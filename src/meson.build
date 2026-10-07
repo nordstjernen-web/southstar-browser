@@ -73,7 +73,6 @@ southstar_engine_sources = files(
   'render.c',
   'security.c',
   'selection.c',
-  'spellcheck.c',
   'texture.c',
   'video.c',
   'video_decode.c',
@@ -166,10 +165,6 @@ endif
 
 if have_avif
   southstar_deps += [libavif]
-endif
-
-if have_enchant
-  southstar_deps += [libenchant]
 endif
 
 if have_libav

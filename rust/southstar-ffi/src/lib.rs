@@ -14,5 +14,6 @@ pub use southstar_glib;
 pub use southstar_history;
 pub use southstar_i18n;
 pub use southstar_safebrowsing;
+pub use southstar_spellcheck;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;

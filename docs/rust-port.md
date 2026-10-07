@@ -703,3 +703,4 @@ table below, and `Changelog.md` gets an entry per phase.
 | `history.c` | 385 | `rust/history` | 2 |
 | `bytecode_cache.c` | 259 | `rust/bytecode-cache` | 2 |
 | `config.c` | 566 | `rust/config` | 2 |
+| `spellcheck.c` | 132 | `rust/spellcheck` | 2 |

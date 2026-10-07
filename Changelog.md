@@ -38,6 +38,8 @@ Southstar Browser (unreleased):
 * The runtime configuration (southstar.conf, its defaults, the NS_*
   environment overrides, Settings saves and --print-config) is Rust and
   reads and writes the same files.
+* Spell checking of editable text is Rust, still over Enchant when it is
+  installed.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the

@@ -69,6 +69,7 @@ dependencies = [
  "southstar-history",
  "southstar-i18n",
  "southstar-safebrowsing",
+ "southstar-spellcheck",
  "southstar-woff2",
 ]
 
@@ -93,6 +94,13 @@ dependencies = [
 
 [[package]]
 name = "southstar-safebrowsing"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-spellcheck"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

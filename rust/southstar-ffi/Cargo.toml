@@ -24,9 +24,11 @@ southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
+southstar-spellcheck = { path = "../spellcheck" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
+enchant = ["southstar-spellcheck/enchant"]
 quickjs-original = ["southstar-bytecode-cache/quickjs-original"]
 woff2 = ["dep:southstar-woff2"]
 
