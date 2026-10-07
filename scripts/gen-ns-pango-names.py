@@ -2,9 +2,8 @@
 """Regenerate src/ns_pango_names.h from the engine's own usage.
 
 The engine spells text layout in the ns-pango fork's renamed API. Builds that
-link the system Pango instead -- Android and iOS, which have no CoreText
-backend in the fork and no fontconfig -- include the generated header to map
-each name back to its stock spelling.
+link the system Pango instead (-Dns-pango=disabled) include the generated
+header to map each name back to its stock spelling.
 
 Names under ns_pango_cache_ are the fork's own additions with no stock
 equivalent; every use of them must sit behind #ifdef NS_USE_NS_PANGO, so they

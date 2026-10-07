@@ -1243,39 +1243,24 @@ ns_net_hsts_upgrade(const char *url)
 gboolean
 ns_net_is_mobile_mode(void)
 {
-#if defined(__ANDROID__)
-    return g_strcmp0(g_getenv("NS_PAGE_FOR_COMPUTER"), "1") != 0;
-#else
     return NS_UA_HINT_MOBILE != 0;
-#endif
 }
 
 const char *
 ns_net_navigator_platform(void)
 {
-#if defined(__ANDROID__)
-    return ns_net_is_mobile_mode() ? NS_NAV_PLATFORM : "Linux x86_64";
-#else
     return NS_NAV_PLATFORM;
-#endif
 }
 
 const char *
 ns_net_ua_hint_platform(void)
 {
-#if defined(__ANDROID__)
-    return ns_net_is_mobile_mode() ? NS_UA_HINT_PLATFORM : "Linux";
-#else
     return NS_UA_HINT_PLATFORM;
-#endif
 }
 
 const char *
 ns_user_agent_for_mode(const char *compat_mode)
 {
-#if defined(__ANDROID__)
-    if (!ns_net_is_mobile_mode()) return NS_DESKTOP_USER_AGENT;
-#endif
     if (compat_mode && *compat_mode) {
         if (g_ascii_strcasecmp(compat_mode, "ladybird") == 0)
             return NS_UA_LADYBIRD;
@@ -1906,20 +1891,7 @@ ns_net_resolve_ca_bundle(void)
         if (g_ca_bundle) return;
     }
 
-#if defined(__ANDROID__)
-    const char *android_paths[] = {
-        "/system/etc/security/cacerts.pem",
-        "/apex/com.android.conscrypt/cacerts.pem",
-        "/data/misc/keychain/cacerts-added/cacert.pem",
-        NULL,
-    };
-    for (int i = 0; android_paths[i]; i++)
-        if (ns_net_try_ca_bundle(android_paths[i])) return;
-    g_info("ns_net: no CA bundle found; the Android host app should set "
-           "CURL_CA_BUNDLE to an extracted cacert.pem before ns_browser_init().");
-#endif
-
-#if (defined(__linux__) && !defined(__ANDROID__)) || defined(__FreeBSD__) || defined(__NetBSD__)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
     const char *unix_paths[] = {
         "/etc/ssl/certs/ca-certificates.crt",
         "/etc/pki/tls/certs/ca-bundle.crt",

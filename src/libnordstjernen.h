@@ -77,8 +77,7 @@ int ns_browser_set_device_pixel_ratio(ns_browser *browser, double dppx);
 void ns_browser_window_action_applied(ns_browser *browser);
 
 /* Render a viewport into a caller-owned RGBA8888 (premultiplied) buffer of
- * `height` rows, each `stride` bytes wide — the pixel layout of an Android
- * ARGB_8888 Bitmap, so callers can hand it straight to AndroidBitmap_lockPixels.
+ * `height` rows, each `stride` bytes wide.
  *
  * scroll_x/scroll_y are CSS-pixel offsets into the page; `scale` maps CSS
  * pixels to output device pixels (e.g. the display density), so the buffer

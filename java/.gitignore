@@ -1,8 +1,0 @@
-.gradle/
-build/
-target/
-out/
-*.png
-src/main/resources/native/
-*.iml
-.idea/

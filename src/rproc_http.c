@@ -29,7 +29,6 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#if !defined(__ANDROID__)
 static int
 open_fb_fd(size_t size)
 {
@@ -69,7 +68,6 @@ close_inherited_fds(long max_fd)
     for (long fd = 4; fd < max_fd; fd++)
         close((int)fd);
 }
-#endif
 #endif
 
 struct ns_rproc_http {
@@ -124,19 +122,6 @@ wait_child(pid_t pid)
 #endif
 
 #ifndef _WIN32
-#if defined(__ANDROID__)
-static ns_rproc_http *
-spawn_common(const char *renderer_path, int max_width, int max_height, int shm,
-             int priv)
-{
-    (void)renderer_path;
-    (void)max_width;
-    (void)max_height;
-    (void)shm;
-    (void)priv;
-    return NULL;
-}
-#else
 static ns_rproc_http *
 spawn_common(const char *renderer_path, int max_width, int max_height, int shm,
              int priv)
@@ -238,7 +223,6 @@ fail:
     free(rxbuf);
     return NULL;
 }
-#endif
 
 #else /* _WIN32 */
 

@@ -36,7 +36,6 @@ NIGHTLY_ALPINE_IMAGE=${NIGHTLY_ALPINE_IMAGE:-alpine:edge}
 DO_TARBALL=1
 DO_DOCKER=1
 DO_GHA=1
-DO_JAVA=1
 DATE=""
 
 usage() {
@@ -54,7 +53,6 @@ Options:
   --no-tarball        Skip the source tarball stage.
   --no-docker         Skip the Linux container builds.
   --no-gha            Skip driving Windows/macOS via GitHub Actions.
-  --no-java           Skip the Java API jar/javadoc stage.
   --no-parallel       Build the Linux containers one at a time.
   --no-pull           Don't fast-forward the working tree to origin/main first.
   -h, --help          Show this help.
@@ -92,7 +90,6 @@ while [ $# -gt 0 ]; do
         --no-tarball) DO_TARBALL=0; shift ;;
         --no-docker)  DO_DOCKER=0; shift ;;
         --no-gha)     DO_GHA=0; shift ;;
-        --no-java)    DO_JAVA=0; shift ;;
         --no-parallel) NIGHTLY_PARALLEL=0; shift ;;
         --no-pull)    NIGHTLY_PULL=0; shift ;;
         -h|--help)    usage; exit 0 ;;
@@ -449,121 +446,6 @@ gha_collect() {
     fi
 }
 
-stage_java() {
-    log "Stage: Java (runnable fat jar + sources + javadoc)"
-    local key="java"
-    local jhome="${JAVA_HOME:-}"
-    if [ -z "$jhome" ] && command -v javac >/dev/null 2>&1; then
-        jhome=$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")
-    fi
-    if [ -z "$jhome" ] || [ ! -x "$jhome/bin/javac" ]; then
-        fail "$key" "JDK not found (JAVA_HOME='${JAVA_HOME:-}', no usable javac on PATH); install openjdk-21-jdk or set JAVA_HOME"
-        return
-    fi
-    local dst="$STAGEOUT/java"
-    mkdir -p "$dst"
-    local blog="$dst/build.log"
-    local work="$WORK/javabuild"
-    mkdir -p "$work/classes" "$work/stage" "$work/doc"
-
-    {
-        printf 'Nordstjernen Java API build — %s\n' "$NVERSION"
-        printf 'JAVA_HOME=%s\nCC=%s\nengine build dir=%s\n' \
-            "$jhome" "${CC:-cc}" "$WORK/java-engine"
-        "$jhome/bin/javac" -version 2>&1 || true
-        printf -- '----------------------------------------\n'
-    } | tee "$blog"
-
-    log "Java: build native libraries (engine + JNI bridge)"
-    mkdir -p "$work/stage/native"
-    local nativeok=0
-    if command -v "$DOCKER" >/dev/null 2>&1; then
-        local jsrc="$WORK/javanative"
-        mkdir -p "$jsrc"
-        archive_to "$jsrc"
-        local jtree="$jsrc/nordstjernen-${NVERSION}"
-        if ! $DOCKER image inspect "$NIGHTLY_DEBIAN_IMAGE" >/dev/null 2>&1; then
-            docker_pull "$NIGHTLY_DEBIAN_IMAGE" >> "$blog" 2>&1 || true
-        fi
-        if $DOCKER run --rm -v "$jtree:/build:z" -w /build \
-                -e "CC=${CC:-cc}" "$NIGHTLY_DEBIAN_IMAGE" \
-                bash scripts/nightly-java-native.sh >> "$blog" 2>&1 \
-           && [ -d "$jtree/java/src/main/resources/native" ]; then
-            cp -r "$jtree/java/src/main/resources/native/." "$work/stage/native/"
-            nativeok=1
-        fi
-        rm -rf "$jsrc"
-    fi
-    if [ "$nativeok" != 1 ]; then
-        log "Java: container native build unavailable; falling back to host toolchain"
-        if JAVA_HOME="$jhome" BUILDDIR="$WORK/java-engine" CC="${CC:-cc}" \
-                bash "$ROOT/java/scripts/build-native.sh" >> "$blog" 2>&1 \
-           && [ -d "$ROOT/java/src/main/resources/native" ]; then
-            cp -r "$ROOT/java/src/main/resources/native/." "$work/stage/native/"
-            nativeok=1
-        fi
-    fi
-    if [ "$nativeok" != 1 ]; then
-        dump_tail "$blog"
-        java_fail "native build failed (engine + JNI bridge)"
-        return
-    fi
-    log "Java: javac"
-    if ! "$jhome/bin/javac" -d "$work/classes" \
-            $(find "$ROOT/java/src/main/java" -name '*.java') >> "$blog" 2>&1; then
-        dump_tail "$blog"
-        java_fail "javac failed"
-        return
-    fi
-
-    cp -r "$work/classes/." "$work/stage/"
-    if [ -d "$ROOT/java/src/main/resources/org" ]; then
-        cp -r "$ROOT/java/src/main/resources/org" "$work/stage/"
-    fi
-    printf 'Automatic-Module-Name: org.nordstjernen\nEnable-Native-Access: ALL-UNNAMED\nMain-Class: org.nordstjernen.app.Browser\nImplementation-Title: Nordstjernen\nImplementation-Version: %s\n' \
-        "$MESON_VERSION" > "$work/mf.txt"
-
-    local base="nordstjernen-java-${NVERSION}"
-    log "Java: fat jar (library API + browser app + icons + native libs)"
-    if ! "$jhome/bin/jar" --create --file "$dst/${base}.jar" \
-             --manifest "$work/mf.txt" -C "$work/stage" . >> "$blog" 2>&1 \
-       || ! "$jhome/bin/jar" --create --file "$dst/${base}-sources.jar" \
-             -C "$ROOT/java/src/main/java" . >> "$blog" 2>&1; then
-        dump_tail "$blog"
-        rm -f "$dst"/*.jar
-        java_fail "jar failed"
-        return
-    fi
-
-    log "Java: javadoc"
-    if "$jhome/bin/javadoc" -quiet -Xdoclint:none -d "$work/doc" \
-            -sourcepath "$ROOT/java/src/main/java" org.nordstjernen >> "$blog" 2>&1; then
-        "$jhome/bin/jar" --create --file "$dst/${base}-javadoc.jar" -C "$work/doc" . >> "$blog" 2>&1 || true
-        rm -rf "$dst/apidocs"
-        cp -r "$work/doc" "$dst/apidocs"
-    else
-        dump_tail "$blog"
-        rm -f "$dst"/*.jar
-        java_fail "javadoc failed"
-        return
-    fi
-
-    publish_stage "$dst" "$OUTDIR/java"
-    ln -sfn "java/${base}.jar"         "$OUTDIR/nordstjernen-java.jar"
-    ln -sfn "java/${base}-sources.jar" "$OUTDIR/nordstjernen-java-sources.jar"
-    ln -sfn "java/${base}-javadoc.jar" "$OUTDIR/nordstjernen-java-javadoc.jar"
-    ok "$key"
-}
-
-java_fail() {
-    local why="$1"
-    if publish_stage "$STAGEOUT/java" "$OUTDIR/java"; then
-        fail "java" "$why — see $OUTDIR/java/build.log"
-    else
-        fail "java" "$why — see $OUTDIR/java/build.log; previous jars kept"
-    fi
-}
-
 # Point $OUTDIR/<name> at the first file matching any of the patterns, tried
 # in order, so a link with several candidate sources falls back to the next
 # one when the preferred build is missing.
@@ -643,7 +525,6 @@ if [ "$DO_GHA" = 1 ]; then
     gha_collect netbsd
 fi
 
-[ "$DO_JAVA" = 1 ] && stage_java || skip "java"
 
 stage_stable_links
 

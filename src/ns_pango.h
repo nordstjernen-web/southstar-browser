@@ -6,10 +6,9 @@
 #ifndef NS_PANGO_H
 #define NS_PANGO_H
 
-/* Desktop builds shape text through ns-pango, a Pango fork that caches
- * finished glyph strings across layouts. Android and iOS keep the system
- * Pango: the fork carries no CoreText backend and requires fontconfig.
- * ns_pango_names.h maps the fork's renamed API back to stock Pango so the
+/* Builds shape text through ns-pango, a Pango fork that caches finished
+ * glyph strings across layouts, unless -Dns-pango=disabled keeps the system
+ * Pango. ns_pango_names.h maps the fork's renamed API back to stock Pango so the
  * engine sources compile unchanged against either.
  */
 

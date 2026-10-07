@@ -108,19 +108,9 @@ message('nordstjernen build profile: ' +
         (ns_is_release ? 'release (LTO + stripped + hardened)'
                        : 'development (debug symbols + frame pointer + hardened)'))
 
-is_android = host_machine.system() == 'android'
-# iOS (set by the ios/ meson cross file) cross-compiles the same GTK-free
-# embeddable engine as Android, driven by a UIKit host app instead of GTK 4.
-# is_mobile gathers the two: both drop GTK 4, gdk-pixbuf, epoxy/WebGL
-# and the desktop-only helper executables, building only libnordstjernen.
-is_ios = get_option('ios')
-is_mobile = is_android or is_ios
-
-# Android builds only the embeddable engine library, driven by the JNI host app
-# in android/. It links the GLib/cairo/pango graphics stack directly instead of
-# GTK 4: the engine uses no GTK widgets, and GdkTexture is replaced by the
-# ns_texture abstraction (src/texture.c). gtk4 is therefore desktop-only.
-# The engine paints with Cairo/Pango and wraps decoded images in the
+# The engine uses no GTK widgets: it links the GLib/cairo/pango graphics stack
+# directly, and GdkTexture is replaced by the ns_texture abstraction
+# (src/texture.c). The engine paints with Cairo/Pango and wraps decoded images in the
 # ns_texture abstraction (no GdkTexture), so the graphics stack is declared
 # directly rather than pulled in transitively through gtk4. The toolkit
 # (gtk4/epoxy) stays out of the shared engine deps and is added only to the
@@ -129,7 +119,7 @@ is_mobile = is_android or is_ios
 # renderer-only build that needs no GTK 4 at all.
 gtk_feature = get_option('gtk')
 gtk4_min = host_machine.system() == 'windows' ? '>=4.22.1' : '>=4.14'
-use_ns_pango = not is_mobile and get_option('ns-pango').allowed()
+use_ns_pango = get_option('ns-pango').allowed()
 
 # ns-pango enforces the text-stack floors from inside the subproject, where a
 # too-old library surfaces as a bare version mismatch and only the first of
@@ -146,7 +136,7 @@ if use_ns_pango
     ['fontconfig', '>=2.15'],
   ]
 endif
-if not is_mobile and gtk_feature.enabled()
+if gtk_feature.enabled()
   ns_dependency_floors += [['gtk4', gtk4_min]]
 endif
 ns_unmet_floors = []
@@ -176,9 +166,8 @@ cairo      = dependency('cairo')
 
 # Text is shaped through ns-pango, a Pango fork that caches finished glyph
 # strings across layouts; every symbol in it is renamed, because GTK loads the
-# system Pango into the same process. Android and iOS link the system Pango
-# instead -- the fork carries no CoreText backend and requires fontconfig --
-# and src/ns_pango_names.h maps the renamed API back for them.
+# system Pango into the same process. -Dns-pango=disabled links the system
+# Pango instead, and src/ns_pango_names.h maps the renamed API back for it.
 if use_ns_pango
   ns_pango_debug = ns_is_release ? 'false' : 'true'
   ns_pango_ndebug = ns_is_release ? 'true' : 'false'
@@ -207,16 +196,14 @@ else
   pangocairo = dependency('pangocairo')
 endif
 
-if not is_mobile
-  # libepoxy is the GL/EGL dispatch layer for WebGL. It lives in the shared
-  # engine deps (not the GTK shell) because WebGL renders to an offscreen
-  # EGL/GLES context in the renderer, with no toolkit involved.
-  epoxy      = dependency('epoxy')
-  have_egl   = cc.has_header('epoxy/egl.h', dependencies: epoxy)
-endif
+# libepoxy is the GL/EGL dispatch layer for WebGL. It lives in the shared
+# engine deps (not the GTK shell) because WebGL renders to an offscreen
+# EGL/GLES context in the renderer, with no toolkit involved.
+epoxy      = dependency('epoxy')
+have_egl   = cc.has_header('epoxy/egl.h', dependencies: epoxy)
 
 have_gtk = false
-if not is_mobile and gtk_feature.allowed()
+if gtk_feature.allowed()
   gtk4 = dependency('gtk4', version: gtk4_min, required: gtk_feature)
   if gtk4.found()
     have_gtk = true
@@ -299,19 +286,17 @@ libpsl = dependency('libpsl')
 
 sqlite3 = dependency('sqlite3')
 
-if not is_mobile
-  add_project_arguments('-DNS_ENABLE_WEBGL=1', language: 'c')
-  # The offscreen GL context (src/glctx.c) has three backends: WGL on Windows,
-  # CGL on macOS (which has no EGL — its epoxy dispatches to the OpenGL
-  # framework, and its GL 4.1 core profile compiles GLSL-ES shaders), and EGL
-  # everywhere else. Pick CGL on darwin, otherwise EGL when its header is
-  # present; without any, ns_gl_context_create() stubs out and WebGL is simply
-  # unavailable rather than failing the build.
-  if host_machine.system() == 'darwin'
-    add_project_arguments('-DNS_HAVE_CGL=1', language: 'c')
-  elif have_egl
-    add_project_arguments('-DNS_HAVE_EGL=1', language: 'c')
-  endif
+add_project_arguments('-DNS_ENABLE_WEBGL=1', language: 'c')
+# The offscreen GL context (src/glctx.c) has three backends: WGL on Windows,
+# CGL on macOS (which has no EGL — its epoxy dispatches to the OpenGL
+# framework, and its GL 4.1 core profile compiles GLSL-ES shaders), and EGL
+# everywhere else. Pick CGL on darwin, otherwise EGL when its header is
+# present; without any, ns_gl_context_create() stubs out and WebGL is simply
+# unavailable rather than failing the build.
+if host_machine.system() == 'darwin'
+  add_project_arguments('-DNS_HAVE_CGL=1', language: 'c')
+elif have_egl
+  add_project_arguments('-DNS_HAVE_EGL=1', language: 'c')
 endif
 
 # WebGPU (navigator.gpu) layers src/webgpu.c over the external wgpu-native
@@ -324,7 +309,7 @@ endif
 have_webgpu = false
 webgpu_dep = declare_dependency()
 webgpu_feature = get_option('webgpu')
-if not webgpu_feature.disabled() and not is_mobile
+if not webgpu_feature.disabled()
   wgpu_lib = dependency('wgpu_native', required: false)
   wgpu_root = get_option('wgpu_native_root')
   if not wgpu_lib.found() and wgpu_root != ''
@@ -354,7 +339,7 @@ if not webgpu_feature.disabled() and not is_mobile
 endif
 
 libpoppler = dependency('poppler-glib', required: false)
-have_poppler = libpoppler.found() and not is_mobile
+have_poppler = libpoppler.found()
 if have_poppler
   add_project_arguments('-DNS_HAVE_POPPLER=1', language: 'c')
 endif
@@ -392,9 +377,8 @@ endif
 libwebp = dependency('libwebp')
 libwebpdemux = dependency('libwebpdemux')
 
-avif_feature = get_option('avif').disable_auto_if(is_mobile)
-libavif = dependency('libavif', required: avif_feature)
-have_avif = libavif.found() and not is_mobile
+libavif = dependency('libavif', required: get_option('avif'))
+have_avif = libavif.found()
 if have_avif
   add_project_arguments('-DNS_HAVE_AVIF=1', language: 'c')
 endif
@@ -402,9 +386,7 @@ endif
 # Inline WebM (VP9/VP8 + Opus/Vorbis) over FFmpeg's libav* (github.com/FFmpeg/
 # FFmpeg, not the defunct Libav fork). Required on Linux and Windows, where WebM
 # is the dominant format served by YouTube and other sites and the
-# external-player fallback is undesirable; auto-detected on macOS; excluded on
-# Android, whose dependency sysroot (android/scripts/build-deps.sh) does not
-# cross-build FFmpeg, so WebM there stays on the external-player path.
+# external-player fallback is undesirable; auto-detected on macOS.
 #
 # The version floors are the library sonames of FFmpeg 6.0 (2023) — the oldest
 # release carrying the new AVChannelLayout API this code uses — so a stock Linux
@@ -420,7 +402,7 @@ libavutil = dependency('libavutil', version: '>=58', required: libav_required)
 libswscale = dependency('libswscale', version: '>=7', required: libav_required)
 libswresample = dependency('libswresample', version: '>=4', required: libav_required)
 have_libav = libavformat.found() and libavcodec.found() and libavutil.found() \
-  and libswscale.found() and libswresample.found() and not is_mobile
+  and libswscale.found() and libswresample.found()
 if have_libav
   add_project_arguments('-DNS_HAVE_LIBAV=1', language: 'c')
 endif
@@ -439,8 +421,8 @@ if libopusfile.found()
 endif
 # canPlayType/mediaCapabilities may honestly advertise native Ogg audio only
 # where the decoder that plays it is built: the desktop (SDL2) nordstjernen-audio
-# helper. On mobile audio takes a different path, so these are gated off there.
-if not is_mobile and get_option('audio').allowed()
+# helper.
+if get_option('audio').allowed()
   sdl2_probe = dependency('sdl2', required: false)
   if sdl2_probe.found() and libvorbisfile.found()
     add_project_arguments('-DNS_AUDIO_NATIVE_VORBIS=1', language: 'c')
@@ -450,7 +432,7 @@ if not is_mobile and get_option('audio').allowed()
   endif
 endif
 libenchant = dependency('enchant-2', required: false)
-have_enchant = libenchant.found() and not is_mobile
+have_enchant = libenchant.found()
 if have_enchant
   add_project_arguments('-DNS_HAVE_ENCHANT=1', language: 'c')
 endif
@@ -459,7 +441,7 @@ libseccomp = dependency(
   'libseccomp',
   required: host_machine.system() == 'linux',
 )
-have_seccomp = libseccomp.found() and not is_mobile
+have_seccomp = libseccomp.found()
 if have_seccomp
   add_project_arguments('-DNS_HAVE_SECCOMP=1', language: 'c')
 endif

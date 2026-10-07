@@ -145,73 +145,48 @@ if host_machine.system() == 'windows'
   )
 endif
 
-if is_mobile
-  nordstjernen_deps = [
-    glib,
-    gobject,
-    gio,
-    gmodule,
-    cairo,
-    pango,
-    pangocairo,
-    libcurl,
-    libcrypto,
-    libm,
-    libquickjs,
-    libwebp,
-    libwebpdemux,
-    libwuffs,
-    libplmpeg,
-    libuchardet,
-    liblexbor,
-    libwamr,
-    sqlite3,
-    zlib,
-  ]
-else
-  nordstjernen_deps = [
-    glib,
-    gobject,
-    gio,
-    cairo,
-    pango,
-    pangocairo,
-    epoxy,
-    gmodule,
-    libcurl,
-    libcrypto,
-    libm,
-    libquickjs,
-    libwebp,
-    libwebpdemux,
-    libwuffs,
-    libplmpeg,
-    libuchardet,
-    liblexbor,
-    libwamr,
-    sqlite3,
-    zlib,
-  ]
+nordstjernen_deps = [
+  glib,
+  gobject,
+  gio,
+  cairo,
+  pango,
+  pangocairo,
+  epoxy,
+  gmodule,
+  libcurl,
+  libcrypto,
+  libm,
+  libquickjs,
+  libwebp,
+  libwebpdemux,
+  libwuffs,
+  libplmpeg,
+  libuchardet,
+  liblexbor,
+  libwamr,
+  sqlite3,
+  zlib,
+]
 
-  if have_seccomp
-    nordstjernen_deps += [libseccomp]
-  endif
+if have_seccomp
+  nordstjernen_deps += [libseccomp]
+endif
 
-  if have_poppler
-    nordstjernen_deps += [libpoppler]
-  endif
+if have_poppler
+  nordstjernen_deps += [libpoppler]
+endif
 
-  if have_avif
-    nordstjernen_deps += [libavif]
-  endif
+if have_avif
+  nordstjernen_deps += [libavif]
+endif
 
-  if have_enchant
-    nordstjernen_deps += [libenchant]
-  endif
+if have_enchant
+  nordstjernen_deps += [libenchant]
+endif
 
-  if have_libav
-    nordstjernen_deps += [libavformat, libavcodec, libavutil, libswscale]
-  endif
+if have_libav
+  nordstjernen_deps += [libavformat, libavcodec, libavutil, libswscale]
 endif
 
 if have_fontconfig
@@ -238,9 +213,8 @@ endif
 
 # macOS WebGL: src/glctx.c creates the offscreen GL context through CGL, whose
 # symbols live in the OpenGL framework. Unused targets drop it via
-# -dead_strip_dylibs. iOS has no OpenGL framework (and WebGL is off there, like
-# Android), so it is desktop-macOS only.
-if host_machine.system() == 'darwin' and not is_ios
+# -dead_strip_dylibs.
+if host_machine.system() == 'darwin'
   nordstjernen_deps += [dependency('appleframeworks', modules: ['OpenGL'])]
 endif
 
@@ -308,15 +282,6 @@ nordstjernen_embed_sources = nordstjernen_engine_sources + files(
   'libnordstjernen.c',
 ) + [polyfills_h, streaming_h]
 
-if is_android
-  nordstjernen_embed_sources += files(
-    'ipc_http.c',
-    'renderer_serve.c',
-    'renderer_tiles.c',
-    'rproc_http.c',
-  )
-endif
-
 libnordstjernen_lib = library(
   'nordstjernen',
   nordstjernen_embed_sources,
@@ -341,110 +306,107 @@ install_headers('libnordstjernen.h', subdir: 'nordstjernen')
 
 # Out-of-process renderer (step 1 of the process-per-tab direction): a small
 # executable that drives libnordstjernen over an IPC control channel + shared
-# memory framebuffer (src/rproc.*), plus a proof-of-concept client. The mobile
-# builds ship only the embeddable library — no standalone executables.
-if not is_mobile
-  rproc_deps = []
-  if host_machine.system() != 'windows'
-    rproc_deps += [cc.find_library('rt', required: false)]
+# memory framebuffer (src/rproc.*), plus a proof-of-concept client.
+rproc_deps = []
+if host_machine.system() != 'windows'
+  rproc_deps += [cc.find_library('rt', required: false)]
+endif
+
+executable(
+  'nordstjernen-renderer',
+  files('renderer_http.c', 'renderer_serve.c', 'renderer_tiles.c',
+        'ipc_http.c', 'threaddump.c'),
+  link_with: libnordstjernen_static,
+  include_directories: include_directories('.'),
+  dependencies: nordstjernen_deps + ns_sdl_deps + rproc_deps,
+  c_args: ns_lib_c_args,
+  link_args: nordstjernen_exe_link_args,
+  win_subsystem: 'windows',
+  install: true,
+)
+
+sdl2_dep = dependency('sdl2', required: get_option('audio'))
+if sdl2_dep.found()
+  libminimp3 = static_library(
+    'minimp3',
+    files('audio/minimp3_impl.c'),
+    include_directories: include_directories('audio'),
+    c_args: cc.get_supported_arguments(['-w']),
+    install: false,
+  )
+
+  audio_deps = [dependency('libcurl'), sdl2_dep, libplmpeg]
+  if have_libav
+    audio_deps += [libavformat, libavcodec, libavutil, libswresample]
+  endif
+  if libvorbisfile.found()
+    audio_deps += [libvorbisfile]
+  endif
+  if libopusfile.found()
+    audio_deps += [libopusfile]
+  endif
+  # libm is needed by pl_mpeg / minimp3 on Linux and the BSDs; it is part of
+  # the C runtime on macOS and Windows, where find_library('m') is a harmless
+  # no-op. librt carries shm_open/shm_unlink (the audio clock's POSIX shared
+  # memory) on the BSDs, where they live outside libc; it is a harmless no-op
+  # where absent, matching the renderer and video-helper link lines.
+  audio_lib_deps = [cc.find_library('m', required: false),
+                    cc.find_library('rt', required: false)]
+
+  # On Linux the helper confines itself with the same Landlock + seccomp
+  # profile as the renderer once its audio device and network stack are up,
+  # so attacker-controlled codec bytes are decoded inside the sandbox.
+  audio_sandbox_sources = []
+  if host_machine.system() == 'linux'
+    audio_sandbox_sources += files('security.c')
+    audio_deps += [glib]
+    if have_seccomp
+      audio_deps += [libseccomp]
+    endif
   endif
 
   executable(
-    'nordstjernen-renderer',
-    files('renderer_http.c', 'renderer_serve.c', 'renderer_tiles.c',
-          'ipc_http.c', 'threaddump.c'),
-    link_with: libnordstjernen_static,
-    include_directories: include_directories('.'),
-    dependencies: nordstjernen_deps + ns_sdl_deps + rproc_deps,
-    c_args: ns_lib_c_args,
-    link_args: nordstjernen_exe_link_args,
+    'nordstjernen-audio',
+    files('audio/main.c') + audio_sandbox_sources,
+    include_directories: include_directories('audio', '.'),
+    link_with: libminimp3,
+    dependencies: audio_deps + audio_lib_deps,
+    link_args: nordstjernen_link_args,
     win_subsystem: 'windows',
     install: true,
   )
-
-  sdl2_dep = dependency('sdl2', required: get_option('audio'))
-  if sdl2_dep.found()
-    libminimp3 = static_library(
-      'minimp3',
-      files('audio/minimp3_impl.c'),
-      include_directories: include_directories('audio'),
-      c_args: cc.get_supported_arguments(['-w']),
-      install: false,
-    )
-
-    audio_deps = [dependency('libcurl'), sdl2_dep, libplmpeg]
-    if have_libav
-      audio_deps += [libavformat, libavcodec, libavutil, libswresample]
-    endif
-    if libvorbisfile.found()
-      audio_deps += [libvorbisfile]
-    endif
-    if libopusfile.found()
-      audio_deps += [libopusfile]
-    endif
-    # libm is needed by pl_mpeg / minimp3 on Linux and the BSDs; it is part of
-    # the C runtime on macOS and Windows, where find_library('m') is a harmless
-    # no-op. librt carries shm_open/shm_unlink (the audio clock's POSIX shared
-    # memory) on the BSDs, where they live outside libc; it is a harmless no-op
-    # where absent, matching the renderer and video-helper link lines.
-    audio_lib_deps = [cc.find_library('m', required: false),
-                      cc.find_library('rt', required: false)]
-
-    # On Linux the helper confines itself with the same Landlock + seccomp
-    # profile as the renderer once its audio device and network stack are up,
-    # so attacker-controlled codec bytes are decoded inside the sandbox.
-    audio_sandbox_sources = []
-    if host_machine.system() == 'linux'
-      audio_sandbox_sources += files('security.c')
-      audio_deps += [glib]
-      if have_seccomp
-        audio_deps += [libseccomp]
-      endif
-    endif
-
-    executable(
-      'nordstjernen-audio',
-      files('audio/main.c') + audio_sandbox_sources,
-      include_directories: include_directories('audio', '.'),
-      link_with: libminimp3,
-      dependencies: audio_deps + audio_lib_deps,
-      link_args: nordstjernen_link_args,
-      win_subsystem: 'windows',
-      install: true,
-    )
-  else
-    message('SDL2 not found — audio playback helper (nordstjernen-audio) disabled')
-  endif
-
-  if have_libav
-    videoproc_deps = [libavformat, libavcodec, libavutil, libswscale,
-                      dependency('threads')]
-    videoproc_sources = files('videoproc/main.c')
-    if host_machine.system() == 'linux'
-      videoproc_sources += files('security.c')
-      videoproc_deps += [glib]
-      if have_seccomp
-        videoproc_deps += [libseccomp]
-      endif
-      videoproc_deps += [cc.find_library('rt', required: false)]
-    endif
-    executable(
-      'nordstjernen-video',
-      videoproc_sources,
-      include_directories: include_directories('.'),
-      dependencies: videoproc_deps + [cc.find_library('m', required: false)],
-      link_args: nordstjernen_link_args,
-      win_subsystem: 'windows',
-      install: true,
-    )
-  endif
+else
+  message('SDL2 not found — audio playback helper (nordstjernen-audio) disabled')
 endif
 
-if not is_mobile and have_gtk
+if have_libav
+  videoproc_deps = [libavformat, libavcodec, libavutil, libswscale,
+                    dependency('threads')]
+  videoproc_sources = files('videoproc/main.c')
+  if host_machine.system() == 'linux'
+    videoproc_sources += files('security.c')
+    videoproc_deps += [glib]
+    if have_seccomp
+      videoproc_deps += [libseccomp]
+    endif
+    videoproc_deps += [cc.find_library('rt', required: false)]
+  endif
+  executable(
+    'nordstjernen-video',
+    videoproc_sources,
+    include_directories: include_directories('.'),
+    dependencies: videoproc_deps + [cc.find_library('m', required: false)],
+    link_args: nordstjernen_link_args,
+    win_subsystem: 'windows',
+    install: true,
+  )
+endif
+
+if have_gtk
   subdir('gtk')
 endif
 
-if not is_mobile and not have_gtk
+if not have_gtk
   message('GTK 4 shell disabled — building the engine, out-of-process renderer' +
           ' and embeddable library without GTK. WebGL is unavailable in this' +
           ' configuration (its GL context is GTK-backed).')
