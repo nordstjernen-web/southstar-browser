@@ -58,6 +58,8 @@ BuildRequires:  meson >= 1.0
 BuildRequires:  ninja-build
 BuildRequires:  cmake
 BuildRequires:  pkgconf-pkg-config
+BuildRequires:  cargo >= 1.85
+BuildRequires:  rust >= 1.85
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libcurl)

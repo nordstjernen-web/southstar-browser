@@ -11,6 +11,12 @@ Southstar Browser (unreleased):
   processes and the renderer protocol and ending with the engine core and
   the JavaScript bindings, with the build integration, the checks every
   step must pass and the decisions still open.
+* Rust joins the build. meson builds a Cargo workspace (Rust 1.85 or
+  newer) into one static library that every C target links, rebuilding
+  it only when Rust sources change. The first module ported is the date
+  and time parsing behind <input type=date|month|week|time|datetime-local>,
+  which behaves identically. Building Southstar now needs cargo and rustc;
+  on Ubuntu 24.04 that means the rustc-1.85 and cargo-1.85 packages.
 
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the

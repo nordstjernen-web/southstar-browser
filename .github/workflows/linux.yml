@@ -51,6 +51,26 @@ jobs:
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 
+      - name: Install Rust
+        shell: bash
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+            --profile minimal --component clippy,rustfmt
+          rustc --version
+          cargo --version
+
+      - name: Rust format and lints
+        if: matrix.compiler == 'gcc'
+        run: |
+          cargo fmt --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
       - name: Restore ccache
         uses: actions/cache@v6
         with:

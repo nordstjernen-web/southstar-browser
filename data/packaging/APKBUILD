@@ -10,8 +10,10 @@ url="https://github.com/nordstjernen-web/southstar-browser"
 arch="x86_64 aarch64"
 license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 makedepends="
+	cargo
 	meson
 	ninja
+	rust
 	gtk4.0-dev
 	libepoxy-dev
 	curl-dev

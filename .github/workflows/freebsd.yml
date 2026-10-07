@@ -49,7 +49,7 @@ jobs:
             pkg install -y \
               meson ninja pkgconf bash zip ccache bzip2 git-lite \
               gtk4 libepoxy curl uchardet webp libavif sdl2 \
-              sqlite3 libpsl
+              sqlite3 libpsl rust
             # FreeBSD's freetype2.pc lists 'bzip2' in Requires.private, but
             # neither the base system nor the bzip2 package ships a bzip2.pc,
             # so cairo's pkg-config lookup (which pulls in freetype2) aborts

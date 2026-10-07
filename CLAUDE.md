@@ -1,7 +1,8 @@
 # Southstar — Claude operating guide
 
 Southstar ("Southstar Browser") is a web
-browser written from scratch in **C**, using **GTK 4** for the UI and
+browser written from scratch in **C**, now being ported to **Rust**
+module by module (`docs/rust-port.md`), using **GTK 4** for the UI and
 **libcurl** for networking (with an optional in-tree **libnghttp2**
 transport backend — see "HTTP client backend" below). Targets Linux,
 macOS, and Windows.
@@ -102,6 +103,9 @@ Update Changelog.md
 - No "section banner" comments (`/* ---------- helpers ---------- */`).
   Group code by file or function instead.
 - No `TODO`/`FIXME`/`XXX` markers — file a real task instead.
+- Rust files follow the same rule: one `//!` header block (the file and one
+  sentence, then the copyright and SPDX lines), nothing else — including no
+  `// SAFETY:` comments; keep `unsafe` in small `ffi` modules instead.
 
 ## Autonomous mode — read this every session
 
@@ -150,6 +154,30 @@ meson setup builddir
 meson compile -C builddir
 ./builddir/src/gtk/southstar
 ```
+
+### Rust: the port in progress
+
+Southstar is being ported from C to Rust in place, module by module
+(`docs/rust-port.md`). The Cargo workspace (`Cargo.toml`, `rust/`) is built
+by meson: `rust/meson.build` runs `scripts/cargo-build.py`, which builds
+`rust/southstar-ffi` — the one static library every C target links — and hands
+ninja cargo's dependency file, so Rust rebuilds only when Rust changes. Rust
+1.85 or newer is required; `rust-toolchain.toml` pins 1.85.0 for rustup users,
+so local builds and CI compile with the minimum supported version.
+
+- A ported module is a crate under `rust/` that exports the same `ns_*`
+  functions its C header declares (`#[unsafe(no_mangle)] extern "C"`). Pointer
+  handling lives in the crate's `ffi.rs`; the logic is safe Rust. The C header
+  stays as the contract, the `.c` file is deleted in the same commit, and the
+  crate is added to `rust/southstar-ffi` (dependency plus `pub use`).
+- `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`
+  must be clean before pushing, like the C warnings.
+- A new crates.io dependency needs a reason in its commit message; keep the
+  dependency tree small. Crates from Servo or Firefox (`html5ever`,
+  `cssparser`, `selectors`, `url`, `encoding_rs`, …) count as upstream browser
+  engine code and stay out.
+- No `#[test]`s. Check a port against the C it replaces with a throwaway
+  differential harness, then in the browser itself.
 
 The QuickJS engine is integrated into the main tree at `src/quickjs/`
 (forked from [quickjs-ng](https://github.com/quickjs-ng/quickjs); we
@@ -312,7 +340,7 @@ depends on `libcrypto` explicitly so the headers resolve.
 System packages required on Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential pkg-config meson ninja-build \
+sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
     libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
     libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
@@ -335,7 +363,7 @@ external-player path. FFmpeg 6.0 or newer is required.
 On Fedora/RHEL:
 
 ```sh
-sudo dnf install gcc pkgconf meson ninja-build gtk4-devel libepoxy-devel libcurl-devel \
+sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel libcurl-devel \
     openssl-devel uchardet-devel libpsl-devel sqlite-devel \
     libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
 ```
@@ -345,12 +373,16 @@ sudo dnf install gcc pkgconf meson ninja-build gtk4-devel libepoxy-devel libcurl
 On openSUSE:
 
 ```sh
-sudo zypper install gcc pkgconf meson ninja gtk4-devel libepoxy-devel libcurl-devel \
+sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel libcurl-devel \
     libopenssl-devel libuchardet-devel libpsl-devel sqlite3-devel \
     libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
 ```
 
 (`ffmpeg-devel` comes from Packman.)
+
+Rust must be 1.85 or newer. Debian 13 and current Fedora and openSUSE ship
+it; on Ubuntu 24.04, whose default is 1.75, install `rustc-1.85 cargo-1.85`
+and put `/usr/lib/rust-1.85/bin` first on `PATH`, or use rustup.
 
 `libseccomp` is required on Linux — `meson setup` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.
@@ -392,7 +424,7 @@ list is stale), and re-cluster the list when the scores move.
 A change is done when:
 
 1. It compiles cleanly (no new warnings) with the configured GCC and
-   Clang flags.
+   Clang flags, and `cargo fmt --check` and `cargo clippy` are clean.
 2. The browser launches and the affected UI path works manually.
 3. The change is committed and pushed to `origin/main`.
 

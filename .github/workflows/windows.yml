@@ -67,6 +67,7 @@ jobs:
             mingw-w64-x86_64-libavif
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-rust
             make
             zip
 
@@ -89,6 +90,8 @@ jobs:
       - name: Show toolchain versions
         run: |
           clang --version
+          rustc --version
+          cargo --version
           ccache --version | head -1
           meson --version
           ninja --version

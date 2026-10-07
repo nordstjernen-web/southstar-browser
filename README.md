@@ -125,7 +125,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
 ## Build
 
 ```sh
-sudo apt install build-essential git pkg-config meson ninja-build \
+sudo apt install build-essential git pkg-config meson ninja-build cargo rustc \
     libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
     libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
@@ -133,7 +133,10 @@ meson setup builddir && meson compile -C builddir
 ./builddir/src/gtk/southstar
 ```
 
-Windows, Fedora, openSUSE and macOS instructions are in
+Rust 1.85 or newer is required. Debian 13 ships it; on Ubuntu 24.04 install
+`rustc-1.85 cargo-1.85` and put `/usr/lib/rust-1.85/bin` first on `PATH`, or
+use [rustup](https://rustup.rs). Windows, Fedora, openSUSE and macOS
+instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).
 

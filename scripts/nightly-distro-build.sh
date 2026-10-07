@@ -30,6 +30,15 @@ install_apt() {
         libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
     pip3 install --break-system-packages --upgrade 'meson>=1.4' \
         || pip3 install --upgrade 'meson>=1.4'
+    apt-get install -y --no-install-recommends cargo rustc
+    if ! rust_new_enough; then
+        apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85
+        export PATH="/usr/lib/rust-1.85/bin:$PATH"
+    fi
+}
+
+rust_new_enough() {
+    rustc --version | awk '{ split($2, v, "."); exit !(v[1] > 1 || (v[1] == 1 && v[2] >= 85)) }'
 }
 
 install_zypper() {
@@ -51,7 +60,7 @@ install_zypper() {
         gcc gcc-c++ clang pkgconf-pkg-config meson ninja cmake git zip unzip curl \
         rpm-build patchelf ca-certificates \
         gtk4-devel libepoxy-devel libcurl-devel libopenssl-devel libuchardet-devel libpsl-devel \
-        sqlite3-devel libseccomp-devel libwebp-devel libavif-devel
+        sqlite3-devel libseccomp-devel libwebp-devel libavif-devel rust cargo
     # SDL2 backs the auto-detected audio helper; keep it out of the required
     # set so an unavailable/mid-sync package degrades to no audio, not a failed
     # nightly. Its own line (not the optional group) so it is independent of
@@ -74,7 +83,7 @@ install_apk() {
     apk add --no-cache \
         build-base clang pkgconf meson ninja cmake git zip alpine-sdk \
         linux-headers gtk4.0-dev libepoxy-dev curl-dev openssl-dev uchardet-dev libpsl-dev sqlite-dev \
-        libseccomp-dev libwebp-dev sdl2-dev
+        libseccomp-dev libwebp-dev sdl2-dev rust cargo
     apk add --no-cache \
         poppler-dev \
         fontconfig-dev pango-dev libavif-dev || true

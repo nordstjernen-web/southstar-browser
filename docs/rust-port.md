@@ -1,7 +1,8 @@
 # Porting Southstar Browser to Rust
 
-Status: **proposed** — October 2026, written against `main` at the commit that
-added this file. Sizes and facts below were taken from the code on that tree.
+Status: **in progress** — phase 0 (toolchain, build integration, the first
+ported module) has landed; see §12. Written in October 2026 against `main` at
+the commit that added this file. Sizes and facts below were taken from the code on that tree.
 Where they disagree with older docs (`Software-Architecture.md` still quotes
 css.c at ~17k lines and layout.c at ~11k; `media.md` calls the audio helper
 unsandboxed and the video ring three slots), the code is right.
@@ -36,13 +37,13 @@ third-party libraries that are deliberately kept (phase 9 and §9).
 
 | Phase | What | Project C retired (lines) |
 |---|---|---:|
-| 0 | Toolchain, build integration, CI, a pilot module | 168 |
+| 0 | Toolchain, build integration, CI, a pilot module | 150 |
 | 1 | Helper processes and the sandbox library | 3,974 |
 | 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 |
 | 3 | Renderer host and IPC protocol | 5,028 |
 | 4 | GTK shell, watchdog and headless driver | 13,291 |
 | 5 | Networking and storage | 13,500 |
-| 6 | Engine core: DOM → style → layout → paint → pipeline | 82,654 |
+| 6 | Engine core: DOM → style → layout → paint → pipeline | 82,672 |
 | 7 | JavaScript bindings | 77,729 |
 | 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 |
 | 9 | Vendored libraries; decide the long-term build | — |
@@ -237,15 +238,21 @@ archive meson links.
 Meson stays the build entry point during the port, so `meson setup builddir &&
 meson compile -C builddir` keeps working on every platform:
 
-- A `custom_target` runs `cargo build --frozen --profile <release|dev>` with
-  `CARGO_TARGET_DIR` inside the build directory, producing
-  `libsouthstar_ffi.a` and the Rust helper executables.
+- A `custom_target` (`rust/meson.build`) runs `scripts/cargo-build.py`,
+  which calls `cargo build --frozen` (`--release` for meson's release and
+  minsize build types) with the target directory inside the build
+  directory. It copies `libsouthstar_ffi.a` out only when its bytes changed
+  and hands ninja cargo's dependency file plus the manifests, so a no-op
+  build runs neither cargo nor the linker.
+- The native libraries Rust's `std` needs (`-lgcc_s -lpthread …` on Linux,
+  different everywhere) are asked of `rustc --print native-static-libs` at
+  configure time, not hard-coded per platform.
 - The engine library and executables link `libsouthstar_ffi.a`; meson
   installs the Rust executables exactly where the C ones were installed, so
   packaging scripts do not change paths.
-- Meson passes the configured features (`webgpu`, `avif`, `http_backend`,
-  `quickjs`, libav presence) to Cargo as `--features`, so one option set
-  controls both languages.
+- Meson will pass the configured features (`webgpu`, `avif`, `http_backend`,
+  `quickjs`, libav presence) to Cargo as `--features` once ported code
+  depends on them, so one option set controls both languages.
 - Cargo profiles mirror the meson profiles: release = LTO, `codegen-units = 1`,
   `panic = "abort"`, stripped; development = debug info, frame pointers.
 
@@ -254,8 +261,12 @@ point and builds whatever C remains through `build.rs` and the `cc` crate.
 
 ### 5.3 Keeping the C and Rust sides in agreement
 
-- The existing C headers stay the contract. `southstar-sys` runs `bindgen`
-  over them at build time; each Rust export is checked against the bindgen
+- The existing C headers stay the contract. Exports whose signatures use
+  only scalars and pointers (the first ports) are written by hand against the
+  header with `core::ffi` types (`c_long` keeps C's width, 32-bit on
+  Windows) and checked with a differential harness against the C they
+  replace. Once headers with structs are ported, `southstar-sys` runs
+  `bindgen` over them and each Rust export is checked against the bindgen
   declaration (a typed function-pointer `const` per export), so a signature
   drift fails the build instead of corrupting memory.
 - Structs that both languages touch during the transition (`ns_node`,
@@ -316,7 +327,7 @@ BSD bundles are unaffected beyond the build: Rust links statically.
 ### 5.7 Pilot
 
 Port `src/datetime.c` (150 lines, no project dependencies, used by three
-modules) and `version.h` through the whole pipeline: crate, `southstar-ffi`, meson link,
+modules) through the whole pipeline: crate, `southstar-ffi`, meson link,
 header check, every CI platform, every package format. Phase 0 is done when
 that pilot ships in a nightly on all platforms with no behaviour change, and
 `CLAUDE.md` and `SOUTHSTAR.md` describe the Rust build and the rules in §3.
@@ -458,7 +469,8 @@ Scope (82.7k lines), in pipeline order:
    renamed ones.
 5. **Pipeline driver** (6.5k): `engine.c` and `libsouthstar.c` — `struct
    ns_browser`, navigation, settle, relayout and the `ns_browser_*` API the
-   renderer host calls.
+   renderer host calls — and `version.h`, which goes with the last C file
+   that includes it.
 
 Approach:
 
@@ -650,12 +662,11 @@ the existing ones, not a test suite.
 
 ## 12. Tracking
 
-Progress is tracked in this file: when a module is ported, its row in §4.1
-moves into a "Ported" table below with the commit that did it, and
-`Changelog.md` gets an entry per phase.
+Progress is tracked in this file: every ported module is listed in the
+table below, and `Changelog.md` gets an entry per phase.
 
 ### Ported
 
-| Module | Lines | Commit |
-|---|---:|---|
-| — | | |
+| Module | Lines | Crate | Phase |
+|---|---:|---|---|
+| `datetime.c` | 150 | `rust/datetime` | 0 |

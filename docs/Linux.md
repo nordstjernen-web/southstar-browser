@@ -10,27 +10,31 @@ locally before pushing.
 
 System packages required on Debian / Ubuntu:
 
-    sudo apt install build-essential pkg-config meson ninja-build \
+    sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
         libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
         libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
 
 On Fedora / RHEL:
 
-    sudo dnf install gcc pkgconf meson ninja-build gtk4-devel libepoxy-devel libcurl-devel \
+    sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel libcurl-devel \
         openssl-devel uchardet-devel libpsl-devel sqlite-devel libseccomp-devel \
         libwebp-devel SDL2-devel
 
 On openSUSE:
 
-    sudo zypper install gcc pkgconf meson ninja gtk4-devel libepoxy-devel libcurl-devel \
+    sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel libcurl-devel \
         libopenssl-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
         libwebp-devel libSDL2-devel
 
 On Alpine (musl libc):
 
-    sudo apk add build-base linux-headers pkgconf meson ninja gtk4.0-dev \
+    sudo apk add build-base linux-headers pkgconf meson ninja cargo rust gtk4.0-dev \
         libepoxy-dev curl-dev openssl-dev uchardet-dev libpsl-dev sqlite-dev \
         libseccomp-dev libwebp-dev sdl2-dev
+
+Rust 1.85 or newer is required. On Ubuntu 24.04, whose default is 1.75,
+install `rustc-1.85 cargo-1.85` instead and put `/usr/lib/rust-1.85/bin`
+first on `PATH`, or use [rustup](https://rustup.rs).
 
 Alpine builds against musl rather than glibc, so the resulting binary
 is not interchangeable with the glibc portable zip — run a musl build

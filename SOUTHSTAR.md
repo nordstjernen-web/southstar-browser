@@ -220,6 +220,8 @@ selection.
 
 ## How we work
 
-meson + ninja, with `ccache` for fast rebuilds. Build and smoke-launch
+meson + ninja, with `ccache` for fast rebuilds; meson builds the Rust
+workspace through Cargo (`rust/meson.build`), and `cargo fmt` and
+`cargo clippy` stay clean like the C warnings. Build and smoke-launch
 locally before pushing — the local machine is the build and run oracle.
 Commit small; push logical units to `origin/main` as they land.

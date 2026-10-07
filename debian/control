@@ -7,6 +7,8 @@ Build-Depends:
  meson (>= 1.0),
  ninja-build,
  pkg-config,
+ cargo (>= 1.85),
+ rustc (>= 1.85),
  libgtk-4-dev,
  libepoxy-dev,
  libcurl4-openssl-dev,
