@@ -44,6 +44,11 @@ Southstar Browser (unreleased):
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be
   built in and compared on test262, benchmarks and real pages.
+* southstar-jsshell runs JavaScript, test262 and the Octane benchmarks on
+  either the in-tree QuickJS-ng or Boa through a new engine-neutral layer,
+  and scripts/js-engine-compare.py writes the results to docs/js-engines.md:
+  test262 83.3% on QuickJS-ng and 94.4% on Boa, while QuickJS-ng runs Octane
+  about 2.5 to 8 times faster and Boa still crashes on 13 tests.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the

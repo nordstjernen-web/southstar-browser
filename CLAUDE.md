@@ -179,6 +179,12 @@ so local builds and CI compile with the minimum supported version.
   engine code and stay out.
 - No `#[test]`s. Check a port against the C it replaces with a throwaway
   differential harness, then in the browser itself.
+- JavaScript engines: `rust/js-engine` is the engine-neutral layer (feature
+  `quickjs`, the default, over the in-tree fork; feature `boa`, optional, needs
+  Rust 1.91+). `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on
+  either; `scripts/js-engine-compare.py` rebuilds both shells, runs test262 and
+  Octane, and rewrites `docs/js-engines.md`. The QuickJS shell links
+  `builddir/src/quickjs/libqjs.a`, so build the browser first.
 
 The QuickJS engine is integrated into the main tree at `src/quickjs/`
 (forked from [quickjs-ng](https://github.com/quickjs-ng/quickjs); we

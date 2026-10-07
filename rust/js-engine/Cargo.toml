@@ -1,0 +1,21 @@
+[package]
+name = "southstar-js-engine"
+description = "The engine-neutral JavaScript layer: one API over the in-tree QuickJS-ng fork or Boa, chosen at build time"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+boa_engine = { version = "0.22", features = ["annex-b"], optional = true }
+boa_gc = { version = "0.22", optional = true }
+
+[features]
+default = ["quickjs"]
+quickjs = []
+boa = ["dep:boa_engine", "dep:boa_gc"]
+boa-intl = ["boa", "boa_engine/intl_bundled"]
+
+[lints]
+workspace = true

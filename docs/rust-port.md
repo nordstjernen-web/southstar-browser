@@ -224,7 +224,8 @@ rust/
   sys/quickjs-sys/      bindgen over src/quickjs (the in-tree fork)
   js-engine/            the engine-neutral layer the bindings are written
                         against, with one backend module per engine
-  bin/southstar-jsshell/ a command-line host for test262 and shell benchmarks
+  jsshell/              southstar-jsshell, a command-line host for test262
+                        and shell benchmarks on any backend
   sys/lexbor-sys/       bindgen over src/lexbor
   sys/ns-pango-sys/     bindgen over ns-pango's renamed API
   sys/southstar-sys/    bindgen over the engine headers still in C
@@ -659,7 +660,10 @@ results go into a table in `docs/` next to the WPT scoreboard:
 | Platforms | builds and smoke-runs on Linux, Windows (MSYS2 MinGW), macOS, FreeBSD, NetBSD and musl |
 
 The shell numbers come first, from the phase 2 bake-off; the browser numbers
-follow as phase 7 lands. Whether a pure-Rust engine ever becomes the default
+follow as phase 7 lands. `scripts/js-engine-compare.py` builds
+`southstar-jsshell` once per engine, runs test262 (in worker processes, so a
+hang or a crash costs one test, not the run) and the Octane suite, and
+rewrites `docs/js-engines.md`. Whether a pure-Rust engine ever becomes the default
 is decision D12, made on these numbers, not in advance.
 
 ### Phase 8 — Remaining web platform features
@@ -796,6 +800,14 @@ the existing ones, not a test suite.
 
 Progress is tracked in this file: every ported module is listed in the
 table below, and `Changelog.md` gets an entry per phase.
+
+### JavaScript engine bake-off
+
+The first `js-engine` layer (`rust/js-engine`) has the QuickJS-ng backend (the
+in-tree fork, linked from meson's `libqjs`) and the Boa 0.22 backend, and
+`southstar-jsshell` (`rust/jsshell`) runs test262 and Octane on both; results
+are in `docs/js-engines.md`. Neither is linked into the browser yet. Next: the
+pilot binding file on both backends.
 
 ### Ported
 
