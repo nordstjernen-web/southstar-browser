@@ -170,7 +170,9 @@ so local builds and CI compile with the minimum supported version.
   functions its C header declares (`#[unsafe(no_mangle)] extern "C"`). Pointer
   handling lives in the crate's `ffi.rs`; the logic is safe Rust. The C header
   stays as the contract, the `.c` file is deleted in the same commit, and the
-  crate is added to `rust/southstar-ffi` (dependency plus `pub use`).
+  crate is added to `rust/southstar-ffi` (dependency plus `pub use`, and the
+  C file's name in the `PORTED` list in `rust/southstar-ffi/src/info.rs`,
+  which `about:southstar` shows).
 - `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`
   must be clean before pushing, like the C warnings.
 - A new crates.io dependency needs a reason in its commit message; keep the

@@ -35,6 +35,7 @@
 #include <sqlite3.h>
 #include <cairo.h>
 #include "ns_pango.h"
+#include "rust_info.h"
 #include <webp/decode.h>
 #include <openssl/crypto.h>
 #include <openssl/opensslv.h>
@@ -2922,6 +2923,20 @@ about_diagnostics_html(void)
     diag_kv(s, "TLS / crypto", OpenSSL_version(OPENSSL_VERSION));
     diag_kv(s, "Networking", curl_version());
 
+    g_string_append(s, "<h3>Rust</h3>");
+    {
+        char *compiler = g_strdup_printf("rustc %s", ns_rust_compiler_version());
+        char *count = g_strdup_printf("%u C modules", ns_rust_module_count());
+        diag_kv(s, "Compiler", compiler);
+        diag_kv(s, "Minimum Rust version", ns_rust_minimum_version());
+        diag_kv(s, "Build profile", ns_rust_build_profile());
+        diag_kv(s, "Ported to Rust", count);
+        diag_kv(s, "Modules", ns_rust_modules());
+        diag_kv(s, "JavaScript bindings", "Temporal, over the js-engine layer");
+        g_free(count);
+        g_free(compiler);
+    }
+
     g_string_append(s, "<h3>Features</h3>");
 #ifdef NS_ENABLE_WEBGL
     diag_feature(s, "WebGL (3D canvas)", TRUE);
@@ -4432,7 +4447,7 @@ static const char k_about_southstar_template[] =
     "__ND_SPLASH__"
     "<div class=\"head\">__ND_LOGO_MARK__<div>"
     "<h1>Southstar<span class=\"ver\">" NS_VERSION "</span></h1>"
-    "<p>A web browser implemented in C.</p></div></div>"
+    "<p>A web browser implemented in C and Rust.</p></div></div>"
     "<section class=\"card\">"
     "<h2>License</h2>"
     "<p>Southstar is \xc2\xa9 2026 Andreas R\xc3\xb8sdal and dual-licensed: "

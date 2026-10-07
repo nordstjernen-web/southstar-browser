@@ -43,6 +43,8 @@ Southstar Browser (unreleased):
   reads and writes the same files.
 * Spell checking of editable text is Rust, still over Enchant when it is
   installed.
+* about:southstar has a Rust section: the compiler a build used, the
+  minimum Rust version, the build profile and the modules now in Rust.
 * Temporal is the first JavaScript binding written in Rust. It is built on
   the engine-neutral layer, so the same code also runs on Boa, and it
   behaves exactly as the C did.

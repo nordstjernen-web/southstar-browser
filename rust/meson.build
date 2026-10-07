@@ -10,10 +10,13 @@ rust_native_libs = run_command(
 
 southstar_rust_features = []
 southstar_rust_link_deps = [sqlite3]
-southstar_rust_env = {}
+southstar_rust_env = {'NS_RUSTC_VERSION': rustc.version()}
 if quickjs_original
   southstar_rust_features += ['quickjs-original']
-  southstar_rust_env = {'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version}
+  southstar_rust_env = {
+    'NS_RUSTC_VERSION': rustc.version(),
+    'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version,
+  }
 endif
 if have_enchant
   southstar_rust_features += ['enchant']
