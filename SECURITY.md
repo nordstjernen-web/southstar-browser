@@ -37,10 +37,10 @@ trusted.
   Wuffs, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
-  implemented, off by default and gated behind a per-site trust prompt —
-  see `docs/webgl.md`. WebGPU is an **experimental**, opt-in feature —
+  implemented, off by default and gated behind a per-site trust prompt.
+  WebGPU is an **experimental**, opt-in feature —
   absent unless the build has wgpu-native and the browser is started with
-  `--enable-webgpu` — see `docs/webgpu.md`. MSE and inline WebM/MP4
+  `--enable-webgpu`. MSE and inline WebM/MP4
   playback *are* implemented; their decoders are in scope above.)
 - CPU-level side channels (Spectre-class).
 - Attacks that already require local code execution as the same user.
@@ -56,7 +56,7 @@ process that holds the strongest sandbox, and does not immediately yield
 arbitrary code execution outside the user's data directory. (Per-origin
 *site* isolation — one renderer per site rather than per tab — and a
 networking/storage broker are the next steps; today the renderer still
-does its own fetching and persistence. See `docs/tab-isolation.md`.)
+does its own fetching and persistence.)
 
 ### Compile-time hardening (`meson.build`)
 

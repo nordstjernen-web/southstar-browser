@@ -30,6 +30,12 @@ Southstar Browser (unreleased):
   again checked against the C over millions of inputs and real fonts. The
   built-in safe-browsing test host, malware.testing.southstar, is blocked
   again; its entry still held the digest of the old name.
+* docs/ is trimmed for the port: the pages that described the C
+  implementation's internals (architecture, threading, rendering, tab
+  isolation, the watchdog, the embedding API, QuickJS notes, …), the
+  architecture poster and its generator, and the old per-distribution,
+  nightly-server and Microsoft Store guides are gone. What remains covers
+  using, building and measuring the browser, and the port plan.
 
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the

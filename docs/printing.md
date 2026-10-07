@@ -87,5 +87,3 @@ break starting sheet three.
 
 - [Controls.md](Controls.md) — the keyboard shortcuts.
 - [CSS-compatibility.md](CSS-compatibility.md) — the paged-media rows.
-- [Rendering.md](Rendering.md) — how the same box tree reaches the screen.
-- [single-process-mode.md](single-process-mode.md) — what `--single-process` changes.

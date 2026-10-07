@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Fetches tc39/test262 (the submodule declared in src/quickjs/.gitmodules
-# is intentionally left uninitialized, see docs/quickjs-ecma-specification-
-# compliance.md) and runs the full suite through the in-tree run-test262
+# is intentionally left uninitialized) and runs the full suite through the in-tree run-test262
 # harness, building it via the upstream CMake path if needed.
 #
 # Usage: scripts/test262-run.sh [run-test262 args...]

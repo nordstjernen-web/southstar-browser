@@ -4,7 +4,7 @@ This is the canonical privacy policy for Southstar Browser. It is
 published at
 `https://github.com/nordstjernen-web/southstar-browser/blob/main/docs/privacy-policy.md`,
 the page the browser's own Privacy links open — Microsoft Store policy 10.5.1 requires every Win32 product to link
-a privacy policy from its listing (see `docs/windows-store.md`), and
+a privacy policy from its listing, and
 other store fronts ask for the same URL.
 
 ---

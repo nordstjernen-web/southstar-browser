@@ -33,15 +33,14 @@ WebExtensions); sync / accounts / telemetry /
 
 WebGL is the standard exception to the no-GPU-APIs stance: a minimalist
 WebGL 1 / 2 implementation mapped directly onto OpenGL ES, enabled by default
-with a global Settings toggle and a visible activity indicator (see
-`docs/webgl.md`).
+with a global Settings toggle and a visible activity indicator.
 
 WebGPU (`navigator.gpu`) is an **experimental** feature layered on the
 external [wgpu-native](https://github.com/gfx-rs/wgpu-native) library. The
 `webgpu` build feature is `auto`: it is compiled in whenever wgpu-native is
 present and skipped otherwise, so a machine without the library still gets a
 WebGPU-free binary. At runtime it stays off until the browser is started with
-`--enable-webgpu` (equivalently `NS_WEBGPU_ALLOW=1`); see `docs/webgpu.md`.
+`--enable-webgpu` (equivalently `NS_WEBGPU_ALLOW=1`).
 wgpu-native is a large dependency that does not fit the minimalism the rest of
 the engine is built around, so it is never made a hard or default dependency.
 
@@ -111,7 +110,8 @@ in-process renderer any more; the optional `--single-process` mode serves the
 same renderer over a thread instead of a child process. The thin shell parses
 no untrusted bytes but must `fork`/`execv`
 renderers and create POSIX shm, so it runs under a widened Landlock with
-seccomp skipped. The mechanics live in `docs/tab-isolation.md`.
+seccomp skipped. The mechanics live in `src/security.c`; `SECURITY.md`
+describes the boundary.
 
 **The plan from here:**
 
@@ -198,10 +198,11 @@ committed, listed to keep the long view in one place:
 **Done:** process-per-tab renderers behind the IPC +
 shared-memory-framebuffer boundary (the GTK shell is a thin display
 client now; the legacy bespoke in-process renderer removed — see
-*Architecture & frontends* and `docs/tab-isolation.md`),
+*Architecture & frontends*),
 10 embeddable `libsouthstar` (built and header-installed
-from meson, see `docs/Embedding.md`),
-15 Debian/Ubuntu `.deb` packaging (built nightly, see `docs/Nightly.md`).
+from meson, `src/libsouthstar.h`),
+15 Debian/Ubuntu `.deb` packaging (`scripts/pack-deb.sh`, built nightly by
+`scripts/nightly.sh`).
 
 **Ongoing — security hardening passes.** Recurring source audits of the
 attacker-reachable surface — network parsing, cookie scoping, layout

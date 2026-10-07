@@ -46,9 +46,9 @@ one person to read and audit end-to-end.
 - [ ] Rewrite the browser in Rust — the plan is in
       [docs/rust-port.md](docs/rust-port.md).
 
-The architecture the rewrite starts from is mapped in
-[docs/Software-Architecture.md](docs/Software-Architecture.md) and planned in
-[SOUTHSTAR.md](SOUTHSTAR.md).
+What the rewrite starts from — the processes, the engine's data model and how
+they fit together — and the order it is ported in are described in
+[docs/rust-port.md](docs/rust-port.md).
 
 ## Download
 
@@ -73,14 +73,13 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   routing, plus Web Workers, IndexedDB (over SQLite), WebSocket and
   `EventSource`. The QuickJS engine is selectable at build time: the in-tree
   quickjs-ng fork by default, or Fabrice Bellard's original QuickJS with
-  `-Dquickjs=quickjs` — see [docs/quickjs.md](docs/quickjs.md).
+  `-Dquickjs=quickjs`.
 - **Networking** over HTTP/2 with libcurl — HSTS, CSP, subresource-integrity
   checks, partitioned cookies, speculative subresource loading, request
   coalescing and a `Vary`-aware HTTP cache. An in-tree **libnghttp2** transport backend is selectable at build
   time (`-Dhttp_backend=nghttp2`), with **HTTP/3 over QUIC** via ngtcp2 +
   nghttp3 + gnutls when present. Both backends fetch byte-identically, so the
-  independent transports cross-check each other. See
-  [docs/http-backends.md](docs/http-backends.md).
+  independent transports cross-check each other.
 - **Images and graphics** — Wuffs decodes PNG/APNG, GIF, BMP, JPEG and lossy
   WebP; libwebp handles lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
@@ -91,11 +90,10 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   helper, and a `<track default>` WebVTT file is drawn over the video. Other
   codecs render a poster and play overlay. See [docs/media.md](docs/media.md).
 - **WebGL / WebGPU / WebAssembly** — WebGL 1/2 mapped onto OpenGL ES, on by
-  default ([docs/webgl.md](docs/webgl.md)); experimental `navigator.gpu` over
+  default; experimental `navigator.gpu` over
   external wgpu-native, built only when that library is installed and gated
-  behind `--enable-webgpu` ([docs/webgpu.md](docs/webgpu.md)); the full
-  WebAssembly JS API over a vendored WAMR interpreter
-  ([docs/webassembly.md](docs/webassembly.md)).
+  behind `--enable-webgpu`; the full
+  WebAssembly JS API over a vendored WAMR interpreter.
 - **MathML** — a minimalist presentation-MathML renderer (`src/mathml.c`)
   laid out over Pango/Cairo and embedded inline on the text baseline.
 - **Spell checking** — optional, via Enchant: misspelled words in editable
@@ -107,18 +105,16 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
 - **Process-per-tab** — each tab's engine runs in its own sandboxed
   `southstar-renderer` process; the GTK app is a thin shell that blits the
   renderer's shared-memory framebuffer and forwards input over an IPC control
-  channel, so a page can't take down the UI
-  ([docs/tab-isolation.md](docs/tab-isolation.md)). `--single-process` runs
-  every tab's engine in the shell process instead
-  ([docs/single-process-mode.md](docs/single-process-mode.md)).
+  channel, so a page can't take down the UI. `--single-process` runs
+  every tab's engine in the shell process instead.
 - **Privacy** — no telemetry or update pings, standards-compliant client
   hints, local-only safe browsing, partitioned cookies and a `--private`
   session mode.
 - **UI** — tabs, bookmarks, history, downloads, find-in-page, printing and
   save-to-PDF, a JavaScript console, settings, headless mode, and a C
-  embedding API ([docs/Embedding.md](docs/Embedding.md)). The interface
+  embedding API (`src/libsouthstar.h`). The interface
   follows the operating-system language, with UI translations for 13
-  languages so far ([docs/i18n.md](docs/i18n.md)).
+  languages so far (`data/i18n/`).
 - **Extensions** — initial support for simple, page-facing WebExtensions
   ([docs/extensions.md](docs/extensions.md)).
 

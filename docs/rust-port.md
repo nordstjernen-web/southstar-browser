@@ -3,8 +3,7 @@
 Status: **in progress** — phase 0 (toolchain, build integration, the first
 ported module) has landed; see §12. Written in October 2026 against `main` at
 the commit that added this file. Sizes and facts below were taken from the code on that tree.
-Where they disagree with older docs (`Software-Architecture.md` still quotes
-css.c at ~17k lines and layout.c at ~11k; `media.md` calls the audio helper
+Where they disagree with older docs (`media.md` calls the audio helper
 unsandboxed and the video ring three slots), the code is right.
 
 ## 1. Summary
@@ -476,8 +475,7 @@ Scope (13.5k lines): `net.c` (7.2k), `net_http2.c` (2.7k), `net_backend.h`,
 - The network threads keep their shape: one I/O thread for the curl multi
   handle, a fetch pool, per-connection threads.
 
-Exit: both backends fetch byte-identically, as `docs/http-backends.md`
-requires today.
+Exit: both backends fetch byte-identically, as they do today.
 
 ### Phase 6 — Engine core: DOM, style, layout, paint
 

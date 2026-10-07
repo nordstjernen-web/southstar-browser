@@ -288,8 +288,7 @@ bundle into an unsigned `dist/southstar-${VERSION}-win64.msix`
 using `data/msix/AppxManifest.xml.in` and tile assets rendered from
 the SVG logo. The Store policy situation (an independent engine
 conflicts with policy 10.2.1), the manifest decisions, identity
-overrides, local sideload testing, and the full submission
-procedure are documented in `docs/windows-store.md`.
+overrides and local sideload testing are in `scripts/pack-msix.sh`.
 
 ## CA bundle (what `app/etc/ssl/certs/ca-bundle.crt` is)
 

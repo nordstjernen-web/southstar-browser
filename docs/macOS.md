@@ -16,8 +16,8 @@ covers both **installing the prebuilt app** and **building from source**.
 
 ## Install the app
 
-1. Download `southstar-macos.dmg` from a nightly server
-   (see [Nightly.md](Nightly.md)) or build one from source (below).
+1. Download `southstar-macos.dmg` from a nightly server (`scripts/nightly.sh`
+   builds one) or build one from source (below).
 2. Open the `.dmg` and drag **Southstar** into `/Applications`.
 3. Launch it from Launchpad, Spotlight, or Finder.
 

@@ -20,7 +20,7 @@ Update Changelog.md
 - HTML5 + modern CSS + modern JavaScript, supported pragmatically as
   far as is feasible without bloat.
 - **No** AI-style web APIs. WebGL **is** supported: a working, minimalist
-  WebGL 1 / 2 over OpenGL ES (`src/webgl.c`, see `docs/webgl.md`). It is
+  WebGL 1 / 2 over OpenGL ES (`src/webgl.c`). It is
   enabled by default, can be disabled globally in Settings, and reports
   active use in the browser status bar. The `WebGLRenderingContext` /
   `WebGL2RenderingContext` interface objects also carry the GL enum
@@ -39,7 +39,7 @@ Update Changelog.md
   `--enable-webgpu` (which sets `NS_WEBGPU_ALLOW=1`, inherited by the
   sandboxed renderer); without that flag `navigator.gpu.requestAdapter()`
   resolves to `null`. wgpu-native is a large dependency and deliberately
-  stays an opt-in build input, never vendored. See `docs/webgpu.md`.
+  stays an opt-in build input, never vendored.
 - The **one vendored, in-tree** video codec is MPEG-1, decoded by the
   vendored MIT-licensed [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
   single-file decoder (`subprojects/plmpeg/`, wrapped by
@@ -194,7 +194,6 @@ The `quickjs` meson option picks the engine under the QuickJS binding:
 Bellard's original [QuickJS](https://github.com/bellard/quickjs), fetched at
 configure time by `subprojects/quickjs.wrap` (pinned to a release commit,
 built by the overlay in `subprojects/packagefiles/quickjs/`, never vendored).
-See `docs/quickjs.md`.
 
 - **Engine code includes `"ns_quickjs.h"`, never `<quickjs.h>`.** On the
   original engine (`NS_QUICKJS_ORIGINAL`) that header and `src/ns_quickjs.c`
@@ -205,7 +204,7 @@ See `docs/quickjs.md`.
   hooks with no equivalent (the receiver-aware `get_own_property_receiver`)
   are guarded in place.
 - CI does not build it: build both configurations locally after binding
-  changes (`docs/quickjs.md`, "Checking a change").
+  changes.
 
 ### Text layout: ns-pango
 
@@ -300,8 +299,7 @@ system OpenSSL 3.0 has no QUIC API; the HTTP/2 path keeps using OpenSSL.
 Like the `webgpu`/`libav` features, the QUIC stack is never vendored and a
 build without those packages carries no ngtcp2/nghttp3/gnutls symbol and is
 HTTP/2-only. Keep the curl path the default and behaviour-identical; extend
-`src/net_http2.c` for the alternate backend. See `docs/http-backends.md` for
-the full comparison.
+`src/net_http2.c` for the alternate backend.
 
 ### Charset detection: uchardet
 
@@ -452,7 +450,7 @@ don't add `meson test` targets.
 - Don't add AI-style web-API surface area, even as stubs. WebGL is a
   deliberate exception — extend `src/webgl.c`, don't re-architect it.
 - WebGPU is an experimental exception layered over external wgpu-native
-  (`src/webgpu.c`, `docs/webgpu.md`). The `webgpu` feature is `auto`: built
+  (`src/webgpu.c`). The `webgpu` feature is `auto`: built
   only when wgpu-native is actually present, so a machine without it still
   gets a build with no WebGPU surface or dependency. Keep it behind the
   `--enable-webgpu` / `NS_WEBGPU_ALLOW` runtime gate, and don't make

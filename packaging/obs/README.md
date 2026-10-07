@@ -52,7 +52,7 @@ as `%license`. NSL-1.0 alone is not OSI-approved (it forbids "Competing
 Use"), but the GPL option is free software, which makes the package
 eligible for openSUSE:Factory / Tumbleweed through the usual devel-project
 submit request and legal review. Until it is accepted there, the home:
-project is the distribution channel. See `docs/opensuse.md`.
+project is the distribution channel.
 
 ## Build options
 
