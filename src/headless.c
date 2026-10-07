@@ -1,4 +1,4 @@
-/* Nordstjernen — headless engine driver.
+/* Southstar — headless engine driver.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -29,7 +29,7 @@
 #include "image.h"
 #include "js.h"
 #include "layout.h"
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "net.h"
 #include "paint.h"
 #include "rproc_http.h"

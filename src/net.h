@@ -1,4 +1,4 @@
-/* Nordstjernen — libcurl-backed async fetcher API.
+/* Southstar — libcurl-backed async fetcher API.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -38,7 +38,7 @@ G_BEGIN_DECLS
 #define NS_USER_AGENT \
        "Mozilla/5.0 (" NS_UA_PLATFORM_TOKEN ") AppleWebKit/537.36 " \
        "(KHTML, like Gecko) Chrome/" NS_CHROME_VERSION \
-       " Safari/537.36 Nordstjernen/1.0"
+       " Safari/537.36 Southstar/1.0"
 #define NS_UA_LADYBIRD \
        "Mozilla/5.0 (" NS_UA_PLATFORM_TOKEN ") AppleWebKit/537.36 " \
        "(KHTML, like Gecko) Chrome/" NS_CHROME_VERSION \

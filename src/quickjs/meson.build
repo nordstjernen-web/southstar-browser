@@ -1,4 +1,4 @@
-# QuickJS — integrated as part of Nordstjernen (no longer a meson
+# QuickJS — integrated as part of Southstar (no longer a meson
 # subproject). Public surface: `libquickjs` (declared dependency).
 # Also builds in-tree `qjs` / `qjsc` host tools used by the polyfill
 # verifier at build time.

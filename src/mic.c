@@ -1,4 +1,4 @@
-/* Nordstjernen — microphone capture (SDL) for getUserMedia audio + Web Audio. */
+/* Southstar — microphone capture (SDL) for getUserMedia audio + Web Audio. */
 
 #include "mic.h"
 

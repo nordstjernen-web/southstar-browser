@@ -1,6 +1,6 @@
-# Nordstjernen on Debian — packaging and distribution
+# Southstar on Debian — packaging and distribution
 
-This document records how Nordstjernen is packaged as a Debian `.deb`,
+This document records how Southstar is packaged as a Debian `.deb`,
 and — importantly — where in the Debian ecosystem it can actually live.
 The packaging sources are in the `debian/` directory at the repository
 root. For the plain build-from-source instructions (any distro) see
@@ -8,7 +8,7 @@ root. For the plain build-from-source instructions (any distro) see
 
 ## Read this first: licensing
 
-Nordstjernen is **dual-licensed**: each recipient may take it under
+Southstar is **dual-licensed**: each recipient may take it under
 **either** the **Nordstjernen Source License v1.0 (NSL-1.0)** **or** the
 **GNU General Public License version 3 or later (GPL-3.0-or-later)**, at
 their option (SPDX `LicenseRef-NSL-1.0 OR GPL-3.0-or-later`; the texts are
@@ -24,14 +24,14 @@ however, is DFSG-free, and a dual license needs only one DFSG-free
 option: Debian distributes the package under the GPL and recipients
 keep the choice. The bundled third-party code (see
 `THIRD-PARTY-LICENSES.md`) keeps its own free, GPL-3-compatible licenses.
-**Nordstjernen can therefore go into Debian `main`**, through the usual
+**Southstar can therefore go into Debian `main`**, through the usual
 sponsorship and FTP-master review.
 
 There are two paths, in order of effort:
 
 1. **A third-party APT repository (fastest, fully under our control).**
    We host signed `.deb`s and an `apt` repo; users add it and
-   `apt install nordstjernen`. No Debian FTP-master review, works on
+   `apt install southstar`. No Debian FTP-master review, works on
    Debian and every Debian derivative (Ubuntu, Mint, …). This is the
    practical channel until the package is in the archive, and is
    documented below.
@@ -44,7 +44,7 @@ There are two paths, in order of effort:
 
 > Neither `non-free` nor `contrib` is the right home. `non-free` is for
 > software with no DFSG-free license option, and `contrib` for DFSG-free
-> software that *depends on* something outside `main`. Nordstjernen is
+> software that *depends on* something outside `main`. Southstar is
 > DFSG-free under the GPL option and its build and runtime
 > dependencies are in `main`.
 
@@ -117,12 +117,12 @@ From a checkout that contains the `debian/` directory:
 `-b` builds a binary-only package; drop it for a full source+binary
 build. The result lands in the parent directory:
 
-    ../nordstjernen_<version>_<arch>.deb
+    ../southstar_<version>_<arch>.deb
 
 Install and smoke-test it:
 
-    sudo apt install ../nordstjernen_*.deb
-    nordstjernen
+    sudo apt install ../southstar_*.deb
+    southstar
 
 ### Clean, reproducible builds with sbuild/pbuilder
 
@@ -140,15 +140,15 @@ or with `pbuilder`:
 
 ### Lint before publishing
 
-    lintian -i -I --show-overrides ../nordstjernen_*.changes
+    lintian -i -I --show-overrides ../southstar_*.changes
 
 For `main` the package should be lintian-clean. Any `license-problem-*`
-tag — on Nordstjernen's own sources or on a **bundled** engine — is a
+tag — on Southstar's own sources or on a **bundled** engine — is a
 real issue to fix before upload.
 
 ## Path 1 — host a third-party APT repository
 
-This is the route that gets Nordstjernen onto users' Debian/Ubuntu
+This is the route that gets Southstar onto users' Debian/Ubuntu
 machines without Debian's archive process.
 
 1. **Build the `.deb`** as above (build once per architecture: `amd64`,
@@ -157,22 +157,22 @@ machines without Debian's archive process.
 2. **Create a signed repository.** [`aptly`](https://www.aptly.info) is
    the simplest tool:
 
-       aptly repo create -distribution=stable -component=main nordstjernen
-       aptly repo add nordstjernen ../nordstjernen_*.deb
-       aptly publish repo -gpg-key=<KEYID> nordstjernen
+       aptly repo create -distribution=stable -component=main southstar
+       aptly repo add southstar ../southstar_*.deb
+       aptly publish repo -gpg-key=<KEYID> southstar
 
    Serve `~/.aptly/public` over HTTPS (e.g. at
-   `https://apt.nordstjernen.org`).
+   `https://apt.example.org`).
 
 3. **Users add the repo** with a keyring (the modern, `signed-by`
    form — never `apt-key`):
 
-       curl -fsSL https://apt.nordstjernen.org/nordstjernen.gpg \
-         | sudo tee /usr/share/keyrings/nordstjernen.gpg >/dev/null
-       echo "deb [signed-by=/usr/share/keyrings/nordstjernen.gpg] \
-         https://apt.nordstjernen.org stable main" \
-         | sudo tee /etc/apt/sources.list.d/nordstjernen.list
-       sudo apt update && sudo apt install nordstjernen
+       curl -fsSL https://apt.example.org/southstar.gpg \
+         | sudo tee /usr/share/keyrings/southstar.gpg >/dev/null
+       echo "deb [signed-by=/usr/share/keyrings/southstar.gpg] \
+         https://apt.example.org stable main" \
+         | sudo tee /etc/apt/sources.list.d/southstar.list
+       sudo apt update && sudo apt install southstar
 
 Updates ship by adding the new `.deb` to the repo and re-publishing;
 `apt upgrade` then picks it up. Ship a `.deb` per release tag so
@@ -186,7 +186,7 @@ With a Debian Developer willing to sponsor it:
 
        reportbug --email <you> wnpp
 
-   Title it `ITP: nordstjernen -- small, hand-written web browser` and
+   Title it `ITP: southstar -- small, hand-written web browser` and
    give the license as `GPL-3+ or NSL-1.0` (SPDX
    `LicenseRef-NSL-1.0 OR GPL-3.0-or-later`), noting that Debian distributes
    it under the GPL-3+ option and that it targets `main`.
@@ -197,7 +197,7 @@ With a Debian Developer willing to sponsor it:
    bundled-engine licenses must all be listed.
 
 3. **Note the embedded code copies.** Debian discourages bundled library
-   copies (Debian Policy §4.13). Nordstjernen *forks* lexbor, QuickJS,
+   copies (Debian Policy §4.13). Southstar *forks* lexbor, QuickJS,
    and WAMR in-tree and modifies them for tight integration, so they
    cannot simply be swapped for system packages. Expect the sponsor and
    FTP-masters to ask about this: explain the reasoning, keep the

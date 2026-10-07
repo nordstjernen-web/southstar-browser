@@ -1,12 +1,12 @@
 # HTML compatibility
 
-How Nordstjernen tracks the **WHATWG HTML Living Standard**
+How Southstar tracks the **WHATWG HTML Living Standard**
 (<https://html.spec.whatwg.org/>).
 
 This is a section-by-section walk through the entire spec, from §1
-*Introduction* to §16 *Obsolete features*, recording how Nordstjernen
+*Introduction* to §16 *Obsolete features*, recording how Southstar
 behaves against each. It is measured against the **spec text**, not
-against any other browser — Nordstjernen is a C / GTK 4 /
+against any other browser — Southstar is a C / GTK 4 /
 libcurl implementation with no upstream engine. It is a living map,
 not a guarantee; the browser's runtime behaviour is the source of
 truth. Re-check any row by running the browser against a page that
@@ -45,15 +45,15 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 
 ## The renderer: out-of-process (IPC)
 
-Nordstjernen has a single renderer architecture. The GTK app
+Southstar has a single renderer architecture. The GTK app
 is a thin shell (`src/gtk/procview.c`) that spawns
-one sandboxed `nordstjernen-renderer` process per tab
+one sandboxed `southstar-renderer` process per tab
 (`src/renderer_http.c`, `src/renderer_serve.c`) and drive it over a control channel +
 shared-memory framebuffer (`src/rproc_http.c`). The engine
 (`src/css.c`, `src/layout.c`, `src/js.c`, `src/dom.c`, `src/paint.c`,
 `src/net.c`, images) runs entirely inside the sandboxed child (Linux
 Landlock + seccomp); the UI process only blits frames and forwards
-input. `./nordstjernen` (the entry point in `src/gtk/appmain.c`) launches
+input. `./southstar` (the entry point in `src/gtk/appmain.c`) launches
 this shell; `--headless`/`--dump`/`--eval`/`--inspect`/`--act` run the
 same engine in-process without a display. The earlier in-process GTK
 renderer (`src/legacy/`) has been removed.
@@ -65,7 +65,7 @@ features layered on top by the GTK shell are tracked here:
 |------------------------|:--:|------|
 | Page render · scroll · resize reflow | ✅ | whole shared-memory frames (`RENDER`/`RENDER_RECT`/`VIEWPORT`) |
 | Per-tab process isolation / sandbox | ✅ | each tab's engine runs in a Landlock+seccomp child |
-| Click activation (`pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click`) | ✅ | full sequence in `ns_browser_click` (`src/libnordstjernen.c`) |
+| Click activation (`pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click`) | ✅ | full sequence in `ns_browser_click` (`src/libsouthstar.c`) |
 | `:hover` CSS restyle + pointer move/over/out JS events | ✅ | `ns_browser_hover` tracks the hovered element and restyles (`ns_css_set_hover_node`) |
 | Keyboard input → JS + form/`contenteditable` editing | ✅ | `KEY` messages drive the shared text-entry machinery |
 | Form submit (GET query + POST body) + navigation | ✅ | stashes a pending POST and re-`OPEN`s |
@@ -83,7 +83,7 @@ features layered on top by the GTK shell are tracked here:
 
 ## §1 Introduction
 
-Informative; nothing to implement. Nordstjernen targets the HTML5
+Informative; nothing to implement. Southstar targets the HTML5
 *standards* processing model — documents are parsed and laid out in
 standards mode (see [§13](#13-the-html-syntax)).
 
@@ -131,7 +131,7 @@ standards mode (see [§13](#13-the-html-syntax)).
 | `link rel="preconnect"`/`dns-prefetch` | ✅ | warm the origin's DNS + TLS connection early via libcurl (`ns_net_preconnect_async`) |
 | `meta charset` | ✅ | feeds charset decode |
 | `meta name="viewport"` | 🟡 | parsed; viewport width/height come from `ns_css_set_viewport` (`src/css.c`); not all directives enforced |
-| `meta http-equiv` (CSP, refresh, etc.) | ✅ | CSP/Referrer-Policy honoured where reflected; **declarative refresh is applied**: the `refresh` directive and the HTTP `Refresh` response header are parsed per the WHATWG shared-declarative-refresh steps (digit time, `;`/`,` separators, optional `url`/`=` keyword, quoted/whitespace-trimmed URL — `ns_net_parse_refresh` in `src/net.c`), armed on document open (`browser_arm_declarative_refresh` in `src/libnordstjernen.c`, header first then the first `<meta>` in tree order), and after the timeout the navigation is handed to the shell through the pending-nav channel (`ns_browser_take_pending_nav` → the renderer's `X-Nav` header); an armed refresh keeps `ns_browser_animating` true so the shell's frame loop stays alive to deliver it |
+| `meta http-equiv` (CSP, refresh, etc.) | ✅ | CSP/Referrer-Policy honoured where reflected; **declarative refresh is applied**: the `refresh` directive and the HTTP `Refresh` response header are parsed per the WHATWG shared-declarative-refresh steps (digit time, `;`/`,` separators, optional `url`/`=` keyword, quoted/whitespace-trimmed URL — `ns_net_parse_refresh` in `src/net.c`), armed on document open (`browser_arm_declarative_refresh` in `src/libsouthstar.c`, header first then the first `<meta>` in tree order), and after the timeout the navigation is handed to the shell through the pending-nav channel (`ns_browser_take_pending_nav` → the renderer's `X-Nav` header); an armed refresh keeps `ns_browser_animating` true so the shell's frame loop stays alive to deliver it |
 | `meta name="referrer"` | ✅ | Referrer-Policy applied in `src/net.c` |
 | `style` (inline sheet) | ✅ | parsed and cascaded by `src/css.c` |
 
@@ -164,7 +164,7 @@ elements (`head title meta link style script noscript template`) to
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| `a href` navigation | ✅ | link ranges tracked in layout; navigation dispatched from `src/libnordstjernen.c` |
+| `a href` navigation | ✅ | link ranges tracked in layout; navigation dispatched from `src/libsouthstar.c` |
 | `target` | ✅ | stored on the link range |
 | `rel` (`noopener`/`noreferrer`/`nofollow`) | 🟡 | parsed; `noreferrer` interacts with Referrer-Policy; `noopener` semantics limited (single browsing context) |
 | `download` | 🟡 | recognised; save flow limited |
@@ -184,11 +184,11 @@ elements (`head title meta link style script noscript template`) to
 | `iframe` | 🟡 | `src`/`srcdoc` load; a **srcless or `about:blank`** frame, when connected, runs the load algorithm — a real same-origin `about:blank` content document is created and a `load` event fires (`ns_js_load_iframe_now`), so script that waits on `iframe.onload` proceeds; `sandbox` parsed **and enforced** — scripts, forms, popups, modals, and same-origin (cookie/storage) gated per the token list, restrictions inherited by nested frames (`ns_iframe_effective_sandbox` in `src/js.c`) |
 | `iframe srcdoc` | 🟡 | attribute and DOM reflection; embedded rendering still limited |
 | `embed` / `object` | 🚫 | no NPAPI/PPAPI plugin dispatch |
-| `video` | 🟡 | plays **inline** for MPEG-1 (`.mpg`/`.mpeg`/`.m1v`, always) and VP9/VP8 WebM (`.webm`, with FFmpeg libav), honouring `autoplay`/`loop`/`muted`/`poster`, play/pause, seeking, volume, `played` and timed events. `MediaSource`/`SourceBuffer` streams use the same standards path: YouTube- and Vimeo-style WebM segments are accumulated in the renderer, video is decoded in `nordstjernen-video`, audio in `nordstjernen-audio`, and old prefix segments are evicted when the page calls `SourceBuffer.remove()`. `SourceBuffer.buffered` exposes the retained demux timestamp range after eviction. Unsupported codecs retain the poster + play overlay. See [media.md](media.md) |
-| `audio` | 🟡 | MP3 (always) and, when FFmpeg libav is built in, Opus/Vorbis (`.opus`/`.webm`/`.ogg`) play via the unsandboxed `nordstjernen-audio` helper; other codecs hand the source URL to the system media player. See [media.md](media.md) |
+| `video` | 🟡 | plays **inline** for MPEG-1 (`.mpg`/`.mpeg`/`.m1v`, always) and VP9/VP8 WebM (`.webm`, with FFmpeg libav), honouring `autoplay`/`loop`/`muted`/`poster`, play/pause, seeking, volume, `played` and timed events. `MediaSource`/`SourceBuffer` streams use the same standards path: YouTube- and Vimeo-style WebM segments are accumulated in the renderer, video is decoded in `southstar-video`, audio in `southstar-audio`, and old prefix segments are evicted when the page calls `SourceBuffer.remove()`. `SourceBuffer.buffered` exposes the retained demux timestamp range after eviction. Unsupported codecs retain the poster + play overlay. See [media.md](media.md) |
+| `audio` | 🟡 | MP3 (always) and, when FFmpeg libav is built in, Opus/Vorbis (`.opus`/`.webm`/`.ogg`) play via the unsandboxed `southstar-audio` helper; other codecs hand the source URL to the system media player. See [media.md](media.md) |
 | `track` (captions) | 🟡 | parsed; `kind`/`src`/`srclang`/`label`/`default` reflected via the standard typed-reflection path. **Rendered**: a `<track default>` whose `kind` is `subtitles`/`captions` (the missing-value default) is fetched, its WebVTT parsed into timed cues (`ns_vtt_parse` in `src/video.c` — `[HH:]MM:SS.mmm` timings, cue-setting/identifier/`NOTE` skipping, `<…>` tag and entity stripping), and the cue active at the video's current time is painted as centred captions over the bottom of the inline video (`paint_video_caption` in `src/paint.c`). Only the `default` track auto-shows (per the spec's initial mode); JS `TextTrack.mode` switching and cue positioning settings (`line`/`position`/`align`) are not wired |
 | `map` / `area` (client-side image maps) | ✅ | `<img usemap>` clicks are hit-tested against the referenced `<map>`'s `<area>` elements — `rect`/`circle`/`poly`/`default` shapes in image-local coordinates — and the first matching area's `href` is navigated (`ns_image_map_resolve` in `src/dom.c`, wired into the GUI and headless click paths) |
-| `img ismap` (server-side image maps) | ✅ | clicking an `<img ismap>` nested in an `<a href>` appends the click position relative to the image's top-left corner as a `?x,y` suffix to the link URL before navigating (GUI path in `src/libnordstjernen.c`, headless click path in `src/headless.c`); coordinates are clamped to non-negative |
+| `img ismap` (server-side image maps) | ✅ | clicking an `<img ismap>` nested in an `<a href>` appends the click position relative to the image's top-left corner as a `?x,y` suffix to the link URL before navigating (GUI path in `src/libsouthstar.c`, headless click path in `src/headless.c`); coordinates are clamped to non-negative |
 | MathML | ✅ | presentation MathML is laid out and painted over Pango/Cairo (`src/mathml.c`), embedded inline on the surrounding text baseline through the replaced-element media-box path (`src/layout.c`, `src/paint.c`): `mrow`, the token elements `mi`/`mn`/`mo`/`ms`/`mtext` (with `mi` auto-italicising single letters and `mo` operator spacing), `msup`/`msub`/`msubsup`, `mfrac` (with rule), `msqrt`/`mroot` (drawn radical), `munder`/`mover`/`munderover`, `mtable`/`mtr`/`mtd`, `mspace`, `mphantom` (reserves its contents' metrics without painting), `mfenced` (synthesises the `open`/`close` fences and `separators`), and `semantics` (renders its first presentation child). Content MathML and `annotation`/`annotation-xml` payloads are not rendered |
 
 ## §4.9 Tabular data
@@ -226,10 +226,10 @@ validation.
 | `input` file/color/range | ✅ (`<input type=file>.files` returns a live `FileList` of `File` objects after the user picks — each carries `name`, `size`, `type` from `g_content_type_guess`, and `Blob`-shaped bytes, so `await file.text()` / `await file.arrayBuffer()` work and `new FormData()` over the input serialises the bytes through the shared multipart path) |
 | `input` date/time/datetime-local/month/week | 🟡 (text-style entry; no native picker) |
 | `textarea` | ✅ (multi-line: newlines preserved as line breaks, height from `rows`, border box grows to enclose content; caret and text selection rendered; an empty textarea shows its `placeholder` in the UA grey / author `::placeholder` colour, and the control's `color`/`font-size`/`font-family` apply to the value — shared with the `<input>` path via `emit_control_text_style` in `src/layout.c`) |
-| `select` / `option` / `optgroup` | 🟡 (rendered; DOM options/selectedOptions collections, add/remove, spec-compliant `option.text` — descendant text minus script subtrees, ASCII-whitespace-stripped + collapsed — `option.label` (label attr, falling back to `option.text`), `optgroup.label` reflected, `option.value` (value attr, falling back to `option.text`), single/multiple `value`; the select popup and form submission both consult `option.label` / `option.value` so legacy markup with extra whitespace or inline children now submits the same string a browser would. **Fully interactive** via an engine-rendered inline picker: a plain select opens on click to an inline option list and commits the clicked option; a `multiple`/`size>1` select renders as a listbox whose options are individually clickable (plain click selects, `Ctrl`-click toggles a `multiple` selection — `browser_dropdown_click` in `src/libnordstjernen.c`, per-option hit-test runs from `emit_listbox_option` in `src/layout.c`); and a focused select takes **keyboard** input (`browser_select_key`): Arrow Up/Down step the selection, Home/End jump to the first/last enabled option, printable keys do type-ahead, and Enter/Space/Escape open/close the dropdown (`ns_js_select_step`/`_edge`/`_typeahead`/`_toggle_option` in `src/js.c`), each firing `input`/`change`. Uses an inline picker, not a native OS popup. Explicit deselection is honoured per spec: `select.selectedIndex = -1`, or setting `select.value` to a string no option carries, deselects every option and reports `selectedIndex === -1` / `value === ""` instead of snapping back to the first option — the contract jQuery's `val()` setter relies on) |
-| `datalist` | 🟡 (autocomplete suggestions rendered: a focused `<input list=…>` shows the referenced `<datalist>`'s matching `<option>`s as an inline dropdown — substring-filtered against the current value, case-insensitive, capped at 8 (`emit_datalist_suggestions` in `src/layout.c`); clicking a suggestion fills the field and fires `input`/`change` while keeping focus (`browser_datalist_click` in `src/libnordstjernen.c`), typing re-filters, and `Escape` dismisses. No keyboard highlight navigation through the suggestions) |
+| `select` / `option` / `optgroup` | 🟡 (rendered; DOM options/selectedOptions collections, add/remove, spec-compliant `option.text` — descendant text minus script subtrees, ASCII-whitespace-stripped + collapsed — `option.label` (label attr, falling back to `option.text`), `optgroup.label` reflected, `option.value` (value attr, falling back to `option.text`), single/multiple `value`; the select popup and form submission both consult `option.label` / `option.value` so legacy markup with extra whitespace or inline children now submits the same string a browser would. **Fully interactive** via an engine-rendered inline picker: a plain select opens on click to an inline option list and commits the clicked option; a `multiple`/`size>1` select renders as a listbox whose options are individually clickable (plain click selects, `Ctrl`-click toggles a `multiple` selection — `browser_dropdown_click` in `src/libsouthstar.c`, per-option hit-test runs from `emit_listbox_option` in `src/layout.c`); and a focused select takes **keyboard** input (`browser_select_key`): Arrow Up/Down step the selection, Home/End jump to the first/last enabled option, printable keys do type-ahead, and Enter/Space/Escape open/close the dropdown (`ns_js_select_step`/`_edge`/`_typeahead`/`_toggle_option` in `src/js.c`), each firing `input`/`change`. Uses an inline picker, not a native OS popup. Explicit deselection is honoured per spec: `select.selectedIndex = -1`, or setting `select.value` to a string no option carries, deselects every option and reports `selectedIndex === -1` / `value === ""` instead of snapping back to the first option — the contract jQuery's `val()` setter relies on) |
+| `datalist` | 🟡 (autocomplete suggestions rendered: a focused `<input list=…>` shows the referenced `<datalist>`'s matching `<option>`s as an inline dropdown — substring-filtered against the current value, case-insensitive, capped at 8 (`emit_datalist_suggestions` in `src/layout.c`); clicking a suggestion fills the field and fires `input`/`change` while keeping focus (`browser_datalist_click` in `src/libsouthstar.c`), typing re-filters, and `Escape` dismisses. No keyboard highlight navigation through the suggestions) |
 | `button` (submit/reset/button) | ✅ |
-| `output` | ✅ (full HTMLOutputElement: `value` and `defaultValue` track the value-mode flag — setting `value` switches to value mode while `defaultValue` preserves/serves the markup default, and a form reset restores the default value; `type` returns `"output"`, `htmlFor` is a live `DOMTokenList`, `labels`/`form`/`name` reflect, and the element is correctly barred from constraint validation so `willValidate` is `false` and `checkValidity()` stays `true` even with `setCustomValidity` set, in `src/js.c`; native reset-button activation routes through `ns_js_form_reset` in `src/libnordstjernen.c`) |
+| `output` | ✅ (full HTMLOutputElement: `value` and `defaultValue` track the value-mode flag — setting `value` switches to value mode while `defaultValue` preserves/serves the markup default, and a form reset restores the default value; `type` returns `"output"`, `htmlFor` is a live `DOMTokenList`, `labels`/`form`/`name` reflect, and the element is correctly barred from constraint validation so `willValidate` is `false` and `checkValidity()` stays `true` even with `setCustomValidity` set, in `src/js.c`; native reset-button activation routes through `ns_js_form_reset` in `src/libsouthstar.c`) |
 | `progress` | ✅ (determinate + indeterminate rendered bars; numeric `value`, `max`, `position` IDL getters) |
 | `meter` | ✅ (spec min/max/value/low/high/optimum gauge algorithm; optimum/suboptimal/less-good regions reflected in rendering and numeric IDL getters) |
 | `fieldset` / `legend` | ✅ (full HTMLFieldSetElement: UA-styled bordered group with rendered `<legend>`; `type` returns `"fieldset"`, `name`/`disabled`/`form` reflect, and `elements` is a live `HTMLFormControlsCollection` of the listed elements (`input`/`select`/`textarea`/`button`/`output`/nested `fieldset`) rooted at the fieldset with indexed and `namedItem` access (`ns_fieldset_collect_listed` in `src/js.c`); a `disabled` fieldset disables and greys its descendant controls and excludes them from submission, and the element is barred from constraint validation — `willValidate` is `false`, `checkValidity()`/`reportValidity()` return `true`, and `validationMessage` is empty even when `setCustomValidity` set `validity.customError`) |
@@ -237,7 +237,7 @@ validation.
 | `FormData` (`append`/`set`/`entries`/…) | ✅ | `append(name, blob, filename)` honours the third-argument filename per spec |
 | Form ownership / successful controls | ✅ (`form="id"` owners, disabled fieldsets, default checkbox/radio `"on"` values, multi-select values, form.elements named lookup/RadioNodeList, associated submit/reset activation with cancelable reset events) |
 | Submission, `application/x-www-form-urlencoded` | ✅ (HTML `+` space encoding; `requestSubmit()` validates/fires `SubmitEvent` with `submitter`, while `submit()` bypasses both) |
-| Submission, `multipart/form-data` | ✅ (full UTF-8 serialiser: native form submit (`src/libnordstjernen.c`), and `fetch`/`XMLHttpRequest` bodies of `FormData` and `URLSearchParams` (`src/js.c` `ns_js_form_data_serialize` / `ns_js_usp_serialize`) — CSPRNG boundary, per-entry `Content-Disposition`, Blob/File parts get a `Content-Type` from `blob.type` (default `application/octet-stream`) and the entry's filename (or `blob` if unspecified), name/filename quoted per WHATWG (only LF/CR/`"` escaped), and `URLSearchParams` bodies auto-pick `application/x-www-form-urlencoded;charset=UTF-8` — caller-set `Content-Type` always wins) |
+| Submission, `multipart/form-data` | ✅ (full UTF-8 serialiser: native form submit (`src/libsouthstar.c`), and `fetch`/`XMLHttpRequest` bodies of `FormData` and `URLSearchParams` (`src/js.c` `ns_js_form_data_serialize` / `ns_js_usp_serialize`) — CSPRNG boundary, per-entry `Content-Disposition`, Blob/File parts get a `Content-Type` from `blob.type` (default `application/octet-stream`) and the entry's filename (or `blob` if unspecified), name/filename quoted per WHATWG (only LF/CR/`"` escaped), and `URLSearchParams` bodies auto-pick `application/x-www-form-urlencoded;charset=UTF-8` — caller-set `Content-Type` always wins) |
 | `formaction`/`formmethod`/`formenctype` overrides | ✅ |
 
 ## §4.11 Interactive elements
@@ -308,14 +308,14 @@ surface).
 |-------|:--:|------|
 | `hidden` attribute | ✅ | plain `hidden` maps to `display:none`; `hidden="until-found"` maps (via the UA stylesheet) to the real `content-visibility: hidden` — its subtree is laid out (so its text stays in the box tree and is findable) and the element is size-contained (collapses to a zero-height box, `style_content_visibility_hidden` in `src/layout.c`) but its contents are skipped while painting (`box_is_hidden` in `src/paint.c`). `HTMLElement.hidden` follows the spec's enumerated getter/setter for `"until-found"`; fragment/hash navigation runs the ancestor reveal path before scrolling, removing `hidden="until-found"` ancestors and opening skipped `<details>` ancestors, with `beforematch` fired for same-document hidden-until-found reveals — removing the attribute drops the containment and reveals the content. The `content-visibility` property is also honoured directly (`auto` is treated as always-rendered, skipping only the lazy-render optimisation) |
 | `inert` attribute | ✅ | excludes the subtree from focus (`focus()`, sequential navigation) and click activation, and an open modal dialog makes the rest of the document inert (`ns_dom_set_active_modal` → `ns_element_effectively_inert`) |
-| Event dispatch / cancellation | ✅ | full capture → at-target → bubble propagation with `eventPhase`, `currentTarget`, `stopPropagation()`/`stopImmediatePropagation()`, `once`/`signal` listener removal, and inline `return false`; `preventDefault()` honours `event.cancelable` and is suppressed (a no-op) for `{passive:true}` listeners; `composedPath()` returns the live propagation path (target → ancestors → document → window) during dispatch and an empty array otherwise. A primary activation fires the full UI-Events button sequence `pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click` (`ns_browser_click` in `src/libnordstjernen.c`) |
-| Pointer hover (`:hover`, `mousemove`/`mouseover`/`mouseout`) | ✅ | the out-of-process renderer reports the hovered point each time the pointer moves (`NS_RPROC_MSG_HOVER` → `ns_browser_hover` in `src/libnordstjernen.c`): it hit-tests the DOM, sets the CSS `:hover` state on the element under the pointer and its ancestors so `:hover` rules restyle and repaint, and fires the `pointermove`/`mousemove` and, on element transitions, `pointerover`/`mouseover`/`pointerout`/`mouseout`/`pointerenter`/`mouseenter`/`pointerleave`/`mouseleave` listeners. Restyle work is gated to pages that actually use `:hover` (`ns_css_stylesheet_has_hover_rules`) and skipped while a text selection is in progress. The thin GTK client (`src/gtk/procview.c`) drives this on every mouse-move and re-renders when the renderer reports a visual change |
+| Event dispatch / cancellation | ✅ | full capture → at-target → bubble propagation with `eventPhase`, `currentTarget`, `stopPropagation()`/`stopImmediatePropagation()`, `once`/`signal` listener removal, and inline `return false`; `preventDefault()` honours `event.cancelable` and is suppressed (a no-op) for `{passive:true}` listeners; `composedPath()` returns the live propagation path (target → ancestors → document → window) during dispatch and an empty array otherwise. A primary activation fires the full UI-Events button sequence `pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click` (`ns_browser_click` in `src/libsouthstar.c`) |
+| Pointer hover (`:hover`, `mousemove`/`mouseover`/`mouseout`) | ✅ | the out-of-process renderer reports the hovered point each time the pointer moves (`NS_RPROC_MSG_HOVER` → `ns_browser_hover` in `src/libsouthstar.c`): it hit-tests the DOM, sets the CSS `:hover` state on the element under the pointer and its ancestors so `:hover` rules restyle and repaint, and fires the `pointermove`/`mousemove` and, on element transitions, `pointerover`/`mouseover`/`pointerout`/`mouseout`/`pointerenter`/`mouseenter`/`pointerleave`/`mouseleave` listeners. Restyle work is gated to pages that actually use `:hover` (`ns_css_stylesheet_has_hover_rules`) and skipped while a text selection is in progress. The thin GTK client (`src/gtk/procview.c`) drives this on every mouse-move and re-renders when the renderer reports a visual change |
 | `contenteditable` | ✅ | in-page plaintext editing: a `contenteditable` host (`true`, the empty string, or `plaintext-only`) is focusable by click or Tab and edits as a single plaintext run — on focus its content is flattened to text, then the shared text-entry machinery (`ns_node_editable_value`/`ns_node_set_editable_value` in `src/dom.c`) drives a rendered caret, text selection, keyboard caret navigation (arrows, Home/End), insertion, Backspace/Delete, Enter→newline, and copy/cut/paste. Newlines in the host render as forced line breaks (`collect_walk` in `src/layout.c`); `beforeinput`/`input` fire and `document.activeElement`/`:focus` stay in sync. Rich inline structure is not preserved across an edit (the plaintext model); there is no per-range rich-text formatting |
-| `tabindex` / focus order | ✅ | sequential focus navigation (`ns_js_sequential_focus_target` in `src/js.c`) honours `tabindex` ordering — positive values first in ascending order, then `0`/auto in tree order, negative excluded — skipping disabled/inert/hidden controls; Tab / Shift+Tab walk it (`src/libnordstjernen.c`), and `focus()`/`blur()` route through the canonical `ns_js_set_focus`, keeping `document.activeElement` and `:focus` in sync |
-| `accesskey` | ✅ | reflected as `HTMLElement.accessKey`, and bound: pressing the access-key modifier (Alt, the platform combo) plus one of the element's space-separated `accesskey` characters focuses the element and runs its activation behaviour. The GTK shell forwards `Alt`+key to the engine (`on_key` in `src/gtk/procview.c`); `ns_browser_key_full` (`src/libnordstjernen.c`) finds the first non-inert element whose `accesskey` matches (case-insensitive) and calls `ns_js_activate_element` (`src/js.c`), which fires the click activation — so an `accesskey` button runs its `onclick`, a checkbox toggles, a link navigates, and a text field is focused |
+| `tabindex` / focus order | ✅ | sequential focus navigation (`ns_js_sequential_focus_target` in `src/js.c`) honours `tabindex` ordering — positive values first in ascending order, then `0`/auto in tree order, negative excluded — skipping disabled/inert/hidden controls; Tab / Shift+Tab walk it (`src/libsouthstar.c`), and `focus()`/`blur()` route through the canonical `ns_js_set_focus`, keeping `document.activeElement` and `:focus` in sync |
+| `accesskey` | ✅ | reflected as `HTMLElement.accessKey`, and bound: pressing the access-key modifier (Alt, the platform combo) plus one of the element's space-separated `accesskey` characters focuses the element and runs its activation behaviour. The GTK shell forwards `Alt`+key to the engine (`on_key` in `src/gtk/procview.c`); `ns_browser_key_full` (`src/libsouthstar.c`) finds the first non-inert element whose `accesskey` matches (case-insensitive) and calls `ns_js_activate_element` (`src/js.c`), which fires the click activation — so an `accesskey` button runs its `onclick`, a checkbox toggles, a link navigates, and a text field is focused |
 | `spellcheck` | ✅ | the enumerated content attribute and the boolean `HTMLElement.spellcheck` IDL attribute are spec-correct (`ns_node_spellcheck_used` in `src/dom.c`): `true`/`""` → `true`, `false` → `false`, and the default/invalid state inherits the nearest ancestor's value, falling back to `true` at the root; the setter writes `"true"`/`"false"` while `getAttribute` keeps the literal. **On-screen checking is performed** when built against the optional Enchant library (`src/spellcheck.c`): editable text (text `input`/`textarea` and `contenteditable`) with spell-checking enabled has its misspelled words drawn with a red wavy underline (`PANGO_UNDERLINE_ERROR`), gated per element by the used `spellcheck` value. Dictionaries are loaded before the renderer seals its sandbox; if Enchant or a dictionary is absent the attribute model still works and nothing is flagged |
 | `autocapitalize` / `enterkeyhint` | ✅ | proper **enumerated** IDL reflection (`src/js.c`): `enterKeyHint` canonicalises to its known keywords (`enter`/`done`/`go`/`next`/`previous`/`search`/`send`) case-insensitively with missing/invalid → `""`; `autocapitalize` maps the `off`/`none` and `on`/`sentences` aliases to their canonical state, returns `""` for the default/invalid state, and — for the form-associated controls (`input`/`textarea`/`select`/`button`/`output`/`fieldset`) — inherits the form owner's own value per spec; `getAttribute` still returns the literal. Behaviourally advisory (hints for an on-screen keyboard), which is the complete behaviour on a desktop UA with a physical keyboard |
-| Drag and drop (`DataTransfer`, drag events) | ✅ | script-created `DataTransfer`, `DataTransferItemList`, `DataTransferItem` (`kind`/`type`, `getAsString`, `getAsFile`), and `DragEvent.dataTransfer` are exposed for feature detection and synthetic events; native GTK drag gestures dispatch the HTML `dragstart` → `dragenter`/`dragover`/`dragleave` → `drop` → `dragend` sequence for `draggable=true` elements, links, and images, with shared `dataTransfer` state and default URL data for links/images. Drop follows the browser rule that the target must accept the drag by cancelling `dragenter` or `dragover`. **External/native OS file drags are bridged into the page**: a `GtkDropTarget` on the view accepts a dropped `GdkFileList`, forwards the paths and drop point to the renderer (`/dropfiles` → `ns_browser_drop_files` in `src/libnordstjernen.c`), which builds a `DataTransfer` whose `items`/`files` carry real `File` objects (`ns_js_drag_session_add_file` in `src/js.c`) and dispatches `dragenter`/`dragover`/`drop` at the hit-tested target — so a page's drop handler receives `event.dataTransfer.files` exactly as in other browsers |
+| Drag and drop (`DataTransfer`, drag events) | ✅ | script-created `DataTransfer`, `DataTransferItemList`, `DataTransferItem` (`kind`/`type`, `getAsString`, `getAsFile`), and `DragEvent.dataTransfer` are exposed for feature detection and synthetic events; native GTK drag gestures dispatch the HTML `dragstart` → `dragenter`/`dragover`/`dragleave` → `drop` → `dragend` sequence for `draggable=true` elements, links, and images, with shared `dataTransfer` state and default URL data for links/images. Drop follows the browser rule that the target must accept the drag by cancelling `dragenter` or `dragover`. **External/native OS file drags are bridged into the page**: a `GtkDropTarget` on the view accepts a dropped `GdkFileList`, forwards the paths and drop point to the renderer (`/dropfiles` → `ns_browser_drop_files` in `src/libsouthstar.c`), which builds a `DataTransfer` whose `items`/`files` carry real `File` objects (`ns_js_drag_session_add_file` in `src/js.c`) and dispatches `dragenter`/`dragover`/`drop` at the hit-tested target — so a page's drop handler receives `event.dataTransfer.files` exactly as in other browsers |
 
 ## §7 Loading web pages
 
@@ -455,7 +455,7 @@ The heart of spec conformance. Tokenisation and tree construction —
 the bulk of §13.2 — are delegated to in-tree **lexbor**, a
 from-scratch WHATWG-conformant C implementation
 (`src/html_lexbor.c`). Because the parser is a conformant engine, the
-DOM tree Nordstjernen builds for a given byte stream is spec-faithful
+DOM tree Southstar builds for a given byte stream is spec-faithful
 **even for malformed input**; the compatibility gaps elsewhere in this
 document are in *rendering and behaviour*, not parsing.
 
@@ -590,7 +590,7 @@ CSS support (abridged):
   renderer: the element under the pointer and its ancestors match
   `:hover` and the page restyles/repaints as the pointer moves
   (`ns_css_set_hover_node` in `src/css.c`, `ns_browser_hover` in
-  `src/libnordstjernen.c`). The dynamic `:active` pseudo-class is live
+  `src/libsouthstar.c`). The dynamic `:active` pseudo-class is live
   too: a primary-button press sets the active element
   (`ns_css_set_active_node`, set in `ns_browser_click`) so the pressed
   element and its ancestors match `:active` and the page restyles; the
@@ -741,7 +741,7 @@ implemented.)
 ## Site compatibility
 
 Top-level URLs, request policy, DOM construction and media discovery all use
-the generic engine paths. Nordstjernen does not rewrite selected hosts to
+the generic engine paths. Southstar does not rewrite selected hosts to
 mobile variants, scrape private player JSON, inject per-site CSS, or synthesize
 site-specific DOM. Compatibility fixes belong in the relevant HTML, CSS,
 JavaScript, networking or media implementation.
@@ -766,7 +766,7 @@ dispatch; `type` honours `maxlength` and filters `type=number` input,
 and `Up`/`Down` step a focused number input — so e.g.
 
 ```sh
-nordstjernen --headless --url=FILE --viewport=800 \
+southstar --headless --url=FILE --viewport=800 \
   --dump=png:out.png --act='click 120,180; type hello; key Enter; wait 500'
 ```
 
@@ -777,8 +777,8 @@ Layout can be inspected — like a browser's "Inspect" panel — with
 `--inspect=SELECTOR` and `--inspect-at=X,Y`:
 
 ```sh
-nordstjernen --headless --url=URL --inspect='.cdx-search-input'
-nordstjernen --headless --url=URL --inspect-at=400,18
+southstar --headless --url=URL --inspect='.cdx-search-input'
+southstar --headless --url=URL --inspect-at=400,18
 ```
 
 `--inspect` matches a CSS selector and, for each match, prints the box

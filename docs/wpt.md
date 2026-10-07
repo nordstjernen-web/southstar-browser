@@ -1,9 +1,9 @@
-# Testing Nordstjernen with the web-platform-tests (WPT)
+# Testing Southstar with the web-platform-tests (WPT)
 
-Nordstjernen can run [web-platform-tests](https://github.com/web-platform-tests/wpt)
+Southstar can run [web-platform-tests](https://github.com/web-platform-tests/wpt)
 testharness.js tests headlessly and report per-subtest results. This is
 the cross-browser conformance suite shared by Chromium, Gecko, and
-WebKit; running slices of it against Nordstjernen is a fast way to find
+WebKit; running slices of it against Southstar is a fast way to find
 and track engine gaps.
 
 ## Scope
@@ -63,8 +63,8 @@ which is also usable directly against any URL serving a testharness.js
 test:
 
 ```sh
-./builddir/src/gtk/nordstjernen --wpt http://web-platform.test:8000/dom/events/CustomEvent.html
-./builddir/src/gtk/nordstjernen --wpt --wpt-timeout-ms=30000 http://localhost:8000/some/test.html
+./builddir/src/gtk/southstar --wpt http://web-platform.test:8000/dom/events/CustomEvent.html
+./builddir/src/gtk/southstar --wpt --wpt-timeout-ms=30000 http://localhost:8000/some/test.html
 ```
 
 Output on stdout, one line per subtest:

@@ -1,4 +1,4 @@
-/* Nordstjernen — single-process mode: in-process renderer host. */
+/* Southstar — single-process mode: in-process renderer host. */
 
 #ifndef NS_RPROC_INPROC_H
 #define NS_RPROC_INPROC_H

@@ -1,6 +1,6 @@
-# Nordstjernen nightly builds — Ubuntu 24.04 build server
+# Southstar nightly builds — Ubuntu 24.04 build server
 
-This document records how to run Nordstjernen's nightly builds on an
+This document records how to run Southstar's nightly builds on an
 Ubuntu 24.04 LTS server from a cron job. The orchestrator is
 `scripts/nightly.sh`; the per-distro container build is
 `scripts/nightly-distro-build.sh`. This guide is the operational
@@ -25,17 +25,16 @@ files are stale. The root contains:
 | Ubuntu package (`.deb`) + binary zip | `ubuntu:26.04` container | `linux/ubuntu/` |
 | openSUSE package (`.rpm`) + binary zip | `opensuse/tumbleweed` container | `linux/opensuse/` |
 | Alpine (musl) binary zip | `alpine:edge` container | `linux/alpine/` |
-| Windows bundle (`.zip`) + `nordstjernen.exe` | GitHub Actions `windows.yml` | `windows/` |
+| Windows bundle (`.zip`) + `southstar.exe` | GitHub Actions `windows.yml` | `windows/` |
 | macOS `.dmg` + binary | GitHub Actions `macos.yml` | `macos/` |
 | FreeBSD portable zip | GitHub Actions `freebsd.yml` (vmactions VM) | `freebsd/` |
 | NetBSD portable zip | GitHub Actions `netbsd.yml` (vmactions VM) | `netbsd/` |
-| Java API jar + sources + javadoc + browsable API docs | `debian:trixie` container (native libs) + JDK 21 on the host | `java/` |
 
 Each glibc Linux artifact (Debian/Ubuntu/openSUSE zip, `.deb`, `.rpm`) also
 ships **experimental WebGPU**: `scripts/pack-linux.sh` fetches the pinned
 wgpu-native release with `scripts/fetch-wgpu-native.sh`, builds the `webgpu`
 feature in, and bundles `libwgpu_native.so` beside the binaries (zip) or under
-`/usr/lib/nordstjernen` (deb/rpm) with an `$ORIGIN` rpath. WebGPU stays dormant
+`/usr/lib/southstar` (deb/rpm) with an `$ORIGIN` rpath. WebGPU stays dormant
 until the browser is started with `--enable-webgpu`. The Alpine (musl) build
 skips it — wgpu-native ships no musl library — and the Windows/macOS/BSD builds
 are WebGPU-free for now (the `webgpu` feature is `auto`, so it is simply not
@@ -55,23 +54,19 @@ nothing is left to point it at, which is a platform that has never
 built. The portable Linux zip is taken from the Ubuntu build and falls
 back to the Debian and then the openSUSE build:
 
-- `https://www.nordstjernen.org/nightly/nordstjernen-windows-x86_64.zip`
-- `https://www.nordstjernen.org/nightly/nordstjernen-windows-x86_64.exe`
-- `https://www.nordstjernen.org/nightly/nordstjernen-macos.dmg` (Apple Silicon)
-- `https://www.nordstjernen.org/nightly/nordstjernen-macos-arm64` (Apple Silicon, unbundled binary)
-- `https://www.nordstjernen.org/nightly/nordstjernen-debian-amd64.deb`
-- `https://www.nordstjernen.org/nightly/nordstjernen-ubuntu-amd64.deb`
-- `https://www.nordstjernen.org/nightly/nordstjernen-opensuse-x86_64.rpm`
-- `https://www.nordstjernen.org/nightly/nordstjernen-linux-x86_64.zip`
-- `https://www.nordstjernen.org/nightly/nordstjernen-alpine-x86_64.zip` (musl)
-- `https://www.nordstjernen.org/nightly/nordstjernen-freebsd-x86_64.zip`
-- `https://www.nordstjernen.org/nightly/nordstjernen-netbsd-x86_64.zip`
-- `https://www.nordstjernen.org/nightly/nordstjernen-java.jar`
-- `https://www.nordstjernen.org/nightly/nordstjernen-java-sources.jar`
-- `https://www.nordstjernen.org/nightly/nordstjernen-java-javadoc.jar`
-- `https://www.nordstjernen.org/nightly/java/apidocs/` (browsable javadoc)
-- `https://www.nordstjernen.org/nightly/nordstjernen-src.tar.xz`
-- `https://www.nordstjernen.org/nightly/nordstjernen-src.tar.gz`
+- `https://<your-server>/nightly/southstar-windows-x86_64.zip`
+- `https://<your-server>/nightly/southstar-windows-x86_64.exe`
+- `https://<your-server>/nightly/southstar-macos.dmg` (Apple Silicon)
+- `https://<your-server>/nightly/southstar-macos-arm64` (Apple Silicon, unbundled binary)
+- `https://<your-server>/nightly/southstar-debian-amd64.deb`
+- `https://<your-server>/nightly/southstar-ubuntu-amd64.deb`
+- `https://<your-server>/nightly/southstar-opensuse-x86_64.rpm`
+- `https://<your-server>/nightly/southstar-linux-x86_64.zip`
+- `https://<your-server>/nightly/southstar-alpine-x86_64.zip` (musl)
+- `https://<your-server>/nightly/southstar-freebsd-x86_64.zip`
+- `https://<your-server>/nightly/southstar-netbsd-x86_64.zip`
+- `https://<your-server>/nightly/southstar-src.tar.xz`
+- `https://<your-server>/nightly/southstar-src.tar.gz`
 
 (These are symlinks, so the web server must follow symlinks — nginx
 does so by default.)
@@ -109,12 +104,7 @@ so it is compiled out on the BSDs.
 **The build server itself needs no GTK / curl / meson toolchain.** All
 compilation happens inside the distro containers or on the GitHub
 runners. The host only needs git, a container engine, the GitHub CLI,
-and standard coreutils. The Java API stage is no exception: its native
-libraries (engine + JNI bridge) are compiled inside the `debian:trixie`
-container, so the host needs only a JDK 21 for `javac`/`jar`/`javadoc` (if
-no container engine is available it falls back to building the natives on
-the host, which then also needs the engine build dependencies). Run with
-`--no-java` to skip it.
+and standard coreutils.
 
 ## One-time setup
 
@@ -125,39 +115,6 @@ sudo apt update
 sudo apt install -y git docker.io gh xz-utils gzip zip ca-certificates
 sudo apt install -y nginx      # or apache2 — to serve /var/www/html
 ```
-
-#### Java API stage (JDK 21 + engine build deps on the host)
-
-Unlike the distro packages (built in containers) and the Windows/macOS builds
-(built on GitHub runners), the **Java API stage builds on the host**, so the
-host needs a JDK 21 and the engine's own build dependencies:
-
-```sh
-# Update apt and install OpenJDK 21
-sudo apt update
-sudo apt install -y openjdk-21-jdk
-
-# Engine build toolchain + libraries (so build-native.sh can cross the JNI bridge)
-sudo apt install -y build-essential clang pkg-config meson ninja-build \
-    libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
-    libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
-
-# Point JAVA_HOME at the JDK 21 install (and persist it for the cron user)
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.profile
-
-java -version    # expect 21.x
-```
-
-If multiple JDKs are installed, select 21 as the default:
-
-```sh
-sudo update-alternatives --config java
-sudo update-alternatives --config javac
-```
-
-(Skip this block and run the nightly with `--no-java` if you don't want the
-Java artifacts.)
 
 ### 2. Container engine
 
@@ -194,8 +151,8 @@ GitHub-driven Windows/macOS builds, skip this step and pass
 ### 4. Clone the repository and create the output root
 
 ```sh
-git clone https://github.com/nordstjernen-web/nordstjernen-browser.git \
-    ~/nordstjernen
+git clone https://github.com/nordstjernen-web/southstar-browser.git \
+    ~/southstar
 sudo install -d -o "$USER" -g "$USER" /var/www/html/nightly
 ```
 
@@ -204,7 +161,7 @@ sudo install -d -o "$USER" -g "$USER" /var/www/html/nightly
 Run the local stages once by hand before wiring cron:
 
 ```sh
-cd ~/nordstjernen
+cd ~/southstar
 ./scripts/nightly.sh --no-gha          # Linux + source only
 ```
 
@@ -228,7 +185,7 @@ built *sources* still come from `origin/main` via `git archive`
 independently. So the only thing the cron line must do is run from the
 repo with a sane `PATH`.
 
-Install a system cron fragment at `/etc/cron.d/nordstjernen-nightly`
+Install a system cron fragment at `/etc/cron.d/southstar-nightly`
 (replace `andreas` with the build user):
 
 ```cron
@@ -237,7 +194,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=andreas@example.com
 
 # 02:30 every day: build the nightly (the script self-updates from main).
-30 2 * * *  andreas  cd /home/andreas/nordstjernen && ./scripts/nightly.sh >> /var/www/html/nightly/cron.log 2>&1
+30 2 * * *  andreas  cd /home/andreas/southstar && ./scripts/nightly.sh >> /var/www/html/nightly/cron.log 2>&1
 ```
 
 `nightly.sh` exits non-zero if any enabled stage failed, so with
@@ -248,7 +205,7 @@ If you authenticate via a token instead of `gh auth login`, prepend it
 to the command (keep the cron file `chmod 600`):
 
 ```cron
-30 2 * * *  andreas  GH_TOKEN=ghp_xxx bash -lc 'cd /home/andreas/nordstjernen && ./scripts/nightly.sh' >> /var/www/html/nightly/cron.log 2>&1
+30 2 * * *  andreas  GH_TOKEN=ghp_xxx bash -lc 'cd /home/andreas/southstar && ./scripts/nightly.sh' >> /var/www/html/nightly/cron.log 2>&1
 ```
 
 ## Options and environment
@@ -261,11 +218,9 @@ to the command (keep the cron file `chmod 600`):
 | `--ref REF` / `NIGHTLY_REF` | `origin/main` | Git ref to archive and build. |
 | `--no-docker` | — | Skip the Linux container builds. |
 | `--no-gha` | — | Skip the Windows/macOS GitHub Actions builds. |
-| `--no-java` | — | Skip the Java API jar/javadoc stage. |
 | `--no-tarball` | — | Skip the source tarball. |
 | `--no-pull` / `NIGHTLY_PULL` | `1` | Fast-forward the checkout to `origin/main` and re-exec before building; `0`/`--no-pull` to disable. |
 | `NIGHTLY_PULL_BRANCH` | `main` | Branch the working tree is fast-forwarded to. |
-| `JAVA_HOME` | autodetected from `javac` | JDK 21 used by the Java stage. |
 | `NS_DOCKER` | `docker` | Container engine (`docker` or `podman`). |
 | `NIGHTLY_GHA_TIMEOUT` | `4200` | Seconds to wait for each GitHub run. |
 | `NIGHTLY_GHA_DISPATCH` | `1` | Dispatch a fresh run if none exists for the commit; set `0` to only reuse. |
@@ -317,7 +272,7 @@ prefer a dedicated vhost, point its `root` at `/var/www/html/nightly`
   build alongside a nightly.
 - **Debian build fails with `implicit declaration of
   gtk_file_dialog_*` / `gtk_css_provider_load_from_string`** — the
-  Debian image's GTK 4 is too old (Nordstjernen needs the GtkFileDialog
+  Debian image's GTK 4 is too old (Southstar needs the GtkFileDialog
   / `load_from_string` APIs from GTK 4.10–4.12). The default image is
   `debian:trixie` (Debian 13), which ships a new enough GTK 4;
   `debian:12` (bookworm, GTK 4.8) cannot build the browser. If you

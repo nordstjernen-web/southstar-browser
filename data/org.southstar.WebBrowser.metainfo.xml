@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright 2026 Andreas Røsdal -->
 <component type="desktop-application">
-  <id>org.nordstjernen.WebBrowser</id>
+  <id>org.southstar.WebBrowser</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>LicenseRef-NSL-1.0 OR GPL-3.0-or-later</project_license>
-  <name>Nordstjernen</name>
+  <name>Southstar Browser</name>
   <summary>A small, hand-written web browser</summary>
-  <developer id="org.nordstjernen">
+  <developer id="org.southstar">
     <name>Andreas Røsdal</name>
   </developer>
 
   <description>
     <p>
-      Nordstjernen is a clean-room web browser written from scratch in C,
+      Southstar is a clean-room web browser written from scratch in C,
       with a GTK 4 user interface and a libcurl network stack. It is built
       to be small, secure, and readable by a single person end to end.
     </p>
@@ -26,16 +26,16 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">org.nordstjernen.WebBrowser.desktop</launchable>
+  <launchable type="desktop-id">org.southstar.WebBrowser.desktop</launchable>
 
-  <url type="homepage">https://nordstjernen.org</url>
-  <url type="bugtracker">https://github.com/nordstjernen-web/nordstjernen-browser/issues</url>
-  <url type="vcs-browser">https://github.com/nordstjernen-web/nordstjernen-browser</url>
+  <url type="homepage">https://github.com/nordstjernen-web/southstar-browser</url>
+  <url type="bugtracker">https://github.com/nordstjernen-web/southstar-browser/issues</url>
+  <url type="vcs-browser">https://github.com/nordstjernen-web/southstar-browser</url>
 
   <screenshots>
     <screenshot type="default">
-      <caption>The Nordstjernen start page</caption>
-      <image>https://raw.githubusercontent.com/nordstjernen-web/nordstjernen-browser/main/docs/screenshot.png</image>
+      <caption>The Southstar start page</caption>
+      <image>https://raw.githubusercontent.com/nordstjernen-web/southstar-browser/main/docs/screenshot.png</image>
     </screenshot>
   </screenshots>
 
@@ -79,7 +79,7 @@
       <description>
         <p>Dual licensing, performance and compatibility release.</p>
         <ul>
-          <li>Nordstjernen is dual-licensed under the Nordstjernen Source License v1.0 or the GNU GPL version 3 or later.</li>
+          <li>Southstar is dual-licensed under the Nordstjernen Source License v1.0 or the GNU GPL version 3 or later.</li>
           <li>Style resolution, script parsing, form access and container-query relayout are faster; Speedometer's Complex-DOM suites run about 18% faster.</li>
           <li>Constructed style sheets adopted by shadow roots work again, and pages with many shadow roots no longer crash the renderer.</li>
           <li>instanceof follows the prototype chain, so Vue apps render HTML elements correctly.</li>
@@ -97,7 +97,7 @@
           <li>Deeply nested pages, SVGs and CSS values no longer crash the renderer.</li>
           <li>The desktop browser records visited pages in History again, and YouTube and other MSE players play video again.</li>
           <li>align-content works on block containers, and textareas honour CSS heights and keep their placeholder while focused.</li>
-          <li>Nordstjernen can also be built on Fabrice Bellard's original QuickJS, and builds against GLib 2.90.</li>
+          <li>Southstar can also be built on Fabrice Bellard's original QuickJS, and builds against GLib 2.90.</li>
         </ul>
       </description>
     </release>
@@ -123,7 +123,7 @@
           <li>Tables measure min-content and max-content widths column by column, position: fixed boxes stay anchored to the viewport, and rtl static positions and single-choice select defaults follow the specifications.</li>
           <li>The toolbar takes the classic look of the Northstar web browser, with labelled colour buttons for Back, Forward, Reload, Stop, Home, Print and Downloads.</li>
           <li>Fullscreen is announced with a notice naming the site, needs a user gesture, and ends on navigation, tab switch and tab close.</li>
-          <li>about:start wears the Northstar splash, an xkcd-style comic of Noah's ark, retitled for Nordstjernen.</li>
+          <li>about:start wears the Northstar splash, an xkcd-style comic of Noah's ark, retitled for Southstar.</li>
           <li>quickjs-ng updated to v0.16.2; the .deb no longer bundles the dynamic loader.</li>
         </ul>
       </description>

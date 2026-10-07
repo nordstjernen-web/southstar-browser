@@ -1,4 +1,4 @@
-/* Nordstjernen — native Temporal date/time API over QuickJS, ICU-free. */
+/* Southstar — native Temporal date/time API over QuickJS, ICU-free. */
 
 #include "js_date.h"
 #include "js_classid.h"

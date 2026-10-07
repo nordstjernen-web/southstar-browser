@@ -1,4 +1,4 @@
-/* Nordstjernen — inline video playback and poster cache.
+/* Southstar — inline video playback and poster cache.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -1207,7 +1207,7 @@ ns_video_stream_file_create(ns_video_cache *cache, const char *subdir,
                             char prefix, const guint8 *data, gsize len)
 {
     char *dir = g_build_filename(g_get_user_cache_dir(),
-                                 "nordstjernen", subdir, NULL);
+                                 "southstar", subdir, NULL);
     g_mkdir_with_parents(dir, 0700);
     char *path = g_strdup_printf("%s/%c%d-%u.dat", dir, prefix,
                                  (int)getpid(), ++cache->next_token);

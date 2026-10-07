@@ -36,18 +36,12 @@
   <g transform="translate(14,15.5)">
     <circle r="10.5" fill="url(#halo)"/>
     <polygon points="0,-9.5 1.1,-1.1 9.5,0 1.1,1.1 0,9.5 -1.1,1.1 -9.5,0 -1.1,-1.1"
-             fill="#ffffff" opacity="0.55"/>
-    <text x="0" y="4.6"
-          text-anchor="middle"
-          font-family="Georgia, 'Times New Roman', serif"
-          font-size="17"
-          font-weight="bold"
-          fill="url(#nfill)">N</text>
+             fill="#ffffff" opacity="0.9"/>
     <circle r="1.7" fill="url(#core)"/>
   </g>
 
   <g font-family="Verdana,Geneva,sans-serif" font-weight="bold" text-anchor="middle">
     <text x="56" y="13" font-size="5.5" fill="#ffffff" letter-spacing="0">BEST VIEWED IN</text>
-    <text x="56" y="24.5" font-size="6" fill="#ffd34d" letter-spacing="0" textLength="48" lengthAdjust="spacingAndGlyphs">NORDSTJERNEN</text>
+    <text x="56" y="24.5" font-size="6" fill="#ffd34d" letter-spacing="0" textLength="48" lengthAdjust="spacingAndGlyphs">SOUTHSTAR</text>
   </g>
 </svg>

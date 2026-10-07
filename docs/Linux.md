@@ -1,7 +1,7 @@
-# Nordstjernen on Linux — build, run, package
+# Southstar on Linux — build, run, package
 
 This document records the working setup for building and packaging
-Nordstjernen on Linux. The primary supported targets are Debian /
+Southstar on Linux. The primary supported targets are Debian /
 Ubuntu, Fedora / RHEL, and openSUSE on `x86_64`. Local Linux is the
 correctness gate: every commit must pass `meson compile -C builddir`
 locally before pushing.
@@ -57,7 +57,7 @@ with the distro package manager.
 
     meson setup builddir
     meson compile -C builddir
-    ./builddir/src/gtk/nordstjernen
+    ./builddir/src/gtk/southstar
 
 `./scripts/dev.sh build` runs `meson setup` (only if needed) and
 `meson compile -C builddir` in one shot.
@@ -67,10 +67,10 @@ with the distro package manager.
 `./scripts/pack-linux.sh` produces a redistributable, stripped,
 LTO-optimised x86_64 build:
 
-    dist/nordstjernen-<version>-linux-x86_64.zip       # ~1.5 MB
-    dist/nordstjernen-<version>-linux-x86_64/          # unpacked bundle
+    dist/southstar-<version>-linux-x86_64.zip       # ~1.5 MB
+    dist/southstar-<version>-linux-x86_64/          # unpacked bundle
 
-The zip contains the `nordstjernen` binary, the application icon,
+The zip contains the `southstar` binary, the application icon,
 the desktop entry, `README.md`, `THIRD-PARTY-LICENSES.md`, and a
 generated `INSTALL.md` listing the runtime requirements.
 
@@ -90,7 +90,7 @@ practical. Runtime requirements:
 
 Smoke test the bundled binary headlessly without installing:
 
-    ./dist/nordstjernen-<version>-linux-x86_64/nordstjernen \
+    ./dist/southstar-<version>-linux-x86_64/southstar \
         --headless --url=https://example.com --dump=text
 
 ## Package — RPM
@@ -107,7 +107,7 @@ then drives `rpmbuild` against a generated spec under
 
 Output:
 
-    dist/nordstjernen-<version>-1.x86_64.rpm           # ~1.3 MB
+    dist/southstar-<version>-1.x86_64.rpm           # ~1.3 MB
 
 The spec uses `AutoReqProv: yes` so `rpmbuild` extracts the actual
 SONAME dependencies (`libgtk-4.so.1`, `libcurl.so.4`,
@@ -119,17 +119,17 @@ packages. (Cross-installing into Debian / Ubuntu uses `alien`.)
 
 Install layout:
 
-    /usr/bin/nordstjernen
-    /usr/share/icons/hicolor/scalable/apps/nordstjernen.svg
-    /usr/share/applications/nordstjernen.desktop
-    /usr/share/doc/packages/nordstjernen/{README.md,THIRD-PARTY-LICENSES.md}
+    /usr/bin/southstar
+    /usr/share/icons/hicolor/scalable/apps/southstar.svg
+    /usr/share/applications/southstar.desktop
+    /usr/share/doc/packages/southstar/{README.md,THIRD-PARTY-LICENSES.md}
 
 Inspect, install, remove:
 
-    rpm -qpi dist/nordstjernen-<version>-1.x86_64.rpm   # metadata
-    rpm -qpR dist/nordstjernen-<version>-1.x86_64.rpm   # required SONAMEs
-    sudo dnf install ./dist/nordstjernen-<version>-1.x86_64.rpm
-    sudo rpm -e nordstjernen
+    rpm -qpi dist/southstar-<version>-1.x86_64.rpm   # metadata
+    rpm -qpR dist/southstar-<version>-1.x86_64.rpm   # required SONAMEs
+    sudo dnf install ./dist/southstar-<version>-1.x86_64.rpm
+    sudo rpm -e southstar
 
 The `%post` / `%postun` scriptlets refresh `gtk-update-icon-cache`
 and `update-desktop-database` if those tools are available, so the

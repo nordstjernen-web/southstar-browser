@@ -1,6 +1,6 @@
 # WPT scores
 
-Tracks Nordstjernen's results on the
+Tracks Southstar's results on the
 [web-platform-tests](https://github.com/web-platform-tests/wpt)
 suite over time: a fixed 15-area slice measured exactly (see
 "Tracked slice" below), and a sampled estimate of the whole-suite
@@ -12,7 +12,7 @@ they regenerate.
 
 ## History
 
-| Date | Nordstjernen | WPT | Files ok | Subtests passing | Notes |
+| Date | Southstar | WPT | Files ok | Subtests passing | Notes |
 |------|--------------|-----|----------|------------------|-------|
 | 2026-06-12 | 9526465 | 3be6ba111 | 181/696 (26%) | 6921/16067 (43%) | full |
 | 2026-06-12 | e000f76 | 3be6ba111 | 181/696 (26%) | 6921/16067 (43%) | partial: dom/lists |
@@ -179,7 +179,7 @@ Not listed by design: the `navigator.*` device APIs are project non-goals.
 
 Full browsers are compared by total passing subtests across the
 entire WPT suite — a scale where Chrome scores roughly 6,000,000.
-Running all of WPT through Nordstjernen is impractical (days of
+Running all of WPT through Southstar is impractical (days of
 wall-clock at the per-test timeout), so this score is estimated by
 sampling: a deterministic random sample of test files drawn from
 every browser-runnable testharness.js test in the checkout, run
@@ -195,12 +195,12 @@ Caveats, so the number is read honestly: only browser-runnable
 testharness tests are counted (worker and service-worker variants,
 reftests, crashtests, and wdspec tests are excluded — Chrome's
 headline number includes those, so the "% of Chrome" column slightly
-flatters Nordstjernen); tests whose harness never reports (hung page,
+flatters Southstar); tests whose harness never reports (hung page,
 missing API) contribute zero even though they contain subtests; and
 the subtest-per-file distribution is heavy-tailed, hence the wide
 interval. Treat the trend, not the point value, as the signal.
 
-| Date | Nordstjernen | WPT | Sample | Est. passing subtests (95% CI) | % of Chrome (~6M) |
+| Date | Southstar | WPT | Sample | Est. passing subtests (95% CI) | % of Chrome (~6M) |
 |------|--------------|-----|--------|--------------------------------|-------------------|
 | 2026-06-12 | 9526465 | 3be6ba111 | 250 of 29259 | ~44,000 (22,000 – 72,000) | ~0.7% |
 | 2026-06-13 | fcfeaf1 | d8a8414e5 | 250 of 29259 | ~255,256 (21,184 – 706,429) | ~4.3% |
@@ -229,7 +229,7 @@ upper bound is about 5 days at the browser timeout alone, or about
 8.5 days with the script's 25 second outer timeout. Including worker
 and service-worker variants, reftests, crashtests, and wdspec would
 push a literal all-WPT run toward several days, and some of those
-harness types are not wired into Nordstjernen's current headless
+harness types are not wired into Southstar's current headless
 runner yet.
 
 ## Running the slice
@@ -292,7 +292,7 @@ The loop, drivable end-to-end by a Claude session:
 3. Reproduce one test with full failure messages:
 
    ```sh
-   ./builddir/src/gtk/nordstjernen --wpt http://web-platform.test:8000/dom/ranges/Range-attributes.html
+   ./builddir/src/gtk/southstar --wpt http://web-platform.test:8000/dom/ranges/Range-attributes.html
    ```
 
 4. Fix the engine, rebuild, and rerun just the affected area:

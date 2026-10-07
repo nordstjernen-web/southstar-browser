@@ -1,4 +1,4 @@
-/* Nordstjernen — HTTP transport backend seam (libcurl or libnghttp2). */
+/* Southstar — HTTP transport backend seam (libcurl or libnghttp2). */
 
 #ifndef NS_NET_BACKEND_H
 #define NS_NET_BACKEND_H

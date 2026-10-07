@@ -1,4 +1,4 @@
-/* Nordstjernen — webcam capture (V4L2) and per-site camera permission. */
+/* Southstar — webcam capture (V4L2) and per-site camera permission. */
 
 #include "camera.h"
 

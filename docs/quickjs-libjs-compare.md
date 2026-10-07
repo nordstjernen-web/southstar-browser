@@ -1,6 +1,6 @@
 # QuickJS vs. LibJS — JavaScript feature comparison
 
-This note compares the JavaScript engine bundled with Nordstjernen
+This note compares the JavaScript engine bundled with Southstar
 ([quickjs-ng](https://github.com/quickjs-ng/quickjs), vendored at
 `src/quickjs/`) against [LibJS](https://github.com/LadybirdBrowser/ladybird/tree/master/Libraries/LibJS),
 the ECMAScript engine in the Ladybird browser. The goal is to
@@ -68,7 +68,7 @@ the gap below is genuinely narrow.
 
 After auditing the recent-proposal surface (the list above), the gap
 narrows to three areas absent from `src/quickjs/` itself but present in
-LibJS: **Intl**, **Temporal**, and **JSON modules**. **Nordstjernen now
+LibJS: **Intl**, **Temporal**, and **JSON modules**. **Southstar now
 supplies all three** outside the QuickJS core — Intl and Temporal as
 native C built-ins, JSON modules in the module loader — so the only
 remaining shortfall against LibJS is the *conformance depth* of the i18n
@@ -98,7 +98,7 @@ ECMA-402 surface backed by ICU, under `Libraries/LibJS/Runtime/Intl/`:
 | `Intl.RelativeTimeFormat` | "3 days ago" style formatting |
 | `Intl.Segmenter`        | Grapheme/word/sentence segmentation |
 
-**Nordstjernen status: implemented natively in `src/js_intl.c`.** All ten
+**Southstar status: implemented natively in `src/js_intl.c`.** All ten
 constructors plus `getCanonicalLocales` and `supportedValuesOf` are
 provided over the public QuickJS C API, ICU-free. `Number/Date/String`'s
 `toLocaleString`/`toLocale*String`/`localeCompare` are wired through it,
@@ -137,7 +137,7 @@ proposal under `Libraries/LibJS/Runtime/Temporal/`:
 plus the supporting calendar, time-zone, and ISO-8601 parsing
 machinery.
 
-**Nordstjernen status: implemented natively in `src/js_date.c`.** All
+**Southstar status: implemented natively in `src/js_date.c`.** All
 nine types above are provided, sharing the civil-date math in
 `src/datetime.c`: `from()` (ISO-string and property-bag forms),
 `toString()`/`toJSON()`, the full getter surface (`year`, `monthCode`,
@@ -167,7 +167,7 @@ module synthesis** — there is no `parse_json_module`/synthetic-module
 path, so the QuickJS *engine* does not turn a `type: "json"` import into a
 usable module by itself.
 
-**Nordstjernen status: implemented in the module loader
+**Southstar status: implemented in the module loader
 (`src/js.c::ns_js_module_loader`).** The loader now uses
 `JS_SetModuleLoaderFunc2`, which delivers the import attributes; when
 `type: "json"` is present it parses the fetched bytes with `JS_ParseJSON`
@@ -178,10 +178,10 @@ dynamic `import("…", { with: { type: "json" } })` work, over `data:` and
 (The CSS/Wasm/HTML module variants remain unimplemented and are rarely
 used on the open web.)
 
-## Beyond LibJS: extras Nordstjernen adds that LibJS lacks
+## Beyond LibJS: extras Southstar adds that LibJS lacks
 
 These were *shared gaps* (absent from the bundled QuickJS **and** from
-LibJS). Nordstjernen now implements the first two natively, so on these it
+LibJS). Southstar now implements the first two natively, so on these it
 is ahead of both bare QuickJS and LibJS:
 
 - **ShadowRealm** — native, in `src/js_realm.c`. `new ShadowRealm()`
@@ -212,7 +212,7 @@ well-formed-string methods, resizable/transferable `ArrayBuffer`, RegExp
 and import-attributes parsing.
 
 **Decorators** (`@decorator`) remain **unimplemented in all three** — the
-bundled QuickJS, Nordstjernen, and LibJS's current (Rust) parser. Unlike
+bundled QuickJS, Southstar, and LibJS's current (Rust) parser. Unlike
 the runtime additions above, decorators are a *syntax/compiler* feature:
 supporting them means changing the QuickJS lexer (`@` token), the class
 parser (`js_parse_class`), bytecode generation, and the decorator
@@ -224,10 +224,10 @@ LibJS-vs-QuickJS scope of this note.
 
 ## Summary
 
-The QuickJS column is the bare engine; the Nordstjernen column reflects
+The QuickJS column is the bare engine; the Southstar column reflects
 what the browser exposes after its native C additions load.
 
-| Feature area              | QuickJS-ng 0.16.1 | Nordstjernen | LibJS |
+| Feature area              | QuickJS-ng 0.16.1 | Southstar | LibJS |
 | ------------------------- | :---------------: | :----------: | :---: |
 | Core ES2023+ language     | ✅ | ✅ | ✅ |
 | WeakRef / FinalizationRegistry | ✅ | ✅ | ✅ |
@@ -243,14 +243,14 @@ what the browser exposes after its native C additions load.
 | ShadowRealm               | ❌ | ✅ native (no `importValue`) | ❌ |
 | AsyncContext              | ❌ | ✅ native (sync-only) | ❌ |
 
-Nordstjernen now matches LibJS on every LibJS-provided API surface here
+Southstar now matches LibJS on every LibJS-provided API surface here
 (its only remaining shortfall is the i18n/calendar/time-zone *data depth*
 an ICU-backed engine provides), and is *ahead* of LibJS on ShadowRealm
 and AsyncContext, which LibJS does not implement. **Decorators** are the
 sole feature absent from all three. Everything else in the recent-proposal
 set is already present in the bundled QuickJS.
 
-## Implications for Nordstjernen
+## Implications for Southstar
 
 - **Intl** and **Temporal** are now provided natively in C
   (`src/js_intl.c`, `src/js_date.c`) and verified through the headless
@@ -267,7 +267,7 @@ set is already present in the bundled QuickJS.
   imports over `data:`/`http(s)`.
 - **ShadowRealm** and **AsyncContext** are now provided natively in
   `src/js_realm.c` (the former over a child `JSContext`, the latter as
-  synchronous `Variable`/`Snapshot`), putting Nordstjernen ahead of LibJS
+  synchronous `Variable`/`Snapshot`), putting Southstar ahead of LibJS
   here. Their documented limits — no `ShadowRealm.importValue`, no
   AsyncContext propagation across `await`/timers — would each require
   deeper engine plumbing (a child-realm module loader; promise/task

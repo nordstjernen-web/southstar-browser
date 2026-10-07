@@ -69,14 +69,6 @@
       <polygon points="196,196 198,202 204,204 198,206 196,212 194,206 188,204 194,202"/>
     </g>
 
-    <text x="128" y="196"
-          text-anchor="middle"
-          font-family="Georgia, 'Times New Roman', 'DejaVu Serif', 'Liberation Serif', serif"
-          font-size="184"
-          font-weight="bold"
-          fill="url(#nfill)"
-          opacity="0.92">N</text>
-
     <circle cx="128" cy="128" r="86" fill="url(#halo)"/>
 
     <polygon points="128,18 138,118 238,128 138,138 128,238 118,138 18,128 118,118"

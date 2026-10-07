@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a source RPM (.src.rpm) of Nordstjernen. Every subproject the build
+# Build a source RPM (.src.rpm) of Southstar. Every subproject the build
 # needs (Wuffs, pl_mpeg) is vendored in the tarball, and the one remaining
 # wrap — ns-pango, cloned with git — is switched off in the spec, so
 # `rpmbuild --rebuild` resolves offline against the system Pango.
@@ -11,7 +11,7 @@ VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
 RPMVERSION=${VERSION//[!A-Za-z0-9.]/.}
-NAME=nordstjernen
+NAME=southstar
 SLUG="${NAME}-${FSVERSION}"
 
 if ! command -v rpmbuild >/dev/null 2>&1; then
@@ -46,10 +46,10 @@ cat > "$SPEC" <<SPEC_EOF
 Name:           ${NAME}
 Version:        ${RPMVERSION}
 Release:        1%{?dist}
-Summary:        Nordstjernen Web Navigator — a small, hand-written web browser
+Summary:        Southstar Browser — a small, hand-written web browser
 
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-URL:            https://nordstjernen.org
+URL:            https://github.com/nordstjernen-web/southstar-browser
 Source0:        ${SLUG}.tar.gz
 
 BuildRequires:  gcc
@@ -83,7 +83,7 @@ Requires:       libcurl
 Requires:       uchardet
 
 %description
-Nordstjernen is a small, free software web browser written in C with
+Southstar is a small, free software web browser written in C with
 GTK 4 and libcurl. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
@@ -111,23 +111,23 @@ DESTDIR=%{buildroot} meson install --no-rebuild -C builddir
 
 # The browser statically compiles the engine; the embedding shared library
 # and its header serve external embedders only.
-rm -f %{buildroot}%{_libdir}/libnordstjernen.so
-rm -f %{buildroot}%{_includedir}/nordstjernen/libnordstjernen.h
-rmdir %{buildroot}%{_includedir}/nordstjernen 2>/dev/null || :
+rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
+rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 
 %files
 %license %{_datadir}/%{name}/License.md
 %license %{_datadir}/%{name}/COPYING
 %doc README.md
-%{_bindir}/nordstjernen
-%{_bindir}/nordstjernen-renderer
-%{_bindir}/nordstjernen-audio
-%{_bindir}/nordstjernen-video
-%{_datadir}/applications/org.nordstjernen.WebBrowser.desktop
-%{_datadir}/metainfo/org.nordstjernen.WebBrowser.metainfo.xml
+%{_bindir}/southstar
+%{_bindir}/southstar-renderer
+%{_bindir}/southstar-audio
+%{_bindir}/southstar-video
+%{_datadir}/applications/org.southstar.WebBrowser.desktop
+%{_datadir}/metainfo/org.southstar.WebBrowser.metainfo.xml
 %{_datadir}/%{name}/
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen.gif
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen*.svg
+%{_datadir}/icons/hicolor/scalable/apps/southstar.gif
+%{_datadir}/icons/hicolor/scalable/apps/southstar*.svg
 
 %post
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -147,7 +147,7 @@ fi
 
 %changelog
 * $(LC_ALL=C date "+%a %b %d %Y") Andreas Røsdal <andreas.rosdal@gmail.com> - ${RPMVERSION}-1
-- Source RPM release of Nordstjernen ${VERSION}.
+- Source RPM release of Southstar ${VERSION}.
 SPEC_EOF
 
 rpmbuild --define "_topdir $RPMTOP" -bs "$SPEC"

@@ -1,11 +1,11 @@
-/* Nordstjernen: paint a page as scroll-layer tiles and viewport layers. */
+/* Southstar: paint a page as scroll-layer tiles and viewport layers. */
 
 #ifndef NS_LAYERS_H
 #define NS_LAYERS_H
 
 #include <glib.h>
 
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "paint.h"
 
 G_BEGIN_DECLS

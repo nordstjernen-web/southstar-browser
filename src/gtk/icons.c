@@ -1,4 +1,4 @@
-/* Nordstjernen — the shell's own icons, drawn by the in-engine SVG renderer.
+/* Southstar — the shell's own icons, drawn by the in-engine SVG renderer.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -9,7 +9,7 @@
 #include "svg.h"
 
 #define NS_ICON_RESOURCE_DIR \
-    "/org/nordstjernen/WebBrowser/icons/scalable/apps/"
+    "/org/southstar/WebBrowser/icons/scalable/apps/"
 #define NS_ICON_DEFAULT_PX 16
 
 #define NS_TYPE_ICON (ns_icon_get_type())

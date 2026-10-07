@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=Nordstjernen
+Name=Southstar Browser
 GenericName=Web Browser
 Comment=A small, hand-written web browser
-Exec=nordstjernen %U
-Icon=nordstjernen
+Exec=southstar %U
+Icon=southstar
 Terminal=false
-StartupWMClass=org.nordstjernen.WebBrowser
+StartupWMClass=org.southstar.WebBrowser
 Categories=Network;WebBrowser;
 MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
 StartupNotify=true

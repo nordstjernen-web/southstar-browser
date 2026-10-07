@@ -29,18 +29,18 @@ VERSION=$(grep -E "^[[:space:]]*version:" "$ROOT/meson.build" \
 # (docs/windows-store.md), so map meson's Major.Minor.Build to X.Y.Z.0 rather
 # than passing a fourth field through.
 MSIX_VERSION=${NS_MSIX_VERSION:-$(awk -F. '{printf "%d.%d.%d.0", $1, $2, $3}' <<<"${VERSION%%-*}")}
-IDENTITY_NAME=${NS_MSIX_IDENTITY_NAME:-29567TheFreecivProject.NordstjernenWebBrowser}
+IDENTITY_NAME=${NS_MSIX_IDENTITY_NAME:-29567TheFreecivProject.SouthstarWebBrowser}
 PUBLISHER=${NS_MSIX_PUBLISHER:-CN=631F98F7-2280-49EE-8EF8-534CC36D09CF}
-PUBLISHER_DISPLAY=${NS_MSIX_PUBLISHER_DISPLAY:-Nordstjernen}
-DISPLAY_NAME=${NS_MSIX_DISPLAY_NAME:-Nordstjernen Web Browser}
+PUBLISHER_DISPLAY=${NS_MSIX_PUBLISHER_DISPLAY:-Southstar}
+DISPLAY_NAME=${NS_MSIX_DISPLAY_NAME:-Southstar Browser}
 PHONE_PRODUCT_ID=${NS_MSIX_PHONE_PRODUCT_ID:-2c47a178-dfb0-4383-9dc0-aa7195bc8354}
 PHONE_PUBLISHER_ID=${NS_MSIX_PHONE_PUBLISHER_ID:-eb62046e-1fa9-48a1-b651-cbf7237e9a03}
 
-BUNDLE=$ROOT/dist/nordstjernen-win64
-STAGE=$ROOT/dist/nordstjernen-msix
-MSIX=$ROOT/dist/nordstjernen-${VERSION}-win64.msix
+BUNDLE=$ROOT/dist/southstar-win64
+STAGE=$ROOT/dist/southstar-msix
+MSIX=$ROOT/dist/southstar-${VERSION}-win64.msix
 TEMPLATE=$ROOT/data/msix/AppxManifest.xml.in
-SVG=$ROOT/data/icons/hicolor/scalable/apps/nordstjernen.svg
+SVG=$ROOT/data/icons/hicolor/scalable/apps/southstar.svg
 
 if ! command -v rsvg-convert >/dev/null 2>&1; then
     echo "pack-msix: rsvg-convert not found (pacman -S mingw-w64-x86_64-librsvg)" >&2

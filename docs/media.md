@@ -1,6 +1,6 @@
 # Media: video and audio
 
-How Nordstjernen plays `<video>` and `<audio>`. The engine ships a tiny,
+How Southstar plays `<video>` and `<audio>`. The engine ships a tiny,
 in-tree decoder set plus one optional WebM extension; anything else renders
 a poster and a play overlay.
 
@@ -53,15 +53,13 @@ How libav is obtained differs by platform, to keep it redistributable:
   (`scripts/build-ffmpeg-lgpl.sh`), carrying just the matroska/ogg demuxers and
   the native VP8/VP9/Opus/Vorbis decoders — no GPL parts, no external codec
   libraries.
-- **Android / iOS** do not cross-build FFmpeg, so the inline libav WebM path is
-  unavailable there.
 
 ## Audio
 
 The MPEG-1 stream's **MP2 audio track** plays too (unless the element is
 `muted`), as does a WebM's **Opus/Vorbis** track when libav is built in. The
 seccomp-sandboxed renderer can't open a sound device, so audio is handed to the
-unsandboxed `nordstjernen-audio` helper. The helper decodes to PCM — pl_mpeg for
+unsandboxed `southstar-audio` helper. The helper decodes to PCM — pl_mpeg for
 the MPEG-1/MP2 track, [minimp3](https://github.com/lieff/minimp3) (CC0, vendored)
 for standalone `.mp3` files, and libav for Opus/Vorbis (WebM/Ogg) — and plays it
 through [SDL2](https://www.libsdl.org/)'s audio device (WASAPI on Windows,
@@ -96,12 +94,12 @@ frames. Playback-time (`v->cur_time`) and the parsed cues are tracked
 renderer-side either way, so the same captions appear regardless of who
 decodes the picture.
 
-## The video helper process (`nordstjernen-video`)
+## The video helper process (`southstar-video`)
 
 MSE streams (YouTube-style playback) decode in a **third process** that sits
 beside the renderer and the audio helper. The renderer appends the growing MSE
-byte stream to a file under `~/.cache/nordstjernen/msvideo/` (exactly as it
-materializes the audio track for `nordstjernen-audio`) and drives the helper
+byte stream to a file under `~/.cache/southstar/msvideo/` (exactly as it
+materializes the audio track for `southstar-audio`) and drives the helper
 over the same renderer→shell media channel with
 `video open`/`reload`/`play`/`pause`/`seek`/`stop` lines, plus a
 `video rect` line carrying the on-page rectangle of the `<video>` box captured
@@ -121,7 +119,7 @@ named file mapping (`CreateFileMapping`/`MapViewOfFile`) rather than POSIX
 `shm_open` — and when the binary is missing, or in headless mode, the renderer
 decodes frames in-process exactly as before. The renderer always keeps the demuxer state that backs
 `buffered`/`duration`/`currentTime`, so page JS sees the same element state
-either way; audio stays in `nordstjernen-audio`, cued by the same
+either way; audio stays in `southstar-audio`, cued by the same
 play/pause/seek commands so both clocks anchor identically.
 
 Each appended media segment is tracked with its byte offset and probed time
@@ -135,12 +133,11 @@ eviction and seek decisions no longer see a synthetic zero-based range.
 ## Other media
 
 Beyond MPEG-1/MP2, MP3, and the optional WebM (VP9/VP8 + Opus/Vorbis) path,
-Nordstjernen ships no media codecs. Other `<audio>` and other `<video>` codecs
+Southstar ships no media codecs. Other `<audio>` and other `<video>` codecs
 render a poster and a play overlay instead of playing. Clicking one resolves
 the source URL inside the sandboxed renderer process (`ns_browser_media_at`),
 and the renderer's HTTP protocol reports it to whoever drives the renderer —
-the C embedding API and the Java binding can hand it to an external player of
-their own. The GTK shell itself does not launch an external player; the
+an embedder of the C API can hand it to an external player of its own. The GTK shell itself does not launch an external player; the
 `.deb` and `.rpm` packages still `Recommend` one (`mpv`) for opening such
 URLs by hand.
 

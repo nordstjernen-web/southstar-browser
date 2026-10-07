@@ -1,4 +1,4 @@
-/* Nordstjernen — JavaScript engine binding (QuickJS).
+/* Southstar — JavaScript engine binding (QuickJS).
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -10228,7 +10228,7 @@ ns_audio_analysis_throw(JSContext *ctx, JSValueConst this_val,
         JS_NewString(ctx, "NotSupportedError"),
         JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
     JS_DefinePropertyValueStr(ctx, err, "message",
-        JS_NewString(ctx, "Nordstjernen does not implement Web Audio analysis"),
+        JS_NewString(ctx, "Southstar does not implement Web Audio analysis"),
         JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
     JS_DefinePropertyValueStr(ctx, err, "code",
         JS_NewInt32(ctx, 9),
@@ -11464,7 +11464,7 @@ ns_ua_client_hint_brands(JSContext *ctx, gboolean full_version)
 {
     JSValue arr = JS_NewArray(ctx);
     const struct { const char *brand; const char *version; } entries[] = {
-        { "Nordstjernen", full_version ? NS_VERSION : "1" },
+        { "Southstar", full_version ? NS_VERSION : "1" },
         { "Not=A?Brand",   full_version ? "24.0.0.0" : "24" },
     };
     for (uint32_t i = 0; i < G_N_ELEMENTS(entries); i++) {
@@ -13212,7 +13212,7 @@ ns_media_set_media_keys(JSContext *ctx, JSValueConst this_val,
                       JS_NewString(ctx, "NotSupportedError"));
     JS_SetPropertyStr(ctx, err, "message",
                       JS_NewString(ctx,
-                          "Nordstjernen does not implement EME / DRM"));
+                          "Southstar does not implement EME / DRM"));
     JS_SetPropertyStr(ctx, err, "code", JS_NewInt32(ctx, 9));
     JS_Call(ctx, resolvers[1], JS_UNDEFINED, 1, &err);
     JS_FreeValue(ctx, err);
@@ -63453,7 +63453,7 @@ ns_js_run_script_element(ns_js *js, ns_node *n, const char *origin)
     }
 }
 
-/* Nordstjernen parses a whole document before running its scripts, but a
+/* Southstar parses a whole document before running its scripts, but a
  * parser-blocking script runs while the HTML parser has only reached its
  * end tag: nothing after it exists yet, so document.body is null in <head>
  * and the script is the last <script> in the document.  Before the first

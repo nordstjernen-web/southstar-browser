@@ -1,4 +1,4 @@
-/* Nordstjernen: the page as cached tile and viewport-layer textures. */
+/* Southstar: the page as cached tile and viewport-layer textures. */
 
 #ifndef NS_PAGELAYERS_H
 #define NS_PAGELAYERS_H

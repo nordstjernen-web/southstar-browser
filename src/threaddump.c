@@ -1,4 +1,4 @@
-/* Nordstjernen — per-process thread dump to stderr, incl. a SIGQUIT trigger. */
+/* Southstar — per-process thread dump to stderr, incl. a SIGQUIT trigger. */
 
 #define _GNU_SOURCE
 #include "threaddump.h"

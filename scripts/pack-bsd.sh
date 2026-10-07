@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage a portable Nordstjernen BSD release zip: the nordstjernen binary, the
+# Stage a portable Southstar BSD release zip: the southstar binary, the
 # sandboxed renderer, runtime data, and an INSTALL.md naming the pkg runtime
 # dependencies, zipped under dist/. OS label via $1 or NS_PACK_OS.
 set -euo pipefail
@@ -13,28 +13,28 @@ VERSION=${VERSION:-$(awk -F"'" \
     '/^[[:space:]]*version[[:space:]]*:/ { print $2; exit }' "$ROOT/meson.build")}
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
-SLUG="nordstjernen-${FSVERSION}-${OS}-x86_64"
+SLUG="southstar-${FSVERSION}-${OS}-x86_64"
 STAGE="$ROOT/dist/$SLUG"
 ZIP="$ROOT/dist/${SLUG}.zip"
 
-if [ ! -x "$BUILDDIR/src/gtk/nordstjernen" ]; then
-    log "ERROR: $BUILDDIR/src/gtk/nordstjernen not found — build first"
+if [ ! -x "$BUILDDIR/src/gtk/southstar" ]; then
+    log "ERROR: $BUILDDIR/src/gtk/southstar not found — build first"
     exit 1
 fi
 
-strip "$BUILDDIR/src/gtk/nordstjernen" 2>/dev/null || true
-strip "$BUILDDIR/src/nordstjernen-renderer" 2>/dev/null || true
+strip "$BUILDDIR/src/gtk/southstar" 2>/dev/null || true
+strip "$BUILDDIR/src/southstar-renderer" 2>/dev/null || true
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/data/icons/hicolor/scalable/apps"
-cp "$BUILDDIR/src/gtk/nordstjernen" "$STAGE/"
-[ -f "$BUILDDIR/src/nordstjernen-renderer" ] && \
-    cp "$BUILDDIR/src/nordstjernen-renderer" "$STAGE/"
-cp "$ROOT"/data/icons/hicolor/scalable/apps/nordstjernen*.svg \
+cp "$BUILDDIR/src/gtk/southstar" "$STAGE/"
+[ -f "$BUILDDIR/src/southstar-renderer" ] && \
+    cp "$BUILDDIR/src/southstar-renderer" "$STAGE/"
+cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
    "$STAGE/data/icons/hicolor/scalable/apps/" 2>/dev/null || true
-cp "$ROOT"/data/icons/hicolor/scalable/apps/nordstjernen.gif \
+cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar.gif \
    "$STAGE/data/icons/hicolor/scalable/apps/" 2>/dev/null || true
-cp "$ROOT/data/nordstjernen.desktop" "$STAGE/data/" 2>/dev/null || true
+cp "$ROOT/data/southstar.desktop" "$STAGE/data/" 2>/dev/null || true
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/License.md" "$STAGE/" 2>/dev/null || true
@@ -50,7 +50,7 @@ case "$OS" in
 esac
 
 cat > "$STAGE/INSTALL.md" <<EOF
-# Nordstjernen ${VERSION} — ${OS} x86_64
+# Southstar ${VERSION} — ${OS} x86_64
 
 Portable build. The browser engine (lexbor for HTML, quickjs for
 JavaScript, wuffs for image decoding, wamr for WebAssembly) is statically
@@ -64,7 +64,7 @@ ${RUNTIME}
 
 ## Run
 
-    ./nordstjernen https://example.com
+    ./southstar https://example.com
 EOF
 
 ( cd "$ROOT/dist" && rm -f "${SLUG}.zip" && zip -r "${SLUG}.zip" "$SLUG" >/dev/null )

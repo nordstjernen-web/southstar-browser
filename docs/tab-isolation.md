@@ -1,6 +1,6 @@
 # Tab isolation and renderer boundaries
 
-This note records the current isolation shape in Nordstjernen and the
+This note records the current isolation shape in Southstar and the
 next useful implementation steps. The current direction is:
 
 - keep using per-tab workers to remove GTK-free work from the UI thread;
@@ -11,8 +11,8 @@ next useful implementation steps. The current direction is:
 
 ## Current state
 
-Nordstjernen now runs each tab's engine in **its own sandboxed renderer
-process** (`nordstjernen-renderer`); the GTK shell is a thin
+Southstar now runs each tab's engine in **its own sandboxed renderer
+process** (`southstar-renderer`); the GTK shell is a thin
 display/input client. The process-per-tab boundary described later in
 this document is the implemented default — the sections below trace how
 the codebase got there from the original single-process model. An
@@ -30,7 +30,7 @@ Engine state is per renderer process:
 - classic Dedicated Workers created by that page get their own QuickJS
   runtime, GLib main context, and OS thread, with message handoff back
   to the owning page;
-- the page is driven over IPC by `libnordstjernen` (`src/libnordstjernen.c`)
+- the page is driven over IPC by `libsouthstar` (`src/libsouthstar.c`)
   and painted into the shared-memory framebuffer.
 
 The old process-global active JavaScript pointer has been replaced by a
@@ -238,9 +238,9 @@ IPC boundary (steps 6–7), independent of the threading cleanups above:
   reference-count bookkeeping. This replaced an earlier opaque binary-struct
   protocol: readable on the wire, no slot-lifetime footgun, and identical
   performance because the data plane is shm.
-- `src/renderer_http.c` — the renderer process (`nordstjernen-renderer`),
+- `src/renderer_http.c` — the renderer process (`southstar-renderer`),
   `fork`+`execv`'d by the POSIX parent and `CreateProcess`'d by the Windows
-  parent (control over `stdin`/`stdout`). It holds one open `libnordstjernen`
+  parent (control over `stdin`/`stdout`). It holds one open `libsouthstar`
   page and services the HTTP operations above
   (`ns_browser_open_viewport` / `ns_browser_render_argb32` /
   `ns_browser_link_at` / …). It links no GUI toolkit.
@@ -277,8 +277,8 @@ IPC round trip.
 
 The renderer now sandboxes itself. After it maps the framebuffer, initialises
 the engine, and sends `HELLO`, but before it opens any page,
-`nordstjernen-renderer` calls `ns_browser_sandbox` (a glib-free entry point on
-`libnordstjernen`) to apply the same Linux Landlock + seccomp confinement the
+`southstar-renderer` calls `ns_browser_sandbox` (a glib-free entry point on
+`libsouthstar`) to apply the same Linux Landlock + seccomp confinement the
 GTK browser process uses (Windows process mitigations off Linux; a no-op on
 macOS). Untrusted HTML/CSS/JS is therefore parsed, scripted, laid out, and
 painted under a loaded syscall filter, with the renderer's filesystem reach
@@ -294,10 +294,10 @@ With process-per-tab the **default**, the GUI shell and the
 renderers have different threat models, so they are confined differently.
 
 - **Renderer processes** process untrusted bytes and carry the real sandbox:
-  each `nordstjernen-renderer` applies Landlock + seccomp (`ns_browser_sandbox`)
+  each `southstar-renderer` applies Landlock + seccomp (`ns_browser_sandbox`)
   after mapping its framebuffer and before opening any page. This is unchanged
   and is where confinement matters most.
-- **The shell** (`nordstjernen` in proc mode) blits
+- **The shell** (`southstar` in proc mode) blits
   framebuffers and forwards input; it parses no untrusted content. It must,
   however, `fork`/`execv` renderer processes, which the engine's full sandbox
   blocks (the seccomp allow-list has no `execve`). So the GTK shell applies
@@ -338,13 +338,13 @@ context, so `setTimeout`/`setInterval`, promise resolutions, and animations
 scheduled for later never advanced, and a deferred DOM update never reached a
 later frame.
 
-`ns_browser_tick(browser, budget_ms)` on `libnordstjernen` fixes that. Before
-each full `RENDER`, `nordstjernen-renderer` calls it to fire due timers,
+`ns_browser_tick(browser, budget_ms)` on `libsouthstar` fixes that. Before
+each full `RENDER`, `southstar-renderer` calls it to fire due timers,
 deliver pending fetch/XHR and promise jobs, run `rAF` and CSS animations, and
 relayout if the DOM changed, all bounded by a budget (`NS_TICK_MS`, default
 16 ms; partial rect repaints skip it). A latent bug surfaced while wiring this
 up: `ns_drain_mutations` notifies the embedder's mutate callback and then
-clears the dirty flag, but `libnordstjernen`'s callback was a no-op, so
+clears the dirty flag, but `libsouthstar`'s callback was a no-op, so
 timer/event-driven mutations were swallowed before `ns_js_consume_mutated`
 could see them. The callback now marks the browser dirty so the tick relayouts.
 

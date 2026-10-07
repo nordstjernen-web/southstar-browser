@@ -1,4 +1,4 @@
-/* Nordstjernen — local phishing/malware blocklist and warning interstitial. */
+/* Southstar — local phishing/malware blocklist and warning interstitial. */
 
 #define _GNU_SOURCE
 #include "safebrowsing.h"
@@ -102,9 +102,9 @@ static gboolean
 load_bundled(void)
 {
     static const char *const rel[] = {
-        "../Resources/share/nordstjernen/safebrowsing.list",
-        "../share/nordstjernen/safebrowsing.list",
-        "share/nordstjernen/safebrowsing.list",
+        "../Resources/share/southstar/safebrowsing.list",
+        "../share/southstar/safebrowsing.list",
+        "share/southstar/safebrowsing.list",
         "data/safebrowsing.list",
         "../data/safebrowsing.list",
         "../../data/safebrowsing.list",
@@ -146,7 +146,7 @@ ensure_loaded(void)
         load_file(override);
         return;
     }
-    char *user = g_build_filename(g_get_user_config_dir(), "nordstjernen",
+    char *user = g_build_filename(g_get_user_config_dir(), "southstar",
                                   "safebrowsing.list", NULL);
     load_file(user);
     g_free(user);
@@ -202,7 +202,7 @@ ns_safebrowsing_interstitial(const char *url, const char *host)
 
     char *html = g_strdup_printf(
         "<!doctype html><html><head><meta charset=\"utf-8\">"
-        "<title>Security warning — Nordstjernen</title><style>"
+        "<title>Security warning — Southstar</title><style>"
         "body{font-family:system-ui,-apple-system,\"Segoe UI\",Helvetica,"
         "Arial,sans-serif;background:#7a1212;color:#1b1b22;margin:0;padding:0;"
         "min-height:100vh;display:flex;align-items:center;justify-content:center}"
@@ -229,7 +229,7 @@ ns_safebrowsing_interstitial(const char *url, const char *host)
         "</style></head><body><div class=\"card\">"
         "<div class=\"icon\">\xe2\x9a\xa0\xef\xb8\x8f</div>"
         "<h1>Deceptive site ahead</h1>"
-        "<p class=\"summary\">Nordstjernen blocked this page because the site "
+        "<p class=\"summary\">Southstar blocked this page because the site "
         "below is on your local list of known phishing or malware hosts. "
         "Attackers there may try to trick you into revealing passwords or "
         "payment details, or to install harmful software.</p>"

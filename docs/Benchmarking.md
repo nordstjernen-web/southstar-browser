@@ -1,9 +1,9 @@
-# Benchmarking Nordstjernen on Speedometer 3.1
+# Benchmarking Southstar on Speedometer 3.1
 
 The official [Speedometer 3.1](https://browserbench.org/Speedometer3.1/)
 harness loads every workload inside an `<iframe>` and drives it through
 `frame.contentDocument` / `frame.contentWindow` after `frame.onload`.
-Nordstjernen now supports this: setting an iframe's `src`/`srcdoc`
+Southstar now supports this: setting an iframe's `src`/`srcdoc`
 fetches and parses the document, splices it under the iframe node so it
 styles, lays out, and runs its own scripts, marks the iframe
 `data-nd-frame-loaded` so the UA stylesheet renders it, and dispatches
@@ -23,7 +23,7 @@ finished.) Example aggregate over the eleven light TodoMVC frameworks
 jQuery, Preact, Svelte, Lit), `iterationCount=1`:
 
 ```sh
-./builddir/src/gtk/nordstjernen \
+./builddir/src/gtk/southstar \
   'http://localhost:8124/index.html?suite=TodoMVC-JavaScript-ES5,TodoMVC-JavaScript-ES6-Webpack,TodoMVC-WebComponents,TodoMVC-React,TodoMVC-React-Redux,TodoMVC-Backbone,TodoMVC-Vue,TodoMVC-jQuery,TodoMVC-Preact,TodoMVC-Svelte,TodoMVC-Lit&startAutomatically=true&iterationCount=1'
 ```
 
@@ -37,7 +37,7 @@ fresh-process runs when comparing the engine over time.
 git clone --depth 1 --branch release/3.1 \
     https://github.com/WebKit/Speedometer.git /tmp/spdm
 ( cd /tmp/spdm && python3 -m http.server 8124 & )
-./builddir/src/gtk/nordstjernen --headless --dump=text --settle-ms=60000 \
+./builddir/src/gtk/southstar --headless --dump=text --settle-ms=60000 \
     'http://localhost:8124/index.html?suite=TodoMVC-JavaScript-ES5&startAutomatically=true&iterationCount=1'
 ```
 

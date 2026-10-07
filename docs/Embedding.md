@@ -1,18 +1,15 @@
-# Embedding Nordstjernen in a C application
+# Embedding Southstar in a C application
 
-Nordstjernen ships a small C API for driving the engine from another
+Southstar ships a small C API for driving the engine from another
 program: fetch a URL, run its scripts, lay it out, and pull back the
 rendered text or a PNG/PDF image. There is no GTK window — it is the
 same synchronous pipeline the `--headless` driver uses, exposed as a
 library.
 
-The public header is **`libnordstjernen.h`** and the build installs a
-shared library (`libnordstjernen.so` / `.dll` / `.dylib`). The header
+The public header is **`libsouthstar.h`** and the build installs a
+shared library (`libsouthstar.so` / `.dll` / `.dylib`). The header
 is plain C with no GLib or GTK types, so a consumer only needs the
 header and the link flag.
-
-For the JVM, the Java binding in `java/` wraps this same API through a JNI
-bridge (`org.nordstjernen.Nordstjernen`, JDK 21) — see `java/README.md`.
 
 ## API
 
@@ -37,7 +34,7 @@ void         ns_browser_shutdown(void);
 ## Example
 
 ```c
-#include <libnordstjernen.h>
+#include <libsouthstar.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -64,14 +61,14 @@ int main(void) {
 Build against the installed library:
 
 ```sh
-cc app.c -lnordstjernen -o app
+cc app.c -lsouthstar -o app
 ```
 
 Or against an uninstalled build tree:
 
 ```sh
 cc app.c -I src \
-   -L builddir/src -lnordstjernen \
+   -L builddir/src -lsouthstar \
    -Wl,-rpath,builddir/src -o app
 ```
 
@@ -86,5 +83,5 @@ cc app.c -I src \
 - A larger `settle_ms` gives async scripts, fonts, and animations more
   time to converge before layout is captured; `0` skips the wait.
 - The root-refusal guard and the seccomp/Landlock sandbox belong to
-  the `nordstjernen` executable, not the library — the embedding host
+  the `southstar` executable, not the library — the embedding host
   is responsible for its own privilege and sandbox posture.

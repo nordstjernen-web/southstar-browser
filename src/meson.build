@@ -43,7 +43,7 @@ wpt_hook_h = custom_target(
             'ns_wpt_hook_src'],
 )
 
-nordstjernen_engine_sources = files(
+southstar_engine_sources = files(
   'anim.c',
   'bytecode_cache.c',
   'bookmarks.c',
@@ -93,7 +93,7 @@ nordstjernen_engine_sources = files(
   'xml.c',
 )
 
-nordstjernen_engine_sources += files(
+southstar_engine_sources += files(
   'ext.c',
   'idb.c',
   'js.c',
@@ -109,43 +109,43 @@ nordstjernen_engine_sources += files(
   'webgl.c',
 )
 if quickjs_original
-  nordstjernen_engine_sources += files('ns_quickjs.c')
+  southstar_engine_sources += files('ns_quickjs.c')
 endif
 
 # GTK-free helpers used by the desktop executable but not the engine UI:
 # the headless render driver and the crash watchdog. Kept in src/ as common
 # code; the GTK frontend itself lives in src/gtk/.
-nordstjernen_app_sources = files(
+southstar_app_sources = files(
   'headless.c',
   'watchdog.c',
 )
 
 if have_avif
-  nordstjernen_engine_sources += files('image_avif.c')
+  southstar_engine_sources += files('image_avif.c')
 endif
 
 if have_woff2
-  nordstjernen_engine_sources += files('woff2.c')
+  southstar_engine_sources += files('woff2.c')
 endif
 
 if http_backend == 'nghttp2'
-  nordstjernen_engine_sources += files('net_http2.c')
+  southstar_engine_sources += files('net_http2.c')
 endif
 
 if have_webgpu
-  nordstjernen_engine_sources += files('webgpu.c')
+  southstar_engine_sources += files('webgpu.c')
 endif
 
-nordstjernen_win_resources = []
+southstar_win_resources = []
 if host_machine.system() == 'windows'
   windows = import('windows')
-  nordstjernen_win_resources = windows.compile_resources(
-    'nordstjernen.rc',
-    depend_files: files('../data/icons/nordstjernen.ico'),
+  southstar_win_resources = windows.compile_resources(
+    'southstar.rc',
+    depend_files: files('../data/icons/southstar.ico'),
   )
 endif
 
-nordstjernen_deps = [
+southstar_deps = [
   glib,
   gobject,
   gio,
@@ -170,52 +170,52 @@ nordstjernen_deps = [
 ]
 
 if have_seccomp
-  nordstjernen_deps += [libseccomp]
+  southstar_deps += [libseccomp]
 endif
 
 if have_poppler
-  nordstjernen_deps += [libpoppler]
+  southstar_deps += [libpoppler]
 endif
 
 if have_avif
-  nordstjernen_deps += [libavif]
+  southstar_deps += [libavif]
 endif
 
 if have_enchant
-  nordstjernen_deps += [libenchant]
+  southstar_deps += [libenchant]
 endif
 
 if have_libav
-  nordstjernen_deps += [libavformat, libavcodec, libavutil, libswscale]
+  southstar_deps += [libavformat, libavcodec, libavutil, libswscale]
 endif
 
 if have_fontconfig
-  nordstjernen_deps += [libfontconfig]
+  southstar_deps += [libfontconfig]
 endif
 
 if have_pangoft2
-  nordstjernen_deps += [libpangoft2]
+  southstar_deps += [libpangoft2]
 endif
 
 if have_freetype
-  nordstjernen_deps += [libfreetype]
+  southstar_deps += [libfreetype]
 endif
 
 if have_woff2
-  nordstjernen_deps += [libbrotlidec_fonts]
+  southstar_deps += [libbrotlidec_fonts]
 endif
 
-nordstjernen_deps += [libpsl]
+southstar_deps += [libpsl]
 
 if http_backend == 'nghttp2'
-  nordstjernen_deps += http_backend_deps
+  southstar_deps += http_backend_deps
 endif
 
 # macOS WebGL: src/glctx.c creates the offscreen GL context through CGL, whose
 # symbols live in the OpenGL framework. Unused targets drop it via
 # -dead_strip_dylibs.
 if host_machine.system() == 'darwin'
-  nordstjernen_deps += [dependency('appleframeworks', modules: ['OpenGL'])]
+  southstar_deps += [dependency('appleframeworks', modules: ['OpenGL'])]
 endif
 
 sdl2_dep = dependency('sdl2', required: get_option('audio'))
@@ -227,19 +227,19 @@ if sdl2_dep.found()
 endif
 
 if have_webgpu
-  nordstjernen_deps += [webgpu_dep]
+  southstar_deps += [webgpu_dep]
 endif
 
-nordstjernen_win_subsystem = (
+southstar_win_subsystem = (
   host_machine.system() == 'windows' ? 'windows' : 'console'
 )
 
-nordstjernen_link_args = []
+southstar_link_args = []
 if host_machine.system() == 'windows'
-  nordstjernen_link_args += cc.get_supported_link_arguments(
+  southstar_link_args += cc.get_supported_link_arguments(
     ['-Wl,--stack,8388608'],
   )
-  nordstjernen_link_args += ['-lbcrypt', '-ladvapi32', '-lshell32', '-luser32']
+  southstar_link_args += ['-lbcrypt', '-ladvapi32', '-lshell32', '-luser32']
 endif
 
 # NetBSD pkgsrc libunistring (pulled in transitively through the libcurl /
@@ -250,7 +250,7 @@ endif
 # Every binary that links that stack needs this — the executables below and
 # the audio/video helpers, which pull in libunistring via libcurl.
 if host_machine.system() == 'netbsd'
-  nordstjernen_link_args += cc.get_supported_link_arguments(
+  southstar_link_args += cc.get_supported_link_arguments(
     ['-Wl,--allow-shlib-undefined'],
   )
 endif
@@ -263,49 +263,49 @@ endif
 # the executables' own symbols (it overrides --export-dynamic regardless of
 # link order); the only runtime dlsym we need (RAND_bytes for RNG warmup)
 # resolves through a dependency library, whose exports this leaves untouched.
-# Applies to the executables only; the shared libnordstjernen keeps its API.
-nordstjernen_exe_link_args = nordstjernen_link_args + \
+# Applies to the executables only; the shared libsouthstar keeps its API.
+southstar_exe_link_args = southstar_link_args + \
   cc.get_supported_link_arguments(
     ['-Wl,--version-script=' + meson.current_source_dir() / 'exe-local.map'])
 
 if host_machine.system() == 'windows'
   executable(
-    'nordstjernen-launcher',
-    files('win_launcher.c') + nordstjernen_win_resources,
+    'southstar-launcher',
+    files('win_launcher.c') + southstar_win_resources,
     win_subsystem: 'windows',
     link_args: ['-luser32', '-lshell32'],
   )
 endif
 
-nordstjernen_embed_sources = nordstjernen_engine_sources + files(
+southstar_embed_sources = southstar_engine_sources + files(
   'embed_shim.c',
-  'libnordstjernen.c',
+  'libsouthstar.c',
 ) + [polyfills_h, streaming_h]
 
-libnordstjernen_lib = library(
-  'nordstjernen',
-  nordstjernen_embed_sources,
-  dependencies: nordstjernen_deps + ns_sdl_deps,
+libsouthstar_lib = library(
+  'southstar',
+  southstar_embed_sources,
+  dependencies: southstar_deps + ns_sdl_deps,
   c_args: ns_lib_c_args,
-  link_args: nordstjernen_link_args,
+  link_args: southstar_link_args,
   install: true,
 )
 
 # A static variant of the engine so the out-of-process renderer links it in
-# and ships as a single self-contained executable (no libnordstjernen.so
+# and ships as a single self-contained executable (no libsouthstar.so
 # runtime dependency to bundle in distro packages).
-libnordstjernen_static = static_library(
-  'nordstjernen-static',
-  nordstjernen_embed_sources,
-  dependencies: nordstjernen_deps + ns_sdl_deps,
+libsouthstar_static = static_library(
+  'southstar-static',
+  southstar_embed_sources,
+  dependencies: southstar_deps + ns_sdl_deps,
   c_args: ns_lib_c_args,
   install: false,
 )
 
-install_headers('libnordstjernen.h', subdir: 'nordstjernen')
+install_headers('libsouthstar.h', subdir: 'southstar')
 
 # Out-of-process renderer (step 1 of the process-per-tab direction): a small
-# executable that drives libnordstjernen over an IPC control channel + shared
+# executable that drives libsouthstar over an IPC control channel + shared
 # memory framebuffer (src/rproc.*), plus a proof-of-concept client.
 rproc_deps = []
 if host_machine.system() != 'windows'
@@ -313,14 +313,14 @@ if host_machine.system() != 'windows'
 endif
 
 executable(
-  'nordstjernen-renderer',
+  'southstar-renderer',
   files('renderer_http.c', 'renderer_serve.c', 'renderer_tiles.c',
         'ipc_http.c', 'threaddump.c'),
-  link_with: libnordstjernen_static,
+  link_with: libsouthstar_static,
   include_directories: include_directories('.'),
-  dependencies: nordstjernen_deps + ns_sdl_deps + rproc_deps,
+  dependencies: southstar_deps + ns_sdl_deps + rproc_deps,
   c_args: ns_lib_c_args,
-  link_args: nordstjernen_exe_link_args,
+  link_args: southstar_exe_link_args,
   win_subsystem: 'windows',
   install: true,
 )
@@ -366,17 +366,17 @@ if sdl2_dep.found()
   endif
 
   executable(
-    'nordstjernen-audio',
+    'southstar-audio',
     files('audio/main.c') + audio_sandbox_sources,
     include_directories: include_directories('audio', '.'),
     link_with: libminimp3,
     dependencies: audio_deps + audio_lib_deps,
-    link_args: nordstjernen_link_args,
+    link_args: southstar_link_args,
     win_subsystem: 'windows',
     install: true,
   )
 else
-  message('SDL2 not found — audio playback helper (nordstjernen-audio) disabled')
+  message('SDL2 not found — audio playback helper (southstar-audio) disabled')
 endif
 
 if have_libav
@@ -392,11 +392,11 @@ if have_libav
     videoproc_deps += [cc.find_library('rt', required: false)]
   endif
   executable(
-    'nordstjernen-video',
+    'southstar-video',
     videoproc_sources,
     include_directories: include_directories('.'),
     dependencies: videoproc_deps + [cc.find_library('m', required: false)],
-    link_args: nordstjernen_link_args,
+    link_args: southstar_link_args,
     win_subsystem: 'windows',
     install: true,
   )

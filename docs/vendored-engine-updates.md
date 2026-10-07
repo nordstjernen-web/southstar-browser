@@ -1,6 +1,6 @@
 # Vendored engine updates — QuickJS & Lexbor
 
-Nordstjernen carries in-tree forks of two upstream C libraries that we
+Southstar carries in-tree forks of two upstream C libraries that we
 modify freely for browser integration:
 
 - **QuickJS** (`src/quickjs/`) — forked from
@@ -203,7 +203,7 @@ attribute module identity, TypedArray resize/overlap corrections, async
 iterator closing fixes, improved module export/error behavior,
 `CallSite.prototype.isConstructor()`, and corrected source positions.
 
-The three-way merge preserves Nordstjernen's browser hooks and compatibility
+The three-way merge preserves Southstar's browser hooks and compatibility
 work, including `JS_RepointArrayBuffer`, caller/function realm accessors,
 browser-shaped stack traces and TypeErrors, native-facade formatting,
 cross-frame caller handling, regexp legacy captures and `RGI_Emoji`, the

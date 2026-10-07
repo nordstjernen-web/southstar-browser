@@ -1,4 +1,4 @@
-/* Nordstjernen — WebIDL brand checks for the native members of interfaces. */
+/* Southstar — WebIDL brand checks for the native members of interfaces. */
 
 #include "js_brand.h"
 

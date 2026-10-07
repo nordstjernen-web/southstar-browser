@@ -1,6 +1,6 @@
 # Third-party software notices
 
-Nordstjernen links to (and in some cases statically includes) the
+Southstar links to (and in some cases statically includes) the
 following open-source libraries. One of them, ns-pango, is a **modified**
 LGPL library; its source and our relink offer are described in its entry
 below. Their copyright notices and license
@@ -9,7 +9,7 @@ release bundles, you are entitled by the LGPL terms to replace them
 with modified versions; the binary will continue to function with any
 ABI-compatible replacement.
 
-The Nordstjernen source code itself is dual-licensed under the
+The Southstar source code itself is dual-licensed under the
 Nordstjernen Source License v1.0 or the GNU General Public License
 version 3 or later, at your option. See `License.md` and `COPYING` for the
 project's own license terms.
@@ -90,7 +90,7 @@ license text (same license).
 
 ### minimp3 — CC0 1.0 Universal (public domain dedication)
 
-> Single-file MP3 decoder, used by the `nordstjernen-audio` helper.
+> Single-file MP3 decoder, used by the `southstar-audio` helper.
 > Vendored at `src/audio/minimp3.h`.
 > <https://github.com/lieff/minimp3>
 
@@ -134,13 +134,13 @@ license text is available at:
   <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>
 
 Unlike the other LGPL libraries listed here, ns-pango is linked
-**statically** into the Nordstjernen executables on desktop platforms. Per
+**statically** into the Southstar executables. Per
 LGPL section 6(a), you are entitled to modify ns-pango and relink
-Nordstjernen against your modified copy: write to the address in
-`README.md` and we will supply the Nordstjernen object files, together with
+Southstar against your modified copy: write to the address in
+`README.md` and we will supply the Southstar object files, together with
 any data and utility programs needed, so that you can produce a modified
-executable. Android and iOS builds do not include ns-pango; they link the
-system Pango dynamically as before.
+executable. Builds configured with `-Dns-pango=disabled` do not include
+ns-pango; they link the system Pango dynamically instead.
 
 ## Dynamically linked
 
@@ -284,8 +284,8 @@ license text is available at:
 
   <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>
 
-Per LGPL section 6, since Nordstjernen links to these libraries
-dynamically, you are entitled to modify them and re-link Nordstjernen
+Per LGPL section 6, since Southstar links to these libraries
+dynamically, you are entitled to modify them and re-link Southstar
 against the modified copies. On Windows / macOS bundles the libraries
 are shipped alongside the executable as ordinary DLLs / dylibs that you
 can replace; on Linux distributions they are loaded from the system
@@ -298,8 +298,8 @@ package manager.
 >
 > Copyright the FFmpeg developers.
 
-Required on Linux and Windows, auto-detected on macOS, and absent from
-Android builds, so it is present in every build with WebM support. The copy
+Required on Linux and Windows and auto-detected on macOS, so it is present
+in every build with WebM support. The copy
 bundled in the macOS / Windows releases is built **LGPL-only** — its
 `configure` uses `--disable-gpl --disable-nonfree --disable-version3
 --disable-autodetect`, so it contains no GPL components and no external

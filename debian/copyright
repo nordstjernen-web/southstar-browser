@@ -1,9 +1,9 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: Nordstjernen
+Upstream-Name: Southstar
 Upstream-Contact: Andreas Røsdal <andreas.rosdal@gmail.com>
-Source: https://github.com/nordstjernen-web/nordstjernen-browser
+Source: https://github.com/nordstjernen-web/southstar-browser
 Comment:
- The Nordstjernen source code is dual-licensed: each recipient may use it
+ The Southstar source code is dual-licensed: each recipient may use it
  under either the GNU General Public License version 3 or later (GPL-3+) or
  the Nordstjernen Source License v1.0 (NSL-1.0), at their option. The GPL-3+
  option is DFSG-free, so the package is distributed under GPL-3+ and belongs
@@ -42,7 +42,7 @@ License: Expat
 
 License: NSL-1.0
  Nordstjernen Source License v1.0. The full text is shipped as
- /usr/share/doc/nordstjernen/copyright and in License.md in the source.
+ /usr/share/doc/southstar/copyright and in License.md in the source.
  .
  Subject to compliance, the licensor grants the right to use, copy, modify,
  create derivative works, publish, and distribute the software for any

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a macOS .app bundle + .dmg for Nordstjernen. Vendors the
+# Build a macOS .app bundle + .dmg for Southstar. Vendors the
 # Homebrew GTK 4 dylibs with dylibbundler so the bundle is portable
 # to Macs without Homebrew installed. Runs on macOS only.
 set -euo pipefail
@@ -8,10 +8,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
           | sed -E "s/.*version: '([^']+)'.*/\1/")
 ARCH=$(uname -m)
-NAME=Nordstjernen
+NAME=Southstar
 BUILDDIR=${BUILDDIR:-$ROOT/build-macos}
 STAGE="$ROOT/dist/${NAME}.app"
-DMG="$ROOT/dist/nordstjernen-${VERSION}-macos-${ARCH}.dmg"
+DMG="$ROOT/dist/southstar-${VERSION}-macos-${ARCH}.dmg"
 
 mkdir -p "$ROOT/dist"
 
@@ -62,24 +62,24 @@ meson compile -C "$BUILDDIR"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Contents/MacOS"
-mkdir -p "$STAGE/Contents/Resources/share/nordstjernen"
+mkdir -p "$STAGE/Contents/Resources/share/southstar"
 mkdir -p "$STAGE/Contents/Frameworks"
 
 # The bundle executable is the real Mach-O, not a wrapper script: dylibbundler
 # rewrites every dependency to @executable_path/../Frameworks, so no
 # DYLD_LIBRARY_PATH shim is needed, and a Mach-O entry point is what lets the
 # whole .app be code-signed (a shell script cannot carry a signature).
-install -m755 "$BUILDDIR/src/gtk/nordstjernen" \
-    "$STAGE/Contents/MacOS/Nordstjernen"
+install -m755 "$BUILDDIR/src/gtk/southstar" \
+    "$STAGE/Contents/MacOS/Southstar"
 # The GUI spawns one sandboxed renderer process per tab; ship it alongside.
-install -m755 "$BUILDDIR/src/nordstjernen-renderer" \
-    "$STAGE/Contents/MacOS/nordstjernen-renderer"
+install -m755 "$BUILDDIR/src/southstar-renderer" \
+    "$STAGE/Contents/MacOS/southstar-renderer"
 # The audio playback helper (MP2/MP3 + optional Opus/Vorbis decode, SDL2
 # output). Built only when SDL2 was present at configure time; ship it beside
 # the main binary so the shell can spawn it for <video>/<audio> sound.
-AUDIO_BIN="$BUILDDIR/src/nordstjernen-audio"
+AUDIO_BIN="$BUILDDIR/src/southstar-audio"
 if [ -f "$AUDIO_BIN" ]; then
-    install -m755 "$AUDIO_BIN" "$STAGE/Contents/MacOS/nordstjernen-audio"
+    install -m755 "$AUDIO_BIN" "$STAGE/Contents/MacOS/southstar-audio"
 else
     echo "pack-macos.sh: warning: $AUDIO_BIN missing; <video>/<audio> sound will not play" >&2
 fi
@@ -89,32 +89,32 @@ fi
 # shell spawns it instead of decoding MSE video in-process. Without it here,
 # ns_proc_video_helper_available() returns false and NS_VIDEO_HELPER is never
 # set, so a released .app silently loses the out-of-process video path.
-VIDEO_BIN="$BUILDDIR/src/nordstjernen-video"
+VIDEO_BIN="$BUILDDIR/src/southstar-video"
 if [ -f "$VIDEO_BIN" ]; then
-    install -m755 "$VIDEO_BIN" "$STAGE/Contents/MacOS/nordstjernen-video"
+    install -m755 "$VIDEO_BIN" "$STAGE/Contents/MacOS/southstar-video"
 else
     echo "pack-macos.sh: warning: $VIDEO_BIN missing; MSE video decodes in-process" >&2
 fi
 
-cp "$ROOT/License.md" "$STAGE/Contents/Resources/share/nordstjernen/"
-cp "$ROOT/COPYING" "$STAGE/Contents/Resources/share/nordstjernen/"
-cp "$ROOT/THIRD-PARTY-LICENSES.md" "$STAGE/Contents/Resources/share/nordstjernen/"
-cp "$ROOT/README.md" "$STAGE/Contents/Resources/share/nordstjernen/"
+cp "$ROOT/License.md" "$STAGE/Contents/Resources/share/southstar/"
+cp "$ROOT/COPYING" "$STAGE/Contents/Resources/share/southstar/"
+cp "$ROOT/THIRD-PARTY-LICENSES.md" "$STAGE/Contents/Resources/share/southstar/"
+cp "$ROOT/README.md" "$STAGE/Contents/Resources/share/southstar/"
 
 ICONSET=$(mktemp -d)
 trap 'rm -rf "$ICONSET"' EXIT
-ICON_GIF="$ROOT/data/icons/hicolor/scalable/apps/nordstjernen.gif"
+ICON_GIF="$ROOT/data/icons/hicolor/scalable/apps/southstar.gif"
 if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
-    mkdir -p "$ICONSET/nordstjernen.iconset"
+    mkdir -p "$ICONSET/southstar.iconset"
     for sz in 16 32 64 128 256 512; do
         sips -s format png -z "$sz" "$sz" "$ICON_GIF" \
-            --out "$ICONSET/nordstjernen.iconset/icon_${sz}x${sz}.png" \
+            --out "$ICONSET/southstar.iconset/icon_${sz}x${sz}.png" \
             >/dev/null 2>&1 || true
     done
-    iconutil -c icns "$ICONSET/nordstjernen.iconset" \
-        -o "$STAGE/Contents/Resources/nordstjernen.icns" >/dev/null 2>&1 || true
+    iconutil -c icns "$ICONSET/southstar.iconset" \
+        -o "$STAGE/Contents/Resources/southstar.icns" >/dev/null 2>&1 || true
 fi
-if [ ! -f "$STAGE/Contents/Resources/nordstjernen.icns" ]; then
+if [ ! -f "$STAGE/Contents/Resources/southstar.icns" ]; then
     if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
         echo "pack-macos.sh: ERROR: icon generation failed" >&2
         exit 1
@@ -128,23 +128,23 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST_EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Nordstjernen</string>
+    <string>Southstar</string>
     <key>CFBundleDisplayName</key>
-    <string>Nordstjernen</string>
+    <string>Southstar</string>
     <key>CFBundleIdentifier</key>
-    <string>org.nordstjernen.Nordstjernen</string>
+    <string>org.southstar.Southstar</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
     <string>${VERSION}</string>
     <key>CFBundleExecutable</key>
-    <string>Nordstjernen</string>
+    <string>Southstar</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
     <string>NORD</string>
     <key>CFBundleIconFile</key>
-    <string>nordstjernen.icns</string>
+    <string>southstar.icns</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>
@@ -174,23 +174,23 @@ PLIST_EOF
 # they all need their references rewritten to the bundled Frameworks, or they
 # fail to start with "Library not loaded: …/lib….dylib".
 audio_bundle_args=()
-if [ -f "$STAGE/Contents/MacOS/nordstjernen-audio" ]; then
-    audio_bundle_args=(-x "$STAGE/Contents/MacOS/nordstjernen-audio")
+if [ -f "$STAGE/Contents/MacOS/southstar-audio" ]; then
+    audio_bundle_args=(-x "$STAGE/Contents/MacOS/southstar-audio")
 fi
 video_bundle_args=()
-if [ -f "$STAGE/Contents/MacOS/nordstjernen-video" ]; then
-    video_bundle_args=(-x "$STAGE/Contents/MacOS/nordstjernen-video")
+if [ -f "$STAGE/Contents/MacOS/southstar-video" ]; then
+    video_bundle_args=(-x "$STAGE/Contents/MacOS/southstar-video")
 fi
 if ! run_dylibbundler 300 dylibbundler -of -cd -b \
-    -x "$STAGE/Contents/MacOS/Nordstjernen" \
-    -x "$STAGE/Contents/MacOS/nordstjernen-renderer" \
+    -x "$STAGE/Contents/MacOS/Southstar" \
+    -x "$STAGE/Contents/MacOS/southstar-renderer" \
     "${audio_bundle_args[@]+"${audio_bundle_args[@]}"}" \
     "${video_bundle_args[@]+"${video_bundle_args[@]}"}" \
     -d "$STAGE/Contents/Frameworks/" \
     -p "@executable_path/../Frameworks/"; then
     echo "pack-macos.sh: dylibbundler failed; listing binary dylibs and continuing" >&2
-    otool -L "$STAGE/Contents/MacOS/Nordstjernen" || true
-    otool -L "$STAGE/Contents/MacOS/nordstjernen-renderer" || true
+    otool -L "$STAGE/Contents/MacOS/Southstar" || true
+    otool -L "$STAGE/Contents/MacOS/southstar-renderer" || true
     exit 1
 fi
 
@@ -205,7 +205,7 @@ dedup_frameworks_rpath() {
     while install_name_tool -delete_rpath "$rp" "$bin" 2>/dev/null; do :; done
     install_name_tool -add_rpath "$rp" "$bin"
 }
-for exe in Nordstjernen nordstjernen-renderer nordstjernen-audio nordstjernen-video; do
+for exe in Southstar southstar-renderer southstar-audio southstar-video; do
     dedup_frameworks_rpath "$STAGE/Contents/MacOS/$exe"
 done
 
@@ -213,12 +213,12 @@ RES="$STAGE/Contents/Resources"
 FW="$STAGE/Contents/Frameworks"
 
 # Engine runtime data the binary looks up relative to itself (the i18n.c and
-# safebrowsing.c "../Resources/share/nordstjernen/..." search arm): the UI
+# safebrowsing.c "../Resources/share/southstar/..." search arm): the UI
 # translation catalogues and the safe-browsing blocklist. Without these the
 # .app shows an English-only UI and silently disables safe-browsing.
-mkdir -p "$RES/share/nordstjernen/i18n"
-cp "$ROOT"/data/i18n/*.lang "$RES/share/nordstjernen/i18n/" 2>/dev/null || true
-cp "$ROOT/data/safebrowsing.list" "$RES/share/nordstjernen/" 2>/dev/null || true
+mkdir -p "$RES/share/southstar/i18n"
+cp "$ROOT"/data/i18n/*.lang "$RES/share/southstar/i18n/" 2>/dev/null || true
+cp "$ROOT/data/safebrowsing.list" "$RES/share/southstar/" 2>/dev/null || true
 
 # Homebrew's "sdl2" is the sdl2-compat shim: the audio helper links
 # libSDL2-2.0.0.dylib, but that shim dlopen's the real SDL3 at runtime
@@ -342,7 +342,7 @@ if command -v codesign >/dev/null 2>&1; then
     while IFS= read -r -d '' lib; do
         codesign "${sign_opts[@]}" "$lib" || sign_ok=0
     done < <(find "$STAGE/Contents" -type f \( -name '*.dylib' -o -name '*.so' \) -print0)
-    for helper in nordstjernen-renderer nordstjernen-audio nordstjernen-video; do
+    for helper in southstar-renderer southstar-audio southstar-video; do
         [ -f "$STAGE/Contents/MacOS/$helper" ] || continue
         codesign "${sign_opts[@]}" "$STAGE/Contents/MacOS/$helper" || sign_ok=0
     done
@@ -366,7 +366,7 @@ else
 fi
 
 rm -f "$DMG"
-if ! hdiutil create -volname "Nordstjernen ${VERSION}" \
+if ! hdiutil create -volname "Southstar ${VERSION}" \
     -srcfolder "$STAGE" \
     -ov -format UDZO -imagekey zlib-level=1 \
     "$DMG"; then
@@ -408,4 +408,4 @@ echo "Built: $DMG ($(du -h "$DMG" | cut -f1))"
 echo "Bundle: $STAGE ($(du -sh "$STAGE" | cut -f1))"
 echo
 echo "Test:  open '$STAGE'"
-echo "       '$STAGE/Contents/MacOS/Nordstjernen' --headless --dump=text about:start"
+echo "       '$STAGE/Contents/MacOS/Southstar' --headless --dump=text about:start"

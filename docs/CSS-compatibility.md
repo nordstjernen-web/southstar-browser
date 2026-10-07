@@ -1,12 +1,12 @@
 # CSS compatibility
 
-How Nordstjernen tracks the **CSS specifications**
+How Southstar tracks the **CSS specifications**
 (<https://www.w3.org/Style/CSS/specs.en.html>).
 
-This is a module-by-module map of how Nordstjernen behaves against the
+This is a module-by-module map of how Southstar behaves against the
 CSS specs. Like the [HTML compatibility](HTML-compatibility.md)
 document, it is measured against the **spec text**, not against any
-other browser — Nordstjernen is a C / GTK 4 / libcurl
+other browser — Southstar is a C / GTK 4 / libcurl
 implementation with no upstream engine. It is a living map, not a
 guarantee; the browser's runtime behaviour is the source of truth.
 Re-check any row by running the browser against a page that exercises
@@ -161,7 +161,7 @@ carry forward from the 1.0.21 pass.
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| `cursor` | ✅ | parsed and inherited; the computed keyword at the hovered point is resolved by the engine (`ns_browser_cursor_at` in `src/libnordstjernen.c`: hit-test, inherited `cursor`, the last recognised keyword of a `url(...)`-fallback list, validated against the CSS Basic UI keyword set) and carried over the renderer IPC (the per-motion `/hover` reply, and the `/link` reply); the GTK shell passes the keyword straight to GDK's named-cursor lookup. `auto` resolves per the spec's UA behaviour: pointer over links, a text I-beam over selectable text (`user-select: none` text excluded), text inputs / textareas, and `contenteditable` hosts, default elsewhere; custom `url(...)` images fall back to their keyword |
+| `cursor` | ✅ | parsed and inherited; the computed keyword at the hovered point is resolved by the engine (`ns_browser_cursor_at` in `src/libsouthstar.c`: hit-test, inherited `cursor`, the last recognised keyword of a `url(...)`-fallback list, validated against the CSS Basic UI keyword set) and carried over the renderer IPC (the per-motion `/hover` reply, and the `/link` reply); the GTK shell passes the keyword straight to GDK's named-cursor lookup. `auto` resolves per the spec's UA behaviour: pointer over links, a text I-beam over selectable text (`user-select: none` text excluded), text inputs / textareas, and `contenteditable` hosts, default elsewhere; custom `url(...)` images fall back to their keyword |
 | `pointer-events: none` | ✅ | |
 | `user-select: none` | ✅ | text in the subtree is skipped by drag selection, select-all, highlight painting, and clipboard collection (`src/selection.c`); treated as inherited, approximating the spec's `auto` resolution. Other values (`all`, `contain`) behave as `auto` |
 | `accent-color` / `caret-color` | ✅ | see Color |
@@ -314,7 +314,7 @@ Validate any row by running the browser against a page that exercises
 the feature and observing the result, e.g.:
 
 ```sh
-nordstjernen --headless --url=FILE --viewport=900 --dump=png:out.png
+southstar --headless --url=FILE --viewport=900 --dump=png:out.png
 ```
 
 The fixtures under `data/render-tests/` (`grid-align.html`,

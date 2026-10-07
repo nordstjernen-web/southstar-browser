@@ -1,4 +1,4 @@
-/* Nordstjernen — native ECMA-402 (Intl) implementation for the QuickJS engine. */
+/* Southstar — native ECMA-402 (Intl) implementation for the QuickJS engine. */
 #ifndef NS_JS_INTL_H
 #define NS_JS_INTL_H
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Render Nordstjernen's SVG logo into a multi-resolution Windows .ico.
+"""Render Southstar's SVG logo into a multi-resolution Windows .ico.
 
-Regenerate after editing data/icons/hicolor/scalable/apps/nordstjernen.svg:
+Regenerate after editing data/icons/hicolor/scalable/apps/southstar.svg:
 
     python scripts/gen-windows-icon.py
 
@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SVG = ROOT / "data" / "icons" / "hicolor" / "scalable" / "apps" / "nordstjernen.svg"
-OUT = ROOT / "data" / "icons" / "nordstjernen.ico"
+SVG = ROOT / "data" / "icons" / "hicolor" / "scalable" / "apps" / "southstar.svg"
+OUT = ROOT / "data" / "icons" / "southstar.ico"
 SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 

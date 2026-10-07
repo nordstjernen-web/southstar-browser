@@ -1,8 +1,8 @@
 # Alpine Linux packaging
 
-`data/packaging/APKBUILD` builds Nordstjernen from source on Alpine
-(musl) with `abuild`. It produces a minimal package: the `nordstjernen`,
-`nordstjernen-renderer`, `nordstjernen-audio` and `nordstjernen-video`
+`data/packaging/APKBUILD` builds Southstar from source on Alpine
+(musl) with `abuild`. It produces a minimal package: the `southstar`,
+`southstar-renderer`, `southstar-audio` and `southstar-video`
 binaries plus icons, the desktop file, the
 i18n catalogues and the license texts — **nothing is bundled**. Every runtime
 library (GTK 4, libcurl, OpenSSL, libwebp, libavif, FFmpeg, poppler-glib, …)
@@ -17,12 +17,12 @@ Text shapes through Alpine's `pango-dev` instead, and nothing is fetched
 during Alpine's network-isolated `build()` phase.
 
 GitHub names the archive root after the repository, so the tarball unpacks
-to `nordstjernen-browser-$pkgver` rather than `$pkgname-$pkgver`; the
+to `southstar-browser-$pkgver` rather than `$pkgname-$pkgver`; the
 APKBUILD sets `builddir` accordingly.
 
 ## License
 
-Nordstjernen is **dual-licensed**: each recipient may take it under
+Southstar is **dual-licensed**: each recipient may take it under
 **either** the **Nordstjernen Source License v1.0** (`License.md`) **or**
 the **GNU General Public License version 3 or later** (`COPYING`), at their
 option. The APKBUILD declares this as
@@ -35,7 +35,7 @@ OSI-approved. The GPL is, so the package is free software under that
 option, and the bundled third-party code (see `THIRD-PARTY-LICENSES.md`)
 keeps its own GPL-3-compatible licenses. Alpine's official `aports`
 (main/community/testing) require free / OSI-approved licenses; the
-GPL option meets that, so Nordstjernen can be proposed for `aports`
+GPL option meets that, so Southstar can be proposed for `aports`
 through the normal merge-request review (see below). Until it is
 accepted, the same APKBUILD builds for a **personal / custom Alpine
 repository**.
@@ -53,7 +53,7 @@ abuild -r              # fetches the pkgver source tarball, builds, packages
 
 # Install the result:
 sudo apk add --allow-untrusted \
-    ~/packages/*/$(uname -m)/nordstjernen-<pkgver>-r0.apk
+    ~/packages/*/$(uname -m)/southstar-<pkgver>-r0.apk
 ```
 
 `abuild -r` installs `makedepends`, downloads the source during the
@@ -79,7 +79,7 @@ checksum mismatch appears, re-run `abuild checksum`.
 To propose it for `aports`:
 
 1. Fork <https://gitlab.alpinelinux.org/alpine/aports>.
-2. Add the APKBUILD under `testing/nordstjernen/APKBUILD` (new packages
+2. Add the APKBUILD under `testing/southstar/APKBUILD` (new packages
    start in `testing/`, then move to `community/` after review).
 3. Keep `license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"` and the
    `package()` lines that install `License.md` and `COPYING` under
@@ -87,7 +87,7 @@ To propose it for `aports`:
    package is distributed under the GPL option.
 4. Verify it builds in a clean chroot with `abuild rootbld` and passes
    `apkbuild-lint` / `apkbuild-shellcheck`.
-5. Commit with the message `testing/nordstjernen: new aport` and open a
+5. Commit with the message `testing/southstar: new aport` and open a
    merge request against `aports`.
 
 See <https://wiki.alpinelinux.org/wiki/Creating_an_Alpine_package> for

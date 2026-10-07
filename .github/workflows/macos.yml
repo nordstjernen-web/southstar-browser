@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
       matrix:
         # macos-26 (Tahoe) is the Apple Silicon (arm64) runner matching the
-        # macOS version Nordstjernen targets and develops on. The project ships
+        # macOS version Southstar targets and develops on. The project ships
         # only modern Apple Silicon builds; an Intel Mac builds from source
         # (see docs/macOS.md). macos-latest still points at macos-15, so pin
         # the version explicitly.
@@ -137,17 +137,17 @@ jobs:
         run: ccache --show-stats
 
       - name: Smoke test (binary present and executable)
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
-          test -x builddir/src/gtk/nordstjernen
-          file builddir/src/gtk/nordstjernen
-          otool -L builddir/src/gtk/nordstjernen | head -20
+          test -x builddir/src/gtk/southstar
+          file builddir/src/gtk/southstar
+          otool -L builddir/src/gtk/southstar | head -20
 
       - name: Headless smoke (about:start)
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
-          ./builddir/src/gtk/nordstjernen --headless --dump=text about:start > about.txt
-          grep -q Nordstjernen about.txt
+          ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt
+          grep -q Southstar about.txt
 
       - name: Upload build log
         if: always() && hashFiles('build.log') != ''
@@ -159,12 +159,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload nordstjernen binary
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+      - name: Upload southstar binary
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         uses: actions/upload-artifact@v7
         with:
-          name: nordstjernen-macos-${{ matrix.macos }}
-          path: builddir/src/gtk/nordstjernen
+          name: southstar-macos-${{ matrix.macos }}
+          path: builddir/src/gtk/southstar
           if-no-files-found: error
           retention-days: 14
 
@@ -172,7 +172,7 @@ jobs:
       # bundle is signed ad-hoc (still needs the xattr quarantine step on
       # download); with them it is signed for real and notarised below.
       - name: Import Developer ID signing identity
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         continue-on-error: true
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -182,7 +182,7 @@ jobs:
             echo "No MACOS_CERTIFICATE_P12_BASE64 secret; pack-macos.sh signs ad-hoc."
             exit 0
           fi
-          KEYCHAIN="$RUNNER_TEMP/nordstjernen-signing.keychain-db"
+          KEYCHAIN="$RUNNER_TEMP/southstar-signing.keychain-db"
           KEYCHAIN_PW="$(uuidgen)"
           printf '%s' "${MACOS_CERTIFICATE_P12_BASE64}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
@@ -200,7 +200,7 @@ jobs:
 
       - name: Build .app bundle and .dmg
         id: pack
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         continue-on-error: true
         env:
           BUILDDIR: ${{ github.workspace }}/builddir
@@ -218,10 +218,10 @@ jobs:
       # regressions that break every HTTPS fetch. If the bundle exists, it
       # must work.
       - name: Smoke test the bundled .app (launch + HTTPS fetch)
-        if: hashFiles('dist/Nordstjernen.app/Contents/MacOS/Nordstjernen') != ''
+        if: hashFiles('dist/Southstar.app/Contents/MacOS/Southstar') != ''
         run: |
           set -o pipefail
-          BIN="dist/Nordstjernen.app/Contents/MacOS/Nordstjernen"
+          BIN="dist/Southstar.app/Contents/MacOS/Southstar"
           "$BIN" --headless --dump=text https://example.com | tee bundle-smoke.txt
           grep -qiE "Example Domain|documentation examples" bundle-smoke.txt
 
@@ -250,7 +250,7 @@ jobs:
       # otherwise the .dmg ships ad-hoc and users clear the quarantine flag
       # once. Non-fatal so a notary outage never fails the build.
       - name: Notarize and staple the .dmg
-        if: hashFiles('dist/nordstjernen-*-macos-*.dmg') != ''
+        if: hashFiles('dist/southstar-*-macos-*.dmg') != ''
         continue-on-error: true
         env:
           MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
@@ -261,7 +261,7 @@ jobs:
             echo "No MACOS_NOTARY_PASSWORD secret; skipping notarization."
             exit 0
           fi
-          DMG=$(ls dist/nordstjernen-*-macos-*.dmg | head -1)
+          DMG=$(ls dist/southstar-*-macos-*.dmg | head -1)
           echo "Notarizing $DMG"
           xcrun notarytool submit "$DMG" \
             --apple-id "${MACOS_NOTARY_APPLE_ID}" \
@@ -272,11 +272,11 @@ jobs:
           xcrun stapler validate "$DMG"
 
       - name: Upload .dmg
-        if: hashFiles('dist/nordstjernen-*-macos-*.dmg') != ''
+        if: hashFiles('dist/southstar-*-macos-*.dmg') != ''
         uses: actions/upload-artifact@v7
         with:
-          name: nordstjernen-macos-${{ matrix.macos }}-dmg
-          path: dist/nordstjernen-*-macos-*.dmg
+          name: southstar-macos-${{ matrix.macos }}-dmg
+          path: dist/southstar-*-macos-*.dmg
           if-no-files-found: ignore
           retention-days: 14
 

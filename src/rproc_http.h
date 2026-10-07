@@ -1,4 +1,4 @@
-/* Nordstjernen — HTTP renderer IPC client (experiment; mirrors rproc.h). */
+/* Southstar — HTTP renderer IPC client (experiment; mirrors rproc.h). */
 
 #ifndef NS_RPROC_HTTP_H
 #define NS_RPROC_HTTP_H

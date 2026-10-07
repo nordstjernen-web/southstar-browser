@@ -1,7 +1,7 @@
 # Threading model
 
-Nordstjernen runs each tab's engine in its own **renderer process**
-(`nordstjernen-renderer`); the GTK app is a separate, thin shell.
+Southstar runs each tab's engine in its own **renderer process**
+(`southstar-renderer`); the GTK app is a separate, thin shell.
 This document describes the threading model **inside one renderer
 process** — that is where the DOM, CSS, layout, paint, and page
 JavaScript live. The shell process is covered briefly at the end.

@@ -1,38 +1,39 @@
-# Nordstjernen on openSUSE — packaging and distribution
+# Southstar on openSUSE — packaging and distribution
 
-This document records how Nordstjernen is packaged for openSUSE through
+This document records how Southstar is packaged for openSUSE through
 the [Open Build Service (OBS)](https://build.opensuse.org), where it can
 live, and how the git-backed build is wired up. For plain
 build-from-source instructions (any distro) see `Linux.md`; this document
 is specifically about the openSUSE RPM and OBS.
 
-The build recipe lives at the repository **root** (`nordstjernen.spec`),
+The build recipe lives at the repository **root** (`southstar.spec`),
 because OBS clones the whole repo and looks for the recipe at the top of
 the synced tree. Notes for maintainers are in `packaging/obs/README.md`.
 
 ## Install it (users)
 
-Nordstjernen is built in the OBS home project
-[`home:andreasrosdal`](https://build.opensuse.org/package/show/home:andreasrosdal/Nordstjernen).
+Southstar is built in the OBS home project
+[`home:andreasrosdal`](https://build.opensuse.org/package/show/home:andreasrosdal/Southstar).
 Add the repository and install; updates then arrive through `zypper`:
 
 ```sh
 # openSUSE Tumbleweed
 sudo zypper addrepo https://download.opensuse.org/repositories/home:/andreasrosdal/openSUSE_Tumbleweed/home:andreasrosdal.repo
 sudo zypper refresh
-sudo zypper install nordstjernen
+sudo zypper install southstar
 ```
 
 For Leap, replace `openSUSE_Tumbleweed` with your release (e.g. `16.0`).
 The package builds for `x86_64`, `aarch64`, and `i586`.
 
 Prefer a one-off install without adding the repo? Grab the nightly RPM
-directly: [`nordstjernen-opensuse-x86_64.rpm`](https://www.nordstjernen.org/nightly/nordstjernen-opensuse-x86_64.rpm)
-(rebuilt from `main` each night; `sudo zypper install ./…rpm`).
+`southstar-opensuse-x86_64.rpm` from a nightly server (see
+[Nightly.md](Nightly.md); rebuilt from `main` each night;
+`sudo zypper install ./…rpm`).
 
 ## Read this first: licensing
 
-Nordstjernen is **dual-licensed**: each recipient may take it under
+Southstar is **dual-licensed**: each recipient may take it under
 **either** the **Nordstjernen Source License v1.0 (NSL-1.0)** **or** the
 **GNU General Public License version 3 or later (GPL-3.0-or-later)**, at
 their option. The spec declares this as `License: LicenseRef-NSL-1.0 OR GPL-3.0-or-later`.
@@ -45,7 +46,7 @@ and its limit of education and research use to **non-commercial**
 contexts make it non-free — but the GPL is free and OSI-approved, and
 the package can be distributed under that option. The bundled third-party
 code (see `THIRD-PARTY-LICENSES.md`) keeps its own free, GPL-3-compatible
-licenses. **Nordstjernen is therefore eligible for Factory**, subject to
+licenses. **Southstar is therefore eligible for Factory**, subject to
 the usual review.
 
 There are two paths, in order of effort:
@@ -75,10 +76,10 @@ The package is bound to this git repo with the OBS
 tarball is stored — git is authoritative.
 
 It is set via the package meta (package → *Advanced* → *Meta* in the web
-UI, or `osc meta pkg home:andreasrosdal Nordstjernen -e`), adding one line:
+UI, or `osc meta pkg home:andreasrosdal Southstar -e`), adding one line:
 
 ```xml
-<scmsync>https://github.com/nordstjernen-web/nordstjernen-browser?trackingbranch=main</scmsync>
+<scmsync>https://github.com/nordstjernen-web/southstar-browser?trackingbranch=main</scmsync>
 ```
 
 After this, edit the spec in this repo and push — do not edit files in
@@ -91,7 +92,7 @@ automatically.
 build.opensuse.org runs its build workers in **secure mode with no network
 access**, so source services that clone over the network (`tar_scm`,
 `obs_scm`) produce nothing there — the build dies at `recompress`
-("no such file … `nordstjernen-*.tar`") or at the buildtime `tar`
+("no such file … `southstar-*.tar`") or at the buildtime `tar`
 ("no .obsinfo file found"). The scmsync bridge clones git on OBS
 infrastructure *outside* the workers, which is why it is the only
 git-backed path that works. The spec therefore has **no** `Source0` and no

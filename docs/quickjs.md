@@ -75,7 +75,7 @@ is a plain include. With the original engine (`NS_QUICKJS_ORIGINAL`, set by
 
 The bytecode cache keys entries by source text only, and the two engines'
 bytecode is not interchangeable, so the original engine keeps its cache in
-`~/.cache/nordstjernen/jsbc/quickjs-<version>/`.
+`~/.cache/southstar/jsbc/quickjs-<version>/`.
 
 ## Known differences on the original engine
 
@@ -130,7 +130,7 @@ Build both configurations with no warnings, GCC and Clang:
 ```sh
 meson setup builddir && meson compile -C builddir
 meson setup builddir-quickjs -Dquickjs=quickjs && meson compile -C builddir-quickjs
-NS_BIN=$PWD/builddir-quickjs/src/gtk/nordstjernen ./scripts/dev.sh smoke
+NS_BIN=$PWD/builddir-quickjs/src/gtk/southstar ./scripts/dev.sh smoke
 ```
 
 A binding change that calls a quickjs-ng function the original engine lacks

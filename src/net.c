@@ -1,4 +1,4 @@
-/* Nordstjernen — libcurl-backed async fetcher.
+/* Southstar — libcurl-backed async fetcher.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -377,9 +377,9 @@ static const char *
 ns_net_private_root(void)
 {
     if (g_private_root) return g_private_root;
-    g_private_root = g_dir_make_tmp("nordstjernen-private-XXXXXX", NULL);
+    g_private_root = g_dir_make_tmp("southstar-private-XXXXXX", NULL);
     if (!g_private_root) {
-        char *base = g_strdup_printf("nordstjernen-private-%u", g_random_int());
+        char *base = g_strdup_printf("southstar-private-%u", g_random_int());
         g_private_root = g_build_filename(g_get_tmp_dir(), base, NULL);
         g_free(base);
         g_mkdir_with_parents(g_private_root, 0700);
@@ -2781,10 +2781,10 @@ about_logo_data_uri(void)
     if (cached) return cached;
 
     static const char *const gif_paths[] = {
-        "share/icons/hicolor/scalable/apps/nordstjernen.gif",
-        "../share/icons/hicolor/scalable/apps/nordstjernen.gif",
-        "../../data/icons/hicolor/scalable/apps/nordstjernen.gif",
-        "data/icons/hicolor/scalable/apps/nordstjernen.gif",
+        "share/icons/hicolor/scalable/apps/southstar.gif",
+        "../share/icons/hicolor/scalable/apps/southstar.gif",
+        "../../data/icons/hicolor/scalable/apps/southstar.gif",
+        "data/icons/hicolor/scalable/apps/southstar.gif",
         NULL,
     };
     gsize gif_len = 0;
@@ -2805,7 +2805,7 @@ static char *
 about_logo_markup(void)
 {
     return g_strdup_printf("<img class=\"mark-img\" src=\"%s\" "
-                           "alt=\"Nordstjernen\" aria-hidden=\"true\">",
+                           "alt=\"Southstar\" aria-hidden=\"true\">",
                            about_logo_data_uri());
 }
 
@@ -2815,7 +2815,7 @@ about_splash_markup(void)
     char *uri = g_strconcat("data:image/gif;base64,", about_splash_gif_b64, NULL);
     char *markup = g_strdup_printf(
         "<img class=\"splash\" src=\"%s\" "
-        "alt=\"Nordstjernen " NS_VERSION " splash\">",
+        "alt=\"Southstar " NS_VERSION " splash\">",
         uri);
     g_free(uri);
     return markup;
@@ -2891,7 +2891,7 @@ about_diagnostics_html(void)
     g_free(cores);
 
     g_string_append(s, "<h3>Version &amp; libraries</h3>");
-    diag_kv(s, "Nordstjernen", NS_VERSION " (built " NS_BUILD_DATE ")");
+    diag_kv(s, "Southstar", NS_VERSION " (built " NS_BUILD_DATE ")");
     {
         const ns_config *ua_cfg = ns_config_get();
         const char *ua = ua_cfg && ua_cfg->user_agent && *ua_cfg->user_agent
@@ -3009,16 +3009,16 @@ static char *
 build_about_license(void)
 {
     static const char *const paths[] = {
-        "nordstjernen/License.md",
-        "share/nordstjernen/License.md",
-        "../share/nordstjernen/License.md",
+        "southstar/License.md",
+        "share/southstar/License.md",
+        "../share/southstar/License.md",
         "../../../License.md",
         "../../License.md",
         "License.md",
         NULL,
     };
-    return build_about_markdown_page(paths, "Nordstjernen License",
-                                     "about:nordstjernen", "About Nordstjernen",
+    return build_about_markdown_page(paths, "Southstar License",
+                                     "about:southstar", "About Southstar",
                                      "License.md");
 }
 
@@ -3026,9 +3026,9 @@ static char *
 build_about_gpl(void)
 {
     static const char *const paths[] = {
-        "nordstjernen/COPYING",
-        "share/nordstjernen/COPYING",
-        "../share/nordstjernen/COPYING",
+        "southstar/COPYING",
+        "share/southstar/COPYING",
+        "../share/southstar/COPYING",
         "../../../COPYING",
         "../../COPYING",
         "COPYING",
@@ -3036,7 +3036,7 @@ build_about_gpl(void)
     };
     return build_about_markdown_page(paths,
                                      "GNU General Public License, version 3",
-                                     "about:nordstjernen", "About Nordstjernen",
+                                     "about:southstar", "About Southstar",
                                      "COPYING");
 }
 
@@ -3044,16 +3044,16 @@ static char *
 build_about_third_party(void)
 {
     static const char *const paths[] = {
-        "nordstjernen/THIRD-PARTY-LICENSES.md",
-        "share/nordstjernen/THIRD-PARTY-LICENSES.md",
-        "../share/nordstjernen/THIRD-PARTY-LICENSES.md",
+        "southstar/THIRD-PARTY-LICENSES.md",
+        "share/southstar/THIRD-PARTY-LICENSES.md",
+        "../share/southstar/THIRD-PARTY-LICENSES.md",
         "../../../THIRD-PARTY-LICENSES.md",
         "../../THIRD-PARTY-LICENSES.md",
         "THIRD-PARTY-LICENSES.md",
         NULL,
     };
     return build_about_markdown_page(paths, "Third-party software notices",
-                                     "about:nordstjernen", "About Nordstjernen",
+                                     "about:southstar", "About Southstar",
                                      "THIRD-PARTY-LICENSES.md");
 }
 
@@ -3114,14 +3114,14 @@ classify_error(long status, const char *transport_error, gboolean is_file_url)
         ERROR_ICON_OFFLINE,
         "Can't reach the network",
         "Can't reach the network",
-        "Nordstjernen couldn't connect to any server. Your device may be "
+        "Southstar couldn't connect to any server. Your device may be "
         "offline, or a firewall is blocking outbound traffic."
     };
     static const ns_error_info DNS = {
         ERROR_ICON_SEARCH,
         "Server address not found",
         "Server address not found",
-        "Nordstjernen couldn't look up the host name. The address may be "
+        "Southstar couldn't look up the host name. The address may be "
         "mistyped, or your DNS resolver isn't responding."
     };
     static const ns_error_info REFUSED = {
@@ -3142,7 +3142,7 @@ classify_error(long status, const char *transport_error, gboolean is_file_url)
         ERROR_ICON_LOCK,
         "Secure connection failed",
         "Secure connection failed",
-        "Nordstjernen couldn't establish a trustworthy TLS connection. "
+        "Southstar couldn't establish a trustworthy TLS connection. "
         "The certificate may be invalid, expired, or self-signed."
     };
     static const ns_error_info BAD_URL = {
@@ -3169,7 +3169,7 @@ classify_error(long status, const char *transport_error, gboolean is_file_url)
         ERROR_ICON_LOCK,
         "Authentication required",
         "Authentication required",
-        "The server needs credentials Nordstjernen doesn't have. Sign in "
+        "The server needs credentials Southstar doesn't have. Sign in "
         "elsewhere first, or try a different URL."
     };
     static const ns_error_info HTTP_403 = {
@@ -3324,7 +3324,7 @@ ns_build_error_page(const char *url, long status, const char *transport_error)
         "<!doctype html><html><head><meta charset=\"utf-8\">"
         "<title>");
     g_string_append(out, esc_title);
-    g_string_append(out, " — Nordstjernen</title>"
+    g_string_append(out, " — Southstar</title>"
         "<meta name=\"color-scheme\" content=\"light dark\">"
         "<style>" NS_ABOUT_BASE_CSS
         "body{display:flex;align-items:center;justify-content:center;"
@@ -4324,7 +4324,7 @@ static const char k_about_start_template[] =
     ".brand h1{font-size:28px}}\n"
     "</style></head>"
     "<body><main class=\"ntp\">"
-    "<div class=\"brand\">__ND_LOGO_MARK__<h1>Nordstjernen</h1>"
+    "<div class=\"brand\">__ND_LOGO_MARK__<h1>Southstar</h1>"
     "<p class=\"tagline\">__ND_TAGLINE__</p></div>"
     "<form class=\"search\" id=\"dsearch\" role=\"search\">"
     "<svg width=\"20\" height=\"20\" viewBox=\"0 0 16 16\" fill=\"none\""
@@ -4350,19 +4350,19 @@ static const char k_about_start_template[] =
     "<path d=\"M2.75 4.5h6.5M12.25 4.5h1M2.75 11.5h1M6.75 11.5h6.5\"/>"
     "<circle cx=\"10.75\" cy=\"4.5\" r=\"1.5\"/>"
     "<circle cx=\"5.25\" cy=\"11.5\" r=\"1.5\"/></svg></span>Settings</a>"
-    "<a class=\"tile\" href=\"about:nordstjernen\"><span class=\"ic\">"
+    "<a class=\"tile\" href=\"about:southstar\"><span class=\"ic\">"
     "<svg width=\"20\" height=\"20\" viewBox=\"0 0 16 16\""
     " fill=\"currentColor\">"
     "<path d=\"M8 1.5l1.35 4.15L13.5 7l-4.15 1.35L8 12.5 6.65 8.35 2.5 7"
     "l4.15-1.35z\"/></svg></span>About</a>"
-    "<a class=\"tile\" href=\"https://nordstjernen.org\"><span class=\"ic\">"
+    "<a class=\"tile\" href=\"https://github.com/nordstjernen-web/southstar-browser\"><span class=\"ic\">"
     "<svg width=\"20\" height=\"20\" viewBox=\"0 0 16 16\" fill=\"none\""
     " stroke=\"currentColor\" stroke-width=\"1.5\"><circle cx=\"8\" cy=\"8\""
     " r=\"5.75\"/><ellipse cx=\"8\" cy=\"8\" rx=\"2.4\" ry=\"5.75\"/>"
-    "<path d=\"M2.5 8h11\"/></svg></span>nordstjernen.org</a>"
+    "<path d=\"M2.5 8h11\"/></svg></span>Southstar on GitHub</a>"
     "</nav>"
     "<p class=\"foot\"><a href=\"about:license\">License</a>"
-    "<a href=\"https://nordstjernen.org/privacy\">Privacy</a></p>"
+    "<a href=\"https://github.com/nordstjernen-web/southstar-browser/blob/main/docs/privacy-policy.md\">Privacy</a></p>"
     "</main>"
     "<script>\n"
     "var searchUrl='__ND_SEARCH_URL__';\n"
@@ -4382,12 +4382,12 @@ static const char k_about_start_template[] =
     "try{sq.focus();}catch(e){}\n"
     "</script></body></html>";
 
-static const char k_about_nordstjernen_template[] =
+static const char k_about_southstar_template[] =
     "<!doctype html><html lang=\"en\"><head>"
     "<meta charset=\"utf-8\">"
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
     "<meta name=\"color-scheme\" content=\"light dark\">"
-    "<title>About Nordstjernen</title>"
+    "<title>About Southstar</title>"
     "<style>\n" NS_ABOUT_BASE_CSS
     ".wrap{max-width:760px;margin:0 auto;padding:28px 24px 48px}\n"
     ".top{margin-bottom:22px}\n"
@@ -4431,11 +4431,11 @@ static const char k_about_nordstjernen_template[] =
     "\xe2\x86\x90 New Tab</a></div>"
     "__ND_SPLASH__"
     "<div class=\"head\">__ND_LOGO_MARK__<div>"
-    "<h1>Nordstjernen<span class=\"ver\">" NS_VERSION "</span></h1>"
+    "<h1>Southstar<span class=\"ver\">" NS_VERSION "</span></h1>"
     "<p>A web browser implemented in C.</p></div></div>"
     "<section class=\"card\">"
     "<h2>License</h2>"
-    "<p>Nordstjernen is \xc2\xa9 2026 Andreas R\xc3\xb8sdal and dual-licensed: "
+    "<p>Southstar is \xc2\xa9 2026 Andreas R\xc3\xb8sdal and dual-licensed: "
     "you may use, modify and redistribute it under either the "
     "<b>Nordstjernen Source License v1.0 (NSL-1.0)</b> or the "
     "<b>GNU General Public License, version\xc2\xa0" "3 or later "
@@ -4454,10 +4454,10 @@ static const char k_about_nordstjernen_template[] =
     "</div>"
     "</section>"
     "<section class=\"card\">__ND_DIAG__</section>"
-    "<div class=\"foot\"><span>Nordstjernen Web Browser \xc2\xa9 2026 "
+    "<div class=\"foot\"><span>Southstar Browser \xc2\xa9 2026 "
     "Andreas R\xc3\xb8sdal</span><span>"
-    "<a href=\"https://nordstjernen.org/privacy\">Privacy</a>"
-    "<a href=\"https://nordstjernen.org\">nordstjernen.org</a>"
+    "<a href=\"https://github.com/nordstjernen-web/southstar-browser/blob/main/docs/privacy-policy.md\">Privacy</a>"
+    "<a href=\"https://github.com/nordstjernen-web/southstar-browser\">GitHub</a>"
     "</span></div>"
     "</main></body></html>";
 
@@ -4775,11 +4775,11 @@ static const char *
 about_start_tagline(void)
 {
     static const char *const taglines[] = {
-        "Nordstjernen the unique web browser",
-        "Northstar the unique web browser",
-        "Nordstjärnan the unique web browser",
-        "Étoile du Nord the unique web browser",
-        "Nordstern the unique web browser",
+        "Southstar the unique web browser",
+        "Sørstjernen the unique web browser",
+        "Sydstjärnan the unique web browser",
+        "Étoile du Sud the unique web browser",
+        "Südstern the unique web browser",
     };
     return taglines[g_random_int_range(0, G_N_ELEMENTS(taglines))];
 }
@@ -4875,9 +4875,9 @@ synthesize_about_response(const char *url, const char *top_url,
         g_byte_array_append(resp->body, (const guint8 *)body,
                             (guint)strlen(body));
         g_free(body);
-    } else if (g_str_equal(what, "nordstjernen") || g_str_equal(what, "about")) {
+    } else if (g_str_equal(what, "southstar") || g_str_equal(what, "about")) {
         char *logo_markup = about_logo_markup();
-        char *with_logo = about_substitute(k_about_nordstjernen_template,
+        char *with_logo = about_substitute(k_about_southstar_template,
                                            "__ND_LOGO_MARK__", logo_markup);
         g_free(logo_markup);
         char *diag = about_diagnostics_html();
@@ -4911,7 +4911,7 @@ synthesize_about_response(const char *url, const char *top_url,
     } else if (g_str_equal(what, "book")) {
         const char *body =
             "<!doctype html><html><head><meta charset=\"utf-8\">"
-            "<title>The Book of Nordstjernen</title><style>"
+            "<title>The Book of Southstar</title><style>"
             "body{background:#fff;color:#7a0000;margin:0;height:100vh;"
             "display:flex;align-items:center;justify-content:center}"
             "p{font-family:serif;font-style:italic;font-size:1.3em;"
@@ -4921,7 +4921,7 @@ synthesize_about_response(const char *url, const char *top_url,
             "a small light rose in the north, written by hand and beholden "
             "to no one. It asked for nothing, reported to nowhere, and "
             "carried the travellers over the wire by the old free roads."
-            "<br><br>from <strong>The Book of Nordstjernen,</strong> 1:1"
+            "<br><br>from <strong>The Book of Southstar,</strong> 1:1"
             "</p></body></html>";
         g_byte_array_append(resp->body, (const guint8 *)body,
                             (guint)strlen(body));
@@ -4958,7 +4958,7 @@ synthesize_about_response(const char *url, const char *top_url,
         about_settings_clear();
         about_emit_json(resp, g_strdup("{\"ok\":true}"));
     } else {
-        const char *body = "<!doctype html><title>Nordstjernen</title>";
+        const char *body = "<!doctype html><title>Southstar</title>";
         g_byte_array_append(resp->body, (const guint8 *)body, (guint)strlen(body));
     }
     return TRUE;
@@ -5797,7 +5797,7 @@ ns_fetch_sync_hop(const char *url, const char *top_url, const char *method,
         gboolean chromium_ua = ns_user_agent_has_client_hints(effective_ua);
         if (chromium_ua) {
             headers = curl_slist_append(headers,
-                "Sec-CH-UA: \"Nordstjernen\";v=\"1\", "
+                "Sec-CH-UA: \"Southstar\";v=\"1\", "
                 "\"Not=A?Brand\";v=\"24\"");
             char *ua_mobile = g_strdup_printf("Sec-CH-UA-Mobile: ?%d",
                                               ns_net_is_mobile_mode() ? 1 : 0);
@@ -6837,7 +6837,7 @@ ns_multipart_boundary(void)
         r[0] = g_random_int(); r[1] = g_random_int();
         r[2] = g_random_int(); r[3] = g_random_int();
     }
-    return g_strdup_printf("----NordstjernenFormBoundary%08x%08x%08x%08x",
+    return g_strdup_printf("----SouthstarFormBoundary%08x%08x%08x%08x",
                            r[0], r[1], r[2], r[3]);
 }
 

@@ -1,4 +1,4 @@
-/* Nordstjernen — minimal HTTP/1.1 + JSON framing for the IPC experiment. */
+/* Southstar — minimal HTTP/1.1 + JSON framing for the IPC experiment. */
 
 #include "ipc_http.h"
 

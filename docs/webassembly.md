@@ -1,11 +1,11 @@
 # WebAssembly
 
-Nordstjernen ships a **complete WebAssembly JS API** backed by a vendored
+Southstar ships a **complete WebAssembly JS API** backed by a vendored
 subset of [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
 (wasm-micro-runtime, Apache-2.0) — the classic interpreter, with
 **reference types** and **bulk memory** enabled. There is no JIT and no
 AOT: wasm executes in a portable interpreter, the same on Linux, macOS,
-Windows and Android.
+Windows and the BSDs.
 
 This is enough to run real-world **wasm-bindgen** bundles (Rust →
 `wasm32-unknown-unknown`), including externref-heavy ones. The flagship
@@ -94,7 +94,7 @@ traces, including the exact signature string a failed import was
 checked against).
 
 ```sh
-ND_WASM_LOG=1 ./builddir/src/gtk/nordstjernen --headless --dump=text \
+ND_WASM_LOG=1 ./builddir/src/gtk/southstar --headless --dump=text \
     --url=https://discord.com/login --settle-ms=20000
 ```
 

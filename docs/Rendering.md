@@ -1,8 +1,8 @@
 # Rendering and scrolling
 
-Nordstjernen renders each tab out of process. The GTK app is a thin
+Southstar renders each tab out of process. The GTK app is a thin
 shell (`src/gtk/procview.c`) that spawns one sandboxed
-`nordstjernen-renderer` process per tab (`src/renderer_http.c`) and drives it
+`southstar-renderer` process per tab (`src/renderer_http.c`) and drives it
 over a tiny **HTTP/JSON control channel plus a shared-memory framebuffer**
 (`src/rproc_http.c`, `src/ipc_http.c`). The engine — HTML parse, the CSS
 cascade, layout into a live `ns_box` tree, and Cairo/Pango paint — runs entirely

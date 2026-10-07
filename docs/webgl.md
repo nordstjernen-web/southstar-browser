@@ -1,6 +1,6 @@
 # WebGL
 
-Nordstjernen ships a **minimalist WebGL implementation**. It maps
+Southstar ships a **minimalist WebGL implementation**. It maps
 the WebGL API more or less directly onto GL through a toolkit-independent
 **offscreen GL context** (`src/glctx.c`) and **libepoxy** for GL dispatch.
 The backend is platform-specific: on Linux it is a surfaceless EGL context
@@ -21,14 +21,14 @@ The data-transfer entry points are bounds-checked and zero-initialised (see
 ## Availability and control
 
 The first time a page calls `canvas.getContext("webgl")` (or `"webgl2"` /
-`"experimental-webgl"`), Nordstjernen creates the context immediately when
+`"experimental-webgl"`), Southstar creates the context immediately when
 WebGL is globally enabled. The origin is remembered for the session and sent
 to the GTK shell over the renderer IPC channel (`X-WebGL`), which adds
 **WebGL enabled** to the status bar. There is no permission dialog.
 
 Turn off **Enable WebGL** on `about:settings` to make subsequent
 `getContext("webgl")` and `getContext("webgl2")` calls return `null`. Hosts
-embedding `libnordstjernen` can also use `ns_browser_resolve_webgl()` to deny
+embedding `libsouthstar` can also use `ns_browser_resolve_webgl()` to deny
 or allow an origin for the current renderer session. The stock GTK browser
 automatically allows an origin's first use while the global setting is on.
 
@@ -43,8 +43,7 @@ kill switch for WebGL context creation.
 `src/webgl.c` is the whole implementation; it is compiled into the engine
 only when `NS_ENABLE_WEBGL` is defined (every desktop build — Linux, macOS,
 Windows), and runs in the engine wherever it is hosted, including the
-out-of-process renderer. The Android engine build gets a stub that returns
-`null`. The status-bar activity indicator belongs to the GTK shell; the GL
+out-of-process renderer. The status-bar activity indicator belongs to the GTK shell; the GL
 implementation itself contains no toolkit UI code.
 
 1. **Context** — `ns_gl_context_create()` (`src/glctx.c`) creates the
@@ -253,7 +252,7 @@ common WebGL content, not a full conformance suite.
 
 ```sh
 meson compile -C builddir
-./builddir/src/gtk/nordstjernen path/to/your-webgl-page.html
+./builddir/src/gtk/southstar path/to/your-webgl-page.html
 ```
 
 A minimal smoke test page is a hello-triangle: create a vertex + fragment

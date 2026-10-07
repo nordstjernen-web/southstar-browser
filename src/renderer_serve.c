@@ -1,9 +1,9 @@
-/* Nordstjernen — renderer request dispatch over the HTTP/JSON IPC protocol,
-   shared by nordstjernen-renderer and the single-process in-process host. */
+/* Southstar — renderer request dispatch over the HTTP/JSON IPC protocol,
+   shared by southstar-renderer and the single-process in-process host. */
 
 #define _GNU_SOURCE
 #include "renderer_serve.h"
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "renderer_tiles.h"
 #include "print.h"
 #include "proc_limits.h"

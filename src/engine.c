@@ -1,4 +1,4 @@
-/* Nordstjernen — synchronous fetch/cascade/layout/capture pipeline.
+/* Southstar — synchronous fetch/cascade/layout/capture pipeline.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -1336,7 +1336,7 @@ static void
 pdf_set_metadata(cairo_surface_t *surf)
 {
     cairo_pdf_surface_set_metadata(surf, CAIRO_PDF_METADATA_CREATOR,
-                                   "Nordstjernen");
+                                   "Southstar");
     time_t now = time(NULL);
     struct tm tm_utc;
 #if defined(_WIN32)

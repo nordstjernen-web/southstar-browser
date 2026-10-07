@@ -1,10 +1,10 @@
-/* Nordstjernen — GTK thin client over the out-of-process renderer (rproc). */
+/* Southstar — GTK thin client over the out-of-process renderer (rproc). */
 
 #include "procview.h"
 #include "i18n.h"
 #include "pagelayers.h"
 
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "proc_limits.h"
 #include "../print.h"
 #include "rproc_http.h"
@@ -659,9 +659,9 @@ static char *
 ns_proc_audio_helper_path(void)
 {
 #ifdef G_OS_WIN32
-    const char *name = "nordstjernen-audio.exe";
+    const char *name = "southstar-audio.exe";
 #else
-    const char *name = "nordstjernen-audio";
+    const char *name = "southstar-audio";
 #endif
     const char *exe = ns_app_self_exe();
     if (exe) {
@@ -855,7 +855,7 @@ pv_stream_url_allowed(const char *url, const char *subdir)
     if (!g_str_has_prefix(url, "file://")) return FALSE;
     char *path = pv_audio_url_path(url);
     char *canon = g_canonicalize_filename(path, NULL);
-    char *streams = g_build_filename(g_get_user_cache_dir(), "nordstjernen",
+    char *streams = g_build_filename(g_get_user_cache_dir(), "southstar",
                                      subdir, "", NULL);
     g_strdelimit(canon, "\\", '/');
     g_strdelimit(streams, "\\", '/');
@@ -938,7 +938,7 @@ pv_audio_pump(NsProcView *v, const char *commands)
         v->audio_proc = g_subprocess_launcher_spawn(launcher, &err, path, NULL);
         g_object_unref(launcher);
         if (!v->audio_proc) {
-            g_printerr("nordstjernen: audio helper %s failed to start: %s\n",
+            g_printerr("southstar: audio helper %s failed to start: %s\n",
                        path, err ? err->message : "unknown error");
             g_free(path);
             g_clear_error(&err);
@@ -996,9 +996,9 @@ static char *
 ns_proc_video_helper_path(void)
 {
 #ifdef G_OS_WIN32
-    const char *name = "nordstjernen-video.exe";
+    const char *name = "southstar-video.exe";
 #else
-    const char *name = "nordstjernen-video";
+    const char *name = "southstar-video";
 #endif
     const char *exe = ns_app_self_exe();
     if (exe) {
@@ -1428,8 +1428,8 @@ static void
 pv_append_media_process_stats(NsProcView *v, GString *out)
 {
     struct { const char *label; int pid; } procs[] = {
-        { "audio helper (nordstjernen-audio)", ns_proc_view_audio_pid(v) },
-        { "video helper (nordstjernen-video)", ns_proc_view_video_pid(v) },
+        { "audio helper (southstar-audio)", ns_proc_view_audio_pid(v) },
+        { "video helper (southstar-video)", ns_proc_view_video_pid(v) },
     };
     gboolean any = FALSE;
     for (gsize i = 0; i < G_N_ELEMENTS(procs); i++) {
@@ -4011,7 +4011,7 @@ print_run(NsProcView *v, GPtrArray *pages, const ns_print_setup *setup,
 
     GtkPageSetup *page_setup = gtk_page_setup_new();
     GtkPaperSize *paper = gtk_paper_size_new_custom(
-        "northstar", "Northstar", setup->width * 72.0 / 96.0,
+        "southstar", "Southstar", setup->width * 72.0 / 96.0,
         setup->height * 72.0 / 96.0, GTK_UNIT_POINTS);
     gtk_page_setup_set_paper_size(page_setup, paper);
     gtk_page_setup_set_orientation(page_setup,
@@ -4055,7 +4055,7 @@ on_save_dialog_done(GObject *src, GAsyncResult *res, gpointer ud)
         if (dest && v->opened) {
             static int export_counter = 0;
             char *base = g_strdup_printf(
-                "nordstjernen-export-%" G_GINT64_FORMAT "-%d.%s",
+                "southstar-export-%" G_GINT64_FORMAT "-%d.%s",
                 g_get_monotonic_time(), ++export_counter,
                 c->pdf ? "pdf" : "png");
             Req *req = g_new0(Req, 1);

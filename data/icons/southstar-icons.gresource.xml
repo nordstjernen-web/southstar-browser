@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/southstar/WebBrowser/icons/scalable/apps">
+    <file alias="southstar.svg">hicolor/scalable/apps/southstar.svg</file>
+    <file alias="southstar-back-symbolic.svg">hicolor/scalable/apps/southstar-back-symbolic.svg</file>
+    <file alias="southstar-bookmarks-symbolic.svg">hicolor/scalable/apps/southstar-bookmarks-symbolic.svg</file>
+    <file alias="southstar-close-symbolic.svg">hicolor/scalable/apps/southstar-close-symbolic.svg</file>
+    <file alias="southstar-downloads-symbolic.svg">hicolor/scalable/apps/southstar-downloads-symbolic.svg</file>
+    <file alias="southstar-forward-symbolic.svg">hicolor/scalable/apps/southstar-forward-symbolic.svg</file>
+    <file alias="southstar-globe-symbolic.svg">hicolor/scalable/apps/southstar-globe-symbolic.svg</file>
+    <file alias="southstar-home-symbolic.svg">hicolor/scalable/apps/southstar-home-symbolic.svg</file>
+    <file alias="southstar-lock-open-symbolic.svg">hicolor/scalable/apps/southstar-lock-open-symbolic.svg</file>
+    <file alias="southstar-lock-symbolic.svg">hicolor/scalable/apps/southstar-lock-symbolic.svg</file>
+    <file alias="southstar-menu-symbolic.svg">hicolor/scalable/apps/southstar-menu-symbolic.svg</file>
+    <file alias="southstar-new-tab-symbolic.svg">hicolor/scalable/apps/southstar-new-tab-symbolic.svg</file>
+    <file alias="southstar-page-symbolic.svg">hicolor/scalable/apps/southstar-page-symbolic.svg</file>
+    <file alias="southstar-private-symbolic.svg">hicolor/scalable/apps/southstar-private-symbolic.svg</file>
+    <file alias="southstar-reload-symbolic.svg">hicolor/scalable/apps/southstar-reload-symbolic.svg</file>
+    <file alias="southstar-star-filled-symbolic.svg">hicolor/scalable/apps/southstar-star-filled-symbolic.svg</file>
+    <file alias="southstar-star-symbolic.svg">hicolor/scalable/apps/southstar-star-symbolic.svg</file>
+    <file alias="southstar-stop-symbolic.svg">hicolor/scalable/apps/southstar-stop-symbolic.svg</file>
+    <file alias="southstar-warning-symbolic.svg">hicolor/scalable/apps/southstar-warning-symbolic.svg</file>
+    <file alias="southstar-console.svg">hicolor/scalable/apps/southstar-console.svg</file>
+    <file alias="southstar-settings.svg">hicolor/scalable/apps/southstar-settings.svg</file>
+    <file alias="southstar-about.svg">hicolor/scalable/apps/southstar-about.svg</file>
+    <file alias="southstar-stage-connect.svg">hicolor/scalable/apps/southstar-stage-connect.svg</file>
+    <file alias="southstar-stage-fetch.svg">hicolor/scalable/apps/southstar-stage-fetch.svg</file>
+    <file alias="southstar-stage-parse.svg">hicolor/scalable/apps/southstar-stage-parse.svg</file>
+    <file alias="southstar-stage-script.svg">hicolor/scalable/apps/southstar-stage-script.svg</file>
+    <file alias="southstar-stage-render.svg">hicolor/scalable/apps/southstar-stage-render.svg</file>
+    <file alias="southstar-stage-done.svg">hicolor/scalable/apps/southstar-stage-done.svg</file>
+  </gresource>
+</gresources>

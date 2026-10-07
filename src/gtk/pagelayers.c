@@ -1,4 +1,4 @@
-/* Nordstjernen: the page as cached tile and viewport-layer textures. */
+/* Southstar: the page as cached tile and viewport-layer textures. */
 
 #include "pagelayers.h"
 

@@ -1,10 +1,10 @@
-/* Nordstjernen — GTK view backed by the out-of-process renderer (thin client).
+/* Southstar — GTK view backed by the out-of-process renderer (thin client).
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
 
-#ifndef NORDSTJERNEN_GTK_PROCVIEW_H
-#define NORDSTJERNEN_GTK_PROCVIEW_H
+#ifndef SOUTHSTAR_GTK_PROCVIEW_H
+#define SOUTHSTAR_GTK_PROCVIEW_H
 
 #include <gtk/gtk.h>
 

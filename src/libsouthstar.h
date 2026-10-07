@@ -1,10 +1,10 @@
-/* Nordstjernen — public C API for embedding the browser engine.
+/* Southstar — public C API for embedding the browser engine.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
 
-#ifndef LIBNORDSTJERNEN_H
-#define LIBNORDSTJERNEN_H
+#ifndef LIBSOUTHSTAR_H
+#define LIBSOUTHSTAR_H
 
 #include <stddef.h>
 
@@ -186,7 +186,7 @@ void ns_browser_scrollbar_release(ns_browser *browser);
 int ns_browser_drop_files(ns_browser *browser, int x, int y,
                           const char *const *paths, int n_paths);
 
-/* Audio playback bridge to the nordstjernen-audio helper. The renderer queues
+/* Audio playback bridge to the southstar-audio helper. The renderer queues
  * commands (open/play/pause/seek/volume/stop, one per line) when page script
  * drives <audio>/<video>; the shell drains them with take_pending_audio and
  * relays them to the helper. */

@@ -8,7 +8,7 @@ build reconstructs the source tarball in the build VM.
 The build recipe therefore lives at the **repo root**, where the bridge
 can find it:
 
-- `/nordstjernen.spec` — RPM build recipe (meson build). It carries no
+- `/southstar.spec` — RPM build recipe (meson build). It carries no
   `Source0`: its `%prep` locates the tree the bridge laid down under
   `%{_sourcedir}` and copies it into the build directory.
 
@@ -17,15 +17,15 @@ alone.
 
 ## One-time OBS setup
 
-The package must be named lowercase **`nordstjernen`** (so the
-bridge-generated tarball is `nordstjernen-<version>` and matches the
+The package must be named lowercase **`southstar`** (so the
+bridge-generated tarball is `southstar-<version>` and matches the
 spec's `%prep`). Create it if needed, then bind it to git:
 
-    osc meta pkg home:andreasrosdal nordstjernen -e
+    osc meta pkg home:andreasrosdal southstar -e
 
 and add inside `<package>`:
 
-    <scmsync>https://github.com/nordstjernen-web/nordstjernen-browser?trackingbranch=main</scmsync>
+    <scmsync>https://github.com/nordstjernen-web/southstar-browser?trackingbranch=main</scmsync>
 
 That is the whole setup. After it, git is authoritative: edit the spec in
 this repo and push — never touch files in the OBS web UI.
@@ -37,14 +37,14 @@ a git webhook backed by `osc token --create --operation runservice`.
 build.opensuse.org does not run network-fetching source services
 (`tar_scm` / `obs_scm`) on its source server for this package — they
 produce no archive, so the chain dies at `recompress`
-("no such file … nordstjernen-*.tar") or at the buildtime `tar`
+("no such file … southstar-*.tar") or at the buildtime `tar`
 ("no .obsinfo file found"). The scmsync bridge is a separate, working
 code path for cloning git, so the source comes from there and the spec
 builds it in place.
 
 ## License
 
-Nordstjernen is dual-licensed under the **Nordstjernen Source License
+Southstar is dual-licensed under the **Nordstjernen Source License
 v1.0 (NSL-1.0)** or the **GNU General Public License version 3 or later
 (GPL-3.0-or-later)**, at the recipient's option, so the spec tags it
 `LicenseRef-NSL-1.0 OR GPL-3.0-or-later` and ships `License.md` and `COPYING`

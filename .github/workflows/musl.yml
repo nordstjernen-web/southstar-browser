@@ -56,7 +56,7 @@ jobs:
           export CC="ccache clang"
           meson setup builddir
           meson compile -C builddir
-          file builddir/src/gtk/nordstjernen
+          file builddir/src/gtk/southstar
 
       - name: ccache stats
         if: always()
@@ -66,8 +66,8 @@ jobs:
         env:
           NS_ALLOW_ROOT: '1'
         run: |
-          ldd builddir/src/gtk/nordstjernen | grep -i musl || true
-          ./builddir/src/gtk/nordstjernen \
+          ldd builddir/src/gtk/southstar | grep -i musl || true
+          ./builddir/src/gtk/southstar \
             --headless --url=https://example.com --dump=text > smoke.txt
           head -40 smoke.txt
           grep -qi example smoke.txt

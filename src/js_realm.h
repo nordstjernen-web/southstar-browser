@@ -1,4 +1,4 @@
-/* Nordstjernen — native ShadowRealm and AsyncContext for the QuickJS engine. */
+/* Southstar — native ShadowRealm and AsyncContext for the QuickJS engine. */
 #ifndef NS_JS_REALM_H
 #define NS_JS_REALM_H
 

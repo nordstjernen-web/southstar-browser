@@ -1,8 +1,8 @@
-# Nordstjernen documentation
+# Southstar documentation
 
 Index of the docs in this directory. The project overview is in the
 top-level [README.md](../README.md); the development plan is
-[NORDSTJERNEN.md](../NORDSTJERNEN.md); the AI/Claude working rules are in
+[SOUTHSTAR.md](../SOUTHSTAR.md); the AI/Claude working rules are in
 [CLAUDE.md](../CLAUDE.md).
 
 ## Using the browser
@@ -20,8 +20,6 @@ top-level [README.md](../README.md); the development plan is
 - [Linux.md](Linux.md) — build, run, and package on Linux.
 - [Windows.md](Windows.md) · [windows-store.md](windows-store.md) — Windows build and the Microsoft Store package.
 - [macOS.md](macOS.md) — macOS install (first-launch quarantine step, troubleshooting), build, `.app`/`.dmg`, and distribution (Developer ID notarisation, Mac App Store).
-- [Android.md](Android.md) — Android build and Google Play release.
-- [iOS.md](iOS.md) — the iOS port: structure, build, and what remains.
 - [Debian.md](Debian.md) · [Ubuntu.md](Ubuntu.md) · [opensuse.md](opensuse.md) · [Alpine.md](Alpine.md) — per-distro packaging.
 - [Nightly.md](Nightly.md) — the nightly build server and artifact matrix.
 - [Embedding.md](Embedding.md) — embedding the engine in a C application.

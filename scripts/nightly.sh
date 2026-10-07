@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nordstjernen nightly build orchestrator. Builds, from a single Linux host,
+# Southstar nightly build orchestrator. Builds, from a single Linux host,
 # a source tarball, per-distro Linux packages (debian/ubuntu/opensuse/alpine
 # via containers, in parallel), and Windows, macOS and BSD (FreeBSD/NetBSD)
 # builds (by driving the GitHub Actions runners, dispatched up front so
@@ -203,12 +203,12 @@ retry() {
 
 docker_pull() { retry "$NIGHTLY_DOCKER_PULL_RETRIES" "$DOCKER" pull "$1"; }
 
-log "Nordstjernen nightly $DATE"
+log "Southstar nightly $DATE"
 printf 'ref=%s commit=%s version=%s\nroot=%s\n' \
     "$NIGHTLY_REF" "$COMMIT" "$NVERSION" "$OUTDIR"
 
 archive_to() {
-    git archive --format=tar --prefix="nordstjernen-${NVERSION}/" "$NIGHTLY_REF" \
+    git archive --format=tar --prefix="southstar-${NVERSION}/" "$NIGHTLY_REF" \
         | tar -x -C "$1"
 }
 
@@ -216,7 +216,7 @@ stage_tarball() {
     log "Stage: source tarball"
     local dst="$STAGEOUT/source"
     mkdir -p "$dst"
-    local base="nordstjernen-${NVERSION}"
+    local base="southstar-${NVERSION}"
     if git archive --format=tar --prefix="${base}/" "$NIGHTLY_REF" \
            | gzip -9 > "$dst/${base}.tar.gz" \
        && git archive --format=tar --prefix="${base}/" "$NIGHTLY_REF" \
@@ -243,7 +243,7 @@ stage_distro() {
     local src="$WORK/$distro"
     mkdir -p "$src"
     archive_to "$src"
-    local tree="$src/nordstjernen-${NVERSION}"
+    local tree="$src/southstar-${NVERSION}"
     local dst="$STAGEOUT/linux/$distro"
     mkdir -p "$dst"
     local -a dargs=( --rm -v "$tree:/build:z" -w /build
@@ -469,24 +469,24 @@ link_stable() {
 
 stage_stable_links() {
     log "Stable download links (/nightly/)"
-    link_stable nordstjernen-windows-x86_64.zip  'windows/*/*-windows-x86_64.zip'
-    link_stable nordstjernen-windows-x86_64.msix 'windows/*/*.msix'
-    link_stable nordstjernen-windows-x86_64.exe  'windows/*/nordstjernen.exe'
-    link_stable nordstjernen-macos.dmg           'macos/*/*.dmg'
-    link_stable nordstjernen-macos-arm64         'macos/*/nordstjernen'
-    link_stable nordstjernen-debian-amd64.deb    'linux/debian/*.deb'
-    link_stable nordstjernen-ubuntu-amd64.deb    'linux/ubuntu/*.deb'
-    link_stable nordstjernen-opensuse-x86_64.rpm 'linux/opensuse/*.rpm'
-    link_stable nordstjernen-linux-x86_64.zip    'linux/ubuntu/*-linux-x86_64.zip' \
+    link_stable southstar-windows-x86_64.zip  'windows/*/*-windows-x86_64.zip'
+    link_stable southstar-windows-x86_64.msix 'windows/*/*.msix'
+    link_stable southstar-windows-x86_64.exe  'windows/*/southstar.exe'
+    link_stable southstar-macos.dmg           'macos/*/*.dmg'
+    link_stable southstar-macos-arm64         'macos/*/southstar'
+    link_stable southstar-debian-amd64.deb    'linux/debian/*.deb'
+    link_stable southstar-ubuntu-amd64.deb    'linux/ubuntu/*.deb'
+    link_stable southstar-opensuse-x86_64.rpm 'linux/opensuse/*.rpm'
+    link_stable southstar-linux-x86_64.zip    'linux/ubuntu/*-linux-x86_64.zip' \
                                                  'linux/debian/*-linux-x86_64.zip' \
                                                  'linux/opensuse/*-linux-x86_64.zip'
-    link_stable nordstjernen-alpine-x86_64.zip   'linux/alpine/*-linux-x86_64.zip'
-    link_stable nordstjernen-alpine-x86_64.apk   'linux/alpine/*.apk'
-    link_stable nordstjernen-freebsd-x86_64.zip  'freebsd/*/*-freebsd-x86_64.zip'
-    link_stable nordstjernen-netbsd-x86_64.zip   'netbsd/*/*-netbsd-x86_64.zip'
-    link_stable nordstjernen-src.tar.xz          'source/*.tar.xz'
-    link_stable nordstjernen-src.tar.gz          'source/*.tar.gz'
-    find "$OUTDIR" -maxdepth 1 -name 'nordstjernen-*' -xtype l -delete
+    link_stable southstar-alpine-x86_64.zip   'linux/alpine/*-linux-x86_64.zip'
+    link_stable southstar-alpine-x86_64.apk   'linux/alpine/*.apk'
+    link_stable southstar-freebsd-x86_64.zip  'freebsd/*/*-freebsd-x86_64.zip'
+    link_stable southstar-netbsd-x86_64.zip   'netbsd/*/*-netbsd-x86_64.zip'
+    link_stable southstar-src.tar.xz          'source/*.tar.xz'
+    link_stable southstar-src.tar.gz          'source/*.tar.gz'
+    find "$OUTDIR" -maxdepth 1 -name 'southstar-*' -xtype l -delete
 }
 
 # Dispatch the remote (Windows/macOS) builds first so they run on GitHub's
@@ -538,7 +538,7 @@ status_keys()  { ls -1 "$STATUSDIR" 2>/dev/null | sort; }
 
 log "Manifest"
 {
-    echo "Nordstjernen nightly build"
+    echo "Southstar nightly build"
     echo "date:    $DATE"
     echo "ref:     $NIGHTLY_REF"
     echo "commit:  $COMMIT"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and package Nordstjernen inside a distro container. Invoked by
+# Build and package Southstar inside a distro container. Invoked by
 # nightly.sh via `docker run` with the source tree at the current
 # directory; installs that distro's deps, builds a release binary, and
 # emits a portable tarball plus a native package (.deb or .rpm) under
@@ -137,7 +137,7 @@ verify_package() {
             ;;
     esac
     # The container runs as root, which the browser refuses without opt-in.
-    NS_ALLOW_ROOT=1 /usr/bin/nordstjernen --headless --dump=text about:start \
+    NS_ALLOW_ROOT=1 /usr/bin/southstar --headless --dump=text about:start \
         > /tmp/ns-smoke.txt
     [ -s /tmp/ns-smoke.txt ] || {
         echo "nightly-distro-build($DISTRO): installed browser produced no output for about:start" >&2

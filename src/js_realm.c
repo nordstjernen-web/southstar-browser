@@ -1,4 +1,4 @@
-/* Nordstjernen — native ShadowRealm over the QuickJS C API. */
+/* Southstar — native ShadowRealm over the QuickJS C API. */
 
 #include "js_realm.h"
 #include "js_classid.h"

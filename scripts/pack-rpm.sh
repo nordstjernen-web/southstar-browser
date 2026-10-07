@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a portable Nordstjernen RPM by repackaging the bundle that
+# Build a portable Southstar RPM by repackaging the bundle that
 # pack-linux.sh produces. The binary is already statically linked
 # against the in-tree engine (lexbor, quickjs, wuffs); the RPM only
 # needs to declare the dynamic GTK / curl / rsvg system deps, and rpm's
@@ -13,7 +13,7 @@ ARCH=$(uname -m)
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
 RPMVERSION=${VERSION//[!A-Za-z0-9.]/.}
-SLUG="nordstjernen-${FSVERSION}-linux-${ARCH}"
+SLUG="southstar-${FSVERSION}-linux-${ARCH}"
 STAGE="$ROOT/dist/${SLUG}"
 
 if ! command -v rpmbuild >/dev/null 2>&1; then
@@ -24,7 +24,7 @@ if ! command -v rpmbuild >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -x "$STAGE/nordstjernen" ]; then
+if [ ! -x "$STAGE/southstar" ]; then
     echo "Bundle not staged yet — running pack-linux.sh first."
     "$ROOT/scripts/pack-linux.sh"
 fi
@@ -33,21 +33,21 @@ RPMTOP="$ROOT/dist/rpmbuild"
 rm -rf "$RPMTOP"
 mkdir -p "$RPMTOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
-cp "$STAGE/nordstjernen" "$RPMTOP/SOURCES/"
-cp "$STAGE/nordstjernen-renderer" "$RPMTOP/SOURCES/"
+cp "$STAGE/southstar" "$RPMTOP/SOURCES/"
+cp "$STAGE/southstar-renderer" "$RPMTOP/SOURCES/"
 # All app + toolbar icons the UI and about: pages look up by name
-# (nordstjernen-back, nordstjernen-reload, …) — not just the app icon.
+# (southstar-back, southstar-reload, …) — not just the app icon.
 ( cd "$ROOT/data/icons/hicolor/scalable/apps" && \
-  tar -czf "$RPMTOP/SOURCES/nordstjernen-icons.tar.gz" \
-      nordstjernen*.svg nordstjernen.gif )
-cp "$ROOT/data/nordstjernen.desktop" "$RPMTOP/SOURCES/"
+  tar -czf "$RPMTOP/SOURCES/southstar-icons.tar.gz" \
+      southstar*.svg southstar.gif )
+cp "$ROOT/data/southstar.desktop" "$RPMTOP/SOURCES/"
 cp "$ROOT/README.md" "$RPMTOP/SOURCES/"
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$RPMTOP/SOURCES/"
 cp "$ROOT/License.md" "$ROOT/COPYING" "$RPMTOP/SOURCES/"
 
 # WebGPU: when pack-linux staged libwgpu_native.so, the binaries link it by its
 # bare soname (DT_NEEDED=libwgpu_native.so), so the RPM must ship it under
-# %{_libdir}/nordstjernen with an $ORIGIN rpath, exclude the auto-Requires on it
+# %{_libdir}/southstar with an $ORIGIN rpath, exclude the auto-Requires on it
 # (it is bundled, not a system package), and rely on rpm's auto-Provides from
 # the bundled copy to satisfy the in-package reference.
 WGPU_SOURCE=""
@@ -58,11 +58,11 @@ if [ -e "$STAGE/libwgpu_native.so" ]; then
     cp -L "$STAGE/libwgpu_native.so" "$RPMTOP/SOURCES/libwgpu_native.so"
     WGPU_SOURCE="Source6:        libwgpu_native.so"
     WGPU_EXCLUDE='%global __requires_exclude ^libwgpu_native\.so.*$'
-    WGPU_INSTALL='install -dm755 %{buildroot}%{_libdir}/nordstjernen
-install -m644 %{SOURCE6} %{buildroot}%{_libdir}/nordstjernen/libwgpu_native.so
-patchelf --set-rpath '\''$ORIGIN/../%{_lib}/nordstjernen'\'' %{buildroot}%{_bindir}/nordstjernen
-patchelf --set-rpath '\''$ORIGIN/../%{_lib}/nordstjernen'\'' %{buildroot}%{_bindir}/nordstjernen-renderer'
-    WGPU_FILES='%{_libdir}/nordstjernen/'
+    WGPU_INSTALL='install -dm755 %{buildroot}%{_libdir}/southstar
+install -m644 %{SOURCE6} %{buildroot}%{_libdir}/southstar/libwgpu_native.so
+patchelf --set-rpath '\''$ORIGIN/../%{_lib}/southstar'\'' %{buildroot}%{_bindir}/southstar
+patchelf --set-rpath '\''$ORIGIN/../%{_lib}/southstar'\'' %{buildroot}%{_bindir}/southstar-renderer'
+    WGPU_FILES='%{_libdir}/southstar/'
 fi
 
 # Audio playback helper, when SDL2 was available at build time. AutoReqProv
@@ -70,30 +70,30 @@ fi
 AUDIO_SOURCE=""
 AUDIO_INSTALL=""
 AUDIO_FILES=""
-if [ -x "$STAGE/nordstjernen-audio" ]; then
-    cp "$STAGE/nordstjernen-audio" "$RPMTOP/SOURCES/"
-    AUDIO_SOURCE="Source7:        nordstjernen-audio"
-    AUDIO_INSTALL='install -m755 %{SOURCE7} %{buildroot}%{_bindir}/nordstjernen-audio'
-    AUDIO_FILES='%{_bindir}/nordstjernen-audio'
+if [ -x "$STAGE/southstar-audio" ]; then
+    cp "$STAGE/southstar-audio" "$RPMTOP/SOURCES/"
+    AUDIO_SOURCE="Source7:        southstar-audio"
+    AUDIO_INSTALL='install -m755 %{SOURCE7} %{buildroot}%{_bindir}/southstar-audio'
+    AUDIO_FILES='%{_bindir}/southstar-audio'
 fi
 
-SPEC="$RPMTOP/SPECS/nordstjernen.spec"
+SPEC="$RPMTOP/SPECS/southstar.spec"
 cat > "$SPEC" <<SPEC_EOF
-Name:           nordstjernen
+Name:           southstar
 Version:        ${RPMVERSION}
 Release:        1%{?dist}
-Summary:        Nordstjernen Web Navigator — a small, hand-written web browser
+Summary:        Southstar Browser — a small, hand-written web browser
 
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-URL:            https://nordstjernen.org
+URL:            https://github.com/nordstjernen-web/southstar-browser
 BuildArch:      ${ARCH}
 
-Source0:        nordstjernen
-Source1:        nordstjernen-icons.tar.gz
-Source2:        nordstjernen.desktop
+Source0:        southstar
+Source1:        southstar-icons.tar.gz
+Source2:        southstar.desktop
 Source3:        README.md
 Source4:        THIRD-PARTY-LICENSES.md
-Source5:        nordstjernen-renderer
+Source5:        southstar-renderer
 Source8:        License.md
 Source9:        COPYING
 ${AUDIO_SOURCE}
@@ -107,7 +107,7 @@ ${WGPU_EXCLUDE}
 %global __os_install_post %{nil}
 
 %description
-Nordstjernen is a small, free software web browser written in C with
+Southstar is a small, free software web browser written in C with
 GTK 4 and libcurl. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
@@ -123,31 +123,31 @@ rm -rf %{buildroot}
 install -dm755 %{buildroot}%{_bindir}
 install -dm755 %{buildroot}%{_datadir}/icons/hicolor/scalable/apps
 install -dm755 %{buildroot}%{_datadir}/applications
-install -dm755 %{buildroot}%{_docdir}/nordstjernen
-install -dm755 %{buildroot}%{_datadir}/nordstjernen
+install -dm755 %{buildroot}%{_docdir}/southstar
+install -dm755 %{buildroot}%{_datadir}/southstar
 
-install -m755 %{SOURCE0} %{buildroot}%{_bindir}/nordstjernen
-install -m755 %{SOURCE5} %{buildroot}%{_bindir}/nordstjernen-renderer
+install -m755 %{SOURCE0} %{buildroot}%{_bindir}/southstar
+install -m755 %{SOURCE5} %{buildroot}%{_bindir}/southstar-renderer
 tar -xzf %{SOURCE1} -C %{buildroot}%{_datadir}/icons/hicolor/scalable/apps
-chmod 644 %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/nordstjernen*
+chmod 644 %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/southstar*
 # Install under the app-id name so Wayland compositors can match the
-# window (StartupWMClass=org.nordstjernen.WebBrowser) to its desktop file.
-install -m644 %{SOURCE2} %{buildroot}%{_datadir}/applications/org.nordstjernen.WebBrowser.desktop
-install -m644 %{SOURCE3} %{buildroot}%{_docdir}/nordstjernen/
-install -m644 %{SOURCE4} %{buildroot}%{_docdir}/nordstjernen/
-install -m644 %{SOURCE8} %{buildroot}%{_datadir}/nordstjernen/
-install -m644 %{SOURCE9} %{buildroot}%{_datadir}/nordstjernen/
+# window (StartupWMClass=org.southstar.WebBrowser) to its desktop file.
+install -m644 %{SOURCE2} %{buildroot}%{_datadir}/applications/org.southstar.WebBrowser.desktop
+install -m644 %{SOURCE3} %{buildroot}%{_docdir}/southstar/
+install -m644 %{SOURCE4} %{buildroot}%{_docdir}/southstar/
+install -m644 %{SOURCE8} %{buildroot}%{_datadir}/southstar/
+install -m644 %{SOURCE9} %{buildroot}%{_datadir}/southstar/
 ${AUDIO_INSTALL}
 ${WGPU_INSTALL}
 
 %files
-%license %{_datadir}/nordstjernen/License.md
-%license %{_datadir}/nordstjernen/COPYING
-%{_bindir}/nordstjernen
-%{_bindir}/nordstjernen-renderer
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen*
-%{_datadir}/applications/org.nordstjernen.WebBrowser.desktop
-%{_docdir}/nordstjernen/
+%license %{_datadir}/southstar/License.md
+%license %{_datadir}/southstar/COPYING
+%{_bindir}/southstar
+%{_bindir}/southstar-renderer
+%{_datadir}/icons/hicolor/scalable/apps/southstar*
+%{_datadir}/applications/org.southstar.WebBrowser.desktop
+%{_docdir}/southstar/
 ${AUDIO_FILES}
 ${WGPU_FILES}
 
@@ -174,7 +174,7 @@ SPEC_EOF
 
 rpmbuild --define "_topdir $RPMTOP" -bb "$SPEC"
 
-RPMFILE=$(find "$RPMTOP/RPMS" -name "nordstjernen-${RPMVERSION}-*.rpm" -print -quit)
+RPMFILE=$(find "$RPMTOP/RPMS" -name "southstar-${RPMVERSION}-*.rpm" -print -quit)
 if [ -z "$RPMFILE" ]; then
     echo "rpmbuild produced no .rpm — see $RPMTOP/BUILD for details." >&2
     exit 1

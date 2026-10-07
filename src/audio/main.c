@@ -1,4 +1,4 @@
-/* nordstjernen-audio: isolated MP3 / MPEG-1 audio playback helper driven over stdin/stdout. */
+/* southstar-audio: isolated MP3 / MPEG-1 audio playback helper driven over stdin/stdout. */
 #define _GNU_SOURCE
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
@@ -1202,7 +1202,7 @@ write_temp_from_url(const char *url)
 #endif
         curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
         curl_easy_setopt(c, CURLOPT_FAILONERROR, 1L);
-        curl_easy_setopt(c, CURLOPT_USERAGENT, "Nordstjernen-Audio");
+        curl_easy_setopt(c, CURLOPT_USERAGENT, "Southstar-Audio");
         curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
 #if defined(_WIN32) && defined(CURLSSLOPT_NATIVE_CA)

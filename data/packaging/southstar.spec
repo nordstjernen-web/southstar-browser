@@ -1,10 +1,10 @@
-Name:           nordstjernen
+Name:           southstar
 Version:        1.0.29
 Release:        1%{?dist}
 Summary:        Clean-room, hardened web browser written from scratch in C
 
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-URL:            https://github.com/nordstjernen-web/nordstjernen-browser
+URL:            https://github.com/nordstjernen-web/southstar-browser
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc
@@ -42,7 +42,7 @@ Recommends:     mpv
 ExclusiveOS:    linux
 
 %description
-Nordstjernen is an independent, lightweight web browser built entirely
+Southstar is an independent, lightweight web browser built entirely
 from scratch in C, using GTK 4 for the UI and libcurl for networking.
 It is a clean-room implementation with no upstream browser engine: the
 HTML parser (lexbor), the JavaScript interpreter (QuickJS), and the
@@ -68,23 +68,23 @@ applications. It does not phone home and does not telemeter the user.
 # The browser statically compiles the engine; the embedding shared library
 # and its header serve external embedders only, so this stays an application
 # package rather than shipping a -devel surface.
-rm -f %{buildroot}%{_libdir}/libnordstjernen.so
-rm -f %{buildroot}%{_includedir}/nordstjernen/libnordstjernen.h
-rmdir %{buildroot}%{_includedir}/nordstjernen 2>/dev/null || :
+rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
+rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 
 %files
-%license %{_datadir}/nordstjernen/License.md
-%license %{_datadir}/nordstjernen/COPYING
+%license %{_datadir}/southstar/License.md
+%license %{_datadir}/southstar/COPYING
 %doc README.md
-%{_bindir}/nordstjernen
-%{_bindir}/nordstjernen-renderer
-%{_bindir}/nordstjernen-audio
-%{_bindir}/nordstjernen-video
-%{_datadir}/applications/org.nordstjernen.WebBrowser.desktop
-%{_datadir}/metainfo/org.nordstjernen.WebBrowser.metainfo.xml
-%{_datadir}/nordstjernen/
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen.gif
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen*.svg
+%{_bindir}/southstar
+%{_bindir}/southstar-renderer
+%{_bindir}/southstar-audio
+%{_bindir}/southstar-video
+%{_datadir}/applications/org.southstar.WebBrowser.desktop
+%{_datadir}/metainfo/org.southstar.WebBrowser.metainfo.xml
+%{_datadir}/southstar/
+%{_datadir}/icons/hicolor/scalable/apps/southstar.gif
+%{_datadir}/icons/hicolor/scalable/apps/southstar*.svg
 
 %changelog
 * Mon Oct 05 2026 Andreas Røsdal <andreas.rosdal@gmail.com> - 1.0.29-1

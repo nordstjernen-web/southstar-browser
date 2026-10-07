@@ -1,4 +1,4 @@
-/* Nordstjernen — native Temporal date/time API for the QuickJS engine. */
+/* Southstar — native Temporal date/time API for the QuickJS engine. */
 #ifndef NS_JS_DATE_H
 #define NS_JS_DATE_H
 

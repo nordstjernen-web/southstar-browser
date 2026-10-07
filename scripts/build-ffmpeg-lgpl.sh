@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a minimal, LGPL-licensed FFmpeg (libav*) carrying exactly the inline
-# media Nordstjernen decodes — VP9/VP8 video and Opus/Vorbis audio in Matroska
+# media Southstar decodes — VP9/VP8 video and Opus/Vorbis audio in Matroska
 # /WebM and Ogg containers — so it can be bundled into the redistributable
 # macOS and Windows packages without the GPL obligations of a stock FFmpeg.
 #

@@ -1,6 +1,6 @@
 # WebGPU (experimental)
 
-Nordstjernen has an **experimental** WebGPU (`navigator.gpu`)
+Southstar has an **experimental** WebGPU (`navigator.gpu`)
 implementation. Unlike WebGL — which is in the standard build and mapped
 onto the in-tree GLES path — WebGPU is layered on the external
 [wgpu-native](https://github.com/gfx-rs/wgpu-native) library. It exists for
@@ -177,6 +177,6 @@ above. This document and feature-detection reflect exactly what runs.
 
 ```sh
 LD_LIBRARY_PATH=/path/to/release/lib \
-  ./builddir/src/gtk/nordstjernen --headless --dump=none --enable-webgpu \
+  ./builddir/src/gtk/southstar --headless --dump=none --enable-webgpu \
   --eval='navigator.gpu.requestAdapter().then(a=>a.info.device)' about:blank
 ```

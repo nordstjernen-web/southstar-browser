@@ -1,8 +1,9 @@
-# Nordstjernen Privacy Policy
+# Southstar Privacy Policy
 
-This is the canonical privacy policy for the Nordstjernen Web
-Navigator. Publish it verbatim at `https://nordstjernen.org/privacy`
-— Microsoft Store policy 10.5.1 requires every Win32 product to link
+This is the canonical privacy policy for Southstar Browser. It is
+published at
+`https://github.com/nordstjernen-web/southstar-browser/blob/main/docs/privacy-policy.md`,
+the page the browser's own Privacy links open — Microsoft Store policy 10.5.1 requires every Win32 product to link
 a privacy policy from its listing (see `docs/windows-store.md`), and
 other store fronts ask for the same URL.
 
@@ -12,25 +13,25 @@ other store fronts ask for the same URL.
 
 ## Summary
 
-Nordstjernen collects nothing. The browser has no telemetry, no
+Southstar collects nothing. The browser has no telemetry, no
 crash reporting, no update pinger, no analytics, no accounts, and no
-"studies" infrastructure. It never phones home — the Nordstjernen
+"studies" infrastructure. It never phones home — the Southstar
 project operates no server that the browser talks to.
 
 ## Data the browser stores on your device
 
-Like any web browser, Nordstjernen keeps your browsing data locally
+Like any web browser, Southstar keeps your browsing data locally
 so the browser works as you expect: history, bookmarks, cookies and
 site storage, the page cache, per-site permission decisions (for
 example camera access), and your settings. This data stays in your
 user profile directory on your device, is never transmitted to the
-Nordstjernen project or anyone else, and you can delete it at any
+Southstar project or anyone else, and you can delete it at any
 time from the browser's settings or by deleting the profile
 directory.
 
 ## Network traffic the browser generates
 
-Nordstjernen connects only to the sites you visit: the address you
+Southstar connects only to the sites you visit: the address you
 type, the links you click, and the resources those pages reference.
 Text typed into the search box is sent to your configured search
 engine (DuckDuckGo by default, changeable in settings).
@@ -47,7 +48,7 @@ by their own privacy policies.
 
 To help you exercise your rights under laws such as the California
 Consumer Privacy Act (CCPA/CPRA) and similar US state statutes,
-Nordstjernen can send a Global Privacy Control signal (the
+Southstar can send a Global Privacy Control signal (the
 `Sec-GPC: 1` request header and the `navigator.globalPrivacyControl`
 property), which many jurisdictions treat as a legally binding request
 to opt out of the sale or sharing of your personal information. It can
@@ -56,14 +57,14 @@ also send the legacy Do Not Track signal (`DNT: 1` and
 mainstream browsers, and each can be turned on in Settings. Honouring
 these signals is the responsibility of the websites that receive them.
 
-By default Nordstjernen blocks third-party cookies, strips common
+By default Southstar blocks third-party cookies, strips common
 tracking parameters from URLs, upgrades connections to HTTPS, and coarsens
 script-visible high-resolution timers (such as `performance.now()`) to
 limit timing-based fingerprinting and side-channel attacks.
 
 ## Children
 
-Nordstjernen provides unfiltered access to the web and is not
+Southstar provides unfiltered access to the web and is not
 directed at children.
 
 ## Changes
@@ -74,6 +75,5 @@ verifiable history of this document.
 
 ## Contact
 
-Questions about this policy: open an issue on the Nordstjernen
-source repository, or use the contact details published at
-`https://nordstjernen.org`.
+Questions about this policy: open an issue on the Southstar
+source repository, <https://github.com/nordstjernen-web/southstar-browser>.

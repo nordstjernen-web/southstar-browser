@@ -1,6 +1,6 @@
 # Browser extensions (WebExtensions, initial support)
 
-Nordstjernen has initial, deliberately scoped support for the
+Southstar has initial, deliberately scoped support for the
 cross-browser **WebExtensions** API used by Firefox and Chromium. The
 goal is source-compatibility with simple, page-facing extensions —
 *content scripts* that modify pages plus a small slice of the `browser.*`
@@ -14,8 +14,8 @@ Extensions are loaded **unpacked** (a directory containing
 locations are scanned at renderer start:
 
 - Every immediate sub-directory of
-  `$XDG_DATA_HOME/nordstjernen/extensions/` (on Linux, by default
-  `~/.local/share/nordstjernen/extensions/<ext>/`).
+  `$XDG_DATA_HOME/southstar/extensions/` (on Linux, by default
+  `~/.local/share/southstar/extensions/<ext>/`).
 - Any path in the `NS_EXTENSIONS_DIR` environment variable
   (`:`-separated). Each entry is treated as a directory of extensions,
   or — if it directly contains a `manifest.json` — as a single
@@ -40,7 +40,7 @@ locations are scanned at renderer start:
   network path, so no per-request JavaScript runs. This is enough to
   drive ad/tracker blocking from a hosts-style or filter-list ruleset.
 - **Adblock filter lists (EasyList / ABP)**: a manifest key
-  `nordstjernen_filter_lists` lists paths to plain-text filter lists in
+  `southstar_filter_lists` lists paths to plain-text filter lists in
   Adblock-Plus / EasyList syntax, so an existing list (EasyList,
   EasyPrivacy, uBO filters) can be dropped in without converting to the
   `declarativeNetRequest` JSON format. Supported:
@@ -72,7 +72,7 @@ locations are scanned at renderer start:
     context), `lastError`.
   - `storage.local` / `storage.sync` / `storage.managed`: `get`, `set`,
     `remove`, `clear` — promise-based, persisted per-extension under
-    `$XDG_DATA_HOME/nordstjernen/ext-storage/<hash>/`. Disabled in
+    `$XDG_DATA_HOME/southstar/ext-storage/<hash>/`. Disabled in
     private mode.
   - `i18n`: `getMessage()`, `getUILanguage()`, `getAcceptLanguages()`.
   - `extension.getURL()`.
@@ -99,7 +99,7 @@ ignored.
 ## Example: content script
 
 ```
-~/.local/share/nordstjernen/extensions/hello/
+~/.local/share/southstar/extensions/hello/
 ├── manifest.json
 └── content.js
 ```
@@ -128,7 +128,7 @@ requests to a few ad/tracker hosts and any URL with an `/ads/` path
 segment, and hides leftover ad containers with an injected stylesheet.
 
 ```
-~/.local/share/nordstjernen/extensions/adblock/
+~/.local/share/southstar/extensions/adblock/
 ├── manifest.json
 ├── rules.json
 └── hide.css
@@ -190,11 +190,11 @@ the converters emit.
 ## Example: ad blocker from an EasyList file
 
 For real-world coverage the easiest path is to ship an actual filter list
-and point at it with `nordstjernen_filter_lists` — no conversion to JSON
+and point at it with `southstar_filter_lists` — no conversion to JSON
 needed. Both network and cosmetic (element-hiding) rules are honored.
 
 ```
-~/.local/share/nordstjernen/extensions/easylist/
+~/.local/share/southstar/extensions/easylist/
 ├── manifest.json
 └── easylist.txt
 ```
@@ -207,7 +207,7 @@ needed. Both network and cosmetic (element-hiding) rules are honored.
   "name": "EasyList Blocker",
   "version": "1.0",
   "browser_specific_settings": { "gecko": { "id": "easylist@example" } },
-  "nordstjernen_filter_lists": ["easylist.txt"]
+  "southstar_filter_lists": ["easylist.txt"]
 }
 ```
 

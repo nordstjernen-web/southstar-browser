@@ -1,4 +1,4 @@
-/* Nordstjernen — local phishing/malware blocklist and warning interstitial. */
+/* Southstar — local phishing/malware blocklist and warning interstitial. */
 
 #ifndef NS_SAFEBROWSING_H
 #define NS_SAFEBROWSING_H
@@ -7,7 +7,7 @@
 
 G_BEGIN_DECLS
 
-#define NS_UNSAFE_CONTINUE_SCHEME "nordstjernen-unsafe-continue:"
+#define NS_UNSAFE_CONTINUE_SCHEME "southstar-unsafe-continue:"
 
 gboolean ns_safebrowsing_blocked(const char *host);
 void     ns_safebrowsing_allow_host(const char *host);

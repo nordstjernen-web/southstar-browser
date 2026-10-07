@@ -1,4 +1,4 @@
-/* Nordstjernen — runtime config (flat key/value file).
+/* Southstar — runtime config (flat key/value file).
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -88,7 +88,7 @@ gboolean         ns_config_save(GError **error);
 void             ns_config_lock(void);
 void             ns_config_unlock(void);
 
-#define NS_APP_DIR_NAME "nordstjernen"
+#define NS_APP_DIR_NAME "southstar"
 #define NS_DEFAULT_SEARCH_ENGINE "https://duckduckgo.com/?q=%s"
 
 G_END_DECLS

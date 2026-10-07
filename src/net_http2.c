@@ -1,4 +1,4 @@
-/* Nordstjernen — HTTP transport over libnghttp2 + OpenSSL (curl alternative). */
+/* Southstar — HTTP transport over libnghttp2 + OpenSSL (curl alternative). */
 
 #include "net.h"
 #include "net_backend.h"

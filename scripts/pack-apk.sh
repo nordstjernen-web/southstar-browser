@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a portable Nordstjernen Alpine package (.apk) by repackaging the
+# Build a portable Southstar Alpine package (.apk) by repackaging the
 # bundle that pack-linux.sh produces. The binary is statically linked
 # against the in-tree engine (lexbor, quickjs). tracedeps is disabled
 # (the APKBUILD has no source=), so every shared library the binary
@@ -18,7 +18,7 @@ VERSION=${VERSION:-$(awk -F"'" \
 ARCH=$(uname -m)
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
-SLUG="nordstjernen-${FSVERSION}-linux-${ARCH}"
+SLUG="southstar-${FSVERSION}-linux-${ARCH}"
 STAGE="$ROOT/dist/${SLUG}"
 
 if ! command -v abuild >/dev/null 2>&1; then
@@ -27,7 +27,7 @@ if ! command -v abuild >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -x "$STAGE/nordstjernen" ]; then
+if [ ! -x "$STAGE/southstar" ]; then
     log "bundle not staged yet — running pack-linux.sh first"
     "$ROOT/scripts/pack-linux.sh"
 fi
@@ -60,22 +60,22 @@ rm -rf "$REPODEST"
 # Audio playback helper, when SDL2 was available at build time. tracedeps is
 # off, so its sdl2 runtime dependency must be listed manually below.
 AUDIO_DEP=""
-[ -x "$STAGE/nordstjernen-audio" ] && AUDIO_DEP=" sdl2"
+[ -x "$STAGE/southstar-audio" ] && AUDIO_DEP=" sdl2"
 
 # Inline WebM (VP9/Opus) links FFmpeg's libav* when present at build time; with
 # tracedeps off, its runtime package (ffmpeg-libs) must be listed manually.
 WEBM_DEP=""
-if ldd "$STAGE/nordstjernen-renderer" 2>/dev/null | grep -q 'libavformat'; then
+if ldd "$STAGE/southstar-renderer" 2>/dev/null | grep -q 'libavformat'; then
     WEBM_DEP=" ffmpeg-libs"
 fi
 
 cat > "$BUILDTOP/APKBUILD" <<APKBUILD_EOF
 # Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
-pkgname=nordstjernen
+pkgname=southstar
 pkgver=${APKVER}
 pkgrel=0
-pkgdesc="Nordstjernen Web Navigator — a small, hand-written web browser"
-url="https://nordstjernen.org"
+pkgdesc="Southstar Browser — a small, hand-written web browser"
+url="https://github.com/nordstjernen-web/southstar-browser"
 arch="${ARCH}"
 license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 depends="gtk4.0 libepoxy libcurl uchardet sqlite-libs ca-certificates fontconfig font-dejavu poppler-glib libavif libwebp libseccomp libpsl libcrypto3${AUDIO_DEP}${WEBM_DEP}"
@@ -87,38 +87,38 @@ build() {
 }
 
 package() {
-	install -Dm755 "${STAGE}/nordstjernen" "\$pkgdir/usr/bin/nordstjernen"
-	install -Dm755 "${STAGE}/nordstjernen-renderer" "\$pkgdir/usr/bin/nordstjernen-renderer"
-	if [ -e "${STAGE}/nordstjernen-audio" ]; then
-		install -Dm755 "${STAGE}/nordstjernen-audio" "\$pkgdir/usr/bin/nordstjernen-audio"
+	install -Dm755 "${STAGE}/southstar" "\$pkgdir/usr/bin/southstar"
+	install -Dm755 "${STAGE}/southstar-renderer" "\$pkgdir/usr/bin/southstar-renderer"
+	if [ -e "${STAGE}/southstar-audio" ]; then
+		install -Dm755 "${STAGE}/southstar-audio" "\$pkgdir/usr/bin/southstar-audio"
 	fi
-	for icon in "${STAGE}"/data/icons/hicolor/scalable/apps/nordstjernen*.svg \\
-	            "${STAGE}"/data/icons/hicolor/scalable/apps/nordstjernen.gif; do
+	for icon in "${STAGE}"/data/icons/hicolor/scalable/apps/southstar*.svg \\
+	            "${STAGE}"/data/icons/hicolor/scalable/apps/southstar.gif; do
 		[ -e "\$icon" ] && install -Dm644 "\$icon" \\
 			"\$pkgdir/usr/share/icons/hicolor/scalable/apps/\$(basename "\$icon")"
 	done
-	install -Dm644 "${STAGE}/data/nordstjernen.desktop" \\
-		"\$pkgdir/usr/share/applications/org.nordstjernen.WebBrowser.desktop"
+	install -Dm644 "${STAGE}/data/southstar.desktop" \\
+		"\$pkgdir/usr/share/applications/org.southstar.WebBrowser.desktop"
 	install -Dm644 "${STAGE}/License.md" \\
-		"\$pkgdir/usr/share/nordstjernen/License.md"
+		"\$pkgdir/usr/share/southstar/License.md"
 	install -Dm644 "${STAGE}/COPYING" \\
-		"\$pkgdir/usr/share/nordstjernen/COPYING"
+		"\$pkgdir/usr/share/southstar/COPYING"
 	install -Dm644 "${STAGE}/README.md" \\
-		"\$pkgdir/usr/share/doc/nordstjernen/README.md"
+		"\$pkgdir/usr/share/doc/southstar/README.md"
 	install -Dm644 "${STAGE}/THIRD-PARTY-LICENSES.md" \\
-		"\$pkgdir/usr/share/doc/nordstjernen/THIRD-PARTY-LICENSES.md"
+		"\$pkgdir/usr/share/doc/southstar/THIRD-PARTY-LICENSES.md"
 }
 APKBUILD_EOF
 
 ( cd "$BUILDTOP" && abuild -F -d rootpkg )
 
-APKFILE=$(find "$REPODEST" -name "nordstjernen-${APKVER}-r*.apk" | head -n1 || true)
+APKFILE=$(find "$REPODEST" -name "southstar-${APKVER}-r*.apk" | head -n1 || true)
 if [ -z "$APKFILE" ]; then
     echo "abuild produced no .apk — see $BUILDTOP for details." >&2
     exit 1
 fi
 
-DEST="$ROOT/dist/nordstjernen-${FSVERSION}-${ARCH}.apk"
+DEST="$ROOT/dist/southstar-${FSVERSION}-${ARCH}.apk"
 cp "$APKFILE" "$DEST"
 [ -s "$DEST" ] || { log "ERROR: $DEST missing or empty"; exit 1; }
 

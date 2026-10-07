@@ -1,4 +1,4 @@
-Source: nordstjernen
+Source: southstar
 Section: web
 Priority: optional
 Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
@@ -27,12 +27,12 @@ Build-Depends:
  libpango1.0-dev,
  libfontconfig-dev,
 Standards-Version: 4.7.0
-Homepage: https://nordstjernen.org
-Vcs-Browser: https://github.com/nordstjernen-web/nordstjernen-browser
-Vcs-Git: https://github.com/nordstjernen-web/nordstjernen-browser.git
+Homepage: https://github.com/nordstjernen-web/southstar-browser
+Vcs-Browser: https://github.com/nordstjernen-web/southstar-browser
+Vcs-Git: https://github.com/nordstjernen-web/southstar-browser.git
 Rules-Requires-Root: no
 
-Package: nordstjernen
+Package: southstar
 Architecture: any
 Depends:
  ${shlibs:Depends},
@@ -41,7 +41,7 @@ Recommends:
  mpv | ffmpeg,
  hunspell-en-us,
 Description: small, hand-written web browser
- Nordstjernen is a clean-room web browser written from scratch in C, with a
+ Southstar is a clean-room web browser written from scratch in C, with a
  GTK 4 user interface and a libcurl network stack. It is built to be small,
  secure, and readable by a single person end to end.
  .
@@ -52,6 +52,6 @@ Description: small, hand-written web browser
   * WebGL 1/2 over OpenGL ES, switchable off in Settings.
   * No telemetry: it does not phone home and does not track the user.
  .
- Nordstjernen is dual-licensed under the GNU General Public License version 3
+ Southstar is dual-licensed under the GNU General Public License version 3
  or later or the Nordstjernen Source License v1.0, at the recipient's option;
  Debian distributes it under the GPL-3+.

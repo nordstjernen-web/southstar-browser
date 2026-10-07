@@ -1,4 +1,4 @@
-/* Nordstjernen — single-process mode: serves every tab's renderer session on
+/* Southstar — single-process mode: serves every tab's renderer session on
    the shell's main-context thread instead of per-tab renderer processes. */
 
 #include "rproc_inproc.h"
@@ -13,7 +13,7 @@
 #endif
 
 #include "ipc_http.h"
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "print.h"
 #include "renderer_serve.h"
 #include "rproc_http.h"

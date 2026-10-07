@@ -1,4 +1,4 @@
-/* Nordstjernen — shared audio-clock and video-frame queue layouts. */
+/* Southstar — shared audio-clock and video-frame queue layouts. */
 #ifndef NS_MEDIA_SHM_H
 #define NS_MEDIA_SHM_H
 

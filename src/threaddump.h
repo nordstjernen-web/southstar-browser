@@ -1,4 +1,4 @@
-/* Nordstjernen — per-process thread dump to stderr, incl. a SIGQUIT trigger. */
+/* Southstar — per-process thread dump to stderr, incl. a SIGQUIT trigger. */
 
 #ifndef NS_THREADDUMP_H
 #define NS_THREADDUMP_H

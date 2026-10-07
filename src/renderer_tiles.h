@@ -1,11 +1,11 @@
-/* Nordstjernen: paint a page into shared-memory tiles for the window's compositor. */
+/* Southstar: paint a page into shared-memory tiles for the window's compositor. */
 
 #ifndef NS_RENDERER_TILES_H
 #define NS_RENDERER_TILES_H
 
 #include <glib.h>
 
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 
 G_BEGIN_DECLS
 

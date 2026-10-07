@@ -1,4 +1,4 @@
-/* Nordstjernen — HTTP/JSON renderer server (IPC experiment, pixels in body). */
+/* Southstar — HTTP/JSON renderer server (IPC experiment, pixels in body). */
 
 #define _GNU_SOURCE
 
@@ -11,7 +11,7 @@
 #endif
 
 #include "ipc_http.h"
-#include "libnordstjernen.h"
+#include "libsouthstar.h"
 #include "net.h"
 #include "renderer_serve.h"
 #include "threaddump.h"
@@ -152,7 +152,7 @@ main(int argc, char **argv)
     renderer_watch_parent_death();
 #endif
 
-    ns_thread_dump_install_signal("nordstjernen-renderer");
+    ns_thread_dump_install_signal("southstar-renderer");
 
     int shm_mode = argc > 3 && strcmp(argv[3], "shm") == 0;
     int stdio_mode = argc > 3 && strcmp(argv[3], "stdio") == 0;

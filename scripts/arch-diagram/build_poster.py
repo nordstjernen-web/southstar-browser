@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Nordstjernen architecture poster: graphviz pieces + PIL compose."""
+"""Build the Southstar architecture poster: graphviz pieces + PIL compose."""
 
 import html
 import subprocess
@@ -81,7 +81,7 @@ PIECES = {}
 
 # ------------------------------------------------------------- watchdog
 L = ['digraph w {'] + header()
-L.append(cluster("watchdog", "PROCESS: nordstjernen (watchdog supervisor)",
+L.append(cluster("watchdog", "PROCESS: southstar (watchdog supervisor)",
                  "the process you launch; owns no UI", "#FBEAE5", "#A6543F"))
 L.append(node("wd_sup", "watchdog.c",
               "ns_watchdog_run_supervisor: spawns the GTK shell,\n"
@@ -92,7 +92,7 @@ PIECES["watchdog"] = "\n".join(L)
 
 # ------------------------------------------------------------- GTK shell
 L = ['digraph s {'] + header(ranksep=0.5)
-L.append(cluster("shell", "PROCESS: nordstjernen (GTK 4 shell)",
+L.append(cluster("shell", "PROCESS: southstar (GTK 4 shell)",
                  "thin, engine-free UI &#8212; never parses HTML, "
                  "runs CSS or JS", "#E8F0FA", "#3E6FA8"))
 L.append(node("appmain", "gtk/appmain.c",
@@ -142,7 +142,7 @@ PIECES["shell"] = "\n".join(L)
 
 # ------------------------------------------------------------- renderer
 L = ['digraph r {'] + header(ranksep=0.5, nodesep=0.27)
-L.append(cluster("renderer", "PROCESS: nordstjernen-renderer &#215; one per tab",
+L.append(cluster("renderer", "PROCESS: southstar-renderer &#215; one per tab",
                  "the whole engine, sandboxed: Landlock + seccomp-bpf (Linux), "
                  "Seatbelt (macOS), mitigation policies (Windows) &#8212; "
                  "no JIT anywhere", "#EDF6ED", "#4E8A4E", 2.5, "r"))
@@ -157,9 +157,9 @@ L.append(node("renderer_serve", "renderer_serve.c",
               "drains side-channel queues into X-* reply headers"))
 L.append('}')
 
-L.append(subcl("api", "Engine core (libnordstjernen \xb7 also a shared "
+L.append(subcl("api", "Engine core (libsouthstar \xb7 also a shared "
                "library for embedders)"))
-L.append(node("libns", "libnordstjernen.c",
+L.append(node("libns", "libsouthstar.c",
               "public C embedding API (ns_browser_*): open, input,\n"
               "ns_browser_tick (animations, rAF, timers),\n"
               "ns_browser_render_argb32 (paint into any buffer)"))
@@ -447,7 +447,7 @@ PIECES["renderer"] = "\n".join(L)
 
 # ------------------------------------------------------------- audio helper
 L = ['digraph a {'] + header()
-L.append(cluster("audio", "PROCESS: nordstjernen-audio (per tab, lazy)",
+L.append(cluster("audio", "PROCESS: southstar-audio (per tab, lazy)",
                  "unsandboxed device access, then self-sandboxes (Linux)",
                  "#FCF3DC", "#A8842C"))
 L.append(node("audio_main", "audio/main.c (+ minimp3_impl.c, security.c)",
@@ -461,7 +461,7 @@ PIECES["audio"] = "\n".join(L)
 
 # ------------------------------------------------------------- video helper
 L = ['digraph v {'] + header()
-L.append(cluster("video", "PROCESS: nordstjernen-video (per tab, lazy)",
+L.append(cluster("video", "PROCESS: southstar-video (per tab, lazy)",
                  "built when libav is present; sandboxed like the renderer",
                  "#F4EAF8", "#7E4F9E"))
 L.append(node("video_main", "videoproc/main.c (+ security.c)",

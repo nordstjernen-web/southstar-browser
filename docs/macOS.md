@@ -1,6 +1,6 @@
-# Nordstjernen on macOS
+# Southstar on macOS
 
-Nordstjernen runs natively on macOS through GTK 4's Quartz backend — no
+Southstar runs natively on macOS through GTK 4's Quartz backend — no
 X11, no XQuartz, no WebKit. The same C engine shipped to Linux
 and Windows links the same GTK 4 / libcurl / Cairo / Pango / lexbor
 libraries here; there is no Xcode project and no CocoaPods. This page
@@ -16,9 +16,9 @@ covers both **installing the prebuilt app** and **building from source**.
 
 ## Install the app
 
-1. Download
-   [`nordstjernen-macos.dmg`](https://www.nordstjernen.org/nightly/nordstjernen-macos.dmg).
-2. Open the `.dmg` and drag **Nordstjernen** into `/Applications`.
+1. Download `southstar-macos.dmg` from a nightly server
+   (see [Nightly.md](Nightly.md)) or build one from source (below).
+2. Open the `.dmg` and drag **Southstar** into `/Applications`.
 3. Launch it from Launchpad, Spotlight, or Finder.
 
 The released `.dmg` is signed with an Apple **Developer ID** and
@@ -33,14 +33,14 @@ to a `.dmg` you built yourself **without** a Developer ID (`pack-macos.sh`
 falls back to an **ad-hoc** signature then). macOS stamps anything
 downloaded with a `com.apple.quarantine` flag, and Gatekeeper refuses to
 open a quarantined app that isn't notarised — the first launch fails with
-*"Nordstjernen is damaged and can't be opened"* or *"cannot be opened
+*"Southstar is damaged and can't be opened"* or *"cannot be opened
 because Apple cannot check it for malicious software."* This is expected
 for an ad-hoc build; the download is not corrupt.
 
 Clear the quarantine flag once, after copying the app to `/Applications`:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/Nordstjernen.app
+xattr -dr com.apple.quarantine /Applications/Southstar.app
 ```
 
 The app then launches normally on every later run. (Right-click → **Open**
@@ -53,35 +53,35 @@ signing and notarising — see the **Code signing** note under
 ### Verifying what you downloaded
 
 ```sh
-codesign -dv --verbose=2 /Applications/Nordstjernen.app   # shows the Developer ID signature
-spctl -a -vv /Applications/Nordstjernen.app               # Gatekeeper's assessment
-shasum -a 256 ~/Downloads/nordstjernen-macos.dmg          # compare against SHA256SUMS
+codesign -dv --verbose=2 /Applications/Southstar.app   # shows the Developer ID signature
+spctl -a -vv /Applications/Southstar.app               # Gatekeeper's assessment
+shasum -a 256 ~/Downloads/southstar-macos.dmg          # compare against SHA256SUMS
 ```
 
 For the published build, `spctl` reports *"accepted"* /
 *"source=Notarized Developer ID"* and `codesign` shows the authority
 *"Developer ID Application: … (49X98YTK33)"*. A self-built ad-hoc `.dmg`
 reports *"rejected"* / *"Unnotarized Developer ID"* instead — that is the
-state the `xattr` step above works around. Published checksums are at
-<https://www.nordstjernen.org/nightly/SHA256SUMS>.
+state the `xattr` step above works around. A nightly server publishes
+checksums beside the artifacts in `SHA256SUMS`.
 
 ### Uninstall
 
 ```sh
-rm -rf /Applications/Nordstjernen.app
-rm -rf ~/.config/nordstjernen ~/.cache/nordstjernen ~/.local/share/nordstjernen
+rm -rf /Applications/Southstar.app
+rm -rf ~/.config/southstar ~/.cache/southstar ~/.local/share/southstar
 ```
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| *"…is damaged and can't be opened"* / *"…cannot be opened because Apple cannot check it"* | Download quarantine on a self-built **ad-hoc** `.dmg` (the published build is notarised and unaffected) | `xattr -dr com.apple.quarantine /Applications/Nordstjernen.app` (see [above](#opening-an-ad-hoc-build)) |
+| *"…is damaged and can't be opened"* / *"…cannot be opened because Apple cannot check it"* | Download quarantine on a self-built **ad-hoc** `.dmg` (the published build is notarised and unaffected) | `xattr -dr com.apple.quarantine /Applications/Southstar.app` (see [above](#opening-an-ad-hoc-build)) |
 | App opens but **no web page loads** — every `https://` site fails | An old build with no bundled CA store, run on a Mac without Homebrew | Update to a current build (the `.dmg` now vendors a CA bundle); or set `CURL_CA_BUNDLE=/path/to/cert.pem` before launch |
-| `<video>` / `<audio>` plays but is **silent** | An old build that did not bundle the audio helper | Update to a current build (it ships `nordstjernen-audio` inside the `.app`) |
+| `<video>` / `<audio>` plays but is **silent** | An old build that did not bundle the audio helper | Update to a current build (it ships `southstar-audio` inside the `.app`) |
 | Quits immediately with status **77** from a terminal | Refuse-root check — launched via `sudo` | Run as a normal user, or set `NS_ALLOW_ROOT=1` |
 | Blank window or GPU glitches | Quartz GL renderer trouble | Relaunch with `GSK_RENDERER=cairo` to force the software renderer |
-| Need to see why it won't start | — | Launch from Terminal and read stderr: `/Applications/Nordstjernen.app/Contents/MacOS/Nordstjernen` |
+| Need to see why it won't start | — | Launch from Terminal and read stderr: `/Applications/Southstar.app/Contents/MacOS/Southstar` |
 
 ## Build from source
 
@@ -119,8 +119,8 @@ Optional extras, all auto-detected — the build works without them:
 ### Build
 
 ```sh
-git clone https://github.com/nordstjernen-web/nordstjernen-browser
-cd nordstjernen-browser
+git clone https://github.com/nordstjernen-web/southstar-browser
+cd southstar-browser
 meson setup builddir
 meson compile -C builddir
 ```
@@ -139,11 +139,11 @@ meson compile -C builddir
 ### Run
 
 ```sh
-./builddir/src/gtk/nordstjernen https://example.com
+./builddir/src/gtk/southstar https://example.com
 ```
 
-The first launch creates per-user state under `~/.config/nordstjernen/`,
-`~/.cache/nordstjernen/`, and `~/.local/share/nordstjernen/`. GLib does
+The first launch creates per-user state under `~/.config/southstar/`,
+`~/.cache/southstar/`, and `~/.local/share/southstar/`. GLib does
 **not** translate XDG base directories to the macOS-native `~/Library/...`
 paths — every GTK app on macOS follows the same Unix convention. Set
 `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, or `XDG_DATA_HOME` to relocate.
@@ -151,8 +151,8 @@ paths — every GTK app on macOS follows the same Unix convention. Set
 Headless rendering works the same as on Linux:
 
 ```sh
-./builddir/src/gtk/nordstjernen --headless --dump=text https://example.com
-./builddir/src/gtk/nordstjernen --headless --dump=png:/tmp/page.png https://example.com
+./builddir/src/gtk/southstar --headless --dump=text https://example.com
+./builddir/src/gtk/southstar --headless --dump=png:/tmp/page.png https://example.com
 ```
 
 ### Package the `.app` and `.dmg`
@@ -162,12 +162,12 @@ Headless rendering works the same as on Linux:
 MACOS_SIGN_IDENTITY="Developer ID Application: …" ./scripts/pack-macos.sh
 # Signed, notarised and stapled in one shot (stored notarytool profile):
 MACOS_SIGN_IDENTITY="Developer ID Application: NAME (TEAMID)" \
-    MACOS_NOTARY_PROFILE="nordstjernen-notary" ./scripts/pack-macos.sh
+    MACOS_NOTARY_PROFILE="southstar-notary" ./scripts/pack-macos.sh
 ```
 
-The script stages `dist/Nordstjernen.app`, vendors the Homebrew dylibs
+The script stages `dist/Southstar.app`, vendors the Homebrew dylibs
 with `dylibbundler`, code-signs the bundle, and produces
-`dist/nordstjernen-<version>-macos-<arch>.dmg`. When `MACOS_NOTARY_PROFILE`
+`dist/southstar-<version>-macos-<arch>.dmg`. When `MACOS_NOTARY_PROFILE`
 names a stored notarytool credential profile (see below) and a real
 `MACOS_SIGN_IDENTITY` is set, it also submits the `.dmg` to Apple's notary
 service, staples the ticket, and runs a `spctl` acceptance check — so a single
@@ -189,7 +189,7 @@ Two channels, with very different feasibility for a multi-process browser:
 
 No major independent browser (Chrome, Firefox, Brave) ships through the
 Mac App Store; they all use Developer ID + notarisation, because the App
-Sandbox fights a multi-process engine. Nordstjernen is in the same spot,
+Sandbox fights a multi-process engine. Southstar is in the same spot,
 so the notarised `.dmg` is the realistic target.
 
 ### Developer ID + notarisation (recommended)
@@ -206,7 +206,7 @@ re-architecture. It needs a paid Apple Developer account ($99/yr).
    <https://account.apple.com> → Sign-In and Security → App-Specific
    Passwords):
    ```sh
-   xcrun notarytool store-credentials nordstjernen-notary \
+   xcrun notarytool store-credentials southstar-notary \
        --apple-id you@example.com --team-id TEAMID \
        --password <app-specific-password>
    ```
@@ -214,13 +214,13 @@ re-architecture. It needs a paid Apple Developer account ($99/yr).
    `.dmg`, waits, staples the ticket, and runs the `spctl` check:
    ```sh
    MACOS_SIGN_IDENTITY="Developer ID Application: NAME (TEAMID)" \
-       MACOS_NOTARY_PROFILE="nordstjernen-notary" \
+       MACOS_NOTARY_PROFILE="southstar-notary" \
        ./scripts/pack-macos.sh
    ```
    To keep the two steps separate instead, omit `MACOS_NOTARY_PROFILE` and run
    the notarisation by hand on the produced `$DMG`:
    ```sh
-   xcrun notarytool submit "$DMG" --keychain-profile nordstjernen-notary --wait
+   xcrun notarytool submit "$DMG" --keychain-profile southstar-notary --wait
    xcrun stapler staple "$DMG"
    ```
 4. Verify: `spctl -a -vv -t open "$DMG"` reports *accepted — Notarized
@@ -252,8 +252,8 @@ them large:
 
 1. **App Sandbox.** The store requires the
    `com.apple.security.app-sandbox` entitlement, and a sandboxed app may
-   **not** `fork()`/`execv()` a sibling executable. Nordstjernen spawns a
-   `nordstjernen-renderer` per tab (and a `nordstjernen-audio` helper)
+   **not** `fork()`/`execv()` a sibling executable. Southstar spawns a
+   `southstar-renderer` per tab (and a `southstar-audio` helper)
    exactly that way (`src/rproc_http.c`) for OS-level tab isolation. Those
    helpers would have to be re-built as **XPC services**
    (`Contents/XPCServices/*.xpc`), or the app would ship
@@ -267,7 +267,7 @@ them large:
 3. **Licensing.** The bundle ships **LGPL** GTK 4 / GLib, and Apple's
    App Store terms are widely read as incompatible with the GPL family
    (LGPL is more arguable when dynamically linked and relinkable — a legal
-   question to clear). Nordstjernen itself is dual-licensed **NSL-1.0 or
+   question to clear). Southstar itself is dual-licensed **NSL-1.0 or
    GPL-3.0-or-later**; the GPL option is generally considered incompatible
    with the App Store terms for the same reason, so a store build by the
    copyright holder would rely on the **NSL-1.0** (or commercial) terms,
@@ -276,13 +276,13 @@ them large:
 
 Once those are resolved, the submission is the standard flow: enroll in
 the Apple Developer Program; create the app record in **App Store
-Connect** (bundle id `org.nordstjernen.Nordstjernen`, category
+Connect** (bundle id `org.southstar.Southstar`, category
 `public.app-category.utilities` — both already in the generated
 `Info.plist`); sign the `.app` with an **Apple Distribution** certificate
 and a Mac App Store provisioning profile (`Contents/embedded.provisionprofile`);
 wrap it with `productbuild --sign "3rd Party Mac Developer Installer: …"`;
 upload the `.pkg` with the **Transporter** app; then fill in metadata and
-the privacy labels (Nordstjernen collects nothing) and submit for review.
+the privacy labels (Southstar collects nothing) and submit for review.
 Updates ship only through the store — no self-update.
 
 ## Platform notes
@@ -290,7 +290,7 @@ Updates ship only through the store — no self-update.
 - **CA bundle.** Homebrew's `libcurl` links against OpenSSL, which
   has no built-in trust store and — unlike the deprecated SecureTransport
   backend — no bridge to the macOS Keychain. For a *developer* build
-  Nordstjernen probes the standard Homebrew and system paths at startup
+  Southstar probes the standard Homebrew and system paths at startup
   (`/opt/homebrew/etc/ca-certificates/cert.pem`,
   `/usr/local/etc/ca-certificates/cert.pem`, `/etc/ssl/cert.pem`,
   and a handful of `openssl@3` variants) and points libcurl at
@@ -307,12 +307,12 @@ Updates ship only through the store — no self-update.
   `_NSGetExecutablePath(3)` and canonicalised with `realpath(3)`.
 - **Sandbox.** Landlock and seccomp are Linux-only, but macOS gets a
   **Seatbelt** sandbox (`sandbox_init`) that write-confines both the shell
-  and the renderer to the per-user nordstjernen config/data/cache dirs,
+  and the renderer to the per-user southstar config/data/cache dirs,
   Downloads, and the system temp roots — the same write set the Linux
   Landlock layer allows. It is a filesystem-integrity boundary only (no
   syscall/network confinement) and fails open. Disable with
   `NS_NO_SANDBOX=1`. See [`SECURITY.md`](../SECURITY.md#macos-sandbox). The
-  refuse-root check also applies — `nordstjernen` exits with status 77 if
+  refuse-root check also applies — `southstar` exits with status 77 if
   launched via `sudo` unless `NS_ALLOW_ROOT=1` is set.
 - **Keyboard shortcuts.** Every accelerator uses GTK's `<Primary>`
   modifier, which maps to ⌘ on macOS. So `⌘L` focuses the URL bar,
@@ -326,19 +326,19 @@ Updates ship only through the store — no self-update.
   If the GPU (`ngl`) renderer misbehaves, `GSK_RENDERER=cairo` forces the
   software path.
 - **Packaging.** The meson output is a plain Mach-O binary in
-  `builddir/src/gtk/nordstjernen` that launches from Terminal or Finder
+  `builddir/src/gtk/southstar` that launches from Terminal or Finder
   and shows up in the Dock while it runs. For distribution,
   `scripts/pack-macos.sh` stages a `.app` bundle (with a generated
   `Info.plist`) and produces a `.dmg`. The bundle executable is the real
-  Mach-O (`Contents/MacOS/Nordstjernen`), not a wrapper script —
+  Mach-O (`Contents/MacOS/Southstar`), not a wrapper script —
   `dylibbundler` rewrites every dependency to
   `@executable_path/../Frameworks`, so no `DYLD_LIBRARY_PATH` shim is
   needed and the whole `.app` can be code-signed. The renderer
-  (`nordstjernen-renderer`), the audio helper (`nordstjernen-audio`,
+  (`southstar-renderer`), the audio helper (`southstar-audio`,
   present whenever SDL2 was found at build time) and the MSE video-decode
-  helper (`nordstjernen-video`, present whenever libav/FFmpeg was found)
+  helper (`southstar-video`, present whenever libav/FFmpeg was found)
   ship beside it and are run through `dylibbundler` (and the same
-  rpath-dedup and inside-out code-signing) too — without `nordstjernen-video`
+  rpath-dedup and inside-out code-signing) too — without `southstar-video`
   in the bundle the shell can't spawn it, so MSE video would fall back to
   in-process decoding in the renderer. Beyond the dylibs, the bundle carries
   the data GTK 4 reads at runtime so the `.dmg` works on a Mac with no
@@ -352,7 +352,7 @@ Updates ship only through the store — no self-update.
   when it detects it is running from inside an `.app`.
 - **Architecture.** CI builds an Apple Silicon (`arm64`) `.dmg` on the
   `macos-26` (Tahoe) runner; that is the only published build, matching the
-  modern macOS versions Nordstjernen targets. An Intel Mac is not covered by CI —
+  modern macOS versions Southstar targets. An Intel Mac is not covered by CI —
   the engine still compiles there, so build from source (the steps above
   work unchanged on an `x86_64` Homebrew prefix).
 - **Code signing.** `pack-macos.sh` signs the bundle inside-out (nested
@@ -388,7 +388,7 @@ options). Put the keg on the path before configuring:
 ```sh
 PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig:$PKG_CONFIG_PATH" \
     meson setup builddir
-otool -L builddir/src/gtk/nordstjernen | grep curl   # expect .../opt/curl/...
+otool -L builddir/src/gtk/southstar | grep curl   # expect .../opt/curl/...
 ```
 
 `scripts/pack-macos.sh` and `.github/workflows/macos.yml` already do this; a
@@ -423,7 +423,7 @@ rpaths, **build the `.dmg` and launch the bundled binary against a real URL**:
 ```sh
 PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig:$PKG_CONFIG_PATH" \
     BUILDDIR="$PWD/builddir" NS_PACK_AI=disabled ./scripts/pack-macos.sh
-dist/Nordstjernen.app/Contents/MacOS/Nordstjernen \
+dist/Southstar.app/Contents/MacOS/Southstar \
     --headless --dump=text https://example.com    # must print page text
 ```
 
@@ -450,7 +450,7 @@ entry after bundling; if you rework the packaging, keep that step (and re-sign
 - **Sandbox is a Seatbelt write-confinement** (`sandbox_init`,
   `security.c` `__APPLE__` arm), not Landlock+seccomp — filesystem writes
   only, no syscall/network filter, fails open. If a new feature needs to
-  write outside the nordstjernen config/data/cache dirs or the system temp
+  write outside the southstar config/data/cache dirs or the system temp
   roots, extend the SBPL profile (or call `ns_security_add_writable_dir`)
   or it will be silently denied on macOS. The refuse-root check also applies
   (exit 77 unless `NS_ALLOW_ROOT=1`).
@@ -485,48 +485,3 @@ The macOS CI workflow runs on every push and pull request to `main`
 plus manual `workflow_dispatch`, and exists to catch regressions that
 the local Linux build misses (Apple Silicon ABI, BSD libc, GTK 4
 Quartz backend).
-
-## iPhone / iPad — not yet, and what would it take
-
-There is no iOS build today. The blockers are real, not speed-of-light:
-
-1. **No GTK 4 on iOS.** GTK 4 has no UIKit backend; the Quartz
-   backend on macOS uses the same desktop AppKit APIs (`NSWindow`,
-   `NSEvent`) that iOS does not expose. The window/toolbar/keyboard
-   layer in `src/gtk/procwindow.c` / `src/gtk/procview.c` and the entry
-   point in `src/gtk/appmain.c` would have to be replaced wholesale by a
-   UIKit / SwiftUI shell.
-2. **App Review until very recently required WebKit.** Apple's
-   App Store Review Guidelines §2.5.6 historically forced every
-   browser-like app to render web content through WebKit's
-   `WKWebView`. The EU's Digital Markets Act has cracked this open
-   for users in the EU as of 2024, but the global rule still
-   stands and the entitlements / notarisation paperwork for an
-   alt-engine browser is non-trivial.
-3. **No `fork`/`exec` for per-tab renderers.** iOS apps run a single
-   process. The per-tab renderer spawn (`ns_rproc_http_spawn`) that
-   re-execs the binary for OS-level isolation simply cannot exist;
-   isolation would need to be inside one process, or shelved.
-4. **Cairo and Pango are not first-class on iOS.** They build,
-   but no one ships them in App Store apps; the native path is
-   CoreGraphics + CoreText, which means re-targeting the paint
-   layer.
-
-A realistic incremental path, if it ever gets prioritised:
-
-- Keep the parser / CSS / layout / paint engine portable C
-  (already true today). Compile it as a static library for the
-  `arm64-apple-ios` triple.
-- Wrap the rendering output in a thin UIKit (or SwiftUI) shell —
-  `UIScrollView` containing a single `CALayer`-backed view that
-  the engine paints into via Cairo's image surface, copied to a
-  `CGImage`.
-- Networking via `libcurl` continues to work on iOS as long as it
-  is linked statically; `_NSGetExecutablePath` and CA bundle
-  discovery already do the right thing.
-- Skip Landlock, skip the refuse-root check (iOS apps are not
-  root), skip the JS console UI for v1.
-
-None of the above is on the roadmap; this section exists so the
-next person who asks "could Nordstjernen run on iPhone?" has the
-short answer in one place.

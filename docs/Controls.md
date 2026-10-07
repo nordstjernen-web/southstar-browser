@@ -1,6 +1,6 @@
 # Controls — keyboard, mouse, and touch
 
-Every way to drive Nordstjernen's GTK shell from the keyboard and the
+Every way to drive Southstar's GTK shell from the keyboard and the
 mouse. This is a living map of the actual bindings; the browser's runtime
 behaviour is the source of truth. Window-level accelerators are registered
 in `src/gtk/procwindow.c` (`install_shortcuts`); the in-page key and
@@ -128,7 +128,6 @@ the process-per-tab shell yet.
 
 > **Mobile sites vs. touch input.** Whether a mobile or a desktop page is
 > requested is decided once for the whole build, not per host: the desktop
-> shells always send the desktop user-agent, and the Android app sends the
-> mobile one until "page for computer" is chosen
-> (`ns_net_is_mobile_mode` in `src/net.c`). That is about which page a
+> shell always sends the desktop user-agent (`ns_net_is_mobile_mode` in
+> `src/net.c`). That is about which page a
 > site serves, not about touch input.

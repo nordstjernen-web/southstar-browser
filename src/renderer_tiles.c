@@ -1,4 +1,4 @@
-/* Nordstjernen: paint a page into shared-memory tiles for the window's compositor. */
+/* Southstar: paint a page into shared-memory tiles for the window's compositor. */
 
 #include "renderer_tiles.h"
 

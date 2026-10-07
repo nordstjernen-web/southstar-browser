@@ -1,6 +1,6 @@
 # Subresource preloading and fetch deduplication
 
-How Nordstjernen decides to fetch a page's scripts and stylesheets early,
+How Southstar decides to fetch a page's scripts and stylesheets early,
 and how it guarantees each one is fetched exactly once.
 
 Source: `src/engine.c` (the scan), `src/net.c` (the key, the coalescer,
@@ -162,7 +162,7 @@ working.
 `ns_net_preconnect_async` and fetch nothing.
 
 Image preloading is a parameter of the scan, not a setting: the only
-caller, `browser_build_from_doc` in `libnordstjernen.c`, passes `include_images = FALSE`, so
+caller, `browser_build_from_doc` in `libsouthstar.c`, passes `include_images = FALSE`, so
 `<img>` is not preloaded today. The branch is kept because the scan is
 the right place for it if that changes.
 
@@ -229,7 +229,7 @@ there through the normal `ns_cache_put` path anyway.
 ## Scope under process-per-tab
 
 The preload map and the coalescer are process-global. In this edition the
-engine runs inside the per-tab renderer process (`nordstjernen-renderer`
+engine runs inside the per-tab renderer process (`southstar-renderer`
 links the engine library), so each tab gets its own map and coalescer and
 no state is shared between tabs even before the key's site partition is
 considered. Under `--single-process` they are shared by every tab in the
@@ -257,7 +257,7 @@ unbounded number of connections.
 Chrome and Firefox both run their preload scanner *ahead of the parser*
 on the raw token stream — Chrome in `HTMLPreloadScanner` on the
 background parser thread, Firefox by emitting `nsHtml5SpeculativeLoad`
-ops from the parser thread. Nordstjernen's scan runs after the document is
+ops from the parser thread. Southstar's scan runs after the document is
 parsed, so it is a parallel-fetch pass rather than a true look-ahead. It
 still overlaps the subresource fetches with cascade and script work, but
 it does not start them before the parser has seen the whole document.
@@ -303,7 +303,7 @@ primitives; HTML's own `rel=preload` section calls the structure a
 Set `NS_NET_LOG=1` to print every request the network layer issues:
 
 ```sh
-NS_NET_LOG=1 ./builddir/src/gtk/nordstjernen --headless https://example.com/
+NS_NET_LOG=1 ./builddir/src/gtk/southstar --headless https://example.com/
 ```
 
 Counting at the origin is the more trustworthy check, since it also

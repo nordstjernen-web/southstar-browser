@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a portable Nordstjernen .deb by repackaging the bundle that
+# Build a portable Southstar .deb by repackaging the bundle that
 # pack-linux.sh produces. The binary statically links the in-tree engine
 # (lexbor, quickjs, wuffs). Stable desktop deps (GTK, curl, rsvg, …) are
 # computed from the binary's SONAMEs with dpkg-shlibdeps, falling back to
@@ -12,7 +12,7 @@
 # patched build host still installs on a system running an earlier patch
 # release of the same ABI. Those package names tie the .deb to the distro
 # release it was built on, so the file name carries that release
-# (nordstjernen_<version>_ubuntu24.04_amd64.deb); DEB_DISTRO_TAG overrides
+# (southstar_<version>_ubuntu24.04_amd64.deb); DEB_DISTRO_TAG overrides
 # the tag read from /etc/os-release, and an empty tag drops it.
 set -euo pipefail
 
@@ -26,7 +26,7 @@ if [ -z "${DEB_DISTRO_TAG+set}" ] && [ -r /etc/os-release ]; then
 fi
 DISTRO_TAG=$(printf '%s' "${DEB_DISTRO_TAG:-}" | tr -cd 'A-Za-z0-9.')
 ARCH=$(uname -m)
-SLUG="nordstjernen-${VERSION}-linux-${ARCH}"
+SLUG="southstar-${VERSION}-linux-${ARCH}"
 STAGE="$ROOT/dist/${SLUG}"
 
 if ! command -v dpkg-deb >/dev/null 2>&1; then
@@ -35,7 +35,7 @@ if ! command -v dpkg-deb >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -x "$STAGE/nordstjernen" ]; then
+if [ ! -x "$STAGE/southstar" ]; then
     echo "Bundle not staged yet — running pack-linux.sh first."
     "$ROOT/scripts/pack-linux.sh"
 fi
@@ -46,36 +46,36 @@ install -dm755 "$PKGROOT/DEBIAN"
 install -dm755 "$PKGROOT/usr/bin"
 install -dm755 "$PKGROOT/usr/share/icons/hicolor/scalable/apps"
 install -dm755 "$PKGROOT/usr/share/applications"
-install -dm755 "$PKGROOT/usr/share/nordstjernen"
-install -dm755 "$PKGROOT/usr/share/doc/nordstjernen"
+install -dm755 "$PKGROOT/usr/share/southstar"
+install -dm755 "$PKGROOT/usr/share/doc/southstar"
 
-install -m755 "$STAGE/nordstjernen" "$PKGROOT/usr/bin/nordstjernen"
-install -m755 "$STAGE/nordstjernen-renderer" "$PKGROOT/usr/bin/nordstjernen-renderer"
+install -m755 "$STAGE/southstar" "$PKGROOT/usr/bin/southstar"
+install -m755 "$STAGE/southstar-renderer" "$PKGROOT/usr/bin/southstar-renderer"
 # Audio playback helper, when SDL2 was available at build time. It is added to
 # the dpkg-shlibdeps scan below so its libSDL2 dependency lands in Depends.
-if [ -x "$STAGE/nordstjernen-audio" ]; then
-    install -m755 "$STAGE/nordstjernen-audio" "$PKGROOT/usr/bin/nordstjernen-audio"
+if [ -x "$STAGE/southstar-audio" ]; then
+    install -m755 "$STAGE/southstar-audio" "$PKGROOT/usr/bin/southstar-audio"
 fi
 # All app + toolbar icons the UI and about: pages look up by name.
-for icon in "$ROOT"/data/icons/hicolor/scalable/apps/nordstjernen*.svg \
-            "$ROOT"/data/icons/hicolor/scalable/apps/nordstjernen.gif; do
+for icon in "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
+            "$ROOT"/data/icons/hicolor/scalable/apps/southstar.gif; do
     [ -e "$icon" ] && install -m644 "$icon" \
         "$PKGROOT/usr/share/icons/hicolor/scalable/apps/"
 done
 # Desktop file named for the GTK app-id so Wayland matches the window to it
 # (otherwise the taskbar/dock icon is blank).
-install -m644 "$ROOT/data/nordstjernen.desktop" \
-    "$PKGROOT/usr/share/applications/org.nordstjernen.WebBrowser.desktop"
-# about:license and about:gpl read these at ../share/nordstjernen/ relative to
-# the binary (/usr/bin -> /usr/share/nordstjernen).
-install -m644 "$ROOT/License.md" "$PKGROOT/usr/share/nordstjernen/License.md"
-install -m644 "$ROOT/COPYING" "$PKGROOT/usr/share/nordstjernen/COPYING"
-install -m644 "$ROOT/README.md" "$PKGROOT/usr/share/doc/nordstjernen/"
-install -m644 "$ROOT/THIRD-PARTY-LICENSES.md" "$PKGROOT/usr/share/doc/nordstjernen/"
-install -m644 "$ROOT/License.md" "$PKGROOT/usr/share/doc/nordstjernen/copyright"
+install -m644 "$ROOT/data/southstar.desktop" \
+    "$PKGROOT/usr/share/applications/org.southstar.WebBrowser.desktop"
+# about:license and about:gpl read these at ../share/southstar/ relative to
+# the binary (/usr/bin -> /usr/share/southstar).
+install -m644 "$ROOT/License.md" "$PKGROOT/usr/share/southstar/License.md"
+install -m644 "$ROOT/COPYING" "$PKGROOT/usr/share/southstar/COPYING"
+install -m644 "$ROOT/README.md" "$PKGROOT/usr/share/doc/southstar/"
+install -m644 "$ROOT/THIRD-PARTY-LICENSES.md" "$PKGROOT/usr/share/doc/southstar/"
+install -m644 "$ROOT/License.md" "$PKGROOT/usr/share/doc/southstar/copyright"
 
 # Bundle the volatile image-codec libraries (libavif and the AV1
-# codecs it pulls in) under /usr/lib/nordstjernen with an $ORIGIN rpath.
+# codecs it pulls in) under /usr/lib/southstar with an $ORIGIN rpath.
 # Their SONAMEs bump between Ubuntu/Debian releases and each release ships
 # only one version, so depending on them as system packages makes the .deb
 # installable on exactly one release. The stable desktop libs (GTK, curl,
@@ -86,7 +86,7 @@ install -m644 "$ROOT/License.md" "$PKGROOT/usr/share/doc/nordstjernen/copyright"
 # degrades to system deps instead of aborting the whole package build.
 set +e
 
-BUNDLE_DIR="$PKGROOT/usr/lib/nordstjernen"
+BUNDLE_DIR="$PKGROOT/usr/lib/southstar"
 # Seed libs the binary links directly whose SONAMEs bump per distro release.
 SEED_RE='libavif\.so'
 # Never bundle the C/C++/OpenMP runtime: universally present and ABI-stable,
@@ -123,8 +123,8 @@ if command -v patchelf >/dev/null 2>&1; then
     # BFS over the dependency closure of the seed codec libs, so every backend
     # libavif pulls in (gav1, aom, dav1d, rav1e, SvtAv1, yuv, sharpyuv, …)
     # is bundled too -- no per-name allow-list to keep in sync.
-    worklist=$( { ldd "$PKGROOT/usr/bin/nordstjernen" 2>/dev/null; \
-                  ldd "$PKGROOT/usr/bin/nordstjernen-renderer" 2>/dev/null; } \
+    worklist=$( { ldd "$PKGROOT/usr/bin/southstar" 2>/dev/null; \
+                  ldd "$PKGROOT/usr/bin/southstar-renderer" 2>/dev/null; } \
                  | grep -oE '/[^ ]+\.so[^ ]*' | grep -E "$SEED_RE")
     seen=""
     while [ -n "$worklist" ]; do
@@ -154,9 +154,9 @@ if command -v patchelf >/dev/null 2>&1; then
         # lives in the engine both share), so both need the bundle on their
         # rpath -- otherwise the renderer fails to start with
         # "libavif.so.NN: cannot open shared object file".
-        for bin in nordstjernen nordstjernen-renderer; do
+        for bin in southstar southstar-renderer; do
             [ -e "$PKGROOT/usr/bin/$bin" ] || continue
-            patchelf --set-rpath '$ORIGIN/../lib/nordstjernen' \
+            patchelf --set-rpath '$ORIGIN/../lib/southstar' \
                 "$PKGROOT/usr/bin/$bin" 2>/dev/null || rpath_ok=0
         done
         if [ "$rpath_ok" = 1 ]; then
@@ -178,16 +178,16 @@ RUNTIME_DEPS=""
 if command -v dpkg-shlibdeps >/dev/null 2>&1; then
     install -dm755 "$PKGROOT/debian"
     cat > "$PKGROOT/debian/control" <<CTL
-Source: nordstjernen
+Source: southstar
 
-Package: nordstjernen
+Package: southstar
 Architecture: any
 CTL
     # Scan the renderer too: it is the binary that actually decodes video, so
     # the FFmpeg libav* SONAMEs of an inline-WebM build land in Depends from
     # here (the GTK shell links them via the shared engine as well).
-    scan_bins=(usr/bin/nordstjernen usr/bin/nordstjernen-renderer)
-    [ -x "$PKGROOT/usr/bin/nordstjernen-audio" ] && scan_bins+=(usr/bin/nordstjernen-audio)
+    scan_bins=(usr/bin/southstar usr/bin/southstar-renderer)
+    [ -x "$PKGROOT/usr/bin/southstar-audio" ] && scan_bins+=(usr/bin/southstar-audio)
     RUNTIME_DEPS=$(cd "$PKGROOT" \
         && dpkg-shlibdeps -O --ignore-missing-info "${scan_bins[@]}" 2>/dev/null \
         | sed -n 's/^shlibs:Depends=//p')
@@ -216,7 +216,7 @@ RUNTIME_DEPS="$kept"
 echo "pack-deb: Depends: $RUNTIME_DEPS"
 
 cat > "$PKGROOT/DEBIAN/control" <<EOF
-Package: nordstjernen
+Package: southstar
 Version: ${VERSION}
 Architecture: ${DEBARCH}
 Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
@@ -224,9 +224,9 @@ Installed-Size: ${INSTALLED_KB}
 Depends: ${RUNTIME_DEPS}
 Section: web
 Priority: optional
-Homepage: https://nordstjernen.org
-Description: Nordstjernen Web Navigator — a small, hand-written web browser
- Nordstjernen is a small, free software web browser written in C with
+Homepage: https://github.com/nordstjernen-web/southstar-browser
+Description: Southstar Browser — a small, hand-written web browser
+ Southstar is a small, free software web browser written in C with
  GTK 4 and libcurl. The HTML parser, CSS engine, layout, paint and
  JavaScript glue are written from scratch — no third-party browser engine
  is used. SVG images are rendered in-engine.
@@ -245,7 +245,7 @@ EOF
 cp "$PKGROOT/DEBIAN/postinst" "$PKGROOT/DEBIAN/postrm"
 chmod 755 "$PKGROOT/DEBIAN/postinst" "$PKGROOT/DEBIAN/postrm"
 
-DEB="$ROOT/dist/nordstjernen_${VERSION}_${DISTRO_TAG:+${DISTRO_TAG}_}${DEBARCH}.deb"
+DEB="$ROOT/dist/southstar_${VERSION}_${DISTRO_TAG:+${DISTRO_TAG}_}${DEBARCH}.deb"
 rm -f "$DEB"
 dpkg-deb --root-owner-group --build "$PKGROOT" "$DEB" >/dev/null
 

@@ -1,4 +1,4 @@
-/* Nordstjernen — set the macOS Dock icon when running unbundled.
+/* Southstar — set the macOS Dock icon when running unbundled.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -17,7 +17,7 @@ void
 ns_macos_set_dock_icon(void)
 {
     GBytes *bytes = g_resources_lookup_data(
-        "/org/nordstjernen/WebBrowser/icons/scalable/apps/nordstjernen.svg",
+        "/org/southstar/WebBrowser/icons/scalable/apps/southstar.svg",
         G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
     if (!bytes)
         return;
@@ -43,7 +43,7 @@ ns_macos_set_dock_icon(void)
     }
     cairo_surface_flush(surf);
 
-    char *png = g_build_filename(g_get_tmp_dir(), "nordstjernen-dock.png", NULL);
+    char *png = g_build_filename(g_get_tmp_dir(), "southstar-dock.png", NULL);
     cairo_status_t st = cairo_surface_write_to_png(surf, png);
     cairo_surface_destroy(surf);
     if (st != CAIRO_STATUS_SUCCESS) {

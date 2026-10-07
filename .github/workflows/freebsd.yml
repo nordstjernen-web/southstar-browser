@@ -73,8 +73,8 @@ jobs:
             export CXX="ccache c++"
             meson setup builddir --buildtype=release -Db_ndebug=true
             meson compile -C builddir
-            if ./builddir/src/gtk/nordstjernen --headless --dump=text about:start > about.txt 2>/dev/null \
-               && grep -q Nordstjernen about.txt; then
+            if ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
+               && grep -q Southstar about.txt; then
               echo "headless smoke: ok"
             else
               echo "headless smoke: skipped"
@@ -87,7 +87,7 @@ jobs:
         if: hashFiles('dist/*-freebsd-x86_64.zip') != ''
         uses: actions/upload-artifact@v7
         with:
-          name: nordstjernen-freebsd-x86_64
+          name: southstar-freebsd-x86_64
           path: dist/*-freebsd-x86_64.zip
           if-no-files-found: error
           retention-days: 14

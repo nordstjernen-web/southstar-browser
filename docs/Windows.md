@@ -1,9 +1,9 @@
-# Nordstjernen on Windows — build, run, package
+# Southstar on Windows — build, run, package
 
 https://apps.microsoft.com/detail/9nw8t7w5z4pl
 
 This document records the working setup for building and packaging
-Nordstjernen on Windows. The Windows CI workflow
+Southstar on Windows. The Windows CI workflow
 (`.github/workflows/windows.yml`) is the authoritative spec; what
 follows is the same recipe verified on a local Windows 11 box.
 
@@ -80,7 +80,7 @@ fresh box gets them in one command:
 From the MINGW64 shell, in the checkout:
 
 ```sh
-cd /c/dev/nordstjernen
+cd /c/dev/southstar
 export CC="ccache clang"
 meson setup builddir
 meson compile -C builddir
@@ -96,11 +96,11 @@ as a single-file release under `subprojects/wuffs/`.
 
 Build artifacts:
 
-- `builddir/src/gtk/nordstjernen.exe` — the main binary (the thin GTK
+- `builddir/src/gtk/southstar.exe` — the main binary (the thin GTK
   shell; ~15 MB).
-- `builddir/src/nordstjernen-renderer.exe` — the out-of-process,
+- `builddir/src/southstar-renderer.exe` — the out-of-process,
   sandboxed renderer the shell spawns per tab. Ship it next to
-  `nordstjernen.exe` (the packaging scripts do).
+  `southstar.exe` (the packaging scripts do).
 - `builddir/src/quickjs/libqjs.a`
 - `builddir/src/lexbor/liblexbor_static.a`
 
@@ -115,20 +115,20 @@ missing.
 Smoke test:
 
 ```sh
-./builddir/src/gtk/nordstjernen.exe --print-config | head
-./builddir/src/gtk/nordstjernen.exe --headless --dump=text about:start
-./builddir/src/gtk/nordstjernen.exe https://lite.cnn.com   # opens a GTK 4 window
+./builddir/src/gtk/southstar.exe --print-config | head
+./builddir/src/gtk/southstar.exe --headless --dump=text about:start
+./builddir/src/gtk/southstar.exe https://lite.cnn.com   # opens a GTK 4 window
 powershell -ExecutionPolicy Bypass -File scripts\smoke-windows.ps1 about:start
 ```
 
 ## Package — redistributable bundle
 
-`scripts/pack-windows.sh` produces a self-contained `dist/nordstjernen-win64/`
+`scripts/pack-windows.sh` produces a self-contained `dist/southstar-win64/`
 folder that runs on a Windows machine with no MSYS2 install. It:
 
-1. Copies a tiny Win32 launcher as `nordstjernen.exe`, copies the
-   real GTK shell as `app/nordstjernen-ui.exe`, copies
-   `app/nordstjernen-renderer.exe`, and transitively resolves every
+1. Copies a tiny Win32 launcher as `southstar.exe`, copies the
+   real GTK shell as `app/southstar-ui.exe`, copies
+   `app/southstar-renderer.exe`, and transitively resolves every
    imported DLL via `objdump -p`, pulling each one from `/mingw64/bin/`
    into `app/` (system DLLs like `KERNEL32.dll` are skipped because
    they aren't found there).
@@ -140,12 +140,12 @@ folder that runs on a Windows machine with no MSYS2 install. It:
 3. Copies the CA bundle to `app/etc/ssl/certs/ca-bundle.crt` so libcurl
    can verify TLS certificates.
 4. Leaves one user-facing executable at the bundle root. The launcher
-   starts `app/nordstjernen-ui.exe`; that process bootstraps
+   starts `app/southstar-ui.exe`; that process bootstraps
    `GTK_DATA_PREFIX`, `GDK_PIXBUF_MODULE_FILE`, `CURL_CA_BUNDLE`, and
    `SSL_CERT_FILE` from `app/` on startup, so no launcher script is
-   needed. Earlier bundles shipped a `nordstjernen.cmd` wrapper for
+   needed. Earlier bundles shipped a `southstar.cmd` wrapper for
    this; it flashed a brief console window on launch and has been
-   removed. The current `nordstjernen.exe` launcher exists to preserve
+   removed. The current `southstar.exe` launcher exists to preserve
    the public executable name and to show a clear error if a user runs
    it from inside the ZIP before extracting the whole folder.
 
@@ -167,8 +167,8 @@ JSValues. Production builds need that assertion compiled out;
 debugging the actual leak is a separate task.
 
 Typical output: 77 DLLs, ~86 MB. The bundle is portable — extract
-the whole `nordstjernen-win64` folder to another Windows box and
-double-click `nordstjernen.exe` to launch. Running the executable
+the whole `southstar-win64` folder to another Windows box and
+double-click `southstar.exe` to launch. Running the executable
 directly from inside File Explorer's ZIP view is not supported;
 Explorer extracts only the clicked file, and the launcher displays
 an "Extract All" message instead of failing with Windows'
@@ -182,11 +182,11 @@ is a separate, manual step (see Phase 11 / Distribution).
 ## Package — `.exe` installer (NSIS)
 
 `scripts/pack-windows-installer.sh` produces a single redistributable
-`dist/nordstjernen-${VERSION}-win64-setup.exe` (~21 MB,
+`dist/southstar-${VERSION}-win64-setup.exe` (~21 MB,
 LZMA-compressed). It runs `scripts/pack-windows.sh` first to populate
-`dist/nordstjernen-win64/`, then feeds that directory to
+`dist/southstar-win64/`, then feeds that directory to
 [NSIS](https://nsis.sourceforge.io/) via
-`data/installer/nordstjernen.nsi` (Modern UI 2).
+`data/installer/southstar.nsi` (Modern UI 2).
 
 One-time tooling install — NSIS only, the bundle deps cover the rest:
 
@@ -207,21 +207,21 @@ The installer is intentionally **per-user**:
   if the browser is launched with an elevated token it drops it by
   relaunching de-elevated (see below), so it never keeps running in an
   Administrator context and a Program-Files install would buy nothing.
-- Default install dir: `%LOCALAPPDATA%\Programs\Nordstjernen`.
+- Default install dir: `%LOCALAPPDATA%\Programs\Southstar`.
   Overridable in the wizard (Directory page) or with `/D=<path>`
   for silent installs.
 - ARP entry (Add/Remove Programs) is registered under
-  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nordstjernen`
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Southstar`
   — so it appears in the user's Settings → Apps list without
   needing admin rights.
 
 ### What the installer does
 
-1. Extracts the entire `dist/nordstjernen-win64/` tree into
-   `$INSTDIR` (preserving the root `nordstjernen.exe` plus the
+1. Extracts the entire `dist/southstar-win64/` tree into
+   `$INSTDIR` (preserving the root `southstar.exe` plus the
    `app/` runtime directory).
-2. Creates a Start Menu group `Nordstjernen` with shortcuts to
-   `nordstjernen.exe` and the uninstaller.
+2. Creates a Start Menu group `Southstar` with shortcuts to
+   `southstar.exe` and the uninstaller.
 3. Optional desktop shortcut (component is selected by default on
    the Components page; opt out in the wizard).
 4. Writes the ARP keys: `DisplayName`, `DisplayVersion`,
@@ -238,10 +238,10 @@ testing and for unattended deployment:
 
 ```sh
 # Silent install to a custom path
-./dist/nordstjernen-1.0.29-win64-setup.exe /S /D=C:\Tools\Nordstjernen
+./dist/southstar-1.0.29-win64-setup.exe /S /D=C:\Tools\Southstar
 
 # Silent uninstall
-"%LOCALAPPDATA%\Programs\Nordstjernen\uninstall.exe" /S
+"%LOCALAPPDATA%\Programs\Southstar\uninstall.exe" /S
 ```
 
 `/D=<path>` is NSIS-special: it must be the **last** argument, no
@@ -251,21 +251,21 @@ original `$INSTDIR` can be removed; in silent mode this returns
 immediately, so script the next step with a short delay or poll
 the install dir.
 
-### Shortcuts target `nordstjernen.exe` directly
+### Shortcuts target `southstar.exe` directly
 
-The public exe is a launcher that starts `app/nordstjernen-ui.exe`.
+The public exe is a launcher that starts `app/southstar-ui.exe`.
 The UI exe self-bootstraps the runtime env (`GTK_DATA_PREFIX`,
 `GTK_EXE_PREFIX`, `XDG_DATA_DIRS`, `GDK_PIXBUF_MODULE_FILE`,
 `CURL_CA_BUNDLE`, `SSL_CERT_FILE`) from its own install directory
 inside `ns_win32_anchor_gtk_data` (`src/gtk/appmain.c`). Earlier bundles
-shipped a `nordstjernen.cmd` wrapper that did this in a batch
+shipped a `southstar.cmd` wrapper that did this in a batch
 script, but launching a `.cmd` from Explorer flashes a console
 window for the lifetime of the script. Removing the wrapper and
 doing the env setup in C means clean GUI startup with no console.
 
 ### NSIS script — what to edit when
 
-`data/installer/nordstjernen.nsi` is small (~150 lines) and parameterised
+`data/installer/southstar.nsi` is small (~150 lines) and parameterised
 by `-D` flags from `scripts/pack-windows-installer.sh`:
 
 - `-DVERSION=…` — propagates into the installer file name, the
@@ -273,17 +273,17 @@ by `-D` flags from `scripts/pack-windows-installer.sh`:
 - `-DSRCDIR=…` — the directory NSIS recursively bundles. Defaults
   to the `scripts/pack-windows.sh` output. Override to test a custom tree.
 - `-DOUTFILE=…` — the produced installer path. Defaults to
-  `dist/nordstjernen-${VERSION}-win64-setup.exe`.
+  `dist/southstar-${VERSION}-win64-setup.exe`.
 
-If you change install layout, edit `Section "Nordstjernen"` and the
+If you change install layout, edit `Section "Southstar"` and the
 matching `Section "Uninstall"` together — the uninstaller must
 reverse exactly what the installer wrote. NSIS provides no
 generic uninstall log; it's a hand-rolled inverse.
 
 ## Package — MSIX (Microsoft Store)
 
-`scripts/pack-msix.sh` wraps the same `dist/nordstjernen-win64/`
-bundle into an unsigned `dist/nordstjernen-${VERSION}-win64.msix`
+`scripts/pack-msix.sh` wraps the same `dist/southstar-win64/`
+bundle into an unsigned `dist/southstar-${VERSION}-win64.msix`
 using `data/msix/AppxManifest.xml.in` and tile assets rendered from
 the SVG logo. The Store policy situation (an independent engine
 conflicts with policy 10.2.1), the manifest decisions, identity
@@ -373,13 +373,13 @@ so we don't ship a bundled copy there.
 
 ## Troubleshooting
 
-- *Double-clicking `nordstjernen.exe` does nothing — no window, no
+- *Double-clicking `southstar.exe` does nothing — no window, no
   error.* The bundled binary is a GUI-subsystem executable with the
   crash-restart watchdog enabled by default, so a child that dies during
   startup leaves no console output to read. Two things now make this
   diagnosable:
   - A diagnostic log is written to
-    `%LOCALAPPDATA%\Nordstjernen\nordstjernen-debug.log` (override with
+    `%LOCALAPPDATA%\Southstar\southstar-debug.log` (override with
     `NS_LOG_FILE=<path>`, disable with `NS_NO_LOG_FILE=1`). GTK/GLib
     startup warnings and errors land there even with no console.
   - When the watchdog gives up after repeated child crashes — or can't
@@ -394,7 +394,7 @@ so we don't ship a bundled copy there.
   PATH is picking up a 32-bit DLL from elsewhere. Run from the
   bundle directory so Windows finds the bundled 64-bit DLLs first.
 - *Running from inside the ZIP shows "Extract All"* — extract the
-  whole `nordstjernen-win64` folder first. Windows' ZIP view launches
+  whole `southstar-win64` folder first. Windows' ZIP view launches
   a temporary copy of only the clicked file, without the `app/` folder
   the browser needs.
 - *Icons missing / buttons blank in the header bar* —
@@ -402,5 +402,5 @@ so we don't ship a bundled copy there.
   `scripts/pack-windows.sh`.
 - *TLS errors (`SSL certificate problem`)* —
   `app/etc/ssl/certs/ca-bundle.crt` isn't being picked up. Re-run
-  `scripts/pack-windows.sh` and keep the root `nordstjernen.exe`
+  `scripts/pack-windows.sh` and keep the root `southstar.exe`
   together with its `app/` directory.

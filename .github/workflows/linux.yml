@@ -107,32 +107,32 @@ jobs:
         run: ccache --show-stats
 
       - name: Smoke test (binary present and executable)
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
-          test -x builddir/src/gtk/nordstjernen
-          file builddir/src/gtk/nordstjernen
-          ldd builddir/src/gtk/nordstjernen | head -20
+          test -x builddir/src/gtk/southstar
+          file builddir/src/gtk/southstar
+          ldd builddir/src/gtk/southstar | head -20
 
       - name: Headless smoke (about:start + <video> layout)
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
           set -o pipefail
-          ./builddir/src/gtk/nordstjernen --headless --dump=text about:start > about.txt
+          ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt
           head -3 about.txt
-          grep -q Nordstjernen about.txt
+          grep -q Southstar about.txt
           mkdir -p smoke
           cat > smoke/video.html <<'EOF'
           <!doctype html><video src="x.webm" width="320" height="180"></video>
           EOF
           (cd smoke && python3 -m http.server 18765 >/dev/null 2>&1 &) ; sleep 1
-          ./builddir/src/gtk/nordstjernen --headless --dump=layout \
+          ./builddir/src/gtk/southstar --headless --dump=layout \
               http://127.0.0.1:18765/video.html \
               | tee /tmp/layout.txt
           grep -q 'video @' /tmp/layout.txt
           pkill -f "http.server 18765" || true
 
       - name: Headless baseline smoke (./scripts/dev.sh smoke)
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: ./scripts/dev.sh smoke
 
       - name: Upload build log
@@ -145,11 +145,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload nordstjernen binary
-        if: hashFiles('builddir/src/gtk/nordstjernen') != ''
+      - name: Upload southstar binary
+        if: hashFiles('builddir/src/gtk/southstar') != ''
         uses: actions/upload-artifact@v7
         with:
-          name: nordstjernen-linux-${{ matrix.ubuntu }}-${{ matrix.compiler }}
-          path: builddir/src/gtk/nordstjernen
+          name: southstar-linux-${{ matrix.ubuntu }}-${{ matrix.compiler }}
+          path: builddir/src/gtk/southstar
           if-no-files-found: error
           retention-days: 14

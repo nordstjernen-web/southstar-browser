@@ -1,6 +1,6 @@
 # HTTP client backends: curl vs nghttp2
 
-Nordstjernen can perform its page and subresource fetches through one of
+Southstar can perform its page and subresource fetches through one of
 two HTTP client backends, chosen at build time:
 
 ```sh

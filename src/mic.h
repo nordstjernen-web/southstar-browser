@@ -1,4 +1,4 @@
-/* Nordstjernen — microphone capture (SDL) for getUserMedia audio + Web Audio. */
+/* Southstar — microphone capture (SDL) for getUserMedia audio + Web Audio. */
 
 #ifndef NS_MIC_H
 #define NS_MIC_H

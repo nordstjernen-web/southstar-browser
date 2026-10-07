@@ -1,4 +1,4 @@
-/* Nordstjernen — HTTP renderer IPC client (experiment; mirrors rproc.c). */
+/* Southstar — HTTP renderer IPC client (experiment; mirrors rproc.c). */
 
 #define _GNU_SOURCE
 #include "rproc_http.h"
@@ -1449,7 +1449,7 @@ ns_rproc_http_print(ns_rproc_http *r, ns_print_setup *out_setup,
         return g_inproc_print(r->inproc_conn, out_setup);
 
     static int counter;
-    char *prefix = g_strdup_printf("%s/nordstjernen-print-%" G_GINT64_FORMAT
+    char *prefix = g_strdup_printf("%s/southstar-print-%" G_GINT64_FORMAT
                                    "-%d", g_get_user_runtime_dir(),
                                    g_get_monotonic_time(), ++counter);
     char *pe = json_escape(prefix);

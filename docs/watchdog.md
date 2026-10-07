@@ -1,6 +1,6 @@
 # Watchdog supervisor
 
-Nordstjernen supervises itself. **The watchdog is on by default** (GTK):
+Southstar supervises itself. **The watchdog is on by default** (GTK):
 a normal launch turns the process you start into a small supervisor that
 spawns the real **GUI shell** as a child, watches it, and restarts it if
 it crashes or hangs. The shell is thin and engine-free, so this guards
@@ -11,8 +11,8 @@ crash is contained to its tab, and a crash/hang of the shell itself is
 caught by the supervisor.
 
 ```sh
-nordstjernen                      # supervised
-nordstjernen https://example.com/ # supervised
+southstar                      # supervised
+southstar https://example.com/ # supervised
 ```
 
 All arguments are forwarded unchanged to the child, so the supervisor is
@@ -26,13 +26,13 @@ Three ways, highest priority first:
    directly with no supervisor.
 
    ```sh
-   nordstjernen --no-watchdog
+   southstar --no-watchdog
    ```
 
 2. **Environment** (one shell): `NS_NO_WATCHDOG=1` does the same.
 
 3. **Config file** (persistent): set `watchdog_enabled = false` in
-   `nordstjernen.conf`.
+   `southstar.conf`.
 
 `--watchdog` forces supervision on even when the config disables it.
 One-shot and tooling modes are never supervised regardless of the

@@ -1,4 +1,4 @@
-/* Nordstjernen — toolkit-independent offscreen GLES context for WebGL.
+/* Southstar — toolkit-independent offscreen GLES context for WebGL.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -21,7 +21,7 @@ static const wchar_t *
 ns_gl_window_class(void)
 {
     static gsize once = 0;
-    static const wchar_t *name = L"NordstjernenGL";
+    static const wchar_t *name = L"SouthstarGL";
     if (g_once_init_enter(&once)) {
         WNDCLASSW wc = { 0 };
         wc.style = CS_OWNDC;

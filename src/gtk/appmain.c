@@ -1,4 +1,4 @@
-/* Nordstjernen — application entry point: process bootstrap, headless render
+/* Southstar — application entry point: process bootstrap, headless render
  * driver dispatch, and the out-of-process (IPC) GTK browser shell. */
 
 #include <gtk/gtk.h>
@@ -147,7 +147,7 @@ SetCurrentProcessExplicitAppUserModelID(PCWSTR AppID);
 static void
 ns_win32_set_app_id(void)
 {
-    (void)SetCurrentProcessExplicitAppUserModelID(L"Nordstjernen.Browser");
+    (void)SetCurrentProcessExplicitAppUserModelID(L"Southstar.Browser");
 }
 
 static void
@@ -352,7 +352,7 @@ ns_apply_gsk_renderer(const char *pref)
 }
 
 /* The GTK GUI runs the process-per-tab IPC renderer (a thin shell spawning
- * sandboxed nordstjernen-renderer processes). Headless / dump / eval / inspect
+ * sandboxed southstar-renderer processes). Headless / dump / eval / inspect
  * modes run the in-process engine without a display. */
 static gboolean
 ns_proc_mode_wanted(int argc, char **argv)
@@ -528,7 +528,7 @@ main(int argc, char **argv)
     if (ns_private_mode_wanted(argc, argv))
         g_setenv("NS_PRIVATE", "1", TRUE);
     ns_config_init();
-    ns_thread_dump_install_signal("nordstjernen");
+    ns_thread_dump_install_signal("southstar");
 
     gboolean proc_mode = ns_proc_mode_wanted(argc, argv);
 
@@ -537,7 +537,7 @@ main(int argc, char **argv)
 #ifdef ND_HAVE_WEBGPU
             g_setenv("NS_WEBGPU_ALLOW", "1", TRUE);
 #else
-            g_printerr("nordstjernen: --enable-webgpu ignored "
+            g_printerr("southstar: --enable-webgpu ignored "
                        "(built without WebGPU support)\n");
 #endif
         }
@@ -670,7 +670,7 @@ main(int argc, char **argv)
             }
             if (!ok) {
                 fprintf(stderr,
-                        "nordstjernen: --viewport wants WIDTH or WIDTHxHEIGHT, "
+                        "southstar: --viewport wants WIDTH or WIDTHxHEIGHT, "
                         "got '%s'\n", spec);
                 return 2;
             }

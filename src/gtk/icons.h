@@ -1,10 +1,10 @@
-/* Nordstjernen — the shell's own icons, drawn by the in-engine SVG renderer.
+/* Southstar — the shell's own icons, drawn by the in-engine SVG renderer.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
 
-#ifndef NORDSTJERNEN_GTK_ICONS_H
-#define NORDSTJERNEN_GTK_ICONS_H
+#ifndef SOUTHSTAR_GTK_ICONS_H
+#define SOUTHSTAR_GTK_ICONS_H
 
 #include <gtk/gtk.h>
 

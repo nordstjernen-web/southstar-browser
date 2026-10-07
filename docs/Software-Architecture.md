@@ -1,6 +1,6 @@
 # Software architecture
 
-How Nordstjernen is built, from the process model down to each engine
+How Southstar is built, from the process model down to each engine
 subsystem, and how those choices compare with Firefox (Gecko), Chrome
 (Blink), and Ladybird (LibWeb).
 
@@ -19,9 +19,9 @@ via `scripts/arch-diagram/build_poster.py` followed by
 
 ---
 
-## 1. What Nordstjernen is
+## 1. What Southstar is
 
-Nordstjernen is a web browser **written from scratch in C**, using GTK 4
+Southstar is a web browser **written from scratch in C**, using GTK 4
 for its desktop shell and libcurl for networking. It is an **independent
 engine**: there is no Gecko, WebKit, or Blink lineage, no forked layout
 or CSS code, nothing imported from another browser. The HTML→DOM parser
@@ -63,16 +63,16 @@ architecture below.
 
 ## 2. Process model
 
-A running Nordstjernen desktop session is a small tree of processes,
+A running Southstar desktop session is a small tree of processes,
 not one monolith. From the top:
 
 ```
-nordstjernen (watchdog supervisor)
-└── nordstjernen (GTK shell — thin, engine-free UI)
-    ├── nordstjernen-renderer   (tab 1 — sandboxed engine)
-    │   ├── nordstjernen-audio   (lazy, per tab)
-    │   └── nordstjernen-video   (lazy, per tab)
-    ├── nordstjernen-renderer   (tab 2 — sandboxed engine)
+southstar (watchdog supervisor)
+└── southstar (GTK shell — thin, engine-free UI)
+    ├── southstar-renderer   (tab 1 — sandboxed engine)
+    │   ├── southstar-audio   (lazy, per tab)
+    │   └── southstar-video   (lazy, per tab)
+    ├── southstar-renderer   (tab 2 — sandboxed engine)
     └── …
 ```
 
@@ -93,7 +93,7 @@ and forwards input to its renderer.
 
 **Per-tab renderer.** The engine — HTML parse, CSS cascade, layout,
 Cairo/Pango paint, the QuickJS runtime, networking — runs inside one
-sandboxed `nordstjernen-renderer` process **per tab**
+sandboxed `southstar-renderer` process **per tab**
 (`src/renderer_http.c`, spawned at `src/gtk/procview.c:1174`). A renderer
 crash is contained to its tab and transparently restarted
 (`src/gtk/procview.c:1189`). This is a **process-per-tab** boundary; a
@@ -117,14 +117,15 @@ IPC at all (`ns_run_headless`, `src/gtk/appmain.c:399`). See
 
 ## 3. IPC: an HTTP/JSON control channel + a shared-memory framebuffer
 
-The shell↔renderer boundary is one of Nordstjernen's more distinctive
+The shell↔renderer boundary is one of Southstar's more distinctive
 choices. Rather than a bespoke binary protocol, every control message is
 a **plain HTTP/1.1 POST with a small JSON body**, and only the rendered
 pixels travel through shared memory (see [Rendering.md](Rendering.md)).
 
 - **Transport.** An `AF_UNIX` `socketpair` on POSIX (the renderer reads
   and writes fd 3, `src/rproc_http.c:137`), inherited stdio pipes on
-  Windows, or a `stdio` mode for JVM/Android embedders. Framing is
+  Windows, or a `stdio` mode for embedders that can only hand a child its
+  standard streams. Framing is
   minimal HTTP/1.1 in `src/ipc_http.c` (`http_write_request`,
   `http_read_head`).
 - **Messages are POST paths**, all dispatched in `ns_renderer_session_handle`
@@ -297,7 +298,7 @@ kind into the implemented formatting contexts:
 
 **Paint.** Page painting is **entirely Cairo software rendering** —
 there is no GPU compositor for page content. `ns_browser_render_argb32`
-(`src/libnordstjernen.c:1451`) wraps the shared-memory buffer directly as
+(`src/libsouthstar.c:1451`) wraps the shared-memory buffer directly as
 a Cairo ARGB32 surface and calls `ns_paint` (`src/paint.c:6100`), whose
 recursive `paint_walk` (`:5468`) culls hidden/offscreen boxes, applies
 opacity/blend/mask groups, sticky offsets, 2D and 3D transforms, and
@@ -309,7 +310,7 @@ WOFF2 to SFNT over libbrotlidec when it is available (`src/woff2.c`), and
 registered with Fontconfig so the Pango-FC fontmap can use them.
 
 **Animation.** `src/anim.c` tracks CSS transitions and `@keyframes`.
-The per-frame pump `ns_browser_tick` (`src/libnordstjernen.c:1231`)
+The per-frame pump `ns_browser_tick` (`src/libsouthstar.c:1231`)
 advances the animator, dispatches transition/animation events, runs
 `requestAnimationFrame` callbacks, pumps the GLib main context, and
 relayouts on mutation. `ns_browser_animating` gates whether the shell
@@ -478,11 +479,11 @@ Media decodes **outside** the sandboxed renderer, in helper processes
 the shell spawns per tab and drives over the `X-Audio` side-channel
 (see [media.md](media.md)):
 
-- **`nordstjernen-audio`** (`src/audio/main.c`) decodes to PCM in-tree —
+- **`southstar-audio`** (`src/audio/main.c`) decodes to PCM in-tree —
   pl_mpeg (MPEG-1/MP2), minimp3 (MP3), and libav (Opus/Vorbis) — and
   plays through SDL2. It speaks a one-command-per-line text protocol over
   stdin/stdout.
-- **`nordstjernen-video`** (`src/videoproc/main.c`) decodes MSE/WebM
+- **`southstar-video`** (`src/videoproc/main.c`) decodes MSE/WebM
   frames and publishes BGRA frames into its **own shared-memory ring**,
   which the shell maps read-only and composites over the page surface
   each frame tick.
@@ -490,7 +491,7 @@ the shell spawns per tab and drives over the `X-Audio` side-channel
 The always-on, in-tree codecs are **pl_mpeg** (MPEG-1) and **minimp3**
 (MP3). **WebM (VP9/VP8 + Opus/Vorbis)** is the one FFmpeg-backed
 extension over the system `libav*` libraries — required on Linux/Windows,
-auto-detected on macOS. Nordstjernen deliberately ships **no general
+auto-detected on macOS. Southstar deliberately ships **no general
 media stack**.
 
 ---
@@ -524,7 +525,7 @@ See [webgl.md](webgl.md), [webgpu.md](webgpu.md).
   through an in-tree catalogue lookup (`src/i18n.c`, `data/i18n/*.lang`).
   There is no gettext dependency.
 - **Start page.** `about:start` is a compact search-focused home page.
-  Nordstjernen contains no built-in AI assistant and exposes no AI-style
+  Southstar contains no built-in AI assistant and exposes no AI-style
   Web APIs to pages.
 
 ---
@@ -537,13 +538,12 @@ See [webgl.md](webgl.md), [webgpu.md](webgpu.md).
   `subdir()` and expose declared dependencies directly, not as
   subprojects.
 - **Embedding:** the engine is exposed as a shared library
-  `libnordstjernen` with a plain-C API (`src/libnordstjernen.h`,
+  `libsouthstar` with a plain-C API (`src/libsouthstar.h`,
   `ns_browser_*`) that carries no GLib or GTK types — the same
   synchronous pipeline the headless driver uses. See
   [Embedding.md](Embedding.md).
-- **Platforms:** Linux, macOS, Windows (MSYS2/MinGW), plus Android and a
-  JVM binding (`java/`, JNI over the same C API) and iOS. Desktop uses
-  GTK 4; the engine core is GTK-optional.
+- **Platforms:** Linux, macOS, Windows (MSYS2/MinGW), FreeBSD and NetBSD.
+  The shell uses GTK 4; the engine core is GTK-optional.
 - **License:** Nordstjernen Source License v1.0 or GNU GPL version 3 or
   later, at your option (`LicenseRef-NSL-1.0 OR GPL-3.0-or-later`).
 
@@ -551,12 +551,12 @@ See [webgl.md](webgl.md), [webgpu.md](webgpu.md).
 
 ## 16. Comparison with Firefox, Chrome, and Ladybird
 
-Nordstjernen sits in a specific corner of the design space: an
+Southstar sits in a specific corner of the design space: an
 **independent** engine like Ladybird and (historically) Gecko, but
 written in **C** with **no JIT** and an unusually **small, reuse-heavy**
 codebase. The table summarises; the notes explain.
 
-| Dimension | Nordstjernen | Firefox (Gecko) | Chrome (Blink) | Ladybird (LibWeb) |
+| Dimension | Southstar | Firefox (Gecko) | Chrome (Blink) | Ladybird (LibWeb) |
 |-----------|--------------|-----------------|----------------|-------------------|
 | Language | C | C++ and Rust | C++ (some Rust) | C++ (moving to Swift) |
 | Engine lineage | Independent, from scratch | Independent (Gecko) | Blink, forked from WebKit ← KHTML | Independent, from scratch |
@@ -586,18 +586,18 @@ site-isolated content processes plus dedicated GPU, socket, and media
 GPU-composited, JIT-driven browser optimised for full web performance at
 the cost of an enormous, multi-language codebase.
 
-Nordstjernen shares the *independent-engine* stance but inverts almost
+Southstar shares the *independent-engine* stance but inverts almost
 every implementation choice: one language (C), no JIT, no Rust
 concurrency machinery, software page compositing, and a codebase five
-orders of magnitude smaller. Nordstjernen's per-tab renderer with a
+orders of magnitude smaller. Southstar's per-tab renderer with a
 seccomp+Landlock sandbox is conceptually similar to a Firefox content
-process, but Nordstjernen isolates per **tab**, whereas Fission isolates
+process, but Southstar isolates per **tab**, whereas Fission isolates
 per **site**.
 
 ### Chrome (Blink)
 
 Blink descends from **WebKit** (itself from KHTML), so unlike
-Nordstjernen it is *not* a from-scratch engine, but it is the reference
+Southstar it is *not* a from-scratch engine, but it is the reference
 point for the modern browser architecture: **V8** with a full JIT tier
 stack (Ignition → Sparkplug → Maglev → TurboFan), **LayoutNG**, a
 Skia-based GPU compositor (**Viz**/cc), a separate **network service**, a
@@ -605,22 +605,22 @@ Skia-based GPU compositor (**Viz**/cc), a separate **network service**, a
 site-instance, all wired together with **Mojo** IPC. It is the most
 capable and the largest of the four.
 
-Every one of those choices is a scale/performance trade Nordstjernen
+Every one of those choices is a scale/performance trade Southstar
 declines on purpose. There is no JIT (security and size), no GPU
 compositor (a page paints in Cairo; the GPU is used only by WebGL/WebGPU/
 canvas producers that hand back CPU-side textures), no code-generated
 binding layer (bindings are hand-written C in `js.c`), and no Mojo-style
 typed-interface IPC (the boundary is human-readable HTTP/JSON). Where
 Chrome sends `Sec-CH-UA`/`Sec-Fetch-*`/`Upgrade-Insecure-Requests` to
-present a consistent client, Nordstjernen sends the same header set under
+present a consistent client, Southstar sends the same header set under
 a selectable Chrome/Firefox/Ladybird identity so pages that gate on a
 mainstream browser environment still run.
 
 ### Ladybird (LibWeb / LibJS)
 
-Ladybird is Nordstjernen's closest architectural relative: a **truly
+Ladybird is Southstar's closest architectural relative: a **truly
 independent, from-scratch engine** (LibWeb + LibJS), originally from
-SerenityOS, now cross-platform, and — like Nordstjernen — with **no JIT**
+SerenityOS, now cross-platform, and — like Southstar — with **no JIT**
 (LibJS is a bytecode interpreter) and a multi-process model that runs the
 engine in a dedicated **WebContent** process per tab alongside separate
 **RequestServer**, **ImageDecoder**, and **WebWorker** processes.
@@ -630,7 +630,7 @@ HarfBuzz).
 
 The differences are language and reuse philosophy. Ladybird is **C++**
 (with new work moving to Swift) and writes its **JS engine, CSS engine,
-and layout all from scratch**, including LibJS. Nordstjernen is **C** and
+and layout all from scratch**, including LibJS. Southstar is **C** and
 takes a more pragmatic middle line: it writes its own DOM, CSS, layout,
 and paint, but **vendors** a proven JS interpreter (QuickJS-ng), HTML
 parser (lexbor), image decoders (Wuffs/libwebp), and wasm runtime (WAMR)
@@ -643,7 +643,7 @@ engine. There is a source-level JS feature comparison between the two
 engines in
 [quickjs-libjs-compare.md](quickjs-libjs-compare.md).
 
-### Where Nordstjernen is deliberately different
+### Where Southstar is deliberately different
 
 - **C, not C++/Rust/Swift.** Unusual among modern browsers; keeps the
   toolchain and the mental model small.

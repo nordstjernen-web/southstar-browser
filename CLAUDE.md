@@ -1,12 +1,12 @@
-# Nordstjernen — Claude operating guide
+# Southstar — Claude operating guide
 
-Nordstjernen ("Nordstjernen Web Navigator") is a web
+Southstar ("Southstar Browser") is a web
 browser written from scratch in **C**, using **GTK 4** for the UI and
 **libcurl** for networking (with an optional in-tree **libnghttp2**
 transport backend — see "HTTP client backend" below). Targets Linux,
 macOS, and Windows.
 
-See `README.md` for the product vision. Nordstjernen is a fresh
+See `README.md` for the product vision. Southstar is a fresh
 implementation — there is no upstream browser engine, no fork,
 nothing imported.
 
@@ -46,7 +46,7 @@ Update Changelog.md
   stream plays **inline** — frames are decoded in the sandboxed renderer
   and advanced off the animation tick (`src/video.c`), honouring
   `autoplay`/`loop`/`muted`/`poster` and click-to-play/pause. Audio plays
-  via the unsandboxed `nordstjernen-audio` helper (`src/audio/main.c`),
+  via the unsandboxed `southstar-audio` helper (`src/audio/main.c`),
   which decodes in-tree — pl_mpeg for the MPEG-1/MP2 track, the vendored
   CC0 [minimp3](https://github.com/lieff/minimp3) (`src/audio/minimp3.h`)
   for standalone `.mp3` files — and outputs through SDL2's audio device
@@ -54,9 +54,9 @@ Update Changelog.md
   renderer emits `open`/`play`/`pause`/`seek`/`stop`/`loop`/`volume`
   commands that ride the render-response `X-Audio` side-channel to the
   shell, which spawns and pumps the helper (`src/gtk/procview.c`).
-  MSE video frames decode in a third process, `nordstjernen-video`
+  MSE video frames decode in a third process, `southstar-video`
   (`src/videoproc/main.c`, built when libav is present): the renderer
-  materializes the growing stream to `~/.cache/nordstjernen/msvideo/`
+  materializes the growing stream to `~/.cache/southstar/msvideo/`
   and drives it with `video …` lines on the same side-channel; the
   helper writes BGRA frames into a shm ring that the shell composites
   over the page surface each tick (see `docs/media.md`). Without the
@@ -76,9 +76,8 @@ Update Changelog.md
   and **auto-detected on macOS** (a stock build there without libav carries no
   libav symbol or dependency and behaves exactly as before). The version floor
   is FFmpeg 6.0's library sonames (libavcodec ≥ 60, libavutil ≥ 58, …) — the
-  oldest release carrying the `AVChannelLayout` API this code uses. Android
-  stays on the external-player path — its dependency sysroot does not
-  cross-build FFmpeg. Other `<audio>` and other `<video>`
+  oldest release carrying the `AVChannelLayout` API this code uses. Other
+  `<audio>` and other `<video>`
   codecs render a
   poster and play overlay; clicking resolves the media URL in the renderer
   (`ns_browser_media_at`) and reports it over the renderer protocol for
@@ -130,7 +129,7 @@ This repo is driven by Claude in long uninterrupted sessions.
   driven from either a Linux box (GTK 4 / libcurl / meson / clang +
   an X session at `DISPLAY=:0`) or a Windows 11 box via MSYS2
   MINGW64 (same toolchain, same meson/ninja invocation; the binary
-  is `./builddir/src/gtk/nordstjernen.exe`). Every commit must pass
+  is `./builddir/src/gtk/southstar.exe`). Every commit must pass
   `meson compile -C builddir` locally before pushing. Smoke-launch
   the browser (in the background, then kill it) on material changes
   — that's the per-change correctness gate, not CI. See
@@ -149,7 +148,7 @@ The intended build system is **meson + ninja**. From a clean checkout:
 ```sh
 meson setup builddir
 meson compile -C builddir
-./builddir/src/gtk/nordstjernen
+./builddir/src/gtk/southstar
 ```
 
 The QuickJS engine is integrated into the main tree at `src/quickjs/`
@@ -197,11 +196,10 @@ Three rules when touching text code:
   pango header directly. The renaming is not cosmetic: GTK loads the system
   Pango into the same process, and GObject aborts when a second library
   registers a type name it already holds.
-- **Android and iOS link the system Pango**, since the fork has no CoreText
-  backend and requires fontconfig. `src/ns_pango_names.h` maps every renamed
-  name back to its stock spelling for those builds; regenerate it with
-  `scripts/gen-ns-pango-names.py` after using a new Pango entry point, and
-  build `-Dns-pango=disabled` to compile that path on desktop. Anything the
+- **`-Dns-pango=disabled` links the system Pango.** `src/ns_pango_names.h`
+  maps every renamed name back to its stock spelling for that build;
+  regenerate it with `scripts/gen-ns-pango-names.py` after using a new Pango
+  entry point. Anything the
   fork adds and stock Pango lacks -- `ns_pango_cache_*` -- must sit behind
   `#ifdef NS_USE_NS_PANGO`.
 - **A run is cached only when its shaping cannot depend on the text around
@@ -406,7 +404,7 @@ don't add `meson test` targets.
 ## Don't
 
 - Don't introduce Mozilla/Gecko code, WebKit code, or any other
-  upstream browser engine source. Nordstjernen is an independent
+  upstream browser engine source. Southstar is an independent
   implementation, not a fork.
 - **Don't add site-specific hacks.** No per-site rendering shims, no
   hardcoded hostnames, no grepping a site's private JSON (e.g.

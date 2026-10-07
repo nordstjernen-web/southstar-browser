@@ -1,4 +1,4 @@
-/* nordstjernen-video: isolated video frame decoding helper driven over stdin/stdout. */
+/* southstar-video: isolated video frame decoding helper driven over stdin/stdout. */
 #ifdef __linux__
 #define _GNU_SOURCE
 #endif

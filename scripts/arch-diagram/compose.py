@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose the Nordstjernen architecture poster from graphviz pieces."""
+"""Compose the Southstar architecture poster from graphviz pieces."""
 
 import math
 from PIL import Image, ImageDraw, ImageFont
@@ -183,7 +183,7 @@ def main():
     draw = ImageDraw.Draw(img)
 
     label(draw, (W / 2, 60),
-          "Nordstjernen Web Navigator — Software Architecture",
+          "Southstar Browser — Software Architecture",
           "#111111", size=64, anchor="mm", bold=True, bg=False)
     label(draw, (W / 2, 130),
           "processes · source modules · dependencies · "
@@ -320,7 +320,7 @@ def main():
         label(draw, *a, **kw)
 
     img = img.convert("RGB")
-    img.save("nordstjernen-architecture.png", optimize=True)
+    img.save("southstar-architecture.png", optimize=True)
     print("poster:", img.size)
 
 

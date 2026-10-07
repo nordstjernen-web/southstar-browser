@@ -1,7 +1,7 @@
 # Single-process mode
 
-Nordstjernen's default architecture is **process-per-tab**: each tab's
-engine runs in its own sandboxed `nordstjernen-renderer` process, and
+Southstar's default architecture is **process-per-tab**: each tab's
+engine runs in its own sandboxed `southstar-renderer` process, and
 the GTK shell is a thin client that blits a shared-memory
 framebuffer and forwards input over an HTTP/JSON IPC control channel
 (see [`tab-isolation.md`](tab-isolation.md)).
@@ -10,7 +10,7 @@ Passing **`--single-process`** to the desktop shell keeps everything
 in one OS process instead:
 
 ```sh
-./builddir/src/gtk/nordstjernen --single-process [URL]
+./builddir/src/gtk/southstar --single-process [URL]
 ```
 
 Setting `NS_SINGLE_PROCESS=1` in the environment does the same (any
@@ -27,7 +27,7 @@ renderer process to inspect.
   of the engine's address space, caches, and font machinery instead of
   one per tab.
 - **Environments where spawning helpers is awkward** — locked-down
-  containers, missing `nordstjernen-renderer` binary, restrictive
+  containers, missing `southstar-renderer` binary, restrictive
   process limits.
 - **Debugging** — every tab's engine lives in the shell process, so a
   single debugger session sees page loading, layout, JavaScript, and
@@ -41,7 +41,7 @@ the transport and process boundary differ.
 - `src/rproc_http.c` — when the mode is enabled
   (`ns_rproc_http_set_inproc`), "spawning a renderer" creates a
   `socketpair` (two `_pipe`s on Windows) and a plain `malloc`'d
-  framebuffer instead of forking `nordstjernen-renderer`. The shell's
+  framebuffer instead of forking `southstar-renderer`. The shell's
   client code (`procview`/`procwindow`) is unchanged
   and does not know which mode it is running in.
 - `src/rproc_inproc.c` — the in-process host. A small reader thread
@@ -51,7 +51,7 @@ the transport and process boundary differ.
 - `src/renderer_serve.c` — the request dispatcher
   (`/open`, `/render`, `/click`, …) shared verbatim between the
   out-of-process renderer executable and the in-process host, driving
-  the same `libnordstjernen` engine API in both modes.
+  the same `libsouthstar` engine API in both modes.
 
 All engine work therefore runs on the thread that owns the default
 GLib main context — the GTK main thread. This

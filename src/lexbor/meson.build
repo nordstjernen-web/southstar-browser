@@ -1,4 +1,4 @@
-# Lexbor — integrated as part of Nordstjernen (no longer a meson
+# Lexbor — integrated as part of Southstar (no longer a meson
 # subproject). Public surface: `liblexbor` (declared dependency).
 # Tracks upstream https://github.com/lexbor/lexbor; modified in tree
 # for tight integration with the rest of the browser.

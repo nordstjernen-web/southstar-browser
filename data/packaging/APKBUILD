@@ -1,10 +1,10 @@
 # Contributor: Andreas Røsdal <andreas.rosdal@gmail.com>
 # Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
-pkgname=nordstjernen
+pkgname=southstar
 pkgver=1.0.29
 pkgrel=0
 pkgdesc="Small, hand-written web browser written in C with GTK 4 and libcurl"
-url="https://nordstjernen.org"
+url="https://github.com/nordstjernen-web/southstar-browser"
 # quickjs and lexbor are vendored C and build in-tree; the engine also links
 # a little C++ (poppler, libavif). Restrict to arches the deps + WAMR asm cover.
 arch="x86_64 aarch64"
@@ -28,9 +28,9 @@ makedepends="
 	pango-dev
 	sdl2-dev
 	"
-source="$pkgname-$pkgver.tar.gz::https://github.com/nordstjernen-web/nordstjernen-browser/archive/refs/tags/$pkgver.tar.gz"
+source="$pkgname-$pkgver.tar.gz::https://github.com/nordstjernen-web/southstar-browser/archive/refs/tags/$pkgver.tar.gz"
 # GitHub names the archive root after the repository, not after $pkgname.
-builddir="$srcdir/nordstjernen-browser-$pkgver"
+builddir="$srcdir/southstar-browser-$pkgver"
 # No test suite upstream — behaviour is verified by running the browser.
 options="!check"
 
@@ -51,5 +51,5 @@ package() {
 
 # Regenerate with `abuild checksum` whenever pkgver moves.
 sha512sums="
-ee76333604a8ea40c44106fc8c70c8e2f121a577a88938a73fe0df534b5aa9044f79125ff25d20123d0cae66d94ee3122aba7fa493d21f123b4d878329f461f4  nordstjernen-1.0.29.tar.gz
+ee76333604a8ea40c44106fc8c70c8e2f121a577a88938a73fe0df534b5aa9044f79125ff25d20123d0cae66d94ee3122aba7fa493d21f123b4d878329f461f4  southstar-1.0.29.tar.gz
 "

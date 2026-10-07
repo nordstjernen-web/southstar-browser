@@ -10,7 +10,7 @@
 #include <io.h>
 
 #define NS_APP_DIR L"app"
-#define NS_BROWSER_EXE L"nordstjernen-ui.exe"
+#define NS_BROWSER_EXE L"southstar-ui.exe"
 #define NS_EXIT_MISSING_RUNTIME 127
 #define NS_STATUS_DLL_NOT_FOUND ((DWORD)0xC0000135u)
 #define NS_STATUS_ENTRYPOINT_NOT_FOUND ((DWORD)0xC0000139u)
@@ -251,12 +251,12 @@ static void
 ns_report_extract_needed(bool console)
 {
     const wchar_t *text =
-        L"Nordstjernen must be extracted before it can run.\n\n"
+        L"Southstar must be extracted before it can run.\n\n"
         L"In File Explorer, right-click the ZIP, choose Extract All, then run "
-        L"nordstjernen.exe from the extracted nordstjernen-win64 folder.";
+        L"southstar.exe from the extracted southstar-win64 folder.";
     ns_console_line(text);
     if (!console)
-        MessageBoxW(NULL, text, L"Nordstjernen", MB_OK | MB_ICONERROR |
+        MessageBoxW(NULL, text, L"Southstar", MB_OK | MB_ICONERROR |
                     MB_SETFOREGROUND);
 }
 
@@ -265,12 +265,12 @@ ns_report_start_error(bool console, DWORD error)
 {
     wchar_t text[512];
     _snwprintf(text, 512,
-               L"Nordstjernen could not start.\n\nWindows error: %lu",
+               L"Southstar could not start.\n\nWindows error: %lu",
                (unsigned long)error);
     text[511] = L'\0';
     ns_console_line(text);
     if (!console)
-        MessageBoxW(NULL, text, L"Nordstjernen", MB_OK | MB_ICONERROR |
+        MessageBoxW(NULL, text, L"Southstar", MB_OK | MB_ICONERROR |
                     MB_SETFOREGROUND);
 }
 
@@ -278,12 +278,12 @@ static void
 ns_report_runtime_error(bool console)
 {
     const wchar_t *text =
-        L"Nordstjernen could not find its bundled runtime files.\n\n"
-        L"Extract the whole nordstjernen-win64 folder and keep "
-        L"nordstjernen.exe and the app folder together.";
+        L"Southstar could not find its bundled runtime files.\n\n"
+        L"Extract the whole southstar-win64 folder and keep "
+        L"southstar.exe and the app folder together.";
     ns_console_line(text);
     if (!console)
-        MessageBoxW(NULL, text, L"Nordstjernen", MB_OK | MB_ICONERROR |
+        MessageBoxW(NULL, text, L"Southstar", MB_OK | MB_ICONERROR |
                     MB_SETFOREGROUND);
 }
 

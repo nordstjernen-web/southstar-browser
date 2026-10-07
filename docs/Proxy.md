@@ -1,6 +1,6 @@
-# Proxies and VPNs in Nordstjernen
+# Proxies and VPNs in Southstar
 
-Nordstjernen routes all HTTP/HTTPS traffic through libcurl, so any
+Southstar routes all HTTP/HTTPS traffic through libcurl, so any
 proxy libcurl understands works: plain HTTP proxies, HTTPS-to-the-proxy
 ("HTTPS proxy"), SOCKS4, SOCKS5, and SOCKS5 with remote DNS
 (`socks5h://`, recommended whenever you don't want DNS leaks).
@@ -8,7 +8,7 @@ proxy libcurl understands works: plain HTTP proxies, HTTPS-to-the-proxy
 There is no separate VPN client built into the browser. A real VPN
 (WireGuard, OpenVPN, Tailscale, your employer's IPSec client, the
 system VPN pane on macOS and Windows) is an OS-level routing
-concern — once it's up, every connection nordstjernen opens already
+concern — once it's up, every connection southstar opens already
 goes through it, with no browser configuration needed. The proxy
 support below is the browser-side complement: useful when you want
 to send only browser traffic through a tunnel, point at Tor, or talk
@@ -21,8 +21,8 @@ Three ways, in priority order (highest wins):
 1. **Command line** (one-shot, doesn't touch the config file):
 
    ```sh
-   nordstjernen --proxy=socks5h://127.0.0.1:1080
-   nordstjernen --proxy=http://user:pass@proxy.corp:8080
+   southstar --proxy=socks5h://127.0.0.1:1080
+   southstar --proxy=http://user:pass@proxy.corp:8080
    ```
 
 2. **Environment variables** (per-shell):
@@ -37,11 +37,11 @@ Three ways, in priority order (highest wins):
    plain `http://`. If only `NS_HTTP_PROXY` is set, it is used for
    both schemes.
 
-3. **Config file** at `~/.config/nordstjernen/nordstjernen.conf`
+3. **Config file** at `~/.config/southstar/southstar.conf`
    (Linux and macOS — the path comes from GLib's user-config dir,
    which is `$XDG_CONFIG_HOME` or `~/.config`), or under the local
    AppData directory on Windows
-   (`%LOCALAPPDATA%\nordstjernen\nordstjernen.conf`):
+   (`%LOCALAPPDATA%\southstar\southstar.conf`):
 
    ```ini
    http_proxy  = http://proxy.corp:8080
@@ -54,7 +54,7 @@ auto-detection of the standard `http_proxy` / `HTTPS_PROXY` /
 `NO_PROXY` lowercase env vars, so an existing shell-wide proxy
 setup keeps working.
 
-Run `nordstjernen --print-config` to confirm the effective values;
+Run `southstar --print-config` to confirm the effective values;
 passwords in the printed proxy URLs are masked.
 
 ## Supported proxy URL schemes
@@ -80,7 +80,7 @@ SOCKS5 endpoint:
 
 ```sh
 ssh -D 1080 -N user@jump.example.com &
-nordstjernen --proxy=socks5h://127.0.0.1:1080
+southstar --proxy=socks5h://127.0.0.1:1080
 ```
 
 DNS is resolved on the far side of the SSH connection. Kill the SSH
@@ -89,11 +89,11 @@ process to "disconnect."
 ### Route browser traffic through Tor
 
 ```sh
-nordstjernen --proxy=socks5h://127.0.0.1:9050
+southstar --proxy=socks5h://127.0.0.1:9050
 ```
 
 assuming `tor` is running locally with default settings. This is not
-a substitute for Tor Browser — Nordstjernen does not implement the
+a substitute for Tor Browser — Southstar does not implement the
 anti-fingerprinting hardening Tor Browser does — but it's enough for
 reading text-mode sites behind Tor.
 
@@ -103,15 +103,15 @@ reading text-mode sites behind Tor.
 export NS_HTTP_PROXY=http://alice:hunter2@proxy.corp:8080
 export NS_HTTPS_PROXY=http://alice:hunter2@proxy.corp:8080
 export NS_NO_PROXY=localhost,127.0.0.1,*.corp.internal
-nordstjernen
+southstar
 ```
 
-Or, equivalently, put the same keys in `nordstjernen.conf` and
+Or, equivalently, put the same keys in `southstar.conf` and
 launch with no flags.
 
 ## Encrypted DNS (DNS-over-HTTPS)
 
-By default Nordstjernen resolves host names with the system resolver,
+By default Southstar resolves host names with the system resolver,
 which usually means plaintext DNS the local network can see. Setting
 `doh_url` to a DNS-over-HTTPS endpoint makes libcurl resolve names over an
 encrypted HTTPS connection to that resolver instead, hiding lookups from
@@ -120,10 +120,10 @@ and the URL must be `https://`.
 
 ```sh
 export NS_DOH_URL=https://dns.quad9.net/dns-query
-nordstjernen
+southstar
 ```
 
-Or put it in `nordstjernen.conf`:
+Or put it in `southstar.conf`:
 
 ```ini
 doh_url = https://cloudflare-dns.com/dns-query
@@ -131,7 +131,7 @@ doh_url = https://cloudflare-dns.com/dns-query
 
 Common endpoints are `https://dns.quad9.net/dns-query`,
 `https://cloudflare-dns.com/dns-query`, and `https://dns.google/dns-query`.
-Confirm the effective value with `nordstjernen --print-config`.
+Confirm the effective value with `southstar --print-config`.
 
 DoH and proxies overlap: a `socks5h://` proxy already resolves DNS on the
 far side (no local leak), so DoH matters most for direct connections or

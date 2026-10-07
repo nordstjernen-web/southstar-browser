@@ -1,5 +1,5 @@
 project(
-  'nordstjernen',
+  'southstar',
   ['c', 'cpp'],
   version: '1.0.30-dev',
   license: 'LicenseRef-NSL-1.0 OR GPL-3.0-or-later',
@@ -79,7 +79,7 @@ add_project_link_arguments(
 ns_buildtype = get_option('buildtype')
 ns_is_release = (ns_buildtype == 'release' or ns_buildtype == 'minsize')
 # Every build profile gets -O3 (via default_options optimization=3) plus
-# dead-section pruning. Nordstjernen leans on the optimizer to inline the
+# dead-section pruning. Southstar leans on the optimizer to inline the
 # lexbor parser walks, QuickJS interpreter dispatch, and our box-layout
 # loops; -O2 left ~30% on the table for JS-heavy pages. The -O level is
 # left to meson's optimization option so it isn't passed twice (which
@@ -104,7 +104,7 @@ else
     language: 'c',
   )
 endif
-message('nordstjernen build profile: ' +
+message('southstar build profile: ' +
         (ns_is_release ? 'release (LTO + stripped + hardened)'
                        : 'development (debug symbols + frame pointer + hardened)'))
 
@@ -153,7 +153,7 @@ if ns_unmet_floors.length() > 0
     ns_floor_hint = (' -Dns-pango=disabled drops the text-stack floors by ' +
                      'shaping through the system Pango.')
   endif
-  error('Nordstjernen needs newer system libraries than this machine has:\n' +
+  error('Southstar needs newer system libraries than this machine has:\n' +
         '\n'.join(ns_unmet_floors) + '\n' +
         'Ubuntu 24.04, Debian 13 and Fedora 40 are the oldest releases of ' +
         'their distributions that ship all of them.' + ns_floor_hint)
@@ -213,7 +213,7 @@ if gtk_feature.allowed()
     elif gtk4.version().version_compare('>=4.22')
       message('GTK @0@ — preferred (>= 4.22).'.format(gtk4.version()))
     else
-      warning('GTK @0@ meets the 4.14 minimum, but Nordstjernen prefers >= 4.22 for the newer GSK renderers.'.format(gtk4.version()))
+      warning('GTK @0@ meets the 4.14 minimum, but Southstar prefers >= 4.22 for the newer GSK renderers.'.format(gtk4.version()))
     endif
   endif
 endif
@@ -420,7 +420,7 @@ if libopusfile.found()
   add_project_arguments('-DNS_HAVE_OPUSFILE=1', language: 'c')
 endif
 # canPlayType/mediaCapabilities may honestly advertise native Ogg audio only
-# where the decoder that plays it is built: the desktop (SDL2) nordstjernen-audio
+# where the decoder that plays it is built: the desktop (SDL2) southstar-audio
 # helper.
 if get_option('audio').allowed()
   sdl2_probe = dependency('sdl2', required: false)
@@ -501,35 +501,35 @@ else
 endif
 
 install_data(
-  'data/icons/hicolor/scalable/apps/nordstjernen.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen.gif',
-  'data/icons/hicolor/scalable/apps/nordstjernen-back-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-bookmarks-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-close-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-downloads-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-forward-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-globe-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-home-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-lock-open-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-lock-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-menu-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-new-tab-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-page-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-private-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-reload-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-star-filled-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-star-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stop-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-warning-symbolic.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-console.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-settings.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-about.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-connect.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-fetch.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-parse.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-script.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-render.svg',
-  'data/icons/hicolor/scalable/apps/nordstjernen-stage-done.svg',
+  'data/icons/hicolor/scalable/apps/southstar.svg',
+  'data/icons/hicolor/scalable/apps/southstar.gif',
+  'data/icons/hicolor/scalable/apps/southstar-back-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-bookmarks-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-close-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-downloads-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-forward-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-globe-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-home-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-lock-open-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-lock-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-menu-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-new-tab-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-page-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-private-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-reload-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-star-filled-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-star-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stop-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-warning-symbolic.svg',
+  'data/icons/hicolor/scalable/apps/southstar-console.svg',
+  'data/icons/hicolor/scalable/apps/southstar-settings.svg',
+  'data/icons/hicolor/scalable/apps/southstar-about.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-connect.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-fetch.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-parse.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-script.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-render.svg',
+  'data/icons/hicolor/scalable/apps/southstar-stage-done.svg',
   install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
 )
 
@@ -537,12 +537,12 @@ install_data(
   'License.md',
   'COPYING',
   'THIRD-PARTY-LICENSES.md',
-  install_dir: get_option('datadir') / 'nordstjernen',
+  install_dir: get_option('datadir') / 'southstar',
 )
 
 install_data(
   'data/safebrowsing.list',
-  install_dir: get_option('datadir') / 'nordstjernen',
+  install_dir: get_option('datadir') / 'southstar',
 )
 
 install_data(
@@ -586,17 +586,17 @@ install_data(
   'data/i18n/vi.lang',
   'data/i18n/yo.lang',
   'data/i18n/zh.lang',
-  install_dir: get_option('datadir') / 'nordstjernen' / 'i18n',
+  install_dir: get_option('datadir') / 'southstar' / 'i18n',
 )
 
 install_data(
-  'data/nordstjernen.desktop',
+  'data/southstar.desktop',
   install_dir: get_option('datadir') / 'applications',
-  rename: 'org.nordstjernen.WebBrowser.desktop',
+  rename: 'org.southstar.WebBrowser.desktop',
 )
 
 install_data(
-  'data/org.nordstjernen.WebBrowser.metainfo.xml',
+  'data/org.southstar.WebBrowser.metainfo.xml',
   install_dir: get_option('datadir') / 'metainfo',
 )
 

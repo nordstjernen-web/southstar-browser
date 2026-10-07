@@ -1,22 +1,22 @@
 #
-# spec file for package nordstjernen
+# spec file for package southstar
 #
 # Copyright 2026 Andreas Røsdal
 #
-# Nordstjernen is dual-licensed under the Nordstjernen Source License v1.0
+# Southstar is dual-licensed under the Nordstjernen Source License v1.0
 # (NSL-1.0) or the GNU General Public License version 3 or later, at the
 # recipient's option. The GPL option is a free, OSI-approved license, so the package
 # can be distributed under it, including in openSUSE:Factory.
 #
 
 
-Name:           nordstjernen
+Name:           southstar
 Version:        1.0.29
 Release:        0
 Summary:        Small, hand-written GTK web browser
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 Group:          Productivity/Networking/Web/Browsers
-URL:            https://nordstjernen.org
+URL:            https://github.com/nordstjernen-web/southstar-browser
 
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
@@ -50,7 +50,7 @@ Recommends:     mpv
 Recommends:     myspell-en_US
 
 %description
-Nordstjernen is a clean-room web browser written from scratch in C, with a
+Southstar is a clean-room web browser written from scratch in C, with a
 GTK 4 user interface and a libcurl network stack. It is built to be small,
 secure, and readable by a single person end to end.
 
@@ -92,24 +92,24 @@ test -f meson.build
 # library and its development header are only needed by external embedders,
 # not the browser app. Drop them so the package is a clean application,
 # not a -devel library.
-rm -f %{buildroot}%{_libdir}/libnordstjernen.so
-rm -f %{buildroot}%{_includedir}/nordstjernen/libnordstjernen.h
-rmdir %{buildroot}%{_includedir}/nordstjernen 2>/dev/null || :
+rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
+rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 
-%suse_update_desktop_file org.nordstjernen.WebBrowser
+%suse_update_desktop_file org.southstar.WebBrowser
 
 %files
 %doc README.md
-%license %{_datadir}/nordstjernen/License.md
-%license %{_datadir}/nordstjernen/COPYING
-%{_bindir}/nordstjernen
-%{_bindir}/nordstjernen-renderer
-%{_bindir}/nordstjernen-audio
-%{_bindir}/nordstjernen-video
-%{_datadir}/applications/org.nordstjernen.WebBrowser.desktop
-%{_datadir}/metainfo/org.nordstjernen.WebBrowser.metainfo.xml
-%{_datadir}/nordstjernen/
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen.gif
-%{_datadir}/icons/hicolor/scalable/apps/nordstjernen*.svg
+%license %{_datadir}/southstar/License.md
+%license %{_datadir}/southstar/COPYING
+%{_bindir}/southstar
+%{_bindir}/southstar-renderer
+%{_bindir}/southstar-audio
+%{_bindir}/southstar-video
+%{_datadir}/applications/org.southstar.WebBrowser.desktop
+%{_datadir}/metainfo/org.southstar.WebBrowser.metainfo.xml
+%{_datadir}/southstar/
+%{_datadir}/icons/hicolor/scalable/apps/southstar.gif
+%{_datadir}/icons/hicolor/scalable/apps/southstar*.svg
 
 %changelog

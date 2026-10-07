@@ -1,6 +1,6 @@
 # Printing
 
-Nordstjernen lays a page out for paper and hands the sheets to the
+Southstar lays a page out for paper and hands the sheets to the
 operating system's own print dialog. No printing UI is written per
 platform and no dependency is added: the sheets go to
 `GtkPrintOperation`, which is CUPS on Linux, the Win32 printer dialog on
@@ -11,7 +11,7 @@ Windows, and the Cocoa print panel on macOS.
 `Ctrl+P`, or **Print…** in the **☰** toolbar menu, opens the system
 print dialog with the current page paginated behind it. Paper size,
 orientation, printer and copies are the dialog's business; what
-Nordstjernen decides is where each sheet begins and ends.
+Southstar decides is where each sheet begins and ends.
 
 Printing works in every process mode. Under `--single-process` (or
 `NS_SINGLE_PROCESS=1`) the sheets stay cairo **recording surfaces** and
@@ -26,7 +26,7 @@ To get a file rather than a printer, from any mode and with no printer
 configured:
 
 ```sh
-nordstjernen --dump=print:out.pdf https://example.org/
+southstar --dump=print:out.pdf https://example.org/
 ```
 
 That renders the same pagination to a multi-page PDF. It is the quickest
@@ -75,7 +75,7 @@ printing leaves the page as it found it.
 kept honest against:
 
 ```sh
-./builddir/src/gtk/nordstjernen --dump=print:/tmp/pagination.pdf \
+./builddir/src/gtk/southstar --dump=print:/tmp/pagination.pdf \
     data/render-tests/print-pagination.html
 ```
 

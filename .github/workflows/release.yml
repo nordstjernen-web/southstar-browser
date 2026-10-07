@@ -65,7 +65,7 @@ jobs:
         run: bash scripts/nightly-distro-build.sh ${{ matrix.distro }}
 
       # A tag that predates per-release file names packs every job's .deb as
-      # nordstjernen_<version>_<arch>.deb; give it the release it was built
+      # southstar_<version>_<arch>.deb; give it the release it was built
       # on, the way scripts/pack-deb.sh names it now, so the jobs' packages
       # don't overwrite each other on the release.
       - name: Name the package for its distro release

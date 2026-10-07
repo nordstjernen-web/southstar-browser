@@ -1,4 +1,4 @@
-/* Nordstjernen — renderer request handling shared by the out-of-process
+/* Southstar — renderer request handling shared by the out-of-process
    renderer executable and the in-process single-process-mode host. */
 
 #ifndef NS_RENDERER_SERVE_H

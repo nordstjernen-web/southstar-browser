@@ -628,7 +628,7 @@ def speech_bubble_2d(ink, cx, cy, lines, size, tail_to):
 
 
 def title_2d(ink, ver):
-    ink.text(30, 20, "NORDSTJERNEN WEB BROWSER", 36, bold=True)
+    ink.text(30, 20, "SOUTHSTAR BROWSER", 36, bold=True)
     ink.text(32, 66, TAGLINE, 18, bold=False)
     ink.text(32, 92, "Version " + ver, 15, bold=False)
 

@@ -1,4 +1,4 @@
-/* Nordstjernen — curl-free network helpers shared by the engine and the
+/* Southstar — curl-free network helpers shared by the engine and the
  * thin browser shells: Accept-Language, search-URL building, proxy masking. */
 
 #include "net.h"
