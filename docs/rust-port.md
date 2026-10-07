@@ -301,7 +301,7 @@ The workflows that build today all gain a Rust toolchain:
 
 | Workflow | Platform | Rust toolchain |
 |---|---|---|
-| `linux.yml` | Ubuntu 26.04, GCC and Clang | rustup, pinned |
+| `linux.yml` | Ubuntu 26.04, GCC | rustup, pinned |
 | `macos.yml` | macOS 26 arm64 | rustup, pinned |
 | `windows.yml` | MSYS2 MINGW64 | MSYS2's `mingw-w64-x86_64-rust` (`x86_64-pc-windows-gnu`, the ABI the C side already uses) |
 | `musl.yml` | Alpine 3.24 | Alpine's `rust`/`cargo` packages |

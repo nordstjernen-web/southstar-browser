@@ -39,6 +39,7 @@ Southstar Browser (unreleased):
   architecture poster and its generator, and the old per-distribution,
   nightly-server and Microsoft Store guides are gone. What remains covers
   using, building and measuring the browser, and the port plan.
+* The Linux CI workflow builds with GCC only; the Clang job is gone.
 
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the

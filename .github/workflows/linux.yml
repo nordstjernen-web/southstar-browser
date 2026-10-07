@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         ubuntu: ['26.04']
-        compiler: [clang, gcc]
+        compiler: [gcc]
 
     env:
       DEBIAN_FRONTEND: noninteractive
@@ -45,7 +45,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            ccache clang gcc g++ make cmake pkg-config meson ninja-build \
+            ccache gcc g++ make cmake pkg-config meson ninja-build \
             libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
@@ -66,7 +66,6 @@ jobs:
           cargo --version
 
       - name: Rust format and lints
-        if: matrix.compiler == 'gcc'
         run: |
           cargo fmt --check
           cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -86,17 +85,12 @@ jobs:
 
       - name: Select compiler
         run: |
-          if [ "${{ matrix.compiler }}" = "gcc" ]; then
-            echo "CC=ccache gcc"  >> $GITHUB_ENV
-            echo "CXX=ccache g++" >> $GITHUB_ENV
-          else
-            echo "CC=ccache clang"    >> $GITHUB_ENV
-            echo "CXX=ccache clang++" >> $GITHUB_ENV
-          fi
+          echo "CC=ccache gcc"  >> $GITHUB_ENV
+          echo "CXX=ccache g++" >> $GITHUB_ENV
 
       - name: Show toolchain versions
         run: |
-          clang --version
+          gcc --version | head -1
           ccache --version | head -1
           meson --version
           ninja --version
