@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_char;
+use core::fmt::Write;
 use core::ptr;
 use std::fs::DirBuilder;
 use std::path::{Path, PathBuf};
@@ -44,7 +45,11 @@ pub(crate) fn sha256_hex(data: &[u8]) -> String {
         glib::g_checksum_get_digest(checksum, digest.as_mut_ptr(), &mut len);
         glib::g_checksum_free(checksum);
     }
-    digest[..len].iter().map(|b| format!("{b:02x}")).collect()
+    let mut hex = String::with_capacity(len * 2);
+    for b in &digest[..len] {
+        let _ = write!(hex, "{b:02x}");
+    }
+    hex
 }
 
 fn g_malloc_copy(bytes: &[u8]) -> *mut u8 {
