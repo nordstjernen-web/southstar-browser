@@ -3,6 +3,7 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The cute-tests pages are removed.
 * The Windows, macOS and musl CI workflows no longer run on every push
   and pull request; they can still be started by hand.
 * Nordstjernen is renamed Southstar Browser: the executables, library,
