@@ -1,6 +1,11 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser starts from the Nordstjernen codebase. The entries below
+are Nordstjernen's release history, kept as written; they refer to the
+browser by its earlier name and include the Android, iOS and Java ports that
+Southstar has since removed.
+
 1.0.30:
 ======
 * The home page set in Settings is saved and used. A text field never

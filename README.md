@@ -1,20 +1,26 @@
-Nordstjernen web browser
-========================
+Southstar Browser
+=================
 
-Nordstjernen is a web browser written from scratch in C,
-focused on support for modern HTML, CSS and JavaScript standards.
+Southstar Browser is a web browser focused on support for modern HTML, CSS
+and JavaScript standards. It is the next step for
+[Nordstjernen](https://github.com/nordstjernen-web/nordstjernen-browser)
+(Northstar): Southstar will become a **Rust rewrite** of that browser.
 
-![Nordstjernen showing a Wikipedia article in the light theme](docs/screenshot.png)
+The rewrite starts from a working browser rather than an empty repository.
+This tree is the Nordstjernen C codebase — its full history included —
+renamed to Southstar Browser and trimmed to the desktop: the Android, iOS and
+Java/JVM versions have been removed.
+
+![Southstar Browser showing its start page](docs/screenshot.png)
 
 Supported platforms:
-* [Windows](https://apps.microsoft.com/detail/9nw8t7w5z4pl)
-* MacOS
-* Linux,
-* FreeBSD and NetBSD. 
-* [Android](https://play.google.com/store/apps/details?id=org.nordstjernen.WebBrowser)
-* Java.
+* Linux
+* Windows
+* macOS
+* FreeBSD and NetBSD
 
-**Current release:** **1.0.29** (October 2026) — see [Changelog.md](Changelog.md).
+**Version:** 1.0.30-dev. Southstar has not made a release of its own yet;
+[Changelog.md](Changelog.md) records the Nordstjernen releases it grew from.
 
 **Standards.** Behaviour is measured against the spec text, section by
 section, not against another browser. The walk-through of the in-scope
@@ -31,24 +37,22 @@ Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 headers, excluding vendored libraries and generated assets — small enough for
 one person to read and audit end-to-end.
 
-See [northstar-browser-gpl](https://github.com/nordstjernen-web/northstar-browser-gpl)
-for the GPL-licensed sibling project.
+<img src="docs/southstar-now.png" alt="Southstar Now!" width="140">
 
-<img src="docs/nordstjernen-now.gif" alt="Nordstjernen Now!" width="140">
+## Roadmap
+
+- [x] Start from Nordstjernen: import the C codebase with its history, rename
+      it to Southstar Browser, and remove the Android, iOS and Java versions.
+- [ ] Rewrite the browser in Rust.
+
+The architecture the rewrite starts from is mapped in
+[docs/Software-Architecture.md](docs/Software-Architecture.md) and planned in
+[SOUTHSTAR.md](SOUTHSTAR.md).
 
 ## Download
 
-| Platform | Download |
-|----------|----------|
-| Windows | [Windows store](https://apps.microsoft.com/detail/9nw8t7w5z4pl) |
-| Android | [Google Play](https://play.google.com/store/apps/details?id=org.nordstjernen.WebBrowser) |
-| Java/JVM | [`org.nordstjernen:nordstjernen-java`](https://github.com/nordstjernen-web/nordstjernen-browser/packages) on GitHub Packages (Maven) |
-| Source | [release tags](https://github.com/nordstjernen-web/nordstjernen-browser/tags) |
-
-Windows 10 or later is required (the GTK 4 frontend links
-DirectComposition). Every other platform builds from source — see
-"Build" below and the per-platform install notes in
-[docs/](docs/README.md).
+There are no Southstar binaries yet — build from source (below). The
+per-platform build and packaging notes are in [docs/](docs/README.md).
 
 ## Browser features
 
@@ -56,11 +60,11 @@ DirectComposition). Every other platform builds from source — see
   covers the modern cascade and CSSOM, Media Queries Level 4, container
   queries and units, flex, grid, transforms, gradients, animations and
   vertical writing modes.
-- **Text layout** — desktop builds shape text with **ns-pango**, a Pango fork
+- **Text layout** — text is shaped with **ns-pango**, a Pango fork
   pinned as a meson subproject that caches finished glyph strings and font
   metrics across layouts, so measuring and painting a run reach HarfBuzz once
-  instead of three times. Android and iOS link the system Pango;
-  `-Dns-pango=disabled` builds that path on the desktop too.
+  instead of three times. `-Dns-pango=disabled` links the system Pango
+  instead.
 - **JavaScript** on the QuickJS interpreter — DOM, Shadow DOM, observer APIs,
   Canvas 2D (`Path2D`, `ImageBitmap`, `DOMMatrix`), WebCrypto
   (`crypto.subtle` over OpenSSL), custom elements including customized
@@ -82,7 +86,7 @@ DirectComposition). Every other platform builds from source — see
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
   present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). MSE/`blob:`
-  streaming and HLS/DASH manifests play through the `nordstjernen-video`
+  streaming and HLS/DASH manifests play through the `southstar-video`
   helper, and a `<track default>` WebVTT file is drawn over the video. Other
   codecs render a poster and play overlay. See [docs/media.md](docs/media.md).
 - **WebGL / WebGPU / WebAssembly** — WebGL 1/2 mapped onto OpenGL ES, on by
@@ -98,9 +102,9 @@ DirectComposition). Every other platform builds from source — see
 - **Safe browsing** — a top-level navigation's host is checked against a local
   SHA-256 blocklist before it is fetched, entirely on-device; a match shows a
   full-page warning. Overridable via
-  `~/.config/nordstjernen/safebrowsing.list`.
+  `~/.config/southstar/safebrowsing.list`.
 - **Process-per-tab** — each tab's engine runs in its own sandboxed
-  `nordstjernen-renderer` process; the GTK app is a thin shell that blits the
+  `southstar-renderer` process; the GTK app is a thin shell that blits the
   renderer's shared-memory framebuffer and forwards input over an IPC control
   channel, so a page can't take down the UI
   ([docs/tab-isolation.md](docs/tab-isolation.md)). `--single-process` runs
@@ -111,17 +115,11 @@ DirectComposition). Every other platform builds from source — see
   session mode.
 - **UI** — tabs, bookmarks, history, downloads, find-in-page, printing and
   save-to-PDF, a JavaScript console, settings, headless mode, and a C
-  embedding API ([docs/Embedding.md](docs/Embedding.md)). The interface is
-  translated into 40 languages and follows the operating-system language
-  ([docs/i18n.md](docs/i18n.md)).
+  embedding API ([docs/Embedding.md](docs/Embedding.md)). The interface
+  follows the operating-system language, with UI translations for 13
+  languages so far ([docs/i18n.md](docs/i18n.md)).
 - **Extensions** — initial support for simple, page-facing WebExtensions
   ([docs/extensions.md](docs/extensions.md)).
-- **Java/JVM** — `org.nordstjernen.Nordstjernen` drives fetch / parse / layout
-  / script / render from Java over a JNI bridge, or `RemoteBrowser` /
-  `RemotePage` drive a separate renderer process so an engine crash can't take
-  down the JVM. The fat jar is both the embedding library and a
-  standalone Swing browser (`java -jar nordstjernen-java.jar <url>`). See
-  [java/README.md](java/README.md).
 
 ## Build
 
@@ -131,7 +129,7 @@ sudo apt install build-essential git pkg-config meson ninja-build \
     libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 meson setup builddir && meson compile -C builddir
-./builddir/src/gtk/nordstjernen
+./builddir/src/gtk/southstar
 ```
 
 Windows, Fedora, openSUSE and macOS instructions are in
@@ -140,7 +138,7 @@ Windows, Fedora, openSUSE and macOS instructions are in
 
 ## Dependencies
 
-Nordstjernen is an independent engine — no upstream browser code.
+Southstar is an independent engine — no upstream browser code.
 
 **Vendored in-tree**, built from the main tree with no submodules:
 [lexbor](https://github.com/lexbor/lexbor) (HTML5 → DOM parser, CSS, and the
@@ -166,7 +164,7 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 | libpsl | — | public-suffix list for cookie scoping |
 | SQLite | — | IndexedDB persistent storage |
 | libwebp | — | animated, lossless and fallback WebP decoding |
-| SDL2 | — | audio output for the `nordstjernen-audio` helper |
+| SDL2 | — | audio output for the `southstar-audio` helper |
 | libseccomp | — (Linux only) | syscall sandbox; no-op on macOS/Windows |
 
 **Optional**, auto-detected or build-time-selected:
@@ -183,9 +181,10 @@ through a meson wrap).
 
 ## License
 
-Nordstjernen is dual-licensed: use it under **either** the Nordstjernen
-Source License v1.0 **or** the GNU General Public License version 3 or later,
-at your option (`LicenseRef-NSL-1.0 OR GPL-3.0-or-later`).
+Southstar Browser is derived from Nordstjernen and is distributed under the
+same dual license: use it under **either** the Nordstjernen Source License
+v1.0 **or** the GNU General Public License version 3 or later, at your option
+(`LicenseRef-NSL-1.0 OR GPL-3.0-or-later`).
 
 - **GPL-3.0-or-later** — free software: use, modify and redistribute it for any
   purpose, provided derivative works are also released under the GPL. See
@@ -198,22 +197,25 @@ See [License.md](License.md) for the full terms. Commercial licenses by
 agreement. Bundled third-party components keep their own licenses
 ([THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)).
 
+## Related projects
+
+- [nordstjernen-browser](https://github.com/nordstjernen-web/nordstjernen-browser)
+  — the C browser Southstar starts from.
+- [northstar-browser-gpl](https://github.com/nordstjernen-web/northstar-browser-gpl)
+  — the GPL-licensed sibling project.
+
 # Development team
-Nordstjernen is developed by a team located in Norway, Poland and Spain.  
+Southstar is developed by a team located in Norway, Poland and Spain.
 
-Project home: <https://nordstjernen.org>  
-
-[Join the Discord](https://discord.gg/4W959nW5vF)  
+[Join the Discord](https://discord.gg/4W959nW5vF)
 
 ## Builds
-[![linux](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/linux.yml)
-[![macos](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/macos.yml)
-[![windows](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/windows.yml)
-[![android](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/android.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/android.yml)
-[![java](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/java.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/nordstjernen-browser/actions/workflows/java.yml)
+[![linux](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/linux.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/linux.yml)
+[![macos](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/macos.yml)
+[![windows](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/windows.yml)
 
-<img src="docs/best-viewed-in-nordstjernen.gif" alt="Best viewed in Nordstjernen" width="140">
+<img src="docs/best-viewed-in-southstar.png" alt="Best viewed in Southstar" width="140">
 
 ----
 
-Copyright 2026 Andreas Røsdal ·  
+Copyright 2026 Andreas Røsdal
