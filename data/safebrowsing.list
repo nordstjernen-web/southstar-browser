@@ -13,7 +13,7 @@
 # Replace this file (or ~/.config/southstar/safebrowsing.list, or the file
 # named by $NS_SAFEBROWSING_LIST) to keep the list up to date.
 
-ff74d19dbaf39ffe1bcb97536f380d39a979d5057bd4851f08799d83df9bb8ca  # malware.testing.southstar (built-in test entry)
+4d1808b12c100747b5ceb25df19381d10bcdd635cc87dc7098ecf393d25dd8c6  # malware.testing.southstar (built-in test entry)
 d77d67d13634749b0776161b06f037b8a2bc27c062f0ad212fa3bd3e3f4c52b0  # testsafebrowsing.appspot.com
 7e38d942977fdef85525e236c0d2f6a4b1f69c413cb6bb3567487238c3443359  # www.itisatrap.org
 be19facbcd16a1e5db0f9ad809727b94c23cad54941b8b6f3b149424f266fc0e  # phishing.example.test
