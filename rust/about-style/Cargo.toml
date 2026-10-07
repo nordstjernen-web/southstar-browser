@@ -1,0 +1,11 @@
+[package]
+name = "southstar-about-style"
+description = "The shared stylesheet of the built-in about: pages, read from src/about_style.h"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

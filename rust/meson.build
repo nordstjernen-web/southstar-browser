@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = []
+southstar_rust_link_deps = [sqlite3]
 if have_woff2
   southstar_rust_features += ['woff2']
   southstar_rust_link_deps += [libbrotlidec_fonts]

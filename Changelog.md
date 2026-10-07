@@ -30,6 +30,9 @@ Southstar Browser (unreleased):
   again checked against the C over millions of inputs and real fonts. The
   built-in safe-browsing test host, malware.testing.southstar, is blocked
   again; its entry still held the digest of the old name.
+* Browsing history is Rust: the SQLite visits table and the about:history
+  page behave as before, checked against the C over 420 randomized
+  sessions of visits, clears and restarts.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the

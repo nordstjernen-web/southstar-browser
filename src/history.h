@@ -1,4 +1,4 @@
-/* Southstar — SQLite-backed browsing history API.
+/* Southstar — SQLite-backed browsing history API, implemented in rust/history.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

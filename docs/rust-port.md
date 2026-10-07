@@ -700,3 +700,4 @@ table below, and `Changelog.md` gets an entry per phase.
 | `safebrowsing.c` | 253 | `rust/safebrowsing` | 2 |
 | `debuglog.c` | 192 | `rust/debuglog` | 2 |
 | `woff2.c` | 721 | `rust/woff2` | 2 |
+| `history.c` | 385 | `rust/history` | 2 |

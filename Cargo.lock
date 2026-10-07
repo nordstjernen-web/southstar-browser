@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "southstar-about-style"
+version = "1.0.30-dev"
+
+[[package]]
 name = "southstar-bookmarks"
 version = "1.0.30-dev"
 dependencies = [
@@ -38,12 +42,14 @@ dependencies = [
 name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-about-style",
  "southstar-bookmarks",
  "southstar-csp",
  "southstar-css-syntax",
  "southstar-datetime",
  "southstar-debuglog",
  "southstar-glib",
+ "southstar-history",
  "southstar-i18n",
  "southstar-safebrowsing",
  "southstar-woff2",
@@ -52,6 +58,14 @@ dependencies = [
 [[package]]
 name = "southstar-glib"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-history"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-about-style",
+ "southstar-glib",
+]
 
 [[package]]
 name = "southstar-i18n"

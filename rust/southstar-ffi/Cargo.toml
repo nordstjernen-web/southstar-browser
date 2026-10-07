@@ -12,12 +12,14 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+southstar-about-style = { path = "../about-style" }
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-csp = { path = "../csp" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-glib = { path = "../glib" }
+southstar-history = { path = "../history" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-woff2 = { path = "../woff2", optional = true }
