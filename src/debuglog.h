@@ -1,4 +1,4 @@
-/* Southstar — in-process debug event log shared with the JS console.
+/* Southstar — in-process debug event log shared with the JS console, implemented in rust/debuglog.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -30,8 +30,20 @@ typedef void (*ns_dlog_listener)(const ns_dlog_entry *entry, gpointer user_data)
 
 void ns_debug_log_init(void);
 
-void ns_debug_log_emit(ns_dlog_level level, const char *category,
-                       const char *fmt, ...) G_GNUC_PRINTF(3, 4);
+void ns_debug_log_emit_take(ns_dlog_level level, const char *category,
+                            char *message);
+
+G_GNUC_PRINTF(3, 4)
+static inline void
+ns_debug_log_emit(ns_dlog_level level, const char *category,
+                  const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char *message = fmt ? g_strdup_vprintf(fmt, ap) : g_strdup("");
+    va_end(ap);
+    ns_debug_log_emit_take(level, category, message);
+}
 
 guint ns_debug_log_subscribe(ns_dlog_listener cb, gpointer user_data);
 void  ns_debug_log_unsubscribe(guint id);

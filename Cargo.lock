@@ -28,6 +28,13 @@ name = "southstar-datetime"
 version = "1.0.30-dev"
 
 [[package]]
+name = "southstar-debuglog"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
@@ -35,6 +42,7 @@ dependencies = [
  "southstar-csp",
  "southstar-css-syntax",
  "southstar-datetime",
+ "southstar-debuglog",
  "southstar-glib",
  "southstar-i18n",
  "southstar-safebrowsing",

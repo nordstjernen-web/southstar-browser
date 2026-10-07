@@ -16,6 +16,7 @@ southstar-bookmarks = { path = "../bookmarks" }
 southstar-csp = { path = "../csp" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
+southstar-debuglog = { path = "../debuglog" }
 southstar-glib = { path = "../glib" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
