@@ -48,7 +48,7 @@ Southstar Browser (unreleased):
   either the in-tree QuickJS-ng or Boa through a new engine-neutral layer,
   and scripts/js-engine-compare.py writes the results to docs/js-engines.md:
   test262 83.3% on QuickJS-ng and 94.4% on Boa, while QuickJS-ng runs Octane
-  about 2.5 to 8 times faster and Boa still crashes on 13 tests.
+  2 to 8 times faster and Boa still crashes on 13 tests.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the
