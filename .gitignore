@@ -86,3 +86,6 @@ Thumbs.db
 perf.data
 /builddir-stock/
 __pycache__/
+
+# Cargo build output when cargo runs outside meson
+/target/

@@ -1,0 +1,18 @@
+[package]
+name = "southstar-ffi"
+description = "The static library meson links into the C targets: every module ported to Rust, behind its C ABI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+southstar-datetime = { path = "../datetime" }
+
+[lints]
+workspace = true

@@ -54,7 +54,6 @@ southstar_engine_sources = files(
   'css_media.c',
   'css_prop_syntax.c',
   'css_syntax.c',
-  'datetime.c',
   'debuglog.c',
   'dom.c',
   'engine.c',
@@ -146,6 +145,7 @@ if host_machine.system() == 'windows'
 endif
 
 southstar_deps = [
+  southstar_rust_dep,
   glib,
   gobject,
   gio,

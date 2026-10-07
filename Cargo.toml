@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["rust/*"]
+
+[workspace.package]
+version = "1.0.30-dev"
+edition = "2024"
+rust-version = "1.85"
+license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[profile.dev]
+panic = "abort"
