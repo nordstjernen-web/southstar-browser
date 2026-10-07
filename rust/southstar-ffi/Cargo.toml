@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 southstar-bookmarks = { path = "../bookmarks" }
+southstar-csp = { path = "../csp" }
 southstar-datetime = { path = "../datetime" }
 southstar-glib = { path = "../glib" }
 

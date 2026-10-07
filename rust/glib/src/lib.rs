@@ -23,6 +23,16 @@ pub struct GHashTable {
 }
 
 #[repr(C)]
+pub struct GChecksum {
+    _private: [u8; 0],
+}
+
+pub type GChecksumType = c_int;
+pub const G_CHECKSUM_SHA256: GChecksumType = 2;
+pub const G_CHECKSUM_SHA512: GChecksumType = 3;
+pub const G_CHECKSUM_SHA384: GChecksumType = 4;
+
+#[repr(C)]
 pub struct GError {
     pub domain: u32,
     pub code: c_int,
@@ -69,6 +79,11 @@ unsafe extern "C" {
     pub fn g_hash_table_unref(table: *mut GHashTable);
     pub fn g_str_hash(v: *const c_void) -> c_uint;
     pub fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
+    pub fn g_checksum_new(checksum_type: GChecksumType) -> *mut GChecksum;
+    pub fn g_checksum_update(checksum: *mut GChecksum, data: *const u8, length: isize);
+    pub fn g_checksum_get_digest(checksum: *mut GChecksum, buffer: *mut u8, digest_len: *mut usize);
+    pub fn g_checksum_free(checksum: *mut GChecksum);
+    pub fn g_base64_encode(data: *const u8, len: usize) -> *mut c_char;
 }
 
 pub fn boolean(value: bool) -> GBoolean {

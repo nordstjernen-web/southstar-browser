@@ -48,7 +48,6 @@ southstar_engine_sources = files(
   'bytecode_cache.c',
   'cache.c',
   'config.c',
-  'csp.c',
   'css.c',
   'css_media.c',
   'css_prop_syntax.c',
