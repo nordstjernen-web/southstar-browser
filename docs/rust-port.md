@@ -369,14 +369,33 @@ Scope: `audio/main.c` (1.7k), `videoproc/main.c` (0.7k), `security.c` (1.1k),
 Exit: `docs/media.md` flows (MPEG-1, MP3, WebM, MSE/HLS) play as before on
 all platforms; the sandbox is unchanged in behaviour.
 
+**Revised order (October 2026).** The media helpers are less self-contained
+than they look: they drive FFmpeg, SDL2, libvorbisfile, libopusfile and
+libcurl, and FFmpeg's struct layouts change across the 6.0–8.0 versions
+Southstar supports, so a Rust helper needs bindings generated against the
+installed headers (`bindgen` and libclang at build time, or the
+`ffmpeg-sys-next` crate that runs it). That is a dependency decision, not a
+porting step, so the helpers wait until it is made; phase 2's leaf modules,
+whose C APIs are opaque pointers and plain scalars, go first. `security.c`
+can still be ported on its own.
+
 ### Phase 2 — Leaf modules
 
 Scope (8.7k lines), roughly in this order — modules with no project dependencies first:
 
-- `webcrypto.c` (1.4k) over the `openssl` crate — same algorithms, same
-  OpenSSL. (RustCrypto's `rsa` crate has carried a timing side-channel
-  advisory, RUSTSEC-2023-0071, so it is not an automatic replacement.)
-- `woff2.c` (0.7k) over the `brotli-decompressor` crate.
+- `webcrypto.c` (1.4k) over OpenSSL, as today. (RustCrypto's `rsa` crate
+  has carried a timing side-channel advisory, RUSTSEC-2023-0071, so it is not
+  an automatic replacement.)
+- `woff2.c` (0.7k) over libbrotlidec, as today.
+
+The leaf ports call their C libraries through **hand-written declarations**
+(an `unsafe extern "C"` block per module, and the shared `rust/glib` crate
+for GLib) rather than crates: OpenSSL's EVP API, libbrotlidec, GLib's
+containers and allocator are opaque pointers plus a few stable public
+structs, the symbols resolve when meson links the libraries it already
+links, and the dependency tree stays empty. Crates come in when they replace
+a C library outright (the image decoders below) or when a binding has to
+follow a library's changing struct layouts.
 - `css_syntax.c`, `mat4.h`, `glctx.c`, `threaddump.c`, `debuglog.c`,
   `i18n.c`, `spellcheck.c` (Enchant via FFI), `safebrowsing.c` (SHA-256 via
   `sha2`), `csp.c`, `bytecode_cache.c`, `config.c`, `history.c`,
