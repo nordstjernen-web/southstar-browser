@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The logo has a large serif S behind the star, as Nordstjernen's had an N:
+  the application and window icon, the Windows icon, the animated start-page
+  logo and the two badges.
 * The cute-tests pages are removed.
 * The Windows, macOS and musl CI workflows no longer run on every push
   and pull request; they can still be started by hand.
