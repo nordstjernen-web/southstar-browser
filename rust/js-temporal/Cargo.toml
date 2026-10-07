@@ -1,0 +1,22 @@
+[package]
+name = "southstar-js-temporal"
+description = "The native Temporal date/time API, written once against the engine-neutral JavaScript layer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-datetime = { path = "../datetime" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs"]
+quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
+boa = ["southstar-js-engine/boa"]
+
+[lints]
+workspace = true

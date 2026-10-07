@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::any::Any;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -9,11 +10,14 @@ use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::object::builtins::{JsArrayBuffer, JsPromise};
+use boa_engine::prelude::{Finalize, JsData, Trace};
+use boa_engine::property::PropertyDescriptor;
 use boa_engine::{
-    Context, JsError, JsNativeError, JsObject, JsString, JsValue, Module, NativeFunction, Source,
+    Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
+    NativeFunction, Source,
 };
 
-use crate::{NativeFn, PromiseState, RealmInit};
+use crate::{Attributes, NativeFn, PromiseState, RealmInit, int64_modulo};
 
 pub const ENGINE_NAME: &str = "boa";
 
@@ -24,13 +28,52 @@ pub fn engine_version() -> String {
 #[derive(Clone)]
 pub struct Value(JsValue);
 
+#[derive(Trace, Finalize, JsData)]
+#[boa_gc(unsafe_empty_trace)]
+struct HostData(Box<dyn Any>);
+
 impl Value {
     pub fn undefined() -> Value {
         Value(JsValue::undefined())
     }
 
+    pub fn null() -> Value {
+        Value(JsValue::null())
+    }
+
+    pub fn int(number: i32) -> Value {
+        Value(JsValue::from(number))
+    }
+
+    pub fn number(number: f64) -> Value {
+        Value(JsValue::from(number))
+    }
+
+    pub fn int64(number: i64) -> Value {
+        match i32::try_from(number) {
+            Ok(small) => Value::int(small),
+            Err(_) => Value::number(number as f64),
+        }
+    }
+
+    pub fn boolean(value: bool) -> Value {
+        Value(JsValue::from(value))
+    }
+
     pub fn is_undefined(&self) -> bool {
         self.0.is_undefined()
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.0.is_null()
+    }
+
+    pub fn is_object(&self) -> bool {
+        self.0.is_object()
+    }
+
+    pub fn is_string(&self) -> bool {
+        self.0.is_string()
     }
 }
 
@@ -119,7 +162,19 @@ impl Scope<'_> {
         Value(JsString::from(text).into())
     }
 
+    pub fn bigint64(&mut self, number: i64) -> Value {
+        Value(JsBigInt::from(number).into())
+    }
+
+    pub fn constructor(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        self.native_function(name, arity, f, true)
+    }
+
     pub fn function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        self.native_function(name, arity, f, false)
+    }
+
+    fn native_function(&mut self, name: &str, arity: u32, f: NativeFn, constructor: bool) -> Value {
         let native = NativeFunction::from_copy_closure(move |this, args, ctx| {
             let this = Value(this.clone());
             let args: Vec<Value> = args.iter().cloned().map(Value).collect();
@@ -130,7 +185,7 @@ impl Scope<'_> {
         let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
             .name(JsString::from(name))
             .length(arity as usize)
-            .constructor(false)
+            .constructor(constructor)
             .build();
         Value(function.into())
     }
@@ -141,6 +196,111 @@ impl Scope<'_> {
             .get(JsString::from(key), self.ctx)
             .map(Value)
             .map_err(|e| self.error(e))
+    }
+
+    fn define_key(
+        &mut self,
+        object: &Value,
+        key: impl Into<boa_engine::property::PropertyKey>,
+        value: Value,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        let object = self.object(object)?;
+        let descriptor = PropertyDescriptor::builder()
+            .value(value.0)
+            .writable(attributes.writable)
+            .enumerable(attributes.enumerable)
+            .configurable(attributes.configurable);
+        object
+            .define_property_or_throw(key, descriptor, self.ctx)
+            .map(|_| ())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn define(
+        &mut self,
+        object: &Value,
+        key: &str,
+        value: Value,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        self.define_key(object, JsString::from(key), value, attributes)
+    }
+
+    pub fn define_to_string_tag(&mut self, object: &Value, tag: &str) -> Result<(), Value> {
+        let value = self.string(tag);
+        self.define_key(
+            object,
+            JsSymbol::to_string_tag(),
+            value,
+            Attributes::CONFIGURABLE,
+        )
+    }
+
+    pub fn set_constructor(&mut self, function: &Value, prototype: &Value) -> Result<(), Value> {
+        let hidden = Attributes {
+            writable: false,
+            enumerable: false,
+            configurable: false,
+        };
+        self.define(function, "prototype", prototype.clone(), hidden)?;
+        self.define(
+            prototype,
+            "constructor",
+            function.clone(),
+            Attributes::METHOD,
+        )
+    }
+
+    pub fn has_property(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
+        let object = self.object(object)?;
+        object
+            .has_property(JsString::from(key), self.ctx)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn call(&mut self, function: &Value, this: &Value, args: &[Value]) -> Result<Value, Value> {
+        let Some(callable) = function.0.as_callable() else {
+            return Err(self.type_error("not a function"));
+        };
+        let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
+        callable
+            .call(&this.0, &args, self.ctx)
+            .map(Value)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn to_int32(&mut self, value: &Value) -> Result<i32, Value> {
+        value.0.to_i32(self.ctx).map_err(|e| self.error(e))
+    }
+
+    pub fn to_int64(&mut self, value: &Value) -> Result<i64, Value> {
+        value
+            .0
+            .to_number(self.ctx)
+            .map(int64_modulo)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn to_bigint64(&mut self, value: &Value) -> Result<i64, Value> {
+        value.0.to_big_int64(self.ctx).map_err(|e| self.error(e))
+    }
+
+    pub fn range_error(&mut self, message: &str) -> Value {
+        let error = JsNativeError::range().with_message(message.to_owned());
+        Value(error.into_opaque(self.ctx).into())
+    }
+
+    pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
+        let prototype = prototype.and_then(|p| p.0.as_object());
+        let object = JsObject::from_proto_and_data(prototype, HostData(Box::new(data)));
+        Value(object.upcast().into())
+    }
+
+    pub fn host_data<T: Any + Clone>(&mut self, value: &Value) -> Option<T> {
+        let object = value.0.as_object()?;
+        let data = object.downcast_ref::<HostData>()?;
+        data.0.downcast_ref::<T>().cloned()
     }
 
     pub fn set(&mut self, object: &Value, key: &str, value: Value) -> Result<(), Value> {

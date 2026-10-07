@@ -13,10 +13,10 @@ use southstar_js_engine::{Engine, PromiseState, engine_version};
 
 const USAGE: &str = "usage:
   southstar-jsshell --version
-  southstar-jsshell run [--module] FILE...
+  southstar-jsshell run [--module] [--temporal] FILE...
   southstar-jsshell test262 --root DIR [--jobs N] [--timeout-ms N] [--results FILE.jsonl] [--staging] [FILTER...]";
 
-fn run_files(files: &[String], module: bool) -> ExitCode {
+fn run_files(files: &[String], module: bool, temporal: bool) -> ExitCode {
     let root = files
         .first()
         .and_then(|f| Path::new(f).parent())
@@ -28,6 +28,19 @@ fn run_files(files: &[String], module: bool) -> ExitCode {
             let (name, message) = host::describe(scope, &error);
             eprintln!("host setup: {name}: {message}");
             return ExitCode::FAILURE;
+        }
+        if temporal {
+            let installed = scope
+                .eval_script("delete globalThis.Temporal", "temporal-reset")
+                .and_then(|_| {
+                    let global = scope.global();
+                    southstar_js_temporal::install(scope, &global)
+                });
+            if let Err(error) = installed {
+                let (name, message) = host::describe(scope, &error);
+                eprintln!("Temporal: {name}: {message}");
+                return ExitCode::FAILURE;
+            }
         }
         for file in files {
             let source = match std::fs::read_to_string(file) {
@@ -88,16 +101,17 @@ fn dispatch(args: Vec<String>) -> ExitCode {
         }
         Some("run") => {
             let module = args.iter().any(|a| a == "--module");
+            let temporal = args.iter().any(|a| a == "--temporal");
             let files: Vec<String> = args[1..]
                 .iter()
-                .filter(|a| *a != "--module")
+                .filter(|a| *a != "--module" && *a != "--temporal")
                 .cloned()
                 .collect();
             if files.is_empty() {
                 eprintln!("{USAGE}");
                 return ExitCode::FAILURE;
             }
-            run_files(&files, module)
+            run_files(&files, module, temporal)
         }
         Some("test262-worker") => {
             let root = args.get(1).map(PathBuf::from).unwrap_or_default();

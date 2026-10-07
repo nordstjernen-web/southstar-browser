@@ -124,6 +124,21 @@ pub fn ascii_strtod(text: &[u8]) -> f64 {
     unsafe { g_ascii_strtod(terminated.as_ptr().cast(), ptr::null_mut()) }
 }
 
+pub fn ascii_strtod_prefix(text: &[u8]) -> (f64, usize) {
+    let mut terminated = Vec::with_capacity(text.len() + 1);
+    terminated.extend_from_slice(text);
+    terminated.push(0);
+    let start = terminated.as_ptr().cast::<c_char>();
+    let mut end: *mut c_char = ptr::null_mut();
+    let value = unsafe { g_ascii_strtod(start, &mut end) };
+    let consumed = if end.is_null() {
+        0
+    } else {
+        (end.cast_const() as usize).saturating_sub(start as usize)
+    };
+    (value, consumed.min(text.len()))
+}
+
 pub unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
 }

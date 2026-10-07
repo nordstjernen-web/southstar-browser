@@ -1,4 +1,4 @@
-/* Southstar — native Temporal date/time API for the QuickJS engine. */
+/* Southstar — native Temporal date/time API for the QuickJS engine, implemented in rust/js-temporal. */
 #ifndef NS_JS_DATE_H
 #define NS_JS_DATE_H
 

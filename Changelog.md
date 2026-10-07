@@ -43,6 +43,9 @@ Southstar Browser (unreleased):
   reads and writes the same files.
 * Spell checking of editable text is Rust, still over Enchant when it is
   installed.
+* Temporal is the first JavaScript binding written in Rust. It is built on
+  the engine-neutral layer, so the same code also runs on Boa, and it
+  behaves exactly as the C did.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

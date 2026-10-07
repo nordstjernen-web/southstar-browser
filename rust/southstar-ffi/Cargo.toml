@@ -22,6 +22,7 @@ southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
+southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-spellcheck = { path = "../spellcheck" }
@@ -29,7 +30,10 @@ southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
 enchant = ["southstar-spellcheck/enchant"]
-quickjs-original = ["southstar-bytecode-cache/quickjs-original"]
+quickjs-original = [
+    "southstar-bytecode-cache/quickjs-original",
+    "southstar-js-temporal/quickjs-original",
+]
 woff2 = ["dep:southstar-woff2"]
 
 [lints]

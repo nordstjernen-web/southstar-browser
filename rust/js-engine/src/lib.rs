@@ -17,6 +17,8 @@ use boa as backend;
 #[cfg(feature = "quickjs")]
 use quickjs_ffi as backend;
 
+#[cfg(feature = "quickjs")]
+pub use backend::quickjs;
 pub use backend::{ENGINE_NAME, Engine, Scope, Value, engine_version};
 
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
@@ -28,4 +30,47 @@ pub enum PromiseState {
     Pending,
     Fulfilled(Value),
     Rejected(Value),
+}
+
+#[derive(Clone, Copy)]
+pub struct Attributes {
+    pub writable: bool,
+    pub enumerable: bool,
+    pub configurable: bool,
+}
+
+impl Attributes {
+    pub const ENUMERABLE: Attributes = Attributes {
+        writable: false,
+        enumerable: true,
+        configurable: false,
+    };
+    pub const CONFIGURABLE: Attributes = Attributes {
+        writable: false,
+        enumerable: false,
+        configurable: true,
+    };
+    pub const METHOD: Attributes = Attributes {
+        writable: true,
+        enumerable: false,
+        configurable: true,
+    };
+}
+
+pub fn int64_modulo(number: f64) -> i64 {
+    let bits = number.to_bits();
+    let exponent = ((bits >> 52) & 0x7ff) as i64;
+    if exponent <= 1023 + 62 {
+        number as i64
+    } else if exponent <= 1023 + 62 + 53 {
+        let mantissa = (bits & ((1u64 << 52) - 1)) | (1u64 << 52);
+        let magnitude = (mantissa << (exponent - 1023 - 52)) as i64;
+        if bits >> 63 != 0 && magnitude != i64::MIN {
+            -magnitude
+        } else {
+            magnitude
+        }
+    } else {
+        0
+    }
 }

@@ -14,6 +14,7 @@ boa_gc = { version = "0.22", optional = true }
 [features]
 default = ["quickjs"]
 quickjs = []
+quickjs-original = ["quickjs"]
 boa = ["dep:boa_engine", "dep:boa_gc"]
 boa-intl = ["boa", "boa_engine/intl_bundled"]
 

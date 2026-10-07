@@ -806,8 +806,19 @@ table below, and `Changelog.md` gets an entry per phase.
 The first `js-engine` layer (`rust/js-engine`) has the QuickJS-ng backend (the
 in-tree fork, linked from meson's `libqjs`) and the Boa 0.22 backend, and
 `southstar-jsshell` (`rust/jsshell`) runs test262 and Octane on both; results
-are in `docs/js-engines.md`. Neither is linked into the browser yet. Next: the
-pilot binding file on both backends.
+are in `docs/js-engines.md`.
+
+The pilot binding is done: Temporal (`js_date.c`) is `rust/js-temporal`,
+written only against `js-engine`, and is the first Rust binding in the
+browser. The layer grew the primitives a binding needs (host objects carrying
+Rust data, constructors callable with or without `new`, `prototype` and
+`constructor` wiring, property attributes, `Symbol.toStringTag`, numeric and
+BigInt conversions, Range and Type errors) and an entry point that wraps a C
+`JSContext*`, and the QuickJS backend serves Bellard's engine through the
+`quickjs-original` feature. The same Temporal code runs unchanged on Boa in
+`southstar-jsshell --temporal`. On D8, hand-written natives over a small
+registration table read close to the C and were enough here; the next binding
+files will show whether WebIDL generation pays for itself.
 
 ### Ported
 
@@ -825,3 +836,4 @@ pilot binding file on both backends.
 | `bytecode_cache.c` | 259 | `rust/bytecode-cache` | 2 |
 | `config.c` | 566 | `rust/config` | 2 |
 | `spellcheck.c` | 132 | `rust/spellcheck` | 2 |
+| `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |

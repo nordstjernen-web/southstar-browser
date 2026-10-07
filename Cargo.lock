@@ -1479,6 +1479,7 @@ dependencies = [
  "southstar-glib",
  "southstar-history",
  "southstar-i18n",
+ "southstar-js-temporal",
  "southstar-safebrowsing",
  "southstar-spellcheck",
  "southstar-woff2",
@@ -1512,10 +1513,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-js-temporal"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-datetime",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
 name = "southstar-jsshell"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-js-engine",
+ "southstar-js-temporal",
 ]
 
 [[package]]

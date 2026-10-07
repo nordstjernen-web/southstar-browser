@@ -1,10 +1,11 @@
-//! Southstar — the QuickJS-ng backend of the JavaScript layer, over the in-tree fork's C API in src/quickjs/quickjs.h.
+//! Southstar — the QuickJS backend of the JavaScript layer, over the in-tree fork's C API (or Bellard's QuickJS through ns_quickjs.h).
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 #[cfg(not(target_pointer_width = "64"))]
-compile_error!("the QuickJS-ng backend lays out JSValue for 64-bit targets only");
+compile_error!("the QuickJS backend lays out JSValue for 64-bit targets only");
 
+use core::any::Any;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::marker::PhantomData;
 use core::{mem, ptr};
@@ -12,17 +13,17 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::{NativeFn, PromiseState, RealmInit};
+use crate::{Attributes, NativeFn, PromiseState, RealmInit};
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 
 #[repr(C)]
-struct JSRuntime {
+pub struct JSRuntime {
     _private: [u8; 0],
 }
 
 #[repr(C)]
-struct JSContext {
+pub struct JSContext {
     _private: [u8; 0],
 }
 
@@ -41,19 +42,41 @@ union JSValueUnion {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct JSValue {
+pub struct JSValue {
     u: JSValueUnion,
     tag: i64,
 }
 
+#[repr(C)]
+struct JSClassDef {
+    class_name: *const c_char,
+    finalizer: Option<unsafe extern "C" fn(rt: *mut JSRuntime, val: JSValue)>,
+    gc_mark: *const c_void,
+    call: *const c_void,
+    exotic: *const c_void,
+}
+
+type JSAtom = u32;
+
+const TAG_STRING: i64 = -7;
+const TAG_OBJECT: i64 = -1;
+const TAG_INT: i64 = 0;
+const TAG_BOOL: i64 = 1;
+const TAG_NULL: i64 = 2;
 const TAG_UNDEFINED: i64 = 3;
 const TAG_EXCEPTION: i64 = 6;
+const TAG_FLOAT64: i64 = 8;
 const EVAL_TYPE_GLOBAL: c_int = 0;
 const EVAL_TYPE_MODULE: c_int = 1;
 const EVAL_FLAG_COMPILE_ONLY: c_int = 1 << 5;
 const PROMISE_PENDING: c_int = 0;
 const PROMISE_FULFILLED: c_int = 1;
 const PROMISE_REJECTED: c_int = 2;
+const PROP_CONFIGURABLE: c_int = 1 << 0;
+const PROP_WRITABLE: c_int = 1 << 1;
+const PROP_ENUMERABLE: c_int = 1 << 2;
+const ATOM_NULL: JSAtom = 0;
+const HOST_CLASS_ID: u32 = 512;
 
 type JSCFunctionData = unsafe extern "C" fn(
     ctx: *mut JSContext,
@@ -80,8 +103,6 @@ type JSModuleNormalizeFunc = unsafe extern "C" fn(
 unsafe extern "C" {
     fn JS_NewRuntime() -> *mut JSRuntime;
     fn JS_FreeRuntime(rt: *mut JSRuntime);
-    fn JS_SetRuntimeOpaque(rt: *mut JSRuntime, opaque: *mut c_void);
-    fn JS_GetRuntimeOpaque(rt: *mut JSRuntime) -> *mut c_void;
     fn JS_SetMaxStackSize(rt: *mut JSRuntime, stack_size: usize);
     fn JS_RunGC(rt: *mut JSRuntime);
     fn JS_NewContext(rt: *mut JSRuntime) -> *mut JSContext;
@@ -95,16 +116,14 @@ unsafe extern "C" {
         eval_flags: c_int,
     ) -> JSValue;
     fn JS_GetException(ctx: *mut JSContext) -> JSValue;
-    fn JS_HasException(ctx: *mut JSContext) -> bool;
     fn JS_Throw(ctx: *mut JSContext, obj: JSValue) -> JSValue;
     fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
-    fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
-    fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
+    fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ToCStringLen2(
         ctx: *mut JSContext,
         plen: *mut usize,
         val: JSValue,
-        cesu8: bool,
+        cesu8: c_int,
     ) -> *const c_char;
     fn JS_FreeCString(ctx: *mut JSContext, ptr: *const c_char);
     fn JS_NewStringLen(ctx: *mut JSContext, str1: *const c_char, len1: usize) -> JSValue;
@@ -117,15 +136,51 @@ unsafe extern "C" {
         prop: *const c_char,
         val: JSValue,
     ) -> c_int;
-    fn JS_NewCFunctionData2(
+    fn JS_DefinePropertyValueStr(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        prop: *const c_char,
+        val: JSValue,
+        flags: c_int,
+    ) -> c_int;
+    fn JS_DefinePropertyValue(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        prop: JSAtom,
+        val: JSValue,
+        flags: c_int,
+    ) -> c_int;
+    fn JS_HasProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> c_int;
+    fn JS_NewAtom(ctx: *mut JSContext, str: *const c_char) -> JSAtom;
+    fn JS_FreeAtom(ctx: *mut JSContext, v: JSAtom);
+    fn JS_ValueToAtom(ctx: *mut JSContext, val: JSValue) -> JSAtom;
+    fn JS_NewCFunctionData(
         ctx: *mut JSContext,
         func: JSCFunctionData,
-        name: *const c_char,
         length: c_int,
         magic: c_int,
         data_len: c_int,
         data: *mut JSValue,
     ) -> JSValue;
+    fn JS_SetConstructorBit(ctx: *mut JSContext, func_obj: JSValue, val: c_int) -> bool;
+    fn JS_SetConstructor(ctx: *mut JSContext, func_obj: JSValue, proto: JSValue) -> c_int;
+    fn JS_Call(
+        ctx: *mut JSContext,
+        func_obj: JSValue,
+        this_obj: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn JS_ToInt32(ctx: *mut JSContext, pres: *mut i32, val: JSValue) -> c_int;
+    fn JS_ToInt64(ctx: *mut JSContext, pres: *mut i64, val: JSValue) -> c_int;
+    fn JS_ToBigInt64(ctx: *mut JSContext, pres: *mut i64, val: JSValue) -> c_int;
+    fn JS_NewBigInt64(ctx: *mut JSContext, v: i64) -> JSValue;
+    fn JS_NewClass(rt: *mut JSRuntime, class_id: u32, class_def: *const JSClassDef) -> c_int;
+    fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: u32) -> bool;
+    fn JS_NewObjectClass(ctx: *mut JSContext, class_id: c_int) -> JSValue;
+    fn JS_NewObjectProtoClass(ctx: *mut JSContext, proto: JSValue, class_id: u32) -> JSValue;
+    fn JS_GetOpaque(obj: JSValue, class_id: u32) -> *mut c_void;
+    fn JS_SetOpaque(obj: JSValue, opaque: *mut c_void) -> c_int;
     fn JS_DetachArrayBuffer(ctx: *mut JSContext, obj: JSValue);
     fn JS_ExecutePendingJob(rt: *mut JSRuntime, pctx: *mut *mut JSContext) -> c_int;
     fn JS_PromiseState(ctx: *mut JSContext, promise: JSValue) -> c_int;
@@ -139,13 +194,60 @@ unsafe extern "C" {
     fn JS_GetVersion() -> *const c_char;
 }
 
-const UNDEFINED: JSValue = JSValue {
-    u: JSValueUnion { int32: 0 },
-    tag: TAG_UNDEFINED,
-};
+#[cfg(not(feature = "quickjs-original"))]
+unsafe extern "C" {
+    fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
+    fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
+}
+
+#[cfg(feature = "quickjs-original")]
+unsafe extern "C" {
+    fn __JS_FreeValue(ctx: *mut JSContext, v: JSValue);
+}
+
+#[cfg(feature = "quickjs-original")]
+unsafe fn ref_count(v: JSValue) -> *mut c_int {
+    unsafe { v.u.ptr.cast::<c_int>().sub(1) }
+}
+
+#[cfg(feature = "quickjs-original")]
+#[allow(non_snake_case)]
+unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
+    if v.tag < 0 {
+        unsafe {
+            let count = ref_count(v);
+            *count -= 1;
+            if *count <= 0 {
+                __JS_FreeValue(ctx, v);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "quickjs-original")]
+#[allow(non_snake_case)]
+unsafe fn JS_DupValue(_ctx: *mut JSContext, v: JSValue) -> JSValue {
+    if v.tag < 0 {
+        unsafe { *ref_count(v) += 1 };
+    }
+    v
+}
+
+const fn mkval(tag: i64, int32: i32) -> JSValue {
+    JSValue {
+        u: JSValueUnion { int32 },
+        tag,
+    }
+}
+
+const UNDEFINED: JSValue = mkval(TAG_UNDEFINED, 0);
+const NULL: JSValue = mkval(TAG_NULL, 0);
+
+struct HostData(Box<dyn Any>);
 
 thread_local! {
     static NATIVES: RefCell<Vec<NativeFn>> = const { RefCell::new(Vec::new()) };
+    static REALMS: RefCell<Vec<(*mut JSRuntime, *mut JSContext)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn native_index(f: NativeFn) -> c_int {
@@ -162,8 +264,26 @@ fn native_index(f: NativeFn) -> c_int {
     })
 }
 
-struct RuntimeState {
-    realms: Vec<*mut JSContext>,
+unsafe extern "C" fn finalize_host(_rt: *mut JSRuntime, val: JSValue) {
+    let data = unsafe { JS_GetOpaque(val, HOST_CLASS_ID) };
+    if !data.is_null() {
+        drop(unsafe { Box::from_raw(data.cast::<HostData>()) });
+    }
+}
+
+fn register_host_class(rt: *mut JSRuntime) {
+    unsafe {
+        if !JS_IsRegisteredClass(rt, HOST_CLASS_ID) {
+            let def = JSClassDef {
+                class_name: c"HostObject".as_ptr(),
+                finalizer: Some(finalize_host),
+                gc_mark: ptr::null(),
+                call: ptr::null(),
+                exotic: ptr::null(),
+            };
+            JS_NewClass(rt, HOST_CLASS_ID, &def);
+        }
+    }
 }
 
 pub struct Value {
@@ -186,8 +306,47 @@ impl Value {
         Value::own(ptr::null_mut(), UNDEFINED)
     }
 
+    pub fn null() -> Value {
+        Value::own(ptr::null_mut(), NULL)
+    }
+
+    pub fn int(number: i32) -> Value {
+        Value::own(ptr::null_mut(), mkval(TAG_INT, number))
+    }
+
+    pub fn number(number: f64) -> Value {
+        let raw = JSValue {
+            u: JSValueUnion { float64: number },
+            tag: TAG_FLOAT64,
+        };
+        Value::own(ptr::null_mut(), raw)
+    }
+
+    pub fn int64(number: i64) -> Value {
+        match i32::try_from(number) {
+            Ok(small) => Value::int(small),
+            Err(_) => Value::number(number as f64),
+        }
+    }
+
+    pub fn boolean(value: bool) -> Value {
+        Value::own(ptr::null_mut(), mkval(TAG_BOOL, value as i32))
+    }
+
     pub fn is_undefined(&self) -> bool {
         self.raw.tag == TAG_UNDEFINED
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.raw.tag == TAG_NULL
+    }
+
+    pub fn is_object(&self) -> bool {
+        self.raw.tag == TAG_OBJECT
+    }
+
+    pub fn is_string(&self) -> bool {
+        self.raw.tag == TAG_STRING
     }
 }
 
@@ -218,6 +377,22 @@ fn nul_terminated(source: &str) -> Vec<u8> {
     bytes.extend_from_slice(source.as_bytes());
     bytes.push(0);
     bytes
+}
+
+fn prop_flags(attributes: Attributes) -> c_int {
+    (if attributes.writable {
+        PROP_WRITABLE
+    } else {
+        0
+    }) | (if attributes.enumerable {
+        PROP_ENUMERABLE
+    } else {
+        0
+    }) | (if attributes.configurable {
+        PROP_CONFIGURABLE
+    } else {
+        0
+    })
 }
 
 unsafe extern "C" fn call_native(
@@ -278,7 +453,7 @@ unsafe extern "C" fn load_module(
 
 pub fn engine_version() -> String {
     let version = unsafe { CStr::from_ptr(JS_GetVersion()) };
-    format!("quickjs-ng {}", version.to_string_lossy())
+    format!("{ENGINE_NAME} {}", version.to_string_lossy())
 }
 
 pub struct Engine {
@@ -290,8 +465,6 @@ impl Engine {
     pub fn new(_module_root: &Path) -> Engine {
         unsafe {
             let rt = JS_NewRuntime();
-            let state = Box::new(RuntimeState { realms: Vec::new() });
-            JS_SetRuntimeOpaque(rt, Box::into_raw(state).cast());
             JS_SetMaxStackSize(rt, 4 * 1024 * 1024);
             JS_SetModuleLoaderFunc(rt, None, Some(load_module), ptr::null_mut());
             let main = JS_NewContext(rt);
@@ -300,24 +473,40 @@ impl Engine {
     }
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        f(&mut Scope {
-            ctx: self.main,
-            engine: PhantomData,
-        })
+        f(&mut Scope::of(self.main))
     }
 }
 
 impl Drop for Engine {
     fn drop(&mut self) {
+        let realms: Vec<*mut JSContext> = REALMS.with(|realms| {
+            let mut realms = realms.borrow_mut();
+            let (mine, others): (Vec<_>, Vec<_>) =
+                realms.drain(..).partition(|&(rt, _)| rt == self.rt);
+            *realms = others;
+            mine.into_iter().map(|(_, ctx)| ctx).collect()
+        });
         unsafe {
-            let state = Box::from_raw(JS_GetRuntimeOpaque(self.rt).cast::<RuntimeState>());
-            for realm in state.realms {
+            for realm in realms {
                 JS_FreeContext(realm);
             }
             JS_FreeContext(self.main);
             JS_RunGC(self.rt);
             JS_FreeRuntime(self.rt);
         }
+    }
+}
+
+pub mod quickjs {
+    pub use super::{JSContext, JSValue};
+    use super::{Scope, Value};
+
+    pub unsafe fn with_context<R>(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        f(&mut Scope::of(ctx))
+    }
+
+    pub unsafe fn borrow_value(scope: &Scope<'_>, raw: JSValue) -> Value {
+        Value::own(scope.ctx, unsafe { super::JS_DupValue(scope.ctx, raw) })
     }
 }
 
@@ -340,15 +529,19 @@ impl Scope<'_> {
 
     fn take(&self, raw: JSValue) -> Result<Value, Value> {
         if raw.tag == TAG_EXCEPTION {
-            Err(Value::own(self.ctx, unsafe { JS_GetException(self.ctx) }))
+            Err(self.exception())
         } else {
             Ok(Value::own(self.ctx, raw))
         }
     }
 
-    fn pending_exception(&self) -> Result<(), Value> {
-        if unsafe { JS_HasException(self.ctx) } {
-            Err(Value::own(self.ctx, unsafe { JS_GetException(self.ctx) }))
+    fn exception(&self) -> Value {
+        Value::own(self.ctx, unsafe { JS_GetException(self.ctx) })
+    }
+
+    fn status(&self, status: c_int) -> Result<(), Value> {
+        if status < 0 {
+            Err(self.exception())
         } else {
             Ok(())
         }
@@ -425,19 +618,41 @@ impl Scope<'_> {
         })
     }
 
-    pub fn function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
-        let name = c_text(name);
-        Value::own(self.ctx, unsafe {
-            JS_NewCFunctionData2(
+    pub fn bigint64(&mut self, number: i64) -> Value {
+        Value::own(self.ctx, unsafe { JS_NewBigInt64(self.ctx, number) })
+    }
+
+    fn native_function(&mut self, name: &str, arity: u32, f: NativeFn, constructor: bool) -> Value {
+        let raw = unsafe {
+            JS_NewCFunctionData(
                 self.ctx,
                 call_native,
-                name.as_ptr(),
                 arity as c_int,
                 native_index(f),
                 0,
                 ptr::null_mut(),
             )
-        })
+        };
+        let function = Value::own(self.ctx, raw);
+        if constructor {
+            unsafe { JS_SetConstructorBit(self.ctx, function.raw, 1) };
+        }
+        let name = self.string(name);
+        let _ = self.define(&function, "name", name, Attributes::CONFIGURABLE);
+        function
+    }
+
+    pub fn function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        self.native_function(name, arity, f, false)
+    }
+
+    pub fn constructor(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        self.native_function(name, arity, f, true)
+    }
+
+    pub fn set_constructor(&mut self, function: &Value, prototype: &Value) -> Result<(), Value> {
+        let status = unsafe { JS_SetConstructor(self.ctx, function.raw, prototype.raw) };
+        self.status(status)
     }
 
     pub fn get(&mut self, object: &Value, key: &str) -> Result<Value, Value> {
@@ -450,18 +665,72 @@ impl Scope<'_> {
         let key = c_text(key);
         let raw = value.into_raw();
         let status = unsafe { JS_SetPropertyStr(self.ctx, object.raw, key.as_ptr(), raw) };
-        if status < 0 {
-            Err(Value::own(self.ctx, unsafe { JS_GetException(self.ctx) }))
-        } else {
-            Ok(())
+        self.status(status)
+    }
+
+    pub fn define(
+        &mut self,
+        object: &Value,
+        key: &str,
+        value: Value,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        let key = c_text(key);
+        let raw = value.into_raw();
+        let status = unsafe {
+            JS_DefinePropertyValueStr(
+                self.ctx,
+                object.raw,
+                key.as_ptr(),
+                raw,
+                prop_flags(attributes),
+            )
+        };
+        self.status(status)
+    }
+
+    pub fn define_to_string_tag(&mut self, object: &Value, tag: &str) -> Result<(), Value> {
+        let global = self.global();
+        let symbol_constructor = self.get(&global, "Symbol")?;
+        let symbol = self.get(&symbol_constructor, "toStringTag")?;
+        let atom = unsafe { JS_ValueToAtom(self.ctx, symbol.raw) };
+        if atom == ATOM_NULL {
+            return Err(self.exception());
         }
+        let value = self.string(tag).into_raw();
+        let status =
+            unsafe { JS_DefinePropertyValue(self.ctx, object.raw, atom, value, PROP_CONFIGURABLE) };
+        unsafe { JS_FreeAtom(self.ctx, atom) };
+        self.status(status)
+    }
+
+    pub fn has_property(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
+        let key = c_text(key);
+        let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
+        let status = unsafe { JS_HasProperty(self.ctx, object.raw, atom) };
+        unsafe { JS_FreeAtom(self.ctx, atom) };
+        self.status(status).map(|()| status > 0)
+    }
+
+    pub fn call(&mut self, function: &Value, this: &Value, args: &[Value]) -> Result<Value, Value> {
+        let mut raw_args: Vec<JSValue> = args.iter().map(|arg| arg.raw).collect();
+        let raw = unsafe {
+            JS_Call(
+                self.ctx,
+                function.raw,
+                this.raw,
+                raw_args.len() as c_int,
+                raw_args.as_mut_ptr(),
+            )
+        };
+        self.take(raw)
     }
 
     pub fn to_string(&mut self, value: &Value) -> Result<String, Value> {
         let mut len = 0usize;
-        let text = unsafe { JS_ToCStringLen2(self.ctx, &mut len, value.raw, false) };
+        let text = unsafe { JS_ToCStringLen2(self.ctx, &mut len, value.raw, 0) };
         if text.is_null() {
-            return Err(Value::own(self.ctx, unsafe { JS_GetException(self.ctx) }));
+            return Err(self.exception());
         }
         let bytes = unsafe { core::slice::from_raw_parts(text.cast::<u8>(), len) };
         let owned = String::from_utf8_lossy(bytes).into_owned();
@@ -469,15 +738,62 @@ impl Scope<'_> {
         Ok(owned)
     }
 
+    pub fn to_int32(&mut self, value: &Value) -> Result<i32, Value> {
+        let mut out = 0i32;
+        let status = unsafe { JS_ToInt32(self.ctx, &mut out, value.raw) };
+        self.status(status).map(|()| out)
+    }
+
+    pub fn to_int64(&mut self, value: &Value) -> Result<i64, Value> {
+        let mut out = 0i64;
+        let status = unsafe { JS_ToInt64(self.ctx, &mut out, value.raw) };
+        self.status(status).map(|()| out)
+    }
+
+    pub fn to_bigint64(&mut self, value: &Value) -> Result<i64, Value> {
+        let mut out = 0i64;
+        let status = unsafe { JS_ToBigInt64(self.ctx, &mut out, value.raw) };
+        self.status(status).map(|()| out)
+    }
+
     pub fn type_error(&mut self, message: &str) -> Value {
         let message = c_text(message);
         unsafe { JS_ThrowTypeError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
-        Value::own(self.ctx, unsafe { JS_GetException(self.ctx) })
+        self.exception()
+    }
+
+    pub fn range_error(&mut self, message: &str) -> Value {
+        let message = c_text(message);
+        unsafe { JS_ThrowRangeError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
+        self.exception()
+    }
+
+    pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
+        register_host_class(self.rt());
+        let raw = unsafe {
+            match prototype {
+                Some(prototype) => JS_NewObjectProtoClass(self.ctx, prototype.raw, HOST_CLASS_ID),
+                None => JS_NewObjectClass(self.ctx, HOST_CLASS_ID as c_int),
+            }
+        };
+        if raw.tag == TAG_OBJECT {
+            let boxed = Box::into_raw(Box::new(HostData(Box::new(data))));
+            unsafe { JS_SetOpaque(raw, boxed.cast()) };
+        }
+        Value::own(self.ctx, raw)
+    }
+
+    pub fn host_data<T: Any + Clone>(&mut self, value: &Value) -> Option<T> {
+        if value.raw.tag != TAG_OBJECT {
+            return None;
+        }
+        let data = unsafe { JS_GetOpaque(value.raw, HOST_CLASS_ID) }.cast::<HostData>();
+        unsafe { data.as_ref() }.and_then(|data| data.0.downcast_ref::<T>().cloned())
     }
 
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
         unsafe { JS_DetachArrayBuffer(self.ctx, value.raw) };
-        self.pending_exception()
+        Ok(())
     }
 
     pub fn gc(&mut self) {
@@ -485,9 +801,9 @@ impl Scope<'_> {
     }
 
     pub fn new_realm(&mut self, init: RealmInit) -> Result<Value, Value> {
-        let ctx = unsafe { JS_NewContext(self.rt()) };
-        let state = unsafe { &mut *JS_GetRuntimeOpaque(self.rt()).cast::<RuntimeState>() };
-        state.realms.push(ctx);
+        let rt = self.rt();
+        let ctx = unsafe { JS_NewContext(rt) };
+        REALMS.with(|realms| realms.borrow_mut().push((rt, ctx)));
         let mut realm = Scope::of(ctx);
         init(&mut realm)?;
         Ok(realm.global())
