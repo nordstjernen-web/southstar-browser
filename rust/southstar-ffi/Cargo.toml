@@ -20,6 +20,10 @@ southstar-debuglog = { path = "../debuglog" }
 southstar-glib = { path = "../glib" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
+southstar-woff2 = { path = "../woff2", optional = true }
+
+[features]
+woff2 = ["dep:southstar-woff2"]
 
 [lints]
 workspace = true

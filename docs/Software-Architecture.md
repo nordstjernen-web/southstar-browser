@@ -306,7 +306,7 @@ clip-paths, and paints positioned/z-indexed children in stacking order.
 
 **Text** is shaped with **Pango** (`pango/pangocairo.h`). `@font-face`
 fonts are fetched, converted from WOFF to SFNT (`src/font.c`) and from
-WOFF2 to SFNT over libbrotlidec when it is available (`src/woff2.c`), and
+WOFF2 to SFNT over libbrotlidec when it is available (`rust/woff2`), and
 registered with Fontconfig so the Pango-FC fontmap can use them.
 
 **Animation.** `src/anim.c` tracks CSS transitions and `@keyframes`.

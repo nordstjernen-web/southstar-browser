@@ -8,6 +8,13 @@ rust_native_libs = run_command(
   check: true,
 ).stdout().strip().split('\n')
 
+southstar_rust_features = []
+southstar_rust_link_deps = []
+if have_woff2
+  southstar_rust_features += ['woff2']
+  southstar_rust_link_deps += [libbrotlidec_fonts]
+endif
+
 southstar_rust_lib = custom_target(
   'southstar-rust',
   output: 'libsouthstar_ffi.a',
@@ -17,7 +24,7 @@ southstar_rust_lib = custom_target(
     meson.current_build_dir() / 'cargo-target',
     ns_is_release ? 'release' : 'dev',
     'southstar-ffi', '@OUTPUT@', '@DEPFILE@',
-  ],
+  ] + southstar_rust_features,
   console: true,
   build_by_default: true,
 )
@@ -25,4 +32,5 @@ southstar_rust_lib = custom_target(
 southstar_rust_dep = declare_dependency(
   link_with: southstar_rust_lib,
   link_args: rust_native_libs,
+  dependencies: southstar_rust_link_deps,
 )

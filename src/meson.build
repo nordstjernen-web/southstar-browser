@@ -117,10 +117,6 @@ if have_avif
   southstar_engine_sources += files('image_avif.c')
 endif
 
-if have_woff2
-  southstar_engine_sources += files('woff2.c')
-endif
-
 if http_backend == 'nghttp2'
   southstar_engine_sources += files('net_http2.c')
 endif
@@ -193,10 +189,6 @@ endif
 
 if have_freetype
   southstar_deps += [libfreetype]
-endif
-
-if have_woff2
-  southstar_deps += [libbrotlidec_fonts]
 endif
 
 southstar_deps += [libpsl]

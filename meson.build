@@ -367,7 +367,7 @@ if have_freetype
 endif
 
 # WOFF2 web fonts. FreeType reads them only when it was built with Brotli
-# (Homebrew's is not), so src/woff2.c decodes them over libbrotlidec.
+# (Homebrew's is not), so rust/woff2 decodes them over libbrotlidec.
 libbrotlidec_fonts = dependency('libbrotlidec', required: false)
 have_woff2 = libbrotlidec_fonts.found()
 if have_woff2

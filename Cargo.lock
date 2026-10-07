@@ -46,6 +46,7 @@ dependencies = [
  "southstar-glib",
  "southstar-i18n",
  "southstar-safebrowsing",
+ "southstar-woff2",
 ]
 
 [[package]]
@@ -61,6 +62,13 @@ dependencies = [
 
 [[package]]
 name = "southstar-safebrowsing"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-woff2"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

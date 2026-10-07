@@ -1,4 +1,4 @@
-/* Southstar: WOFF2 web font decoder over libbrotlidec. */
+/* Southstar: WOFF2 web font decoder over libbrotlidec, implemented in rust/woff2. */
 
 #ifndef NS_WOFF2_H
 #define NS_WOFF2_H
