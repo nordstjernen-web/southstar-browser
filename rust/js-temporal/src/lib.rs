@@ -130,7 +130,7 @@ impl Temporal {
 
     fn add_date(&mut self, y: i64, mo: i64, w: i64, d: i64, sign: i64) {
         let mut ny = self.year.wrapping_add((sign * y) as c_int);
-        let total_mo = (c_long::from(self.month) as i64 - 1 + sign * mo) as c_long;
+        let total_mo = long(i64::from(self.month) - 1 + sign * mo);
         ny = ny.wrapping_add(
             (if total_mo >= 0 {
                 total_mo / 12
@@ -141,7 +141,7 @@ impl Temporal {
         let nmo = dt::floormod(total_mo, 12) as c_int + 1;
         let dim = dt::days_in_month(ny, nmo);
         let nd = self.day.min(dim);
-        let days = (dt::days_from_civil(ny, nmo, nd) as i64 + sign * (w * 7 + d)) as c_long;
+        let days = long(wide(dt::days_from_civil(ny, nmo, nd)) + sign * (w * 7 + d));
         (self.year, self.month, self.day) = dt::civil_from_days(days);
     }
 
@@ -161,6 +161,16 @@ impl Temporal {
             .find(|&&field| field != 0)
             .map_or(0, |&field| if field > 0 { 1 } else { -1 })
     }
+}
+
+#[allow(clippy::unnecessary_cast)]
+fn long(value: i64) -> c_long {
+    value as c_long
+}
+
+#[allow(clippy::useless_conversion)]
+fn wide(value: c_long) -> i64 {
+    i64::from(value)
 }
 
 fn iso_day_of_week(y: c_int, m: c_int, d: c_int) -> c_int {
@@ -197,12 +207,14 @@ fn week_of_year(mut y: c_int, m: c_int, d: c_int) -> c_int {
 }
 
 fn breakdown(epoch_sec: i64) -> (c_int, c_int, c_int, c_int, c_int, c_int) {
-    let days = (if epoch_sec >= 0 {
-        epoch_sec
-    } else {
-        epoch_sec - 86_399
-    } / 86_400) as c_long;
-    let rem = (epoch_sec - days as i64 * 86_400) as c_long;
+    let days = long(
+        if epoch_sec >= 0 {
+            epoch_sec
+        } else {
+            epoch_sec - 86_399
+        } / 86_400,
+    );
+    let rem = long(epoch_sec - wide(days) * 86_400);
     let (y, mo, d) = dt::civil_from_days(days);
     (
         y,
@@ -215,7 +227,7 @@ fn breakdown(epoch_sec: i64) -> (c_int, c_int, c_int, c_int, c_int, c_int) {
 }
 
 fn epoch_of(y: c_int, mo: c_int, d: c_int, h: c_int, mi: c_int, s: c_int) -> i64 {
-    dt::days_from_civil(y, mo, d) as i64 * 86_400
+    wide(dt::days_from_civil(y, mo, d)) * 86_400
         + i64::from(h.wrapping_mul(3600))
         + i64::from(mi.wrapping_mul(60))
         + i64::from(s)
@@ -787,7 +799,7 @@ fn date_until_impl(
         dt::days_from_civil(o.year, o.month, o.day) - dt::days_from_civil(t.year, t.month, t.day);
     let prototype = global_prototype(scope, "Duration");
     let mut nt = Temporal::new(Kind::Duration);
-    nt.dur[3] = sign * days as i64;
+    nt.dur[3] = sign * wide(days);
     Ok(make(scope, prototype, nt))
 }
 
@@ -1003,7 +1015,7 @@ fn datetime_add_impl(
     tns -= carry * NS_PER_DAY;
     nt.split_time_ns(tns);
     let mut ny = nt.year.wrapping_add((sign * dur[0]) as c_int);
-    let total_mo = (c_long::from(nt.month) as i64 - 1 + sign * dur[1]) as c_long;
+    let total_mo = long(i64::from(nt.month) - 1 + sign * dur[1]);
     ny = ny.wrapping_add(
         (if total_mo >= 0 {
             total_mo / 12
@@ -1014,8 +1026,7 @@ fn datetime_add_impl(
     let nmo = dt::floormod(total_mo, 12) as c_int + 1;
     let dim = dt::days_in_month(ny, nmo);
     let nd = nt.day.min(dim);
-    let days =
-        (dt::days_from_civil(ny, nmo, nd) as i64 + sign * (dur[2] * 7 + dur[3]) + carry) as c_long;
+    let days = long(wide(dt::days_from_civil(ny, nmo, nd)) + sign * (dur[2] * 7 + dur[3]) + carry);
     (nt.year, nt.month, nt.day) = dt::civil_from_days(days);
     Ok(make(scope, prototype, nt))
 }
