@@ -1,0 +1,661 @@
+# Porting Southstar Browser to Rust
+
+Status: **proposed** — October 2026, written against `main` at the commit that
+added this file. Sizes and facts below were taken from the code on that tree.
+Where they disagree with older docs (`Software-Architecture.md` still quotes
+css.c at ~17k lines and layout.c at ~11k; `media.md` calls the audio helper
+unsandboxed and the video ring three slots), the code is right.
+
+## 1. Summary
+
+Southstar starts as about **221,000 lines of project C** (plus ~570,000 lines
+of vendored C libraries) that already make a working, sandboxed,
+process-per-tab browser on Linux, Windows, macOS, FreeBSD and NetBSD. The plan
+is to port that code to Rust **in place and incrementally**, so that every
+commit still builds, launches and passes the same checks as today:
+
+1. **Cross process boundaries first.** The audio and video helpers, the
+   renderer protocol and the GTK shell are separated from the engine by narrow
+   IPC protocols. Rust replacements can speak the same protocol and drop in
+   without touching the engine.
+2. **Then replace engine modules behind their existing C headers.** A Rust
+   module exports the same `ns_*` functions the C header declares, so the C
+   that still calls it does not change. Leaf modules go first; the large
+   coupled core (DOM, style, layout, paint) goes next; the JavaScript bindings,
+   at ~78,000 lines the largest single piece, go last, written once against an
+   already-Rust DOM.
+3. **Translate first, redesign later.** Each port keeps behaviour, data layout
+   and algorithms. Redesigns (a display list, a Rust-native text stack, an
+   arena-based DOM) are separate, later steps with their own decisions.
+4. **Vendored C libraries are decided one by one.** Some are replaced during
+   the port where a Rust crate is a clear win (Wuffs, WAMR); QuickJS, lexbor,
+   Cairo, ns-pango and GTK stay C behind FFI until a separate decision.
+
+The end state of this plan: all **project** code is Rust; C remains only in
+third-party libraries that are deliberately kept (phase 9 and §9).
+
+| Phase | What | Project C retired (lines) |
+|---|---|---:|
+| 0 | Toolchain, build integration, CI, a pilot module | 168 |
+| 1 | Helper processes and the sandbox library | 3,974 |
+| 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 |
+| 3 | Renderer host and IPC protocol | 5,028 |
+| 4 | GTK shell, watchdog and headless driver | 13,291 |
+| 5 | Networking and storage | 13,500 |
+| 6 | Engine core: DOM → style → layout → paint → pipeline | 82,654 |
+| 7 | JavaScript bindings | 77,729 |
+| 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 |
+| 9 | Vendored libraries; decide the long-term build | — |
+| | **Total** | **221,452** |
+
+Every project source file is assigned to exactly one phase.
+
+The phases are ordered by dependency and risk, not by calendar; sizes are the
+only estimates given. Decisions that need an owner are collected in §11.
+
+## 2. Goals and non-goals
+
+**Goals**
+
+- All project code in Rust, with `unsafe` confined to FFI layers.
+- Same platforms as today: Linux (glibc and musl), Windows (MSYS2/MinGW),
+  macOS, FreeBSD, NetBSD.
+- Feature parity at every step, including the curl and nghttp2 HTTP backends,
+  single-process mode, headless mode, the C embedding API (`libsouthstar.h`)
+  and the optional features (WebGPU, AVIF, spell checking, HTTP/3).
+- The same security posture: process-per-tab, seccomp + Landlock on Linux, the
+  macOS sandbox profile, Windows mitigations, no JIT.
+- No performance or memory regression beyond noise.
+
+**Non-goals of the port itself**
+
+- New features or behaviour changes mixed into port commits.
+- Replacing the rendering stack (Cairo, ns-pango, GTK) or the JavaScript
+  engine while porting. These are separate decisions (§9, §11).
+- Bringing back Android, iOS or a JVM binding.
+
+## 3. Project rules and what they mean in Rust
+
+The rules in `CLAUDE.md` and `SOUTHSTAR.md` carry over unchanged. Some need an
+explicit Rust reading:
+
+- **No upstream browser engine code.** Several popular crates come out of
+  Servo or Firefox: `html5ever`, `markup5ever`, `cssparser`, `selectors`,
+  `stylo`, `webrender`, `url` (rust-url, a Servo project), `encoding_rs` and
+  `chardetng`. This plan treats them as excluded. That rules out the usual
+  shortcuts for HTML parsing, CSS parsing, URL parsing and encoding detection;
+  Southstar keeps lexbor and uchardet behind FFI or writes its own (decision
+  D1).
+- **Few small auditable dependencies.** Crates pull in transitive trees.
+  Every crate is pinned in `Cargo.lock`, vendored for offline builds (§5.6),
+  licence-checked with `cargo-deny`, and listed in `THIRD-PARTY-LICENSES.md`.
+  Prefer crates with no or few dependencies; an async runtime (`tokio`) is not
+  added unless decision D7 calls for it.
+- **No comments beyond one header line per file.** In Rust that header is a
+  `//!` line. Clippy's `undocumented_unsafe_blocks` lint expects
+  `// SAFETY:` comments, which the rule forbids; this plan keeps the rule and
+  confines `unsafe` to small `ffi` modules instead (decision D5).
+- **No automated test suite.** No `#[test]` functions, no `tests/` directory,
+  no `cargo test` targets. Parity is checked with the scripts the project
+  already has (§8). Whether ported code may carry unit tests is decision D6.
+- **No JIT, no telemetry, no AI-style web APIs, no site-specific hacks** — as
+  today.
+- **WebGPU stays opt-in.** Its Rust side is a Cargo feature that is off by
+  default and still runtime-gated by `--enable-webgpu`; a stock build carries
+  no WebGPU code.
+- **UI translation** keeps `data/i18n/*.lang` and the `ns_i18n()` lookup; the
+  Rust shell reads the same catalogues.
+
+## 4. Starting point
+
+### 4.1 Code inventory
+
+Project code by subsystem (`.c`, `.h`, `.m`; generated image headers and
+vendored code excluded):
+
+| Subsystem | Lines | Main files |
+|---|---:|---|
+| JavaScript bindings | 79,269 | `js.c` (66.6k), `js_canvas*.c`, `js_date.c`, `js_intl.c`, `js_perf.c`, `ns_quickjs.c` |
+| Style and animation | 38,604 | `css.c` (33.1k), `css_media.c`, `css_prop_syntax.c`, `css_syntax.c`, `anim.c` |
+| Layout | 22,058 | `layout.c` (17.8k), `svg.c`, `mathml.c`, `selection.c`, `print.c`, `pdf.c` |
+| Networking and storage | 15,864 | `net.c` (7.2k), `net_http2.c`, `cache.c`, `idb.c`, `ws.c`, `eventsource.c`, `csp.c`, `config.c` |
+| Embedding and renderer process | 13,776 | `libsouthstar.c`, `engine.c`, `headless.c`, `renderer_*.c`, `rproc_*.c`, `ipc_http.c` |
+| Paint and text | 11,262 | `paint.c` (8.5k), `render.c`, `font.c`, `woff2.c`, `ns_pango*.h` |
+| WebGL, WebGPU, Wasm | 10,734 | `webgl.c`, `webgpu.c`, `wasm.c`, `glctx.c` |
+| GTK shell | 10,414 | `gtk/procview.c`, `gtk/procwindow.c`, `gtk/appmain.c`, `gtk/macos_dock.m` |
+| DOM and parsing | 5,831 | `dom.c`, `html.c`, `html_lexbor.c`, `xml.c`, `forms.c` |
+| Images and media | 5,654 | `image*.c`, `video.c`, `video_decode.c`, `camera.c`, `mic.c` |
+| Platform, security, misc | 5,574 | `security.c`, `watchdog.c`, `webcrypto.c`, `ext.c`, `win_launcher.c` |
+| Audio and video helpers | 2,412 | `audio/main.c`, `videoproc/main.c` |
+| **Total** | **221,452** | |
+
+Vendored C: lexbor (~289k lines), QuickJS-ng fork (~101k), Wuffs (~97k), WAMR
+(~73k), pl_mpeg (~4.5k), minimp3 (~1.9k); ns-pango is a meson subproject.
+`data/js/polyfills.js` (11k lines) and `streaming.js` are JavaScript and stay
+as they are.
+
+### 4.2 Structure that shapes the plan
+
+**Processes.** The shell (`southstar`) runs one sandboxed `southstar-renderer`
+per tab, plus lazily spawned `southstar-audio` and `southstar-video` helpers;
+the watchdog is a supervisor mode of `southstar` itself, and Windows adds a
+small `southstar-launcher`. The interfaces between them are narrow:
+
+- *Shell ↔ renderer*: `fork`+`exec` with a socketpair on fd 3 (inherited pipes
+  on Windows, or stdio for embedders), carrying HTTP/1.1 requests with JSON
+  bodies to about 33 POST paths (`/open`, `/tick`, `/render`, `/click`,
+  `/key`, `/scroll`, `/find`, `/eval`, `/media`, `/print`, …). Pixels travel
+  through one shared-memory framebuffer (Cairo ARGB32, passed with
+  `SCM_RIGHTS`); a tiles mode packs tiles into it and describes them in a
+  text body. Single-process mode runs the same `ns_renderer_session` on a
+  thread over an fd pair, so the shell's client code is identical.
+- *Shell ↔ audio helper*: about ten line-based text verbs over pipes and one
+  shared-memory clock.
+- *Shell ↔ video helper*: about ten text verbs and a shared-memory ring of
+  eight BGRA frames.
+- Behind the renderer protocol, the engine's public API is `libsouthstar.h`:
+  about 80 `ns_browser_*` functions with no GLib types in them.
+
+**DOM.** The engine has its own DOM, a tree of `ns_node` structs
+(`dom.h`) with raw parent/child/sibling pointers, an attribute list, per-document
+id/class/tag indexes and a JS wrapper pointer. lexbor parses, then
+`html_lexbor.c` copies its tree into `ns_node`s; names, text and attributes
+are *borrowed* from lexbor's memory, which stays alive as the document's
+backing store. Nodes are not refcounted: the tree owns them, and nodes that
+JavaScript detaches are collected by an orphan sweep that runs the QuickJS GC
+first.
+
+**Style.** `css.c` is a hand-written parser and cascade (lexbor's CSS module
+is unused). Computed style (`ns_style`, ~242 properties plus pseudo-element
+styles and custom properties) is refcounted and shared between nodes; it is
+not stored on nodes but in a node → style hash table owned by the page.
+Selector matching is right-to-left with an ancestor Bloom filter, a `:has`
+memo and a match budget.
+
+**Layout and paint.** Layout builds a separate `ns_box` tree from a global
+free-list pool and rebuilds it on every relayout. Paint walks the box tree
+straight into Cairo — there is no display list — with text measured and drawn
+through ns-pango. Tiles and layers are planned in `renderer_tiles.c`.
+
+**JavaScript.** All bindings are hand-written against a QuickJS-ng fork that
+carries browser hooks (`get_own_property_receiver`, host-function mode,
+WebIDL brands, engine-private names, realm queries, `JS_ThrowDOMException`,
+…). There are about 27 classes; every DOM node uses one `Element` class whose
+prototype is picked per node kind. js.c has ~714 entries in its function-list
+tables and several hundred more functions bound one by one. Each node caches and pins its wrapper; freeing a
+node invalidates the wrapper and scrubs side tables. Workers run their own
+`JSRuntime` on their own thread with a private `GMainContext`.
+
+**Threads.** The renderer's main thread owns DOM, style, layout, paint and
+page JS. Around it: a GTask fetch pool, a network I/O thread owning the curl
+multi handle, HTTP/2 I/O threads, an image decode pool (which also parses and
+lays out SVG images, so `css.c`, `layout.c` and `svg.c` use `__thread`
+globals), one thread per WebSocket and EventSource, and the worker threads.
+The main thread runs no persistent GLib main loop; GLib is pumped from
+`ns_browser_tick`, during settle, and in nested loops for blocking fetches.
+
+**Globals and GLib.** The engine has ~431 mutable file-scope statics (css.c
+101, net.c 53, js.c 53, layout.c 35). GLib is used throughout the engine —
+`gboolean`, `GString`, `GHashTable`, `GPtrArray`, `g_malloc`/`g_free` — but it
+defines no GObject types. The public embedding header `libsouthstar.h` (~80
+`ns_browser_*` functions) uses no GLib types.
+
+**Coupling.** The include graph has cycles (`css`↔`dom`, `layout`↔`paint`,
+`net`↔`config`, `net`↔`js`), and a few hubs that most of the engine includes:
+`net.h` (included by 28 modules), `dom.h` (19), `config.h` (19), `image.h`
+(18), `css.h` (15). Modules cannot be ported in strict leaf-to-root order;
+the headers, not the files, are the stable seams.
+
+## 5. Toolchain and build (phase 0)
+
+### 5.1 Layout
+
+```
+Cargo.toml              workspace, shared lints and profiles
+Cargo.lock
+rust/
+  southstar-ffi/        the one staticlib linked into C targets; re-exports
+                        every ported module's extern "C" functions
+  sys/quickjs-sys/      bindgen over src/quickjs (the in-tree fork)
+  sys/lexbor-sys/       bindgen over src/lexbor
+  sys/ns-pango-sys/     bindgen over ns-pango's renamed API
+  sys/southstar-sys/    bindgen over the engine headers still in C
+  ipc/                  renderer protocol, both ends
+  sandbox/              seccomp, Landlock, macOS and Windows policies
+  …                     one crate per ported subsystem
+  bin/southstar-audio/  helper executables
+  bin/southstar-video/
+```
+
+Only **one** Rust staticlib is linked into any C executable: two Rust
+staticlibs in one binary each carry their own copy of `std` and collide.
+`southstar-ffi` therefore depends on every ported crate and is the single
+archive meson links.
+
+### 5.2 Meson drives Cargo
+
+Meson stays the build entry point during the port, so `meson setup builddir &&
+meson compile -C builddir` keeps working on every platform:
+
+- A `custom_target` runs `cargo build --frozen --profile <release|dev>` with
+  `CARGO_TARGET_DIR` inside the build directory, producing
+  `libsouthstar_ffi.a` and the Rust helper executables.
+- The engine library and executables link `libsouthstar_ffi.a`; meson
+  installs the Rust executables exactly where the C ones were installed, so
+  packaging scripts do not change paths.
+- Meson passes the configured features (`webgpu`, `avif`, `http_backend`,
+  `quickjs`, libav presence) to Cargo as `--features`, so one option set
+  controls both languages.
+- Cargo profiles mirror the meson profiles: release = LTO, `codegen-units = 1`,
+  `panic = "abort"`, stripped; development = debug info, frame pointers.
+
+At the end of the port (phase 9) the direction can flip: Cargo becomes the entry
+point and builds whatever C remains through `build.rs` and the `cc` crate.
+
+### 5.3 Keeping the C and Rust sides in agreement
+
+- The existing C headers stay the contract. `southstar-sys` runs `bindgen`
+  over them at build time; each Rust export is checked against the bindgen
+  declaration (a typed function-pointer `const` per export), so a signature
+  drift fails the build instead of corrupting memory.
+- Structs that both languages touch during the transition (`ns_node`,
+  `ns_style`, `ns_box`, …) are defined once, in Rust, as `#[repr(C)]`, and
+  the C header is generated from them with `cbindgen` for that period. Size
+  and offset assertions are emitted on both sides.
+- Memory crosses the boundary in GLib's allocator: anything Rust hands to C
+  that C will `g_free` is allocated with `g_malloc`/`g_strdup`, and anything C
+  hands to Rust is released with `g_free`. Rust-owned values stay behind
+  opaque pointers with explicit `*_free` functions.
+- Panics abort (`panic = "abort"`; since Rust 1.81 an unwind out of an
+  `extern "C"` function aborts anyway), matching how a C crash behaves today:
+  the renderer dies and the shell restarts it.
+
+### 5.4 Toolchain version
+
+Rust 2024 edition needs **Rust 1.85**, which is exactly what Debian 13
+(trixie) ships; the nightly packages build in `debian:trixie`. Two pulls the
+other way:
+
+- `gtk4` 0.11 (current gtk-rs) requires Rust 1.92; `gtk4` 0.10 needs 1.83 but
+  only exposes APIs up to GTK 4.20 (Windows uses GTK ≥ 4.22.1).
+- Ubuntu 24.04's default `rustc` is 1.75; versioned `rustc-1.85`, `-1.89`,
+  `-1.91` packages exist. trixie-backports carries 1.94–1.95.
+
+Decision D3 picks between "MSRV 1.85, gtk4 0.10" and "MSRV 1.92+, distro
+builds use backports/versioned compilers". CI pins the chosen version with
+`rust-toolchain.toml`.
+
+### 5.5 CI
+
+The workflows that build today all gain a Rust toolchain:
+
+| Workflow | Platform | Rust toolchain |
+|---|---|---|
+| `linux.yml` | Ubuntu 26.04, GCC and Clang | rustup, pinned |
+| `macos.yml` | macOS 26 arm64 | rustup, pinned |
+| `windows.yml` | MSYS2 MINGW64 | MSYS2's `mingw-w64-x86_64-rust` (`x86_64-pc-windows-gnu`, the ABI the C side already uses) |
+| `musl.yml` | Alpine 3.24 | Alpine's `rust`/`cargo` packages |
+| `freebsd.yml`, `netbsd.yml` | VMs, nightly | `pkg`/pkgsrc `rust` |
+| `release.yml` | `ubuntu:24.04`, `ubuntu:26.04`, `debian:trixie` containers | distro packages (`rustc-1.85` on Ubuntu 24.04, whose default `rustc` is 1.75) |
+
+Every workflow adds `cargo clippy --all-targets -- -D warnings` and
+`cargo fmt --check`, the Rust form of "no new warnings".
+
+### 5.6 Offline builds and packaging
+
+Two package builds run without network access: `debian/rules` in a
+network-isolated sbuild/pbuilder chroot, and the openSUSE package, which OBS
+builds straight from git (`scmsync`). Cargo therefore always runs with
+`--frozen` against vendored sources (`cargo vendor`), and where those sources
+live is decision D4. `nightly-distro-build.sh` and the `pack-*.sh` scripts
+need no path changes because meson installs the Rust executables where the C
+ones were; their dependency lists gain `cargo`/`rustc` (and `debian/control`,
+the RPM spec and `APKBUILD` their build dependencies). The macOS, Windows and
+BSD bundles are unaffected beyond the build: Rust links statically.
+
+### 5.7 Pilot
+
+Port `src/datetime.c` (150 lines, no project dependencies, used by three
+modules) and `version.h` through the whole pipeline: crate, `southstar-ffi`, meson link,
+header check, every CI platform, every package format. Phase 0 is done when
+that pilot ships in a nightly on all platforms with no behaviour change, and
+`CLAUDE.md` and `SOUTHSTAR.md` describe the Rust build and the rules in §3.
+
+## 6. Phases
+
+Each phase lists its scope, approach and exit criteria. A module is
+**ported** when its C file is deleted, the Rust replacement is linked through
+`southstar-ffi`, and the parity gate (§8) passes.
+
+### Phase 1 — Helper processes and the sandbox
+
+Scope: `audio/main.c` (1.7k), `videoproc/main.c` (0.7k), `security.c` (1.1k),
+`win_launcher.c` (0.4k), `media_shm.h`.
+
+- `southstar-audio` and `southstar-video` become Rust executables that speak
+  the same line protocol and lay out the same shared-memory clock and frame
+  ring (`media_shm.h`, now a `#[repr(C)]` definition both sides share). The
+  shell does not change. These are the first Rust code to ship, and they
+  prove the toolchain, the sandbox and packaging on every platform with no
+  engine involvement.
+- `southstar-launcher` (Windows only) is a self-contained executable; port
+  it alongside.
+- `security.c` becomes the `sandbox` crate (seccomp via `seccompiler` or the
+  `libseccomp` crate, Landlock via the `landlock` crate, the macOS profile and
+  Windows mitigation policies via FFI). The C renderer keeps calling it
+  through its existing header, and the Rust helpers use it directly.
+- **Run every ported process under the real filter.** The seccomp allowlist
+  (266 syscalls) already includes what Rust's `std` relies on — `clone3`,
+  `statx`, `getrandom` (for `HashMap` seeding), `sigaltstack` and
+  `mmap`/`mprotect` (the guard `std` installs on every thread it spawns),
+  `futex`, `rseq`. Its default action is `EPERM`, not kill, so a syscall the
+  list misses shows up as a failing call rather than a crash; look for those
+  in the smoke runs.
+- Audio output keeps SDL2 through the `sdl2` crate for parity (it covers the
+  BSDs); `cpal` is a later option. MP3 and MPEG-1 decoding keep minimp3 and
+  pl_mpeg through FFI; libav through `ffmpeg-sys-next`.
+
+Exit: `docs/media.md` flows (MPEG-1, MP3, WebM, MSE/HLS) play as before on
+all platforms; the sandbox is unchanged in behaviour.
+
+### Phase 2 — Leaf modules
+
+Scope (8.7k lines), roughly in this order — modules with no project dependencies first:
+
+- `webcrypto.c` (1.4k) over the `openssl` crate — same algorithms, same
+  OpenSSL. (RustCrypto's `rsa` crate has carried a timing side-channel
+  advisory, RUSTSEC-2023-0071, so it is not an automatic replacement.)
+- `woff2.c` (0.7k) over the `brotli-decompressor` crate.
+- `css_syntax.c`, `mat4.h`, `glctx.c`, `threaddump.c`, `debuglog.c`,
+  `i18n.c`, `spellcheck.c` (Enchant via FFI), `safebrowsing.c` (SHA-256 via
+  `sha2`), `csp.c`, `bytecode_cache.c`, `config.c`, `history.c`,
+  `bookmarks.c`, `proc_limits.h`.
+- **Image decoders.** Replace the Wuffs chain (`image_wuffs.c`) and
+  `image_webp.c`/`image_ico.c` with the pure-Rust `png`, `gif`, `zune-jpeg`
+  and `image-webp` crates (BMP and ICO are small enough to port by hand);
+  libavif stays behind FFI. This retires ~97k vendored lines and keeps the
+  memory-safety reason Wuffs was chosen for.
+- **A JavaScript pilot.** Port one self-contained binding file — `js_date.c`
+  (Temporal, 1.5k) or `js_perf.c` (1.3k) — over a first `quickjs-sys`. This
+  settles the binding style (decision D8) long before phase 7 depends on it.
+
+Exit: the modules above are Rust; PNG, GIF and WebP images decode
+identically (render-test PNG dumps match pixel for pixel). JPEG decoders round
+IDCT and chroma upsampling differently, so JPEGs are compared with a small
+tolerance and checked by eye.
+
+### Phase 3 — Renderer host and IPC
+
+Scope (5k lines): `ipc_http.c`, `renderer_serve.c`, `renderer_tiles.c`,
+`renderer_http.c`, `rproc_http.c`, `rproc_inproc.c`, `embed_shim.c`.
+
+- The `ipc` crate implements both ends of the renderer protocol: spawning
+  (`fork`+`exec` with fd 3, inherited pipes on Windows, stdio mode), the
+  HTTP/1.1 framing and its size limits, the ~33 POST paths, the `X-*` reply
+  headers (`X-Render-RC`, `X-Tiles`, `X-Audio`, `X-Nav`, …), the tiles
+  description, and the shared-memory framebuffer (`memfd_create` or
+  `shm_open`, passed with `SCM_RIGHTS`).
+- The renderer executable becomes a Rust `main` that serves the protocol and
+  calls the still-C engine through the `ns_browser_*` API (bindgen over
+  `libsouthstar.h`). Single-process mode runs the same server on a thread.
+
+Exit: the shell (still C) drives a Rust renderer host; single-process and
+headless modes work; WPT slice and smoke unchanged.
+
+### Phase 4 — GTK shell and headless driver
+
+Scope (13.3k lines): `src/gtk/*` (10.4k), `headless.c` (2.3k) and
+`watchdog.c` (0.6k).
+
+- The shell moves to `gtk4-rs`, using the `ipc` crate for renderers and the
+  embedding API for single-process mode. It is the least coupled part of the
+  application — it never touches engine data structures. (Today it compiles
+  the engine sources in directly for single-process mode; it links
+  `southstar-ffi` and the engine library instead.)
+- The watchdog is a supervisor mode of the same executable (it re-spawns
+  itself with `--watchdog-child` and watches for hangs); it moves with the
+  shell.
+- `macos_dock.m` moves to `objc2`; the Windows-specific calls go through
+  `windows-sys`.
+- The shell keeps reading `data/i18n/*.lang` and the GResource icon bundle.
+
+Exit: `southstar` is a Rust executable; every UI path in `docs/Controls.md`
+works on all platforms.
+
+### Phase 5 — Networking and storage
+
+Scope (13.5k lines): `net.c` (7.2k), `net_http2.c` (2.7k), `net_backend.h`,
+`netutil.c`, `cache.c`, `ws.c`, `eventsource.c`, `idb.c` (SQLite via
+`rusqlite`), plus the cookie jar, HSTS and CORS logic inside `net.c`.
+
+- `net.h` is the busiest hub (28 includers). Its C API stays as the seam
+  until the core is ported.
+- The default backend keeps libcurl through the `curl` crate — same
+  transport, same behaviour.
+- The alternative backend is decision D7: keep libnghttp2 behind FFI, or move
+  to `h2` (pure Rust, but it needs an async runtime). If the latter, HTTP/3
+  can move from ngtcp2 + nghttp3 + gnutls to `quinn` + `h3`, which removes the
+  gnutls requirement that exists only because system OpenSSL 3.0 has no QUIC
+  API.
+- The network threads keep their shape: one I/O thread for the curl multi
+  handle, a fetch pool, per-connection threads.
+
+Exit: both backends fetch byte-identically, as `docs/http-backends.md`
+requires today.
+
+### Phase 6 — Engine core: DOM, style, layout, paint
+
+Scope (82.7k lines), in pipeline order:
+
+1. **DOM** (5.8k): `dom.c`, `html.c`, `html_lexbor.c`, `xml.c`, `forms.c`.
+2. **Style** (38k): `css_media.c`, `css_prop_syntax.c`, `css.c`, `anim.c`.
+3. **Layout** (22k): `layout.c`, `mathml.c`, `svg.c`, `selection.c`,
+   `print.c`, `pdf.c`.
+4. **Paint and text** (10.4k): `paint.c`, `render.c`, `font.c`,
+   `texture.c`, `layers.h`, `ns_pango*.h`, with Cairo through `cairo-sys-rs`
+   and text through `ns-pango-sys`. The `pango` crate cannot be used: it
+   binds the system Pango's symbol names, and the engine must use ns-pango's
+   renamed ones.
+5. **Pipeline driver** (6.5k): `engine.c` and `libsouthstar.c` — `struct
+   ns_browser`, navigation, settle, relayout and the `ns_browser_*` API the
+   renderer host calls.
+
+Approach:
+
+- **Keep the data layout while C still reads it.** `js.c` (66k lines) reads
+  and writes `ns_node`, `ns_style` and `ns_box` fields directly. While it is
+  C, those structs stay `#[repr(C)]` with identical layout (§5.3), and Rust
+  exports every function their headers declare. The structs become idiomatic
+  Rust (an arena with `NodeId` handles instead of raw links, `Rc`-free
+  sharing, owned strings) only after phase 7.
+- **lexbor memory.** Node names and text borrow lexbor's memory today. The
+  DOM port keeps that ownership model (lexbor stays, decision D1) and only
+  changes it if lexbor is replaced.
+- **Globals.** Each file-scope static becomes a `static` with a `Mutex`,
+  `OnceLock` or `Cell`, or a `thread_local!` where C uses `__thread`. The
+  `__thread` ones exist because the image pool builds SVG documents off the
+  main thread; that stays legal in Rust only if those trees never cross
+  threads, which the port must preserve.
+- **Order inside style.** `css.c` is 33k lines in one file. Port it by
+  section — parser, value types, selector matching, cascade, computed values,
+  incremental restyle — each section a set of exported functions, so the file
+  shrinks commit by commit rather than flipping at once.
+
+Why the core goes before the JS bindings: the bindings sit on top of the DOM,
+style and layout. Porting them first would mean writing 79k lines of Rust
+against raw C structs through bindgen and rewriting them once the DOM is
+Rust. Porting the core first means the bindings are written once, against a
+Rust DOM. The phase 2 pilot keeps the binding approach from being an unknown
+until then.
+
+Exit: no C remains in the DOM, style, layout or paint modules; render-test
+PNGs match pixel for pixel; WPT slice not lower; layout and paint timings
+within noise.
+
+### Phase 7 — JavaScript bindings
+
+Scope (77.7k lines): `js.c` and its siblings (`js_canvas*.c`, `js_intl.c`,
+`js_perf.c`, `js_realm.c`, `js_brand.c`, `js_internal.h`, `js_classid.h`),
+`ns_quickjs.c`, `webaudio.c`.
+
+- **Own `quickjs-sys`, not `rquickjs`.** `rquickjs` bundles its own
+  quickjs-ng and has none of the fork's hooks (`get_own_property_receiver`,
+  host-function mode, brands, engine-private names, realm queries,
+  `JS_RepointArrayBuffer`, …). Southstar binds its in-tree fork directly and
+  keeps `-Dquickjs=quickjs` working through the same adapter idea as
+  `ns_quickjs.c`.
+- **Binding style** (decision D8): a small declarative layer (macros or
+  tables) replacing the ~27 `JSCFunctionListEntry` tables and hand-written
+  getters, or a generator driven by WebIDL. Settled by the phase 2 pilot.
+- **Port by subsystem**, following js.c's own regions: timers and the event
+  loop; DOM and element bindings; events; XHR and fetch; WebSocket and
+  EventSource; workers and service workers; observers; custom elements;
+  context setup; script and module loading and the bytecode cache.
+- **Keep the lifetime model first**: wrappers cached on nodes and pinned,
+  invalidated when the node is freed, orphans swept after a GC. Revisit it
+  only after the port.
+- **Event loop.** Timers, rAF and worker loops are GLib sources today. They
+  stay on GLib (through the `glib` crate) during the port; replacing GLib's
+  loop with a Rust one is a later step.
+- The JavaScript polyfills (`data/js/*.js`) are unchanged.
+
+Exit: no C bindings remain; test262 and WPT slice scores not lower; the
+Speedometer runs (`scripts/speedometer*-bench.sh`) within noise.
+
+### Phase 8 — Remaining web platform features
+
+Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),
+`video.c`, `video_decode.c`, `camera.c`, `mic.c`, `ext.c` (WebExtensions),
+`image.c` (the decode chain and image cache).
+
+- WebGL keeps GL ES through libepoxy (FFI) or moves to `glow`.
+- WebGPU can use the `wgpu` crate directly — wgpu-native is itself a C
+  wrapper around it — behind an off-by-default Cargo feature, keeping the
+  runtime gate.
+- Wasm: WAMR (73k vendored lines) can be replaced by `wasmi`, a pure-Rust
+  interpreter with no JIT (decision D9).
+
+Some of these can move earlier; they sit at the edge of the engine and only
+depend on the JS binding style.
+
+### Phase 9 — Vendored libraries and the end of C
+
+What is left is third-party C. Each library gets its own decision:
+
+| Library | Lines | Recommendation |
+|---|---:|---|
+| Wuffs | ~97k | Replaced in phase 2 by Rust image crates |
+| WAMR | ~73k | Replace with `wasmi` (D9) |
+| QuickJS-ng fork | ~101k | Keep. A JS engine is out of scope for this port; revisit separately (Boa is the main pure-Rust candidate) |
+| lexbor | ~289k | Keep for HTML parsing and URLs unless D1 allows writing Southstar's own (an HTML5 tokenizer and tree builder plus a WHATWG URL parser) |
+| pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
+| ns-pango, Cairo, GTK 4, libcurl, OpenSSL, SQLite, FFmpeg, SDL2, uchardet, libpsl, libseccomp | system / subproject | Keep behind FFI |
+
+Then decide whether Cargo becomes the build entry point (D10). Meson can stay
+if C libraries remain; Cargo with `build.rs` is simpler once the C is only
+vendored libraries.
+
+## 7. Engineering rules during the port
+
+- **One module per commit** (one section per commit for the very large files,
+  as for `css.c` in phase 6), behaviour unchanged, C code deleted in the same
+  commit that adds its Rust replacement.
+- **No redesign inside a port commit.** Better data structures, a display
+  list, a Rust-native text stack — later, separately, measured.
+- **`unsafe` lives in `ffi` modules and `-sys` crates.** Code above them is
+  safe Rust.
+- **Strings.** Inside Rust, `String`/`&str`; at the C boundary,
+  NUL-terminated GLib-allocated strings as today.
+- **Collections.** `Vec` and `HashMap` replace `GPtrArray`, `GArray` and
+  `GHashTable` inside Rust; GLib types appear only at the boundary.
+- **Threads** keep their current roles and owners; no new runtime unless D7.
+- **Performance budget.** Check layout, paint and script timings on every
+  core port; bounds checks and reference counting in hot loops are the usual
+  regressions.
+
+## 8. Verification
+
+The project has no test suite and this plan does not add one. Every port is
+checked with what already exists:
+
+| Check | Tool | Bar |
+|---|---|---|
+| Build | `meson compile -C builddir`, clippy, rustfmt | No warnings, every CI platform |
+| Smoke | `scripts/dev.sh smoke` | All fixtures match `data/baseline/` |
+| Rendering | `scripts/render-tests.sh` (53 pages, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
+| Web platform | `scripts/wpt-score.sh` | Slice score not lower (70,743 of 71,907 subtests on the 2026-07-13 slice) |
+| JavaScript | `scripts/test262-run.sh` | Not lower |
+| Performance | `scripts/speedometer-bench.sh`, `speedometer4-bench.sh` | Within noise |
+| Manual | Launch the browser, exercise the changed path | As `CLAUDE.md` requires |
+
+The rendering check needs one small addition: a script that dumps the render
+tests from two builds and compares the PNGs. That is a comparison script like
+the existing ones, not a test suite.
+
+## 9. Dependency map
+
+| Today (C) | During the port | Later option |
+|---|---|---|
+| GTK 4 | `gtk4-rs` (shell only) | — |
+| Cairo | `cairo-sys-rs` | `tiny-skia` or a GPU rasterizer, after a display list exists |
+| ns-pango | own `ns-pango-sys` | `rustybuzz` + `swash` (a text-stack redesign) |
+| libcurl | `curl` crate | — |
+| libnghttp2, ngtcp2, nghttp3, gnutls | FFI (D7) | `h2`, `quinn` + `h3` |
+| OpenSSL (WebCrypto) | `openssl` crate | — |
+| lexbor (HTML, URL) | own `lexbor-sys` | Southstar's own parser (D1) |
+| QuickJS-ng fork | own `quickjs-sys` | Kept |
+| Wuffs, libwebp | `png`, `gif`, `zune-jpeg`, `image-webp` | — |
+| libavif | FFI | — |
+| WAMR | `wasmi` (D9) | — |
+| SQLite | `rusqlite` | — |
+| uchardet | FFI | Own detector (D1 excludes `chardetng`) |
+| libpsl | FFI | `psl` crate |
+| libseccomp, Landlock | `seccompiler` or `libseccomp`, `landlock` | — |
+| SDL2 | `sdl2` crate | `cpal` |
+| FFmpeg | `ffmpeg-sys-next` | — |
+| pl_mpeg, minimp3 | FFI | `symphonia` (audio) |
+| Enchant | FFI | — |
+| libepoxy | FFI | `glow` |
+| wgpu-native | `wgpu` (feature, off by default) | — |
+| GLib | `glib-sys` at boundaries, `glib` for the event loop | Own event loop |
+
+## 10. Risks
+
+| Risk | Mitigation |
+|---|---|
+| js.c (66.6k lines, 30% of the project) is ported last, so the biggest work lands at the end | Phase 2 pilot settles the binding style early; phase 7 is split by js.c's own subsystems |
+| `#[repr(C)]` structs drift from what C expects | cbindgen-generated headers and size/offset assertions on both sides (§5.3) |
+| DOM wrapper lifetime bugs (use-after-free, leaks) during the mixed period | Keep today's pin/invalidate/orphan-sweep model unchanged until phase 7 is done |
+| The sandbox denies a syscall Rust code needs (it returns `EPERM`, so this shows up as a failing call) | The allowlist already covers `std`'s needs; every port is smoke-run under the real sandbox |
+| Toolchain friction on MSYS2, Alpine/musl, FreeBSD, NetBSD | Phase 0 pilot must ship on every platform before any real module moves |
+| Distro compilers older than crate MSRVs | D3; `rust-toolchain.toml`; crate versions chosen against the MSRV |
+| Dependency creep | `cargo-deny` licence and source policy; new crates need a reason in the commit message |
+| Performance loss (bounds checks, `RefCell`, extra copies at FFI boundaries) | Speedometer and layout timings on every core commit |
+| A long mixed-language period slows everything else | Phases 1–5 are independent enough to interleave with feature work; the core and bindings phases are the ones to schedule deliberately |
+
+## 11. Decisions needed
+
+| # | Decision | Recommendation |
+|---|---|---|
+| D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep lexbor and uchardet behind FFI |
+| D2 | Incremental port in place (this plan) or a clean rewrite in a new tree? | Incremental: the C browser already passes 98% of the tracked WPT slice, and a rewrite would have to reach that bar again before it could replace anything |
+| D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | 1.85 — every build environment above can provide it; revisit when the shell port (phase 4) needs GTK 4.22 APIs |
+| D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small |
+| D5 | Keep the no-comments rule in Rust, including no `// SAFETY:` comments? | Keep it; confine `unsafe` to `ffi` modules |
+| D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |
+| D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Keep FFI during the port |
+| D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Decide after the phase 2 pilot |
+| D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 |
+| D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
+
+## 12. Tracking
+
+Progress is tracked in this file: when a module is ported, its row in §4.1
+moves into a "Ported" table below with the commit that did it, and
+`Changelog.md` gets an entry per phase.
+
+### Ported
+
+| Module | Lines | Commit |
+|---|---:|---|
+| — | | |

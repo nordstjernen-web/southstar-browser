@@ -28,6 +28,7 @@ top-level [README.md](../README.md); the development plan is
 ## Architecture & internals
 
 - [Software-Architecture.md](Software-Architecture.md) — the whole system, from the process model down to each engine subsystem.
+- [rust-port.md](rust-port.md) — the plan for porting Southstar from C to Rust: phases, build integration, verification and open decisions.
 - [Rendering.md](Rendering.md) — rendering and scrolling.
 - [preloading.md](preloading.md) — the speculative preload scan, the request key that identifies a fetch, and the four layers that keep a subresource from being fetched twice.
 - [tab-isolation.md](tab-isolation.md) — process-per-tab renderers and the sandbox boundary.

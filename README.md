@@ -43,7 +43,8 @@ one person to read and audit end-to-end.
 
 - [x] Start from Nordstjernen: import the C codebase with its history, rename
       it to Southstar Browser, and remove the Android, iOS and Java versions.
-- [ ] Rewrite the browser in Rust.
+- [ ] Rewrite the browser in Rust — the plan is in
+      [docs/rust-port.md](docs/rust-port.md).
 
 The architecture the rewrite starts from is mapped in
 [docs/Software-Architecture.md](docs/Software-Architecture.md) and planned in

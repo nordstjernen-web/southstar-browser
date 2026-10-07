@@ -1,6 +1,17 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser (unreleased):
+======
+* Nordstjernen is renamed Southstar Browser: the executables, library,
+  app ID, configuration folders, user-agent token, logo and documentation
+  carry the new name. The Android, iOS and Java/JVM versions are removed.
+* docs/rust-port.md plans the port of Southstar from C to Rust: an
+  incremental, in-place port in nine phases, starting with the helper
+  processes and the renderer protocol and ending with the engine core and
+  the JavaScript bindings, with the build integration, the checks every
+  step must pass and the decisions still open.
+
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the
 browser by its earlier name and include the Android, iOS and Java ports that
