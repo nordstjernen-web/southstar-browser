@@ -11,6 +11,9 @@ pub const FALSE: GBoolean = 0;
 
 pub type GDestroyNotify = Option<unsafe extern "C" fn(data: *mut c_void)>;
 
+pub type GFileTest = c_uint;
+pub const FILE_TEST_IS_REGULAR: GFileTest = 1 << 0;
+
 #[repr(C)]
 pub struct GPtrArray {
     pub pdata: *mut *mut c_void,
@@ -59,6 +62,9 @@ unsafe extern "C" {
         error: *mut *mut GError,
     ) -> GBoolean;
     pub fn g_error_free(error: *mut GError);
+    pub fn g_file_test(filename: *const c_char, test: GFileTest) -> GBoolean;
+    pub fn g_build_filenamev(args: *mut *mut c_char) -> *mut c_char;
+    pub fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
     pub fn g_ptr_array_new_with_free_func(free_func: GDestroyNotify) -> *mut GPtrArray;
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     pub fn g_ptr_array_unref(array: *mut GPtrArray);

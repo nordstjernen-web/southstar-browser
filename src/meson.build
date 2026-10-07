@@ -62,7 +62,6 @@ southstar_engine_sources = files(
   'glctx.c',
   'history.c',
   'html.c',
-  'i18n.c',
   'image.c',
   'svg.c',
   'image_ico.c',
