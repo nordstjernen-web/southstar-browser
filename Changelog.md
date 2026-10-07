@@ -33,6 +33,8 @@ Southstar Browser (unreleased):
 * Browsing history is Rust: the SQLite visits table and the about:history
   page behave as before, checked against the C over 420 randomized
   sessions of visits, clears and restarts.
+* The JavaScript bytecode cache is Rust. Its files keep the same names
+  and format, so caches written by earlier builds stay valid.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the

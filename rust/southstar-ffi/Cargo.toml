@@ -14,6 +14,8 @@ path = "src/lib.rs"
 [dependencies]
 southstar-about-style = { path = "../about-style" }
 southstar-bookmarks = { path = "../bookmarks" }
+southstar-bytecode-cache = { path = "../bytecode-cache" }
+southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
@@ -25,6 +27,7 @@ southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
+quickjs-original = ["southstar-bytecode-cache/quickjs-original"]
 woff2 = ["dep:southstar-woff2"]
 
 [lints]

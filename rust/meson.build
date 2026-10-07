@@ -10,6 +10,11 @@ rust_native_libs = run_command(
 
 southstar_rust_features = []
 southstar_rust_link_deps = [sqlite3]
+southstar_rust_env = {}
+if quickjs_original
+  southstar_rust_features += ['quickjs-original']
+  southstar_rust_env = {'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version}
+endif
 if have_woff2
   southstar_rust_features += ['woff2']
   southstar_rust_link_deps += [libbrotlidec_fonts]
@@ -25,6 +30,7 @@ southstar_rust_lib = custom_target(
     ns_is_release ? 'release' : 'dev',
     'southstar-ffi', '@OUTPUT@', '@DEPFILE@',
   ] + southstar_rust_features,
+  env: southstar_rust_env,
   console: true,
   build_by_default: true,
 )

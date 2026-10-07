@@ -1,0 +1,14 @@
+[package]
+name = "southstar-config"
+description = "The runtime configuration as the engine's C side lays it out in src/config.h"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

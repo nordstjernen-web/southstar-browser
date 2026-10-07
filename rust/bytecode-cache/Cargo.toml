@@ -1,0 +1,18 @@
+[package]
+name = "southstar-bytecode-cache"
+description = "JavaScript bytecode cache: compiled scripts kept in memory and in the user's cache directory, keyed by source hash"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-glib = { path = "../glib" }
+
+[features]
+quickjs-original = []
+
+[lints]
+workspace = true

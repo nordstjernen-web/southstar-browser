@@ -701,3 +701,4 @@ table below, and `Changelog.md` gets an entry per phase.
 | `debuglog.c` | 192 | `rust/debuglog` | 2 |
 | `woff2.c` | 721 | `rust/woff2` | 2 |
 | `history.c` | 385 | `rust/history` | 2 |
+| `bytecode_cache.c` | 259 | `rust/bytecode-cache` | 2 |
