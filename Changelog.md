@@ -17,6 +17,11 @@ Southstar Browser (unreleased):
   and time parsing behind <input type=date|month|week|time|datetime-local>,
   which behaves identically. Building Southstar now needs cargo and rustc;
   on Ubuntu 24.04 that means the rustc-1.85 and cargo-1.85 packages.
+* Bookmarks storage, the Content-Security-Policy parser and checks, and the
+  CSS Syntax tokenizer used for @property values are now Rust. Each was
+  checked against the C it replaces over millions of inputs, from fuzzed
+  strings to policies and style sheets taken from real sites, with no
+  difference in results.
 
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the

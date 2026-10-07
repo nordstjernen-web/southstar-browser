@@ -689,3 +689,6 @@ table below, and `Changelog.md` gets an entry per phase.
 | Module | Lines | Crate | Phase |
 |---|---:|---|---|
 | `datetime.c` | 150 | `rust/datetime` | 0 |
+| `bookmarks.c` | 153 | `rust/bookmarks` | 2 |
+| `csp.c` | 500 | `rust/csp` | 2 |
+| `css_syntax.c` | 475 | `rust/css-syntax` | 2 |
