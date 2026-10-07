@@ -35,6 +35,9 @@ Southstar Browser (unreleased):
   sessions of visits, clears and restarts.
 * The JavaScript bytecode cache is Rust. Its files keep the same names
   and format, so caches written by earlier builds stay valid.
+* The runtime configuration (southstar.conf, its defaults, the NS_*
+  environment overrides, Settings saves and --print-config) is Rust and
+  reads and writes the same files.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the

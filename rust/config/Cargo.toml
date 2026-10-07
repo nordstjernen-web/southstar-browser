@@ -1,6 +1,6 @@
 [package]
 name = "southstar-config"
-description = "The runtime configuration as the engine's C side lays it out in src/config.h"
+description = "Runtime configuration: the flat key = value file in the user's config directory, its defaults and environment overrides"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

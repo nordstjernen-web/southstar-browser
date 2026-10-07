@@ -1,4 +1,4 @@
-/* Southstar — runtime config (flat key/value file).
+/* Southstar — runtime config (flat key/value file), implemented in rust/config.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
