@@ -40,6 +40,10 @@ Southstar Browser (unreleased):
   reads and writes the same files.
 * Spell checking of editable text is Rust, still over Enchant when it is
   installed.
+* docs/rust-port.md reviews the JavaScript engines available to Rust and
+  plans the JavaScript engine as a build option: the Rust bindings target an
+  engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be
+  built in and compared on test262, benchmarks and real pages.
 * docs/ is trimmed for the port: the pages that described the C
   implementation's internals (architecture, threading, rendering, tab
   isolation, the watchdog, the embedding API, QuickJS notes, …), the
