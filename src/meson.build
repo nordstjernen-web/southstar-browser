@@ -75,7 +75,6 @@ southstar_engine_sources = files(
   'print.c',
   'pdf.c',
   'render.c',
-  'safebrowsing.c',
   'security.c',
   'selection.c',
   'spellcheck.c',

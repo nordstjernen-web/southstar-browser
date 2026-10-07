@@ -8,3 +8,4 @@ pub use southstar_css_syntax;
 pub use southstar_datetime;
 pub use southstar_glib;
 pub use southstar_i18n;
+pub use southstar_safebrowsing;

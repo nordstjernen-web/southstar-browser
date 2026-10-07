@@ -213,7 +213,7 @@ RES="$STAGE/Contents/Resources"
 FW="$STAGE/Contents/Frameworks"
 
 # Engine runtime data the binary looks up relative to itself (the rust/i18n and
-# safebrowsing.c "../Resources/share/southstar/..." search arm): the UI
+# rust/safebrowsing "../Resources/share/southstar/..." search arm): the UI
 # translation catalogues and the safe-browsing blocklist. Without these the
 # .app shows an English-only UI and silently disables safe-browsing.
 mkdir -p "$RES/share/southstar/i18n"

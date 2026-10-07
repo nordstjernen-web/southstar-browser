@@ -18,6 +18,7 @@ southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-glib = { path = "../glib" }
 southstar-i18n = { path = "../i18n" }
+southstar-safebrowsing = { path = "../safebrowsing" }
 
 [lints]
 workspace = true

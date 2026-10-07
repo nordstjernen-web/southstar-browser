@@ -1,4 +1,4 @@
-/* Southstar — local phishing/malware blocklist and warning interstitial. */
+/* Southstar — local phishing/malware blocklist and warning interstitial, implemented in rust/safebrowsing. */
 
 #ifndef NS_SAFEBROWSING_H
 #define NS_SAFEBROWSING_H

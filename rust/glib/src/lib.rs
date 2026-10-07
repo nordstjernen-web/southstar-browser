@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
 pub type GBoolean = c_int;
@@ -13,6 +13,7 @@ pub type GDestroyNotify = Option<unsafe extern "C" fn(data: *mut c_void)>;
 
 pub type GFileTest = c_uint;
 pub const FILE_TEST_IS_REGULAR: GFileTest = 1 << 0;
+pub const FILE_TEST_EXISTS: GFileTest = 1 << 4;
 
 #[repr(C)]
 pub struct GPtrArray {
@@ -50,6 +51,7 @@ unsafe extern "C" {
     pub fn g_strdup(s: *const c_char) -> *mut c_char;
     pub fn g_strndup(s: *const c_char, n: usize) -> *mut c_char;
     pub fn g_strfreev(v: *mut *mut c_char);
+    pub fn g_markup_escape_text(text: *const c_char, length: isize) -> *mut c_char;
     pub fn g_getenv(variable: *const c_char) -> *const c_char;
     pub fn g_get_user_config_dir() -> *const c_char;
     pub fn g_get_user_data_dir() -> *const c_char;
@@ -63,8 +65,16 @@ unsafe extern "C" {
     ) -> GBoolean;
     pub fn g_error_free(error: *mut GError);
     pub fn g_file_test(filename: *const c_char, test: GFileTest) -> GBoolean;
+    pub fn g_file_read_link(filename: *const c_char, error: *mut *mut GError) -> *mut c_char;
     pub fn g_build_filenamev(args: *mut *mut c_char) -> *mut c_char;
     pub fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
+    pub fn g_utf16_to_utf8(
+        str: *const u16,
+        len: c_long,
+        items_read: *mut c_long,
+        items_written: *mut c_long,
+        error: *mut *mut GError,
+    ) -> *mut c_char;
     pub fn g_ptr_array_new_with_free_func(free_func: GDestroyNotify) -> *mut GPtrArray;
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     pub fn g_ptr_array_unref(array: *mut GPtrArray);
