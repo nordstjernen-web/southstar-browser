@@ -24,6 +24,11 @@ Southstar Browser (unreleased):
   checked against the C it replaces over millions of inputs, from fuzzed
   strings to policies and style sheets taken from real sites, with no
   difference in results.
+* The UI translation lookup, the local safe-browsing blocklist and its
+  warning page, the debug log and the WOFF2 web-font decoder are Rust too,
+  again checked against the C over millions of inputs and real fonts. The
+  built-in safe-browsing test host, malware.testing.southstar, is blocked
+  again; its entry still held the digest of the old name.
 
 Southstar Browser starts from the Nordstjernen codebase. The entries below
 are Nordstjernen's release history, kept as written; they refer to the

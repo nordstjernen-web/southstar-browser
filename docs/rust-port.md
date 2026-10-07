@@ -388,6 +388,12 @@ Scope (8.7k lines), roughly in this order — modules with no project dependenci
   an automatic replacement.)
 - `woff2.c` (0.7k) over libbrotlidec, as today.
 
+C-variadic functions cannot be defined in stable Rust. The engine's headers
+declare two: `ns_debug_log_emit`, which became a `static inline` formatting
+wrapper in `debuglog.h` around the non-variadic `ns_debug_log_emit_take`,
+and one in the original-QuickJS adapter, which will need the same
+treatment.
+
 The leaf ports call their C libraries through **hand-written declarations**
 (an `unsafe extern "C"` block per module, and the shared `rust/glib` crate
 for GLib) rather than crates: OpenSSL's EVP API, libbrotlidec, GLib's
@@ -692,3 +698,7 @@ table below, and `Changelog.md` gets an entry per phase.
 | `bookmarks.c` | 153 | `rust/bookmarks` | 2 |
 | `csp.c` | 500 | `rust/csp` | 2 |
 | `css_syntax.c` | 475 | `rust/css-syntax` | 2 |
+| `i18n.c` | 120 | `rust/i18n` | 2 |
+| `safebrowsing.c` | 253 | `rust/safebrowsing` | 2 |
+| `debuglog.c` | 192 | `rust/debuglog` | 2 |
+| `woff2.c` | 721 | `rust/woff2` | 2 |
