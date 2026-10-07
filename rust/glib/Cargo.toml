@@ -1,0 +1,11 @@
+[package]
+name = "southstar-glib"
+description = "The GLib functions and types ported modules share with the C side of the engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -11,4 +11,9 @@ name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-datetime",
+ "southstar-glib",
 ]
+
+[[package]]
+name = "southstar-glib"
+version = "1.0.30-dev"

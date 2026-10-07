@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 southstar-datetime = { path = "../datetime" }
+southstar-glib = { path = "../glib" }
 
 [lints]
 workspace = true
