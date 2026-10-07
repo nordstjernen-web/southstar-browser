@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The Windows, macOS and musl CI workflows no longer run on every push
+  and pull request; they can still be started by hand.
 * Nordstjernen is renamed Southstar Browser: the executables, library,
   app ID, configuration folders, user-agent token, logo and documentation
   carry the new name. The Android, iOS and Java/JVM versions are removed.
