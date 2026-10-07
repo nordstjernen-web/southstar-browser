@@ -17,6 +17,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-css-syntax"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-datetime"
 version = "1.0.30-dev"
 
@@ -26,6 +33,7 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-bookmarks",
  "southstar-csp",
+ "southstar-css-syntax",
  "southstar-datetime",
  "southstar-glib",
 ]

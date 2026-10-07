@@ -62,6 +62,7 @@ unsafe extern "C" {
     pub fn g_ptr_array_new_with_free_func(free_func: GDestroyNotify) -> *mut GPtrArray;
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     pub fn g_ptr_array_unref(array: *mut GPtrArray);
+    pub fn g_ptr_array_free(array: *mut GPtrArray, free_segment: GBoolean) -> *mut *mut c_void;
     pub fn g_hash_table_new_full(
         hash_func: Option<unsafe extern "C" fn(key: *const c_void) -> c_uint>,
         key_equal_func: Option<
@@ -79,11 +80,12 @@ unsafe extern "C" {
     pub fn g_hash_table_unref(table: *mut GHashTable);
     pub fn g_str_hash(v: *const c_void) -> c_uint;
     pub fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
+    pub fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
+    pub fn g_base64_encode(data: *const u8, len: usize) -> *mut c_char;
+    pub fn g_checksum_free(checksum: *mut GChecksum);
+    pub fn g_checksum_get_digest(checksum: *mut GChecksum, buffer: *mut u8, digest_len: *mut usize);
     pub fn g_checksum_new(checksum_type: GChecksumType) -> *mut GChecksum;
     pub fn g_checksum_update(checksum: *mut GChecksum, data: *const u8, length: isize);
-    pub fn g_checksum_get_digest(checksum: *mut GChecksum, buffer: *mut u8, digest_len: *mut usize);
-    pub fn g_checksum_free(checksum: *mut GChecksum);
-    pub fn g_base64_encode(data: *const u8, len: usize) -> *mut c_char;
 }
 
 pub fn boolean(value: bool) -> GBoolean {
@@ -97,6 +99,13 @@ pub fn strdup(bytes: &[u8]) -> *mut c_char {
         *out.add(bytes.len()) = 0;
         out.cast()
     }
+}
+
+pub fn ascii_strtod(text: &[u8]) -> f64 {
+    let mut terminated = Vec::with_capacity(text.len() + 1);
+    terminated.extend_from_slice(text);
+    terminated.push(0);
+    unsafe { g_ascii_strtod(terminated.as_ptr().cast(), ptr::null_mut()) }
 }
 
 pub unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {

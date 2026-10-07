@@ -4,5 +4,6 @@
 
 pub use southstar_bookmarks;
 pub use southstar_csp;
+pub use southstar_css_syntax;
 pub use southstar_datetime;
 pub use southstar_glib;

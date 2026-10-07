@@ -1,4 +1,4 @@
-/* Northstar — CSS Syntax token and component-value API. */
+/* Northstar — CSS Syntax token and component-value API, implemented in rust/css-syntax. */
 
 #ifndef NS_CSS_SYNTAX_H
 #define NS_CSS_SYNTAX_H
