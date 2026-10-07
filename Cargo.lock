@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "southstar-bookmarks"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-datetime"
 version = "1.0.30-dev"
 
@@ -10,6 +17,7 @@ version = "1.0.30-dev"
 name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-bookmarks",
  "southstar-datetime",
  "southstar-glib",
 ]
