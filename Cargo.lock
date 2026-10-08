@@ -1447,6 +1447,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-css-media"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-css-prop-syntax"
 version = "1.0.30-dev"
 dependencies = [
@@ -1481,6 +1488,7 @@ dependencies = [
  "southstar-bytecode-cache",
  "southstar-config",
  "southstar-csp",
+ "southstar-css-media",
  "southstar-css-prop-syntax",
  "southstar-css-syntax",
  "southstar-datetime",

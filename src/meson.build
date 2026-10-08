@@ -47,7 +47,6 @@ southstar_engine_sources = files(
   'anim.c',
   'cache.c',
   'css.c',
-  'css_media.c',
   'dom.c',
   'engine.c',
   'eventsource.c',
