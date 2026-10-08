@@ -1538,6 +1538,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-http-cache",
  "southstar-i18n",
+ "southstar-idb",
  "southstar-image",
  "southstar-image-decoders",
  "southstar-ipc",
@@ -1635,6 +1636,16 @@ name = "southstar-i18n"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-idb"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-glib",
+ "southstar-js-engine",
+ "southstar-sqlite",
 ]
 
 [[package]]

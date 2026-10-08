@@ -1,0 +1,23 @@
+[package]
+name = "southstar-idb"
+description = "IndexedDB storage in per-origin SQLite files behind the __nd_idb backend the IndexedDB bindings call"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-sqlite = { path = "../sqlite" }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs"]
+quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
+boa = ["southstar-js-engine/boa"]
+
+[lints]
+workspace = true

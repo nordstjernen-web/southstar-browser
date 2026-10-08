@@ -429,6 +429,29 @@ impl Scope<'_> {
         Value(error.into_opaque(self.ctx).into())
     }
 
+    pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
+        let error = JsNativeError::error()
+            .with_message(message.to_owned())
+            .into_opaque(self.ctx);
+        let _ = error.set(
+            JsString::from("name"),
+            JsString::from(name),
+            false,
+            self.ctx,
+        );
+        Value(error.into())
+    }
+
+    pub fn write_object(&mut self, _value: &Value) -> Result<Vec<u8>, Option<Value>> {
+        Err(Some(self.type_error(
+            "object serialization is not available on this engine",
+        )))
+    }
+
+    pub fn read_object(&mut self, _bytes: &[u8]) -> Result<Value, Value> {
+        Err(self.type_error("object serialization is not available on this engine"))
+    }
+
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
         let buffer = value
             .0

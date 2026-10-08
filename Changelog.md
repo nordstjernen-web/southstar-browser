@@ -129,6 +129,10 @@ Southstar Browser (unreleased):
   namespaces, the attribute bloom filter, class tokens and template
   contents. dom.c is gone; nodes and attributes keep their layout and GLib
   memory, so the rest of the engine reads and builds them as before.
+* IndexedDB storage is Rust: the per-origin SQLite files, their schema,
+  handle cache and quota, object stores, indexes, key generators and records
+  read and write the same databases, and databases written by earlier builds
+  open unchanged.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

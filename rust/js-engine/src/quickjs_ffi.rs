@@ -100,6 +100,8 @@ type JSModuleNormalizeFunc = unsafe extern "C" fn(
     opaque: *mut c_void,
 ) -> *mut c_char;
 
+const OBJ_REFERENCE: c_int = 1 << 3;
+
 unsafe extern "C" {
     fn JS_NewRuntime() -> *mut JSRuntime;
     fn JS_FreeRuntime(rt: *mut JSRuntime);
@@ -119,6 +121,21 @@ unsafe extern "C" {
     fn JS_Throw(ctx: *mut JSContext, obj: JSValue) -> JSValue;
     fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
+    fn JS_ThrowDOMException(
+        ctx: *mut JSContext,
+        name: *const c_char,
+        fmt: *const c_char,
+        ...
+    ) -> JSValue;
+    fn JS_HasException(ctx: *mut JSContext) -> bool;
+    fn JS_WriteObject(
+        ctx: *mut JSContext,
+        psize: *mut usize,
+        obj: JSValue,
+        flags: c_int,
+    ) -> *mut u8;
+    fn JS_ReadObject(ctx: *mut JSContext, buf: *const u8, buf_len: usize, flags: c_int) -> JSValue;
+    fn js_free(ctx: *mut JSContext, ptr: *mut c_void);
     fn JS_ToCStringLen2(
         ctx: *mut JSContext,
         plen: *mut usize,
@@ -612,6 +629,10 @@ pub mod quickjs {
     pub unsafe fn borrow_value(scope: &Scope<'_>, raw: JSValue) -> Value {
         Value::own(scope.ctx, unsafe { super::JS_DupValue(scope.ctx, raw) })
     }
+
+    pub fn raw_context(scope: &Scope<'_>) -> *mut JSContext {
+        scope.ctx
+    }
 }
 
 pub struct Scope<'a> {
@@ -959,6 +980,29 @@ impl Scope<'_> {
         let message = c_text(message);
         unsafe { JS_ThrowRangeError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
         self.exception()
+    }
+
+    pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
+        let name = c_text(name);
+        let message = c_text(message);
+        unsafe { JS_ThrowDOMException(self.ctx, name.as_ptr(), c"%s".as_ptr(), message.as_ptr()) };
+        self.exception()
+    }
+
+    pub fn write_object(&mut self, value: &Value) -> Result<Vec<u8>, Option<Value>> {
+        let mut len = 0usize;
+        let buf = unsafe { JS_WriteObject(self.ctx, &mut len, value.raw, OBJ_REFERENCE) };
+        if buf.is_null() {
+            return Err(unsafe { JS_HasException(self.ctx) }.then(|| self.exception()));
+        }
+        let bytes = unsafe { core::slice::from_raw_parts(buf, len) }.to_vec();
+        unsafe { js_free(self.ctx, buf.cast()) };
+        Ok(bytes)
+    }
+
+    pub fn read_object(&mut self, bytes: &[u8]) -> Result<Value, Value> {
+        let raw = unsafe { JS_ReadObject(self.ctx, bytes.as_ptr(), bytes.len(), OBJ_REFERENCE) };
+        self.take(raw)
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {

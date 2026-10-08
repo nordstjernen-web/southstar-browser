@@ -4,4 +4,7 @@
 
 mod ffi;
 
-pub use ffi::{Db, Step, Stmt};
+pub use ffi::{
+    Db, SQLITE_CONSTRAINT, SQLITE_OPEN_CREATE, SQLITE_OPEN_FULLMUTEX, SQLITE_OPEN_NOFOLLOW,
+    SQLITE_OPEN_READONLY, SQLITE_OPEN_READWRITE, SharedDb, Step, Stmt,
+};

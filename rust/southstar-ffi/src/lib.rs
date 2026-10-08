@@ -26,6 +26,7 @@ pub use southstar_html_parser;
 pub use southstar_html_util;
 pub use southstar_http_cache;
 pub use southstar_i18n;
+pub use southstar_idb;
 pub use southstar_image;
 pub use southstar_image_decoders;
 pub use southstar_ipc;
