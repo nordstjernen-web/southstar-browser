@@ -84,6 +84,9 @@ Southstar Browser (unreleased):
 * Webcam capture is Rust: opening a V4L2 camera (MJPEG, else YUYV), its
   buffers and stream, frame conversion, device enumeration and the per-site
   camera permission make the same system calls and give the same frames.
+* The XML parser behind DOMParser, XMLHttpRequest's responseXML and XHTML
+  pages is Rust and builds the same documents, reporting parse errors at the
+  same line and column.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

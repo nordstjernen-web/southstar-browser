@@ -51,6 +51,7 @@ const PORTED: &[&str] = &[
     "watchdog.c",
     "ws.c",
     "webcrypto.c",
+    "xml.c",
     #[cfg(feature = "woff2")]
     "woff2.c",
 ];

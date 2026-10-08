@@ -43,3 +43,4 @@ pub use southstar_webcrypto;
 pub use southstar_websocket;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;
+pub use southstar_xml;

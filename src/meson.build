@@ -63,7 +63,6 @@ southstar_engine_sources = files(
   'video.c',
   'video_decode.c',
   'html_lexbor.c',
-  'xml.c',
 )
 
 southstar_engine_sources += files(

@@ -50,6 +50,7 @@ southstar-texture = { path = "../texture" }
 southstar-watchdog = { path = "../watchdog" }
 southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
+southstar-xml = { path = "../xml" }
 
 [features]
 sdl = ["southstar-mic/sdl", "southstar-renderer-host/sdl"]

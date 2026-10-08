@@ -1545,6 +1545,7 @@ dependencies = [
  "southstar-webcrypto",
  "southstar-websocket",
  "southstar-woff2",
+ "southstar-xml",
 ]
 
 [[package]]
@@ -1744,6 +1745,13 @@ dependencies = [
 
 [[package]]
 name = "southstar-woff2"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-xml"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

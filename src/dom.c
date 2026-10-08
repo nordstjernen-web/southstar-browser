@@ -842,6 +842,18 @@ ns_node_set_name_owned(ns_node *n, char *name)
 }
 
 void
+ns_node_add_flags(ns_node *n, guint32 flags)
+{
+    if (n) n->flags |= flags;
+}
+
+void
+ns_node_mark_doctype(ns_node *n)
+{
+    if (n) n->kind = NS_NODE_DOCTYPE;
+}
+
+void
 ns_node_set_text_borrow(ns_node *n, const char *text)
 {
     if (!n) return;
