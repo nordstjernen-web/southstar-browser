@@ -21,6 +21,11 @@ endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']
 endif
+rust_sdl2 = dependency('sdl2', required: get_option('audio'))
+if rust_sdl2.found()
+  southstar_rust_features += ['sdl']
+  southstar_rust_link_deps += [rust_sdl2]
+endif
 if have_poppler
   southstar_rust_features += ['poppler']
   southstar_rust_link_deps += [libpoppler]

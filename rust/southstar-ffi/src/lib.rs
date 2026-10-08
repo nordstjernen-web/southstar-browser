@@ -23,6 +23,7 @@ pub use southstar_i18n;
 pub use southstar_image_decoders;
 pub use southstar_js_temporal;
 pub use southstar_mat4;
+pub use southstar_mic;
 pub use southstar_netutil;
 pub use southstar_pdf;
 pub use southstar_safebrowsing;

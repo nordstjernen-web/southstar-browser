@@ -30,6 +30,7 @@ const PORTED: &[&str] = &[
     "image_webp.c",
     "js_date.c",
     "mat4.h",
+    "mic.c",
     "netutil.c",
     "pdf.c",
     "safebrowsing.c",

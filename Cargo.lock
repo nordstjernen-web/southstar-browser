@@ -1509,6 +1509,7 @@ dependencies = [
  "southstar-image-decoders",
  "southstar-js-temporal",
  "southstar-mat4",
+ "southstar-mic",
  "southstar-netutil",
  "southstar-pdf",
  "southstar-safebrowsing",
@@ -1598,6 +1599,10 @@ dependencies = [
 
 [[package]]
 name = "southstar-mat4"
+version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-mic"
 version = "1.0.30-dev"
 
 [[package]]

@@ -1,4 +1,4 @@
-/* Southstar — microphone capture (SDL) for getUserMedia audio + Web Audio. */
+/* Southstar — microphone capture (SDL) for getUserMedia audio + Web Audio, implemented in rust/mic. */
 
 #ifndef NS_MIC_H
 #define NS_MIC_H
