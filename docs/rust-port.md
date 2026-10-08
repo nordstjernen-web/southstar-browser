@@ -906,12 +906,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `print.c` | 218 | `rust/print` (the box tree through `rust/layout`, a `#[repr(C)]` mirror of `ns_box` with borrowed box handles) | 6 (layout) |
 | `selection.c` | 546 | `rust/selection` (boxes through `rust/layout`) | 6 (layout) |
 | `headless.c` | 2,227 | `rust/headless` (ported in two sections; its standard output still goes through the C runtime's stdout buffer, so it stays ordered with what C writes there) | 4 |
-
-### Ported in part
-
-Files ported section by section shrink with each commit and move to the table
-above once the last section goes.
-
-| Module | Sections in Rust | Crate | Phase |
-|---|---|---|---|
-| `engine.c` | PNG, PDF and paged-PDF captures with their metadata, print recordings, the text and layout dumps, output-path suffixes and keyframe loading (229 lines); blocking fetches and navigations, stylesheet fetches with their failure markers and resource timings, linked-stylesheet text, speculative preloads, and the blocking and incremental image fetches (623 lines) | `rust/engine` | 6 (pipeline driver) |
+| `engine.c` | 1,500 | `rust/engine` (ported in three sections; style sheets stay C `ns_css_stylesheet`s collected into GLib pointer arrays, and the render context and profile are `#[repr(C)]` mirrors asserted on both sides) | 6 (pipeline driver) |

@@ -148,6 +148,12 @@ Southstar Browser (unreleased):
   resource timings, linked-stylesheet text for CSSOM, speculative preloads
   and preconnects, and the blocking and incremental image fetches, making the
   same requests in the same order.
+* The rest of the engine pipeline is Rust: collecting a page's style sheets
+  (runs of inline <style>, linked sheets, @import chains, frames' own sheets
+  under their viewport for media queries, and adopted sheets), the cascade,
+  relayout with its NS_PROFILE timings and the second pass when a frame's
+  measured viewport changes, and the relayout counters. engine.c is gone;
+  styles, layouts, captures and requests are the same as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -52,6 +52,14 @@ typedef struct ns_render_profile {
     gboolean container_pass;
 } ns_render_profile;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_render_ctx) == 144);
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ns_render_ctx, viewport_width) == 32);
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ns_render_ctx, caret_byte) == 104);
+G_STATIC_ASSERT(sizeof(ns_render_profile) == 72);
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ns_render_profile, container_pass) == 64);
+#endif
+
 /* Whether the most recently relaid-out page's stylesheets contain any :hover
  * selector. Lets a renderer skip hover-driven restyle/repaint work on pages
  * that have no hover styling. */

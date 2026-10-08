@@ -1,6 +1,6 @@
 [package]
 name = "southstar-engine"
-description = "The synchronous page pipeline shared by the drivers: captures to PNG and PDF, print sheets, text and layout dumps and keyframe loading"
+description = "The synchronous page pipeline shared by the drivers: fetches, style sheet collection, cascade and relayout, captures to PNG and PDF, print sheets and dumps"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -334,6 +334,14 @@ impl Bytes {
         unsafe { core::slice::from_raw_parts(data.cast(), len) }
     }
 
+    pub fn raw(&self) -> *mut GBytes {
+        self.0.as_ptr()
+    }
+
+    pub fn addr(&self) -> usize {
+        self.0.as_ptr() as usize
+    }
+
     pub fn clone_ref(&self) -> Bytes {
         Bytes(NonNull::new(unsafe { g_bytes_ref(self.0.as_ptr()) }).expect("g_bytes_ref"))
     }

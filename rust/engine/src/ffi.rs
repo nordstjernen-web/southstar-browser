@@ -1,26 +1,35 @@
-//! Southstar — the C ABI of the pipeline's captures and dumps in src/engine.h, over cairo, paint, print and the GLib string they fill.
+//! Southstar — the C ABI of src/engine.h: captures, dumps, fetches, style sheet collection, cascade and relayout.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod css;
 mod images;
 mod net;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
+use std::sync::OnceLock;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 
+pub use css::{
+    CssScope, SheetList, Stylesheet, c_str_ptr, is_self_contained, layout_frame_viewport,
+    layout_frame_viewport_raw, media_query_matches, media_viewport_pop, media_viewport_push,
+    merged_styles_cached, parse_import_cached, parse_url_cached, shadow_adopted_css,
+    style_element_cache_end, style_element_text, stylesheet_from_style_element_cached,
+    url_resolve_opt,
+};
 pub use images::{ImageCache, Session, Wanted, collect_images};
 pub use net::{
-    Bytes, CssCache, Dest, GBytes, NsResponse, Request, fetch_blocking_with_headers,
-    in_blocking_fetch, monotonic_us, preconnect, preload_clear, preload_request, record_timing,
-    url_is_http_or_https, url_origin, url_resolve,
+    Bytes, CssCache, Dest, NsResponse, Request, fetch_blocking_with_headers, in_blocking_fetch,
+    monotonic_us, preconnect, preload_clear, preload_request, record_timing, url_is_http_or_https,
+    url_origin, url_resolve,
 };
 
-use crate::fetch::{self, CssFetch};
+use crate::fetch;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -96,16 +105,7 @@ unsafe extern "C" {
     );
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
     fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
-    fn ns_engine_collect_stylesheets(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        out: *mut GPtrArray,
-        out_docs: *mut GPtrArray,
-        css_cache: *mut GHashTable,
-    );
-    fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn ns_css_stylesheet_free(sheet: *mut c_void);
     fn g_array_free(array: *mut GArray, free_segment: glib::GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_string_append_printf(s: *mut GString, format: *const c_char, ...);
@@ -372,21 +372,144 @@ pub unsafe extern "C" fn ns_engine_load_keyframes(
     if anim.is_null() {
         return;
     }
-    let sheets = unsafe { glib::g_ptr_array_new() };
-    unsafe { ns_engine_collect_stylesheets(doc, base_url, sheets, ptr::null_mut(), css_cache) };
-    let a = unsafe { &*sheets };
-    let list: Vec<*mut c_void> = (0..a.len as usize)
-        .map(|i| unsafe { *a.pdata.add(i) })
-        .collect();
-    for &sheet in &list {
-        if !sheet.is_null() {
-            unsafe { ns_anim_load_from_stylesheet(anim, sheet) };
+    let sheets = SheetList::new();
+    crate::styles::collect_stylesheets(
+        unsafe { Node::from_ptr(doc) },
+        c_str(base_url),
+        &sheets,
+        None,
+        unsafe { CssCache::from_ptr(css_cache) },
+    );
+    css::load_into_anim(anim, &sheets);
+    sheets.free_sheets();
+    sheets.destroy();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_collect_stylesheets(
+    doc: *mut NsNode,
+    base_url: *const c_char,
+    out: *mut GPtrArray,
+    out_docs: *mut GPtrArray,
+    css_cache: *mut GHashTable,
+) {
+    let Some(out) = (unsafe { SheetList::from_ptr(out) }) else {
+        return;
+    };
+    let docs = unsafe { SheetList::from_ptr(out_docs) };
+    crate::styles::collect_stylesheets(
+        unsafe { Node::from_ptr(doc) },
+        c_str(base_url),
+        &out,
+        docs.as_ref(),
+        unsafe { CssCache::from_ptr(css_cache) },
+    );
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_compute_cascade(
+    doc: *mut NsNode,
+    base_url: *const c_char,
+    css_cache: *mut GHashTable,
+    anim: *mut c_void,
+) -> *mut GHashTable {
+    let base = c_str(base_url);
+    let _scope = CssScope::enter(base);
+    let sheets = SheetList::new();
+    let docs = SheetList::new();
+    crate::styles::collect_stylesheets(
+        unsafe { Node::from_ptr(doc) },
+        base,
+        &sheets,
+        Some(&docs),
+        unsafe { CssCache::from_ptr(css_cache) },
+    );
+    if !anim.is_null() {
+        css::load_into_anim(anim, &sheets);
+    }
+    let styles = css::css_compute(doc, &sheets, &docs);
+    sheets.free_sheets();
+    sheets.destroy();
+    docs.destroy();
+    styles
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_relayout(
+    doc: *mut NsNode,
+    base_url: *const c_char,
+    viewport_width: c_int,
+    viewport_height: f64,
+    images: *mut c_void,
+    anim: *mut c_void,
+    js: *mut c_void,
+    css_cache: *mut GHashTable,
+    focused: *const NsNode,
+    hover: *const NsNode,
+    caret_byte: usize,
+    sel_anchor_byte: usize,
+    out_layout: *mut *mut NsBox,
+) -> *mut GHashTable {
+    let r = css::Relayout {
+        doc,
+        base: c_str(base_url),
+        viewport_width,
+        viewport_height,
+        images,
+        anim,
+        js,
+        focused,
+        hover,
+        caret_byte,
+        sel_anchor_byte,
+    };
+    let cache = unsafe { CssCache::from_ptr(css_cache) };
+    let doc_node = unsafe { Node::from_ptr(doc) };
+    let scope = CssScope::enter(r.base);
+    let sheets = SheetList::new();
+    let docs = SheetList::new();
+    crate::styles::collect_stylesheets(doc_node, r.base, &sheets, Some(&docs), cache);
+    let ctx = css::render_ctx(&r, &sheets, &docs);
+    let t0 = monotonic_us();
+    let mut styles = if profile_enabled() {
+        css::render_relayout_profiled(&ctx, out_layout, viewport_width)
+    } else {
+        css::render_relayout(&ctx, out_layout)
+    };
+    if crate::styles::frame_viewports_disagree_with_layout() {
+        css::discard_layout(js, styles, out_layout);
+        sheets.free_sheets();
+        sheets.truncate();
+        docs.truncate();
+        scope.cache_begin();
+        crate::styles::collect_stylesheets(doc_node, r.base, &sheets, Some(&docs), cache);
+        let ctx = css::render_ctx(&r, &sheets, &docs);
+        styles = css::render_relayout(&ctx, out_layout);
+    }
+    crate::styles::add_relayout(monotonic_us() - t0);
+    css::log_relayout(styles, viewport_width);
+    sheets.free_sheets();
+    sheets.destroy();
+    docs.destroy();
+    styles
+}
+
+fn profile_enabled() -> bool {
+    static PROFILE: OnceLock<bool> = OnceLock::new();
+    *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut f64) {
+    let (count, ms) = crate::styles::layout_perf();
+    unsafe {
+        if let Some(r) = relayouts.as_mut() {
+            *r = count;
+        }
+        if let Some(t) = total_ms.as_mut() {
+            *t = ms;
         }
     }
-    for &sheet in &list {
-        unsafe { ns_css_stylesheet_free(sheet) };
-    }
-    unsafe { glib::g_ptr_array_free(sheets, glib::TRUE) };
 }
 
 #[unsafe(no_mangle)]
@@ -477,45 +600,8 @@ pub unsafe extern "C" fn ns_engine_linked_css_text(url: *const c_char) -> *mut c
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_remember_linked_css(url: *const c_char, bytes: *mut GBytes) {
-    let (Some(url), Some(bytes)) = (c_str(url), unsafe { Bytes::borrow(bytes) }) else {
-        return;
-    };
-    fetch::remember_linked_css(url.to_bytes(), bytes.data());
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray {
     net::take_resource_timings(c_str(top_url))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_fetch_css_bytes(
-    url: *const c_char,
-    top_url: *const c_char,
-    cache: *mut GHashTable,
-    strict_mime: GBoolean,
-    initiator: *const c_char,
-    render_blocking: GBoolean,
-    in_frame: GBoolean,
-) -> *mut GBytes {
-    let Some(url) = c_str(url) else {
-        return ptr::null_mut();
-    };
-    let initiator = match c_str(initiator).map(CStr::to_bytes) {
-        Some(b"link") => c"link",
-        _ => c"css",
-    };
-    let f = CssFetch {
-        url,
-        top_url: c_str(top_url),
-        strict_mime: strict_mime != 0,
-        initiator,
-        render_blocking: render_blocking != 0,
-        in_frame: in_frame != 0,
-    };
-    fetch::fetch_css_bytes(&f, unsafe { CssCache::from_ptr(cache) })
-        .map_or(ptr::null_mut(), Bytes::into_raw)
 }
 
 #[unsafe(no_mangle)]

@@ -42,6 +42,10 @@ pub fn rel_has_token(rel: Option<&[u8]>, token: &[u8]) -> bool {
             .any(|part| !part.is_empty() && part.eq_ignore_ascii_case(token))
 }
 
+pub fn rel_is_stylesheet(rel: Option<&[u8]>) -> bool {
+    rel_has_token(rel, b"stylesheet") && !rel_has_token(rel, b"alternate")
+}
+
 pub fn remember_linked_css(url: &[u8], css: &[u8]) {
     if url.is_empty() {
         return;

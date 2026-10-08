@@ -127,7 +127,7 @@ standards mode (see [§13](#13-the-html-syntax)).
 | `base` (`href`, `target`) | ✅ | `href` feeds URL resolution via `ns_url_resolve` |
 | `link rel="stylesheet"` | ✅ | fetched and cascaded (`src/css.c`) |
 | `link rel="icon"` | ✅ | favicon fetched as image |
-| `link rel="preload"`/`prefetch` | ✅ | fetched early into the disk cache by the speculative-preload scanner (`src/engine.c`); no `as=`-based prioritization |
+| `link rel="preload"`/`prefetch` | ✅ | fetched early into the disk cache by the speculative-preload scanner (`rust/engine/src/fetch.rs`); no `as=`-based prioritization |
 | `link rel="preconnect"`/`dns-prefetch` | ✅ | warm the origin's DNS + TLS connection early via libcurl (`ns_net_preconnect_async`) |
 | `meta charset` | ✅ | feeds charset decode |
 | `meta name="viewport"` | 🟡 | parsed; viewport width/height come from `ns_css_set_viewport` (`src/css.c`); not all directives enforced |
@@ -179,7 +179,7 @@ elements (`head title meta link style script noscript template`) to
 | `img` | ✅ | layout + decode pipeline |
 | `img srcset` / `sizes` | ✅ | descriptor parsing (`first_url_from_srcset_sized`) + `sizes` evaluation (`ns_css_sizes_resolve`); width & density descriptors selected by viewport/density. `HTMLImageElement.currentSrc` reflects the actually-selected source (resolved to an absolute URL via the shared `ns_img_chosen_url` so it always matches the image the engine renders, including `<picture>` selection) |
 | `picture` / `source` | ✅ | `pick_picture_source_url` matches `media`/`type` via `ns_css_media_query_matches` |
-| `img loading="lazy"` | ✅ | fetch/decode deferred until the image scrolls near the viewport (`src/engine.c`) |
+| `img loading="lazy"` | ✅ | fetch/decode deferred until the image scrolls near the viewport (`rust/engine/src/fetch.rs`) |
 | Decode pipeline | ✅/🟡 | ICO (`src/image_ico.c`) → Wuffs (PNG/APNG, GIF, BMP, JPEG) → WebP via libwebp (lossy VP8 + lossless VP8L + animated via `WebPAnimDecoder`, `src/image_webp.c`) → AVIF via libavif (`src/image_avif.c`, if built). SVG renders in-engine (`src/svg.c`). Nothing follows: an unsupported format fails to decode |
 | `iframe` | 🟡 | `src`/`srcdoc` load; a **srcless or `about:blank`** frame, when connected, runs the load algorithm — a real same-origin `about:blank` content document is created and a `load` event fires (`ns_js_load_iframe_now`), so script that waits on `iframe.onload` proceeds; `sandbox` parsed **and enforced** — scripts, forms, popups, modals, and same-origin (cookie/storage) gated per the token list, restrictions inherited by nested frames (`ns_iframe_effective_sandbox` in `src/js.c`) |
 | `iframe srcdoc` | 🟡 | attribute and DOM reflection; embedded rendering still limited |

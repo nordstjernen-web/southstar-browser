@@ -24,6 +24,7 @@ const PORTED: &[&str] = &[
     "datetime.c",
     "debuglog.c",
     "dom.c",
+    "engine.c",
     "eventsource.c",
     "ext.c",
     "font.c",
