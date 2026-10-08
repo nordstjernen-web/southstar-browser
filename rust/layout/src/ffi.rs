@@ -41,7 +41,7 @@ pub struct Edges {
 #[repr(C)]
 pub struct NsBox {
     kind: c_uint,
-    _dom: *const c_void,
+    dom: *const c_void,
     style: *const Style,
     x: f64,
     y: f64,
@@ -96,7 +96,7 @@ pub struct NsBox {
     _grid_row_tracks: *mut GArray,
     _grid_explicit_cols: c_int,
     _grid_explicit_rows: c_int,
-    _media: *mut c_void,
+    media: *mut c_void,
     _svg_styles: *mut GHashTable,
     _colspan: c_int,
     _rowspan: c_int,
@@ -151,6 +151,14 @@ impl<'a> BoxRef<'a> {
 
     pub fn style(self) -> *const Style {
         self.raw().style
+    }
+
+    pub fn dom_ptr(self) -> *const c_void {
+        self.raw().dom
+    }
+
+    pub fn media_ptr(self) -> *mut c_void {
+        self.raw().media
     }
 
     pub fn x(self) -> f64 {

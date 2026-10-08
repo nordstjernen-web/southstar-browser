@@ -21,6 +21,7 @@ pub use southstar_font;
 pub use southstar_forms;
 pub use southstar_glctx;
 pub use southstar_glib;
+pub use southstar_headless;
 pub use southstar_history;
 pub use southstar_html_parser;
 pub use southstar_html_util;

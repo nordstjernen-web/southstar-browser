@@ -133,6 +133,10 @@ Southstar Browser (unreleased):
   handle cache and quota, object stores, indexes, key generators and records
   read and write the same databases, and databases written by earlier builds
   open unchanged.
+* The headless driver's renderer-driven runs are Rust: the default path for
+  --dump=text, dom and layout, with its scripted --act actions, screenshots,
+  followed navigations and console output, plus --debug level parsing and the
+  --inspect and --inspect-at reports. Output is byte for byte the same.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

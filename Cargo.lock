@@ -1533,6 +1533,7 @@ dependencies = [
  "southstar-forms",
  "southstar-glctx",
  "southstar-glib",
+ "southstar-headless",
  "southstar-history",
  "southstar-html-parser",
  "southstar-html-util",
@@ -1592,6 +1593,15 @@ dependencies = [
 [[package]]
 name = "southstar-glib"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-headless"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+]
 
 [[package]]
 name = "southstar-helper-ffi"
