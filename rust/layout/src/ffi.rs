@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
-use southstar_glib::{GArray, GBoolean, GHashTable};
+use southstar_glib::{GArray, GBoolean, GHashTable, GPtrArray};
 
 #[repr(C)]
 pub struct Style {
@@ -89,14 +89,14 @@ pub struct NsBox {
     _paint_layout: *mut c_void,
     _links: *mut GArray,
     _attrs: *mut GArray,
-    _inline_atomics: *mut GArray,
+    inline_atomics: *mut GArray,
     _atomic_line_heights: *mut GArray,
     _table_col_hints: *mut GArray,
     _grid_col_tracks: *mut GArray,
     _grid_row_tracks: *mut GArray,
     _grid_explicit_cols: c_int,
     _grid_explicit_rows: c_int,
-    media: *mut c_void,
+    media: *mut NsBoxMedia,
     _svg_styles: *mut GHashTable,
     _colspan: c_int,
     _rowspan: c_int,
@@ -110,6 +110,89 @@ pub struct NsBox {
 #[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(size_of::<NsBox>() == 560 && core::mem::offset_of!(NsBox, next_sibling) == 552);
+
+#[repr(C)]
+pub struct NsBoxMedia {
+    image_src: *mut c_char,
+    _image: *mut c_void,
+    bg_image_src: *mut c_char,
+    _bg_image: *mut c_void,
+    marker_image_src: *mut c_char,
+    _marker_image: *mut c_void,
+    border_image_src: *mut c_char,
+    _border_image: *mut c_void,
+    bg_layer_srcs: *mut GPtrArray,
+    _bg_layer_images: *mut GPtrArray,
+    video_src: *mut c_char,
+    video_poster: *mut c_char,
+    _video_audio_src: *mut c_char,
+    video: *mut c_void,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(core::mem::offset_of!(NsBoxMedia, video) == 104);
+
+#[repr(C)]
+struct InlineAtomic {
+    _byte_off: usize,
+    b: *const NsBox,
+    _owner_offset_x: f64,
+    _owner_offset_y: f64,
+}
+
+fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
+    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
+}
+
+#[derive(Clone, Copy)]
+pub struct MediaRef<'a>(NonNull<NsBoxMedia>, PhantomData<&'a NsBoxMedia>);
+
+impl<'a> MediaRef<'a> {
+    fn raw(self) -> &'a NsBoxMedia {
+        unsafe { &*self.0.as_ptr() }
+    }
+
+    pub fn image_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().image_src)
+    }
+
+    pub fn bg_image_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().bg_image_src)
+    }
+
+    pub fn marker_image_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().marker_image_src)
+    }
+
+    pub fn border_image_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().border_image_src)
+    }
+
+    pub fn bg_layer_srcs(self) -> Option<Vec<Option<&'a CStr>>> {
+        let layers = unsafe { self.raw().bg_layer_srcs.as_ref() }?;
+        Some(
+            (0..layers.len as usize)
+                .map(|i| c_str(unsafe { *layers.pdata.add(i) }.cast()))
+                .collect(),
+        )
+    }
+
+    pub fn video_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().video_src)
+    }
+
+    pub fn video_poster(self) -> Option<&'a CStr> {
+        c_str(self.raw().video_poster)
+    }
+
+    pub fn video(self) -> *mut c_void {
+        self.raw().video
+    }
+
+    pub fn set_video(self, video: *mut c_void) {
+        unsafe { (*self.0.as_ptr()).video = video };
+    }
+}
 
 unsafe extern "C" {
     fn ns_box_max_bottom(root: *const NsBox, seed: f64) -> f64;
@@ -149,6 +232,10 @@ impl<'a> BoxRef<'a> {
         }
     }
 
+    pub fn kind_raw(self) -> c_uint {
+        self.raw().kind
+    }
+
     pub fn style(self) -> *const Style {
         self.raw().style
     }
@@ -157,8 +244,18 @@ impl<'a> BoxRef<'a> {
         self.raw().dom
     }
 
-    pub fn media_ptr(self) -> *mut c_void {
-        self.raw().media
+    pub fn media(self) -> Option<MediaRef<'a>> {
+        NonNull::new(self.raw().media).map(|m| MediaRef(m, PhantomData))
+    }
+
+    pub fn inline_atomic_boxes(self) -> Vec<BoxRef<'a>> {
+        let Some(atomics) = (unsafe { self.raw().inline_atomics.as_ref() }) else {
+            return Vec::new();
+        };
+        let data = atomics.data.cast::<InlineAtomic>();
+        (0..atomics.len as usize)
+            .filter_map(|i| unsafe { BoxRef::from_ptr((*data.add(i)).b) })
+            .collect()
     }
 
     pub fn x(self) -> f64 {

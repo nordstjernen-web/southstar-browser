@@ -1,0 +1,16 @@
+[package]
+name = "southstar-engine"
+description = "The synchronous page pipeline shared by the drivers: captures to PNG and PDF, print sheets, text and layout dumps and keyframe loading"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-layout = { path = "../layout" }
+
+[lints]
+workspace = true

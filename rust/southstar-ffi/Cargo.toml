@@ -55,6 +55,7 @@ southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-texture = { path = "../texture" }
 southstar-watchdog = { path = "../watchdog" }
+southstar-engine = { path = "../engine" }
 southstar-headless = { path = "../headless" }
 southstar-idb = { path = "../idb" }
 southstar-webaudio = { path = "../webaudio" }

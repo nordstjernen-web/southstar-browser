@@ -55,27 +55,6 @@ struct NsResponse {
 const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184);
 
 #[repr(C)]
-struct NsBoxMedia {
-    _image_src: *mut c_char,
-    _image: *mut c_void,
-    _bg_image_src: *mut c_char,
-    _bg_image: *mut c_void,
-    _marker_image_src: *mut c_char,
-    _marker_image: *mut c_void,
-    _border_image_src: *mut c_char,
-    _border_image: *mut c_void,
-    _bg_layer_srcs: *mut GPtrArray,
-    _bg_layer_images: *mut GPtrArray,
-    video_src: *mut c_char,
-    video_poster: *mut c_char,
-    _video_audio_src: *mut c_char,
-    video: *mut NsVideo,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::offset_of!(NsBoxMedia, video) == 104);
-
-#[repr(C)]
 struct NsVideo {
     url: *mut c_char,
     natural_width: c_int,
@@ -812,15 +791,11 @@ pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
     boxes
 }
 
-fn media(b: BoxRef<'_>) -> Option<&mut NsBoxMedia> {
-    unsafe { b.media_ptr().cast::<NsBoxMedia>().as_mut() }
-}
-
 pub fn video_sources(b: BoxRef<'_>) -> Option<(Option<&CStr>, Option<&CStr>)> {
-    let m = media(b)?;
-    m.video
+    let m = b.media()?;
+    m.video()
         .is_null()
-        .then(|| (c_str(m.video_src), c_str(m.video_poster)))
+        .then(|| (m.video_src(), m.video_poster()))
 }
 
 pub struct Video(NonNull<NsVideo>);
@@ -867,9 +842,9 @@ impl Video {
     }
 
     pub fn attach(self, b: BoxRef) -> Result<(), Video> {
-        match media(b).filter(|m| m.video.is_null()) {
+        match b.media().filter(|m| m.video().is_null()) {
             Some(m) => {
-                m.video = self.0.as_ptr();
+                m.set_video(self.0.as_ptr().cast());
                 Ok(())
             }
             None => Err(self),

@@ -16,12 +16,6 @@ unsafe extern "C" {
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
 }
 
-#[cfg(windows)]
-unsafe extern "C" {
-    fn __acrt_iob_func(index: core::ffi::c_uint) -> *mut c_void;
-    fn fwrite(data: *const c_void, size: usize, count: usize, stream: *mut c_void) -> usize;
-}
-
 pub fn out(bytes: &[u8]) {
     for (i, run) in bytes.split(|&b| b == 0).enumerate() {
         if i > 0 {
@@ -39,15 +33,8 @@ pub fn flush() {
     unsafe { fflush(ptr::null_mut()) };
 }
 
-#[cfg(windows)]
 pub fn err(bytes: &[u8]) {
-    unsafe { fwrite(bytes.as_ptr().cast(), 1, bytes.len(), __acrt_iob_func(2)) };
-}
-
-#[cfg(not(windows))]
-pub fn err(bytes: &[u8]) {
-    use std::io::Write;
-    let _ = std::io::stderr().write_all(bytes);
+    southstar_glib::stderr_write(bytes);
 }
 
 pub fn fmt_g(value: f64) -> String {

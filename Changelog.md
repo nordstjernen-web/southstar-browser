@@ -140,6 +140,9 @@ Southstar Browser (unreleased):
   holds, scrolls, screenshots), followed navigations, inline video frames in
   captures, the WPT harness report and --debug logging. headless.c is gone;
   output is byte for byte the same.
+* The engine's captures and dumps are Rust: PNG, PDF and paged-PDF output
+  with its metadata, the per-sheet print recordings, the text and layout
+  dumps and keyframe loading, with the same output.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

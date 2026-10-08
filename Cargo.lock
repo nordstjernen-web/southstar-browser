@@ -1497,6 +1497,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-engine"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+]
+
+[[package]]
 name = "southstar-eventsource"
 version = "1.0.30-dev"
 dependencies = [
@@ -1527,6 +1536,7 @@ dependencies = [
  "southstar-css-syntax",
  "southstar-datetime",
  "southstar-debuglog",
+ "southstar-engine",
  "southstar-eventsource",
  "southstar-extensions",
  "southstar-font",

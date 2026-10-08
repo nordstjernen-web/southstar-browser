@@ -226,3 +226,20 @@ pub unsafe fn slice<'a>(p: *const u8, len: usize) -> &'a [u8] {
         unsafe { core::slice::from_raw_parts(p, len) }
     }
 }
+
+#[cfg(windows)]
+unsafe extern "C" {
+    fn __acrt_iob_func(index: c_uint) -> *mut c_void;
+    fn fwrite(data: *const c_void, size: usize, count: usize, stream: *mut c_void) -> usize;
+}
+
+#[cfg(windows)]
+pub fn stderr_write(bytes: &[u8]) {
+    unsafe { fwrite(bytes.as_ptr().cast(), 1, bytes.len(), __acrt_iob_func(2)) };
+}
+
+#[cfg(not(windows))]
+pub fn stderr_write(bytes: &[u8]) {
+    use std::io::Write;
+    let _ = std::io::stderr().write_all(bytes);
+}

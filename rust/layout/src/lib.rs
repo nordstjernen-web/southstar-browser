@@ -4,7 +4,7 @@
 
 mod ffi;
 
-pub use ffi::{BoxKind, BoxRef, Edges, NsBox, Style};
+pub use ffi::{BoxKind, BoxRef, Edges, MediaRef, NsBox, NsBoxMedia, Style};
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {
     core::iter::successors(b.first_child(), |child| child.next_sibling())
