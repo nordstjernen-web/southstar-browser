@@ -178,6 +178,10 @@ Southstar Browser (unreleased):
   icon, explanation and what to try) and data: URL decoding, percent-encoded
   or base64 under the response memory budget, produce the same pages and
   bytes as before.
+* Local folders and FTP directories are listed by Rust: the "Index of" page
+  with folders first, sizes and modification dates, Unix and DOS FTP listing
+  formats, file: reads under the response budget with their content type,
+  and view-source: pages with their highlighting, all unchanged.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
