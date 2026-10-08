@@ -36,7 +36,7 @@ def depfile_entries(path):
 
 def build(cargo, source_root, target_dir, profile, crate, output, depfile, features):
     source_root = Path(source_root)
-    command = [cargo, "build", "--frozen", "--package", crate,
+    command = [cargo, "build", "--locked", "--package", crate,
                "--manifest-path", str(source_root / "Cargo.toml"),
                "--target-dir", target_dir]
     command += ["--release"] if profile == "release" else []

@@ -247,7 +247,7 @@ Meson stays the build entry point during the port, so `meson setup builddir &&
 meson compile -C builddir` keeps working on every platform:
 
 - A `custom_target` (`rust/meson.build`) runs `scripts/cargo-build.py`,
-  which calls `cargo build --frozen` (`--release` for meson's release and
+  which calls `cargo build --locked` (`--release` for meson's release and
   minsize build types) with the target directory inside the build
   directory. It copies `libsouthstar_ffi.a` out only when its bytes changed
   and hands ninja cargo's dependency file plus the manifests, so a no-op
@@ -324,9 +324,13 @@ Every workflow adds `cargo clippy --all-targets -- -D warnings` and
 
 Two package builds run without network access: `debian/rules` in a
 network-isolated sbuild/pbuilder chroot, and the openSUSE package, which OBS
-builds straight from git (`scmsync`). Cargo therefore always runs with
-`--frozen` against vendored sources (`cargo vendor`), and where those sources
-live is decision D4. `nightly-distro-build.sh` and the `pack-*.sh` scripts
+builds straight from git (`scmsync`). Cargo runs with `--locked`: the lockfile
+is never rewritten, and nothing is fetched when the registry index and sources
+are already present. A fresh machine with network fetches the index entries
+once, including those of optional dependencies such as Boa that the default
+build never compiles (`--frozen` refused even that, which broke the BSD
+builds); an offline package build points Cargo at vendored sources
+(`cargo vendor`), and where those sources live is decision D4. `nightly-distro-build.sh` and the `pack-*.sh` scripts
 need no path changes because meson installs the Rust executables where the C
 ones were; their dependency lists gain `cargo`/`rustc` (and `debian/control`,
 the RPM spec and `APKBUILD` their build dependencies). The macOS, Windows and
