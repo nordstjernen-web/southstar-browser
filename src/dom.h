@@ -110,6 +110,10 @@ struct ns_node {
     struct ns_node *tpl_content;
 };
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_node) == 176 && sizeof(ns_attr) == 56);
+#endif
+
 ns_node *ns_node_new_document(void);
 ns_node *ns_node_new_element(char *name);
 ns_node *ns_node_new_text(char *text);

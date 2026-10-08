@@ -200,6 +200,10 @@ typedef struct ns_box {
     struct ns_box *next_sibling;
 } ns_box;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_box) == 560 && offsetof(ns_box, next_sibling) == 552);
+#endif
+
 struct _PangoAttrList;
 struct _PangoLayout;
 void ns_inline_apply_atomic_shapes(struct _PangoAttrList *list, const ns_box *box);

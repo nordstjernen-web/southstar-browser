@@ -107,6 +107,10 @@ pub struct NsBox {
     next_sibling: *const NsBox,
 }
 
+#[cfg(target_pointer_width = "64")]
+const _: () =
+    assert!(size_of::<NsBox>() == 560 && core::mem::offset_of!(NsBox, next_sibling) == 552);
+
 unsafe extern "C" {
     fn ns_box_max_bottom(root: *const NsBox, seed: f64) -> f64;
     fn ns_box_clips_out_point(b: *const NsBox, x: f64, y: f64) -> GBoolean;

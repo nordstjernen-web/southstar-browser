@@ -67,6 +67,9 @@ pub struct NsNode {
     tpl_content: *mut NsNode,
 }
 
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<NsNode>() == 176 && size_of::<NsAttr>() == 56);
+
 mod attrs;
 mod controls;
 mod index;
