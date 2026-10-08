@@ -254,7 +254,7 @@ them large:
    `com.apple.security.app-sandbox` entitlement, and a sandboxed app may
    **not** `fork()`/`execv()` a sibling executable. Southstar spawns a
    `southstar-renderer` per tab (and a `southstar-audio` helper)
-   exactly that way (`src/rproc_http.c`) for OS-level tab isolation. Those
+   exactly that way (`rust/renderer-client`) for OS-level tab isolation. Those
    helpers would have to be re-built as **XPC services**
    (`Contents/XPCServices/*.xpc`), or the app would ship
    `--single-process` and forfeit the per-tab security boundary. This is

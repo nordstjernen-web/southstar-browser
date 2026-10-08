@@ -49,7 +49,7 @@ Southstar has a single renderer architecture. The GTK app
 is a thin shell (`src/gtk/procview.c`) that spawns
 one sandboxed `southstar-renderer` process per tab
 (`src/renderer_http.c`, `rust/renderer-host`) and drive it over a control channel +
-shared-memory framebuffer (`src/rproc_http.c`). The engine
+shared-memory framebuffer (`rust/renderer-client`). The engine
 (`src/css.c`, `src/layout.c`, `src/js.c`, `src/dom.c`, `src/paint.c`,
 `src/net.c`, images) runs entirely inside the sandboxed child (Linux
 Landlock + seccomp); the UI process only blits frames and forwards

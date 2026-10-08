@@ -270,6 +270,19 @@ mod sys {
     pub(super) fn set_read_timeout(_fd: c_int, _seconds: c_int) {}
 }
 
+pub(crate) fn set_bufsize(fd: c_int, bytes: c_int) {
+    sys::set_bufsize(fd, bytes);
+}
+
+pub(crate) fn set_read_timeout(fd: c_int, seconds: c_int) {
+    sys::set_read_timeout(fd, seconds);
+}
+
+#[cfg(unix)]
+pub(crate) fn send_fd(sock: c_int, fd: c_int) -> bool {
+    sys::send_fd(sock, fd)
+}
+
 pub(crate) fn read(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
     sys::read_fd(fd, buf)
 }
@@ -315,18 +328,18 @@ pub unsafe extern "C" fn http_conn_init(c: *mut Conn, fd: c_int) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn http_set_bufsize(fd: c_int, bytes: c_int) {
-    sys::set_bufsize(fd, bytes);
+    set_bufsize(fd, bytes);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn http_set_read_timeout(fd: c_int, seconds: c_int) {
-    sys::set_read_timeout(fd, seconds);
+    set_read_timeout(fd, seconds);
 }
 
 #[cfg(unix)]
 #[unsafe(no_mangle)]
 pub extern "C" fn http_send_fd(sock: c_int, fd: c_int) -> c_int {
-    if sys::send_fd(sock, fd) { 0 } else { -1 }
+    if send_fd(sock, fd) { 0 } else { -1 }
 }
 
 #[cfg(unix)]

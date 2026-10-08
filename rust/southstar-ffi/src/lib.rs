@@ -28,6 +28,7 @@ pub use southstar_mat4;
 pub use southstar_mic;
 pub use southstar_netutil;
 pub use southstar_pdf;
+pub use southstar_renderer_client;
 pub use southstar_renderer_host;
 pub use southstar_safebrowsing;
 pub use southstar_sandbox;

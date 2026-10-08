@@ -4,5 +4,6 @@
 
 mod engine;
 mod ffi;
+mod inproc;
 mod serve;
 mod tiles;

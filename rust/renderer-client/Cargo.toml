@@ -1,6 +1,6 @@
 [package]
-name = "southstar-renderer-host"
-description = "The renderer side of the renderer protocol: painting a page into shared-memory tiles and viewport layers for the window's compositor"
+name = "southstar-renderer-client"
+description = "The window's side of the renderer protocol: spawning renderer processes or in-process sessions, sharing the framebuffer, requests and replies, and task-manager statistics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 southstar-glib = { path = "../glib" }
 southstar-ipc = { path = "../ipc" }
-southstar-renderer-client = { path = "../renderer-client" }
 
 [lints]
 workspace = true

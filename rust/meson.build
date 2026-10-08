@@ -10,6 +10,9 @@ rust_native_libs = run_command(
 
 southstar_rust_features = []
 southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet, cairo]
+if host_machine.system() != 'windows'
+  southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
+endif
 southstar_rust_env = {'NS_RUSTC_VERSION': rustc.version()}
 if quickjs_original
   southstar_rust_features += ['quickjs-original']

@@ -85,7 +85,9 @@ Southstar Browser (unreleased):
   requests (opening pages, the back/forward cache, rendering, input, find,
   dumps, printing) and the tiling that cuts a page into tiles and fixed and
   sticky layers, crops and packs them into shared memory and describes them
-  to the window.
+  to the window. The window's side is Rust as well: starting renderer
+  processes, sharing their framebuffer, every request it sends them, the
+  process statistics in the task manager, and single-process mode.
 * The watchdog that restarts the browser after a crash or a hang is Rust,
   with the same restart limits, hang budget and messages.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and

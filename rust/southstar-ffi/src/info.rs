@@ -37,6 +37,8 @@ const PORTED: &[&str] = &[
     "pdf.c",
     "renderer_serve.c",
     "renderer_tiles.c",
+    "rproc_http.c",
+    "rproc_inproc.c",
     "safebrowsing.c",
     "security.c",
     "spellcheck.c",

@@ -36,6 +36,7 @@ southstar-mat4 = { path = "../mat4" }
 southstar-mic = { path = "../mic" }
 southstar-netutil = { path = "../netutil" }
 southstar-pdf = { path = "../pdf" }
+southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }

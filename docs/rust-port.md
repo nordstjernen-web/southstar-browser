@@ -843,6 +843,8 @@ files will show whether WebIDL generation pays for itself.
 | `image_ico.c`, `image_webp.c` | 377 | `rust/image-decoders` | 2 |
 | `ipc_http.c` | 599 | `rust/ipc` | 3 |
 | `renderer_serve.c` | 1,240 | `rust/renderer-host` | 3 |
+| `rproc_http.c` | 1,822 | `rust/renderer-client` | 3 |
+| `rproc_inproc.c` | 240 | `rust/renderer-host` | 3 |
 | `renderer_tiles.c` | 439 | `rust/renderer-host` | 3 |
 | `cache.c` | 788 | `rust/http-cache` (SQLite through the shared `rust/sqlite`) | 5 |
 | `eventsource.c` | 438 | `rust/eventsource` | 5 |

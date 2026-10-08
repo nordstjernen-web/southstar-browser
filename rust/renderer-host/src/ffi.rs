@@ -22,7 +22,24 @@ impl Framebuffer for SharedFramebuffer {
     }
 }
 
-type RendererSession = Session<SharedFramebuffer>;
+pub type RendererSession = Session<SharedFramebuffer>;
+
+pub fn new_session(
+    ctrl_w: c_int,
+    fb: *mut u8,
+    max_w: c_int,
+    max_h: c_int,
+    shm_mode: bool,
+) -> Option<RendererSession> {
+    if fb.is_null() || max_w <= 0 || max_h <= 0 {
+        return None;
+    }
+    let framebuffer = SharedFramebuffer {
+        pixels: fb,
+        len: max_w as usize * max_h as usize * 4,
+    };
+    Some(Session::new(ctrl_w, framebuffer, max_w, max_h, shm_mode))
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_renderer_session_new(
@@ -32,20 +49,8 @@ pub unsafe extern "C" fn ns_renderer_session_new(
     max_h: c_int,
     shm_mode: c_int,
 ) -> *mut RendererSession {
-    if fb.is_null() || max_w <= 0 || max_h <= 0 {
-        return ptr::null_mut();
-    }
-    let framebuffer = SharedFramebuffer {
-        pixels: fb,
-        len: max_w as usize * max_h as usize * 4,
-    };
-    Box::into_raw(Box::new(Session::new(
-        ctrl_w,
-        framebuffer,
-        max_w,
-        max_h,
-        shm_mode != 0,
-    )))
+    new_session(ctrl_w, fb, max_w, max_h, shm_mode != 0)
+        .map_or(ptr::null_mut(), |s| Box::into_raw(Box::new(s)))
 }
 
 #[unsafe(no_mangle)]

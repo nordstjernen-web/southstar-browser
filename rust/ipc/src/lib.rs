@@ -8,6 +8,7 @@ use core::ffi::{c_int, c_long};
 use std::io;
 
 pub const MAX_BODY: c_long = 64 * 1024 * 1024;
+pub const MAX_REPLY: c_long = 16 * 1024 * 1024;
 pub const MAX_HEADERS: usize = 64;
 const LINE_CAP: usize = 20480;
 const REQUEST_HEAD_CAP: usize = 512;
@@ -44,13 +45,6 @@ pub struct Head {
     pub x_download: [u8; 3072],
     pub x_audio: [u8; 16384],
     pub x_window_action: [u8; 32],
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 fn copy_truncated(dst: &mut [u8], src: &[u8]) {
@@ -98,6 +92,35 @@ pub fn atoi(s: &[u8]) -> c_int {
 }
 
 impl Head {
+    pub fn boxed() -> Box<Head> {
+        let mut head = Box::new(Head {
+            method: [0; 8],
+            path: [0; 128],
+            status: 0,
+            content_length: 0,
+            x_w: 0,
+            x_h: 0,
+            x_stride: 0,
+            x_anim: 0,
+            x_unchanged: 0,
+            x_render_rc: 0,
+            x_page_w: 0,
+            x_page_h: 0,
+            x_scroll_y: 0,
+            x_scroll_x: 0,
+            x_clipboard: 0,
+            x_tiles: 0,
+            x_nav: [0; 2048],
+            x_webgl: [0; 2048],
+            x_camera: [0; 2048],
+            x_download: [0; 3072],
+            x_audio: [0; 16384],
+            x_window_action: [0; 32],
+        });
+        head.clear();
+        head
+    }
+
     pub fn clear(&mut self) {
         self.method.fill(0);
         self.path.fill(0);
@@ -196,6 +219,15 @@ impl Head {
 }
 
 impl Conn {
+    pub fn boxed(fd: c_int) -> Box<Conn> {
+        Box::new(Conn {
+            fd,
+            buf: [0; 16384],
+            start: 0,
+            len: 0,
+        })
+    }
+
     fn fill(&mut self) -> bool {
         if self.len > 0 {
             return true;
@@ -299,6 +331,26 @@ impl Conn {
         }
         (0..=MAX_BODY).contains(&out.content_length)
     }
+}
+
+pub fn set_bufsize(fd: c_int, bytes: c_int) {
+    ffi::set_bufsize(fd, bytes);
+}
+
+pub fn set_read_timeout(fd: c_int, seconds: c_int) {
+    ffi::set_read_timeout(fd, seconds);
+}
+
+#[cfg(unix)]
+pub fn send_fd(sock: c_int, fd: c_int) -> bool {
+    ffi::send_fd(sock, fd)
+}
+
+pub fn until_nul(bytes: &[u8]) -> &[u8] {
+    bytes
+        .iter()
+        .position(|&b| b == 0)
+        .map_or(bytes, |end| &bytes[..end])
 }
 
 pub fn write_all(fd: c_int, mut bytes: &[u8]) -> bool {

@@ -105,6 +105,7 @@ unsafe extern "C" {
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
 
+    fn ns_browser_init() -> c_int;
     fn ns_browser_open_viewport(
         url: *const c_char,
         width: c_int,
@@ -359,6 +360,10 @@ fn take(text: *mut c_char) -> Option<Vec<u8>> {
 
 fn opt_ptr(text: Option<&CStr>) -> *const c_char {
     text.map_or(ptr::null(), CStr::as_ptr)
+}
+
+pub fn init() -> c_int {
+    unsafe { ns_browser_init() }
 }
 
 pub fn monotonic_us() -> i64 {
