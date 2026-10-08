@@ -97,6 +97,7 @@ typedef struct ns_response {
 
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(offsetof(ns_response, response_end_ms) == 184);
+G_STATIC_ASSERT(offsetof(ns_response, security) == 192 && sizeof(ns_response) == 200);
 #endif
 
 

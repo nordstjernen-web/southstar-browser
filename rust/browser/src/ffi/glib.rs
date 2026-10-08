@@ -150,6 +150,10 @@ impl Drop for StrBufOwned {
     }
 }
 
+pub unsafe fn append_to(s: *mut GString, bytes: &[u8]) {
+    unsafe { g_string_append_len(s, bytes.as_ptr().cast(), bytes.len() as isize) };
+}
+
 pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
@@ -188,6 +192,22 @@ pub fn printerr(text: &[u8]) {
 
 pub fn printerr_double(format: &CStr, value: f64) {
     unsafe { g_printerr(format.as_ptr(), value) };
+}
+
+pub fn env_value(name: &CStr) -> Option<&'static CStr> {
+    let v = unsafe { glib::g_getenv(name.as_ptr()) };
+    (!v.is_null()).then(|| unsafe { CStr::from_ptr(v) })
+}
+
+pub fn printerr_paint_profile(ms: f64, width: c_int, height: c_int) {
+    unsafe {
+        g_printerr(
+            c"[profile] paint %6.1fms %dx%d\n".as_ptr(),
+            ms,
+            width,
+            height,
+        )
+    };
 }
 
 pub fn env_set(name: &CStr) -> bool {

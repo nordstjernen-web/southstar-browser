@@ -6,6 +6,8 @@ mod dom;
 mod engine;
 mod glib;
 mod js;
+mod net;
+mod paint;
 mod trampolines;
 
 use core::cell::{Cell, UnsafeCell};
@@ -20,8 +22,10 @@ pub use dom::*;
 pub use engine::*;
 pub use glib::*;
 pub use js::{Js, NavigationTiming};
+pub use net::*;
+pub use paint::*;
 
-use crate::{build, callbacks, images, page, query, settle};
+use crate::{build, callbacks, images, open, page, query, render, settle};
 
 #[repr(transparent)]
 pub struct Flag(Cell<GBoolean>);
@@ -494,38 +498,37 @@ fn take_or_null(s: Option<GStr>) -> *mut c_char {
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_build(
-    doc: *mut NsNode,
-    base: *mut c_char,
-    viewport_width: c_int,
-    viewport_height: f64,
-    settle_ms: c_int,
-    bfcache_ok: GBoolean,
-    refresh_hdr: *mut c_char,
-    doc_language: *mut c_char,
-    csp_header: *mut c_char,
-    doc_charset: *mut c_char,
-    url: *const c_char,
-    navigation_timing: *const NavigationTiming,
-) -> *mut NsBrowser {
+pub struct Created<'a> {
+    pub doc: ParsedDoc,
+    pub base: Option<GStr>,
+    pub view: &'a open::Viewport,
+    pub bfcache_ok: bool,
+    pub refresh_header: Option<GStr>,
+    pub doc_language: Option<GStr>,
+    pub csp_header: Option<GStr>,
+    pub doc_charset: Option<GStr>,
+    pub url: Option<&'a CStr>,
+    pub timing: Option<&'a NavigationTimingData>,
+}
+
+pub fn create_browser(c: Created<'_>) -> &'static NsBrowser {
     let b = NsBrowser::allocate();
-    b.doc.set(doc);
-    b.base_url.adopt(unsafe { GStr::take(base) });
-    b.doc_charset.adopt(unsafe { GStr::take(doc_charset) });
-    b.doc_language.adopt(unsafe { GStr::take(doc_language) });
+    b.doc.set(c.doc.0);
+    b.base_url.adopt(c.base);
+    b.doc_charset.adopt(c.doc_charset);
+    b.doc_language.adopt(c.doc_language);
     let setup = build::Setup {
-        viewport_width,
-        viewport_height,
-        settle_ms,
-        bfcache_ok: bfcache_ok != 0,
-        refresh_header: unsafe { GStr::take(refresh_hdr) },
-        csp_header: unsafe { GStr::take(csp_header) },
-        url: c_str(url),
-        navigation_timing,
+        viewport_width: c.view.width,
+        viewport_height: c.view.height,
+        settle_ms: c.view.settle_ms,
+        bfcache_ok: c.bfcache_ok,
+        refresh_header: c.refresh_header,
+        csp_header: c.csp_header,
+        url: c.url,
+        navigation_timing: c.timing.map_or(ptr::null(), |t| ptr::from_ref(t).cast()),
     };
     build::build(b, setup);
-    b.as_ptr()
+    b
 }
 
 pub fn attach_js(b: &NsBrowser, navigation_timing: *const NavigationTiming) -> Option<Js> {
@@ -1098,4 +1101,327 @@ pub unsafe extern "C" fn ns_browser_close(b: *mut NsBrowser) {
 
 pub fn browser_for(ud: *mut c_void) -> Option<&'static NsBrowser> {
     unsafe { ud.cast::<NsBrowser>().as_ref() }
+}
+
+fn view(width: c_int, height: f64, settle_ms: c_int) -> open::Viewport {
+    open::Viewport {
+        width,
+        height,
+        settle_ms,
+    }
+}
+
+unsafe fn open_with(
+    url: *const c_char,
+    view: open::Viewport,
+    post: Option<&Post<'_>>,
+) -> *mut NsBrowser {
+    c_str(url)
+        .and_then(|url| open::open(url, &view, post))
+        .map_or(ptr::null_mut(), NsBrowser::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_set_next_referrer(url: *const c_char) {
+    open::set_next_referrer(c_str(url));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_browser_set_next_user_activated(user_activated: c_int) {
+    open::set_next_user_activated(user_activated != 0);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_browser_set_color_scheme(dark: c_int) {
+    css_set_color_scheme(dark != 0);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_browser_set_reduced_motion(reduce: c_int) {
+    css_set_reduced_motion(reduce != 0);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_open(
+    url: *const c_char,
+    viewport_width: c_int,
+    settle_ms: c_int,
+) -> *mut NsBrowser {
+    unsafe { open_with(url, view(viewport_width, 0.0, settle_ms), None) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_open_viewport(
+    url: *const c_char,
+    viewport_width: c_int,
+    viewport_height: f64,
+    settle_ms: c_int,
+) -> *mut NsBrowser {
+    unsafe { open_with(url, view(viewport_width, viewport_height, settle_ms), None) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_open_post(
+    url: *const c_char,
+    viewport_width: c_int,
+    settle_ms: c_int,
+    body: *const c_void,
+    body_len: usize,
+    content_type: *const c_char,
+) -> *mut NsBrowser {
+    unsafe {
+        ns_browser_open_post_viewport(
+            url,
+            viewport_width,
+            0.0,
+            settle_ms,
+            body,
+            body_len,
+            content_type,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_open_post_viewport(
+    url: *const c_char,
+    viewport_width: c_int,
+    viewport_height: f64,
+    settle_ms: c_int,
+    body: *const c_void,
+    body_len: usize,
+    content_type: *const c_char,
+) -> *mut NsBrowser {
+    let post = (!body.is_null()).then(|| Post {
+        body,
+        len: body_len,
+        content_type: c_str(content_type),
+    });
+    unsafe {
+        open_with(
+            url,
+            view(viewport_width, viewport_height, settle_ms),
+            post.as_ref(),
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_render_rgba(
+    b: *mut NsBrowser,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    width: c_int,
+    height: c_int,
+    scale: f64,
+    out: *mut u8,
+    stride: c_int,
+) -> c_int {
+    match unsafe { browser(b) } {
+        Some(b) if !out.is_null() => render::render_rgba(b, scroll_x, scroll_y, scale, &unsafe {
+            PixelBuf::new(out, width, height, stride)
+        }),
+        _ => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_render_argb32(
+    b: *mut NsBrowser,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    width: c_int,
+    height: c_int,
+    scale: f64,
+    out: *mut u8,
+    stride: c_int,
+) -> c_int {
+    match unsafe { browser(b) } {
+        Some(b) if !out.is_null() => render::render_argb32(b, scroll_x, scroll_y, scale, &unsafe {
+            PixelBuf::new(out, width, height, stride)
+        }),
+        _ => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_snap_document(
+    b: *mut NsBrowser,
+    viewport_w: f64,
+    viewport_h: f64,
+    prev_x: c_int,
+    prev_y: c_int,
+    scroll_x: *mut c_int,
+    scroll_y: *mut c_int,
+) -> c_int {
+    let (Some(b), Some(sx), Some(sy)) = (
+        unsafe { browser(b) },
+        unsafe { scroll_x.as_mut() },
+        unsafe { scroll_y.as_mut() },
+    ) else {
+        return 0;
+    };
+    match render::snap_document(b, (viewport_w, viewport_h), (prev_x, prev_y), (*sx, *sy)) {
+        Some((x, y)) => {
+            *sx = x;
+            *sy = y;
+            1
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_note_viewport(
+    b: *mut NsBrowser,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    height: c_int,
+    scale: f64,
+) {
+    let Some(b) = (unsafe { browser(b) }).filter(|b| b.layout().is_some()) else {
+        return;
+    };
+    b.set_video_page_coords(true);
+    render::note_viewport(
+        b,
+        scroll_x,
+        scroll_y,
+        height,
+        if scale > 0.0 { scale } else { 1.0 },
+    );
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_flush_video_rects(b: *mut NsBrowser) {
+    if let Some(b) = (unsafe { browser(b) }).filter(|b| b.videos().is_some()) {
+        b.flush_video_composites(monotonic_us());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_layers_prepare(
+    b: *mut NsBrowser,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    width: c_int,
+    height: c_int,
+    scale: f64,
+    plan: *mut LayerPlan,
+) -> c_int {
+    match (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) {
+        (Some(b), Some(plan)) if b.layout().is_some() && width > 0 && height > 0 => {
+            render::layers_prepare(b, scroll_x, scroll_y, width, height, scale, &plan)
+        }
+        _ => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_render_doc_tile(
+    b: *mut NsBrowser,
+    plan: *const LayerPlan,
+    scroll_x: c_int,
+    tile_y: c_int,
+    width: c_int,
+    height: c_int,
+    scale: f64,
+    bufs: *const *mut u8,
+    stride: c_int,
+    upper_used: *mut GBoolean,
+) -> c_int {
+    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) else {
+        return -1;
+    };
+    if bufs.is_null() || b.layout().is_none() || width <= 0 || height <= 0 || stride < width * 4 {
+        return -1;
+    }
+    let target = TileTarget {
+        bufs,
+        used: upper_used,
+        width,
+        height,
+        stride,
+        scroll_x,
+        tile_y,
+        scale: if scale > 0.0 { scale } else { 1.0 },
+    };
+    render::render_doc_tile(b, &plan, &target)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_vp_layer_info(
+    b: *mut NsBrowser,
+    plan: *const LayerPlan,
+    index: c_int,
+    out: *mut VpLayerInfo,
+) -> c_int {
+    let out = unsafe { &mut *out };
+    *out = VpLayerInfo::default();
+    match unsafe { browser(b) } {
+        Some(b) => render::vp_layer_info(b, unsafe { Plan::from_ptr(plan) }.as_ref(), index, out),
+        None => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_render_vp_layer(
+    b: *mut NsBrowser,
+    plan: *const LayerPlan,
+    index: c_int,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    origin_y: c_int,
+    width: c_int,
+    height: c_int,
+    scale: f64,
+    out: *mut u8,
+    stride: c_int,
+) -> c_int {
+    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) else {
+        return -1;
+    };
+    if out.is_null() {
+        return -1;
+    }
+    let r = render::VpRender {
+        index,
+        scroll_x,
+        scroll_y,
+        origin_y,
+        scale,
+    };
+    render::render_vp_layer(b, &plan, &r, &unsafe {
+        PixelBuf::new(out, width, height, stride)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scroller_rects(
+    b: *mut NsBrowser,
+    out: *mut GString,
+    max_rects: c_int,
+) {
+    if out.is_null() {
+        return;
+    }
+    if let Some(rects) = (unsafe { browser(b) }).and_then(|b| render::scroller_rects(b, max_rects))
+    {
+        unsafe { append_to(out, &rects) };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_canvas_color(
+    b: *mut NsBrowser,
+    rgba_out: *mut f64,
+) -> GBoolean {
+    let Some(layout) = (unsafe { browser(b) }).and_then(NsBrowser::layout) else {
+        return 0;
+    };
+    let mut rgba = [0.0f64; 4];
+    unsafe { ptr::copy_nonoverlapping(rgba_out, rgba.as_mut_ptr(), 4) };
+    let ok = canvas_color(layout, &mut rgba);
+    unsafe { ptr::copy_nonoverlapping(rgba.as_ptr(), rgba_out, 4) };
+    southstar_glib::boolean(ok)
 }

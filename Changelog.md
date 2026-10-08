@@ -161,6 +161,12 @@ Southstar Browser (unreleased):
   and media's callbacks, form submission, declarative refresh, the dumps,
   captures and print sheets, the title, links and favicon, the caret blink
   and closing a page. Pages behave exactly as before.
+* Opening and painting a page are Rust too: the safe-browsing gate,
+  local file paths, HTTPS-first upgrades, error pages, image, PDF, JSON, XML
+  and plain-text documents, the security state, and every way a page is
+  painted for the shell (whole frames, scroll snapping, layer plans,
+  document tiles, fixed and sticky layers, scroller rectangles), with
+  pixel-identical output.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
