@@ -66,6 +66,8 @@ Southstar Browser (unreleased):
   directly over the Rust CSS tokenizer, with unchanged results.
 * Media queries (@media rules, matchMedia() and their serialization) are
   parsed and evaluated in Rust.
+* The HTTP cache is Rust. Its database and body files are unchanged, so an
+  existing cache keeps working.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

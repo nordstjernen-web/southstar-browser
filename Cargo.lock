@@ -1496,6 +1496,7 @@ dependencies = [
  "southstar-glctx",
  "southstar-glib",
  "southstar-history",
+ "southstar-http-cache",
  "southstar-i18n",
  "southstar-image-decoders",
  "southstar-js-temporal",
@@ -1532,6 +1533,16 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-glib",
+ "southstar-sqlite",
+]
+
+[[package]]
+name = "southstar-http-cache"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-glib",
+ "southstar-sqlite",
 ]
 
 [[package]]
@@ -1593,6 +1604,13 @@ dependencies = [
 
 [[package]]
 name = "southstar-spellcheck"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-sqlite"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

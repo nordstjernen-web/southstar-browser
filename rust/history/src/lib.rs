@@ -8,7 +8,8 @@ use std::ffi::CStr;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ffi::{Db, LocalTime};
+use ffi::LocalTime;
+use southstar_sqlite::Db;
 
 const MAX_ROWS: i32 = 10000;
 const PAGE_ROWS: i32 = 200;

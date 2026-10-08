@@ -1,4 +1,4 @@
-/* Southstar — on-disk HTTP cache API.
+/* Southstar — on-disk HTTP cache API, implemented in rust/http-cache.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

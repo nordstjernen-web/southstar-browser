@@ -1,6 +1,6 @@
 [package]
-name = "southstar-history"
-description = "Browsing history: the SQLite visits table in the user's data directory and the about:history page"
+name = "southstar-http-cache"
+description = "The on-disk HTTP cache: a SQLite index of responses keyed by URL, partition and Vary, with bodies stored as files"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-southstar-about-style = { path = "../about-style" }
+southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 southstar-sqlite = { path = "../sqlite" }
 

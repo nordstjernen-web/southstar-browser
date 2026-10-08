@@ -45,7 +45,6 @@ wpt_hook_h = custom_target(
 
 southstar_engine_sources = files(
   'anim.c',
-  'cache.c',
   'css.c',
   'dom.c',
   'engine.c',

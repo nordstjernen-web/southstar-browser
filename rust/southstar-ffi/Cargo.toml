@@ -25,6 +25,7 @@ southstar-debuglog = { path = "../debuglog" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
+southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }

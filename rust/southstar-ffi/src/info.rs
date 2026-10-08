@@ -14,6 +14,7 @@ const COMPILER: &str = match option_env!("NS_RUSTC_VERSION") {
 const PORTED: &[&str] = &[
     "bookmarks.c",
     "bytecode_cache.c",
+    "cache.c",
     "config.c",
     "csp.c",
     "css_media.c",
