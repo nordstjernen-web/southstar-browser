@@ -895,6 +895,6 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `js_intl.c` | 2,433 | `rust/js-intl` | 7 (JavaScript bindings) |
 | `camera.c` | 393 | `rust/camera` | 8 |
 | `xml.c` | 456 | `rust/xml` | 6 (DOM and parsing) |
-| `forms.c` | 320 | `rust/forms` (reads `ns_node` links through a `#[repr(C)]` prefix of the struct) | 6 (DOM and parsing) |
+| `forms.c` | 320 | `rust/forms` (reads the C DOM through `rust/dom`, a `#[repr(C)]` prefix of `ns_node` with borrowed node handles) | 6 (DOM and parsing) |
 | `font.c` | 597 | `rust/font` (WOFF2 through `rust/woff2` directly) | 6 (paint and text) |
 | `webaudio.c` | 351 | `rust/webaudio` | 7 (JavaScript bindings) |

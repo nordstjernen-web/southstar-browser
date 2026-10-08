@@ -1488,6 +1488,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-dom"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-eventsource"
 version = "1.0.30-dev"
 dependencies = [
@@ -1563,6 +1570,7 @@ dependencies = [
 name = "southstar-forms"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-glib",
 ]
 

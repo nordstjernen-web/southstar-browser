@@ -3,30 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::marker::PhantomData;
-use core::ops::Deref;
-use core::ptr::{self, NonNull};
+use core::ptr;
 
-use southstar_glib::{self as glib, GBoolean, GError};
-
-const NODE_ELEMENT: c_uint = 2;
-
-#[repr(C)]
-pub struct NsNode {
-    kind: c_uint,
-    name: *const c_char,
-    _text: *const c_char,
-    _text_len: u32,
-    _attrs: *const c_void,
-    parent: *const NsNode,
-    first_child: *const NsNode,
-    _last_child: *const NsNode,
-    _prev_sibling: *const NsNode,
-    next_sibling: *const NsNode,
-}
+use southstar_dom::{Node, NsNode};
+use southstar_glib::{self as glib, GBoolean, GError, GStr};
 
 unsafe extern "C" {
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean;
     fn ns_select_chosen_option(select: *const NsNode) -> *const NsNode;
@@ -78,144 +60,93 @@ unsafe extern "C" {
     fn g_regex_unref(regex: *mut c_void);
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Node<'a> {
-    node: NonNull<NsNode>,
-    tree: PhantomData<&'a NsNode>,
-}
-
 fn opt_ptr(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
 }
 
-fn node_ptr(node: Option<Node>) -> *const NsNode {
-    node.map_or(ptr::null(), |n| n.node.as_ptr())
+fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
+    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
-impl<'a> Node<'a> {
-    unsafe fn from_ptr(node: *const NsNode) -> Option<Self> {
-        NonNull::new(node.cast_mut()).map(|node| Node {
-            node,
-            tree: PhantomData,
-        })
+pub trait Control<'a>: Sized {
+    fn form_owner(self, doc: Option<Node>) -> Option<Self>;
+    fn effectively_disabled(self) -> bool;
+    fn chosen_option(self) -> Option<Self>;
+    fn option_value(self) -> Option<GStr>;
+    fn textarea_value(self) -> Option<GStr>;
+    fn checked(self) -> bool;
+    fn used_value(self) -> Option<&'a CStr>;
+    fn email_value_valid(self, value: &CStr) -> bool;
+    fn range_state(self, value: &CStr) -> Option<(bool, bool)>;
+    fn step_mismatch(self, value: &CStr) -> bool;
+    fn value_missing(self, value: &CStr, doc: Option<Node>) -> bool;
+    fn readonly_bars_validation(self) -> bool;
+    fn length_limits_apply(self) -> bool;
+    fn supports_required(self) -> bool;
+}
+
+impl<'a> Control<'a> for Node<'a> {
+    fn form_owner(self, doc: Option<Node>) -> Option<Self> {
+        unsafe { Node::from_ptr(ns_form_owner(self.as_ptr(), Node::ptr_or_null(doc))) }
     }
 
-    fn get(self) -> &'a NsNode {
-        unsafe { self.node.as_ref() }
+    fn effectively_disabled(self) -> bool {
+        unsafe { ns_element_effectively_disabled(self.as_ptr()) != 0 }
     }
 
-    fn link(link: *const NsNode) -> Option<Self> {
-        unsafe { Self::from_ptr(link) }
+    fn chosen_option(self) -> Option<Self> {
+        unsafe { Node::from_ptr(ns_select_chosen_option(self.as_ptr())) }
     }
 
-    fn ptr(self) -> *const NsNode {
-        self.node.as_ptr()
+    fn option_value(self) -> Option<GStr> {
+        unsafe { GStr::take(ns_option_value_dup(self.as_ptr())) }
     }
 
-    pub fn element_name(self) -> Option<&'a [u8]> {
-        let node = self.get();
-        (node.kind == NODE_ELEMENT && !node.name.is_null())
-            .then(|| unsafe { CStr::from_ptr(node.name) }.to_bytes())
+    fn textarea_value(self) -> Option<GStr> {
+        unsafe { GStr::take(ns_textarea_value_dup(self.as_ptr())) }
     }
 
-    pub fn parent(self) -> Option<Self> {
-        Self::link(self.get().parent)
+    fn checked(self) -> bool {
+        unsafe { ns_input_is_checked(self.as_ptr()) != 0 }
     }
 
-    pub fn first_child(self) -> Option<Self> {
-        Self::link(self.get().first_child)
+    fn used_value(self) -> Option<&'a CStr> {
+        c_str(unsafe { ns_input_used_value(self.as_ptr()) })
     }
 
-    pub fn next_sibling(self) -> Option<Self> {
-        Self::link(self.get().next_sibling)
+    fn email_value_valid(self, value: &CStr) -> bool {
+        unsafe { ns_input_email_value_valid(self.as_ptr(), value.as_ptr()) != 0 }
     }
 
-    pub fn attr(self, name: &CStr) -> Option<&'a CStr> {
-        let value = unsafe { ns_element_get_attr(self.ptr(), name.as_ptr()) };
-        (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
-    }
-
-    pub fn form_owner(self, doc: Option<Node>) -> Option<Self> {
-        Self::link(unsafe { ns_form_owner(self.ptr(), node_ptr(doc)) })
-    }
-
-    pub fn effectively_disabled(self) -> bool {
-        unsafe { ns_element_effectively_disabled(self.ptr()) != 0 }
-    }
-
-    pub fn chosen_option(self) -> Option<Self> {
-        Self::link(unsafe { ns_select_chosen_option(self.ptr()) })
-    }
-
-    pub fn option_value(self) -> Option<GStr> {
-        GStr::take(unsafe { ns_option_value_dup(self.ptr()) })
-    }
-
-    pub fn textarea_value(self) -> Option<GStr> {
-        GStr::take(unsafe { ns_textarea_value_dup(self.ptr()) })
-    }
-
-    pub fn is_checked(self) -> bool {
-        unsafe { ns_input_is_checked(self.ptr()) != 0 }
-    }
-
-    pub fn used_value(self) -> Option<&'a CStr> {
-        let value = unsafe { ns_input_used_value(self.ptr()) };
-        (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
-    }
-
-    pub fn email_value_valid(self, value: &CStr) -> bool {
-        unsafe { ns_input_email_value_valid(self.ptr(), value.as_ptr()) != 0 }
-    }
-
-    pub fn range_state(self, value: &CStr) -> Option<(bool, bool)> {
+    fn range_state(self, value: &CStr) -> Option<(bool, bool)> {
         let (mut under, mut over) = (0, 0);
         let known = unsafe {
-            ns_input_value_range_state(self.ptr(), value.as_ptr(), &mut under, &mut over)
+            ns_input_value_range_state(self.as_ptr(), value.as_ptr(), &mut under, &mut over)
         };
         (known != 0).then_some((under != 0, over != 0))
     }
 
-    pub fn step_mismatch(self, value: &CStr) -> bool {
-        unsafe { ns_input_value_step_mismatch(self.ptr(), value.as_ptr()) != 0 }
+    fn step_mismatch(self, value: &CStr) -> bool {
+        unsafe { ns_input_value_step_mismatch(self.as_ptr(), value.as_ptr()) != 0 }
     }
 
-    pub fn value_missing(self, value: &CStr, doc: Option<Node>) -> bool {
-        unsafe { ns_form_control_value_missing(self.ptr(), value.as_ptr(), node_ptr(doc)) != 0 }
+    fn value_missing(self, value: &CStr, doc: Option<Node>) -> bool {
+        unsafe {
+            ns_form_control_value_missing(self.as_ptr(), value.as_ptr(), Node::ptr_or_null(doc))
+                != 0
+        }
     }
 
-    pub fn readonly_bars_validation(self) -> bool {
-        unsafe { ns_form_control_readonly_bars_validation(self.ptr()) != 0 }
+    fn readonly_bars_validation(self) -> bool {
+        unsafe { ns_form_control_readonly_bars_validation(self.as_ptr()) != 0 }
     }
 
-    pub fn length_limits_apply(self) -> bool {
-        unsafe { ns_form_control_length_limits_apply(self.ptr()) != 0 }
+    fn length_limits_apply(self) -> bool {
+        unsafe { ns_form_control_length_limits_apply(self.as_ptr()) != 0 }
     }
 
-    pub fn supports_required(self) -> bool {
-        unsafe { ns_form_control_supports_required(self.ptr()) != 0 }
-    }
-}
-
-pub struct GStr(NonNull<c_char>);
-
-impl GStr {
-    fn take(s: *mut c_char) -> Option<Self> {
-        NonNull::new(s).map(GStr)
-    }
-}
-
-impl Deref for GStr {
-    type Target = CStr;
-
-    fn deref(&self) -> &CStr {
-        unsafe { CStr::from_ptr(self.0.as_ptr()) }
-    }
-}
-
-impl Drop for GStr {
-    fn drop(&mut self) {
-        unsafe { glib::g_free(self.0.as_ptr().cast()) };
+    fn supports_required(self) -> bool {
+        unsafe { ns_form_control_supports_required(self.as_ptr()) != 0 }
     }
 }
 
@@ -318,5 +249,5 @@ pub unsafe extern "C" fn ns_form_first_invalid(
             0,
         )
     };
-    node_ptr(invalid)
+    Node::ptr_or_null(invalid)
 }

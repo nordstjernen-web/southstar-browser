@@ -7,7 +7,9 @@ mod ffi;
 use core::ffi::{CStr, c_long};
 use std::ffi::CString;
 
-use ffi::{GStr, Node, Query};
+use ffi::{Control, Query};
+use southstar_dom::{Node, ancestors, children};
+use southstar_glib::GStr;
 
 const MAX_DEPTH: i32 = 512;
 const PATTERN_MAX_LEN: usize = 2048;
@@ -37,10 +39,6 @@ fn gstr_or_empty(value: &Option<GStr>) -> &CStr {
     value.as_deref().unwrap_or(c"")
 }
 
-fn children(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(node.first_child(), |child| child.next_sibling())
-}
-
 pub(crate) fn is_submit_trigger(node: Node) -> bool {
     match node.element_name() {
         Some(b"button") => {
@@ -67,8 +65,7 @@ fn option_disabled(option: Node) -> bool {
     if option.effectively_disabled() {
         return true;
     }
-    let ancestors = core::iter::successors(option.parent(), |p| p.parent());
-    for p in ancestors.take(MAX_DEPTH as usize) {
+    for p in ancestors(option).take(MAX_DEPTH as usize) {
         if is_named(p, b"select") {
             return false;
         }
@@ -113,7 +110,7 @@ fn suffixed(name: &CStr, suffix: &[u8]) -> CString {
 
 fn collect_input(node: Node, name: &CStr, query: &mut Query, submitter: Option<Node>) {
     let ty = node.attr(c"type");
-    if type_is_any(ty, &["checkbox", "radio"]) && !node.is_checked() {
+    if type_is_any(ty, &["checkbox", "radio"]) && !node.checked() {
         return;
     }
     if type_is(ty, "submit") {

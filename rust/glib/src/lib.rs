@@ -105,6 +105,28 @@ unsafe extern "C" {
     pub fn g_checksum_update(checksum: *mut GChecksum, data: *const u8, length: isize);
 }
 
+pub struct GStr(core::ptr::NonNull<c_char>);
+
+impl GStr {
+    pub unsafe fn take(s: *mut c_char) -> Option<Self> {
+        core::ptr::NonNull::new(s).map(GStr)
+    }
+}
+
+impl core::ops::Deref for GStr {
+    type Target = CStr;
+
+    fn deref(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.0.as_ptr()) }
+    }
+}
+
+impl Drop for GStr {
+    fn drop(&mut self) {
+        unsafe { g_free(self.0.as_ptr().cast()) };
+    }
+}
+
 pub fn boolean(value: bool) -> GBoolean {
     if value { TRUE } else { FALSE }
 }
