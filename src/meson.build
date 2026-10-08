@@ -48,7 +48,6 @@ southstar_engine_sources = files(
   'css.c',
   'dom.c',
   'engine.c',
-  'eventsource.c',
   'forms.c',
   'camera.c',
   'mic.c',

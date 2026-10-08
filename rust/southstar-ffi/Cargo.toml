@@ -22,6 +22,7 @@ southstar-css-prop-syntax = { path = "../css-prop-syntax" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
+southstar-eventsource = { path = "../eventsource" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }

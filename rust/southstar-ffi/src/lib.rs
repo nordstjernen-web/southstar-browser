@@ -14,6 +14,7 @@ pub use southstar_css_prop_syntax;
 pub use southstar_css_syntax;
 pub use southstar_datetime;
 pub use southstar_debuglog;
+pub use southstar_eventsource;
 pub use southstar_glctx;
 pub use southstar_glib;
 pub use southstar_history;

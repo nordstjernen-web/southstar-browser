@@ -72,6 +72,7 @@ Southstar Browser (unreleased):
   search URLs, local paths as file: URLs and proxy password masking are
   Rust. Accept-Language q-values now always use a decimal point, even when
   the system locale writes decimals with a comma.
+* EventSource (Server-Sent Events) is Rust, still over libcurl.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be
