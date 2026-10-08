@@ -3242,7 +3242,6 @@ static gboolean bg_repeat_token(const char *tok, gboolean allow_axis);
 static char *bg_repeat_canonical(const char *a, const char *b);
 static char *bg_position_zip(const char *xs, const char *ys);
 static gboolean bg_token_is_box(const char *tok);
-static char *position_from_edge(const char *edge, const char *offset);
 static int css_ws_token_count(const char *s);
 static char *transform_list_canonical(const char *value);
 static char *individual_transform_canonical(const char *value, ns_css_prop prop);
@@ -3251,7 +3250,6 @@ static gboolean inline_css_wide_value(const char *value);
 static char *bg_clip_canonical(const char *text);
 static char *css_add_leading_zeros(char *v);
 static char *css_normalize_negative_zero(char *value);
-static void ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b, guint8 a);
 
 static gboolean
 shadow_length_token(const char *tok, gboolean allow_negative, GString *out)
@@ -3464,1807 +3462,8 @@ parse_box_shadow(const char *text)
     return v;
 }
 
-static gboolean position_is_h_edge(const char *t);
-static gboolean position_is_v_edge(const char *t);
-static gboolean math_text_mixes_angle_and_length(const char *t);
-static void position_split(const char *text, char **out_x, char **out_y);
-static double parse_angle_deg(const char *s);
 
-typedef struct ns_gradient_parse {
-    ns_css_gradient gr;
-    char *angle_text;
-    char *size_text;
-    char *position_text;
-    gboolean interp_explicit;
-    gboolean all_legacy;
-    GPtrArray *stop_texts;
-} ns_gradient_parse;
-
-static void
-gradient_parse_clear(ns_gradient_parse *gp)
-{
-    g_free(gp->angle_text);
-    g_free(gp->size_text);
-    g_free(gp->position_text);
-    if (gp->stop_texts) g_ptr_array_free(gp->stop_texts, TRUE);
-    memset(gp, 0, sizeof *gp);
-}
-
-static gboolean
-token_eq(const char *t, const char *kw)
-{
-    return g_ascii_strcasecmp(t, kw) == 0;
-}
-
-static gboolean
-token_is_math_fn(const char *t)
-{
-    return g_ascii_strncasecmp(t, "calc(", 5) == 0 ||
-           g_ascii_strncasecmp(t, "min(", 4) == 0 ||
-           g_ascii_strncasecmp(t, "max(", 4) == 0 ||
-           g_ascii_strncasecmp(t, "clamp(", 6) == 0;
-}
-
-static gboolean
-token_is_length_pct(const char *t)
-{
-    if (token_is_math_fn(t)) {
-        ns_css_value *cv = ns_css_parse_calc(t);
-        if (!cv) return FALSE;
-        gboolean ok = cv->kind == NS_CSS_V_CALC || cv->kind == NS_CSS_V_LENGTH;
-        ns_css_value_free(cv);
-        return ok;
-    }
-    double v; ns_css_unit u;
-    if (!ns_css_parse_length(t, &v, &u)) return FALSE;
-    return u != NS_CSS_UNIT_NUMBER || v == 0;
-}
-
-static gboolean
-token_is_angle(const char *t)
-{
-    if (token_is_math_fn(t)) {
-        char *lower = g_ascii_strdown(t, -1);
-        gboolean ok = strstr(lower, "deg") || strstr(lower, "rad") ||
-                      strstr(lower, "turn") || strstr(lower, "grad");
-        g_free(lower);
-        return ok;
-    }
-    if (strcmp(t, "0") == 0) return TRUE;
-    char *end = NULL;
-    double v = g_ascii_strtod(t, &end);
-    (void)v;
-    if (!end || end == t) return FALSE;
-    return token_eq(end, "deg") || token_eq(end, "grad") ||
-           token_eq(end, "rad") || token_eq(end, "turn");
-}
-
-static char *
-gradient_stop_color_specified(const char *tok)
-{
-    guint8 r, g, b, a;
-    gboolean legacy_syntax = tok[0] == '#' ||
-        g_ascii_strncasecmp(tok, "rgb(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "rgba(", 5) == 0 ||
-        g_ascii_strncasecmp(tok, "hsl(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "hsla(", 5) == 0;
-    if (legacy_syntax && ns_css_parse_color(tok, &r, &g, &b, &a)) {
-        ns_css_value cv = { .kind = NS_CSS_V_COLOR };
-        cv.u.color.r = r;
-        cv.u.color.g = g;
-        cv.u.color.b = b;
-        cv.u.color.a = a;
-        return ns_css_value_serialize(&cv);
-    }
-    if (strchr(tok, '(')) return g_strdup(tok);
-    return g_ascii_strdown(tok, -1);
-}
-
-static gboolean
-color_text_is_legacy(const char *t)
-{
-    if (t[0] == '#') return TRUE;
-    if (!strchr(t, '(')) return TRUE;
-    return g_ascii_strncasecmp(t, "rgb(", 4) == 0 ||
-           g_ascii_strncasecmp(t, "rgba(", 5) == 0 ||
-           g_ascii_strncasecmp(t, "hsl(", 4) == 0 ||
-           g_ascii_strncasecmp(t, "hsla(", 5) == 0;
-}
-
-static int
-gradient_interp_parse(char **tok, int n, char out[NS_CSS_GRADIENT_INTERP_MAX])
-{
-    if (n < 1) return 0;
-    static const char *rect[] = {
-        "srgb", "srgb-linear", "display-p3", "a98-rgb", "prophoto-rgb",
-        "rec2020", "lab", "oklab", "xyz", "xyz-d50", "xyz-d65",
-    };
-    static const char *polar[] = { "hsl", "hwb", "lch", "oklch" };
-    char *space = g_ascii_strdown(tok[0], -1);
-    gboolean is_rect = FALSE, is_polar = FALSE;
-    for (gsize i = 0; i < G_N_ELEMENTS(rect); i++)
-        if (strcmp(space, rect[i]) == 0) is_rect = TRUE;
-    for (gsize i = 0; i < G_N_ELEMENTS(polar); i++)
-        if (strcmp(space, polar[i]) == 0) is_polar = TRUE;
-    if (!is_rect && !is_polar) { g_free(space); return 0; }
-    if (strcmp(space, "xyz") == 0) { g_free(space); space = g_strdup("xyz-d65"); }
-    int used = 1;
-    const char *hue = NULL;
-    if (is_polar && n >= 3 && token_eq(tok[2], "hue")) {
-        if (token_eq(tok[1], "shorter")) hue = NULL;
-        else if (token_eq(tok[1], "longer")) hue = "longer";
-        else if (token_eq(tok[1], "increasing")) hue = "increasing";
-        else if (token_eq(tok[1], "decreasing")) hue = "decreasing";
-        else { g_free(space); return 0; }
-        used = 3;
-    } else if (n >= 2 && (token_eq(tok[1], "hue") || token_eq(tok[1], "shorter") ||
-                          token_eq(tok[1], "longer") || token_eq(tok[1], "increasing") ||
-                          token_eq(tok[1], "decreasing"))) {
-        g_free(space);
-        return 0;
-    }
-    if (hue) g_snprintf(out, NS_CSS_GRADIENT_INTERP_MAX, "%s %s hue", space, hue);
-    else g_strlcpy(out, space, NS_CSS_GRADIENT_INTERP_MAX);
-    g_free(space);
-    return used;
-}
-
-static char *
-position_canonical_ex(const char *text, gboolean expand_single,
-                      gboolean allow_three)
-{
-    char *tok[8] = {0};
-    int m = split_ws_paren(text, tok, 8);
-    char *spec = NULL;
-    if (m == 0 || m > 4 || (m == 3 && !allow_three)) goto done;
-    gboolean h0 = position_is_h_edge(tok[0]), v0 = position_is_v_edge(tok[0]);
-    gboolean c0 = token_eq(tok[0], "center");
-    if (m == 1) {
-        if (!(h0 || v0 || c0 || token_is_length_pct(tok[0]))) goto done;
-        if (!expand_single) spec = g_strdup(tok[0]);
-        else if (v0) spec = g_strdup_printf("center %s", tok[0]);
-        else spec = g_strdup_printf("%s center", tok[0]);
-    } else if (m == 3) {
-        gboolean off_after_first = token_is_length_pct(tok[1]);
-        const char *ek = off_after_first ? tok[0] : tok[1];
-        const char *off = off_after_first ? tok[1] : tok[2];
-        const char *other = off_after_first ? tok[2] : tok[0];
-        gboolean eh = position_is_h_edge(ek), ev = position_is_v_edge(ek);
-        gboolean oh = position_is_h_edge(other), ov = position_is_v_edge(other);
-        gboolean oc = token_eq(other, "center");
-        if (!(eh || ev) || !token_is_length_pct(off) || !(oh || ov || oc))
-            goto done;
-        if ((eh && oh) || (ev && ov)) goto done;
-        if (eh) spec = g_strdup_printf("%s %s %s", ek, off, other);
-        else spec = g_strdup_printf("%s %s %s", other, ek, off);
-    } else if (m == 2) {
-        gboolean h1 = position_is_h_edge(tok[1]), v1 = position_is_v_edge(tok[1]);
-        gboolean c1 = token_eq(tok[1], "center");
-        gboolean k0 = h0 || v0 || c0, k1 = h1 || v1 || c1;
-        if (k0 && k1) {
-            if ((h0 && h1) || (v0 && v1)) goto done;
-            if ((v0 && (h1 || c1) && !(c0 && c1)) || (c0 && h1))
-                spec = g_strdup_printf("%s %s", tok[1], tok[0]);
-            else
-                spec = g_strdup_printf("%s %s", tok[0], tok[1]);
-        } else if (k0 && !k1) {
-            if (!v0 && token_is_length_pct(tok[1]))
-                spec = g_strdup_printf("%s %s", tok[0], tok[1]);
-        } else if (!k0 && k1) {
-            if (!h1 && token_is_length_pct(tok[0]))
-                spec = g_strdup_printf("%s %s", tok[0], tok[1]);
-        } else if (token_is_length_pct(tok[0]) && token_is_length_pct(tok[1])) {
-            spec = g_strdup_printf("%s %s", tok[0], tok[1]);
-        }
-    } else {
-        gboolean h2 = position_is_h_edge(tok[2]), v2 = position_is_v_edge(tok[2]);
-        if (!token_is_length_pct(tok[1]) || !token_is_length_pct(tok[3]))
-            goto done;
-        if (h0 && v2)
-            spec = g_strdup_printf("%s %s %s %s", tok[0], tok[1], tok[2], tok[3]);
-        else if (v0 && h2)
-            spec = g_strdup_printf("%s %s %s %s", tok[2], tok[3], tok[0], tok[1]);
-    }
-done:
-    for (int k = 0; k < m; k++) g_free(tok[k]);
-    return spec;
-}
-
-static char *
-position_canonical(const char *text)
-{
-    return position_canonical_ex(text, FALSE, FALSE);
-}
-
-static int
-gradient_position_parse(char **tok, int n, ns_gradient_parse *gp)
-{
-    int m = 0;
-    while (m < n && m < 4 && !token_eq(tok[m], "in")) m++;
-    if (m == 0) return 0;
-    GString *joined = g_string_new(NULL);
-    for (int k = 0; k < m; k++) {
-        if (k) g_string_append_c(joined, ' ');
-        g_string_append(joined, tok[k]);
-    }
-    char *spec = position_canonical(joined->str);
-    g_string_free(joined, TRUE);
-    if (!spec) return 0;
-    char *xs = NULL, *ys = NULL;
-    position_split(spec, &xs, &ys);
-    double px = 0, pct = 0;
-    if (ns_css_resolve_to_px_pct(xs, strlen(xs), &px, &pct)) {
-        gp->gr.center_x = pct / 100.0;
-        gp->gr.center_x_px = px;
-    }
-    if (ns_css_resolve_to_px_pct(ys, strlen(ys), &px, &pct)) {
-        gp->gr.center_y = pct / 100.0;
-        gp->gr.center_y_px = px;
-    }
-    g_free(xs);
-    g_free(ys);
-    gp->gr.has_center = !(gp->gr.center_x == 0.5 && gp->gr.center_x_px == 0 &&
-                          gp->gr.center_y == 0.5 && gp->gr.center_y_px == 0);
-    g_free(gp->position_text);
-    gp->position_text = spec;
-    return m;
-}
-
-static gboolean
-gradient_parse_prelude(ns_gradient_parse *gp, char **tok, int n)
-{
-    ns_css_gradient *gr = &gp->gr;
-    gboolean seen_dir = FALSE, seen_shape = FALSE, seen_size = FALSE;
-    gboolean seen_at = FALSE, seen_in = FALSE, seen_from = FALSE;
-    int explicit_lengths = 0;
-    int i = 0;
-    while (i < n) {
-        const char *t = tok[i];
-        if (token_eq(t, "in")) {
-            if (seen_in) return FALSE;
-            int used = gradient_interp_parse(tok + i + 1, n - i - 1, gr->interp);
-            if (!used) return FALSE;
-            seen_in = TRUE;
-            gp->interp_explicit = TRUE;
-            i += 1 + used;
-            continue;
-        }
-        if (!gr->radial && !gr->conic) {
-            if (token_eq(t, "to")) {
-                if (seen_dir) return FALSE;
-                int sides = 0;
-                for (int k = i + 1; k < n && k <= i + 2; k++) {
-                    int bit = 0;
-                    if (token_eq(tok[k], "top")) bit = NS_CSS_GRADIENT_TO_TOP;
-                    else if (token_eq(tok[k], "bottom")) bit = NS_CSS_GRADIENT_TO_BOTTOM;
-                    else if (token_eq(tok[k], "left")) bit = NS_CSS_GRADIENT_TO_LEFT;
-                    else if (token_eq(tok[k], "right")) bit = NS_CSS_GRADIENT_TO_RIGHT;
-                    if (!bit) break;
-                    if (gr->to_side & bit) return FALSE;
-                    gr->to_side |= bit;
-                    sides++;
-                }
-                if (!sides) return FALSE;
-                if ((gr->to_side & (NS_CSS_GRADIENT_TO_TOP | NS_CSS_GRADIENT_TO_BOTTOM)) ==
-                    (NS_CSS_GRADIENT_TO_TOP | NS_CSS_GRADIENT_TO_BOTTOM))
-                    return FALSE;
-                if ((gr->to_side & (NS_CSS_GRADIENT_TO_LEFT | NS_CSS_GRADIENT_TO_RIGHT)) ==
-                    (NS_CSS_GRADIENT_TO_LEFT | NS_CSS_GRADIENT_TO_RIGHT))
-                    return FALSE;
-                seen_dir = TRUE;
-                i += 1 + sides;
-                continue;
-            }
-            if (token_is_angle(t)) {
-                if (seen_dir) return FALSE;
-                gr->has_angle = TRUE;
-                gr->angle_deg = parse_angle_deg(t);
-                g_free(gp->angle_text);
-                gp->angle_text = g_ascii_strdown(t, -1);
-                seen_dir = TRUE;
-                i++;
-                continue;
-            }
-            return FALSE;
-        }
-        if (token_eq(t, "at")) {
-            if (seen_at) return FALSE;
-            int used = gradient_position_parse(tok + i + 1, n - i - 1, gp);
-            if (!used) return FALSE;
-            seen_at = TRUE;
-            i += 1 + used;
-            continue;
-        }
-        if (gr->conic) {
-            if (token_eq(t, "from")) {
-                if (seen_from || i + 1 >= n || !token_is_angle(tok[i + 1]) ||
-                    strchr(tok[i + 1], '%') ||
-                    math_text_mixes_angle_and_length(tok[i + 1]))
-                    return FALSE;
-                gr->has_from = TRUE;
-                gr->from_deg = parse_angle_deg(tok[i + 1]);
-                g_free(gp->angle_text);
-                gp->angle_text = g_ascii_strdown(tok[i + 1], -1);
-                seen_from = TRUE;
-                i += 2;
-                continue;
-            }
-            return FALSE;
-        }
-        if (token_eq(t, "circle") || token_eq(t, "ellipse")) {
-            if (seen_shape) return FALSE;
-            gr->circle = token_eq(t, "circle");
-            gr->shape_explicit = TRUE;
-            seen_shape = TRUE;
-            i++;
-            continue;
-        }
-        static const struct { const char *kw; ns_css_gradient_size size; } sizes[] = {
-            { "closest-side", NS_CSS_GRADIENT_CLOSEST_SIDE },
-            { "farthest-side", NS_CSS_GRADIENT_FARTHEST_SIDE },
-            { "closest-corner", NS_CSS_GRADIENT_CLOSEST_CORNER },
-            { "farthest-corner", NS_CSS_GRADIENT_FARTHEST_CORNER },
-        };
-        gboolean size_kw = FALSE;
-        for (gsize k = 0; k < G_N_ELEMENTS(sizes); k++) {
-            if (!token_eq(t, sizes[k].kw)) continue;
-            if (seen_size) return FALSE;
-            gr->size = sizes[k].size;
-            seen_size = TRUE;
-            size_kw = TRUE;
-        }
-        if (size_kw) { i++; continue; }
-        if (token_is_length_pct(t)) {
-            if (seen_size) return FALSE;
-            int j = 0;
-            double px[2] = { 0, 0 }, pct[2] = { 0, 0 };
-            while (i + j < n && j < 2 && token_is_length_pct(tok[i + j])) {
-                ns_css_resolve_to_px_pct(tok[i + j], strlen(tok[i + j]), &px[j], &pct[j]);
-                if (px[j] < 0 || pct[j] < 0) return FALSE;
-                j++;
-            }
-            if (i + j < n && token_is_length_pct(tok[i + j])) return FALSE;
-            gr->size = NS_CSS_GRADIENT_EXPLICIT_SIZE;
-            gr->size_x = px[0];
-            gr->size_x_pct = pct[0];
-            gr->size_y = j == 2 ? px[1] : px[0];
-            gr->size_y_pct = j == 2 ? pct[1] : pct[0];
-            explicit_lengths = j;
-            if (j == 1 && strchr(tok[i], '%')) return FALSE;
-            g_free(gp->size_text);
-            gp->size_text = j == 2 ? g_strdup_printf("%s %s", tok[i], tok[i + 1])
-                                   : g_strdup(tok[i]);
-            seen_size = TRUE;
-            i += j;
-            continue;
-        }
-        return FALSE;
-    }
-    if (explicit_lengths) {
-        if (seen_shape && gr->circle != (explicit_lengths == 1)) return FALSE;
-        gr->circle = explicit_lengths == 1;
-    }
-    return TRUE;
-}
-
-static gboolean
-math_text_has_unit(const char *t, const char *const *units, gsize n_units)
-{
-    char *lower = g_ascii_strdown(t, -1);
-    gboolean found = FALSE;
-    for (const char *p = lower; *p && !found; p++) {
-        if (!g_ascii_isdigit((guchar)*p) && *p != '.') continue;
-        while (g_ascii_isdigit((guchar)*p) || *p == '.') p++;
-        for (gsize k = 0; k < n_units && !found; k++) {
-            gsize len = strlen(units[k]);
-            if (g_ascii_strncasecmp(p, units[k], len) == 0 &&
-                !g_ascii_isalpha((guchar)p[len]))
-                found = TRUE;
-        }
-        if (!*p) break;
-    }
-    g_free(lower);
-    return found;
-}
-
-static gboolean
-math_text_mixes_angle_and_length(const char *t)
-{
-    static const char *const angles[] = { "deg", "grad", "rad", "turn" };
-    static const char *const lengths[] = { "px", "em", "rem", "vw", "vh",
-                                           "vmin", "vmax", "ch", "ex", "cm",
-                                           "mm", "in", "pt", "pc", "lh" };
-    return math_text_has_unit(t, angles, G_N_ELEMENTS(angles)) &&
-           math_text_has_unit(t, lengths, G_N_ELEMENTS(lengths));
-}
-
-static char *
-conic_calc_canonical(const char *t)
-{
-    if (g_ascii_strncasecmp(t, "calc(", 5) != 0) return g_strdup(t);
-    gsize len = strlen(t);
-    if (len < 7 || t[len - 1] != ')') return g_strdup(t);
-    char *inner = g_strndup(t + 5, len - 6);
-    char *plus = strstr(inner, " + ");
-    char *out = NULL;
-    if (plus && !strchr(inner, '(')) {
-        *plus = '\0';
-        char *a = g_strstrip(inner), *b = g_strstrip(plus + 3);
-        gboolean a_angle = !strchr(a, '%'), b_pct = strchr(b, '%') != NULL;
-        if (a_angle && b_pct) out = g_strdup_printf("calc(%s + %s)", b, a);
-    }
-    g_free(inner);
-    return out ? out : g_strdup(t);
-}
-
-static gboolean
-gradient_stop_pos_parse(const char *t, gboolean conic, ns_css_gradient_stop *st)
-{
-    st->pos = 0;
-    st->pos_px = 0;
-    st->pos_is_angle = FALSE;
-    if (token_is_math_fn(t)) {
-        static const char *const angles[] = { "deg", "grad", "rad", "turn" };
-        static const char *const lengths[] = { "px", "em", "rem", "vw", "vh",
-                                               "vmin", "vmax", "ch", "ex",
-                                               "cm", "mm", "in", "pt", "pc",
-                                               "lh" };
-        gboolean has_angle = math_text_has_unit(t, angles, G_N_ELEMENTS(angles));
-        gboolean has_len = math_text_has_unit(t, lengths, G_N_ELEMENTS(lengths));
-        if (conic ? has_len : has_angle) return FALSE;
-        if (conic && !has_angle && !strchr(t, '%')) return FALSE;
-    }
-    if (conic) {
-        if (token_is_angle(t)) {
-            st->pos = parse_angle_deg(t) / 360.0;
-            st->pos_is_angle = TRUE;
-            st->has_pos = TRUE;
-            return TRUE;
-        }
-        if (token_is_math_fn(t)) {
-            double px = 0, pct = 0;
-            if (!ns_css_resolve_to_px_pct(t, strlen(t), &px, &pct)) return FALSE;
-            st->pos = pct / 100.0;
-            st->has_pos = TRUE;
-            return TRUE;
-        }
-        double v; ns_css_unit u;
-        if (ns_css_parse_length(t, &v, &u) && u == NS_CSS_UNIT_PERCENT) {
-            st->pos = v / 100.0;
-            st->has_pos = TRUE;
-            return TRUE;
-        }
-        return FALSE;
-    }
-    if (!token_is_length_pct(t)) return FALSE;
-    double px = 0, pct = 0;
-    ns_css_resolve_to_px_pct(t, strlen(t), &px, &pct);
-    st->pos = pct / 100.0;
-    st->pos_px = px;
-    st->has_pos = TRUE;
-    return TRUE;
-}
-
-static gboolean
-gradient_stop_parse(ns_gradient_parse *gp, const char *seg, gboolean *is_hint)
-{
-    char *tok[8] = {0};
-    int n = split_ws_paren(seg, tok, 8);
-    gboolean ok = FALSE;
-    gboolean conic = gp->gr.conic;
-    ns_css_gradient *gr = &gp->gr;
-    *is_hint = FALSE;
-    if (n < 1) goto done;
-    guint8 r, g, b, a;
-    if (ns_css_parse_color(tok[0], &r, &g, &b, &a)) {
-        if (n > 3) goto done;
-        ns_css_gradient_stop first = { .r = r, .g = g, .b = b, .a = a };
-        ns_css_gradient_stop second = first;
-        if (n >= 2 && !gradient_stop_pos_parse(tok[1], conic, &first)) goto done;
-        if (n == 3 && !gradient_stop_pos_parse(tok[2], conic, &second)) goto done;
-        if (!color_text_is_legacy(tok[0])) gp->all_legacy = FALSE;
-        if (gr->n_stops < NS_CSS_GRADIENT_STOPS_MAX)
-            gr->stops[gr->n_stops++] = first;
-        if (n == 3 && gr->n_stops < NS_CSS_GRADIENT_STOPS_MAX) {
-            second.pair_with_prev = TRUE;
-            gr->stops[gr->n_stops++] = second;
-        }
-        if (gp->stop_texts) {
-            GString *s = g_string_new(NULL);
-            char *color_text = gradient_stop_color_specified(tok[0]);
-            g_string_append(s, color_text);
-            g_free(color_text);
-            for (int k = 1; k < n; k++) {
-                g_string_append_c(s, ' ');
-                char *pos_text = conic ? conic_calc_canonical(tok[k]) : g_strdup(tok[k]);
-                g_string_append(s, pos_text);
-                g_free(pos_text);
-            }
-            g_ptr_array_add(gp->stop_texts, g_string_free(s, FALSE));
-        }
-        ok = TRUE;
-        goto done;
-    }
-    if (n != 1) goto done;
-    ns_css_gradient_stop hint = { .is_hint = TRUE };
-    if (!gradient_stop_pos_parse(tok[0], conic, &hint)) goto done;
-    if (gr->n_stops < NS_CSS_GRADIENT_STOPS_MAX)
-        gr->stops[gr->n_stops++] = hint;
-    if (gp->stop_texts)
-        g_ptr_array_add(gp->stop_texts,
-                        conic ? conic_calc_canonical(tok[0]) : g_strdup(tok[0]));
-    *is_hint = TRUE;
-    ok = TRUE;
-done:
-    for (int k = 0; k < n; k++) g_free(tok[k]);
-    return ok;
-}
-
-static void
-gradient_finish_stops(ns_css_gradient *gr)
-{
-    int n = MIN(gr->n_stops, NS_CSS_GRADIENT_STOPS_MAX);
-    if (n == 0) return;
-    ns_css_gradient_stop *st = gr->stops;
-    gboolean fixed[NS_CSS_GRADIENT_STOPS_MAX] = { FALSE };
-    for (int i = 0; i < n; i++) fixed[i] = st[i].has_pos;
-    if (!fixed[0]) { st[0].pos = 0; st[0].pos_px = 0; fixed[0] = TRUE; }
-    if (!fixed[n - 1]) { st[n - 1].pos = 1; st[n - 1].pos_px = 0; fixed[n - 1] = TRUE; }
-    for (int i = 1; i < n; i++)
-        if (fixed[i] && fixed[i - 1] && st[i].pos_px == 0 &&
-            st[i - 1].pos_px == 0 && st[i].pos < st[i - 1].pos)
-            st[i].pos = st[i - 1].pos;
-    for (int i = 0; i < n; ) {
-        if (fixed[i]) { i++; continue; }
-        int j = i;
-        while (j < n && !fixed[j]) j++;
-        double lo = st[i - 1].pos, hi = st[j].pos;
-        for (int k = i; k < j; k++) {
-            st[k].pos = lo + (hi - lo) * (double)(k - i + 1) / (double)(j - i + 1);
-            st[k].pos_px = 0;
-        }
-        i = j;
-    }
-    for (int i = 1; i + 1 < n; i++) {
-        if (!st[i].is_hint) continue;
-        st[i].r = (guint8)((st[i - 1].r + st[i + 1].r) / 2);
-        st[i].g = (guint8)((st[i - 1].g + st[i + 1].g) / 2);
-        st[i].b = (guint8)((st[i - 1].b + st[i + 1].b) / 2);
-        st[i].a = (guint8)((st[i - 1].a + st[i + 1].a) / 2);
-    }
-}
-
-static gboolean
-gradient_parse(const char *text, ns_gradient_parse *gp, const char **out_end,
-               gboolean keep_texts)
-{
-    memset(gp, 0, sizeof *gp);
-    const char *p = text;
-    while (*p && is_ws(*p)) p++;
-    if (g_ascii_strncasecmp(p, "repeating-", 10) == 0) {
-        gp->gr.repeating = TRUE;
-        p += 10;
-    }
-    if (g_ascii_strncasecmp(p, "linear-gradient", 15) == 0) p += 15;
-    else if (g_ascii_strncasecmp(p, "radial-gradient", 15) == 0) { gp->gr.radial = TRUE; p += 15; }
-    else if (g_ascii_strncasecmp(p, "conic-gradient", 14) == 0) { gp->gr.conic = TRUE; p += 14; }
-    else return FALSE;
-    while (*p && is_ws(*p)) p++;
-    if (*p != '(') return FALSE;
-    p++;
-    const char *body_start = p;
-    int depth = 0;
-    const char *end = NULL;
-    for (const char *q = p; *q; q++) {
-        if (*q == '(') depth++;
-        else if (*q == ')') {
-            if (depth == 0) { end = q; break; }
-            depth--;
-        }
-    }
-    if (!end) return FALSE;
-    if (out_end) *out_end = end + 1;
-    gp->gr.center_x = 0.5;
-    gp->gr.center_y = 0.5;
-    gp->all_legacy = TRUE;
-    if (keep_texts) gp->stop_texts = g_ptr_array_new_with_free_func(g_free);
-
-    GPtrArray *parts = g_ptr_array_new_with_free_func(g_free);
-    const char *seg = body_start;
-    depth = 0;
-    for (const char *q = body_start; ; q++) {
-        if (*q == '(') depth++;
-        else if (*q == ')' && depth > 0) depth--;
-        if ((*q == ',' && depth == 0) || q == end) {
-            char *piece = g_strndup(seg, (gsize)(q - seg));
-            g_strstrip(piece);
-            g_ptr_array_add(parts, piece);
-            if (q == end) break;
-            seg = q + 1;
-        }
-    }
-    gboolean ok = TRUE;
-    for (guint i = 0; i < parts->len && ok; i++)
-        if (!*(char *)parts->pdata[i]) ok = FALSE;
-    guint start = 0;
-    if (ok && parts->len > 0) {
-        char *tok[24] = {0};
-        int n = split_ws_paren(parts->pdata[0], tok, 24);
-        ns_css_gradient saved = gp->gr;
-        gboolean saved_explicit = gp->interp_explicit;
-        if (n > 0 && gradient_parse_prelude(gp, tok, n)) {
-            start = 1;
-        } else {
-            gp->gr = saved;
-            gp->interp_explicit = saved_explicit;
-            g_free(gp->angle_text); gp->angle_text = NULL;
-            g_free(gp->size_text); gp->size_text = NULL;
-            g_free(gp->position_text); gp->position_text = NULL;
-        }
-        for (int k = 0; k < n; k++) g_free(tok[k]);
-    }
-    if (ok && start >= parts->len) ok = FALSE;
-    gboolean prev_hint = TRUE;
-    int color_stops = 0;
-    for (guint i = start; i < parts->len && ok; i++) {
-        gboolean hint = FALSE;
-        if (!gradient_stop_parse(gp, parts->pdata[i], &hint)) { ok = FALSE; break; }
-        if (hint && prev_hint) { ok = FALSE; break; }
-        if (!hint) color_stops++;
-        prev_hint = hint;
-    }
-    if (ok && (prev_hint || color_stops < 1)) ok = FALSE;
-    g_ptr_array_free(parts, TRUE);
-    if (!ok) {
-        gradient_parse_clear(gp);
-        return FALSE;
-    }
-    if (gp->interp_explicit) {
-        const char *def = gp->all_legacy ? "srgb" : "oklab";
-        if (strcmp(gp->gr.interp, def) == 0) gp->gr.interp[0] = '\0';
-    }
-    gradient_finish_stops(&gp->gr);
-    return TRUE;
-}
-
-static void
-gradient_append_stop_pos(GString *s, const ns_css_gradient_stop *st)
-{
-    if (st->pos_is_angle) {
-        g_string_append_printf(s, "%gdeg", st->pos * 360.0);
-    } else if (st->pos_px == 0) {
-        g_string_append_printf(s, "%g%%", st->pos * 100.0);
-    } else if (st->pos == 0) {
-        g_string_append_printf(s, "%gpx", st->pos_px);
-    } else {
-        g_string_append_printf(s, "calc(%g%% %c %gpx)", st->pos * 100.0,
-                               st->pos_px < 0 ? '-' : '+', fabs(st->pos_px));
-    }
-}
-
-static void
-gradient_append_center_coord(GString *s, double frac, double px)
-{
-    if (px == 0) g_string_append_printf(s, "%g%%", frac * 100.0);
-    else if (frac == 0) g_string_append_printf(s, "%gpx", px);
-    else g_string_append_printf(s, "calc(%g%% %c %gpx)", frac * 100.0,
-                                px < 0 ? '-' : '+', fabs(px));
-}
-
-static void
-gradient_append_to_side(GString *s, int to_side)
-{
-    g_string_append(s, "to");
-    if (to_side & NS_CSS_GRADIENT_TO_LEFT) g_string_append(s, " left");
-    if (to_side & NS_CSS_GRADIENT_TO_RIGHT) g_string_append(s, " right");
-    if (to_side & NS_CSS_GRADIENT_TO_TOP) g_string_append(s, " top");
-    if (to_side & NS_CSS_GRADIENT_TO_BOTTOM) g_string_append(s, " bottom");
-}
-
-static void
-gradient_append_name(GString *s, const ns_css_gradient *gr)
-{
-    if (gr->repeating) g_string_append(s, "repeating-");
-    g_string_append(s, gr->conic ? "conic-gradient(" :
-                       gr->radial ? "radial-gradient(" : "linear-gradient(");
-}
-
-static void
-gradient_append_prelude_part(GString *prelude, const char *part)
-{
-    if (prelude->len) g_string_append_c(prelude, ' ');
-    g_string_append(prelude, part);
-}
-
-static void
-gradient_serialize_computed(GString *s, const ns_css_gradient *gr)
-{
-    gradient_append_name(s, gr);
-    GString *pre = g_string_new(NULL);
-    if (gr->conic) {
-        if (gr->has_from) {
-            char *t = g_strdup_printf("from %gdeg", gr->from_deg);
-            gradient_append_prelude_part(pre, t);
-            g_free(t);
-        }
-    } else if (gr->radial) {
-        if (gr->size == NS_CSS_GRADIENT_EXPLICIT_SIZE) {
-            GString *sz = g_string_new(NULL);
-            gradient_append_center_coord(sz, gr->size_x_pct / 100.0, gr->size_x);
-            if (!gr->circle) {
-                g_string_append_c(sz, ' ');
-                gradient_append_center_coord(sz, gr->size_y_pct / 100.0, gr->size_y);
-            }
-            gradient_append_prelude_part(pre, sz->str);
-            g_string_free(sz, TRUE);
-        } else {
-            if (gr->circle) gradient_append_prelude_part(pre, "circle");
-            static const char *kws[] = { NULL, "closest-side", "farthest-side",
-                                         "closest-corner", NULL };
-            if (kws[gr->size]) gradient_append_prelude_part(pre, kws[gr->size]);
-        }
-    } else {
-        if (gr->has_angle) {
-            char *t = g_strdup_printf("%gdeg", gr->angle_deg);
-            gradient_append_prelude_part(pre, t);
-            g_free(t);
-        } else if (gr->to_side && gr->to_side != NS_CSS_GRADIENT_TO_BOTTOM) {
-            GString *t = g_string_new(NULL);
-            gradient_append_to_side(t, gr->to_side);
-            gradient_append_prelude_part(pre, t->str);
-            g_string_free(t, TRUE);
-        }
-    }
-    if ((gr->radial || gr->conic) && gr->has_center) {
-        GString *at = g_string_new("at ");
-        gradient_append_center_coord(at, gr->center_x, gr->center_x_px);
-        g_string_append_c(at, ' ');
-        gradient_append_center_coord(at, gr->center_y, gr->center_y_px);
-        gradient_append_prelude_part(pre, at->str);
-        g_string_free(at, TRUE);
-    }
-    if (gr->interp[0]) {
-        char *t = g_strdup_printf("in %s", gr->interp);
-        gradient_append_prelude_part(pre, t);
-        g_free(t);
-    }
-    if (pre->len) {
-        g_string_append(s, pre->str);
-        g_string_append(s, ", ");
-    }
-    g_string_free(pre, TRUE);
-    for (int i = 0; i < gr->n_stops; i++) {
-        const ns_css_gradient_stop *st = &gr->stops[i];
-        if (st->pair_with_prev) {
-            g_string_append_c(s, ' ');
-            gradient_append_stop_pos(s, st);
-            continue;
-        }
-        if (i > 0) g_string_append(s, ", ");
-        if (st->is_hint) {
-            gradient_append_stop_pos(s, st);
-            continue;
-        }
-        ns_css_append_color(s, st->r, st->g, st->b, st->a);
-        if (st->has_pos) {
-            g_string_append_c(s, ' ');
-            gradient_append_stop_pos(s, st);
-        }
-    }
-    g_string_append_c(s, ')');
-}
-
-static char *
-gradient_serialize_specified(const ns_gradient_parse *gp)
-{
-    const ns_css_gradient *gr = &gp->gr;
-    GString *s = g_string_new(NULL);
-    gradient_append_name(s, gr);
-    GString *pre = g_string_new(NULL);
-    if (gr->conic) {
-        if (gr->has_from) {
-            char *t = g_strdup_printf("from %s", gp->angle_text);
-            gradient_append_prelude_part(pre, t);
-            g_free(t);
-        }
-    } else if (gr->radial) {
-        if (gr->size == NS_CSS_GRADIENT_EXPLICIT_SIZE) {
-            gradient_append_prelude_part(pre, gp->size_text);
-        } else {
-            if (gr->circle) gradient_append_prelude_part(pre, "circle");
-            static const char *kws[] = { NULL, "closest-side", "farthest-side",
-                                         "closest-corner", NULL };
-            if (kws[gr->size]) gradient_append_prelude_part(pre, kws[gr->size]);
-        }
-    } else {
-        if (gr->has_angle) {
-            gradient_append_prelude_part(pre, gp->angle_text);
-        } else if (gr->to_side && gr->to_side != NS_CSS_GRADIENT_TO_BOTTOM) {
-            GString *t = g_string_new(NULL);
-            gradient_append_to_side(t, gr->to_side);
-            gradient_append_prelude_part(pre, t->str);
-            g_string_free(t, TRUE);
-        }
-    }
-    if ((gr->radial || gr->conic) && gp->position_text &&
-        g_ascii_strcasecmp(gp->position_text, "center") != 0 &&
-        g_ascii_strcasecmp(gp->position_text, "center center") != 0) {
-        char *t = g_strdup_printf("at %s", gp->position_text);
-        gradient_append_prelude_part(pre, t);
-        g_free(t);
-    }
-    if (gr->interp[0]) {
-        char *t = g_strdup_printf("in %s", gr->interp);
-        gradient_append_prelude_part(pre, t);
-        g_free(t);
-    }
-    if (pre->len) {
-        g_string_append(s, pre->str);
-        g_string_append(s, ", ");
-    }
-    g_string_free(pre, TRUE);
-    for (guint i = 0; gp->stop_texts && i < gp->stop_texts->len; i++) {
-        if (i > 0) g_string_append(s, ", ");
-        g_string_append(s, gp->stop_texts->pdata[i]);
-    }
-    g_string_append_c(s, ')');
-    return g_string_free(s, FALSE);
-}
-
-static gboolean
-text_starts_gradient(const char *p)
-{
-    while (*p && is_ws(*p)) p++;
-    if (g_ascii_strncasecmp(p, "repeating-", 10) == 0) p += 10;
-    return g_ascii_strncasecmp(p, "linear-gradient", 15) == 0 ||
-           g_ascii_strncasecmp(p, "radial-gradient", 15) == 0 ||
-           g_ascii_strncasecmp(p, "conic-gradient", 14) == 0;
-}
-
-static char *image_set_canonical(const char *text, gboolean computed);
-static gboolean text_starts_image_set(const char *p);
-static const char *
-cq_match_paren(const char *p, const char *end)
-{
-    int depth = 0;
-    for (const char *q = p; q < end; q++) {
-        if (*q == '"' || *q == '\'') {
-            char quote = *q++;
-            while (q < end && *q != quote) { if (*q == '\\' && q + 1 < end) q++; q++; }
-            continue;
-        }
-        if (*q == '(') depth++;
-        else if (*q == ')' && --depth == 0) return q;
-    }
-    return NULL;
-}
-
-char *
-ns_css_image_value_canonical(const char *text)
-{
-    if (!text) return NULL;
-    GString *out = g_string_new(NULL);
-    const char *p = text;
-    const char *end = text + strlen(text);
-    gboolean first = TRUE;
-    while (p < end) {
-        char term = 0;
-        const char *seg_end = css_scan_until(p, end, ",", &term);
-        char *layer = css_trim_dup_range(p, seg_end);
-        char *canon = NULL;
-        if (text_starts_gradient(layer)) {
-            ns_gradient_parse gp;
-            const char *gend = NULL;
-            if (gradient_parse(layer, &gp, &gend, TRUE)) {
-                while (gend && *gend && is_ws(*gend)) gend++;
-                if (!gend || !*gend) canon = gradient_serialize_specified(&gp);
-                gradient_parse_clear(&gp);
-            }
-            if (!canon) {
-                g_free(layer);
-                g_string_free(out, TRUE);
-                return NULL;
-            }
-        } else if (text_starts_image_set(layer)) {
-            canon = image_set_canonical(layer, FALSE);
-            if (!canon) {
-                g_free(layer);
-                g_string_free(out, TRUE);
-                return NULL;
-            }
-        }
-        if (!first) g_string_append(out, ", ");
-        first = FALSE;
-        g_string_append(out, canon ? canon : layer);
-        g_free(canon);
-        g_free(layer);
-        p = term == ',' ? seg_end + 1 : seg_end;
-    }
-    return g_string_free(out, FALSE);
-}
-
-double
-ns_css_gradient_angle(const ns_css_gradient *gr, double w, double h)
-{
-    if (gr->has_angle) return gr->angle_deg;
-    int side = gr->to_side ? gr->to_side : NS_CSS_GRADIENT_TO_BOTTOM;
-    gboolean horiz = side & (NS_CSS_GRADIENT_TO_LEFT | NS_CSS_GRADIENT_TO_RIGHT);
-    gboolean vert = side & (NS_CSS_GRADIENT_TO_TOP | NS_CSS_GRADIENT_TO_BOTTOM);
-    if (!horiz) return side & NS_CSS_GRADIENT_TO_TOP ? 0 : 180;
-    if (!vert) return side & NS_CSS_GRADIENT_TO_LEFT ? 270 : 90;
-    double corner = w > 0 && h > 0 ? atan2(w, h) * 180.0 / G_PI : 45.0;
-    gboolean right = side & NS_CSS_GRADIENT_TO_RIGHT;
-    gboolean top = side & NS_CSS_GRADIENT_TO_TOP;
-    if (right && top) return corner;
-    if (right) return 180.0 - corner;
-    if (top) return 360.0 - corner;
-    return 180.0 + corner;
-}
-
-void
-ns_css_gradient_radii(const ns_css_gradient *gr, double w, double h,
-                      double cx, double cy, double *rx, double *ry)
-{
-    double dl = fabs(cx), dr = fabs(w - cx), dt = fabs(cy), db = fabs(h - cy);
-    switch (gr->size) {
-    case NS_CSS_GRADIENT_EXPLICIT_SIZE:
-        *rx = gr->size_x + gr->size_x_pct / 100.0 * w;
-        *ry = gr->circle ? *rx : gr->size_y + gr->size_y_pct / 100.0 * h;
-        break;
-    case NS_CSS_GRADIENT_CLOSEST_SIDE:
-        *rx = MIN(dl, dr);
-        *ry = MIN(dt, db);
-        if (gr->circle) *rx = *ry = MIN(*rx, *ry);
-        break;
-    case NS_CSS_GRADIENT_FARTHEST_SIDE:
-        *rx = MAX(dl, dr);
-        *ry = MAX(dt, db);
-        if (gr->circle) *rx = *ry = MAX(*rx, *ry);
-        break;
-    case NS_CSS_GRADIENT_CLOSEST_CORNER:
-        if (gr->circle) {
-            *rx = *ry = sqrt(MIN(dl, dr) * MIN(dl, dr) + MIN(dt, db) * MIN(dt, db));
-        } else {
-            *rx = MIN(dl, dr) * G_SQRT2;
-            *ry = MIN(dt, db) * G_SQRT2;
-        }
-        break;
-    case NS_CSS_GRADIENT_FARTHEST_CORNER:
-    default:
-        if (gr->circle) {
-            *rx = *ry = sqrt(MAX(dl, dr) * MAX(dl, dr) + MAX(dt, db) * MAX(dt, db));
-        } else {
-            *rx = MAX(dl, dr) * G_SQRT2;
-            *ry = MAX(dt, db) * G_SQRT2;
-        }
-        break;
-    }
-    if (*rx <= 0) *rx = 1;
-    if (*ry <= 0) *ry = 1;
-}
-
-typedef enum {
-    CONTENT_TOK_STRING,
-    CONTENT_TOK_IDENT,
-    CONTENT_TOK_FUNC,
-    CONTENT_TOK_SLASH,
-} content_tok_kind;
-
-typedef struct {
-    content_tok_kind kind;
-    char *text;
-    char *args;
-} content_tok;
-
-static void
-content_tok_clear(gpointer data)
-{
-    content_tok *t = data;
-    g_free(t->text);
-    g_free(t->args);
-}
-
-static char *
-content_string_canonical(const char *raw, gsize len)
-{
-    GString *decoded = g_string_new(NULL);
-    char *inner = g_strndup(raw, len);
-    for (const char *p = inner; *p; )
-        ns_css_append_unescaped(decoded, &p);
-    g_free(inner);
-    GString *out = g_string_new("\"");
-    for (const char *p = decoded->str; *p; p++) {
-        if (*p == '"' || *p == '\\') g_string_append_c(out, '\\');
-        g_string_append_c(out, *p);
-    }
-    g_string_append_c(out, '"');
-    g_string_free(decoded, TRUE);
-    return g_string_free(out, FALSE);
-}
-
-static const char *
-content_scan_string_end(const char *p)
-{
-    char q = *p++;
-    while (*p) {
-        if (*p == '\\' && p[1]) { p += 2; continue; }
-        if (*p == q) return p;
-        p++;
-    }
-    return NULL;
-}
-
-static GArray *
-content_tokenize(const char *text)
-{
-    GArray *toks = g_array_new(FALSE, TRUE, sizeof(content_tok));
-    g_array_set_clear_func(toks, content_tok_clear);
-    const char *p = text;
-    while (*p) {
-        if (is_ws(*p)) { p++; continue; }
-        content_tok t = { 0 };
-        if (*p == '"' || *p == '\'') {
-            const char *e = content_scan_string_end(p);
-            if (!e) goto fail;
-            t.kind = CONTENT_TOK_STRING;
-            t.text = content_string_canonical(p + 1, (gsize)(e - p - 1));
-            p = e + 1;
-        } else if (*p == '/') {
-            t.kind = CONTENT_TOK_SLASH;
-            t.text = g_strdup("/");
-            p++;
-        } else if (g_ascii_isalpha((guchar)*p) || *p == '-' || *p == '_' ||
-                   *p == '\\' || (guchar)*p >= 0x80) {
-            const char *s = p;
-            while (*p && (g_ascii_isalnum((guchar)*p) || *p == '-' ||
-                          *p == '_' || (guchar)*p >= 0x80 || *p == '\\')) {
-                if (*p == '\\' && p[1]) p += 2;
-                else p++;
-            }
-            t.text = g_strndup(s, (gsize)(p - s));
-            if (*p == '(') {
-                int depth = 0;
-                const char *a = p + 1;
-                const char *q = p;
-                for (; *q; q++) {
-                    if (*q == '"' || *q == '\'') {
-                        q = content_scan_string_end(q);
-                        if (!q) break;
-                        continue;
-                    }
-                    if (*q == '(') depth++;
-                    else if (*q == ')' && --depth == 0) break;
-                }
-                if (!q || *q != ')') { g_free(t.text); goto fail; }
-                t.kind = CONTENT_TOK_FUNC;
-                t.args = g_strndup(a, (gsize)(q - a));
-                g_strstrip(t.args);
-                char *lower = g_ascii_strdown(t.text, -1);
-                g_free(t.text);
-                t.text = lower;
-                p = q + 1;
-            } else {
-                t.kind = CONTENT_TOK_IDENT;
-            }
-        } else {
-            goto fail;
-        }
-        g_array_append_val(toks, t);
-    }
-    return toks;
-fail:
-    g_array_free(toks, TRUE);
-    return NULL;
-}
-
-static GPtrArray *
-content_split_args(const char *args)
-{
-    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
-    const char *seg = args;
-    int depth = 0;
-    for (const char *q = args; ; q++) {
-        if (*q == '"' || *q == '\'') {
-            const char *e = content_scan_string_end(q);
-            if (!e) { g_ptr_array_free(out, TRUE); return NULL; }
-            q = e;
-            continue;
-        }
-        if (*q == '(') depth++;
-        else if (*q == ')' && depth > 0) depth--;
-        if ((*q == ',' && depth == 0) || !*q) {
-            char *piece = g_strndup(seg, (gsize)(q - seg));
-            g_strstrip(piece);
-            g_ptr_array_add(out, piece);
-            if (!*q) break;
-            seg = q + 1;
-        }
-    }
-    return out;
-}
-
-static gboolean css_wide_keyword_or_default(const char *item);
 static gboolean attr_functions_syntax_valid(const char *text);
-
-static gboolean
-content_ident_valid(const char *s)
-{
-    if (!s || !*s) return FALSE;
-    if (g_ascii_isdigit((guchar)s[0])) return FALSE;
-    for (const char *p = s; *p; p++) {
-        if (*p == '\\') { if (!p[1]) return FALSE; p++; continue; }
-        if (!(g_ascii_isalnum((guchar)*p) || *p == '-' || *p == '_' ||
-              (guchar)*p >= 0x80))
-            return FALSE;
-    }
-    return TRUE;
-}
-
-static gboolean
-content_is_string_token(const char *s)
-{
-    if (!s || (s[0] != '"' && s[0] != '\'')) return FALSE;
-    const char *e = content_scan_string_end(s);
-    return e && e[1] == '\0';
-}
-
-static char *
-content_symbols_canonical(const char *args)
-{
-    GArray *toks = content_tokenize(args);
-    if (!toks) return NULL;
-    const char *system = NULL;
-    guint i = 0;
-    if (toks->len > 0) {
-        content_tok *t = &g_array_index(toks, content_tok, 0);
-        if (t->kind == CONTENT_TOK_IDENT) {
-            static const char *systems[] = { "cyclic", "numeric", "alphabetic",
-                                             "symbolic", "additive", "fixed" };
-            for (gsize k = 0; k < G_N_ELEMENTS(systems); k++)
-                if (g_ascii_strcasecmp(t->text, systems[k]) == 0)
-                    system = systems[k];
-            if (!system) { g_array_free(toks, TRUE); return NULL; }
-            i = 1;
-        }
-    }
-    GString *out = g_string_new(NULL);
-    if (system && strcmp(system, "symbolic") != 0) g_string_append(out, system);
-    int n_symbols = 0;
-    for (; i < toks->len; i++) {
-        content_tok *t = &g_array_index(toks, content_tok, i);
-        gboolean image = t->kind == CONTENT_TOK_FUNC &&
-                         (strcmp(t->text, "url") == 0 ||
-                          strcmp(t->text, "image") == 0 ||
-                          strstr(t->text, "gradient"));
-        if (t->kind != CONTENT_TOK_STRING && !image) {
-            g_string_free(out, TRUE);
-            g_array_free(toks, TRUE);
-            return NULL;
-        }
-        if (out->len) g_string_append_c(out, ' ');
-        if (image) g_string_append_printf(out, "%s(%s)", t->text, t->args);
-        else g_string_append(out, t->text);
-        n_symbols++;
-    }
-    g_array_free(toks, TRUE);
-    gboolean ok = n_symbols >= 1;
-    if (system && (strcmp(system, "numeric") == 0 ||
-                   strcmp(system, "alphabetic") == 0) && n_symbols < 2)
-        ok = FALSE;
-    if (system && strcmp(system, "additive") == 0) ok = FALSE;
-    if (!ok) { g_string_free(out, TRUE); return NULL; }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-content_counter_style_canonical(const char *style)
-{
-    if (g_ascii_strncasecmp(style, "symbols(", 8) == 0 &&
-        style[strlen(style) - 1] == ')') {
-        char *inner = g_strndup(style + 8, strlen(style) - 9);
-        char *canon = content_symbols_canonical(inner);
-        g_free(inner);
-        if (!canon) return NULL;
-        char *res = g_strdup_printf("symbols(%s)", canon);
-        g_free(canon);
-        return res;
-    }
-    if (!content_ident_valid(style) || css_wide_keyword_or_default(style) ||
-        g_ascii_strcasecmp(style, "none") == 0) return NULL;
-    if (g_ascii_strcasecmp(style, "decimal") == 0) return g_strdup("");
-    return g_strdup(style);
-}
-
-static char *
-content_counter_canonical(const content_tok *t)
-{
-    gboolean counters = strcmp(t->text, "counters") == 0;
-    GPtrArray *args = content_split_args(t->args);
-    if (!args) return NULL;
-    guint min_args = counters ? 2 : 1, max_args = counters ? 3 : 2;
-    char *res = NULL;
-    if (args->len < min_args || args->len > max_args) goto done;
-    const char *name = args->pdata[0];
-    if (!content_ident_valid(name) || g_ascii_strcasecmp(name, "none") == 0)
-        goto done;
-    char *sep = NULL;
-    if (counters) {
-        const char *s = args->pdata[1];
-        if (!content_is_string_token(s)) goto done;
-        sep = content_string_canonical(s + 1, strlen(s) - 2);
-    }
-    char *style = NULL;
-    if (args->len == max_args) {
-        style = content_counter_style_canonical(args->pdata[max_args - 1]);
-        if (!style) { g_free(sep); goto done; }
-    }
-    GString *out = g_string_new(t->text);
-    g_string_append_c(out, '(');
-    g_string_append(out, name);
-    if (sep) { g_string_append(out, ", "); g_string_append(out, sep); }
-    if (style && *style) { g_string_append(out, ", "); g_string_append(out, style); }
-    g_string_append_c(out, ')');
-    g_free(sep);
-    g_free(style);
-    res = g_string_free(out, FALSE);
-done:
-    g_ptr_array_free(args, TRUE);
-    return res;
-}
-
-static gboolean
-content_func_is_image(const content_tok *t)
-{
-    return strcmp(t->text, "url") == 0 || strcmp(t->text, "image") == 0 ||
-           strcmp(t->text, "image-set") == 0 ||
-           strcmp(t->text, "cross-fade") == 0 ||
-           strcmp(t->text, "element") == 0 ||
-           g_str_has_suffix(t->text, "-gradient");
-}
-
-static char *
-content_item_canonical(const content_tok *t, gboolean alt)
-{
-    if (t->kind == CONTENT_TOK_STRING) return g_strdup(t->text);
-    if (t->kind == CONTENT_TOK_IDENT) {
-        if (alt) return NULL;
-        static const char *kws[] = { "open-quote", "close-quote",
-                                     "no-open-quote", "no-close-quote",
-                                     "contents" };
-        for (gsize k = 0; k < G_N_ELEMENTS(kws); k++)
-            if (g_ascii_strcasecmp(t->text, kws[k]) == 0)
-                return g_strdup(kws[k]);
-        return NULL;
-    }
-    if (t->kind != CONTENT_TOK_FUNC) return NULL;
-    if (strcmp(t->text, "counter") == 0 || strcmp(t->text, "counters") == 0)
-        return content_counter_canonical(t);
-    if (strcmp(t->text, "attr") == 0) {
-        GPtrArray *args = content_split_args(t->args);
-        gboolean ok = args && args->len >= 1 && args->len <= 2 &&
-                      *(char *)args->pdata[0];
-        if (ok) {
-            char *first = g_strdup(args->pdata[0]);
-            char *sp = strpbrk(first, " \t");
-            if (sp) *sp = '\0';
-            ok = content_ident_valid(first);
-            g_free(first);
-        }
-        if (args) g_ptr_array_free(args, TRUE);
-        return ok ? g_strdup_printf("attr(%s)", t->args) : NULL;
-    }
-    if (alt) return NULL;
-    if (strcmp(t->text, "image-set") == 0 || strcmp(t->text, "-webkit-image-set") == 0) {
-        char *raw = g_strdup_printf("%s(%s)", t->text, t->args);
-        char *canon = image_set_canonical(raw, FALSE);
-        g_free(raw);
-        return canon;
-    }
-    if (content_func_is_image(t) || strcmp(t->text, "leader") == 0 ||
-        g_str_has_prefix(t->text, "target-") || strcmp(t->text, "var") == 0 ||
-        strcmp(t->text, "string") == 0 || strcmp(t->text, "content") == 0)
-        return g_strdup_printf("%s(%s)", t->text, t->args);
-    return NULL;
-}
-
-char *
-ns_css_content_canonical(const char *text)
-{
-    if (!text) return NULL;
-    GArray *toks = content_tokenize(text);
-    if (!toks || toks->len == 0) {
-        if (toks) g_array_free(toks, TRUE);
-        return NULL;
-    }
-    if (toks->len == 1) {
-        content_tok *t = &g_array_index(toks, content_tok, 0);
-        if (t->kind == CONTENT_TOK_IDENT &&
-            (g_ascii_strcasecmp(t->text, "normal") == 0 ||
-             g_ascii_strcasecmp(t->text, "none") == 0)) {
-            char *r = g_ascii_strdown(t->text, -1);
-            g_array_free(toks, TRUE);
-            return r;
-        }
-    }
-    GString *out = g_string_new(NULL);
-    gboolean alt = FALSE, ok = TRUE;
-    int main_items = 0, alt_items = 0;
-    for (guint i = 0; i < toks->len && ok; i++) {
-        content_tok *t = &g_array_index(toks, content_tok, i);
-        if (t->kind == CONTENT_TOK_SLASH) {
-            if (alt || main_items == 0) { ok = FALSE; break; }
-            alt = TRUE;
-            g_string_append(out, " /");
-            continue;
-        }
-        char *item = content_item_canonical(t, alt);
-        if (!item) { ok = FALSE; break; }
-        if (out->len) g_string_append_c(out, ' ');
-        g_string_append(out, item);
-        g_free(item);
-        if (alt) alt_items++; else main_items++;
-    }
-    g_array_free(toks, TRUE);
-    if (!ok || main_items == 0 || (alt && alt_items == 0)) {
-        g_string_free(out, TRUE);
-        return NULL;
-    }
-    return g_string_free(out, FALSE);
-}
-
-static int
-image_set_split_ws(const char *text, char **out, int max)
-{
-    int n = 0;
-    const char *p = text;
-    while (*p && n < max) {
-        while (*p && is_ws(*p)) p++;
-        if (!*p) break;
-        const char *start = p;
-        int depth = 0;
-        while (*p) {
-            if (*p == '"' || *p == '\'') {
-                const char *e = content_scan_string_end(p);
-                if (!e) return -1;
-                p = e + 1;
-                continue;
-            }
-            if (*p == '(') depth++;
-            else if (*p == ')') { if (depth) depth--; }
-            else if (is_ws(*p) && depth == 0) break;
-            p++;
-        }
-        out[n++] = g_strndup(start, (gsize)(p - start));
-    }
-    return n;
-}
-
-typedef struct {
-    double value;
-    gboolean resolution;
-    gboolean known;
-} res_term;
-
-static gboolean
-res_unit_factor(const char *unit, double *factor)
-{
-    if (g_ascii_strcasecmp(unit, "x") == 0 || g_ascii_strcasecmp(unit, "dppx") == 0)
-        *factor = 1.0;
-    else if (g_ascii_strcasecmp(unit, "dpi") == 0)
-        *factor = 1.0 / 96.0;
-    else if (g_ascii_strcasecmp(unit, "dpcm") == 0)
-        *factor = 2.54 / 96.0;
-    else
-        return FALSE;
-    return TRUE;
-}
-
-static gboolean res_eval_sum(const char **pp, const char *end, res_term *out,
-                             int depth);
-
-static gboolean
-res_eval_atom(const char **pp, const char *end, res_term *out, int depth)
-{
-    if (depth > NS_CALC_MAX_DEPTH) return FALSE;
-    const char *p = *pp;
-    while (p < end && is_ws(*p)) p++;
-    if (p >= end) return FALSE;
-    if (*p == '(') {
-        p++;
-        if (!res_eval_sum(&p, end, out, depth + 1)) return FALSE;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || *p != ')') return FALSE;
-        *pp = p + 1;
-        return TRUE;
-    }
-    if (g_ascii_isalpha((guchar)*p) || *p == '-') {
-        const char *s = p;
-        while (p < end && (g_ascii_isalnum((guchar)*p) || *p == '-')) p++;
-        if (p < end && *p == '(') {
-            const char *close = cq_match_paren(p, end);
-            if (!close) return FALSE;
-            char *name = g_strndup(s, (gsize)(p - s));
-            gboolean ok = g_ascii_strcasecmp(name, "calc") == 0 ||
-                          g_ascii_strcasecmp(name, "sign") == 0 ||
-                          g_ascii_strcasecmp(name, "sibling-index") == 0 ||
-                          g_ascii_strcasecmp(name, "sibling-count") == 0 ||
-                          g_ascii_strcasecmp(name, "min") == 0 ||
-                          g_ascii_strcasecmp(name, "max") == 0 ||
-                          g_ascii_strcasecmp(name, "clamp") == 0 ||
-                          g_ascii_strcasecmp(name, "abs") == 0;
-            if (g_ascii_strcasecmp(name, "calc") == 0) {
-                const char *inner = p + 1;
-                ok = res_eval_sum(&inner, close, out, depth + 1);
-            } else if (g_ascii_strcasecmp(name, "sign") == 0) {
-                char *arg = g_strndup(p + 1, (gsize)(close - p - 1));
-                double px = 0, pct = 0;
-                gboolean rel = ns_css_value_has_relative_unit(arg);
-                gboolean parsed = !rel && ns_css_resolve_to_px_pct(arg, strlen(arg), &px, &pct);
-                out->resolution = FALSE;
-                out->known = parsed && pct == 0;
-                out->value = px > 0 ? 1 : px < 0 ? -1 : 0;
-                g_free(arg);
-            } else if (ok) {
-                out->resolution = FALSE;
-                out->known = FALSE;
-                out->value = 0;
-            }
-            g_free(name);
-            if (!ok) return FALSE;
-            *pp = close + 1;
-            return TRUE;
-        }
-        return FALSE;
-    }
-    char *endp = NULL;
-    double v = g_ascii_strtod(p, &endp);
-    if (!endp || endp == p) return FALSE;
-    p = endp;
-    const char *us = p;
-    while (p < end && g_ascii_isalpha((guchar)*p)) p++;
-    out->value = v;
-    out->known = TRUE;
-    out->resolution = FALSE;
-    if (p > us) {
-        char *unit = g_strndup(us, (gsize)(p - us));
-        double factor = 1;
-        gboolean ok = res_unit_factor(unit, &factor);
-        g_free(unit);
-        if (!ok) return FALSE;
-        out->value = v * factor;
-        out->resolution = TRUE;
-    }
-    *pp = p;
-    return TRUE;
-}
-
-static gboolean
-res_eval_product(const char **pp, const char *end, res_term *out, int depth)
-{
-    if (!res_eval_atom(pp, end, out, depth)) return FALSE;
-    while (TRUE) {
-        const char *p = *pp;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || (*p != '*' && *p != '/')) break;
-        char op = *p++;
-        res_term rhs;
-        if (!res_eval_atom(&p, end, &rhs, depth)) return FALSE;
-        if (op == '*') {
-            if (out->resolution && rhs.resolution) return FALSE;
-            out->resolution = out->resolution || rhs.resolution;
-            out->value *= rhs.value;
-        } else {
-            if (rhs.resolution) return FALSE;
-            if (rhs.known && rhs.value == 0) return FALSE;
-            out->value = rhs.value != 0 ? out->value / rhs.value : 0;
-        }
-        out->known = out->known && rhs.known;
-        *pp = p;
-    }
-    return TRUE;
-}
-
-static gboolean
-res_eval_sum(const char **pp, const char *end, res_term *out, int depth)
-{
-    if (!res_eval_product(pp, end, out, depth)) return FALSE;
-    while (TRUE) {
-        const char *p = *pp;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || (*p != '+' && *p != '-')) break;
-        char op = *p;
-        if (!(p + 1 < end && is_ws(p[1]))) return FALSE;
-        p++;
-        res_term rhs;
-        if (!res_eval_product(&p, end, &rhs, depth)) return FALSE;
-        if (out->resolution != rhs.resolution) return FALSE;
-        out->value = op == '+' ? out->value + rhs.value : out->value - rhs.value;
-        out->known = out->known && rhs.known;
-        *pp = p;
-    }
-    return TRUE;
-}
-
-static char *
-image_set_resolution_canonical(const char *tok, gboolean computed)
-{
-    if (token_is_math_fn(tok)) {
-        const char *p = tok;
-        const char *end = tok + strlen(tok);
-        res_term t = { 0 };
-        if (!res_eval_atom(&p, end, &t, 0) || !t.resolution) return NULL;
-        while (p < end && is_ws(*p)) p++;
-        if (p < end) return NULL;
-        if (!t.known) return g_strdup(tok);
-        return computed ? g_strdup_printf("%gdppx", t.value)
-                        : g_strdup_printf("calc(%gdppx)", t.value);
-    }
-    char *endp = NULL;
-    double v = g_ascii_strtod(tok, &endp);
-    if (!endp || endp == tok || !*endp) return NULL;
-    double factor = 1;
-    if (!res_unit_factor(endp, &factor) || v < 0) return NULL;
-    if (computed) return g_strdup_printf("%gdppx", v * factor);
-    char *unit = g_ascii_strdown(endp, -1);
-    char *res = g_strdup_printf("%g%s", v, unit);
-    g_free(unit);
-    return res;
-}
-
-static char *
-image_set_canonical(const char *text, gboolean computed)
-{
-    const char *p = text;
-    while (*p && is_ws(*p)) p++;
-    if (g_ascii_strncasecmp(p, "-webkit-image-set(", 18) == 0) p += 18;
-    else if (g_ascii_strncasecmp(p, "image-set(", 10) == 0) p += 10;
-    else return NULL;
-    const char *end = p + strlen(p);
-    const char *close = cq_match_paren(p - 1, end);
-    if (!close) return NULL;
-    const char *after = close + 1;
-    while (*after && is_ws(*after)) after++;
-    if (*after) return NULL;
-    char *body = g_strndup(p, (gsize)(close - p));
-    GPtrArray *options = content_split_args(body);
-    g_free(body);
-    if (!options) return NULL;
-    GString *out = g_string_new("image-set(");
-    gboolean ok = options->len > 0;
-    for (guint i = 0; i < options->len && ok; i++) {
-        char *tok[6] = {0};
-        int n = image_set_split_ws(options->pdata[i], tok, 6);
-        char *image = NULL, *res = NULL, *type = NULL;
-        if (n < 1) ok = FALSE;
-        for (int k = 0; k < n && ok; k++) {
-            const char *t = tok[k];
-            if (k == 0) {
-                if (content_is_string_token(t)) {
-                    char *inner = content_string_canonical(t + 1, strlen(t) - 2);
-                    image = g_strdup_printf("url(%s)", inner);
-                    g_free(inner);
-                } else if (g_ascii_strncasecmp(t, "url(", 4) == 0 ||
-                           g_ascii_strncasecmp(t, "src(", 4) == 0 ||
-                           g_ascii_strncasecmp(t, "image(", 6) == 0 ||
-                           g_ascii_strncasecmp(t, "cross-fade(", 11) == 0) {
-                    image = g_strdup(t);
-                } else if (text_starts_gradient(t)) {
-                    ns_gradient_parse gp;
-                    const char *gend = NULL;
-                    if (gradient_parse(t, &gp, &gend, TRUE)) {
-                        image = gradient_serialize_specified(&gp);
-                        gradient_parse_clear(&gp);
-                    }
-                    if (!image) ok = FALSE;
-                } else {
-                    ok = FALSE;
-                }
-            } else if (g_ascii_strncasecmp(t, "type(", 5) == 0) {
-                if (type) ok = FALSE;
-                else type = g_strdup(t);
-            } else {
-                if (res) ok = FALSE;
-                else res = image_set_resolution_canonical(t, computed);
-                if (!res) ok = FALSE;
-            }
-        }
-        if (ok) {
-            if (i) g_string_append(out, ", ");
-            g_string_append(out, image);
-            g_string_append_c(out, ' ');
-            g_string_append(out, res ? res : computed ? "1dppx" : "1x");
-            if (type) { g_string_append_c(out, ' '); g_string_append(out, type); }
-        }
-        g_free(image);
-        g_free(res);
-        g_free(type);
-        for (int k = 0; k < n; k++) g_free(tok[k]);
-    }
-    g_ptr_array_free(options, TRUE);
-    if (!ok) { g_string_free(out, TRUE); return NULL; }
-    g_string_append_c(out, ')');
-    return g_string_free(out, FALSE);
-}
-
-static gboolean
-text_starts_image_set(const char *p)
-{
-    while (*p && is_ws(*p)) p++;
-    return g_ascii_strncasecmp(p, "image-set(", 10) == 0 ||
-           g_ascii_strncasecmp(p, "-webkit-image-set(", 18) == 0;
-}
-
-char *
-ns_css_unicode_range_canonical(const char *text)
-{
-    if (!text) return NULL;
-    GString *clean = g_string_new(NULL);
-    for (const char *p = text; *p; ) {
-        if (p[0] == '/' && p[1] == '*') {
-            const char *e = strstr(p + 2, "*/");
-            if (!e) { g_string_free(clean, TRUE); return NULL; }
-            p = e + 2;
-            continue;
-        }
-        g_string_append_c(clean, *p++);
-    }
-    GString *out = g_string_new(NULL);
-    gboolean ok = TRUE;
-    char **parts = g_strsplit(clean->str, ",", -1);
-    for (int i = 0; parts[i] && ok; i++) {
-        char *r = g_strstrip(parts[i]);
-        if (!*r || (r[0] != 'u' && r[0] != 'U') || r[1] != '+') { ok = FALSE; break; }
-        const char *q = r + 2;
-        guint32 start = 0, endv = 0;
-        int hex = 0, wild = 0;
-        while (g_ascii_isxdigit((guchar)*q) && hex < 7) {
-            start = start * 16 + g_ascii_xdigit_value(*q);
-            hex++; q++;
-        }
-        while (*q == '?' && wild < 7) { wild++; q++; }
-        if (hex + wild == 0 || hex + wild > 6) { ok = FALSE; break; }
-        if (wild) {
-            if (*q) { ok = FALSE; break; }
-            endv = start;
-            for (int k = 0; k < wild; k++) { start *= 16; endv = endv * 16 + 15; }
-        } else if (*q == '-') {
-            q++;
-            int hex2 = 0;
-            while (g_ascii_isxdigit((guchar)*q) && hex2 < 7) {
-                endv = endv * 16 + g_ascii_xdigit_value(*q);
-                hex2++; q++;
-            }
-            if (hex2 == 0 || hex2 > 6 || *q) { ok = FALSE; break; }
-        } else if (*q) {
-            ok = FALSE;
-            break;
-        } else {
-            endv = start;
-        }
-        if (start > endv || endv > 0x10FFFF) { ok = FALSE; break; }
-        if (out->len) g_string_append(out, ", ");
-        if (start == endv) g_string_append_printf(out, "U+%X", start);
-        else g_string_append_printf(out, "U+%X-%X", start, endv);
-    }
-    g_strfreev(parts);
-    g_string_free(clean, TRUE);
-    if (!ok || out->len == 0) { g_string_free(out, TRUE); return NULL; }
-    return g_string_free(out, FALSE);
-}
-
-static const char *
-css_quoted_end(const char *u, char quote)
-{
-    const char *p = u;
-    while (*p) {
-        if (*p == '\\' && p[1]) { p += 2; continue; }
-        if (*p == quote) return p;
-        p++;
-    }
-    return NULL;
-}
-
-static char *
-css_unescape_url(const char *u, gsize len)
-{
-    GString *out = g_string_sized_new(len);
-    for (gsize i = 0; i < len; i++) {
-        if (u[i] == '\\' && i + 1 < len) i++;
-        g_string_append_c(out, u[i]);
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-pick_image_set_url(const char *t)
-{
-    const char *p = t;
-    while (*p && is_ws(*p)) p++;
-    if (g_ascii_strncasecmp(p, "-webkit-image-set(", 18) == 0)
-        p += 18;
-    else if (g_ascii_strncasecmp(p, "image-set(", 10) == 0)
-        p += 10;
-    else
-        return NULL;
-
-    const double target = 1.0;
-    char *best = NULL;
-    double best_res = 0;
-    while (*p && *p != ')') {
-        while (*p && (is_ws(*p) || *p == ',')) p++;
-        if (!*p || *p == ')') break;
-        char *url = NULL;
-        if (g_ascii_strncasecmp(p, "url(", 4) == 0) {
-            const char *u = p + 4;
-            while (*u && is_ws(*u)) u++;
-            char q = 0;
-            if (*u == '"' || *u == '\'') { q = *u; u++; }
-            const char *end;
-            if (q) end = css_quoted_end(u, q);
-            else { end = u; while (*end && *end != ')' && !is_ws(*end)) end++; }
-            if (end && end > u) url = css_unescape_url(u, (gsize)(end - u));
-            p = end ? end : p + 4;
-            while (*p && *p != ')') p++;
-            if (*p == ')') p++;
-        }
-        double res = 1.0;
-        while (*p && is_ws(*p)) p++;
-        if (*p && *p != ',' && *p != ')') {
-            res = g_ascii_strtod(p, NULL);
-            while (*p && *p != ',' && *p != ')') p++;
-        }
-        if (url) {
-            if (!best || fabs(res - target) < fabs(best_res - target)) {
-                g_free(best);
-                best = url;
-                best_res = res;
-            } else {
-                g_free(url);
-            }
-        } else {
-            while (*p && *p != ',' && *p != ')') p++;
-        }
-    }
-    return best;
-}
-
-static ns_css_value *
-parse_gradient_text(const char *t, gboolean allow_trailing)
-{
-    ns_gradient_parse gp;
-    const char *gend = NULL;
-    if (!gradient_parse(t, &gp, &gend, FALSE)) return NULL;
-    while (gend && *gend && is_ws(*gend)) gend++;
-    if (!allow_trailing && gend && *gend) {
-        gradient_parse_clear(&gp);
-        return NULL;
-    }
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_GRADIENT;
-    v->u.gradient = gp.gr;
-    gradient_parse_clear(&gp);
-    return v;
-}
-
-static ns_css_value *
-parse_any_gradient(const char *t)
-{
-    return parse_gradient_text(t, FALSE);
-}
-
-static double
-parse_angle_deg(const char *s)
-{
-    if (!s) return 0;
-    char *end = NULL;
-    double v = g_ascii_strtod(s, &end);
-    if (!end || end == s) return 0;
-    while (*end && is_ws(*end)) end++;
-    if (g_ascii_strncasecmp(end, "rad", 3) == 0) return v * 180.0 / G_PI;
-    if (g_ascii_strncasecmp(end, "turn", 4) == 0) return v * 360.0;
-    if (g_ascii_strncasecmp(end, "grad", 4) == 0) return v * 0.9;
-    return v;
-}
 
 static gboolean
 parse_transform_len(const char *s, double *out, gboolean *is_percent)
@@ -5358,7 +3557,7 @@ parse_angle_any(const char *s, double *deg_out)
     char *end = NULL;
     g_ascii_strtod(s, &end);
     if (!end || end == s) return FALSE;
-    *deg_out = parse_angle_deg(s);
+    *deg_out = ns_css_parse_angle_deg(s);
     return TRUE;
 }
 
@@ -5551,11 +3750,11 @@ parse_transform_origin(const char *text)
 {
     if (!text || !*text) return NULL;
     char *edge_canon = css_ws_token_count(text) >= 3 &&
-                       position_canonical_ex(text, TRUE, FALSE)
-        ? position_canonical_ex(text, TRUE, FALSE) : NULL;
+                       ns_css_position_canonical_ex(text, TRUE, FALSE)
+        ? ns_css_position_canonical_ex(text, TRUE, FALSE) : NULL;
     if (edge_canon) {
         char *xs = NULL, *ys = NULL;
-        position_split(edge_canon, &xs, &ys);
+        ns_css_position_split(edge_canon, &xs, &ys);
         g_free(edge_canon);
         ns_css_transform tf;
         memset(&tf, 0, sizeof(tf));
@@ -6123,16 +4322,6 @@ timing_item_parse(const char *item, ns_css_timing *out)
 }
 
 static gboolean
-css_wide_keyword_or_default(const char *item)
-{
-    static const char *const words[] = { "initial", "inherit", "unset", "revert",
-                                         "revert-layer", "default" };
-    for (gsize i = 0; i < G_N_ELEMENTS(words); i++)
-        if (g_ascii_strcasecmp(item, words[i]) == 0) return TRUE;
-    return FALSE;
-}
-
-static gboolean
 anim_longhand_item_valid(ns_css_prop prop, const char *item)
 {
     ns_css_timing tm;
@@ -6145,7 +4334,7 @@ anim_longhand_item_valid(ns_css_prop prop, const char *item)
             item[strlen(item) - 1] == item[0];
         {
             char *ident = anim_ident_decode(item);
-            gboolean ok = ident && *ident && !css_wide_keyword_or_default(ident) &&
+            gboolean ok = ident && *ident && !ns_css_wide_keyword_or_default(ident) &&
                           !g_ascii_isdigit((guchar)item[0]) &&
                           !(item[0] == '-' && g_ascii_isdigit((guchar)item[1]));
             g_free(ident);
@@ -6171,7 +4360,7 @@ anim_longhand_item_valid(ns_css_prop prop, const char *item)
     case NS_CSS_TRANSITION_PROPERTY:
         return g_ascii_strcasecmp(item, "none") == 0 ||
                g_ascii_strcasecmp(item, "all") == 0 ||
-               (content_ident_valid(item) && !css_wide_keyword_or_default(item));
+               (ns_css_content_ident_valid(item) && !ns_css_wide_keyword_or_default(item));
     case NS_CSS_TRANSITION_BEHAVIOR:
         return g_ascii_strcasecmp(item, "normal") == 0 ||
                g_ascii_strcasecmp(item, "allow-discrete") == 0;
@@ -6185,7 +4374,7 @@ anim_longhand_item_valid(ns_css_prop prop, const char *item)
     case NS_CSS_ANIMATION_TIMELINE:
         if (g_ascii_strcasecmp(item, "auto") == 0 ||
             g_ascii_strcasecmp(item, "none") == 0) return TRUE;
-        if (item[0] == '-' && item[1] == '-') return content_ident_valid(item);
+        if (item[0] == '-' && item[1] == '-') return ns_css_content_ident_valid(item);
         return (g_ascii_strncasecmp(item, "scroll(", 7) == 0 ||
                 g_ascii_strncasecmp(item, "view(", 5) == 0) &&
                item[strlen(item) - 1] == ')';
@@ -6223,7 +4412,7 @@ anim_range_lp_canonical(const char *tok)
             return g_strdup(tok);
         }
         static const char *const bad_units[] = { "s", "ms", "deg", "rad", "turn", "hz" };
-        if (math_text_has_unit(m, bad_units, G_N_ELEMENTS(bad_units))) {
+        if (ns_css_math_text_has_unit(m, bad_units, G_N_ELEMENTS(bad_units))) {
             g_free(m);
             return NULL;
         }
@@ -6369,7 +4558,7 @@ parse_anim_longhand(ns_css_prop prop, const char *t)
                 if (g_ascii_strcasecmp(items[i], "none") == 0) g_string_append(canon, "none");
                 else if (items[i][0] == '"' || items[i][0] == '\'') {
                     char *inner = anim_string_decode(items[i]);
-                    if (css_wide_keyword_or_default(inner) ||
+                    if (ns_css_wide_keyword_or_default(inner) ||
                         g_ascii_strcasecmp(inner, "none") == 0) {
                         g_string_append_c(canon, '"');
                         g_string_append(canon, inner);
@@ -7063,7 +5252,7 @@ counter_list_canonical(const char *text, ns_css_prop prop)
         }
         char *decoded = anim_ident_decode(name);
         g_free(name);
-        if (!decoded || css_wide_keyword_or_default(decoded) ||
+        if (!decoded || ns_css_wide_keyword_or_default(decoded) ||
             g_ascii_strcasecmp(decoded, "none") == 0 ||
             g_ascii_isdigit((guchar)decoded[0]) ||
             (decoded[0] == '-' && (g_ascii_isdigit((guchar)decoded[1]) || !decoded[1]))) {
@@ -7107,7 +5296,7 @@ list_style_type_canonical(const char *text)
         gsize len = strlen(tok);
         if (g_ascii_strncasecmp(tok, "symbols(", 8) == 0 && tok[len - 1] == ')') {
             char *inner = g_strndup(tok + 8, len - 9);
-            char *canon = content_symbols_canonical(inner);
+            char *canon = ns_css_content_symbols_canonical(inner);
             g_free(inner);
             if (canon && !strstr(canon, "url(") && !strstr(canon, "image(") &&
                 !strstr(canon, "gradient("))
@@ -7117,7 +5306,7 @@ list_style_type_canonical(const char *text)
             r = g_strdup(tok);
         } else if (g_ascii_strcasecmp(tok, "none") == 0) {
             r = g_strdup("none");
-        } else if (content_ident_valid(tok) && !css_wide_keyword_or_default(tok)) {
+        } else if (ns_css_content_ident_valid(tok) && !ns_css_wide_keyword_or_default(tok)) {
             r = g_strdup(tok);
         }
     }
@@ -7200,7 +5389,7 @@ list_style_split(const char *text, char **out_type, char **out_position,
         }
         if (g_ascii_strcasecmp(tok, "none") == 0) { nones++; continue; }
         if (!image && (g_ascii_strncasecmp(tok, "url(", 4) == 0 ||
-                       text_starts_gradient(tok) || text_starts_image_set(tok))) {
+                       ns_css_text_starts_gradient(tok) || ns_css_text_starts_image_set(tok))) {
             ns_css_value *iv = parse_value_for(NS_CSS_LIST_STYLE_IMAGE, tok);
             if (!iv) { ok = FALSE; break; }
             ns_css_value_free(iv);
@@ -7392,7 +5581,7 @@ parse_anim_value(const char *text, gboolean is_animation)
                     if (!*e->name) { g_free(e->name); e->name = NULL; valid = FALSE; break; }
                 } else {
                     char *ident = anim_ident_decode(tok);
-                    if (!ident || css_wide_keyword_or_default(ident) ||
+                    if (!ident || ns_css_wide_keyword_or_default(ident) ||
                         g_ascii_isdigit((guchar)tok[0]) ||
                         (tok[0] == '-' && g_ascii_isdigit((guchar)tok[1]))) {
                         g_free(ident);
@@ -7411,7 +5600,7 @@ parse_anim_value(const char *text, gboolean is_animation)
             }
             if (got_name) { valid = FALSE; break; }
             char *ident = anim_ident_decode(tok);
-            if (!ident || css_wide_keyword_or_default(ident)) {
+            if (!ident || ns_css_wide_keyword_or_default(ident)) {
                 g_free(ident);
                 valid = FALSE;
                 break;
@@ -9657,11 +7846,11 @@ parse_value_layer_list(ns_css_prop prop, const char *t)
 static ns_css_value *
 parse_image_reference(const char *t)
 {
-    ns_css_value *v = parse_any_gradient(t);
+    ns_css_value *v = ns_css_parse_gradient(t);
     if (v) return v;
     const char *p = t;
     while (*p && is_ws(*p)) p++;
-    char *iset = pick_image_set_url(p);
+    char *iset = ns_css_pick_image_set_url(p);
     if (iset) {
         v = g_new0(ns_css_value, 1);
         v->kind = NS_CSS_V_URL;
@@ -9675,7 +7864,7 @@ parse_image_reference(const char *t)
     if (*u == '"' || *u == '\'') { q = *u; u++; }
     const char *end;
     if (q) {
-        end = css_quoted_end(u, q);
+        end = ns_css_quoted_end(u, q);
     } else {
         end = u;
         while (*end && *end != ')' && !is_ws(*end)) end++;
@@ -9683,7 +7872,7 @@ parse_image_reference(const char *t)
     if (!end || end <= u) return NULL;
     v = g_new0(ns_css_value, 1);
     v->kind = NS_CSS_V_URL;
-    v->u.url = css_unescape_url(u, (gsize)(end - u));
+    v->u.url = ns_css_unescape_url(u, (gsize)(end - u));
     return v;
 }
 
@@ -10780,10 +8969,10 @@ parse_value_for(ns_css_prop prop, const char *text)
     case NS_CSS_LIST_STYLE_IMAGE:
     case NS_CSS_BACKGROUND_IMAGE: {
         v = parse_image_reference(t);
-        if (!v && text_starts_gradient(t)) break;
+        if (!v && ns_css_text_starts_gradient(t)) break;
         char *iset_computed = NULL;
-        if (text_starts_image_set(t)) {
-            iset_computed = image_set_canonical(t, TRUE);
+        if (ns_css_text_starts_image_set(t)) {
+            iset_computed = ns_css_image_set_canonical(t, TRUE);
             if (!iset_computed) {
                 ns_css_value_free(v);
                 v = NULL;
@@ -11511,80 +9700,6 @@ split_ws(const char *s, char *out[4])
     return split_ws_limit(s, out, 4);
 }
 
-static gboolean
-position_is_h_edge(const char *t)
-{
-    return g_ascii_strcasecmp(t, "left") == 0 ||
-           g_ascii_strcasecmp(t, "right") == 0;
-}
-
-static gboolean
-position_is_v_edge(const char *t)
-{
-    return g_ascii_strcasecmp(t, "top") == 0 ||
-           g_ascii_strcasecmp(t, "bottom") == 0;
-}
-
-static gboolean
-position_is_keyword(const char *t)
-{
-    return position_is_h_edge(t) || position_is_v_edge(t) ||
-           g_ascii_strcasecmp(t, "center") == 0;
-}
-
-static char *
-position_from_edge(const char *edge, const char *offset)
-{
-    gboolean far = g_ascii_strcasecmp(edge, "right") == 0 ||
-                   g_ascii_strcasecmp(edge, "bottom") == 0;
-    if (!offset) return g_strdup(far ? "100%" : "0%");
-    if (!far) return g_strdup(offset);
-    char *unit = NULL;
-    double v = g_ascii_strtod(offset, &unit);
-    if (unit && g_strcmp0(unit, "%") == 0)
-        return g_strdup_printf("%g%%", 100.0 - v);
-    return g_strdup_printf("calc(100%% - %s)", offset);
-}
-
-static void
-position_split(const char *text, char **out_x, char **out_y)
-{
-    char *tok[4] = {0};
-    int n = split_ws_limit(text, tok, 4);
-    char *x = NULL, *y = NULL;
-    gboolean used[4] = { FALSE, FALSE, FALSE, FALSE };
-
-    for (int i = 0; i < n; i++) {
-        if (used[i] || !position_is_h_edge(tok[i])) continue;
-        const char *off = (n >= 3 && i + 1 < n && !position_is_keyword(tok[i + 1]))
-                          ? tok[i + 1] : NULL;
-        g_free(x);
-        x = position_from_edge(tok[i], off);
-        used[i] = TRUE;
-        if (off) used[i + 1] = TRUE;
-    }
-    for (int i = 0; i < n; i++) {
-        if (used[i] || !position_is_v_edge(tok[i])) continue;
-        const char *off = (n >= 3 && i + 1 < n && !position_is_keyword(tok[i + 1]))
-                          ? tok[i + 1] : NULL;
-        g_free(y);
-        y = position_from_edge(tok[i], off);
-        used[i] = TRUE;
-        if (off) used[i + 1] = TRUE;
-    }
-    for (int i = 0; i < n; i++) {
-        if (used[i]) continue;
-        gboolean center = g_ascii_strcasecmp(tok[i], "center") == 0;
-        char *v = g_strdup(center ? "50%" : tok[i]);
-        if (!x) x = v;
-        else if (!y) y = v;
-        else g_free(v);
-    }
-    for (int i = 0; i < n; i++) g_free(tok[i]);
-    *out_x = x ? x : g_strdup("50%");
-    *out_y = y ? y : g_strdup("50%");
-}
-
 static void
 position_split_specified(const char *canon, char **out_x, char **out_y)
 {
@@ -11594,7 +9709,7 @@ position_split_specified(const char *canon, char **out_x, char **out_y)
         *out_x = g_strdup_printf("%s %s", tok[0], tok[1]);
         *out_y = g_strdup_printf("%s %s", tok[2], tok[3]);
     } else if (n == 3) {
-        gboolean off_after_first = !position_is_keyword(tok[1]);
+        gboolean off_after_first = !ns_css_position_is_keyword(tok[1]);
         *out_x = off_after_first ? g_strdup_printf("%s %s", tok[0], tok[1])
                                  : g_strdup(tok[0]);
         *out_y = off_after_first ? g_strdup(tok[2])
@@ -12734,7 +10849,7 @@ bg_token_is_image(const char *tok)
 {
     return g_ascii_strcasecmp(tok, "none") == 0 ||
            g_ascii_strncasecmp(tok, "url(", 4) == 0 ||
-           text_starts_gradient(tok) || text_starts_image_set(tok);
+           ns_css_text_starts_gradient(tok) || ns_css_text_starts_image_set(tok);
 }
 
 static gboolean
@@ -12855,7 +10970,7 @@ bg_layer_parse(const char *text, gboolean final_layer, bg_layer_text *out,
         }
     }
     if (ok && pos) {
-        char *canon = position_canonical_ex(pos->str, TRUE, TRUE);
+        char *canon = ns_css_position_canonical_ex(pos->str, TRUE, TRUE);
         if (canon) {
             position_split_specified(canon, &out->pos_x, &out->pos_y);
             g_free(canon);
@@ -13414,21 +11529,21 @@ transform_origin_canonical(const char *value, gboolean two_only)
     int n = split_ws_limit(value, tokens, G_N_ELEMENTS(tokens));
     char *r = NULL;
     if (two_only && (n == 3 || n == 4)) {
-        r = position_canonical_ex(value, TRUE, FALSE);
+        r = ns_css_position_canonical_ex(value, TRUE, FALSE);
     } else if (n >= 1 && n <= (two_only ? 2 : 3)) {
         const char *x = NULL, *y = NULL;
         char *xc = NULL, *yc = NULL, *zc = NULL;
         gboolean ok = TRUE;
-        gboolean a_h = position_is_h_edge(tokens[0]);
-        gboolean a_v = position_is_v_edge(tokens[0]);
+        gboolean a_h = ns_css_position_is_h_edge(tokens[0]);
+        gboolean a_v = ns_css_position_is_v_edge(tokens[0]);
         gboolean a_c = g_ascii_strcasecmp(tokens[0], "center") == 0;
         if (n == 1) {
             if (a_v) { x = "center"; y = tokens[0]; }
             else if (a_h || a_c) { x = tokens[0]; y = "center"; }
             else { x = tokens[0]; y = "center"; }
         } else {
-            gboolean b_h = position_is_h_edge(tokens[1]);
-            gboolean b_v = position_is_v_edge(tokens[1]);
+            gboolean b_h = ns_css_position_is_h_edge(tokens[1]);
+            gboolean b_v = ns_css_position_is_v_edge(tokens[1]);
             gboolean b_c = g_ascii_strcasecmp(tokens[1], "center") == 0;
             gboolean a_kw = a_h || a_v || a_c, b_kw = b_h || b_v || b_c;
             if (a_kw && b_kw) {
@@ -13446,10 +11561,10 @@ transform_origin_canonical(const char *value, gboolean two_only)
             }
         }
         if (ok) {
-            xc = position_is_h_edge(x) || g_ascii_strcasecmp(x, "center") == 0
+            xc = ns_css_position_is_h_edge(x) || g_ascii_strcasecmp(x, "center") == 0
                 ? g_ascii_strdown(x, -1)
                 : transform_arg_canonical(x, TX_LENGTH | TX_PERCENT, FALSE);
-            yc = position_is_v_edge(y) || g_ascii_strcasecmp(y, "center") == 0
+            yc = ns_css_position_is_v_edge(y) || g_ascii_strcasecmp(y, "center") == 0
                 ? g_ascii_strdown(y, -1)
                 : transform_arg_canonical(y, TX_LENGTH | TX_PERCENT, FALSE);
             if (!xc || !yc) ok = FALSE;
@@ -14028,7 +12143,7 @@ parse_declaration_block(const char **pp, const char *end,
                 const char *sseg = css_scan_until(sp, send, ",", &sterm);
                 char *layer = css_trim_dup_range(sp, sseg);
                 sp = sterm == ',' ? sseg + 1 : sseg;
-                char *layer_canon = position_canonical_ex(layer, TRUE, TRUE);
+                char *layer_canon = ns_css_position_canonical_ex(layer, TRUE, TRUE);
                 if (!layer_canon) {
                     g_free(layer);
                     ns_css_value_free(vx_head);
@@ -14037,7 +12152,7 @@ parse_declaration_block(const char **pp, const char *end,
                     break;
                 }
                 char *xs = NULL, *ys = NULL, *sx = NULL, *sy = NULL;
-                position_split(layer, &xs, &ys);
+                ns_css_position_split(layer, &xs, &ys);
                 position_split_specified(layer_canon, &sx, &sy);
                 g_free(layer_canon);
                 if (xs) {
@@ -14084,8 +12199,8 @@ parse_declaration_block(const char **pp, const char *end,
 
         if (strcmp(pname, "object-position") == 0) {
             char *xs = NULL, *ys = NULL;
-            char *canon = position_canonical_ex(vtext, TRUE, FALSE);
-            if (canon) position_split(vtext, &xs, &ys);
+            char *canon = ns_css_position_canonical_ex(vtext, TRUE, FALSE);
+            if (canon) ns_css_position_split(vtext, &xs, &ys);
             g_free(canon);
             if (xs) {
                 ns_css_value *v = parse_value_for(NS_CSS_OBJECT_POSITION_X, xs);
@@ -16900,9 +15015,9 @@ parse_rules_until(const char **pp, const char *end,
                     while (q < prelude_end && is_ws(*q)) q++;
                     gboolean quoted = q < prelude_end && (*q == '"' || *q == '\'');
                     if (kf_name && *kf_name && !quoted &&
-                        (css_wide_keyword_or_default(kf_name) ||
+                        (ns_css_wide_keyword_or_default(kf_name) ||
                          g_ascii_strcasecmp(kf_name, "none") == 0 ||
-                         !content_ident_valid(kf_name))) {
+                         !ns_css_content_ident_valid(kf_name))) {
                         g_free(kf_name);
                         kf_name = g_strdup("");
                     }
@@ -19808,7 +17923,7 @@ css_inline_value_canonical(const char *prop, char *value)
             char term = 0;
             const char *seg_end = css_scan_until(p, end, ",", &term);
             char *layer = css_trim_dup_range(p, seg_end);
-            char *canon = position_canonical_ex(
+            char *canon = ns_css_position_canonical_ex(
                 layer, TRUE, strcmp(prop, "background-position") == 0);
             if (canon) {
                 if (out->len) g_string_append(out, ", ");
@@ -21589,36 +19704,6 @@ ns_style_overflow_keyword(const ns_style *s, ns_css_prop axis)
     return value;
 }
 
-static void
-ns_css_alpha_serialize(guint8 a, char *buf, gsize cap)
-{
-    double f = a / 255.0;
-    for (int prec = 1; prec <= 5; prec++) {
-        char fmt[8];
-        g_snprintf(fmt, sizeof fmt, "%%.%df", prec);
-        g_ascii_formatd(buf, (int)cap, fmt, f);
-        if ((int)(g_ascii_strtod(buf, NULL) * 255.0 + 0.5) == a) break;
-    }
-    char *dot = strchr(buf, '.');
-    if (dot) {
-        char *end = buf + strlen(buf) - 1;
-        while (end > dot && *end == '0') *end-- = '\0';
-        if (end == dot) *end = '\0';
-    }
-}
-
-static void
-ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b, guint8 a)
-{
-    if (a == 255) {
-        g_string_append_printf(s, "rgb(%u, %u, %u)", r, g, b);
-    } else {
-        char ab[16];
-        ns_css_alpha_serialize(a, ab, sizeof ab);
-        g_string_append_printf(s, "rgba(%u, %u, %u, %s)", r, g, b, ab);
-    }
-}
-
 static gboolean
 value_lerp_lengths(const ns_css_value *a, const ns_css_value *b, double t,
                    ns_css_value *out)
@@ -22015,15 +20100,8 @@ value_serialize_one(const ns_css_value *v)
     case NS_CSS_V_KEYWORD:
         return g_strdup(v->u.keyword ? v->u.keyword : "");
     case NS_CSS_V_COLOR:
-        if (v->u.color.a == 255)
-            return g_strdup_printf("rgb(%u, %u, %u)",
-                v->u.color.r, v->u.color.g, v->u.color.b);
-        {
-            char ab[16];
-            ns_css_alpha_serialize(v->u.color.a, ab, sizeof ab);
-            return g_strdup_printf("rgba(%u, %u, %u, %s)",
-                v->u.color.r, v->u.color.g, v->u.color.b, ab);
-        }
+        return ns_css_color_text(v->u.color.r, v->u.color.g, v->u.color.b,
+                                 v->u.color.a);
     case NS_CSS_V_LENGTH: {
         const char *unit = ns_css_unit_suffix(v->u.length.unit);
         return g_strdup_printf("%g%s", v->u.length.v, unit);
@@ -22088,11 +20166,8 @@ value_serialize_one(const ns_css_value *v)
         }
         return g_string_free(s, FALSE);
     }
-    case NS_CSS_V_GRADIENT: {
-        GString *s = g_string_new(NULL);
-        gradient_serialize_computed(s, &v->u.gradient);
-        return g_string_free(s, FALSE);
-    }
+    case NS_CSS_V_GRADIENT:
+        return ns_css_gradient_serialize(&v->u.gradient);
     case NS_CSS_V_TRACKS: {
         if (v->u.tracks.subgrid)
             return g_strdup(v->specified ? v->specified : "subgrid");
@@ -23474,7 +21549,7 @@ attr_function_value(const char *args, const ns_node *node, int depth,
     int n = split_ws_paren(head, toks, 4);
     char *result = NULL;
     *invalid = FALSE;
-    if (n < 1 || n > 2 || !content_ident_valid(toks[0])) {
+    if (n < 1 || n > 2 || !ns_css_content_ident_valid(toks[0])) {
         *invalid = TRUE;
         goto done;
     }
@@ -23579,7 +21654,7 @@ substitute_attrs(const char *text, const ns_node *node, int depth,
     int stack_n = 0;
     while (p < end) {
         if (*p == '"' || *p == '\'') {
-            const char *q = css_quoted_end(p + 1, *p);
+            const char *q = ns_css_quoted_end(p + 1, *p);
             if (!q) { g_string_append(out, p); break; }
             g_string_append_len(out, p, q + 1 - p);
             p = q + 1;
@@ -23598,7 +21673,7 @@ substitute_attrs(const char *text, const ns_node *node, int depth,
             const char *q = p + 5;
             while (q < end && d > 0) {
                 if (*q == '"' || *q == '\'') {
-                    const char *qe = css_quoted_end(q + 1, *q);
+                    const char *qe = ns_css_quoted_end(q + 1, *q);
                     if (!qe) break;
                     q = qe + 1;
                     continue;
@@ -23639,7 +21714,7 @@ attr_args_syntax_valid(const char *args)
     char *head = css_trim_dup_range(args, comma ? comma : end);
     char *toks[4] = { 0 };
     int n = split_ws_paren(head, toks, 4);
-    gboolean ok = n >= 1 && n <= 2 && content_ident_valid(toks[0]);
+    gboolean ok = n >= 1 && n <= 2 && ns_css_content_ident_valid(toks[0]);
     if (ok && n == 2) {
         const char *type = toks[1];
         gsize tlen = strlen(type);
@@ -23671,7 +21746,7 @@ attr_functions_syntax_valid(const char *text)
     const char *end = text + strlen(text);
     while (p < end) {
         if (*p == '"' || *p == '\'') {
-            const char *q = css_quoted_end(p + 1, *p);
+            const char *q = ns_css_quoted_end(p + 1, *p);
             if (!q) return TRUE;
             p = q + 1;
             continue;
@@ -23681,7 +21756,7 @@ attr_functions_syntax_valid(const char *text)
             const char *q = p + 5;
             while (q < end && d > 0) {
                 if (*q == '"' || *q == '\'') {
-                    const char *qe = css_quoted_end(q + 1, *q);
+                    const char *qe = ns_css_quoted_end(q + 1, *q);
                     if (!qe) return FALSE;
                     q = qe + 1;
                     continue;

@@ -1023,3 +1023,38 @@ fn parse_depth(text: &CStr, out: &mut Channels, depth: i32) -> bool {
             named_color(s, out)
         }
 }
+
+fn alpha_text(a: u8) -> Vec<u8> {
+    let f = f64::from(a) / 255.0;
+    let mut text = Vec::new();
+    for format in [c"%.1f", c"%.2f", c"%.3f", c"%.4f", c"%.5f"] {
+        text = ffi::formatd(format, f);
+        let back = CString::new(text.clone()).unwrap_or_default();
+        if (ffi::strtod(&back, 0).0 * 255.0 + 0.5) as i32 == i32::from(a) {
+            break;
+        }
+    }
+    if let Some(dot) = text.iter().position(|&c| c == b'.') {
+        let mut end = text.len();
+        while end > dot + 1 && text[end - 1] == b'0' {
+            end -= 1;
+        }
+        if end == dot + 1 {
+            end = dot;
+        }
+        text.truncate(end);
+    }
+    text
+}
+
+pub(crate) fn color_text(rgba: [u8; 4]) -> Vec<u8> {
+    let [r, g, b, a] = rgba;
+    if a == 255 {
+        format!("rgb({r}, {g}, {b})").into_bytes()
+    } else {
+        let mut out = format!("rgba({r}, {g}, {b}, ").into_bytes();
+        out.extend_from_slice(&alpha_text(a));
+        out.push(b')');
+        out
+    }
+}

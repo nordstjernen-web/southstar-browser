@@ -7,7 +7,9 @@ use std::ffi::{CStr, CString};
 
 use crate::calc;
 use crate::ffi::{self, Container};
-use crate::scan::{is_ws, skip_ws, split_ws_limit, split_ws_paren, starts_with_ci, strip};
+use crate::scan::{
+    is_ws, match_paren_quoted, skip_ws, split_ws_limit, split_ws_paren, starts_with_ci, strip,
+};
 use crate::units::{self, CQH, CQMAX, CQMIN, CQW, NUMBER, Unit};
 
 pub(crate) const TYPE_INLINE: i32 = 1;
@@ -219,35 +221,6 @@ fn word_at(s: &[u8], p: usize, end: usize, word: &[u8]) -> bool {
     }
     let after = p + word.len();
     after == end || is_ws(s[after]) || s[after] == b'('
-}
-
-fn match_paren(s: &[u8], p: usize, end: usize) -> Option<usize> {
-    let mut depth = 0i32;
-    let mut q = p;
-    while q < end {
-        let c = s[q];
-        if c == b'"' || c == b'\'' {
-            q += 1;
-            while q < end && s[q] != c {
-                if s[q] == b'\\' && q + 1 < end {
-                    q += 1;
-                }
-                q += 1;
-            }
-            q += 1;
-            continue;
-        }
-        if c == b'(' {
-            depth += 1;
-        } else if c == b')' {
-            depth -= 1;
-            if depth == 0 {
-                return Some(q);
-            }
-        }
-        q += 1;
-    }
-    None
 }
 
 const FEATURE_NAMES: &[&[u8]] = &[
@@ -481,7 +454,7 @@ fn parse_in_parens(
 ) -> Option<QueryNode> {
     let mut p = skip_ws(s, *pos, end);
     if p < end && s[p] == b'(' {
-        let Some(close) = match_paren(s, p, end) else {
+        let Some(close) = match_paren_quoted(s, p, end) else {
             *ok = false;
             return None;
         };
@@ -517,7 +490,7 @@ fn parse_in_parens(
         p += 1;
     }
     if p > start && p < end && s[p] == b'(' {
-        let Some(close) = match_paren(s, p, end) else {
+        let Some(close) = match_paren_quoted(s, p, end) else {
             *ok = false;
             return None;
         };
@@ -675,7 +648,7 @@ fn split_commas(text: &[u8]) -> Vec<&[u8]> {
     let mut q = 0;
     loop {
         if q < end && text[q] == b'(' {
-            if let Some(close) = match_paren(text, q, end) {
+            if let Some(close) = match_paren_quoted(text, q, end) {
                 q = close + 1;
                 continue;
             }

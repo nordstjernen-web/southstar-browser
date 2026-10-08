@@ -1,6 +1,6 @@
 [package]
 name = "southstar-css"
-description = "css.c ported by section: colours, lengths and calc(), container queries, and the scanning helpers the style engine shares"
+description = "css.c ported by section: colours, lengths and calc(), container queries, gradients, positions and image values, and the scanning helpers the style engine shares"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

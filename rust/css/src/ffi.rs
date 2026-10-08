@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod container;
+mod image;
 mod value;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
@@ -21,6 +22,12 @@ unsafe extern "C" {
     fn ns_css_viewport_w() -> c_double;
     fn ns_css_viewport_h() -> c_double;
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
+    fn g_ascii_formatd(
+        buffer: *mut c_char,
+        buf_len: c_int,
+        format: *const c_char,
+        d: c_double,
+    ) -> *mut c_char;
 }
 
 pub(crate) fn prefers_dark() -> bool {
@@ -43,6 +50,19 @@ pub(crate) fn format_double(format: &'static CStr, value: f64) -> Vec<u8> {
     let text = unsafe { glib::GStr::take(g_strdup_printf(format.as_ptr(), value)) };
     text.map(|text| text.to_bytes().to_vec())
         .unwrap_or_default()
+}
+
+pub(crate) fn formatd(format: &'static CStr, value: f64) -> Vec<u8> {
+    let mut buffer = [0 as c_char; 64];
+    unsafe {
+        g_ascii_formatd(
+            buffer.as_mut_ptr(),
+            buffer.len() as c_int,
+            format.as_ptr(),
+            value,
+        );
+        CStr::from_ptr(buffer.as_ptr()).to_bytes().to_vec()
+    }
 }
 
 pub(crate) fn format_g6(value: f64) -> Vec<u8> {

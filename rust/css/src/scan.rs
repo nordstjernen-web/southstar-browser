@@ -200,3 +200,32 @@ pub(crate) fn split_ws_paren(text: &[u8], max: usize) -> Vec<&[u8]> {
     }
     out
 }
+
+pub(crate) fn match_paren_quoted(s: &[u8], p: usize, end: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut q = p;
+    while q < end {
+        let c = s[q];
+        if c == b'"' || c == b'\'' {
+            q += 1;
+            while q < end && s[q] != c {
+                if s[q] == b'\\' && q + 1 < end {
+                    q += 1;
+                }
+                q += 1;
+            }
+            q += 1;
+            continue;
+        }
+        if c == b'(' {
+            depth += 1;
+        } else if c == b')' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(q);
+            }
+        }
+        q += 1;
+    }
+    None
+}

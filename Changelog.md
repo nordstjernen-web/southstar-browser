@@ -260,6 +260,14 @@ Southstar Browser (unreleased):
   range syntax, not, and, or and sibling-index() in values, as they parse,
   serialize through CSSContainerRule and evaluate. Pages match the same
   rules as before.
+* Gradients, positions and image values are Rust: linear-, radial- and
+  conic-gradient() and their repeating forms (directions, angles, shapes,
+  sizes, positions, colour interpolation spaces and hues, colour stops,
+  hints and double positions), their specified and computed spelling and
+  the angle and radii painting uses; <position> values; image-set() with
+  its resolutions and types; the content property with strings,
+  counter(), counters(), symbols(), attr() and quotes; unicode-range; and
+  the text colours serialize to. They parse, serialize and paint as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

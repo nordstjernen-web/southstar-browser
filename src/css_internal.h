@@ -31,6 +31,42 @@ gboolean      ns_css_container_rule_matches(const char *condition,
                                             ns_css_container_query **cache);
 void          ns_css_container_query_free(ns_css_container_query *query);
 
+char         *ns_css_color_text(guint8 r, guint8 g, guint8 b, guint8 a);
+void          ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b,
+                                  guint8 a);
+gboolean      ns_css_wide_keyword_or_default(const char *item);
+gboolean      ns_css_position_is_h_edge(const char *t);
+gboolean      ns_css_position_is_v_edge(const char *t);
+gboolean      ns_css_position_is_keyword(const char *t);
+void          ns_css_position_split(const char *text, char **out_x,
+                                    char **out_y);
+char         *ns_css_position_canonical_ex(const char *text,
+                                           gboolean expand_single,
+                                           gboolean allow_three);
+gboolean      ns_css_math_text_has_unit(const char *t,
+                                        const char *const *units,
+                                        gsize n_units);
+double        ns_css_parse_angle_deg(const char *s);
+gboolean      ns_css_text_starts_gradient(const char *t);
+gboolean      ns_css_text_starts_image_set(const char *t);
+ns_css_value *ns_css_parse_gradient(const char *t);
+char         *ns_css_gradient_serialize(const ns_css_gradient *gr);
+char         *ns_css_image_set_canonical(const char *text, gboolean computed);
+char         *ns_css_content_symbols_canonical(const char *args);
+gboolean      ns_css_content_ident_valid(const char *s);
+const char   *ns_css_quoted_end(const char *u, char quote);
+char         *ns_css_unescape_url(const char *u, gsize len);
+char         *ns_css_pick_image_set_url(const char *t);
+
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_css_gradient_stop) == 40 &&
+                sizeof(ns_css_gradient) == 1448 &&
+                offsetof(ns_css_gradient, size_x) == 48 &&
+                offsetof(ns_css_gradient, has_from) == 88 &&
+                offsetof(ns_css_gradient, interp) == 132 &&
+                offsetof(ns_css_gradient, stops) == 168);
+#endif
+
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(offsetof(ns_css_value, u.calc.fn) == 88 &&
                 offsetof(ns_css_value, u.calc.args) == 96 &&

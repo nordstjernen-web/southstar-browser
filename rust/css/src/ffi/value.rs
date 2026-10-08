@@ -8,9 +8,11 @@ use core::mem::{offset_of, size_of};
 use southstar_glib as glib;
 
 use crate::calc::{Calc, CalcArg, Parsed};
+use crate::gradient::Gradient;
 
 pub(crate) const KIND_LENGTH: c_uint = 1;
 pub(crate) const KIND_CALC: c_uint = 4;
+pub(crate) const KIND_GRADIENT: c_uint = 6;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -49,6 +51,7 @@ pub(crate) struct RawCalc {
 pub(crate) union ValueUnion {
     pub length: Length,
     pub calc: RawCalc,
+    pub gradient: Gradient,
     _storage: [u64; 381],
 }
 
@@ -139,6 +142,14 @@ pub(crate) fn new_value(parsed: &Parsed) -> *mut NsCssValue {
             value_ref.u.calc = RawCalc::from_calc(calc);
         }
     }
+    value
+}
+
+pub(crate) fn new_gradient(gradient: &Gradient) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_GRADIENT;
+    value_ref.u.gradient = *gradient;
     value
 }
 
