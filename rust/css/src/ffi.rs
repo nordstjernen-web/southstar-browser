@@ -4,6 +4,7 @@
 
 mod container;
 mod image;
+mod transform;
 mod value;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};

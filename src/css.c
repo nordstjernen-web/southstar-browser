@@ -3242,14 +3242,8 @@ static gboolean bg_repeat_token(const char *tok, gboolean allow_axis);
 static char *bg_repeat_canonical(const char *a, const char *b);
 static char *bg_position_zip(const char *xs, const char *ys);
 static gboolean bg_token_is_box(const char *tok);
-static int css_ws_token_count(const char *s);
-static char *transform_list_canonical(const char *value);
-static char *individual_transform_canonical(const char *value, ns_css_prop prop);
-static char *transform_origin_canonical(const char *value, gboolean two_only);
 static gboolean inline_css_wide_value(const char *value);
 static char *bg_clip_canonical(const char *text);
-static char *css_add_leading_zeros(char *v);
-static char *css_normalize_negative_zero(char *value);
 
 static gboolean
 shadow_length_token(const char *tok, gboolean allow_negative, GString *out)
@@ -3264,8 +3258,8 @@ shadow_length_token(const char *tok, gboolean allow_negative, GString *out)
             g_string_append(out, "0px");
             return TRUE;
         }
-        char *canon = css_normalize_negative_zero(
-            css_add_leading_zeros(g_strdup(tok)));
+        char *canon = ns_css_normalize_negative_zero(
+            ns_css_add_leading_zeros(g_strdup(tok)));
         char *suffix = canon + strlen(canon);
         while (suffix > canon && g_ascii_isalpha((guchar)suffix[-1]))
             suffix--;
@@ -3283,7 +3277,7 @@ shadow_length_token(const char *tok, gboolean allow_negative, GString *out)
     ns_css_value_free(calc);
     if (!ok) return FALSE;
     char *canon = ns_css_math_canonical(tok);
-    if (!canon) canon = css_add_leading_zeros(g_strdup(tok));
+    if (!canon) canon = ns_css_add_leading_zeros(g_strdup(tok));
     g_string_append(out, canon);
     g_free(canon);
     return TRUE;
@@ -3465,629 +3459,6 @@ parse_box_shadow(const char *text)
 
 static gboolean attr_functions_syntax_valid(const char *text);
 
-static gboolean
-parse_transform_len(const char *s, double *out, gboolean *is_percent)
-{
-    if (!s) return FALSE;
-    double px = 0, pct = 0;
-    if (ns_css_resolve_to_px_pct(s, strlen(s), &px, &pct)) {
-        if (pct != 0 && px == 0) {
-            *out = pct;
-            *is_percent = TRUE;
-        } else {
-            *out = px;
-            *is_percent = FALSE;
-        }
-        return TRUE;
-    }
-    char *end = NULL;
-    double v = g_ascii_strtod(s, &end);
-    if (!end || end == s) return FALSE;
-    while (*end && is_ws(*end)) end++;
-    *out = v;
-    *is_percent = (*end == '%');
-    return TRUE;
-}
-
-
-static gboolean
-parse_translate_len(const char *s, ns_css_transform_op *op, int axis)
-{
-    if (!s) return FALSE;
-    double *field = axis == 0 ? &op->a : axis == 1 ? &op->b : &op->c;
-    gboolean *is_percent = axis == 0 ? &op->a_is_percent
-                         : axis == 1 ? &op->b_is_percent : NULL;
-    double px = 0, pct = 0, em = 0, rem = 0;
-    if (!ns_css_resolve_to_px_pct_font(s, strlen(s), &px, &pct, &em, &rem)) {
-        gboolean fallback_pct = FALSE;
-        if (!parse_transform_len(s, field, &fallback_pct)) return FALSE;
-        if (is_percent) *is_percent = fallback_pct;
-        return is_percent || !fallback_pct;
-    }
-    op->em[axis] = em;
-    op->rem[axis] = rem;
-    if (!is_percent) {
-        *field = px;
-        return pct == 0;
-    }
-    if (pct != 0 && px == 0 && em == 0 && rem == 0) {
-        *field = pct;
-        *is_percent = TRUE;
-        return TRUE;
-    }
-    *field = px;
-    *is_percent = FALSE;
-    if (axis == 0) op->a_pct = pct;
-    else op->b_pct = pct;
-    return TRUE;
-}
-
-static gboolean
-parse_angle_any(const char *s, double *deg_out)
-{
-    if (!s) return FALSE;
-    while (*s && is_ws(*s)) s++;
-    if (!*s) return FALSE;
-    if (g_ascii_strncasecmp(s, "atan2(", 6) == 0 ||
-        g_ascii_strncasecmp(s, "atan(", 5) == 0 ||
-        g_ascii_strncasecmp(s, "asin(", 5) == 0 ||
-        g_ascii_strncasecmp(s, "acos(", 5) == 0) {
-        double px = 0, pct = 0;
-        if (!ns_css_resolve_to_px_pct(s, strlen(s), &px, &pct)) return FALSE;
-        *deg_out = px * 180.0 / G_PI;
-        return TRUE;
-    }
-    {
-        static const char *const fns[] = {
-            "calc(", "min(", "max(", "clamp(", "round(", "mod(", "rem(",
-            "abs(", "sign(", "hypot(", "pow(", "sqrt(", "sin(", "cos(",
-            "tan(", "exp(", "log(",
-        };
-        for (gsize i = 0; i < G_N_ELEMENTS(fns); i++) {
-            if (g_ascii_strncasecmp(s, fns[i], strlen(fns[i])) != 0) continue;
-            char *rw = ns_css_angle_expr_rewrite(s, FALSE);
-            double px = 0, pct = 0;
-            gboolean ok = ns_css_resolve_to_px_pct(rw, strlen(rw), &px, &pct);
-            g_free(rw);
-            if (!ok) return FALSE;
-            *deg_out = px;
-            return TRUE;
-        }
-    }
-    char *end = NULL;
-    g_ascii_strtod(s, &end);
-    if (!end || end == s) return FALSE;
-    *deg_out = ns_css_parse_angle_deg(s);
-    return TRUE;
-}
-
-static gboolean parse_scale_number(const char *s, double *out);
-
-static ns_css_value *
-parse_transform(const char *text)
-{
-    while (*text && is_ws(*text)) text++;
-    if (!*text) return NULL;
-    if (g_ascii_strncasecmp(text, "none", 4) == 0) return NULL;
-    ns_css_transform tf = {0};
-    const char *p = text;
-    while (*p && tf.n_ops < NS_CSS_TRANSFORM_OPS_MAX) {
-        while (*p && (is_ws(*p) || *p == ',')) p++;
-        if (!*p) break;
-        const char *name_start = p;
-        while (*p && *p != '(') p++;
-        if (*p != '(') break;
-        gsize name_len = (gsize)(p - name_start);
-        char *fn = g_strndup(name_start, name_len);
-        g_strstrip(fn);
-        char *fn_lc = g_ascii_strdown(fn, -1);
-        g_free(fn);
-        p++;
-        const char *args_start = p;
-        int depth = 1;
-        while (*p && depth > 0) {
-            if (*p == '(') depth++;
-            else if (*p == ')') depth--;
-            if (depth > 0) p++;
-        }
-        if (depth != 0) { g_free(fn_lc); break; }
-        gsize args_len = (gsize)(p - args_start);
-        char *args = g_strndup(args_start, args_len);
-        if (*p == ')') p++;
-
-        char *targs[16] = {0};
-        int nt = 0;
-        char *seg = args;
-        int adepth = 0;
-        for (char *q = args; ; q++) {
-            if (*q == '(') adepth++;
-            else if (*q == ')') adepth--;
-            if ((*q == ',' && adepth == 0) || *q == '\0') {
-                int saved = *q;
-                *q = '\0';
-                if (nt < 16) {
-                    char *piece = g_strdup(seg);
-                    g_strstrip(piece);
-                    targs[nt++] = piece;
-                }
-                if (saved == '\0') break;
-                seg = q + 1;
-            }
-        }
-
-        ns_css_transform_op *op = &tf.ops[tf.n_ops];
-        gboolean accept = FALSE;
-        gboolean dummy_pct = FALSE;
-        if (strcmp(fn_lc, "translate") == 0 ||
-            strcmp(fn_lc, "translatex") == 0 ||
-            strcmp(fn_lc, "translatey") == 0 ||
-            strcmp(fn_lc, "translatez") == 0) {
-            op->kind = NS_CSS_TFN_TRANSLATE;
-            op->a = 0; op->b = 0; op->c = 0;
-            op->a_is_percent = FALSE; op->b_is_percent = FALSE;
-            if (strcmp(fn_lc, "translatey") == 0) {
-                if (nt >= 1) parse_translate_len(targs[0], op, 1);
-            } else if (strcmp(fn_lc, "translatez") == 0) {
-                if (nt >= 1) parse_translate_len(targs[0], op, 2);
-            } else {
-                if (nt >= 1) parse_translate_len(targs[0], op, 0);
-                if (nt >= 2) parse_translate_len(targs[1], op, 1);
-            }
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "rotate") == 0 ||
-                   strcmp(fn_lc, "rotatez") == 0) {
-            op->kind = NS_CSS_TFN_ROTATE;
-            op->a = 0;
-            op->b = 0;
-            accept = nt == 1 && parse_angle_any(targs[0], &op->a);
-        } else if (strcmp(fn_lc, "rotatex") == 0 ||
-                   strcmp(fn_lc, "rotatey") == 0) {
-            op->kind = NS_CSS_TFN_ROTATE3D;
-            op->a = strcmp(fn_lc, "rotatex") == 0 ? 1 : 0;
-            op->b = strcmp(fn_lc, "rotatey") == 0 ? 1 : 0;
-            op->c = 0;
-            op->d = 0;
-            accept = nt == 1 && parse_angle_any(targs[0], &op->d);
-        } else if (strcmp(fn_lc, "rotate3d") == 0 && nt == 4) {
-            op->kind = NS_CSS_TFN_ROTATE3D;
-            op->a = g_ascii_strtod(targs[0], NULL);
-            op->b = g_ascii_strtod(targs[1], NULL);
-            op->c = g_ascii_strtod(targs[2], NULL);
-            op->d = 0;
-            accept = parse_angle_any(targs[3], &op->d);
-        } else if (strcmp(fn_lc, "perspective") == 0 && nt >= 1) {
-            op->kind = NS_CSS_TFN_PERSPECTIVE;
-            op->a = 0;
-            parse_transform_len(targs[0], &op->a, &dummy_pct);
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "scale") == 0 ||
-                   strcmp(fn_lc, "scalex") == 0 ||
-                   strcmp(fn_lc, "scaley") == 0 ||
-                   strcmp(fn_lc, "scalez") == 0) {
-            op->kind = NS_CSS_TFN_SCALE;
-            double sa = 1, sb;
-            if (nt >= 1 && !parse_scale_number(targs[0], &sa)) sa = 0;
-            sb = sa;
-            if (nt >= 2 && !parse_scale_number(targs[1], &sb)) sb = 0;
-            op->c = 1;
-            if (strcmp(fn_lc, "scalex") == 0) { op->a = sa; op->b = 1; }
-            else if (strcmp(fn_lc, "scaley") == 0) { op->a = 1; op->b = sa; }
-            else if (strcmp(fn_lc, "scalez") == 0) { op->a = 1; op->b = 1; op->c = sa; }
-            else { op->a = sa; op->b = sb; }
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "skew") == 0 ||
-                   strcmp(fn_lc, "skewx") == 0 ||
-                   strcmp(fn_lc, "skewy") == 0) {
-            op->kind = NS_CSS_TFN_SKEW;
-            double aa = 0, bb = 0;
-            if (nt >= 1) parse_angle_any(targs[0], &aa);
-            if (nt >= 2) parse_angle_any(targs[1], &bb);
-            if (strcmp(fn_lc, "skewx") == 0) { op->a = aa; op->b = 0; }
-            else if (strcmp(fn_lc, "skewy") == 0) { op->a = 0; op->b = aa; }
-            else { op->a = aa; op->b = bb; }
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "matrix") == 0 && nt == 6) {
-            op->kind = NS_CSS_TFN_MATRIX;
-            op->a = g_ascii_strtod(targs[0], NULL);
-            op->b = g_ascii_strtod(targs[1], NULL);
-            op->c = g_ascii_strtod(targs[2], NULL);
-            op->d = g_ascii_strtod(targs[3], NULL);
-            op->e = g_ascii_strtod(targs[4], NULL);
-            op->f = g_ascii_strtod(targs[5], NULL);
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "matrix3d") == 0 && nt == 16) {
-            op->kind = NS_CSS_TFN_MATRIX3D;
-            for (int k = 0; k < 16; k++)
-                op->m3d[k] = g_ascii_strtod(targs[k], NULL);
-            accept = TRUE;
-        } else if ((strcmp(fn_lc, "translate3d") == 0 && nt >= 2)) {
-            op->kind = NS_CSS_TFN_TRANSLATE;
-            op->a = 0; op->b = 0; op->c = 0;
-            op->a_is_percent = FALSE; op->b_is_percent = FALSE;
-            parse_translate_len(targs[0], op, 0);
-            parse_translate_len(targs[1], op, 1);
-            if (nt >= 3) parse_translate_len(targs[2], op, 2);
-            accept = TRUE;
-        } else if (strcmp(fn_lc, "scale3d") == 0 && nt >= 2) {
-            op->kind = NS_CSS_TFN_SCALE;
-            op->a = 0; op->b = 0; op->c = 1;
-            parse_scale_number(targs[0], &op->a);
-            parse_scale_number(targs[1], &op->b);
-            if (nt >= 3) parse_scale_number(targs[2], &op->c);
-            accept = TRUE;
-        }
-        if (accept) tf.n_ops++;
-        for (int k = 0; k < 16; k++) g_free(targs[k]);
-        g_free(args);
-        g_free(fn_lc);
-    }
-    if (tf.n_ops == 0) return NULL;
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_TRANSFORM;
-    v->u.transform = tf;
-    return v;
-}
-
-static gboolean
-parse_origin_axis(const char *tok, gboolean is_y,
-                  double *out, gboolean *is_percent)
-{
-    if (!tok || !*tok) return FALSE;
-    char *lc = ascii_lower(tok, strlen(tok));
-    gboolean ok = TRUE;
-    if (strcmp(lc, "center") == 0)      { *out = 50; *is_percent = TRUE; }
-    else if (!is_y && strcmp(lc, "left")  == 0)  { *out = 0;   *is_percent = TRUE; }
-    else if (!is_y && strcmp(lc, "right") == 0)  { *out = 100; *is_percent = TRUE; }
-    else if ( is_y && strcmp(lc, "top")   == 0)  { *out = 0;   *is_percent = TRUE; }
-    else if ( is_y && strcmp(lc, "bottom") == 0) { *out = 100; *is_percent = TRUE; }
-    else ok = parse_transform_len(tok, out, is_percent);
-    g_free(lc);
-    return ok;
-}
-
-static ns_css_value *
-parse_transform_origin(const char *text)
-{
-    if (!text || !*text) return NULL;
-    char *edge_canon = css_ws_token_count(text) >= 3 &&
-                       ns_css_position_canonical_ex(text, TRUE, FALSE)
-        ? ns_css_position_canonical_ex(text, TRUE, FALSE) : NULL;
-    if (edge_canon) {
-        char *xs = NULL, *ys = NULL;
-        ns_css_position_split(edge_canon, &xs, &ys);
-        g_free(edge_canon);
-        ns_css_transform tf;
-        memset(&tf, 0, sizeof(tf));
-        tf.n_ops = 1;
-        ns_css_transform_op *op = &tf.ops[0];
-        op->kind = NS_CSS_TFN_TRANSLATE;
-        op->a = 50; op->b = 50; op->c = 0;
-        op->a_is_percent = TRUE; op->b_is_percent = TRUE;
-        if (xs) parse_origin_axis(xs, FALSE, &op->a, &op->a_is_percent);
-        if (ys) parse_origin_axis(ys, TRUE, &op->b, &op->b_is_percent);
-        g_free(xs);
-        g_free(ys);
-        ns_css_value *v = g_new0(ns_css_value, 1);
-        v->kind = NS_CSS_V_TRANSFORM;
-        v->u.transform = tf;
-        return v;
-    }
-    char *toks[4] = {0};
-    int nt = split_ws_limit(text, toks, 3);
-    char *a = nt >= 1 ? toks[0] : NULL;
-    char *b = nt >= 2 ? toks[1] : NULL;
-    char *zc = nt >= 3 ? toks[2] : NULL;
-    ns_css_transform tf;
-    memset(&tf, 0, sizeof(tf));
-    tf.n_ops = 1;
-    ns_css_transform_op *op = &tf.ops[0];
-    op->kind = NS_CSS_TFN_TRANSLATE;
-    op->a = 50; op->b = 50; op->c = 0;
-    op->a_is_percent = TRUE; op->b_is_percent = TRUE;
-    gboolean swap = FALSE;
-    if (a) {
-        char *alc = ascii_lower(a, strlen(a));
-        if (strcmp(alc, "top") == 0 || strcmp(alc, "bottom") == 0) swap = TRUE;
-        g_free(alc);
-    }
-    if (swap) {
-        if (a) parse_origin_axis(a, TRUE,  &op->b, &op->b_is_percent);
-        if (b) parse_origin_axis(b, FALSE, &op->a, &op->a_is_percent);
-    } else {
-        if (a) parse_origin_axis(a, FALSE, &op->a, &op->a_is_percent);
-        if (b) parse_origin_axis(b, TRUE,  &op->b, &op->b_is_percent);
-        else if (a) {
-            char *alc = ascii_lower(a, strlen(a));
-            if (strcmp(alc, "left") == 0 || strcmp(alc, "right") == 0) {
-                op->b = 50; op->b_is_percent = TRUE;
-            }
-            g_free(alc);
-        }
-    }
-    if (zc) {
-        gboolean zpct = FALSE;
-        parse_transform_len(zc, &op->c, &zpct);
-        if (zpct) op->c = 0;
-    }
-    for (int i = 0; i < nt; i++) g_free(toks[i]);
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_TRANSFORM;
-    v->u.transform = tf;
-    return v;
-}
-
-static ns_css_value *
-transform_value_one_op(const ns_css_transform_op *op)
-{
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_TRANSFORM;
-    v->u.transform.n_ops = 1;
-    v->u.transform.ops[0] = *op;
-    return v;
-}
-
-static ns_css_value *
-parse_translate_prop(const char *text)
-{
-    while (*text && is_ws(*text)) text++;
-    if (!*text || g_ascii_strcasecmp(text, "none") == 0) return NULL;
-    char *toks[4] = {0};
-    int nt = split_ws_limit(text, toks, 3);
-    if (nt == 0) return NULL;
-    ns_css_transform_op op;
-    memset(&op, 0, sizeof(op));
-    op.kind = NS_CSS_TFN_TRANSLATE;
-    gboolean ok = parse_translate_len(toks[0], &op, 0);
-    if (ok && nt >= 2) ok = parse_translate_len(toks[1], &op, 1);
-    if (ok && nt >= 3) ok = parse_translate_len(toks[2], &op, 2);
-    for (int i = 0; i < nt; i++) g_free(toks[i]);
-    if (!ok) return NULL;
-    return transform_value_one_op(&op);
-}
-
-static ns_css_value *
-parse_rotate_prop(const char *text)
-{
-    while (*text && is_ws(*text)) text++;
-    if (!*text || g_ascii_strcasecmp(text, "none") == 0) return NULL;
-    char *toks[5] = {0};
-    int nt = split_ws_limit(text, toks, 4);
-    ns_css_value *v = NULL;
-    ns_css_transform_op op;
-    memset(&op, 0, sizeof(op));
-    if (nt == 1) {
-        op.kind = NS_CSS_TFN_ROTATE;
-        if (parse_angle_any(toks[0], &op.a)) v = transform_value_one_op(&op);
-    } else if (nt == 2) {
-        op.kind = NS_CSS_TFN_ROTATE3D;
-        char *axis = ascii_lower(toks[0], strlen(toks[0]));
-        gboolean ok = TRUE;
-        if      (strcmp(axis, "x") == 0) op.a = 1;
-        else if (strcmp(axis, "y") == 0) op.b = 1;
-        else if (strcmp(axis, "z") == 0) op.c = 1;
-        else ok = FALSE;
-        g_free(axis);
-        if (ok && parse_angle_any(toks[1], &op.d)) {
-            if (op.c == 1 && op.a == 0 && op.b == 0) {
-                op.kind = NS_CSS_TFN_ROTATE;
-                op.a = op.d;
-                op.b = 0; op.c = 0; op.d = 0;
-            }
-            v = transform_value_one_op(&op);
-        }
-    } else if (nt == 4) {
-        op.kind = NS_CSS_TFN_ROTATE3D;
-        op.a = g_ascii_strtod(toks[0], NULL);
-        op.b = g_ascii_strtod(toks[1], NULL);
-        op.c = g_ascii_strtod(toks[2], NULL);
-        if (parse_angle_any(toks[3], &op.d)) v = transform_value_one_op(&op);
-    }
-    for (int i = 0; i < nt; i++) g_free(toks[i]);
-    return v;
-}
-
-static gboolean
-parse_scale_number(const char *s, double *out)
-{
-    if (!s) return FALSE;
-    while (*s && is_ws(*s)) s++;
-    if (!*s) return FALSE;
-    char *end = NULL;
-    double v = g_ascii_strtod(s, &end);
-    if (end && end != s) {
-        const char *p = end;
-        while (*p && is_ws(*p)) p++;
-        if (*p == '\0') { *out = v; return TRUE; }
-        if (*p == '%' && p[1] == '\0') { *out = v / 100.0; return TRUE; }
-    }
-    double px = 0, pct = 0;
-    if (ns_css_resolve_to_px_pct(s, strlen(s), &px, &pct)) {
-        *out = px + pct / 100.0;
-        return TRUE;
-    }
-    ns_css_value *cv = ns_css_parse_calc(s);
-    if (!cv) {
-        char *w = g_strdup_printf("calc(%s)", s);
-        cv = ns_css_parse_calc(w);
-        g_free(w);
-    }
-    if (cv && cv->kind == NS_CSS_V_LENGTH) {
-        double val = cv->u.length.unit == NS_CSS_UNIT_PERCENT
-                   ? cv->u.length.v / 100.0 : cv->u.length.v;
-        ns_css_value_free(cv);
-        *out = isnan(val) ? 0.0 : val;
-        return TRUE;
-    }
-    if (cv) ns_css_value_free(cv);
-    return FALSE;
-}
-
-static ns_css_value *
-parse_scale_prop(const char *text)
-{
-    while (*text && is_ws(*text)) text++;
-    if (!*text || g_ascii_strcasecmp(text, "none") == 0) return NULL;
-    char *toks[4] = {0};
-    int nt = split_ws_limit(text, toks, 3);
-    if (nt == 0) return NULL;
-    ns_css_transform_op op;
-    memset(&op, 0, sizeof(op));
-    op.kind = NS_CSS_TFN_SCALE;
-    gboolean ok = parse_scale_number(toks[0], &op.a);
-    op.b = op.a;
-    op.c = 1;
-    if (ok && nt >= 2) ok = parse_scale_number(toks[1], &op.b);
-    if (ok && nt >= 3) ok = parse_scale_number(toks[2], &op.c);
-    for (int i = 0; i < nt; i++) g_free(toks[i]);
-    if (!ok) return NULL;
-    return transform_value_one_op(&op);
-}
-
-static void
-append_scale_number(GString *s, double n)
-{
-    if (isnan(n)) {
-        g_string_append_c(s, '0');
-        return;
-    }
-    if (!isfinite(n)) {
-        g_string_append(s, n < 0 ? "calc(-infinity)" : "calc(infinity)");
-        return;
-    }
-    char *t = ns_css_number_str(n);
-    g_string_append(s, t);
-    g_free(t);
-}
-
-static gboolean
-translate_axis_is_mixed(const ns_css_transform_op *op, int axis)
-{
-    double pct = axis == 0 ? op->a_pct : axis == 1 ? op->b_pct : 0;
-    return pct != 0 || op->em[axis] != 0 || op->rem[axis] != 0;
-}
-
-static void
-append_translate_length(GString *s, const ns_css_transform_op *op, int axis)
-{
-    double v = axis == 0 ? op->a : axis == 1 ? op->b : op->c;
-    gboolean is_percent = axis == 0 ? op->a_is_percent
-                        : axis == 1 && op->b_is_percent;
-    if (is_percent || !translate_axis_is_mixed(op, axis)) {
-        char *t = ns_css_number_str(v);
-        g_string_append(s, t);
-        g_free(t);
-        g_string_append(s, is_percent ? "%" : "px");
-        return;
-    }
-    const double parts[4] = {
-        axis == 0 ? op->a_pct : axis == 1 ? op->b_pct : 0,
-        v, op->em[axis], op->rem[axis],
-    };
-    static const char *const units[4] = { "%", "px", "em", "rem" };
-    gboolean first = TRUE;
-    g_string_append(s, "calc(");
-    for (int k = 0; k < 4; k++) {
-        if (parts[k] == 0) continue;
-        if (!first) g_string_append(s, parts[k] < 0 ? " - " : " + ");
-        char *t = ns_css_number_str(first ? parts[k] : fabs(parts[k]));
-        g_string_append(s, t);
-        g_free(t);
-        g_string_append(s, units[k]);
-        first = FALSE;
-    }
-    g_string_append_c(s, ')');
-}
-
-char *
-ns_css_individual_transform_serialize(const ns_css_value *v, int prop)
-{
-    if (!v) return NULL;
-    if (v->kind == NS_CSS_V_KEYWORD)
-        return g_strdup(v->u.keyword);
-    if (v->kind != NS_CSS_V_TRANSFORM || v->u.transform.n_ops < 1)
-        return NULL;
-    const ns_css_transform_op *op = &v->u.transform.ops[0];
-    GString *s = g_string_new(NULL);
-    if (prop == NS_CSS_SCALE) {
-        gboolean ab_same = (op->a == op->b) || (isnan(op->a) && isnan(op->b));
-        append_scale_number(s, op->a);
-        if (op->c != 1) {
-            g_string_append_c(s, ' ');
-            append_scale_number(s, op->b);
-            g_string_append_c(s, ' ');
-            append_scale_number(s, op->c);
-        } else if (!ab_same) {
-            g_string_append_c(s, ' ');
-            append_scale_number(s, op->b);
-        }
-    } else if (prop == NS_CSS_ROTATE) {
-        if (op->kind == NS_CSS_TFN_ROTATE3D) {
-            const char *axis = NULL;
-            if (op->a == 1 && op->b == 0 && op->c == 0) axis = "x";
-            else if (op->a == 0 && op->b == 1 && op->c == 0) axis = "y";
-            else if (op->a == 0 && op->b == 0 && op->c == 1) axis = NULL;
-            if (axis) {
-                g_string_append(s, axis);
-                g_string_append_c(s, ' ');
-            } else if (!(op->a == 0 && op->b == 0 && op->c == 1)) {
-                append_scale_number(s, op->a);
-                g_string_append_c(s, ' ');
-                append_scale_number(s, op->b);
-                g_string_append_c(s, ' ');
-                append_scale_number(s, op->c);
-                g_string_append_c(s, ' ');
-            }
-            append_scale_number(s, op->d);
-            g_string_append(s, "deg");
-        } else {
-            append_scale_number(s, op->a);
-            g_string_append(s, "deg");
-        }
-    } else if (prop == NS_CSS_TRANSLATE) {
-        append_translate_length(s, op, 0);
-        gboolean need_c = op->c != 0 || translate_axis_is_mixed(op, 2);
-        gboolean need_b = need_c || op->b != 0 || op->b_is_percent ||
-                          translate_axis_is_mixed(op, 1);
-        if (need_b) {
-            g_string_append_c(s, ' ');
-            append_translate_length(s, op, 1);
-        }
-        if (need_c) {
-            g_string_append_c(s, ' ');
-            append_translate_length(s, op, 2);
-        }
-    } else {
-        g_string_free(s, TRUE);
-        return NULL;
-    }
-    return g_string_free(s, FALSE);
-}
-
-gboolean
-ns_css_transform_is_3d(const ns_css_transform *tf)
-{
-    if (!tf) return FALSE;
-    for (int i = 0; i < tf->n_ops; i++) {
-        const ns_css_transform_op *op = &tf->ops[i];
-        switch (op->kind) {
-        case NS_CSS_TFN_TRANSLATE:
-            if (op->c != 0 || translate_axis_is_mixed(op, 2)) return TRUE;
-            break;
-        case NS_CSS_TFN_SCALE:
-            if (op->c != 0 && op->c != 1) return TRUE;
-            break;
-        case NS_CSS_TFN_ROTATE3D:
-            if (fabs(op->d) > 1e-12 && (op->a != 0 || op->b != 0)) return TRUE;
-            break;
-        case NS_CSS_TFN_MATRIX3D:
-        case NS_CSS_TFN_PERSPECTIVE:
-            return TRUE;
-        default:
-            break;
-        }
-    }
-    return FALSE;
-}
 
 void
 ns_css_style_effective_transform(const ns_style *st,
@@ -4113,63 +3484,6 @@ ns_css_style_effective_transform(const ns_style *st,
             out->ops[out->n_ops++] = tf->ops[i];
 }
 
-void
-ns_css_transform_to_mat4(const ns_css_transform *tf,
-                         double bw, double bh, ns_mat4 *out)
-{
-    ns_mat4_identity(out);
-    if (!tf) return;
-    for (int i = 0; i < tf->n_ops; i++) {
-        ns_css_transform_op sane = tf->ops[i];
-        double dflt = sane.kind == NS_CSS_TFN_SCALE ? 1.0 : 0.0;
-        double *fields[] = { &sane.a, &sane.b, &sane.c, &sane.d,
-                             &sane.e, &sane.f, &sane.a_pct, &sane.b_pct,
-                             &sane.em[0], &sane.em[1], &sane.em[2],
-                             &sane.rem[0], &sane.rem[1], &sane.rem[2] };
-        for (gsize k = 0; k < G_N_ELEMENTS(fields); k++)
-            if (!isfinite(*fields[k])) *fields[k] = dflt;
-        const ns_css_transform_op *op = &sane;
-        switch (op->kind) {
-        case NS_CSS_TFN_TRANSLATE: {
-            double dx = (op->a_is_percent ? op->a / 100.0 * bw : op->a) +
-                        op->a_pct / 100.0 * bw +
-                        (op->em[0] + op->rem[0]) * 16.0;
-            double dy = (op->b_is_percent ? op->b / 100.0 * bh : op->b) +
-                        op->b_pct / 100.0 * bh +
-                        (op->em[1] + op->rem[1]) * 16.0;
-            double dz = op->c + (op->em[2] + op->rem[2]) * 16.0;
-            ns_mat4_translate(out, dx, dy, dz);
-            break;
-        }
-        case NS_CSS_TFN_ROTATE:
-            ns_mat4_rotate_axis(out, 0, 0, 1, op->a);
-            break;
-        case NS_CSS_TFN_ROTATE3D:
-            ns_mat4_rotate_axis(out, op->a, op->b, op->c, op->d);
-            break;
-        case NS_CSS_TFN_SCALE:
-            ns_mat4_scale(out, op->a, op->b, op->c == 0 ? 1 : op->c);
-            break;
-        case NS_CSS_TFN_SKEW:
-            ns_mat4_skew(out, op->a, op->b);
-            break;
-        case NS_CSS_TFN_MATRIX:
-            ns_mat4_affine2d(out, op->a, op->b, op->c, op->d, op->e, op->f);
-            break;
-        case NS_CSS_TFN_MATRIX3D: {
-            ns_mat4 t;
-            for (int row = 0; row < 4; row++)
-                for (int col = 0; col < 4; col++)
-                    t.m[row * 4 + col] = op->m3d[col * 4 + row];
-            ns_mat4_multiply(out, &t, out);
-            break;
-        }
-        case NS_CSS_TFN_PERSPECTIVE:
-            ns_mat4_perspective(out, op->a);
-            break;
-        }
-    }
-}
 
 static ns_css_timing
 parse_timing_keyword(const char *kw)
@@ -5864,181 +5178,6 @@ ns_css_display_canonical(const char *value)
     return r;
 }
 
-static gboolean
-is_math_fn_start(const char *s)
-{
-    static const char *const fns[] = {
-        "calc(", "min(", "max(", "clamp(", "round(", "mod(", "rem(",
-        "abs(", "sign(", "hypot(", "pow(", "sqrt(", "sin(", "cos(",
-        "tan(", "exp(", "log(", "atan2(", "atan(", "asin(", "acos(",
-        "progress(",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(fns); i++)
-        if (g_ascii_strncasecmp(s, fns[i], strlen(fns[i])) == 0)
-            return TRUE;
-    return FALSE;
-}
-
-static char *
-serialize_calc_angle(double deg)
-{
-    if (isnan(deg)) return g_strdup("calc(NaN * 1deg)");
-    if (isinf(deg)) return g_strdup(deg < 0 ? "calc(-infinity * 1deg)"
-                                            : "calc(infinity * 1deg)");
-    char *num = ns_css_number_str(deg);
-    char *out = g_strdup_printf("calc(%sdeg)", num);
-    g_free(num);
-    return out;
-}
-
-static char *
-serialize_calc_number(double n)
-{
-    if (isnan(n)) return g_strdup("calc(NaN)");
-    if (isinf(n)) return g_strdup(n < 0 ? "calc(-infinity)" : "calc(infinity)");
-    char *num = ns_css_number_str(n);
-    char *out = g_strdup_printf("calc(%s)", num);
-    g_free(num);
-    return out;
-}
-
-static gboolean
-eval_calc_number(const char *arg, double *out)
-{
-    ns_css_value *v = ns_css_parse_calc(arg);
-    if (!v) return FALSE;
-    gboolean ok = v->kind == NS_CSS_V_LENGTH &&
-                  v->u.length.unit == NS_CSS_UNIT_NUMBER;
-    if (ok) *out = v->u.length.v;
-    ns_css_value_free(v);
-    return ok;
-}
-
-enum { TF_ARG_NONE = 0, TF_ARG_ANGLE, TF_ARG_NUMBER, TF_ARG_LENGTH };
-
-static int
-transform_arg_type(const char *fn_lc, int idx)
-{
-    if (!strcmp(fn_lc, "rotate") || !strcmp(fn_lc, "rotatex") ||
-        !strcmp(fn_lc, "rotatey") || !strcmp(fn_lc, "rotatez") ||
-        !strcmp(fn_lc, "skewx") || !strcmp(fn_lc, "skewy"))
-        return idx == 0 ? TF_ARG_ANGLE : TF_ARG_NONE;
-    if (!strcmp(fn_lc, "skew"))
-        return idx < 2 ? TF_ARG_ANGLE : TF_ARG_NONE;
-    if (!strcmp(fn_lc, "rotate3d"))
-        return idx == 3 ? TF_ARG_ANGLE : idx < 3 ? TF_ARG_NUMBER : TF_ARG_NONE;
-    if (!strcmp(fn_lc, "scale") || !strcmp(fn_lc, "scalex") ||
-        !strcmp(fn_lc, "scaley") || !strcmp(fn_lc, "scalez") ||
-        !strcmp(fn_lc, "scale3d") || !strcmp(fn_lc, "matrix") ||
-        !strcmp(fn_lc, "matrix3d"))
-        return TF_ARG_NUMBER;
-    if (!strcmp(fn_lc, "translate") || !strcmp(fn_lc, "translatex") ||
-        !strcmp(fn_lc, "translatey") || !strcmp(fn_lc, "translatez") ||
-        !strcmp(fn_lc, "translate3d") || !strcmp(fn_lc, "perspective"))
-        return TF_ARG_LENGTH;
-    return TF_ARG_NONE;
-}
-
-static char *
-canonicalize_transform_arg(const char *arg, int type)
-{
-    if (type == TF_ARG_ANGLE) {
-        double deg = 0;
-        if (!parse_angle_any(arg, &deg)) return NULL;
-        return serialize_calc_angle(deg);
-    }
-    if (type == TF_ARG_NUMBER) {
-        if (ns_css_value_has_relative_unit(arg)) return NULL;
-        double n = 0;
-        if (!eval_calc_number(arg, &n)) return NULL;
-        return serialize_calc_number(n);
-    }
-    if (type == TF_ARG_LENGTH) {
-        if (ns_css_value_has_relative_unit(arg)) return NULL;
-        double px = 0, pct = 0;
-        if (!ns_css_resolve_to_px_pct(arg, strlen(arg), &px, &pct)) return NULL;
-        if (!isfinite(px) || !isfinite(pct)) return NULL;
-        if (px != 0 && pct != 0) return NULL;
-        if (pct != 0) {
-            char *num = ns_css_number_str(pct);
-            char *out = g_strdup_printf("calc(%s%%)", num);
-            g_free(num);
-            return out;
-        }
-        char *num = ns_css_number_str(px);
-        char *out = g_strdup_printf("calc(%spx)", num);
-        g_free(num);
-        return out;
-    }
-    return NULL;
-}
-
-char *
-ns_css_transform_canonical(const char *value)
-{
-    if (!value) return NULL;
-    const char *scan = value;
-    while (*scan && is_ws(*scan)) scan++;
-    if (!*scan || g_ascii_strncasecmp(scan, "none", 4) == 0) return NULL;
-
-    GString *out = g_string_new(NULL);
-    gboolean changed = FALSE;
-    const char *p = value;
-    while (*p) {
-        if (is_ws(*p) || *p == ',') { g_string_append_c(out, *p); p++; continue; }
-        const char *nstart = p;
-        while (*p && *p != '(' && !is_ws(*p) && *p != ',') p++;
-        gsize nlen = (gsize)(p - nstart);
-        g_string_append_len(out, nstart, nlen);
-        while (*p && is_ws(*p)) { g_string_append_c(out, *p); p++; }
-        if (*p != '(') continue;
-        char *fn_lc = g_ascii_strdown(nstart, nlen);
-        g_string_append_c(out, '(');
-        p++;
-        const char *astart = p;
-        int depth = 1;
-        while (*p && depth > 0) {
-            if (*p == '(') depth++;
-            else if (*p == ')') depth--;
-            if (depth > 0) p++;
-        }
-        const char *aend = p;
-        const char *seg = astart;
-        int adepth = 0, argidx = 0;
-        for (const char *q = astart; q <= aend; q++) {
-            if (q < aend && *q == '(') adepth++;
-            else if (q < aend && *q == ')') adepth--;
-            if (q == aend || (*q == ',' && adepth == 0)) {
-                const char *s = seg;
-                while (s < q && is_ws(*s)) s++;
-                const char *e = q;
-                while (e > s && is_ws(e[-1])) e--;
-                char *argtxt = g_strndup(s, (gsize)(e - s));
-                char *canon = NULL;
-                int type = transform_arg_type(fn_lc, argidx);
-                if (type != TF_ARG_NONE && is_math_fn_start(argtxt))
-                    canon = canonicalize_transform_arg(argtxt, type);
-                if (canon) {
-                    g_string_append_len(out, seg, (gsize)(s - seg));
-                    g_string_append(out, canon);
-                    g_string_append_len(out, e, (gsize)(q - e));
-                    g_free(canon);
-                    changed = TRUE;
-                } else {
-                    g_string_append_len(out, seg, (gsize)(q - seg));
-                }
-                g_free(argtxt);
-                if (q < aend) g_string_append_c(out, ',');
-                argidx++;
-                seg = q + 1;
-            }
-        }
-        g_free(fn_lc);
-        if (*p == ')') { g_string_append_c(out, ')'); p++; }
-    }
-    if (!changed) { g_string_free(out, TRUE); return NULL; }
-    return g_string_free(out, FALSE);
-}
 
 static gboolean
 prop_name_is_color(const char *prop)
@@ -6082,14 +5221,14 @@ border_radius_half_canonical(const char *text)
         ns_css_unit unit;
         if (ns_css_parse_length(tokens[i], &num, &unit)) {
             ok = num >= 0 && (unit != NS_CSS_UNIT_NUMBER || num == 0);
-            vals[i] = ok ? css_add_leading_zeros(g_strdup(tokens[i])) : NULL;
+            vals[i] = ok ? ns_css_add_leading_zeros(g_strdup(tokens[i])) : NULL;
         } else {
             ns_css_value *c = ns_css_parse_calc(tokens[i]);
             ok = c != NULL;
             ns_css_value_free(c);
             if (ok) {
                 vals[i] = ns_css_math_canonical(tokens[i]);
-                if (!vals[i]) vals[i] = css_add_leading_zeros(g_strdup(tokens[i]));
+                if (!vals[i]) vals[i] = ns_css_add_leading_zeros(g_strdup(tokens[i]));
             }
         }
     }
@@ -6143,21 +5282,21 @@ ns_css_specified_canonical(const char *prop, const char *value)
         if (d) return d;
     }
     if (prop && strcmp(prop, "transform") == 0) {
-        char *t = transform_list_canonical(value);
+        char *t = ns_css_transform_list_canonical(value);
         if (t) return t;
         t = ns_css_transform_canonical(value);
         if (t) return t;
     }
     if (prop && (strcmp(prop, "scale") == 0 || strcmp(prop, "rotate") == 0 ||
                  strcmp(prop, "translate") == 0)) {
-        char *t = individual_transform_canonical(value,
+        char *t = ns_css_individual_transform_canonical(value,
             prop[0] == 's' ? NS_CSS_SCALE : prop[0] == 'r' ? NS_CSS_ROTATE
                                                           : NS_CSS_TRANSLATE);
         if (t) return t;
     }
     if (prop && (strcmp(prop, "transform-origin") == 0 ||
                  strcmp(prop, "perspective-origin") == 0)) {
-        char *t = transform_origin_canonical(value, prop[0] == 'p');
+        char *t = ns_css_transform_origin_canonical(value, prop[0] == 'p');
         if (t) return t;
     }
     if (prop && (strcmp(prop, "border-radius") == 0 ||
@@ -6754,7 +5893,7 @@ grid_integer_canonical(const char *tok, gboolean *literal, long *value)
         return g_strdup_printf("%ld", *value);
     }
     *literal = FALSE;
-    if (!is_math_fn_start(tok)) return NULL;
+    if (!ns_css_is_math_fn_start(tok)) return NULL;
     ns_css_value *v = ns_css_parse_calc(tok);
     gboolean number = v && v->kind == NS_CSS_V_LENGTH &&
                       v->u.length.unit == NS_CSS_UNIT_NUMBER;
@@ -8998,11 +8137,11 @@ parse_value_for(ns_css_prop prop, const char *text)
     }
     case NS_CSS_TRANSFORM: {
         if (g_ascii_strcasecmp(t, "none") != 0 && !strstr(t, "var(")) {
-            char *canon = transform_list_canonical(t);
+            char *canon = ns_css_transform_list_canonical(t);
             if (!canon) break;
             g_free(canon);
         }
-        v = parse_transform(t);
+        v = ns_css_parse_transform(t);
         if (!v) {
             char *lc = g_ascii_strdown(t, -1);
             g_strstrip(lc);
@@ -9020,35 +8159,35 @@ parse_value_for(ns_css_prop prop, const char *text)
         break;
     case NS_CSS_TRANSFORM_ORIGIN:
     case NS_CSS_PERSPECTIVE_ORIGIN: {
-        char *canon = transform_origin_canonical(t, prop == NS_CSS_PERSPECTIVE_ORIGIN);
+        char *canon = ns_css_transform_origin_canonical(t, prop == NS_CSS_PERSPECTIVE_ORIGIN);
         if (!canon && !strstr(t, "var(")) break;
         g_free(canon);
-        v = parse_transform_origin(t);
+        v = ns_css_parse_transform_origin(t);
         break;
     }
     case NS_CSS_TRANSLATE: {
-        char *canon = individual_transform_canonical(t, NS_CSS_TRANSLATE);
+        char *canon = ns_css_individual_transform_canonical(t, NS_CSS_TRANSLATE);
         if (!canon && !strstr(t, "var(")) break;
         g_free(canon);
-        v = parse_translate_prop(t);
+        v = ns_css_parse_translate_prop(t);
         if (!v && g_ascii_strcasecmp(t, "none") == 0)
             v = parse_keyword_choice(t, "none");
         break;
     }
     case NS_CSS_ROTATE: {
-        char *canon = individual_transform_canonical(t, NS_CSS_ROTATE);
+        char *canon = ns_css_individual_transform_canonical(t, NS_CSS_ROTATE);
         if (!canon && !strstr(t, "var(")) break;
-        v = parse_rotate_prop(canon ? canon : t);
+        v = ns_css_parse_rotate_prop(canon ? canon : t);
         g_free(canon);
         if (!v && g_ascii_strcasecmp(t, "none") == 0)
             v = parse_keyword_choice(t, "none");
         break;
     }
     case NS_CSS_SCALE: {
-        char *canon = individual_transform_canonical(t, NS_CSS_SCALE);
+        char *canon = ns_css_individual_transform_canonical(t, NS_CSS_SCALE);
         if (!canon && !strstr(t, "var(")) break;
         g_free(canon);
-        v = parse_scale_prop(t);
+        v = ns_css_parse_scale_prop(t);
         if (!v && g_ascii_strcasecmp(t, "none") == 0)
             v = parse_keyword_choice(t, "none");
         break;
@@ -10627,22 +9766,6 @@ bg_repeat_canonical(const char *a, const char *b)
     return r;
 }
 
-static GPtrArray *
-css_split_top_level_commas(const char *text)
-{
-    GPtrArray *parts = g_ptr_array_new_with_free_func(g_free);
-    const char *p = text;
-    const char *end = text + strlen(text);
-    while (p <= end) {
-        char term = 0;
-        const char *seg_end = css_scan_until(p, end, ",", &term);
-        g_ptr_array_add(parts, css_trim_dup_range(p, seg_end));
-        if (term != ',') break;
-        p = seg_end + 1;
-    }
-    return parts;
-}
-
 char *
 ns_css_background_position_join(const char *xs, const char *ys)
 {
@@ -10655,8 +9778,8 @@ bg_position_zip(const char *xs, const char *ys)
     char *x = g_strdup(xs), *y = g_strdup(ys);
     gboolean xi = ns_inline_value_strip_important(x);
     gboolean yi = ns_inline_value_strip_important(y);
-    GPtrArray *xl = css_split_top_level_commas(x);
-    GPtrArray *yl = css_split_top_level_commas(y);
+    GPtrArray *xl = ns_css_split_top_level_commas(x);
+    GPtrArray *yl = ns_css_split_top_level_commas(y);
     char *r = NULL;
     if (xi == yi && xl->len == 1 && yl->len == 1 &&
         inline_css_wide_value(g_ptr_array_index(xl, 0)) &&
@@ -10722,7 +9845,7 @@ ns_css_background_shorthand_serialize(const char *image, const char *position,
     guint n = 0;
     gboolean ok = TRUE;
     for (int k = 0; k < 7; k++) {
-        lists[k] = css_split_top_level_commas(texts[k] ? texts[k] : "");
+        lists[k] = ns_css_split_top_level_commas(texts[k] ? texts[k] : "");
         if (k == 0) n = lists[k]->len;
         else if (lists[k]->len != n) ok = FALSE;
     }
@@ -10980,7 +10103,7 @@ bg_layer_parse(const char *text, gboolean final_layer, bg_layer_text *out,
     }
     if (ok && size) {
         ns_css_value *sv = parse_value_for(NS_CSS_BACKGROUND_SIZE, size->str);
-        if (sv) out->size = css_add_leading_zeros(g_strdup(size->str));
+        if (sv) out->size = ns_css_add_leading_zeros(g_strdup(size->str));
         else ok = FALSE;
         ns_css_value_free(sv);
     }
@@ -11073,7 +10196,7 @@ parse_mask_shorthand(const char *vtext, gboolean important, GArray *decls_out)
         for (gsize f = 0; f < G_N_ELEMENTS(props); f++)
             heads[f] = f ? ns_css_value_dup(wide) : wide;
     } else {
-        GPtrArray *layers = css_split_top_level_commas(vtext);
+        GPtrArray *layers = ns_css_split_top_level_commas(vtext);
         ok = layers->len > 0;
         for (guint li = 0; ok && li < layers->len; li++)
             ok = mask_layer_append(g_ptr_array_index(layers, li), heads, tails);
@@ -11117,7 +10240,7 @@ parse_background_shorthand(const char *vtext, gboolean important,
         }
         return TRUE;
     }
-    GPtrArray *layers = css_split_top_level_commas(vtext);
+    GPtrArray *layers = ns_css_split_top_level_commas(vtext);
     GArray *parsed = g_array_new(FALSE, TRUE, sizeof(bg_layer_text));
     g_array_set_size(parsed, layers->len);
     char *color = NULL;
@@ -11171,418 +10294,6 @@ parse_background_shorthand(const char *vtext, gboolean important,
     return ok;
 }
 
-enum { TX_NUMBER = 1, TX_PERCENT = 2, TX_LENGTH = 4, TX_ANGLE = 8, TX_ZERO = 16 };
-
-static char *
-transform_arg_canonical(const char *arg, int want, gboolean scale_percent)
-{
-    double num;
-    ns_css_unit unit;
-    char *end = NULL;
-    if (is_math_fn_start(arg)) {
-        int legacy = (want & TX_ANGLE) ? TF_ARG_ANGLE
-                   : (want & TX_LENGTH) ? TF_ARG_LENGTH
-                   : (want & TX_NUMBER) && !scale_percent ? TF_ARG_NUMBER
-                   : TF_ARG_NONE;
-        if (legacy != TF_ARG_NONE) {
-            char *canon = canonicalize_transform_arg(arg, legacy);
-            if (canon) return canon;
-            if (!(want & TX_PERCENT) || (want & TX_ANGLE)) {
-                ns_css_value *probe = ns_css_parse_calc(arg);
-                double deg;
-                gboolean angle_ok = (want & TX_ANGLE) && parse_angle_any(arg, &deg);
-                if (!probe && !angle_ok) return NULL;
-                ns_css_value_free(probe);
-                return css_add_leading_zeros(g_strdup(arg));
-            }
-        }
-        if (scale_percent && (want & TX_NUMBER)) {
-            double n = 0, px = 0, pct = 0;
-            if (ns_css_value_has_relative_unit(arg))
-                return css_add_leading_zeros(g_strdup(arg));
-            if (eval_calc_number(arg, &n)) return serialize_calc_number(n);
-            if (ns_css_resolve_to_px_pct(arg, strlen(arg), &px, &pct) && px == 0) {
-                char *canon = ns_css_math_canonical(arg);
-                return canon ? canon : css_add_leading_zeros(g_strdup(arg));
-            }
-            return NULL;
-        }
-        ns_css_value *c = ns_css_parse_calc(arg);
-        double deg;
-        if (c) {
-            gboolean pct = c->kind == NS_CSS_V_CALC && c->u.calc.pct != 0;
-            gboolean number = c->kind == NS_CSS_V_LENGTH &&
-                              c->u.length.unit == NS_CSS_UNIT_NUMBER;
-            ns_css_value_free(c);
-            if ((want & TX_LENGTH) || (want & TX_PERCENT) ||
-                ((want & TX_NUMBER) && number)) {
-                if (pct && !(want & TX_PERCENT)) return NULL;
-                char *canon = ns_css_math_canonical(arg);
-                return canon ? canon : css_add_leading_zeros(g_strdup(arg));
-            }
-        }
-        if ((want & TX_ANGLE) && parse_angle_any(arg, &deg)) {
-            char *canon = ns_css_math_canonical(arg);
-            return canon ? canon : css_add_leading_zeros(g_strdup(arg));
-        }
-        if (want & TX_NUMBER) {
-            double n = 0;
-            if (eval_calc_number(arg, &n)) return serialize_calc_number(n);
-        }
-        return NULL;
-    }
-    if (want & TX_ANGLE) {
-        num = g_ascii_strtod(arg, &end);
-        if (end && end != arg && (!*end || g_ascii_strcasecmp(end, "deg") == 0 ||
-                                  g_ascii_strcasecmp(end, "grad") == 0 ||
-                                  g_ascii_strcasecmp(end, "rad") == 0 ||
-                                  g_ascii_strcasecmp(end, "turn") == 0)) {
-            if (!*end && num != 0) return NULL;
-            char *canon = css_normalize_negative_zero(
-                css_add_leading_zeros(g_strdup(arg)));
-            if (!*end) {
-                g_free(canon);
-                return g_strdup("0deg");
-            }
-            for (char *c = canon; *c; c++) *c = g_ascii_tolower((guchar)*c);
-            return canon;
-        }
-        if (!(want & ~TX_ANGLE)) return NULL;
-    }
-    if (!ns_css_parse_length(arg, &num, &unit)) return NULL;
-    if (unit == NS_CSS_UNIT_NUMBER) {
-        if (want & TX_NUMBER) {
-            char *n = ns_css_number_str(num);
-            return n;
-        }
-        if (num == 0 && (want & TX_LENGTH)) return g_strdup("0px");
-        return NULL;
-    }
-    if (unit == NS_CSS_UNIT_PERCENT) {
-        if (scale_percent && (want & TX_NUMBER)) return ns_css_number_str(num / 100.0);
-        if (!(want & TX_PERCENT)) return NULL;
-    } else if (!(want & TX_LENGTH)) {
-        return NULL;
-    }
-    char *canon = css_normalize_negative_zero(css_add_leading_zeros(g_strdup(arg)));
-    char *suffix = canon + strlen(canon);
-    while (suffix > canon && g_ascii_isalpha((guchar)suffix[-1])) suffix--;
-    for (char *c = suffix; *c; c++) *c = g_ascii_tolower((guchar)*c);
-    return canon;
-}
-
-static char *
-transform_function_canonical(const char *fn_lc, char *const args[], int n)
-{
-    typedef struct { const char *name; int min, max; int types[16]; } transform_fn_spec;
-    const transform_fn_spec *spec = NULL;
-    static const transform_fn_spec specs[] = {
-        { "translate", 1, 2, { TX_LENGTH | TX_PERCENT, TX_LENGTH | TX_PERCENT } },
-        { "translatex", 1, 1, { TX_LENGTH | TX_PERCENT } },
-        { "translatey", 1, 1, { TX_LENGTH | TX_PERCENT } },
-        { "translatez", 1, 1, { TX_LENGTH } },
-        { "translate3d", 3, 3, { TX_LENGTH | TX_PERCENT, TX_LENGTH | TX_PERCENT, TX_LENGTH } },
-        { "scale", 1, 2, { TX_NUMBER, TX_NUMBER } },
-        { "scalex", 1, 1, { TX_NUMBER } },
-        { "scaley", 1, 1, { TX_NUMBER } },
-        { "scalez", 1, 1, { TX_NUMBER } },
-        { "scale3d", 3, 3, { TX_NUMBER, TX_NUMBER, TX_NUMBER } },
-        { "rotate", 1, 1, { TX_ANGLE } },
-        { "rotatex", 1, 1, { TX_ANGLE } },
-        { "rotatey", 1, 1, { TX_ANGLE } },
-        { "rotatez", 1, 1, { TX_ANGLE } },
-        { "rotate3d", 4, 4, { TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_ANGLE } },
-        { "skew", 1, 2, { TX_ANGLE, TX_ANGLE } },
-        { "skewx", 1, 1, { TX_ANGLE } },
-        { "skewy", 1, 1, { TX_ANGLE } },
-        { "matrix", 6, 6, { TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER } },
-        { "matrix3d", 16, 16, { TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER,
-                                TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER,
-                                TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER,
-                                TX_NUMBER, TX_NUMBER, TX_NUMBER, TX_NUMBER } },
-        { "perspective", 1, 1, { TX_LENGTH } },
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(specs); i++)
-        if (strcmp(specs[i].name, fn_lc) == 0) spec = &specs[i];
-    if (!spec || n < spec->min || n > spec->max) return NULL;
-    GString *out = g_string_new(fn_lc);
-    g_string_append_c(out, '(');
-    gboolean scale = g_str_has_prefix(fn_lc, "scale");
-    for (int i = 0; i < n; i++) {
-        char *canon = NULL;
-        if (strcmp(fn_lc, "perspective") == 0 &&
-            g_ascii_strcasecmp(args[i], "none") == 0)
-            canon = g_strdup("none");
-        else
-            canon = transform_arg_canonical(args[i], spec->types[i], scale);
-        if (!canon) {
-            g_string_free(out, TRUE);
-            return NULL;
-        }
-        if (i) g_string_append(out, ", ");
-        g_string_append(out, canon);
-        g_free(canon);
-    }
-    g_string_append_c(out, ')');
-    return g_string_free(out, FALSE);
-}
-
-static int
-css_ws_token_count(const char *s)
-{
-    int n = 0;
-    const char *p = s;
-    const char *end = s + strlen(s);
-    while (p < end) {
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end) break;
-        char term = 0;
-        p = css_scan_until(p, end, " \t\n\r\f", &term);
-        n++;
-    }
-    return n;
-}
-
-static char *
-transform_list_canonical(const char *value)
-{
-    if (!value) return NULL;
-    const char *p = value;
-    while (*p && is_ws(*p)) p++;
-    if (!*p) return NULL;
-    if (g_ascii_strcasecmp(p, "none") == 0) return g_strdup("none");
-    GString *out = g_string_new(NULL);
-    gboolean ok = TRUE;
-    while (ok && *p) {
-        while (*p && is_ws(*p)) p++;
-        if (!*p) break;
-        const char *name_start = p;
-        while (*p && (g_ascii_isalnum((guchar)*p) || *p == '-' || *p == '_')) p++;
-        if (*p != '(' || p == name_start) { ok = FALSE; break; }
-        char *fn_lc = g_ascii_strdown(name_start, p - name_start);
-        char *fn_as_written = g_strndup(name_start, (gsize)(p - name_start));
-        p++;
-        const char *args_start = p;
-        int depth = 1;
-        while (*p && depth > 0) {
-            if (*p == '(') depth++;
-            else if (*p == ')') depth--;
-            if (depth > 0) p++;
-        }
-        if (depth != 0) { g_free(fn_lc); g_free(fn_as_written); ok = FALSE; break; }
-        char *args = g_strndup(args_start, (gsize)(p - args_start));
-        p++;
-        GPtrArray *parts = css_split_top_level_commas(args);
-        int n = (int)parts->len;
-        if (n == 1 && !*(char *)g_ptr_array_index(parts, 0)) n = 0;
-        char *canon = transform_function_canonical(fn_lc, (char **)parts->pdata, n);
-        if (!canon) ok = FALSE;
-        else {
-            if (out->len) g_string_append_c(out, ' ');
-            if (g_str_has_prefix(fn_lc, "translate")) {
-                g_string_append(out, fn_as_written);
-                g_string_append(out, canon + strlen(fn_lc));
-            } else {
-                g_string_append(out, canon);
-            }
-            g_free(canon);
-        }
-        g_free(fn_as_written);
-        g_ptr_array_free(parts, TRUE);
-        g_free(args);
-        g_free(fn_lc);
-        while (*p && is_ws(*p)) p++;
-        if (*p == ',') ok = FALSE;
-    }
-    if (!ok || out->len == 0) {
-        g_string_free(out, TRUE);
-        return NULL;
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-individual_transform_canonical(const char *value, ns_css_prop prop)
-{
-    if (!value) return NULL;
-    while (*value && is_ws(*value)) value++;
-    if (g_ascii_strcasecmp(value, "none") == 0) return g_strdup("none");
-    char *tokens[5] = {0};
-    int n = split_ws_limit(value, tokens, G_N_ELEMENTS(tokens));
-    char *r = NULL;
-    if (prop == NS_CSS_TRANSLATE && n >= 1 && n <= 3) {
-        char *c[3] = { NULL };
-        gboolean ok = TRUE;
-        for (int i = 0; ok && i < n; i++) {
-            c[i] = transform_arg_canonical(tokens[i],
-                i == 2 ? TX_LENGTH : TX_LENGTH | TX_PERCENT, FALSE);
-            if (!c[i]) ok = FALSE;
-        }
-        if (ok) {
-            int keep = n;
-            if (keep == 3 && strcmp(c[2], "0px") == 0) keep = 2;
-            if (keep == 2 && strcmp(c[1], "0px") == 0) keep = 1;
-            GString *out = g_string_new(NULL);
-            for (int i = 0; i < keep; i++) {
-                if (i) g_string_append_c(out, ' ');
-                g_string_append(out, c[i]);
-            }
-            r = g_string_free(out, FALSE);
-        }
-        for (int i = 0; i < 3; i++) g_free(c[i]);
-    } else if (prop == NS_CSS_SCALE && n >= 1 && n <= 3) {
-        char *c[3] = { NULL };
-        gboolean ok = TRUE;
-        for (int i = 0; ok && i < n; i++) {
-            c[i] = transform_arg_canonical(tokens[i], TX_NUMBER, TRUE);
-            if (!c[i]) ok = FALSE;
-        }
-        if (ok) {
-            int keep = n;
-            if (keep == 3 && strcmp(c[2], "1") == 0) keep = 2;
-            if (keep == 2 && strcmp(c[0], c[1]) == 0) keep = 1;
-            GString *out = g_string_new(NULL);
-            for (int i = 0; i < keep; i++) {
-                if (i) g_string_append_c(out, ' ');
-                g_string_append(out, c[i]);
-            }
-            r = g_string_free(out, FALSE);
-        }
-        for (int i = 0; i < 3; i++) g_free(c[i]);
-    } else if (prop == NS_CSS_ROTATE && (n == 1 || n == 2 || n == 4)) {
-        char *angle = NULL;
-        const char *axis_kw = NULL;
-        double vec[3] = { 0, 0, 1 };
-        int n_vec = 0;
-        gboolean ok = TRUE, have_vec = FALSE;
-        for (int i = 0; ok && i < n; i++) {
-            const char *tok = tokens[i];
-            char *end = NULL;
-            if (n == 2 && (g_ascii_strcasecmp(tok, "x") == 0 ||
-                           g_ascii_strcasecmp(tok, "y") == 0 ||
-                           g_ascii_strcasecmp(tok, "z") == 0)) {
-                if (axis_kw) { ok = FALSE; break; }
-                axis_kw = tok;
-                continue;
-            }
-            if (n == 4 && n_vec < 3 && (i == 0 || n_vec > 0 || angle)) {
-                double num = g_ascii_strtod(tok, &end);
-                if (end && end != tok && !*end) {
-                    vec[n_vec++] = num;
-                    if (n_vec == 3) have_vec = TRUE;
-                    continue;
-                }
-            }
-            char *a = angle ? NULL : transform_arg_canonical(tok, TX_ANGLE, FALSE);
-            if (!a) { ok = FALSE; break; }
-            angle = a;
-        }
-        if (ok && !angle) ok = FALSE;
-        if (ok && n == 2 && !axis_kw) ok = FALSE;
-        if (ok && n == 4 && !have_vec) ok = FALSE;
-        if (ok) {
-            const char *axis = NULL;
-            gboolean flip = FALSE, numeric = FALSE;
-            if (axis_kw) {
-                char c = g_ascii_tolower((guchar)axis_kw[0]);
-                axis = c == 'x' ? "x" : c == 'y' ? "y" : NULL;
-            } else if (have_vec) {
-                if (vec[1] == 0 && vec[2] == 0 && vec[0] != 0) { axis = "x"; flip = vec[0] < 0; }
-                else if (vec[0] == 0 && vec[2] == 0 && vec[1] != 0) { axis = "y"; flip = vec[1] < 0; }
-                else if (vec[0] == 0 && vec[1] == 0 && vec[2] != 0) { flip = vec[2] < 0; }
-                else numeric = TRUE;
-            }
-            GString *out = g_string_new(NULL);
-            if (numeric) {
-                for (int k = 0; k < 3; k++) {
-                    char *num = ns_css_number_str(vec[k]);
-                    g_string_append(out, num);
-                    g_string_append_c(out, ' ');
-                    g_free(num);
-                }
-            } else if (axis) {
-                g_string_append(out, axis);
-                g_string_append_c(out, ' ');
-            }
-            if (flip && strcmp(angle, "0deg") != 0) {
-                if (angle[0] == '-') g_string_append(out, angle + 1);
-                else {
-                    g_string_append_c(out, '-');
-                    g_string_append(out, angle);
-                }
-            } else {
-                g_string_append(out, angle);
-            }
-            r = g_string_free(out, FALSE);
-        }
-        g_free(angle);
-    }
-    for (int i = 0; i < n; i++) g_free(tokens[i]);
-    return r;
-}
-
-static char *
-transform_origin_canonical(const char *value, gboolean two_only)
-{
-    if (!value) return NULL;
-    char *tokens[5] = {0};
-    int n = split_ws_limit(value, tokens, G_N_ELEMENTS(tokens));
-    char *r = NULL;
-    if (two_only && (n == 3 || n == 4)) {
-        r = ns_css_position_canonical_ex(value, TRUE, FALSE);
-    } else if (n >= 1 && n <= (two_only ? 2 : 3)) {
-        const char *x = NULL, *y = NULL;
-        char *xc = NULL, *yc = NULL, *zc = NULL;
-        gboolean ok = TRUE;
-        gboolean a_h = ns_css_position_is_h_edge(tokens[0]);
-        gboolean a_v = ns_css_position_is_v_edge(tokens[0]);
-        gboolean a_c = g_ascii_strcasecmp(tokens[0], "center") == 0;
-        if (n == 1) {
-            if (a_v) { x = "center"; y = tokens[0]; }
-            else if (a_h || a_c) { x = tokens[0]; y = "center"; }
-            else { x = tokens[0]; y = "center"; }
-        } else {
-            gboolean b_h = ns_css_position_is_h_edge(tokens[1]);
-            gboolean b_v = ns_css_position_is_v_edge(tokens[1]);
-            gboolean b_c = g_ascii_strcasecmp(tokens[1], "center") == 0;
-            gboolean a_kw = a_h || a_v || a_c, b_kw = b_h || b_v || b_c;
-            if (a_kw && b_kw) {
-                if ((a_h && b_h) || (a_v && b_v)) ok = FALSE;
-                else if (a_v || (a_c && b_h)) { x = tokens[1]; y = tokens[0]; }
-                else { x = tokens[0]; y = tokens[1]; }
-            } else if (a_kw) {
-                if (a_v) ok = FALSE;
-                else { x = tokens[0]; y = tokens[1]; }
-            } else if (b_kw) {
-                if (b_h) ok = FALSE;
-                else { x = tokens[0]; y = tokens[1]; }
-            } else {
-                x = tokens[0]; y = tokens[1];
-            }
-        }
-        if (ok) {
-            xc = ns_css_position_is_h_edge(x) || g_ascii_strcasecmp(x, "center") == 0
-                ? g_ascii_strdown(x, -1)
-                : transform_arg_canonical(x, TX_LENGTH | TX_PERCENT, FALSE);
-            yc = ns_css_position_is_v_edge(y) || g_ascii_strcasecmp(y, "center") == 0
-                ? g_ascii_strdown(y, -1)
-                : transform_arg_canonical(y, TX_LENGTH | TX_PERCENT, FALSE);
-            if (!xc || !yc) ok = FALSE;
-        }
-        if (ok && n == 3) {
-            zc = transform_arg_canonical(tokens[2], TX_LENGTH, FALSE);
-            if (!zc) ok = FALSE;
-        }
-        if (ok)
-            r = zc ? g_strdup_printf("%s %s %s", xc, yc, zc)
-                   : g_strdup_printf("%s %s", xc, yc);
-        g_free(xc);
-        g_free(yc);
-        g_free(zc);
-    }
-    for (int i = 0; i < n; i++) g_free(tokens[i]);
-    return r;
-}
 
 static gboolean
 border_shorthand_valid(const char *vtext, ns_css_prop style_prop)
@@ -13769,14 +12480,14 @@ ns_css_keyframes_resolve(const ns_css_keyframes *kf,
             char *val  = g_strstrip(colon + 1);
             ns_css_value *tv = NULL;
             if (g_ascii_strcasecmp(prop, "transform") == 0) {
-                tv = parse_transform(val);
+                tv = ns_css_parse_transform(val);
                 if (tv) list = tv->u.transform;
             } else if (g_ascii_strcasecmp(prop, "translate") == 0) {
-                tv = parse_translate_prop(val);
+                tv = ns_css_parse_translate_prop(val);
             } else if (g_ascii_strcasecmp(prop, "rotate") == 0) {
-                tv = parse_rotate_prop(val);
+                tv = ns_css_parse_rotate_prop(val);
             } else if (g_ascii_strcasecmp(prop, "scale") == 0) {
-                tv = parse_scale_prop(val);
+                tv = ns_css_parse_scale_prop(val);
             }
             if (tv && g_ascii_strcasecmp(prop, "transform") != 0 &&
                 ind.n_ops < NS_CSS_TRANSFORM_OPS_MAX)
@@ -15083,7 +13794,7 @@ parse_rules_until(const char **pp, const char *end,
                                 op = g_ascii_strtod(val, NULL);
                                 has_op = TRUE;
                             } else if (g_ascii_strcasecmp(prop, "transform") == 0) {
-                                ns_css_value *tv = parse_transform(val);
+                                ns_css_value *tv = ns_css_parse_transform(val);
                                 if (tv) {
                                     tf = tv->u.transform;
                                     has_tf = TRUE;
@@ -15094,10 +13805,10 @@ parse_rules_until(const char **pp, const char *end,
                                        g_ascii_strcasecmp(prop, "scale") == 0) {
                                 ns_css_value *tv =
                                     g_ascii_strcasecmp(prop, "translate") == 0
-                                        ? parse_translate_prop(val)
+                                        ? ns_css_parse_translate_prop(val)
                                     : g_ascii_strcasecmp(prop, "rotate") == 0
-                                        ? parse_rotate_prop(val)
-                                        : parse_scale_prop(val);
+                                        ? ns_css_parse_rotate_prop(val)
+                                        : ns_css_parse_scale_prop(val);
                                 if (tv) {
                                     if (tf_ind.n_ops < NS_CSS_TRANSFORM_OPS_MAX)
                                         tf_ind.ops[tf_ind.n_ops++] =
@@ -17684,65 +16395,6 @@ match_simple(const ns_css_simple *sel, const ns_node *el)
 }
 
 static char *
-css_add_leading_zeros(char *v)
-{
-    if (!v) return NULL;
-    gboolean needs = FALSE;
-    for (const char *p = v; *p; p++) {
-        if (*p != '.' || !g_ascii_isdigit((guchar)p[1])) continue;
-        char prev = p == v ? 0 : p[-1];
-        if (prev == 0 || prev == ' ' || prev == '\t' || prev == '(' ||
-            prev == ',' || prev == '+' || prev == '-' || prev == '/' ||
-            prev == '*') { needs = TRUE; break; }
-    }
-    if (!needs) return v;
-    GString *out = g_string_new(NULL);
-    for (const char *p = v; *p; p++) {
-        if (*p == '.' && g_ascii_isdigit((guchar)p[1])) {
-            char prev = p == v ? 0 : p[-1];
-            if (prev == 0 || prev == ' ' || prev == '\t' || prev == '(' ||
-                prev == ',' || prev == '+' || prev == '-' || prev == '/' ||
-                prev == '*')
-                g_string_append_c(out, '0');
-        }
-        g_string_append_c(out, *p);
-    }
-    g_free(v);
-    return g_string_free(out, FALSE);
-}
-
-static char *
-css_normalize_negative_zero(char *value)
-{
-    if (!value) return NULL;
-    gboolean changed = FALSE;
-    GString *out = g_string_new(NULL);
-    const char *p = value;
-    while (*p) {
-        gboolean boundary = p == value ||
-            !(is_ident(p[-1]) || p[-1] == '.' || p[-1] == '\\');
-        if (*p == '-' && boundary &&
-            (g_ascii_isdigit((guchar)p[1]) || p[1] == '.')) {
-            char *number_end = NULL;
-            double number = g_ascii_strtod(p, &number_end);
-            if (number_end > p + 1 && number == 0.0) {
-                g_string_append_c(out, '0');
-                p = number_end;
-                changed = TRUE;
-                continue;
-            }
-        }
-        g_string_append_c(out, *p++);
-    }
-    if (!changed) {
-        g_string_free(out, TRUE);
-        return value;
-    }
-    g_free(value);
-    return g_string_free(out, FALSE);
-}
-
-static char *
 css_serialize_urls(char *value)
 {
     GString *out = g_string_new(NULL);
@@ -17892,8 +16544,8 @@ css_inline_value_canonical(const char *prop, char *value)
             return canon;
         }
     }
-    value = css_add_leading_zeros(value);
-    value = css_normalize_negative_zero(value);
+    value = ns_css_add_leading_zeros(value);
+    value = ns_css_normalize_negative_zero(value);
     value = css_serialize_urls(value);
     if (strcmp(prop, "content") == 0) {
         char *canon = ns_css_content_canonical(value);
@@ -20233,64 +18885,8 @@ value_serialize_one(const ns_css_value *v)
         }
         return g_string_free(s, FALSE);
     }
-    case NS_CSS_V_TRANSFORM: {
-        GString *s = g_string_new(NULL);
-        for (int i = 0; i < v->u.transform.n_ops; i++) {
-            const ns_css_transform_op *op = &v->u.transform.ops[i];
-            if (i) g_string_append_c(s, ' ');
-            switch (op->kind) {
-            case NS_CSS_TFN_TRANSLATE:
-                if (translate_axis_is_mixed(op, 0) ||
-                    translate_axis_is_mixed(op, 1) ||
-                    translate_axis_is_mixed(op, 2)) {
-                    gboolean three_d = op->c != 0 ||
-                                       translate_axis_is_mixed(op, 2);
-                    g_string_append(s, three_d ? "translate3d(" : "translate(");
-                    append_translate_length(s, op, 0);
-                    g_string_append(s, ", ");
-                    append_translate_length(s, op, 1);
-                    if (three_d) {
-                        g_string_append(s, ", ");
-                        append_translate_length(s, op, 2);
-                    }
-                    g_string_append_c(s, ')');
-                } else {
-                    g_string_append_printf(s, "translate(%g%s, %g%s)",
-                        op->a, op->a_is_percent ? "%" : "px",
-                        op->b, op->b_is_percent ? "%" : "px");
-                }
-                break;
-            case NS_CSS_TFN_ROTATE:
-                g_string_append_printf(s, "rotate(%gdeg)", op->a);
-                break;
-            case NS_CSS_TFN_SCALE:
-                g_string_append_printf(s, "scale(%g, %g)", op->a, op->b);
-                break;
-            case NS_CSS_TFN_SKEW:
-                g_string_append_printf(s, "skew(%gdeg, %gdeg)", op->a, op->b);
-                break;
-            case NS_CSS_TFN_MATRIX:
-                g_string_append_printf(s, "matrix(%g, %g, %g, %g, %g, %g)",
-                    op->a, op->b, op->c, op->d, op->e, op->f);
-                break;
-            case NS_CSS_TFN_MATRIX3D:
-                g_string_append(s, "matrix3d(");
-                for (int k = 0; k < 16; k++)
-                    g_string_append_printf(s, "%s%g", k ? ", " : "",
-                                           op->m3d[k]);
-                g_string_append_c(s, ')');
-                break;
-            case NS_CSS_TFN_ROTATE3D:
-                g_string_append_printf(s, "rotate3d(%g, %g, %g, %gdeg)",
-                    op->a, op->b, op->c, op->d);
-                break;
-            case NS_CSS_TFN_PERSPECTIVE:
-                g_string_append_printf(s, "perspective(%gpx)", op->a);
-                break;
-            }
-        }
-        return g_string_free(s, FALSE);
-    }
+    case NS_CSS_V_TRANSFORM:
+        return ns_css_transform_serialize(&v->u.transform);
     case NS_CSS_V_RECT: {
         GString *s = g_string_new("rect(");
         for (int i = 0; i < 4; i++) {
@@ -21260,7 +19856,7 @@ track_length_computed_append(GString *out, const char *tok, gsize len,
 {
     char *text = g_strndup(tok, len);
     double px = 0, pct = 0;
-    gboolean has_pct = FALSE, ok = FALSE, math = is_math_fn_start(text);
+    gboolean has_pct = FALSE, ok = FALSE, math = ns_css_is_math_fn_start(text);
     ns_css_value *v = math ? ns_css_parse_calc(text) : NULL;
     if (v && v->kind == NS_CSS_V_LENGTH) {
         has_pct = v->u.length.unit == NS_CSS_UNIT_PERCENT;
@@ -21324,7 +19920,7 @@ tracks_computed_text(const char *text, double font_px, double root_px)
             p = stop;
             continue;
         }
-        if (boundary && is_math_fn_start(p)) {
+        if (boundary && ns_css_is_math_fn_start(p)) {
             const char *close = match_close_paren(strchr(p, '(') + 1, end);
             const char *stop = close ? close + 1 : end;
             if (!track_length_computed_append(out, p, (gsize)(stop - p),

@@ -9,10 +9,13 @@ use southstar_glib as glib;
 
 use crate::calc::{Calc, CalcArg, Parsed};
 use crate::gradient::Gradient;
+use crate::transform::Transform;
 
+pub(crate) const KIND_KEYWORD: c_uint = 0;
 pub(crate) const KIND_LENGTH: c_uint = 1;
 pub(crate) const KIND_CALC: c_uint = 4;
 pub(crate) const KIND_GRADIENT: c_uint = 6;
+pub(crate) const KIND_TRANSFORM: c_uint = 9;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -52,6 +55,8 @@ pub(crate) union ValueUnion {
     pub length: Length,
     pub calc: RawCalc,
     pub gradient: Gradient,
+    pub transform: Transform,
+    pub keyword: *mut c_char,
     _storage: [u64; 381],
 }
 
@@ -150,6 +155,14 @@ pub(crate) fn new_gradient(gradient: &Gradient) -> *mut NsCssValue {
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_GRADIENT;
     value_ref.u.gradient = *gradient;
+    value
+}
+
+pub(crate) fn new_transform(transform: &Transform) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_TRANSFORM;
+    value_ref.u.transform = *transform;
     value
 }
 

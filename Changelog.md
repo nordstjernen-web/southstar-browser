@@ -268,6 +268,11 @@ Southstar Browser (unreleased):
   its resolutions and types; the content property with strings,
   counter(), counters(), symbols(), attr() and quotes; unicode-range; and
   the text colours serialize to. They parse, serialize and paint as before.
+* Transforms are Rust: transform lists with every 2D and 3D function,
+  transform-origin and perspective-origin, the translate, rotate and scale
+  properties, their computed and canonical specified spelling, whether a
+  transform is 3D and the matrix it applies. Elements transform, report
+  their transforms and animate as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -58,6 +58,22 @@ const char   *ns_css_quoted_end(const char *u, char quote);
 char         *ns_css_unescape_url(const char *u, gsize len);
 char         *ns_css_pick_image_set_url(const char *t);
 
+ns_css_value *ns_css_parse_transform(const char *text);
+ns_css_value *ns_css_parse_transform_origin(const char *text);
+ns_css_value *ns_css_parse_translate_prop(const char *text);
+ns_css_value *ns_css_parse_rotate_prop(const char *text);
+ns_css_value *ns_css_parse_scale_prop(const char *text);
+char         *ns_css_transform_serialize(const ns_css_transform *tf);
+char         *ns_css_transform_list_canonical(const char *value);
+char         *ns_css_individual_transform_canonical(const char *value,
+                                                    ns_css_prop prop);
+char         *ns_css_transform_origin_canonical(const char *value,
+                                                gboolean two_only);
+gboolean      ns_css_is_math_fn_start(const char *s);
+char         *ns_css_add_leading_zeros(char *v);
+char         *ns_css_normalize_negative_zero(char *v);
+GPtrArray    *ns_css_split_top_level_commas(const char *text);
+
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(sizeof(ns_css_gradient_stop) == 40 &&
                 sizeof(ns_css_gradient) == 1448 &&
@@ -65,6 +81,12 @@ G_STATIC_ASSERT(sizeof(ns_css_gradient_stop) == 40 &&
                 offsetof(ns_css_gradient, has_from) == 88 &&
                 offsetof(ns_css_gradient, interp) == 132 &&
                 offsetof(ns_css_gradient, stops) == 168);
+G_STATIC_ASSERT(sizeof(ns_css_transform_op) == 264 &&
+                offsetof(ns_css_transform_op, m3d) == 56 &&
+                offsetof(ns_css_transform_op, a_is_percent) == 184 &&
+                offsetof(ns_css_transform_op, a_pct) == 200 &&
+                offsetof(ns_css_transform_op, rem) == 240 &&
+                sizeof(ns_css_transform) == 2120);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8
