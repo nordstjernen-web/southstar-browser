@@ -74,6 +74,7 @@ Southstar Browser (unreleased):
   the system locale writes decimals with a comma.
 * EventSource (Server-Sent Events) and WebSocket are Rust, still over
   libcurl.
+* Decoded image textures are Rust.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

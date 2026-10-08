@@ -34,6 +34,7 @@ const PORTED: &[&str] = &[
     "safebrowsing.c",
     "security.c",
     "spellcheck.c",
+    "texture.c",
     "threaddump.c",
     "ws.c",
     "webcrypto.c",

@@ -64,7 +64,6 @@ southstar_engine_sources = files(
   'pdf.c',
   'render.c',
   'selection.c',
-  'texture.c',
   'video.c',
   'video_decode.c',
   'html_lexbor.c',
