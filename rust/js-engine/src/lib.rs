@@ -23,6 +23,8 @@ pub use backend::{ENGINE_NAME, Engine, Scope, Value, engine_version};
 
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
 
+pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Result<Value, Value>;
+
 pub type RealmInit = for<'a> fn(&mut Scope<'a>) -> Result<(), Value>;
 
 pub enum PromiseState {

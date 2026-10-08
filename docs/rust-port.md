@@ -832,6 +832,14 @@ manifests and rule files are parsed by a private QuickJS runtime with the C's
 1 MiB stack budget, so the same JSON is accepted and the same values are read
 from it.
 
+Intl (`js_intl.c`, now `rust/js-intl`) is the second binding written only
+against the layer. The layer gained arrays, objects with a given prototype,
+indexed writes, ToNumber, `new` on an arbitrary constructor and native
+functions that carry captured values (Intl's bound `format` and `compare`).
+Collation, normalization and case folding stay with GLib and word, sentence and
+grapheme breaks with ns-pango, called over FFI, and the C library's `%.*f` and
+`%g` output is reproduced exactly, so every formatted string is unchanged.
+
 ### Ported
 
 | Module | Lines | Crate | Phase |
@@ -873,3 +881,4 @@ from it.
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |
 | `watchdog.c` | 583 | `rust/watchdog` | 4 |
 | `ext.c` | 1,265 | `rust/extensions` | 8 (WebExtensions) |
+| `js_intl.c` | 2,433 | `rust/js-intl` | 7 (JavaScript bindings) |

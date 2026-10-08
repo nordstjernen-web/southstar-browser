@@ -1519,6 +1519,7 @@ dependencies = [
  "southstar-i18n",
  "southstar-image-decoders",
  "southstar-ipc",
+ "southstar-js-intl",
  "southstar-js-temporal",
  "southstar-mat4",
  "southstar-mic",
@@ -1604,6 +1605,15 @@ version = "1.0.30-dev"
 dependencies = [
  "boa_engine",
  "boa_gc",
+]
+
+[[package]]
+name = "southstar-js-intl"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-i18n",
+ "southstar-js-engine",
 ]
 
 [[package]]

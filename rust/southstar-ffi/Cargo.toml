@@ -31,6 +31,7 @@ southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
+southstar-js-intl = { path = "../js-intl" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
@@ -54,11 +55,13 @@ sdl = ["southstar-mic/sdl", "southstar-renderer-host/sdl"]
 fontconfig = ["southstar-renderer-host/fontconfig"]
 poppler = ["southstar-pdf/poppler"]
 egl = ["southstar-glctx/egl"]
+ns-pango = ["southstar-js-intl/ns-pango"]
 enchant = ["southstar-spellcheck/enchant"]
 seccomp = ["southstar-sandbox/seccomp"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-extensions/quickjs-original",
+    "southstar-js-intl/quickjs-original",
     "southstar-js-temporal/quickjs-original",
 ]
 woff2 = ["dep:southstar-woff2"]

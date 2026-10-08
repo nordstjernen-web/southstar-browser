@@ -9,7 +9,7 @@ use std::rc::Rc;
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
-use boa_engine::object::builtins::{JsArrayBuffer, JsPromise};
+use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise};
 use boa_engine::prelude::{Finalize, JsData, Trace};
 use boa_engine::property::PropertyDescriptor;
 use boa_engine::{
@@ -17,7 +17,7 @@ use boa_engine::{
     NativeFunction, Source,
 };
 
-use crate::{Attributes, NativeFn, PromiseState, RealmInit, int64_modulo};
+use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit, int64_modulo};
 
 pub const ENGINE_NAME: &str = "boa";
 
@@ -74,6 +74,10 @@ impl Value {
 
     pub fn is_string(&self) -> bool {
         self.0.is_string()
+    }
+
+    pub fn is_array(&self) -> bool {
+        self.0.as_object().is_some_and(|object| object.is_array())
     }
 
     pub fn is_number(&self) -> bool {
@@ -172,6 +176,19 @@ impl Scope<'_> {
         Value(JsString::from(text).into())
     }
 
+    pub fn new_array(&mut self) -> Value {
+        match JsArray::new(self.ctx) {
+            Ok(array) => Value(array.into()),
+            Err(error) => self.error(error),
+        }
+    }
+
+    pub fn new_object_with_proto(&mut self, prototype: &Value) -> Value {
+        let object = JsObject::with_object_proto(self.ctx.intrinsics());
+        object.set_prototype(prototype.0.as_object());
+        Value(object.into())
+    }
+
     pub fn string_from_bytes(&mut self, bytes: &[u8]) -> Value {
         self.string(&String::from_utf8_lossy(bytes))
     }
@@ -196,6 +213,26 @@ impl Scope<'_> {
         self.native_function(name, arity, f, false)
     }
 
+    pub fn bound_function(&mut self, name: &str, arity: u32, f: BoundFn, data: &[Value]) -> Value {
+        let captures: Vec<JsValue> = data.iter().map(|value| value.0.clone()).collect();
+        let native = NativeFunction::from_copy_closure_with_captures(
+            move |this, args, captures: &Vec<JsValue>, ctx| {
+                let this = Value(this.clone());
+                let args: Vec<Value> = args.iter().cloned().map(Value).collect();
+                let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
+                f(&mut Scope { ctx }, &this, &args, &data)
+                    .map(|value| value.0)
+                    .map_err(|error| JsError::from_opaque(error.0))
+            },
+            captures,
+        );
+        let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
+            .name(JsString::from(name))
+            .length(arity as usize)
+            .build();
+        Value(function.into())
+    }
+
     fn native_function(&mut self, name: &str, arity: u32, f: NativeFn, constructor: bool) -> Value {
         let native = NativeFunction::from_copy_closure(move |this, args, ctx| {
             let this = Value(this.clone());
@@ -217,6 +254,14 @@ impl Scope<'_> {
         object
             .get(JsString::from(key), self.ctx)
             .map(Value)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn set_index(&mut self, object: &Value, index: u32, value: Value) -> Result<(), Value> {
+        let object = self.object(object)?;
+        object
+            .set(index, value.0, true, self.ctx)
+            .map(|_| ())
             .map_err(|e| self.error(e))
     }
 
@@ -298,6 +343,21 @@ impl Scope<'_> {
             .call(&this.0, &args, self.ctx)
             .map(Value)
             .map_err(|e| self.error(e))
+    }
+
+    pub fn construct(&mut self, constructor: &Value, args: &[Value]) -> Result<Value, Value> {
+        let Some(constructor) = constructor.0.as_constructor() else {
+            return Err(self.type_error("not a constructor"));
+        };
+        let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
+        constructor
+            .construct(&args, None, self.ctx)
+            .map(|object| Value(object.into()))
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn to_number(&mut self, value: &Value) -> Result<f64, Value> {
+        value.0.to_number(self.ctx).map_err(|e| self.error(e))
     }
 
     pub fn to_bytes(&mut self, value: &Value) -> Result<Vec<u8>, Value> {

@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::{Attributes, NativeFn, PromiseState, RealmInit};
+use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit};
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 
@@ -138,6 +138,21 @@ unsafe extern "C" {
         filename: *const c_char,
     ) -> JSValue;
     fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> c_int;
+    fn JS_ToFloat64(ctx: *mut JSContext, pres: *mut f64, val: JSValue) -> c_int;
+    fn JS_NewArray(ctx: *mut JSContext) -> JSValue;
+    fn JS_NewObjectProto(ctx: *mut JSContext, proto: JSValue) -> JSValue;
+    fn JS_SetPropertyUint32(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        idx: u32,
+        val: JSValue,
+    ) -> c_int;
+    fn JS_CallConstructor(
+        ctx: *mut JSContext,
+        func_obj: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
     fn JS_SetPropertyStr(
         ctx: *mut JSContext,
         this_obj: JSValue,
@@ -206,6 +221,13 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
     fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
+    fn JS_IsArray(val: JSValue) -> bool;
+}
+
+#[cfg(feature = "quickjs-original")]
+unsafe extern "C" {
+    #[link_name = "ns_quickjs_is_array"]
+    fn JS_IsArray(val: JSValue) -> bool;
 }
 
 #[cfg(feature = "quickjs-original")]
@@ -255,6 +277,7 @@ struct HostData(Box<dyn Any>);
 
 thread_local! {
     static NATIVES: RefCell<Vec<NativeFn>> = const { RefCell::new(Vec::new()) };
+    static BOUND: RefCell<Vec<(BoundFn, usize)>> = const { RefCell::new(Vec::new()) };
     static REALMS: RefCell<Vec<(*mut JSRuntime, *mut JSContext)>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -267,6 +290,20 @@ fn native_index(f: NativeFn) -> c_int {
             .unwrap_or_else(|| {
                 natives.push(f);
                 natives.len() - 1
+            });
+        index as c_int
+    })
+}
+
+fn bound_index(f: BoundFn, captured: usize) -> c_int {
+    BOUND.with(|bound| {
+        let mut bound = bound.borrow_mut();
+        let index = bound
+            .iter()
+            .position(|&(known, count)| ptr::fn_addr_eq(known, f) && count == captured)
+            .unwrap_or_else(|| {
+                bound.push((f, captured));
+                bound.len() - 1
             });
         index as c_int
     })
@@ -357,6 +394,10 @@ impl Value {
         self.raw.tag == TAG_STRING
     }
 
+    pub fn is_array(&self) -> bool {
+        unsafe { JS_IsArray(self.raw) }
+    }
+
     pub fn is_number(&self) -> bool {
         self.raw.tag == TAG_INT || self.raw.tag == TAG_FLOAT64
     }
@@ -434,6 +475,41 @@ unsafe extern "C" fn call_native(
     let this = Value::own(ctx, unsafe { JS_DupValue(ctx, this_val) });
     let mut scope = Scope::of(ctx);
     match f(&mut scope, &this, &args) {
+        Ok(value) => value.into_raw(),
+        Err(error) => unsafe { JS_Throw(ctx, error.into_raw()) },
+    }
+}
+
+unsafe extern "C" fn call_bound(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+    magic: c_int,
+    func_data: *mut JSValue,
+) -> JSValue {
+    let Some((f, captured)) = BOUND.with(|bound| bound.borrow().get(magic as usize).copied())
+    else {
+        return UNDEFINED;
+    };
+    let owned = |raw: &[JSValue]| -> Vec<Value> {
+        raw.iter()
+            .map(|&value| Value::own(ctx, unsafe { JS_DupValue(ctx, value) }))
+            .collect()
+    };
+    let args = if argv.is_null() || argc <= 0 {
+        Vec::new()
+    } else {
+        owned(unsafe { core::slice::from_raw_parts(argv, argc as usize) })
+    };
+    let data = if func_data.is_null() || captured == 0 {
+        Vec::new()
+    } else {
+        owned(unsafe { core::slice::from_raw_parts(func_data, captured) })
+    };
+    let this = Value::own(ctx, unsafe { JS_DupValue(ctx, this_val) });
+    let mut scope = Scope::of(ctx);
+    match f(&mut scope, &this, &args, &data) {
         Ok(value) => value.into_raw(),
         Err(error) => unsafe { JS_Throw(ctx, error.into_raw()) },
     }
@@ -638,6 +714,16 @@ impl Scope<'_> {
         })
     }
 
+    pub fn new_array(&mut self) -> Value {
+        Value::own(self.ctx, unsafe { JS_NewArray(self.ctx) })
+    }
+
+    pub fn new_object_with_proto(&mut self, prototype: &Value) -> Value {
+        Value::own(self.ctx, unsafe {
+            JS_NewObjectProto(self.ctx, prototype.raw)
+        })
+    }
+
     pub fn string_from_bytes(&mut self, bytes: &[u8]) -> Value {
         Value::own(self.ctx, unsafe {
             JS_NewStringLen(self.ctx, bytes.as_ptr().cast(), bytes.len())
@@ -686,6 +772,24 @@ impl Scope<'_> {
         self.native_function(name, arity, f, true)
     }
 
+    pub fn bound_function(&mut self, name: &str, arity: u32, f: BoundFn, data: &[Value]) -> Value {
+        let mut raw_data: Vec<JSValue> = data.iter().map(|value| value.raw).collect();
+        let raw = unsafe {
+            JS_NewCFunctionData(
+                self.ctx,
+                call_bound,
+                arity as c_int,
+                bound_index(f, data.len()),
+                data.len() as c_int,
+                raw_data.as_mut_ptr(),
+            )
+        };
+        let function = Value::own(self.ctx, raw);
+        let name = self.string(name);
+        let _ = self.define(&function, "name", name, Attributes::CONFIGURABLE);
+        function
+    }
+
     pub fn set_constructor(&mut self, function: &Value, prototype: &Value) -> Result<(), Value> {
         let status = unsafe { JS_SetConstructor(self.ctx, function.raw, prototype.raw) };
         self.status(status)
@@ -700,6 +804,12 @@ impl Scope<'_> {
     pub fn get_index(&mut self, object: &Value, index: u32) -> Result<Value, Value> {
         let raw = unsafe { JS_GetPropertyUint32(self.ctx, object.raw, index) };
         self.take(raw)
+    }
+
+    pub fn set_index(&mut self, object: &Value, index: u32, value: Value) -> Result<(), Value> {
+        let raw = value.into_raw();
+        let status = unsafe { JS_SetPropertyUint32(self.ctx, object.raw, index, raw) };
+        self.status(status)
     }
 
     pub fn set(&mut self, object: &Value, key: &str, value: Value) -> Result<(), Value> {
@@ -765,6 +875,25 @@ impl Scope<'_> {
             )
         };
         self.take(raw)
+    }
+
+    pub fn construct(&mut self, constructor: &Value, args: &[Value]) -> Result<Value, Value> {
+        let mut raw_args: Vec<JSValue> = args.iter().map(|arg| arg.raw).collect();
+        let raw = unsafe {
+            JS_CallConstructor(
+                self.ctx,
+                constructor.raw,
+                raw_args.len() as c_int,
+                raw_args.as_mut_ptr(),
+            )
+        };
+        self.take(raw)
+    }
+
+    pub fn to_number(&mut self, value: &Value) -> Result<f64, Value> {
+        let mut out = 0f64;
+        let status = unsafe { JS_ToFloat64(self.ctx, &mut out, value.raw) };
+        self.status(status).map(|()| out)
     }
 
     pub fn to_string(&mut self, value: &Value) -> Result<String, Value> {

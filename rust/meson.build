@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet, cairo, libpsl]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet, cairo, libpsl, pango]
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif
@@ -20,6 +20,9 @@ if quickjs_original
     'NS_RUSTC_VERSION': rustc.version(),
     'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version,
   }
+endif
+if use_ns_pango
+  southstar_rust_features += ['ns-pango']
 endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']

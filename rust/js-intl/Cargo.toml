@@ -1,0 +1,23 @@
+[package]
+name = "southstar-js-intl"
+description = "The ICU-free ECMA-402 Intl API, written once against the engine-neutral JavaScript layer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+southstar-i18n = { path = "../i18n" }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs"]
+quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
+boa = ["southstar-js-engine/boa"]
+ns-pango = []
+
+[lints]
+workspace = true

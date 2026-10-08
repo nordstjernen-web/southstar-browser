@@ -48,6 +48,11 @@ Southstar Browser (unreleased):
 * Temporal is the first JavaScript binding written in Rust. It is built on
   the engine-neutral layer, so the same code also runs on Boa, and it
   behaves exactly as the C did.
+* Intl is Rust too: Collator, NumberFormat, DateTimeFormat, PluralRules,
+  ListFormat, RelativeTimeFormat, DisplayNames, DurationFormat, Segmenter,
+  Locale and the toLocaleString, toLocaleDateString, toLocaleTimeString and
+  localeCompare hooks give the same strings and parts as before, again
+  written against the engine-neutral layer.
 * Web Cryptography (crypto.subtle) is Rust, still over OpenSSL: hashing,
   HMAC, AES, RSA, ECDSA/ECDH, Ed25519/X25519, PBKDF2 and HKDF give the same
   results and the same errors as before.
