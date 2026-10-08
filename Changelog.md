@@ -87,7 +87,8 @@ Southstar Browser (unreleased):
   sticky layers, crops and packs them into shared memory and describes them
   to the window. The window's side is Rust as well: starting renderer
   processes, sharing their framebuffer, every request it sends them, the
-  process statistics in the task manager, and single-process mode.
+  process statistics in the task manager, and single-process mode. The
+  southstar-renderer executable itself now starts in Rust.
 * The watchdog that restarts the browser after a crash or a hang is Rust,
   with the same restart limits, hang budget and messages.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and

@@ -283,6 +283,11 @@ pub(crate) fn send_fd(sock: c_int, fd: c_int) -> bool {
     sys::send_fd(sock, fd)
 }
 
+#[cfg(unix)]
+pub(crate) fn recv_fd(sock: c_int) -> c_int {
+    sys::recv_fd(sock)
+}
+
 pub(crate) fn read(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
     sys::read_fd(fd, buf)
 }
@@ -345,7 +350,7 @@ pub extern "C" fn http_send_fd(sock: c_int, fd: c_int) -> c_int {
 #[cfg(unix)]
 #[unsafe(no_mangle)]
 pub extern "C" fn http_recv_fd(sock: c_int) -> c_int {
-    sys::recv_fd(sock)
+    recv_fd(sock)
 }
 
 unsafe fn conn<'a>(c: *mut Conn) -> Option<&'a mut Conn> {

@@ -106,6 +106,9 @@ unsafe extern "C" {
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
 
     fn ns_browser_init() -> c_int;
+    fn ns_browser_shutdown();
+    fn ns_browser_sandbox(self_exe: *const c_char);
+    fn ns_net_idle() -> GBoolean;
     fn ns_browser_open_viewport(
         url: *const c_char,
         width: c_int,
@@ -364,6 +367,18 @@ fn opt_ptr(text: Option<&CStr>) -> *const c_char {
 
 pub fn init() -> c_int {
     unsafe { ns_browser_init() }
+}
+
+pub fn shutdown() {
+    unsafe { ns_browser_shutdown() };
+}
+
+pub fn sandbox(self_exe: Option<&CStr>) {
+    unsafe { ns_browser_sandbox(opt_ptr(self_exe)) };
+}
+
+pub fn net_idle() -> bool {
+    unsafe { ns_net_idle() != 0 }
 }
 
 pub fn monotonic_us() -> i64 {

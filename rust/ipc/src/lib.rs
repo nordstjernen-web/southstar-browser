@@ -346,6 +346,11 @@ pub fn send_fd(sock: c_int, fd: c_int) -> bool {
     ffi::send_fd(sock, fd)
 }
 
+#[cfg(unix)]
+pub fn recv_fd(sock: c_int) -> c_int {
+    ffi::recv_fd(sock)
+}
+
 pub fn until_nul(bytes: &[u8]) -> &[u8] {
     bytes
         .iter()

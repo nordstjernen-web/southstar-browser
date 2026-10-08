@@ -12,5 +12,9 @@ southstar-glib = { path = "../glib" }
 southstar-ipc = { path = "../ipc" }
 southstar-renderer-client = { path = "../renderer-client" }
 
+[features]
+sdl = []
+fontconfig = []
+
 [lints]
 workspace = true

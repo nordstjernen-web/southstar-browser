@@ -453,6 +453,11 @@ Scope (5k lines): `ipc_http.c`, `renderer_serve.c`, `renderer_tiles.c`,
 Exit: the shell (still C) drives a Rust renderer host; single-process and
 headless modes work; WPT slice and smoke unchanged.
 
+The renderer executable has no C sources left: its entry point is
+`ns_renderer_main` in the one Rust library, and because the shell links that
+library too and has its own `main`, the linker aliases `main` to it for the
+renderer only (`--defsym`, or `-alias` on macOS).
+
 ### Phase 4 — GTK shell and headless driver
 
 Scope (13.3k lines): `src/gtk/*` (10.4k), `headless.c` (2.3k) and
@@ -842,6 +847,7 @@ files will show whether WebIDL generation pays for itself.
 | `mat4.h` | 144 | `rust/mat4` | 2 |
 | `image_ico.c`, `image_webp.c` | 377 | `rust/image-decoders` | 2 |
 | `ipc_http.c` | 599 | `rust/ipc` | 3 |
+| `renderer_http.c` | 313 | `rust/renderer-host` (the renderer's `main`) | 3 |
 | `renderer_serve.c` | 1,240 | `rust/renderer-host` | 3 |
 | `rproc_http.c` | 1,822 | `rust/renderer-client` | 3 |
 | `rproc_inproc.c` | 240 | `rust/renderer-host` | 3 |

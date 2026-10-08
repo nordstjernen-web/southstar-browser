@@ -29,6 +29,10 @@ if rust_sdl2.found()
   southstar_rust_features += ['sdl']
   southstar_rust_link_deps += [rust_sdl2]
 endif
+if have_fontconfig and host_machine.system() == 'windows'
+  southstar_rust_features += ['fontconfig']
+  southstar_rust_link_deps += [libfontconfig]
+endif
 if have_poppler
   southstar_rust_features += ['poppler']
   southstar_rust_link_deps += [libpoppler]

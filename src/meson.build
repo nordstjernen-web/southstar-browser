@@ -265,22 +265,29 @@ libsouthstar_static = static_library(
 
 install_headers('libsouthstar.h', subdir: 'southstar')
 
-# Out-of-process renderer (step 1 of the process-per-tab direction): a small
-# executable that drives libsouthstar over an IPC control channel + shared
-# memory framebuffer (src/rproc.*), plus a proof-of-concept client.
+# The out-of-process renderer: the engine served over the IPC control channel
+# and shared-memory framebuffer. Its entry point is ns_renderer_main in the
+# Rust library, which the shell links too and which therefore cannot export a
+# symbol called main; the linker makes main an alias of it for this
+# executable only.
 rproc_deps = []
 if host_machine.system() != 'windows'
   rproc_deps += [cc.find_library('rt', required: false)]
 endif
 
+if host_machine.system() == 'darwin'
+  renderer_entry_args = ['-Wl,-alias,_ns_renderer_main,_main',
+                         '-Wl,-u,_ns_renderer_main']
+else
+  renderer_entry_args = ['-Wl,--defsym=main=ns_renderer_main',
+                         '-Wl,--undefined=ns_renderer_main']
+endif
+
 executable(
   'southstar-renderer',
-  files('renderer_http.c'),
   link_with: libsouthstar_static,
-  include_directories: include_directories('.'),
   dependencies: southstar_deps + ns_sdl_deps + rproc_deps,
-  c_args: ns_lib_c_args,
-  link_args: southstar_exe_link_args,
+  link_args: southstar_exe_link_args + renderer_entry_args,
   win_subsystem: 'windows',
   install: true,
 )

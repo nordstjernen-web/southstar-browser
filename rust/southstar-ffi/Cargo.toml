@@ -49,7 +49,8 @@ southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
-sdl = ["southstar-mic/sdl"]
+sdl = ["southstar-mic/sdl", "southstar-renderer-host/sdl"]
+fontconfig = ["southstar-renderer-host/fontconfig"]
 poppler = ["southstar-pdf/poppler"]
 egl = ["southstar-glctx/egl"]
 enchant = ["southstar-spellcheck/enchant"]
