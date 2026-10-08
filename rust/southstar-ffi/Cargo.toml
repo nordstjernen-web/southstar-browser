@@ -83,6 +83,7 @@ ns-pango = [
     "southstar-net/ns-pango",
 ]
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]
+http-nghttp2 = ["southstar-net/http-nghttp2"]
 libav = ["southstar-headless/libav", "southstar-net/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 webgpu = ["southstar-net/webgpu"]

@@ -70,6 +70,9 @@ endif
 if have_libav
   southstar_rust_features += ['libav']
 endif
+if http_backend == 'nghttp2'
+  southstar_rust_features += ['http-nghttp2']
+endif
 if have_webgpu
   southstar_rust_features += ['webgpu']
 endif

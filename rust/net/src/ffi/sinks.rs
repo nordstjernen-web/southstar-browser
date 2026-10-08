@@ -1,4 +1,4 @@
-//! Southstar — the body and header sinks transports write into: the budgeted body append behind curl's write callback and ns_body_sink_write, and the header callback that captures the headers the fetch path reads.
+//! Southstar — the body and header sinks transports write into: the budgeted body append behind curl's write callback and ns_body_sink_write, and the header callback that captures the headers the fetch path reads and hands them over.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -55,9 +55,129 @@ const _: () = assert!(
         && core::mem::offset_of!(NsHeaderCtx, set_cookie_seen) == 120
 );
 
+impl NsWriteCtx {
+    pub fn new(body: *mut GByteArray) -> NsWriteCtx {
+        NsWriteCtx {
+            body,
+            total: 0,
+            budget: crate::transport::response_budget(),
+            next_recheck: RECHECK_BYTES,
+            exceeded: 0,
+        }
+    }
+
+    pub fn restart(&mut self) {
+        unsafe { g_byte_array_set_size(self.body, 0) };
+        self.total = 0;
+        self.next_recheck = RECHECK_BYTES;
+        self.exceeded = 0;
+    }
+
+    pub fn budget(&self) -> u64 {
+        self.budget
+    }
+
+    pub fn total(&self) -> u64 {
+        self.total
+    }
+
+    pub fn exceeded(&self) -> bool {
+        self.exceeded != 0
+    }
+
+    pub fn mark_exceeded(&mut self) {
+        self.exceeded = 1;
+    }
+}
+
+pub struct Captured {
+    pub etag: Option<Vec<u8>>,
+    pub last_modified: Option<Vec<u8>>,
+    pub cache_control: Option<Vec<u8>>,
+    pub vary: Option<Vec<u8>>,
+    pub expires: Option<Vec<u8>>,
+    pub location: Option<Vec<u8>>,
+    pub set_cookie_seen: bool,
+    raw: *mut GString,
+}
+
+impl Captured {
+    pub fn take_raw(&mut self) -> Option<*mut c_char> {
+        let raw = core::mem::replace(&mut self.raw, ptr::null_mut());
+        (!raw.is_null()).then(|| unsafe { g_string_free(raw, 0) })
+    }
+}
+
+impl Drop for Captured {
+    fn drop(&mut self) {
+        if !self.raw.is_null() {
+            unsafe { g_string_free(self.raw, 1) };
+        }
+    }
+}
+
+fn take_text(slot: &mut *mut c_char) -> Option<Vec<u8>> {
+    let value = unsafe { glib::bytes(*slot) }.map(<[u8]>::to_vec);
+    unsafe { glib::g_free((*slot).cast()) };
+    *slot = ptr::null_mut();
+    value
+}
+
+impl NsHeaderCtx {
+    pub fn new(outputs: [*mut *mut c_char; 8]) -> NsHeaderCtx {
+        let [
+            content_type_out,
+            content_disposition_out,
+            csp_out,
+            xframe_options_out,
+            x_content_type_options_out,
+            cors_allow_origin_out,
+            refresh_out,
+            content_language_out,
+        ] = outputs;
+        NsHeaderCtx {
+            content_type_out,
+            content_disposition_out,
+            csp_out,
+            xframe_options_out,
+            x_content_type_options_out,
+            cors_allow_origin_out,
+            refresh_out,
+            content_language_out,
+            etag: ptr::null_mut(),
+            last_modified: ptr::null_mut(),
+            cache_control: ptr::null_mut(),
+            vary: ptr::null_mut(),
+            expires: ptr::null_mut(),
+            location: ptr::null_mut(),
+            raw: ptr::null_mut(),
+            set_cookie_seen: 0,
+        }
+    }
+
+    pub fn has_location(&self) -> bool {
+        unsafe { glib::bytes(self.location) }.is_some_and(|l| !l.is_empty())
+    }
+
+    pub fn take(&mut self) -> Captured {
+        Captured {
+            etag: take_text(&mut self.etag),
+            last_modified: take_text(&mut self.last_modified),
+            cache_control: take_text(&mut self.cache_control),
+            vary: take_text(&mut self.vary),
+            expires: take_text(&mut self.expires),
+            location: take_text(&mut self.location),
+            set_cookie_seen: self.set_cookie_seen != 0,
+            raw: core::mem::replace(&mut self.raw, ptr::null_mut()),
+        }
+    }
+}
+
 unsafe extern "C" {
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
+    fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
+    fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_set_size(string: *mut GString, len: usize) -> *mut GString;
     fn g_string_append_len(string: *mut GString, val: *const c_char, len: isize) -> *mut GString;
@@ -105,15 +225,7 @@ pub unsafe extern "C" fn ns_write_cb(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_body_sink_init(ctx: *mut NsWriteCtx, body: *mut GByteArray) {
-    unsafe {
-        ctx.write(NsWriteCtx {
-            body,
-            total: 0,
-            budget: crate::transport::response_budget(),
-            next_recheck: RECHECK_BYTES,
-            exceeded: 0,
-        });
-    }
+    unsafe { ctx.write(NsWriteCtx::new(body)) };
 }
 
 #[unsafe(no_mangle)]

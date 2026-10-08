@@ -1,4 +1,4 @@
-//! Southstar — the libcurl calls, constants and structs the transport layer uses: easy, multi and share handles, version information, header lists and the TLS options.
+//! Southstar — the libcurl calls, constants and structs the transport layer uses: easy, multi and share handles, transfer options and information, version information, header lists and the TLS options.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,11 +6,59 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 
 pub type Code = c_int;
 
+pub const E_OK: Code = 0;
 pub const E_FAILED_INIT: Code = 2;
+pub const E_COULDNT_RESOLVE_HOST: Code = 6;
+pub const E_COULDNT_CONNECT: Code = 7;
+pub const E_OPERATION_TIMEDOUT: Code = 28;
 pub const E_ABORTED_BY_CALLBACK: Code = 42;
+pub const E_RECV_ERROR: Code = 56;
+pub const E_PEER_FAILED_VERIFICATION: Code = 60;
+pub const E_FILESIZE_EXCEEDED: Code = 63;
+pub const E_SSL_CACERT_BADFILE: Code = 77;
+pub const E_SSL_ISSUER_ERROR: Code = 83;
+pub const ERROR_SIZE: usize = 256;
 pub const M_OK: c_int = 0;
 pub const MSG_DONE: c_int = 1;
 
+pub const OPT_WRITEDATA: c_int = 10001;
+pub const OPT_URL: c_int = 10002;
+pub const OPT_PROXY: c_int = 10004;
+pub const OPT_ERRORBUFFER: c_int = 10010;
+pub const OPT_WRITEFUNCTION: c_int = 20011;
+pub const OPT_TIMEOUT: c_int = 13;
+pub const OPT_POSTFIELDS: c_int = 10015;
+pub const OPT_REFERER: c_int = 10016;
+pub const OPT_USERAGENT: c_int = 10018;
+pub const OPT_HTTPHEADER: c_int = 10023;
+pub const OPT_HEADERDATA: c_int = 10029;
+pub const OPT_COOKIEFILE: c_int = 10031;
+pub const OPT_CUSTOMREQUEST: c_int = 10036;
+pub const OPT_VERBOSE: c_int = 41;
+pub const OPT_NOPROGRESS: c_int = 43;
+pub const OPT_POST: c_int = 47;
+pub const OPT_FOLLOWLOCATION: c_int = 52;
+pub const OPT_XFERINFODATA: c_int = 10057;
+pub const OPT_AUTOREFERER: c_int = 58;
+pub const OPT_POSTFIELDSIZE: c_int = 60;
+pub const OPT_MAXREDIRS: c_int = 68;
+pub const OPT_CONNECTTIMEOUT: c_int = 78;
+pub const OPT_HEADERFUNCTION: c_int = 20079;
+pub const OPT_COOKIEJAR: c_int = 10082;
+pub const OPT_HTTP_VERSION: c_int = 84;
+pub const OPT_NOSIGNAL: c_int = 99;
+pub const OPT_SHARE: c_int = 10100;
+pub const OPT_ACCEPT_ENCODING: c_int = 10102;
+pub const OPT_UNRESTRICTED_AUTH: c_int = 105;
+pub const OPT_MAXFILESIZE_LARGE: c_int = 30117;
+pub const OPT_COOKIELIST: c_int = 10135;
+pub const OPT_NOPROXY: c_int = 10177;
+pub const OPT_XFERINFOFUNCTION: c_int = 20219;
+pub const OPT_ALTSVC: c_int = 10287;
+pub const OPT_HSTS_CTRL: c_int = 299;
+pub const OPT_HSTS: c_int = 10300;
+pub const OPT_PROTOCOLS_STR: c_int = 10318;
+pub const OPT_REDIR_PROTOCOLS_STR: c_int = 10319;
 pub const OPT_SSL_VERIFYPEER: c_int = 64;
 pub const OPT_SSL_VERIFYHOST: c_int = 81;
 pub const OPT_SSL_OPTIONS: c_int = 216;
@@ -21,6 +69,19 @@ pub const OPT_DOH_URL: c_int = 10279;
 pub const OPT_SSL_EC_CURVES: c_int = 10298;
 pub const OPT_ECH: c_int = 10325;
 pub const SSLOPT_NATIVE_CA: c_long = 16;
+pub const HSTS_ENABLE: c_long = 1;
+
+pub const INFO_EFFECTIVE_URL: c_int = 0x10_0001;
+pub const INFO_PRIMARY_IP: c_int = 0x10_0020;
+pub const INFO_RESPONSE_CODE: c_int = 0x20_0002;
+pub const INFO_NUM_CONNECTS: c_int = 0x20_001a;
+pub const INFO_HTTP_VERSION: c_int = 0x20_002e;
+pub const INFO_TOTAL_TIME_T: c_int = 0x60_0032;
+pub const INFO_NAMELOOKUP_TIME_T: c_int = 0x60_0033;
+pub const INFO_CONNECT_TIME_T: c_int = 0x60_0034;
+pub const INFO_PRETRANSFER_TIME_T: c_int = 0x60_0035;
+pub const INFO_STARTTRANSFER_TIME_T: c_int = 0x60_0036;
+pub const INFO_APPCONNECT_TIME_T: c_int = 0x60_0038;
 
 pub const MOPT_PIPELINING: c_int = 3;
 pub const PIPE_MULTIPLEX: c_long = 2;
@@ -107,8 +168,14 @@ unsafe extern "C" {
     pub fn curl_global_init(flags: c_long) -> Code;
     pub fn curl_global_cleanup();
     pub fn curl_version_info(age: c_int) -> *const VersionInfo;
+    pub fn curl_easy_init() -> *mut c_void;
+    pub fn curl_easy_cleanup(handle: *mut c_void);
     pub fn curl_easy_setopt(handle: *mut c_void, option: c_int, ...) -> Code;
+    pub fn curl_easy_getinfo(handle: *mut c_void, info: c_int, ...) -> Code;
     pub fn curl_easy_perform(handle: *mut c_void) -> Code;
+    pub fn curl_easy_strerror(code: Code) -> *const c_char;
+    pub fn curl_slist_append(list: *mut Slist, data: *const c_char) -> *mut Slist;
+    pub fn curl_slist_free_all(list: *mut Slist);
     pub fn curl_multi_init() -> *mut c_void;
     pub fn curl_multi_cleanup(multi: *mut c_void) -> c_int;
     pub fn curl_multi_setopt(multi: *mut c_void, option: c_int, ...) -> c_int;

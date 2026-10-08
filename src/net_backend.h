@@ -86,6 +86,15 @@ typedef struct ns_hop_out {
     char    *error_message;
 } ns_hop_out;
 
+#if GLIB_SIZEOF_VOID_P == 8 && GLIB_SIZEOF_LONG == 8
+G_STATIC_ASSERT(sizeof(ns_hop_req) == 160 &&
+                offsetof(ns_hop_req, referer_policy) == 56 &&
+                offsetof(ns_hop_req, follow_redirects) == 120 &&
+                offsetof(ns_hop_req, http_version_pref) == 152);
+G_STATIC_ASSERT(sizeof(ns_hop_out) == 120 && offsetof(ns_hop_out, ok) == 88 &&
+                offsetof(ns_hop_out, error_message) == 112);
+#endif
+
 void ns_hop_out_clear(ns_hop_out *out);
 
 gboolean ns_hop_transport(const ns_hop_req *req, ns_write_ctx *wctx,

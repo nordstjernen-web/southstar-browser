@@ -210,6 +210,13 @@ Southstar Browser (unreleased):
   TLS options, cancellation, the six-connections-per-origin limit,
   remembering origins that refused a connection, the CA bundle search and
   the response memory budget. Fetches behave as before.
+* Fetching a URL is Rust: the curl request for each hop (with the retry
+  the insecure-TLS override allows), the Accept, Sec-Fetch, client-hint,
+  Do Not Track, Global Privacy Control, Origin and revalidation headers,
+  the HTTP cache lookup, conditional requests and storing, the cookie jar
+  a request uses, the network log, and the redirect loop with Fetch's
+  rules for methods, bodies and credentials. Requests carry the same
+  headers as before, over both the curl and the nghttp2 backends.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -1768,6 +1768,7 @@ dependencies = [
  "southstar-config",
  "southstar-glib",
  "southstar-html-util",
+ "southstar-http-cache",
 ]
 
 [[package]]
