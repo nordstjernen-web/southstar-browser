@@ -98,6 +98,7 @@ unsafe extern "C" {
     pub fn g_str_hash(v: *const c_void) -> c_uint;
     pub fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
     pub fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
+    pub fn g_ascii_dtostr(buffer: *mut c_char, buf_len: c_int, d: f64) -> *mut c_char;
     pub fn g_base64_encode(data: *const u8, len: usize) -> *mut c_char;
     pub fn g_checksum_free(checksum: *mut GChecksum);
     pub fn g_checksum_get_digest(checksum: *mut GChecksum, buffer: *mut u8, digest_len: *mut usize);
@@ -145,6 +146,14 @@ pub fn ascii_strtod(text: &[u8]) -> f64 {
     terminated.extend_from_slice(text);
     terminated.push(0);
     unsafe { g_ascii_strtod(terminated.as_ptr().cast(), ptr::null_mut()) }
+}
+
+pub fn ascii_dtostr(value: f64) -> Vec<u8> {
+    let mut buffer = [0 as c_char; 39];
+    unsafe {
+        g_ascii_dtostr(buffer.as_mut_ptr(), buffer.len() as c_int, value);
+        CStr::from_ptr(buffer.as_ptr()).to_bytes().to_vec()
+    }
 }
 
 pub fn ascii_strtod_prefix(text: &[u8]) -> (f64, usize) {

@@ -106,6 +106,11 @@ Southstar Browser (unreleased):
 * Building the DOM from lexbor's HTML parse is Rust, as are declarative
   shadow roots, inline script source positions, standard video metadata and
   the XML well-formedness check; documents and fragments get the same trees.
+* The DOM's form-control helpers are Rust, the first section of dom.c to
+  move: input types and their numeric values, stepUp/stepDown for number,
+  range, date, month, week, time and datetime-local, range and step
+  validity, required and email checks, contenteditable and spellcheck hosts,
+  and the values editing reads and writes, with the same results as before.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

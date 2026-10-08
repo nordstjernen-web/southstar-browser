@@ -1,4 +1,4 @@
-//! Southstar — the leading fields of struct ns_node and the dom.h readers behind the borrowed node handle.
+//! Southstar — struct ns_node, the borrowed node handle over it and the dom.h calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -39,9 +39,21 @@ pub struct NsNode {
     tpl_content: *mut NsNode,
 }
 
+mod controls;
+
 unsafe extern "C" {
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
+    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
+    fn ns_node_root(n: *const NsNode) -> *const NsNode;
+    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
+    fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
+    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
+    fn ns_node_remove(child: *mut NsNode);
+    fn ns_node_free(node: *mut NsNode);
+    fn ns_doc_id_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
+    fn ns_doc_class_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
+    fn ns_doc_tag_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -150,5 +162,40 @@ impl<'a> Node<'a> {
 
     pub fn collect_text(self) -> Option<GStr> {
         unsafe { GStr::take(ns_node_collect_text(self.as_ptr())) }
+    }
+
+    pub fn root(self) -> Self {
+        Self::link(unsafe { ns_node_root(self.as_ptr()) }).unwrap_or(self)
+    }
+
+    pub fn form_owner(self, doc: Option<Node>) -> Option<Self> {
+        Self::link(unsafe { ns_form_owner(self.as_ptr(), Node::ptr_or_null(doc)) })
+    }
+}
+
+pub fn set_attr(node: Node, name: &CStr, value: &CStr) {
+    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+}
+
+pub fn detach(node: Node) {
+    unsafe { ns_node_remove(node.as_mut_ptr()) };
+}
+
+pub fn free(node: Node) {
+    unsafe { ns_node_free(node.as_mut_ptr()) };
+}
+
+pub fn append_text(parent: Node, text: &CStr) {
+    unsafe {
+        let child = ns_node_new_text(southstar_glib::g_strdup(text.as_ptr()));
+        ns_node_append_child(parent.as_mut_ptr(), child);
+    }
+}
+
+pub fn index_subtree_removed(doc: Node, root: Node) {
+    unsafe {
+        ns_doc_id_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
+        ns_doc_class_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
+        ns_doc_tag_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
     }
 }

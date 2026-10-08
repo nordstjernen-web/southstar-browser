@@ -8,7 +8,7 @@ use core::ffi::{CStr, c_long};
 use std::ffi::CString;
 
 use ffi::{Control, Query};
-use southstar_dom::{Node, ancestors, children};
+use southstar_dom::{Node, ancestors, children, controls};
 use southstar_glib::GStr;
 
 const MAX_DEPTH: i32 = 512;
@@ -37,6 +37,10 @@ fn or_empty(value: Option<&CStr>) -> &CStr {
 
 fn gstr_or_empty(value: &Option<GStr>) -> &CStr {
     value.as_deref().unwrap_or(c"")
+}
+
+fn textarea_value(node: Node) -> CString {
+    CString::new(controls::textarea_value(Some(node))).unwrap_or_default()
 }
 
 pub(crate) fn is_submit_trigger(node: Node) -> bool {
@@ -110,7 +114,7 @@ fn suffixed(name: &CStr, suffix: &[u8]) -> CString {
 
 fn collect_input(node: Node, name: &CStr, query: &mut Query, submitter: Option<Node>) {
     let ty = node.attr(c"type");
-    if type_is_any(ty, &["checkbox", "radio"]) && !node.checked() {
+    if type_is_any(ty, &["checkbox", "radio"]) && !controls::is_checked(node) {
         return;
     }
     if type_is(ty, "submit") {
@@ -129,7 +133,7 @@ fn collect_input(node: Node, name: &CStr, query: &mut Query, submitter: Option<N
     if type_is_any(ty, &["button", "reset", "file"]) {
         return;
     }
-    let mut value = node.used_value();
+    let mut value = controls::used_value(node);
     if value.is_none() && type_is_any(ty, &["checkbox", "radio"]) {
         value = Some(c"on");
     }
@@ -145,7 +149,7 @@ fn collect_control(
 ) {
     match tag {
         b"input" => collect_input(node, name, query, submitter),
-        b"textarea" => query.append(name, Some(gstr_or_empty(&node.textarea_value()))),
+        b"textarea" => query.append(name, Some(&textarea_value(node))),
         b"select" => {
             for option in selected_options(node) {
                 query.append(name, Some(gstr_or_empty(&option.option_value())));
@@ -212,43 +216,43 @@ fn type_matches(node: Node, value: &CStr, ty: Option<&CStr>) -> bool {
         return true;
     }
     if type_is(Some(ty), "email") {
-        return node.email_value_valid(value);
+        return controls::email_value_valid(Some(node), Some(value));
     }
     if type_is(Some(ty), "url") {
         return ffi::url_is_valid_absolute(value);
     }
-    if ffi::type_has_number_value(ty) {
-        return ffi::value_to_number(ty, value);
+    if controls::type_has_number_value(Some(ty)) {
+        return controls::value_to_number(Some(ty), Some(value)).is_some();
     }
     true
 }
 
 fn range_matches(node: Node, value: &CStr) -> bool {
-    node.range_state(value)
-        .is_none_or(|(under, over)| !under && !over)
+    controls::value_range_state(node, Some(value)).is_none_or(|(under, over)| !under && !over)
 }
 
 fn length_matches(node: Node, value: &CStr) -> bool {
-    if !node.length_limits_apply() {
+    if !controls::length_limits_apply(node) {
         return true;
     }
     let minlen = node.attr(c"minlength");
     let maxlen = node.attr(c"maxlength");
     let length = ffi::utf8_strlen(value);
-    let limit = |attr: &CStr| c_long::from(ffi::parse_int(attr, 0, 0, LENGTH_LIMIT_MAX));
+    let limit = |attr: &CStr| c_long::from(controls::parse_int(Some(attr), 0, 0, LENGTH_LIMIT_MAX));
     minlen.is_none_or(|minlen| length >= limit(minlen))
         && maxlen.is_none_or(|maxlen| length <= limit(maxlen))
 }
 
 fn value_valid(node: Node, is_input: bool, ty: Option<&CStr>, value: &CStr) -> bool {
     let pattern = node.attr(c"pattern");
-    if is_input && ffi::type_supports_text_constraints(ty) && !pattern_matches(value, pattern) {
+    if is_input && controls::type_supports_text_constraints(ty) && !pattern_matches(value, pattern)
+    {
         return false;
     }
     if is_input
         && (!type_matches(node, value, ty)
             || !range_matches(node, value)
-            || node.step_mismatch(value))
+            || controls::value_step_mismatch(node, Some(value)))
     {
         return false;
     }
@@ -268,18 +272,19 @@ fn control_invalid(node: Node, tag: &[u8], doc: Option<Node>) -> bool {
         return true;
     }
     let collected = match tag {
-        b"textarea" => node.textarea_value(),
+        b"textarea" => Some(textarea_value(node)),
         b"select" => selected_options(node)
             .first()
-            .and_then(|option| option.option_value()),
+            .and_then(|option| option.option_value())
+            .map(|value| CString::from(&*value)),
         _ => None,
     };
     let value = match tag {
-        b"textarea" | b"select" => gstr_or_empty(&collected),
-        _ => or_empty(node.used_value()),
+        b"textarea" | b"select" => collected.as_deref().unwrap_or(c""),
+        _ => or_empty(controls::used_value(node)),
     };
-    let required = node.supports_required() && node.attr(c"required").is_some();
-    if required && node.value_missing(value, doc) {
+    let required = controls::supports_required(node) && node.attr(c"required").is_some();
+    if required && controls::value_missing(node, Some(value), doc) {
         return true;
     }
     !value.is_empty() && !value_valid(node, is_input, ty, value)
@@ -298,7 +303,7 @@ pub(crate) fn first_invalid<'a>(
     if let Some(tag) = node.element_name().filter(|tag| VALIDATED.contains(tag)) {
         if belongs_to(form, node, doc)
             && !node.effectively_disabled()
-            && !node.readonly_bars_validation()
+            && !controls::readonly_bars_validation(node)
             && control_invalid(node, tag, doc)
         {
             return Some(node);

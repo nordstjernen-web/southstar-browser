@@ -901,3 +901,12 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `mathml.c` | 560 | `rust/mathml` (DOM through `rust/dom`) | 6 (layout) |
 | `image.c` | 909 | `rust/image` (`ns_image` stays a `#[repr(C)]` struct the C reads and writes) | 8 |
 | `html_lexbor.c` | 852 | `rust/html-parser` (lexbor through its exported `_noi` functions and mirrored node structs) | 6 (DOM and parsing) |
+
+### Ported in part
+
+Files ported section by section shrink with each commit and move to the table
+above once the last section goes.
+
+| Module | Sections in Rust | Crate | Phase |
+|---|---|---|---|
+| `dom.c` | form controls: input types and their numeric values, stepping, range and step validity, required, email syntax, `contenteditable` and spellcheck hosts, and editable values (741 lines) | `rust/dom` | 6 (DOM and parsing) |
