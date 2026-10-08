@@ -76,6 +76,8 @@ Southstar Browser (unreleased):
   libcurl.
 * Decoded image textures, the inline PDF viewer and microphone capture are
   Rust.
+* Response-body charset detection and decoding, HTML escaping and the
+  image, JSON and XML viewer pages are Rust.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

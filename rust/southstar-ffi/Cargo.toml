@@ -26,6 +26,7 @@ southstar-eventsource = { path = "../eventsource" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
+southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-js-temporal = { path = "../js-temporal" }

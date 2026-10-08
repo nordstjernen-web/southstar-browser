@@ -1,0 +1,14 @@
+[package]
+name = "southstar-html-util"
+description = "HTML helper utilities: escaping, number and charset parsing, response-body decoding, and the image, JSON and XML viewer documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

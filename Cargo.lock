@@ -1504,6 +1504,7 @@ dependencies = [
  "southstar-glctx",
  "southstar-glib",
  "southstar-history",
+ "southstar-html-util",
  "southstar-http-cache",
  "southstar-i18n",
  "southstar-image-decoders",
@@ -1547,6 +1548,13 @@ dependencies = [
  "southstar-about-style",
  "southstar-glib",
  "southstar-sqlite",
+]
+
+[[package]]
+name = "southstar-html-util"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
 ]
 
 [[package]]
