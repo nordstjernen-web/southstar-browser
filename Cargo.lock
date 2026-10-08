@@ -1510,6 +1510,7 @@ dependencies = [
  "southstar-js-temporal",
  "southstar-mat4",
  "southstar-netutil",
+ "southstar-pdf",
  "southstar-safebrowsing",
  "southstar-sandbox",
  "southstar-spellcheck",
@@ -1604,6 +1605,13 @@ name = "southstar-netutil"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-config",
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-pdf"
+version = "1.0.30-dev"
+dependencies = [
  "southstar-glib",
 ]
 

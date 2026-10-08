@@ -21,6 +21,10 @@ endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']
 endif
+if have_poppler
+  southstar_rust_features += ['poppler']
+  southstar_rust_link_deps += [libpoppler]
+endif
 if have_seccomp
   southstar_rust_features += ['seccomp']
   southstar_rust_link_deps += [libseccomp]

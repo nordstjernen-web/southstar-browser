@@ -32,6 +32,7 @@ southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
 southstar-netutil = { path = "../netutil" }
+southstar-pdf = { path = "../pdf" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }
@@ -42,6 +43,7 @@ southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
+poppler = ["southstar-pdf/poppler"]
 egl = ["southstar-glctx/egl"]
 enchant = ["southstar-spellcheck/enchant"]
 seccomp = ["southstar-sandbox/seccomp"]

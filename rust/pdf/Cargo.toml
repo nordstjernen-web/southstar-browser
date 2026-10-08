@@ -1,0 +1,17 @@
+[package]
+name = "southstar-pdf"
+description = "PDF documents shown as an HTML page of rendered page images, through poppler-glib and Cairo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[features]
+poppler = []
+
+[lints]
+workspace = true
