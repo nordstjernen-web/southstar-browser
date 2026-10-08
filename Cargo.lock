@@ -1425,6 +1425,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-browser"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+]
+
+[[package]]
 name = "southstar-bytecode-cache"
 version = "1.0.30-dev"
 dependencies = [
@@ -1527,6 +1537,7 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-bookmarks",
+ "southstar-browser",
  "southstar-bytecode-cache",
  "southstar-camera",
  "southstar-config",

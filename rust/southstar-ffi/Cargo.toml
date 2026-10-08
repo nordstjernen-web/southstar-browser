@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 southstar-about-style = { path = "../about-style" }
 southstar-bookmarks = { path = "../bookmarks" }
+southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-camera = { path = "../camera" }
 southstar-config = { path = "../config" }

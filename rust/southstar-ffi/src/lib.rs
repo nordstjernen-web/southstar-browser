@@ -6,6 +6,7 @@ mod info;
 
 pub use southstar_about_style;
 pub use southstar_bookmarks;
+pub use southstar_browser;
 pub use southstar_bytecode_cache;
 pub use southstar_camera;
 pub use southstar_config;

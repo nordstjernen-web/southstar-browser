@@ -70,9 +70,9 @@ pub struct NsBox {
     border: Edges,
     scroll_x: f64,
     scroll_y: f64,
-    _scroll_max_x: f64,
-    _scroll_max_y: f64,
-    _scrolls: GBoolean,
+    scroll_max_x: f64,
+    scroll_max_y: f64,
+    scrolls: GBoolean,
     text: *const c_char,
     _inline_layout_cache_style: *const Style,
     _inline_layout_cache_width: f64,
@@ -280,6 +280,26 @@ impl<'a> BoxRef<'a> {
 
     pub fn scroll_y(self) -> f64 {
         self.raw().scroll_y
+    }
+
+    pub fn scroll_max_x(self) -> f64 {
+        self.raw().scroll_max_x
+    }
+
+    pub fn scroll_max_y(self) -> f64 {
+        self.raw().scroll_max_y
+    }
+
+    pub fn scrolls(self) -> bool {
+        self.raw().scrolls != 0
+    }
+
+    pub fn set_scroll(self, x: f64, y: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).scroll_y = y;
+            (*b).scroll_x = x;
+        }
     }
 
     pub fn margin(self) -> Edges {

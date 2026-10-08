@@ -1,0 +1,17 @@
+[package]
+name = "southstar-browser"
+description = "The embedding API of src/libsouthstar.h: a page's lifecycle, relayout, settling, script callbacks and queries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-layout = { path = "../layout" }
+
+[lints]
+workspace = true

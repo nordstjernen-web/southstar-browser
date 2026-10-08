@@ -154,6 +154,13 @@ Southstar Browser (unreleased):
   relayout with its NS_PROFILE timings and the second pass when a frame's
   measured viewport changes, and the relayout counters. engine.c is gone;
   styles, layouts, captures and requests are the same as before.
+* The embedding API's page lifecycle is Rust: building a page from its
+  document, relayout with its oscillation damper and saved scroll offsets,
+  image sessions, settling and the per-frame tick, viewport and device pixel
+  ratio changes, fragment targets and scroll requests, the script engine's
+  and media's callbacks, form submission, declarative refresh, the dumps,
+  captures and print sheets, the title, links and favicon, the caret blink
+  and closing a page. Pages behave exactly as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

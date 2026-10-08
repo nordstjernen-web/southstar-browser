@@ -907,3 +907,12 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `selection.c` | 546 | `rust/selection` (boxes through `rust/layout`) | 6 (layout) |
 | `headless.c` | 2,227 | `rust/headless` (ported in two sections; its standard output still goes through the C runtime's stdout buffer, so it stays ordered with what C writes there) | 4 |
 | `engine.c` | 1,500 | `rust/engine` (ported in three sections; style sheets stay C `ns_css_stylesheet`s collected into GLib pointer arrays, and the render context and profile are `#[repr(C)]` mirrors asserted on both sides) | 6 (pipeline driver) |
+
+### Ported in part
+
+Files ported section by section shrink with each commit and move to the table
+above once the last section goes.
+
+| Module | Sections in Rust | Crate | Phase |
+|---|---|---|---|
+| `libsouthstar.c` | building a page from its document, relayout with the oscillation damper and saved scroll offsets, image sessions, settling and the per-frame tick, the viewport and device pixel ratio, fragment and scroll requests, every script-engine and media callback, form submission, the dumps, captures and print sheets, the title, links and favicon, the caret blink, pending navigations, downloads, clipboard text, audio and posts, and closing a page (2,007 lines) | `rust/browser` (`struct ns_browser` stays C's layout, mirrored field for field with `Cell`s so callbacks re-entering from script stay sound) | 6 (pipeline driver) |

@@ -14,34 +14,22 @@
 #include <string.h>
 
 #include "anim.h"
-#include "bytecode_cache.h"
-#include "cache.h"
-#include "debuglog.h"
-#include "history.h"
 #include "config.h"
 #include "css.h"
 #include "dom.h"
 #include "engine.h"
-#include "font.h"
 #include "forms.h"
 #include "html.h"
 #include "image.h"
 #include "js.h"
 #include "layout.h"
 #include "net.h"
-#include "spellcheck.h"
 #include "paint.h"
-#include "print.h"
 #include "pdf.h"
 #include "render.h"
 #include "safebrowsing.h"
-#include "security.h"
 #include "selection.h"
 #include "video.h"
-#include "camera.h"
-#include "webgl.h"
-
-#define NS_IMAGE_RELAYOUT_BATCH 8
 
 struct ns_browser {
     ns_node        *doc;
@@ -131,886 +119,42 @@ struct ns_browser {
     char           *remote_ip;
 };
 
-#define NS_LAYOUT_OSC_THRESHOLD 6
-#define NS_LAYOUT_RAPID_US (250 * 1000)
-#define NS_LAYOUT_DAMP_US (700 * 1000)
-#define NS_LAYOUT_BACKGROUND_MIN_US (16 * 1000)
-#define NS_LAYOUT_BACKGROUND_MAX_US (120 * 1000)
-#define NS_CARET_BLINK_US (530 * 1000)
-
-static gboolean
-browser_doc_has_node(const ns_node *root, const ns_node *target)
-{
-    for (const ns_node *n = root; n; n = ns_node_next_in_subtree(n, root, TRUE))
-        if (n == target) return TRUE;
-    return FALSE;
-}
-
-static gboolean
-browser_node_alive(const ns_browser *browser, const ns_node *node)
-{
-    if (!node || !browser || !browser->doc) return FALSE;
-    return browser_doc_has_node(browser->doc, node);
-}
-
-static void
-browser_prune_cached_nodes(ns_browser *browser)
-{
-    if (!browser || !browser->doc) return;
-    if (browser->press_node && !browser_node_alive(browser, browser->press_node))
-        browser->press_node = NULL;
-    if (browser->hover_node && !browser_node_alive(browser, browser->hover_node))
-        browser->hover_node = NULL;
-    if (browser->open_select && !browser_node_alive(browser, browser->open_select))
-        browser->open_select = NULL;
-}
-
-static guint64
-layout_signature_walk(const ns_box *b, guint64 h)
-{
-    if (!b) return h;
-    gint32 q[4] = {
-        (gint32)(b->x * 4), (gint32)(b->y * 4),
-        (gint32)(b->content_width * 4), (gint32)(b->content_height * 4),
-    };
-    const guchar *bytes = (const guchar *)q;
-    h ^= (guint64)b->kind;
-    h *= 0x100000001b3ULL;
-    for (gsize i = 0; i < sizeof q; i++) {
-        h ^= bytes[i];
-        h *= 0x100000001b3ULL;
-    }
-    for (const ns_box *c = b->first_child; c; c = c->next_sibling)
-        h = layout_signature_walk(c, h);
-    if (b->inline_atomics)
-        for (guint i = 0; i < b->inline_atomics->len; i++)
-            h = layout_signature_walk(
-                g_array_index(b->inline_atomics, ns_inline_atomic, i).box, h);
-    return h;
-}
-
-static guint64
-layout_signature(const ns_box *root)
-{
-    return layout_signature_walk(root, 0xcbf29ce484222325ULL);
-}
-
-static void
-browser_damp_reset(ns_browser *b)
-{
-    b->layout_osc = 0;
-    b->damp_until_us = 0;
-    b->damp_logged = FALSE;
-}
-
-typedef struct { double x, y; } browser_scroll_pos;
-
-static void
-browser_collect_scroll(const ns_box *b, GHashTable *map)
-{
-    if (!b) return;
-    if (b->dom && (b->scroll_y != 0.0 || b->scroll_x != 0.0)) {
-        browser_scroll_pos *p = g_new(browser_scroll_pos, 1);
-        p->x = b->scroll_x;
-        p->y = b->scroll_y;
-        g_hash_table_insert(map, (gpointer)b->dom, p);
-    }
-    for (const ns_box *c = b->first_child; c; c = c->next_sibling)
-        browser_collect_scroll(c, map);
-}
-
-static void
-browser_restore_scroll(ns_box *b, GHashTable *map)
-{
-    if (!b) return;
-    if (b->dom) {
-        browser_scroll_pos *p = g_hash_table_lookup(map, b->dom);
-        if (p) {
-            double maxy = b->scroll_max_y > 0 ? b->scroll_max_y : 0;
-            double maxx = b->scroll_max_x > 0 ? b->scroll_max_x : 0;
-            double y = p->y < 0 ? 0 : (p->y > maxy ? maxy : p->y);
-            double x = p->x < 0 ? 0 : (p->x > maxx ? maxx : p->x);
-            b->scroll_y = y;
-            b->scroll_x = x;
-        }
-    }
-    for (ns_box *c = b->first_child; c; c = c->next_sibling)
-        browser_restore_scroll(c, map);
-}
-
-static void browser_ensure_images(ns_browser *browser);
-static void browser_schedule_media_events(ns_browser *b);
-
-static void
-browser_relayout(ns_browser *b)
-{
-    if (b->relaying) { b->dirty = TRUE; return; }
-    b->relaying = TRUE;
-    b->cascade_dirty = FALSE;
-    if (b->js)
-        (void)ns_js_consume_mutated(b->js);
-    b->image_arrivals_since_layout = 0;
-    GHashTable *scroll_save =
-        g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
-    browser_collect_scroll(b->layout, scroll_save);
-    ns_css_set_viewport((double)b->vw, b->vh);
-    ns_css_set_doc_language(b->doc_language);
-    if (b->js) ns_js_sync_window_metrics(b->js);
-    b->search_active = NULL;
-    ns_selection_clear(&b->selection);
-    if (b->js && b->layout) ns_js_set_layout_root(b->js, NULL);
-    if (b->layout) {
-        ns_paint_3d_invalidate();
-        ns_box_free(b->layout);
-        b->layout = NULL;
-        b->sb_box = NULL;
-        b->sb_node = NULL;
-        b->sb_dragging = FALSE;
-    }
-    if (b->js && b->styles) ns_js_set_style_table(b->js, NULL);
-    if (b->styles) { g_hash_table_destroy(b->styles); b->styles = NULL; }
-    browser_prune_cached_nodes(b);
-    ns_layout_set_open_select(b->open_select);
-    {
-        const ns_node *fn = b->js ? ns_js_focused_node(b->js) : NULL;
-        gboolean dl_open = !b->datalist_suppressed && fn &&
-                           ns_node_is_element_named(fn, "input") &&
-                           ns_element_get_attr(fn, "list") != NULL;
-        ns_layout_set_datalist_open(dl_open);
-    }
-    gint64 relayout_t0 = g_get_monotonic_time();
-    b->styles = ns_engine_relayout(b->doc, b->base_url, b->vw, b->vh,
-                                   b->images, b->anim, b->js,
-                                   b->css_cache,
-                                   b->js ? ns_js_focused_node(b->js) : NULL,
-                                   b->hover_node,
-                                   b->caret_byte, b->sel_anchor_byte,
-                                   &b->layout);
-    b->relayout_cost_us = g_get_monotonic_time() - relayout_t0;
-    b->relaying = FALSE;
-    if (g_hash_table_size(scroll_save) > 0)
-        browser_restore_scroll(b->layout, scroll_save);
-    g_hash_table_destroy(scroll_save);
-    b->images_fetched = FALSE;
-    b->has_deferred_lazy = FALSE;
-    b->images_arrived_since_layout = FALSE;
-    if (b->js) {
-        ns_js_set_style_table(b->js, b->styles);
-        ns_js_set_layout_root(b->js, b->layout);
-        browser_ensure_images(b);
-        browser_schedule_media_events(b);
-    }
-
-    gint64 now = g_get_monotonic_time();
-    gboolean rapid = now - b->last_layout_us < NS_LAYOUT_RAPID_US;
-    b->last_layout_us = now;
-    guint64 sig = layout_signature(b->layout);
-    if (sig == b->layout_sig[0] || sig == b->layout_sig[1]) {
-        if (rapid && b->layout_osc < G_MAXINT) b->layout_osc++;
-    } else {
-        browser_damp_reset(b);
-    }
-    b->layout_sig[1] = b->layout_sig[0];
-    b->layout_sig[0] = sig;
-}
-
-static gboolean
-browser_mutation_relayout_due(ns_browser *b)
-{
-    if (!b->layout || b->last_layout_us <= 0) return TRUE;
-    gint64 min_gap = b->relayout_cost_us;
-    if (min_gap < NS_LAYOUT_BACKGROUND_MIN_US)
-        min_gap = NS_LAYOUT_BACKGROUND_MIN_US;
-    if (min_gap > NS_LAYOUT_BACKGROUND_MAX_US)
-        min_gap = NS_LAYOUT_BACKGROUND_MAX_US;
-    return g_get_monotonic_time() - b->last_layout_us >= min_gap;
-}
-
-static gboolean
-browser_relayout_from_mutation(ns_browser *b)
-{
-    if (b->layout && b->layout_osc >= NS_LAYOUT_OSC_THRESHOLD) {
-        gint64 now = g_get_monotonic_time();
-        if (now < b->damp_until_us) {
-            b->dirty = TRUE;
-            return FALSE;
-        }
-        b->damp_until_us = now + NS_LAYOUT_DAMP_US;
-        if (!b->damp_logged) {
-            b->damp_logged = TRUE;
-            g_message("southstar: layout dampener engaged "
-                      "(script reflow loop with no user input)");
-        }
-    }
-    browser_relayout(b);
-    return TRUE;
-}
-
-static gboolean
-overflow_keyword_hidden(const char *kw)
-{
-    return kw && (g_ascii_strcasecmp(kw, "hidden") == 0 ||
-                  g_ascii_strcasecmp(kw, "clip") == 0);
-}
-
-static gboolean
-box_axis_overflow_hidden(const ns_box *b, ns_css_prop axis)
-{
-    if (!b || !b->style) return FALSE;
-    const char *kw = ns_style_keyword(b->style, axis);
-    if (!kw) kw = ns_style_keyword(b->style, NS_CSS_OVERFLOW);
-    return overflow_keyword_hidden(kw);
-}
-
-static gboolean
-root_axis_overflow_hidden(const ns_box *b, ns_css_prop axis)
-{
-    if (!b) return FALSE;
-    if (b->dom && b->dom->name &&
-        (strcmp(b->dom->name, "html") == 0 ||
-         strcmp(b->dom->name, "body") == 0) &&
-        box_axis_overflow_hidden(b, axis))
-        return TRUE;
-    for (const ns_box *c = b->first_child; c; c = c->next_sibling)
-        if (root_axis_overflow_hidden(c, axis)) return TRUE;
-    return FALSE;
-}
-
-static int browser_images_outstanding(ns_browser *browser);
-
-static gboolean
-browser_fire_media_events(gpointer user_data)
-{
-    ns_browser *b = user_data;
-    b->media_events_source = 0;
-    if (b->js && b->layout) ns_js_fire_media_load_events(b->js, b->layout);
-    return G_SOURCE_REMOVE;
-}
-
-static void
-browser_schedule_media_events(ns_browser *b)
-{
-    if (!b->media_events_source)
-        b->media_events_source =
-            g_timeout_add(0, browser_fire_media_events, b);
-}
-
-static gboolean
-browser_load_waits_for_images(gpointer user_data)
-{
-    ns_browser *b = user_data;
-    if (g_get_monotonic_time() >= b->load_delay_deadline_us) return FALSE;
-    return b->media_events_source != 0 || b->images_arrived_since_layout ||
-           browser_images_outstanding(b) > 0;
-}
-
-static void
-browser_image_arrived(gpointer user_data)
-{
-    ns_browser *b = user_data;
-    if (!b) return;
-    b->images_arrived_since_layout = TRUE;
-    b->image_arrivals_since_layout++;
-    if (b->image_arrivals_since_layout >= NS_IMAGE_RELAYOUT_BATCH ||
-        browser_images_outstanding(b) == 0) {
-        b->image_arrivals_since_layout = 0;
-        b->dirty = TRUE;
-    }
-}
-
-static int
-browser_images_outstanding(ns_browser *browser)
-{
-    if (!browser->img_sessions) return 0;
-    int total = 0;
-    for (guint i = 0; i < browser->img_sessions->len; ) {
-        ns_engine_img_session *s = g_ptr_array_index(browser->img_sessions, i);
-        int o = ns_engine_img_session_outstanding(s);
-        if (o == 0) {
-            ns_engine_img_session_close(s);
-            g_ptr_array_remove_index_fast(browser->img_sessions, i);
-            continue;
-        }
-        total += o;
-        i++;
-    }
-    return total;
-}
-
-static void
-browser_ensure_images(ns_browser *browser)
-{
-    if (browser->images_fetched && !browser->has_deferred_lazy) return;
-    if (!browser->img_requested)
-        browser->img_requested = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                       g_free, NULL);
-    if (!browser->img_sessions)
-        browser->img_sessions = g_ptr_array_new();
-    double vp_h = browser->cur_viewport_h > 0.0 ? browser->cur_viewport_h
-                                                : browser->vh;
-    gboolean deferred = FALSE;
-    ns_engine_img_session *s =
-        ns_engine_fetch_images_start(browser->layout, browser->base_url,
-                                     browser->images, browser->img_requested,
-                                     browser->cur_scroll_y, vp_h, &deferred,
-                                     browser_image_arrived, browser);
-    if (s) g_ptr_array_add(browser->img_sessions, s);
-    browser->images_fetched = TRUE;
-    browser->has_deferred_lazy = deferred;
-}
-
-static void
-browser_wait_images(ns_browser *browser)
-{
-    browser_ensure_images(browser);
-    gint64 deadline = g_get_monotonic_time() + (gint64)15 * G_USEC_PER_SEC;
-    while (browser_images_outstanding(browser) > 0 &&
-           g_get_monotonic_time() < deadline) {
-        int dispatched = 0;
-        while (g_main_context_pending(NULL) && dispatched++ < 64)
-            g_main_context_iteration(NULL, FALSE);
-        if (dispatched == 0) g_usleep(1000);
-    }
-    if (browser->dirty) {
-        browser_relayout(browser);
-        browser->dirty = FALSE;
-    }
-}
-
-static void
-browser_flush(gpointer user_data)
-{
-    ns_browser *b = user_data;
-    if (!b || !b->js) return;
-    if (ns_js_consume_mutated(b->js))
-        b->dirty = TRUE;
-    if (!b->layout || b->dirty || b->cascade_dirty) {
-        browser_relayout(b);
-        b->dirty = FALSE;
-    }
-}
-
-static char *
-browser_url_fragment(const char *url, gboolean *has_fragment)
-{
-    const char *hash = url ? strchr(url, '#') : NULL;
-    if (has_fragment) *has_fragment = hash != NULL;
-    if (!hash) return NULL;
-    char *decoded = g_uri_unescape_string(hash + 1, NULL);
-    return decoded ? decoded : g_strdup(hash + 1);
-}
-
-static gboolean
-browser_reveal_fragment_target(ns_browser *browser, ns_node *target)
-{
-    gboolean changed = FALSE;
-    for (ns_node *cur = target; cur; cur = cur->parent) {
-        if (ns_element_hidden_until_found(cur)) {
-            ns_element_remove_attr(cur, "hidden");
-            changed = TRUE;
-        }
-        if (cur->parent && ns_details_fragment_needs_open(cur->parent, cur) &&
-            !ns_element_get_attr(cur->parent, "open")) {
-            ns_element_set_attr(cur->parent, "open", "");
-            changed = TRUE;
-        }
-        if (cur == browser->doc) break;
-    }
-    return changed;
-}
-
-static const ns_box *
-browser_box_for_node(const ns_box *box, const ns_node *target)
-{
-    if (!box || !target) return NULL;
-    if (box->dom == target) return box;
-    for (const ns_box *child = box->first_child; child;
-         child = child->next_sibling) {
-        const ns_box *found = browser_box_for_node(child, target);
-        if (found) return found;
-    }
-    if (box->inline_atomics)
-        for (guint i = 0; i < box->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic = &g_array_index(
-                box->inline_atomics, ns_inline_atomic, i);
-            const ns_box *found = browser_box_for_node(atomic->box, target);
-            if (found) return found;
-        }
-    return NULL;
-}
-
-static gboolean
-browser_target_scroll_y(ns_browser *browser, const ns_node *target, int *out_y)
-{
-    if (!browser || !browser->layout || !target) return FALSE;
-    const ns_box *box = browser_box_for_node(browser->layout, target);
-    double y = 0;
-    if (box) {
-        y = box->y + box->margin.top;
-    } else {
-        double x = 0, w = 0, h = 0;
-        if (!ns_box_inline_rect_for_dom(browser->layout, target,
-                                        &x, &y, &w, &h))
-            return FALSE;
-    }
-    *out_y = (int)floor(MAX(0.0, y));
-    return TRUE;
-}
-
-static void
-browser_queue_scroll_to(ns_browser *browser, const ns_node *target,
-                        gboolean reveal)
-{
-    if (!browser || !target) return;
-    if (reveal && browser_reveal_fragment_target(browser, (ns_node *)target))
-        browser->dirty = TRUE;
-    browser_flush(browser);
-    int y = 0;
-    if (!browser_target_scroll_y(browser, target, &y)) return;
-    browser->pending_scroll_y = y;
-    browser->pending_scroll = TRUE;
-    if (reveal) {
-        browser->scroll_anchor = target;
-        browser->scroll_anchor_y = y;
-    }
-}
-
-static void
-browser_follow_scroll_anchor(ns_browser *browser)
-{
-    if (!browser || !browser->scroll_anchor) return;
-    if (fabs(browser->cur_scroll_y - (double)browser->scroll_anchor_y) > 1.0 &&
-        !browser->pending_scroll) {
-        browser->scroll_anchor = NULL;
-        return;
-    }
-    int y = 0;
-    if (browser_target_scroll_y(browser, browser->scroll_anchor, &y) &&
-        y != browser->scroll_anchor_y) {
-        browser->scroll_anchor_y = y;
-        browser->pending_scroll_y = y;
-        browser->pending_scroll = TRUE;
-    }
-    if (!ns_browser_animating(browser) && !browser->pending_scroll)
-        browser->scroll_anchor = NULL;
-}
-
-static void
-browser_js_viewport_scroll(double *x, double *y, gpointer user_data)
-{
-    ns_browser *b = user_data;
-    if (!b) return;
-    browser_flush(b);
-    int page_w = 0, page_h = 0;
-    ns_browser_page_size(b, &page_w, &page_h);
-    double view_h = b->cur_viewport_h > 0.0 ? b->cur_viewport_h : b->vh;
-    double max_x = MAX((double)page_w - (double)b->vw, 0.0);
-    double max_y = MAX((double)page_h - view_h, 0.0);
-    *x = round(CLAMP(*x, 0.0, max_x));
-    *y = round(CLAMP(*y, 0.0, max_y));
-    b->pending_scroll_x = (int)*x;
-    b->pending_scroll_y = (int)*y;
-    b->pending_scroll = TRUE;
-    b->js_scroll_x = *x;
-    b->js_scroll_y = *y;
-    b->scroll_anchor = NULL;
-}
-
-static void
-browser_js_scroll_to(const ns_node *target, gpointer user_data)
-{
-    ns_browser *browser = user_data;
-    if (browser) browser->scroll_anchor = NULL;
-    browser_queue_scroll_to(browser, target, FALSE);
-}
-
-static void
-browser_js_soft_navigate(const char *url, gboolean replace, gpointer user_data)
-{
-    ns_browser *browser = user_data;
-    if (!browser || !url) return;
-    if (!replace) browser->soft_nav_pushed = TRUE;
-    gboolean has_fragment = FALSE;
-    g_autofree char *fragment = browser_url_fragment(url, &has_fragment);
-    ns_css_set_target_fragment(has_fragment && fragment && *fragment
-                                   ? fragment : NULL);
-    g_free(browser->base_url);
-    browser->base_url = g_strdup(url);
-    browser->dirty = TRUE;
-}
-
-static void
-browser_js_fragment_navigate(const char *url, gpointer user_data)
-{
-    ns_browser *browser = user_data;
-    if (!browser || !url) return;
-    gboolean has_fragment = FALSE;
-    g_autofree char *fragment = browser_url_fragment(url, &has_fragment);
-    if (!has_fragment) return;
-    ns_css_set_target_fragment(fragment && *fragment ? fragment : NULL);
-    browser->dirty = TRUE;
-    browser->scroll_anchor = NULL;
-    if (!fragment || !*fragment) {
-        browser->pending_scroll_y = 0;
-        browser->pending_scroll = TRUE;
-        return;
-    }
-    ns_node *target = ns_node_find_fragment_target(browser->doc, fragment);
-    if (target) browser_queue_scroll_to(browser, target, TRUE);
-}
-
-static gboolean
-settle_quit_cb(gpointer user_data)
-{
-    g_main_loop_quit(user_data);
-    return G_SOURCE_CONTINUE;
-}
-
-typedef struct settle_ctx {
-    ns_browser *b;
-    GMainLoop  *loop;
-    int         quiet_ticks;
-    gint64      deadline_us;
-} settle_ctx;
-
-#define NS_SETTLE_QUIET_TICKS 3
-
-static gboolean
-browser_settle_quiet(ns_browser *b)
-{
-    if (b->dirty) return FALSE;
-    if (b->anim && ns_anim_has_active(b->anim)) return FALSE;
-    if (b->js && ns_js_has_pending_work(b->js)) return FALSE;
-    if (b->js && ns_js_has_pending_animation_frame(b->js)) return FALSE;
-    if (b->images && ns_image_cache_has_pending(b->images)) return FALSE;
-    if (b->videos && ns_video_cache_has_pending(b->videos)) return FALSE;
-    if (g_main_context_pending(NULL)) return FALSE;
-    return TRUE;
-}
-
-static gboolean
-settle_tick_cb(gpointer user_data)
-{
-    settle_ctx *ctx = user_data;
-    ns_browser *b = ctx->b;
-    gint64 now = g_get_monotonic_time();
-    if (now >= ctx->deadline_us) {
-        g_main_loop_quit(ctx->loop);
-        return G_SOURCE_CONTINUE;
-    }
-    if (b->images) ns_image_cache_tick(b->images, now);
-    if (b->videos && b->layout) {
-        ns_video_cache_discover(b->videos, b->layout, b->doc, now);
-        ns_video_cache_note_layout(b->videos, b->layout, b->cur_scroll_x,
-                                   b->cur_scroll_y, b->cur_scale);
-        ns_video_cache_tick(b->videos, now);
-    }
-    if (b->anim && ns_anim_tick(b->anim, now)) {
-        b->cascade_dirty = TRUE;
-        if (ns_anim_needs_layout(b->anim)) b->dirty = TRUE;
-    }
-    if (b->anim && b->js) ns_js_dispatch_anim_events(b->js, b->anim);
-    if (b->js) ns_js_run_animation_frame(b->js);
-    if (b->js && ns_js_consume_mutated(b->js))
-        b->dirty = TRUE;
-    if (b->dirty && browser_mutation_relayout_due(b)) {
-        if (browser_relayout_from_mutation(b))
-            b->dirty = FALSE;
-    }
-    if (browser_settle_quiet(b)) {
-        if (++ctx->quiet_ticks >= NS_SETTLE_QUIET_TICKS) {
-            g_main_loop_quit(ctx->loop);
-            return G_SOURCE_CONTINUE;
-        }
-    } else {
-        ctx->quiet_ticks = 0;
-    }
-    return G_SOURCE_CONTINUE;
-}
-
-static void
-browser_settle(ns_browser *b, int settle_ms)
-{
-    if (settle_ms <= 0) return;
-    if (b->videos && b->layout) {
-        ns_video_cache_discover(b->videos, b->layout, b->doc, g_get_monotonic_time());
-        ns_video_cache_note_layout(b->videos, b->layout, b->cur_scroll_x,
-                                   b->cur_scroll_y, b->cur_scale);
-    }
-    if (browser_settle_quiet(b)) return;
-    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
-    settle_ctx ctx = {
-        .b = b,
-        .loop = loop,
-        .deadline_us = g_get_monotonic_time() +
-                       (gint64)settle_ms * 1000,
-    };
-    guint quit = g_timeout_add(settle_ms, settle_quit_cb, loop);
-    guint tick = g_timeout_add(16, settle_tick_cb, &ctx);
-    g_main_loop_run(loop);
-    g_source_remove(tick);
-    g_source_remove(quit);
-    g_main_loop_unref(loop);
-}
-
-static void
-browser_js_log(const char *line, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !line) return;
-    ns_debug_log_emit(NS_DLOG_JS, "console", "%s", line);
-    if (!b->console_buf) b->console_buf = g_string_new(NULL);
-    if (b->console_buf->len > 256u * 1024u)
-        g_string_erase(b->console_buf, 0,
-                       (gssize)(b->console_buf->len - 192u * 1024u));
-    g_string_append(b->console_buf, line);
-    g_string_append_c(b->console_buf, '\n');
-}
-static void browser_js_mutated(gpointer ud) { ns_browser *b = ud; if (b) b->dirty = TRUE; }
-
-static gboolean
-browser_allows_navigation_url(ns_browser *b, const char *url)
-{
-    if (!url || !g_str_has_prefix(url, "file:")) return TRUE;
-    return b && b->base_url && g_str_has_prefix(b->base_url, "file:");
-}
-
-static char *
-browser_resolve_navigation(ns_browser *b, const char *href)
-{
-    if (!b || !href) return NULL;
-    char *abs = ns_url_resolve(b->base_url, href);
-    if (!browser_allows_navigation_url(b, abs)) {
-        g_free(abs);
-        return NULL;
-    }
-    return abs;
-}
-
-static void browser_js_navigate(const char *url, gboolean reload, gpointer ud)
-{
-    (void)reload;
-    ns_browser *b = ud;
-    if (!b || !url || !*url) return;
-    g_free(b->pending_nav);
-    b->pending_nav = browser_resolve_navigation(b, url);
-}
-
-static void browser_js_download(const char *url, const char *filename, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !url || !*url) return;
-    char *abs = ns_url_resolve(b->base_url, url);
-    const char *target = abs ? abs : url;
-    if (!browser_allows_navigation_url(b, target)) {
-        g_free(abs);
-        return;
-    }
-    g_free(b->pending_download);
-    b->pending_download = g_strdup_printf("%s\t%s", target,
-                                          filename ? filename : "");
-    g_free(abs);
-}
-
-static void
-browser_js_window_action(const char *action, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !action || !*action) return;
-    g_free(b->pending_window_action);
-    b->pending_window_action = g_strdup(action);
-}
-
-#define NS_PENDING_CLIPBOARD_MAX 1048576
-
-static gboolean
-browser_js_clipboard_write(const char *text, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !text) return FALSE;
-    if (strlen(text) > NS_PENDING_CLIPBOARD_MAX) return FALSE;
-    g_free(b->pending_clipboard);
-    b->pending_clipboard = g_strdup(text);
-    return TRUE;
-}
-
-static void browser_sync_js_selection(ns_browser *browser);
-
-static gboolean
-browser_js_selection_cmd(const char *command, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !command || !b->layout) return FALSE;
-    gboolean ok = FALSE;
-    if (strcmp(command, "selectAll") == 0)
-        ok = ns_selection_select_all(&b->selection, b->layout);
-    else if (strcmp(command, "unselect") == 0) {
-        ns_selection_clear(&b->selection);
-        ok = TRUE;
-    }
-    if (ok) {
-        browser_sync_js_selection(b);
-        b->dirty = TRUE;
-    }
-    return ok;
-}
-
-#define NS_PENDING_AUDIO_MAX 15000
-
-static void
-browser_js_audio(const char *command, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !command || !*command) return;
-    if (g_getenv("NS_DBG_AUDIO"))
-        g_printerr("[audio-cmd] %s\n", command);
-    if (!b->pending_audio) b->pending_audio = g_string_new(NULL);
-    if (b->pending_audio->len >= NS_PENDING_AUDIO_MAX) return;
-    g_string_append(b->pending_audio, command);
-    g_string_append_c(b->pending_audio, '\n');
-}
-
-static void
-browser_js_video(const void *node, const char *kind, double value, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->js) return;
-    ns_js_video_event(b->js, node, kind, value);
-}
-
-static gboolean
-browser_media_seek(const void *node, double seconds, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (g_getenv("NS_DBG_AUDIO"))
-        g_printerr("[media-seek] to=%.3f\n", seconds);
-    if (!b || !b->videos) return FALSE;
-    return ns_video_cache_seek_node(b->videos, node, seconds,
-                                    g_get_monotonic_time());
-}
-
-static void
-browser_media_play(const void *node, gboolean play, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return;
-    ns_video_cache_set_node_playing(b->videos, node, play,
-                                    g_get_monotonic_time());
-    if (b->js) ns_js_request_repaint(b->js);
-}
-
-static void
-browser_media_muted(const void *node, gboolean muted, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return;
-    ns_video_cache_set_node_muted(b->videos, node, muted);
-    if (b->js) ns_js_request_repaint(b->js);
-}
-
-static void
-browser_media_volume(const void *node, double volume, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return;
-    ns_video_cache_set_node_volume(b->videos, node, volume);
-    if (b->js) ns_js_request_repaint(b->js);
-}
-
-static gboolean
-browser_mse_data(guint stream_id, char kind, const guint8 *data, gsize len,
-                 gboolean eos, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return FALSE;
-    if (eos) {
-        ns_video_cache_mse_eos(b->videos, stream_id);
-        return TRUE;
-    }
-    return ns_video_cache_mse_append(b->videos, stream_id, kind, data, len);
-}
-
-static double
-browser_mse_buffered(guint stream_id, char kind, double *start, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) {
-        if (start) *start = 0.0;
-        return 0.0;
-    }
-    return ns_video_cache_mse_buffered(b->videos, stream_id, kind, start);
-}
-
-static gboolean
-browser_mse_remove(guint stream_id, char kind, double start, double end,
-                   gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return FALSE;
-    return ns_video_cache_mse_remove(b->videos, stream_id, kind, start, end);
-}
-
-static gsize
-browser_mse_bytes(guint stream_id, char kind, gpointer ud)
-{
-    ns_browser *b = ud;
-    if (!b || !b->videos) return 0;
-    return ns_video_cache_mse_bytes(b->videos, stream_id, kind);
-}
-
-char *
-ns_browser_take_pending_audio(ns_browser *browser)
-{
-    if (!browser || !browser->pending_audio ||
-        browser->pending_audio->len == 0)
-        return NULL;
-    char *out = g_strdup(browser->pending_audio->str);
-    g_string_truncate(browser->pending_audio, 0);
-    return out;
-}
-
-int
-ns_browser_video_helper_event(ns_browser *browser, const char *token,
-                              const char *kind)
-{
-    if (!browser || !browser->videos || !kind) return 0;
-    return ns_video_cache_helper_event(browser->videos, token, kind) ? 1 : 0;
-}
-
-int
-ns_browser_init(void)
-{
-    ns_config_init();
-    if (ns_config_get()->harden_allocator)
-        ns_security_harden_allocator();
-    ns_net_init();
-    ns_net_set_allow_file_urls(TRUE);
-    ns_cache_init();
-    ns_bytecode_cache_init();
-    ns_history_init();
-    ns_font_init();
-    ns_spell_init();
-    return 0;
-}
-
-void
-ns_browser_sandbox(const char *self_exe)
-{
-    ns_security_win32_mitigations_init(FALSE);
-    ns_security_sandbox_init(self_exe);
-    ns_security_seccomp_init();
-}
-
-void
-ns_browser_shutdown(void)
-{
-    ns_font_shutdown();
-    ns_bytecode_cache_shutdown();
-    ns_history_shutdown();
-    ns_cache_shutdown();
-    ns_net_shutdown();
-    ns_config_shutdown();
-}
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(struct ns_browser) == 656 &&
+                G_STRUCT_OFFSET(struct ns_browser, base_url) == 64 &&
+                G_STRUCT_OFFSET(struct ns_browser, vh) == 96 &&
+                G_STRUCT_OFFSET(struct ns_browser, cur_viewport_h) == 160 &&
+                G_STRUCT_OFFSET(struct ns_browser, scroll_anchor_y) == 192 &&
+                G_STRUCT_OFFSET(struct ns_browser, media_events_source) == 212 &&
+                G_STRUCT_OFFSET(struct ns_browser, dirty) == 240 &&
+                G_STRUCT_OFFSET(struct ns_browser, soft_nav_pushed) == 272 &&
+                G_STRUCT_OFFSET(struct ns_browser, refresh_due_us) == 320 &&
+                G_STRUCT_OFFSET(struct ns_browser, caret_blink_node) == 368 &&
+                G_STRUCT_OFFSET(struct ns_browser, selection) == 408 &&
+                G_STRUCT_OFFSET(struct ns_browser, datalist_suppressed) == 472 &&
+                G_STRUCT_OFFSET(struct ns_browser, keydown_prevented) == 504 &&
+                G_STRUCT_OFFSET(struct ns_browser, layout_sig) == 544 &&
+                G_STRUCT_OFFSET(struct ns_browser, damp_logged) == 584 &&
+                G_STRUCT_OFFSET(struct ns_browser, sb_grab) == 632 &&
+                G_STRUCT_OFFSET(struct ns_browser, remote_ip) == 648);
+#endif
+
+ns_browser *ns_browser_core_build(ns_node *doc, char *base, int viewport_width,
+                                  double viewport_height, int settle_ms,
+                                  gboolean bfcache_ok, char *refresh_hdr,
+                                  char *doc_language, char *csp_header,
+                                  char *doc_charset, const char *url,
+                                  const ns_js_navigation_timing *timing);
+void  ns_browser_core_relayout(ns_browser *b);
+void  ns_browser_core_prune(ns_browser *b);
+void  ns_browser_core_damp_reset(ns_browser *b);
+void  ns_browser_core_ensure_images(ns_browser *b);
+char *ns_browser_core_resolve_navigation(ns_browser *b, const char *href);
+void  ns_browser_core_sync_js_selection(ns_browser *b);
+gsize ns_browser_core_utf8_boundary(const char *s, gsize off);
+void  ns_browser_core_submit_form(ns_browser *b, const ns_node *clicked);
+void  ns_browser_core_js_download(const char *url, const char *filename,
+                                  ns_browser *b);
 
 static char *
 resolve_local_path(const char *url)
@@ -1023,46 +167,6 @@ resolve_local_path(const char *url)
     char *file_url = g_filename_to_uri(abs, NULL, NULL);
     g_free(abs);
     return file_url;
-}
-
-static const char *
-browser_find_meta_refresh(const ns_node *n, int depth)
-{
-    if (!n || depth > 1024) return NULL;
-    if (ns_node_is_element_named(n, "meta")) {
-        const char *equiv = ns_element_get_attr(n, "http-equiv");
-        if (equiv && g_ascii_strcasecmp(equiv, "refresh") == 0) {
-            const char *content = ns_element_get_attr(n, "content");
-            if (content && *content) return content;
-        }
-    }
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        const char *found = browser_find_meta_refresh(c, depth + 1);
-        if (found) return found;
-    }
-    return NULL;
-}
-
-static void
-browser_arm_declarative_refresh(ns_browser *b, const char *header_value)
-{
-    double seconds = 0.0;
-    char *target = NULL;
-    gboolean armed = header_value &&
-        ns_net_parse_refresh(header_value, &seconds, &target);
-    if (!armed) {
-        const char *meta = browser_find_meta_refresh(b->doc, 0);
-        armed = meta && ns_net_parse_refresh(meta, &seconds, &target);
-    }
-    if (!armed) return;
-    if (target) {
-        b->refresh_url = browser_resolve_navigation(b, target);
-        g_free(target);
-        if (!b->refresh_url) return;
-    } else {
-        b->refresh_url = g_strdup(b->base_url);
-    }
-    b->refresh_due_us = g_get_monotonic_time() + (gint64)(seconds * 1e6);
 }
 
 static gboolean
@@ -1172,25 +276,6 @@ browser_prepare_document_response(ns_response *resp)
     resp->content_type = g_strdup("text/html; charset=utf-8");
 }
 
-static void
-browser_apply_meta_csp(ns_js *js, const ns_node *node, int depth)
-{
-    if (depth > 1024) return;
-    for (const ns_node *c = node ? node->first_child : NULL; c;
-         c = c->next_sibling) {
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            g_ascii_strcasecmp(c->name, "meta") == 0) {
-            const char *he = ns_element_get_attr(c, "http-equiv");
-            if (he && g_ascii_strcasecmp(he, "content-security-policy") == 0) {
-                const char *content = ns_element_get_attr(c, "content");
-                if (content && *content)
-                    ns_js_add_csp_header(js, content);
-            }
-        }
-        browser_apply_meta_csp(js, c, depth + 1);
-    }
-}
-
 static gboolean
 headers_have_no_store(const char *raw)
 {
@@ -1199,113 +284,6 @@ headers_have_no_store(const char *raw)
     gboolean found = strstr(low, "no-store") != NULL;
     g_free(low);
     return found;
-}
-
-static void browser_js_form_submit(const ns_node *form, const ns_node *submitter,
-                                   gpointer user_data);
-
-static ns_browser *
-browser_build_from_doc(ns_node *doc, char *base, int viewport_width,
-                       double viewport_height, int settle_ms,
-                       gboolean bfcache_ok, char *refresh_hdr,
-                       char *doc_language, char *csp_header, char *doc_charset,
-                       const char *url,
-                       const ns_js_navigation_timing *navigation_timing)
-{
-    int vw = viewport_width > 0 ? viewport_width : 1000;
-    double vh = viewport_height > 0.0
-        ? viewport_height
-        : (double)vw * 0.75;
-    ns_css_set_viewport((double)vw, vh);
-    gboolean has_fragment = FALSE;
-    g_autofree char *fragment = browser_url_fragment(url, &has_fragment);
-    ns_css_set_target_fragment(has_fragment && fragment && *fragment
-                                   ? fragment : NULL);
-
-    if (ns_config_get()->speculative_preload)
-        ns_engine_speculative_preload(doc, base, FALSE);
-
-    ns_browser *b = g_new0(ns_browser, 1);
-    b->pending_scroll_x = -1;
-    b->dppx = ns_css_device_pixel_ratio();
-    b->doc = doc;
-    b->doc_charset = doc_charset;
-    b->doc_language = doc_language;
-    b->base_url = base;
-    ns_css_set_doc_language(b->doc_language);
-    b->vw = vw;
-    b->vh = vh;
-    b->bfcache_ok = bfcache_ok;
-    b->caret_paint_visible = TRUE;
-    b->css_cache = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
-                                         (GDestroyNotify)g_bytes_unref);
-    b->images = ns_image_cache_new();
-    b->videos = ns_video_cache_new();
-    ns_video_cache_set_base(b->videos, base);
-    b->styles = ns_engine_compute_cascade(doc, base, b->css_cache, NULL);
-
-    b->anim = ns_anim_new();
-    ns_engine_load_keyframes(b->anim, doc, base, b->css_cache);
-    ns_engine_anim_observe(b->anim, b->styles, g_get_monotonic_time());
-
-    b->js = ns_js_new(browser_js_log, b,
-                      browser_js_mutated, b,
-                      browser_js_navigate, b,
-                      navigation_timing);
-    if (b->js) {
-        b->load_delay_deadline_us =
-            g_get_monotonic_time() + (gint64)10 * G_USEC_PER_SEC;
-        ns_js_set_load_delay_cb(b->js, browser_load_waits_for_images, b);
-        ns_js_set_style_table(b->js, b->styles);
-        ns_js_set_image_cache(b->js, b->images);
-        ns_js_set_anim(b->js, b->anim);
-        ns_js_set_form_submit_cb(b->js, browser_js_form_submit, b);
-        ns_js_set_layout_flush_cb(b->js, browser_flush, b);
-        ns_js_set_viewport_scroll_cb(b->js, browser_js_viewport_scroll, b);
-        ns_js_set_scroll_to_cb(b->js, browser_js_scroll_to, b);
-        ns_js_set_fragment_nav_cb(b->js, browser_js_fragment_navigate, b);
-        ns_js_set_soft_nav_cb(b->js, browser_js_soft_navigate, b);
-        ns_js_set_download_cb(b->js, browser_js_download, b);
-        ns_js_set_clipboard_write_cb(b->js, browser_js_clipboard_write, b);
-        ns_js_set_selection_cmd_cb(b->js, browser_js_selection_cmd, b);
-        ns_js_set_audio_cb(b->js, browser_js_audio, b);
-        ns_js_set_media_seek_cb(b->js, browser_media_seek, b);
-        ns_js_set_media_play_cb(b->js, browser_media_play, b);
-        ns_js_set_media_muted_cb(b->js, browser_media_muted, b);
-        ns_js_set_mse_cb(b->js, browser_mse_data, b);
-        ns_js_set_mse_buffered_cb(b->js, browser_mse_buffered, b);
-        ns_js_set_mse_remove_cb(b->js, browser_mse_remove, b);
-        ns_js_set_mse_bytes_cb(b->js, browser_mse_bytes, b);
-        ns_js_set_media_volume_cb(b->js, browser_media_volume, b);
-        ns_js_set_window_action_cb(b->js, browser_js_window_action, b);
-        ns_js_add_csp_header(b->js, csp_header);
-        browser_apply_meta_csp(b->js, doc, 0);
-        const ns_config *run_cfg = ns_config_get();
-        if (!run_cfg || run_cfg->javascript_enabled)
-            ns_js_run_scripts_in_doc(b->js, doc, base);
-    }
-    g_free(csp_header);
-    if (b->videos) {
-        ns_video_cache_set_js_cb(b->videos, browser_js_video, b);
-        ns_video_cache_set_audio_cb(b->videos, browser_js_audio, b);
-    }
-
-    browser_arm_declarative_refresh(b, refresh_hdr);
-    g_free(refresh_hdr);
-
-    if (!b->layout || b->dirty)
-        browser_relayout(b);
-    browser_settle(b, settle_ms);
-    if (!b->layout || b->dirty)
-        browser_relayout(b);
-    ns_node *fragment_target = fragment && *fragment
-        ? ns_node_find_fragment_target(b->doc, fragment) : NULL;
-    if (fragment_target) browser_queue_scroll_to(b, fragment_target, TRUE);
-    else if (has_fragment && (!fragment || !*fragment)) {
-        b->pending_scroll_y = 0;
-        b->pending_scroll = TRUE;
-    }
-    return b;
 }
 
 static char *g_pending_referrer;
@@ -1375,7 +353,7 @@ browser_open_common(const char *url, int viewport_width, double viewport_height,
             g_free(host);
             ns_node *doc = ns_html_parse(html, html ? (gssize)strlen(html) : 0);
             g_free(html);
-            return browser_build_from_doc(doc, g_strdup(url), viewport_width,
+            return ns_browser_core_build(doc, g_strdup(url), viewport_width,
                                           viewport_height, settle_ms, FALSE,
                                           NULL, NULL, NULL, g_strdup("UTF-8"),
                                           url, NULL);
@@ -1506,7 +484,7 @@ browser_open_common(const char *url, int viewport_width, double viewport_height,
     };
     ns_response_free(resp);
 
-    ns_browser *b = browser_build_from_doc(doc, base, viewport_width,
+    ns_browser *b = ns_browser_core_build(doc, base, viewport_width,
                                            viewport_height, settle_ms,
                                            bfcache_ok, refresh_hdr, doc_language,
                                            csp_header, doc_charset, url,
@@ -1554,389 +532,6 @@ ns_browser_open_post_viewport(const char *url, int viewport_width,
                                body, body_len, content_type);
 }
 
-char *
-ns_browser_render_text(ns_browser *browser)
-{
-    if (!browser || !browser->layout) return NULL;
-    GString *out = g_string_new(NULL);
-    ns_engine_dump_text(browser->layout, out);
-    char *text = malloc(out->len + 1);
-    if (text) {
-        memcpy(text, out->str, out->len);
-        text[out->len] = '\0';
-    }
-    g_string_free(out, TRUE);
-    return text;
-}
-
-char *
-ns_browser_dump_dom(ns_browser *browser)
-{
-    if (!browser || !browser->doc) return NULL;
-    GString *out = ns_node_dump(browser->doc);
-    return out ? g_string_free(out, FALSE) : NULL;
-}
-
-char *
-ns_browser_dump_layout(ns_browser *browser)
-{
-    if (!browser || !browser->layout) return NULL;
-    GString *out = g_string_new(NULL);
-    ns_engine_dump_layout(browser->layout, 0, out);
-    return g_string_free(out, FALSE);
-}
-
-static int
-node_count_walk(const ns_node *n, int depth)
-{
-    if (depth > 1024) return 0;
-    int c = 0;
-    for (; n; n = n->next_sibling)
-        c += 1 + node_count_walk(n->first_child, depth + 1);
-    return c;
-}
-
-static int
-box_count_walk(const ns_box *b)
-{
-    int c = 0;
-    for (; b; b = b->next_sibling)
-        c += 1 + box_count_walk(b->first_child);
-    return c;
-}
-
-static void
-perf_dump_threads(GString *out)
-{
-    g_string_append(out, "Threads\n");
-#if defined(__linux__)
-    GError *err = NULL;
-    GDir *dir = g_dir_open("/proc/self/task", 0, &err);
-    if (!dir) {
-        g_string_append_printf(out, "  (unavailable: %s)\n",
-                               err ? err->message : "?");
-        g_clear_error(&err);
-        return;
-    }
-    const char *tid;
-    int n = 0;
-    while ((tid = g_dir_read_name(dir))) {
-        char *path = g_strdup_printf("/proc/self/task/%s/comm", tid);
-        char *comm = NULL;
-        if (g_file_get_contents(path, &comm, NULL, NULL) && comm) {
-            g_string_append_printf(out, "  [%s] %s", tid, g_strchomp(comm));
-            g_string_append_c(out, '\n');
-            n++;
-        }
-        g_free(comm);
-        g_free(path);
-    }
-    g_dir_close(dir);
-    g_string_append_printf(out, "  %d thread%s total\n", n, n == 1 ? "" : "s");
-#else
-    g_string_append(out, "  (thread enumeration is Linux-only)\n");
-#endif
-}
-
-char *
-ns_browser_dump_performance(ns_browser *browser)
-{
-    if (!browser) return NULL;
-    GString *out = g_string_new(NULL);
-
-    int pw = 0, ph = 0;
-    ns_browser_page_size(browser, &pw, &ph);
-
-    g_string_append(out, "Document\n");
-    g_string_append_printf(out, "  url         %s\n",
-                           browser->base_url ? browser->base_url : "");
-    g_string_append_printf(out, "  charset     %s\n",
-                           browser->doc_charset ? browser->doc_charset : "");
-    g_string_append_printf(out, "  DOM nodes   %d\n",
-                           node_count_walk(browser->doc, 0));
-    g_string_append_printf(out, "  layout boxes %d\n",
-                           box_count_walk(browser->layout));
-    g_string_append_printf(out, "  page size   %d x %d px\n", pw, ph);
-
-    g_string_append(out, "\nLayout\n");
-    g_string_append_printf(out, "  viewport    %d x %.0f px\n",
-                           browser->vw, browser->vh);
-    g_string_append_printf(out, "  last reflow %.2f ms\n",
-                           browser->relayout_cost_us / 1000.0);
-    g_string_append_printf(out, "  oscillation %d\n", browser->layout_osc);
-
-    g_string_append_c(out, '\n');
-    if (browser->js)
-        ns_js_dump_stats(browser->js, out);
-
-    g_string_append_c(out, '\n');
-    perf_dump_threads(out);
-
-    return g_string_free(out, FALSE);
-}
-
-int
-ns_browser_render_image(ns_browser *browser, const char *path)
-{
-    if (!browser || !browser->layout || !path) return -1;
-
-    browser_wait_images(browser);
-
-    ns_paint_set_js(browser->js);
-    ns_paint_set_anim(browser->anim);
-
-    int rc;
-    gsize len = strlen(path);
-    if (len >= 4 && g_ascii_strcasecmp(path + len - 4, ".pdf") == 0)
-        rc = ns_engine_write_pdf(browser->layout, path);
-    else
-        rc = ns_engine_write_png(browser->layout, path);
-
-    ns_paint_set_anim(NULL);
-    ns_paint_set_js(NULL);
-    return rc;
-}
-
-GPtrArray *
-ns_browser_print_pages(ns_browser *browser, ns_print_setup *out_setup)
-{
-    if (!browser || !browser->doc || !out_setup) return NULL;
-
-    browser_wait_images(browser);
-
-    ns_print_setup setup;
-    ns_print_setup_default(&setup);
-
-    int saved_vw = browser->vw;
-    double saved_vh = browser->vh;
-
-    ns_css_set_print_media(TRUE);
-    browser->vw = (int)(setup.width - setup.margin_left - setup.margin_right);
-    browser->vh = setup.height - setup.margin_top - setup.margin_bottom;
-    browser_relayout(browser);
-
-    const ns_css_page_rule *rule = ns_render_page_rule();
-    if (rule) {
-        ns_print_setup_apply_page_rule(&setup, rule);
-        int w = (int)(setup.width - setup.margin_left - setup.margin_right);
-        if (w > 0 && w != browser->vw) {
-            browser->vw = w;
-            browser->vh = setup.height - setup.margin_top - setup.margin_bottom;
-            browser_relayout(browser);
-        }
-    }
-
-    ns_paint_set_js(browser->js);
-    ns_paint_set_anim(browser->anim);
-    GPtrArray *pages = ns_engine_print_recordings(browser->layout, &setup);
-    ns_paint_set_anim(NULL);
-    ns_paint_set_js(NULL);
-
-    ns_css_set_print_media(FALSE);
-    browser->vw = saved_vw;
-    browser->vh = saved_vh;
-    browser_relayout(browser);
-
-    *out_setup = setup;
-    return pages;
-}
-
-int
-ns_browser_tick(ns_browser *browser, int budget_ms)
-{
-    if (!browser) return -1;
-    if (budget_ms < 0) budget_ms = 0;
-
-    if (browser->refresh_due_us && !browser->pending_nav &&
-        g_get_monotonic_time() >= browser->refresh_due_us) {
-        browser->refresh_due_us = 0;
-        browser->pending_nav = browser->refresh_url;
-        browser->refresh_url = NULL;
-    }
-
-    gint64 deadline = g_get_monotonic_time() + (gint64)budget_ms * 1000;
-    gboolean changed = FALSE;
-    gboolean video_changed = FALSE;
-    gboolean other_changed = FALSE;
-    int guard = 0;
-    if (browser->js &&
-        !browser->pending_scroll &&
-        (fabs(browser->cur_scroll_x - browser->js_scroll_x) > 0.5 ||
-         fabs(browser->cur_scroll_y - browser->js_scroll_y) > 0.5)) {
-        browser->js_scroll_x = browser->cur_scroll_x;
-        browser->js_scroll_y = browser->cur_scroll_y;
-        ns_js_note_viewport_scroll(browser->js, browser->cur_scroll_x,
-                                   browser->cur_scroll_y);
-    }
-    if (browser->hover_restyle_pending) {
-        gint64 now = g_get_monotonic_time();
-        gint64 min_gap = browser->relayout_cost_us * 2;
-        if (min_gap < 60000) min_gap = 60000;
-        if (now - browser->hover_relayout_us >= min_gap) {
-            browser->hover_restyle_pending = FALSE;
-            browser->hover_relayout_us = now;
-            browser_relayout(browser);
-            browser->dirty = FALSE;
-            changed = TRUE;
-        }
-    }
-    for (;;) {
-        gint64 now = g_get_monotonic_time();
-        if (browser->images && ns_image_cache_tick(browser->images, now)) {
-            changed = TRUE;
-            other_changed = TRUE;
-        }
-        if (browser->videos && browser->layout) {
-            ns_video_cache_discover(browser->videos, browser->layout, browser->doc, now);
-            ns_video_cache_note_layout(browser->videos, browser->layout,
-                                       browser->cur_scroll_x,
-                                       browser->cur_scroll_y,
-                                       browser->cur_scale);
-            if (ns_video_cache_tick(browser->videos, now)) {
-                changed = TRUE;
-                video_changed = TRUE;
-            }
-        }
-        if (browser->anim && ns_anim_tick(browser->anim, now)) {
-            changed = TRUE;
-            other_changed = TRUE;
-            browser->cascade_dirty = TRUE;
-            if (ns_anim_needs_layout(browser->anim)) browser->dirty = TRUE;
-        }
-        if (browser->anim && browser->js)
-            ns_js_dispatch_anim_events(browser->js, browser->anim);
-        if (browser->js && ns_js_run_animation_frame(browser->js)) {
-            changed = TRUE;
-            other_changed = TRUE;
-        }
-
-        gboolean did_iter = FALSE;
-        int it = 0;
-        while (g_main_context_pending(NULL) && it++ < 64 &&
-               g_get_monotonic_time() < deadline) {
-            g_main_context_iteration(NULL, FALSE);
-            did_iter = TRUE;
-        }
-
-        if (!did_iter) break;
-        if (++guard >= 4096) break;
-        if (g_get_monotonic_time() >= deadline) break;
-    }
-    if (browser->js && ns_js_consume_mutated(browser->js))
-        browser->dirty = TRUE;
-    if (browser->dirty && browser_mutation_relayout_due(browser)) {
-        if (browser_relayout_from_mutation(browser)) {
-            changed = TRUE;
-            other_changed = TRUE;
-            browser->dirty = FALSE;
-            if (browser->videos && browser->layout) {
-                ns_video_cache_discover(browser->videos, browser->layout,
-                                        browser->doc, g_get_monotonic_time());
-                ns_video_cache_note_layout(browser->videos, browser->layout,
-                                           browser->cur_scroll_x,
-                                           browser->cur_scroll_y,
-                                           browser->cur_scale);
-            }
-        }
-    }
-    browser_follow_scroll_anchor(browser);
-    if (browser->pending_scroll) changed = TRUE;
-    (void)video_changed;
-    (void)other_changed;
-    if (!changed && browser->videos &&
-        ns_video_cache_waiting_growth(browser->videos))
-        changed = TRUE;
-    return changed ? 1 : 0;
-}
-
-int
-ns_browser_animating(ns_browser *browser)
-{
-    if (!browser) return 0;
-    if (browser->dirty) return 1;
-    if (browser->hover_restyle_pending) return 1;
-    if (browser->refresh_due_us || browser->refresh_url) return 1;
-    if (browser_images_outstanding(browser) > 0) return 1;
-    if (browser->js && ns_js_has_pending_animation_frame(browser->js))
-        return 1;
-    if (browser->js && ns_js_needs_tick(browser->js))
-        return 1;
-    if (browser->anim && ns_anim_has_active(browser->anim))
-        return 1;
-    if (browser->images && ns_image_cache_animating(browser->images))
-        return 1;
-    if (browser->videos && ns_video_cache_animating(browser->videos))
-        return 1;
-    return 0;
-}
-
-int
-ns_browser_set_viewport(ns_browser *browser, int css_width, double css_height)
-{
-    if (!browser || !browser->doc || css_width <= 0) return -1;
-    if (css_height <= 0.0) css_height = (double)css_width * 0.75;
-    if (css_width == browser->vw && css_height == browser->vh) return 0;
-    browser->vw = css_width;
-    browser->vh = css_height;
-    ns_css_set_viewport((double)browser->vw, browser->vh);
-    if (browser->js) {
-        ns_js_sync_window_metrics(browser->js);
-        ns_js_dispatch_resize(browser->js);
-    }
-    browser_damp_reset(browser);
-    browser_relayout(browser);
-    return 0;
-}
-
-int
-ns_browser_set_device_pixel_ratio(ns_browser *browser, double dppx)
-{
-    if (!(dppx > 0)) return -1;
-    ns_css_set_device_pixel_ratio(dppx);
-    if (!browser || !browser->doc || browser->dppx == dppx) return 0;
-    browser->dppx = dppx;
-    if (browser->js) {
-        ns_js_sync_window_metrics(browser->js);
-        ns_js_reeval_media_queries(browser->js);
-    }
-    browser_relayout(browser);
-    return 1;
-}
-
-int
-ns_browser_set_viewport_width(ns_browser *browser, int css_width)
-{
-    return ns_browser_set_viewport(browser, css_width,
-                                   (double)css_width * 0.75);
-}
-
-void
-ns_browser_window_action_applied(ns_browser *browser)
-{
-    if (browser && browser->js)
-        ns_js_window_action_applied(browser->js);
-}
-
-int
-ns_browser_page_size(ns_browser *browser, int *out_width, int *out_height)
-{
-    if (!browser || !browser->layout) return -1;
-    gboolean hide_x = root_axis_overflow_hidden(browser->layout,
-                                                NS_CSS_OVERFLOW_X);
-    gboolean hide_y = root_axis_overflow_hidden(browser->layout,
-                                                NS_CSS_OVERFLOW_Y);
-    double w = hide_x ? browser->vw : browser->layout->content_width;
-    if (!(w > 0)) w = browser->vw;
-    double bottom = hide_y ? browser->vh : browser->layout->content_height;
-    if (!hide_y)
-        bottom = ns_box_max_bottom(browser->layout, bottom);
-    if (!(bottom > 0)) bottom = 0;
-    if (out_width)  *out_width  = (int)w;
-    int ypad = (!hide_y && bottom > browser->vh + 0.5) ? 32 : 0;
-    if (out_height) *out_height = (int)bottom + ypad;
-    return 0;
-}
-
 int
 ns_browser_render_rgba(ns_browser *browser, int scroll_x, int scroll_y,
                        int width, int height, double scale,
@@ -1950,7 +545,7 @@ ns_browser_render_rgba(ns_browser *browser, int scroll_x, int scroll_y,
     browser->cur_scroll_y = (double)scroll_y;
     browser->cur_scale = scale;
     browser->cur_viewport_h = (double)height / scale;
-    browser_ensure_images(browser);
+    ns_browser_core_ensure_images(browser);
     if (browser->videos && browser->layout) {
         gint64 now = g_get_monotonic_time();
         ns_video_cache_discover(browser->videos, browser->layout,
@@ -1974,7 +569,6 @@ ns_browser_render_rgba(ns_browser *browser, int scroll_x, int scroll_y,
     cairo_clip(cr);
     cairo_scale(cr, scale, scale);
     cairo_translate(cr, -(double)scroll_x, -(double)scroll_y);
-
 
     ns_paint_set_js(browser->js);
     ns_paint_set_anim(browser->anim);
@@ -2063,7 +657,7 @@ browser_note_viewport(ns_browser *browser, int scroll_x, int scroll_y,
     browser->cur_scale = scale;
     browser->cur_viewport_h = (double)height / scale;
     ns_box_set_hit_viewport(browser->cur_scroll_x, browser->cur_scroll_y);
-    browser_ensure_images(browser);
+    ns_browser_core_ensure_images(browser);
     if (browser->videos && browser->layout) {
         gint64 now = g_get_monotonic_time();
         ns_video_cache_discover(browser->videos, browser->layout,
@@ -2477,7 +1071,7 @@ browser_link_near(ns_browser *browser, int x, int y, int probes)
                 if (browser_node_is_hyperlink(a))
                     href = ns_element_get_attr(a, "href");
         }
-        if (href && *href) return browser_resolve_navigation(browser, href);
+        if (href && *href) return ns_browser_core_resolve_navigation(browser, href);
     }
     return NULL;
 }
@@ -2546,17 +1140,6 @@ ns_browser_cursor_at(ns_browser *browser, int x, int y)
     return NULL;
 }
 
-static gsize
-browser_utf8_boundary(const char *s, gsize off)
-{
-    gsize len = s ? strlen(s) : 0;
-    if (off >= len)
-        return len;
-    while (off > 0 && (((unsigned char)s[off] & 0xc0) == 0x80))
-        off--;
-    return off;
-}
-
 static ns_node *
 browser_focused_field(ns_browser *b)
 {
@@ -2586,8 +1169,8 @@ browser_field_selection(ns_browser *b, const ns_node *field, gsize *lo,
                         gsize *hi)
 {
     const char *cur = ns_node_editable_value(field);
-    gsize caret = browser_utf8_boundary(cur, b->caret_byte);
-    gsize anchor = browser_utf8_boundary(cur, b->sel_anchor_byte);
+    gsize caret = ns_browser_core_utf8_boundary(cur, b->caret_byte);
+    gsize anchor = ns_browser_core_utf8_boundary(cur, b->sel_anchor_byte);
     *lo = MIN(caret, anchor);
     *hi = MAX(caret, anchor);
     return *lo < *hi;
@@ -2621,29 +1204,11 @@ static void browser_input_replace(ns_browser *b, ns_node *node, gsize del_start,
                                   const char *input_type);
 
 static void
-browser_sync_js_selection(ns_browser *browser)
-{
-    if (!browser || !browser->js) return;
-    char *text = ns_selection_collect_text(browser->layout,
-                                           &browser->selection);
-    double x = 0, y = 0, w = 0, h = 0;
-    if (ns_selection_bounds(browser->layout, &browser->selection,
-                            &x, &y, &w, &h)) {
-        x -= browser->cur_scroll_x;
-        y -= browser->cur_scroll_y;
-    }
-    ns_js_set_selection(browser->js, text,
-                        ns_selection_has_range(&browser->selection),
-                        x, y, w, h);
-    g_free(text);
-}
-
-static void
 browser_field_select_all(ns_browser *b, const ns_node *field)
 {
     b->sel_anchor_byte = 0;
     b->caret_byte = strlen(ns_node_editable_value(field));
-    browser_relayout(b);
+    ns_browser_core_relayout(b);
     b->dirty = FALSE;
 }
 
@@ -2656,7 +1221,7 @@ browser_field_cut(ns_browser *b, ns_node *field)
     if (!text) return NULL;
     browser_field_selection(b, field, &lo, &hi);
     browser_input_replace(b, field, lo, hi, NULL, "deleteByCut");
-    browser_relayout(b);
+    ns_browser_core_relayout(b);
     b->dirty = FALSE;
     return text;
 }
@@ -2699,7 +1264,7 @@ ns_browser_select(ns_browser *browser, int kind, int x, int y)
             browser->selection_dragged = TRUE; break;
     default: break;
     }
-    browser_sync_js_selection(browser);
+    ns_browser_core_sync_js_selection(browser);
     return NULL;
 }
 
@@ -2728,7 +1293,7 @@ ns_browser_hover(ns_browser *browser, int x, int y)
 
     const ns_node *node = browser_hit_node(browser, x, y);
 
-    browser_prune_cached_nodes(browser);
+    ns_browser_core_prune(browser);
     const ns_node *prev = browser->hover_node;
     gboolean changed = node != prev;
     browser->hover_node = node;
@@ -2753,7 +1318,7 @@ ns_browser_hover(ns_browser *browser, int x, int y)
     gboolean hover_restyle = changed && ns_render_page_uses_hover() &&
                              !ns_selection_has_range(&browser->selection);
     if (dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
         return 1;
     }
@@ -2764,7 +1329,7 @@ ns_browser_hover(ns_browser *browser, int x, int y)
         if (now - browser->hover_relayout_us >= min_gap) {
             browser->hover_relayout_us = now;
             browser->hover_restyle_pending = FALSE;
-            browser_relayout(browser);
+            ns_browser_core_relayout(browser);
             browser->dirty = FALSE;
             return 1;
         }
@@ -2970,7 +1535,7 @@ ns_browser_drop_files(ns_browser *browser, int x, int y,
     ns_js_drag_session_free(session);
 
     if (ns_js_consume_mutated(browser->js)) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
         return 1;
     }
@@ -2978,25 +1543,15 @@ ns_browser_drop_files(ns_browser *browser, int x, int y,
 }
 
 char *
-ns_browser_console_drain(ns_browser *browser)
-{
-    if (!browser || !browser->console_buf || browser->console_buf->len == 0)
-        return NULL;
-    char *out = g_strdup(browser->console_buf->str);
-    g_string_truncate(browser->console_buf, 0);
-    return out;
-}
-
-char *
 ns_browser_eval(ns_browser *browser, const char *src)
 {
     if (!browser || !browser->js || !src) return NULL;
-    browser_damp_reset(browser);
+    ns_browser_core_damp_reset(browser);
     char *res = ns_js_eval_source(browser->js, src, "devtools-console");
     if (ns_js_run_animation_frame(browser->js)) browser->dirty = TRUE;
     if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
     return res;
@@ -3039,7 +1594,7 @@ ns_browser_contextmenu_full(ns_browser *browser, int x, int y, int *out_edit)
                                &prevented);
     if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
     int edit = prevented ? 0 : browser_context_field(browser, x, y);
@@ -3047,7 +1602,7 @@ ns_browser_contextmenu_full(ns_browser *browser, int x, int y, int *out_edit)
     if (ns_js_run_animation_frame(browser->js)) browser->dirty = TRUE;
     if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
     if (out_edit) *out_edit = edit;
@@ -3207,131 +1762,6 @@ ns_browser_find(ns_browser *browser, const char *query, int case_sensitive,
     return 0;
 }
 
-char *
-ns_browser_take_post(ns_browser *browser, size_t *out_len, char **out_ct)
-{
-    if (out_len) *out_len = 0;
-    if (out_ct) *out_ct = NULL;
-    if (!browser || !browser->pending_post_body) return NULL;
-    char *body = browser->pending_post_body;
-    browser->pending_post_body = NULL;
-    if (out_len) *out_len = browser->pending_post_len;
-    browser->pending_post_len = 0;
-    if (out_ct) *out_ct = browser->pending_post_ct;
-    else        g_free(browser->pending_post_ct);
-    browser->pending_post_ct = NULL;
-    return body;
-}
-
-static void
-browser_perform_form_navigation(ns_browser *b, const ns_node *form,
-                                const ns_node *clicked)
-{
-    if (!b || !form || !b->doc) return;
-    gboolean from_text = clicked && ns_node_is_text_input(clicked);
-
-    const char *method = ns_element_get_attr(form, "method");
-    const char *formmethod = (clicked && !from_text)
-                             ? ns_element_get_attr(clicked, "formmethod") : NULL;
-    if (formmethod && *formmethod) method = formmethod;
-    gboolean is_post = method && g_ascii_strcasecmp(method, "post") == 0;
-
-    const char *action = ns_element_get_attr(form, "action");
-    const char *formaction = (clicked && !from_text)
-                             ? ns_element_get_attr(clicked, "formaction") : NULL;
-    if (formaction && *formaction) action = formaction;
-    char *abs_action = (action && *action) ? ns_url_resolve(b->base_url, action)
-                                           : g_strdup(b->base_url);
-    if (!abs_action) return;
-    if (!browser_allows_navigation_url(b, abs_action)) {
-        g_free(abs_action);
-        return;
-    }
-    if (b->js && !ns_js_csp_form_action_allowed(b->js, abs_action)) {
-        g_free(abs_action);
-        return;
-    }
-
-    const char *accept_charset = ns_element_get_attr(form, "accept-charset");
-    ns_form_set_submission_charset(
-        (accept_charset && *accept_charset) ? accept_charset
-                                            : b->doc_charset);
-
-    if (is_post) {
-        GString *body = g_string_new(NULL);
-        gboolean first = TRUE;
-        ns_form_collect_inputs(form, b->doc, b->doc, body, &first, clicked);
-        ns_form_set_submission_charset(NULL);
-        g_free(b->pending_post_body);
-        g_free(b->pending_post_ct);
-        b->pending_post_len = body->len;
-        b->pending_post_body = g_string_free(body, FALSE);
-        b->pending_post_ct = g_strdup("application/x-www-form-urlencoded");
-        g_free(b->pending_nav);
-        b->pending_nav = abs_action;
-        return;
-    }
-
-    GString *query = g_string_new(NULL);
-    gboolean first = TRUE;
-    ns_form_collect_inputs(form, b->doc, b->doc, query, &first, clicked);
-    ns_form_set_submission_charset(NULL);
-
-    char *frag = strchr(abs_action, '#');
-    if (frag) *frag = '\0';
-    char *full;
-    if (query->len == 0) {
-        full = g_strdup(abs_action);
-    } else {
-        full = strchr(abs_action, '?')
-            ? g_strdup_printf("%s&%s", abs_action, query->str)
-            : g_strdup_printf("%s?%s", abs_action, query->str);
-    }
-    g_string_free(query, TRUE);
-    g_free(abs_action);
-    g_free(b->pending_nav);
-    b->pending_nav = full;
-}
-
-static void
-browser_js_form_submit(const ns_node *form, const ns_node *submitter,
-                       gpointer user_data)
-{
-    ns_browser *b = user_data;
-    if (!b || !form) return;
-    browser_perform_form_navigation(b, form, submitter ? submitter : form);
-}
-
-static void
-browser_submit_form(ns_browser *b, const ns_node *clicked)
-{
-    if (!clicked || !b->doc) return;
-    gboolean from_text = ns_node_is_text_input(clicked);
-    gboolean from_form = ns_node_is_element_named(clicked, "form");
-    if (!from_text && !from_form && !ns_form_is_submit_trigger(clicked))
-        return;
-    const ns_node *form = from_form ? clicked : ns_form_owner(clicked, b->doc);
-    if (!form) return;
-
-    if (!ns_element_get_attr(form, "novalidate") &&
-        !ns_element_get_attr(clicked, "formnovalidate")) {
-        const ns_node *bad = ns_form_first_invalid(form, b->doc, b->doc);
-        if (bad) {
-            if (b->js) ns_js_dispatch_event(b->js, bad, "invalid", NULL);
-            return;
-        }
-    }
-
-    if (b->js) {
-        gboolean prevented = FALSE;
-        ns_js_dispatch_submit_event(b->js, form, clicked, &prevented);
-        if (ns_js_consume_mutated(b->js)) b->dirty = TRUE;
-        if (prevented) return;
-    }
-
-    browser_perform_form_navigation(b, form, clicked);
-}
-
 static const ns_node *
 browser_hit_node(ns_browser *browser, int x, int y)
 {
@@ -3343,13 +1773,13 @@ ns_browser_press(ns_browser *browser, int x, int y, int mods)
 {
     if (!browser || !browser->layout) return NULL;
     ns_js_note_pointer_input(browser->js, TRUE);
-    browser_damp_reset(browser);
+    ns_browser_core_damp_reset(browser);
     g_clear_pointer(&browser->pending_nav, g_free);
     gboolean extending = (mods & 1) != 0 &&
                          ns_selection_has_range(&browser->selection);
     if (!extending) {
         ns_selection_clear(&browser->selection);
-        browser_sync_js_selection(browser);
+        ns_browser_core_sync_js_selection(browser);
     }
     browser->selection_dragged = FALSE;
 
@@ -3362,7 +1792,7 @@ ns_browser_press(ns_browser *browser, int x, int y, int mods)
 
     ns_css_set_active_node(node);
     if (node && ns_render_page_uses_active()) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
 
@@ -3404,7 +1834,7 @@ ns_browser_press(ns_browser *browser, int x, int y, int mods)
         if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     }
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
 
@@ -3502,10 +1932,10 @@ ns_browser_release_click(ns_browser *browser, int *out_changed)
         if (out_changed) *out_changed = -1;
         return NULL;
     }
-    browser_damp_reset(browser);
+    ns_browser_core_damp_reset(browser);
     g_clear_pointer(&browser->pending_nav, g_free);
 
-    browser_prune_cached_nodes(browser);
+    ns_browser_core_prune(browser);
     const ns_node *node = browser->press_active ? browser->press_node : NULL;
     int x = browser->press_x;
     int y = browser->press_y;
@@ -3554,7 +1984,7 @@ ns_browser_release_click(ns_browser *browser, int *out_changed)
         if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     } else if (!prevented && !browser->pending_nav && node &&
         ns_form_is_submit_trigger(node)) {
-        browser_submit_form(browser, node);
+        ns_browser_core_submit_form(browser, node);
     } else if (!prevented && node && browser->js && browser->doc &&
                ns_form_is_reset_trigger(node)) {
         ns_node *form = (ns_node *)ns_form_owner(node, browser->doc);
@@ -3577,9 +2007,9 @@ ns_browser_release_click(ns_browser *browser, int *out_changed)
         if (!href)
             href = ns_box_hit_link(browser->layout, (double)x, (double)y);
         if (href && *href && download)
-            browser_js_download(href, download, browser);
+            ns_browser_core_js_download(href, download, browser);
         else if (href && *href)
-            browser->pending_nav = browser_resolve_navigation(browser, href);
+            browser->pending_nav = ns_browser_core_resolve_navigation(browser, href);
     }
     }
 
@@ -3592,7 +2022,7 @@ ns_browser_release_click(ns_browser *browser, int *out_changed)
         if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     }
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
         if (out_changed) *out_changed = 1;
     }
@@ -3771,7 +2201,7 @@ browser_edit_key(ns_browser *b, ns_node *node, const char *key, int mods)
             ns_js_commit_change(b->js, node);
             if (ns_js_focused_node(b->js) != node) return TRUE;
         }
-        browser_submit_form(b, node);
+        ns_browser_core_submit_form(b, node);
         return TRUE;
     }
     if (g_utf8_strlen(key, -1) == 1 &&
@@ -3923,7 +2353,7 @@ ns_browser_key_full(ns_browser *browser, int kind, const char *key,
     if (out_prevented) *out_prevented = 0;
     if (!browser || !browser->js) return NULL;
     ns_js_note_pointer_input(browser->js, FALSE);
-    browser_damp_reset(browser);
+    ns_browser_core_damp_reset(browser);
     g_clear_pointer(&browser->pending_nav, g_free);
 
     const ns_node *target = ns_js_focused_node(browser->js);
@@ -4045,7 +2475,7 @@ ns_browser_key_full(ns_browser *browser, int kind, const char *key,
     if (ns_js_run_animation_frame(browser->js)) browser->dirty = TRUE;
     if (ns_js_consume_mutated(browser->js)) browser->dirty = TRUE;
     if (browser->dirty) {
-        browser_relayout(browser);
+        ns_browser_core_relayout(browser);
         browser->dirty = FALSE;
     }
 
@@ -4061,412 +2491,3 @@ ns_browser_key(ns_browser *browser, int kind, const char *key,
     return ns_browser_key_full(browser, kind, key, code, keycode, mods, NULL);
 }
 
-int
-ns_browser_focused_editable(ns_browser *browser)
-{
-    if (!browser || !browser->js)
-        return 0;
-    const ns_node *f = ns_js_focused_node(browser->js);
-    return f && ns_node_editable_value(f) ? 1 : 0;
-}
-
-int
-ns_browser_set_caret_blink_active(ns_browser *browser, int active)
-{
-    if (!browser) return 0;
-    const ns_node *focused = active && ns_browser_focused_editable(browser)
-                           ? ns_js_focused_node(browser->js) : NULL;
-    gsize caret = focused ? browser->caret_byte : 0;
-    gsize anchor = focused ? browser->sel_anchor_byte : 0;
-    gint64 now = g_get_monotonic_time();
-    if (focused != browser->caret_blink_node ||
-        caret != browser->caret_blink_byte ||
-        anchor != browser->caret_blink_anchor) {
-        browser->caret_blink_epoch_us = now;
-        browser->caret_blink_node = focused;
-        browser->caret_blink_byte = caret;
-        browser->caret_blink_anchor = anchor;
-    }
-    gboolean visible = focused &&
-        ((now - browser->caret_blink_epoch_us) / NS_CARET_BLINK_US) % 2 == 0;
-    gboolean changed = browser->caret_blink_active != (focused != NULL) ||
-                       browser->caret_paint_visible != visible;
-    browser->caret_blink_active = focused != NULL;
-    browser->caret_paint_visible = visible;
-    if (!focused) browser->caret_blink_epoch_us = 0;
-    return changed ? 1 : 0;
-}
-
-int
-ns_browser_caret_blinking(ns_browser *browser)
-{
-    return browser && browser->caret_blink_active ? 1 : 0;
-}
-
-char *
-ns_browser_focused_editable_value(ns_browser *browser, size_t *out_caret,
-                                  size_t *out_anchor)
-{
-    if (out_caret)
-        *out_caret = 0;
-    if (out_anchor)
-        *out_anchor = 0;
-    if (!browser || !browser->js)
-        return NULL;
-    const ns_node *f = ns_js_focused_node(browser->js);
-    const char *cur = f ? ns_node_editable_value(f) : NULL;
-    if (!cur)
-        return NULL;
-    gsize len = strlen(cur);
-    gsize caret = browser->caret_byte > len ? len : browser->caret_byte;
-    gsize anchor = browser->sel_anchor_byte > len ? len
-                                                  : browser->sel_anchor_byte;
-    caret = browser_utf8_boundary(cur, caret);
-    anchor = browser_utf8_boundary(cur, anchor);
-    if (out_caret)
-        *out_caret = caret;
-    if (out_anchor)
-        *out_anchor = anchor;
-    return strdup(cur);
-}
-
-int
-ns_browser_set_focused_editable_selection(ns_browser *browser, size_t caret,
-                                          size_t anchor)
-{
-    if (!browser || !browser->js)
-        return 0;
-    const ns_node *f = ns_js_focused_node(browser->js);
-    const char *cur = f ? ns_node_editable_value(f) : NULL;
-    if (!cur)
-        return 0;
-    browser->caret_byte = browser_utf8_boundary(cur, (gsize)caret);
-    browser->sel_anchor_byte = browser_utf8_boundary(cur, (gsize)anchor);
-    browser->dirty = TRUE;
-    browser_relayout(browser);
-    browser->dirty = FALSE;
-    return 1;
-}
-
-char *
-ns_browser_title(ns_browser *browser)
-{
-    if (!browser || !browser->doc) return NULL;
-    ns_node *title = ns_node_find_first_element(browser->doc, "title");
-    if (!title) return NULL;
-    char *raw = ns_node_collect_text(title);
-    if (!raw) return NULL;
-
-    GString *out = g_string_new(NULL);
-    gboolean prev_ws = TRUE;
-    for (const char *p = raw; *p; p++) {
-        gboolean ws = (*p == ' ' || *p == '\t' || *p == '\n' ||
-                       *p == '\r' || *p == '\f');
-        if (ws) {
-            if (!prev_ws) g_string_append_c(out, ' ');
-            prev_ws = TRUE;
-        } else {
-            g_string_append_c(out, *p);
-            prev_ws = FALSE;
-        }
-    }
-    if (out->len > 0 && out->str[out->len - 1] == ' ')
-        g_string_set_size(out, out->len - 1);
-    g_free(raw);
-
-    if (out->len == 0) { g_string_free(out, TRUE); return NULL; }
-    char *result = strdup(out->str);
-    g_string_free(out, TRUE);
-    return result;
-}
-
-char *
-ns_browser_url(ns_browser *browser)
-{
-    if (!browser || !browser->base_url) return NULL;
-    return strdup(browser->base_url);
-}
-
-int
-ns_browser_security(ns_browser *browser, const char **out_ip)
-{
-    if (out_ip)
-        *out_ip = browser ? browser->remote_ip : NULL;
-    return browser ? browser->security : NS_SEC_NONE;
-}
-
-char *
-ns_browser_take_pending_nav(ns_browser *browser)
-{
-    if (!browser || !browser->pending_nav) return NULL;
-    char *out = strdup(browser->pending_nav);
-    g_clear_pointer(&browser->pending_nav, g_free);
-    return out;
-}
-
-int
-ns_browser_take_soft_nav_pushed(ns_browser *browser)
-{
-    if (!browser || !browser->soft_nav_pushed) return 0;
-    browser->soft_nav_pushed = FALSE;
-    return 1;
-}
-
-int
-ns_browser_take_pending_scroll(ns_browser *browser, int *out_scroll_x,
-                               int *out_scroll_y)
-{
-    if (!browser || !browser->pending_scroll) return 0;
-    if (out_scroll_x) *out_scroll_x = browser->pending_scroll_x;
-    if (out_scroll_y) *out_scroll_y = browser->pending_scroll_y;
-    browser->pending_scroll_x = -1;
-    browser->pending_scroll = FALSE;
-    return 1;
-}
-
-int
-ns_browser_take_pending_scroll_y(ns_browser *browser, int *out_scroll_y)
-{
-    return ns_browser_take_pending_scroll(browser, NULL, out_scroll_y);
-}
-
-char *
-ns_browser_take_pending_webgl(ns_browser *browser)
-{
-    (void)browser;
-    return ns_webgl_take_pending_origin();
-}
-
-int
-ns_browser_has_pending_clipboard(ns_browser *browser)
-{
-    return browser && browser->pending_clipboard ? 1 : 0;
-}
-
-char *
-ns_browser_take_pending_clipboard(ns_browser *browser)
-{
-    if (!browser || !browser->pending_clipboard) return NULL;
-    char *out = browser->pending_clipboard;
-    browser->pending_clipboard = NULL;
-    return out;
-}
-
-char *
-ns_browser_take_pending_download(ns_browser *browser)
-{
-    if (!browser || !browser->pending_download) return NULL;
-    char *out = browser->pending_download;
-    browser->pending_download = NULL;
-    return out;
-}
-
-char *
-ns_browser_take_pending_window_action(ns_browser *browser)
-{
-    if (!browser || !browser->pending_window_action) return NULL;
-    char *out = browser->pending_window_action;
-    browser->pending_window_action = NULL;
-    return out;
-}
-
-void
-ns_browser_resolve_webgl(ns_browser *browser, const char *origin, int allow)
-{
-    (void)browser;
-    ns_webgl_set_decision(origin, allow);
-}
-
-char *
-ns_browser_take_pending_camera(ns_browser *browser)
-{
-    (void)browser;
-    return ns_camera_take_pending_origin();
-}
-
-void
-ns_browser_resolve_camera(ns_browser *browser, const char *origin, int allow)
-{
-    ns_camera_set_decision(origin, allow);
-    if (browser && browser->js) {
-        char *r = ns_js_eval_source(browser->js,
-            allow ? "__nd_camera_resolve_pending(true)"
-                  : "__nd_camera_resolve_pending(false)",
-            "camera-resolve");
-        free(r);
-    }
-}
-
-static void
-collect_links(const ns_node *node, const char *base, GString *out,
-              GHashTable *seen, int depth)
-{
-    if (!node || depth > 1024) return;
-    for (const ns_node *c = node->first_child; c; c = c->next_sibling) {
-        if (ns_node_is_element_named(c, "a")) {
-            const char *href = ns_element_get_attr(c, "href");
-            if (href && *href && href[0] != '#' &&
-                !g_str_has_prefix(href, "javascript:")) {
-                char *abs = ns_url_resolve(base, href);
-                if (abs && *abs && !g_hash_table_contains(seen, abs)) {
-                    g_hash_table_add(seen, g_strdup(abs));
-                    if (out->len) g_string_append_c(out, '\n');
-                    g_string_append(out, abs);
-                }
-                g_free(abs);
-            }
-        }
-        collect_links(c, base, out, seen, depth + 1);
-    }
-}
-
-char *
-ns_browser_links(ns_browser *browser)
-{
-    if (!browser || !browser->doc) return NULL;
-    GString *out = g_string_new(NULL);
-    GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                             g_free, NULL);
-    collect_links(browser->doc, browser->base_url, out, seen, 0);
-    g_hash_table_destroy(seen);
-    if (out->len == 0) { g_string_free(out, TRUE); return NULL; }
-    char *result = strdup(out->str);
-    g_string_free(out, TRUE);
-    return result;
-}
-
-static gboolean
-rel_token_is_icon(const char *rel)
-{
-    if (!rel)
-        return FALSE;
-    for (const char *p = rel; *p;) {
-        while (*p && g_ascii_isspace(*p))
-            p++;
-        const char *start = p;
-        while (*p && !g_ascii_isspace(*p))
-            p++;
-        if ((size_t)(p - start) == 4 &&
-            g_ascii_strncasecmp(start, "icon", 4) == 0)
-            return TRUE;
-    }
-    return FALSE;
-}
-
-static const char *
-find_icon_href(const ns_node *node, int depth)
-{
-    if (!node || depth > 1024) return NULL;
-    for (const ns_node *c = node->first_child; c; c = c->next_sibling) {
-        if (ns_node_is_element_named(c, "link")) {
-            const char *href = ns_element_get_attr(c, "href");
-            if (href && *href && rel_token_is_icon(ns_element_get_attr(c, "rel")))
-                return href;
-        }
-        const char *found = find_icon_href(c, depth + 1);
-        if (found)
-            return found;
-    }
-    return NULL;
-}
-
-char *
-ns_browser_favicon_url(ns_browser *browser)
-{
-    if (!browser || !browser->doc)
-        return NULL;
-    const char *href = find_icon_href(browser->doc, 0);
-    char *abs = (href && *href) ? ns_url_resolve(browser->base_url, href) : NULL;
-    if (abs && *abs) {
-        char *out = strdup(abs);
-        g_free(abs);
-        return out;
-    }
-    g_free(abs);
-    char *origin = ns_url_origin_from(browser->base_url);
-    char *out = (origin && *origin) ? g_strconcat(origin, "/favicon.ico", NULL)
-                                    : NULL;
-    g_free(origin);
-    if (!out)
-        return NULL;
-    char *dup = strdup(out);
-    g_free(out);
-    return dup;
-}
-
-int
-ns_browser_bfcache_eligible(ns_browser *browser)
-{
-    return browser && browser->bfcache_ok;
-}
-
-void
-ns_browser_bfcache_park(ns_browser *browser)
-{
-    if (!browser) return;
-    if (browser->js)
-        ns_js_fire_page_transition(browser->js, "pagehide", TRUE);
-}
-
-void
-ns_browser_bfcache_restore(ns_browser *browser, int viewport_width,
-                           double viewport_height)
-{
-    if (!browser) return;
-    if (viewport_width > 0 && viewport_height > 0.0)
-        ns_browser_set_viewport(browser, viewport_width, viewport_height);
-    if (browser->js)
-        ns_js_fire_page_transition(browser->js, "pageshow", TRUE);
-}
-
-int
-ns_browser_busy(const ns_browser *browser)
-{
-    if (!browser) return 0;
-    if (ns_engine_in_blocking_fetch()) return 1;
-    return browser->js && ns_js_in_pump(browser->js);
-}
-
-void
-ns_browser_close(ns_browser *browser)
-{
-    if (!browser) return;
-    if (browser->media_events_source)
-        g_source_remove(browser->media_events_source);
-    if (browser->img_sessions) {
-        for (guint i = 0; i < browser->img_sessions->len; i++)
-            ns_engine_img_session_close(
-                g_ptr_array_index(browser->img_sessions, i));
-        g_ptr_array_free(browser->img_sessions, TRUE);
-    }
-    if (browser->img_requested) g_hash_table_destroy(browser->img_requested);
-    ns_css_set_active_node(NULL);
-    ns_paint_set_anim(NULL);
-    if (browser->js) {
-        ns_js_set_layout_root(browser->js, NULL);
-        ns_js_set_style_table(browser->js, NULL);
-    }
-    if (browser->anim) ns_anim_free(browser->anim);
-    if (browser->layout) { ns_paint_3d_invalidate(); ns_box_free(browser->layout); }
-    if (browser->styles) g_hash_table_destroy(browser->styles);
-    if (browser->css_cache) g_hash_table_destroy(browser->css_cache);
-    if (browser->js) ns_js_free(browser->js);
-    if (browser->doc) ns_node_free(browser->doc);
-    if (browser->videos) ns_video_cache_free(browser->videos);
-    if (browser->images) ns_image_cache_free(browser->images);
-    g_free(browser->base_url);
-    g_free(browser->doc_charset);
-    g_free(browser->doc_language);
-    g_free(browser->pending_nav);
-    g_free(browser->pending_download);
-    g_free(browser->pending_clipboard);
-    g_free(browser->pending_window_action);
-    if (browser->pending_audio) g_string_free(browser->pending_audio, TRUE);
-    g_free(browser->refresh_url);
-    g_free(browser->pending_post_body);
-    g_free(browser->pending_post_ct);
-    g_free(browser->search_query);
-    g_free(browser->remote_ip);
-    if (browser->console_buf) g_string_free(browser->console_buf, TRUE);
-    g_free(browser);
-}
