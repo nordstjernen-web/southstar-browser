@@ -210,7 +210,6 @@ endif
 
 southstar_embed_sources = southstar_engine_sources + files(
   'embed_shim.c',
-  'libsouthstar.c',
 ) + [polyfills_h, streaming_h]
 
 libsouthstar_lib = library(

@@ -167,6 +167,12 @@ Southstar Browser (unreleased):
   painted for the shell (whole frames, scroll snapping, layer plans,
   document tiles, fixed and sticky layers, scroller rectangles), with
   pixel-identical output.
+* Page input is Rust as well, completing the embedding API: links and the
+  cursor under the pointer, media hits, find in page, selection gestures,
+  hover events, wheel and scrollbar scrolling, dropped files, context menus,
+  presses and clicks with select, datalist, summary, reset and submit
+  activation, access keys, editing keys, typing and paste. libsouthstar.c
+  is gone; pages respond to input exactly as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

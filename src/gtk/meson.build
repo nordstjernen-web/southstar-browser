@@ -5,7 +5,6 @@ southstar_gtk_sources = files(
   'procview.c',
   'procwindow.c',
   'titlerow.c',
-  '../libsouthstar.c',
 )
 
 southstar_gtk_deps = southstar_deps + [gtk4_dep]

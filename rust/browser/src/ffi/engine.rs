@@ -513,6 +513,11 @@ pub fn style_keyword(b: BoxRef<'_>, prop: c_int) -> Option<&CStr> {
     (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
 }
 
+pub fn style_keyword_raw<'a>(style: *const Style, prop: c_int) -> Option<&'a CStr> {
+    let kw = unsafe { ns_style_keyword(style, prop) };
+    (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+}
+
 pub fn layout_set_datalist_open(open: bool) {
     unsafe { ns_layout_set_datalist_open(southstar_glib::boolean(open)) };
 }

@@ -42,6 +42,7 @@ const PORTED: &[&str] = &[
     "ipc_http.c",
     "js_date.c",
     "js_intl.c",
+    "libsouthstar.c",
     "mat4.h",
     "mathml.c",
     "mic.c",

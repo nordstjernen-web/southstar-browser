@@ -1,9 +1,10 @@
-//! Southstar — struct ns_browser as libsouthstar.c lays it out, its typed fields and the C ABI of the ported embedding calls.
+//! Southstar — struct ns_browser with its typed fields and the C ABI of src/libsouthstar.h and src/layers.h.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod dom;
 mod engine;
+mod events;
 mod glib;
 mod js;
 mod net;
@@ -20,12 +21,13 @@ use southstar_layout::{BoxRef, NsBox};
 
 pub use dom::*;
 pub use engine::*;
+pub use events::*;
 pub use glib::*;
 pub use js::{Js, NavigationTiming};
 pub use net::*;
 pub use paint::*;
 
-use crate::{build, callbacks, images, open, page, query, render, settle};
+use crate::{build, hit, input, open, page, query, render, settle};
 
 #[repr(transparent)]
 pub struct Flag(Cell<GBoolean>);
@@ -204,9 +206,9 @@ pub struct NsBrowser {
     pub relayout_cost_us: Cell<i64>,
     pub hover_restyle_pending: Flag,
     sb_box: Cell<*mut NsBox>,
-    sb_node: NodeSlot,
-    sb_grab: Cell<f64>,
-    sb_dragging: Flag,
+    pub sb_node: NodeSlot,
+    pub sb_grab: Cell<f64>,
+    pub sb_dragging: Flag,
     pub security: Cell<c_int>,
     pub remote_ip: Text,
 }
@@ -568,75 +570,6 @@ pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, 
 
 pub fn run_settle_loop(b: &NsBrowser, settle_ms: c_int) {
     trampolines::run_settle_loop(b, settle_ms);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_relayout(b: *mut NsBrowser) {
-    if let Some(b) = unsafe { browser(b) } {
-        page::relayout(b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_prune(b: *mut NsBrowser) {
-    if let Some(b) = unsafe { browser(b) } {
-        page::prune_cached_nodes(b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_damp_reset(b: *mut NsBrowser) {
-    if let Some(b) = unsafe { browser(b) } {
-        page::damp_reset(b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_ensure_images(b: *mut NsBrowser) {
-    if let Some(b) = unsafe { browser(b) } {
-        images::ensure_images(b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_resolve_navigation(
-    b: *mut NsBrowser,
-    href: *const c_char,
-) -> *mut c_char {
-    match (unsafe { browser(b) }, c_str(href)) {
-        (Some(b), Some(href)) => take_or_null(callbacks::resolve_navigation(b, href)),
-        _ => ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_sync_js_selection(b: *mut NsBrowser) {
-    if let Some(b) = unsafe { browser(b) } {
-        callbacks::sync_js_selection(b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_utf8_boundary(s: *const c_char, off: usize) -> usize {
-    query::utf8_boundary(c_str(s).map_or(&[][..], CStr::to_bytes), off)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_submit_form(b: *mut NsBrowser, clicked: *const NsNode) {
-    if let Some(b) = unsafe { browser(b) } {
-        build::submit_form(b, unsafe { Node::from_ptr(clicked) });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_browser_core_js_download(
-    url: *const c_char,
-    filename: *const c_char,
-    b: *mut NsBrowser,
-) {
-    if let (Some(b), Some(url)) = (unsafe { browser(b) }, c_str(url)) {
-        callbacks::js_download(b, url, c_str(filename));
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -1424,4 +1357,342 @@ pub unsafe extern "C" fn ns_browser_canvas_color(
     let ok = canvas_color(layout, &mut rgba);
     unsafe { ptr::copy_nonoverlapping(rgba.as_ptr(), rgba_out, 4) };
     southstar_glib::boolean(ok)
+}
+
+fn gstrdup(bytes: &[u8]) -> *mut c_char {
+    take_or_null(gstr_from(bytes))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_link_at(b: *mut NsBrowser, x: c_int, y: c_int) -> *mut c_char {
+    take_or_null(unsafe { browser(b) }.and_then(|b| hit::link_near(b, x, y, 9)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_link_under(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+) -> *mut c_char {
+    take_or_null(unsafe { browser(b) }.and_then(|b| hit::link_near(b, x, y, 1)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_cursor_at(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+) -> *mut c_char {
+    match unsafe { browser(b) }.and_then(|b| hit::cursor_at(b, x, y)) {
+        Some(cursor) => gstrdup(cursor),
+        None => ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_select(
+    b: *mut NsBrowser,
+    kind: c_int,
+    x: c_int,
+    y: c_int,
+) -> *mut c_char {
+    match unsafe { browser(b) }.and_then(|b| input::select(b, kind, x, y)) {
+        Some(input::Selected::Text(text)) => gstrdup(&text),
+        _ => ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_hover(b: *mut NsBrowser, x: c_int, y: c_int) -> c_int {
+    match unsafe { browser(b) } {
+        Some(b) if b.layout().is_some() => input::hover(b, x, y),
+        _ => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scroll_at(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    dx: c_int,
+    dy: c_int,
+) -> c_int {
+    unsafe { ns_browser_scroll_at_full(b, x, y, dx, dy, ptr::null_mut()) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scroll_at_full(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    dx: c_int,
+    dy: c_int,
+    out_snapped: *mut c_int,
+) -> c_int {
+    if let Some(out) = unsafe { out_snapped.as_mut() } {
+        *out = 0;
+    }
+    let Some(b) = (unsafe { browser(b) }) else {
+        return 0;
+    };
+    let (consumed, snapped) = input::scroll_at(b, x, y, dx, dy);
+    if consumed != 0 {
+        if let Some(out) = unsafe { out_snapped.as_mut() } {
+            *out = bool_int(snapped);
+        }
+    }
+    consumed
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scrollbar_press(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+) -> c_int {
+    unsafe { browser(b) }.map_or(0, |b| input::scrollbar_press(b, x, y))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scrollbar_drag(
+    b: *mut NsBrowser,
+    _x: c_int,
+    y: c_int,
+) -> c_int {
+    unsafe { browser(b) }.map_or(0, |b| input::scrollbar_drag(b, y))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_scrollbar_release(b: *mut NsBrowser) {
+    if let Some(b) = unsafe { browser(b) } {
+        input::scrollbar_release(b);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_drop_files(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    paths: *const *const c_char,
+    n_paths: c_int,
+) -> c_int {
+    let Some(b) = (unsafe { browser(b) }) else {
+        return 0;
+    };
+    if paths.is_null() || n_paths <= 0 {
+        return 0;
+    }
+    let list: Vec<&CStr> = (0..n_paths as usize)
+        .filter_map(|i| c_str(unsafe { *paths.add(i) }))
+        .collect();
+    input::drop_files(b, x, y, &list)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_eval(b: *mut NsBrowser, src: *const c_char) -> *mut c_char {
+    match (unsafe { browser(b) }, c_str(src)) {
+        (Some(b), Some(src)) => input::eval(b, src),
+        _ => ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_contextmenu_full(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    out_edit: *mut c_int,
+) -> c_int {
+    if let Some(out) = unsafe { out_edit.as_mut() } {
+        *out = 0;
+    }
+    let Some(b) = (unsafe { browser(b) }).filter(|b| b.layout().is_some()) else {
+        return 0;
+    };
+    let (prevented, edit_state) = input::contextmenu(b, x, y);
+    if let Some(out) = unsafe { out_edit.as_mut() } {
+        *out = edit_state;
+    }
+    prevented
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_contextmenu(b: *mut NsBrowser, x: c_int, y: c_int) -> c_int {
+    unsafe { ns_browser_contextmenu_full(b, x, y, ptr::null_mut()) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_media_at(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    out_is_video: *mut c_int,
+    out_stream: *mut c_int,
+) -> *mut c_char {
+    unsafe {
+        if let Some(out) = out_is_video.as_mut() {
+            *out = 0;
+        }
+        if let Some(out) = out_stream.as_mut() {
+            *out = 0;
+        }
+    }
+    let Some(found) = (unsafe { browser(b) }).and_then(|b| hit::media_at(b, x, y)) else {
+        return ptr::null_mut();
+    };
+    unsafe {
+        if let Some(out) = out_is_video.as_mut() {
+            *out = bool_int(found.is_video);
+        }
+        if let Some(out) = out_stream.as_mut() {
+            *out = bool_int(found.stream);
+        }
+    }
+    take_or_null(Some(found.url))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_find(
+    b: *mut NsBrowser,
+    query: *const c_char,
+    case_sensitive: c_int,
+    direction: c_int,
+    from_y: c_int,
+    out_total: *mut c_int,
+    out_current: *mut c_int,
+    out_y: *mut c_int,
+) -> c_int {
+    let outs = [out_total, out_current, out_y];
+    for out in outs {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = 0;
+        }
+    }
+    let Some(found) = (unsafe { browser(b) })
+        .and_then(|b| hit::find(b, c_str(query), case_sensitive != 0, direction, from_y))
+    else {
+        return -1;
+    };
+    for (out, value) in outs.into_iter().zip([found.total, found.current, found.y]) {
+        if let Some(out) = unsafe { out.as_mut() } {
+            *out = value;
+        }
+    }
+    0
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_press(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    mods: c_int,
+) -> *mut c_char {
+    match unsafe { browser(b) } {
+        Some(b) if b.layout().is_some() => take_or_null(input::press(b, x, y, mods)),
+        _ => ptr::null_mut(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_release_click(
+    b: *mut NsBrowser,
+    out_changed: *mut c_int,
+) -> *mut c_char {
+    let Some(b) = (unsafe { browser(b) }) else {
+        if let Some(out) = unsafe { out_changed.as_mut() } {
+            *out = -1;
+        }
+        return ptr::null_mut();
+    };
+    if let Some(out) = unsafe { out_changed.as_mut() } {
+        *out = 0;
+    }
+    let (nav, changed) = input::release_click(b);
+    if changed {
+        if let Some(out) = unsafe { out_changed.as_mut() } {
+            *out = 1;
+        }
+    }
+    take_or_null(nav)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_release(b: *mut NsBrowser) -> c_int {
+    let mut changed = 0;
+    let nav = unsafe { ns_browser_release_click(b, &mut changed) };
+    unsafe { southstar_glib::g_free(nav.cast()) };
+    changed
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_click(
+    b: *mut NsBrowser,
+    x: c_int,
+    y: c_int,
+    mods: c_int,
+) -> *mut c_char {
+    let nav = unsafe { ns_browser_press(b, x, y, mods) };
+    if !nav.is_null() && unsafe { *nav } != 0 {
+        if let Some(b) = unsafe { browser(b) } {
+            b.press_node.set(None);
+            b.press_active.set(false);
+            css_set_active_node(None);
+        }
+        return nav;
+    }
+    unsafe { southstar_glib::g_free(nav.cast()) };
+    let out = unsafe { ns_browser_release_click(b, ptr::null_mut()) };
+    if out.is_null() || unsafe { *out } == 0 {
+        if let Some(b) = unsafe { browser(b) } {
+            hit::video_click_toggle(b, x, y);
+        }
+    }
+    out
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_key_full(
+    b: *mut NsBrowser,
+    kind: c_int,
+    key: *const c_char,
+    code: *const c_char,
+    keycode: c_int,
+    mods: c_int,
+    out_prevented: *mut c_int,
+) -> *mut c_char {
+    if let Some(out) = unsafe { out_prevented.as_mut() } {
+        *out = 0;
+    }
+    let Some(b) = (unsafe { browser(b) }) else {
+        return ptr::null_mut();
+    };
+    let ev = input::KeyEvent {
+        kind,
+        key: c_str(key),
+        code: c_str(code),
+        keycode,
+        mods,
+    };
+    let (nav, prevented) = input::key(b, &ev);
+    if prevented {
+        if let Some(out) = unsafe { out_prevented.as_mut() } {
+            *out = 1;
+        }
+    }
+    take_or_null(nav)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_browser_key(
+    b: *mut NsBrowser,
+    kind: c_int,
+    key: *const c_char,
+    code: *const c_char,
+    keycode: c_int,
+    mods: c_int,
+) -> *mut c_char {
+    unsafe { ns_browser_key_full(b, kind, key, code, keycode, mods, ptr::null_mut()) }
 }

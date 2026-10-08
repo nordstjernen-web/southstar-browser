@@ -1,4 +1,4 @@
-/* Southstar — public C API for embedding the browser engine.
+/* Southstar — public C API for embedding the browser engine, implemented in rust/browser.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

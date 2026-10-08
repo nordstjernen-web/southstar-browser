@@ -1,6 +1,6 @@
 [package]
 name = "southstar-browser"
-description = "The embedding API of src/libsouthstar.h: a page's lifecycle, relayout, settling, script callbacks and queries"
+description = "The embedding API of src/libsouthstar.h: opening, laying out, painting, driving and querying a page"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -125,7 +125,7 @@ pub struct NsBoxMedia {
     _bg_layer_images: *mut GPtrArray,
     video_src: *mut c_char,
     video_poster: *mut c_char,
-    _video_audio_src: *mut c_char,
+    video_audio_src: *mut c_char,
     video: *mut c_void,
 }
 
@@ -179,6 +179,10 @@ impl<'a> MediaRef<'a> {
 
     pub fn video_src(self) -> Option<&'a CStr> {
         c_str(self.raw().video_src)
+    }
+
+    pub fn video_audio_src(self) -> Option<&'a CStr> {
+        c_str(self.raw().video_audio_src)
     }
 
     pub fn video_poster(self) -> Option<&'a CStr> {
