@@ -262,3 +262,37 @@ pub unsafe extern "C" fn ns_numeric_filter_insert(
     }
     glib::strdup(&filtered)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean {
+    glib::boolean(unsafe { node(n) }.is_some_and(controls::is_one_line_text))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_owner(
+    control: *const NsNode,
+    _doc: *const NsNode,
+) -> *const NsNode {
+    Node::ptr_or_null(unsafe { node(control) }.and_then(controls::form_owner))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_reset_owned_controls(
+    form: *mut NsNode,
+    root: *mut NsNode,
+    _doc: *const NsNode,
+) {
+    if let Some(form) = unsafe { node(form) } {
+        controls::reset_owned_controls(form, unsafe { node(root) });
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_supports_disabled(el: *const NsNode) -> GBoolean {
+    glib::boolean(unsafe { node(el) }.is_some_and(controls::supports_disabled))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean {
+    glib::boolean(unsafe { node(el) }.is_some_and(controls::effectively_disabled))
+}

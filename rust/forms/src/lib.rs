@@ -7,9 +7,8 @@ mod ffi;
 use core::ffi::{CStr, c_long};
 use std::ffi::CString;
 
-use ffi::{Control, Query};
-use southstar_dom::{Node, ancestors, children, controls};
-use southstar_glib::GStr;
+use ffi::Query;
+use southstar_dom::{Node, ancestors, children, controls, select};
 
 const MAX_DEPTH: i32 = 512;
 const PATTERN_MAX_LEN: usize = 2048;
@@ -35,8 +34,8 @@ fn or_empty(value: Option<&CStr>) -> &CStr {
     value.unwrap_or(c"")
 }
 
-fn gstr_or_empty(value: &Option<GStr>) -> &CStr {
-    value.as_deref().unwrap_or(c"")
+fn option_value(option: Node) -> CString {
+    CString::new(select::option_value(option)).unwrap_or_default()
 }
 
 fn textarea_value(node: Node) -> CString {
@@ -61,12 +60,12 @@ pub(crate) fn is_reset_trigger(node: Node) -> bool {
     type_is(node.attr(c"type"), "reset") && (name == b"button" || name == b"input")
 }
 
-fn belongs_to(form: Option<Node>, control: Node, doc: Option<Node>) -> bool {
-    form.is_some() && control.form_owner(doc) == form
+fn belongs_to(form: Option<Node>, control: Node) -> bool {
+    form.is_some() && controls::form_owner(control) == form
 }
 
 fn option_disabled(option: Node) -> bool {
-    if option.effectively_disabled() {
+    if controls::effectively_disabled(option) {
         return true;
     }
     for p in ancestors(option).take(MAX_DEPTH as usize) {
@@ -86,8 +85,7 @@ fn selected_option_node(option: Node) -> bool {
 
 fn selected_options(select: Node) -> Vec<Node> {
     if select.attr(c"multiple").is_none() {
-        return select
-            .chosen_option()
+        return select::chosen_option(select)
             .filter(|opt| !option_disabled(*opt))
             .into_iter()
             .collect();
@@ -95,7 +93,7 @@ fn selected_options(select: Node) -> Vec<Node> {
     let mut out = Vec::new();
     for child in children(select) {
         if is_named(child, b"optgroup") {
-            if child.effectively_disabled() || child.attr(c"disabled").is_some() {
+            if controls::effectively_disabled(child) || child.attr(c"disabled").is_some() {
                 continue;
             }
             out.extend(children(child).filter(|option| selected_option_node(*option)));
@@ -152,7 +150,7 @@ fn collect_control(
         b"textarea" => query.append(name, Some(&textarea_value(node))),
         b"select" => {
             for option in selected_options(node) {
-                query.append(name, Some(gstr_or_empty(&option.option_value())));
+                query.append(name, Some(&option_value(option)));
             }
         }
         _ => {
@@ -165,18 +163,17 @@ fn collect_control(
     }
 }
 
-fn submission_name<'a>(form: Option<Node>, node: Node<'a>, doc: Option<Node>) -> Option<&'a CStr> {
-    if !belongs_to(form, node, doc) {
+fn submission_name<'a>(form: Option<Node>, node: Node<'a>) -> Option<&'a CStr> {
+    if !belongs_to(form, node) {
         return None;
     }
     let name = node.attr(c"name").filter(|name| !name.is_empty())?;
-    (!node.effectively_disabled()).then_some(name)
+    (!controls::effectively_disabled(node)).then_some(name)
 }
 
 pub(crate) fn collect_inputs(
     form: Option<Node>,
     node: Option<Node>,
-    doc: Option<Node>,
     query: &mut Query,
     submitter: Option<Node>,
     depth: i32,
@@ -186,12 +183,12 @@ pub(crate) fn collect_inputs(
         return;
     }
     if let Some(tag) = node.element_name().filter(|tag| SUBMITTABLE.contains(tag)) {
-        if let Some(name) = submission_name(form, node, doc) {
+        if let Some(name) = submission_name(form, node) {
             collect_control(node, tag, name, query, submitter);
         }
     }
     for child in children(node) {
-        collect_inputs(form, Some(child), doc, query, submitter, depth + 1);
+        collect_inputs(form, Some(child), query, submitter, depth + 1);
     }
 }
 
@@ -275,8 +272,7 @@ fn control_invalid(node: Node, tag: &[u8], doc: Option<Node>) -> bool {
         b"textarea" => Some(textarea_value(node)),
         b"select" => selected_options(node)
             .first()
-            .and_then(|option| option.option_value())
-            .map(|value| CString::from(&*value)),
+            .map(|option| option_value(*option)),
         _ => None,
     };
     let value = match tag {
@@ -301,8 +297,8 @@ pub(crate) fn first_invalid<'a>(
         return None;
     }
     if let Some(tag) = node.element_name().filter(|tag| VALIDATED.contains(tag)) {
-        if belongs_to(form, node, doc)
-            && !node.effectively_disabled()
+        if belongs_to(form, node)
+            && !controls::effectively_disabled(node)
             && !controls::readonly_bars_validation(node)
             && control_invalid(node, tag, doc)
         {

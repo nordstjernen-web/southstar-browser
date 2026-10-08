@@ -6,12 +6,9 @@ use core::ffi::{CStr, c_char, c_long, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GError, GStr};
+use southstar_glib::{self as glib, GBoolean, GError};
 
 unsafe extern "C" {
-    fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean;
-    fn ns_select_chosen_option(select: *const NsNode) -> *const NsNode;
-    fn ns_option_value_dup(option: *const NsNode) -> *mut c_char;
     fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean;
     fn ns_form_urlencoded_append_pair(
         out: *mut c_void,
@@ -37,26 +34,6 @@ unsafe extern "C" {
 
 fn opt_ptr(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-pub trait Control: Sized {
-    fn effectively_disabled(self) -> bool;
-    fn chosen_option(self) -> Option<Self>;
-    fn option_value(self) -> Option<GStr>;
-}
-
-impl Control for Node<'_> {
-    fn effectively_disabled(self) -> bool {
-        unsafe { ns_element_effectively_disabled(self.as_ptr()) != 0 }
-    }
-
-    fn chosen_option(self) -> Option<Self> {
-        unsafe { Node::from_ptr(ns_select_chosen_option(self.as_ptr())) }
-    }
-
-    fn option_value(self) -> Option<GStr> {
-        unsafe { GStr::take(ns_option_value_dup(self.as_ptr())) }
-    }
 }
 
 pub struct Query {
@@ -110,7 +87,7 @@ pub unsafe extern "C" fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean 
 pub unsafe extern "C" fn ns_form_collect_inputs(
     form: *const NsNode,
     n: *const NsNode,
-    doc: *const NsNode,
+    _doc: *const NsNode,
     query: *mut c_void,
     first: *mut GBoolean,
     submitter: *const NsNode,
@@ -120,7 +97,6 @@ pub unsafe extern "C" fn ns_form_collect_inputs(
         crate::collect_inputs(
             Node::from_ptr(form),
             Node::from_ptr(n),
-            Node::from_ptr(doc),
             &mut query,
             Node::from_ptr(submitter),
             0,

@@ -5,7 +5,9 @@
 pub mod controls;
 mod ffi;
 pub mod image_map;
+pub mod select;
 pub mod serialize;
+pub mod tree;
 
 pub use ffi::{Attr, Kind, Node, NsNode};
 

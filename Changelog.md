@@ -115,6 +115,10 @@ Southstar Browser (unreleased):
   declarative shadow roots, the XML serialization, textContent and the text
   of subtrees, the --dump=dom tree and client-side image map hit testing give
   the same output.
+* Which option a select shows and what it submits, option text and labels,
+  form owners (including the form attribute and shadow trees), form reset,
+  disabled fieldsets and optgroups, inert subtrees and the active modal
+  dialog are Rust, with the same results.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

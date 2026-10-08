@@ -909,4 +909,4 @@ above once the last section goes.
 
 | Module | Sections in Rust | Crate | Phase |
 |---|---|---|---|
-| `dom.c` | form controls: input types and their numeric values, stepping, range and step validity, required, email syntax, `contenteditable` and spellcheck hosts, and editable values (741 lines); text collection, HTML and XML serialization, the debug dump and client-side image maps (570 lines) | `rust/dom` | 6 (DOM and parsing) |
+| `dom.c` | form controls: input types and their numeric values, stepping, range and step validity, required, email syntax, `contenteditable` and spellcheck hosts, and editable values (741 lines); text collection, HTML and XML serialization, the debug dump and client-side image maps (570 lines); option text and select choice, form owners and reset, disabled, inert and the active modal, details opened for a fragment, tree roots (339 lines) | `rust/dom` | 6 (DOM and parsing) |

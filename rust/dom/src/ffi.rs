@@ -63,13 +63,15 @@ pub struct NsNode {
 }
 
 mod controls;
+mod select;
 mod serialize;
+mod tree;
 
 unsafe extern "C" {
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_node_root(n: *const NsNode) -> *const NsNode;
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
+    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
+    fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
     fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_node_remove(child: *mut NsNode);
@@ -216,11 +218,7 @@ impl<'a> Node<'a> {
     }
 
     pub fn root(self) -> Self {
-        Self::link(unsafe { ns_node_root(self.as_ptr()) }).unwrap_or(self)
-    }
-
-    pub fn form_owner(self, doc: Option<Node>) -> Option<Self> {
-        Self::link(unsafe { ns_form_owner(self.as_ptr(), Node::ptr_or_null(doc)) })
+        crate::tree::root(self)
     }
 }
 
@@ -253,6 +251,14 @@ impl<'a> Attr<'a> {
 
 pub fn set_attr(node: Node, name: &CStr, value: &CStr) {
     unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+}
+
+pub fn remove_attr(node: Node, name: &CStr) {
+    unsafe { ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+}
+
+pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
+    unsafe { Node::from_ptr(ns_node_find_by_id(root.as_ptr(), id.as_ptr())) }
 }
 
 pub fn detach(node: Node) {

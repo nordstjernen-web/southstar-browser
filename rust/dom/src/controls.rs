@@ -7,7 +7,7 @@ use core::ffi::{CStr, c_int, c_long};
 use southstar_datetime::{MAX_YEAR, civil_from_days, floormod};
 
 use crate::ffi::{self, Node};
-use crate::{MAX_DEPTH, ancestors_and_self, children};
+use crate::{MAX_DEPTH, ancestors, ancestors_and_self, children, tree};
 
 const DAY_MS: f64 = 86_400_000.0;
 const WEEK_MS: f64 = 604_800_000.0;
@@ -503,23 +503,17 @@ fn input_type_is(node: Node, want: &str) -> bool {
     named(node, b"input") && node.attr(c"type").is_some_and(|t| ieq(t, want))
 }
 
-fn radio_group_has_checked(
-    scan: Node,
-    doc: Option<Node>,
-    owner: Option<Node>,
-    name: &CStr,
-    depth: i32,
-) -> bool {
+fn radio_group_has_checked(scan: Node, owner: Option<Node>, name: &CStr, depth: i32) -> bool {
     if depth >= MAX_DEPTH {
         return false;
     }
     if input_type_is(scan, "radio") {
         let scan_name = scan.attr(c"name").unwrap_or(c"");
-        if scan_name == name && scan.form_owner(doc) == owner && is_checked(scan) {
+        if scan_name == name && form_owner(scan) == owner && is_checked(scan) {
             return true;
         }
     }
-    children(scan).any(|child| radio_group_has_checked(child, doc, owner, name, depth + 1))
+    children(scan).any(|child| radio_group_has_checked(child, owner, name, depth + 1))
 }
 
 pub fn value_missing(control: Node, value: Option<&CStr>, doc: Option<Node>) -> bool {
@@ -531,9 +525,8 @@ pub fn value_missing(control: Node, value: Option<&CStr>, doc: Option<Node>) -> 
     }
     if input_type_is(control, "radio") {
         let name = control.attr(c"name").unwrap_or(c"");
-        let root = doc.unwrap_or_else(|| control.root());
-        let owner = control.form_owner(Some(root));
-        return !radio_group_has_checked(root, Some(root), owner, name, 0);
+        let root = doc.unwrap_or_else(|| tree::root(control));
+        return !radio_group_has_checked(root, form_owner(control), name, 0);
     }
     value.is_none_or(CStr::is_empty)
 }
@@ -783,4 +776,125 @@ pub fn numeric_filter(insert: &[u8]) -> Vec<u8> {
         .copied()
         .filter(|c| c.is_ascii_digit() || matches!(c, b'.' | b'-' | b'+' | b'e' | b'E'))
         .collect()
+}
+
+pub fn is_one_line_text(node: Node) -> bool {
+    if !named(node, b"input") {
+        return false;
+    }
+    let ty = node.attr(c"type");
+    ty.is_none()
+        || !type_in(
+            ty,
+            &[
+                "button",
+                "checkbox",
+                "color",
+                "date",
+                "datetime-local",
+                "file",
+                "hidden",
+                "image",
+                "month",
+                "number",
+                "radio",
+                "range",
+                "reset",
+                "submit",
+                "time",
+                "week",
+            ],
+        )
+}
+
+fn is_shadow_root(node: Node) -> bool {
+    node.is_element() && node.attr(c"data-nd-shadow-root").is_some()
+}
+
+pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
+    if !control.is_element() {
+        return None;
+    }
+    if let Some(form_id) = control.attr(c"form") {
+        if form_id.is_empty() {
+            return None;
+        }
+        let tree_root = ancestors_and_self(control)
+            .find(|n| n.parent().is_none() || is_shadow_root(*n))
+            .unwrap_or(control);
+        return ffi::find_by_id(tree_root, form_id).filter(|owner| named(*owner, b"form"));
+    }
+    ancestors(control)
+        .take(MAX_DEPTH as usize)
+        .take_while(|p| !is_shadow_root(*p))
+        .find(|p| named(*p, b"form"))
+}
+
+fn reset_control(node: Node) {
+    match node.element_name() {
+        Some(b"input" | b"textarea") => {
+            if type_in(node.attr(c"type"), &["checkbox", "radio"]) {
+                ffi::remove_attr(node, c"data-nd-checked");
+            }
+            ffi::remove_attr(node, c"data-nd-value");
+            ffi::remove_attr(node, c"data-nd-vdirty");
+            ffi::remove_attr(node, c"data-nd-user-edited");
+        }
+        Some(b"select") => {
+            ffi::remove_attr(node, c"data-nd-noselect");
+            for option in children(node).filter(|o| named(*o, b"option")) {
+                ffi::remove_attr(option, c"selected");
+            }
+        }
+        _ => {}
+    }
+}
+
+fn reset_walk(form: Node, scan: Node, depth: i32) {
+    if depth >= MAX_DEPTH {
+        return;
+    }
+    if scan.element_name().is_some() && form_owner(scan) == Some(form) {
+        reset_control(scan);
+    }
+    for child in children(scan) {
+        reset_walk(form, child, depth + 1);
+    }
+}
+
+pub fn reset_owned_controls(form: Node, root: Option<Node>) {
+    reset_walk(form, root.unwrap_or(form), 0);
+}
+
+pub fn supports_disabled(el: Node) -> bool {
+    matches!(
+        el.element_name(),
+        Some(
+            b"button" | b"fieldset" | b"input" | b"optgroup" | b"option" | b"select" | b"textarea"
+        )
+    )
+}
+
+pub fn effectively_disabled(el: Node) -> bool {
+    if !supports_disabled(el) {
+        return false;
+    }
+    if el.attr(c"disabled").is_some() {
+        return true;
+    }
+    let is_option = named(el, b"option");
+    for p in ancestors(el) {
+        if is_option && named(p, b"optgroup") && p.attr(c"disabled").is_some() {
+            return true;
+        }
+        if !named(p, b"fieldset") || p.attr(c"disabled").is_none() {
+            continue;
+        }
+        let legend = children(p).find(|c| named(*c, b"legend"));
+        if legend.is_some_and(|legend| tree::contains(legend.as_ptr(), el)) {
+            continue;
+        }
+        return true;
+    }
+    false
 }
