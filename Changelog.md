@@ -217,6 +217,12 @@ Southstar Browser (unreleased):
   a request uses, the network log, and the redirect loop with Fetch's
   rules for methods, bodies and credentials. Requests carry the same
   headers as before, over both the curl and the nghttp2 backends.
+* The request queue is Rust, and with it all of net.c: asynchronous and
+  blocking fetches, the limits of 32 requests at once and 6 per host,
+  sharing one response among identical requests in flight, the
+  responses kept for the preloads a page announces, preconnects, blob:
+  URLs and shutting the network down. Only the nghttp2 backend's own
+  client is still C in the network layer.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

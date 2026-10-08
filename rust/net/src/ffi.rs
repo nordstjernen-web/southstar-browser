@@ -10,6 +10,7 @@ pub mod host;
 pub mod lexbor;
 pub mod netlog;
 pub mod proxy;
+pub mod queue;
 pub mod sinks;
 pub mod storage;
 pub mod sys;

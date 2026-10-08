@@ -52,6 +52,7 @@ pub const OPT_ACCEPT_ENCODING: c_int = 10102;
 pub const OPT_UNRESTRICTED_AUTH: c_int = 105;
 pub const OPT_MAXFILESIZE_LARGE: c_int = 30117;
 pub const OPT_COOKIELIST: c_int = 10135;
+pub const OPT_CONNECT_ONLY: c_int = 141;
 pub const OPT_NOPROXY: c_int = 10177;
 pub const OPT_XFERINFOFUNCTION: c_int = 20219;
 pub const OPT_ALTSVC: c_int = 10287;

@@ -6,7 +6,7 @@ use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::{self, NonNull, addr_of_mut};
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_http_cache as http_cache;
 
 use super::hop::{self, HopOut, HopReq};
@@ -33,6 +33,7 @@ const FETCH_DEST_FONT: c_int = 4;
 unsafe extern "C" {
     fn g_quark_from_static_string(string: *const c_char) -> u32;
     fn g_io_error_quark() -> u32;
+    fn g_error_new_literal(domain: u32, code: c_int, message: *const c_char) -> *mut GError;
     fn g_set_error_literal(err: *mut *mut GError, domain: u32, code: c_int, message: *const c_char);
     fn g_get_monotonic_time() -> i64;
     fn g_get_real_time() -> i64;
@@ -72,6 +73,7 @@ static FONT_ACCEPT: AcceptLines = AcceptLines([
     ptr::null(),
 ]);
 
+#[derive(Clone)]
 pub enum Failure {
     Cancelled,
     Net(c_int, Vec<u8>),
@@ -92,6 +94,18 @@ impl Failure {
     pub fn set(&self, error: *mut *mut GError) {
         let (domain, code, message) = self.parts();
         unsafe { g_set_error_literal(error, domain, code, message.as_ptr()) };
+    }
+
+    pub fn into_error(self) -> *mut GError {
+        let (domain, code, message) = self.parts();
+        unsafe { g_error_new_literal(domain, code, message.as_ptr()) }
+    }
+
+    pub fn message(&self) -> &[u8] {
+        match self {
+            Failure::Cancelled => b"fetch cancelled",
+            Failure::Net(_, message) => message,
+        }
     }
 }
 
@@ -118,6 +132,19 @@ impl Response {
 
     pub fn get(&mut self) -> &mut NsResponse {
         unsafe { self.0.as_mut() }
+    }
+
+    pub fn view(&self) -> &NsResponse {
+        unsafe { self.0.as_ref() }
+    }
+
+    pub fn copy(&self) -> Response {
+        let raw = unsafe { super::ns_response_copy(self.as_ptr()) };
+        Response(NonNull::new(raw).expect("copy of a response"))
+    }
+
+    pub fn append(&mut self, bytes: &[u8]) {
+        append(self.get().body, bytes);
     }
 
     pub fn into_raw(self) -> *mut NsResponse {
@@ -818,7 +845,7 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
     }
 }
 
-unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
+pub unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
     let mut lines = Vec::new();
     if list.is_null() {
         return lines;
@@ -829,16 +856,6 @@ unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
         p = unsafe { p.add(1) };
     }
     lines
-}
-
-unsafe fn ptr_array_lines(array: *const GPtrArray) -> Vec<Vec<u8>> {
-    let Some(array) = (unsafe { array.as_ref() }) else {
-        return Vec::new();
-    };
-    (0..array.len as usize)
-        .filter_map(|i| text(unsafe { *array.pdata.add(i) }.cast()))
-        .map(<[u8]>::to_vec)
-        .collect()
 }
 
 #[unsafe(no_mangle)]
@@ -853,6 +870,20 @@ pub extern "C" fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char
     lines.0.as_ptr()
 }
 
+pub fn request_key(
+    url: &[u8],
+    top_url: Option<&[u8]>,
+    method: Option<&[u8]>,
+    headers: &[Vec<u8>],
+) -> Option<Vec<u8>> {
+    if !request::is_coalescable(url, method) {
+        return None;
+    }
+    let partition = cache_partition(url, top_url);
+    let lines: Vec<&[u8]> = headers.iter().map(Vec::as_slice).collect();
+    Some(request::coalescing_key(url, &partition, &lines))
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_request_key(
     url: *const c_char,
@@ -860,46 +891,10 @@ pub unsafe extern "C" fn ns_net_request_key(
     method: *const c_char,
     extra_headers: *const *const c_char,
 ) -> *mut c_char {
-    let Some(url) = text(url).filter(|u| request::is_coalescable(u, text(method))) else {
-        return ptr::null_mut();
-    };
-    let partition = cache_partition(url, text(top_url));
-    let lines = unsafe { header_lines(extra_headers) };
-    let lines: Vec<&[u8]> = lines.iter().map(Vec::as_slice).collect();
-    glib::strdup(&request::coalescing_key(url, &partition, &lines))
-}
-
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_fetch_sync(
-    url: *const c_char,
-    top_url: *const c_char,
-    method: *const c_char,
-    body: *const c_void,
-    body_len: usize,
-    content_type: *const c_char,
-    extra_headers: *const GPtrArray,
-    cancellable: *mut c_void,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
     let Some(url) = text(url) else {
         return ptr::null_mut();
     };
-    let headers = unsafe { ptr_array_lines(extra_headers) };
-    let f = Fetch {
-        url,
-        top_url: text(top_url),
-        method: text(method),
-        body: (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), body_len) }),
-        content_type: text(content_type),
-        headers: &headers,
-        cancellable,
-    };
-    match fetch(&f) {
-        Ok(resp) => resp.into_raw(),
-        Err(failure) => {
-            failure.set(error);
-            ptr::null_mut()
-        }
-    }
+    let headers = unsafe { header_lines(extra_headers) };
+    request_key(url, text(top_url), text(method), &headers)
+        .map_or(ptr::null_mut(), |key| glib::strdup(&key))
 }

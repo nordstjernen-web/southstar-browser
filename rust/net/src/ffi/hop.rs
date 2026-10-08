@@ -107,7 +107,16 @@ unsafe extern "C" {
         out: *mut HopOut,
         cancellable: *mut c_void,
     ) -> GBoolean;
+    fn ns_net_backend_shutdown();
 }
+
+#[cfg(feature = "http-nghttp2")]
+pub fn backend_shutdown() {
+    unsafe { ns_net_backend_shutdown() };
+}
+
+#[cfg(not(feature = "http-nghttp2"))]
+pub fn backend_shutdown() {}
 
 unsafe extern "C" {
     fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
@@ -147,6 +156,10 @@ impl Easy {
 
     pub fn off(&self, option: c_int, value: i64) {
         unsafe { curl::curl_easy_setopt(self.0, option, value) };
+    }
+
+    pub fn perform(&self) -> Code {
+        unsafe { curl::curl_easy_perform(self.0) }
     }
 
     fn info_long(&self, info: c_int) -> c_long {
