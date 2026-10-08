@@ -275,7 +275,7 @@ endif
 
 executable(
   'southstar-renderer',
-  files('renderer_http.c', 'renderer_serve.c', 'renderer_tiles.c'),
+  files('renderer_http.c', 'renderer_serve.c'),
   link_with: libsouthstar_static,
   include_directories: include_directories('.'),
   dependencies: southstar_deps + ns_sdl_deps + rproc_deps,

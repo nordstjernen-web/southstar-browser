@@ -7,7 +7,6 @@ southstar_gtk_sources = files(
   'titlerow.c',
   '../libsouthstar.c',
   '../renderer_serve.c',
-  '../renderer_tiles.c',
   '../rproc_http.c',
   '../rproc_inproc.c',
 )

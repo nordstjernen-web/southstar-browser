@@ -1514,6 +1514,7 @@ dependencies = [
  "southstar-mic",
  "southstar-netutil",
  "southstar-pdf",
+ "southstar-renderer-host",
  "southstar-safebrowsing",
  "southstar-sandbox",
  "southstar-spellcheck",
@@ -1632,6 +1633,14 @@ name = "southstar-pdf"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-renderer-host"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-ipc",
 ]
 
 [[package]]

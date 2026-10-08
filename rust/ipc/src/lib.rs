@@ -63,7 +63,7 @@ fn c_space(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
 }
 
-pub fn atol(s: &[u8]) -> c_long {
+pub fn strtol(s: &[u8]) -> (c_long, usize) {
     let at = |i: usize| s.get(i).copied().unwrap_or(0);
     let mut i = 0;
     while c_space(at(i)) {
@@ -73,13 +73,24 @@ pub fn atol(s: &[u8]) -> c_long {
     if matches!(at(i), b'-' | b'+') {
         i += 1;
     }
+    let digits = i;
     let mut magnitude: i128 = 0;
     while at(i).is_ascii_digit() {
         magnitude = (magnitude * 10 + i128::from(at(i) - b'0')).min(1 << 80);
         i += 1;
     }
+    if i == digits {
+        return (0, 0);
+    }
     let value = if negative { -magnitude } else { magnitude };
-    value.clamp(i128::from(c_long::MIN), i128::from(c_long::MAX)) as c_long
+    (
+        value.clamp(i128::from(c_long::MIN), i128::from(c_long::MAX)) as c_long,
+        i,
+    )
+}
+
+pub fn atol(s: &[u8]) -> c_long {
+    strtol(s).0
 }
 
 pub fn atoi(s: &[u8]) -> c_int {
