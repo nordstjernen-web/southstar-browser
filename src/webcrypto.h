@@ -1,4 +1,4 @@
-/* Southstar — SubtleCrypto primitives implemented over OpenSSL libcrypto.
+/* Southstar — SubtleCrypto primitives over OpenSSL libcrypto, implemented in rust/webcrypto.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

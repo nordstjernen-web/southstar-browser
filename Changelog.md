@@ -48,6 +48,9 @@ Southstar Browser (unreleased):
 * Temporal is the first JavaScript binding written in Rust. It is built on
   the engine-neutral layer, so the same code also runs on Boa, and it
   behaves exactly as the C did.
+* Web Cryptography (crypto.subtle) is Rust, still over OpenSSL: hashing,
+  HMAC, AES, RSA, ECDSA/ECDH, Ed25519/X25519, PBKDF2 and HKDF give the same
+  results and the same errors as before.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

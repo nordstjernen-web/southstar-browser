@@ -76,7 +76,6 @@ southstar_engine_sources = files(
   'texture.c',
   'video.c',
   'video_decode.c',
-  'webcrypto.c',
   'ws.c',
   'html_lexbor.c',
   'xml.c',

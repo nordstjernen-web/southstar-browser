@@ -1482,6 +1482,7 @@ dependencies = [
  "southstar-js-temporal",
  "southstar-safebrowsing",
  "southstar-spellcheck",
+ "southstar-webcrypto",
  "southstar-woff2",
 ]
 
@@ -1538,6 +1539,13 @@ dependencies = [
 
 [[package]]
 name = "southstar-spellcheck"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-webcrypto"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
