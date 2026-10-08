@@ -289,7 +289,7 @@ pub fn links(b: &NsBrowser) -> Option<Vec<u8>> {
 fn rel_token_is_icon(rel: Option<&CStr>) -> bool {
     rel.is_some_and(|rel| {
         rel.to_bytes()
-            .split(|c| matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+            .split(|c| matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r'))
             .any(|token| token.eq_ignore_ascii_case(b"icon"))
     })
 }

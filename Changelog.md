@@ -173,6 +173,11 @@ Southstar Browser (unreleased):
   presses and clicks with select, datalist, summary, reset and submit
   activation, access keys, editing keys, typing and paste. libsouthstar.c
   is gone; pages respond to input exactly as before.
+* Networking starts moving to Rust: the error page shown when a load fails
+  (the failure classified from the transport error or HTTP status, with its
+  icon, explanation and what to try) and data: URL decoding, percent-encoded
+  or base64 under the response memory budget, produce the same pages and
+  bytes as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

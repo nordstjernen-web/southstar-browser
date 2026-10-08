@@ -38,6 +38,7 @@ pub use southstar_js_temporal;
 pub use southstar_mat4;
 pub use southstar_mathml;
 pub use southstar_mic;
+pub use southstar_net;
 pub use southstar_netutil;
 pub use southstar_pdf;
 pub use southstar_print;

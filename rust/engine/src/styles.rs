@@ -40,7 +40,7 @@ pub fn layout_perf() -> (u64, f64) {
 }
 
 fn is_space(b: u8) -> bool {
-    matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
+    matches!(b, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
 }
 
 fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {

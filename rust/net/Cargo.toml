@@ -1,0 +1,16 @@
+[package]
+name = "southstar-net"
+description = "Networking from src/net.h: error pages and data: URL decoding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-about-style = { path = "../about-style" }
+southstar-glib = { path = "../glib" }
+southstar-html-util = { path = "../html-util" }
+
+[lints]
+workspace = true

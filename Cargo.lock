@@ -1569,6 +1569,7 @@ dependencies = [
  "southstar-mat4",
  "southstar-mathml",
  "southstar-mic",
+ "southstar-net",
  "southstar-netutil",
  "southstar-pdf",
  "southstar-print",
@@ -1757,6 +1758,15 @@ dependencies = [
 [[package]]
 name = "southstar-mic"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-net"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-about-style",
+ "southstar-glib",
+ "southstar-html-util",
+]
 
 [[package]]
 name = "southstar-netutil"

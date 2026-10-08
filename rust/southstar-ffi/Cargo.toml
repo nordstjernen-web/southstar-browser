@@ -43,6 +43,7 @@ southstar-image = { path = "../image" }
 southstar-mat4 = { path = "../mat4" }
 southstar-mathml = { path = "../mathml" }
 southstar-mic = { path = "../mic" }
+southstar-net = { path = "../net" }
 southstar-netutil = { path = "../netutil" }
 southstar-pdf = { path = "../pdf" }
 southstar-print = { path = "../print" }
