@@ -54,6 +54,8 @@ Southstar Browser (unreleased):
 * The thread dump (Task Manager's dump button, and SIGQUIT on Unix) is Rust.
 * The offscreen GL context WebGL draws into is Rust, over WGL on Windows,
   CGL on macOS and EGL elsewhere, still through libepoxy.
+* The 4x4 matrices behind CSS 3D transforms are Rust and compute the same
+  values bit for bit.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

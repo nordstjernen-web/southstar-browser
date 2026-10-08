@@ -839,4 +839,5 @@ files will show whether WebIDL generation pays for itself.
 | `webcrypto.c` | 1,248 | `rust/webcrypto` | 2 |
 | `threaddump.c` | 237 | `rust/threaddump` | 2 |
 | `glctx.c` | 350 | `rust/glctx` | 2 |
+| `mat4.h` | 144 | `rust/mat4` | 2 |
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |

@@ -23,6 +23,7 @@ const PORTED: &[&str] = &[
     "history.c",
     "i18n.c",
     "js_date.c",
+    "mat4.h",
     "safebrowsing.c",
     "spellcheck.c",
     "threaddump.c",

@@ -1481,6 +1481,7 @@ dependencies = [
  "southstar-history",
  "southstar-i18n",
  "southstar-js-temporal",
+ "southstar-mat4",
  "southstar-safebrowsing",
  "southstar-spellcheck",
  "southstar-threaddump",
@@ -1538,6 +1539,10 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-temporal",
 ]
+
+[[package]]
+name = "southstar-mat4"
+version = "1.0.30-dev"
 
 [[package]]
 name = "southstar-safebrowsing"
