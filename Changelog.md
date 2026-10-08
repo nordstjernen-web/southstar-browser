@@ -217,6 +217,9 @@ Southstar Browser (unreleased):
   select-all, the highlighted runs, the selection's bounds and the copied
   text (with user-select: none, line and paragraph separators and
   zero-width characters handled as before).
+* SVG rendering is Rust: shapes and path data, transforms, gradients,
+  clip paths, masks, markers, text, use and symbol, nested viewports,
+  switch and systemLanguage, and the geometry behind getBBox and getCTM.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

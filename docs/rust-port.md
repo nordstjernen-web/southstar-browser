@@ -905,6 +905,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `idb.c` | 1,219 | `rust/idb` (SQLite through `rust/sqlite`, values in QuickJS's object serialization as before) | 5 |
 | `print.c` | 218 | `rust/print` (the box tree through `rust/layout`, a `#[repr(C)]` mirror of `ns_box` with borrowed box handles) | 6 (layout) |
 | `selection.c` | 546 | `rust/selection` (boxes through `rust/layout`) | 6 (layout) |
+| `svg.c` | 2,542 | `rust/svg` (computed styles through the new shared `rust/style`) | 6 (layout) |
 | `headless.c` | 2,227 | `rust/headless` (ported in two sections; its standard output still goes through the C runtime's stdout buffer, so it stays ordered with what C writes there) | 4 |
 | `engine.c` | 1,500 | `rust/engine` (ported in three sections; style sheets stay C `ns_css_stylesheet`s collected into GLib pointer arrays, and the render context and profile are `#[repr(C)]` mirrors asserted on both sides) | 6 (pipeline driver) |
 | `libsouthstar.c` | 4,472 | `rust/browser` (ported in three sections; `struct ns_browser` became a Rust struct with C's field layout and `Cell` fields, so the script callbacks that re-enter a page while it relays out stay sound) | 6 (pipeline driver) |

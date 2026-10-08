@@ -53,6 +53,7 @@ southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-selection = { path = "../selection" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }
+southstar-svg = { path = "../svg" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-texture = { path = "../texture" }
@@ -78,6 +79,7 @@ ns-pango = [
     "southstar-font/ns-pango",
     "southstar-js-intl/ns-pango",
     "southstar-mathml/ns-pango",
+    "southstar-svg/ns-pango",
     "southstar-net/ns-pango",
 ]
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]

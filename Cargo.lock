@@ -1579,6 +1579,7 @@ dependencies = [
  "southstar-sandbox",
  "southstar-selection",
  "southstar-spellcheck",
+ "southstar-svg",
  "southstar-texture",
  "southstar-threaddump",
  "southstar-watchdog",
@@ -1843,6 +1844,25 @@ name = "southstar-sqlite"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-style"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+]
+
+[[package]]
+name = "southstar-svg"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]

@@ -58,6 +58,7 @@ const PORTED: &[&str] = &[
     "security.c",
     "selection.c",
     "spellcheck.c",
+    "svg.c",
     "texture.c",
     "threaddump.c",
     "watchdog.c",
