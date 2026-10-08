@@ -68,8 +68,8 @@ pub struct NsBox {
     margin: Edges,
     padding: Edges,
     border: Edges,
-    _scroll_x: f64,
-    _scroll_y: f64,
+    scroll_x: f64,
+    scroll_y: f64,
     _scroll_max_x: f64,
     _scroll_max_y: f64,
     _scrolls: GBoolean,
@@ -109,6 +109,7 @@ pub struct NsBox {
 
 unsafe extern "C" {
     fn ns_box_max_bottom(root: *const NsBox, seed: f64) -> f64;
+    fn ns_box_clips_out_point(b: *const NsBox, x: f64, y: f64) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -164,6 +165,14 @@ impl<'a> BoxRef<'a> {
         self.raw().content_height
     }
 
+    pub fn scroll_x(self) -> f64 {
+        self.raw().scroll_x
+    }
+
+    pub fn scroll_y(self) -> f64 {
+        self.raw().scroll_y
+    }
+
     pub fn margin(self) -> Edges {
         self.raw().margin
     }
@@ -195,5 +204,13 @@ impl<'a> BoxRef<'a> {
 
     pub fn max_bottom(self, seed: f64) -> f64 {
         unsafe { ns_box_max_bottom(self.as_ptr(), seed) }
+    }
+
+    pub fn clips_out_point(self, x: f64, y: f64) -> bool {
+        unsafe { ns_box_clips_out_point(self.as_ptr(), x, y) != 0 }
+    }
+
+    pub fn same(self, other: BoxRef<'_>) -> bool {
+        core::ptr::eq(self.as_ptr(), other.as_ptr())
     }
 }

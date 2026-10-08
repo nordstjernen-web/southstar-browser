@@ -53,6 +53,7 @@ const PORTED: &[&str] = &[
     "rproc_inproc.c",
     "safebrowsing.c",
     "security.c",
+    "selection.c",
     "spellcheck.c",
     "texture.c",
     "threaddump.c",

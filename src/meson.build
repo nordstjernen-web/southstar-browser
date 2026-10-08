@@ -53,7 +53,6 @@ southstar_engine_sources = files(
   'net.c',
   'paint.c',
   'render.c',
-  'selection.c',
   'video.c',
   'video_decode.c',
 )

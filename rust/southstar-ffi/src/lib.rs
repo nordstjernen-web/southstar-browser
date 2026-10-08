@@ -42,6 +42,7 @@ pub use southstar_renderer_client;
 pub use southstar_renderer_host;
 pub use southstar_safebrowsing;
 pub use southstar_sandbox;
+pub use southstar_selection;
 pub use southstar_spellcheck;
 pub use southstar_texture;
 pub use southstar_threaddump;

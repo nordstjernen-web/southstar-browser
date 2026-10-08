@@ -48,6 +48,7 @@ southstar-print = { path = "../print" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-safebrowsing = { path = "../safebrowsing" }
+southstar-selection = { path = "../selection" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }
 southstar-threaddump = { path = "../threaddump" }

@@ -1554,6 +1554,7 @@ dependencies = [
  "southstar-renderer-host",
  "southstar-safebrowsing",
  "southstar-sandbox",
+ "southstar-selection",
  "southstar-spellcheck",
  "southstar-texture",
  "southstar-threaddump",
@@ -1777,6 +1778,14 @@ name = "southstar-sandbox"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-selection"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-layout",
 ]
 
 [[package]]
