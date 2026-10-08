@@ -76,6 +76,10 @@ typedef struct {
     double load_event_end_ms;
 } ns_js_navigation_timing;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_js_navigation_timing) == 136);
+#endif
+
 const char *ns_js_engine_version(void);
 
 ns_js *ns_js_new(ns_js_log_cb      log_cb,  gpointer log_user_data,

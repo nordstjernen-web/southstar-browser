@@ -1598,6 +1598,7 @@ version = "1.0.30-dev"
 name = "southstar-headless"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-config",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",

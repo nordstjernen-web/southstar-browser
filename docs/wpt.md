@@ -93,7 +93,7 @@ callback with the harness — via a microtask, since testharness.js
 creates its internal `Tests` object after exposing the API — and then
 restores the plain function. On completion the callback serializes the
 harness status and every subtest result into globals that the driver
-polls from C (`src/headless.c`), prints, and turns into the exit code.
+polls (`rust/headless`), prints, and turns into the exit code.
 Because registration happens before the test script executes, even
 tests that complete synchronously during parsing are captured. No
 modification of the WPT checkout (e.g. replacing

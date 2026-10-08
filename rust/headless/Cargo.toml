@@ -1,13 +1,17 @@
 [package]
 name = "southstar-headless"
-description = "The headless driver behind --headless: debug-log levels, the renderer-driven run with its scripted actions, and layout inspection reports"
+description = "The headless driver behind --headless: renderer-driven and in-process runs, scripted input, captures, WPT reporting and layout inspection"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+libav = []
+
 [dependencies]
+southstar-config = { path = "../config" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }

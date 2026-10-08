@@ -31,10 +31,10 @@ southstar_icon_resources = gnome.compile_resources(
 
 executable(
   'southstar',
-  southstar_engine_sources + southstar_app_sources +
+  southstar_engine_sources +
     southstar_gtk_sources + southstar_gtk_platform_sources +
     southstar_icon_resources +
-    southstar_win_resources + [polyfills_h, wpt_hook_h],
+    southstar_win_resources + [polyfills_h],
   dependencies: southstar_gtk_deps,
   c_args: ['-DNS_HAVE_GTK=1'],
   include_directories: include_directories('..', '.'),

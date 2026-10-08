@@ -35,14 +35,6 @@ streaming_h = custom_target(
             'ns_js_streaming_src'],
 )
 
-wpt_hook_h = custom_target(
-  'wpt_hook.h',
-  input: ['../scripts/embed-text.py', '../data/js/wpt-hook.js'],
-  output: 'wpt_hook.h',
-  command: [python, '@INPUT0@', '@INPUT1@', '@OUTPUT@',
-            'ns_wpt_hook_src'],
-)
-
 southstar_engine_sources = files(
   'anim.c',
   'css.c',
@@ -70,13 +62,6 @@ southstar_engine_sources += files(
 if quickjs_original
   southstar_engine_sources += files('ns_quickjs.c')
 endif
-
-# GTK-free helpers used by the desktop executable but not the engine UI:
-# the headless render driver. Kept in src/ as common code; the GTK frontend
-# itself lives in src/gtk/.
-southstar_app_sources = files(
-  'headless.c',
-)
 
 if have_avif
   southstar_engine_sources += files('image_avif.c')

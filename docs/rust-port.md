@@ -905,12 +905,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `idb.c` | 1,219 | `rust/idb` (SQLite through `rust/sqlite`, values in QuickJS's object serialization as before) | 5 |
 | `print.c` | 218 | `rust/print` (the box tree through `rust/layout`, a `#[repr(C)]` mirror of `ns_box` with borrowed box handles) | 6 (layout) |
 | `selection.c` | 546 | `rust/selection` (boxes through `rust/layout`) | 6 (layout) |
-
-### Ported in part
-
-Files ported section by section shrink with each commit and move to the table
-above once the last section goes.
-
-| Module | Sections in Rust | Crate | Phase |
-|---|---|---|---|
-| `headless.c` | the renderer-driven run with its scripted actions, screenshots and dumps, `--debug` level parsing, and the `--inspect` / `--inspect-at` reports (606 lines) | `rust/headless` | 4 |
+| `headless.c` | 2,227 | `rust/headless` (ported in two sections; its standard output still goes through the C runtime's stdout buffer, so it stays ordered with what C writes there) | 4 |

@@ -3,6 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+mod inproc;
+mod input;
 mod inspect;
 mod renderer;
 mod text;
@@ -25,16 +27,22 @@ pub enum Dump {
     Unknown,
 }
 
+#[derive(Clone, Copy)]
 pub struct Opts<'a> {
     pub url: Option<&'a CStr>,
     pub dump: Dump,
+    pub out_path: Option<&'a CStr>,
     pub viewport_width: i32,
     pub viewport_height: i32,
     pub settle_ms: i32,
+    pub time_ms: i32,
+    pub debug_levels: u32,
     pub actions: Option<&'a CStr>,
     pub eval: Option<&'a CStr>,
     pub inspect: Option<&'a CStr>,
     pub inspect_at: Option<&'a CStr>,
+    pub wpt: bool,
+    pub wpt_timeout_ms: i32,
 }
 
 pub fn nonempty(s: Option<&CStr>) -> Option<&CStr> {
@@ -58,4 +66,30 @@ pub fn debug_mask(spec: Option<&CStr>) -> u32 {
         }
     }
     mask
+}
+
+fn renderer_capable(o: &Opts) -> bool {
+    if std::env::var_os("NS_HEADLESS_LEGACY").is_some() || o.wpt {
+        return false;
+    }
+    if nonempty(o.inspect).is_some() || nonempty(o.inspect_at).is_some() {
+        return false;
+    }
+    !matches!(o.dump, Dump::Png | Dump::Pdf | Dump::Print)
+}
+
+pub fn run(opts: Option<&Opts>) -> i32 {
+    let Some((o, url)) = opts.and_then(|o| nonempty(o.url).map(|url| (o, url))) else {
+        ffi::err(b"headless: --url is required\n");
+        return 2;
+    };
+    ffi::console_setup();
+    let subscription = ffi::subscribe_dlog(o.debug_levels);
+    let rc = if renderer_capable(o) {
+        renderer::run(o)
+    } else {
+        inproc::run_one(o, url, 0, None, None)
+    };
+    drop(subscription);
+    rc
 }

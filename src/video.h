@@ -83,6 +83,10 @@ typedef struct ns_video {
     gboolean     track_requested;
 } ns_video;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_video) == 544 && offsetof(ns_video, duration) == 520);
+#endif
+
 typedef struct ns_video_cache ns_video_cache;
 typedef void (*ns_video_js_cb)(const void *dom_node, const char *kind,
                                double value, gpointer user_data);

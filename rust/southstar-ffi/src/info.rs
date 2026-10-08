@@ -29,6 +29,7 @@ const PORTED: &[&str] = &[
     "font.c",
     "forms.c",
     "glctx.c",
+    "headless.c",
     "history.c",
     "html.c",
     "html_lexbor.c",

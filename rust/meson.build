@@ -63,6 +63,9 @@ if have_enchant
   southstar_rust_features += ['enchant']
   southstar_rust_link_deps += [libenchant]
 endif
+if have_libav
+  southstar_rust_features += ['libav']
+endif
 if have_woff2
   southstar_rust_features += ['woff2']
   southstar_rust_link_deps += [libbrotlidec_fonts]

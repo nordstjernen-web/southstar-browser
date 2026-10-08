@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -100,4 +100,47 @@ pub fn scan_size(s: &[u8]) -> Option<(c_int, c_int)> {
         )
     };
     (n == 2).then_some((w, h))
+}
+
+pub fn scan_pair(s: &[u8]) -> Option<(f64, f64)> {
+    let (mut x, mut y) = (0.0, 0.0);
+    let n = unsafe {
+        sscanf(
+            c_input(s).as_ptr(),
+            c"%lf %lf".as_ptr(),
+            &mut x as *mut f64,
+            &mut y as *mut f64,
+        )
+    };
+    (n == 2).then_some((x, y))
+}
+
+pub fn scan_hold(s: &[u8]) -> Option<(f64, f64, c_long)> {
+    let (mut x, mut y, mut ms): (f64, f64, c_long) = (0.0, 0.0, 0);
+    let n = unsafe {
+        sscanf(
+            c_input(s).as_ptr(),
+            c"%lf , %lf %ld".as_ptr(),
+            &mut x as *mut f64,
+            &mut y as *mut f64,
+            &mut ms as *mut c_long,
+        )
+    };
+    (n == 3).then_some((x, y, ms))
+}
+
+pub fn scan_drag(s: &[u8]) -> Option<[f64; 4]> {
+    let mut v = [0.0f64; 4];
+    let [a, b, c, d] = &mut v;
+    let n = unsafe {
+        sscanf(
+            c_input(s).as_ptr(),
+            c"%lf , %lf %lf , %lf".as_ptr(),
+            a as *mut f64,
+            b as *mut f64,
+            c as *mut f64,
+            d as *mut f64,
+        )
+    };
+    (n == 4).then_some(v)
 }

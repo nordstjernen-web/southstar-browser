@@ -125,6 +125,10 @@ typedef struct ns_box_media {
     double   image_density;
 } ns_box_media;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(offsetof(ns_box_media, video) == 104);
+#endif
+
 typedef struct ns_grid_track_edges {
     double start, end;
 } ns_grid_track_edges;

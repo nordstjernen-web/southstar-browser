@@ -95,6 +95,10 @@ typedef struct ns_response {
     int   redirect_count;
 } ns_response;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(offsetof(ns_response, response_end_ms) == 184);
+#endif
+
 
 void ns_response_free(ns_response *resp);
 
