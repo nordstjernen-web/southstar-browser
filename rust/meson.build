@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet, cairo]
 southstar_rust_env = {'NS_RUSTC_VERSION': rustc.version()}
 if quickjs_original
   southstar_rust_features += ['quickjs-original']

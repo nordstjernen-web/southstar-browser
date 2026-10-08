@@ -81,9 +81,11 @@ Southstar Browser (unreleased):
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and
   replies between the window and its renderer processes, their X-* headers
   and JSON bodies, and the passing of the shared framebuffer's descriptor.
-  So is the renderer's tiling: how a page is cut into tiles and fixed and
-  sticky layers, cropped, packed into shared memory and described to the
-  window.
+  So is the renderer's side of it: the session that answers the window's
+  requests (opening pages, the back/forward cache, rendering, input, find,
+  dumps, printing) and the tiling that cuts a page into tiles and fixed and
+  sticky layers, crops and packs them into shared memory and describes them
+  to the window.
 * The watchdog that restarts the browser after a crash or a hang is Rust,
   with the same restart limits, hang budget and messages.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
