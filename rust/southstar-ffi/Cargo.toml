@@ -38,6 +38,7 @@ southstar-js-intl = { path = "../js-intl" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
+southstar-mathml = { path = "../mathml" }
 southstar-mic = { path = "../mic" }
 southstar-netutil = { path = "../netutil" }
 southstar-pdf = { path = "../pdf" }
@@ -63,7 +64,11 @@ freetype = ["southstar-font/freetype"]
 pangoft2 = ["southstar-font/pangofc"]
 poppler = ["southstar-pdf/poppler"]
 egl = ["southstar-glctx/egl"]
-ns-pango = ["southstar-font/ns-pango", "southstar-js-intl/ns-pango"]
+ns-pango = [
+    "southstar-font/ns-pango",
+    "southstar-js-intl/ns-pango",
+    "southstar-mathml/ns-pango",
+]
 enchant = ["southstar-spellcheck/enchant"]
 seccomp = ["southstar-sandbox/seccomp"]
 quickjs-original = [

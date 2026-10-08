@@ -94,7 +94,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   external wgpu-native, built only when that library is installed and gated
   behind `--enable-webgpu`; the full
   WebAssembly JS API over a vendored WAMR interpreter.
-- **MathML** — a minimalist presentation-MathML renderer (`src/mathml.c`)
+- **MathML** — a minimalist presentation-MathML renderer (`rust/mathml`)
   laid out over Pango/Cairo and embedded inline on the text baseline.
 - **Spell checking** — optional, via Enchant: misspelled words in editable
   text get a red wavy underline, honouring the `spellcheck` attribute.

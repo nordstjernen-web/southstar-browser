@@ -97,6 +97,9 @@ Southstar Browser (unreleased):
 * OfflineAudioContext rendering is Rust: oscillators, buffer sources,
   constant sources, gain, biquad filters, compressors, delays, wave shapers
   and panners mix to the same samples.
+* MathML layout and painting are Rust: tokens, scripts, fractions, roots,
+  under and over scripts, tables, fences and semantics measure and draw the
+  same pixels.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

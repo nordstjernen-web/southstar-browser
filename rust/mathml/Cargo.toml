@@ -1,0 +1,18 @@
+[package]
+name = "southstar-mathml"
+description = "Minimalist MathML presentation layout and paint, measured with Pango and drawn with Cairo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+
+[features]
+ns-pango = []
+
+[lints]
+workspace = true
