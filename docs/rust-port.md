@@ -841,4 +841,5 @@ files will show whether WebIDL generation pays for itself.
 | `glctx.c` | 350 | `rust/glctx` | 2 |
 | `mat4.h` | 144 | `rust/mat4` | 2 |
 | `image_ico.c`, `image_webp.c` | 377 | `rust/image-decoders` | 2 |
+| `security.c` | 1,107 | `rust/sandbox` (and `rust/helper-ffi` for the media helpers) | 1 |
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |

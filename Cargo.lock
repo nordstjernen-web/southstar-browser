@@ -1484,6 +1484,7 @@ dependencies = [
  "southstar-js-temporal",
  "southstar-mat4",
  "southstar-safebrowsing",
+ "southstar-sandbox",
  "southstar-spellcheck",
  "southstar-threaddump",
  "southstar-webcrypto",
@@ -1500,6 +1501,13 @@ dependencies = [
 [[package]]
 name = "southstar-glib"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-helper-ffi"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-sandbox",
+]
 
 [[package]]
 name = "southstar-history"
@@ -1554,6 +1562,13 @@ version = "1.0.30-dev"
 
 [[package]]
 name = "southstar-safebrowsing"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-sandbox"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

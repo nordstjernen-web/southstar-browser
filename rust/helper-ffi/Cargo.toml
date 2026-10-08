@@ -1,0 +1,21 @@
+[package]
+name = "southstar-helper-ffi"
+description = "The static library the media helper processes link: only the sandbox, so they stay small and need none of the engine's libraries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+southstar-sandbox = { path = "../sandbox" }
+
+[features]
+seccomp = ["southstar-sandbox/seccomp"]
+
+[lints]
+workspace = true

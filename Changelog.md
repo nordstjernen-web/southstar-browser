@@ -58,6 +58,10 @@ Southstar Browser (unreleased):
   values bit for bit.
 * ICO/CUR favicons and WebP images, still and animated, are decoded in
   Rust (WebP still through libwebp), with the same pixels as before.
+* The sandbox is Rust: Landlock and seccomp on Linux (the audio and video
+  helpers included), Seatbelt on macOS, the Windows mitigation policies and
+  elevation check, Subresource Integrity checks and download marking. The
+  Landlock rules and seccomp filters it installs are the same as before.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

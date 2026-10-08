@@ -28,6 +28,7 @@ southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
 southstar-safebrowsing = { path = "../safebrowsing" }
+southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
@@ -36,6 +37,7 @@ southstar-woff2 = { path = "../woff2", optional = true }
 [features]
 egl = ["southstar-glctx/egl"]
 enchant = ["southstar-spellcheck/enchant"]
+seccomp = ["southstar-sandbox/seccomp"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-js-temporal/quickjs-original",

@@ -21,6 +21,10 @@ endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']
 endif
+if have_seccomp
+  southstar_rust_features += ['seccomp']
+  southstar_rust_link_deps += [libseccomp]
+endif
 if have_enchant
   southstar_rust_features += ['enchant']
   southstar_rust_link_deps += [libenchant]
@@ -50,3 +54,27 @@ southstar_rust_dep = declare_dependency(
   link_args: rust_native_libs,
   dependencies: southstar_rust_link_deps,
 )
+
+if host_machine.system() == 'linux'
+  southstar_helper_rust_features = have_seccomp ? ['seccomp'] : []
+  southstar_helper_rust_lib = custom_target(
+    'southstar-helper-rust',
+    output: 'libsouthstar_helper_ffi.a',
+    depfile: 'libsouthstar_helper_ffi.a.d',
+    command: [
+      cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
+      meson.current_build_dir() / 'cargo-target',
+      ns_is_release ? 'release' : 'dev',
+      'southstar-helper-ffi', '@OUTPUT@', '@DEPFILE@',
+    ] + southstar_helper_rust_features,
+    env: southstar_rust_env,
+    console: true,
+    build_by_default: true,
+  )
+
+  southstar_helper_rust_dep = declare_dependency(
+    link_with: southstar_helper_rust_lib,
+    link_args: rust_native_libs,
+    dependencies: [glib] + (have_seccomp ? [libseccomp] : []),
+  )
+endif

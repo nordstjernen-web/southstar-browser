@@ -13,6 +13,7 @@ pub type GDestroyNotify = Option<unsafe extern "C" fn(data: *mut c_void)>;
 
 pub type GFileTest = c_uint;
 pub const FILE_TEST_IS_REGULAR: GFileTest = 1 << 0;
+pub const FILE_TEST_IS_DIR: GFileTest = 1 << 2;
 pub const FILE_TEST_EXISTS: GFileTest = 1 << 4;
 
 #[repr(C)]

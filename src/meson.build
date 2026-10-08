@@ -68,7 +68,6 @@ southstar_engine_sources = files(
   'print.c',
   'pdf.c',
   'render.c',
-  'security.c',
   'selection.c',
   'texture.c',
   'video.c',
@@ -331,11 +330,7 @@ if sdl2_dep.found()
   # so attacker-controlled codec bytes are decoded inside the sandbox.
   audio_sandbox_sources = []
   if host_machine.system() == 'linux'
-    audio_sandbox_sources += files('security.c')
-    audio_deps += [glib]
-    if have_seccomp
-      audio_deps += [libseccomp]
-    endif
+    audio_deps += [southstar_helper_rust_dep]
   endif
 
   executable(
@@ -357,11 +352,7 @@ if have_libav
                     dependency('threads')]
   videoproc_sources = files('videoproc/main.c')
   if host_machine.system() == 'linux'
-    videoproc_sources += files('security.c')
-    videoproc_deps += [glib]
-    if have_seccomp
-      videoproc_deps += [libseccomp]
-    endif
+    videoproc_deps += [southstar_helper_rust_dep]
     videoproc_deps += [cc.find_library('rt', required: false)]
   endif
   executable(

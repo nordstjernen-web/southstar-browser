@@ -1,0 +1,17 @@
+[package]
+name = "southstar-sandbox"
+description = "Startup security: refusing root or elevation, the Landlock and seccomp sandbox on Linux, Seatbelt on macOS, Windows mitigation policies, SRI checks and download marking"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[features]
+seccomp = []
+
+[lints]
+workspace = true
