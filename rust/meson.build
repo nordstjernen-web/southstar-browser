@@ -30,7 +30,7 @@ endif
 rust_sdl2 = dependency('sdl2', required: get_option('audio'))
 if rust_sdl2.found()
   southstar_rust_features += ['sdl']
-  southstar_rust_link_deps += [rust_sdl2]
+  southstar_rust_link_deps += [rust_sdl2.partial_dependency(link_args: true)]
 endif
 if have_fontconfig and host_machine.system() == 'windows'
   southstar_rust_features += ['fontconfig']
