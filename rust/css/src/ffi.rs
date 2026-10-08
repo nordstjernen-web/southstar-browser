@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod container;
 mod value;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
@@ -10,6 +11,7 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::{calc, color, math, units};
 
+pub(crate) use container::{Container, container_map};
 pub use value::NsCssValue;
 
 const COLOR_SCHEME_DARK: c_int = 1;
@@ -18,7 +20,6 @@ unsafe extern "C" {
     fn ns_css_get_color_scheme() -> c_int;
     fn ns_css_viewport_w() -> c_double;
     fn ns_css_viewport_h() -> c_double;
-    fn ns_css_container_unit_resolve(v: c_double, unit: c_uint) -> c_double;
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
 }
 
@@ -28,10 +29,6 @@ pub(crate) fn prefers_dark() -> bool {
 
 pub(crate) fn viewport() -> (f64, f64) {
     unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
-}
-
-pub(crate) fn container_unit_resolve(v: f64, unit: units::Unit) -> f64 {
-    unsafe { ns_css_container_unit_resolve(v, unit) }
 }
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {

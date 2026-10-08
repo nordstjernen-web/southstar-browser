@@ -253,6 +253,13 @@ Southstar Browser (unreleased):
   percentages, evaluating the ones that wait for a percentage basis, and
   the canonical calc() spelling getComputedStyle and element.style report.
   Values compute and serialize as before.
+* Container queries are Rust: the query containers layout records, the
+  stack of ancestor containers while styles cascade, the cqw, cqh, cqi,
+  cqb, cqmin and cqmax units, and @container conditions with names,
+  width, height, inline-size, block-size, aspect-ratio and orientation,
+  range syntax, not, and, or and sibling-index() in values, as they parse,
+  serialize through CSSContainerRule and evaluate. Pages match the same
+  rules as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

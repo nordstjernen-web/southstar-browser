@@ -171,7 +171,7 @@ pub(crate) fn resolve_to_px_pct(text: &[u8], font: bool) -> (bool, Resolved) {
         VH => out.px = num * h / 100.0,
         VMIN => out.px = num * (if w < h { w } else { h }) / 100.0,
         VMAX => out.px = num * (if w > h { w } else { h }) / 100.0,
-        CQW | CQH | CQMIN | CQMAX => out.px = ffi::container_unit_resolve(num, unit),
+        CQW | CQH | CQMIN | CQMAX => out.px = crate::container::unit_resolve(num, unit),
         _ => out.px = num,
     }
     (true, out)
@@ -292,7 +292,7 @@ fn term_from_length(v: f64, unit: Unit) -> Term {
             out.px = units::viewport_resolve(v, unit);
             add_viewport_coeff(unit, v, &mut out);
         }
-        CQW | CQH | CQMIN | CQMAX => out.px = ffi::container_unit_resolve(v, unit),
+        CQW | CQH | CQMIN | CQMAX => out.px = crate::container::unit_resolve(v, unit),
         _ => out.px = v,
     }
     out

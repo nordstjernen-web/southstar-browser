@@ -156,3 +156,47 @@ pub(crate) fn split_args(s: &[u8], start: usize, body_end: usize, max: usize) ->
     }
     out
 }
+
+pub(crate) fn split_ws_paren(text: &[u8], max: usize) -> Vec<&[u8]> {
+    let mut out = Vec::new();
+    let end = text.len();
+    let mut p = 0;
+    while p < end && out.len() < max {
+        p = skip_ws(text, p, end);
+        if p >= end {
+            break;
+        }
+        let start = p;
+        let mut depth = 0u32;
+        let mut quote = 0u8;
+        while p < end {
+            let c = text[p];
+            if quote != 0 {
+                if c == quote {
+                    quote = 0;
+                }
+                p += 1;
+                continue;
+            }
+            if c == b'\\' && p + 1 < end {
+                p += 2;
+                continue;
+            }
+            if c == b'"' || c == b'\'' {
+                quote = c;
+                p += 1;
+                continue;
+            }
+            if c == b'(' {
+                depth += 1;
+            } else if c == b')' {
+                depth = depth.saturating_sub(1);
+            } else if is_ws(c) && depth == 0 {
+                break;
+            }
+            p += 1;
+        }
+        out.push(&text[start..p]);
+    }
+    out
+}
