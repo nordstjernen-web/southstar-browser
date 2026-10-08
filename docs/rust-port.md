@@ -914,4 +914,4 @@ above once the last section goes.
 
 | Module | Sections in Rust | Crate | Phase |
 |---|---|---|---|
-| `engine.c` | PNG, PDF and paged-PDF captures with their metadata, print recordings, the text and layout dumps, output-path suffixes and keyframe loading (229 lines) | `rust/engine` | 6 (pipeline driver) |
+| `engine.c` | PNG, PDF and paged-PDF captures with their metadata, print recordings, the text and layout dumps, output-path suffixes and keyframe loading (229 lines); blocking fetches and navigations, stylesheet fetches with their failure markers and resource timings, linked-stylesheet text, speculative preloads, and the blocking and incremental image fetches (623 lines) | `rust/engine` | 6 (pipeline driver) |

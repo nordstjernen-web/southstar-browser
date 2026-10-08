@@ -2,13 +2,25 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod images;
+mod net;
+
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
+
+pub use images::{ImageCache, Session, Wanted, collect_images};
+pub use net::{
+    Bytes, CssCache, Dest, GBytes, NsResponse, Request, fetch_blocking_with_headers,
+    in_blocking_fetch, monotonic_us, preconnect, preload_clear, preload_request, record_timing,
+    url_is_http_or_https, url_origin, url_resolve,
+};
+
+use crate::fetch::{self, CssFetch};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -83,6 +95,7 @@ unsafe extern "C" {
         page_bottom: f64,
     );
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
+    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_engine_collect_stylesheets(
         doc: *mut NsNode,
         base_url: *const c_char,
@@ -100,6 +113,10 @@ unsafe extern "C" {
 
 pub fn err(bytes: &[u8]) {
     glib::stderr_write(bytes);
+}
+
+pub fn is_named(n: Node, tag: &CStr) -> bool {
+    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
@@ -379,4 +396,191 @@ pub unsafe extern "C" fn ns_engine_anim_observe(
     now_us: i64,
 ) {
     unsafe { ns_anim_observe_all(anim, styles, now_us) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_engine_in_blocking_fetch() -> GBoolean {
+    glib::boolean(in_blocking_fetch())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_fetch_blocking(
+    url: *const c_char,
+    top_url: *const c_char,
+    error: *mut *mut GError,
+) -> *mut NsResponse {
+    let r = Request {
+        url,
+        top_url,
+        method: c"GET",
+        body: ptr::null(),
+        body_len: 0,
+        content_type: ptr::null(),
+        navigation: false,
+        user_activated: false,
+        headers: ptr::null(),
+    };
+    unsafe { net::request_blocking(&r, error) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_navigate_blocking(
+    url: *const c_char,
+    top_url: *const c_char,
+    user_activated: GBoolean,
+    error: *mut *mut GError,
+) -> *mut NsResponse {
+    let r = Request {
+        url,
+        top_url,
+        method: c"GET",
+        body: ptr::null(),
+        body_len: 0,
+        content_type: ptr::null(),
+        navigation: true,
+        user_activated: user_activated != 0,
+        headers: ptr::null(),
+    };
+    unsafe { net::request_blocking(&r, error) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_navigate_post_blocking(
+    url: *const c_char,
+    top_url: *const c_char,
+    body: *const c_void,
+    body_len: usize,
+    content_type: *const c_char,
+    user_activated: GBoolean,
+    error: *mut *mut GError,
+) -> *mut NsResponse {
+    let r = Request {
+        url,
+        top_url,
+        method: c"POST",
+        body,
+        body_len,
+        content_type,
+        navigation: true,
+        user_activated: user_activated != 0,
+        headers: ptr::null(),
+    };
+    unsafe { net::request_blocking(&r, error) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char {
+    let Some(url) = c_str(url) else {
+        return ptr::null_mut();
+    };
+    fetch::linked_css_text(url.to_bytes()).map_or(ptr::null_mut(), |css| glib::strdup(&css))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_remember_linked_css(url: *const c_char, bytes: *mut GBytes) {
+    let (Some(url), Some(bytes)) = (c_str(url), unsafe { Bytes::borrow(bytes) }) else {
+        return;
+    };
+    fetch::remember_linked_css(url.to_bytes(), bytes.data());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray {
+    net::take_resource_timings(c_str(top_url))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_fetch_css_bytes(
+    url: *const c_char,
+    top_url: *const c_char,
+    cache: *mut GHashTable,
+    strict_mime: GBoolean,
+    initiator: *const c_char,
+    render_blocking: GBoolean,
+    in_frame: GBoolean,
+) -> *mut GBytes {
+    let Some(url) = c_str(url) else {
+        return ptr::null_mut();
+    };
+    let initiator = match c_str(initiator).map(CStr::to_bytes) {
+        Some(b"link") => c"link",
+        _ => c"css",
+    };
+    let f = CssFetch {
+        url,
+        top_url: c_str(top_url),
+        strict_mime: strict_mime != 0,
+        initiator,
+        render_blocking: render_blocking != 0,
+        in_frame: in_frame != 0,
+    };
+    fetch::fetch_css_bytes(&f, unsafe { CssCache::from_ptr(cache) })
+        .map_or(ptr::null_mut(), Bytes::into_raw)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_speculative_preload(
+    doc: *mut NsNode,
+    base_url: *const c_char,
+    include_images: GBoolean,
+) {
+    let (Some(doc), Some(base)) = (unsafe { Node::from_ptr(doc) }, c_str(base_url)) else {
+        return;
+    };
+    fetch::speculative_preload(doc, base, include_images != 0);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_fetch_images(
+    root_box: *mut NsBox,
+    base_url: *const c_char,
+    cache: *mut c_void,
+) {
+    let (Some(r), Some(base), Some(cache)) = (unsafe { root(root_box) }, c_str(base_url), unsafe {
+        ImageCache::from_ptr(cache)
+    }) else {
+        return;
+    };
+    let wanted = fetch::collect_wanted_images(r, base, cache, 0.0, 0.0).wanted;
+    if wanted.len() > 0 {
+        images::fetch_images_blocking(&wanted, base, cache);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_fetch_images_start(
+    root_box: *mut NsBox,
+    base_url: *const c_char,
+    cache: *mut c_void,
+    requested: *mut GHashTable,
+    scroll_y: f64,
+    viewport_h: f64,
+    deferred_any: *mut GBoolean,
+    arrived_cb: images::ArrivedCb,
+    user_data: *mut c_void,
+) -> *mut Session {
+    let (Some(r), Some(base), Some(cache)) = (unsafe { root(root_box) }, c_str(base_url), unsafe {
+        ImageCache::from_ptr(cache)
+    }) else {
+        return images::null_session();
+    };
+    let found = fetch::collect_wanted_images(r, base, cache, scroll_y, viewport_h);
+    if found.deferred_any && !deferred_any.is_null() {
+        unsafe { *deferred_any = glib::TRUE };
+    }
+    found.wanted.exclude_and_record(requested);
+    if found.wanted.len() == 0 {
+        return images::null_session();
+    }
+    images::start_session(&found.wanted, base, cache, arrived_cb, user_data)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_img_session_outstanding(s: *const Session) -> c_int {
+    unsafe { images::session_outstanding(s) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_engine_img_session_close(s: *mut Session) {
+    unsafe { images::session_close(s) };
 }

@@ -52,6 +52,10 @@ typedef struct ns_engine_resource_timing {
     gboolean            in_frame;         /* for a frame's document */
 } ns_engine_resource_timing;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_engine_resource_timing) == 56);
+#endif
+
 GPtrArray *ns_engine_take_resource_timings(const char *top_url);
 
 void ns_engine_speculative_preload(ns_node *doc, const char *base_url,

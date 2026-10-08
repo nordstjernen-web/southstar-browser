@@ -143,6 +143,11 @@ Southstar Browser (unreleased):
 * The engine's captures and dumps are Rust: PNG, PDF and paged-PDF output
   with its metadata, the per-sheet print recordings, the text and layout
   dumps and keyframe loading, with the same output.
+* The engine's fetching is Rust: blocking page fetches, navigations and form
+  POSTs, stylesheet fetches with MIME and nosniff checks, retry markers and
+  resource timings, linked-stylesheet text for CSSOM, speculative preloads
+  and preconnects, and the blocking and incremental image fetches, making the
+  same requests in the same order.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
