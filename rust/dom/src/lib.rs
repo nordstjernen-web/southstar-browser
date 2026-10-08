@@ -1,11 +1,13 @@
-//! Southstar — the DOM of src/dom.h: the ns_node layout, borrowed node handles and the sections of dom.c in Rust.
+//! Southstar — the DOM declared in src/dom.h: nodes and attributes, document indexes, serialization and form controls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub mod attrs;
 pub mod controls;
 mod ffi;
 pub mod image_map;
 pub mod index;
+pub mod node;
 pub mod select;
 pub mod serialize;
 pub mod tree;

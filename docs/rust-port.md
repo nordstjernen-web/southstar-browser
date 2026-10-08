@@ -901,12 +901,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `mathml.c` | 560 | `rust/mathml` (DOM through `rust/dom`) | 6 (layout) |
 | `image.c` | 909 | `rust/image` (`ns_image` stays a `#[repr(C)]` struct the C reads and writes) | 8 |
 | `html_lexbor.c` | 852 | `rust/html-parser` (lexbor through its exported `_noi` functions and mirrored node structs) | 6 (DOM and parsing) |
-
-### Ported in part
-
-Files ported section by section shrink with each commit and move to the table
-above once the last section goes.
-
-| Module | Sections in Rust | Crate | Phase |
-|---|---|---|---|
-| `dom.c` | form controls: input types and their numeric values, stepping, range and step validity, required, email syntax, `contenteditable` and spellcheck hosts, and editable values (741 lines); text collection, HTML and XML serialization, the debug dump and client-side image maps (570 lines); option text and select choice, form owners and reset, disabled, inert and the active modal, details opened for a fragment, tree roots (339 lines); the id, class and tag indexes, document order and the lookups by tag, id and fragment (632 lines) | `rust/dom` | 6 (DOM and parsing) |
+| `dom.c` | 3,028 | `rust/dom` (ported in five sections; the node and attribute memory stays GLib's and the document indexes stay GLib tables, so the C that reads `ns_node` keeps working) | 6 (DOM and parsing) |

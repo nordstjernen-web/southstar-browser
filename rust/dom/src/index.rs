@@ -18,14 +18,18 @@ pub fn scope_boundary(node: Node) -> bool {
         || (node.is_element() && node.attr(c"data-nd-shadow-root").is_some())
 }
 
-pub fn next_in_subtree<'a>(node: Node<'a>, root: Node<'a>, descend: bool) -> Option<Node<'a>> {
+pub fn next_in_subtree<'a>(
+    node: Node<'a>,
+    root: Option<Node<'a>>,
+    descend: bool,
+) -> Option<Node<'a>> {
     if descend {
         if let Some(child) = node.first_child() {
             return Some(child);
         }
     }
     let mut cur = Some(node);
-    while let Some(n) = cur.filter(|n| *n != root) {
+    while let Some(n) = cur.filter(|n| Some(*n) != root) {
         if let Some(sibling) = n.next_sibling() {
             return Some(sibling);
         }
@@ -43,7 +47,7 @@ fn walk(doc: Node, root: Node, scoped: bool, mut visit: impl FnMut(Node)) {
             visit(n);
             !(scoped && n.element_name() == Some(b"template"))
         };
-        cur = next_in_subtree(n, root, descend);
+        cur = next_in_subtree(n, Some(root), descend);
     }
 }
 

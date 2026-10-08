@@ -80,7 +80,7 @@ harness** (run individually, `?suite=<name>&startAutomatically=true`):
 - **jQuery** and **Backbone** — after giving iframe scripts their own scoped
   `document` (`src/js.c`), running an iframe's classic scripts in one shared
   scope (so Backbone's cross-file `var app` is shared), and serializing
-  `<script>` innerHTML unescaped (`src/dom.c`) so Handlebars/Underscore
+  `<script>` innerHTML unescaped (`rust/dom/src/serialize.rs`) so Handlebars/Underscore
   templates compile to real markup.
 
 Each iframe's classic `<script>`s run concatenated inside one

@@ -23,8 +23,7 @@ fn bytes(s: Option<&CStr>) -> &[u8] {
 }
 
 fn is_internal_attr(name: Option<&CStr>) -> bool {
-    let name = bytes(name);
-    name.len() >= 8 && name[..8].eq_ignore_ascii_case(b"data-nd-")
+    crate::attrs::is_internal(bytes(name))
 }
 
 fn collect_text_into(node: Node, out: &mut Vec<u8>, depth: i32) {

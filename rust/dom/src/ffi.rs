@@ -26,62 +26,62 @@ pub enum Kind {
 
 #[repr(C)]
 pub struct NsAttr {
-    name: *const c_char,
-    value: *const c_char,
-    _namespace_uri: *const c_char,
-    _prefix: *const c_char,
-    _local_name: *const c_char,
-    next: *const NsAttr,
-    _value_len: c_uint,
-    _flags: u8,
+    name: *mut c_char,
+    value: *mut c_char,
+    namespace_uri: *mut c_char,
+    prefix: *mut c_char,
+    local_name: *mut c_char,
+    next: *mut NsAttr,
+    value_len: c_uint,
+    flags: u8,
 }
+
+type Invalidator = Option<unsafe extern "C" fn(node: *mut NsNode)>;
+type BackingFree = Option<unsafe extern "C" fn(backing: *mut c_void)>;
 
 #[repr(C)]
 pub struct NsNode {
     kind: c_uint,
-    name: *const c_char,
-    text: *const c_char,
+    name: *mut c_char,
+    text: *mut c_char,
     text_len: u32,
-    attrs: *const NsAttr,
-    parent: *const NsNode,
-    first_child: *const NsNode,
-    last_child: *const NsNode,
-    prev_sibling: *const NsNode,
-    next_sibling: *const NsNode,
+    attrs: *mut NsAttr,
+    parent: *mut NsNode,
+    first_child: *mut NsNode,
+    last_child: *mut NsNode,
+    prev_sibling: *mut NsNode,
+    next_sibling: *mut NsNode,
     _js_wrapper: *mut c_void,
-    _js_invalidate: *mut c_void,
-    _backing: *mut c_void,
-    _backing_free: *mut c_void,
+    js_invalidate: Invalidator,
+    backing: *mut c_void,
+    backing_free: BackingFree,
     id_index: *mut GHashTable,
     class_index: *mut GHashTable,
     tag_index: *mut GHashTable,
-    _class_set: *mut c_void,
-    _attr_bloom: u64,
-    _attr_gen: u32,
+    class_set: *mut c_void,
+    attr_bloom: u64,
+    attr_gen: u32,
     flags: u32,
     src_line: c_int,
     src_col: c_int,
     tpl_content: *mut NsNode,
 }
 
+mod attrs;
 mod controls;
 mod index;
+mod memory;
+mod node;
 mod select;
 mod serialize;
 mod tables;
 mod tree;
 
+pub use memory::{
+    ATTR_NAME_LOWER, ATTR_OWN_NAME, ATTR_OWN_VALUE, NewAttr, dup, dup_bytes, dup_with_len,
+    return_if_fail, value_dup,
+};
 pub use tables::{BucketTable, IdTable, NodeArray, NodeSet};
-
-unsafe extern "C" {
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
-    fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
-    fn ns_node_remove(child: *mut NsNode);
-    fn ns_node_free(node: *mut NsNode);
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Node<'a> {
@@ -159,7 +159,11 @@ impl<'a> Node<'a> {
     }
 
     pub fn attr(self, name: &CStr) -> Option<&'a CStr> {
-        c_str(unsafe { ns_element_get_attr(self.as_ptr(), name.as_ptr()) })
+        crate::attrs::get(self, name)
+    }
+
+    pub fn kind_raw(self) -> c_uint {
+        self.get().kind
     }
 
     pub fn flags(self) -> u32 {
@@ -253,27 +257,58 @@ impl<'a> Attr<'a> {
     pub fn value(self) -> Option<&'a CStr> {
         c_str(self.get().value)
     }
+
+    pub fn value_ptr(self) -> *const c_char {
+        self.get().value
+    }
+
+    pub fn value_len(self) -> c_uint {
+        self.get().value_len
+    }
+
+    pub fn namespace_uri(self) -> Option<&'a CStr> {
+        c_str(self.get().namespace_uri)
+    }
+
+    pub fn prefix(self) -> Option<&'a CStr> {
+        c_str(self.get().prefix)
+    }
+
+    pub fn local_name(self) -> Option<&'a CStr> {
+        c_str(self.get().local_name)
+    }
+
+    pub fn flags(self) -> u8 {
+        self.get().flags
+    }
+
+    pub fn name_first_byte(self) -> Option<u8> {
+        let name = self.get().name;
+        (!name.is_null()).then(|| unsafe { *name.cast::<u8>() })
+    }
 }
 
 pub fn set_attr(node: Node, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    unsafe { attrs::ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
 }
 
 pub fn remove_attr(node: Node, name: &CStr) {
-    unsafe { ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+    unsafe { attrs::ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
 }
 
 pub fn detach(node: Node) {
-    unsafe { ns_node_remove(node.as_mut_ptr()) };
+    node.detach();
 }
 
 pub fn free(node: Node) {
-    unsafe { ns_node_free(node.as_mut_ptr()) };
+    node.free_tree();
 }
 
 pub fn append_text(parent: Node, text: &CStr) {
-    unsafe {
-        let child = ns_node_new_text(southstar_glib::g_strdup(text.as_ptr()));
-        ns_node_append_child(parent.as_mut_ptr(), child);
-    }
+    let child = crate::node::new_text(
+        crate::node::KIND_TEXT,
+        dup(text),
+        text.to_bytes().len() as u32,
+    );
+    parent.append(child);
 }

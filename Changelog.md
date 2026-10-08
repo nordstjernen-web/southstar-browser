@@ -124,6 +124,11 @@ Southstar Browser (unreleased):
   tag, fragment targets and document order return the same nodes in the same
   order, and the indexes stay the same GLib tables the rest of the engine
   reads.
+* The DOM is Rust: creating, linking, cloning and freeing nodes, names and
+  text with their borrowed or owned strings, attributes with their
+  namespaces, the attribute bloom filter, class tokens and template
+  contents. dom.c is gone; nodes and attributes keep their layout and GLib
+  memory, so the rest of the engine reads and builds them as before.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and
