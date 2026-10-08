@@ -22,6 +22,7 @@ pub use southstar_forms;
 pub use southstar_glctx;
 pub use southstar_glib;
 pub use southstar_history;
+pub use southstar_html_parser;
 pub use southstar_html_util;
 pub use southstar_http_cache;
 pub use southstar_i18n;

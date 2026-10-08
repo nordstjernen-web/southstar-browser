@@ -1,0 +1,15 @@
+[package]
+name = "southstar-html-parser"
+description = "The lexbor-backed HTML parser: builds the engine DOM from lexbor's tree, declarative shadow roots, media metadata and inline script positions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

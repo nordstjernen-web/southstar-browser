@@ -29,7 +29,7 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 
 | Concern | Source |
 |---------|--------|
-| HTML tokenizer + tree construction | in-tree lexbor, `src/html_lexbor.c` |
+| HTML tokenizer + tree construction | in-tree lexbor, `rust/html-parser` |
 | Parse dispatch, charset decode | `src/html.c` |
 | DOM tree + node APIs | `src/dom.c`, exposed in `src/js.c` |
 | WHATWG URL | lexbor URL module via `src/net.c` (`ns_url_*`) |
@@ -105,7 +105,7 @@ standards mode (see [§13](#13-the-html-syntax)).
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| DOM tree construction | ✅ | lexbor (`src/html_lexbor.c`); spec-faithful even for malformed input |
+| DOM tree construction | ✅ | lexbor (`rust/html-parser`); spec-faithful even for malformed input |
 | `Document`, `documentElement`, `body`, `head` | ✅ | exposed in `src/js.c` |
 | `document.title` | ✅ | reflects `<title>` |
 | `HTMLElement.innerText` / `outerText` | ✅ | layout-aware getter (not a `textContent` alias): the rendered-text walk in `src/js.c` skips `display:none` subtrees and non-rendered elements (`script`/`style`/`head`/…), collapses runs of ASCII whitespace under normal `white-space` while preserving them under the `pre` family, turns `<br>` and block-box boundaries into newlines, and keeps `visibility:hidden` text per spec; when the element itself is not rendered the getter falls back to `textContent`. The setter splits on `\n` into text nodes and `<br>` elements |
@@ -454,7 +454,7 @@ workers are not implemented yet.
 The heart of spec conformance. Tokenisation and tree construction —
 the bulk of §13.2 — are delegated to in-tree **lexbor**, a
 from-scratch WHATWG-conformant C implementation
-(`src/html_lexbor.c`). Because the parser is a conformant engine, the
+(`rust/html-parser`). Because the parser is a conformant engine, the
 DOM tree Southstar builds for a given byte stream is spec-faithful
 **even for malformed input**; the compatibility gaps elsewhere in this
 document are in *rendering and behaviour*, not parsing.
@@ -463,7 +463,7 @@ document are in *rendering and behaviour*, not parsing.
 |-------|:--:|
 | Tokenizer state machine (§13.2.5) | ✅ |
 | Tree construction / insertion modes (§13.2.6) | ✅ |
-| Foreign content (SVG/MathML namespaces) | ✅ (SVG parsed to DOM; MathML parsed to DOM **and laid out** — see §4.8; per-element namespace now propagated from lexbor at parse time — `lxb_node_convert` in `src/html_lexbor.c` flags SVG elements `NS_NODE_SVG_NS` and MathML elements `NS_NODE_FOREIGN_NS` with the MathML URI, so a parsed inline `<svg>`/`<math>` reports the correct `namespaceURI`/`localName`/`tagName`, satisfies `instanceof SVGElement`-style namespace checks, and is matched by `getElementsByTagNameNS`; `<foreignObject>` content correctly reverts to the XHTML namespace) |
+| Foreign content (SVG/MathML namespaces) | ✅ (SVG parsed to DOM; MathML parsed to DOM **and laid out** — see §4.8; per-element namespace now propagated from lexbor at parse time — the lexbor tree conversion in `rust/html-parser` flags SVG elements `NS_NODE_SVG_NS` and MathML elements `NS_NODE_FOREIGN_NS` with the MathML URI, so a parsed inline `<svg>`/`<math>` reports the correct `namespaceURI`/`localName`/`tagName`, satisfies `instanceof SVGElement`-style namespace checks, and is matched by `getElementsByTagNameNS`; `<foreignObject>` content correctly reverts to the XHTML namespace) |
 | Adoption agency / error recovery | ✅ |
 | Named & numeric character references | ✅ |
 | Fragment parsing (`innerHTML`) | ✅ |

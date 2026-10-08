@@ -30,6 +30,7 @@ const PORTED: &[&str] = &[
     "glctx.c",
     "history.c",
     "html.c",
+    "html_lexbor.c",
     "i18n.c",
     "image.c",
     "image_ico.c",

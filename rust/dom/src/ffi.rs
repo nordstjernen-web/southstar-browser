@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
@@ -23,6 +23,20 @@ pub struct NsNode {
     _last_child: *const NsNode,
     _prev_sibling: *const NsNode,
     next_sibling: *const NsNode,
+    _js_wrapper: *mut c_void,
+    _js_invalidate: *mut c_void,
+    _backing: *mut c_void,
+    _backing_free: *mut c_void,
+    _id_index: *mut c_void,
+    _class_index: *mut c_void,
+    _tag_index: *mut c_void,
+    _class_set: *mut c_void,
+    _attr_bloom: u64,
+    _attr_gen: u32,
+    flags: u32,
+    src_line: c_int,
+    src_col: c_int,
+    tpl_content: *mut NsNode,
 }
 
 unsafe extern "C" {
@@ -81,6 +95,10 @@ impl<'a> Node<'a> {
         }
     }
 
+    pub fn name(self) -> Option<&'a CStr> {
+        c_str(self.get().name)
+    }
+
     pub fn text(self) -> Option<&'a CStr> {
         c_str(self.get().text)
     }
@@ -99,6 +117,35 @@ impl<'a> Node<'a> {
 
     pub fn attr(self, name: &CStr) -> Option<&'a CStr> {
         c_str(unsafe { ns_element_get_attr(self.as_ptr(), name.as_ptr()) })
+    }
+
+    pub fn flags(self) -> u32 {
+        self.get().flags
+    }
+
+    pub fn tpl_content(self) -> Option<Self> {
+        Self::link(self.get().tpl_content)
+    }
+
+    pub fn add_flags(self, flags: u32) {
+        unsafe { (*self.node.as_ptr()).flags |= flags };
+    }
+
+    pub fn set_source_position(self, line: c_int, col: c_int) {
+        unsafe {
+            (*self.node.as_ptr()).src_line = line;
+            (*self.node.as_ptr()).src_col = col;
+        }
+    }
+
+    pub fn take_tpl_content(self) -> Option<Self> {
+        let content = self.tpl_content();
+        unsafe { (*self.node.as_ptr()).tpl_content = core::ptr::null_mut() };
+        content
+    }
+
+    pub fn as_mut_ptr(self) -> *mut NsNode {
+        self.node.as_ptr()
     }
 
     pub fn collect_text(self) -> Option<GStr> {

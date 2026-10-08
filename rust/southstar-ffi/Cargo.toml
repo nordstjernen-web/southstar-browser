@@ -30,6 +30,7 @@ southstar-forms = { path = "../forms" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
+southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }

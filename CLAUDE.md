@@ -453,7 +453,7 @@ don't add `meson test` targets.
   the site's own JavaScript rather than reverse-engineering its data. When a
   page renders wrong, fix the engine capability it exercises — never
   special-case the host. The standards-based media metadata extractor in
-  `src/html_lexbor.c` is the pattern; the deleted YouTube scraper was the
+  `rust/html-parser` is the pattern; the deleted YouTube scraper was the
   anti-pattern.
 - Don't add AI-style web-API surface area, even as stubs. WebGL is a
   deliberate exception — extend `src/webgl.c`, don't re-architect it.

@@ -900,3 +900,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `webaudio.c` | 351 | `rust/webaudio` | 7 (JavaScript bindings) |
 | `mathml.c` | 560 | `rust/mathml` (DOM through `rust/dom`) | 6 (layout) |
 | `image.c` | 909 | `rust/image` (`ns_image` stays a `#[repr(C)]` struct the C reads and writes) | 8 |
+| `html_lexbor.c` | 852 | `rust/html-parser` (lexbor through its exported `_noi` functions and mirrored node structs) | 6 (DOM and parsing) |

@@ -103,6 +103,9 @@ Southstar Browser (unreleased):
 * The image cache and decode chain are Rust: fetching, retries with their
   back-off, threaded and synchronous decoding, animated GIF, APNG and WebP
   frames, the 256 MB budget and which image it purges first behave as before.
+* Building the DOM from lexbor's HTML parse is Rust, as are declarative
+  shadow roots, inline script source positions, standard video metadata and
+  the XML well-formedness check; documents and fragments get the same trees.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and
