@@ -320,6 +320,10 @@ pub fn private_mode() -> bool {
     get().is_some_and(|config| config.private_mode != FALSE)
 }
 
+pub fn enable_camera() {
+    ffi::enable_camera();
+}
+
 fn strip(bytes: &[u8]) -> &[u8] {
     let start = bytes
         .iter()

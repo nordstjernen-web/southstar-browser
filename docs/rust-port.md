@@ -886,3 +886,4 @@ grapheme breaks with ns-pango, called over FFI, and the C library's `%.*f` and
 | `watchdog.c` | 583 | `rust/watchdog` | 4 |
 | `ext.c` | 1,265 | `rust/extensions` | 8 (WebExtensions) |
 | `js_intl.c` | 2,433 | `rust/js-intl` | 7 (JavaScript bindings) |
+| `camera.c` | 393 | `rust/camera` | 8 |

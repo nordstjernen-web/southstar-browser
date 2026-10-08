@@ -15,6 +15,7 @@ path = "src/lib.rs"
 southstar-about-style = { path = "../about-style" }
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
+southstar-camera = { path = "../camera" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
 southstar-css-media = { path = "../css-media" }

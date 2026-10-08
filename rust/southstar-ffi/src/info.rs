@@ -15,6 +15,7 @@ const PORTED: &[&str] = &[
     "bookmarks.c",
     "bytecode_cache.c",
     "cache.c",
+    "camera.c",
     "config.c",
     "csp.c",
     "css_media.c",

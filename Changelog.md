@@ -81,6 +81,9 @@ Southstar Browser (unreleased):
   libcurl.
 * Decoded image textures, the inline PDF viewer and microphone capture are
   Rust.
+* Webcam capture is Rust: opening a V4L2 camera (MJPEG, else YUYV), its
+  buffers and stream, frame conversion, device enumeration and the per-site
+  camera permission make the same system calls and give the same frames.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, FALSE, GBoolean, GError};
+use southstar_glib::{self as glib, FALSE, GBoolean, GError, TRUE};
 
 use crate::NsConfig;
 
@@ -96,6 +96,14 @@ fn global_path() -> &'static mut *mut c_char {
 
 pub(crate) fn config() -> Option<&'static NsConfig> {
     Some(unsafe { &*GLOBAL.config.get() })
+}
+
+pub(crate) fn enable_camera() {
+    let config = global_config();
+    if config.camera_enabled == FALSE {
+        config.camera_enabled = TRUE;
+        unsafe { ns_config_save(ptr::null_mut()) };
+    }
 }
 
 pub(crate) fn text(p: *const c_char) -> Option<Vec<u8>> {
