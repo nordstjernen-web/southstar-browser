@@ -1,0 +1,14 @@
+[package]
+name = "southstar-websocket"
+description = "The WebSocket client over libcurl's native WebSocket API: the worker thread, frame reassembly, close handshake and main-loop dispatch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

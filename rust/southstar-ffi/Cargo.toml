@@ -37,6 +37,7 @@ southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
+southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]

@@ -1515,6 +1515,7 @@ dependencies = [
  "southstar-spellcheck",
  "southstar-threaddump",
  "southstar-webcrypto",
+ "southstar-websocket",
  "southstar-woff2",
 ]
 
@@ -1639,6 +1640,13 @@ version = "1.0.30-dev"
 
 [[package]]
 name = "southstar-webcrypto"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-websocket"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",

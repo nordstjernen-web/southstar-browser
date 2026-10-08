@@ -29,5 +29,6 @@ pub use southstar_sandbox;
 pub use southstar_spellcheck;
 pub use southstar_threaddump;
 pub use southstar_webcrypto;
+pub use southstar_websocket;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;
