@@ -1,0 +1,20 @@
+[package]
+name = "southstar-webaudio"
+description = "Offline Web Audio rendering: mixes the AudioNode graph an OfflineAudioContext builds into one channel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-js-engine = { path = "../js-engine", default-features = false }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs"]
+quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
+boa = ["southstar-js-engine/boa"]
+
+[lints]
+workspace = true

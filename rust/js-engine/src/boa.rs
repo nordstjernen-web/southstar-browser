@@ -7,9 +7,10 @@ use std::path::Path;
 use std::rc::Rc;
 
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
+use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
-use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise};
+use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise, JsTypedArray};
 use boa_engine::prelude::{Finalize, JsData, Trace};
 use boa_engine::property::PropertyDescriptor;
 use boa_engine::{
@@ -17,7 +18,9 @@ use boa_engine::{
     NativeFunction, Source,
 };
 
-use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit, int64_modulo};
+use crate::{
+    Attributes, BoundFn, NativeFn, PromiseState, RealmInit, TypedArrayBytes, int64_modulo,
+};
 
 pub const ENGINE_NAME: &str = "boa";
 
@@ -438,6 +441,31 @@ impl Scope<'_> {
                 .map_err(|e| self.error(e)),
             None => Err(self.type_error("not an ArrayBuffer")),
         }
+    }
+
+    pub fn with_typed_array<R>(
+        &mut self,
+        value: &Value,
+        f: impl FnOnce(TypedArrayBytes<'_>) -> R,
+    ) -> Option<R> {
+        let array = JsTypedArray::from_object(value.0.as_object()?.clone()).ok()?;
+        let element_size = match array.kind()? {
+            TypedArrayKind::Int8 | TypedArrayKind::Uint8 | TypedArrayKind::Uint8Clamped => 1,
+            TypedArrayKind::Int16 | TypedArrayKind::Uint16 => 2,
+            TypedArrayKind::Int32 | TypedArrayKind::Uint32 | TypedArrayKind::Float32 => 4,
+            _ => 8,
+        };
+        let byte_offset = array.byte_offset(self.ctx).ok()?;
+        let length = array.byte_length(self.ctx).ok()?;
+        let buffer =
+            JsArrayBuffer::from_object(array.buffer(self.ctx).ok()?.as_object()?.clone()).ok()?;
+        let data = buffer.data()?;
+        let bytes = data.get(byte_offset..byte_offset.checked_add(length)?)?;
+        Some(f(TypedArrayBytes {
+            bytes,
+            byte_offset,
+            element_size,
+        }))
     }
 
     pub fn gc(&mut self) {

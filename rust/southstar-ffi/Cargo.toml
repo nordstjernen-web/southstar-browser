@@ -50,6 +50,7 @@ southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-texture = { path = "../texture" }
 southstar-watchdog = { path = "../watchdog" }
+southstar-webaudio = { path = "../webaudio" }
 southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
 southstar-xml = { path = "../xml" }
@@ -70,6 +71,7 @@ quickjs-original = [
     "southstar-extensions/quickjs-original",
     "southstar-js-intl/quickjs-original",
     "southstar-js-temporal/quickjs-original",
+    "southstar-webaudio/quickjs-original",
 ]
 woff2 = ["dep:southstar-woff2", "southstar-font/woff2"]
 

@@ -27,6 +27,12 @@ pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Res
 
 pub type RealmInit = for<'a> fn(&mut Scope<'a>) -> Result<(), Value>;
 
+pub struct TypedArrayBytes<'a> {
+    pub bytes: &'a [u8],
+    pub byte_offset: usize,
+    pub element_size: usize,
+}
+
 pub enum PromiseState {
     NotAPromise,
     Pending,

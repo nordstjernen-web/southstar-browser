@@ -72,7 +72,6 @@ southstar_engine_sources += files(
   'js_perf.c',
   'js_realm.c',
   'wasm.c',
-  'webaudio.c',
   'webgl.c',
 )
 if quickjs_original

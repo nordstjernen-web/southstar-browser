@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit};
+use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit, TypedArrayBytes};
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 
@@ -205,6 +205,14 @@ unsafe extern "C" {
     fn JS_GetOpaque(obj: JSValue, class_id: u32) -> *mut c_void;
     fn JS_SetOpaque(obj: JSValue, opaque: *mut c_void) -> c_int;
     fn JS_DetachArrayBuffer(ctx: *mut JSContext, obj: JSValue);
+    fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut usize, obj: JSValue) -> *mut u8;
+    fn JS_GetTypedArrayBuffer(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        pbyte_offset: *mut usize,
+        pbyte_length: *mut usize,
+        pbytes_per_element: *mut usize,
+    ) -> JSValue;
     fn JS_ExecutePendingJob(rt: *mut JSRuntime, pctx: *mut *mut JSContext) -> c_int;
     fn JS_PromiseState(ctx: *mut JSContext, promise: JSValue) -> c_int;
     fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
@@ -979,6 +987,43 @@ impl Scope<'_> {
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
         unsafe { JS_DetachArrayBuffer(self.ctx, value.raw) };
         Ok(())
+    }
+
+    pub fn with_typed_array<R>(
+        &mut self,
+        value: &Value,
+        f: impl FnOnce(TypedArrayBytes<'_>) -> R,
+    ) -> Option<R> {
+        let (mut byte_offset, mut length, mut element_size) = (0usize, 0usize, 0usize);
+        let buffer = unsafe {
+            JS_GetTypedArrayBuffer(
+                self.ctx,
+                value.raw,
+                &mut byte_offset,
+                &mut length,
+                &mut element_size,
+            )
+        };
+        if buffer.tag == TAG_EXCEPTION {
+            drop(self.exception());
+            return None;
+        }
+        let mut total = 0usize;
+        let base = unsafe { JS_GetArrayBuffer(self.ctx, &mut total, buffer) };
+        unsafe { JS_FreeValue(self.ctx, buffer) };
+        if base.is_null()
+            || byte_offset
+                .checked_add(length)
+                .is_none_or(|end| end > total)
+        {
+            return None;
+        }
+        let bytes = unsafe { core::slice::from_raw_parts(base.add(byte_offset), length) };
+        Some(f(TypedArrayBytes {
+            bytes,
+            byte_offset,
+            element_size,
+        }))
     }
 
     pub fn gc(&mut self) {

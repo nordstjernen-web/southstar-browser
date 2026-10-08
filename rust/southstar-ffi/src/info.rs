@@ -51,6 +51,7 @@ const PORTED: &[&str] = &[
     "texture.c",
     "threaddump.c",
     "watchdog.c",
+    "webaudio.c",
     "ws.c",
     "webcrypto.c",
     "xml.c",

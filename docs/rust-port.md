@@ -844,6 +844,13 @@ Collation, normalization and case folding stay with GLib and word, sentence and
 grapheme breaks with ns-pango, called over FFI, and the C library's `%.*f` and
 `%g` output is reproduced exactly, so every formatted string is unchanged.
 
+Offline Web Audio rendering (`webaudio.c`, now `rust/webaudio`) reads the
+AudioNode graph the bindings build through the layer, which gained a borrowed
+view of a typed array's bytes, element size and offset (the same
+`JS_GetTypedArrayBuffer` and `JS_GetArrayBuffer` calls the C made on QuickJS,
+`JsTypedArray` on Boa). Every property is read in the C's order, so getters
+observe the same sequence, and the DSP gives bit-identical samples.
+
 ### Ported
 
 | Module | Lines | Crate | Phase |
@@ -890,3 +897,4 @@ grapheme breaks with ns-pango, called over FFI, and the C library's `%.*f` and
 | `xml.c` | 456 | `rust/xml` | 6 (DOM and parsing) |
 | `forms.c` | 320 | `rust/forms` (reads `ns_node` links through a `#[repr(C)]` prefix of the struct) | 6 (DOM and parsing) |
 | `font.c` | 597 | `rust/font` (WOFF2 through `rust/woff2` directly) | 6 (paint and text) |
+| `webaudio.c` | 351 | `rust/webaudio` | 7 (JavaScript bindings) |

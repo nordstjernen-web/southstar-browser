@@ -1544,6 +1544,7 @@ dependencies = [
  "southstar-texture",
  "southstar-threaddump",
  "southstar-watchdog",
+ "southstar-webaudio",
  "southstar-webcrypto",
  "southstar-websocket",
  "southstar-woff2",
@@ -1744,6 +1745,13 @@ name = "southstar-watchdog"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-webaudio"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-js-engine",
 ]
 
 [[package]]
