@@ -192,6 +192,12 @@ Southstar Browser (unreleased):
   upgrades, Refresh headers and the user agent strings, with identical
   results. Parsed URLs are now freed after use instead of accumulating in
   each thread's parser memory until the thread ends.
+* The cookie jar and HSTS are Rust: reading and writing the per-site
+  cookie files for requests, Set-Cookie headers and document.cookie (with
+  the Secure, HttpOnly, Max-Age, Expires, Domain and Path rules and the
+  __Secure- and __Host- prefixes), the HSTS host list curl keeps, and the
+  network layer's data, cookie and private-mode folders. Cookies are
+  stored and sent exactly as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

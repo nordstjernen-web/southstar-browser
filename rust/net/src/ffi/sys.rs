@@ -26,6 +26,10 @@ struct File {
 }
 
 const FILE_ERROR_ACCES: c_int = 2;
+const FILE_ERROR_NOENT: c_int = 4;
+const FILE_TEST_IS_SYMLINK: c_uint = 1 << 1;
+const CHECKSUM_SHA256: c_int = 2;
+const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
     fn g_utf8_collate(str1: *const c_char, str2: *const c_char) -> c_int;
@@ -61,6 +65,30 @@ unsafe extern "C" {
     fn ferror(stream: *mut File) -> c_int;
     fn fclose(stream: *mut File) -> c_int;
     fn g_strerror(errnum: c_int) -> *const c_char;
+    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
+    fn g_get_tmp_dir() -> *const c_char;
+    fn g_dir_make_tmp(tmpl: *const c_char, error: *mut *mut GError) -> *mut c_char;
+    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
+    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
+    fn g_unlink(filename: *const c_char) -> c_int;
+    fn g_rmdir(filename: *const c_char) -> c_int;
+    fn g_random_int() -> u32;
+    fn g_get_real_time() -> i64;
+    fn g_file_set_contents(
+        filename: *const c_char,
+        contents: *const c_char,
+        length: isize,
+        error: *mut *mut GError,
+    ) -> GBoolean;
+    fn g_compute_checksum_for_string(
+        checksum_type: c_int,
+        text: *const c_char,
+        length: isize,
+    ) -> *mut c_char;
+    fn curl_getdate(datestring: *const c_char, now: *const i64) -> i64;
+    fn psl_builtin() -> *const c_void;
+    fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
+    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 }
 
 #[cfg(windows)]
@@ -282,4 +310,164 @@ impl Drop for CFile {
     fn drop(&mut self) {
         unsafe { fclose(self.0) };
     }
+}
+
+pub fn ascii_strtoll(text: &[u8]) -> (i64, usize) {
+    let text = c(text);
+    let mut end: *mut c_char = ptr::null_mut();
+    let value = unsafe { g_ascii_strtoll(text.as_ptr(), &mut end, 10) };
+    let consumed = if end.is_null() {
+        0
+    } else {
+        (end as usize).wrapping_sub(text.as_ptr() as usize)
+    };
+    (value, consumed)
+}
+
+pub fn tmp_dir() -> Vec<u8> {
+    unsafe { glib::bytes(g_get_tmp_dir()) }
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default()
+}
+
+pub fn user_config_dir() -> Vec<u8> {
+    unsafe { glib::bytes(glib::g_get_user_config_dir()) }
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default()
+}
+
+pub fn user_data_dir() -> Vec<u8> {
+    unsafe { glib::bytes(glib::g_get_user_data_dir()) }
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default()
+}
+
+pub fn make_tmp_dir(template: &CStr) -> Option<Vec<u8>> {
+    take(unsafe { g_dir_make_tmp(template.as_ptr(), ptr::null_mut()) })
+}
+
+pub fn mkdir_with_parents(path: &[u8], mode: c_int) {
+    let path = c(path);
+    unsafe { g_mkdir_with_parents(path.as_ptr(), mode) };
+}
+
+pub fn chmod(path: &[u8], mode: c_int) {
+    let path = c(path);
+    unsafe { g_chmod(path.as_ptr(), mode) };
+}
+
+pub fn random_u32() -> u32 {
+    unsafe { g_random_int() }
+}
+
+pub fn now_seconds() -> i64 {
+    (unsafe { g_get_real_time() }) / 1_000_000
+}
+
+fn is_symlink(path: &CString) -> bool {
+    unsafe { glib::g_file_test(path.as_ptr(), FILE_TEST_IS_SYMLINK) != 0 }
+}
+
+pub fn empty_dir(dir: &[u8]) {
+    let Ok(names) = read_dir(dir) else {
+        return;
+    };
+    for name in names {
+        let child = build_filename(dir, &name);
+        let child_c = c(&child);
+        if is_dir(&child) && !is_symlink(&child_c) {
+            remove_tree(&child);
+        } else {
+            unsafe { g_unlink(child_c.as_ptr()) };
+        }
+    }
+}
+
+pub fn remove_tree(path: &[u8]) {
+    empty_dir(path);
+    let path = c(path);
+    unsafe { g_rmdir(path.as_ptr()) };
+}
+
+pub enum ReadError {
+    Missing,
+    Other(Vec<u8>),
+}
+
+pub fn read_file(path: &[u8]) -> Result<Vec<u8>, ReadError> {
+    let path = c(path);
+    let mut contents: *mut c_char = ptr::null_mut();
+    let mut len = 0usize;
+    let mut err: *mut GError = ptr::null_mut();
+    let ok = unsafe { glib::g_file_get_contents(path.as_ptr(), &mut contents, &mut len, &mut err) };
+    if ok == 0 {
+        let failure = match unsafe { err.as_ref() } {
+            Some(e)
+                if e.domain == unsafe { g_file_error_quark() } && e.code == FILE_ERROR_NOENT =>
+            {
+                ReadError::Missing
+            }
+            Some(e) => ReadError::Other(
+                unsafe { glib::bytes(e.message) }
+                    .map(<[u8]>::to_vec)
+                    .unwrap_or_default(),
+            ),
+            None => ReadError::Other(Vec::new()),
+        };
+        if !err.is_null() {
+            unsafe { glib::g_error_free(err) };
+        }
+        return Err(failure);
+    }
+    let bytes = unsafe { glib::slice(contents.cast(), len) }.to_vec();
+    unsafe { glib::g_free(contents.cast()) };
+    Ok(bytes)
+}
+
+pub fn write_file(path: &[u8], contents: &[u8]) -> bool {
+    let path = c(path);
+    let ok = unsafe {
+        g_file_set_contents(
+            path.as_ptr(),
+            contents.as_ptr().cast(),
+            contents.len() as isize,
+            ptr::null_mut(),
+        )
+    };
+    ok != 0
+}
+
+pub fn sha256_hex(text: &[u8]) -> Vec<u8> {
+    let text = c(text);
+    take(unsafe { g_compute_checksum_for_string(CHECKSUM_SHA256, text.as_ptr(), -1) })
+        .unwrap_or_default()
+}
+
+pub fn http_date(text: &[u8]) -> Option<i64> {
+    let text = c(text);
+    let t = unsafe { curl_getdate(text.as_ptr(), ptr::null()) };
+    (t != -1).then_some(t)
+}
+
+pub fn is_public_suffix(domain: &[u8]) -> bool {
+    let psl = unsafe { psl_builtin() };
+    if psl.is_null() {
+        return false;
+    }
+    let domain = c(domain);
+    unsafe { psl_is_public_suffix(psl, domain.as_ptr()) != 0 }
+}
+
+pub fn warn_read_failure(what: &CStr, path: &[u8], message: &[u8]) {
+    let (path, message) = (c(path), c(message));
+    unsafe {
+        g_log(
+            ptr::null(),
+            LOG_LEVEL_WARNING,
+            c"%s: failed to read %s: %s".as_ptr(),
+            what.as_ptr(),
+            path.as_ptr(),
+            message.as_ptr(),
+        )
+    };
 }

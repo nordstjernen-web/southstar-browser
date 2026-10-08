@@ -4,6 +4,7 @@
 
 pub mod host;
 pub mod lexbor;
+pub mod storage;
 pub mod sys;
 pub mod url;
 
