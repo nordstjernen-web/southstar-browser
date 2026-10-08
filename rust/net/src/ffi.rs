@@ -1,7 +1,8 @@
-//! Southstar — the C ABI of the ported net.h calls: error pages, data:, file:, FTP listing and view-source: responses written into an ns_response.
+//! Southstar — the C ABI of the ported net.h calls: error pages, about:, data:, file:, FTP listing and view-source: responses written into an ns_response.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub mod host;
 pub mod sys;
 
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
@@ -246,8 +247,28 @@ pub unsafe extern "C" fn ns_net_finish_ftp_response(resp: *mut NsResponse) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_about_request_from_chrome(top_url: *const c_char) -> GBoolean {
-    glib::boolean(about::request_from_chrome(text(top_url)))
+pub unsafe extern "C" fn ns_net_synthesize_about_response(
+    url: *const c_char,
+    top_url: *const c_char,
+    method: *const c_char,
+    req_body: *const c_void,
+    req_body_len: usize,
+    resp: *mut NsResponse,
+) -> GBoolean {
+    let Some(url_bytes) = text(url) else {
+        return 0;
+    };
+    let req_body =
+        (!req_body.is_null()).then(|| unsafe { glib::slice(req_body.cast(), req_body_len) });
+    let Some(page) = about::respond(url_bytes, text(top_url), text(method), req_body) else {
+        return 0;
+    };
+    let resp = unsafe { &mut *resp };
+    resp.status = page.status;
+    resp.final_url = unsafe { glib::g_strdup(url) };
+    resp.content_type = glib::strdup(page.content_type);
+    ByteArraySink(resp.body).append(&page.body);
+    1
 }
 
 #[unsafe(no_mangle)]

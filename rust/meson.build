@@ -13,11 +13,15 @@ southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, 
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif
-southstar_rust_env = {'NS_RUSTC_VERSION': rustc.version()}
+southstar_rust_env = {
+  'NS_RUSTC_VERSION': rustc.version(),
+  'NS_VERSION': meson.project_version(),
+  'NS_BUILD_DATE': build_date,
+  'NS_LEXBOR_VERSION': lexbor_version,
+}
 if quickjs_original
   southstar_rust_features += ['quickjs-original']
-  southstar_rust_env = {
-    'NS_RUSTC_VERSION': rustc.version(),
+  southstar_rust_env += {
     'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version,
   }
 endif
@@ -65,6 +69,9 @@ if have_enchant
 endif
 if have_libav
   southstar_rust_features += ['libav']
+endif
+if have_webgpu
+  southstar_rust_features += ['webgpu']
 endif
 if have_woff2
   southstar_rust_features += ['woff2']

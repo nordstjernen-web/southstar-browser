@@ -182,6 +182,10 @@ Southstar Browser (unreleased):
   with folders first, sizes and modification dates, Unix and DOS FTP listing
   formats, file: reads under the response budget with their content type,
   and view-source: pages with their highlighting, all unchanged.
+* The about: pages are Rust: the new tab with its logo, tagline and search
+  engine, about:southstar with its diagnostics, the license texts, history,
+  the settings page and its load, save and clear endpoints, and the check
+  that keeps them from web content. They read the same as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

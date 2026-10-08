@@ -1764,6 +1764,7 @@ name = "southstar-net"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-about-style",
+ "southstar-config",
  "southstar-glib",
  "southstar-html-util",
 ]

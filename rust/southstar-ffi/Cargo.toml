@@ -66,22 +66,24 @@ southstar-woff2 = { path = "../woff2", optional = true }
 southstar-xml = { path = "../xml" }
 
 [features]
-avif = ["southstar-image/avif"]
+avif = ["southstar-image/avif", "southstar-net/avif"]
 sdl = ["southstar-mic/sdl", "southstar-renderer-host/sdl"]
 fontconfig = ["southstar-renderer-host/fontconfig"]
 font-fontconfig = ["southstar-font/fontconfig"]
 freetype = ["southstar-font/freetype"]
 pangoft2 = ["southstar-font/pangofc"]
-poppler = ["southstar-pdf/poppler"]
+poppler = ["southstar-pdf/poppler", "southstar-net/poppler"]
 egl = ["southstar-glctx/egl"]
 ns-pango = [
     "southstar-font/ns-pango",
     "southstar-js-intl/ns-pango",
     "southstar-mathml/ns-pango",
+    "southstar-net/ns-pango",
 ]
-enchant = ["southstar-spellcheck/enchant"]
-libav = ["southstar-headless/libav"]
-seccomp = ["southstar-sandbox/seccomp"]
+enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]
+libav = ["southstar-headless/libav", "southstar-net/libav"]
+seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
+webgpu = ["southstar-net/webgpu"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-extensions/quickjs-original",
