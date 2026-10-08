@@ -16,6 +16,7 @@ pub use southstar_glctx;
 pub use southstar_glib;
 pub use southstar_history;
 pub use southstar_i18n;
+pub use southstar_image_decoders;
 pub use southstar_js_temporal;
 pub use southstar_mat4;
 pub use southstar_safebrowsing;

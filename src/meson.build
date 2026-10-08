@@ -59,8 +59,6 @@ southstar_engine_sources = files(
   'html.c',
   'image.c',
   'svg.c',
-  'image_ico.c',
-  'image_webp.c',
   'image_wuffs.c',
   'layout.c',
   'mathml.c',

@@ -22,6 +22,8 @@ const PORTED: &[&str] = &[
     "glctx.c",
     "history.c",
     "i18n.c",
+    "image_ico.c",
+    "image_webp.c",
     "js_date.c",
     "mat4.h",
     "safebrowsing.c",

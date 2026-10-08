@@ -56,6 +56,8 @@ Southstar Browser (unreleased):
   CGL on macOS and EGL elsewhere, still through libepoxy.
 * The 4x4 matrices behind CSS 3D transforms are Rust and compute the same
   values bit for bit.
+* ICO/CUR favicons and WebP images, still and animated, are decoded in
+  Rust (WebP still through libwebp), with the same pixels as before.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be
