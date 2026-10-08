@@ -590,11 +590,7 @@ fn render_fenced(
 }
 
 fn token_text(node: Node) -> CString {
-    stripped(
-        node.collect_text()
-            .as_deref()
-            .map_or(&[][..], CStr::to_bytes),
-    )
+    stripped(&node.collect_text())
 }
 
 fn render(

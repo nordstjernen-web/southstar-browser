@@ -7,9 +7,8 @@ use core::ffi::{CStr, c_int, c_long};
 use southstar_datetime::{MAX_YEAR, civil_from_days, floormod};
 
 use crate::ffi::{self, Node};
-use crate::{ancestors_and_self, children};
+use crate::{MAX_DEPTH, ancestors_and_self, children};
 
-const MAX_DEPTH: i32 = 512;
 const DAY_MS: f64 = 86_400_000.0;
 const WEEK_MS: f64 = 604_800_000.0;
 const WEEK_BASE_MS: f64 = -259_200_000.0;
@@ -770,10 +769,8 @@ pub fn flatten_editable(node: Node) {
     if !is_contenteditable_host(node) {
         return;
     }
-    match node.collect_text() {
-        Some(text) => set_editable_value(node, &text),
-        None => set_editable_value(node, c""),
-    }
+    let text = std::ffi::CString::new(node.collect_text()).unwrap_or_default();
+    set_editable_value(node, &text);
 }
 
 pub fn is_numeric_input(node: Node) -> bool {

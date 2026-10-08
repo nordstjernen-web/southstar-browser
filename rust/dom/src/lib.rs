@@ -4,8 +4,16 @@
 
 pub mod controls;
 mod ffi;
+pub mod image_map;
+pub mod serialize;
 
-pub use ffi::{Node, NsNode};
+pub use ffi::{Attr, Kind, Node, NsNode};
+
+pub const MAX_DEPTH: i32 = 512;
+pub const FLAG_SVG_NS: u32 = 1 << 7;
+pub const FLAG_FOREIGN_NS: u32 = 1 << 9;
+pub const FLAG_PI: u32 = 1 << 11;
+pub const FLAG_SCRIPTING_DISABLED: u32 = 1 << 15;
 
 pub fn children(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
     core::iter::successors(node.first_child(), |child| child.next_sibling())

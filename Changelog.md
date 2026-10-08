@@ -111,6 +111,10 @@ Southstar Browser (unreleased):
   range, date, month, week, time and datetime-local, range and step
   validity, required and email checks, contenteditable and spellcheck hosts,
   and the values editing reads and writes, with the same results as before.
+* Serializing the DOM is Rust: innerHTML, outerHTML and getHTML() with
+  declarative shadow roots, the XML serialization, textContent and the text
+  of subtrees, the --dump=dom tree and client-side image map hit testing give
+  the same output.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

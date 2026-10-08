@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-datetime = { path = "../datetime" }
 southstar-glib = { path = "../glib" }
+southstar-html-util = { path = "../html-util" }
 
 [lints]
 workspace = true

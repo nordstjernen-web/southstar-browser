@@ -1493,6 +1493,7 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-datetime",
  "southstar-glib",
+ "southstar-html-util",
 ]
 
 [[package]]

@@ -6,21 +6,44 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
-use southstar_glib::GStr;
-
+const NODE_DOCUMENT: c_uint = 0;
+const NODE_DOCTYPE: c_uint = 1;
 const NODE_ELEMENT: c_uint = 2;
 const NODE_TEXT: c_uint = 3;
+const NODE_COMMENT: c_uint = 4;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Document,
+    Doctype,
+    Element,
+    Text,
+    Comment,
+    Other,
+}
+
+#[repr(C)]
+pub struct NsAttr {
+    name: *const c_char,
+    value: *const c_char,
+    _namespace_uri: *const c_char,
+    _prefix: *const c_char,
+    _local_name: *const c_char,
+    next: *const NsAttr,
+    _value_len: c_uint,
+    _flags: u8,
+}
 
 #[repr(C)]
 pub struct NsNode {
     kind: c_uint,
     name: *const c_char,
     text: *const c_char,
-    _text_len: u32,
-    _attrs: *const c_void,
+    text_len: u32,
+    attrs: *const NsAttr,
     parent: *const NsNode,
     first_child: *const NsNode,
-    _last_child: *const NsNode,
+    last_child: *const NsNode,
     _prev_sibling: *const NsNode,
     next_sibling: *const NsNode,
     _js_wrapper: *mut c_void,
@@ -40,11 +63,11 @@ pub struct NsNode {
 }
 
 mod controls;
+mod serialize;
 
 unsafe extern "C" {
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
     fn ns_node_root(n: *const NsNode) -> *const NsNode;
     fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
@@ -160,8 +183,36 @@ impl<'a> Node<'a> {
         self.node.as_ptr()
     }
 
-    pub fn collect_text(self) -> Option<GStr> {
-        unsafe { GStr::take(ns_node_collect_text(self.as_ptr())) }
+    pub fn kind(self) -> Kind {
+        match self.get().kind {
+            NODE_DOCUMENT => Kind::Document,
+            NODE_DOCTYPE => Kind::Doctype,
+            NODE_ELEMENT => Kind::Element,
+            NODE_TEXT => Kind::Text,
+            NODE_COMMENT => Kind::Comment,
+            _ => Kind::Other,
+        }
+    }
+
+    pub fn last_child(self) -> Option<Self> {
+        Self::link(self.get().last_child)
+    }
+
+    pub fn text_len(self) -> u32 {
+        self.get().text_len
+    }
+
+    pub fn text_with_len(self) -> Option<&'a [u8]> {
+        let node = self.get();
+        (!node.text.is_null()).then(|| unsafe {
+            core::slice::from_raw_parts(node.text.cast::<u8>(), node.text_len as usize)
+        })
+    }
+
+    pub fn attrs(self) -> impl Iterator<Item = Attr<'a>> {
+        core::iter::successors(Attr::link(self.get().attrs), |attr| {
+            Attr::link(attr.get().next)
+        })
     }
 
     pub fn root(self) -> Self {
@@ -170,6 +221,33 @@ impl<'a> Node<'a> {
 
     pub fn form_owner(self, doc: Option<Node>) -> Option<Self> {
         Self::link(unsafe { ns_form_owner(self.as_ptr(), Node::ptr_or_null(doc)) })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Attr<'a> {
+    attr: NonNull<NsAttr>,
+    node: PhantomData<&'a NsAttr>,
+}
+
+impl<'a> Attr<'a> {
+    fn link(attr: *const NsAttr) -> Option<Self> {
+        NonNull::new(attr.cast_mut()).map(|attr| Attr {
+            attr,
+            node: PhantomData,
+        })
+    }
+
+    fn get(self) -> &'a NsAttr {
+        unsafe { self.attr.as_ref() }
+    }
+
+    pub fn name(self) -> Option<&'a CStr> {
+        c_str(self.get().name)
+    }
+
+    pub fn value(self) -> Option<&'a CStr> {
+        c_str(self.get().value)
     }
 }
 
