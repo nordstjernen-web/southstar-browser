@@ -1,0 +1,14 @@
+[package]
+name = "southstar-forms"
+description = "HTML form submission triggers, form data collection and constraint validation over the engine's DOM"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

@@ -25,6 +25,7 @@ southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-eventsource = { path = "../eventsource" }
 southstar-extensions = { path = "../extensions" }
+southstar-forms = { path = "../forms" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
