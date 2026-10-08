@@ -1476,6 +1476,7 @@ dependencies = [
  "southstar-css-syntax",
  "southstar-datetime",
  "southstar-debuglog",
+ "southstar-glctx",
  "southstar-glib",
  "southstar-history",
  "southstar-i18n",
@@ -1485,6 +1486,13 @@ dependencies = [
  "southstar-threaddump",
  "southstar-webcrypto",
  "southstar-woff2",
+]
+
+[[package]]
+name = "southstar-glctx"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
 ]
 
 [[package]]

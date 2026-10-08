@@ -20,6 +20,7 @@ southstar-csp = { path = "../csp" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
+southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
 southstar-js-temporal = { path = "../js-temporal" }
@@ -31,6 +32,7 @@ southstar-webcrypto = { path = "../webcrypto" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]
+egl = ["southstar-glctx/egl"]
 enchant = ["southstar-spellcheck/enchant"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",

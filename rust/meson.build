@@ -18,6 +18,9 @@ if quickjs_original
     'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version,
   }
 endif
+if have_egl and host_machine.system() not in ['darwin', 'windows']
+  southstar_rust_features += ['egl']
+endif
 if have_enchant
   southstar_rust_features += ['enchant']
   southstar_rust_link_deps += [libenchant]

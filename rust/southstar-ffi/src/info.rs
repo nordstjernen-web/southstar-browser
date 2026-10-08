@@ -19,6 +19,7 @@ const PORTED: &[&str] = &[
     "css_syntax.c",
     "datetime.c",
     "debuglog.c",
+    "glctx.c",
     "history.c",
     "i18n.c",
     "js_date.c",

@@ -1,0 +1,17 @@
+[package]
+name = "southstar-glctx"
+description = "The toolkit-independent offscreen GL context WebGL renders into: WGL on Windows, CGL on macOS, EGL elsewhere"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[features]
+egl = []
+
+[lints]
+workspace = true
