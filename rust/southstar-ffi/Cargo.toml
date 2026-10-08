@@ -30,6 +30,7 @@ southstar-image-decoders = { path = "../image-decoders" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
+southstar-netutil = { path = "../netutil" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-spellcheck = { path = "../spellcheck" }

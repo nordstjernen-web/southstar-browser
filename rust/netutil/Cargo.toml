@@ -1,0 +1,15 @@
+[package]
+name = "southstar-netutil"
+description = "Network helpers the engine and the shells share: Accept-Language and navigator.languages, address-bar search detection and search URLs, local paths as file URLs, proxy credential masking"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

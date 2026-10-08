@@ -60,7 +60,6 @@ southstar_engine_sources = files(
   'layout.c',
   'mathml.c',
   'net.c',
-  'netutil.c',
   'paint.c',
   'print.c',
   'pdf.c',
