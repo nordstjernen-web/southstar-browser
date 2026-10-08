@@ -198,6 +198,12 @@ Southstar Browser (unreleased):
   __Secure- and __Host- prefixes), the HSTS host list curl keeps, and the
   network layer's data, cookie and private-mode folders. Cookies are
   stored and sent exactly as before.
+* More of the network layer is Rust: the response body and header sinks
+  every transport writes into (with the memory budget and the headers
+  the fetch path keeps), the developer-tools network log and fetch
+  counters, connection statistics, proxy settings, copying and freeing
+  responses, and form encoding (urlencoded in the page's charset and
+  multipart boundaries). Requests and their logs are unchanged.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -42,13 +42,27 @@ const char *ns_net_hsts_curl_path(void);
 const char *ns_net_altsvc_path(void);
 char    *ns_net_cookie_path_for_partition(const char *top_origin);
 char    *ns_net_cookie_js_path_for_partition(const char *top_origin);
-void     ns_net_storage_shutdown(void);
+void     ns_net_state_shutdown(void);
+gboolean ns_net_log_fetches_enabled(void);
+const char *ns_net_pick_configured_proxy(const char *url);
+const char *ns_net_configured_no_proxy(void);
+void     ns_net_perf_record(gint64 start_us, gint64 end_us, guint64 bytes);
+void     ns_net_conn_stat_record(const char *url, long http_version,
+                                 long new_connections);
+void     ns_net_log_record(const char *method, const char *url, long status,
+                           const char *content_type, guint64 body_len,
+                           double duration_ms, const char *req_headers,
+                           const char *resp_headers, const char *error);
+size_t   ns_write_cb(char *data, size_t size, size_t nmemb, void *userdata);
+size_t   ns_header_cb(char *buffer, size_t size, size_t nitems,
+                      void *userdata);
+ns_response *ns_response_copy(const ns_response *src);
+const char *ns_net_http_version_name(long version);
 
 static char *g_ca_bundle;
 static gboolean g_has_http3;
 static const char *g_ec_curves = "X25519:P-256:P-384";
 static char *g_accept_encoding;
-static char *g_proxy_override;
 static CURLSH *g_share;
 static GMutex g_fetch_throttle_mutex;
 static GCond  g_fetch_idle_cond;
@@ -57,9 +71,6 @@ static int    g_preconnect_active;
 static gint   g_net_aborting;
 static GQueue g_fetch_queue = G_QUEUE_INIT;
 static GMutex g_share_locks[CURL_LOCK_DATA_LAST];
-static GMutex      g_conn_stats_lock;
-static GHashTable *g_conn_stats;
-
 #define NS_DEAD_HOST_TTL_US ((gint64)120 * G_USEC_PER_SEC)
 /* Origins (scheme, host and port) a connection recently failed to.  A
  * refused port says nothing about the host's other ports, so the key is
@@ -655,182 +666,17 @@ ns_net_shutdown(void)
     if (!ns_net_drain(3000))
         return;
     ns_net_backend_shutdown();
-    if (g_conn_stats) {
-        g_hash_table_destroy(g_conn_stats);
-        g_conn_stats = NULL;
-    }
     if (g_share) { curl_share_cleanup(g_share); g_share = NULL; }
     curl_global_cleanup();
     g_free(g_accept_encoding);
     g_accept_encoding = NULL;
-    g_free(g_proxy_override);
-    g_proxy_override = NULL;
-    ns_net_storage_shutdown();
+    ns_net_state_shutdown();
     g_free(g_ca_bundle);
     g_ca_bundle = NULL;
     if (g_origin_slots) {
         g_hash_table_destroy(g_origin_slots);
         g_origin_slots = NULL;
     }
-}
-
-void
-ns_net_set_proxy_override(const char *proxy_url)
-{
-    g_free(g_proxy_override);
-    g_proxy_override = (proxy_url && *proxy_url) ? g_strdup(proxy_url) : NULL;
-}
-
-static gboolean g_log_fetches = FALSE;
-
-void
-ns_net_set_log_fetches(gboolean on)
-{
-    g_log_fetches = on;
-}
-
-typedef struct ns_conn_stat {
-    guint64 requests;
-    guint64 connections;
-} ns_conn_stat;
-
-static const char *
-ns_net_http_version_name(long v)
-{
-    switch (v) {
-    case CURL_HTTP_VERSION_1_0: return "http/1.0";
-    case CURL_HTTP_VERSION_1_1: return "http/1.1";
-    case CURL_HTTP_VERSION_2_0: return "h2";
-#ifdef CURL_HTTP_VERSION_3
-    case CURL_HTTP_VERSION_3:   return "h3";
-#endif
-    default:                    return "http/?";
-    }
-}
-
-static GMutex   g_perf_lock;
-static guint64  g_perf_fetch_count;
-static guint64  g_perf_fetch_bytes;
-static gint64   g_perf_fetch_sum_us;
-static gint64   g_perf_fetch_first_us;
-static gint64   g_perf_fetch_last_us;
-
-static void
-ns_net_perf_record(gint64 start_us, gint64 end_us, guint64 bytes)
-{
-    if (!g_log_fetches) return;
-    g_mutex_lock(&g_perf_lock);
-    if (g_perf_fetch_count == 0 || start_us < g_perf_fetch_first_us)
-        g_perf_fetch_first_us = start_us;
-    if (end_us > g_perf_fetch_last_us)
-        g_perf_fetch_last_us = end_us;
-    g_perf_fetch_count++;
-    g_perf_fetch_bytes += bytes;
-    g_perf_fetch_sum_us += end_us - start_us;
-    g_mutex_unlock(&g_perf_lock);
-}
-
-void
-ns_net_perf_snapshot(guint64 *fetches, guint64 *bytes,
-                     double *sum_ms, double *span_ms)
-{
-    g_mutex_lock(&g_perf_lock);
-    if (fetches) *fetches = g_perf_fetch_count;
-    if (bytes)   *bytes   = g_perf_fetch_bytes;
-    if (sum_ms)  *sum_ms  = g_perf_fetch_sum_us / 1000.0;
-    if (span_ms) *span_ms = g_perf_fetch_count
-                            ? (g_perf_fetch_last_us - g_perf_fetch_first_us) / 1000.0
-                            : 0.0;
-    g_mutex_unlock(&g_perf_lock);
-}
-
-static void
-ns_net_conn_stat_record(const char *url, long http_version, long new_connections)
-{
-    if (!g_log_fetches) return;
-    char *origin = ns_url_origin_from(url);
-    if (!origin) return;
-
-    g_mutex_lock(&g_conn_stats_lock);
-    if (!g_conn_stats)
-        g_conn_stats = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                             g_free, g_free);
-    ns_conn_stat *s = g_hash_table_lookup(g_conn_stats, origin);
-    if (!s) {
-        s = g_new0(ns_conn_stat, 1);
-        g_hash_table_insert(g_conn_stats, g_strdup(origin), s);
-    }
-    s->requests++;
-    if (new_connections > 0)
-        s->connections += (guint64)new_connections;
-    guint64 reqs = s->requests, conns = s->connections;
-    g_mutex_unlock(&g_conn_stats_lock);
-
-    ns_debug_log_emit(NS_DLOG_NET, "conn", "%s new=%ld origin=%s reqs=%"
-                      G_GUINT64_FORMAT " conns=%" G_GUINT64_FORMAT,
-                      ns_net_http_version_name(http_version),
-                      new_connections, origin, reqs, conns);
-    g_free(origin);
-}
-
-static const char *
-ns_net_pick_configured_proxy(const char *url)
-{
-    if (g_proxy_override && *g_proxy_override) return g_proxy_override;
-    const ns_config *cfg = ns_config_get();
-    if (!cfg) return NULL;
-    gboolean https = g_str_has_prefix(url, "https://") ||
-                     g_str_has_prefix(url, "wss://");
-    if (https && cfg->https_proxy && *cfg->https_proxy) return cfg->https_proxy;
-    if (cfg->http_proxy && *cfg->http_proxy)            return cfg->http_proxy;
-    return NULL;
-}
-
-static const char *
-ns_net_configured_no_proxy(void)
-{
-    const ns_config *cfg = ns_config_get();
-    if (cfg && cfg->no_proxy && *cfg->no_proxy) return cfg->no_proxy;
-    return NULL;
-}
-
-void
-ns_net_apply_curl_proxy(void *curl_handle, const char *url)
-{
-    CURL *curl = curl_handle;
-    const char *proxy = ns_net_pick_configured_proxy(url);
-    if (proxy && *proxy)
-        curl_easy_setopt(curl, CURLOPT_PROXY, proxy);
-    const char *no_proxy = ns_net_configured_no_proxy();
-    if (no_proxy && *no_proxy)
-        curl_easy_setopt(curl, CURLOPT_NOPROXY, no_proxy);
-}
-
-const char *
-ns_net_proxy_override(void)
-{
-    return g_proxy_override;
-}
-
-const char *
-ns_net_http_proxy(void)
-{
-    const ns_config *cfg = ns_config_get();
-    return cfg ? cfg->http_proxy : NULL;
-}
-
-const char *
-ns_net_https_proxy(void)
-{
-    const ns_config *cfg = ns_config_get();
-    return cfg ? cfg->https_proxy : NULL;
-}
-
-const char *
-ns_net_no_proxy(void)
-{
-    const ns_config *cfg = ns_config_get();
-    return cfg ? cfg->no_proxy : NULL;
 }
 
 const char *
@@ -893,178 +739,6 @@ ns_net_apply_curl_tls(void *curl_handle)
 #endif
 }
 
-void
-ns_response_free(ns_response *resp)
-{
-    if (!resp)
-        return;
-    g_free(resp->final_url);
-    g_free(resp->content_type);
-    g_free(resp->content_disposition);
-    g_free(resp->csp_header);
-    g_free(resp->xframe_options);
-    g_free(resp->x_content_type_options);
-    g_free(resp->cors_allow_origin);
-    g_free(resp->refresh);
-    g_free(resp->content_language);
-    g_free(resp->raw_headers);
-    if (resp->body)
-        g_byte_array_unref(resp->body);
-    g_free(resp->error);
-    g_free(resp->tls_warning);
-    g_free(resp->remote_ip);
-    g_free(resp->next_hop_protocol);
-    g_free(resp);
-}
-
-static ns_response *
-ns_response_copy(const ns_response *src)
-{
-    if (!src) return NULL;
-    ns_response *r = g_new0(ns_response, 1);
-    *r = *src;
-    r->final_url = g_strdup(src->final_url);
-    r->content_type = g_strdup(src->content_type);
-    r->content_disposition = g_strdup(src->content_disposition);
-    r->csp_header = g_strdup(src->csp_header);
-    r->xframe_options = g_strdup(src->xframe_options);
-    r->x_content_type_options = g_strdup(src->x_content_type_options);
-    r->cors_allow_origin = g_strdup(src->cors_allow_origin);
-    r->refresh = g_strdup(src->refresh);
-    r->content_language = g_strdup(src->content_language);
-    r->raw_headers = g_strdup(src->raw_headers);
-    r->error = g_strdup(src->error);
-    r->tls_warning = g_strdup(src->tls_warning);
-    r->remote_ip = g_strdup(src->remote_ip);
-    r->next_hop_protocol = g_strdup(src->next_hop_protocol);
-    r->body = g_byte_array_new();
-    if (src->body && src->body->len)
-        g_byte_array_append(r->body, src->body->data, src->body->len);
-    return r;
-}
-
-typedef struct {
-    char   *method;
-    char   *url;
-    long    status;
-    char   *content_type;
-    guint64 body_len;
-    double  duration_ms;
-    char   *req_headers;
-    char   *resp_headers;
-    char   *error;
-} ns_net_log_entry;
-
-#define NS_NET_LOG_CAP 256
-
-static GMutex      ns_net_log_lock;
-static GPtrArray  *ns_net_log;
-
-static void
-ns_net_log_entry_free(gpointer data)
-{
-    ns_net_log_entry *e = data;
-    if (!e)
-        return;
-    g_free(e->method);
-    g_free(e->url);
-    g_free(e->content_type);
-    g_free(e->req_headers);
-    g_free(e->resp_headers);
-    g_free(e->error);
-    g_free(e);
-}
-
-static void
-ns_net_log_record(const char *method, const char *url, long status,
-                  const char *content_type, guint64 body_len,
-                  double duration_ms, const char *req_headers,
-                  const char *resp_headers, const char *error)
-{
-    if (!url || !*url)
-        return;
-    if (g_str_has_prefix(url, "data:") || g_str_has_prefix(url, "about:"))
-        return;
-    ns_net_log_entry *e = g_new0(ns_net_log_entry, 1);
-    e->method = g_strdup(method && *method ? method : "GET");
-    e->url = g_strdup(url);
-    e->status = status;
-    e->content_type = g_strdup(content_type ? content_type : "");
-    e->body_len = body_len;
-    e->duration_ms = duration_ms;
-    e->req_headers = g_strdup(req_headers ? req_headers : "");
-    e->resp_headers = g_strdup(resp_headers ? resp_headers : "");
-    e->error = error && *error ? g_strdup(error) : NULL;
-
-    g_mutex_lock(&ns_net_log_lock);
-    if (!ns_net_log)
-        ns_net_log = g_ptr_array_new_with_free_func(ns_net_log_entry_free);
-    if (ns_net_log->len >= NS_NET_LOG_CAP)
-        g_ptr_array_remove_index(ns_net_log, 0);
-    g_ptr_array_add(ns_net_log, e);
-    g_mutex_unlock(&ns_net_log_lock);
-}
-
-void
-ns_net_log_clear(void)
-{
-    g_mutex_lock(&ns_net_log_lock);
-    if (ns_net_log)
-        g_ptr_array_set_size(ns_net_log, 0);
-    g_mutex_unlock(&ns_net_log_lock);
-}
-
-static void
-ns_net_log_append_headers(GString *out, const char *headers)
-{
-    if (!headers || !*headers)
-        return;
-    char **lines = g_strsplit(headers, "\n", -1);
-    for (guint i = 0; lines && lines[i]; i++) {
-        char *line = g_strchomp(lines[i]);
-        if (*line)
-            g_string_append_printf(out, "    %s\n", line);
-    }
-    g_strfreev(lines);
-}
-
-char *
-ns_net_log_dump(void)
-{
-    GString *out = g_string_new(NULL);
-    g_mutex_lock(&ns_net_log_lock);
-    guint n = ns_net_log ? ns_net_log->len : 0;
-    g_string_append_printf(out, "%u network request%s\n\n", n,
-                           n == 1 ? "" : "s");
-    for (guint i = 0; i < n; i++) {
-        ns_net_log_entry *e = g_ptr_array_index(ns_net_log, i);
-        if (e->status > 0)
-            g_string_append_printf(out, "[%ld] %s %s\n", e->status,
-                                   e->method, e->url);
-        else
-            g_string_append_printf(out, "[---] %s %s\n", e->method, e->url);
-        g_string_append_printf(out, "    %.0f ms, %llu bytes",
-                               e->duration_ms,
-                               (unsigned long long)e->body_len);
-        if (e->content_type && *e->content_type)
-            g_string_append_printf(out, ", %s", e->content_type);
-        g_string_append_c(out, '\n');
-        if (e->error)
-            g_string_append_printf(out, "    error: %s\n", e->error);
-        if (e->req_headers && *e->req_headers) {
-            g_string_append(out, "  Request headers:\n");
-            ns_net_log_append_headers(out, e->req_headers);
-        }
-        if (e->resp_headers && *e->resp_headers) {
-            g_string_append(out, "  Response headers:\n");
-            ns_net_log_append_headers(out, e->resp_headers);
-        }
-        g_string_append_c(out, '\n');
-    }
-    g_mutex_unlock(&ns_net_log_lock);
-    return g_string_free(out, FALSE);
-}
-
 static char *
 ns_net_slist_serialize(struct curl_slist *list)
 {
@@ -1084,8 +758,6 @@ ns_net_slist_serialize(struct curl_slist *list)
 
 #define NS_NET_RESPONSE_MIN_BUDGET (64ULL * 1024ULL * 1024ULL)
 #define NS_NET_RESPONSE_RECHECK_BYTES (16ULL * 1024ULL * 1024ULL)
-#define NS_NET_MAX_RAW_HEADER_BYTES   (1ULL * 1024ULL * 1024ULL)
-
 static guint64
 ns_net_available_memory_bytes(void)
 {
@@ -1142,157 +814,6 @@ ns_net_response_budget(void)
     if (avail == 0) return NS_NET_RESPONSE_MIN_BUDGET;
     guint64 half = avail / 2;
     return half < NS_NET_RESPONSE_MIN_BUDGET ? NS_NET_RESPONSE_MIN_BUDGET : half;
-}
-
-static size_t
-ns_write_cb(char *data, size_t size, size_t nmemb, void *userdata)
-{
-    ns_write_ctx *ctx = userdata;
-    if (size != 0 && nmemb > G_MAXSIZE / size)
-        return 0;
-    size_t bytes = size * nmemb;
-
-    if (bytes == 0)
-        return 0;
-    if (bytes > G_MAXUINT)
-        return 0;
-    if (ctx->total >= ctx->next_recheck) {
-        ctx->budget = ns_net_response_budget();
-        ctx->next_recheck = ctx->total + NS_NET_RESPONSE_RECHECK_BYTES;
-    }
-    if (ctx->total + bytes > ctx->budget) {
-        ctx->exceeded = TRUE;
-        return 0;
-    }
-    if (ctx->total + bytes > G_MAXUINT) {
-        ctx->exceeded = TRUE;
-        return 0;
-    }
-    g_byte_array_append(ctx->body, (const guint8 *)data, bytes);
-    ctx->total += bytes;
-    return bytes;
-}
-
-void
-ns_body_sink_init(ns_write_ctx *ctx, GByteArray *body)
-{
-    ctx->body = body;
-    ctx->total = 0;
-    ctx->budget = ns_net_response_budget();
-    ctx->next_recheck = NS_NET_RESPONSE_RECHECK_BYTES;
-    ctx->exceeded = FALSE;
-}
-
-gboolean
-ns_body_sink_write(ns_write_ctx *ctx, const void *data, size_t len)
-{
-    if (len == 0)
-        return TRUE;
-    return ns_write_cb((char *)data, 1, len, ctx) == len;
-}
-
-static char *
-header_value_dup(const char *line, size_t bytes, size_t prefix_len)
-{
-    const char *v = line + prefix_len;
-    size_t vlen = bytes - prefix_len;
-    while (vlen > 0 && (*v == ' ' || *v == '\t')) { v++; vlen--; }
-    while (vlen > 0 &&
-           (v[vlen - 1] == '\r' || v[vlen - 1] == '\n' ||
-            v[vlen - 1] == ' '  || v[vlen - 1] == '\t')) vlen--;
-    return g_strndup(v, vlen);
-}
-
-static gboolean
-header_capture(const char *buffer, size_t bytes,
-               const char *name, char **slot)
-{
-    size_t name_len = strlen(name);
-    if (bytes < name_len ||
-        g_ascii_strncasecmp(buffer, name, name_len) != 0)
-        return FALSE;
-    if (slot) {
-        g_free(*slot);
-        *slot = header_value_dup(buffer, bytes, name_len);
-    }
-    return TRUE;
-}
-
-static gboolean
-header_append(const char *buffer, size_t bytes,
-              const char *name, char **slot)
-{
-    size_t name_len = strlen(name);
-    if (bytes < name_len ||
-        g_ascii_strncasecmp(buffer, name, name_len) != 0)
-        return FALSE;
-    if (slot) {
-        char *val = header_value_dup(buffer, bytes, name_len);
-        if (*slot && **slot && val && *val) {
-            char *joined = g_strconcat(*slot, ", ", val, NULL);
-            g_free(*slot);
-            g_free(val);
-            *slot = joined;
-        } else if (val && *val) {
-            g_free(*slot);
-            *slot = val;
-        } else {
-            g_free(val);
-        }
-    }
-    return TRUE;
-}
-
-static size_t
-ns_header_cb(char *buffer, size_t size, size_t nitems, void *userdata)
-{
-    ns_header_ctx *hc = userdata;
-    if (size != 0 && nitems > G_MAXSIZE / size)
-        return 0;
-    size_t bytes = size * nitems;
-
-    if (bytes >= 5 && g_ascii_strncasecmp(buffer, "HTTP/", 5) == 0) {
-        if (hc->raw) g_string_set_size(hc->raw, 0);
-    } else if (bytes > 2) {
-        gboolean set_cookie =
-            (bytes >= 11 && g_ascii_strncasecmp(buffer, "Set-Cookie:", 11) == 0) ||
-            (bytes >= 12 && g_ascii_strncasecmp(buffer, "Set-Cookie2:", 12) == 0);
-        if (!set_cookie) {
-            if (!hc->raw) hc->raw = g_string_new(NULL);
-            if (hc->raw->len + bytes <= NS_NET_MAX_RAW_HEADER_BYTES)
-                g_string_append_len(hc->raw, buffer, bytes);
-        }
-    }
-
-    if      (header_capture(buffer, bytes, "Content-Type:",    hc->content_type_out))         {}
-    else if (header_capture(buffer, bytes, "ETag:",            &hc->etag))                    {}
-    else if (header_capture(buffer, bytes, "Last-Modified:",   &hc->last_modified))           {}
-    else if (header_capture(buffer, bytes, "Cache-Control:",   &hc->cache_control))           {}
-    else if (header_capture(buffer, bytes, "Vary:",            &hc->vary))                    {}
-    else if (header_capture(buffer, bytes, "Expires:",         &hc->expires))                 {}
-    else if (header_append(buffer, bytes, "Content-Security-Policy:",
-                            hc->csp_out))                                                     {}
-    else if (header_capture(buffer, bytes, "X-Frame-Options:", hc->xframe_options_out))       {}
-    else if (header_capture(buffer, bytes, "X-Content-Type-Options:",
-                            hc->x_content_type_options_out))                                  {}
-    else if (header_capture(buffer, bytes, "Access-Control-Allow-Origin:",
-                            hc->cors_allow_origin_out))                                       {}
-    else if (header_capture(buffer, bytes, "Content-Disposition:",
-                            hc->content_disposition_out))                                     {}
-    else if (header_capture(buffer, bytes, "Content-Language:", hc->content_language_out))      {}
-    else if (header_capture(buffer, bytes, "Refresh:", hc->refresh_out))                       {}
-    else if (header_capture(buffer, bytes, "Location:", &hc->location))                        {}
-    else if (header_capture(buffer, bytes, "Set-Cookie:", NULL))
-        hc->set_cookie_seen = TRUE;
-
-    return bytes;
-}
-
-void
-ns_header_sink_feed(ns_header_ctx *ctx, const char *line, size_t len)
-{
-    if (line && len)
-        ns_header_cb((char *)line, 1, len, ctx);
 }
 
 static gboolean
@@ -2131,7 +1652,7 @@ ns_fetch_sync_hop(const char *url, const char *top_url, const char *method,
             resp->security = NS_SEC_PLAIN;
         }
     }
-    if (g_log_fetches)
+    if (ns_net_log_fetches_enabled())
         ns_net_conn_stat_record(resp->final_url, out.http_version,
                                 out.num_connects);
     if (transport_ok && request_ftp) {
@@ -2755,11 +2276,11 @@ ns_fetch_thread(GTask        *task,
     if (ctx->coalesce_key)
         ns_fetch_coalesce_deliver(ctx->coalesce_key, resp, err);
     if (!resp) {
-        if (g_log_fetches)
+        if (ns_net_log_fetches_enabled())
             ns_debug_log_emit(NS_DLOG_NET, "fetch", "failed %s: %s",
                               ctx->url, err ? err->message : "unknown error");
         g_task_return_error(task, err);
-    } else if (g_log_fetches) {
+    } else if (ns_net_log_fetches_enabled()) {
         if (resp->error)
             ns_debug_log_emit(NS_DLOG_NET, "fetch", "error %s: %s",
                               ctx->url, resp->error);
@@ -2986,84 +2507,4 @@ ns_net_fetch_finish(GAsyncResult *result, GError **error)
 {
     g_return_val_if_fail(g_task_is_valid(result, NULL), NULL);
     return g_task_propagate_pointer(G_TASK(result), error);
-}
-
-char *
-ns_multipart_boundary(void)
-{
-    guint32 r[4];
-    if (!ns_security_csprng_fill(r, sizeof r)) {
-        r[0] = g_random_int(); r[1] = g_random_int();
-        r[2] = g_random_int(); r[3] = g_random_int();
-    }
-    return g_strdup_printf("----SouthstarFormBoundary%08x%08x%08x%08x",
-                           r[0], r[1], r[2], r[3]);
-}
-
-void
-ns_multipart_quote_field(GString *out, const char *s)
-{
-    if (!out || !s) return;
-    for (const char *p = s; *p; p++) {
-        unsigned char c = (unsigned char)*p;
-        if      (c == '"')  g_string_append(out, "%22");
-        else if (c == '\r') g_string_append(out, "%0D");
-        else if (c == '\n') g_string_append(out, "%0A");
-        else                g_string_append_c(out, (char)c);
-    }
-}
-
-static char *g_form_submission_charset;
-
-void
-ns_form_set_submission_charset(const char *charset)
-{
-    g_free(g_form_submission_charset);
-    g_form_submission_charset = NULL;
-    if (!charset || !*charset) return;
-    char *first = g_strdup(charset);
-    g_strstrip(first);
-    for (char *p = first; *p; p++)
-        if (*p == ' ' || *p == ',' || *p == '\t') { *p = '\0'; break; }
-    if (*first && g_ascii_strcasecmp(first, "UTF-8") != 0 &&
-        g_ascii_strcasecmp(first, "UTF8") != 0 &&
-        g_ascii_strcasecmp(first, "UTF-16LE") != 0 &&
-        g_ascii_strcasecmp(first, "UTF-16BE") != 0)
-        g_form_submission_charset = first;
-    else
-        g_free(first);
-}
-
-void
-ns_form_urlencoded_append(GString *out, const char *s)
-{
-    if (!out || !s) return;
-    char *converted = NULL;
-    if (g_form_submission_charset) {
-        converted = g_convert(s, -1, g_form_submission_charset, "UTF-8",
-                              NULL, NULL, NULL);
-        if (converted) s = converted;
-    }
-    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
-        unsigned char c = *p;
-        if (g_ascii_isalnum(c) || c == '*' || c == '-' || c == '.' || c == '_')
-            g_string_append_c(out, (char)c);
-        else if (c == ' ')
-            g_string_append_c(out, '+');
-        else
-            g_string_append_printf(out, "%%%02X", c);
-    }
-    g_free(converted);
-}
-
-void
-ns_form_urlencoded_append_pair(GString *out, gboolean *first,
-                               const char *name, const char *value)
-{
-    if (!out || !first || !name) return;
-    if (!*first) g_string_append_c(out, '&');
-    *first = FALSE;
-    ns_form_urlencoded_append(out, name);
-    g_string_append_c(out, '=');
-    ns_form_urlencoded_append(out, value);
 }

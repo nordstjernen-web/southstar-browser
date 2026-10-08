@@ -2,8 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub mod forms;
 pub mod host;
 pub mod lexbor;
+pub mod netlog;
+pub mod proxy;
+pub mod sinks;
 pub mod storage;
 pub mod sys;
 pub mod url;
@@ -68,6 +72,8 @@ unsafe extern "C" {
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
+    fn g_byte_array_new() -> *mut GByteArray;
+    fn g_byte_array_unref(array: *mut GByteArray);
     fn ns_net_response_budget() -> u64;
     fn ns_net_request_blocking(
         url: *const c_char,
@@ -80,7 +86,6 @@ unsafe extern "C" {
         cancellable: *mut c_void,
         error: *mut *mut GError,
     ) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
     fn ns_html_decode_body_full(
         body: *const c_char,
         len: usize,
@@ -346,4 +351,56 @@ pub unsafe extern "C" fn ns_net_synthesize_view_source_response(
         unsafe { glib::g_error_free(err) };
     }
     1
+}
+
+fn text_fields(r: &mut NsResponse) -> [&mut *mut c_char; 14] {
+    [
+        &mut r.final_url,
+        &mut r.content_type,
+        &mut r.content_disposition,
+        &mut r.csp_header,
+        &mut r.xframe_options,
+        &mut r.x_content_type_options,
+        &mut r.cors_allow_origin,
+        &mut r.refresh,
+        &mut r.content_language,
+        &mut r.raw_headers,
+        &mut r.error,
+        &mut r.tls_warning,
+        &mut r.remote_ip,
+        &mut r.next_hop_protocol,
+    ]
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_response_free(resp: *mut NsResponse) {
+    let Some(r) = (unsafe { resp.as_mut() }) else {
+        return;
+    };
+    for field in text_fields(r) {
+        unsafe { glib::g_free((*field).cast()) };
+    }
+    if !r.body.is_null() {
+        unsafe { g_byte_array_unref(r.body) };
+    }
+    unsafe { glib::g_free(resp.cast()) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_response_copy(src: *const NsResponse) -> *mut NsResponse {
+    if src.is_null() {
+        return ptr::null_mut();
+    }
+    let copy = unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast::<NsResponse>();
+    unsafe { ptr::copy_nonoverlapping(src, copy, 1) };
+    let r = unsafe { &mut *copy };
+    for field in text_fields(r) {
+        *field = unsafe { glib::g_strdup(*field) };
+    }
+    let body = body_bytes(unsafe { (*src).body }).unwrap_or_default();
+    r.body = unsafe { g_byte_array_new() };
+    if !body.is_empty() {
+        ByteArraySink(r.body).append(body);
+    }
+    copy
 }

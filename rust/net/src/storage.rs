@@ -37,6 +37,10 @@ impl Slot {
         f(self.lock().as_ref())
     }
 
+    pub fn set(&self, value: Option<Vec<u8>>) {
+        *self.lock() = value.and_then(|v| CString::new(v).ok());
+    }
+
     pub fn take(&self) -> Option<Vec<u8>> {
         self.lock().take().map(CString::into_bytes)
     }

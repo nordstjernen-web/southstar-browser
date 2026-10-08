@@ -5,6 +5,7 @@
 
 #include <glib.h>
 #include <curl/curl.h>
+#include <stddef.h>
 
 G_BEGIN_DECLS
 
@@ -34,6 +35,12 @@ typedef struct ns_header_ctx {
     GString *raw;
     gboolean set_cookie_seen;
 } ns_header_ctx;
+
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_write_ctx) == 40);
+G_STATIC_ASSERT(offsetof(ns_header_ctx, set_cookie_seen) == 120 &&
+                sizeof(ns_header_ctx) == 128);
+#endif
 
 typedef struct ns_hop_req {
     const char        *url;

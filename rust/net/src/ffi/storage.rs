@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of cookies, HSTS and the network layer's storage paths: the net.h calls plus the paths and teardown the transport code in net.c uses.
+//! Southstar — the C ABI of cookies, HSTS and the network layer's storage paths: the net.h calls plus the paths the transport code in net.c uses and the teardown of the Rust side's network state.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -65,7 +65,9 @@ pub extern "C" fn ns_net_site_storage_clear() {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_net_storage_shutdown() {
+pub extern "C" fn ns_net_state_shutdown() {
+    crate::netlog::shutdown();
+    super::proxy::shutdown();
     storage::shutdown();
     hsts::shutdown();
 }
