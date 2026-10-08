@@ -9,6 +9,7 @@ pub use southstar_bookmarks;
 pub use southstar_bytecode_cache;
 pub use southstar_config;
 pub use southstar_csp;
+pub use southstar_css_prop_syntax;
 pub use southstar_css_syntax;
 pub use southstar_datetime;
 pub use southstar_debuglog;

@@ -62,6 +62,8 @@ Southstar Browser (unreleased):
   helpers included), Seatbelt on macOS, the Windows mitigation policies and
   elevation check, Subresource Integrity checks and download marking. The
   Landlock rules and seccomp filters it installs are the same as before.
+* @property syntax definitions are parsed, matched and computed in Rust,
+  directly over the Rust CSS tokenizer, with unchanged results.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

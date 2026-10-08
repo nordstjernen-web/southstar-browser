@@ -17,6 +17,7 @@ southstar-bookmarks = { path = "../bookmarks" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
+southstar-css-prop-syntax = { path = "../css-prop-syntax" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }

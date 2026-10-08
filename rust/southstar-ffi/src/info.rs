@@ -16,6 +16,7 @@ const PORTED: &[&str] = &[
     "bytecode_cache.c",
     "config.c",
     "csp.c",
+    "css_prop_syntax.c",
     "css_syntax.c",
     "datetime.c",
     "debuglog.c",

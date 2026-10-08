@@ -1,4 +1,4 @@
-/* Northstar — registered custom property <syntax> grammar and matching. */
+/* Northstar — registered custom property <syntax> grammar and matching, implemented in rust/css-prop-syntax. */
 
 #ifndef NS_CSS_PROP_SYNTAX_H
 #define NS_CSS_PROP_SYNTAX_H
