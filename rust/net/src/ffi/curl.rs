@@ -36,6 +36,7 @@ pub const OPT_COOKIEFILE: c_int = 10031;
 pub const OPT_CUSTOMREQUEST: c_int = 10036;
 pub const OPT_VERBOSE: c_int = 41;
 pub const OPT_NOPROGRESS: c_int = 43;
+pub const OPT_NOBODY: c_int = 44;
 pub const OPT_POST: c_int = 47;
 pub const OPT_FOLLOWLOCATION: c_int = 52;
 pub const OPT_XFERINFODATA: c_int = 10057;

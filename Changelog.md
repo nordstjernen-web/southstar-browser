@@ -223,6 +223,9 @@ Southstar Browser (unreleased):
   responses kept for the preloads a page announces, preconnects, blob:
   URLs and shutting the network down. Only the nghttp2 backend's own
   client is still C in the network layer.
+* HEAD requests from XMLHttpRequest and fetch() no longer hang until the
+  30-second timeout with the curl backend, and redirects of a HEAD request
+  are followed, as the nghttp2 backend already did.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -276,7 +276,9 @@ fn configure(
         easy.long(curl::OPT_POSTFIELDSIZE, 0);
     }
     let single_line = method.is_some_and(|m| !m.contains(&b'\r') && !m.contains(&b'\n'));
-    if !is_post && !is_get && single_line {
+    if method.is_some_and(|m| m.eq_ignore_ascii_case(b"HEAD")) {
+        easy.long(curl::OPT_NOBODY, 1);
+    } else if !is_post && !is_get && single_line {
         easy.text(curl::OPT_CUSTOMREQUEST, req.method);
     }
 
