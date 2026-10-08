@@ -1513,6 +1513,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-render",
 ]
 
 [[package]]
@@ -1573,6 +1574,7 @@ dependencies = [
  "southstar-netutil",
  "southstar-pdf",
  "southstar-print",
+ "southstar-render",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-safebrowsing",
@@ -1792,6 +1794,16 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
+]
+
+[[package]]
+name = "southstar-render"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]

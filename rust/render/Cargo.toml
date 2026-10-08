@@ -1,6 +1,6 @@
 [package]
-name = "southstar-engine"
-description = "The synchronous page pipeline shared by the drivers: fetches, style sheet collection, cascade and relayout, captures to PNG and PDF, print sheets and dumps"
+name = "southstar-render"
+description = "The style and layout pipeline of src/render.h: cascade, web fonts on demand, zoom, container-query passes and layout"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,7 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
-southstar-render = { path = "../render" }
+southstar-style = { path = "../style" }
 
 [lints]
 workspace = true

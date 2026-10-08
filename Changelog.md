@@ -226,6 +226,12 @@ Southstar Browser (unreleased):
 * HEAD requests from XMLHttpRequest and fetch() no longer hang until the
   30-second timeout with the curl backend, and redirects of a HEAD request
   are followed, as the nghttp2 backend already did.
+* The style-and-layout pipeline every relayout runs is Rust: computing
+  styles, loading only the web fonts a page uses (by font-family and
+  unicode-range, including generated content), the container-query passes
+  and container units, the width a viewport meta tag asks for, and the
+  @page rule and :hover and :active use it records. Pages lay out, render
+  and print as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

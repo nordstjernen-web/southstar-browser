@@ -41,7 +41,6 @@ southstar_engine_sources = files(
   'image_wuffs.c',
   'layout.c',
   'paint.c',
-  'render.c',
   'video.c',
   'video_decode.c',
 )

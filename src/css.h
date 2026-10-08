@@ -626,6 +626,11 @@ typedef struct ns_css_value {
     struct ns_css_value *next_layer;
 } ns_css_value;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_css_value) == 3080 &&
+                offsetof(ns_css_value, next_layer) == 3072);
+#endif
+
 int                 ns_css_font_stretch_rank(const ns_css_value *v);
 const ns_css_value *ns_css_value_layer(const ns_css_value *head, int index);
 int                 ns_css_value_layer_count(const ns_css_value *head);
@@ -926,6 +931,13 @@ typedef struct ns_css_stylesheet {
     struct ns_css_rule_index *index;
 } ns_css_stylesheet;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_css_font_face) == 32 &&
+                sizeof(ns_css_page_rule) == 72 &&
+                offsetof(ns_css_stylesheet, font_faces) == 32 &&
+                offsetof(ns_css_stylesheet, page_rule) == 56);
+#endif
+
 gboolean ns_css_stylesheet_has_container_rules(const ns_css_stylesheet *sh);
 gboolean ns_css_stylesheet_has_container_units(const ns_css_stylesheet *sh);
 gboolean ns_css_stylesheet_has_hover_rules(const ns_css_stylesheet *sh);
@@ -1024,6 +1036,12 @@ typedef struct ns_style {
     guint32 currentcolor_bits;
     struct ns_var_map *vars;
 } ns_style;
+
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(NS_CSS_PROP_COUNT == 242 && sizeof(ns_style) == 2056 &&
+                offsetof(ns_style, display) == 1936 &&
+                offsetof(ns_style, vars) == 2048);
+#endif
 
 gboolean ns_style_prop_from_currentcolor(const ns_style *s, int prop);
 

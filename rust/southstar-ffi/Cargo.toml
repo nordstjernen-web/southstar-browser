@@ -47,6 +47,7 @@ southstar-net = { path = "../net" }
 southstar-netutil = { path = "../netutil" }
 southstar-pdf = { path = "../pdf" }
 southstar-print = { path = "../print" }
+southstar-render = { path = "../render" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-safebrowsing = { path = "../safebrowsing" }

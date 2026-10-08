@@ -34,6 +34,25 @@ pub struct GHashTable {
 }
 
 #[repr(C)]
+pub struct GHashTableIter {
+    _dummy: [*mut c_void; 6],
+}
+
+impl GHashTableIter {
+    pub const fn new() -> GHashTableIter {
+        GHashTableIter {
+            _dummy: [ptr::null_mut(); 6],
+        }
+    }
+}
+
+impl Default for GHashTableIter {
+    fn default() -> GHashTableIter {
+        GHashTableIter::new()
+    }
+}
+
+#[repr(C)]
 pub struct GChecksum {
     _private: [u8; 0],
 }
@@ -124,6 +143,12 @@ unsafe extern "C" {
     pub fn g_hash_table_contains(table: *mut GHashTable, key: *const c_void) -> GBoolean;
     pub fn g_hash_table_remove_all(table: *mut GHashTable);
     pub fn g_hash_table_size(table: *mut GHashTable) -> c_uint;
+    pub fn g_hash_table_iter_init(iter: *mut GHashTableIter, table: *mut GHashTable);
+    pub fn g_hash_table_iter_next(
+        iter: *mut GHashTableIter,
+        key: *mut *mut c_void,
+        value: *mut *mut c_void,
+    ) -> GBoolean;
     pub fn g_hash_table_destroy(table: *mut GHashTable);
     pub fn g_hash_table_get_keys_as_array(
         table: *mut GHashTable,
@@ -169,6 +194,35 @@ impl core::ops::Deref for GStr {
 impl Drop for GStr {
     fn drop(&mut self) {
         unsafe { g_free(self.0.as_ptr().cast()) };
+    }
+}
+
+pub struct HashTableEntries {
+    iter: GHashTableIter,
+    live: bool,
+}
+
+impl Iterator for HashTableEntries {
+    type Item = (*mut c_void, *mut c_void);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.live {
+            return None;
+        }
+        let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
+        self.live = unsafe { g_hash_table_iter_next(&mut self.iter, &mut key, &mut value) } != 0;
+        self.live.then_some((key, value))
+    }
+}
+
+pub unsafe fn hash_table_entries(table: *mut GHashTable) -> HashTableEntries {
+    let mut iter = GHashTableIter::new();
+    if !table.is_null() {
+        unsafe { g_hash_table_iter_init(&mut iter, table) };
+    }
+    HashTableEntries {
+        iter,
+        live: !table.is_null(),
     }
 }
 

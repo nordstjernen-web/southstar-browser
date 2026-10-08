@@ -25,55 +25,7 @@ struct NsCssStylesheetHead {
     imports: *mut GArray,
 }
 
-#[repr(C)]
-pub struct RenderCtx {
-    pub doc: *mut NsNode,
-    pub sheets: *const *const c_void,
-    pub sheet_docs: *const *const NsNode,
-    pub n_sheets: c_uint,
-    pub viewport_width: f64,
-    pub viewport_height: f64,
-    pub zoom: f64,
-    pub images: *mut c_void,
-    pub base_url: *const c_char,
-    pub anim: *mut c_void,
-    pub js: *mut c_void,
-    pub focused_input: *const NsNode,
-    pub hover_node: *const NsNode,
-    pub caret_byte: usize,
-    pub sel_anchor_byte: usize,
-    pub resolve_url: *const c_void,
-    pub font_allowed: *const c_void,
-    pub cb_ud: *mut c_void,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<RenderCtx>() == 144
-        && core::mem::offset_of!(RenderCtx, viewport_width) == 32
-        && core::mem::offset_of!(RenderCtx, caret_byte) == 104
-);
-
-#[repr(C)]
-#[derive(Default)]
-pub struct RenderProfile {
-    pub css1_us: i64,
-    pub style1_us: i64,
-    pub layout1_us: i64,
-    pub container_us: i64,
-    pub css2_us: i64,
-    pub style2_us: i64,
-    pub layout2_us: i64,
-    pub containers: c_uint,
-    pub container_passes: c_uint,
-    pub container_pass: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<RenderProfile>() == 72
-        && core::mem::offset_of!(RenderProfile, container_pass) == 64
-);
+pub use southstar_render::{RenderCtx, RenderProfile};
 
 type FrameViewportCb = unsafe extern "C" fn(frame: *const NsNode, w: *mut f64, h: *mut f64);
 
@@ -117,12 +69,6 @@ unsafe extern "C" {
     ) -> *mut GHashTable;
     fn ns_css_stylesheet_free(sheet: *mut c_void);
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
-    fn ns_render_relayout(ctx: *const RenderCtx, out_layout: *mut *mut NsBox) -> *mut GHashTable;
-    fn ns_render_relayout_profile(
-        ctx: *const RenderCtx,
-        out_layout: *mut *mut NsBox,
-        profile: *mut RenderProfile,
-    ) -> *mut GHashTable;
     fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
     fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
     fn ns_box_free(b: *mut NsBox);
@@ -396,14 +342,14 @@ pub fn render_ctx(r: &Relayout, sheets: &SheetList, docs: &SheetList) -> RenderC
         hover_node: r.hover,
         caret_byte: r.caret_byte,
         sel_anchor_byte: r.sel_anchor_byte,
-        resolve_url: ptr::null(),
-        font_allowed: ptr::null(),
+        resolve_url: None,
+        font_allowed: None,
         cb_ud: ptr::null_mut(),
     }
 }
 
 pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> *mut GHashTable {
-    unsafe { ns_render_relayout(ctx, out_layout) }
+    unsafe { southstar_render::ns_render_relayout(ctx, out_layout) }
 }
 
 pub fn render_relayout_profiled(
@@ -413,7 +359,8 @@ pub fn render_relayout_profiled(
 ) -> *mut GHashTable {
     let mut prof = RenderProfile::default();
     let t0 = super::net::monotonic_us();
-    let styles = unsafe { ns_render_relayout_profile(ctx, out_layout, &mut prof) };
+    let styles =
+        unsafe { southstar_render::ns_render_relayout_profile(ctx, out_layout, &mut prof) };
     let total = super::net::monotonic_us() - t0;
     let nstyles = table_size(styles);
     unsafe {
