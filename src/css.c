@@ -771,10 +771,6 @@ static int split_ws_limit(const char *s, char *out[], int max);
 static int calc_split_args(const char *args, const char *body_end,
                            char *out[], int max);
 static const char *match_close_paren(const char *p, const char *end);
-static gboolean parse_color(const char *s, guint8 *r, guint8 *g, guint8 *b,
-                            guint8 *a);
-static gboolean parse_color_depth(const char *s, guint8 *r, guint8 *g,
-                                  guint8 *b, guint8 *a, int depth);
 
 static char *
 ascii_lower(const char *s, gsize len)
@@ -1336,977 +1332,7 @@ ns_css_font_weight_number(const ns_css_value *v, int fallback)
     return fallback;
 }
 
-static gboolean
-named_color(const char *name, guint8 *r, guint8 *g, guint8 *b)
-{
-    static const struct { const char *n; guint8 r, g, b; } table[] = {
-        { "aliceblue",       240, 248, 255 },
-        { "antiquewhite",    250, 235, 215 },
-        { "aqua",            0,   255, 255 },
-        { "aquamarine",      127, 255, 212 },
-        { "azure",           240, 255, 255 },
-        { "beige",           245, 245, 220 },
-        { "bisque",          255, 228, 196 },
-        { "black",           0,   0,   0   },
-        { "blanchedalmond",  255, 235, 205 },
-        { "blue",            0,   0,   255 },
-        { "blueviolet",      138, 43,  226 },
-        { "brown",           165, 42,  42  },
-        { "burlywood",       222, 184, 135 },
-        { "cadetblue",       95,  158, 160 },
-        { "chartreuse",      127, 255, 0   },
-        { "chocolate",       210, 105, 30  },
-        { "coral",           255, 127, 80  },
-        { "cornflowerblue",  100, 149, 237 },
-        { "cornsilk",        255, 248, 220 },
-        { "crimson",         220, 20,  60  },
-        { "cyan",            0,   255, 255 },
-        { "darkblue",        0,   0,   139 },
-        { "darkcyan",        0,   139, 139 },
-        { "darkgoldenrod",   184, 134, 11  },
-        { "darkgray",        169, 169, 169 },
-        { "darkgrey",        169, 169, 169 },
-        { "darkgreen",       0,   100, 0   },
-        { "darkkhaki",       189, 183, 107 },
-        { "darkmagenta",     139, 0,   139 },
-        { "darkolivegreen",  85,  107, 47  },
-        { "darkorange",      255, 140, 0   },
-        { "darkorchid",      153, 50,  204 },
-        { "darkred",         139, 0,   0   },
-        { "darksalmon",      233, 150, 122 },
-        { "darkseagreen",    143, 188, 143 },
-        { "darkslateblue",   72,  61,  139 },
-        { "darkslategray",   47,  79,  79  },
-        { "darkslategrey",   47,  79,  79  },
-        { "darkturquoise",   0,   206, 209 },
-        { "darkviolet",      148, 0,   211 },
-        { "deeppink",        255, 20,  147 },
-        { "deepskyblue",     0,   191, 255 },
-        { "dimgray",         105, 105, 105 },
-        { "dimgrey",         105, 105, 105 },
-        { "dodgerblue",      30,  144, 255 },
-        { "firebrick",       178, 34,  34  },
-        { "floralwhite",     255, 250, 240 },
-        { "forestgreen",     34,  139, 34  },
-        { "fuchsia",         255, 0,   255 },
-        { "gainsboro",       220, 220, 220 },
-        { "ghostwhite",      248, 248, 255 },
-        { "gold",            255, 215, 0   },
-        { "goldenrod",       218, 165, 32  },
-        { "gray",            128, 128, 128 },
-        { "grey",            128, 128, 128 },
-        { "green",           0,   128, 0   },
-        { "greenyellow",     173, 255, 47  },
-        { "honeydew",        240, 255, 240 },
-        { "hotpink",         255, 105, 180 },
-        { "indianred",       205, 92,  92  },
-        { "indigo",          75,  0,   130 },
-        { "ivory",           255, 255, 240 },
-        { "khaki",           240, 230, 140 },
-        { "lavender",        230, 230, 250 },
-        { "lavenderblush",   255, 240, 245 },
-        { "lawngreen",       124, 252, 0   },
-        { "lemonchiffon",    255, 250, 205 },
-        { "lightblue",       173, 216, 230 },
-        { "lightcoral",      240, 128, 128 },
-        { "lightcyan",       224, 255, 255 },
-        { "lightgoldenrodyellow", 250, 250, 210 },
-        { "lightgray",       211, 211, 211 },
-        { "lightgrey",       211, 211, 211 },
-        { "lightgreen",      144, 238, 144 },
-        { "lightpink",       255, 182, 193 },
-        { "lightsalmon",     255, 160, 122 },
-        { "lightseagreen",   32,  178, 170 },
-        { "lightskyblue",    135, 206, 250 },
-        { "lightslategray",  119, 136, 153 },
-        { "lightslategrey",  119, 136, 153 },
-        { "lightsteelblue",  176, 196, 222 },
-        { "lightyellow",     255, 255, 224 },
-        { "lime",            0,   255, 0   },
-        { "limegreen",       50,  205, 50  },
-        { "linen",           250, 240, 230 },
-        { "magenta",         255, 0,   255 },
-        { "maroon",          128, 0,   0   },
-        { "mediumaquamarine",102, 205, 170 },
-        { "mediumblue",      0,   0,   205 },
-        { "mediumorchid",    186, 85,  211 },
-        { "mediumpurple",    147, 112, 219 },
-        { "mediumseagreen",  60,  179, 113 },
-        { "mediumslateblue", 123, 104, 238 },
-        { "mediumspringgreen",0,  250, 154 },
-        { "mediumturquoise", 72,  209, 204 },
-        { "mediumvioletred", 199, 21,  133 },
-        { "midnightblue",    25,  25,  112 },
-        { "mintcream",       245, 255, 250 },
-        { "mistyrose",       255, 228, 225 },
-        { "moccasin",        255, 228, 181 },
-        { "navajowhite",     255, 222, 173 },
-        { "navy",            0,   0,   128 },
-        { "oldlace",         253, 245, 230 },
-        { "olive",           128, 128, 0   },
-        { "olivedrab",       107, 142, 35  },
-        { "orange",          255, 165, 0   },
-        { "orangered",       255, 69,  0   },
-        { "orchid",          218, 112, 214 },
-        { "palegoldenrod",   238, 232, 170 },
-        { "palegreen",       152, 251, 152 },
-        { "paleturquoise",   175, 238, 238 },
-        { "palevioletred",   219, 112, 147 },
-        { "papayawhip",      255, 239, 213 },
-        { "peachpuff",       255, 218, 185 },
-        { "peru",            205, 133, 63  },
-        { "pink",            255, 192, 203 },
-        { "plum",            221, 160, 221 },
-        { "powderblue",      176, 224, 230 },
-        { "purple",          128, 0,   128 },
-        { "rebeccapurple",   102, 51,  153 },
-        { "red",             255, 0,   0   },
-        { "rosybrown",       188, 143, 143 },
-        { "royalblue",       65,  105, 225 },
-        { "saddlebrown",     139, 69,  19  },
-        { "salmon",          250, 128, 114 },
-        { "sandybrown",      244, 164, 96  },
-        { "seagreen",        46,  139, 87  },
-        { "seashell",        255, 245, 238 },
-        { "sienna",          160, 82,  45  },
-        { "silver",          192, 192, 192 },
-        { "skyblue",         135, 206, 235 },
-        { "slateblue",       106, 90,  205 },
-        { "slategray",       112, 128, 144 },
-        { "slategrey",       112, 128, 144 },
-        { "snow",            255, 250, 250 },
-        { "springgreen",     0,   255, 127 },
-        { "steelblue",       70,  130, 180 },
-        { "tan",             210, 180, 140 },
-        { "teal",            0,   128, 128 },
-        { "thistle",         216, 191, 216 },
-        { "tomato",          255, 99,  71  },
-        { "turquoise",       64,  224, 208 },
-        { "violet",          238, 130, 238 },
-        { "wheat",           245, 222, 179 },
-        { "white",           255, 255, 255 },
-        { "whitesmoke",      245, 245, 245 },
-        { "yellow",          255, 255, 0   },
-        { "yellowgreen",     154, 205, 50  },
-        { "transparent",     0,   0,   0   },
-        { "accentcolor",     0,   120, 215 },
-        { "accentcolortext", 255, 255, 255 },
-        { "activetext",      255, 0,   0   },
-        { "buttonborder",    140, 140, 140 },
-        { "buttonface",      240, 240, 240 },
-        { "buttontext",      0,   0,   0   },
-        { "canvas",          255, 255, 255 },
-        { "canvastext",      0,   0,   0   },
-        { "field",           255, 255, 255 },
-        { "fieldtext",       0,   0,   0   },
-        { "graytext",        128, 128, 128 },
-        { "highlight",       51,  153, 255 },
-        { "highlighttext",   255, 255, 255 },
-        { "linktext",        0,   0,   238 },
-        { "mark",            255, 255, 0   },
-        { "marktext",        0,   0,   0   },
-        { "selecteditem",    51,  153, 255 },
-        { "selecteditemtext",255, 255, 255 },
-        { "visitedtext",     85,  26,  139 },
-        { "window",          255, 255, 255 },
-        { "windowtext",      0,   0,   0   },
-        { "activeborder",    140, 140, 140 },
-        { "activecaption",   255, 255, 255 },
-        { "appworkspace",    255, 255, 255 },
-        { "background",      255, 255, 255 },
-        { "buttonhighlight", 240, 240, 240 },
-        { "buttonshadow",    240, 240, 240 },
-        { "captiontext",     0,   0,   0   },
-        { "inactiveborder",  140, 140, 140 },
-        { "inactivecaption", 255, 255, 255 },
-        { "inactivecaptiontext", 128, 128, 128 },
-        { "infobackground",  255, 255, 255 },
-        { "infotext",        0,   0,   0   },
-        { "menu",            255, 255, 255 },
-        { "menutext",        0,   0,   0   },
-        { "scrollbar",       255, 255, 255 },
-        { "threeddarkshadow",140, 140, 140 },
-        { "threedface",      140, 140, 140 },
-        { "threedhighlight", 140, 140, 140 },
-        { "threedlightshadow",140, 140, 140 },
-        { "threedshadow",    140, 140, 140 },
-        { "windowframe",     140, 140, 140 },
-        { NULL, 0, 0, 0 },
-    };
-    for (int i = 0; table[i].n; i++) {
-        if (g_ascii_strcasecmp(table[i].n, name) == 0) {
-            *r = table[i].r; *g = table[i].g; *b = table[i].b;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static gboolean
-parse_rgb_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a)
-{
-    gboolean is_rgba = g_ascii_strncasecmp(s, "rgba(", 5) == 0;
-    gboolean is_rgb  = !is_rgba && g_ascii_strncasecmp(s, "rgb(", 4) == 0;
-    if (!is_rgb && !is_rgba) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    double values[4] = { 0, 0, 0, 1 };
-    gboolean is_percent[4] = { FALSE, FALSE, FALSE, FALSE };
-    int count = 0;
-    while (*p && *p != ')' && count < 4) {
-        while (*p == ' ' || *p == ',' || *p == '/') p++;
-        if (!*p || *p == ')') break;
-        if (g_ascii_strncasecmp(p, "none", 4) == 0 &&
-            !is_ident(p[4])) {
-            values[count] = count == 3 ? 1.0 : 0.0;
-            count++;
-            p += 4;
-            continue;
-        }
-        char *end = NULL;
-        double v = g_ascii_strtod(p, &end);
-        if (!end || end == p) return FALSE;
-        if (*end == '%') { is_percent[count] = TRUE; end++; }
-        values[count++] = v;
-        p = end;
-    }
-    if (count < 3) return FALSE;
-    double rgb_scaled[3];
-    for (int i = 0; i < 3; i++)
-        rgb_scaled[i] = is_percent[i] ? values[i] * 255.0 / 100.0 : values[i];
-    *r = (guint8)CLAMP((int)(rgb_scaled[0] + 0.5), 0, 255);
-    *g = (guint8)CLAMP((int)(rgb_scaled[1] + 0.5), 0, 255);
-    *b = (guint8)CLAMP((int)(rgb_scaled[2] + 0.5), 0, 255);
-    if (count == 4) {
-        double alpha = is_percent[3] ? values[3] / 100.0 : values[3];
-        *a = (guint8)CLAMP((int)(alpha * 255 + 0.5), 0, 255);
-    } else {
-        *a = 255;
-    }
-    return TRUE;
-}
-
-static double
-hsl_hue_to_rgb(double p, double q, double t)
-{
-    if (t < 0) t += 1.0;
-    if (t > 1) t -= 1.0;
-    if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
-    if (t < 0.5)     return q;
-    if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
-    return p;
-}
-
-static double
-css_angle_value_degrees(double v, char **endp)
-{
-    char *end = *endp;
-    if (g_ascii_strncasecmp(end, "deg", 3) == 0 && !is_ident(end[3])) {
-        *endp = end + 3;
-    } else if (g_ascii_strncasecmp(end, "turn", 4) == 0 &&
-               !is_ident(end[4])) {
-        v *= 360.0;
-        *endp = end + 4;
-    } else if (g_ascii_strncasecmp(end, "grad", 4) == 0 &&
-               !is_ident(end[4])) {
-        v *= 0.9;
-        *endp = end + 4;
-    } else if (g_ascii_strncasecmp(end, "rad", 3) == 0 &&
-               !is_ident(end[3])) {
-        v = v * 180.0 / G_PI;
-        *endp = end + 3;
-    }
-    return v;
-}
-
-static gboolean
-parse_hsl_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a)
-{
-    gboolean is_hsla = g_ascii_strncasecmp(s, "hsla(", 5) == 0;
-    gboolean is_hsl  = !is_hsla && g_ascii_strncasecmp(s, "hsl(", 4) == 0;
-    if (!is_hsl && !is_hsla) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    double values[4] = { 0, 0, 0, 1 };
-    gboolean alpha_pct = FALSE;
-    int count = 0;
-    while (*p && *p != ')' && count < 4) {
-        while (*p == ' ' || *p == ',' || *p == '/') p++;
-        if (!*p || *p == ')') break;
-        if (g_ascii_strncasecmp(p, "none", 4) == 0 &&
-            !is_ident(p[4])) {
-            values[count] = count == 3 ? 1.0 : 0.0;
-            count++;
-            p += 4;
-            continue;
-        }
-        char *end = NULL;
-        double v = g_ascii_strtod(p, &end);
-        if (!end || end == p) return FALSE;
-        if (count == 0) {
-            v = css_angle_value_degrees(v, &end);
-            if (is_ident(*end)) return FALSE;
-        } else if (count == 1 || count == 2) {
-            if (*end != '%') return FALSE;   /* saturation/lightness need % */
-            end++;
-        } else if (*end == '%') {
-            alpha_pct = TRUE;
-            end++;
-        }
-        values[count++] = v;
-        p = end;
-    }
-    if (count < 3) return FALSE;
-    double h = values[0] / 360.0;
-    h = isfinite(h) ? h - floor(h) : 0.0;
-    double sat = values[1] / 100.0;
-    if (sat < 0) sat = 0;
-    if (sat > 1) sat = 1;
-    double lig = values[2] / 100.0;
-    if (lig < 0) lig = 0;
-    if (lig > 1) lig = 1;
-    double rr, gg, bb;
-    if (sat == 0) {
-        rr = gg = bb = lig;
-    } else {
-        double q = lig < 0.5 ? lig * (1 + sat) : lig + sat - lig * sat;
-        double pp = 2 * lig - q;
-        rr = hsl_hue_to_rgb(pp, q, h + 1.0/3.0);
-        gg = hsl_hue_to_rgb(pp, q, h);
-        bb = hsl_hue_to_rgb(pp, q, h - 1.0/3.0);
-    }
-    *r = (guint8)CLAMP((int)(rr * 255 + 0.5), 0, 255);
-    *g = (guint8)CLAMP((int)(gg * 255 + 0.5), 0, 255);
-    *b = (guint8)CLAMP((int)(bb * 255 + 0.5), 0, 255);
-    if (count >= 4) {
-        double alpha = values[3];
-        if (alpha_pct) alpha /= 100.0;
-        *a = (guint8)CLAMP((int)(alpha * 255 + 0.5), 0, 255);
-    } else {
-        *a = 255;
-    }
-    return TRUE;
-}
-
-static gboolean
-parse_hwb_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a)
-{
-    if (g_ascii_strncasecmp(s, "hwb(", 4) != 0) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    double values[4] = { 0, 0, 0, 1 };
-    gboolean is_percent[4] = { FALSE, FALSE, FALSE, FALSE };
-    int count = 0;
-    while (*p && *p != ')' && count < 4) {
-        while (*p == ' ' || *p == ',' || *p == '/') p++;
-        if (!*p || *p == ')') break;
-        if (g_ascii_strncasecmp(p, "none", 4) == 0 &&
-            !is_ident(p[4])) {
-            values[count] = count == 3 ? 1.0 : 0.0;
-            count++;
-            p += 4;
-            continue;
-        }
-        char *end = NULL;
-        double v = g_ascii_strtod(p, &end);
-        if (!end || end == p) return FALSE;
-        if (count == 0) {
-            v = css_angle_value_degrees(v, &end);
-            if (is_ident(*end)) return FALSE;
-        } else if (*end == '%') {
-            is_percent[count] = TRUE;
-            end++;
-        } else if (is_ident(*end)) {
-            return FALSE;
-        }
-        values[count++] = v;
-        p = end;
-    }
-    if (count < 3) return FALSE;
-    double h = values[0] / 360.0;
-    h = isfinite(h) ? h - floor(h) : 0.0;
-    double w = (is_percent[1] ? values[1] : values[1]) / 100.0;
-    double bl = (is_percent[2] ? values[2] : values[2]) / 100.0;
-    w = CLAMP(w, 0.0, 1.0);
-    bl = CLAMP(bl, 0.0, 1.0);
-    double rr = hsl_hue_to_rgb(0, 1, h + 1.0/3.0);
-    double gg = hsl_hue_to_rgb(0, 1, h);
-    double bb = hsl_hue_to_rgb(0, 1, h - 1.0/3.0);
-    double sum = w + bl;
-    if (sum >= 1.0) {
-        rr = gg = bb = sum > 0 ? w / sum : 0;
-    } else {
-        double scale = 1.0 - w - bl;
-        rr = rr * scale + w;
-        gg = gg * scale + w;
-        bb = bb * scale + w;
-    }
-    *r = (guint8)CLAMP((int)(rr * 255 + 0.5), 0, 255);
-    *g = (guint8)CLAMP((int)(gg * 255 + 0.5), 0, 255);
-    *b = (guint8)CLAMP((int)(bb * 255 + 0.5), 0, 255);
-    if (count >= 4) {
-        double alpha = is_percent[3] ? values[3] / 100.0 : values[3];
-        *a = (guint8)CLAMP((int)(alpha * 255 + 0.5), 0, 255);
-    } else {
-        *a = 255;
-    }
-    return TRUE;
-}
-
-static double
-srgb_encode_linear(double c)
-{
-    if (c <= 0.0031308) return 12.92 * c;
-    return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
-}
-
-static void
-oklab_to_srgb(double l, double a, double b, guint8 *r, guint8 *g,
-              guint8 *bl)
-{
-    double lp = l + 0.3963377774 * a + 0.2158037573 * b;
-    double mp = l - 0.1055613458 * a - 0.0638541728 * b;
-    double sp = l - 0.0894841775 * a - 1.2914855480 * b;
-    double ll = lp * lp * lp;
-    double mm = mp * mp * mp;
-    double ss = sp * sp * sp;
-    double rr =  4.0767416621 * ll - 3.3077115913 * mm + 0.2309699292 * ss;
-    double gg = -1.2684380046 * ll + 2.6097574011 * mm - 0.3413193965 * ss;
-    double bb = -0.0041960863 * ll - 0.7034186147 * mm + 1.7076147010 * ss;
-    rr = srgb_encode_linear(rr);
-    gg = srgb_encode_linear(gg);
-    bb = srgb_encode_linear(bb);
-    *r = (guint8)CLAMP((int)(rr * 255 + 0.5), 0, 255);
-    *g = (guint8)CLAMP((int)(gg * 255 + 0.5), 0, 255);
-    *bl = (guint8)CLAMP((int)(bb * 255 + 0.5), 0, 255);
-}
-
-static double
-srgb_decode_gamma(double c)
-{
-    if (c <= 0.04045) return c / 12.92;
-    return pow((c + 0.055) / 1.055, 2.4);
-}
-
-static void
-srgb_to_oklab(guint8 r, guint8 g, guint8 b, double *ol, double *oa, double *ob)
-{
-    double rl = srgb_decode_gamma(r / 255.0);
-    double gl = srgb_decode_gamma(g / 255.0);
-    double bl = srgb_decode_gamma(b / 255.0);
-    double l = 0.4122214708 * rl + 0.5363325363 * gl + 0.0514459929 * bl;
-    double m = 0.2119034982 * rl + 0.6806995451 * gl + 0.1073969566 * bl;
-    double s = 0.0883024619 * rl + 0.2817188376 * gl + 0.6299787005 * bl;
-    double lp = cbrt(l), mp = cbrt(m), sp = cbrt(s);
-    *ol = 0.2104542553 * lp + 0.7936177850 * mp - 0.0040720468 * sp;
-    *oa = 1.9779984951 * lp - 2.4285922050 * mp + 0.4505937099 * sp;
-    *ob = 0.0259040371 * lp + 0.7827717662 * mp - 0.8086757660 * sp;
-}
-
-static double
-lab_inv_f(double t)
-{
-    double t3 = t * t * t;
-    if (t3 > 0.008856451679) return t3;
-    return (116.0 * t - 16.0) / 903.2962963;
-}
-
-static void
-lab_to_srgb(double l, double a, double b, guint8 *r, guint8 *g, guint8 *bl)
-{
-    double fy = (l + 16.0) / 116.0;
-    double fx = fy + a / 500.0;
-    double fz = fy - b / 200.0;
-    double x50 = 0.96422 * lab_inv_f(fx);
-    double y50 = lab_inv_f(fy);
-    double z50 = 0.82521 * lab_inv_f(fz);
-    double x =  0.9555766 * x50 - 0.0230393 * y50 + 0.0631636 * z50;
-    double y = -0.0282895 * x50 + 1.0099416 * y50 + 0.0210077 * z50;
-    double z =  0.0122982 * x50 - 0.0204830 * y50 + 1.3299098 * z50;
-    double rr =  3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
-    double gg = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z;
-    double bb =  0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
-    rr = srgb_encode_linear(rr);
-    gg = srgb_encode_linear(gg);
-    bb = srgb_encode_linear(bb);
-    *r = (guint8)CLAMP((int)(rr * 255 + 0.5), 0, 255);
-    *g = (guint8)CLAMP((int)(gg * 255 + 0.5), 0, 255);
-    *bl = (guint8)CLAMP((int)(bb * 255 + 0.5), 0, 255);
-}
-
-static gboolean
-parse_lab_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *alpha)
-{
-    gboolean is_lch = g_ascii_strncasecmp(s, "lch(", 4) == 0;
-    gboolean is_lab = !is_lch && g_ascii_strncasecmp(s, "lab(", 4) == 0;
-    if (!is_lch && !is_lab) return FALSE;
-    if (strchr(s, ',')) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    double values[4] = { 0, 0, 0, 1 };
-    int count = 0;
-    while (*p && *p != ')' && count < 4) {
-        while (*p == ' ' || *p == '/') p++;
-        if (!*p || *p == ')') break;
-        if (g_ascii_strncasecmp(p, "none", 4) == 0 &&
-            !is_ident(p[4])) {
-            values[count] = count == 3 ? 1.0 : 0.0;
-            count++;
-            p += 4;
-            continue;
-        }
-        char *end = NULL;
-        double v = g_ascii_strtod(p, &end);
-        if (!end || end == p) return FALSE;
-        if (count == 0) {
-            if (*end == '%') end++;
-        } else if (count == 1) {
-            if (*end == '%') {
-                v *= 1.25;
-                end++;
-            }
-            if (is_lch && v < 0) v = 0;
-        } else if (count == 2) {
-            if (is_lch) {
-                v = css_angle_value_degrees(v, &end);
-                if (is_ident(*end)) return FALSE;
-            } else if (*end == '%') {
-                v *= 1.25;
-                end++;
-            }
-        } else if (count == 3) {
-            if (*end == '%') {
-                v /= 100.0;
-                end++;
-            }
-        }
-        values[count++] = v;
-        p = end;
-    }
-    if (count < 3) return FALSE;
-    double l = CLAMP(values[0], 0.0, 100.0);
-    double aa = values[1];
-    double bb = values[2];
-    if (is_lch) {
-        double rad = values[2] * G_PI / 180.0;
-        aa = values[1] * cos(rad);
-        bb = values[1] * sin(rad);
-    }
-    lab_to_srgb(l, aa, bb, r, g, b);
-    double av = count >= 4 ? values[3] : 1.0;
-    *alpha = (guint8)CLAMP((int)(CLAMP(av, 0.0, 1.0) * 255 + 0.5), 0, 255);
-    return TRUE;
-}
-
-static gboolean
-parse_oklab_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *alpha)
-{
-    gboolean is_lch = g_ascii_strncasecmp(s, "oklch(", 6) == 0;
-    gboolean is_lab = !is_lch && g_ascii_strncasecmp(s, "oklab(", 6) == 0;
-    if (!is_lch && !is_lab) return FALSE;
-    if (strchr(s, ',')) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    double values[4] = { 0, 0, 0, 1 };
-    int count = 0;
-    while (*p && *p != ')' && count < 4) {
-        while (*p == ' ' || *p == '/') p++;
-        if (!*p || *p == ')') break;
-        if (g_ascii_strncasecmp(p, "none", 4) == 0 &&
-            !is_ident(p[4])) {
-            values[count] = count == 3 ? 1.0 : 0.0;
-            count++;
-            p += 4;
-            continue;
-        }
-        char *end = NULL;
-        double v = g_ascii_strtod(p, &end);
-        if (!end || end == p) return FALSE;
-        if (count == 0) {
-            if (*end == '%') {
-                v /= 100.0;
-                end++;
-            }
-        } else if (count == 1) {
-            if (*end == '%') {
-                v *= 0.004;
-                end++;
-            }
-            if (is_lch && v < 0) v = 0;
-        } else if (count == 2) {
-            if (is_lch) {
-                v = css_angle_value_degrees(v, &end);
-                if (is_ident(*end)) return FALSE;
-            } else if (*end == '%') {
-                v *= 0.004;
-                end++;
-            }
-        } else if (count == 3) {
-            if (*end == '%') {
-                v /= 100.0;
-                end++;
-            }
-        }
-        values[count++] = v;
-        p = end;
-    }
-    if (count < 3) return FALSE;
-    double l = CLAMP(values[0], 0.0, 1.0);
-    double aa = values[1];
-    double bb = values[2];
-    if (is_lch) {
-        double rad = values[2] * G_PI / 180.0;
-        aa = values[1] * cos(rad);
-        bb = values[1] * sin(rad);
-    }
-    oklab_to_srgb(l, aa, bb, r, g, b);
-    double av = count >= 4 ? values[3] : 1.0;
-    *alpha = (guint8)CLAMP((int)(CLAMP(av, 0.0, 1.0) * 255 + 0.5), 0, 255);
-    return TRUE;
-}
-
-static gboolean
-color_mix_percent(const char *s, double *out)
-{
-    char *end = NULL;
-    double v = g_ascii_strtod(s, &end);
-    if (!end || end == s) return FALSE;
-    while (*end && is_ws(*end)) end++;
-    if (*end != '%') return FALSE;
-    end++;
-    while (*end && is_ws(*end)) end++;
-    if (*end) return FALSE;
-    *out = CLAMP(v, 0.0, 100.0);
-    return TRUE;
-}
-
-static gboolean
-parse_color_mix_stop(const char *text, guint8 rgba[4], double *pct,
-                     gboolean *has_pct, int depth)
-{
-    *has_pct = FALSE;
-    char *tokens[3] = {0};
-    int n = split_ws_limit(text, tokens, G_N_ELEMENTS(tokens));
-    gboolean ok = FALSE;
-    if (n == 1 || n == 2) {
-        if (n == 2) {
-            if (!color_mix_percent(tokens[1], pct)) goto done;
-            *has_pct = TRUE;
-        }
-        ok = parse_color_depth(tokens[0], &rgba[0], &rgba[1], &rgba[2],
-                               &rgba[3], depth + 1);
-    }
-done:
-    for (int i = 0; i < n; i++) g_free(tokens[i]);
-    return ok;
-}
-
-static gboolean
-parse_color_mix_func(const char *s, guint8 *r, guint8 *g, guint8 *b,
-                     guint8 *a, int depth)
-{
-    if (g_ascii_strncasecmp(s, "color-mix(", 10) != 0) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    const char *end = s + strlen(s);
-    const char *body_end = match_close_paren(p, end);
-    if (!body_end) return FALSE;
-    char *parts[3] = {0};
-    int n = calc_split_args(p, body_end, parts, G_N_ELEMENTS(parts));
-    if (n != 3) {
-        for (int i = 0; i < n; i++) g_free(parts[i]);
-        return FALSE;
-    }
-    char *space = parts[0];
-    while (*space && is_ws(*space)) space++;
-    gboolean ok = g_ascii_strncasecmp(space, "in", 2) == 0 &&
-                  is_ws(space[2]);
-    gboolean in_oklab = FALSE;
-    if (ok) {
-        space += 2;
-        while (*space && is_ws(*space)) space++;
-        gsize sl = 0;
-        while (space[sl] && !is_ws(space[sl])) sl++;
-        in_oklab = (sl == 5 &&
-                    (g_ascii_strncasecmp(space, "oklab", 5) == 0 ||
-                     g_ascii_strncasecmp(space, "oklch", 5) == 0));
-        ok = in_oklab ||
-             (sl == 4 && g_ascii_strncasecmp(space, "srgb", 4) == 0) ||
-             (sl == 11 && g_ascii_strncasecmp(space, "srgb-linear", 11) == 0) ||
-             (sl == 3 && (g_ascii_strncasecmp(space, "hsl", 3) == 0 ||
-                          g_ascii_strncasecmp(space, "hwb", 3) == 0 ||
-                          g_ascii_strncasecmp(space, "lab", 3) == 0 ||
-                          g_ascii_strncasecmp(space, "lch", 3) == 0 ||
-                          g_ascii_strncasecmp(space, "xyz", 3) == 0));
-    }
-    guint8 c1[4] = {0}, c2[4] = {0};
-    double p1 = 50, p2 = 50;
-    gboolean h1 = FALSE, h2 = FALSE;
-    if (ok)
-        ok = parse_color_mix_stop(parts[1], c1, &p1, &h1, depth) &&
-             parse_color_mix_stop(parts[2], c2, &p2, &h2, depth);
-    if (ok) {
-        if (h1 && !h2) p2 = 100.0 - p1;
-        else if (!h1 && h2) p1 = 100.0 - p2;
-        else if (!h1 && !h2) { p1 = 50.0; p2 = 50.0; }
-        double sum = p1 + p2;
-        if (sum <= 0) ok = FALSE;
-        else {
-            double w1 = p1 / sum;
-            double w2 = p2 / sum;
-            double a1 = c1[3] / 255.0;
-            double a2 = c2[3] / 255.0;
-            double ao = a1 * w1 + a2 * w2;
-            if (in_oklab) {
-                double l1, aa1, bb1, l2, aa2, bb2;
-                srgb_to_oklab(c1[0], c1[1], c1[2], &l1, &aa1, &bb1);
-                srgb_to_oklab(c2[0], c2[1], c2[2], &l2, &aa2, &bb2);
-                double lo = 0, ao2 = 0, bo = 0;
-                if (ao > 0) {
-                    lo  = (l1 * a1 * w1 + l2 * a2 * w2) / ao;
-                    ao2 = (aa1 * a1 * w1 + aa2 * a2 * w2) / ao;
-                    bo  = (bb1 * a1 * w1 + bb2 * a2 * w2) / ao;
-                }
-                oklab_to_srgb(lo, ao2, bo, r, g, b);
-            } else {
-                double rr = 0, gg = 0, bb = 0;
-                if (ao > 0) {
-                    rr = (c1[0] * a1 * w1 + c2[0] * a2 * w2) / ao;
-                    gg = (c1[1] * a1 * w1 + c2[1] * a2 * w2) / ao;
-                    bb = (c1[2] * a1 * w1 + c2[2] * a2 * w2) / ao;
-                }
-                *r = (guint8)CLAMP((int)(rr + 0.5), 0, 255);
-                *g = (guint8)CLAMP((int)(gg + 0.5), 0, 255);
-                *b = (guint8)CLAMP((int)(bb + 0.5), 0, 255);
-            }
-            *a = (guint8)CLAMP((int)(ao * 255 + 0.5), 0, 255);
-        }
-    }
-    for (int i = 0; i < n; i++) g_free(parts[i]);
-    return ok;
-}
-
-static gboolean
-parse_light_dark_func(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a,
-                      int depth)
-{
-    if (g_ascii_strncasecmp(s, "light-dark(", 11) != 0) return FALSE;
-    const char *p = strchr(s, '(');
-    if (!p) return FALSE;
-    p++;
-    const char *end = s + strlen(s);
-    const char *body_end = match_close_paren(p, end);
-    if (!body_end) return FALSE;
-    char *parts[2] = {0};
-    int n = calc_split_args(p, body_end, parts, G_N_ELEMENTS(parts));
-    if (n != 2) {
-        for (int i = 0; i < n; i++) g_free(parts[i]);
-        return FALSE;
-    }
-    const char *choice = (ns_css_get_color_scheme() == NS_CSS_COLOR_SCHEME_DARK)
-        ? parts[1] : parts[0];
-    gboolean ok = parse_color_depth(choice, r, g, b, a, depth + 1);
-    g_free(parts[0]);
-    g_free(parts[1]);
-    return ok;
-}
-
-typedef struct {
-    double v;
-    char unit[8];
-} ns_color_calc_term;
-
 #define NS_CALC_MAX_DEPTH 64
-
-static gboolean color_calc_expr(const char **pp, const char *end,
-                                ns_color_calc_term *out, int depth);
-
-static gboolean
-color_calc_factor(const char **pp, const char *end, ns_color_calc_term *out,
-                  int depth)
-{
-    const char *p = *pp;
-    if (depth > NS_CALC_MAX_DEPTH) return FALSE;
-    while (p < end && is_ws(*p)) p++;
-    if (p < end && *p == '(') {
-        p++;
-        if (!color_calc_expr(&p, end, out, depth + 1)) return FALSE;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || *p != ')') return FALSE;
-        *pp = p + 1;
-        return TRUE;
-    }
-    if (p + 5 <= end && g_ascii_strncasecmp(p, "calc(", 5) == 0) {
-        p += 5;
-        if (!color_calc_expr(&p, end, out, depth + 1)) return FALSE;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || *p != ')') return FALSE;
-        *pp = p + 1;
-        return TRUE;
-    }
-    char *num_end = NULL;
-    double v = g_ascii_strtod(p, &num_end);
-    if (!num_end || num_end == p || num_end > end) return FALSE;
-    out->v = v;
-    int ui = 0;
-    p = num_end;
-    while (p < end && (is_ident(*p) || *p == '%') &&
-           ui < (int)sizeof out->unit - 1)
-        out->unit[ui++] = *p++;
-    out->unit[ui] = '\0';
-    *pp = p;
-    return TRUE;
-}
-
-static gboolean
-color_calc_term_mul(const char **pp, const char *end, ns_color_calc_term *out,
-                    int depth)
-{
-    if (!color_calc_factor(pp, end, out, depth)) return FALSE;
-    for (;;) {
-        const char *p = *pp;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || (*p != '*' && *p != '/')) return TRUE;
-        char op = *p++;
-        ns_color_calc_term rhs;
-        if (!color_calc_factor(&p, end, &rhs, depth)) return FALSE;
-        if (op == '*') {
-            if (out->unit[0] && rhs.unit[0]) return FALSE;
-            out->v *= rhs.v;
-            if (rhs.unit[0]) g_strlcpy(out->unit, rhs.unit, sizeof out->unit);
-        } else {
-            if (rhs.unit[0] || rhs.v == 0) return FALSE;
-            out->v /= rhs.v;
-        }
-        *pp = p;
-    }
-}
-
-static gboolean
-color_calc_expr(const char **pp, const char *end, ns_color_calc_term *out,
-                int depth)
-{
-    if (!color_calc_term_mul(pp, end, out, depth)) return FALSE;
-    for (;;) {
-        const char *p = *pp;
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end || (*p != '+' && *p != '-')) return TRUE;
-        char op = *p++;
-        ns_color_calc_term rhs;
-        if (!color_calc_term_mul(&p, end, &rhs, depth)) return FALSE;
-        if (g_ascii_strcasecmp(out->unit, rhs.unit) != 0) {
-            if (!out->unit[0] && out->v == 0)
-                g_strlcpy(out->unit, rhs.unit, sizeof out->unit);
-            else if (!(rhs.unit[0] == '\0' && rhs.v == 0))
-                return FALSE;
-        }
-        out->v = op == '+' ? out->v + rhs.v : out->v - rhs.v;
-        *pp = p;
-    }
-}
-
-static char *
-color_resolve_calcs(const char *s)
-{
-    const char *s_end = s + strlen(s);
-    GString *out = g_string_new(NULL);
-    const char *p = s;
-    while (*p) {
-        if (g_ascii_strncasecmp(p, "calc(", 5) == 0) {
-            const char *body = p + 5;
-            const char *close = match_close_paren(body, s_end);
-            if (!close) { g_string_free(out, TRUE); return NULL; }
-            const char *q = body;
-            ns_color_calc_term t = { 0, "" };
-            if (!color_calc_expr(&q, close, &t, 0)) {
-                g_string_free(out, TRUE);
-                return NULL;
-            }
-            g_string_append_printf(out, "%.6g%s", t.v, t.unit);
-            p = close + 1;
-        } else {
-            g_string_append_c(out, *p++);
-        }
-    }
-    return g_string_free(out, FALSE);
-}
-
-static gboolean
-parse_color_depth(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a,
-                  int depth)
-{
-    *a = 255;
-    if (!s || !*s) return FALSE;
-    if (depth > 32) return FALSE;
-    if (strstr(s, "calc(")) {
-        char *flat = color_resolve_calcs(s);
-        if (flat) {
-            gboolean ok = parse_color_depth(flat, r, g, b, a, depth + 1);
-            g_free(flat);
-            return ok;
-        }
-        return FALSE;
-    }
-    if (g_ascii_strcasecmp(s, "transparent") == 0) {
-        *r = 0; *g = 0; *b = 0; *a = 0;
-        return TRUE;
-    }
-    if (parse_rgb_func(s, r, g, b, a)) return TRUE;
-    if (parse_hsl_func(s, r, g, b, a)) return TRUE;
-    if (parse_hwb_func(s, r, g, b, a)) return TRUE;
-    if (parse_lab_func(s, r, g, b, a)) return TRUE;
-    if (parse_oklab_func(s, r, g, b, a)) return TRUE;
-    if (parse_color_mix_func(s, r, g, b, a, depth)) return TRUE;
-    if (parse_light_dark_func(s, r, g, b, a, depth)) return TRUE;
-    if (s[0] == '#') {
-        gsize n = strlen(s + 1);
-        if (n == 3 || n == 4) {
-            int rr = g_ascii_xdigit_value(s[1]);
-            int gg = g_ascii_xdigit_value(s[2]);
-            int bb = g_ascii_xdigit_value(s[3]);
-            if (rr < 0 || gg < 0 || bb < 0) return FALSE;
-            *r = (guint8)(rr * 17); *g = (guint8)(gg * 17); *b = (guint8)(bb * 17);
-            if (n == 4) {
-                int aa = g_ascii_xdigit_value(s[4]);
-                if (aa < 0) return FALSE;
-                *a = (guint8)(aa * 17);
-            }
-            return TRUE;
-        }
-        if (n == 6 || n == 8) {
-            int v[8];
-            for (gsize i = 0; i < n; i++) {
-                v[i] = g_ascii_xdigit_value(s[1 + i]);
-                if (v[i] < 0) return FALSE;
-            }
-            *r = (guint8)(v[0] * 16 + v[1]);
-            *g = (guint8)(v[2] * 16 + v[3]);
-            *b = (guint8)(v[4] * 16 + v[5]);
-            if (n == 8) *a = (guint8)(v[6] * 16 + v[7]);
-            return TRUE;
-        }
-        return FALSE;
-    }
-    return named_color(s, r, g, b);
-}
-
-static gboolean
-parse_color(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a)
-{
-    return parse_color_depth(s, r, g, b, a, 0);
-}
-
-gboolean
-ns_css_parse_color(const char *s, guint8 *r, guint8 *g, guint8 *b, guint8 *a)
-{
-    return parse_color(s, r, g, b, a);
-}
 
 static void
 ns_attr_pred_clear(gpointer p)
@@ -5922,7 +4948,7 @@ shadow_specified_one(const char *text, gboolean is_text, GString *out)
             if (n_lengths) lengths_closed = TRUE;
             continue;
         }
-        if (parse_color(tok, &r, &g, &b, &a) ||
+        if (ns_css_parse_color(tok, &r, &g, &b, &a) ||
             g_ascii_strcasecmp(tok, "currentcolor") == 0) {
             if (color) {
                 ok = FALSE;
@@ -6005,7 +5031,7 @@ parse_one_shadow(const char *text, ns_css_shadow *out)
         guint8 r, g, b, a;
         double num;
         ns_css_unit u;
-        if (parse_color(tok, &r, &g, &b, &a)) {
+        if (ns_css_parse_color(tok, &r, &g, &b, &a)) {
             cr = r; cg = g; cb = b; ca = a; has_color = TRUE;
         } else if (n_lens < 4 && parse_length(tok, &num, &u)) {
             if (u == NS_CSS_UNIT_EM) { ems[n_lens] = num; num = 0; }
@@ -6160,7 +5186,7 @@ gradient_stop_color_specified(const char *tok)
         g_ascii_strncasecmp(tok, "rgba(", 5) == 0 ||
         g_ascii_strncasecmp(tok, "hsl(", 4) == 0 ||
         g_ascii_strncasecmp(tok, "hsla(", 5) == 0;
-    if (legacy_syntax && parse_color(tok, &r, &g, &b, &a)) {
+    if (legacy_syntax && ns_css_parse_color(tok, &r, &g, &b, &a)) {
         ns_css_value cv = { .kind = NS_CSS_V_COLOR };
         cv.u.color.r = r;
         cv.u.color.g = g;
@@ -6568,7 +5594,7 @@ gradient_stop_parse(ns_gradient_parse *gp, const char *seg, gboolean *is_hint)
     *is_hint = FALSE;
     if (n < 1) goto done;
     guint8 r, g, b, a;
-    if (parse_color(tok[0], &r, &g, &b, &a)) {
+    if (ns_css_parse_color(tok[0], &r, &g, &b, &a)) {
         if (n > 3) goto done;
         ns_css_gradient_stop first = { .r = r, .g = g, .b = b, .a = a };
         ns_css_gradient_stop second = first;
@@ -10637,7 +9663,7 @@ ns_css_specified_canonical(const char *prop, const char *value)
     if (prop && value && prop_name_is_color(prop)) {
         guint8 r, g, b, a;
         if (text_is_ident(value)) {
-            if (parse_color(value, &r, &g, &b, &a) ||
+            if (ns_css_parse_color(value, &r, &g, &b, &a) ||
                 g_ascii_strcasecmp(value, "currentcolor") == 0)
                 return g_ascii_strdown(value, -1);
         } else if ((value[0] == '#' ||
@@ -10646,7 +9672,7 @@ ns_css_specified_canonical(const char *prop, const char *value)
                     g_ascii_strncasecmp(value, "hwb(", 4) == 0) &&
                    !strstr(value, "var(") && !strstr(value, "calc(") &&
                    !strstr(value, "none") &&
-                   parse_color(value, &r, &g, &b, &a)) {
+                   ns_css_parse_color(value, &r, &g, &b, &a)) {
             GString *out = g_string_new(NULL);
             ns_css_append_color(out, r, g, b, a);
             return g_string_free(out, FALSE);
@@ -12906,7 +11932,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     case NS_CSS_STOP_COLOR:
     case NS_CSS_ACCENT_COLOR: {
         guint8 r, g, b, a;
-        if (parse_color(t, &r, &g, &b, &a)) {
+        if (ns_css_parse_color(t, &r, &g, &b, &a)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_COLOR;
             v->u.color.r = r; v->u.color.g = g; v->u.color.b = b; v->u.color.a = a;
@@ -12929,7 +11955,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     case NS_CSS_FILL:
     case NS_CSS_STROKE: {
         guint8 r, g, b, a;
-        if (parse_color(t, &r, &g, &b, &a)) {
+        if (ns_css_parse_color(t, &r, &g, &b, &a)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_COLOR;
             v->u.color.r = r; v->u.color.g = g; v->u.color.b = b; v->u.color.a = a;
@@ -15479,7 +14505,7 @@ bg_layer_parse(const char *text, gboolean final_layer, bg_layer_text *out,
             g_free(joined);
             g_free(lower);
             if (!clip_only) { ok = FALSE; break; }
-        } else if (parse_color(tok, &r, &g, &b, &a) ||
+        } else if (ns_css_parse_color(tok, &r, &g, &b, &a) ||
                    g_ascii_strcasecmp(tok, "currentcolor") == 0) {
             if (!final_layer || *color_out) { ok = FALSE; break; }
             *color_out = g_strdup(tok);
@@ -16119,7 +15145,7 @@ border_shorthand_valid(const char *vtext, ns_css_prop style_prop)
         guint8 r, g, b, a;
         double num;
         ns_css_unit unit;
-        if (parse_color(tok, &r, &g, &b, &a) || is_color_keyword(tok)) {
+        if (ns_css_parse_color(tok, &r, &g, &b, &a) || is_color_keyword(tok)) {
             ok = !saw_color;
             saw_color = TRUE;
         } else if (g_ascii_strcasecmp(tok, "thin") == 0 ||
@@ -16348,7 +15374,7 @@ parse_declaration_block(const char **pp, const char *end,
             for (int i = 0; i < n; i++) {
                 guint8 r, g, b, a;
                 double num; ns_css_unit u;
-                if (parse_color(tokens[i], &r, &g, &b, &a) ||
+                if (ns_css_parse_color(tokens[i], &r, &g, &b, &a) ||
                     is_color_keyword(tokens[i])) {
                     saw_color = TRUE;
                     if (is_border_side) {
@@ -16457,7 +15483,7 @@ parse_declaration_block(const char **pp, const char *end,
                 guint8 r, g, b, a;
                 double num; ns_css_unit u;
                 ns_css_prop p1, p2;
-                if (parse_color(tokens[i], &r, &g, &b, &a) ||
+                if (ns_css_parse_color(tokens[i], &r, &g, &b, &a) ||
                     is_color_keyword(tokens[i])) {
                     p1 = c1; p2 = c2;
                 } else if (parse_length(tokens[i], &num, &u)) {
@@ -16935,7 +15961,7 @@ parse_declaration_block(const char **pp, const char *end,
             for (int i = 0; i < n; i++) {
                 guint8 r, g, b, a;
                 double num; ns_css_unit u;
-                if (parse_color(tokens[i], &r, &g, &b, &a) ||
+                if (ns_css_parse_color(tokens[i], &r, &g, &b, &a) ||
                     is_color_keyword(tokens[i])) {
                     ns_css_value *v = parse_value_for(p_c, tokens[i]);
                     if (v) {
@@ -17018,7 +16044,7 @@ parse_declaration_block(const char **pp, const char *end,
                         .value = v, .important = important
                     };
                     g_array_append_val(decls_out, d);
-                } else if (parse_color(tk, &cr, &cg, &cb, &ca)) {
+                } else if (ns_css_parse_color(tk, &cr, &cg, &cb, &ca)) {
                     ns_css_value *v = g_new0(ns_css_value, 1);
                     v->kind = NS_CSS_V_COLOR;
                     v->u.color.r = cr; v->u.color.g = cg;
@@ -20615,12 +19641,12 @@ parse_rules_until(const char **pp, const char *end,
                                     ns_css_value_free(tv);
                                 }
                             } else if (g_ascii_strcasecmp(prop, "color") == 0) {
-                                if (parse_color(val, &col[0], &col[1],
+                                if (ns_css_parse_color(val, &col[0], &col[1],
                                                 &col[2], &col[3]))
                                     has_col = TRUE;
                             } else if (g_ascii_strcasecmp(prop, "background-color") == 0 ||
                                        g_ascii_strcasecmp(prop, "background") == 0) {
-                                if (parse_color(val, &bgcol[0], &bgcol[1],
+                                if (ns_css_parse_color(val, &bgcol[0], &bgcol[1],
                                                 &bgcol[2], &bgcol[3]))
                                     has_bgcol = TRUE;
                             }
@@ -28370,7 +27396,7 @@ attr_is_color(const char *v, guint8 *r_out, guint8 *g_out, guint8 *b_out, guint8
         end--;
     if (end == v) return FALSE;
     char *stripped = g_strndup(v, (gsize)(end - v));
-    gboolean ok = parse_color(stripped, r_out, g_out, b_out, a_out);
+    gboolean ok = ns_css_parse_color(stripped, r_out, g_out, b_out, a_out);
     if (!ok) {
         *a_out = 255;
         ok = parse_legacy_color(stripped, r_out, g_out, b_out);

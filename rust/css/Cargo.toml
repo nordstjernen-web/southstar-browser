@@ -1,0 +1,14 @@
+[package]
+name = "southstar-css"
+description = "css.c ported by section: the CSS colour parser, with the scanning helpers it shares with the rest of the style engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+
+[lints]
+workspace = true

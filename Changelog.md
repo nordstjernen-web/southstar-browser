@@ -239,6 +239,12 @@ Southstar Browser (unreleased):
   the Web Animations hooks behind getAnimations(), currentTime, pause,
   play, finish, cancel and Element.animate(), and writing animated values
   into computed styles. Animations look and time as before.
+* The first section of css.c is Rust: the colour parser behind every CSS
+  colour value, canvas fillStyle and SVG paint (hex, named and system
+  colours, rgb(), hsl(), hwb(), lab(), lch(), oklab(), oklch(), color-mix(),
+  light-dark() and calc() inside them). Colours parse as before, except that
+  a channel too large for an integer (rgb(1e20 0 0), rgb(calc(infinity) 0 0))
+  now clamps to 255 as specified instead of coming out as 0.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

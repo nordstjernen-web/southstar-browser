@@ -269,6 +269,19 @@ pub fn ascii_strtod_prefix(text: &[u8]) -> (f64, usize) {
     (value, consumed.min(text.len()))
 }
 
+pub fn ascii_strtod_at(text: &CStr, pos: usize) -> (f64, usize) {
+    let pos = pos.min(text.to_bytes().len());
+    let start = unsafe { text.as_ptr().add(pos) };
+    let mut end: *mut c_char = ptr::null_mut();
+    let value = unsafe { g_ascii_strtod(start, &mut end) };
+    let consumed = if end.is_null() {
+        0
+    } else {
+        (end.cast_const() as usize).saturating_sub(start as usize)
+    };
+    (value, pos + consumed.min(text.to_bytes().len() - pos))
+}
+
 pub unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
 }

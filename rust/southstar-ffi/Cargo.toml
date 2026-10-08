@@ -20,6 +20,7 @@ southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-camera = { path = "../camera" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
+southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-css-prop-syntax = { path = "../css-prop-syntax" }
 southstar-css-syntax = { path = "../css-syntax" }
