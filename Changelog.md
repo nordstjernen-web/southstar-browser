@@ -133,6 +133,9 @@ Southstar Browser (unreleased):
   handle cache and quota, object stores, indexes, key generators and records
   read and write the same databases, and databases written by earlier builds
   open unchanged.
+* Printing's pagination is Rust: the page setup and @page rules, forced
+  and avoided page breaks, keeping lines of text whole across sheets, and
+  painting each sheet, with the same sheets as before.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

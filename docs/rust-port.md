@@ -903,3 +903,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `html_lexbor.c` | 852 | `rust/html-parser` (lexbor through its exported `_noi` functions and mirrored node structs) | 6 (DOM and parsing) |
 | `dom.c` | 3,028 | `rust/dom` (ported in five sections; the node and attribute memory stays GLib's and the document indexes stay GLib tables, so the C that reads `ns_node` keeps working) | 6 (DOM and parsing) |
 | `idb.c` | 1,219 | `rust/idb` (SQLite through `rust/sqlite`, values in QuickJS's object serialization as before) | 5 |
+| `print.c` | 218 | `rust/print` (the box tree through `rust/layout`, a `#[repr(C)]` mirror of `ns_box` with borrowed box handles) | 6 (layout) |

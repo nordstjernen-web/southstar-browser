@@ -37,6 +37,7 @@ pub use southstar_mathml;
 pub use southstar_mic;
 pub use southstar_netutil;
 pub use southstar_pdf;
+pub use southstar_print;
 pub use southstar_renderer_client;
 pub use southstar_renderer_host;
 pub use southstar_safebrowsing;

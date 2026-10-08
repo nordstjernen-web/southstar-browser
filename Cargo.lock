@@ -1549,6 +1549,7 @@ dependencies = [
  "southstar-mic",
  "southstar-netutil",
  "southstar-pdf",
+ "southstar-print",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-safebrowsing",
@@ -1702,6 +1703,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-layout"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
 name = "southstar-mat4"
 version = "1.0.30-dev"
 
@@ -1730,6 +1738,14 @@ name = "southstar-pdf"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-print"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-layout",
 ]
 
 [[package]]

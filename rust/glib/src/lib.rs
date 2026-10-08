@@ -23,6 +23,12 @@ pub struct GPtrArray {
 }
 
 #[repr(C)]
+pub struct GArray {
+    pub data: *mut c_char,
+    pub len: c_uint,
+}
+
+#[repr(C)]
 pub struct GHashTable {
     _private: [u8; 0],
 }
@@ -76,6 +82,13 @@ unsafe extern "C" {
         items_written: *mut c_long,
         error: *mut *mut GError,
     ) -> *mut c_char;
+    pub fn g_array_new(
+        zero_terminated: GBoolean,
+        clear: GBoolean,
+        element_size: c_uint,
+    ) -> *mut GArray;
+    pub fn g_array_append_vals(array: *mut GArray, data: *const c_void, len: c_uint)
+    -> *mut GArray;
     pub fn g_ptr_array_new_with_free_func(free_func: GDestroyNotify) -> *mut GPtrArray;
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     pub fn g_ptr_array_unref(array: *mut GPtrArray);
