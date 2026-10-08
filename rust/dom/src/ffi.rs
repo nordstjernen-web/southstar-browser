@@ -6,6 +6,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
+use southstar_glib::GHashTable;
+
 const NODE_DOCUMENT: c_uint = 0;
 const NODE_DOCTYPE: c_uint = 1;
 const NODE_ELEMENT: c_uint = 2;
@@ -44,15 +46,15 @@ pub struct NsNode {
     parent: *const NsNode,
     first_child: *const NsNode,
     last_child: *const NsNode,
-    _prev_sibling: *const NsNode,
+    prev_sibling: *const NsNode,
     next_sibling: *const NsNode,
     _js_wrapper: *mut c_void,
     _js_invalidate: *mut c_void,
     _backing: *mut c_void,
     _backing_free: *mut c_void,
-    _id_index: *mut c_void,
-    _class_index: *mut c_void,
-    _tag_index: *mut c_void,
+    id_index: *mut GHashTable,
+    class_index: *mut GHashTable,
+    tag_index: *mut GHashTable,
     _class_set: *mut c_void,
     _attr_bloom: u64,
     _attr_gen: u32,
@@ -63,22 +65,22 @@ pub struct NsNode {
 }
 
 mod controls;
+mod index;
 mod select;
 mod serialize;
+mod tables;
 mod tree;
+
+pub use tables::{BucketTable, IdTable, NodeArray, NodeSet};
 
 unsafe extern "C" {
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
-    fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
     fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_node_remove(child: *mut NsNode);
     fn ns_node_free(node: *mut NsNode);
-    fn ns_doc_id_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
-    fn ns_doc_class_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
-    fn ns_doc_tag_index_subtree_removed(doc: *mut NsNode, root: *mut NsNode);
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -146,6 +148,10 @@ impl<'a> Node<'a> {
 
     pub fn first_child(self) -> Option<Self> {
         Self::link(self.get().first_child)
+    }
+
+    pub fn prev_sibling(self) -> Option<Self> {
+        Self::link(self.get().prev_sibling)
     }
 
     pub fn next_sibling(self) -> Option<Self> {
@@ -257,10 +263,6 @@ pub fn remove_attr(node: Node, name: &CStr) {
     unsafe { ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
 }
 
-pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_node_find_by_id(root.as_ptr(), id.as_ptr())) }
-}
-
 pub fn detach(node: Node) {
     unsafe { ns_node_remove(node.as_mut_ptr()) };
 }
@@ -273,13 +275,5 @@ pub fn append_text(parent: Node, text: &CStr) {
     unsafe {
         let child = ns_node_new_text(southstar_glib::g_strdup(text.as_ptr()));
         ns_node_append_child(parent.as_mut_ptr(), child);
-    }
-}
-
-pub fn index_subtree_removed(doc: Node, root: Node) {
-    unsafe {
-        ns_doc_id_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
-        ns_doc_class_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
-        ns_doc_tag_index_subtree_removed(doc.as_mut_ptr(), root.as_mut_ptr());
     }
 }

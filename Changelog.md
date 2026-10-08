@@ -119,6 +119,11 @@ Southstar Browser (unreleased):
   form owners (including the form attribute and shadow trees), form reset,
   disabled fieldsets and optgroups, inert subtrees and the active modal
   dialog are Rust, with the same results.
+* The document's id, class and tag indexes are Rust: getElementById,
+  getElementsByClassName and getElementsByTagName, the first element of a
+  tag, fragment targets and document order return the same nodes in the same
+  order, and the indexes stay the same GLib tables the rest of the engine
+  reads.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and

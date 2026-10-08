@@ -7,7 +7,7 @@ use core::ffi::{CStr, c_int, c_long};
 use southstar_datetime::{MAX_YEAR, civil_from_days, floormod};
 
 use crate::ffi::{self, Node};
-use crate::{MAX_DEPTH, ancestors, ancestors_and_self, children, tree};
+use crate::{MAX_DEPTH, ancestors, ancestors_and_self, children, index, tree};
 
 const DAY_MS: f64 = 86_400_000.0;
 const WEEK_MS: f64 = 604_800_000.0;
@@ -745,7 +745,9 @@ pub fn set_editable_value(node: Node, value: &CStr) {
             child = c.next_sibling();
             ffi::detach(c);
             if doc != c {
-                ffi::index_subtree_removed(doc, c);
+                index::id_subtree_removed(doc, c);
+                index::class_subtree_removed(doc, c);
+                index::tag_subtree_removed(doc, c);
             }
             ffi::free(c);
         }
@@ -822,7 +824,7 @@ pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
         let tree_root = ancestors_and_self(control)
             .find(|n| n.parent().is_none() || is_shadow_root(*n))
             .unwrap_or(control);
-        return ffi::find_by_id(tree_root, form_id).filter(|owner| named(*owner, b"form"));
+        return index::find_by_id(tree_root, form_id).filter(|owner| named(*owner, b"form"));
     }
     ancestors(control)
         .take(MAX_DEPTH as usize)

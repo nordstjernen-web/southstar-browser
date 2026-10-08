@@ -5,6 +5,7 @@
 pub mod controls;
 mod ffi;
 pub mod image_map;
+pub mod index;
 pub mod select;
 pub mod serialize;
 pub mod tree;
