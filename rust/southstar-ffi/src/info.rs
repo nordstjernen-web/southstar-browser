@@ -24,6 +24,7 @@ const PORTED: &[&str] = &[
     "js_date.c",
     "safebrowsing.c",
     "spellcheck.c",
+    "threaddump.c",
     "webcrypto.c",
     #[cfg(feature = "woff2")]
     "woff2.c",

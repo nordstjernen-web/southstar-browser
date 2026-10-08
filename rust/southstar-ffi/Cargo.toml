@@ -26,6 +26,7 @@ southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-spellcheck = { path = "../spellcheck" }
+southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-woff2 = { path = "../woff2", optional = true }
 

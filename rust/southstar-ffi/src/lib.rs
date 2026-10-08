@@ -18,6 +18,7 @@ pub use southstar_i18n;
 pub use southstar_js_temporal;
 pub use southstar_safebrowsing;
 pub use southstar_spellcheck;
+pub use southstar_threaddump;
 pub use southstar_webcrypto;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;

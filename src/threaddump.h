@@ -1,4 +1,4 @@
-/* Southstar — per-process thread dump to stderr, incl. a SIGQUIT trigger. */
+/* Southstar — per-process thread dump to stderr, incl. a SIGQUIT trigger, implemented in rust/threaddump. */
 
 #ifndef NS_THREADDUMP_H
 #define NS_THREADDUMP_H

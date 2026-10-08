@@ -11,7 +11,6 @@ southstar_gtk_sources = files(
   '../rproc_http.c',
   '../rproc_inproc.c',
   '../ipc_http.c',
-  '../threaddump.c',
 )
 
 southstar_gtk_deps = southstar_deps + [gtk4_dep]

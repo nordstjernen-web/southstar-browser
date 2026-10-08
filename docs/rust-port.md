@@ -837,4 +837,5 @@ files will show whether WebIDL generation pays for itself.
 | `config.c` | 566 | `rust/config` | 2 |
 | `spellcheck.c` | 132 | `rust/spellcheck` | 2 |
 | `webcrypto.c` | 1,248 | `rust/webcrypto` | 2 |
+| `threaddump.c` | 237 | `rust/threaddump` | 2 |
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |

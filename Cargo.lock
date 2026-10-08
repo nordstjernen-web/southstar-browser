@@ -1482,6 +1482,7 @@ dependencies = [
  "southstar-js-temporal",
  "southstar-safebrowsing",
  "southstar-spellcheck",
+ "southstar-threaddump",
  "southstar-webcrypto",
  "southstar-woff2",
 ]
@@ -1543,6 +1544,10 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
 ]
+
+[[package]]
+name = "southstar-threaddump"
+version = "1.0.30-dev"
 
 [[package]]
 name = "southstar-webcrypto"
