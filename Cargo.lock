@@ -1519,6 +1519,7 @@ dependencies = [
  "southstar-spellcheck",
  "southstar-texture",
  "southstar-threaddump",
+ "southstar-watchdog",
  "southstar-webcrypto",
  "southstar-websocket",
  "southstar-woff2",
@@ -1671,6 +1672,13 @@ dependencies = [
 [[package]]
 name = "southstar-threaddump"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-watchdog"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+]
 
 [[package]]
 name = "southstar-webcrypto"

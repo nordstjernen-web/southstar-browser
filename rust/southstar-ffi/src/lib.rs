@@ -33,6 +33,7 @@ pub use southstar_sandbox;
 pub use southstar_spellcheck;
 pub use southstar_texture;
 pub use southstar_threaddump;
+pub use southstar_watchdog;
 pub use southstar_webcrypto;
 pub use southstar_websocket;
 #[cfg(feature = "woff2")]

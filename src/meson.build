@@ -86,11 +86,10 @@ if quickjs_original
 endif
 
 # GTK-free helpers used by the desktop executable but not the engine UI:
-# the headless render driver and the crash watchdog. Kept in src/ as common
-# code; the GTK frontend itself lives in src/gtk/.
+# the headless render driver. Kept in src/ as common code; the GTK frontend
+# itself lives in src/gtk/.
 southstar_app_sources = files(
   'headless.c',
-  'watchdog.c',
 )
 
 if have_avif

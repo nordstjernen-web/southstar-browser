@@ -854,3 +854,4 @@ files will show whether WebIDL generation pays for itself.
 | `css_prop_syntax.c` | 1,295 | `rust/css-prop-syntax` | 6 (style) |
 | `security.c` | 1,107 | `rust/sandbox` (and `rust/helper-ffi` for the media helpers) | 1 |
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |
+| `watchdog.c` | 583 | `rust/watchdog` | 4 |

@@ -40,6 +40,7 @@ const PORTED: &[&str] = &[
     "spellcheck.c",
     "texture.c",
     "threaddump.c",
+    "watchdog.c",
     "ws.c",
     "webcrypto.c",
     #[cfg(feature = "woff2")]

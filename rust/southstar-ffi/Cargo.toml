@@ -42,6 +42,7 @@ southstar-spellcheck = { path = "../spellcheck" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-texture = { path = "../texture" }
+southstar-watchdog = { path = "../watchdog" }
 southstar-websocket = { path = "../websocket" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
