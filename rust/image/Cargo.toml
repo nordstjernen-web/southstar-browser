@@ -1,0 +1,18 @@
+[package]
+name = "southstar-image"
+description = "The image decode chain and the per-page image cache: fetching, synchronous and threaded decoding, animation and the memory budget"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-glib = { path = "../glib" }
+
+[features]
+avif = []
+
+[lints]
+workspace = true

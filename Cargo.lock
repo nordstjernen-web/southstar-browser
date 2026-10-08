@@ -1535,6 +1535,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-http-cache",
  "southstar-i18n",
+ "southstar-image",
  "southstar-image-decoders",
  "southstar-ipc",
  "southstar-js-intl",
@@ -1622,6 +1623,14 @@ dependencies = [
 name = "southstar-i18n"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-glib",
+]
+
+[[package]]
+name = "southstar-image"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
  "southstar-glib",
 ]
 

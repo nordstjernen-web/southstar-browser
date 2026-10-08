@@ -899,3 +899,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `font.c` | 597 | `rust/font` (WOFF2 through `rust/woff2` directly) | 6 (paint and text) |
 | `webaudio.c` | 351 | `rust/webaudio` | 7 (JavaScript bindings) |
 | `mathml.c` | 560 | `rust/mathml` (DOM through `rust/dom`) | 6 (layout) |
+| `image.c` | 909 | `rust/image` (`ns_image` stays a `#[repr(C)]` struct the C reads and writes) | 8 |

@@ -48,6 +48,9 @@ if have_pangoft2
   southstar_rust_features += ['pangoft2']
   southstar_rust_link_deps += [libpangoft2]
 endif
+if have_avif
+  southstar_rust_features += ['avif']
+endif
 if have_poppler
   southstar_rust_features += ['poppler']
   southstar_rust_link_deps += [libpoppler]

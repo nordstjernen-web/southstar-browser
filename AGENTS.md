@@ -181,11 +181,11 @@ PNG/APNG, GIF, BMP, and JPEG bytes are decoded through
 [Wuffs](https://github.com/google/wuffs), a memory-safe
 transpiled-to-C image-decoder library. The single-file release is
 vendored at `subprojects/wuffs/wuffs-v0.4.c` and built as a static
-subproject. `src/image.c::ns_image_decode_bytes` runs the decoders
-in order: ICO (`src/image_ico.c`) → Wuffs (PNG/APNG, GIF, BMP, JPEG)
-→ WebP via libwebp (`src/image_webp.c`) → AVIF via libavif when built with it
-(`src/image_avif.c`, optional) → GDK-Pixbuf fallback (TIFF and other
-loader-backed formats). SVG renders in-engine (`src/svg.c`).
+subproject. `ns_image_decode_bytes` (`rust/image`) runs the decoders
+in order: ICO (`rust/image-decoders`) → Wuffs (PNG/APNG, GIF, BMP, JPEG)
+→ WebP via libwebp (`rust/image-decoders`) → AVIF via libavif when built with it
+(`src/image_avif.c`, optional) → SVG in-engine (`src/svg.c`). Nothing
+follows, so an unsupported format fails to decode.
 
 ### URL parsing: lexbor URL module
 

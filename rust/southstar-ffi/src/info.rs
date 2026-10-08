@@ -31,6 +31,7 @@ const PORTED: &[&str] = &[
     "history.c",
     "html.c",
     "i18n.c",
+    "image.c",
     "image_ico.c",
     "image_webp.c",
     "ipc_http.c",

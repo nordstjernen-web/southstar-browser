@@ -262,9 +262,9 @@ PNG/APNG, GIF, BMP, and JPEG bytes are decoded through
 [Wuffs](https://github.com/google/wuffs), a memory-safe
 transpiled-to-C image-decoder library. The single-file release is
 vendored at `subprojects/wuffs/wuffs-v0.4.c` and built as a static
-subproject. `src/image.c::ns_image_decode_bytes` is the whole chain:
-ICO (`src/image_ico.c`), then `ns_image_decode_wuffs`, then WebP
-(`src/image_webp.c`), then AVIF when built, then SVG in-engine
+subproject. `ns_image_decode_bytes` (`rust/image`) is the whole chain:
+ICO (`rust/image-decoders`), then `ns_image_decode_wuffs`, then WebP
+(`rust/image-decoders`), then AVIF when built, then SVG in-engine
 (`src/svg.c`). Nothing follows — gdk-pixbuf no longer decodes page
 images, so an unsupported format simply fails to decode rather than
 reaching a loader plugin installed on the user's machine.
