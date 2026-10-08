@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 southstar-about-style = { path = "../about-style" }
+southstar-anim = { path = "../anim" }
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }

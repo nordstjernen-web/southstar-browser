@@ -6,7 +6,7 @@ mod ffi;
 
 pub use ffi::{
     Display, NsCssValue, PROP_COUNT, Prop, StyleRef, StyleTable, Value, ValueRef, display_of,
-    font_family_for_pango, parse_color, styles_equal, values_equal,
+    font_family_for_pango, parse_color, retain, styles_equal, value_slot, values_equal,
 };
 
 pub const UNIT_PERCENT: u32 = 3;

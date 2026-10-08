@@ -935,6 +935,7 @@ typedef struct ns_css_stylesheet {
 G_STATIC_ASSERT(sizeof(ns_css_font_face) == 32 &&
                 sizeof(ns_css_page_rule) == 72 &&
                 offsetof(ns_css_stylesheet, font_faces) == 32 &&
+                offsetof(ns_css_stylesheet, keyframes) == 40 &&
                 offsetof(ns_css_stylesheet, page_rule) == 56);
 #endif
 

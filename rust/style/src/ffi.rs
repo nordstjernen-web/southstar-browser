@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::sync::OnceLock;
@@ -309,6 +309,10 @@ impl<'a> StyleRef<'a> {
         self.fields().display
     }
 
+    pub fn vars_ptr(self) -> *const c_void {
+        self.fields().vars.cast()
+    }
+
     pub fn before(self) -> Option<StyleRef<'a>> {
         unsafe { StyleRef::from_ptr(self.fields().before) }
     }
@@ -344,6 +348,19 @@ impl StyleTable {
         }
         let style = unsafe { g_hash_table_lookup(self.0, node.as_ptr().cast()) };
         unsafe { StyleRef::from_ptr(style.cast()) }
+    }
+}
+
+pub unsafe fn value_slot(style: *mut Style, index: usize) -> Option<*mut *mut NsCssValue> {
+    if style.is_null() || index >= PROP_COUNT {
+        return None;
+    }
+    Some(unsafe { core::ptr::addr_of_mut!((*style.cast::<NsStyle>()).values[index]) }.cast())
+}
+
+pub unsafe fn retain(style: *mut Style) {
+    if let Some(fields) = unsafe { style.cast::<NsStyle>().as_mut() } {
+        fields._ref += 1;
     }
 }
 

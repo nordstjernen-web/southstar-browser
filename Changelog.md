@@ -232,6 +232,13 @@ Southstar Browser (unreleased):
   and container units, the width a viewport meta tag asks for, and the
   @page rule and :hover and :active use it records. Pages lay out, render
   and print as before.
+* CSS transitions and @keyframes animations are Rust: starting, reversing
+  and cancelling transitions (with transition: all, discrete properties and
+  allow-discrete), sampling keyframes with their own easing, fill modes,
+  directions and iteration counts, the animation and transition events,
+  the Web Animations hooks behind getAnimations(), currentTime, pause,
+  play, finish, cancel and Element.animate(), and writing animated values
+  into computed styles. Animations look and time as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -1418,6 +1418,16 @@ name = "southstar-about-style"
 version = "1.0.30-dev"
 
 [[package]]
+name = "southstar-anim"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
 name = "southstar-bookmarks"
 version = "1.0.30-dev"
 dependencies = [
@@ -1537,6 +1547,7 @@ name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-about-style",
+ "southstar-anim",
  "southstar-bookmarks",
  "southstar-browser",
  "southstar-bytecode-cache",
