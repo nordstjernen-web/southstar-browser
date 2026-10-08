@@ -825,6 +825,13 @@ BigInt conversions, Range and Type errors) and an entry point that wraps a C
 registration table read close to the C and were enough here; the next binding
 files will show whether WebIDL generation pays for itself.
 
+The WebExtensions host (`ext.c`, now `rust/extensions`) is the second user of
+the layer. It needed JSON parsing, indexed property reads, ToBoolean, number
+and boolean checks and a string's raw bytes, which both backends now provide;
+manifests and rule files are parsed by a private QuickJS runtime with the C's
+1 MiB stack budget, so the same JSON is accepted and the same values are read
+from it.
+
 ### Ported
 
 | Module | Lines | Crate | Phase |
@@ -865,3 +872,4 @@ files will show whether WebIDL generation pays for itself.
 | `security.c` | 1,107 | `rust/sandbox` (and `rust/helper-ffi` for the media helpers) | 1 |
 | `js_date.c` | 1,531 | `rust/js-temporal` | 2 (JavaScript pilot) |
 | `watchdog.c` | 583 | `rust/watchdog` | 4 |
+| `ext.c` | 1,265 | `rust/extensions` | 8 (WebExtensions) |

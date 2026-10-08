@@ -130,6 +130,14 @@ unsafe extern "C" {
     fn JS_NewObject(ctx: *mut JSContext) -> JSValue;
     fn JS_GetGlobalObject(ctx: *mut JSContext) -> JSValue;
     fn JS_GetPropertyStr(ctx: *mut JSContext, this_obj: JSValue, prop: *const c_char) -> JSValue;
+    fn JS_GetPropertyUint32(ctx: *mut JSContext, this_obj: JSValue, idx: u32) -> JSValue;
+    fn JS_ParseJSON(
+        ctx: *mut JSContext,
+        buf: *const c_char,
+        buf_len: usize,
+        filename: *const c_char,
+    ) -> JSValue;
+    fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> c_int;
     fn JS_SetPropertyStr(
         ctx: *mut JSContext,
         this_obj: JSValue,
@@ -348,6 +356,14 @@ impl Value {
     pub fn is_string(&self) -> bool {
         self.raw.tag == TAG_STRING
     }
+
+    pub fn is_number(&self) -> bool {
+        self.raw.tag == TAG_INT || self.raw.tag == TAG_FLOAT64
+    }
+
+    pub fn is_bool(&self) -> bool {
+        self.raw.tag == TAG_BOOL
+    }
 }
 
 impl Clone for Value {
@@ -470,6 +486,10 @@ impl Engine {
             let main = JS_NewContext(rt);
             Engine { rt, main }
         }
+    }
+
+    pub fn set_max_stack_size(&mut self, bytes: usize) {
+        unsafe { JS_SetMaxStackSize(self.rt, bytes) };
     }
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
@@ -618,6 +638,22 @@ impl Scope<'_> {
         })
     }
 
+    pub fn string_from_bytes(&mut self, bytes: &[u8]) -> Value {
+        Value::own(self.ctx, unsafe {
+            JS_NewStringLen(self.ctx, bytes.as_ptr().cast(), bytes.len())
+        })
+    }
+
+    pub fn parse_json(&mut self, text: &[u8], name: &str) -> Result<Value, Value> {
+        let mut input = Vec::with_capacity(text.len() + 1);
+        input.extend_from_slice(text);
+        input.push(0);
+        let name = c_text(name);
+        let raw =
+            unsafe { JS_ParseJSON(self.ctx, input.as_ptr().cast(), text.len(), name.as_ptr()) };
+        self.take(raw)
+    }
+
     pub fn bigint64(&mut self, number: i64) -> Value {
         Value::own(self.ctx, unsafe { JS_NewBigInt64(self.ctx, number) })
     }
@@ -658,6 +694,11 @@ impl Scope<'_> {
     pub fn get(&mut self, object: &Value, key: &str) -> Result<Value, Value> {
         let key = c_text(key);
         let raw = unsafe { JS_GetPropertyStr(self.ctx, object.raw, key.as_ptr()) };
+        self.take(raw)
+    }
+
+    pub fn get_index(&mut self, object: &Value, index: u32) -> Result<Value, Value> {
+        let raw = unsafe { JS_GetPropertyUint32(self.ctx, object.raw, index) };
         self.take(raw)
     }
 
@@ -736,6 +777,21 @@ impl Scope<'_> {
         let owned = String::from_utf8_lossy(bytes).into_owned();
         unsafe { JS_FreeCString(self.ctx, text) };
         Ok(owned)
+    }
+
+    pub fn to_bytes(&mut self, value: &Value) -> Result<Vec<u8>, Value> {
+        let mut len = 0usize;
+        let text = unsafe { JS_ToCStringLen2(self.ctx, &mut len, value.raw, 0) };
+        if text.is_null() {
+            return Err(self.exception());
+        }
+        let bytes = unsafe { core::slice::from_raw_parts(text.cast::<u8>(), len) }.to_vec();
+        unsafe { JS_FreeCString(self.ctx, text) };
+        Ok(bytes)
+    }
+
+    pub fn to_bool(&mut self, value: &Value) -> bool {
+        unsafe { JS_ToBool(self.ctx, value.raw) > 0 }
     }
 
     pub fn to_int32(&mut self, value: &Value) -> Result<i32, Value> {

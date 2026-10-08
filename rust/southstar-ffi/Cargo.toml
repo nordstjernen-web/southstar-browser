@@ -23,6 +23,7 @@ southstar-css-syntax = { path = "../css-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-eventsource = { path = "../eventsource" }
+southstar-extensions = { path = "../extensions" }
 southstar-glctx = { path = "../glctx" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
@@ -57,6 +58,7 @@ enchant = ["southstar-spellcheck/enchant"]
 seccomp = ["southstar-sandbox/seccomp"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
+    "southstar-extensions/quickjs-original",
     "southstar-js-temporal/quickjs-original",
 ]
 woff2 = ["dep:southstar-woff2"]

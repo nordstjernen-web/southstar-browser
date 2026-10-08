@@ -5,7 +5,8 @@ cross-browser **WebExtensions** API used by Firefox and Chromium. The
 goal is source-compatibility with simple, page-facing extensions —
 *content scripts* that modify pages plus a small slice of the `browser.*`
 (a.k.a. `chrome.*`) JavaScript API — not full parity. The implementation
-lives in `src/ext.c` and is wired into the engine from `src/js.c`.
+lives in `rust/extensions` (the C ABI in `src/ext.h`) and is wired into the
+engine from `src/js.c` and `src/net.c`.
 
 ## Installing an extension
 

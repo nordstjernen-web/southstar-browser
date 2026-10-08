@@ -91,6 +91,10 @@ Southstar Browser (unreleased):
   southstar-renderer executable itself now starts in Rust.
 * The watchdog that restarts the browser after a crash or a hang is Rust,
   with the same restart limits, hang budget and messages.
+* WebExtensions are Rust: loading unpacked extensions and their manifests,
+  content scripts with the browser.* shim and its storage, declarativeNetRequest
+  rules and Adblock filter lists inject the same scripts and styles and block
+  the same requests as before.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

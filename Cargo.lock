@@ -1487,6 +1487,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-extensions"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
 name = "southstar-ffi"
 version = "1.0.30-dev"
 dependencies = [
@@ -1501,6 +1510,7 @@ dependencies = [
  "southstar-datetime",
  "southstar-debuglog",
  "southstar-eventsource",
+ "southstar-extensions",
  "southstar-glctx",
  "southstar-glib",
  "southstar-history",

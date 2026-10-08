@@ -68,7 +68,6 @@ southstar_engine_sources = files(
 )
 
 southstar_engine_sources += files(
-  'ext.c',
   'idb.c',
   'js.c',
   'js_brand.c',

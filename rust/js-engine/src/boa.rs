@@ -75,6 +75,14 @@ impl Value {
     pub fn is_string(&self) -> bool {
         self.0.is_string()
     }
+
+    pub fn is_number(&self) -> bool {
+        self.0.is_number()
+    }
+
+    pub fn is_bool(&self) -> bool {
+        self.0.is_boolean()
+    }
 }
 
 pub struct Engine {
@@ -94,6 +102,8 @@ impl Engine {
             .unwrap_or_default();
         Engine { ctx }
     }
+
+    pub fn set_max_stack_size(&mut self, _bytes: usize) {}
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
         f(&mut Scope { ctx: &mut self.ctx })
@@ -162,6 +172,18 @@ impl Scope<'_> {
         Value(JsString::from(text).into())
     }
 
+    pub fn string_from_bytes(&mut self, bytes: &[u8]) -> Value {
+        self.string(&String::from_utf8_lossy(bytes))
+    }
+
+    pub fn parse_json(&mut self, text: &[u8], _name: &str) -> Result<Value, Value> {
+        let global = self.global();
+        let json = self.get(&global, "JSON")?;
+        let parse = self.get(&json, "parse")?;
+        let text = self.string_from_bytes(text);
+        self.call(&parse, &json, &[text])
+    }
+
     pub fn bigint64(&mut self, number: i64) -> Value {
         Value(JsBigInt::from(number).into())
     }
@@ -194,6 +216,14 @@ impl Scope<'_> {
         let object = self.object(object)?;
         object
             .get(JsString::from(key), self.ctx)
+            .map(Value)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn get_index(&mut self, object: &Value, index: u32) -> Result<Value, Value> {
+        let object = self.object(object)?;
+        object
+            .get(index, self.ctx)
             .map(Value)
             .map_err(|e| self.error(e))
     }
@@ -268,6 +298,18 @@ impl Scope<'_> {
             .call(&this.0, &args, self.ctx)
             .map(Value)
             .map_err(|e| self.error(e))
+    }
+
+    pub fn to_bytes(&mut self, value: &Value) -> Result<Vec<u8>, Value> {
+        value
+            .0
+            .to_string(self.ctx)
+            .map(|text| text.to_std_string_lossy().into_bytes())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn to_bool(&mut self, value: &Value) -> bool {
+        value.0.to_boolean()
     }
 
     pub fn to_int32(&mut self, value: &Value) -> Result<i32, Value> {
