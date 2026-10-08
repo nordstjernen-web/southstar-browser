@@ -1520,6 +1520,7 @@ dependencies = [
  "southstar-debuglog",
  "southstar-eventsource",
  "southstar-extensions",
+ "southstar-font",
  "southstar-forms",
  "southstar-glctx",
  "southstar-glib",
@@ -1547,6 +1548,14 @@ dependencies = [
  "southstar-websocket",
  "southstar-woff2",
  "southstar-xml",
+]
+
+[[package]]
+name = "southstar-font"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-woff2",
 ]
 
 [[package]]

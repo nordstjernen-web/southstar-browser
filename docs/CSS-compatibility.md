@@ -28,7 +28,7 @@ carry forward from the 1.0.21 pass.
 | Value/unit resolution, `calc()` | `src/css.c` (`length_resolve` in `src/layout.c`) |
 | Box layout (block/inline/flex/grid/table/multicol/float/position) | `src/layout.c`, `src/layout.h` |
 | Paint (Cairo): backgrounds, borders, shadows, gradients, filters | `src/paint.c`, `src/render.c` |
-| Text / fonts (Pango) | `src/font.c`, `src/paint.c` |
+| Text / fonts (Pango) | `rust/font`, `src/paint.c` |
 | Transitions / `@keyframes` animation | `src/anim.c` |
 | UA stylesheet | the `kUa` sheet embedded in `src/css.c` |
 

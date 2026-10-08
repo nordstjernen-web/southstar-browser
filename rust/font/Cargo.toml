@@ -1,0 +1,22 @@
+[package]
+name = "southstar-font"
+description = "The @font-face web font loader: fetching, WOFF and WOFF2 conversion, the on-disk cache and fontconfig registration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+southstar-woff2 = { path = "../woff2", optional = true }
+
+[features]
+fontconfig = []
+freetype = []
+pangofc = []
+ns-pango = []
+woff2 = ["dep:southstar-woff2"]
+
+[lints]
+workspace = true

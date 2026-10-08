@@ -36,6 +36,18 @@ if have_fontconfig and host_machine.system() == 'windows'
   southstar_rust_features += ['fontconfig']
   southstar_rust_link_deps += [libfontconfig]
 endif
+if have_fontconfig
+  southstar_rust_features += ['font-fontconfig']
+  southstar_rust_link_deps += [libfontconfig]
+endif
+if have_freetype
+  southstar_rust_features += ['freetype']
+  southstar_rust_link_deps += [libfreetype]
+endif
+if have_pangoft2
+  southstar_rust_features += ['pangoft2']
+  southstar_rust_link_deps += [libpangoft2]
+endif
 if have_poppler
   southstar_rust_features += ['poppler']
   southstar_rust_link_deps += [libpoppler]

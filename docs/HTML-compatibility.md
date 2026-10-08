@@ -35,7 +35,7 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 | WHATWG URL | lexbor URL module via `src/net.c` (`ns_url_*`) |
 | CSS cascade / selectors | `src/css.c`, `src/css.h` |
 | Layout (block/inline/flex/grid/table) | `src/layout.c`, `src/layout.h` |
-| Paint (Cairo) / text (Pango) | `src/paint.c`, `src/render.c`, `src/font.c` |
+| Paint (Cairo) / text (Pango) | `src/paint.c`, `src/render.c`, `rust/font` |
 | JavaScript (QuickJS-ng, interpreter) | `src/js.c`, `src/js.h` |
 | Networking | `src/net.c`, cookies/cache in `src/cache.c` |
 | Images / media | `src/image*.c`, `src/video.c`, `src/video_decode.c`, `src/webaudio.c`, `src/audio/` |

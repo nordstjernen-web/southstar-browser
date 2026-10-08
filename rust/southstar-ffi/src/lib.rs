@@ -17,6 +17,7 @@ pub use southstar_datetime;
 pub use southstar_debuglog;
 pub use southstar_eventsource;
 pub use southstar_extensions;
+pub use southstar_font;
 pub use southstar_forms;
 pub use southstar_glctx;
 pub use southstar_glib;

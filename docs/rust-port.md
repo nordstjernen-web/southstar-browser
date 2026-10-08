@@ -889,3 +889,4 @@ grapheme breaks with ns-pango, called over FFI, and the C library's `%.*f` and
 | `camera.c` | 393 | `rust/camera` | 8 |
 | `xml.c` | 456 | `rust/xml` | 6 (DOM and parsing) |
 | `forms.c` | 320 | `rust/forms` (reads `ns_node` links through a `#[repr(C)]` prefix of the struct) | 6 (DOM and parsing) |
+| `font.c` | 597 | `rust/font` (WOFF2 through `rust/woff2` directly) | 6 (paint and text) |

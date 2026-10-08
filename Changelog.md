@@ -90,6 +90,10 @@ Southstar Browser (unreleased):
 * Form submission is Rust: which buttons submit or reset a form, the
   name/value pairs a submitted form sends and the constraint validation that
   stops an invalid form give the same queries, bodies and blocked fields.
+* The @font-face loader is Rust: one fetch per font URL, WOFF and WOFF2
+  converted to TrueType or OpenType, the on-disk web font cache and the
+  fontconfig registration under the CSS family and descriptors write the same
+  files and render the same text.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
 * The framing of the renderer protocol is Rust: the HTTP/1.1 requests and
