@@ -25,21 +25,6 @@ struct File {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
 const FILE_ERROR_ACCES: c_int = 2;
 
 unsafe extern "C" {
@@ -76,8 +61,6 @@ unsafe extern "C" {
     fn ferror(stream: *mut File) -> c_int;
     fn fclose(stream: *mut File) -> c_int;
     fn g_strerror(errnum: c_int) -> *const c_char;
-    fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
-    fn ns_url_parts_free(parts: *mut NsUrlParts);
 }
 
 #[cfg(windows)]
@@ -271,12 +254,7 @@ pub fn mime_type_guess(filename: &[u8], data: Option<&[u8]>) -> Vec<u8> {
 }
 
 pub fn url_pathname(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c(url);
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    let parts_ref = unsafe { parts.as_ref() }?;
-    let path = unsafe { glib::bytes(parts_ref.pathname) }.map(<[u8]>::to_vec);
-    unsafe { ns_url_parts_free(parts) };
-    path
+    crate::url::parts(url).map(|p| p.pathname)
 }
 
 pub struct CFile(*mut File);

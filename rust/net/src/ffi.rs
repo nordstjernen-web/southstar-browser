@@ -3,7 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub mod host;
+pub mod lexbor;
 pub mod sys;
+pub mod url;
 
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;

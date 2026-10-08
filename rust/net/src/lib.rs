@@ -1,4 +1,4 @@
-//! Southstar — networking from src/net.h: error pages, data: URLs, file: and FTP listings and view-source: documents.
+//! Southstar — networking from src/net.h: URL helpers, error pages, about: pages, data: URLs, file: and FTP listings and view-source: documents.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -10,4 +10,5 @@ mod ffi;
 mod file;
 mod ftp;
 mod listing;
+mod url;
 mod view_source;

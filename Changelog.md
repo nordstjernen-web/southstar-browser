@@ -186,6 +186,12 @@ Southstar Browser (unreleased):
   engine, about:southstar with its diagnostics, the license texts, history,
   the settings page and its load, save and clear endpoints, and the check
   that keeps them from web content. They read the same as before.
+* URL handling is Rust, over the same lexbor WHATWG parser: resolving,
+  the URL setters behind location and URL objects, origins, sites, hosts
+  and components, referrers, tracking-parameter stripping, HTTPS-first
+  upgrades, Refresh headers and the user agent strings, with identical
+  results. Parsed URLs are now freed after use instead of accumulating in
+  each thread's parser memory until the thread ends.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
