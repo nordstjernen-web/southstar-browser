@@ -15,23 +15,9 @@
 #include "security.h"
 
 #include <curl/curl.h>
-#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
-#include <glib/gstdio.h>
-#include <gmodule.h>
-
-#ifdef G_OS_WIN32
-#include <windows.h>
-#endif
-
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#include <stdlib.h>
-#include <sys/sysctl.h>
-#endif
 
 char    *ns_url_to_ascii(const char *url);
 char    *ns_url_origin_from_any(const char *url);
@@ -58,306 +44,33 @@ size_t   ns_header_cb(char *buffer, size_t size, size_t nitems,
                       void *userdata);
 ns_response *ns_response_copy(const ns_response *src);
 const char *ns_net_http_version_name(long version);
+gboolean ns_net_host_recently_dead(const char *origin);
+void     ns_net_host_mark_dead(const char *origin);
+void     ns_net_host_mark_alive(const char *origin);
+gboolean ns_net_acquire_origin_slot(const char *origin,
+                                    GCancellable *cancellable);
+void     ns_net_release_origin_slot(const char *origin);
+CURLcode ns_net_multi_perform(CURL *easy, GCancellable *cancellable);
+void     ns_net_multi_shutdown(void);
+long     ns_net_http_version(void);
+int      ns_xferinfo_cb(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
+                        curl_off_t ultotal, curl_off_t ulnow);
+void     ns_net_begin_abort(void);
+void     ns_net_join_rng(void);
+void     ns_net_transport_shutdown(void);
+CURLSH  *ns_net_share(void);
+const char *ns_net_accept_encoding(void);
+char    *ns_net_slist_serialize(struct curl_slist *list);
 
-static char *g_ca_bundle;
-static gboolean g_has_http3;
-static const char *g_ec_curves = "X25519:P-256:P-384";
-static char *g_accept_encoding;
-static CURLSH *g_share;
 static GMutex g_fetch_throttle_mutex;
 static GCond  g_fetch_idle_cond;
 static int    g_fetch_active;
 static int    g_preconnect_active;
-static gint   g_net_aborting;
 static GQueue g_fetch_queue = G_QUEUE_INIT;
-static GMutex g_share_locks[CURL_LOCK_DATA_LAST];
-#define NS_DEAD_HOST_TTL_US ((gint64)120 * G_USEC_PER_SEC)
-/* Origins (scheme, host and port) a connection recently failed to.  A
- * refused port says nothing about the host's other ports, so the key is
- * the origin, not the host. */
-static GHashTable *g_dead_hosts;
-static GMutex      g_dead_hosts_lock;
-
-static gboolean
-ns_net_host_recently_dead(const char *host)
-{
-    gboolean dead = FALSE;
-    g_mutex_lock(&g_dead_hosts_lock);
-    if (g_dead_hosts) {
-        gint64 *expiry = g_hash_table_lookup(g_dead_hosts, host);
-        if (expiry) {
-            if (g_get_monotonic_time() < *expiry)
-                dead = TRUE;
-            else
-                g_hash_table_remove(g_dead_hosts, host);
-        }
-    }
-    g_mutex_unlock(&g_dead_hosts_lock);
-    return dead;
-}
-
-static void
-ns_net_host_mark_dead(const char *host)
-{
-    g_mutex_lock(&g_dead_hosts_lock);
-    if (!g_dead_hosts)
-        g_dead_hosts = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                             g_free, g_free);
-    gint64 *expiry = g_new(gint64, 1);
-    *expiry = g_get_monotonic_time() + NS_DEAD_HOST_TTL_US;
-    g_hash_table_replace(g_dead_hosts, g_strdup(host), expiry);
-    g_mutex_unlock(&g_dead_hosts_lock);
-}
-
-static void
-ns_net_host_mark_alive(const char *host)
-{
-    g_mutex_lock(&g_dead_hosts_lock);
-    if (g_dead_hosts)
-        g_hash_table_remove(g_dead_hosts, host);
-    g_mutex_unlock(&g_dead_hosts_lock);
-}
-
-#define NS_NET_MAX_PER_ORIGIN 6
-
-typedef struct ns_origin_slot {
-    int   in_use;
-    GCond cond;
-} ns_origin_slot;
-
-static GMutex      g_origin_slots_lock;
-static GHashTable *g_origin_slots;
-
-static void
-ns_origin_slot_free(gpointer p)
-{
-    ns_origin_slot *s = p;
-    g_cond_clear(&s->cond);
-    g_free(s);
-}
-
-static char *
-origin_slot_key(const char *origin)
-{
-    return (origin && *origin) ? g_ascii_strdown(origin, -1) : NULL;
-}
-
-static gboolean
-ns_net_acquire_origin_slot(const char *origin, GCancellable *cancellable)
-{
-    char *key = origin_slot_key(origin);
-    if (!key) return FALSE;
-    g_mutex_lock(&g_origin_slots_lock);
-    if (!g_origin_slots)
-        g_origin_slots = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                               g_free, ns_origin_slot_free);
-    ns_origin_slot *s = g_hash_table_lookup(g_origin_slots, key);
-    if (!s) {
-        s = g_new0(ns_origin_slot, 1);
-        g_cond_init(&s->cond);
-        g_hash_table_insert(g_origin_slots, key, s);
-        key = NULL;
-    }
-    while (s->in_use >= NS_NET_MAX_PER_ORIGIN) {
-        if (cancellable && g_cancellable_is_cancelled(cancellable)) {
-            g_mutex_unlock(&g_origin_slots_lock);
-            g_free(key);
-            return FALSE;
-        }
-        gint64 wakeup = g_get_monotonic_time() + 250 * G_TIME_SPAN_MILLISECOND;
-        g_cond_wait_until(&s->cond, &g_origin_slots_lock, wakeup);
-    }
-    s->in_use++;
-    g_mutex_unlock(&g_origin_slots_lock);
-    g_free(key);
-    return TRUE;
-}
-
-static void
-ns_net_release_origin_slot(const char *origin)
-{
-    char *key = origin_slot_key(origin);
-    if (!key) return;
-    g_mutex_lock(&g_origin_slots_lock);
-    if (g_origin_slots) {
-        ns_origin_slot *s = g_hash_table_lookup(g_origin_slots, key);
-        if (s && s->in_use > 0) {
-            s->in_use--;
-            g_cond_signal(&s->cond);
-        }
-    }
-    g_mutex_unlock(&g_origin_slots_lock);
-    g_free(key);
-}
-
-typedef struct ns_multi_xfer {
-    CURL     *easy;
-    GCond     cond;
-    gboolean  done;
-    CURLcode  result;
-} ns_multi_xfer;
-
-static CURLM      *g_multi;
-static GThread    *g_multi_thread;
-static gboolean    g_multi_quit;
-static GMutex      g_multi_lock;
-static GQueue      g_multi_incoming = G_QUEUE_INIT;
-static GHashTable *g_multi_active;
-
-static void
-ns_net_multi_finish_locked(ns_multi_xfer *x, CURLcode result)
-{
-    x->result = result;
-    x->done = TRUE;
-    g_cond_signal(&x->cond);
-}
-
-static gpointer
-ns_net_multi_loop(gpointer data)
-{
-    (void)data;
-    for (;;) {
-        g_mutex_lock(&g_multi_lock);
-        if (g_multi_quit) {
-            GHashTableIter it;
-            gpointer key, val;
-            g_hash_table_iter_init(&it, g_multi_active);
-            while (g_hash_table_iter_next(&it, &key, &val)) {
-                ns_multi_xfer *x = val;
-                curl_multi_remove_handle(g_multi, x->easy);
-                ns_net_multi_finish_locked(x, CURLE_ABORTED_BY_CALLBACK);
-            }
-            g_hash_table_remove_all(g_multi_active);
-            for (ns_multi_xfer *x; (x = g_queue_pop_head(&g_multi_incoming)); )
-                ns_net_multi_finish_locked(x, CURLE_ABORTED_BY_CALLBACK);
-            g_mutex_unlock(&g_multi_lock);
-            break;
-        }
-        for (ns_multi_xfer *x; (x = g_queue_pop_head(&g_multi_incoming)); ) {
-            if (curl_multi_add_handle(g_multi, x->easy) == CURLM_OK)
-                g_hash_table_insert(g_multi_active, x->easy, x);
-            else
-                ns_net_multi_finish_locked(x, CURLE_FAILED_INIT);
-        }
-        g_mutex_unlock(&g_multi_lock);
-
-        int running = 0;
-        curl_multi_perform(g_multi, &running);
-
-        int nmsgs = 0;
-        CURLMsg *m;
-        while ((m = curl_multi_info_read(g_multi, &nmsgs))) {
-            if (m->msg != CURLMSG_DONE) continue;
-            CURL *easy = m->easy_handle;
-            CURLcode res = m->data.result;
-            curl_multi_remove_handle(g_multi, easy);
-            g_mutex_lock(&g_multi_lock);
-            ns_multi_xfer *x = g_hash_table_lookup(g_multi_active, easy);
-            if (x) {
-                g_hash_table_remove(g_multi_active, easy);
-                ns_net_multi_finish_locked(x, res);
-            }
-            g_mutex_unlock(&g_multi_lock);
-        }
-
-        long timeo = -1;
-        curl_multi_timeout(g_multi, &timeo);
-        int wait_ms = (timeo < 0 || timeo > 1000) ? 1000 : (int)timeo;
-        curl_multi_poll(g_multi, NULL, 0, wait_ms, NULL);
-    }
-    return NULL;
-}
-
-static void
-ns_net_multi_start(void)
-{
-    g_mutex_lock(&g_multi_lock);
-    if (!g_multi_thread) {
-        g_multi = curl_multi_init();
-        if (g_multi) {
-            curl_multi_setopt(g_multi, CURLMOPT_PIPELINING,
-                              (long)CURLPIPE_MULTIPLEX);
-            g_multi_active = g_hash_table_new(g_direct_hash, g_direct_equal);
-            g_multi_thread = g_thread_new("ns-net-multi",
-                                          ns_net_multi_loop, NULL);
-        }
-    }
-    g_mutex_unlock(&g_multi_lock);
-}
-
-static CURLcode
-ns_net_multi_perform(CURL *easy, GCancellable *cancellable)
-{
-    (void)cancellable;
-    ns_net_multi_start();
-    if (!g_multi) return curl_easy_perform(easy);
-
-    ns_multi_xfer x = { .easy = easy, .done = FALSE, .result = CURLE_OK };
-    g_cond_init(&x.cond);
-
-    g_mutex_lock(&g_multi_lock);
-    if (g_multi_quit) {
-        g_mutex_unlock(&g_multi_lock);
-        g_cond_clear(&x.cond);
-        return curl_easy_perform(easy);
-    }
-    g_queue_push_tail(&g_multi_incoming, &x);
-    curl_multi_wakeup(g_multi);
-    while (!x.done) {
-        gint64 wakeup = g_get_monotonic_time() + 250 * G_TIME_SPAN_MILLISECOND;
-        g_cond_wait_until(&x.cond, &g_multi_lock, wakeup);
-    }
-    g_mutex_unlock(&g_multi_lock);
-
-    g_cond_clear(&x.cond);
-    return x.result;
-}
-
-static void
-ns_net_multi_shutdown(void)
-{
-    g_mutex_lock(&g_multi_lock);
-    GThread *t = g_multi_thread;
-    if (t) {
-        g_multi_quit = TRUE;
-        curl_multi_wakeup(g_multi);
-    }
-    g_mutex_unlock(&g_multi_lock);
-    if (t) {
-        g_thread_join(t);
-        g_multi_thread = NULL;
-    }
-    if (g_multi) { curl_multi_cleanup(g_multi); g_multi = NULL; }
-    if (g_multi_active) {
-        g_hash_table_destroy(g_multi_active);
-        g_multi_active = NULL;
-    }
-    g_multi_quit = FALSE;
-}
-
 static gboolean
 ns_url_is_ftp(const char *url)
 {
     return url && g_str_has_prefix(url, "ftp://");
-}
-
-static long
-ns_net_http_version(void)
-{
-#ifdef CURL_VERSION_HTTP3
-    static gsize once = 0;
-    static long version = CURL_HTTP_VERSION_2TLS;
-    if (g_once_init_enter(&once)) {
-        const curl_version_info_data *info = curl_version_info(CURLVERSION_NOW);
-        if (info && (info->features & CURL_VERSION_HTTP3) &&
-            g_getenv("NS_FORCE_HTTP3"))
-            version = CURL_HTTP_VERSION_3;
-        g_once_init_leave(&once, 1);
-    }
-    return version;
-#else
-    return CURL_HTTP_VERSION_2TLS;
-#endif
 }
 
 #define NS_NET_DOMAIN ns_net_error_quark()
@@ -366,256 +79,6 @@ static GQuark
 ns_net_error_quark(void)
 {
     return g_quark_from_static_string("nd-net-error");
-}
-
-static int
-ns_xferinfo_cb(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
-               curl_off_t ultotal, curl_off_t ulnow)
-{
-    (void)dltotal; (void)dlnow; (void)ultotal; (void)ulnow;
-    if (g_atomic_int_get(&g_net_aborting)) return 1;
-    GCancellable *c = clientp;
-    return (c && g_cancellable_is_cancelled(c)) ? 1 : 0;
-}
-
-extern const char *ns_app_self_exe(void);
-
-static char *
-ns_net_exe_dir(void)
-{
-    const char *self = ns_app_self_exe();
-    if (self && *self)
-        return g_path_get_dirname(self);
-#ifdef G_OS_WIN32
-    DWORD cap = MAX_PATH;
-    wchar_t *buf = g_new(wchar_t, cap);
-    DWORD n = GetModuleFileNameW(NULL, buf, cap);
-    while (n >= cap && cap < 32768) {
-        cap *= 2;
-        wchar_t *bigger = g_renew(wchar_t, buf, cap);
-        buf = bigger;
-        n = GetModuleFileNameW(NULL, buf, cap);
-    }
-    char *utf8 = NULL;
-    if (n > 0 && n < cap)
-        utf8 = g_utf16_to_utf8((gunichar2 *)buf, -1, NULL, NULL, NULL);
-    g_free(buf);
-    if (!utf8) return NULL;
-    char *dir = g_path_get_dirname(utf8);
-    g_free(utf8);
-    return dir;
-#elif defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(NULL, &size);
-    if (size == 0 || size > 32768) return NULL;
-    char *raw = g_malloc(size);
-    if (_NSGetExecutablePath(raw, &size) != 0) { g_free(raw); return NULL; }
-    char *dir = g_path_get_dirname(raw);
-    g_free(raw);
-    return dir;
-#elif defined(__linux__)
-    char *exe = g_file_read_link("/proc/self/exe", NULL);
-    if (!exe) return NULL;
-    char *dir = g_path_get_dirname(exe);
-    g_free(exe);
-    return dir;
-#else
-    return NULL;
-#endif
-}
-
-static gboolean
-ns_net_try_ca_bundle(const char *path)
-{
-    if (!path || !*path) return FALSE;
-    if (!g_file_test(path, G_FILE_TEST_EXISTS)) return FALSE;
-    g_ca_bundle = g_strdup(path);
-    return TRUE;
-}
-
-static void
-ns_net_resolve_ca_bundle(void)
-{
-    if (g_ca_bundle) return;
-    const char *env = g_getenv("CURL_CA_BUNDLE");
-    if (!env) env = g_getenv("SSL_CERT_FILE");
-    if (ns_net_try_ca_bundle(env)) return;
-
-    char *dir = ns_net_exe_dir();
-    if (dir) {
-        const char *rels[] = {
-            "etc/ssl/certs/ca-bundle.crt",
-            "ssl/certs/ca-bundle.crt",
-            "ca-bundle.crt",
-            "cert.pem",
-            "../etc/ca-certificates/cert.pem",
-            "../etc/openssl@3/cert.pem",
-            "../etc/openssl/cert.pem",
-            NULL,
-        };
-        for (int i = 0; rels[i]; i++) {
-            char *cand = g_build_filename(dir, rels[i], NULL);
-            gboolean ok = ns_net_try_ca_bundle(cand);
-            g_free(cand);
-            if (ok) break;
-        }
-        g_free(dir);
-        if (g_ca_bundle) return;
-    }
-
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
-    const char *unix_paths[] = {
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/etc/ssl/ca-bundle.pem",
-        "/var/lib/ca-certificates/ca-bundle.pem",
-        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-        "/etc/ssl/cert.pem",
-        "/usr/local/share/certs/ca-root-nss.crt",
-        NULL,
-    };
-    for (int i = 0; unix_paths[i]; i++)
-        if (ns_net_try_ca_bundle(unix_paths[i])) return;
-#endif
-
-#ifdef __APPLE__
-    const char *mac_paths[] = {
-        "/opt/homebrew/etc/ca-certificates/cert.pem",
-        "/opt/homebrew/etc/openssl@3/cert.pem",
-        "/usr/local/etc/ca-certificates/cert.pem",
-        "/usr/local/etc/openssl@3/cert.pem",
-        "/usr/local/etc/openssl/cert.pem",
-        "/etc/ssl/cert.pem",
-        NULL,
-    };
-    for (int i = 0; mac_paths[i]; i++)
-        if (ns_net_try_ca_bundle(mac_paths[i])) return;
-#endif
-
-#ifdef G_OS_WIN32
-    const char *win_paths[] = {
-        "C:/msys64/mingw64/etc/ssl/certs/ca-bundle.crt",
-        "C:/msys64/mingw64/etc/ssl/cert.pem",
-        "C:/msys64/ucrt64/etc/ssl/certs/ca-bundle.crt",
-        "C:/msys64/clang64/etc/ssl/certs/ca-bundle.crt",
-        NULL,
-    };
-    for (int i = 0; win_paths[i]; i++)
-        if (ns_net_try_ca_bundle(win_paths[i])) return;
-
-    g_info("ns_net: no CA bundle file found; relying on "
-           "CURLSSLOPT_NATIVE_CA via the Windows certificate store. "
-           "If HTTPS fails, install mingw-w64-x86_64-ca-certificates or "
-           "set CURL_CA_BUNDLE.");
-#endif
-}
-
-static void
-ns_share_lock(CURL *handle, curl_lock_data data,
-              curl_lock_access access, void *user_data)
-{
-    (void)handle; (void)access; (void)user_data;
-    if (data < CURL_LOCK_DATA_LAST)
-        g_mutex_lock(&g_share_locks[data]);
-}
-
-static void
-ns_share_unlock(CURL *handle, curl_lock_data data, void *user_data)
-{
-    (void)handle; (void)user_data;
-    if (data < CURL_LOCK_DATA_LAST)
-        g_mutex_unlock(&g_share_locks[data]);
-}
-
-static gpointer
-ns_rng_warmup_thread(gpointer data)
-{
-    (void)data;
-    int (*rand_bytes)(unsigned char *, int) = NULL;
-    GModule *self = g_module_open(NULL, G_MODULE_BIND_LAZY);
-    if (self &&
-        g_module_symbol(self, "RAND_bytes", (gpointer *)&rand_bytes) &&
-        rand_bytes) {
-        unsigned char buf[32];
-        rand_bytes(buf, (int)sizeof buf);
-    }
-    if (self) g_module_close(self);
-    return NULL;
-}
-
-static GThread *g_rng_warmup_thread;
-
-static void
-ns_net_warm_rng(void)
-{
-    if (!g_module_supported()) return;
-    g_rng_warmup_thread = g_thread_try_new("nd-rng-warmup",
-                                           ns_rng_warmup_thread, NULL, NULL);
-}
-
-static void
-ns_net_join_rng(void)
-{
-    if (g_rng_warmup_thread) {
-        g_thread_join(g_rng_warmup_thread);
-        g_rng_warmup_thread = NULL;
-    }
-}
-
-void
-ns_net_init(void)
-{
-    ns_net_resolve_ca_bundle();
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-    curl_version_info_data *vi = curl_version_info(CURLVERSION_NOW);
-    g_has_http3 = vi && (vi->features & CURL_VERSION_HTTP3) != 0;
-
-    unsigned ossl_major = 0, ossl_minor = 0;
-    if (vi && vi->ssl_version &&
-        sscanf(vi->ssl_version, "OpenSSL/%u.%u", &ossl_major, &ossl_minor) == 2 &&
-        (ossl_major > 3 || (ossl_major == 3 && ossl_minor >= 5)))
-        g_ec_curves = "X25519MLKEM768:X25519:P-256:P-384";
-
-    GString *enc = g_string_new(NULL);
-    if (vi && (vi->features & CURL_VERSION_LIBZ) != 0)
-        g_string_append(enc, "gzip, deflate");
-#ifdef CURL_VERSION_BROTLI
-    if (vi && (vi->features & CURL_VERSION_BROTLI) != 0) {
-        if (enc->len) g_string_append(enc, ", ");
-        g_string_append(enc, "br");
-    }
-#endif
-#ifdef CURL_VERSION_ZSTD
-    if (vi && (vi->features & CURL_VERSION_ZSTD) != 0) {
-        if (enc->len) g_string_append(enc, ", ");
-        g_string_append(enc, "zstd");
-    }
-#endif
-    g_free(g_accept_encoding);
-    g_accept_encoding = g_string_free(enc, FALSE);
-
-    g_share = curl_share_init();
-    if (g_share) {
-        curl_share_setopt(g_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
-        curl_share_setopt(g_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
-#ifdef CURL_LOCK_DATA_CONNECT
-        curl_share_setopt(g_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
-#endif
-#ifdef CURL_LOCK_DATA_PSL
-        curl_share_setopt(g_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_PSL);
-#endif
-#ifdef CURL_LOCK_DATA_HSTS
-        curl_share_setopt(g_share, CURLSHOPT_SHARE, CURL_LOCK_DATA_HSTS);
-#endif
-        curl_share_setopt(g_share, CURLSHOPT_LOCKFUNC,   ns_share_lock);
-        curl_share_setopt(g_share, CURLSHOPT_UNLOCKFUNC, ns_share_unlock);
-    }
-
-    ns_net_warm_rng();
-
-    ns_net_hsts_curl_path();
-    ns_net_altsvc_path();
-    ns_net_cookie_dir();
 }
 
 gboolean
@@ -632,7 +95,7 @@ static void ns_fetch_task_abandon(GTask *task, const GError *err);
 static gboolean
 ns_net_drain(int timeout_ms)
 {
-    g_atomic_int_set(&g_net_aborting, 1);
+    ns_net_begin_abort();
     GQueue dropped = G_QUEUE_INIT;
     g_mutex_lock(&g_fetch_throttle_mutex);
     for (GTask *t; (t = g_queue_pop_head(&g_fetch_queue)); )
@@ -666,132 +129,10 @@ ns_net_shutdown(void)
     if (!ns_net_drain(3000))
         return;
     ns_net_backend_shutdown();
-    if (g_share) { curl_share_cleanup(g_share); g_share = NULL; }
-    curl_global_cleanup();
-    g_free(g_accept_encoding);
-    g_accept_encoding = NULL;
-    ns_net_state_shutdown();
-    g_free(g_ca_bundle);
-    g_ca_bundle = NULL;
-    if (g_origin_slots) {
-        g_hash_table_destroy(g_origin_slots);
-        g_origin_slots = NULL;
-    }
+    ns_net_transport_shutdown();
 }
 
-const char *
-ns_net_ca_bundle_path(void)
-{
-    return g_ca_bundle;
-}
-
-const char *
-ns_net_ec_curves(void)
-{
-    return g_ec_curves;
-}
-
-gboolean
-ns_net_aborting(void)
-{
-    return g_atomic_int_get(&g_net_aborting) != 0;
-}
-
-void
-ns_net_apply_curl_tls(void *curl_handle)
-{
-    CURL *curl = curl_handle;
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    curl_easy_setopt(curl, CURLOPT_SSL_CIPHER_LIST,
-        "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
-        "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
-        "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
-        "ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:"
-        "AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA:AES256-SHA");
-#ifdef CURLOPT_TLS13_CIPHERS
-    curl_easy_setopt(curl, CURLOPT_TLS13_CIPHERS,
-        "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:"
-        "TLS_CHACHA20_POLY1305_SHA256");
-#endif
-    curl_easy_setopt(curl, CURLOPT_SSL_EC_CURVES, g_ec_curves);
-#if LIBCURL_VERSION_NUM >= 0x080800
-    {
-        const curl_version_info_data *info = curl_version_info(CURLVERSION_NOW);
-        const char *const *feat = info ? info->feature_names : NULL;
-        for (; feat && *feat; feat++) {
-            if (!g_ascii_strcasecmp(*feat, "ECH")) {
-                curl_easy_setopt(curl, CURLOPT_ECH, "true");
-                break;
-            }
-        }
-    }
-#endif
-    if (g_ca_bundle)
-        curl_easy_setopt(curl, CURLOPT_CAINFO, g_ca_bundle);
-#ifdef G_OS_WIN32
-    curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_NATIVE_CA);
-#endif
-#ifdef CURLOPT_DOH_URL
-    const ns_config *cfg = ns_config_get();
-    if (cfg && cfg->doh_url && g_str_has_prefix(cfg->doh_url, "https://"))
-        curl_easy_setopt(curl, CURLOPT_DOH_URL, cfg->doh_url);
-#endif
-}
-
-static char *
-ns_net_slist_serialize(struct curl_slist *list)
-{
-    if (!list)
-        return NULL;
-    GString *out = g_string_new(NULL);
-    for (struct curl_slist *n = list; n; n = n->next) {
-        if (!n->data)
-            continue;
-        if (g_ascii_strncasecmp(n->data, "X-ND-", 5) == 0)
-            continue;
-        g_string_append(out, n->data);
-        g_string_append_c(out, '\n');
-    }
-    return g_string_free(out, FALSE);
-}
-
-#define NS_NET_RESPONSE_MIN_BUDGET (64ULL * 1024ULL * 1024ULL)
 #define NS_NET_RESPONSE_RECHECK_BYTES (16ULL * 1024ULL * 1024ULL)
-static guint64
-ns_net_available_memory_bytes(void)
-{
-#if defined(G_OS_WIN32)
-    MEMORYSTATUSEX m = { .dwLength = sizeof(m) };
-    if (GlobalMemoryStatusEx(&m))
-        return (guint64)m.ullAvailPhys;
-#elif defined(__linux__)
-    FILE *f = fopen("/proc/meminfo", "re");
-    if (f) {
-        char line[256];
-        guint64 kb = 0;
-        while (fgets(line, sizeof(line), f)) {
-            if (sscanf(line, "MemAvailable: %" G_GUINT64_FORMAT " kB", &kb) == 1) {
-                fclose(f);
-                return kb * 1024ULL;
-            }
-        }
-        fclose(f);
-    }
-#elif defined(__APPLE__)
-    uint64_t mem = 0;
-    size_t len = sizeof mem;
-    if (sysctlbyname("hw.memsize", &mem, &len, NULL, 0) == 0 && mem > 0)
-        return (guint64)mem;
-#elif defined(_SC_AVPHYS_PAGES) && defined(_SC_PAGESIZE)
-    long pages = sysconf(_SC_AVPHYS_PAGES);
-    long psize = sysconf(_SC_PAGESIZE);
-    if (pages > 0 && psize > 0)
-        return (guint64)pages * (guint64)psize;
-#endif
-    return 0;
-}
-
 guint64 ns_net_response_budget(void);
 gboolean ns_net_synthesize_data_response(const char *url, ns_response *resp);
 gboolean ns_net_synthesize_file_response(const char *url, const char *top_url,
@@ -806,15 +147,6 @@ gboolean ns_net_synthesize_about_response(const char *url, const char *top_url,
                                           const void *req_body,
                                           gsize req_body_len,
                                           ns_response *resp);
-
-guint64
-ns_net_response_budget(void)
-{
-    guint64 avail = ns_net_available_memory_bytes();
-    if (avail == 0) return NS_NET_RESPONSE_MIN_BUDGET;
-    guint64 half = avail / 2;
-    return half < NS_NET_RESPONSE_MIN_BUDGET ? NS_NET_RESPONSE_MIN_BUDGET : half;
-}
 
 static gboolean
 is_simple_get(const char *method)
@@ -877,7 +209,7 @@ ns_hop_transport_curl(const ns_hop_req *req, ns_write_ctx *wctx,
     }
     if (getenv("NS_NET_TRACE"))
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-    if (g_share) curl_easy_setopt(curl, CURLOPT_SHARE, g_share);
+    if (ns_net_share()) curl_easy_setopt(curl, CURLOPT_SHARE, ns_net_share());
 
     char errbuf[CURL_ERROR_SIZE];
     errbuf[0] = '\0';
@@ -1570,7 +902,7 @@ ns_fetch_sync_hop(const char *url, const char *top_url, const char *method,
         .referer = referer,
         .referer_policy = cfg ? (int)cfg->referer_policy
                               : (int)NS_REFERER_STRICT_ORIGIN_WHEN_CROSS,
-        .accept_encoding = g_accept_encoding ? g_accept_encoding : "",
+        .accept_encoding = ns_net_accept_encoding() ? ns_net_accept_encoding() : "",
         .timeout_s = fetch_timeout,
         .connect_timeout_s = is_navigation ? 15L : 6L,
         .proxy = ns_net_pick_configured_proxy(url),
@@ -2104,7 +1436,7 @@ ns_fetch_join_sync(const char *key, gboolean *joined, GError **error)
         gint64 deadline = g_get_monotonic_time() +
             (gint64)NS_FETCH_JOIN_MAX_WAIT_S * G_TIME_SPAN_SECOND;
         while (!waiter.done) {
-            if (g_atomic_int_get(&g_net_aborting) ||
+            if (ns_net_aborting() ||
                 !g_cond_wait_until(&g_fetch_cond, &g_fetch_mutex, deadline))
                 break;
         }
@@ -2314,11 +1646,11 @@ ns_preconnect_thread(GTask *task, gpointer source_object, gpointer task_data,
     g_mutex_lock(&g_fetch_throttle_mutex);
     g_preconnect_active++;
     g_mutex_unlock(&g_fetch_throttle_mutex);
-    CURL *curl = g_atomic_int_get(&g_net_aborting) ? NULL : curl_easy_init();
+    CURL *curl = ns_net_aborting() ? NULL : curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
-        if (g_share) curl_easy_setopt(curl, CURLOPT_SHARE, g_share);
+        if (ns_net_share()) curl_easy_setopt(curl, CURLOPT_SHARE, ns_net_share());
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 6L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);

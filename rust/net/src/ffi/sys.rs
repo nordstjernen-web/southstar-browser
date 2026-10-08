@@ -89,6 +89,8 @@ unsafe extern "C" {
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
+    fn g_get_monotonic_time() -> i64;
+    fn ns_app_self_exe() -> *const c_char;
 }
 
 #[cfg(windows)]
@@ -470,4 +472,177 @@ pub fn warn_read_failure(what: &CStr, path: &[u8], message: &[u8]) {
             message.as_ptr(),
         )
     };
+}
+
+pub fn monotonic_us() -> i64 {
+    unsafe { g_get_monotonic_time() }
+}
+
+pub fn info(message: &CStr) {
+    unsafe { g_log(ptr::null(), 1 << 6, c"%s".as_ptr(), message.as_ptr()) };
+}
+
+pub fn exists(path: &[u8]) -> bool {
+    let path = c(path);
+    unsafe { glib::g_file_test(path.as_ptr(), glib::FILE_TEST_EXISTS) != 0 }
+}
+
+#[cfg(target_vendor = "apple")]
+fn platform_exe() -> Option<Vec<u8>> {
+    unsafe extern "C" {
+        fn _NSGetExecutablePath(buf: *mut c_char, size: *mut u32) -> c_int;
+    }
+    let mut size = 0u32;
+    unsafe { _NSGetExecutablePath(ptr::null_mut(), &mut size) };
+    if size == 0 || size > 32768 {
+        return None;
+    }
+    let mut raw = vec![0u8; size as usize];
+    if unsafe { _NSGetExecutablePath(raw.as_mut_ptr().cast(), &mut size) } != 0 {
+        return None;
+    }
+    Some(raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())].to_vec())
+}
+
+#[cfg(windows)]
+fn platform_exe() -> Option<Vec<u8>> {
+    std::env::current_exe()
+        .ok()?
+        .to_str()
+        .map(|s| s.as_bytes().to_vec())
+}
+
+#[cfg(target_os = "linux")]
+fn platform_exe() -> Option<Vec<u8>> {
+    use std::os::unix::ffi::OsStrExt;
+    std::fs::read_link("/proc/self/exe")
+        .ok()
+        .map(|p| p.as_os_str().as_bytes().to_vec())
+}
+
+#[cfg(not(any(target_vendor = "apple", windows, target_os = "linux")))]
+fn platform_exe() -> Option<Vec<u8>> {
+    None
+}
+
+pub fn exe_dir() -> Option<Vec<u8>> {
+    let own = unsafe { glib::bytes(ns_app_self_exe()) }
+        .filter(|e| !e.is_empty())
+        .map(<[u8]>::to_vec);
+    own.or_else(platform_exe).map(|exe| path_dirname(&exe))
+}
+
+#[cfg(target_os = "linux")]
+pub fn available_memory_bytes() -> u64 {
+    let Ok(meminfo) = std::fs::read("/proc/meminfo") else {
+        return 0;
+    };
+    for line in meminfo.split(|&c| c == b'\n') {
+        let Some(rest) = line.strip_prefix(b"MemAvailable:") else {
+            continue;
+        };
+        let rest = &rest[rest
+            .iter()
+            .position(|c| !c.is_ascii_whitespace())
+            .unwrap_or(rest.len())..];
+        let rest = rest.strip_prefix(b"+").unwrap_or(rest);
+        let digits = rest.iter().take_while(|c| c.is_ascii_digit()).count();
+        if digits == 0 {
+            continue;
+        }
+        let kb = rest[..digits].iter().fold(0u64, |n, &d| {
+            n.wrapping_mul(10).wrapping_add(u64::from(d - b'0'))
+        });
+        return kb.wrapping_mul(1024);
+    }
+    0
+}
+
+#[cfg(windows)]
+pub fn available_memory_bytes() -> u64 {
+    #[repr(C)]
+    struct MemoryStatusEx {
+        length: u32,
+        memory_load: u32,
+        total_phys: u64,
+        avail_phys: u64,
+        total_page_file: u64,
+        avail_page_file: u64,
+        total_virtual: u64,
+        avail_virtual: u64,
+        avail_extended_virtual: u64,
+    }
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalMemoryStatusEx(buffer: *mut MemoryStatusEx) -> c_int;
+    }
+    let mut status = MemoryStatusEx {
+        length: core::mem::size_of::<MemoryStatusEx>() as u32,
+        memory_load: 0,
+        total_phys: 0,
+        avail_phys: 0,
+        total_page_file: 0,
+        avail_page_file: 0,
+        total_virtual: 0,
+        avail_virtual: 0,
+        avail_extended_virtual: 0,
+    };
+    if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 {
+        status.avail_phys
+    } else {
+        0
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+pub fn available_memory_bytes() -> u64 {
+    unsafe extern "C" {
+        fn sysctlbyname(
+            name: *const c_char,
+            oldp: *mut c_void,
+            oldlenp: *mut usize,
+            newp: *mut c_void,
+            newlen: usize,
+        ) -> c_int;
+    }
+    let mut mem = 0u64;
+    let mut len = core::mem::size_of::<u64>();
+    let ok = unsafe {
+        sysctlbyname(
+            c"hw.memsize".as_ptr(),
+            (&mut mem as *mut u64).cast(),
+            &mut len,
+            ptr::null_mut(),
+            0,
+        )
+    };
+    if ok == 0 { mem } else { 0 }
+}
+
+#[cfg(any(target_os = "openbsd", target_os = "solaris", target_os = "illumos"))]
+pub fn available_memory_bytes() -> u64 {
+    unsafe extern "C" {
+        fn sysconf(name: c_int) -> core::ffi::c_long;
+    }
+    const AVPHYS_PAGES: c_int = 501;
+    const PAGESIZE: c_int = if cfg!(target_os = "openbsd") { 28 } else { 11 };
+    let pages = unsafe { sysconf(AVPHYS_PAGES) };
+    let size = unsafe { sysconf(PAGESIZE) };
+    if pages > 0 && size > 0 {
+        pages as u64 * size as u64
+    } else {
+        0
+    }
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    windows,
+    target_vendor = "apple",
+    target_os = "openbsd",
+    target_os = "solaris",
+    target_os = "illumos"
+)))]
+pub fn available_memory_bytes() -> u64 {
+    0
 }

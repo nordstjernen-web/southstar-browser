@@ -61,7 +61,6 @@ unsafe extern "C" {
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_set_size(string: *mut GString, len: usize) -> *mut GString;
     fn g_string_append_len(string: *mut GString, val: *const c_char, len: isize) -> *mut GString;
-    fn ns_net_response_budget() -> u64;
 }
 
 pub fn gstring_append(out: *mut GString, bytes: &[u8]) {
@@ -74,7 +73,7 @@ fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
         return 0;
     }
     if ctx.total >= ctx.next_recheck {
-        ctx.budget = unsafe { ns_net_response_budget() };
+        ctx.budget = crate::transport::response_budget();
         ctx.next_recheck = ctx.total + RECHECK_BYTES;
     }
     if ctx.total + bytes > ctx.budget || ctx.total + bytes > u64::from(u32::MAX) {
@@ -110,7 +109,7 @@ pub unsafe extern "C" fn ns_body_sink_init(ctx: *mut NsWriteCtx, body: *mut GByt
         ctx.write(NsWriteCtx {
             body,
             total: 0,
-            budget: ns_net_response_budget(),
+            budget: crate::transport::response_budget(),
             next_recheck: RECHECK_BYTES,
             exceeded: 0,
         });

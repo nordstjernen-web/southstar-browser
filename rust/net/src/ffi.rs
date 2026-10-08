@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub mod curl;
 pub mod forms;
 pub mod host;
 pub mod lexbor;
@@ -10,6 +11,7 @@ pub mod proxy;
 pub mod sinks;
 pub mod storage;
 pub mod sys;
+pub mod transport;
 pub mod url;
 
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
@@ -74,7 +76,6 @@ unsafe extern "C" {
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_unref(array: *mut GByteArray);
-    fn ns_net_response_budget() -> u64;
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -174,7 +175,7 @@ pub unsafe extern "C" fn ns_net_synthesize_data_response(
         return 0;
     };
     let resp = unsafe { &mut *resp };
-    let budget = unsafe { ns_net_response_budget() };
+    let budget = crate::transport::response_budget();
     let body_start = unsafe { (*resp.body).len };
     let mut sink = ByteArraySink(resp.body);
     let mut budgeted = Budgeted::new(&mut sink, budget);
@@ -210,7 +211,7 @@ pub unsafe extern "C" fn ns_net_synthesize_file_response(
     };
     let resp = unsafe { &mut *resp };
     let mut sink = ByteArraySink(resp.body);
-    let budget = || unsafe { ns_net_response_budget() };
+    let budget = crate::transport::response_budget;
     let Some(out) = file::respond(url, text(top_url), &mut sink, budget) else {
         return 0;
     };

@@ -204,6 +204,12 @@ Southstar Browser (unreleased):
   counters, connection statistics, proxy settings, copying and freeing
   responses, and form encoding (urlencoded in the page's charset and
   multipart boundaries). Requests and their logs are unchanged.
+* Network setup and the transport plumbing are Rust: initializing and
+  tearing down curl, the thread that drives every transfer through one
+  multi handle, the shared DNS, TLS-session and connection caches, the
+  TLS options, cancellation, the six-connections-per-origin limit,
+  remembering origins that refused a connection, the CA bundle search and
+  the response memory budget. Fetches behave as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
