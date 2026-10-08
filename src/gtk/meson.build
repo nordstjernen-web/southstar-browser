@@ -10,7 +10,6 @@ southstar_gtk_sources = files(
   '../renderer_tiles.c',
   '../rproc_http.c',
   '../rproc_inproc.c',
-  '../ipc_http.c',
 )
 
 southstar_gtk_deps = southstar_deps + [gtk4_dep]

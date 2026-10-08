@@ -841,6 +841,7 @@ files will show whether WebIDL generation pays for itself.
 | `glctx.c` | 350 | `rust/glctx` | 2 |
 | `mat4.h` | 144 | `rust/mat4` | 2 |
 | `image_ico.c`, `image_webp.c` | 377 | `rust/image-decoders` | 2 |
+| `ipc_http.c` | 599 | `rust/ipc` | 3 |
 | `cache.c` | 788 | `rust/http-cache` (SQLite through the shared `rust/sqlite`) | 5 |
 | `eventsource.c` | 438 | `rust/eventsource` | 5 |
 | `html.c` | 829 | `rust/html-util` | 6 |

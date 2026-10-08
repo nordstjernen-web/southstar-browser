@@ -1508,6 +1508,7 @@ dependencies = [
  "southstar-http-cache",
  "southstar-i18n",
  "southstar-image-decoders",
+ "southstar-ipc",
  "southstar-js-temporal",
  "southstar-mat4",
  "southstar-mic",
@@ -1579,6 +1580,10 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
 ]
+
+[[package]]
+name = "southstar-ipc"
+version = "1.0.30-dev"
 
 [[package]]
 name = "southstar-js-engine"

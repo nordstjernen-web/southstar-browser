@@ -1,0 +1,11 @@
+[package]
+name = "southstar-ipc"
+description = "The renderer protocol's framing: HTTP/1.1 requests and replies over a socket or pipe, the X-* reply headers, the flat JSON bodies, and file-descriptor passing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

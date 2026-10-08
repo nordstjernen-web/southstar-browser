@@ -78,6 +78,9 @@ Southstar Browser (unreleased):
   Rust.
 * Response-body charset detection and decoding, HTML escaping and the
   image, JSON and XML viewer pages are Rust.
+* The framing of the renderer protocol is Rust: the HTTP/1.1 requests and
+  replies between the window and its renderer processes, their X-* headers
+  and JSON bodies, and the passing of the shared framebuffer's descriptor.
 * docs/rust-port.md reviews the JavaScript engines available to Rust and
   plans the JavaScript engine as a build option: the Rust bindings target an
   engine-neutral layer, QuickJS-ng stays the default, and Boa and Nova can be

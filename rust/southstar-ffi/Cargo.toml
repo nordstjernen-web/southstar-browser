@@ -29,6 +29,7 @@ southstar-history = { path = "../history" }
 southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
+southstar-ipc = { path = "../ipc" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-i18n = { path = "../i18n" }
 southstar-mat4 = { path = "../mat4" }
