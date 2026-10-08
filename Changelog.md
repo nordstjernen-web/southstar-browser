@@ -245,6 +245,14 @@ Southstar Browser (unreleased):
   light-dark() and calc() inside them). Colours parse as before, except that
   a channel too large for an integer (rgb(1e20 0 0), rgb(calc(infinity) 0 0))
   now clamps to 255 as specified instead of coming out as 0.
+* Lengths and CSS math functions are Rust: every length unit (absolute,
+  font-relative, viewport, dynamic and container units), calc(), min(),
+  max(), clamp(), round(), mod(), rem(), abs(), hypot(), pow(), sqrt(),
+  exp(), log(), sign(), the trigonometric functions, progress(), env() and
+  the constants pi, e, infinity and NaN, resolving them to pixels and
+  percentages, evaluating the ones that wait for a percentage basis, and
+  the canonical calc() spelling getComputedStyle and element.style report.
+  Values compute and serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

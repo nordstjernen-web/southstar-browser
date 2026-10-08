@@ -1,9 +1,13 @@
-//! Southstar — css.c ported to Rust section by section, starting with the colour parser and the scanning helpers it needs.
+//! Southstar — css.c ported to Rust section by section: so far the colour parser, and lengths with calc() and the other math functions.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod calc;
 mod color;
 mod ffi;
+mod math;
 mod scan;
+mod units;
 
 pub use color::parse_color;
+pub use ffi::NsCssValue;

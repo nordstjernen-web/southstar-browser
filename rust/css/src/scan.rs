@@ -14,6 +14,19 @@ pub(crate) fn is_ident(c: u8) -> bool {
     is_ident_start(c) || c.is_ascii_digit()
 }
 
+pub(crate) fn is_gspace(c: u8) -> bool {
+    c == b' ' || (b'\t'..=b'\r').contains(&c)
+}
+
+pub(crate) fn strip(s: &[u8]) -> &[u8] {
+    let start = s.iter().position(|&c| !is_gspace(c)).unwrap_or(s.len());
+    let end = s
+        .iter()
+        .rposition(|&c| !is_gspace(c))
+        .map_or(start, |last| last + 1);
+    &s[start..end.max(start)]
+}
+
 pub(crate) fn byte(s: &[u8], at: usize) -> u8 {
     s.get(at).copied().unwrap_or(0)
 }
