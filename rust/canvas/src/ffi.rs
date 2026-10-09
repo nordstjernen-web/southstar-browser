@@ -23,6 +23,86 @@ unsafe extern "C" {
         a: *mut u8,
     ) -> c_int;
     fn ns_css_font_shorthand_canonical(css: *const c_char) -> *mut c_char;
+    fn cairo_move_to(cr: *mut Cairo, x: c_double, y: c_double);
+    fn cairo_line_to(cr: *mut Cairo, x: c_double, y: c_double);
+    fn cairo_curve_to(
+        cr: *mut Cairo,
+        x1: c_double,
+        y1: c_double,
+        x2: c_double,
+        y2: c_double,
+        x3: c_double,
+        y3: c_double,
+    );
+    fn cairo_close_path(cr: *mut Cairo);
+    fn cairo_save(cr: *mut Cairo);
+    fn cairo_restore(cr: *mut Cairo);
+    fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
+    fn cairo_rotate(cr: *mut Cairo, angle: c_double);
+    fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
+    fn cairo_arc(
+        cr: *mut Cairo,
+        xc: c_double,
+        yc: c_double,
+        radius: c_double,
+        angle1: c_double,
+        angle2: c_double,
+    );
+    fn cairo_arc_negative(
+        cr: *mut Cairo,
+        xc: c_double,
+        yc: c_double,
+        radius: c_double,
+        angle1: c_double,
+        angle2: c_double,
+    );
+}
+
+#[repr(C)]
+pub struct Cairo {
+    _private: [u8; 0],
+}
+
+struct CairoPath(*mut Cairo);
+
+impl crate::path::PathSink for CairoPath {
+    fn move_to(&mut self, x: f64, y: f64) {
+        unsafe { cairo_move_to(self.0, x, y) };
+    }
+
+    fn line_to(&mut self, x: f64, y: f64) {
+        unsafe { cairo_line_to(self.0, x, y) };
+    }
+
+    fn curve_to(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, x: f64, y: f64) {
+        unsafe { cairo_curve_to(self.0, x1, y1, x2, y2, x, y) };
+    }
+
+    fn close_path(&mut self) {
+        unsafe { cairo_close_path(self.0) };
+    }
+
+    fn unit_arc(
+        &mut self,
+        center: (f64, f64),
+        phi: f64,
+        radii: (f64, f64),
+        angles: (f64, f64),
+        sweep: bool,
+    ) {
+        unsafe {
+            cairo_save(self.0);
+            cairo_translate(self.0, center.0, center.1);
+            cairo_rotate(self.0, phi);
+            cairo_scale(self.0, radii.0, radii.1);
+            if sweep {
+                cairo_arc(self.0, 0.0, 0.0, 1.0, angles.0, angles.1);
+            } else {
+                cairo_arc_negative(self.0, 0.0, 0.0, 1.0, angles.0, angles.1);
+            }
+            cairo_restore(self.0);
+        }
+    }
 }
 
 unsafe fn text<'a>(s: *const c_char) -> Option<&'a [u8]> {
@@ -102,4 +182,14 @@ pub unsafe extern "C" fn ns_canvas_font_string(css: *const c_char) -> *mut c_cha
         return ptr::null_mut();
     };
     glib::strdup(&crate::font::canonical(canon.to_bytes()))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_path2d_parse_svg(cr: *mut Cairo, d: *const c_char) {
+    if cr.is_null() {
+        return;
+    }
+    if let Some(d) = unsafe { text(d) } {
+        crate::path::parse(&mut CairoPath(cr), d);
+    }
 }

@@ -647,15 +647,6 @@ ns_path2d_roundRect(JSContext *ctx, JSValueConst this_val,
 JSValue
 ns_path2d_addPath(JSContext *ctx, JSValueConst this_val,
                   int argc, JSValueConst *argv);
-const char *
-ns_svg_skip_ws(const char *p);
-gboolean
-ns_svg_read_number(const char **pp, double *out);
-void
-ns_path2d_arc_svg(cairo_t *cr, double x1, double y1,
-                  double rx, double ry, double phi_deg,
-                  gboolean large_arc, gboolean sweep,
-                  double x2, double y2);
 void
 ns_path2d_parse_svg(cairo_t *cr, const char *d);
 JSValue

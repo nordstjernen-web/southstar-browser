@@ -5,8 +5,9 @@ Southstar Browser (unreleased):
 ======
 * The canvas 2D API starts moving to Rust (rust/canvas): colour parsing and
   the colour strings fillStyle, strokeStyle and shadowColor report, and the
-  filter and letter/word-spacing checks and the serialized font, identical to the C over a fuzzed set
-  of colour, filter, length and font strings.
+  filter and letter/word-spacing checks, the serialized font and the SVG
+  path data parsed by new Path2D(), identical to the C over a fuzzed set
+  of colour, filter, length, font and path strings.
 * The Performance API is Rust: performance.now(), mark(), measure(), the
   entry getters and clear methods, resource timing with its Timing-Allow-Origin
   and CORS rules, each frame's own clock and timeline, and
