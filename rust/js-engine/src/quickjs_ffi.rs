@@ -14,7 +14,8 @@ use std::ffi::CString;
 use std::path::Path;
 
 use crate::{
-    Attributes, BoundFn, NativeFn, PromiseState, PropertyDescriptor, RealmInit, TypedArrayBytes,
+    Attributes, BoundFn, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit, Trace,
+    TypedArrayBytes,
 };
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
@@ -49,11 +50,16 @@ pub struct JSValue {
     tag: i64,
 }
 
+type GcMark = unsafe extern "C" fn(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void);
+
+type JobFunc =
+    unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
+
 #[repr(C)]
 struct JSClassDef {
     class_name: *const c_char,
     finalizer: Option<unsafe extern "C" fn(rt: *mut JSRuntime, val: JSValue)>,
-    gc_mark: *const c_void,
+    gc_mark: Option<GcMark>,
     call: *const c_void,
     exotic: *const c_void,
 }
@@ -271,6 +277,14 @@ unsafe extern "C" {
     ) -> c_int;
     fn JS_AtomToValue(ctx: *mut JSContext, atom: JSAtom) -> JSValue;
     fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
+    fn JS_SetPrototype(ctx: *mut JSContext, obj: JSValue, proto: JSValue) -> c_int;
+    fn JS_MarkValue(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void);
+    fn JS_EnqueueJob(
+        ctx: *mut JSContext,
+        job_func: JobFunc,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> c_int;
     fn JS_SetModuleLoaderFunc(
         rt: *mut JSRuntime,
         module_normalize: Option<JSModuleNormalizeFunc>,
@@ -284,6 +298,8 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
     fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
+    fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+    fn JS_DupValueRT(rt: *mut JSRuntime, v: JSValue) -> JSValue;
     fn JS_IsArray(val: JSValue) -> bool;
 }
 
@@ -296,6 +312,30 @@ unsafe extern "C" {
 #[cfg(feature = "quickjs-original")]
 unsafe extern "C" {
     fn __JS_FreeValue(ctx: *mut JSContext, v: JSValue);
+    fn __JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+}
+
+#[cfg(feature = "quickjs-original")]
+#[allow(non_snake_case)]
+unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
+    if v.tag < 0 {
+        unsafe {
+            let count = ref_count(v);
+            *count -= 1;
+            if *count <= 0 {
+                __JS_FreeValueRT(rt, v);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "quickjs-original")]
+#[allow(non_snake_case)]
+unsafe fn JS_DupValueRT(_rt: *mut JSRuntime, v: JSValue) -> JSValue {
+    if v.tag < 0 {
+        unsafe { *ref_count(v) += 1 };
+    }
+    v
 }
 
 #[cfg(feature = "quickjs-original")]
@@ -336,12 +376,49 @@ const fn mkval(tag: i64, int32: i32) -> JSValue {
 const UNDEFINED: JSValue = mkval(TAG_UNDEFINED, 0);
 const NULL: JSValue = mkval(TAG_NULL, 0);
 
-struct HostData(Box<dyn Any>);
+type HostTrace = fn(&dyn Any, &mut dyn FnMut(&Value));
+
+struct HostData {
+    data: Box<dyn Any>,
+    trace: Option<HostTrace>,
+}
+
+fn trace_as<T: Any + Trace>(data: &dyn Any, visit: &mut dyn FnMut(&Value)) {
+    if let Some(data) = data.downcast_ref::<T>() {
+        data.trace(visit);
+    }
+}
 
 thread_local! {
     static NATIVES: RefCell<Vec<NativeFn>> = const { RefCell::new(Vec::new()) };
     static BOUND: RefCell<Vec<(BoundFn, usize)>> = const { RefCell::new(Vec::new()) };
     static REALMS: RefCell<Vec<(*mut JSRuntime, *mut JSContext)>> = const { RefCell::new(Vec::new()) };
+    static JOBS: RefCell<Vec<Job>> = const { RefCell::new(Vec::new()) };
+}
+
+fn job_index(f: Job) -> i32 {
+    JOBS.with(|jobs| {
+        let mut jobs = jobs.borrow_mut();
+        let index = jobs
+            .iter()
+            .position(|&known| ptr::fn_addr_eq(known, f))
+            .unwrap_or_else(|| {
+                jobs.push(f);
+                jobs.len() - 1
+            });
+        index as i32
+    })
+}
+
+unsafe extern "C" fn run_job(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue {
+    if argc < 1 || argv.is_null() {
+        return UNDEFINED;
+    }
+    let index = unsafe { (*argv).u.int32 } as usize;
+    if let Some(f) = JOBS.with(|jobs| jobs.borrow().get(index).copied()) {
+        f(&mut Scope::of(ctx));
+    }
+    UNDEFINED
 }
 
 fn native_index(f: NativeFn) -> c_int {
@@ -379,13 +456,25 @@ unsafe extern "C" fn finalize_host(_rt: *mut JSRuntime, val: JSValue) {
     }
 }
 
+unsafe extern "C" fn mark_host(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void) {
+    let data = unsafe { JS_GetOpaque(val, HOST_CLASS_ID) }.cast::<HostData>();
+    let Some(host) = (unsafe { data.as_ref() }) else {
+        return;
+    };
+    if let Some(trace) = host.trace {
+        trace(&*host.data, &mut |value| unsafe {
+            JS_MarkValue(rt, value.raw, mark_func)
+        });
+    }
+}
+
 fn register_host_class(rt: *mut JSRuntime) {
     unsafe {
         if !JS_IsRegisteredClass(rt, HOST_CLASS_ID) {
             let def = JSClassDef {
                 class_name: c"HostObject".as_ptr(),
                 finalizer: Some(finalize_host),
-                gc_mark: ptr::null(),
+                gc_mark: Some(mark_host),
                 call: ptr::null(),
                 exotic: ptr::null(),
             };
@@ -395,13 +484,18 @@ fn register_host_class(rt: *mut JSRuntime) {
 }
 
 pub struct Value {
-    ctx: *mut JSContext,
+    rt: *mut JSRuntime,
     raw: JSValue,
 }
 
 impl Value {
     fn own(ctx: *mut JSContext, raw: JSValue) -> Value {
-        Value { ctx, raw }
+        let rt = if raw.tag < 0 && !ctx.is_null() {
+            unsafe { JS_GetRuntime(ctx) }
+        } else {
+            ptr::null_mut()
+        };
+        Value { rt, raw }
     }
 
     fn into_raw(self) -> JSValue {
@@ -476,18 +570,19 @@ impl Value {
 
 impl Clone for Value {
     fn clone(&self) -> Value {
-        if self.raw.tag < 0 && !self.ctx.is_null() {
-            Value::own(self.ctx, unsafe { JS_DupValue(self.ctx, self.raw) })
+        let raw = if self.rt.is_null() {
+            self.raw
         } else {
-            Value::own(self.ctx, self.raw)
-        }
+            unsafe { JS_DupValueRT(self.rt, self.raw) }
+        };
+        Value { rt: self.rt, raw }
     }
 }
 
 impl Drop for Value {
     fn drop(&mut self) {
-        if self.raw.tag < 0 && !self.ctx.is_null() {
-            unsafe { JS_FreeValue(self.ctx, self.raw) };
+        if !self.rt.is_null() {
+            unsafe { JS_FreeValueRT(self.rt, self.raw) };
         }
     }
 }
@@ -661,6 +756,8 @@ impl Drop for Engine {
 }
 
 pub mod quickjs {
+    use core::ffi::{c_char, c_int, c_void};
+
     pub use super::{JSContext, JSValue};
     use super::{Scope, Value};
 
@@ -674,6 +771,134 @@ pub mod quickjs {
 
     pub fn raw_context(scope: &Scope<'_>) -> *mut JSContext {
         scope.ctx
+    }
+
+    pub type JSCFunction = unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+
+    const CFUNC_GENERIC: c_int = 0;
+
+    #[repr(C)]
+    struct JSMemoryUsage {
+        malloc_size: i64,
+        malloc_limit: i64,
+        memory_used_size: i64,
+        rest: [i64; 61],
+    }
+
+    unsafe extern "C" {
+        fn JS_NewCFunction2(
+            ctx: *mut JSContext,
+            func: JSCFunction,
+            name: *const c_char,
+            length: c_int,
+            cproto: c_int,
+            magic: c_int,
+        ) -> JSValue;
+        fn JS_ComputeMemoryUsage(rt: *mut super::JSRuntime, s: *mut JSMemoryUsage);
+        fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    unsafe extern "C" {
+        fn JS_GetFunctionRealm(ctx: *mut JSContext, func_obj: JSValue) -> *mut JSContext;
+    }
+
+    pub struct MemoryUsage {
+        pub malloc_size: i64,
+        pub malloc_limit: i64,
+        pub memory_used_size: i64,
+    }
+
+    pub unsafe fn take_value(scope: &Scope<'_>, raw: JSValue) -> Value {
+        Value::own(scope.ctx, raw)
+    }
+
+    pub fn into_raw(value: Value) -> JSValue {
+        value.into_raw()
+    }
+
+    pub unsafe fn call_native(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+        f: impl FnOnce(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    ) -> JSValue {
+        let raw_args = if argv.is_null() || argc <= 0 {
+            &[][..]
+        } else {
+            unsafe { core::slice::from_raw_parts(argv, argc as usize) }
+        };
+        let mut scope = Scope::of(ctx);
+        let args: Vec<Value> = raw_args
+            .iter()
+            .map(|&raw| unsafe { borrow_value(&scope, raw) })
+            .collect();
+        let this = unsafe { borrow_value(&scope, this_val) };
+        match f(&mut scope, &this, &args) {
+            Ok(value) => value.into_raw(),
+            Err(error) => unsafe { super::JS_Throw(ctx, error.into_raw()) },
+        }
+    }
+
+    pub fn c_function(scope: &mut Scope<'_>, name: &str, arity: u32, f: JSCFunction) -> Value {
+        let name = super::c_text(name);
+        let raw = unsafe {
+            JS_NewCFunction2(
+                scope.ctx,
+                f,
+                name.as_ptr(),
+                arity as c_int,
+                CFUNC_GENERIC,
+                0,
+            )
+        };
+        Value::own(scope.ctx, raw)
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    pub fn function_realm(
+        scope: &mut Scope<'_>,
+        function: &Value,
+    ) -> Result<*mut JSContext, Value> {
+        let realm = unsafe { JS_GetFunctionRealm(scope.ctx, function.raw) };
+        if realm.is_null() {
+            Err(scope.exception())
+        } else {
+            Ok(realm)
+        }
+    }
+
+    #[cfg(feature = "quickjs-original")]
+    pub fn function_realm(
+        scope: &mut Scope<'_>,
+        _function: &Value,
+    ) -> Result<*mut JSContext, Value> {
+        Ok(scope.ctx)
+    }
+
+    pub fn context_opaque(scope: &Scope<'_>) -> *mut c_void {
+        unsafe { JS_GetContextOpaque(scope.ctx) }
+    }
+
+    pub fn memory_usage(scope: &Scope<'_>) -> MemoryUsage {
+        let mut usage = JSMemoryUsage {
+            malloc_size: 0,
+            malloc_limit: 0,
+            memory_used_size: 0,
+            rest: [0; 61],
+        };
+        unsafe { JS_ComputeMemoryUsage(scope.rt(), &mut usage) };
+        MemoryUsage {
+            malloc_size: usage.malloc_size,
+            malloc_limit: usage.malloc_limit,
+            memory_used_size: usage.memory_used_size,
+        }
     }
 
     #[derive(Clone, Copy)]
@@ -1110,6 +1335,15 @@ impl Scope<'_> {
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
+        self.host_object(prototype, data, None)
+    }
+
+    fn host_object<T: Any>(
+        &mut self,
+        prototype: Option<&Value>,
+        data: T,
+        trace: Option<HostTrace>,
+    ) -> Value {
         register_host_class(self.rt());
         let raw = unsafe {
             match prototype {
@@ -1118,10 +1352,21 @@ impl Scope<'_> {
             }
         };
         if raw.tag == TAG_OBJECT {
-            let boxed = Box::into_raw(Box::new(HostData(Box::new(data))));
+            let boxed = Box::into_raw(Box::new(HostData {
+                data: Box::new(data),
+                trace,
+            }));
             unsafe { JS_SetOpaque(raw, boxed.cast()) };
         }
         Value::own(self.ctx, raw)
+    }
+
+    pub fn new_traced_host_object<T: Any + Trace>(
+        &mut self,
+        prototype: Option<&Value>,
+        data: T,
+    ) -> Value {
+        self.host_object(prototype, data, Some(trace_as::<T>))
     }
 
     pub fn host_data<T: Any + Clone>(&mut self, value: &Value) -> Option<T> {
@@ -1129,7 +1374,7 @@ impl Scope<'_> {
             return None;
         }
         let data = unsafe { JS_GetOpaque(value.raw, HOST_CLASS_ID) }.cast::<HostData>();
-        unsafe { data.as_ref() }.and_then(|data| data.0.downcast_ref::<T>().cloned())
+        unsafe { data.as_ref() }.and_then(|host| host.data.downcast_ref::<T>().cloned())
     }
 
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
@@ -1230,6 +1475,17 @@ impl Scope<'_> {
     pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {
         let raw = unsafe { JS_GetPrototype(self.ctx, object.raw) };
         self.take(raw)
+    }
+
+    pub fn set_prototype(&mut self, object: &Value, prototype: &Value) -> Result<(), Value> {
+        let status = unsafe { JS_SetPrototype(self.ctx, object.raw, prototype.raw) };
+        self.status(status)
+    }
+
+    pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
+        let mut index = Value::int(job_index(job)).into_raw();
+        let status = unsafe { JS_EnqueueJob(self.ctx, run_job, 1, &mut index) };
+        self.status(status)
     }
 
     pub fn is_function(&mut self, value: &Value) -> bool {

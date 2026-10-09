@@ -9,19 +9,21 @@ use std::rc::Rc;
 use boa_engine::builtins::object::OrdinaryObject;
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
+use boa_engine::job::PromiseJob;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise, JsTypedArray};
-use boa_engine::prelude::{Finalize, JsData, Trace};
+use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
 use boa_engine::{
     Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
     NativeFunction, Source,
 };
+use boa_gc::custom_trace;
 
 use crate::{
-    Attributes, BoundFn, NativeFn, PromiseState, PropertyDescriptor, RealmInit, TypedArrayBytes,
-    int64_modulo,
+    Attributes, BoundFn, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit, Trace,
+    TypedArrayBytes, int64_modulo,
 };
 
 pub const ENGINE_NAME: &str = "boa";
@@ -33,9 +35,29 @@ pub fn engine_version() -> String {
 #[derive(Clone)]
 pub struct Value(JsValue);
 
-#[derive(Trace, Finalize, JsData)]
-#[boa_gc(unsafe_empty_trace)]
-struct HostData(Box<dyn Any>);
+type HostTrace = fn(&dyn Any, &mut dyn FnMut(&Value));
+
+#[derive(JsData)]
+struct HostData {
+    data: Box<dyn Any>,
+    trace: Option<HostTrace>,
+}
+
+impl Finalize for HostData {}
+
+unsafe impl BoaTrace for HostData {
+    custom_trace!(this, mark, {
+        if let Some(trace) = this.trace {
+            trace(&*this.data, &mut |value: &Value| mark(&value.0));
+        }
+    });
+}
+
+fn trace_as<T: Any + Trace>(data: &dyn Any, visit: &mut dyn FnMut(&Value)) {
+    if let Some(data) = data.downcast_ref::<T>() {
+        data.trace(visit);
+    }
+}
 
 impl Value {
     pub fn undefined() -> Value {
@@ -408,15 +430,36 @@ impl Scope<'_> {
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
+        self.host_object(prototype, data, None)
+    }
+
+    pub fn new_traced_host_object<T: Any + Trace>(
+        &mut self,
+        prototype: Option<&Value>,
+        data: T,
+    ) -> Value {
+        self.host_object(prototype, data, Some(trace_as::<T>))
+    }
+
+    fn host_object<T: Any>(
+        &mut self,
+        prototype: Option<&Value>,
+        data: T,
+        trace: Option<HostTrace>,
+    ) -> Value {
         let prototype = prototype.and_then(|p| p.0.as_object());
-        let object = JsObject::from_proto_and_data(prototype, HostData(Box::new(data)));
+        let host = HostData {
+            data: Box::new(data),
+            trace,
+        };
+        let object = JsObject::from_proto_and_data(prototype, host);
         Value(object.upcast().into())
     }
 
     pub fn host_data<T: Any + Clone>(&mut self, value: &Value) -> Option<T> {
         let object = value.0.as_object()?;
         let data = object.downcast_ref::<HostData>()?;
-        data.0.downcast_ref::<T>().cloned()
+        data.data.downcast_ref::<T>().cloned()
     }
 
     pub fn set(&mut self, object: &Value, key: &str, value: Value) -> Result<(), Value> {
@@ -542,6 +585,21 @@ impl Scope<'_> {
             getter: self.get(&descriptor, "get")?,
             setter: self.get(&descriptor, "set")?,
         }))
+    }
+
+    pub fn set_prototype(&mut self, object: &Value, prototype: &Value) -> Result<(), Value> {
+        let object = self.object(object)?;
+        object.set_prototype(prototype.0.as_object());
+        Ok(())
+    }
+
+    pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
+        let native = PromiseJob::new(move |ctx| {
+            job(&mut Scope { ctx });
+            Ok(JsValue::undefined())
+        });
+        self.ctx.enqueue_job(native.into());
+        Ok(())
     }
 
     pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {

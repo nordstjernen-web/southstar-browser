@@ -27,6 +27,12 @@ pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Res
 
 pub type RealmInit = for<'a> fn(&mut Scope<'a>) -> Result<(), Value>;
 
+pub type Job = for<'a> fn(&mut Scope<'a>);
+
+pub trait Trace {
+    fn trace(&self, visit: &mut dyn FnMut(&Value));
+}
+
 pub struct TypedArrayBytes<'a> {
     pub bytes: &'a [u8],
     pub byte_offset: usize,
