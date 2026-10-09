@@ -37,48 +37,30 @@ pub(crate) mod c {
     use super::{JSContext, JSValue, c_int};
 
     jscfunctions!(
-        ns_ctx_arc,
-        ns_ctx_arcTo,
-        ns_ctx_beginPath,
-        ns_ctx_bezierCurveTo,
         ns_ctx_clearRect,
         ns_ctx_clip,
-        ns_ctx_closePath,
         ns_ctx_createConicGradient,
         ns_ctx_createImageData,
         ns_ctx_createLinearGradient,
         ns_ctx_createPattern,
         ns_ctx_createRadialGradient,
         ns_ctx_drawImage,
-        ns_ctx_ellipse,
         ns_ctx_fill,
         ns_ctx_fillRect,
         ns_ctx_fillText,
         ns_ctx_getImageData,
         ns_ctx_getLineDash,
-        ns_ctx_getTransform,
         ns_ctx_isPointInPath,
         ns_ctx_isPointInStroke,
-        ns_ctx_lineTo,
         ns_ctx_measureText,
-        ns_ctx_moveTo,
         ns_ctx_putImageData,
-        ns_ctx_quadraticCurveTo,
-        ns_ctx_rect,
         ns_ctx_reset,
-        ns_ctx_resetTransform,
         ns_ctx_restore,
-        ns_ctx_rotate,
-        ns_ctx_roundRect,
         ns_ctx_save,
-        ns_ctx_scale,
         ns_ctx_setLineDash,
-        ns_ctx_setTransform,
         ns_ctx_stroke,
         ns_ctx_strokeRect,
         ns_ctx_strokeText,
-        ns_ctx_transform,
-        ns_ctx_translate,
         ns_ctx_gradient_addColorStop,
     );
 }
@@ -290,6 +272,16 @@ unsafe fn bitmap_source(v: JSValue) -> Option<Source> {
 
 fn js_of(scope: &Scope<'_>) -> *mut NsJs {
     quickjs::context_opaque(scope).cast()
+}
+
+pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::cairo::Context> {
+    let js = super::state::js_of(scope);
+    if js.is_null() || !hidden::is_ctx2d(this) {
+        return None;
+    }
+    let el = super::state::Node::from_addr(hidden::ptr(this));
+    let st = crate::state::state_for(js, el)?;
+    unsafe { super::cairo::Context::from_raw((*st).cr) }
 }
 
 pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {

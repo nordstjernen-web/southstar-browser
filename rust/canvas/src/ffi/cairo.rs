@@ -11,6 +11,29 @@ pub struct Cairo {
 }
 
 #[repr(C)]
+struct Matrix {
+    xx: c_double,
+    yx: c_double,
+    xy: c_double,
+    yy: c_double,
+    x0: c_double,
+    y0: c_double,
+}
+
+impl Matrix {
+    fn from(m: [f64; 6]) -> Matrix {
+        Matrix {
+            xx: m[0],
+            yx: m[1],
+            xy: m[2],
+            yy: m[3],
+            x0: m[4],
+            y0: m[5],
+        }
+    }
+}
+
+#[repr(C)]
 #[derive(Clone, Copy)]
 struct PathHeader {
     kind: c_int,
@@ -56,6 +79,10 @@ unsafe extern "C" {
     fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
     fn cairo_rotate(cr: *mut Cairo, angle: c_double);
     fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
+    fn cairo_transform(cr: *mut Cairo, matrix: *const Matrix);
+    fn cairo_set_matrix(cr: *mut Cairo, matrix: *const Matrix);
+    fn cairo_get_matrix(cr: *mut Cairo, matrix: *mut Matrix);
+    fn cairo_identity_matrix(cr: *mut Cairo);
     fn cairo_rectangle(cr: *mut Cairo, x: c_double, y: c_double, w: c_double, h: c_double);
     fn cairo_arc(
         cr: *mut Cairo,
@@ -309,6 +336,24 @@ impl Context {
 
     pub fn scale(self, x: f64, y: f64) {
         unsafe { cairo_scale(self.0, x, y) };
+    }
+
+    pub fn transform(self, m: [f64; 6]) {
+        unsafe { cairo_transform(self.0, &Matrix::from(m)) };
+    }
+
+    pub fn set_matrix(self, m: [f64; 6]) {
+        unsafe { cairo_set_matrix(self.0, &Matrix::from(m)) };
+    }
+
+    pub fn matrix(self) -> [f64; 6] {
+        let mut m = Matrix::from([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+        unsafe { cairo_get_matrix(self.0, &mut m) };
+        [m.xx, m.yx, m.xy, m.yy, m.x0, m.y0]
+    }
+
+    pub fn identity_matrix(self) {
+        unsafe { cairo_identity_matrix(self.0) };
     }
 
     pub fn rectangle(self, x: f64, y: f64, w: f64, h: f64) {

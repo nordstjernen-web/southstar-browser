@@ -437,18 +437,6 @@ JSValue
 ns_ctx_strokeRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue
 ns_ctx_clearRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_beginPath(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_closePath(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_moveTo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_lineTo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_arc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_rect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 gboolean
 ns_value_is_path2d(JSValueConst v);
 void
@@ -472,12 +460,6 @@ JSValue
 ns_ctx_save(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue
 ns_ctx_restore(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_scale(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 NsPangoFontDescription *
 ns_canvas_font_desc(const char *css_font);
 gboolean
@@ -492,31 +474,8 @@ ns_ctx_fillText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *a
 JSValue
 ns_ctx_measureText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue
-ns_ctx_quadraticCurveTo(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv);
-JSValue
-ns_ctx_bezierCurveTo(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv);
-JSValue
-ns_ctx_arcTo(JSContext *ctx, JSValueConst this_val,
-             int argc, JSValueConst *argv);
-JSValue
-ns_ctx_ellipse(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv);
-JSValue
 ns_ctx_clip(JSContext *ctx, JSValueConst this_val,
             int argc, JSValueConst *argv);
-gboolean
-ns_matrix_from_obj(JSContext *ctx, JSValueConst v, cairo_matrix_t *m);
-JSValue
-ns_ctx_setTransform(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
-JSValue
-ns_ctx_transform(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
-ns_ctx_resetTransform(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv);
 JSValue
 ns_ctx_setLineDash(JSContext *ctx, JSValueConst this_val,
                    int argc, JSValueConst *argv);
@@ -563,14 +522,8 @@ gboolean
 ns_extract_radii(JSContext *ctx, JSValueConst v,
                  double *rtl, double *rtr, double *rbr, double *rbl);
 JSValue
-ns_ctx_roundRect(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
 ns_ctx_reset(JSContext *ctx, JSValueConst this_val,
              int argc, JSValueConst *argv);
-JSValue
-ns_ctx_getTransform(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
 JSValue
 ns_ctx_isPointInPath(JSContext *ctx, JSValueConst this_val,
                      int argc, JSValueConst *argv);

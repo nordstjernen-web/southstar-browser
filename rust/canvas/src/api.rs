@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, context, path2d};
+use crate::{bitmap, context, ctxpath, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -147,13 +147,13 @@ static CTX2D_ATTRS: [AttrDef; 28] = [
 macro_rules! ctx2d_methods {
     ($($extra:expr,)*) => {
         [
-            method("arc", c::ns_ctx_arc, 5),
-            method("arcTo", c::ns_ctx_arcTo, 5),
-            method("beginPath", c::ns_ctx_beginPath, 0),
-            method("bezierCurveTo", c::ns_ctx_bezierCurveTo, 6),
+            native("arc", ctxpath::arc, 5),
+            native("arcTo", ctxpath::arc_to_method, 5),
+            native("beginPath", ctxpath::begin_path, 0),
+            native("bezierCurveTo", ctxpath::bezier_curve_to, 6),
             method("clearRect", c::ns_ctx_clearRect, 4),
             method("clip", c::ns_ctx_clip, 0),
-            method("closePath", c::ns_ctx_closePath, 0),
+            native("closePath", ctxpath::close_path, 0),
             method("createConicGradient", c::ns_ctx_createConicGradient, 3),
             method("createImageData", c::ns_ctx_createImageData, 1),
             method("createLinearGradient", c::ns_ctx_createLinearGradient, 4),
@@ -161,37 +161,37 @@ macro_rules! ctx2d_methods {
             method("createRadialGradient", c::ns_ctx_createRadialGradient, 6),
             $($extra,)*
             method("drawImage", c::ns_ctx_drawImage, 3),
-            method("ellipse", c::ns_ctx_ellipse, 7),
+            native("ellipse", ctxpath::ellipse, 7),
             method("fill", c::ns_ctx_fill, 0),
             method("fillRect", c::ns_ctx_fillRect, 4),
             method("fillText", c::ns_ctx_fillText, 3),
             native("getContextAttributes", context::get_attributes, 0),
             method("getImageData", c::ns_ctx_getImageData, 4),
             method("getLineDash", c::ns_ctx_getLineDash, 0),
-            method("getTransform", c::ns_ctx_getTransform, 0),
+            native("getTransform", ctxpath::get_transform, 0),
             native("isContextLost", context::is_context_lost, 0),
             method("isPointInPath", c::ns_ctx_isPointInPath, 2),
             method("isPointInStroke", c::ns_ctx_isPointInStroke, 2),
-            method("lineTo", c::ns_ctx_lineTo, 2),
+            native("lineTo", ctxpath::line_to, 2),
             method("measureText", c::ns_ctx_measureText, 1),
-            method("moveTo", c::ns_ctx_moveTo, 2),
+            native("moveTo", ctxpath::move_to, 2),
             method("putImageData", c::ns_ctx_putImageData, 3),
-            method("quadraticCurveTo", c::ns_ctx_quadraticCurveTo, 4),
-            method("rect", c::ns_ctx_rect, 4),
+            native("quadraticCurveTo", ctxpath::quadratic_curve_to, 4),
+            native("rect", ctxpath::rect, 4),
             method("reset", c::ns_ctx_reset, 0),
-            method("resetTransform", c::ns_ctx_resetTransform, 0),
+            native("resetTransform", ctxpath::reset_transform, 0),
             method("restore", c::ns_ctx_restore, 0),
-            method("rotate", c::ns_ctx_rotate, 1),
-            method("roundRect", c::ns_ctx_roundRect, 4),
+            native("rotate", ctxpath::rotate, 1),
+            native("roundRect", ctxpath::round_rect, 4),
             method("save", c::ns_ctx_save, 0),
-            method("scale", c::ns_ctx_scale, 2),
+            native("scale", ctxpath::scale, 2),
             method("setLineDash", c::ns_ctx_setLineDash, 1),
-            method("setTransform", c::ns_ctx_setTransform, 0),
+            native("setTransform", ctxpath::set_transform, 0),
             method("stroke", c::ns_ctx_stroke, 0),
             method("strokeRect", c::ns_ctx_strokeRect, 4),
             method("strokeText", c::ns_ctx_strokeText, 3),
-            method("transform", c::ns_ctx_transform, 6),
-            method("translate", c::ns_ctx_translate, 2),
+            native("transform", ctxpath::transform, 6),
+            native("translate", ctxpath::translate, 2),
         ]
     };
 }

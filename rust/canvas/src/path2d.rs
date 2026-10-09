@@ -126,6 +126,10 @@ pub(crate) fn ellipse(cr: Context, e: &Ellipse) {
         degenerate_ellipse(cr, e);
         return;
     }
+    ellipse_scaled(cr, e);
+}
+
+pub(crate) fn ellipse_scaled(cr: Context, e: &Ellipse) {
     cr.save();
     cr.translate(e.center.0, e.center.1);
     cr.rotate(e.rotation);

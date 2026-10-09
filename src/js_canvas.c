@@ -497,75 +497,6 @@ ns_ctx_clearRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *
     return JS_UNDEFINED;
 }
 
-JSValue
-ns_ctx_beginPath(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_new_path(st->cr);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_closePath(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_close_path(st->cr);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_moveTo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    double x = ns_arg_d(ctx, argv[0]), y = ns_arg_d(ctx, argv[1]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_move_to(st->cr, x, y);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_lineTo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    double x = ns_arg_d(ctx, argv[0]), y = ns_arg_d(ctx, argv[1]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_line_to(st->cr, x, y);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_arc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 5) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    double x = ns_arg_d(ctx, argv[0]);
-    double y = ns_arg_d(ctx, argv[1]);
-    double r = ns_arg_d(ctx, argv[2]);
-    double a0 = ns_arg_d(ctx, argv[3]);
-    double a1 = ns_arg_d(ctx, argv[4]);
-    if (r < 0)
-        return ns_canvas_throw_dom(ctx, "IndexSizeError",
-                                   "arc radius must not be negative");
-    gboolean ccw = argc >= 6 && JS_ToBool(ctx, argv[5]);
-    if (ccw) cairo_arc_negative(st->cr, x, y, r, a0, a1);
-    else     cairo_arc(st->cr, x, y, r, a0, a1);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_rect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 4) return JS_UNDEFINED;
-    double x = ns_arg_d(ctx, argv[0]), y = ns_arg_d(ctx, argv[1]);
-    double w = ns_arg_d(ctx, argv[2]), h = ns_arg_d(ctx, argv[3]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_rectangle(st->cr, x, y, w, h);
-    return JS_UNDEFINED;
-}
-
 cairo_path_t *
 ns_ctx_prepare_path_and_rule(JSContext *ctx, cairo_t *cr,
                              int argc, JSValueConst *argv)
@@ -737,36 +668,6 @@ ns_ctx_restore(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *ar
     JS_FreeAtom(ctx, len_atom);
     JS_FreeValue(ctx, stack);
     cairo_restore(st->cr);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_translate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    double tx = ns_arg_d(ctx, argv[0]), ty = ns_arg_d(ctx, argv[1]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_translate(st->cr, tx, ty);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_scale(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    double sx = ns_arg_d(ctx, argv[0]), sy = ns_arg_d(ctx, argv[1]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_scale(st->cr, sx, sy);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_rotate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 1) return JS_UNDEFINED;
-    double angle = ns_arg_d(ctx, argv[0]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_rotate(st->cr, angle);
     return JS_UNDEFINED;
 }
 
@@ -961,114 +862,6 @@ ns_ctx_measureText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst
 }
 
 JSValue
-ns_ctx_quadraticCurveTo(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv)
-{
-    if (argc < 4) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    double cpx = ns_arg_d(ctx, argv[0]), cpy = ns_arg_d(ctx, argv[1]);
-    double x   = ns_arg_d(ctx, argv[2]), y   = ns_arg_d(ctx, argv[3]);
-    double x0, y0;
-    if (!cairo_has_current_point(st->cr))
-        cairo_move_to(st->cr, cpx, cpy);
-    cairo_get_current_point(st->cr, &x0, &y0);
-    cairo_curve_to(st->cr,
-                   x0 + 2.0 / 3.0 * (cpx - x0), y0 + 2.0 / 3.0 * (cpy - y0),
-                   x  + 2.0 / 3.0 * (cpx - x),  y  + 2.0 / 3.0 * (cpy - y),
-                   x, y);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_bezierCurveTo(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    if (argc < 6) return JS_UNDEFINED;
-    double x1 = ns_arg_d(ctx, argv[0]), y1 = ns_arg_d(ctx, argv[1]);
-    double x2 = ns_arg_d(ctx, argv[2]), y2 = ns_arg_d(ctx, argv[3]);
-    double x3 = ns_arg_d(ctx, argv[4]), y3 = ns_arg_d(ctx, argv[5]);
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_curve_to(st->cr, x1, y1, x2, y2, x3, y3);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_arcTo(JSContext *ctx, JSValueConst this_val,
-             int argc, JSValueConst *argv)
-{
-    if (argc < 5) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    double x1 = ns_arg_d(ctx, argv[0]), y1 = ns_arg_d(ctx, argv[1]);
-    double x2 = ns_arg_d(ctx, argv[2]), y2 = ns_arg_d(ctx, argv[3]);
-    double r  = ns_arg_d(ctx, argv[4]);
-    if (r < 0)
-        return ns_canvas_throw_dom(ctx, "IndexSizeError",
-                                   "arcTo radius must not be negative");
-    double x0, y0;
-    if (!cairo_has_current_point(st->cr))
-        cairo_move_to(st->cr, x1, y1);
-    cairo_get_current_point(st->cr, &x0, &y0);
-    double a1x = x0 - x1, a1y = y0 - y1;
-    double a2x = x2 - x1, a2y = y2 - y1;
-    double l1 = hypot(a1x, a1y), l2 = hypot(a2x, a2y);
-    if (l1 == 0 || l2 == 0 || r == 0) { cairo_line_to(st->cr, x1, y1); return JS_UNDEFINED; }
-    double u1x = a1x / l1, u1y = a1y / l1;
-    double u2x = a2x / l2, u2y = a2y / l2;
-    double cos_t = u1x * u2x + u1y * u2y;
-    if (cos_t >= 1.0 || cos_t <= -1.0) {
-        cairo_line_to(st->cr, x1, y1);
-        return JS_UNDEFINED;
-    }
-    double tan_half = sqrt((1 - cos_t) / (1 + cos_t));
-    double dist = r / tan_half;
-    double t1x = x1 + u1x * dist, t1y = y1 + u1y * dist;
-    double t2x = x1 + u2x * dist, t2y = y1 + u2y * dist;
-    double bisx = (u1x + u2x), bisy = (u1y + u2y);
-    double blen = hypot(bisx, bisy);
-    if (blen == 0) { cairo_line_to(st->cr, t1x, t1y); return JS_UNDEFINED; }
-    bisx /= blen; bisy /= blen;
-    double cdist = sqrt(r * r + dist * dist);
-    double cx = x1 + bisx * cdist, cy = y1 + bisy * cdist;
-    double ang1 = atan2(t1y - cy, t1x - cx);
-    double ang2 = atan2(t2y - cy, t2x - cx);
-    double cross = u1x * u2y - u1y * u2x;
-    cairo_line_to(st->cr, t1x, t1y);
-    if (cross < 0) cairo_arc_negative(st->cr, cx, cy, r, ang1, ang2);
-    else           cairo_arc(st->cr, cx, cy, r, ang1, ang2);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_ellipse(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv)
-{
-    if (argc < 7) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    double x  = ns_arg_d(ctx, argv[0]);
-    double y  = ns_arg_d(ctx, argv[1]);
-    double rx = ns_arg_d(ctx, argv[2]);
-    double ry = ns_arg_d(ctx, argv[3]);
-    double rot = ns_arg_d(ctx, argv[4]);
-    double a0 = ns_arg_d(ctx, argv[5]);
-    double a1 = ns_arg_d(ctx, argv[6]);
-    if (rx < 0 || ry < 0)
-        return ns_canvas_throw_dom(ctx, "IndexSizeError",
-                                   "ellipse radius must not be negative");
-    gboolean ccw = argc >= 8 && JS_ToBool(ctx, argv[7]);
-    cairo_save(st->cr);
-    cairo_translate(st->cr, x, y);
-    cairo_rotate(st->cr, rot);
-    cairo_scale(st->cr, rx, ry);
-    if (ccw) cairo_arc_negative(st->cr, 0, 0, 1.0, a0, a1);
-    else     cairo_arc(st->cr, 0, 0, 1.0, a0, a1);
-    cairo_restore(st->cr);
-    return JS_UNDEFINED;
-}
-
-JSValue
 ns_ctx_clip(JSContext *ctx, JSValueConst this_val,
             int argc, JSValueConst *argv)
 {
@@ -1077,73 +870,6 @@ ns_ctx_clip(JSContext *ctx, JSValueConst this_val,
     cairo_path_t *saved = ns_ctx_prepare_path_and_rule(ctx, st->cr, argc, argv);
     cairo_clip_preserve(st->cr);
     ns_ctx_restore_path(st->cr, saved);
-    return JS_UNDEFINED;
-}
-
-gboolean
-ns_matrix_from_obj(JSContext *ctx, JSValueConst v, cairo_matrix_t *m)
-{
-    if (!JS_IsObject(v)) return FALSE;
-    double a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
-    JSValue tmp;
-    tmp = JS_GetPropertyStr(ctx, v, "a"); JS_ToFloat64(ctx, &a, tmp); JS_FreeValue(ctx, tmp);
-    tmp = JS_GetPropertyStr(ctx, v, "b"); JS_ToFloat64(ctx, &b, tmp); JS_FreeValue(ctx, tmp);
-    tmp = JS_GetPropertyStr(ctx, v, "c"); JS_ToFloat64(ctx, &c, tmp); JS_FreeValue(ctx, tmp);
-    tmp = JS_GetPropertyStr(ctx, v, "d"); JS_ToFloat64(ctx, &d, tmp); JS_FreeValue(ctx, tmp);
-    tmp = JS_GetPropertyStr(ctx, v, "e"); JS_ToFloat64(ctx, &e, tmp); JS_FreeValue(ctx, tmp);
-    tmp = JS_GetPropertyStr(ctx, v, "f"); JS_ToFloat64(ctx, &f, tmp); JS_FreeValue(ctx, tmp);
-    cairo_matrix_init(m, a, b, c, d, e, f);
-    return TRUE;
-}
-
-JSValue
-ns_ctx_setTransform(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    cairo_matrix_t m;
-    if (argc == 0) {
-        cairo_identity_matrix(st->cr);
-        return JS_UNDEFINED;
-    }
-    if (argc == 1) {
-        if (!ns_matrix_from_obj(ctx, argv[0], &m)) return JS_UNDEFINED;
-        cairo_set_matrix(st->cr, &m);
-        return JS_UNDEFINED;
-    }
-    if (argc < 6) return JS_UNDEFINED;
-    cairo_matrix_init(&m,
-        ns_arg_d(ctx, argv[0]), ns_arg_d(ctx, argv[1]),
-        ns_arg_d(ctx, argv[2]), ns_arg_d(ctx, argv[3]),
-        ns_arg_d(ctx, argv[4]), ns_arg_d(ctx, argv[5]));
-    cairo_set_matrix(st->cr, &m);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_transform(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    if (argc < 6) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    cairo_matrix_t m;
-    cairo_matrix_init(&m,
-        ns_arg_d(ctx, argv[0]), ns_arg_d(ctx, argv[1]),
-        ns_arg_d(ctx, argv[2]), ns_arg_d(ctx, argv[3]),
-        ns_arg_d(ctx, argv[4]), ns_arg_d(ctx, argv[5]));
-    cairo_transform(st->cr, &m);
-    return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_resetTransform(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (st) cairo_identity_matrix(st->cr);
     return JS_UNDEFINED;
 }
 
@@ -1667,24 +1393,6 @@ ns_ctx_strokeText(JSContext *ctx, JSValueConst this_val,
 }
 
 JSValue
-ns_ctx_roundRect(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    if (argc < 4) return JS_UNDEFINED;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    if (!st) return JS_UNDEFINED;
-    double x = ns_arg_d(ctx, argv[0]);
-    double y = ns_arg_d(ctx, argv[1]);
-    double w = ns_arg_d(ctx, argv[2]);
-    double h = ns_arg_d(ctx, argv[3]);
-    double rtl = 0, rtr = 0, rbr = 0, rbl = 0;
-    if (argc >= 5 && !ns_extract_radii(ctx, argv[4], &rtl, &rtr, &rbr, &rbl))
-        return JS_ThrowRangeError(ctx, "roundRect radius must be non-negative");
-    ns_round_rect_subpath(st->cr, x, y, w, h, rtl, rtr, rbr, rbl);
-    return JS_UNDEFINED;
-}
-
-JSValue
 ns_ctx_reset(JSContext *ctx, JSValueConst this_val,
              int argc, JSValueConst *argv)
 {
@@ -1717,17 +1425,6 @@ ns_ctx_reset(JSContext *ctx, JSValueConst this_val,
     st->shadow_ox = st->shadow_oy = 0;
     { ns_js *_j = js_from_ctx(ctx); if (_j) _j->mutated = TRUE; }
     return JS_UNDEFINED;
-}
-
-JSValue
-ns_ctx_getTransform(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_canvas_state *st = ns_ctx_state(ctx, this_val);
-    cairo_matrix_t m = { 1, 0, 0, 1, 0, 0 };
-    if (st) cairo_get_matrix(st->cr, &m);
-    return ns_dommatrix_make(ctx, m.xx, m.yx, m.xy, m.yy, m.x0, m.y0);
 }
 
 JSValue

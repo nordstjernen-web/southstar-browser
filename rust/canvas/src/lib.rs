@@ -6,6 +6,7 @@ mod api;
 mod bitmap;
 mod color;
 mod context;
+mod ctxpath;
 mod ffi;
 mod font;
 mod hidden;
