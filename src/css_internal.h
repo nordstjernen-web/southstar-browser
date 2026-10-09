@@ -103,6 +103,20 @@ const char   *ns_css_parse_declaration_block(const char *p, const char *end,
                                              ns_css_rule *capture);
 gboolean      ns_css_declaration_value_syntax_valid(const char *text);
 gboolean      ns_css_attr_unit_ident_valid(const char *unit);
+
+void          ns_css_selector_free(ns_css_selector *sel);
+GPtrArray    *ns_css_parse_selector_group(const char *text, gsize len,
+                                          int depth);
+gboolean      ns_css_parse_rule_selectors(const char *p, const char *end,
+                                          GPtrArray *out,
+                                          gboolean *has_hover,
+                                          gboolean *has_active);
+gboolean      ns_css_supports_selector(const char *text, gsize len);
+gboolean      ns_css_selector_attr_ancestor_hashes(void);
+guint32       ns_css_identifier_hash(char kind, const char *name, gsize len);
+guint32       ns_css_attr_value_hash(const char *name, const char *value,
+                                     gsize value_len);
+gboolean      ns_css_anb_int_strict(const char *text, int *out);
 char         *ns_css_border_radius_canonical(const char *value);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);
@@ -166,6 +180,18 @@ G_STATIC_ASSERT(sizeof(ns_border_image) == 176);
 G_STATIC_ASSERT(sizeof(ns_css_decl) == 24 &&
                 offsetof(ns_css_decl, value) == 8 &&
                 offsetof(ns_css_decl, important) == 16);
+G_STATIC_ASSERT(sizeof(ns_css_pending_decl) == 32 &&
+                offsetof(ns_css_rule, decls) == 8 &&
+                offsetof(ns_css_rule, pending) == 32);
+G_STATIC_ASSERT(sizeof(ns_css_selector) == 56 &&
+                offsetof(ns_css_selector, ancestor_hashes) == 32 &&
+                sizeof(ns_css_simple) == 80 &&
+                offsetof(ns_css_simple, never_match) == 72 &&
+                sizeof(ns_css_attr_pred) == 48 &&
+                offsetof(ns_css_attr_pred, name_bit) == 40 &&
+                sizeof(ns_css_pseudo_pred) == 32 &&
+                offsetof(ns_css_pseudo_pred, arg) == 16 &&
+                sizeof(ns_css_comb) == 4);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

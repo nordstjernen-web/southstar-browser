@@ -409,6 +409,14 @@ Southstar Browser (unreleased):
   ask of one declaration. So is choosing an image width from an
   <img sizes> list. Style sheets parse and images pick their sources as
   before.
+* The selector parser is Rust: type, universal and namespaced selectors,
+  ids, classes, attribute selectors with every operator and the i and s
+  flags, every pseudo-class (nth-child() and friends with An+B and "of
+  S", :heading(), :lang(), :dir()), :is(), :where(), :not() and
+  relative :has(), the pseudo-elements, combinators, specificity, the
+  ancestor hashes the Bloom filter uses, and @supports selector(). The
+  selectors css.c matches are built from it with the same structure, so
+  selectors match, count specificity and report validity as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

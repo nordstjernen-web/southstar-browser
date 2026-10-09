@@ -13,6 +13,7 @@ mod image;
 mod inline;
 mod lex;
 mod property;
+mod selector;
 mod shadow;
 mod shorthand;
 mod transform;
