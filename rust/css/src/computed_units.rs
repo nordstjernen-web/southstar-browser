@@ -6,9 +6,7 @@ use core::ffi::CStr;
 
 use crate::calc;
 use crate::container;
-use crate::ffi::{
-    ComputedStyle, PROP_COUNT, ParentStyle, RawCalc, Slot, SlotMut, font_relative_px,
-};
+use crate::ffi::{ComputedStyle, PROP_COUNT, RawCalc, Slot, SlotMut, StyleView, font_relative_px};
 use crate::font;
 use crate::grid::Tracks;
 use crate::prop::Prop;
@@ -65,7 +63,7 @@ impl Values for ComputedStyle<'_> {
     }
 }
 
-impl Values for ParentStyle<'_> {
+impl Values for StyleView<'_> {
     fn slot(&self, prop: usize) -> Option<Slot<'_>> {
         self.get(prop)
     }
@@ -93,7 +91,7 @@ fn viewport_refresh_px(c: &RawCalc) -> f64 {
     viewport_coeff_px(c, w, h) - viewport_coeff_px(c, c.parsed_vw, c.parsed_vh)
 }
 
-fn font_size_px(out: &ComputedStyle<'_>, parent: Option<&ParentStyle<'_>>) -> f64 {
+fn font_size_px(out: &ComputedStyle<'_>, parent: Option<&StyleView<'_>>) -> f64 {
     let parent_px = parent.and_then(Values::font_px).unwrap_or(16.0);
     let length = match out.slot(FONT_SIZE) {
         Some(Slot::Calc(c)) => {
@@ -372,7 +370,7 @@ fn apply(change: Change, slot: SlotMut<'_>, b: &Basis<'_>) {
     }
 }
 
-fn own_font_px(out: &ComputedStyle<'_>, parent: Option<&ParentStyle<'_>>, root_px: f64) -> f64 {
+fn own_font_px(out: &ComputedStyle<'_>, parent: Option<&StyleView<'_>>, root_px: f64) -> f64 {
     let mut font_px = font_size_px(out, parent);
     if font_px.is_nan() || font_px < 0.0 {
         font_px = 0.0;
@@ -397,7 +395,7 @@ fn own_font_px(out: &ComputedStyle<'_>, parent: Option<&ParentStyle<'_>>, root_p
     }
 }
 
-pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&ParentStyle<'_>>, root_px: f64) {
+pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&StyleView<'_>>, root_px: f64) {
     let font_px = own_font_px(out, parent, root_px);
     let root_px = if root_px <= 0.0 { font_px } else { root_px };
     out.set_length_px(FONT_SIZE, font_px);
@@ -428,4 +426,8 @@ pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&ParentStyle<'
             apply(change, slot, &basis);
         }
     }
+}
+
+pub(crate) fn style_font_px(style: &StyleView<'_>) -> f64 {
+    style.font_px().unwrap_or(16.0)
 }

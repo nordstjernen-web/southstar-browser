@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_double, c_int};
+use core::ffi::{CStr, c_char, c_double, c_int};
 use core::mem::size_of;
 use core::ptr;
 
@@ -16,6 +16,7 @@ use crate::computed_units;
 use crate::grid::Tracks;
 use crate::prop::Prop;
 use crate::shadow::ShadowList;
+use crate::track_text;
 use crate::transform::Transform;
 use crate::units::PX;
 
@@ -81,7 +82,7 @@ fn slot_mut(v: &mut NsCssValue) -> SlotMut<'_> {
 
 pub(crate) struct ComputedStyle<'a>(&'a mut RawStyle);
 
-pub(crate) struct ParentStyle<'a>(&'a RawStyle);
+pub(crate) struct StyleView<'a>(&'a RawStyle);
 
 impl ComputedStyle<'_> {
     pub(crate) fn get(&self, prop: usize) -> Option<Slot<'_>> {
@@ -110,7 +111,7 @@ impl ComputedStyle<'_> {
     }
 }
 
-impl ParentStyle<'_> {
+impl StyleView<'_> {
     pub(crate) fn get(&self, prop: usize) -> Option<Slot<'_>> {
         unsafe { self.0.values.get(prop)?.as_ref() }.map(slot)
     }
@@ -158,6 +159,35 @@ pub unsafe extern "C" fn ns_css_resolve_em_units(
     let Some(out) = (unsafe { out.as_mut() }) else {
         return;
     };
-    let parent = unsafe { parent_style.as_ref() }.map(ParentStyle);
+    let parent = unsafe { parent_style.as_ref() }.map(StyleView);
     computed_units::resolve(&mut ComputedStyle(out), parent.as_ref(), root_px);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_tracks_computed_serialize(
+    style: *const RawStyle,
+    root: *const RawStyle,
+    prop: c_int,
+) -> *mut c_char {
+    let Some(style) = (unsafe { style.as_ref() }) else {
+        return ptr::null_mut();
+    };
+    let value = usize::try_from(prop)
+        .ok()
+        .and_then(|prop| style.values.get(prop))
+        .and_then(|&v| unsafe { v.as_ref() });
+    let Some(value) = value.filter(|v| v.kind == KIND_TRACKS && !v.specified.is_null()) else {
+        return ptr::null_mut();
+    };
+    if unsafe { value.u.tracks.subgrid } != 0 {
+        return ptr::null_mut();
+    }
+    let specified = unsafe { CStr::from_ptr(value.specified) }.to_bytes();
+    let root = unsafe { root.as_ref() }.unwrap_or(style);
+    let text = track_text::tracks_computed_text(
+        specified,
+        computed_units::style_font_px(&StyleView(style)),
+        computed_units::style_font_px(&StyleView(root)),
+    );
+    glib::strdup(&text)
 }

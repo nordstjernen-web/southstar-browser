@@ -515,6 +515,11 @@ Southstar Browser (unreleased):
   or NaN calc() results clamped and shared values copied before they
   change. Values come out identical (checked over 58 million generated
   property values) and slightly faster.
+* The computed text of grid-template track lists (what
+  getComputedStyle reports) is Rust: lengths and math functions in em,
+  rem and px resolved to px, percentages and percent-plus-length calc()
+  kept, and line names, keywords and fr lengths left as written. The
+  text is identical (checked over 1.6 million generated track lists).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

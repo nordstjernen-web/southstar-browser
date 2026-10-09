@@ -39,7 +39,7 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::{calc, color, math, units};
 
-pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, ParentStyle, Slot, SlotMut};
+pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
