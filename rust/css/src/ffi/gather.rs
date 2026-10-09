@@ -38,6 +38,7 @@ const ORIGIN_AUTHOR: c_int = 2;
 const INLINE_SPECIFICITY: (c_int, c_int, c_int) = (1000, 0, 0);
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub(super) struct RawDest {
     pub(super) pe: c_uint,
     pub(super) out: *mut GArray,

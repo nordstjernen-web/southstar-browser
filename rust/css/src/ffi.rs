@@ -6,6 +6,7 @@ mod animation;
 mod attr_fn;
 mod border_image;
 mod cascade;
+mod compute;
 mod computed_units;
 mod container;
 mod custom_props;
@@ -44,6 +45,7 @@ mod ua;
 mod value;
 mod values;
 mod vars;
+mod viewport;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
 
@@ -79,8 +81,6 @@ const COLOR_SCHEME_DARK: c_int = 1;
 
 unsafe extern "C" {
     fn ns_css_get_color_scheme() -> c_int;
-    fn ns_css_viewport_w() -> c_double;
-    fn ns_css_viewport_h() -> c_double;
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
     fn g_ascii_formatd(
@@ -96,7 +96,7 @@ pub(crate) fn prefers_dark() -> bool {
 }
 
 pub(crate) fn viewport() -> (f64, f64) {
-    unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
+    viewport::get()
 }
 
 pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {

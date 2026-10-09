@@ -43,6 +43,10 @@ pub(super) struct RawSheet {
 }
 
 impl RawSheet {
+    pub(super) fn serial(&self) -> u64 {
+        self.serial
+    }
+
     pub(super) fn property_rules(&self) -> &[RawPropertyRule] {
         unsafe { elements(self.property_rules) }
     }
