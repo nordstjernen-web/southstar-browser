@@ -201,7 +201,7 @@ agreement. Bundled third-party components keep their own licenses
 
 - [nordstjernen-browser](https://github.com/nordstjernen-web/nordstjernen-browser)
   — the C browser Southstar starts from.
-- [northstar-browser-gpl](https://github.com/nordstjernen-web/northstar-browser-gpl)
+- [northstar-browser](https://github.com/nordstjernen-web/northstar-browser)
   — the GPL-licensed sibling project.
 
 # Development team
