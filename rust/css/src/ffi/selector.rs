@@ -294,50 +294,6 @@ pub unsafe extern "C" fn ns_css_parse_selector_list_checked(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_selector_group(
-    text: *const c_char,
-    len: usize,
-    depth: c_int,
-) -> *mut GPtrArray {
-    group_to_c(&selector::parse_group(
-        unsafe { range(text, len) },
-        depth,
-        false,
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_rule_selectors(
-    p: *const c_char,
-    end: *const c_char,
-    out: *mut GPtrArray,
-    has_hover: *mut GBoolean,
-    has_active: *mut GBoolean,
-) -> GBoolean {
-    let len = if p.is_null() || end <= p {
-        0
-    } else {
-        unsafe { end.offset_from(p) as usize }
-    };
-    let parsed = selector::parse_rule_selectors(unsafe { range(p, len) });
-    for sel in &parsed.selectors {
-        unsafe { glib::g_ptr_array_add(out, selector_to_c(sel).cast()) };
-    }
-    unsafe {
-        *has_hover = glib::boolean(parsed.has_hover);
-        *has_active = glib::boolean(parsed.has_active);
-    }
-    glib::boolean(parsed.ok)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_supports_selector(text: *const c_char, len: usize) -> GBoolean {
-    let text = unsafe { range(text, len) };
-    let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
-    glib::boolean(selector::supports_selector(text))
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_selector_attr_ancestor_hashes() -> GBoolean {
     glib::boolean(selector::get(&FLAGS.attr_ancestor_hashes))
 }

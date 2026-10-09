@@ -1,44 +1,15 @@
-//! Southstar — the C ABI of the border-image longhands, the shorthand's tokens, and the parameters painting reads from a computed style.
+//! Southstar — the C ABI of the border-image parameters painting reads from a computed style.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_int, c_void};
 use std::sync::OnceLock;
 
-use super::value::{self, NsCssValue};
+use super::value;
 use crate::border_image::{self, Params};
 
 unsafe extern "C" {
     fn ns_css_prop_id(name: *const c_char) -> c_int;
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-fn keyword(text: Option<Vec<u8>>) -> *mut NsCssValue {
-    text.map_or(ptr::null_mut(), |text| value::new_keyword(&text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_border_image_slice(t: *const c_char) -> *mut NsCssValue {
-    keyword(unsafe { bytes(t) }.and_then(border_image::slice_canonical))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_border_image_width(t: *const c_char) -> *mut NsCssValue {
-    keyword(unsafe { bytes(t) }.and_then(|t| border_image::quad_canonical(t, true, true)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_border_image_outset(t: *const c_char) -> *mut NsCssValue {
-    keyword(unsafe { bytes(t) }.and_then(|t| border_image::quad_canonical(t, false, false)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_border_image_repeat(t: *const c_char) -> *mut NsCssValue {
-    keyword(unsafe { bytes(t) }.and_then(border_image::repeat_canonical))
 }
 
 fn prop_ids() -> &'static [c_int; 4] {

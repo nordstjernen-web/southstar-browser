@@ -171,18 +171,3 @@ pub unsafe extern "C" fn ns_css_font_shorthand_canonical(text: *const c_char) ->
 pub unsafe extern "C" fn ns_css_font_family_canonical(text: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(text) }.and_then(font::family_canonical))
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_ligatures_valid(s: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(s) }.is_some_and(font::ligatures_valid))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_feature_settings_valid(s: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(s) }.is_some_and(font::feature_settings_valid))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_variation_settings_valid(s: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(s) }.is_some_and(font::variation_settings_valid))
-}

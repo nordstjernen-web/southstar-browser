@@ -16,7 +16,6 @@ mod lex;
 mod nesting;
 mod property;
 mod selector;
-mod shadow;
 mod sheet;
 mod shorthand;
 mod supports;
@@ -150,91 +149,14 @@ pub unsafe extern "C" fn ns_css_parse_calc(s: *const c_char) -> *mut NsCssValue 
     }
 }
 
-unsafe fn resolve_into(
-    s: *const c_char,
-    len: usize,
-    font: bool,
-    out_px: *mut c_double,
-    out_pct: *mut c_double,
-) -> (bool, calc::Resolved) {
-    let bytes = if s.is_null() {
-        &[][..]
-    } else {
-        let all = unsafe { glib::slice(s.cast(), len) };
-        let nul = all.iter().position(|&c| c == 0).unwrap_or(all.len());
-        &all[..nul]
-    };
-    let (ok, resolved) = calc::resolve_to_px_pct(bytes, font);
-    unsafe {
-        *out_px = resolved.px;
-        *out_pct = resolved.pct;
-    }
-    (ok, resolved)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_resolve_to_px_pct(
-    s: *const c_char,
-    len: usize,
-    out_px: *mut c_double,
-    out_pct: *mut c_double,
-) -> GBoolean {
-    let (ok, _) = unsafe { resolve_into(s, len, false, out_px, out_pct) };
-    glib::boolean(ok)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_resolve_to_px_pct_font(
-    s: *const c_char,
-    len: usize,
-    out_px: *mut c_double,
-    out_pct: *mut c_double,
-    out_em: *mut c_double,
-    out_rem: *mut c_double,
-) -> GBoolean {
-    let font = !out_em.is_null() && !out_rem.is_null();
-    let (ok, resolved) = unsafe { resolve_into(s, len, font, out_px, out_pct) };
-    unsafe {
-        if let Some(em) = out_em.as_mut() {
-            *em = resolved.em;
-        }
-        if let Some(rem) = out_rem.as_mut() {
-            *rem = resolved.rem;
-        }
-    }
-    glib::boolean(ok)
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_viewport_resolve(v: c_double, unit: c_uint) -> c_double {
     units::viewport_resolve(v, unit)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_unit_suffix(unit: c_int) -> *const c_char {
-    units::unit_suffix(unit as c_uint).as_ptr()
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_number_str(n: c_double) -> *mut c_char {
     glib::strdup(&units::number_text(n))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_has_relative_unit(s: *const c_char) -> GBoolean {
-    let relative = unsafe { text(s) }.is_some_and(|s| units::has_relative_unit(s.to_bytes()));
-    glib::boolean(relative)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_angle_expr_rewrite(
-    s: *const c_char,
-    to_radians: GBoolean,
-) -> *mut c_char {
-    let rewritten = unsafe { text(s) }
-        .map(|s| units::angle_expr_rewrite(s, to_radians != 0))
-        .unwrap_or_default();
-    glib::strdup(&rewritten)
 }
 
 #[unsafe(no_mangle)]

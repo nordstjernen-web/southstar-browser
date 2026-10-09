@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{c_char, c_int, c_uint};
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray, GBoolean};
@@ -32,10 +31,6 @@ pub(crate) fn prop_named(name: &[u8]) -> Option<Prop> {
     prop_of(unsafe { ns_css_prop_id(name.as_ptr()) })
 }
 
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
 pub(super) unsafe fn append_expanded(
     name: &[u8],
     text: &[u8],
@@ -59,13 +54,5 @@ pub(super) unsafe fn append_expanded(
     }
     if !raw.is_empty() {
         unsafe { glib::g_array_append_vals(decls, raw.as_ptr().cast(), raw.len() as c_uint) };
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_border_radius_canonical(value: *const c_char) -> *mut c_char {
-    match unsafe { bytes(value) }.and_then(shorthand::border_radius_canonical) {
-        Some(canon) => glib::strdup(&canon),
-        None => ptr::null_mut(),
     }
 }

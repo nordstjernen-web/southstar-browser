@@ -7,7 +7,7 @@ use core::ptr;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 
 use super::animation::RawList;
 use super::value::{
@@ -133,11 +133,6 @@ pub unsafe extern "C" fn ns_css_parse_value_for(
         return ptr::null_mut();
     };
     property::parse_for(prop_of(prop), text).map_or(ptr::null_mut(), to_c)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_bg_token_is_box(tok: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(tok) }.is_some_and(property::bg_token_is_box))
 }
 
 #[unsafe(no_mangle)]

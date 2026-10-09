@@ -1,16 +1,15 @@
-//! Southstar — the C ABI of transforms and of the specified-value text clean-ups.
+//! Southstar — the C ABI of transforms, the translate, rotate and scale properties, and the math-function check.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::ffi::{CStr, c_char, c_double, c_int};
 use core::ptr;
 use std::sync::OnceLock;
 
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_mat4::Mat4;
 
 use super::value::{self, NsCssValue};
-use crate::text;
 use crate::transform::{self, Individual, Transform};
 
 unsafe extern "C" {
@@ -51,11 +50,6 @@ pub unsafe extern "C" fn ns_css_parse_transform(text: *const c_char) -> *mut NsC
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_transform_origin(text: *const c_char) -> *mut NsCssValue {
-    transform_value(unsafe { bytes(text) }.and_then(transform::parse_transform_origin))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_parse_translate_prop(text: *const c_char) -> *mut NsCssValue {
     transform_value(unsafe { bytes(text) }.and_then(transform::parse_translate_prop))
 }
@@ -89,14 +83,6 @@ pub unsafe extern "C" fn ns_css_individual_transform_serialize(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_transform_serialize(tf: *const Transform) -> *mut c_char {
-    let text = unsafe { tf.as_ref() }
-        .map(transform::serialize)
-        .unwrap_or_default();
-    glib::strdup(&text)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_transform_is_3d(tf: *const Transform) -> GBoolean {
     glib::boolean(unsafe { tf.as_ref() }.is_some_and(transform::is_3d))
 }
@@ -121,70 +107,6 @@ pub unsafe extern "C" fn ns_css_transform_canonical(value: *const c_char) -> *mu
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_transform_list_canonical(value: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(value) }.and_then(transform::list_canonical))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_individual_transform_canonical(
-    value: *const c_char,
-    prop: c_int,
-) -> *mut c_char {
-    let prop = individual(prop);
-    owned(unsafe { bytes(value) }.and_then(|value| transform::individual_canonical(value, prop?)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_transform_origin_canonical(
-    value: *const c_char,
-    two_only: GBoolean,
-) -> *mut c_char {
-    owned(
-        unsafe { bytes(value) }.and_then(|value| transform::origin_canonical(value, two_only != 0)),
-    )
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_is_math_fn_start(s: *const c_char) -> GBoolean {
     glib::boolean(unsafe { bytes(s) }.is_some_and(transform::is_math_fn_start))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_add_leading_zeros(v: *mut c_char) -> *mut c_char {
-    let Some(text) = (unsafe { bytes(v) }) else {
-        return ptr::null_mut();
-    };
-    let fixed = text::add_leading_zeros(text);
-    if fixed == text {
-        return v;
-    }
-    unsafe { glib::g_free(v.cast()) };
-    glib::strdup(&fixed)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_normalize_negative_zero(v: *mut c_char) -> *mut c_char {
-    let Some(text) = (unsafe { bytes(v) }) else {
-        return ptr::null_mut();
-    };
-    let fixed = text::normalize_negative_zero(text);
-    if fixed == text {
-        return v;
-    }
-    unsafe { glib::g_free(v.cast()) };
-    glib::strdup(&fixed)
-}
-
-unsafe extern "C" fn free_string(data: *mut c_void) {
-    unsafe { glib::g_free(data) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_split_top_level_commas(text: *const c_char) -> *mut GPtrArray {
-    let parts = text::split_top_level_commas(unsafe { bytes(text) }.unwrap_or_default());
-    let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(free_string)) };
-    for part in parts {
-        unsafe { glib::g_ptr_array_add(array, glib::strdup(&part).cast()) };
-    }
-    array
 }

@@ -4,7 +4,6 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-use core::slice;
 use std::sync::OnceLock;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -142,13 +141,6 @@ fn prop_ids() -> &'static [c_int; 17] {
     IDS.get_or_init(|| Longhand::ALL.map(|lh| unsafe { ns_css_prop_id(lh.name().as_ptr()) }))
 }
 
-fn longhand_of(prop: c_int) -> Option<Longhand> {
-    prop_ids()
-        .iter()
-        .position(|&id| id == prop)
-        .map(|i| Longhand::ALL[i])
-}
-
 fn prop_of(lh: Longhand) -> c_int {
     let i = Longhand::ALL.iter().position(|&l| l == lh).unwrap_or(0);
     prop_ids()[i]
@@ -173,45 +165,6 @@ pub unsafe extern "C" fn ns_css_timing_parse(text: *const c_char, out: *mut Timi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_timing_serialize(t: *const Timing) -> *mut c_char {
     glib::strdup(&timing::serialize(unsafe { t.as_ref() }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_time_property(t: *const c_char) -> *mut NsCssValue {
-    match unsafe { bytes(t) } {
-        Some(text) if time::property_valid(text) => value::new_keyword(text),
-        _ => ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_animation_duration(t: *const c_char) -> *mut NsCssValue {
-    unsafe { bytes(t) }
-        .and_then(animation::duration_canonical)
-        .map_or(ptr::null_mut(), |canon| value::new_keyword(&canon))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_anim_longhand(
-    prop: c_int,
-    t: *const c_char,
-) -> *mut NsCssValue {
-    let (Some(lh), Some(text)) = (longhand_of(prop), unsafe { bytes(t) }) else {
-        return ptr::null_mut();
-    };
-    animation::longhand_canonical(lh, text)
-        .map_or(ptr::null_mut(), |canon| value::new_keyword(&canon))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_anim_value(
-    t: *const c_char,
-    is_animation: GBoolean,
-) -> *mut NsCssValue {
-    unsafe { bytes(t) }
-        .and_then(|text| animation::shorthand_parse(text, is_animation != 0))
-        .map_or(ptr::null_mut(), |list| {
-            value::new_anim(&RawList::from_entries(&list))
-        })
 }
 
 #[unsafe(no_mangle)]
@@ -311,23 +264,6 @@ pub unsafe extern "C" fn ns_css_time_computed(value: *const c_char) -> *mut c_ch
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_range_shorthand_expand(
-    text: *const c_char,
-    out_start: *mut *mut c_char,
-    out_end: *mut *mut c_char,
-) -> GBoolean {
-    let Some((start, end)) = unsafe { bytes(text) }.and_then(animation::range_shorthand_expand)
-    else {
-        return 0;
-    };
-    unsafe {
-        *out_start = glib::strdup(&start);
-        *out_end = glib::strdup(&end);
-    }
-    1
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_animation_range_serialize(
     start_list: *const c_char,
     end_list: *const c_char,
@@ -335,20 +271,4 @@ pub unsafe extern "C" fn ns_css_animation_range_serialize(
     let start = unsafe { bytes(start_list) }.unwrap_or(b"normal");
     let end = unsafe { bytes(end_list) }.unwrap_or(b"normal");
     glib::strdup(&animation::range_serialize(start, end))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_ident_decode(tok: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(tok) }.and_then(animation::ident_decode))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_starts_math_fn(s: *const c_char, e: *const c_char) -> GBoolean {
-    if s.is_null() {
-        return 0;
-    }
-    let len = usize::try_from(unsafe { e.offset_from(s) }).unwrap_or(0);
-    glib::boolean(time::starts_math_fn(unsafe {
-        slice::from_raw_parts(s.cast::<u8>(), len)
-    }))
 }
