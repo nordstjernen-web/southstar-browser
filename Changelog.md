@@ -301,6 +301,12 @@ Southstar Browser (unreleased):
   and transition shorthands, the per-element lists the animation engine
   runs, and their serialization in getComputedStyle and element.style.
   Animations and transitions run and serialize as before.
+* The display property is Rust: its single and multi-keyword forms, the
+  vendor-prefixed flex, grid and box values, their canonical spelling and
+  blockification; so are counter-reset, counter-increment and counter-set
+  lists with reversed(), list-style-type with symbols() and strings, the
+  list-style shorthand's text, and overflow-clip-margin. Boxes lay out,
+  count and serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

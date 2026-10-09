@@ -4,6 +4,7 @@
 
 mod animation;
 mod container;
+mod display;
 mod font;
 mod grid;
 mod image;

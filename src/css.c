@@ -2169,169 +2169,6 @@ ns_css_initial_value_text(const char *name)
 }
 
 static gboolean
-counter_integer_text(const char *tok, char **out)
-{
-    if (ns_css_starts_math_fn(tok, tok + strlen(tok))) {
-        ns_css_value *cv = ns_css_parse_calc(tok);
-        gboolean ok = cv && cv->kind == NS_CSS_V_LENGTH &&
-                      cv->u.length.unit == NS_CSS_UNIT_NUMBER;
-        if (ok) *out = g_strdup(tok);
-        ns_css_value_free(cv);
-        return ok;
-    }
-    char *end = NULL;
-    long v = strtol(tok, &end, 10);
-    if (end == tok || *end != '\0') return FALSE;
-    *out = g_strdup_printf("%ld", v);
-    return TRUE;
-}
-
-static char *
-counter_list_canonical(const char *text, ns_css_prop prop)
-{
-    char *toks[64] = { 0 };
-    int n = ns_css_split_ws_paren(text, toks, 64);
-    if (n == 0) return NULL;
-    if (n == 1 && g_ascii_strcasecmp(toks[0], "none") == 0) {
-        g_free(toks[0]);
-        return g_strdup("none");
-    }
-    const char *dflt = prop == NS_CSS_COUNTER_INCREMENT ? "1" : "0";
-    GString *out = g_string_new(NULL);
-    gboolean ok = TRUE;
-    for (int i = 0; i < n && ok; i++) {
-        const char *tok = toks[i];
-        char *name = NULL;
-        gboolean reversed = FALSE;
-        if (g_ascii_strncasecmp(tok, "reversed(", 9) == 0 && tok[strlen(tok) - 1] == ')') {
-            if (prop != NS_CSS_COUNTER_RESET) { ok = FALSE; break; }
-            name = g_strstrip(g_strndup(tok + 9, strlen(tok) - 10));
-            reversed = TRUE;
-        } else {
-            name = g_strdup(tok);
-        }
-        char *decoded = ns_css_ident_decode(name);
-        g_free(name);
-        if (!decoded || ns_css_wide_keyword_or_default(decoded) ||
-            g_ascii_strcasecmp(decoded, "none") == 0 ||
-            g_ascii_isdigit((guchar)decoded[0]) ||
-            (decoded[0] == '-' && (g_ascii_isdigit((guchar)decoded[1]) || !decoded[1]))) {
-            g_free(decoded);
-            ok = FALSE;
-            break;
-        }
-        name = ns_css_ident_serialize(decoded);
-        g_free(decoded);
-        char *num = NULL;
-        if (i + 1 < n && counter_integer_text(toks[i + 1], &num)) i++;
-        if (out->len) g_string_append_c(out, ' ');
-        if (reversed) g_string_append_printf(out, "reversed(%s)", name);
-        else g_string_append(out, name);
-        if (num) {
-            g_string_append_c(out, ' ');
-            g_string_append(out, num);
-        } else if (!reversed) {
-            g_string_append_c(out, ' ');
-            g_string_append(out, dflt);
-        }
-        g_free(num);
-        g_free(name);
-    }
-    for (int i = 0; i < n; i++) g_free(toks[i]);
-    if (!ok) {
-        g_string_free(out, TRUE);
-        return NULL;
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-list_style_type_canonical(const char *text)
-{
-    char *toks[4] = { 0 };
-    int n = ns_css_split_ws_paren(text, toks, 4);
-    char *r = NULL;
-    if (n == 1) {
-        const char *tok = toks[0];
-        gsize len = strlen(tok);
-        if (g_ascii_strncasecmp(tok, "symbols(", 8) == 0 && tok[len - 1] == ')') {
-            char *inner = g_strndup(tok + 8, len - 9);
-            char *canon = ns_css_content_symbols_canonical(inner);
-            g_free(inner);
-            if (canon && !strstr(canon, "url(") && !strstr(canon, "image(") &&
-                !strstr(canon, "gradient("))
-                r = g_strdup_printf("symbols(%s)", canon);
-            g_free(canon);
-        } else if ((tok[0] == '"' || tok[0] == '\'') && len >= 2 && tok[len - 1] == tok[0]) {
-            r = g_strdup(tok);
-        } else if (g_ascii_strcasecmp(tok, "none") == 0) {
-            r = g_strdup("none");
-        } else if (ns_css_content_ident_valid(tok) && !ns_css_wide_keyword_or_default(tok)) {
-            r = g_strdup(tok);
-        }
-    }
-    for (int i = 0; i < n; i++) g_free(toks[i]);
-    return r;
-}
-
-static char *
-overflow_clip_margin_canonical(const char *text)
-{
-    char *toks[3] = { 0 };
-    int n = ns_css_split_ws_paren(text, toks, 3);
-    const char *box = NULL;
-    char *len = NULL;
-    gboolean ok = n >= 1 && n <= 2;
-    for (int i = 0; i < n && ok; i++) {
-        const char *tok = toks[i];
-        if (!box && (g_ascii_strcasecmp(tok, "content-box") == 0 ||
-                     g_ascii_strcasecmp(tok, "padding-box") == 0 ||
-                     g_ascii_strcasecmp(tok, "border-box") == 0)) {
-            box = g_ascii_strcasecmp(tok, "content-box") == 0 ? "content-box"
-                : g_ascii_strcasecmp(tok, "border-box") == 0 ? "border-box" : "padding-box";
-            continue;
-        }
-        if (!len) {
-            double v;
-            ns_css_unit u;
-            if (ns_css_starts_math_fn(tok, tok + strlen(tok))) {
-                len = ns_css_math_canonical(tok);
-                if (!len) len = g_strdup(tok);
-                continue;
-            }
-            if (ns_css_parse_length(tok, &v, &u) && u != NS_CSS_UNIT_PERCENT &&
-                (u != NS_CSS_UNIT_NUMBER || v == 0) && v >= 0) {
-                if (v == 0) len = g_strdup("0px");
-                else {
-                    char *end = NULL;
-                    g_ascii_strtod(tok, &end);
-                    char *num = ns_css_number_str(v);
-                    char *unit = g_ascii_strdown(end, -1);
-                    len = g_strconcat(num, unit, NULL);
-                    g_free(num);
-                    g_free(unit);
-                }
-                continue;
-            }
-        }
-        ok = FALSE;
-    }
-    for (int i = 0; i < n; i++) g_free(toks[i]);
-    if (!ok) {
-        g_free(len);
-        return NULL;
-    }
-    gboolean zero = !len || strcmp(len, "0px") == 0;
-    gboolean padding = !box || strcmp(box, "padding-box") == 0;
-    char *r;
-    if (padding) r = g_strdup(zero ? "0px" : len);
-    else if (zero) r = g_strdup(box);
-    else r = g_strconcat(box, " ", len, NULL);
-    g_free(len);
-    return r;
-}
-
-static gboolean
 list_style_split(const char *text, char **out_type, char **out_position,
                  char **out_image)
 {
@@ -2357,7 +2194,7 @@ list_style_split(const char *text, char **out_type, char **out_position,
             continue;
         }
         if (!type) {
-            type = list_style_type_canonical(tok);
+            type = ns_css_list_style_type_canonical(tok);
             if (type) continue;
         }
         ok = FALSE;
@@ -2386,265 +2223,11 @@ list_style_split(const char *text, char **out_type, char **out_position,
     return TRUE;
 }
 
-char *
-ns_css_list_style_serialize(const char *type, const char *position,
-                            const char *image)
-{
-    GString *out = g_string_new(NULL);
-    gboolean type_none = !type || strcmp(type, "none") == 0;
-    gboolean image_none = !image || strcmp(image, "none") == 0;
-    gboolean type_is_position_word = type &&
-        (strcmp(type, "inside") == 0 || strcmp(type, "outside") == 0);
-    if (position && (strcmp(position, "outside") != 0 || type_is_position_word))
-        g_string_append(out, position);
-    if (!image_none) {
-        if (out->len) g_string_append_c(out, ' ');
-        g_string_append(out, image);
-    }
-    if (type && strcmp(type, "disc") != 0) {
-        if (out->len) g_string_append_c(out, ' ');
-        g_string_append(out, type);
-    }
-    if (out->len == 0) {
-        g_string_append(out, type_none && image_none ? "none" : "outside");
-        if (type_none && image_none && type == NULL) {
-            g_string_assign(out, "outside");
-        }
-    }
-    return g_string_free(out, FALSE);
-}
-
-static const struct {
-    const char *name;
-    ns_display  display;
-} kDisplayKeywords[] = {
-    { "none",               { .box = NS_DISPLAY_BOX_NONE,
-                              .outer = NS_DISPLAY_OUTER_BLOCK } },
-    { "contents",           { .box = NS_DISPLAY_BOX_CONTENTS,
-                              .outer = NS_DISPLAY_OUTER_BLOCK } },
-    { "block",              { .outer = NS_DISPLAY_OUTER_BLOCK } },
-    { "flow",               { .outer = NS_DISPLAY_OUTER_BLOCK } },
-    { "flow-root",          { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .inner = NS_DISPLAY_INNER_FLOW_ROOT } },
-    { "table",              { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .inner = NS_DISPLAY_INNER_TABLE } },
-    { "flex",               { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .inner = NS_DISPLAY_INNER_FLEX } },
-    { "-webkit-box",        { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .inner = NS_DISPLAY_INNER_FLEX } },
-    { "grid",               { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .inner = NS_DISPLAY_INNER_GRID } },
-    { "list-item",          { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .list_item = 1 } },
-    { "inline",             { .outer = NS_DISPLAY_OUTER_INLINE } },
-    { "inline-block",       { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_FLOW_ROOT } },
-    { "inline-table",       { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_TABLE } },
-    { "inline-flex",        { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_FLEX } },
-    { "-webkit-inline-box", { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_FLEX } },
-    { "inline-grid",        { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_GRID } },
-    { "ruby",               { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .inner = NS_DISPLAY_INNER_RUBY } },
-    { "run-in",             { .outer = NS_DISPLAY_OUTER_RUN_IN } },
-    { "table-row-group",    { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_ROW_GROUP } },
-    { "table-header-group", { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_HEADER_GROUP } },
-    { "table-footer-group", { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_FOOTER_GROUP } },
-    { "table-row",          { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_ROW } },
-    { "table-cell",         { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_CELL } },
-    { "table-column-group", { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_COLUMN_GROUP } },
-    { "table-column",       { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_COLUMN } },
-    { "table-caption",      { .outer = NS_DISPLAY_OUTER_BLOCK,
-                              .internal = NS_DISPLAY_INTERNAL_TABLE_CAPTION } },
-    { "ruby-base",          { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .internal = NS_DISPLAY_INTERNAL_RUBY_BASE } },
-    { "ruby-text",          { .outer = NS_DISPLAY_OUTER_INLINE,
-                              .internal = NS_DISPLAY_INTERNAL_RUBY_TEXT } },
-};
-
-static gboolean
-display_outer_from_token(const char *tok, guint8 *out)
-{
-    if (strcmp(tok, "block") == 0)  { *out = NS_DISPLAY_OUTER_BLOCK;  return TRUE; }
-    if (strcmp(tok, "inline") == 0) { *out = NS_DISPLAY_OUTER_INLINE; return TRUE; }
-    if (strcmp(tok, "run-in") == 0) { *out = NS_DISPLAY_OUTER_RUN_IN; return TRUE; }
-    return FALSE;
-}
-
-static gboolean
-display_inner_from_token(const char *tok, guint8 *out)
-{
-    if (strcmp(tok, "flow") == 0)      { *out = NS_DISPLAY_INNER_FLOW;      return TRUE; }
-    if (strcmp(tok, "flow-root") == 0) { *out = NS_DISPLAY_INNER_FLOW_ROOT; return TRUE; }
-    if (strcmp(tok, "table") == 0)     { *out = NS_DISPLAY_INNER_TABLE;     return TRUE; }
-    if (strcmp(tok, "flex") == 0)      { *out = NS_DISPLAY_INNER_FLEX;      return TRUE; }
-    if (strcmp(tok, "grid") == 0)      { *out = NS_DISPLAY_INNER_GRID;      return TRUE; }
-    if (strcmp(tok, "ruby") == 0)      { *out = NS_DISPLAY_INNER_RUBY;      return TRUE; }
-    return FALSE;
-}
-
-static gboolean
-display_parse(const char *lowered, ns_display *out)
-{
-    for (guint i = 0; i < G_N_ELEMENTS(kDisplayKeywords); i++)
-        if (strcmp(lowered, kDisplayKeywords[i].name) == 0) {
-            *out = kDisplayKeywords[i].display;
-            return TRUE;
-        }
-
-    char *tokens[5] = {0};
-    int n = split_ws_limit(lowered, tokens, 5);
-    ns_display d = { 0 };
-    gboolean have_outer = FALSE, have_inner = FALSE;
-    gboolean valid = n >= 2 && n <= 3;
-    for (int i = 0; valid && i < n; i++) {
-        const char *tok = tokens[i];
-        guint8 slot;
-        if (strcmp(tok, "list-item") == 0) {
-            if (d.list_item) valid = FALSE;
-            d.list_item = 1;
-        } else if (display_outer_from_token(tok, &slot)) {
-            if (have_outer) valid = FALSE;
-            have_outer = TRUE;
-            d.outer = slot;
-        } else if (display_inner_from_token(tok, &slot)) {
-            if (have_inner) valid = FALSE;
-            have_inner = TRUE;
-            d.inner = slot;
-        } else {
-            valid = FALSE;
-        }
-    }
-    for (int i = 0; i < n; i++) g_free(tokens[i]);
-    if (!valid) return FALSE;
-    if (d.list_item && d.inner != NS_DISPLAY_INNER_FLOW &&
-        d.inner != NS_DISPLAY_INNER_FLOW_ROOT)
-        return FALSE;
-    if (!have_outer)
-        d.outer = d.inner == NS_DISPLAY_INNER_RUBY ? NS_DISPLAY_OUTER_INLINE
-                                                   : NS_DISPLAY_OUTER_BLOCK;
-    *out = d;
-    return TRUE;
-}
-
-char *
-ns_css_display_serialize(ns_display d)
-{
-    static const char *const internal_names[] = {
-        NULL, "table-row-group", "table-header-group", "table-footer-group",
-        "table-row", "table-cell", "table-column-group", "table-column",
-        "table-caption", "ruby-base", "ruby-text",
-    };
-    static const char *const block_names[] = {
-        "block", "flow-root", "table", "flex", "grid", "block ruby",
-    };
-    static const char *const inline_names[] = {
-        "inline", "inline-block", "inline-table", "inline-flex",
-        "inline-grid", "ruby",
-    };
-    static const char *const inner_names[] = {
-        "flow", "flow-root", "table", "flex", "grid", "ruby",
-    };
-
-    if (d.box == NS_DISPLAY_BOX_NONE)     return g_strdup("none");
-    if (d.box == NS_DISPLAY_BOX_CONTENTS) return g_strdup("contents");
-    if (d.internal != NS_DISPLAY_INTERNAL_NONE)
-        return g_strdup(internal_names[d.internal]);
-
-    if (d.list_item) {
-        gboolean froot = d.inner == NS_DISPLAY_INNER_FLOW_ROOT;
-        if (d.outer == NS_DISPLAY_OUTER_BLOCK)
-            return g_strdup(froot ? "flow-root list-item" : "list-item");
-        if (d.outer == NS_DISPLAY_OUTER_INLINE)
-            return g_strdup(froot ? "inline flow-root list-item"
-                                  : "inline list-item");
-        return g_strdup(froot ? "run-in flow-root list-item"
-                              : "run-in list-item");
-    }
-    if (d.outer == NS_DISPLAY_OUTER_BLOCK)  return g_strdup(block_names[d.inner]);
-    if (d.outer == NS_DISPLAY_OUTER_INLINE) return g_strdup(inline_names[d.inner]);
-    if (d.inner == NS_DISPLAY_INNER_FLOW)   return g_strdup("run-in");
-    return g_strdup_printf("run-in %s", inner_names[d.inner]);
-}
-
-ns_display
-ns_css_display_from_keyword(const char *canonical)
-{
-    ns_display d = { 0 };
-    if (canonical) display_parse(canonical, &d);
-    return d;
-}
-
 ns_display
 ns_css_display_of(const ns_style *s)
 {
     ns_display d = { 0 };
     return s ? s->display : d;
-}
-
-ns_display
-ns_css_display_blockified(ns_display d)
-{
-    if (d.box != NS_DISPLAY_BOX_NORMAL) return d;
-    if (d.internal != NS_DISPLAY_INTERNAL_NONE) {
-        d.internal = NS_DISPLAY_INTERNAL_NONE;
-        d.inner = NS_DISPLAY_INNER_FLOW;
-    } else if (d.outer == NS_DISPLAY_OUTER_INLINE && !d.list_item &&
-               d.inner == NS_DISPLAY_INNER_FLOW_ROOT) {
-        d.inner = NS_DISPLAY_INNER_FLOW;
-    }
-    d.outer = NS_DISPLAY_OUTER_BLOCK;
-    return d;
-}
-
-static char *
-normalize_display_value(const char *text)
-{
-    static const struct { const char *alias, *standard; } prefixed[] = {
-        { "-webkit-flex",         "flex" },
-        { "-ms-flexbox",          "flex" },
-        { "-webkit-inline-flex",  "inline-flex" },
-        { "-ms-inline-flexbox",   "inline-flex" },
-        { "-webkit-grid",         "grid" },
-        { "-ms-grid",             "grid" },
-    };
-    char *kw = ascii_lower(text, strlen(text));
-    if (strcmp(kw, "-webkit-box") == 0 ||
-        strcmp(kw, "-webkit-inline-box") == 0)
-        return kw;
-    for (guint i = 0; i < G_N_ELEMENTS(prefixed); i++)
-        if (strcmp(kw, prefixed[i].alias) == 0) {
-            g_free(kw);
-            kw = g_strdup(prefixed[i].standard);
-            break;
-        }
-    ns_display d;
-    gboolean ok = display_parse(kw, &d);
-    g_free(kw);
-    return ok ? ns_css_display_serialize(d) : NULL;
-}
-
-char *
-ns_css_display_canonical(const char *value)
-{
-    if (!value) return NULL;
-    while (*value && is_ws(*value)) value++;
-    gsize n = strlen(value);
-    while (n > 0 && is_ws(value[n - 1])) n--;
-    char *t = g_strndup(value, n);
-    char *r = normalize_display_value(t);
-    g_free(t);
-    return r;
 }
 
 
@@ -3696,7 +3279,7 @@ parse_value_for(ns_css_prop prop, const char *text)
 
     switch (prop) {
     case NS_CSS_DISPLAY: {
-        char *norm = normalize_display_value(t);
+        char *norm = ns_css_display_normalize(t);
         if (!norm) break;
         v = g_new0(ns_css_value, 1);
         v->kind = NS_CSS_V_KEYWORD;
@@ -4404,7 +3987,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     case NS_CSS_COUNTER_RESET:
     case NS_CSS_COUNTER_INCREMENT:
     case NS_CSS_COUNTER_SET: {
-        char *canon = counter_list_canonical(t, prop);
+        char *canon = ns_css_counter_list_canonical(t, prop);
         if (!canon) break;
         v = g_new0(ns_css_value, 1);
         v->kind = NS_CSS_V_KEYWORD;
@@ -4412,7 +3995,7 @@ parse_value_for(ns_css_prop prop, const char *text)
         break;
     }
     case NS_CSS_LIST_STYLE_TYPE: {
-        char *canon = list_style_type_canonical(t);
+        char *canon = ns_css_list_style_type_canonical(t);
         if (!canon) break;
         v = g_new0(ns_css_value, 1);
         v->kind = NS_CSS_V_KEYWORD;
@@ -4420,7 +4003,7 @@ parse_value_for(ns_css_prop prop, const char *text)
         break;
     }
     case NS_CSS_OVERFLOW_CLIP_MARGIN: {
-        char *canon = overflow_clip_margin_canonical(t);
+        char *canon = ns_css_overflow_clip_margin_canonical(t);
         if (!canon) break;
         v = g_new0(ns_css_value, 1);
         v->kind = NS_CSS_V_KEYWORD;

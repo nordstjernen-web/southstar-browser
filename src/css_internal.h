@@ -99,6 +99,11 @@ gboolean      ns_css_anim_range_shorthand_expand(const char *text,
 char         *ns_css_ident_decode(const char *tok);
 gboolean      ns_css_starts_math_fn(const char *s, const char *e);
 
+char         *ns_css_display_normalize(const char *text);
+char         *ns_css_overflow_clip_margin_canonical(const char *text);
+char         *ns_css_counter_list_canonical(const char *text, ns_css_prop prop);
+char         *ns_css_list_style_type_canonical(const char *text);
+
 ns_css_value *ns_css_parse_box_shadow(const char *text);
 char         *ns_css_shadow_specified_canonical(const char *text,
                                                 gboolean is_text);
@@ -153,6 +158,7 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 offsetof(ns_css_anim_entry, timing) == 32 &&
                 offsetof(ns_css_anim_entry, iterations) == 88 &&
                 sizeof(ns_css_anim_list) == 968);
+G_STATIC_ASSERT(sizeof(ns_display) == 5);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8
