@@ -74,6 +74,27 @@ char         *ns_css_add_leading_zeros(char *v);
 char         *ns_css_normalize_negative_zero(char *v);
 GPtrArray    *ns_css_split_top_level_commas(const char *text);
 
+char         *ns_css_read_ident(const char **pp, const char *end);
+char         *ns_css_read_string(const char **pp, const char *end);
+
+ns_css_value *ns_css_parse_tracks(const char *text);
+ns_css_value *ns_css_parse_areas(const char *text);
+char         *ns_css_grid_line_canonical(const char *text,
+                                         gboolean *ident_only);
+int           ns_css_grid_placement_expand(const char *text, gboolean area,
+                                           char *out[4],
+                                           gboolean ident_only[4]);
+char         *ns_css_grid_placement_canonical(const char *text,
+                                              gboolean area);
+char         *ns_css_grid_track_text_canonical(const char *text);
+gboolean      ns_css_grid_template_parse(const char *text, char *out[3],
+                                         char **canon);
+gboolean      ns_css_grid_shorthand_parse(const char *text, char *out[6],
+                                          char **canon);
+char         *ns_css_grid_auto_flow_canonical(const char *text);
+char         *ns_css_grid_template_compose(char *const v[3]);
+char         *ns_css_grid_compose(char *const v[6]);
+
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(sizeof(ns_css_gradient_stop) == 40 &&
                 sizeof(ns_css_gradient) == 1448 &&
@@ -87,6 +108,13 @@ G_STATIC_ASSERT(sizeof(ns_css_transform_op) == 264 &&
                 offsetof(ns_css_transform_op, a_pct) == 200 &&
                 offsetof(ns_css_transform_op, rem) == 240 &&
                 sizeof(ns_css_transform) == 2120);
+G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
+                sizeof(ns_css_line_name) == 28 &&
+                offsetof(ns_css_tracks, auto_repeat) == 2120 &&
+                offsetof(ns_css_tracks, line_names) == 2148 &&
+                sizeof(ns_css_tracks) == 3048 &&
+                sizeof(ns_css_area_rect) == 24 &&
+                sizeof(ns_css_areas) == 784);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

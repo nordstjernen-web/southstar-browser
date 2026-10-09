@@ -273,6 +273,15 @@ Southstar Browser (unreleased):
   properties, their computed and canonical specified spelling, whether a
   transform is 3D and the matrix it applies. Elements transform, report
   their transforms and animate as before.
+* CSS grid values are Rust: grid-template-rows and -columns track lists
+  with repeat() (including auto-fill and auto-fit), minmax(),
+  fit-content(), math functions, line names and subgrid;
+  grid-template-areas; grid-row, grid-column, grid-area and their longhand
+  lines with span, integers and custom identifiers; the grid-template and
+  grid shorthands with auto-flow, and grid-auto-flow; how they serialize
+  and compose back from longhands in element.style. With them go the
+  readers of CSS identifiers and strings and their escapes that selectors,
+  @-rules and declarations share. Grids lay out and serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -1,4 +1,4 @@
-//! Southstar — struct ns_css_value as css.h lays it out for lengths and calc() values, and building one css.c can own and free.
+//! Southstar — struct ns_css_value as css.h lays it out for the value kinds the Rust sections build, and building one css.c can own and free.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,13 +9,16 @@ use southstar_glib as glib;
 
 use crate::calc::{Calc, CalcArg, Parsed};
 use crate::gradient::Gradient;
+use crate::grid::{AREAS_MAX, Areas, Tracks};
 use crate::transform::Transform;
 
 pub(crate) const KIND_KEYWORD: c_uint = 0;
 pub(crate) const KIND_LENGTH: c_uint = 1;
 pub(crate) const KIND_CALC: c_uint = 4;
 pub(crate) const KIND_GRADIENT: c_uint = 6;
+pub(crate) const KIND_TRACKS: c_uint = 7;
 pub(crate) const KIND_TRANSFORM: c_uint = 9;
+pub(crate) const KIND_AREAS: c_uint = 10;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -51,11 +54,32 @@ pub(crate) struct RawCalc {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct RawAreaRect {
+    pub name: *mut c_char,
+    pub r0: c_int,
+    pub r1: c_int,
+    pub c0: c_int,
+    pub c1: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct RawAreas {
+    pub n_rows: c_int,
+    pub n_cols: c_int,
+    pub n_rects: c_int,
+    pub rects: [RawAreaRect; AREAS_MAX],
+}
+
+#[repr(C)]
 pub(crate) union ValueUnion {
     pub length: Length,
     pub calc: RawCalc,
     pub gradient: Gradient,
     pub transform: Transform,
+    pub tracks: Tracks,
+    pub areas: RawAreas,
     pub keyword: *mut c_char,
     _storage: [u64; 381],
 }
@@ -78,6 +102,8 @@ const _: () = assert!(
         && offset_of!(RawCalc, func) == 80
         && offset_of!(RawCalc, args) == 88
         && size_of::<RawCalc>() == 152
+        && size_of::<RawAreaRect>() == 24
+        && size_of::<RawAreas>() == 784
 );
 
 impl RawCalc {
@@ -178,4 +204,32 @@ pub(crate) unsafe fn length_of(value: *const NsCssValue) -> Option<Length> {
     } else {
         None
     }
+}
+
+pub(crate) fn new_tracks(tracks: &Tracks) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_TRACKS;
+    value_ref.u.tracks = *tracks;
+    value
+}
+
+pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_AREAS;
+    let raw = unsafe { &mut value_ref.u.areas };
+    raw.n_rows = areas.rows;
+    raw.n_cols = areas.cols;
+    raw.n_rects = areas.rects.len() as c_int;
+    for (slot, rect) in raw.rects.iter_mut().zip(&areas.rects) {
+        *slot = RawAreaRect {
+            name: glib::strdup(&rect.name),
+            r0: rect.r0,
+            r1: rect.r1,
+            c0: rect.c0,
+            c1: rect.c1,
+        };
+    }
+    value
 }
