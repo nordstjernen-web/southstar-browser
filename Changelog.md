@@ -32,6 +32,10 @@ Southstar Browser (unreleased):
   verified, and WebSocket.protocol now reports the subprotocol the server
   chose (it was always empty). WebSocket no longer depends on the libcurl
   version.
+* ftp:// downloads and directory listings go through the Rust client too,
+  with anonymous or URL credentials, a CWD per path segment as curl did,
+  EPSV with a PASV fallback, and proxies for both connections. Page loads
+  no longer use libcurl at all.
 * HTTP/1.1 responses from a server that pauses for more than a second no
   longer fail on Windows: the Rust client waits for sockets with poll()
   instead of socket timeouts, which Windows reports as errors rather than

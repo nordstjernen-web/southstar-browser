@@ -214,7 +214,7 @@ fn origin_key(req: &Request) -> String {
     }
 }
 
-fn resolve_host(host: &str) -> &str {
+pub(crate) fn resolve_host(host: &str) -> &str {
     host.strip_prefix('[')
         .and_then(|h| h.strip_suffix(']'))
         .unwrap_or(host)
@@ -232,7 +232,7 @@ impl Stream {
         }
     }
 
-    fn read_some(&mut self, buf: &mut [u8], abort: &dyn Fn() -> bool) -> Option<usize> {
+    pub(crate) fn read_some(&mut self, buf: &mut [u8], abort: &dyn Fn() -> bool) -> Option<usize> {
         loop {
             match self {
                 Stream::Plain(s) => match s.read(buf) {
@@ -254,7 +254,7 @@ impl Stream {
         }
     }
 
-    fn write_all(&mut self, mut buf: &[u8], abort: &dyn Fn() -> bool) -> bool {
+    pub(crate) fn write_all(&mut self, mut buf: &[u8], abort: &dyn Fn() -> bool) -> bool {
         while !buf.is_empty() {
             let n = match self {
                 Stream::Plain(s) => match s.write(buf) {
@@ -314,7 +314,7 @@ fn tcp_connect(
     }
 }
 
-fn tcp_connect_to(
+pub(crate) fn tcp_connect_to(
     host_name: &str,
     port: u16,
     deadline: Instant,
@@ -443,7 +443,7 @@ fn open(
     }
 }
 
-fn read_line(
+pub(crate) fn read_line(
     stream: &mut Stream,
     buf: &mut Vec<u8>,
     pos: &mut usize,

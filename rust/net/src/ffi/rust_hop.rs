@@ -1,4 +1,4 @@
-//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies and HSTS recording, written into the body and header sinks, directly or through an HTTP or SOCKS proxy, with FTP hops still handed to curl.
+//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies and HSTS recording, written into the body and header sinks, directly or through an HTTP or SOCKS proxy, and FTP downloads and listings.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,7 +6,7 @@ use core::ffi::{c_char, c_long, c_void};
 use std::time::Duration;
 
 use southstar_glib::{self as glib, GBoolean};
-use southstar_http::{Handler, Request, TlsSettings, Version};
+use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
 
 use super::curl;
 use super::hop::{HopOut, HopReq, ns_hop_transport_curl};
@@ -89,13 +89,33 @@ pub unsafe extern "C" fn ns_hop_transport(
     let url_bytes = text(hop.url).unwrap_or_default();
     let proxy_spec = text(hop.proxy).filter(|p| !p.is_empty());
     let proxy = proxy_spec.and_then(southstar_http::parse_proxy);
-    if (proxy_spec.is_some() && proxy.is_none())
-        || hop.request_ftp != 0
-        || !url::is_http_or_https(url_bytes)
-    {
+    let ftp = hop.request_ftp != 0 || url_bytes.starts_with(b"ftp://");
+    if (proxy_spec.is_some() && proxy.is_none()) || (!ftp && !url::is_http_or_https(url_bytes)) {
         return unsafe { ns_hop_transport_curl(req, wctx, hctx, out, cancellable) };
     }
     out.effective_url = unsafe { glib::g_strdup(hop.url) };
+    if ftp {
+        let host = url::host_from(url_bytes).unwrap_or_default();
+        let host = String::from_utf8_lossy(&host).into_owned();
+        let no_proxy = text(hop.no_proxy).unwrap_or_default();
+        let proxy = proxy.filter(|_| !southstar_http::proxy_bypassed(no_proxy, &host));
+        let mut sinks = Sinks {
+            url: url_bytes,
+            jar: None,
+            wctx: unsafe { &mut *wctx },
+            hctx: unsafe { &mut *hctx },
+            cancellable,
+            sts: None,
+        };
+        let outcome = southstar_http::ftp::get(
+            url_bytes,
+            proxy.as_ref(),
+            seconds(hop.connect_timeout_s, 10),
+            seconds(hop.timeout_s, 30),
+            &mut sinks,
+        );
+        return write_outcome(out, &outcome, sinks.wctx, false);
+    }
     let Some(parts) = url::parts(url_bytes).filter(|p| !p.hostname.is_empty()) else {
         out.error_message = glib::strdup(b"invalid URL");
         out.connect_failed = 1;
@@ -176,7 +196,15 @@ pub unsafe extern "C" fn ns_hop_transport(
     {
         hsts::record(&parts.hostname, sts);
     }
+    write_outcome(out, &outcome, sinks.wctx, true)
+}
 
+fn write_outcome(
+    out: &mut HopOut,
+    outcome: &Outcome,
+    wctx: &mut NsWriteCtx,
+    http: bool,
+) -> GBoolean {
     out.t_namelookup_ms = outcome.namelookup_ms;
     out.t_connect_ms = outcome.connect_ms;
     out.t_appconnect_ms = outcome.appconnect_ms;
@@ -184,6 +212,7 @@ pub unsafe extern "C" fn ns_hop_transport(
     out.t_starttransfer_ms = outcome.starttransfer_ms;
     out.t_total_ms = outcome.total_ms;
     out.http_version = match outcome.version {
+        _ if !http => 0,
         Version::Http2 => HTTP_VERSION_2_0,
         Version::Http11 => HTTP_VERSION_1_1,
     };
@@ -201,7 +230,7 @@ pub unsafe extern "C" fn ns_hop_transport(
         return 0;
     }
     if outcome.sink_full {
-        sinks.wctx.mark_exceeded();
+        wctx.mark_exceeded();
     }
     out.status = outcome.status as c_long;
     out.ok = glib::boolean(outcome.ok);
