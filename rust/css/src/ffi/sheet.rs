@@ -41,6 +41,12 @@ pub(super) struct RawSheet {
     pub(super) index: *mut c_void,
 }
 
+impl RawSheet {
+    pub(super) fn property_rules(&self) -> &[RawPropertyRule] {
+        unsafe { elements(self.property_rules) }
+    }
+}
+
 #[repr(C)]
 struct RawImport {
     url: *mut c_char,
@@ -89,6 +95,39 @@ pub(super) struct RawPropertyRule {
 }
 
 impl RawPropertyRule {
+    pub(super) unsafe fn registered(
+        name: *const c_char,
+        syntax_text: *const c_char,
+        syntax: *mut c_void,
+        inherits: GBoolean,
+        initial_value: *const c_char,
+        has_initial: GBoolean,
+    ) -> Self {
+        let syntax_text = if syntax_text.is_null() {
+            c"*".as_ptr()
+        } else {
+            syntax_text
+        };
+        unsafe {
+            RawPropertyRule {
+                name: glib::g_strdup(name),
+                initial_value: if has_initial != 0 {
+                    glib::g_strdup(initial_value)
+                } else {
+                    ptr::null_mut()
+                },
+                syntax_text: glib::g_strdup(syntax_text),
+                syntax,
+                inherits,
+                has_initial,
+            }
+        }
+    }
+
+    pub(super) fn name(&self) -> *const c_char {
+        self.name
+    }
+
     pub(super) fn inherits(&self) -> bool {
         self.inherits != 0
     }

@@ -592,6 +592,9 @@ Southstar Browser (unreleased):
   root font size, container context and matched declarations make, and
   the per-pass table of styles stored under it. Elements share exactly
   when they did before (checked over 16 million generated lookups).
+* CSS.registerProperty()'s registry is Rust, with the per-pass table of
+  @property rules and script registrations the cascade checks custom
+  properties against; registrations are accepted and rejected as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

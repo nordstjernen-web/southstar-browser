@@ -25,6 +25,7 @@ mod matcher;
 mod nesting;
 mod pending;
 mod property;
+mod registry;
 mod restyle;
 mod rule_index;
 mod selector;

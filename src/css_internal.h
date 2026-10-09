@@ -74,6 +74,10 @@ void ns_css_gather_element_declarations(const ns_node *el, GArray *matches,
                                         GArray *var_matches,
                                         GArray *pending_matches);
 void ns_css_decl_sheet_cache_trim(void);
+guint64 ns_css_registered_property_serial(void);
+GHashTable *ns_css_registered_props_build(const ns_css_stylesheet *ua,
+                                          const ns_css_stylesheet *const *author,
+                                          gsize n_author);
 void ns_css_style_share_begin(void);
 void ns_css_style_share_end(void);
 gboolean ns_css_style_share_find(const ns_style *parent, double root_px,

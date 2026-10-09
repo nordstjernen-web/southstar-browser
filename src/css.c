@@ -18,72 +18,6 @@
 static double g_viewport_w = 1000;
 static double g_viewport_h = 800;
 
-static GHashTable *g_js_registered_props;
-static guint64 g_js_registered_serial;
-
-static void css_property_rule_free(gpointer data);
-
-static guint64
-ns_css_registered_property_serial(void)
-{
-    return g_js_registered_serial;
-}
-
-static gboolean
-css_custom_property_name(const char *name)
-{
-    if (!name || name[0] != '-' || name[1] != '-' || !name[2]) return FALSE;
-    for (const char *p = name + 2; *p; p++)
-        if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r' || *p == '\f')
-            return FALSE;
-    return TRUE;
-}
-
-ns_css_register_status
-ns_css_register_property(const char *name, const char *syntax_text,
-                         gboolean inherits, const char *initial_value,
-                         gboolean has_initial)
-{
-    if (!css_custom_property_name(name)) return NS_CSS_REGISTER_BAD_NAME;
-    if (g_js_registered_props &&
-        g_hash_table_contains(g_js_registered_props, name))
-        return NS_CSS_REGISTER_EXISTS;
-    ns_css_syntax_def *syntax = ns_css_syntax_def_parse(syntax_text);
-    if (!syntax) return NS_CSS_REGISTER_BAD_SYNTAX;
-    gboolean universal = ns_css_syntax_def_universal(syntax);
-    if ((!universal && !has_initial) ||
-        (has_initial &&
-         !ns_css_syntax_def_initial_valid(syntax, initial_value))) {
-        ns_css_syntax_def_free(syntax);
-        return NS_CSS_REGISTER_BAD_INITIAL;
-    }
-    if (!g_js_registered_props)
-        g_js_registered_props = g_hash_table_new_full(
-            g_str_hash, g_str_equal, NULL, css_property_rule_free);
-    ns_css_property_rule *pr = g_new0(ns_css_property_rule, 1);
-    pr->name = g_strdup(name);
-    pr->initial_value = has_initial ? g_strdup(initial_value) : NULL;
-    pr->syntax_text = g_strdup(syntax_text ? syntax_text : "*");
-    pr->syntax = syntax;
-    pr->inherits = inherits;
-    pr->has_initial = has_initial;
-    g_hash_table_replace(g_js_registered_props, pr->name, pr);
-    g_js_registered_serial++;
-    return NS_CSS_REGISTER_OK;
-}
-
-void
-ns_css_clear_registered_properties(void)
-{
-    if (g_js_registered_props) {
-        g_hash_table_destroy(g_js_registered_props);
-        g_js_registered_props = NULL;
-        g_js_registered_serial++;
-    }
-}
-
-
-
 void
 ns_css_set_viewport(double vw_px, double vh_px)
 {
@@ -94,7 +28,6 @@ ns_css_set_viewport(double vw_px, double vh_px)
 double ns_css_viewport_w(void) { return g_viewport_w; }
 double ns_css_viewport_h(void) { return g_viewport_h; }
 
-
 static void (*g_frame_viewport_cb)(const ns_node *frame, double *w, double *h);
 
 void
@@ -103,7 +36,6 @@ ns_css_set_frame_viewport_cb(void (*cb)(const ns_node *frame,
 {
     g_frame_viewport_cb = cb;
 }
-
 
 static gboolean
 is_ws(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
@@ -145,7 +77,6 @@ ns_css_append_unescaped(GString *out, const char **pp)
     *pp = p;
 }
 
-
 ns_css_value *
 ns_css_value_dup(const ns_css_value *v)
 {
@@ -177,26 +108,12 @@ ns_css_value_free(ns_css_value *v)
     }
 }
 
-
 typedef struct ns_css_scope {
     GPtrArray *roots;
     GPtrArray *limits;
 } ns_css_scope;
 
 #define NS_CSS_MAX_AT_NESTING 32
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 static ns_css_value *
 keyword_value_dup(const char *canonical)
@@ -249,19 +166,11 @@ ns_var_map_unref(ns_var_map *m)
     }
 }
 
-
 char *
 ns_css_resolve_style_vars(const char *text, const ns_style *style)
 {
     return ns_css_substitute_vars(text, style ? style->vars : NULL,
                                   g_registered_props, 0);
-}
-
-static void
-css_property_rule_free(gpointer data)
-{
-    ns_css_property_rule_clear(data);
-    g_free(data);
 }
 
 ns_css_keyframes *
@@ -372,7 +281,6 @@ ns_css_get_color_scheme(void)
     return g_color_scheme;
 }
 
-
 static __thread GHashTable *g_var_adjust_cache;
 
 typedef struct css_candidate {
@@ -454,8 +362,6 @@ ns_css_rule_index_free(ns_css_rule_index *idx)
     if (idx->universal) g_array_free(idx->universal, TRUE);
     g_free(idx);
 }
-
-
 
 static ns_style *g_style_pool[16384];
 static int g_style_pool_n;
@@ -571,17 +477,6 @@ typedef struct {
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(sizeof(gather_dest) == 32);
 #endif
-
-static void
-css_collect_property_rules(GHashTable *reg, const ns_css_stylesheet *sh)
-{
-    if (!reg || !sh || !sh->property_rules) return;
-    for (guint i = 0; i < sh->property_rules->len; i++) {
-        ns_css_property_rule *pr =
-            &g_array_index(sh->property_rules, ns_css_property_rule, i);
-        if (pr->name) g_hash_table_replace(reg, pr->name, pr);
-    }
-}
 
 static const ns_css_stylesheet *
 ua_sheet_for(const ns_node *doc)
@@ -1090,17 +985,8 @@ ns_css_compute(ns_node *doc,
     GHashTable *layer_ranks =
         ns_css_layer_ranks_build(cached_ua, author_sheets, n_sheets);
 
-    g_registered_props = g_hash_table_new(g_str_hash, g_str_equal);
-    css_collect_property_rules(g_registered_props, cached_ua);
-    for (gsize i = 0; i < n_sheets; i++)
-        css_collect_property_rules(g_registered_props, author_sheets[i]);
-    if (g_js_registered_props) {
-        GHashTableIter it;
-        gpointer k, v;
-        g_hash_table_iter_init(&it, g_js_registered_props);
-        while (g_hash_table_iter_next(&it, &k, &v))
-            g_hash_table_replace(g_registered_props, k, v);
-    }
+    g_registered_props =
+        ns_css_registered_props_build(cached_ua, author_sheets, n_sheets);
 
     double root_px = 0;
     ns_css_decl_sheet_cache_trim();
