@@ -77,15 +77,6 @@ ns_css_append_unescaped(GString *out, const char **pp)
     *pp = p;
 }
 
-static ns_css_value *
-keyword_value_dup(const char *canonical)
-{
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_KEYWORD;
-    v->u.keyword = g_strdup(canonical);
-    return v;
-}
-
 static ns_css_color_scheme g_color_scheme = NS_CSS_COLOR_SCHEME_LIGHT;
 static ns_css_reduced_motion g_reduced_motion = NS_CSS_REDUCED_MOTION_NO_PREFERENCE;
 
@@ -269,123 +260,6 @@ typedef struct {
     GArray *p;
 } ns_pe_gather;
 
-static gboolean
-element_cannot_be_unboxed(const ns_node *el)
-{
-    if (el->kind != NS_NODE_ELEMENT || !el->name) return FALSE;
-    if (el->flags & NS_NODE_SVG_NS)
-        return strcmp(el->name, "svg") == 0 && el->parent &&
-               !(el->parent->flags & NS_NODE_SVG_NS);
-    if (el->flags & NS_NODE_FOREIGN_NS) return FALSE;
-    static const char *const unusual[] = {
-        "audio", "br", "canvas", "embed", "frame", "frameset", "iframe",
-        "img", "input", "meter", "object", "progress", "select",
-        "textarea", "video", "wbr",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(unusual); i++)
-        if (g_ascii_strcasecmp(el->name, unusual[i]) == 0) return TRUE;
-    return FALSE;
-}
-
-static gboolean
-display_contents_to_none(const ns_node *el, ns_style *s)
-{
-    if (s->display.box != NS_DISPLAY_BOX_CONTENTS ||
-        !element_cannot_be_unboxed(el))
-        return FALSE;
-    ns_css_value_free(s->values[NS_CSS_DISPLAY]);
-    s->values[NS_CSS_DISPLAY] = keyword_value_dup("none");
-    s->display = ns_css_display_from_keyword("none");
-    return TRUE;
-}
-
-static void
-strip_native_widget_decorations(const ns_node *el, ns_style *s)
-{
-    if (!ns_node_is_element_named(el, "input")) return;
-    const char *type = ns_element_get_attr(el, "type");
-    if (!type || (g_ascii_strcasecmp(type, "checkbox") != 0 &&
-                  g_ascii_strcasecmp(type, "radio") != 0))
-        return;
-    const ns_css_value *ap = s->values[NS_CSS_APPEARANCE];
-    if (ap && ap->kind == NS_CSS_V_KEYWORD && ap->u.keyword &&
-        strcmp(ap->u.keyword, "none") == 0)
-        return;
-    static const ns_css_prop stripped[] = {
-        NS_CSS_BACKGROUND_COLOR, NS_CSS_BACKGROUND_IMAGE,
-        NS_CSS_BORDER_TOP_WIDTH, NS_CSS_BORDER_RIGHT_WIDTH,
-        NS_CSS_BORDER_BOTTOM_WIDTH, NS_CSS_BORDER_LEFT_WIDTH,
-        NS_CSS_BORDER_TOP_STYLE, NS_CSS_BORDER_RIGHT_STYLE,
-        NS_CSS_BORDER_BOTTOM_STYLE, NS_CSS_BORDER_LEFT_STYLE,
-        NS_CSS_BORDER_TOP_COLOR, NS_CSS_BORDER_RIGHT_COLOR,
-        NS_CSS_BORDER_BOTTOM_COLOR, NS_CSS_BORDER_LEFT_COLOR,
-        NS_CSS_BORDER_TOP_LEFT_RADIUS, NS_CSS_BORDER_TOP_RIGHT_RADIUS,
-        NS_CSS_BORDER_BOTTOM_RIGHT_RADIUS, NS_CSS_BORDER_BOTTOM_LEFT_RADIUS,
-        NS_CSS_PADDING_TOP, NS_CSS_PADDING_RIGHT,
-        NS_CSS_PADDING_BOTTOM, NS_CSS_PADDING_LEFT,
-        NS_CSS_BOX_SHADOW,
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(stripped); i++) {
-        if (s->values[stripped[i]]) {
-            ns_css_value_free(s->values[stripped[i]]);
-            s->values[stripped[i]] = NULL;
-        }
-    }
-}
-
-static double
-frame_edge_px(const ns_style *s, ns_css_prop prop)
-{
-    const ns_css_value *v = s->values[prop];
-    if (!v || v->kind != NS_CSS_V_LENGTH || v->u.length.unit != NS_CSS_UNIT_PX)
-        return 0;
-    return v->u.length.v;
-}
-
-static double
-frame_border_px(const ns_style *s, ns_css_prop width_prop,
-                ns_css_prop style_prop)
-{
-    const ns_css_value *st = s->values[style_prop];
-    if (!st || (st->kind == NS_CSS_V_KEYWORD && st->u.keyword &&
-                (strcmp(st->u.keyword, "none") == 0 ||
-                 strcmp(st->u.keyword, "hidden") == 0)))
-        return 0;
-    return frame_edge_px(s, width_prop);
-}
-
-static gboolean
-frame_viewport_from_style(const ns_style *s, double *w, double *h)
-{
-    if (!s) return FALSE;
-    const ns_css_value *wv = s->values[NS_CSS_WIDTH];
-    const ns_css_value *hv = s->values[NS_CSS_HEIGHT];
-    if (!wv || wv->kind != NS_CSS_V_LENGTH ||
-        wv->u.length.unit != NS_CSS_UNIT_PX ||
-        !hv || hv->kind != NS_CSS_V_LENGTH ||
-        hv->u.length.unit != NS_CSS_UNIT_PX)
-        return FALSE;
-    double fw = wv->u.length.v, fh = hv->u.length.v;
-    if (ns_css_keyword_is(s->values[NS_CSS_BOX_SIZING], "border-box")) {
-        fw -= frame_edge_px(s, NS_CSS_PADDING_LEFT) +
-              frame_edge_px(s, NS_CSS_PADDING_RIGHT) +
-              frame_border_px(s, NS_CSS_BORDER_LEFT_WIDTH,
-                              NS_CSS_BORDER_LEFT_STYLE) +
-              frame_border_px(s, NS_CSS_BORDER_RIGHT_WIDTH,
-                              NS_CSS_BORDER_RIGHT_STYLE);
-        fh -= frame_edge_px(s, NS_CSS_PADDING_TOP) +
-              frame_edge_px(s, NS_CSS_PADDING_BOTTOM) +
-              frame_border_px(s, NS_CSS_BORDER_TOP_WIDTH,
-                              NS_CSS_BORDER_TOP_STYLE) +
-              frame_border_px(s, NS_CSS_BORDER_BOTTOM_WIDTH,
-                              NS_CSS_BORDER_BOTTOM_STYLE);
-    }
-    if (fw <= 0 || fh <= 0) return FALSE;
-    *w = fw;
-    *h = fh;
-    return TRUE;
-}
-
 /* The sheets of each document, when the caller of ns_css_compute() says
  * whose each sheet is. */
 static __thread GHashTable *g_doc_sheets;
@@ -440,7 +314,7 @@ cascade_walk(ns_node *node,
     gboolean frame_viewport = FALSE;
     if (node->kind == NS_NODE_DOCUMENT && node->parent && g_frame_viewport_cb) {
         double fw = 0, fh = 0;
-        if (!frame_viewport_from_style(parent_style, &fw, &fh))
+        if (!ns_css_frame_viewport_from_style(parent_style, &fw, &fh))
             g_frame_viewport_cb(node->parent, &fw, &fh);
         if (fw > 0 && fh > 0 &&
             (fabs(fw - g_viewport_w) > 0.01 ||
@@ -549,7 +423,7 @@ cascade_walk(ns_node *node,
         if (shared) {
             ns_style_free(s);
             s = ns_style_clone_shared(shared);
-            display_contents_to_none(node, s);
+            ns_css_display_contents_to_none(node, s);
             g_array_set_size(matches, 0);
             g_array_set_size(var_matches, 0);
             g_array_set_size(pending_matches, 0);
@@ -569,8 +443,8 @@ cascade_walk(ns_node *node,
                                  *root_px);
             ns_css_compute_registered_vars(s, parent_style, registered,
                                            *root_px);
-            strip_native_widget_decorations(node, s);
-            if (display_contents_to_none(node, s)) have_key = FALSE;
+            ns_css_strip_native_widget_decorations(node, s);
+            if (ns_css_display_contents_to_none(node, s)) have_key = FALSE;
             g_array_set_size(matches, 0);
             g_array_set_size(var_matches, 0);
             g_array_set_size(pending_matches, 0);

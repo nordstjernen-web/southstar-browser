@@ -603,6 +603,10 @@ Southstar Browser (unreleased):
   and freeing values, releasing variable maps, the pool computed styles
   come from with freeing and sharing them, and freeing style sheets with
   their rule indexes.
+* The fixups a computed style gets after the cascade are Rust: display:
+  contents on an element that cannot be unboxed becomes none, native
+  checkboxes and radios drop the box decorations their widget draws, and
+  a frame's width and height give its document's viewport.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

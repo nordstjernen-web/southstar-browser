@@ -12,6 +12,7 @@ mod custom_props;
 mod declarations;
 mod display;
 mod element_state;
+mod fixups;
 mod font;
 mod gather;
 mod grid;

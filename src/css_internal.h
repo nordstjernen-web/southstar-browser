@@ -83,6 +83,10 @@ void ns_css_registered_props_end(void);
 ns_style *ns_style_alloc(void);
 ns_style *ns_style_clone_shared(const ns_style *s);
 void ns_var_map_unref(struct ns_var_map *m);
+gboolean ns_css_display_contents_to_none(const ns_node *el, ns_style *s);
+void ns_css_strip_native_widget_decorations(const ns_node *el, ns_style *s);
+gboolean ns_css_frame_viewport_from_style(const ns_style *s, double *w,
+                                          double *h);
 void ns_css_style_share_begin(void);
 void ns_css_style_share_end(void);
 gboolean ns_css_style_share_find(const ns_style *parent, double root_px,
