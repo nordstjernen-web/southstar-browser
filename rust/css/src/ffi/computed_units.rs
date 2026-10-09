@@ -30,7 +30,7 @@ pub(crate) struct RawStyle {
     pub(super) display: Display,
     pub(super) specified_inline: u8,
     _pseudo_styles: [*mut c_void; 11],
-    _share_id: u64,
+    pub(super) share_id: u64,
     _ref_count: c_int,
     pub(super) currentcolor_bits: u32,
     pub(super) vars: *mut RawVarMap,
@@ -40,7 +40,7 @@ pub(crate) struct RawStyle {
 const _: () = assert!(
     size_of::<RawStyle>() == 2056
         && offset_of!(RawStyle, _pseudo_styles) == 1944
-        && offset_of!(RawStyle, _share_id) == 2032
+        && offset_of!(RawStyle, share_id) == 2032
         && offset_of!(RawStyle, vars) == 2048
 );
 

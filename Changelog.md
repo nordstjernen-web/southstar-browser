@@ -588,6 +588,10 @@ Southstar Browser (unreleased):
   and its style attribute, are turned into matched declarations in Rust,
   parsed once per distinct text as before, with the same cascade
   placement (checked over 24,000 generated documents).
+* Style sharing between elements is Rust: the key an element's parent,
+  root font size, container context and matched declarations make, and
+  the per-pass table of styles stored under it. Elements share exactly
+  when they did before (checked over 16 million generated lookups).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -583,17 +583,6 @@ css_collect_property_rules(GHashTable *reg, const ns_css_stylesheet *sh)
     }
 }
 
-static gboolean
-pending_uses_attr(const GArray *pending_matches)
-{
-    if (!pending_matches) return FALSE;
-    for (guint i = 0; i < pending_matches->len; i++) {
-        const pending_match *e = &g_array_index((GArray *)pending_matches, pending_match, i);
-        if (e->pd && e->pd->raw_vtext && strstr(e->pd->raw_vtext, "attr(")) return TRUE;
-    }
-    return FALSE;
-}
-
 static const ns_css_stylesheet *
 ua_sheet_for(const ns_node *doc)
 {
@@ -655,52 +644,7 @@ incr_sheet_sig(const ns_css_stylesheet *ua,
     return h;
 }
 
-static GHashTable *g_style_share;
-static GByteArray *g_share_scratch;
 static guint64 g_style_share_next_id;
-
-typedef struct {
-    guint32  hash;
-    guint32  len;
-    guint8  *data;
-} share_key_t;
-
-static guint
-share_key_hash(gconstpointer p)
-{
-    return ((const share_key_t *)p)->hash;
-}
-
-static gboolean
-share_key_equal(gconstpointer a, gconstpointer b)
-{
-    const share_key_t *x = a, *y = b;
-    return x->hash == y->hash && x->len == y->len &&
-           memcmp(x->data, y->data, x->len) == 0;
-}
-
-static void
-share_key_free(gpointer p)
-{
-    share_key_t *k = p;
-    g_free(k->data);
-    g_free(k);
-}
-
-static guint32
-share_key_djb2(const guint8 *d, guint32 n)
-{
-    guint64 h = 1469598103934665603ULL;
-    guint32 i = 0;
-    for (; i + 8 <= n; i += 8) {
-        guint64 w;
-        memcpy(&w, d + i, 8);
-        h = (h ^ w) * 1099511628211ULL;
-    }
-    for (; i < n; i++)
-        h = (h ^ d[i]) * 1099511628211ULL;
-    return (guint32)(h ^ (h >> 32));
-}
 
 typedef struct {
     ns_css_pseudo_element pe;
@@ -740,194 +684,6 @@ ns_style_clone_shared(const ns_style *s)
     c->hidden_after  = ns_style_clone_shared(s->hidden_after);
     c->vars = ns_style_vars_clone(s->vars);
     return c;
-}
-
-#define SHARE_KEY_MATCH_BYTES \
-    (sizeof(int) * 9 + sizeof(((match_entry *)0)->important) + \
-     sizeof(((match_entry *)0)->inline_style) + \
-     sizeof(((match_entry *)0)->rule) + sizeof(((match_entry *)0)->value) + \
-     sizeof(((match_entry *)0)->prop))
-#define SHARE_KEY_VAR_BYTES \
-    (sizeof(int) * 9 + sizeof(((var_match *)0)->important) + \
-     sizeof(((var_match *)0)->inline_style) + \
-     sizeof(((var_match *)0)->rule) + sizeof(((var_match *)0)->name) + \
-     sizeof(((var_match *)0)->text))
-#define SHARE_KEY_PENDING_BYTES \
-    (sizeof(int) * 9 + sizeof(((pending_match *)0)->inline_style) + \
-     sizeof(((pending_match *)0)->rule) + sizeof(((pending_match *)0)->pd))
-
-static inline guint8 *
-share_key_put_raw(guint8 *p, const void *src, gsize n)
-{
-    memcpy(p, src, n);
-    return p + n;
-}
-
-static guint8 *
-share_key_put_matches(guint8 *p, const GArray *arr)
-{
-    guint n = arr ? arr->len : 0;
-    p = share_key_put_raw(p, &n, sizeof n);
-    for (guint i = 0; i < n; i++) {
-        const match_entry *e = &g_array_index((GArray *)arr, match_entry, i);
-        p = share_key_put_raw(p, &e->origin, sizeof(int) * 9);
-        p = share_key_put_raw(p, &e->important, sizeof e->important);
-        p = share_key_put_raw(p, &e->inline_style, sizeof e->inline_style);
-        p = share_key_put_raw(p, &e->rule, sizeof e->rule);
-        p = share_key_put_raw(p, &e->value, sizeof e->value);
-        p = share_key_put_raw(p, &e->prop, sizeof e->prop);
-    }
-    return p;
-}
-
-static guint8 *
-share_key_put_vars(guint8 *p, const GArray *arr)
-{
-    guint n = arr ? arr->len : 0;
-    p = share_key_put_raw(p, &n, sizeof n);
-    for (guint i = 0; i < n; i++) {
-        const var_match *e = &g_array_index((GArray *)arr, var_match, i);
-        p = share_key_put_raw(p, &e->origin, sizeof(int) * 9);
-        p = share_key_put_raw(p, &e->important, sizeof e->important);
-        p = share_key_put_raw(p, &e->inline_style, sizeof e->inline_style);
-        p = share_key_put_raw(p, &e->rule, sizeof e->rule);
-        p = share_key_put_raw(p, &e->name, sizeof e->name);
-        p = share_key_put_raw(p, &e->text, sizeof e->text);
-    }
-    return p;
-}
-
-static guint8 *
-share_key_put_pending(guint8 *p, const GArray *arr)
-{
-    guint n = arr ? arr->len : 0;
-    p = share_key_put_raw(p, &n, sizeof n);
-    for (guint i = 0; i < n; i++) {
-        const pending_match *e = &g_array_index((GArray *)arr, pending_match, i);
-        p = share_key_put_raw(p, &e->origin, sizeof(int) * 9);
-        p = share_key_put_raw(p, &e->inline_style, sizeof e->inline_style);
-        p = share_key_put_raw(p, &e->rule, sizeof e->rule);
-        p = share_key_put_raw(p, &e->pd, sizeof e->pd);
-    }
-    return p;
-}
-
-static gboolean
-container_relative_unit(ns_css_unit unit)
-{
-    return unit == NS_CSS_UNIT_CQW || unit == NS_CSS_UNIT_CQH ||
-           unit == NS_CSS_UNIT_CQMIN || unit == NS_CSS_UNIT_CQMAX;
-}
-
-static gboolean
-share_matches_need_container(const GArray *matches)
-{
-    if (!matches) return FALSE;
-    for (guint i = 0; i < matches->len; i++) {
-        const match_entry *e = &g_array_index((GArray *)matches,
-                                               match_entry, i);
-        if (e->prop == NS_CSS_FONT_SIZE && e->value &&
-            e->value->kind == NS_CSS_V_LENGTH &&
-            container_relative_unit(e->value->u.length.unit))
-            return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-share_vars_need_container(const GArray *matches)
-{
-    if (!matches) return FALSE;
-    for (guint i = 0; i < matches->len; i++) {
-        const var_match *e = &g_array_index((GArray *)matches, var_match, i);
-        if (ns_css_text_has_container_units(e->text, -1)) return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-share_pending_need_container(const GArray *matches)
-{
-    if (!matches) return FALSE;
-    for (guint i = 0; i < matches->len; i++) {
-        const pending_match *e = &g_array_index((GArray *)matches,
-                                                 pending_match, i);
-        if (e->pd && ns_css_text_has_container_units(e->pd->raw_vtext, -1))
-            return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-share_key_needs_container(const GArray *matches,
-                          const GArray *var_matches,
-                          const GArray *pending_matches,
-                          const ns_pe_gather *pe_g, int n_pe)
-{
-    if (share_matches_need_container(matches) ||
-        share_vars_need_container(var_matches) ||
-        share_pending_need_container(pending_matches))
-        return TRUE;
-    for (int i = 0; i < n_pe; i++)
-        if (share_matches_need_container(pe_g[i].m) ||
-            share_vars_need_container(pe_g[i].v) ||
-            share_pending_need_container(pe_g[i].p))
-            return TRUE;
-    return FALSE;
-}
-
-static gsize
-share_key_arrays_bytes(const GArray *matches, const GArray *var_matches,
-                       const GArray *pending_matches)
-{
-    return sizeof(guint) * 3 +
-           (matches ? matches->len : 0) * SHARE_KEY_MATCH_BYTES +
-           (var_matches ? var_matches->len : 0) * SHARE_KEY_VAR_BYTES +
-           (pending_matches ? pending_matches->len : 0) *
-               SHARE_KEY_PENDING_BYTES;
-}
-
-static void
-style_share_key(GByteArray *b,
-                const ns_style *parent_style, double root_px,
-                const GArray *matches, const GArray *var_matches,
-                const GArray *pending_matches,
-                const ns_pe_gather *pe_g, int n_pe)
-{
-    gsize cq_bytes = ns_css_container_stack_copy(NULL, 0);
-    if (cq_bytes && !share_key_needs_container(matches, var_matches,
-                                               pending_matches, pe_g, n_pe))
-        cq_bytes = 0;
-    guint cq_len = (guint)(cq_bytes / NS_CSS_CONTAINER_BYTES);
-
-    gsize need = sizeof(guint64) + sizeof(double) + sizeof(guint) +
-                 cq_bytes +
-                 share_key_arrays_bytes(matches, var_matches, pending_matches);
-    for (int i = 0; i < n_pe; i++)
-        need += sizeof(guint) +
-                share_key_arrays_bytes(pe_g[i].m, pe_g[i].v, pe_g[i].p);
-    if (b->len < need) g_byte_array_set_size(b, (guint)need);
-
-    guint8 *p = b->data;
-    guint64 parent_id = parent_style ? parent_style->share_id : 0;
-    p = share_key_put_raw(p, &parent_id, sizeof parent_id);
-    p = share_key_put_raw(p, &root_px, sizeof root_px);
-    p = share_key_put_raw(p, &cq_len, sizeof cq_len);
-    if (cq_len) {
-        ns_css_container_stack_copy(p, cq_bytes);
-        p += cq_bytes;
-    }
-    p = share_key_put_matches(p, matches);
-    p = share_key_put_vars(p, var_matches);
-    p = share_key_put_pending(p, pending_matches);
-    for (int i = 0; i < n_pe; i++) {
-        guint pe = (guint)pe_g[i].pe;
-        p = share_key_put_raw(p, &pe, sizeof pe);
-        p = share_key_put_matches(p, pe_g[i].m);
-        p = share_key_put_vars(p, pe_g[i].v);
-        p = share_key_put_pending(p, pe_g[i].p);
-    }
-    b->len = (guint)(p - b->data);
 }
 
 static gboolean
@@ -1202,26 +958,11 @@ cascade_walk(ns_node *node,
         ns_css_gather_element_declarations(node, matches, var_matches,
                                            pending_matches);
 
-        share_key_t probe;
-        gboolean have_key = FALSE;
         const ns_style *shared = NULL;
-        if (g_style_share) {
-            style_share_key(g_share_scratch, parent_style, *root_px, matches,
-                            var_matches, pending_matches, pe_g, n_pe);
-            probe.data = g_share_scratch->data;
-            probe.len  = g_share_scratch->len;
-            probe.hash = share_key_djb2(probe.data, probe.len);
-            have_key = TRUE;
-            shared = g_hash_table_lookup(g_style_share, &probe);
-            gboolean uses_attr = pending_uses_attr(pending_matches);
-            for (int i = 0; i < n_pe && !uses_attr; i++)
-                uses_attr = pending_uses_attr(pe_g[i].p);
-            if (uses_attr) {
-                have_key = FALSE;
-                shared = NULL;
-                ns_css_incremental_exclude(node, TRUE);
-            }
-        }
+        gboolean have_key = ns_css_style_share_find(parent_style, *root_px,
+                                                    dests, (guint)n_pe + 1,
+                                                    &shared);
+        if (!have_key) ns_css_incremental_exclude(node, TRUE);
         if (shared) {
             ns_style_free(s);
             s = ns_style_clone_shared(shared);
@@ -1294,13 +1035,7 @@ cascade_walk(ns_node *node,
                 }
                 g_ptr_array_free(pe_owned, TRUE);
             }
-            if (have_key) {
-                share_key_t *k = g_new(share_key_t, 1);
-                k->len  = probe.len;
-                k->hash = probe.hash;
-                k->data = g_memdup2(probe.data, probe.len);
-                g_hash_table_insert(g_style_share, k, s);
-            }
+            if (have_key) ns_css_style_share_insert(s);
         }
         }
         g_hash_table_insert(out, node, s);
@@ -1370,10 +1105,7 @@ ns_css_compute(ns_node *doc,
     double root_px = 0;
     ns_css_decl_sheet_cache_trim();
     ns_css_container_stack_reset();
-    if (!g_share_scratch)
-        g_share_scratch = g_byte_array_sized_new(512);
-    g_style_share = g_hash_table_new_full(share_key_hash, share_key_equal,
-                                          share_key_free, NULL);
+    ns_css_style_share_begin();
     g_var_adjust_cache = g_hash_table_new_full(
         g_direct_hash, g_direct_equal,
         (GDestroyNotify)ns_var_map_unref, (GDestroyNotify)ns_var_map_unref);
@@ -1442,8 +1174,7 @@ ns_css_compute(ns_node *doc,
 
     ns_css_has_memo_end();
     ns_css_selector_batch_end();
-    g_hash_table_destroy(g_style_share);
-    g_style_share = NULL;
+    ns_css_style_share_end();
     g_hash_table_destroy(g_var_adjust_cache);
     g_var_adjust_cache = NULL;
     g_hash_table_destroy(layer_ranks);

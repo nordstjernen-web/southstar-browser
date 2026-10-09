@@ -42,11 +42,11 @@ unsafe extern "C" {
 }
 
 #[repr(C)]
-struct RawDest {
-    pe: c_uint,
-    out: *mut GArray,
-    var_out: *mut GArray,
-    pending_out: *mut GArray,
+pub(super) struct RawDest {
+    pub(super) pe: c_uint,
+    pub(super) out: *mut GArray,
+    pub(super) var_out: *mut GArray,
+    pub(super) pending_out: *mut GArray,
 }
 
 #[cfg(target_pointer_width = "64")]

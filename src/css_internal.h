@@ -74,6 +74,12 @@ void ns_css_gather_element_declarations(const ns_node *el, GArray *matches,
                                         GArray *var_matches,
                                         GArray *pending_matches);
 void ns_css_decl_sheet_cache_trim(void);
+void ns_css_style_share_begin(void);
+void ns_css_style_share_end(void);
+gboolean ns_css_style_share_find(const ns_style *parent, double root_px,
+                                 const void *dests, guint n_dests,
+                                 const ns_style **shared);
+void ns_css_style_share_insert(const ns_style *style);
 void ns_css_ancestor_filter_begin(gboolean attr_hashes);
 void ns_css_ancestor_filter_end(void);
 void ns_css_ancestor_filter_subject(const ns_node *node);
