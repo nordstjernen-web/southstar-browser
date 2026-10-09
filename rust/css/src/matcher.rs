@@ -60,7 +60,7 @@ const MATCH_BUDGET: u64 = 8_000_000;
 const MAX_CHAIN: i32 = 1024;
 
 #[derive(Default)]
-struct AddrHasher(u64);
+pub(crate) struct AddrHasher(u64);
 
 impl Hasher for AddrHasher {
     fn finish(&self) -> u64 {
@@ -79,6 +79,7 @@ impl Hasher for AddrHasher {
 }
 
 type AddrMap<K, V> = HashMap<K, V, BuildHasherDefault<AddrHasher>>;
+pub(crate) type AddrSet<K> = HashSet<K, BuildHasherDefault<AddrHasher>>;
 
 #[derive(Clone, Copy)]
 struct Position {
@@ -219,7 +220,7 @@ fn word_matches(value: &[u8], want: &[u8], ci: bool) -> bool {
     false
 }
 
-fn attr_value_matches(op: u32, v: &[u8], want: &[u8], ci: bool) -> bool {
+pub(crate) fn attr_value_matches(op: u32, v: &[u8], want: &[u8], ci: bool) -> bool {
     let (vl, wl) = (v.len(), want.len());
     match op {
         ATTR_EQ => eq_case(v, want, ci),

@@ -491,6 +491,14 @@ Southstar Browser (unreleased):
   (counted across the sheet), the rest under the universal list, with
   the sheet's and rules' pseudo-element masks recorded on the way.
   Indexes come out identical (checked over 83,000 generated sheets).
+* Restyle invalidation is Rust: the ids, classes, tags and attributes the
+  style sheets' structural, sibling and :has() selectors depend on, and
+  the elements a DOM mutation marks dirty from them (the changed element,
+  the siblings after it when a sibling selector can see the change, the
+  whole child list when an nth or :empty selector can, and the :has()
+  subjects above it), so the next style pass recomputes only those. The
+  same elements are marked as before (checked over 20 million node
+  comparisons after generated attribute and child-list mutations).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

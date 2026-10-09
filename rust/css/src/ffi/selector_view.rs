@@ -9,7 +9,7 @@ use southstar_glib::{GArray, GPtrArray};
 
 use super::declarations::RawRule;
 use super::selector::{RawAttrPred, RawPseudoPred, RawSelector, RawSimple};
-use super::sheet::RawScope;
+use super::sheet::{RawScope, RawSheet};
 
 unsafe fn pointers<'a, T>(array: *const GPtrArray) -> &'a [*mut T] {
     match unsafe { array.as_ref() } {
@@ -47,6 +47,9 @@ pub(crate) struct RuleRef<'a>(&'a RawRule);
 
 #[derive(Clone, Copy)]
 pub(crate) struct ScopeRef<'a>(&'a RawScope);
+
+#[derive(Clone, Copy)]
+pub(crate) struct SheetRef<'a>(&'a RawSheet);
 
 #[repr(transparent)]
 pub(crate) struct AttrRef(RawAttrPred);
@@ -137,6 +140,16 @@ impl<'a> CompoundRef<'a> {
     pub(crate) fn has_groups(self) -> impl Iterator<Item = GroupRef<'a>> {
         Self::groups(self.0.has_groups)
     }
+
+    pub(crate) fn has_group_count(self) -> usize {
+        unsafe { pointers::<GPtrArray>(self.0.has_groups) }.len()
+    }
+
+    pub(crate) fn has_group_arrays(self) -> bool {
+        !self.0.matches_any.is_null()
+            || !self.0.matches_none.is_null()
+            || !self.0.has_groups.is_null()
+    }
 }
 
 impl<'a> GroupRef<'a> {
@@ -208,6 +221,16 @@ impl<'a> RuleRef<'a> {
         unsafe { rule.cast::<RawRule>().as_ref() }.map(RuleRef)
     }
 
+    pub(crate) fn selector_group(self) -> Option<GroupRef<'a>> {
+        unsafe { self.0.selectors.as_ref() }.map(GroupRef)
+    }
+
+    pub(crate) fn selectors(self) -> impl Iterator<Item = Option<SelectorRef<'a>>> {
+        self.selector_group()
+            .into_iter()
+            .flat_map(GroupRef::selectors)
+    }
+
     pub(crate) fn scopes(self) -> impl Iterator<Item = ScopeRef<'a>> {
         unsafe { pointers::<RawScope>(self.0.scopes) }
             .iter()
@@ -222,5 +245,17 @@ impl<'a> ScopeRef<'a> {
 
     pub(crate) fn limits(self) -> Option<GroupRef<'a>> {
         unsafe { self.0.limits.as_ref() }.map(GroupRef)
+    }
+}
+
+impl<'a> SheetRef<'a> {
+    pub(super) unsafe fn from_ptr(sheet: *const c_void) -> Option<Self> {
+        unsafe { sheet.cast::<RawSheet>().as_ref() }.map(SheetRef)
+    }
+
+    pub(crate) fn rules(self) -> impl Iterator<Item = RuleRef<'a>> {
+        unsafe { pointers::<RawRule>(self.0.rules) }
+            .iter()
+            .filter_map(|&r| unsafe { r.as_ref() }.map(RuleRef))
     }
 }

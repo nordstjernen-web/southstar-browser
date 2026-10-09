@@ -19,6 +19,7 @@ mod lex;
 mod matcher;
 mod nesting;
 mod property;
+mod restyle;
 mod rule_index;
 mod selector;
 mod selector_view;
@@ -49,7 +50,9 @@ pub(crate) use matcher::{
     active_node, focus_node, focus_visible_node, fullscreen_node, hover_node, match_scope,
     set_match_scope,
 };
-pub(crate) use selector_view::{CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef};
+pub(crate) use selector_view::{
+    AttrRef, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef, SheetRef,
+};
 pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;

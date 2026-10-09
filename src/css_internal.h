@@ -64,6 +64,11 @@ char         *ns_css_substitute_vars(const char *value,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
 struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
+gboolean ns_css_restyle_prepare(const ns_css_stylesheet *ua,
+                                const ns_css_stylesheet *const *author,
+                                gsize n_author, guint64 sig);
+gboolean ns_css_restyle_dirty(const ns_node *node);
+void ns_css_restyle_dirty_clear(void);
 const ns_node *ns_css_match_scope(void);
 const ns_node *ns_css_focus_node(void);
 const ns_node *ns_css_hover_node(void);
