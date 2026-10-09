@@ -19,6 +19,7 @@ mod hints;
 mod host_scope;
 mod image;
 mod inline;
+mod keyframes;
 mod layers;
 mod lex;
 mod matcher;

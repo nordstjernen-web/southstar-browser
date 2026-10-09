@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::collections::HashMap;
@@ -41,6 +42,10 @@ struct Registry {
 }
 
 static REGISTRY: LazyLock<Mutex<Registry>> = LazyLock::new(Mutex::default);
+
+thread_local! {
+    static PASS: Cell<*mut GHashTable> = const { Cell::new(ptr::null_mut()) };
+}
 
 fn registry() -> MutexGuard<'static, Registry> {
     REGISTRY.lock().unwrap_or_else(PoisonError::into_inner)
@@ -140,8 +145,25 @@ unsafe fn put_rules(table: *mut GHashTable, sheet: *const RawSheet) {
     }
 }
 
+pub(super) fn pass_registered() -> *mut GHashTable {
+    PASS.get()
+}
+
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_registered_props_build(
+pub extern "C" fn ns_css_registered_props() -> *mut GHashTable {
+    PASS.get()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_registered_props_end() {
+    let table = PASS.replace(ptr::null_mut());
+    if !table.is_null() {
+        unsafe { glib::g_hash_table_destroy(table) };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_registered_props_begin(
     ua: *const RawSheet,
     author: *const *const RawSheet,
     n_author: usize,
@@ -163,5 +185,6 @@ pub unsafe extern "C" fn ns_css_registered_props_build(
             )
         };
     }
+    PASS.set(table);
     table
 }

@@ -64,24 +64,24 @@ struct RawFontFace {
 }
 
 #[repr(C)]
-struct RawStop {
+pub(super) struct RawStop {
     pct: f64,
     opacity: f64,
     has_opacity: GBoolean,
-    transform: Transform,
-    has_transform: GBoolean,
+    pub(super) transform: Transform,
+    pub(super) has_transform: GBoolean,
     color: [u8; 4],
     has_color: GBoolean,
     bg_color: [u8; 4],
     has_bg_color: GBoolean,
-    raw_props: *mut c_char,
+    pub(super) raw_props: *mut c_char,
 }
 
 #[repr(C)]
-struct RawKeyframes {
-    name: *mut c_char,
-    n_stops: c_int,
-    stops: *mut RawStop,
+pub(super) struct RawKeyframes {
+    pub(super) name: *mut c_char,
+    pub(super) n_stops: c_int,
+    pub(super) stops: *mut RawStop,
 }
 
 #[repr(C)]

@@ -145,8 +145,6 @@ typedef struct ns_var_map {
 G_STATIC_ASSERT(sizeof(ns_var_map) == 32);
 #endif
 
-static __thread GHashTable *g_registered_props;
-
 static ns_var_map *
 ns_var_map_ref(ns_var_map *m)
 {
@@ -164,86 +162,6 @@ ns_var_map_unref(ns_var_map *m)
         g_free(m);
         m = parent;
     }
-}
-
-char *
-ns_css_resolve_style_vars(const char *text, const ns_style *style)
-{
-    return ns_css_substitute_vars(text, style ? style->vars : NULL,
-                                  g_registered_props, 0);
-}
-
-ns_css_keyframes *
-ns_css_keyframes_resolve(const ns_css_keyframes *kf,
-                         const struct ns_var_map *vars)
-{
-    if (!kf) return NULL;
-    gboolean any_raw = FALSE;
-    for (int i = 0; i < kf->n_stops && !any_raw; i++)
-        if (kf->stops[i].raw_props) any_raw = TRUE;
-    if (!any_raw) return NULL;
-    ns_css_keyframes *out = g_new0(ns_css_keyframes, 1);
-    out->n_stops = kf->n_stops;
-    out->stops = g_new(ns_css_keyframe_stop, (gsize)kf->n_stops);
-    memcpy(out->stops, kf->stops,
-           (gsize)kf->n_stops * sizeof(ns_css_keyframe_stop));
-    for (int i = 0; i < out->n_stops; i++) {
-        ns_css_keyframe_stop *s = &out->stops[i];
-        const char *rawp = s->raw_props;
-        s->raw_props = NULL;
-        if (!rawp) continue;
-        char *resolved = ns_css_substitute_vars(rawp, vars,
-                                                g_registered_props, 0);
-        if (!resolved) continue;
-        ns_css_transform ind = { 0 };
-        ns_css_transform list = s->has_transform ? s->transform
-                                                 : (ns_css_transform){ 0 };
-        char **decls = g_strsplit(resolved, ";", -1);
-        for (int d = 0; decls[d]; d++) {
-            char *colon = strchr(decls[d], ':');
-            if (!colon) continue;
-            *colon = '\0';
-            char *prop = g_strstrip(decls[d]);
-            char *val  = g_strstrip(colon + 1);
-            ns_css_value *tv = NULL;
-            if (g_ascii_strcasecmp(prop, "transform") == 0) {
-                tv = ns_css_parse_transform(val);
-                if (tv) list = tv->u.transform;
-            } else if (g_ascii_strcasecmp(prop, "translate") == 0) {
-                tv = ns_css_parse_translate_prop(val);
-            } else if (g_ascii_strcasecmp(prop, "rotate") == 0) {
-                tv = ns_css_parse_rotate_prop(val);
-            } else if (g_ascii_strcasecmp(prop, "scale") == 0) {
-                tv = ns_css_parse_scale_prop(val);
-            }
-            if (tv && g_ascii_strcasecmp(prop, "transform") != 0 &&
-                ind.n_ops < NS_CSS_TRANSFORM_OPS_MAX)
-                ind.ops[ind.n_ops++] = tv->u.transform.ops[0];
-            if (tv) ns_css_value_free(tv);
-        }
-        g_strfreev(decls);
-        s->raw_props = resolved;
-        ns_css_transform merged = ind;
-        for (int k = 0; k < list.n_ops &&
-                        merged.n_ops < NS_CSS_TRANSFORM_OPS_MAX; k++)
-            merged.ops[merged.n_ops++] = list.ops[k];
-        if (merged.n_ops > 0) {
-            s->transform = merged;
-            s->has_transform = TRUE;
-        }
-    }
-    return out;
-}
-
-void
-ns_css_keyframes_resolved_free(ns_css_keyframes *kf)
-{
-    if (!kf) return;
-    g_free(kf->name);
-    for (int i = 0; i < kf->n_stops; i++)
-        g_free(kf->stops[i].raw_props);
-    g_free(kf->stops);
-    g_free(kf);
 }
 
 static ns_css_color_scheme g_color_scheme = NS_CSS_COLOR_SCHEME_LIGHT;
@@ -867,18 +785,19 @@ cascade_walk(ns_node *node,
             g_array_set_size(pending_matches, 0);
             g_ptr_array_set_size(owned_values, 0);
         } else {
+            GHashTable *registered = ns_css_registered_props();
             s->share_id = ++g_style_share_next_id;
             s->vars = ns_css_build_vars(parent_style ? parent_style->vars : NULL,
-                                        var_matches, g_registered_props,
+                                        var_matches, registered,
                                         g_var_adjust_cache);
-            ns_css_resolve_pending(pending_matches, s->vars, g_registered_props,
+            ns_css_resolve_pending(pending_matches, s->vars, registered,
                                    matches, owned_values, node);
 
             ns_css_cascade_apply(matches, s, parent_style, layout_parent,
                                  node->parent &&
                                      node->parent->kind == NS_NODE_DOCUMENT,
                                  *root_px);
-            ns_css_compute_registered_vars(s, parent_style, g_registered_props,
+            ns_css_compute_registered_vars(s, parent_style, registered,
                                            *root_px);
             strip_native_widget_decorations(node, s);
             if (display_contents_to_none(node, s)) have_key = FALSE;
@@ -897,16 +816,16 @@ cascade_walk(ns_node *node,
                     g_ptr_array_new_with_free_func(
                         (GDestroyNotify)ns_css_value_free);
                 ns_style *ps = ns_style_alloc();
-                ps->vars = ns_css_build_vars(s->vars, pe_vars, g_registered_props,
+                ps->vars = ns_css_build_vars(s->vars, pe_vars, registered,
                                          g_var_adjust_cache);
-                ns_css_resolve_pending(pe_pending, ps->vars, g_registered_props,
+                ns_css_resolve_pending(pe_pending, ps->vars, registered,
                                        pm, pe_owned, node);
                 ns_css_cascade_apply(pm, ps, s,
                                      pe == NS_CSS_PE_BEFORE ||
                                          pe == NS_CSS_PE_AFTER
                                          ? s : NULL,
                                      FALSE, *root_px);
-                ns_css_compute_registered_vars(ps, s, g_registered_props,
+                ns_css_compute_registered_vars(ps, s, registered,
                                                *root_px);
                 gboolean keep = TRUE;
                 if (pe == NS_CSS_PE_BEFORE || pe == NS_CSS_PE_AFTER)
@@ -985,8 +904,7 @@ ns_css_compute(ns_node *doc,
     GHashTable *layer_ranks =
         ns_css_layer_ranks_build(cached_ua, author_sheets, n_sheets);
 
-    g_registered_props =
-        ns_css_registered_props_build(cached_ua, author_sheets, n_sheets);
+    ns_css_registered_props_begin(cached_ua, author_sheets, n_sheets);
 
     double root_px = 0;
     ns_css_decl_sheet_cache_trim();
@@ -1064,8 +982,7 @@ ns_css_compute(ns_node *doc,
     g_hash_table_destroy(g_var_adjust_cache);
     g_var_adjust_cache = NULL;
     g_hash_table_destroy(layer_ranks);
-    g_hash_table_destroy(g_registered_props);
-    g_registered_props = NULL;
+    ns_css_registered_props_end();
     gint64 t_cascade = profile ? g_get_monotonic_time() : 0;
     if (profile)
         g_printerr("[profile]   css.idx=%.1fms css.cascade=%.1fms\n",

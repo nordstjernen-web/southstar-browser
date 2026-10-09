@@ -595,6 +595,10 @@ Southstar Browser (unreleased):
 * CSS.registerProperty()'s registry is Rust, with the per-pass table of
   @property rules and script registrations the cascade checks custom
   properties against; registrations are accepted and rejected as before.
+* Resolving var() in @keyframes stops against an element's custom
+  properties is Rust, with the transform a stop's resolved translate,
+  rotate, scale and transform declarations give it; the per-pass table of
+  registered properties now lives on the Rust side too.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
