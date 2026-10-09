@@ -520,11 +520,8 @@ static const char *css_scan_until(const char *p, const char *end,
                                   const char *terminators, char *terminator);
 static const char *css_find_top_level_char(const char *p, const char *end,
                                            char needle);
-static const char *css_find_function(const char *p, const char *end,
-                                     const char *name);
 static const char *css_skip_comment(const char *p, const char *end);
 static void css_strip_important(char *text, gboolean *important);
-static char *css_trim_dup_range(const char *start, const char *end);
 static const char *match_close_paren(const char *p, const char *end);
 
 ns_css_value *
@@ -908,42 +905,16 @@ typedef enum ns_custom_prop_wide {
     NS_CUSTOM_WIDE_REVERT_RULE,
 } ns_custom_prop_wide;
 
-static ns_custom_prop_wide
-custom_prop_wide_kind(const char *text)
-{
-    if (!text) return NS_CUSTOM_WIDE_NONE;
-    const char *start = text;
-    while (*start && is_ws(*start)) start++;
-    const char *end = text + strlen(text);
-    while (end > start && is_ws(end[-1])) end--;
-    gsize len = (gsize)(end - start);
-    if (len == 7 && g_ascii_strncasecmp(start, "inherit", len) == 0)
-        return NS_CUSTOM_WIDE_INHERIT;
-    if (len == 7 && g_ascii_strncasecmp(start, "initial", len) == 0)
-        return NS_CUSTOM_WIDE_INITIAL;
-    if (len == 5 && g_ascii_strncasecmp(start, "unset", len) == 0)
-        return NS_CUSTOM_WIDE_UNSET;
-    if (len == 6 && g_ascii_strncasecmp(start, "revert", len) == 0)
-        return NS_CUSTOM_WIDE_REVERT;
-    if (len == 12 && g_ascii_strncasecmp(start, "revert-layer", len) == 0)
-        return NS_CUSTOM_WIDE_REVERT_LAYER;
-    if (len == 11 && g_ascii_strncasecmp(start, "revert-rule", len) == 0)
-        return NS_CUSTOM_WIDE_REVERT_RULE;
-    return NS_CUSTOM_WIDE_NONE;
-}
-
-static gboolean
-custom_prop_value_invalid(const char *text)
-{
-    return !text || custom_prop_wide_kind(text) != NS_CUSTOM_WIDE_NONE;
-}
-
 typedef struct ns_var_map {
     int ref;
     GHashTable *own;
     struct ns_var_map *parent;
     GPtrArray *names;
 } ns_var_map;
+
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_var_map) == 32);
+#endif
 
 static __thread GHashTable *g_registered_props;
 
@@ -976,183 +947,12 @@ ns_var_map_unref(ns_var_map *m)
     }
 }
 
-const char *
-ns_var_map_lookup(const ns_var_map *m, const char *name)
-{
-    for (; m; m = m->parent) {
-        if (m->own) {
-            const char *v = g_hash_table_lookup(m->own, name);
-            if (v) return v;
-        }
-    }
-    return NULL;
-}
-
-static gint
-ns_var_name_compare(gconstpointer a, gconstpointer b)
-{
-    const char *left = *(const char *const *)a;
-    const char *right = *(const char *const *)b;
-    return strcmp(left, right);
-}
-
-GPtrArray *
-ns_var_map_names(const ns_var_map *m)
-{
-    if (m && m->names) return g_ptr_array_ref(m->names);
-    GPtrArray *names = g_ptr_array_new_with_free_func(g_free);
-    GHashTable *seen = g_hash_table_new(g_str_hash, g_str_equal);
-    for (const ns_var_map *current = m; current; current = current->parent) {
-        if (!current->own) continue;
-        GHashTableIter iter;
-        gpointer key, value;
-        g_hash_table_iter_init(&iter, current->own);
-        while (g_hash_table_iter_next(&iter, &key, &value)) {
-            if (g_hash_table_contains(seen, key)) continue;
-            g_hash_table_add(seen, key);
-            if (value && g_ascii_strcasecmp(value, "initial") != 0)
-                g_ptr_array_add(names, g_strdup(key));
-        }
-    }
-    g_hash_table_destroy(seen);
-    g_ptr_array_sort(names, ns_var_name_compare);
-    if (!m) return names;
-    ((ns_var_map *)m)->names = names;
-    return g_ptr_array_ref(names);
-}
-
-#define NS_CSS_VAR_EXPAND_MAX   ((gsize)1024 * 1024)
-#define NS_CSS_VAR_EXPAND_CALLS ((guint)100000)
-
-typedef struct {
-    gsize    out_bytes;
-    guint    calls;
-    gboolean overflow;
-} ns_var_budget;
-
-static gboolean
-var_budget_take(ns_var_budget *b, gsize n, gboolean *valid)
-{
-    if (b->overflow) return FALSE;
-    if (n > NS_CSS_VAR_EXPAND_MAX - b->out_bytes) {
-        b->overflow = TRUE;
-        if (valid) *valid = FALSE;
-        return FALSE;
-    }
-    b->out_bytes += n;
-    return TRUE;
-}
-
-static char *
-substitute_vars_with_valid(const char *vtext, const ns_var_map *map, int depth,
-                           gboolean *valid, ns_var_budget *b)
-{
-    if (!vtext) return NULL;
-    if (depth > 16) return g_strdup(vtext);
-    if (b->overflow || ++b->calls > NS_CSS_VAR_EXPAND_CALLS) {
-        b->overflow = TRUE;
-        if (valid) *valid = FALSE;
-        return g_strdup("");
-    }
-    GString *out = g_string_new(NULL);
-    const char *p = vtext;
-    const char *end = vtext + strlen(vtext);
-    while (p < end) {
-        const char *fn = css_find_function(p, end, "var");
-        if (!fn) {
-            if (!var_budget_take(b, (gsize)(end - p), valid)) break;
-            g_string_append_len(out, p, (gssize)(end - p));
-            break;
-        }
-        if (!var_budget_take(b, (gsize)(fn - p), valid)) break;
-        g_string_append_len(out, p, (gssize)(fn - p));
-        const char *args_start = fn + 4;
-        char term = 0;
-        const char *args_end = css_scan_until(args_start, end, ")", &term);
-        if (term != ')') {
-            p = end;
-            break;
-        }
-        char comma_term = 0;
-        const char *comma = css_scan_until(args_start, args_end, ",",
-                                           &comma_term);
-        const char *name_end = comma_term == ',' ? comma : args_end;
-        char *name = css_trim_dup_range(args_start, name_end);
-        const char *replacement = NULL;
-        if (map && name[0] == '-' && name[1] == '-')
-            replacement = ns_var_map_lookup(map, name);
-        if (replacement && *replacement &&
-            !custom_prop_value_invalid(replacement)) {
-            gboolean sub_valid = TRUE;
-            char *sub = substitute_vars_with_valid(replacement, map,
-                                                   depth + 1, &sub_valid, b);
-            if (sub_valid && custom_prop_value_invalid(sub)) {
-                ns_css_property_rule *pr = g_registered_props
-                    ? g_hash_table_lookup(g_registered_props, name) : NULL;
-                if (pr && pr->has_initial) {
-                    g_free(sub);
-                    sub = substitute_vars_with_valid(pr->initial_value, map,
-                                                     depth + 1, &sub_valid, b);
-                } else {
-                    sub_valid = FALSE;
-                }
-            }
-            if (sub_valid) {
-                if (sub) g_string_append(out, sub);
-            } else if (comma_term == ',') {
-                char *nested = css_trim_dup_range(comma + 1, args_end);
-                gboolean nested_valid = TRUE;
-                char *fallback = substitute_vars_with_valid(nested, map,
-                                                            depth + 1,
-                                                            &nested_valid, b);
-                if (nested_valid && fallback)
-                    g_string_append(out, fallback);
-                else if (valid)
-                    *valid = FALSE;
-                g_free(nested);
-                g_free(fallback);
-            } else if (valid) {
-                *valid = FALSE;
-            }
-            g_free(sub);
-        } else if (comma_term == ',') {
-            char *nested = css_trim_dup_range(comma + 1, args_end);
-            gboolean nested_valid = TRUE;
-            char *sub = substitute_vars_with_valid(nested, map, depth + 1,
-                                                   &nested_valid, b);
-            if (nested_valid) {
-                if (sub) g_string_append(out, sub);
-            } else if (valid) {
-                *valid = FALSE;
-            }
-            g_free(nested);
-            g_free(sub);
-        } else if (valid) {
-            *valid = FALSE;
-        }
-        g_free(name);
-        p = args_end + 1;
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-substitute_vars_with(const char *vtext, const ns_var_map *map, int depth)
-{
-    gboolean valid = TRUE;
-    ns_var_budget budget = { 0, 0, FALSE };
-    char *out = substitute_vars_with_valid(vtext, map, depth, &valid, &budget);
-    if (!valid) {
-        g_free(out);
-        return NULL;
-    }
-    return out;
-}
 
 char *
 ns_css_resolve_style_vars(const char *text, const ns_style *style)
 {
-    return substitute_vars_with(text, style ? style->vars : NULL, 0);
+    return ns_css_substitute_vars(text, style ? style->vars : NULL,
+                                  g_registered_props, 0);
 }
 
 static const char *
@@ -1234,46 +1034,6 @@ css_find_top_level_char(const char *p, const char *end, char needle)
     return term == needle ? q : NULL;
 }
 
-static const char *
-css_find_function(const char *p, const char *end, const char *name)
-{
-    gsize n = strlen(name);
-    const char *start = p;
-    char quote = 0;
-    while (p < end) {
-        char c = *p;
-        if (quote) {
-            if (c == '\\' && p + 1 < end) {
-                p += 2;
-                continue;
-            }
-            if (c == quote) quote = 0;
-            else if (c == '\n' || c == '\r' || c == '\f') quote = 0;
-            p++;
-            continue;
-        }
-        if (c == '/' && p + 1 < end && p[1] == '*') {
-            p = css_skip_comment(p, end);
-            continue;
-        }
-        if (c == '\\' && p + 1 < end) {
-            p += 2;
-            continue;
-        }
-        if (c == '"' || c == '\'') {
-            quote = c;
-            p++;
-            continue;
-        }
-        if ((gsize)(end - p) > n && p[n] == '(' &&
-            g_ascii_strncasecmp(p, name, n) == 0 &&
-            (p == start || !is_ident(p[-1])))
-            return p;
-        p++;
-    }
-    return NULL;
-}
-
 static void
 css_strip_important(char *text, gboolean *important)
 {
@@ -1329,7 +1089,8 @@ ns_css_keyframes_resolve(const ns_css_keyframes *kf,
         const char *rawp = s->raw_props;
         s->raw_props = NULL;
         if (!rawp) continue;
-        char *resolved = substitute_vars_with(rawp, vars, 0);
+        char *resolved = ns_css_substitute_vars(rawp, vars,
+                                                g_registered_props, 0);
         if (!resolved) continue;
         ns_css_transform ind = { 0 };
         ns_css_transform list = s->has_transform ? s->transform
@@ -1420,14 +1181,6 @@ ns_css_get_color_scheme(void)
 #define NS_CSS_LAYER_NONE INT_MAX
 
 static __thread GHashTable *g_var_adjust_cache;
-
-static char *
-css_trim_dup_range(const char *start, const char *end)
-{
-    while (start < end && is_ws(*start)) start++;
-    while (end > start && is_ws(end[-1])) end--;
-    return g_strndup(start, (gsize)(end - start));
-}
 
 typedef struct css_candidate {
     guint rule_idx;
@@ -2616,7 +2369,7 @@ var_rollback_match(GArray *matches, gint before, const var_match *rollback,
         } else if (css_same_revert_origin(rollback->origin, prev->origin)) {
             continue;
         }
-        ns_custom_prop_wide prev_kind = custom_prop_wide_kind(prev->text);
+        ns_custom_prop_wide prev_kind = ns_css_custom_value_wide_kind(prev->text);
         if (prev_kind == NS_CUSTOM_WIDE_REVERT ||
             prev_kind == NS_CUSTOM_WIDE_REVERT_LAYER ||
             prev_kind == NS_CUSTOM_WIDE_REVERT_RULE)
@@ -2630,7 +2383,7 @@ static const var_match *
 var_resolved_match(GArray *matches, guint index)
 {
     var_match *match = &g_array_index(matches, var_match, index);
-    ns_custom_prop_wide kind = custom_prop_wide_kind(match->text);
+    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(match->text);
     if (kind == NS_CUSTOM_WIDE_REVERT ||
         kind == NS_CUSTOM_WIDE_REVERT_LAYER ||
         kind == NS_CUSTOM_WIDE_REVERT_RULE)
@@ -2684,7 +2437,7 @@ var_prefill_plain_values(GHashTable *own, GArray *matches)
         var_match *vm = &g_array_index(matches, var_match, i);
         if (!vm->name || !vm->text) continue;
         gboolean plain = !strstr(vm->text, "var(") &&
-            custom_prop_wide_kind(vm->text) == NS_CUSTOM_WIDE_NONE &&
+            ns_css_custom_value_wide_kind(vm->text) == NS_CUSTOM_WIDE_NONE &&
             !(g_registered_props &&
               g_hash_table_lookup(g_registered_props, vm->name));
         gpointer seen = g_hash_table_lookup(last, vm->name);
@@ -2717,20 +2470,21 @@ var_map_apply_unregistered(GHashTable *own, const ns_var_map *parent,
         return;
     }
     const char *value_text = resolved->text;
-    ns_custom_prop_wide kind = custom_prop_wide_kind(value_text);
+    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(value_text);
     char *expanded = NULL;
     if (kind == NS_CUSTOM_WIDE_NONE && strstr(resolved->text, "var(")) {
         ns_var_map scope = { .ref = 1, .own = own,
                              .parent = (ns_var_map *)parent };
-        expanded = substitute_vars_with(value_text, &scope, 0);
-        kind = custom_prop_wide_kind(expanded);
+        expanded = ns_css_substitute_vars(value_text, &scope,
+                                          g_registered_props, 0);
+        kind = ns_css_custom_value_wide_kind(expanded);
     }
     if (kind == NS_CUSTOM_WIDE_REVERT ||
         kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
         resolved = var_rollback_match(matches, (gint)index - 1, current, kind);
         if (resolved) {
             value_text = resolved->text;
-            kind = custom_prop_wide_kind(value_text);
+            kind = ns_css_custom_value_wide_kind(value_text);
         }
     }
     if (kind == NS_CUSTOM_WIDE_INHERIT || kind == NS_CUSTOM_WIDE_UNSET ||
@@ -2799,20 +2553,21 @@ var_map_apply_registered(GHashTable *vars, const ns_var_map *parent,
         return;
     }
     const char *value_text = resolved->text;
-    ns_custom_prop_wide kind = custom_prop_wide_kind(value_text);
+    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(value_text);
     char *expanded = NULL;
     if (kind == NS_CUSTOM_WIDE_NONE && strstr(resolved->text, "var(")) {
         ns_var_map scope = { .ref = 1, .own = vars,
                              .parent = (ns_var_map *)parent };
-        expanded = substitute_vars_with(value_text, &scope, 0);
-        kind = custom_prop_wide_kind(expanded);
+        expanded = ns_css_substitute_vars(value_text, &scope,
+                                          g_registered_props, 0);
+        kind = ns_css_custom_value_wide_kind(expanded);
     }
     if (kind == NS_CUSTOM_WIDE_REVERT ||
         kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
         resolved = var_rollback_match(matches, (gint)index - 1, current, kind);
         if (resolved) {
             value_text = resolved->text;
-            kind = custom_prop_wide_kind(value_text);
+            kind = ns_css_custom_value_wide_kind(value_text);
         }
     }
     if (kind == NS_CUSTOM_WIDE_INHERIT) {
@@ -3173,7 +2928,8 @@ pending_substituted_value(const pending_match *pm, const ns_var_map *vars,
                           const ns_node *node)
 {
     gboolean custom = pm->pd->pname[0] == '-' && pm->pd->pname[1] == '-';
-    char *substituted = substitute_vars_with(pm->pd->raw_vtext, vars, 0);
+    char *substituted = ns_css_substitute_vars(pm->pd->raw_vtext, vars,
+                                               g_registered_props, 0);
     if (substituted && strstr(substituted, "attr(")) {
         gboolean tainted = FALSE;
         char *with_attrs = ns_css_substitute_attrs(substituted, node, &tainted);

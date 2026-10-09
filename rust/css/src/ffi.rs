@@ -27,6 +27,7 @@ mod supports;
 mod transform;
 mod value;
 mod values;
+mod vars;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
 

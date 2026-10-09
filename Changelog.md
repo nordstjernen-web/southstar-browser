@@ -478,6 +478,14 @@ Southstar Browser (unreleased):
   @scope roots, limits and proximity. querySelector, matches() and the
   cascade match as before (checked identical over 20 million generated
   selector/element pairs in every mode) at the same speed.
+* var() substitution is Rust: custom properties looked up through the
+  element's inherited variable maps, CSS-wide keywords treated as
+  guaranteed-invalid, registered properties falling back to their
+  initial value, nested fallbacks, and the 1 MiB / 100,000-call budget
+  that stops self-referencing variables from exploding. So are the
+  variable-name listing behind getComputedStyle and the CSS-wide keyword
+  test the custom-property cascade uses. Values substitute as before
+  (checked identical over 150,000 generated variable chains).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

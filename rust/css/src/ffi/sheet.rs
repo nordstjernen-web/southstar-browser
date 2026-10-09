@@ -79,13 +79,13 @@ struct RawKeyframes {
 }
 
 #[repr(C)]
-struct RawPropertyRule {
+pub(super) struct RawPropertyRule {
     name: *mut c_char,
-    initial_value: *mut c_char,
+    pub(super) initial_value: *mut c_char,
     syntax_text: *mut c_char,
     syntax: *mut c_void,
     inherits: GBoolean,
-    has_initial: GBoolean,
+    pub(super) has_initial: GBoolean,
 }
 
 #[repr(C)]
