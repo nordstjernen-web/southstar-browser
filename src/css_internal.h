@@ -53,7 +53,6 @@ gboolean      ns_css_anb_int_strict(const char *text, int *out);
 
 char         *ns_css_scoped_css(const char *css, gsize len,
                                 const char *host_id, gboolean frame_scope);
-char         *ns_css_presentational_hints(const ns_node *el);
 gboolean      ns_css_is_presentational_attr(const char *name);
 gboolean      ns_css_element_state_matches(const ns_node *el,
                                            ns_css_pseudo kind,
@@ -71,6 +70,10 @@ void ns_css_gather_matches(const ns_css_stylesheet *sheet, int origin,
                            int sheet_index, const ns_node *el,
                            const void *dests, guint n_dests,
                            GHashTable *layer_ranks);
+void ns_css_gather_element_declarations(const ns_node *el, GArray *matches,
+                                        GArray *var_matches,
+                                        GArray *pending_matches);
+void ns_css_decl_sheet_cache_trim(void);
 void ns_css_ancestor_filter_begin(gboolean attr_hashes);
 void ns_css_ancestor_filter_end(void);
 void ns_css_ancestor_filter_subject(const ns_node *node);

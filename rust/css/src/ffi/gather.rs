@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of gathering an element's matching rules: candidates looked up in a sheet's rule index by id, class, tag and attribute, filtered by @container conditions and the ancestor Bloom filter, matched with a per-pass selector cache, and appended as css.c's match_entry, var_match and pending_match arrays per pseudo-element.
+//! Southstar — the C ABI of gathering an element's matching rules: candidates looked up in a sheet's rule index by id, class, tag and attribute, filtered by @container conditions and the ancestor Bloom filter, matched with a per-pass selector cache, and appended as css.c's match_entry, var_match and pending_match arrays per pseudo-element, followed by the element's presentational hints and style attribute.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,6 +9,7 @@ use core::mem::size_of;
 use core::ptr;
 use core::slice;
 use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex, PoisonError};
 
 use southstar_dom::{Node, NsNode, attrs};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
@@ -22,14 +23,23 @@ use super::pending::RawPendingMatch;
 use super::rule_index::{Candidate, RawIndex, ns_css_rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
-use super::sheet::RawSheet;
+use super::sheet::{RawSheet, ns_css_stylesheet_parse};
 use super::shorthand::RawDecl;
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
+use crate::hints;
 use crate::matcher::{self, AddrHasher};
 use crate::selector::{attr_value_hash, identifier_hash};
 
 const LAYER_NONE: c_int = c_int::MAX;
 const SELECTOR_CACHE_MAX: usize = 262_144;
+const DECL_SHEETS_MAX: usize = 8192;
+const ORIGIN_PRESENTATIONAL: c_int = 1;
+const ORIGIN_AUTHOR: c_int = 2;
+const INLINE_SPECIFICITY: (c_int, c_int, c_int) = (1000, 0, 0);
+
+unsafe extern "C" {
+    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
+}
 
 #[repr(C)]
 struct RawDest {
@@ -295,6 +305,8 @@ fn layer_rank(layer_ranks: *mut GHashTable, name: *const c_char) -> c_int {
 struct Output<'a> {
     origin: c_int,
     sheet_index: c_int,
+    source_order: Option<c_int>,
+    inline_style: GBoolean,
     dests: &'a [RawDest],
 }
 
@@ -319,10 +331,10 @@ impl Output<'_> {
                     sheet_index: self.sheet_index,
                     layer_order,
                     scope_order,
-                    source_order: rule.source_order,
+                    source_order: self.source_order.unwrap_or(rule.source_order),
                     decl_order: di as c_int * DECL_SLOT_SPAN,
                     important: d.important,
-                    inline_style: glib::FALSE,
+                    inline_style: self.inline_style,
                     rule: rule_ptr,
                     value: d.value,
                     prop: d.prop,
@@ -343,10 +355,10 @@ impl Output<'_> {
                         sheet_index: self.sheet_index,
                         layer_order,
                         scope_order,
-                        source_order: rule.source_order,
+                        source_order: self.source_order.unwrap_or(rule.source_order),
                         decl_order: decl_order as c_int,
                         important: glib::boolean(important),
-                        inline_style: glib::FALSE,
+                        inline_style: self.inline_style,
                         rule: rule_ptr,
                         name: k.cast(),
                         text: v.cast(),
@@ -364,9 +376,9 @@ impl Output<'_> {
                         sheet_index: self.sheet_index,
                         layer_order,
                         scope_order,
-                        source_order: rule.source_order,
+                        source_order: self.source_order.unwrap_or(rule.source_order),
                         decl_order_base: pd.decl_slot(),
-                        inline_style: glib::FALSE,
+                        inline_style: self.inline_style,
                         rule: rule_ptr,
                         pd,
                     };
@@ -482,6 +494,8 @@ impl Gather<'_> {
         let output = Output {
             origin,
             sheet_index,
+            source_order: None,
+            inline_style: glib::FALSE,
             dests: self.dests,
         };
         for &ri in &scratch.matched {
@@ -552,4 +566,105 @@ pub unsafe extern "C" fn ns_css_gather_matches(
             })
         })
     });
+}
+
+struct DeclSheet(*mut RawSheet);
+
+unsafe impl Send for DeclSheet {}
+
+impl Drop for DeclSheet {
+    fn drop(&mut self) {
+        unsafe { ns_css_stylesheet_free(self.0) };
+    }
+}
+
+static DECL_SHEETS: LazyLock<Mutex<HashMap<Vec<u8>, DeclSheet>>> = LazyLock::new(Mutex::default);
+
+fn decl_sheets() -> std::sync::MutexGuard<'static, HashMap<Vec<u8>, DeclSheet>> {
+    DECL_SHEETS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn decl_sheet(decls: &[u8]) -> *const RawSheet {
+    let decls = &decls[..decls.iter().position(|&c| c == 0).unwrap_or(decls.len())];
+    if decls.is_empty() {
+        return ptr::null();
+    }
+    if let Some(sheet) = decl_sheets().get(decls) {
+        return sheet.0;
+    }
+    let wrapped = [&b"* { "[..], decls, b" }"].concat();
+    let sheet = unsafe { ns_css_stylesheet_parse(wrapped.as_ptr().cast(), wrapped.len() as isize) }
+        .cast::<RawSheet>();
+    if !sheet.is_null() {
+        decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
+    }
+    sheet
+}
+
+fn emit_decl_sheet(
+    sheet: *const RawSheet,
+    output: &Output<'_>,
+    specificity: (c_int, c_int, c_int),
+) {
+    let Some(sheet) = (unsafe { sheet.as_ref() }) else {
+        return;
+    };
+    let mut acc = Accum::default();
+    acc.note(0, specificity, 0);
+    for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
+        if let Some(rule) = unsafe { rule.as_ref() } {
+            output.emit(rule, &acc, LAYER_NONE);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_gather_element_declarations(
+    el: *const NsNode,
+    matches: *mut GArray,
+    var_matches: *mut GArray,
+    pending_matches: *mut GArray,
+) {
+    let Some(node) = (unsafe { Node::from_ptr(el) }) else {
+        return;
+    };
+    let dests = [RawDest {
+        pe: 0,
+        out: matches,
+        var_out: var_matches,
+        pending_out: pending_matches,
+    }];
+    if let Some(hints) = hints::presentational_hints(node) {
+        let output = Output {
+            origin: ORIGIN_PRESENTATIONAL,
+            sheet_index: 0,
+            source_order: Some(c_int::MIN),
+            inline_style: glib::FALSE,
+            dests: &dests,
+        };
+        emit_decl_sheet(decl_sheet(&hints), &output, (0, 0, 0));
+    }
+    if let Some(style) = node.attr(c"style") {
+        let output = Output {
+            origin: ORIGIN_AUTHOR,
+            sheet_index: 0,
+            source_order: Some(c_int::MAX),
+            inline_style: glib::TRUE,
+            dests: &dests,
+        };
+        emit_decl_sheet(decl_sheet(style.to_bytes()), &output, INLINE_SPECIFICITY);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_decl_sheet_cache_trim() {
+    let dropped = {
+        let mut sheets = decl_sheets();
+        if sheets.len() >= DECL_SHEETS_MAX {
+            core::mem::take(&mut *sheets)
+        } else {
+            HashMap::new()
+        }
+    };
+    drop(dropped);
 }

@@ -372,7 +372,6 @@ ns_css_get_color_scheme(void)
     return g_color_scheme;
 }
 
-#define NS_CSS_LAYER_NONE INT_MAX
 
 static __thread GHashTable *g_var_adjust_cache;
 
@@ -562,22 +561,6 @@ typedef struct pending_match {
     ns_css_pending_decl *pd;
 } pending_match;
 
-#define NS_CSS_DECL_SLOT_SPAN 64
-
-static int
-css_decl_slot(guint decl_index)
-{
-    return (int)decl_index * NS_CSS_DECL_SLOT_SPAN;
-}
-
-static int
-css_pending_decl_slot(const ns_css_pending_decl *pd)
-{
-    int rank = pd->decl_rank < NS_CSS_DECL_SLOT_SPAN - 1
-        ? pd->decl_rank : NS_CSS_DECL_SLOT_SPAN - 2;
-    return css_decl_slot((guint)pd->decl_index) - NS_CSS_DECL_SLOT_SPAN + 1 + rank;
-}
-
 typedef struct {
     ns_css_pseudo_element pe;
     GArray *out;
@@ -618,25 +601,6 @@ ua_sheet_for(const ns_node *doc)
 }
 
 #define NS_CSS_MAX_CASCADE_DEPTH 512
-
-static GHashTable *g_decl_sheet_cache;
-
-static const ns_css_stylesheet *
-ns_css_cached_decl_sheet(const char *decls)
-{
-    if (!decls || !*decls) return NULL;
-    if (!g_decl_sheet_cache)
-        g_decl_sheet_cache = g_hash_table_new_full(
-            g_str_hash, g_str_equal, g_free,
-            (GDestroyNotify)ns_css_stylesheet_free);
-    ns_css_stylesheet *s = g_hash_table_lookup(g_decl_sheet_cache, decls);
-    if (s) return s;
-    char *wrapped = g_strconcat("* { ", decls, " }", NULL);
-    s = ns_css_stylesheet_parse(wrapped, -1);
-    g_free(wrapped);
-    if (s) g_hash_table_insert(g_decl_sheet_cache, g_strdup(decls), s);
-    return s;
-}
 
 static void
 cascade_walk(ns_node *node,
@@ -1235,134 +1199,8 @@ cascade_walk(ns_node *node,
                                   (int)(i + 1), node, dests,
                                   (guint)n_pe + 1, layer_ranks);
 
-        char *pres_css = ns_css_presentational_hints(node);
-        const ns_css_stylesheet *pres_sheet = NULL;
-        if (pres_css) {
-            pres_sheet = ns_css_cached_decl_sheet(pres_css);
-            g_free(pres_css);
-        }
-        if (pres_sheet) {
-            for (guint ri = 0; ri < pres_sheet->rules->len; ri++) {
-                ns_css_rule *r = g_ptr_array_index(pres_sheet->rules, ri);
-                for (guint di = 0; di < r->decls->len; di++) {
-                    ns_css_decl *d = &g_array_index(r->decls, ns_css_decl, di);
-                    match_entry e = {
-                        .origin = NS_CSS_ORIGIN_PRESENTATIONAL,
-                        .spec_a = 0, .spec_b = 0, .spec_c = 0,
-                        .layer_order = NS_CSS_LAYER_NONE,
-                        .source_order = INT_MIN,
-                        .decl_order = css_decl_slot(di),
-                        .important = d->important,
-                        .rule = r,
-                        .value = d->value,
-                        .prop  = d->prop,
-                    };
-                    g_array_append_val(matches, e);
-                }
-                if (r->vars) {
-                    GHashTableIter it; gpointer k, v; int di_v = 0;
-                    g_hash_table_iter_init(&it, r->vars);
-                    while (g_hash_table_iter_next(&it, &k, &v)) {
-                        var_match vm = {
-                            .origin = NS_CSS_ORIGIN_PRESENTATIONAL,
-                            .spec_a = 0, .spec_b = 0, .spec_c = 0,
-                            .sheet_index = 0,
-                            .layer_order = NS_CSS_LAYER_NONE,
-                            .source_order = INT_MIN,
-                            .decl_order = di_v++,
-                            .important = r->var_important &&
-                                g_hash_table_contains(r->var_important, k),
-                            .rule = r,
-                            .name = (const char *)k,
-                            .text = (const char *)v,
-                        };
-                        g_array_append_val(var_matches, vm);
-                    }
-                }
-                if (r->pending) {
-                    for (guint pi = 0; pi < r->pending->len; pi++) {
-                        ns_css_pending_decl *pd =
-                            &g_array_index(r->pending, ns_css_pending_decl, pi);
-                        pending_match pm = {
-                            .origin = NS_CSS_ORIGIN_PRESENTATIONAL,
-                            .spec_a = 0, .spec_b = 0, .spec_c = 0,
-                            .sheet_index = 0,
-                            .layer_order = NS_CSS_LAYER_NONE,
-                            .source_order = INT_MIN,
-                            .decl_order_base = css_pending_decl_slot(pd),
-                            .rule = r,
-                            .pd = pd,
-                        };
-                        g_array_append_val(pending_matches, pm);
-                    }
-                }
-            }
-        }
-
-        const char *inline_css = ns_element_get_attr(node, "style");
-        const ns_css_stylesheet *inline_sheet = NULL;
-        if (inline_css && *inline_css)
-            inline_sheet = ns_css_cached_decl_sheet(inline_css);
-        if (inline_sheet) {
-            for (guint ri = 0; ri < inline_sheet->rules->len; ri++) {
-                ns_css_rule *r = g_ptr_array_index(inline_sheet->rules, ri);
-                for (guint di = 0; di < r->decls->len; di++) {
-                    ns_css_decl *d = &g_array_index(r->decls, ns_css_decl, di);
-                    match_entry e = {
-                        .origin = NS_CSS_ORIGIN_AUTHOR,
-                        .spec_a = 1000, .spec_b = 0, .spec_c = 0,
-                        .layer_order = NS_CSS_LAYER_NONE,
-                        .source_order = INT_MAX,
-                        .decl_order = css_decl_slot(di),
-                        .important = d->important,
-                        .inline_style = TRUE,
-                        .rule = r,
-                        .value = d->value,
-                        .prop  = d->prop,
-                    };
-                    g_array_append_val(matches, e);
-                }
-                if (r->vars) {
-                    GHashTableIter it; gpointer k, v; int di_v = 0;
-                    g_hash_table_iter_init(&it, r->vars);
-                    while (g_hash_table_iter_next(&it, &k, &v)) {
-                        var_match vm = {
-                            .origin = NS_CSS_ORIGIN_AUTHOR,
-                            .spec_a = 1000, .spec_b = 0, .spec_c = 0,
-                            .sheet_index = 0,
-                            .layer_order = NS_CSS_LAYER_NONE,
-                            .source_order = INT_MAX,
-                            .decl_order = di_v++,
-                            .important = r->var_important &&
-                                g_hash_table_contains(r->var_important, k),
-                            .inline_style = TRUE,
-                            .rule = r,
-                            .name = (const char *)k,
-                            .text = (const char *)v,
-                        };
-                        g_array_append_val(var_matches, vm);
-                    }
-                }
-                if (r->pending) {
-                    for (guint pi = 0; pi < r->pending->len; pi++) {
-                        ns_css_pending_decl *pd =
-                            &g_array_index(r->pending, ns_css_pending_decl, pi);
-                        pending_match pm = {
-                            .origin = NS_CSS_ORIGIN_AUTHOR,
-                            .spec_a = 1000, .spec_b = 0, .spec_c = 0,
-                            .sheet_index = 0,
-                            .layer_order = NS_CSS_LAYER_NONE,
-                            .source_order = INT_MAX,
-                            .decl_order_base = css_pending_decl_slot(pd),
-                            .inline_style = TRUE,
-                            .rule = r,
-                            .pd = pd,
-                        };
-                        g_array_append_val(pending_matches, pm);
-                    }
-                }
-            }
-        }
+        ns_css_gather_element_declarations(node, matches, var_matches,
+                                           pending_matches);
 
         share_key_t probe;
         gboolean have_key = FALSE;
@@ -1530,8 +1368,7 @@ ns_css_compute(ns_node *doc,
     }
 
     double root_px = 0;
-    if (g_decl_sheet_cache && g_hash_table_size(g_decl_sheet_cache) >= 8192)
-        g_hash_table_remove_all(g_decl_sheet_cache);
+    ns_css_decl_sheet_cache_trim();
     ns_css_container_stack_reset();
     if (!g_share_scratch)
         g_share_scratch = g_byte_array_sized_new(512);
