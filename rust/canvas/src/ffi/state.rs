@@ -330,3 +330,21 @@ pub unsafe extern "C" fn ns_ctx_state(ctx: *mut JSContext, this_val: JSValue) ->
         })
     }
 }
+
+pub(crate) fn clear_patterns(st: &mut CanvasState) {
+    unsafe {
+        if !st.fill_pattern.is_null() {
+            cairo_pattern_destroy(st.fill_pattern);
+            st.fill_pattern = ptr::null_mut();
+        }
+        if !st.stroke_pattern.is_null() {
+            cairo_pattern_destroy(st.stroke_pattern);
+            st.stroke_pattern = ptr::null_mut();
+        }
+    }
+}
+
+pub(crate) fn set_font(st: &mut CanvasState, font: &[u8]) {
+    unsafe { glib::g_free(st.font.cast()) };
+    st.font = glib::strdup(font);
+}

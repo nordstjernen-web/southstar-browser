@@ -79,6 +79,10 @@ unsafe extern "C" {
     fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
     fn cairo_rotate(cr: *mut Cairo, angle: c_double);
     fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
+    fn cairo_set_line_cap(cr: *mut Cairo, cap: c_int);
+    fn cairo_set_line_join(cr: *mut Cairo, join: c_int);
+    fn cairo_set_miter_limit(cr: *mut Cairo, limit: c_double);
+    fn cairo_set_dash(cr: *mut Cairo, dashes: *const c_double, num: c_int, offset: c_double);
     fn cairo_transform(cr: *mut Cairo, matrix: *const Matrix);
     fn cairo_set_matrix(cr: *mut Cairo, matrix: *const Matrix);
     fn cairo_get_matrix(cr: *mut Cairo, matrix: *mut Matrix);
@@ -336,6 +340,31 @@ impl Context {
 
     pub fn scale(self, x: f64, y: f64) {
         unsafe { cairo_scale(self.0, x, y) };
+    }
+
+    pub fn set_operator(self, op: i32) {
+        unsafe { cairo_set_operator(self.0, op) };
+    }
+
+    pub fn set_line_cap(self, cap: i32) {
+        unsafe { cairo_set_line_cap(self.0, cap) };
+    }
+
+    pub fn set_line_join(self, join: i32) {
+        unsafe { cairo_set_line_join(self.0, join) };
+    }
+
+    pub fn set_miter_limit(self, limit: f64) {
+        unsafe { cairo_set_miter_limit(self.0, limit) };
+    }
+
+    pub fn set_dash(self, dashes: &[f64], offset: f64) {
+        let ptr = if dashes.is_empty() {
+            core::ptr::null()
+        } else {
+            dashes.as_ptr()
+        };
+        unsafe { cairo_set_dash(self.0, ptr, dashes.len() as c_int, offset) };
     }
 
     pub fn transform(self, m: [f64; 6]) {

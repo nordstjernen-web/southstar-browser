@@ -12,6 +12,9 @@ pub(crate) mod cairo;
 pub(crate) mod context;
 mod objects;
 pub(crate) mod state;
+mod style;
+
+pub(crate) use style::build_pattern;
 
 pub(crate) use objects::{
     c, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, drawimage_source,
