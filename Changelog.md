@@ -463,6 +463,12 @@ Southstar Browser (unreleased):
   bdi resolution, :heading(), and the open, popover, modal and media
   states. Selectors match as before (checked identical over 50 million
   element/pseudo-class tests).
+* attr() substitution is Rust: an attribute read as a quoted string, as
+  any value, against a type() syntax or with a unit, nested fallbacks,
+  and the taint that keeps attribute text out of url() and the image
+  functions. Values substitute as before (checked identical over 7.5
+  million generated calls); a type() whose syntax has no <...> no longer
+  leaks the parsed syntax.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

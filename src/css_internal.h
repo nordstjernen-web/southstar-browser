@@ -59,6 +59,8 @@ gboolean      ns_css_element_state_matches(const ns_node *el,
                                            ns_css_pseudo kind,
                                            const char *arg);
 void          ns_css_language_cache_reset(void);
+char         *ns_css_substitute_attrs(const char *text, const ns_node *node,
+                                      gboolean *tainted);
 void          ns_css_property_rule_clear(gpointer data);
 
 #if GLIB_SIZEOF_VOID_P == 8

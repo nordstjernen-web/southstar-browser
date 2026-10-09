@@ -136,6 +136,7 @@ unsafe extern "C" {
     fn ns_css_syntax_def_free(syntax: *mut c_void);
     fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
     fn ns_css_syntax_def_initial_valid(syntax: *const c_void, value: *const c_char) -> GBoolean;
+    fn ns_css_syntax_def_matches(syntax: *const c_void, value: *const c_char) -> GBoolean;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
 }
 
@@ -303,6 +304,11 @@ impl SyntaxDef {
         let initial = initial.map(c_string);
         let initial = initial.as_ref().map_or(ptr::null(), |text| text.as_ptr());
         unsafe { ns_css_syntax_def_initial_valid(self.0, initial) != 0 }
+    }
+
+    pub(crate) fn matches(&self, value: &[u8]) -> bool {
+        let value = c_string(value);
+        unsafe { ns_css_syntax_def_matches(self.0, value.as_ptr()) != 0 }
     }
 
     fn into_raw(self) -> *mut c_void {
