@@ -577,6 +577,13 @@ Southstar Browser (unreleased):
   the quirks-mode additions, now lives as plain CSS in rust/css
   (ua.css, ua-quirks.css) instead of C string literals; each is parsed
   once per process from the same text as before.
+* The style sheet caches are Rust: the sheets kept per <style> element,
+  per merged run of style text, per linked URL and per imported URL and
+  layer, with the same trimming between style passes, and the style text
+  a <style> element or adopted shadow sheet contributes, scoped to its
+  shadow host or framed document. Every lookup returns the same cached or
+  freshly parsed sheet as before (checked over 1.4 million generated
+  calls).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

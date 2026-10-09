@@ -18,7 +18,7 @@ fn until_nul(text: &[u8]) -> &[u8] {
     &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())]
 }
 
-fn scoped(css: &[u8], host_id: &[u8], frame_scope: bool) -> Vec<u8> {
+pub(crate) fn scoped(css: &[u8], host_id: &[u8], frame_scope: bool) -> Vec<u8> {
     let mut key = Vec::with_capacity(css.len() + host_id.len() + 2);
     key.push(if frame_scope { b'f' } else { b's' });
     key.extend_from_slice(host_id);
