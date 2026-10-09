@@ -392,12 +392,6 @@ ns_image_bitmap_surface(JSValueConst v, int *out_w, int *out_h, int *origin_clea
 JSValue
 ns_canvas_clone_object(JSContext *ctx, JSValueConst v);
 JSValue
-ns_offscreen_getContext(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv);
-JSValue
-ns_dommatrix_make(JSContext *ctx, double a, double b, double c, double d,
-                  double e, double f);
-JSValue
 ns_canvas_throw_dom(JSContext *ctx, const char *name, const char *msg);
 int
 ns_canvas_dim_from_attr(const ns_node *el, const char *name, int defv);
@@ -586,22 +580,13 @@ ns_ctx_isPointInStroke(JSContext *ctx, JSValueConst this_val,
 void
 ns_path2d_parse_svg(cairo_t *cr, const char *d);
 JSValue
-ns_ctx_get_attrs(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
-ns_ctx_is_context_lost(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv);
-JSValue
-ns_ctx_draw_focus_if_needed(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv);
+ns_dommatrix_make(JSContext *ctx, double a, double b, double c, double d,
+                  double e, double f);
 JSValue
 ns_element_getContext(JSContext *ctx, JSValueConst this_val,
                       int argc, JSValueConst *argv);
 cairo_status_t
 ns_canvas_png_write(void *closure, const unsigned char *data, unsigned int length);
-JSValue
-ns_offscreen_convertToBlob(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv);
 
 
 /* The canvas objects' WebIDL surface (js_canvas_api.c). */
@@ -700,6 +685,7 @@ gint64 ns_js_page_time_origin_us(const ns_js *js);
 double ns_js_page_time_origin_real_ms(const ns_js *js);
 JSContext *ns_js_main_realm(const ns_js *js);
 JSContext *ns_js_main_context(const ns_js *js);
+gboolean ns_js_is_worker(const ns_js *js);
 const ns_js_navigation_timing *ns_js_page_navigation_timing(const ns_js *js);
 void ns_js_log_line(ns_js *js, const char *line);
 struct ns_response;

@@ -9,13 +9,14 @@ use std::ffi::CString;
 use southstar_glib as glib;
 
 pub(crate) mod cairo;
+pub(crate) mod context;
 mod objects;
 pub(crate) mod state;
 
 pub(crate) use objects::{
-    c, canvas_state_for, computed_color, decode_image, drawimage_source, element_attr, is_path2d,
-    new_offscreen_canvas_node, ns_pattern_set_transform, path2d_context, set_element_attr,
-    with_bitmap, with_hidden,
+    c, canvas_state_for, computed_color, ctx2d_new, decode_image, drawimage_source, element_attr,
+    is_path2d, new_offscreen_canvas_node, ns_pattern_set_transform, path2d_context,
+    set_element_attr, with_bitmap, with_hidden,
 };
 
 unsafe extern "C" {

@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, path2d};
+use crate::{bitmap, context, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -165,11 +165,11 @@ macro_rules! ctx2d_methods {
             method("fill", c::ns_ctx_fill, 0),
             method("fillRect", c::ns_ctx_fillRect, 4),
             method("fillText", c::ns_ctx_fillText, 3),
-            method("getContextAttributes", c::ns_ctx_get_attrs, 0),
+            native("getContextAttributes", context::get_attributes, 0),
             method("getImageData", c::ns_ctx_getImageData, 4),
             method("getLineDash", c::ns_ctx_getLineDash, 0),
             method("getTransform", c::ns_ctx_getTransform, 0),
-            method("isContextLost", c::ns_ctx_is_context_lost, 0),
+            native("isContextLost", context::is_context_lost, 0),
             method("isPointInPath", c::ns_ctx_isPointInPath, 2),
             method("isPointInStroke", c::ns_ctx_isPointInStroke, 2),
             method("lineTo", c::ns_ctx_lineTo, 2),
@@ -196,9 +196,9 @@ macro_rules! ctx2d_methods {
     };
 }
 
-static CTX2D_METHODS: [Method; 45] = ctx2d_methods!(method(
+static CTX2D_METHODS: [Method; 45] = ctx2d_methods!(native(
     "drawFocusIfNeeded",
-    c::ns_ctx_draw_focus_if_needed,
+    context::draw_focus_if_needed,
     1
 ),);
 
@@ -253,8 +253,8 @@ static PATH2D_METHODS: [Method; 11] = [
 static IMAGE_BITMAP_METHODS: [Method; 1] = [native("close", bitmap::close, 0)];
 
 static OFFSCREEN_METHODS: [Method; 3] = [
-    method("convertToBlob", c::ns_offscreen_convertToBlob, 0),
-    method("getContext", c::ns_offscreen_getContext, 1),
+    native("convertToBlob", context::convert_to_blob, 0),
+    native("getContext", context::offscreen_get_context, 1),
     native(
         "transferToImageBitmap",
         ffi::state::transfer_to_image_bitmap,

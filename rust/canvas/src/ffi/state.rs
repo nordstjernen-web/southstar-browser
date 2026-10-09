@@ -68,6 +68,10 @@ impl Js {
     pub fn addr(self) -> usize {
         self.0 as usize
     }
+
+    pub fn ptr(self) -> *mut NsJs {
+        self.0
+    }
 }
 
 impl Node {
@@ -81,6 +85,10 @@ impl Node {
 
     pub fn addr(self) -> usize {
         self.0 as usize
+    }
+
+    pub fn ptr(self) -> *const NsNode {
+        self.0
     }
 }
 

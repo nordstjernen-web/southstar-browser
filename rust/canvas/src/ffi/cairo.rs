@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_double, c_int, c_void};
+use core::ffi::{c_double, c_int, c_uint, c_void};
 use core::ptr;
 
 #[repr(C)]
@@ -90,6 +90,18 @@ unsafe extern "C" {
     fn cairo_set_source_surface(cr: *mut Cairo, surface: *mut c_void, x: c_double, y: c_double);
     fn cairo_set_operator(cr: *mut Cairo, op: c_int);
     fn cairo_paint(cr: *mut Cairo);
+    fn cairo_set_source_rgba(cr: *mut Cairo, r: c_double, g: c_double, b: c_double, a: c_double);
+    fn cairo_surface_write_to_png_stream(
+        surface: *mut c_void,
+        write: unsafe extern "C" fn(*mut c_void, *const u8, c_uint) -> c_int,
+        closure: *mut c_void,
+    ) -> c_int;
+}
+
+unsafe extern "C" fn collect_png(closure: *mut c_void, data: *const u8, length: c_uint) -> c_int {
+    let out = unsafe { &mut *closure.cast::<Vec<u8>>() };
+    out.extend_from_slice(unsafe { core::slice::from_raw_parts(data, length as usize) });
+    0
 }
 
 const FORMAT_ARGB32: c_int = 0;
@@ -148,6 +160,23 @@ impl Surface {
             stride as usize,
         );
         unsafe { cairo_surface_mark_dirty(self.0) };
+    }
+
+    pub fn png(&self) -> Option<Vec<u8>> {
+        let mut out: Vec<u8> = Vec::new();
+        let closure = (&mut out as *mut Vec<u8>).cast::<c_void>();
+        let status = unsafe { cairo_surface_write_to_png_stream(self.0, collect_png, closure) };
+        (status == 0).then_some(out)
+    }
+
+    pub fn fill_opaque_black(&self) {
+        unsafe {
+            let cr = cairo_create(self.0);
+            cairo_set_operator(cr, OPERATOR_SOURCE);
+            cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 1.0);
+            cairo_paint(cr);
+            cairo_destroy(cr);
+        }
     }
 
     pub fn paint_onto(&self, target: &Surface, offset: (f64, f64), replace: bool) {

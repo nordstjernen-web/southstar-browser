@@ -66295,6 +66295,12 @@ ns_js_main_context(const ns_js *js)
     return js->ctx;
 }
 
+gboolean
+ns_js_is_worker(const ns_js *js)
+{
+    return js->worker_host != NULL;
+}
+
 const ns_js_navigation_timing *
 ns_js_page_navigation_timing(const ns_js *js)
 {

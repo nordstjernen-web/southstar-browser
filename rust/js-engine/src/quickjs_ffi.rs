@@ -846,6 +846,15 @@ pub mod quickjs {
         value.raw
     }
 
+    pub fn checked(scope: &mut Scope<'_>, value: Value) -> Result<Value, Value> {
+        if value.raw.tag == super::TAG_EXCEPTION {
+            core::mem::forget(value);
+            Err(scope.exception())
+        } else {
+            Ok(value)
+        }
+    }
+
     pub fn raw_is_object(raw: JSValue) -> bool {
         raw.tag == super::TAG_OBJECT
     }
@@ -992,6 +1001,10 @@ pub mod quickjs {
         _function: &Value,
     ) -> Result<*mut JSContext, Value> {
         Ok(scope.ctx)
+    }
+
+    pub fn runtime(scope: &Scope<'_>) -> *mut c_void {
+        scope.rt().cast()
     }
 
     pub fn context_opaque(scope: &Scope<'_>) -> *mut c_void {

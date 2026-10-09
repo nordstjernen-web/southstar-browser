@@ -49,17 +49,14 @@ pub(crate) mod c {
         ns_ctx_createLinearGradient,
         ns_ctx_createPattern,
         ns_ctx_createRadialGradient,
-        ns_ctx_draw_focus_if_needed,
         ns_ctx_drawImage,
         ns_ctx_ellipse,
         ns_ctx_fill,
         ns_ctx_fillRect,
         ns_ctx_fillText,
-        ns_ctx_get_attrs,
         ns_ctx_getImageData,
         ns_ctx_getLineDash,
         ns_ctx_getTransform,
-        ns_ctx_is_context_lost,
         ns_ctx_isPointInPath,
         ns_ctx_isPointInStroke,
         ns_ctx_lineTo,
@@ -83,8 +80,6 @@ pub(crate) mod c {
         ns_ctx_transform,
         ns_ctx_translate,
         ns_ctx_gradient_addColorStop,
-        ns_offscreen_convertToBlob,
-        ns_offscreen_getContext,
     );
 }
 
@@ -544,16 +539,15 @@ unsafe fn new_in_realm(realm: *mut JSContext, kind: i32, iface: &str) -> Value {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ctx2d_new(
-    ctx: *mut JSContext,
-    el: *const NsNode,
-    canvas_obj: JSValue,
-    offscreen: c_int,
-    attrs: JSValue,
-) -> JSValue {
-    let realm = canvas_realm(ctx, el as usize);
-    let (kind, iface) = if offscreen != 0 {
+pub(crate) fn ctx2d_new(
+    scope: &mut Scope<'_>,
+    el: usize,
+    canvas: &Value,
+    offscreen: bool,
+    attrs: Value,
+) -> Value {
+    let realm = canvas_realm(quickjs::raw_context(scope), el);
+    let (kind, iface) = if offscreen {
         (
             hidden::KIND_OFFSCREEN_CTX2D,
             "OffscreenCanvasRenderingContext2D",
@@ -562,12 +556,29 @@ pub unsafe extern "C" fn ns_ctx2d_new(
         (hidden::KIND_CTX2D, "CanvasRenderingContext2D")
     };
     let obj = unsafe { new_in_realm(realm, kind, iface) };
+    crate::api::ctx2d_finish(scope, &obj, el, canvas, attrs);
+    obj
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_ctx2d_new(
+    ctx: *mut JSContext,
+    el: *const NsNode,
+    canvas_obj: JSValue,
+    offscreen: c_int,
+    attrs: JSValue,
+) -> JSValue {
     unsafe {
         quickjs::with_context(ctx, |scope| {
             let attrs = quickjs::take_value(scope, attrs);
             let canvas = quickjs::borrow_value(scope, canvas_obj);
-            crate::api::ctx2d_finish(scope, &obj, el as usize, &canvas, attrs);
-            quickjs::into_raw(obj)
+            quickjs::into_raw(ctx2d_new(
+                scope,
+                el as usize,
+                &canvas,
+                offscreen != 0,
+                attrs,
+            ))
         })
     }
 }
