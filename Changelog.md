@@ -623,6 +623,9 @@ Southstar Browser (unreleased):
   against sizes and the device pixel ratio, a <picture>'s first <source>
   whose type and media match, and the data-src and data-srcset attributes
   lazy-loading sites use, preferring a real URL over a data: placeholder.
+* Finding the image-map <area> under the pointer is Rust: the usemap's
+  <map> in the image's tree scope, coordinates read as HTML's list of
+  numbers, and circle, polygon, default and rectangle shapes.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

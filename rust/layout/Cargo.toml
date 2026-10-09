@@ -1,6 +1,6 @@
 [package]
 name = "southstar-layout"
-description = "The box tree of src/layout.h: the ns_box layout and borrowed box handles over it, and layout.c ported by section: so far choosing the image an <img> loads"
+description = "The box tree of src/layout.h: the ns_box layout and borrowed box handles over it, and layout.c ported by section: so far choosing the image an <img> loads and image-map hit testing"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
