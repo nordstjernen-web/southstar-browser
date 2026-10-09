@@ -8,6 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
+use crate::path2d;
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -41,14 +42,32 @@ const fn attr(name: &'static str, ty: AttrType) -> AttrDef {
     AttrDef { name, ty }
 }
 
+#[derive(Clone, Copy)]
+enum Callable {
+    C(JSCFunction),
+    Native(NativeFn),
+}
+
 struct Method {
     name: &'static str,
-    f: JSCFunction,
+    f: Callable,
     length: u32,
 }
 
 const fn method(name: &'static str, f: JSCFunction, length: u32) -> Method {
-    Method { name, f, length }
+    Method {
+        name,
+        f: Callable::C(f),
+        length,
+    }
+}
+
+const fn native(name: &'static str, f: NativeFn, length: u32) -> Method {
+    Method {
+        name,
+        f: Callable::Native(f),
+        length,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -218,17 +237,17 @@ static OFFSCREEN_ATTRS: [AttrDef; 4] = [
 ];
 
 static PATH2D_METHODS: [Method; 11] = [
-    method("addPath", c::ns_path2d_addPath, 1),
-    method("arc", c::ns_path2d_arc, 5),
-    method("arcTo", c::ns_path2d_arcTo, 5),
-    method("bezierCurveTo", c::ns_path2d_bezierCurveTo, 6),
-    method("closePath", c::ns_path2d_closePath, 0),
-    method("ellipse", c::ns_path2d_ellipse, 7),
-    method("lineTo", c::ns_path2d_lineTo, 2),
-    method("moveTo", c::ns_path2d_moveTo, 2),
-    method("quadraticCurveTo", c::ns_path2d_quadraticCurveTo, 4),
-    method("rect", c::ns_path2d_rect, 4),
-    method("roundRect", c::ns_path2d_roundRect, 4),
+    native("addPath", path2d::add_path, 1),
+    native("arc", path2d::arc, 5),
+    native("arcTo", path2d::arc_to_method, 5),
+    native("bezierCurveTo", path2d::bezier_curve_to, 6),
+    native("closePath", path2d::close_path, 0),
+    native("ellipse", path2d::ellipse_method, 7),
+    native("lineTo", path2d::line_to, 2),
+    native("moveTo", path2d::move_to, 2),
+    native("quadraticCurveTo", path2d::quadratic_curve_to, 4),
+    native("rect", path2d::rect, 4),
+    native("roundRect", path2d::round_rect, 4),
 ];
 
 static IMAGE_BITMAP_METHODS: [Method; 1] = [method("close", c::ns_image_bitmap_close, 0)];
@@ -363,7 +382,10 @@ fn api_call(
         );
         return Err(scope.type_error(&message));
     }
-    quickjs::call_c_function(scope, m.f, this, args)
+    match m.f {
+        Callable::C(f) => quickjs::call_c_function(scope, f, this, args),
+        Callable::Native(f) => f(scope, this, args),
+    }
 }
 
 fn sync_canvas(scope: &mut Scope<'_>, this: &Value) {
@@ -653,10 +675,6 @@ fn install_illegal(scope: &mut Scope<'_>, global: &Value, index: usize, table: u
     define_members(scope, &proto, table);
 }
 
-fn path2d_construct(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
-    quickjs::call_c_function(scope, c::ns_path2d_ctor, this, args)
-}
-
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value, window: bool) {
     let create = quickjs::c_function(
         scope,
@@ -680,7 +698,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value, window: bool) {
     let ctor = scope.constructor_or_function("ImageData", 2, imagedata_construct);
     let proto = interface(scope, global, "ImageData", ctor, None);
     define_members(scope, &proto, TABLE_IMAGEDATA);
-    let ctor = scope.constructor_or_function("Path2D", 0, path2d_construct);
+    let ctor = scope.constructor_or_function("Path2D", 0, path2d::construct);
     let proto = interface(scope, global, "Path2D", ctor, None);
     define_members(scope, &proto, TABLE_PATH2D);
 }

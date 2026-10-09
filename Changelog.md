@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Path2D is Rust, from the path it records to its methods and the
+  rounded-rectangle geometry roundRect() shares with the 2D context. Arguments
+  are now converted left to right, as WebIDL asks; the C converted some of
+  them in whatever order the compiler chose.
 * The canvas objects' JavaScript interfaces are Rust: CanvasRenderingContext2D
   and its offscreen twin, CanvasGradient, CanvasPattern, TextMetrics, ImageData,
   OffscreenCanvas and the Path2D and ImageBitmap interface objects, with their

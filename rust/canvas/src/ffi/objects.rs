@@ -10,8 +10,10 @@ use southstar_glib as glib;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
+use super::cairo::{Cairo, Context};
 use super::text;
 use crate::hidden::{self, Hidden};
+use crate::path2d::Path2D;
 
 macro_rules! jscfunctions {
     ($($name:ident),* $(,)?) => {
@@ -79,18 +81,6 @@ pub(crate) mod c {
         ns_ctx_transform,
         ns_ctx_translate,
         ns_ctx_gradient_addColorStop,
-        ns_path2d_addPath,
-        ns_path2d_arc,
-        ns_path2d_arcTo,
-        ns_path2d_bezierCurveTo,
-        ns_path2d_closePath,
-        ns_path2d_ellipse,
-        ns_path2d_lineTo,
-        ns_path2d_moveTo,
-        ns_path2d_quadraticCurveTo,
-        ns_path2d_rect,
-        ns_path2d_roundRect,
-        ns_path2d_ctor,
         ns_image_bitmap_close,
         ns_offscreen_convertToBlob,
         ns_offscreen_getContext,
@@ -110,12 +100,10 @@ pub struct NsNode {
 }
 
 unsafe extern "C" {
-    fn ns_value_is_path2d(v: JSValue) -> c_int;
     fn ns_image_bitmap_is(v: JSValue) -> c_int;
     fn ns_image_bitmap_clone(ctx: *mut JSContext, v: JSValue) -> JSValue;
     fn ns_image_bitmap_define_members(ctx: *mut JSContext, global: JSValue);
     fn ns_canvas_register_image_bitmap_class(rt: *mut c_void);
-    fn ns_canvas_register_path2d_class(rt: *mut c_void);
     fn ns_canvas_state_for(js: *mut NsJs, el: *const NsNode) -> *mut c_void;
     fn ns_canvas_state_adopt_node(js: *mut NsJs, el: *mut NsNode);
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> *mut JSContext;
@@ -134,7 +122,71 @@ pub(crate) fn with_hidden<R>(value: &Value, f: impl FnOnce(&Hidden) -> R) -> Opt
 }
 
 pub(crate) fn is_path2d(value: &Value) -> bool {
-    unsafe { ns_value_is_path2d(quickjs::raw(value)) != 0 }
+    path2d_context(value).is_some()
+}
+
+pub(crate) fn path2d_context(value: &Value) -> Option<Context> {
+    unsafe { quickjs::with_host::<Path2D, Context>(quickjs::raw(value), |p| p.recording.context()) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_value_is_path2d(v: JSValue) -> c_int {
+    let found = unsafe { quickjs::with_host::<Path2D, ()>(v, |_| ()) };
+    c_int::from(found.is_some())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_replay_path2d(target: *mut Cairo, path: JSValue) {
+    let Some(target) = (unsafe { Context::from_raw(target) }) else {
+        return;
+    };
+    let src = unsafe { quickjs::with_host::<Path2D, Context>(path, |p| p.recording.context()) };
+    if let Some(src) = src {
+        let copy = src.copy_path();
+        target.new_path();
+        target.append_path(&copy);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_round_rect_subpath(
+    cr: *mut Cairo,
+    x: c_double,
+    y: c_double,
+    w: c_double,
+    h: c_double,
+    rtl: c_double,
+    rtr: c_double,
+    rbr: c_double,
+    rbl: c_double,
+) {
+    if let Some(cr) = unsafe { Context::from_raw(cr) } {
+        crate::path2d::round_rect_subpath(cr, [x, y, w, h], [rtl, rtr, rbr, rbl]);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_extract_radii(
+    ctx: *mut JSContext,
+    v: JSValue,
+    rtl: *mut c_double,
+    rtr: *mut c_double,
+    rbr: *mut c_double,
+    rbl: *mut c_double,
+) -> c_int {
+    let (radii, valid) = unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let v = quickjs::borrow_value(scope, v);
+            crate::path2d::extract_radii(scope, &v)
+        })
+    };
+    unsafe {
+        *rtl = radii[0];
+        *rtr = radii[1];
+        *rbr = radii[2];
+        *rbl = radii[3];
+    }
+    c_int::from(valid)
 }
 
 pub(crate) fn is_image_bitmap(value: &Value) -> bool {
@@ -225,7 +277,6 @@ pub(crate) unsafe extern "C" fn ns_pattern_set_transform(
 pub unsafe extern "C" fn ns_canvas_register_classes(rt: *mut c_void) {
     unsafe {
         ns_canvas_register_image_bitmap_class(rt);
-        ns_canvas_register_path2d_class(rt);
     }
 }
 

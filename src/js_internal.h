@@ -39,11 +39,6 @@ typedef struct ns_canvas_state {
     int context_kind;
 } ns_canvas_state;
 
-typedef struct ns_path2d {
-    cairo_surface_t *rs;
-    cairo_t         *cr;
-} ns_path2d;
-
 typedef struct ns_image_bitmap {
     cairo_surface_t *surf;
     int w, h;
@@ -391,8 +386,6 @@ const ns_node *ns_unwrap_element(JSValueConst val);
 
 /* Canvas API implemented in js_canvas.c */
 void
-ns_path2d_finalizer(JSRuntime *rt, JSValue val);
-void
 ns_image_bitmap_finalizer(JSRuntime *rt, JSValue val);
 void
 ns_canvas_state_free(gpointer data);
@@ -612,46 +605,8 @@ ns_ctx_isPointInPath(JSContext *ctx, JSValueConst this_val,
 JSValue
 ns_ctx_isPointInStroke(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv);
-JSValue
-ns_path2d_get_cr(JSContext *ctx, JSValueConst this_val, cairo_t **out);
-JSValue
-ns_path2d_moveTo(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
-ns_path2d_lineTo(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
-ns_path2d_closePath(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
-JSValue
-ns_path2d_bezierCurveTo(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv);
-JSValue
-ns_path2d_quadraticCurveTo(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv);
-JSValue
-ns_path2d_arc(JSContext *ctx, JSValueConst this_val,
-              int argc, JSValueConst *argv);
-JSValue
-ns_path2d_arcTo(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv);
-JSValue
-ns_path2d_ellipse(JSContext *ctx, JSValueConst this_val,
-                  int argc, JSValueConst *argv);
-JSValue
-ns_path2d_rect(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv);
-JSValue
-ns_path2d_roundRect(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
-JSValue
-ns_path2d_addPath(JSContext *ctx, JSValueConst this_val,
-                  int argc, JSValueConst *argv);
 void
 ns_path2d_parse_svg(cairo_t *cr, const char *d);
-JSValue
-ns_path2d_ctor(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv);
 JSValue
 ns_ctx_get_attrs(JSContext *ctx, JSValueConst this_val,
                  int argc, JSValueConst *argv);
@@ -671,7 +626,6 @@ ns_offscreen_convertToBlob(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv);
 
 void ns_canvas_register_image_bitmap_class(JSRuntime *rt);
-void ns_canvas_register_path2d_class(JSRuntime *rt);
 void ns_image_bitmap_define_members(JSContext *ctx, JSValueConst global);
 
 /* The canvas objects' WebIDL surface (js_canvas_api.c). */

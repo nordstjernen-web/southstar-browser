@@ -8,5 +8,6 @@ mod ffi;
 mod font;
 mod hidden;
 mod path;
+mod path2d;
 mod raster;
 mod validate;

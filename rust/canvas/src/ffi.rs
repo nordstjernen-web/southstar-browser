@@ -8,12 +8,13 @@ use std::ffi::CString;
 
 use southstar_glib as glib;
 
+pub(crate) mod cairo;
 mod objects;
 
 pub(crate) use objects::{
     c, canvas_state_for, computed_color, element_attr, image_bitmap_clone,
     image_bitmap_define_members, is_image_bitmap, is_path2d, new_offscreen_canvas_node,
-    ns_pattern_set_transform, set_element_attr, with_hidden,
+    ns_pattern_set_transform, path2d_context, set_element_attr, with_hidden,
 };
 
 unsafe extern "C" {
