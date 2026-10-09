@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, context, ctxpath, path2d};
+use crate::{bitmap, context, ctxpath, draw, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -151,7 +151,7 @@ macro_rules! ctx2d_methods {
             native("arcTo", ctxpath::arc_to_method, 5),
             native("beginPath", ctxpath::begin_path, 0),
             native("bezierCurveTo", ctxpath::bezier_curve_to, 6),
-            method("clearRect", c::ns_ctx_clearRect, 4),
+            native("clearRect", draw::clear_rect, 4),
             method("clip", c::ns_ctx_clip, 0),
             native("closePath", ctxpath::close_path, 0),
             method("createConicGradient", c::ns_ctx_createConicGradient, 3),
@@ -162,8 +162,8 @@ macro_rules! ctx2d_methods {
             $($extra,)*
             method("drawImage", c::ns_ctx_drawImage, 3),
             native("ellipse", ctxpath::ellipse, 7),
-            method("fill", c::ns_ctx_fill, 0),
-            method("fillRect", c::ns_ctx_fillRect, 4),
+            native("fill", draw::fill, 0),
+            native("fillRect", draw::fill_rect, 4),
             method("fillText", c::ns_ctx_fillText, 3),
             native("getContextAttributes", context::get_attributes, 0),
             method("getImageData", c::ns_ctx_getImageData, 4),
@@ -180,15 +180,15 @@ macro_rules! ctx2d_methods {
             native("rect", ctxpath::rect, 4),
             method("reset", c::ns_ctx_reset, 0),
             native("resetTransform", ctxpath::reset_transform, 0),
-            method("restore", c::ns_ctx_restore, 0),
+            native("restore", draw::restore, 0),
             native("rotate", ctxpath::rotate, 1),
             native("roundRect", ctxpath::round_rect, 4),
-            method("save", c::ns_ctx_save, 0),
+            native("save", draw::save, 0),
             native("scale", ctxpath::scale, 2),
             method("setLineDash", c::ns_ctx_setLineDash, 1),
             native("setTransform", ctxpath::set_transform, 0),
-            method("stroke", c::ns_ctx_stroke, 0),
-            method("strokeRect", c::ns_ctx_strokeRect, 4),
+            native("stroke", draw::stroke, 0),
+            native("strokeRect", draw::stroke_rect, 4),
             method("strokeText", c::ns_ctx_strokeText, 3),
             native("transform", ctxpath::transform, 6),
             native("translate", ctxpath::translate, 2),

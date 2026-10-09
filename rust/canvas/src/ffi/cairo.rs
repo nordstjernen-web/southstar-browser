@@ -79,6 +79,14 @@ unsafe extern "C" {
     fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
     fn cairo_rotate(cr: *mut Cairo, angle: c_double);
     fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
+    fn cairo_set_source(cr: *mut Cairo, pattern: *mut c_void);
+    fn cairo_set_line_width(cr: *mut Cairo, width: c_double);
+    fn cairo_set_fill_rule(cr: *mut Cairo, rule: c_int);
+    fn cairo_get_fill_rule(cr: *mut Cairo) -> c_int;
+    fn cairo_fill(cr: *mut Cairo);
+    fn cairo_stroke(cr: *mut Cairo);
+    fn cairo_fill_preserve(cr: *mut Cairo);
+    fn cairo_stroke_preserve(cr: *mut Cairo);
     fn cairo_set_line_cap(cr: *mut Cairo, cap: c_int);
     fn cairo_set_line_join(cr: *mut Cairo, join: c_int);
     fn cairo_set_miter_limit(cr: *mut Cairo, limit: c_double);
@@ -223,6 +231,36 @@ impl Surface {
     }
 }
 
+pub(crate) struct OwnedContext(Context);
+
+impl OwnedContext {
+    pub fn on(surface: &Surface) -> OwnedContext {
+        OwnedContext(Context(unsafe { cairo_create(surface.0) }))
+    }
+
+    pub fn context(&self) -> Context {
+        self.0
+    }
+}
+
+impl Drop for OwnedContext {
+    fn drop(&mut self) {
+        unsafe { cairo_destroy(self.0.0) };
+    }
+}
+
+impl Path {
+    pub unsafe fn from_raw(path: *mut CairoPathData) -> Option<Path> {
+        (!path.is_null()).then_some(Path(path))
+    }
+
+    pub fn into_raw(self) -> *mut CairoPathData {
+        let raw = self.0;
+        core::mem::forget(self);
+        raw
+    }
+}
+
 impl Drop for Surface {
     fn drop(&mut self) {
         unsafe { cairo_surface_destroy(self.0) };
@@ -340,6 +378,54 @@ impl Context {
 
     pub fn scale(self, x: f64, y: f64) {
         unsafe { cairo_scale(self.0, x, y) };
+    }
+
+    pub fn raw(self) -> *mut Cairo {
+        self.0
+    }
+
+    pub fn set_source_pattern(self, pattern: *mut c_void) {
+        unsafe { cairo_set_source(self.0, pattern) };
+    }
+
+    pub fn set_source_rgba(self, rgba: [f64; 4]) {
+        unsafe { cairo_set_source_rgba(self.0, rgba[0], rgba[1], rgba[2], rgba[3]) };
+    }
+
+    pub fn set_source_surface(self, surface: &Surface, x: f64, y: f64) {
+        unsafe { cairo_set_source_surface(self.0, surface.0, x, y) };
+    }
+
+    pub fn paint(self) {
+        unsafe { cairo_paint(self.0) };
+    }
+
+    pub fn set_line_width(self, width: f64) {
+        unsafe { cairo_set_line_width(self.0, width) };
+    }
+
+    pub fn set_fill_rule(self, rule: i32) {
+        unsafe { cairo_set_fill_rule(self.0, rule) };
+    }
+
+    pub fn fill_rule(self) -> i32 {
+        unsafe { cairo_get_fill_rule(self.0) }
+    }
+
+    pub fn fill(self) {
+        unsafe { cairo_fill(self.0) };
+    }
+
+    pub fn stroke(self) {
+        unsafe { cairo_stroke(self.0) };
+    }
+
+    pub fn fill_preserve(self) {
+        unsafe { cairo_fill_preserve(self.0) };
+    }
+
+    pub fn stroke_preserve(self) {
+        unsafe { cairo_stroke_preserve(self.0) };
     }
 
     pub fn set_operator(self, op: i32) {

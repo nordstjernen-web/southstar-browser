@@ -354,22 +354,6 @@ js_from_ctx(JSContext *ctx)
 
 typedef void (*ns_ctx_drawfn)(cairo_t *cr, void *ud);
 
-typedef struct ns_draw_rect_ud {
-    double x, y, w, h, lw;
-    JSContext *ctx;
-    JSValueConst this_val;
-    ns_canvas_state *st;
-} ns_draw_rect_ud;
-
-typedef struct ns_draw_path_ud {
-    JSContext *ctx;
-    JSValueConst this_val;
-    ns_canvas_state *st;
-    double lw;
-    cairo_path_t *snapshot;
-    cairo_fill_rule_t fill_rule;
-} ns_draw_path_ud;
-
 /* Helpers defined in js.c, used by js_canvas.c */
 double ns_arg_d(JSContext *ctx, JSValueConst v);
 void ns_bind_fn(JSContext *ctx, JSValueConst obj, const char *name, JSCFunction *fn, int argc);
@@ -427,16 +411,6 @@ void
 ns_ctx_set_fill_source(JSContext *ctx, JSValueConst this_val, ns_canvas_state *st);
 void
 ns_ctx_set_stroke_source(JSContext *ctx, JSValueConst this_val, ns_canvas_state *st);
-void
-ns_draw_fillrect(cairo_t *cr, void *vud);
-void
-ns_draw_strokerect(cairo_t *cr, void *vud);
-JSValue
-ns_ctx_fillRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_strokeRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_clearRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 gboolean
 ns_value_is_path2d(JSValueConst v);
 void
@@ -448,18 +422,6 @@ ns_ctx_prepare_path_and_rule(JSContext *ctx, cairo_t *cr,
                              int argc, JSValueConst *argv);
 void
 ns_ctx_restore_path(cairo_t *cr, cairo_path_t *saved);
-void
-ns_draw_fillpath(cairo_t *cr, void *vud);
-void
-ns_draw_strokepath(cairo_t *cr, void *vud);
-JSValue
-ns_ctx_fill(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_stroke(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_save(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_restore(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 NsPangoFontDescription *
 ns_canvas_font_desc(const char *css_font);
 gboolean
@@ -639,6 +601,7 @@ double ns_js_page_time_origin_real_ms(const ns_js *js);
 JSContext *ns_js_main_realm(const ns_js *js);
 JSContext *ns_js_main_context(const ns_js *js);
 gboolean ns_js_is_worker(const ns_js *js);
+void ns_js_mark_mutated(ns_js *js);
 const ns_js_navigation_timing *ns_js_page_navigation_timing(const ns_js *js);
 void ns_js_log_line(ns_js *js, const char *line);
 struct ns_response;

@@ -37,7 +37,6 @@ pub(crate) mod c {
     use super::{JSContext, JSValue, c_int};
 
     jscfunctions!(
-        ns_ctx_clearRect,
         ns_ctx_clip,
         ns_ctx_createConicGradient,
         ns_ctx_createImageData,
@@ -45,8 +44,6 @@ pub(crate) mod c {
         ns_ctx_createPattern,
         ns_ctx_createRadialGradient,
         ns_ctx_drawImage,
-        ns_ctx_fill,
-        ns_ctx_fillRect,
         ns_ctx_fillText,
         ns_ctx_getImageData,
         ns_ctx_getLineDash,
@@ -55,11 +52,7 @@ pub(crate) mod c {
         ns_ctx_measureText,
         ns_ctx_putImageData,
         ns_ctx_reset,
-        ns_ctx_restore,
-        ns_ctx_save,
         ns_ctx_setLineDash,
-        ns_ctx_stroke,
-        ns_ctx_strokeRect,
         ns_ctx_strokeText,
         ns_ctx_gradient_addColorStop,
     );

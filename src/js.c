@@ -66301,6 +66301,12 @@ ns_js_is_worker(const ns_js *js)
     return js->worker_host != NULL;
 }
 
+void
+ns_js_mark_mutated(ns_js *js)
+{
+    if (js) js->mutated = TRUE;
+}
+
 const ns_js_navigation_timing *
 ns_js_page_navigation_timing(const ns_js *js)
 {

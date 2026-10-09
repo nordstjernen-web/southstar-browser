@@ -7,6 +7,7 @@ mod bitmap;
 mod color;
 mod context;
 mod ctxpath;
+mod draw;
 mod ffi;
 mod font;
 mod hidden;
