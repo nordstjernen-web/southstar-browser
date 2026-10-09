@@ -38,6 +38,7 @@ southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
+southstar-js-brand = { path = "../js-brand" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-temporal = { path = "../js-temporal" }
@@ -96,6 +97,7 @@ webgpu = ["southstar-net/webgpu"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-extensions/quickjs-original",
+    "southstar-js-brand/quickjs-original",
     "southstar-js-intl/quickjs-original",
     "southstar-js-realm/quickjs-original",
     "southstar-js-temporal/quickjs-original",

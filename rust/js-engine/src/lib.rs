@@ -33,6 +33,12 @@ pub struct TypedArrayBytes<'a> {
     pub element_size: usize,
 }
 
+pub struct PropertyDescriptor {
+    pub value: Value,
+    pub getter: Value,
+    pub setter: Value,
+}
+
 pub enum PromiseState {
     NotAPromise,
     Pending,

@@ -1,4 +1,4 @@
-/* Southstar — WebIDL brand checks for the native members of interfaces. */
+/* Southstar — WebIDL brand checks for the native members of interfaces, implemented in rust/js-brand. */
 #ifndef NS_JS_BRAND_H
 #define NS_JS_BRAND_H
 

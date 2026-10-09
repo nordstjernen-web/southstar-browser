@@ -1589,6 +1589,7 @@ dependencies = [
  "southstar-image",
  "southstar-image-decoders",
  "southstar-ipc",
+ "southstar-js-brand",
  "southstar-js-intl",
  "southstar-js-realm",
  "southstar-js-temporal",
@@ -1735,6 +1736,13 @@ dependencies = [
 [[package]]
 name = "southstar-ipc"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-js-brand"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-js-engine",
+]
 
 [[package]]
 name = "southstar-js-engine"

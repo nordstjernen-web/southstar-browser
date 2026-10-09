@@ -6,20 +6,22 @@ use std::any::Any;
 use std::path::Path;
 use std::rc::Rc;
 
+use boa_engine::builtins::object::OrdinaryObject;
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise, JsTypedArray};
 use boa_engine::prelude::{Finalize, JsData, Trace};
-use boa_engine::property::PropertyDescriptor;
+use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
 use boa_engine::{
     Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
     NativeFunction, Source,
 };
 
 use crate::{
-    Attributes, BoundFn, NativeFn, PromiseState, RealmInit, TypedArrayBytes, int64_modulo,
+    Attributes, BoundFn, NativeFn, PromiseState, PropertyDescriptor, RealmInit, TypedArrayBytes,
+    int64_modulo,
 };
 
 pub const ENGINE_NAME: &str = "boa";
@@ -89,6 +91,13 @@ impl Value {
 
     pub fn is_bool(&self) -> bool {
         self.0.is_boolean()
+    }
+
+    pub fn same_object(&self, other: &Value) -> bool {
+        match (self.0.as_object(), other.0.as_object()) {
+            (Some(a), Some(b)) => JsObject::equals(&a, &b),
+            _ => false,
+        }
     }
 }
 
@@ -286,7 +295,7 @@ impl Scope<'_> {
         attributes: Attributes,
     ) -> Result<(), Value> {
         let object = self.object(object)?;
-        let descriptor = PropertyDescriptor::builder()
+        let descriptor = BoaPropertyDescriptor::builder()
             .value(value.0)
             .writable(attributes.writable)
             .enumerable(attributes.enumerable)
@@ -495,6 +504,52 @@ impl Scope<'_> {
 
     pub fn gc(&mut self) {
         boa_gc::force_collect();
+    }
+
+    pub fn own_property_keys(
+        &mut self,
+        object: &Value,
+        symbols: bool,
+    ) -> Result<Vec<Value>, Value> {
+        let object = self.object(object)?;
+        let keys = object
+            .own_property_keys(self.ctx)
+            .map_err(|e| self.error(e))?;
+        Ok(keys
+            .into_iter()
+            .filter(|key| symbols || !matches!(key, PropertyKey::Symbol(_)))
+            .map(|key| Value(key.into()))
+            .collect())
+    }
+
+    pub fn own_property(
+        &mut self,
+        object: &Value,
+        key: &Value,
+    ) -> Result<Option<PropertyDescriptor>, Value> {
+        let descriptor = OrdinaryObject::get_own_property_descriptor(
+            &JsValue::undefined(),
+            &[object.0.clone(), key.0.clone()],
+            self.ctx,
+        )
+        .map_err(|e| self.error(e))?;
+        if descriptor.is_undefined() {
+            return Ok(None);
+        }
+        let descriptor = Value(descriptor);
+        Ok(Some(PropertyDescriptor {
+            value: self.get(&descriptor, "value")?,
+            getter: self.get(&descriptor, "get")?,
+            setter: self.get(&descriptor, "set")?,
+        }))
+    }
+
+    pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {
+        let object = self.object(object)?;
+        Ok(match object.prototype() {
+            Some(prototype) => Value(prototype.into()),
+            None => Value::null(),
+        })
     }
 
     pub fn is_function(&mut self, value: &Value) -> bool {

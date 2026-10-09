@@ -13,7 +13,9 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::{Attributes, BoundFn, NativeFn, PromiseState, RealmInit, TypedArrayBytes};
+use crate::{
+    Attributes, BoundFn, NativeFn, PromiseState, PropertyDescriptor, RealmInit, TypedArrayBytes,
+};
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 
@@ -57,6 +59,23 @@ struct JSClassDef {
 }
 
 type JSAtom = u32;
+
+#[repr(C)]
+struct JSPropertyEnum {
+    is_enumerable: c_int,
+    atom: JSAtom,
+}
+
+#[repr(C)]
+struct JSPropertyDescriptor {
+    flags: c_int,
+    value: JSValue,
+    getter: JSValue,
+    setter: JSValue,
+}
+
+const GPN_STRING_MASK: c_int = 1 << 0;
+const GPN_SYMBOL_MASK: c_int = 1 << 1;
 
 const TAG_STRING: i64 = -7;
 const TAG_OBJECT: i64 = -1;
@@ -236,6 +255,22 @@ unsafe extern "C" {
     fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
     fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> bool;
     fn JS_NewError(ctx: *mut JSContext) -> JSValue;
+    fn JS_GetOwnPropertyNames(
+        ctx: *mut JSContext,
+        ptab: *mut *mut JSPropertyEnum,
+        plen: *mut u32,
+        obj: JSValue,
+        flags: c_int,
+    ) -> c_int;
+    fn JS_FreePropertyEnum(ctx: *mut JSContext, tab: *mut JSPropertyEnum, len: u32);
+    fn JS_GetOwnProperty(
+        ctx: *mut JSContext,
+        desc: *mut JSPropertyDescriptor,
+        obj: JSValue,
+        prop: JSAtom,
+    ) -> c_int;
+    fn JS_AtomToValue(ctx: *mut JSContext, atom: JSAtom) -> JSValue;
+    fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
     fn JS_SetModuleLoaderFunc(
         rt: *mut JSRuntime,
         module_normalize: Option<JSModuleNormalizeFunc>,
@@ -432,6 +467,10 @@ impl Value {
 
     pub fn is_bool(&self) -> bool {
         self.raw.tag == TAG_BOOL
+    }
+
+    pub fn same_object(&self, other: &Value) -> bool {
+        self.is_object() && other.is_object() && unsafe { self.raw.u.ptr == other.raw.u.ptr }
     }
 }
 
@@ -635,6 +674,58 @@ pub mod quickjs {
 
     pub fn raw_context(scope: &Scope<'_>) -> *mut JSContext {
         scope.ctx
+    }
+
+    #[derive(Clone, Copy)]
+    #[repr(C)]
+    pub enum BrandMode {
+        Throw,
+        Reject,
+        Ignore,
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    unsafe extern "C" {
+        fn JS_NewCFunctionBrand(
+            ctx: *mut JSContext,
+            class_ids: *const u32,
+            count: core::ffi::c_int,
+        ) -> core::ffi::c_int;
+        fn JS_SetCFunctionBrand(
+            ctx: *mut JSContext,
+            func: JSValue,
+            brand: core::ffi::c_int,
+            mode: BrandMode,
+        );
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    pub fn new_function_brand(scope: &mut Scope<'_>, class_ids: &[u32]) -> i32 {
+        unsafe { JS_NewCFunctionBrand(scope.ctx, class_ids.as_ptr(), class_ids.len() as _) }
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    pub fn set_function_brand(
+        scope: &mut Scope<'_>,
+        function: &Value,
+        brand: i32,
+        mode: BrandMode,
+    ) {
+        unsafe { JS_SetCFunctionBrand(scope.ctx, function.raw, brand, mode) };
+    }
+
+    #[cfg(feature = "quickjs-original")]
+    pub fn new_function_brand(_scope: &mut Scope<'_>, _class_ids: &[u32]) -> i32 {
+        0
+    }
+
+    #[cfg(feature = "quickjs-original")]
+    pub fn set_function_brand(
+        _scope: &mut Scope<'_>,
+        _function: &Value,
+        _brand: i32,
+        _mode: BrandMode,
+    ) {
     }
 }
 
@@ -1085,6 +1176,60 @@ impl Scope<'_> {
 
     pub fn gc(&mut self) {
         unsafe { JS_RunGC(self.rt()) };
+    }
+
+    pub fn own_property_keys(
+        &mut self,
+        object: &Value,
+        symbols: bool,
+    ) -> Result<Vec<Value>, Value> {
+        let mut tab: *mut JSPropertyEnum = ptr::null_mut();
+        let mut len = 0u32;
+        let flags = GPN_STRING_MASK | if symbols { GPN_SYMBOL_MASK } else { 0 };
+        let status =
+            unsafe { JS_GetOwnPropertyNames(self.ctx, &mut tab, &mut len, object.raw, flags) };
+        self.status(status)?;
+        let entries = if tab.is_null() {
+            &[][..]
+        } else {
+            unsafe { core::slice::from_raw_parts(tab, len as usize) }
+        };
+        let keys = entries
+            .iter()
+            .map(|entry| Value::own(self.ctx, unsafe { JS_AtomToValue(self.ctx, entry.atom) }))
+            .collect();
+        unsafe { JS_FreePropertyEnum(self.ctx, tab, len) };
+        Ok(keys)
+    }
+
+    pub fn own_property(
+        &mut self,
+        object: &Value,
+        key: &Value,
+    ) -> Result<Option<PropertyDescriptor>, Value> {
+        let atom = unsafe { JS_ValueToAtom(self.ctx, key.raw) };
+        if atom == ATOM_NULL {
+            return Err(self.exception());
+        }
+        let mut desc = JSPropertyDescriptor {
+            flags: 0,
+            value: UNDEFINED,
+            getter: UNDEFINED,
+            setter: UNDEFINED,
+        };
+        let status = unsafe { JS_GetOwnProperty(self.ctx, &mut desc, object.raw, atom) };
+        unsafe { JS_FreeAtom(self.ctx, atom) };
+        self.status(status)?;
+        Ok((status > 0).then(|| PropertyDescriptor {
+            value: Value::own(self.ctx, desc.value),
+            getter: Value::own(self.ctx, desc.getter),
+            setter: Value::own(self.ctx, desc.setter),
+        }))
+    }
+
+    pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_GetPrototype(self.ctx, object.raw) };
+        self.take(raw)
     }
 
     pub fn is_function(&mut self, value: &Value) -> bool {

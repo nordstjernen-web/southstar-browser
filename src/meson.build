@@ -45,7 +45,6 @@ southstar_engine_sources = files(
 
 southstar_engine_sources += files(
   'js.c',
-  'js_brand.c',
   'js_canvas.c',
   'js_canvas_api.c',
   'js_perf.c',

@@ -42,6 +42,7 @@ const PORTED: &[&str] = &[
     "image_ico.c",
     "image_webp.c",
     "ipc_http.c",
+    "js_brand.c",
     "js_date.c",
     "js_intl.c",
     "js_realm.c",

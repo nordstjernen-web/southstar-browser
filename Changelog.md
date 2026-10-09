@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The WebIDL brand checks on DOM interface members (calling a Node or
+  Element method on the wrong kind of object throws, rejects or is ignored
+  as the member requires) are applied from Rust, with identical results over
+  every member of every Node interface.
 * ShadowRealm is Rust, written on the engine-neutral JavaScript layer like
   Temporal and Intl, so it also runs on Boa. evaluate(), wrapped callables
   and importValue() behave as before on both QuickJS engines.
