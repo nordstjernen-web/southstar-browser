@@ -507,6 +507,14 @@ Southstar Browser (unreleased):
   their initial or inherited value, into the variable map its style
   carries. Maps come out identical (checked over 1.9 million generated
   cascades) and building one is about a fifth faster.
+* Unit resolution in computed styles is Rust: the element's font size in
+  px (em, rem, %, lh, font-relative, viewport and container units and
+  calc()), then em, rem, ex, ch, cap, ic, viewport units and
+  line-height percentages resolved across lengths, calc() values,
+  shadows, grid tracks, transforms and two-value sizes, with infinite
+  or NaN calc() results clamped and shared values copied before they
+  change. Values come out identical (checked over 58 million generated
+  property values) and slightly faster.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

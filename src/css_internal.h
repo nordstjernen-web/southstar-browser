@@ -69,6 +69,9 @@ gboolean ns_css_restyle_prepare(const ns_css_stylesheet *ua,
                                 gsize n_author, guint64 sig);
 gboolean ns_css_restyle_dirty(const ns_node *node);
 void ns_css_restyle_dirty_clear(void);
+ns_css_value *ns_css_value_cow(ns_style *out, int prop);
+void ns_css_resolve_em_units(ns_style *out, const ns_style *parent_style,
+                             double root_px);
 struct ns_var_map *ns_css_build_vars(struct ns_var_map *parent,
                                      GArray *var_matches,
                                      GHashTable *registered,

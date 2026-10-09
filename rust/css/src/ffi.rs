@@ -5,6 +5,7 @@
 mod animation;
 mod attr_fn;
 mod border_image;
+mod computed_units;
 mod container;
 mod custom_props;
 mod declarations;
@@ -38,12 +39,14 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::{calc, color, math, units};
 
+pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, ParentStyle, Slot, SlotMut};
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
     regex_matches_whole, unichar_is_alpha, unichar_is_rtl_script, url_is_valid_absolute,
     url_resolve,
 };
+pub(crate) use font::relative_unit_px as font_relative_px;
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
@@ -57,6 +60,7 @@ pub(crate) use selector_view::{
 pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
+pub(crate) use value::RawCalc;
 
 const COLOR_SCHEME_DARK: c_int = 1;
 
