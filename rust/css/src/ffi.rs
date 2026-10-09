@@ -30,6 +30,7 @@ mod selector;
 mod selector_view;
 mod sheet;
 mod shorthand;
+mod style_query;
 mod supports;
 mod transform;
 mod value;

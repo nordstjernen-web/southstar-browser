@@ -105,31 +105,6 @@ ns_css_set_frame_viewport_cb(void (*cb)(const ns_node *frame,
 }
 
 
-int
-ns_css_writing_mode(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_WRITING_MODE] : NULL;
-    if (!v || v->kind != NS_CSS_V_KEYWORD || !v->u.keyword) return 0;
-    const char *k = v->u.keyword;
-    if (strcmp(k, "vertical-rl") == 0 || strcmp(k, "sideways-rl") == 0 ||
-        strcmp(k, "tb-rl") == 0 || strcmp(k, "tb") == 0)
-        return 1;
-    if (strcmp(k, "vertical-lr") == 0 || strcmp(k, "sideways-lr") == 0)
-        return 2;
-    return 0;
-}
-
-int
-ns_css_text_orientation(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_TEXT_ORIENTATION] : NULL;
-    if (!v || v->kind != NS_CSS_V_KEYWORD || !v->u.keyword) return 0;
-    const char *k = v->u.keyword;
-    if (strcmp(k, "upright") == 0) return 1;
-    if (strcmp(k, "sideways") == 0 || strcmp(k, "sideways-right") == 0) return 2;
-    return 0;
-}
-
 static gboolean
 is_ws(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
 
@@ -202,125 +177,6 @@ ns_css_value_free(ns_css_value *v)
     }
 }
 
-int
-ns_css_value_layer_count(const ns_css_value *head)
-{
-    int n = 0;
-    for (const ns_css_value *l = head; l; l = l->next_layer) n++;
-    return n;
-}
-
-const ns_css_value *
-ns_css_value_layer(const ns_css_value *head, int index)
-{
-    int n = ns_css_value_layer_count(head);
-    if (n == 0) return NULL;
-    index %= n;
-    const ns_css_value *l = head;
-    while (index-- > 0) l = l->next_layer;
-    return l;
-}
-
-
-static double
-column_len_px(const ns_css_value *v, double basis, double fallback)
-{
-    if (!v) return fallback;
-    if (ns_css_calc_is_math_fn(v))
-        return ns_css_calc_math_fn_px(v, basis);
-    if (v->kind == NS_CSS_V_CALC)
-        return v->u.calc.pct / 100.0 * basis + v->u.calc.px;
-    if (v->kind != NS_CSS_V_LENGTH) return fallback;
-    switch (v->u.length.unit) {
-    case NS_CSS_UNIT_PX:
-    case NS_CSS_UNIT_NUMBER: return v->u.length.v;
-    case NS_CSS_UNIT_EM:
-    case NS_CSS_UNIT_REM:    return v->u.length.v * 16.0;
-    case NS_CSS_UNIT_PERCENT: return v->u.length.v * basis / 100.0;
-    case NS_CSS_UNIT_VW:     return v->u.length.v * ns_css_viewport_w() / 100.0;
-    case NS_CSS_UNIT_VH:     return v->u.length.v * ns_css_viewport_h() / 100.0;
-    default:                 return fallback;
-    }
-}
-
-double
-ns_css_dimension_px(const ns_css_value *v, double font_size, double basis)
-{
-    if (!v) return 0;
-    if (ns_css_calc_is_math_fn(v) && basis > 0) {
-        double out = ns_css_calc_math_fn_px(v, basis);
-        return out > 0 ? out : 0;
-    }
-    if (v->kind == NS_CSS_V_CALC) {
-        double out = v->u.calc.px;
-        if (basis > 0) out += v->u.calc.pct * basis / 100.0;
-        return out > 0 ? out : 0;
-    }
-    if (v->kind != NS_CSS_V_LENGTH) return 0;
-    double n = v->u.length.v;
-    ns_css_unit unit = v->u.length.unit;
-    switch (unit) {
-    case NS_CSS_UNIT_PX:
-    case NS_CSS_UNIT_NUMBER: return n;
-    case NS_CSS_UNIT_EM:     return n * font_size;
-    case NS_CSS_UNIT_REM:    return n * 16.0;
-    case NS_CSS_UNIT_PERCENT: return basis > 0 ? n * basis / 100.0 : 0;
-    case NS_CSS_UNIT_EX:
-    case NS_CSS_UNIT_CH:
-    case NS_CSS_UNIT_CAP:
-    case NS_CSS_UNIT_IC:
-        return n * ns_css_font_relative_unit_px(unit, font_size, NULL, 400, FALSE);
-    case NS_CSS_UNIT_LH:     return n * font_size * 1.5;
-    case NS_CSS_UNIT_RLH:    return n * 24.0;
-    case NS_CSS_UNIT_REX:
-    case NS_CSS_UNIT_RCH:    return n * 8.0;
-    case NS_CSS_UNIT_RCAP:   return n * 11.2;
-    case NS_CSS_UNIT_RIC:    return n * 16.0;
-    default: {
-        double r = ns_css_container_unit_resolve(n, unit);
-        if (r != 0) return r;
-        return ns_css_viewport_resolve(n, unit);
-    }
-    }
-}
-
-int
-ns_css_used_column_count(const ns_style *s, double avail_w, double *out_gap)
-{
-    double gap = 16.0;
-    if (s) {
-        const ns_css_value *cg = s->values[NS_CSS_COLUMN_GAP];
-        if (!cg || cg->kind != NS_CSS_V_LENGTH)
-            cg = s->values[NS_CSS_GAP];
-        if (cg) {
-            double g = column_len_px(cg, avail_w, -1);
-            if (g >= 0) gap = g;
-        }
-    }
-    if (out_gap) *out_gap = gap;
-    int n = 1;
-    if (s && s->values[NS_CSS_COLUMN_COUNT] &&
-        s->values[NS_CSS_COLUMN_COUNT]->kind == NS_CSS_V_LENGTH) {
-        double v = s->values[NS_CSS_COLUMN_COUNT]->u.length.v;
-        if (v >= 2) n = (int)(v + 0.5);
-    }
-    if (n == 1 && s && s->values[NS_CSS_COLUMN_WIDTH] &&
-        s->values[NS_CSS_COLUMN_WIDTH]->kind == NS_CSS_V_LENGTH) {
-        double colw = column_len_px(s->values[NS_CSS_COLUMN_WIDTH], avail_w, 0);
-        if (colw > 1 && avail_w > colw + gap) {
-            int fit = (int)((avail_w + gap) / (colw + gap));
-            if (fit > 1) n = fit;
-        }
-    }
-    return n;
-}
-
-gboolean
-ns_css_keyword_is(const ns_css_value *v, const char *kw)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && kw &&
-           v->u.keyword && strcmp(v->u.keyword, kw) == 0;
-}
 
 typedef struct ns_css_scope {
     GPtrArray *roots;
@@ -336,39 +192,8 @@ typedef struct ns_css_scope {
 
 
 
-void
-ns_css_style_effective_transform(const ns_style *st,
-                                 const ns_css_transform *transform_override,
-                                 ns_css_transform *out)
-{
-    memset(out, 0, sizeof(*out));
-    static const ns_css_prop independent[3] = {
-        NS_CSS_TRANSLATE, NS_CSS_ROTATE, NS_CSS_SCALE,
-    };
-    for (int i = 0; i < 3; i++) {
-        const ns_css_value *v = st ? st->values[independent[i]] : NULL;
-        if (v && v->kind == NS_CSS_V_TRANSFORM && v->u.transform.n_ops > 0 &&
-            out->n_ops < NS_CSS_TRANSFORM_OPS_MAX)
-            out->ops[out->n_ops++] = v->u.transform.ops[0];
-    }
-    const ns_css_transform *tf = transform_override;
-    if (!tf && st && st->values[NS_CSS_TRANSFORM] &&
-        st->values[NS_CSS_TRANSFORM]->kind == NS_CSS_V_TRANSFORM)
-        tf = &st->values[NS_CSS_TRANSFORM]->u.transform;
-    if (tf)
-        for (int i = 0; i < tf->n_ops && out->n_ops < NS_CSS_TRANSFORM_OPS_MAX; i++)
-            out->ops[out->n_ops++] = tf->ops[i];
-}
 
 
-
-
-ns_display
-ns_css_display_of(const ns_style *s)
-{
-    ns_display d = { 0 };
-    return s ? s->display : d;
-}
 
 
 
@@ -380,32 +205,6 @@ keyword_value_dup(const char *canonical)
     v->kind = NS_CSS_V_KEYWORD;
     v->u.keyword = g_strdup(canonical);
     return v;
-}
-
-const char *
-ns_css_alignment_base(const char *kw)
-{
-    if (!kw) return NULL;
-    if (g_str_has_prefix(kw, "safe ")) return kw + 5;
-    if (g_str_has_prefix(kw, "unsafe ")) return kw + 7;
-    if (g_str_has_prefix(kw, "legacy ")) return kw + 7;
-    return kw;
-}
-
-static gboolean
-prop_is_alignment(ns_css_prop p)
-{
-    return p == NS_CSS_JUSTIFY_CONTENT || p == NS_CSS_ALIGN_ITEMS ||
-           p == NS_CSS_ALIGN_SELF || p == NS_CSS_ALIGN_CONTENT ||
-           p == NS_CSS_JUSTIFY_ITEMS || p == NS_CSS_JUSTIFY_SELF;
-}
-
-const ns_css_value *
-ns_css_border_image_source(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_BORDER_IMAGE_SOURCE] : NULL;
-    return v && (v->kind == NS_CSS_V_URL || v->kind == NS_CSS_V_GRADIENT)
-        ? v : NULL;
 }
 
 typedef enum ns_custom_prop_wide {
@@ -770,60 +569,7 @@ ns_style_free(ns_style *s)
         g_free(s);
 }
 
-const char *
-ns_style_keyword(const ns_style *s, ns_css_prop p)
-{
-    if (!s) return NULL;
-    ns_css_value *v = s->values[p];
-    if (!v || v->kind != NS_CSS_V_KEYWORD) return NULL;
-    return prop_is_alignment(p) ? ns_css_alignment_base(v->u.keyword)
-                                : v->u.keyword;
-}
-
-const char *
-ns_style_overflow_keyword(const ns_style *s, ns_css_prop axis)
-{
-    const char *value = ns_style_keyword(s, axis);
-    if (!value) value = ns_style_keyword(s, NS_CSS_OVERFLOW);
-    if (!value) value = "visible";
-    ns_css_prop other_axis = axis == NS_CSS_OVERFLOW_X
-        ? NS_CSS_OVERFLOW_Y : NS_CSS_OVERFLOW_X;
-    const char *other = ns_style_keyword(s, other_axis);
-    if (!other) other = ns_style_keyword(s, NS_CSS_OVERFLOW);
-    if (!other) other = "visible";
-    gboolean other_scrollable =
-        g_ascii_strcasecmp(other, "visible") != 0 &&
-        g_ascii_strcasecmp(other, "clip") != 0;
-    if (other_scrollable && g_ascii_strcasecmp(value, "visible") == 0)
-        return "auto";
-    if (other_scrollable && g_ascii_strcasecmp(value, "clip") == 0)
-        return "hidden";
-    return value;
-}
-
 static GHashTable *g_incr_exclude;
-
-gboolean
-ns_style_prop_from_currentcolor(const ns_style *s, int prop)
-{
-    static const int color_props[] = {
-        NS_CSS_BACKGROUND_COLOR,
-        NS_CSS_BORDER_TOP_COLOR, NS_CSS_BORDER_RIGHT_COLOR,
-        NS_CSS_BORDER_BOTTOM_COLOR, NS_CSS_BORDER_LEFT_COLOR,
-        NS_CSS_OUTLINE_COLOR,
-        NS_CSS_TEXT_DECORATION_COLOR,
-        NS_CSS_COLUMN_RULE_COLOR,
-        NS_CSS_ACCENT_COLOR,
-        NS_CSS_CARET_COLOR,
-        NS_CSS_FILL,
-        NS_CSS_STROKE,
-        NS_CSS_STOP_COLOR,
-    };
-    if (!s) return FALSE;
-    for (gsize i = 0; i < G_N_ELEMENTS(color_props); i++)
-        if (color_props[i] == prop) return (s->currentcolor_bits >> i) & 1u;
-    return FALSE;
-}
 
 void
 ns_css_incremental_exclude(const void *node, gboolean exclude)

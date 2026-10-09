@@ -74,7 +74,7 @@ pub(crate) enum SlotMut<'a> {
     Other,
 }
 
-fn slot(v: &NsCssValue) -> Slot<'_> {
+pub(super) fn slot(v: &NsCssValue) -> Slot<'_> {
     unsafe {
         match v.kind {
             KIND_KEYWORD => {

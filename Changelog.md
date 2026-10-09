@@ -555,6 +555,15 @@ Southstar Browser (unreleased):
   longhands as matched declarations, or set to unset when it cannot
   stand. The matched declarations are identical (checked over 320,000
   generated elements, 4.5 million declarations).
+* The questions layout, paint and script ask of a computed style are
+  answered in Rust: writing mode and text orientation, lengths in px
+  (with font-relative, root, viewport and container units and math
+  functions), the used column count and gap, keyword tests, background
+  layers, the effective transform with translate/rotate/scale folded
+  in, alignment keywords without safe/unsafe/legacy, the overflow
+  keyword an axis is used with, the border-image source and which
+  colors came from currentcolor. The answers are identical (checked
+  with 172 million generated queries).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

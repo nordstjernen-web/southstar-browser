@@ -5,10 +5,27 @@
 use core::cmp::Ordering;
 
 use crate::display::{self, Display};
+use crate::prop::Prop;
 
 const ORIGIN_PRESENTATIONAL: i32 = 1;
 const ORIGIN_AUTHOR: i32 = 2;
 const LAYER_NONE: i32 = i32::MAX;
+
+pub(crate) const CURRENTCOLOR_PROPS: [Prop; 13] = [
+    Prop::BackgroundColor,
+    Prop::BorderTopColor,
+    Prop::BorderRightColor,
+    Prop::BorderBottomColor,
+    Prop::BorderLeftColor,
+    Prop::OutlineColor,
+    Prop::TextDecorationColor,
+    Prop::ColumnRuleColor,
+    Prop::AccentColor,
+    Prop::CaretColor,
+    Prop::Fill,
+    Prop::Stroke,
+    Prop::StopColor,
+];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Revert {

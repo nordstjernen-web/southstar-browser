@@ -15,7 +15,7 @@ use super::property::to_c;
 use super::value::{
     KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, alloc, new_keyword,
 };
-use crate::cascade::{self, DisplayContext, Entry, OverflowFix, Revert};
+use crate::cascade::{self, CURRENTCOLOR_PROPS, DisplayContext, Entry, OverflowFix, Revert};
 use crate::computed_units;
 use crate::display::{self, Display};
 use crate::font;
@@ -43,22 +43,6 @@ pub(super) struct RawMatch {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<RawMatch>() == 72);
-
-const CURRENTCOLOR_PROPS: [Prop; 13] = [
-    Prop::BackgroundColor,
-    Prop::BorderTopColor,
-    Prop::BorderRightColor,
-    Prop::BorderBottomColor,
-    Prop::BorderLeftColor,
-    Prop::OutlineColor,
-    Prop::TextDecorationColor,
-    Prop::ColumnRuleColor,
-    Prop::AccentColor,
-    Prop::CaretColor,
-    Prop::Fill,
-    Prop::Stroke,
-    Prop::StopColor,
-];
 
 unsafe extern "C" {
     fn ns_css_value_free(v: *mut NsCssValue);
