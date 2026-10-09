@@ -39,6 +39,27 @@ pub(super) unsafe fn map_ref(map: *mut RawVarMap) -> *mut RawVarMap {
     map
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_var_map_unref(mut map: *mut RawVarMap) {
+    while let Some(m) = unsafe { map.as_mut() } {
+        m.ref_count -= 1;
+        if m.ref_count > 0 {
+            return;
+        }
+        let parent = m.parent;
+        unsafe {
+            if !m.own.is_null() {
+                glib::g_hash_table_destroy(m.own);
+            }
+            if !m.names.is_null() {
+                glib::g_ptr_array_unref(m.names);
+            }
+            glib::g_free(map.cast());
+        }
+        map = parent;
+    }
+}
+
 unsafe extern "C" {
     fn g_ptr_array_ref(array: *mut GPtrArray) -> *mut GPtrArray;
     fn g_ptr_array_sort(

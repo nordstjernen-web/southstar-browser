@@ -80,6 +80,9 @@ GHashTable *ns_css_registered_props_begin(const ns_css_stylesheet *ua,
                                           gsize n_author);
 GHashTable *ns_css_registered_props(void);
 void ns_css_registered_props_end(void);
+ns_style *ns_style_alloc(void);
+ns_style *ns_style_clone_shared(const ns_style *s);
+void ns_var_map_unref(struct ns_var_map *m);
 void ns_css_style_share_begin(void);
 void ns_css_style_share_end(void);
 gboolean ns_css_style_share_find(const ns_style *parent, double root_px,

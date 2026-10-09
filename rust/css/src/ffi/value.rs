@@ -321,3 +321,46 @@ pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
     unsafe { (*value).kind = kind };
     value
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_value_dup(v: *const NsCssValue) -> *mut NsCssValue {
+    let v = v.cast_mut();
+    if let Some(value) = unsafe { v.as_mut() } {
+        value.ref_count += 1;
+    }
+    v
+}
+
+unsafe fn free_payload(value: &mut NsCssValue) {
+    unsafe {
+        match value.kind {
+            KIND_KEYWORD => glib::g_free(value.u.keyword.cast()),
+            KIND_URL => glib::g_free(value.u.url.cast()),
+            KIND_AREAS => {
+                let areas = &value.u.areas;
+                let n = usize::try_from(areas.n_rects).unwrap_or(0).min(AREAS_MAX);
+                for rect in &areas.rects[..n] {
+                    glib::g_free(rect.name.cast());
+                }
+            }
+            KIND_ANIM => value.u.anim.free_names(),
+            _ => {}
+        }
+        glib::g_free(value.image_set_text.cast());
+        glib::g_free(value.specified.cast());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_value_free(mut v: *mut NsCssValue) {
+    while let Some(value) = unsafe { v.as_mut() } {
+        if value.ref_count > 0 {
+            value.ref_count -= 1;
+            return;
+        }
+        unsafe { free_payload(value) };
+        let next = value.next_layer;
+        unsafe { glib::g_free(v.cast()) };
+        v = next;
+    }
+}

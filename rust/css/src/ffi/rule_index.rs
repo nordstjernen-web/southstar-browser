@@ -97,6 +97,23 @@ unsafe fn selector_slice<'a>(rule: &RawRule) -> &'a [*mut c_void] {
     }
 }
 
+pub(super) unsafe fn index_free(idx: *mut RawIndex) {
+    let Some(index) = (unsafe { idx.as_ref() }) else {
+        return;
+    };
+    unsafe {
+        for table in [index.by_id, index.by_class, index.by_tag, index.by_attr] {
+            if !table.is_null() {
+                glib::g_hash_table_destroy(table);
+            }
+        }
+        if !index.universal.is_null() {
+            g_array_free(index.universal, glib::TRUE);
+        }
+        glib::g_free(idx.cast());
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_rule_index_build(sheet: *mut c_void) -> *mut c_void {
     let Some(sheet) = (unsafe { sheet.cast::<RawSheet>().as_mut() }) else {

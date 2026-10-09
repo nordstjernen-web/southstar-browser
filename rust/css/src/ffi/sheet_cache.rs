@@ -10,7 +10,9 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 
-use super::sheet::{RawSheet, ns_css_stylesheet_force_layer, ns_css_stylesheet_parse};
+use super::sheet::{
+    RawSheet, ns_css_stylesheet_force_layer, ns_css_stylesheet_free, ns_css_stylesheet_parse,
+};
 use crate::style_text;
 
 const STYLE_ELEMENTS_MAX: usize = 2048;
@@ -19,7 +21,6 @@ const MERGED_TRIM_TO: usize = 48;
 const URL_SHEETS_MAX: usize = 256;
 
 unsafe extern "C" {
-    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
     fn ns_css_media_viewport_current_w() -> f64;
     fn ns_css_media_viewport_current_h() -> f64;
     fn g_bytes_ref(bytes: *mut c_void) -> *mut c_void;

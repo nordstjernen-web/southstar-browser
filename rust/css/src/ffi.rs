@@ -34,6 +34,7 @@ mod selector_view;
 mod sheet;
 mod sheet_cache;
 mod shorthand;
+mod style_alloc;
 mod style_query;
 mod style_share;
 mod supports;

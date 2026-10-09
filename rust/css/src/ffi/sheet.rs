@@ -11,9 +11,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::declarations::{RawPending, RawRule, RuleSink};
+use super::rule_index::index_free;
 use super::selector::{group_to_c, selector_to_c};
 use super::shorthand::RawDecl;
-use super::value::{KIND_URL, NsCssValue};
+use super::value::{KIND_URL, NsCssValue, ns_css_value_free};
 use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
@@ -196,7 +197,6 @@ unsafe extern "C" {
         compare: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
     );
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
-    fn ns_css_value_free(v: *mut NsCssValue);
     fn ns_css_container_query_free(query: *mut c_void);
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);
@@ -835,6 +835,63 @@ pub unsafe extern "C" fn ns_css_stylesheet_resolve_urls(
         }
         unsafe { glib::g_free(face.src_url.cast()) };
         face.src_url = resolved;
+    }
+}
+
+fn flag(sheet: *const RawSheet, read: fn(&RawSheet) -> GBoolean) -> GBoolean {
+    unsafe { sheet.as_ref() }.map_or(glib::FALSE, |sheet| glib::boolean(read(sheet) != 0))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_stylesheet_has_container_rules(sheet: *const RawSheet) -> GBoolean {
+    flag(sheet, |s| s.has_container_rules)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_stylesheet_has_container_units(sheet: *const RawSheet) -> GBoolean {
+    flag(sheet, |s| s.has_container_units)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_stylesheet_has_hover_rules(sheet: *const RawSheet) -> GBoolean {
+    flag(sheet, |s| s.has_hover_rules)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_stylesheet_has_active_rules(sheet: *const RawSheet) -> GBoolean {
+    flag(sheet, |s| s.has_active_rules)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_stylesheet_free(s: *mut RawSheet) {
+    let Some(sheet) = (unsafe { s.as_ref() }) else {
+        return;
+    };
+    if sheet.cached != 0 {
+        return;
+    }
+    unsafe {
+        if !sheet.rules.is_null() {
+            glib::g_ptr_array_free(sheet.rules, glib::TRUE);
+        }
+        if !sheet.imports.is_null() {
+            g_array_free(sheet.imports, glib::TRUE);
+        }
+        if !sheet.layers.is_null() {
+            glib::g_hash_table_destroy(sheet.layers);
+        }
+        if !sheet.layer_names.is_null() {
+            glib::g_ptr_array_free(sheet.layer_names, glib::TRUE);
+        }
+        for array in [sheet.font_faces, sheet.keyframes, sheet.property_rules] {
+            if !array.is_null() {
+                g_array_free(array, glib::TRUE);
+            }
+        }
+        glib::g_free(sheet.page_rule.cast());
+        glib::g_free(sheet.resolved_base.cast());
+        index_free(sheet.index.cast());
+        glib::g_free(s.cast());
     }
 }
 

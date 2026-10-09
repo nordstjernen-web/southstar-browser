@@ -599,6 +599,10 @@ Southstar Browser (unreleased):
   properties is Rust, with the transform a stop's resolved translate,
   rotate, scale and transform declarations give it; the per-pass table of
   registered properties now lives on the Rust side too.
+* The lifetimes of the style engine's C structs are Rust: duplicating
+  and freeing values, releasing variable maps, the pool computed styles
+  come from with freeing and sharing them, and freeing style sheets with
+  their rule indexes.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

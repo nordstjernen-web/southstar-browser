@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::ffi::{CStr, c_char, c_double, c_int};
 use core::mem::{offset_of, size_of};
 use core::ptr;
 
@@ -29,9 +29,9 @@ pub(crate) struct RawStyle {
     pub(super) values: [*mut NsCssValue; PROP_COUNT],
     pub(super) display: Display,
     pub(super) specified_inline: u8,
-    _pseudo_styles: [*mut c_void; 11],
+    pub(super) pseudo_styles: [*mut RawStyle; 11],
     pub(super) share_id: u64,
-    _ref_count: c_int,
+    pub(super) ref_count: c_int,
     pub(super) currentcolor_bits: u32,
     pub(super) vars: *mut RawVarMap,
 }
@@ -39,7 +39,7 @@ pub(crate) struct RawStyle {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
     size_of::<RawStyle>() == 2056
-        && offset_of!(RawStyle, _pseudo_styles) == 1944
+        && offset_of!(RawStyle, pseudo_styles) == 1944
         && offset_of!(RawStyle, share_id) == 2032
         && offset_of!(RawStyle, vars) == 2048
 );

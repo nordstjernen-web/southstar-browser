@@ -41,6 +41,15 @@ pub(crate) struct RawList {
     entries: [RawEntry; ENTRIES_MAX],
 }
 
+impl RawList {
+    pub(super) fn free_names(&mut self) {
+        let n = usize::try_from(self.n).unwrap_or(0).min(ENTRIES_MAX);
+        for entry in &mut self.entries[..n] {
+            unsafe { glib::g_free(entry.name.cast()) };
+        }
+    }
+}
+
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
     core::mem::size_of::<RawEntry>() == 120

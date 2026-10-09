@@ -23,7 +23,7 @@ use super::pending::RawPendingMatch;
 use super::rule_index::{Candidate, RawIndex, ns_css_rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
-use super::sheet::{RawSheet, ns_css_stylesheet_parse};
+use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
 use super::shorthand::RawDecl;
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
 use crate::hints;
@@ -36,10 +36,6 @@ const DECL_SHEETS_MAX: usize = 8192;
 const ORIGIN_PRESENTATIONAL: c_int = 1;
 const ORIGIN_AUTHOR: c_int = 2;
 const INLINE_SPECIFICITY: (c_int, c_int, c_int) = (1000, 0, 0);
-
-unsafe extern "C" {
-    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-}
 
 #[repr(C)]
 pub(super) struct RawDest {

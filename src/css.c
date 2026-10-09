@@ -77,44 +77,6 @@ ns_css_append_unescaped(GString *out, const char **pp)
     *pp = p;
 }
 
-ns_css_value *
-ns_css_value_dup(const ns_css_value *v)
-{
-    if (!v) return NULL;
-    ((ns_css_value *)v)->ref++;
-    return (ns_css_value *)v;
-}
-
-void
-ns_css_value_free(ns_css_value *v)
-{
-    while (v) {
-        if (v->ref > 0) { v->ref--; return; }
-        if (v->kind == NS_CSS_V_KEYWORD) g_free(v->u.keyword);
-        else if (v->kind == NS_CSS_V_URL) g_free(v->u.url);
-        else if (v->kind == NS_CSS_V_AREAS) {
-            for (int i = 0; i < v->u.areas.n_rects; i++)
-                g_free(v->u.areas.rects[i].name);
-        }
-        else if (v->kind == NS_CSS_V_ANIM) {
-            for (int i = 0; i < v->u.anim.n; i++)
-                g_free(v->u.anim.entries[i].name);
-        }
-        g_free(v->image_set_text);
-        g_free(v->specified);
-        ns_css_value *next = v->next_layer;
-        g_free(v);
-        v = next;
-    }
-}
-
-typedef struct ns_css_scope {
-    GPtrArray *roots;
-    GPtrArray *limits;
-} ns_css_scope;
-
-#define NS_CSS_MAX_AT_NESTING 32
-
 static ns_css_value *
 keyword_value_dup(const char *canonical)
 {
@@ -122,46 +84,6 @@ keyword_value_dup(const char *canonical)
     v->kind = NS_CSS_V_KEYWORD;
     v->u.keyword = g_strdup(canonical);
     return v;
-}
-
-typedef enum ns_custom_prop_wide {
-    NS_CUSTOM_WIDE_NONE,
-    NS_CUSTOM_WIDE_INHERIT,
-    NS_CUSTOM_WIDE_INITIAL,
-    NS_CUSTOM_WIDE_UNSET,
-    NS_CUSTOM_WIDE_REVERT,
-    NS_CUSTOM_WIDE_REVERT_LAYER,
-    NS_CUSTOM_WIDE_REVERT_RULE,
-} ns_custom_prop_wide;
-
-typedef struct ns_var_map {
-    int ref;
-    GHashTable *own;
-    struct ns_var_map *parent;
-    GPtrArray *names;
-} ns_var_map;
-
-#if GLIB_SIZEOF_VOID_P == 8
-G_STATIC_ASSERT(sizeof(ns_var_map) == 32);
-#endif
-
-static ns_var_map *
-ns_var_map_ref(ns_var_map *m)
-{
-    if (m) m->ref++;
-    return m;
-}
-
-static void
-ns_var_map_unref(ns_var_map *m)
-{
-    while (m && --m->ref <= 0) {
-        ns_var_map *parent = m->parent;
-        if (m->own) g_hash_table_destroy(m->own);
-        if (m->names) g_ptr_array_unref(m->names);
-        g_free(m);
-        m = parent;
-    }
 }
 
 static ns_css_color_scheme g_color_scheme = NS_CSS_COLOR_SCHEME_LIGHT;
@@ -200,125 +122,6 @@ ns_css_get_color_scheme(void)
 }
 
 static __thread GHashTable *g_var_adjust_cache;
-
-typedef struct css_candidate {
-    guint rule_idx;
-    guint selector_idx;
-} css_candidate;
-
-typedef struct ns_css_rule_index {
-    GHashTable *by_id;
-    GHashTable *by_class;
-    GHashTable *by_tag;
-    GHashTable *by_attr;
-    GArray     *universal;
-} ns_css_rule_index;
-
-#if GLIB_SIZEOF_VOID_P == 8
-G_STATIC_ASSERT(sizeof(ns_css_rule_index) == 40 && sizeof(css_candidate) == 8);
-#endif
-
-static void ns_css_rule_index_free(ns_css_rule_index *idx);
-
-gboolean
-ns_css_stylesheet_has_container_rules(const ns_css_stylesheet *sh)
-{
-    return sh && sh->has_container_rules;
-}
-
-gboolean
-ns_css_stylesheet_has_container_units(const ns_css_stylesheet *sh)
-{
-    return sh && sh->has_container_units;
-}
-
-gboolean
-ns_css_stylesheet_has_hover_rules(const ns_css_stylesheet *sh)
-{
-    return sh && sh->has_hover_rules;
-}
-
-gboolean
-ns_css_stylesheet_has_active_rules(const ns_css_stylesheet *sh)
-{
-    return sh && sh->has_active_rules;
-}
-
-void
-ns_css_stylesheet_free(ns_css_stylesheet *s)
-{
-    if (!s || s->cached) return;
-    if (s->rules) g_ptr_array_free(s->rules, TRUE);
-    if (s->imports) g_array_free(s->imports, TRUE);
-    if (s->layers) g_hash_table_destroy(s->layers);
-    if (s->layer_names) g_ptr_array_free(s->layer_names, TRUE);
-    if (s->font_faces) g_array_free(s->font_faces, TRUE);
-    if (s->keyframes) g_array_free(s->keyframes, TRUE);
-    if (s->property_rules) g_array_free(s->property_rules, TRUE);
-    g_clear_pointer(&s->page_rule, g_free);
-    g_clear_pointer(&s->resolved_base, g_free);
-    if (s->index) ns_css_rule_index_free(s->index);
-    s->rules = NULL;
-    s->imports = NULL;
-    s->layers = NULL;
-    s->layer_names = NULL;
-    s->font_faces = NULL;
-    s->keyframes = NULL;
-    s->property_rules = NULL;
-    s->index = NULL;
-    g_free(s);
-}
-
-static void
-ns_css_rule_index_free(ns_css_rule_index *idx)
-{
-    if (!idx) return;
-    if (idx->by_id)    g_hash_table_destroy(idx->by_id);
-    if (idx->by_class) g_hash_table_destroy(idx->by_class);
-    if (idx->by_tag)   g_hash_table_destroy(idx->by_tag);
-    if (idx->by_attr)  g_hash_table_destroy(idx->by_attr);
-    if (idx->universal) g_array_free(idx->universal, TRUE);
-    g_free(idx);
-}
-
-static ns_style *g_style_pool[16384];
-static int g_style_pool_n;
-
-static ns_style *
-ns_style_alloc(void)
-{
-    if (g_style_pool_n > 0) {
-        ns_style *s = g_style_pool[--g_style_pool_n];
-        memset(s, 0, sizeof(*s));
-        return s;
-    }
-    return g_new0(ns_style, 1);
-}
-
-void
-ns_style_free(ns_style *s)
-{
-    if (!s) return;
-    if (s->ref > 0) { s->ref--; return; }
-    for (int i = 0; i < NS_CSS_PROP_COUNT; i++)
-        if (s->values[i]) ns_css_value_free(s->values[i]);
-    ns_style_free(s->before);
-    ns_style_free(s->after);
-    ns_style_free(s->first_letter);
-    ns_style_free(s->first_line);
-    ns_style_free(s->placeholder);
-    ns_style_free(s->selection);
-    ns_style_free(s->marker);
-    ns_style_free(s->backdrop);
-    ns_style_free(s->file_selector_button);
-    ns_style_free(s->hidden_before);
-    ns_style_free(s->hidden_after);
-    if (s->vars) ns_var_map_unref(s->vars);
-    if (g_style_pool_n < (int)G_N_ELEMENTS(g_style_pool))
-        g_style_pool[g_style_pool_n++] = s;
-    else
-        g_free(s);
-}
 
 static GHashTable *g_incr_exclude;
 
@@ -465,39 +268,6 @@ typedef struct {
     GArray *v;
     GArray *p;
 } ns_pe_gather;
-
-static ns_var_map *
-ns_style_vars_clone(ns_var_map *vars)
-{
-    return ns_var_map_ref(vars);
-}
-
-static ns_style *
-ns_style_clone_shared(const ns_style *s)
-{
-    if (!s) return NULL;
-    ns_style *c = ns_style_alloc();
-    c->share_id = s->share_id;
-    c->display  = s->display;
-    for (int i = 0; i < NS_CSS_PROP_COUNT; i++) {
-        c->values[i] = s->values[i];
-        if (c->values[i]) c->values[i]->ref++;
-    }
-    c->before       = ns_style_clone_shared(s->before);
-    c->after        = ns_style_clone_shared(s->after);
-    c->first_letter = ns_style_clone_shared(s->first_letter);
-    c->first_line   = ns_style_clone_shared(s->first_line);
-    c->placeholder  = ns_style_clone_shared(s->placeholder);
-    c->selection    = ns_style_clone_shared(s->selection);
-    c->marker       = ns_style_clone_shared(s->marker);
-    c->backdrop     = ns_style_clone_shared(s->backdrop);
-    c->file_selector_button = ns_style_clone_shared(
-        s->file_selector_button);
-    c->hidden_before = ns_style_clone_shared(s->hidden_before);
-    c->hidden_after  = ns_style_clone_shared(s->hidden_after);
-    c->vars = ns_style_vars_clone(s->vars);
-    return c;
-}
 
 static gboolean
 element_cannot_be_unboxed(const ns_node *el)

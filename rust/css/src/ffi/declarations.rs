@@ -11,7 +11,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::property::prop_of;
 use super::shorthand::{RawDecl, append_expanded};
-use super::value::NsCssValue;
+use super::value::ns_css_value_free;
 use crate::declarations::{self, Sink};
 
 #[repr(C)]
@@ -48,7 +48,6 @@ const _: () = assert!(
 unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_css_value_free(v: *mut NsCssValue);
     fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);

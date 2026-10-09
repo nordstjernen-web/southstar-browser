@@ -14,6 +14,7 @@ use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView, cow}
 use super::property::to_c;
 use super::value::{
     KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, alloc, new_keyword,
+    ns_css_value_free,
 };
 use crate::cascade::{self, CURRENTCOLOR_PROPS, DisplayContext, Entry, OverflowFix, Revert};
 use crate::computed_units;
@@ -43,10 +44,6 @@ pub(super) struct RawMatch {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<RawMatch>() == 72);
-
-unsafe extern "C" {
-    fn ns_css_value_free(v: *mut NsCssValue);
-}
 
 struct InitialValues(Vec<Option<*mut NsCssValue>>);
 

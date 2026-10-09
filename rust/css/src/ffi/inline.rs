@@ -10,15 +10,11 @@ use southstar_glib::{self as glib, GArray, GBoolean};
 
 use super::declarations::RawRule;
 use super::property::prop_of;
-use super::sheet::{RawSheet, ns_css_stylesheet_parse};
+use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
 use super::shorthand::RawDecl;
 use super::values::text_of;
 use crate::inline;
 use crate::prop::Prop;
-
-unsafe extern "C" {
-    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-}
 
 unsafe fn parse_sheet(text: &CStr) -> *mut RawSheet {
     unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) }.cast()
