@@ -14,7 +14,7 @@ use crate::vars::{self, Lookup};
 #[repr(C)]
 pub(super) struct RawVarMap {
     ref_count: c_int,
-    own: *mut GHashTable,
+    pub(super) own: *mut GHashTable,
     parent: *mut RawVarMap,
     names: *mut GPtrArray,
 }

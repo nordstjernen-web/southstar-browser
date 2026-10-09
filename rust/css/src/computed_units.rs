@@ -24,10 +24,17 @@ const FONT_STYLE: usize = Prop::FontStyle as usize;
 const FONT_FAMILY: usize = Prop::FontFamily as usize;
 const LINE_HEIGHT: usize = Prop::LineHeight as usize;
 
-struct Font<'a> {
-    family: Option<&'a CStr>,
-    weight: i32,
-    italic: bool,
+pub(crate) struct Font<'a> {
+    pub(crate) family: Option<&'a CStr>,
+    pub(crate) weight: i32,
+    pub(crate) italic: bool,
+}
+
+pub(crate) struct SyntaxBasis<'a> {
+    pub(crate) font_px: f64,
+    pub(crate) root_px: f64,
+    pub(crate) line_height: f64,
+    pub(crate) font: Font<'a>,
 }
 
 trait Values {
@@ -430,4 +437,26 @@ pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&StyleView<'_>
 
 pub(crate) fn style_font_px(style: &StyleView<'_>) -> f64 {
     style.font_px().unwrap_or(16.0)
+}
+
+fn line_height_px(style: &StyleView<'_>, font_px: f64) -> f64 {
+    match style.slot(LINE_HEIGHT) {
+        Some(Slot::Length(l)) => match l.unit {
+            PX => l.v,
+            NUMBER | EM => l.v * font_px,
+            PERCENT => l.v * font_px / 100.0,
+            _ => font_px * 1.4375,
+        },
+        _ => font_px * 1.4375,
+    }
+}
+
+pub(crate) fn syntax_basis<'a>(style: &'a StyleView<'a>, root_px: f64) -> SyntaxBasis<'a> {
+    let font_px = style_font_px(style);
+    SyntaxBasis {
+        font_px,
+        root_px: if root_px <= 0.0 { font_px } else { root_px },
+        line_height: line_height_px(style, font_px),
+        font: style.font(),
+    }
 }

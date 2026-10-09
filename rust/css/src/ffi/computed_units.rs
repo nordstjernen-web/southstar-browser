@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int};
-use core::mem::size_of;
+use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::mem::{offset_of, size_of};
 use core::ptr;
 
 use southstar_glib as glib;
@@ -12,6 +12,7 @@ use super::value::{
     KIND_CALC, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, KIND_SIZE, KIND_TRACKS, KIND_TRANSFORM,
     Length, NsCssValue, RawCalc, RawSize,
 };
+use super::vars::RawVarMap;
 use crate::computed_units;
 use crate::grid::Tracks;
 use crate::prop::Prop;
@@ -25,6 +26,29 @@ pub(crate) const PROP_COUNT: usize = Prop::ALL.len();
 #[repr(C)]
 pub(crate) struct RawStyle {
     values: [*mut NsCssValue; PROP_COUNT],
+    _display: [u8; 5],
+    _specified_inline: u8,
+    _pseudo_styles: [*mut c_void; 11],
+    _share_id: u64,
+    _ref_count: c_int,
+    _currentcolor_bits: u32,
+    pub(super) vars: *mut RawVarMap,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(
+    size_of::<RawStyle>() == 2056
+        && offset_of!(RawStyle, _pseudo_styles) == 1944
+        && offset_of!(RawStyle, _share_id) == 2032
+        && offset_of!(RawStyle, vars) == 2048
+);
+
+impl RawStyle {
+    pub(super) fn value(&self, prop: usize) -> *const NsCssValue {
+        self.values
+            .get(prop)
+            .map_or(ptr::null(), |&v| v.cast_const())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -82,7 +106,7 @@ fn slot_mut(v: &mut NsCssValue) -> SlotMut<'_> {
 
 pub(crate) struct ComputedStyle<'a>(&'a mut RawStyle);
 
-pub(crate) struct StyleView<'a>(&'a RawStyle);
+pub(crate) struct StyleView<'a>(pub(super) &'a RawStyle);
 
 impl ComputedStyle<'_> {
     pub(crate) fn get(&self, prop: usize) -> Option<Slot<'_>> {

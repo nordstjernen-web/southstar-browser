@@ -520,6 +520,12 @@ Southstar Browser (unreleased):
   rem and px resolved to px, percentages and percent-plus-length calc()
   kept, and line names, keywords and fr lengths left as written. The
   text is identical (checked over 1.6 million generated track lists).
+* Registered custom properties get their computed values in Rust: each
+  @property-typed variable an element sets is computed against its
+  syntax with the element's font size, line height, font-relative
+  units, root sizes, viewport, container and currentcolor, the context
+  built only when a typed property needs it. Values are identical
+  (checked over 320,000 generated styles and registries).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

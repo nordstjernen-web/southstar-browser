@@ -100,12 +100,18 @@ impl RawPropertyRule {
         Some(unsafe { CStr::from_ptr(self.initial_value) }.to_bytes())
     }
 
+    pub(super) fn typed_syntax(&self) -> Option<*const c_void> {
+        let typed =
+            !self.syntax.is_null() && unsafe { ns_css_syntax_def_universal(self.syntax) } == 0;
+        typed.then_some(self.syntax.cast_const())
+    }
+
     pub(super) fn rejects(&self, value: &[u8]) -> bool {
-        if self.syntax.is_null() || unsafe { ns_css_syntax_def_universal(self.syntax) } != 0 {
+        let Some(syntax) = self.typed_syntax() else {
             return false;
-        }
+        };
         let value = c_string(value);
-        unsafe { ns_css_syntax_def_matches(self.syntax, value.as_ptr()) == 0 }
+        unsafe { ns_css_syntax_def_matches(syntax, value.as_ptr()) == 0 }
     }
 }
 

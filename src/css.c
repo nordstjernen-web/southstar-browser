@@ -2064,104 +2064,6 @@ css_collect_property_rules(GHashTable *reg, const ns_css_stylesheet *sh)
     }
 }
 
-static double
-syntax_line_height_px(const ns_style *s, double font_px)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_LINE_HEIGHT] : NULL;
-    if (v && v->kind == NS_CSS_V_LENGTH) {
-        switch (v->u.length.unit) {
-        case NS_CSS_UNIT_PX:      return v->u.length.v;
-        case NS_CSS_UNIT_NUMBER:  return v->u.length.v * font_px;
-        case NS_CSS_UNIT_PERCENT: return v->u.length.v * font_px / 100.0;
-        case NS_CSS_UNIT_EM:      return v->u.length.v * font_px;
-        default: break;
-        }
-    }
-    return font_px * 1.4375;
-}
-
-static double
-style_font_px(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_FONT_SIZE] : NULL;
-    if (v && v->kind == NS_CSS_V_LENGTH && v->u.length.unit == NS_CSS_UNIT_PX)
-        return v->u.length.v;
-    return 16;
-}
-
-static void
-syntax_ctx_for_style(ns_css_syntax_ctx *ctx, const ns_style *s, double root_px)
-{
-    double font_px = style_font_px(s);
-    if (root_px <= 0) root_px = font_px;
-    const char *family =
-        s && s->values[NS_CSS_FONT_FAMILY] &&
-        s->values[NS_CSS_FONT_FAMILY]->kind == NS_CSS_V_KEYWORD
-            ? s->values[NS_CSS_FONT_FAMILY]->u.keyword : NULL;
-    int weight = s ? ns_css_font_weight_number(s->values[NS_CSS_FONT_WEIGHT],
-                                               400) : 400;
-    gboolean italic = s &&
-        (ns_css_keyword_is(s->values[NS_CSS_FONT_STYLE], "italic") ||
-         ns_css_keyword_is(s->values[NS_CSS_FONT_STYLE], "oblique"));
-    double root_line = root_px * 1.4375;
-    ctx->font_size = font_px;
-    ctx->root_font_size = root_px;
-    ctx->line_height = syntax_line_height_px(s, font_px);
-    ctx->root_line_height = root_line;
-    ctx->ex_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_EX, font_px, family,
-                                        weight, italic);
-    ctx->ch_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_CH, font_px, family,
-                                        weight, italic);
-    ctx->cap_px = ns_css_font_relative_unit_px(NS_CSS_UNIT_CAP, font_px, family,
-                                        weight, italic);
-    ctx->ic_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_IC, font_px, family,
-                                        weight, italic);
-    ctx->root_ex_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_EX, root_px, NULL,
-                                             400, FALSE);
-    ctx->root_ch_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_CH, root_px, NULL,
-                                             400, FALSE);
-    ctx->root_cap_px = ns_css_font_relative_unit_px(NS_CSS_UNIT_CAP, root_px, NULL,
-                                             400, FALSE);
-    ctx->root_ic_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_IC, root_px, NULL,
-                                             400, FALSE);
-    ctx->viewport_w = ns_css_viewport_resolve(100, NS_CSS_UNIT_VW);
-    ctx->viewport_h = ns_css_viewport_resolve(100, NS_CSS_UNIT_VH);
-    ctx->container_w = ns_css_container_w();
-    ctx->container_h = ns_css_container_h();
-    ctx->current_color = NULL;
-}
-
-static void
-compute_registered_vars(ns_style *s, const ns_style *parent_style,
-                        double root_px)
-{
-    if (!g_registered_props || !s || !s->vars || !s->vars->own) return;
-    if (parent_style && s->vars == parent_style->vars) return;
-    if (g_hash_table_size(g_registered_props) == 0) return;
-
-    ns_css_syntax_ctx ctx;
-    gboolean have_ctx = FALSE;
-    char *current_color = NULL;
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, s->vars->own);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        const ns_css_property_rule *pr =
-            g_hash_table_lookup(g_registered_props, k);
-        if (!pr || !pr->syntax || ns_css_syntax_def_universal(pr->syntax))
-            continue;
-        if (!have_ctx) {
-            syntax_ctx_for_style(&ctx, s, root_px);
-            current_color = ns_css_value_serialize(s->values[NS_CSS_COLOR]);
-            ctx.current_color = current_color;
-            have_ctx = TRUE;
-        }
-        char *computed = ns_css_syntax_def_compute(pr->syntax, v, &ctx);
-        if (computed) g_hash_table_iter_replace(&it, computed);
-    }
-    g_free(current_color);
-}
-
 static gboolean
 pending_uses_attr(const GArray *pending_matches)
 {
@@ -3566,7 +3468,8 @@ cascade_walk(ns_node *node,
             cascade_for(matches, s, parent_style, layout_parent,
                     node->parent &&
                         node->parent->kind == NS_NODE_DOCUMENT, *root_px);
-            compute_registered_vars(s, parent_style, *root_px);
+            ns_css_compute_registered_vars(s, parent_style, g_registered_props,
+                                           *root_px);
             strip_native_widget_decorations(node, s);
             if (display_contents_to_none(node, s)) have_key = FALSE;
             g_array_set_size(matches, 0);
@@ -3591,7 +3494,8 @@ cascade_walk(ns_node *node,
                             pe == NS_CSS_PE_BEFORE || pe == NS_CSS_PE_AFTER
                                 ? s : NULL,
                             FALSE, *root_px);
-                compute_registered_vars(ps, s, *root_px);
+                ns_css_compute_registered_vars(ps, s, g_registered_props,
+                                               *root_px);
                 gboolean keep = TRUE;
                 if (pe == NS_CSS_PE_BEFORE || pe == NS_CSS_PE_AFTER)
                     keep = ps->values[NS_CSS_CONTENT] != NULL;
