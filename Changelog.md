@@ -282,6 +282,13 @@ Southstar Browser (unreleased):
   and compose back from longhands in element.style. With them go the
   readers of CSS identifiers and strings and their escapes that selectors,
   @-rules and declarations share. Grids lay out and serialize as before.
+* CSS font values are Rust: font-family lists (quoted names, generic
+  families, random-item()) and the font shorthand in their canonical
+  spelling, the font-size keywords, font-stretch, font-weight numbers and
+  bolder and lighter, font-feature-settings, font-variation-settings and
+  font-variant-ligatures, the ex, ch, cap and ic units from the painter's
+  font metrics, and resolving a family list to the font Pango loads.
+  Text picks the same fonts and serializes as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

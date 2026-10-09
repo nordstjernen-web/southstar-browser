@@ -125,9 +125,6 @@ ns_css_set_viewport(double vw_px, double vh_px)
 double ns_css_viewport_w(void) { return g_viewport_w; }
 double ns_css_viewport_h(void) { return g_viewport_h; }
 
-static double font_relative_unit_px(ns_css_unit unit, double font_px,
-                                    const char *family, int weight,
-                                    gboolean italic);
 
 static void (*g_frame_viewport_cb)(const ns_node *frame, double *w, double *h);
 
@@ -777,7 +774,7 @@ ns_css_dimension_px(const ns_css_value *v, double font_size, double basis)
     case NS_CSS_UNIT_CH:
     case NS_CSS_UNIT_CAP:
     case NS_CSS_UNIT_IC:
-        return n * font_relative_unit_px(unit, font_size, NULL, 400, FALSE);
+        return n * ns_css_font_relative_unit_px(unit, font_size, NULL, 400, FALSE);
     case NS_CSS_UNIT_LH:     return n * font_size * 1.5;
     case NS_CSS_UNIT_RLH:    return n * 24.0;
     case NS_CSS_UNIT_REX:
@@ -830,171 +827,6 @@ ns_css_keyword_is(const ns_css_value *v, const char *kw)
            v->u.keyword && strcmp(v->u.keyword, kw) == 0;
 }
 
-static char *
-font_family_token_clean(const char *start, gsize len)
-{
-    while (len > 0 && is_ws(*start)) {
-        start++;
-        len--;
-    }
-    while (len > 0 && is_ws(start[len - 1])) len--;
-    if (len >= 2 &&
-        ((start[0] == '"' && start[len - 1] == '"') ||
-         (start[0] == '\'' && start[len - 1] == '\''))) {
-        start++;
-        len -= 2;
-    }
-    GString *out = g_string_new(NULL);
-    gboolean pending_space = FALSE;
-    for (gsize i = 0; i < len; i++) {
-        char c = start[i];
-        if (c == '\\' && i + 1 < len) {
-            i++;
-            c = start[i];
-        }
-        if (is_ws(c)) {
-            pending_space = out->len > 0;
-            continue;
-        }
-        if (pending_space) {
-            g_string_append_c(out, ' ');
-            pending_space = FALSE;
-        }
-        g_string_append_c(out, c);
-    }
-    char *ret = g_string_free(out, FALSE);
-    g_strstrip(ret);
-    return ret;
-}
-
-static char *
-font_family_map_generic(const char *token)
-{
-    char *lo = g_ascii_strdown(token, -1);
-    char *ret = NULL;
-    if (strcmp(lo, "system-ui") == 0)
-        ret = g_strdup("system-ui");
-    else if (strcmp(lo, "ui-sans-serif") == 0 ||
-             strcmp(lo, "ui-rounded") == 0 ||
-             strcmp(lo, "sans-serif") == 0)
-        ret = g_strdup("sans-serif");
-    else if (strcmp(lo, "ui-serif") == 0 ||
-             strcmp(lo, "serif") == 0)
-#ifdef G_OS_WIN32
-        ret = g_strdup("Times New Roman");
-#else
-        ret = g_strdup("serif");
-#endif
-    else if (strcmp(lo, "ui-monospace") == 0 ||
-             strcmp(lo, "monospace") == 0)
-        ret = g_strdup("monospace");
-    else if (strcmp(lo, "cursive") == 0 ||
-             strcmp(lo, "fantasy") == 0 ||
-             strcmp(lo, "emoji") == 0 ||
-             strcmp(lo, "math") == 0 ||
-             strcmp(lo, "fangsong") == 0)
-        ret = g_strdup(lo);
-    g_free(lo);
-    return ret;
-}
-
-static char *
-font_family_substitute(const char *token)
-{
-    char *lo = g_ascii_strdown(token, -1);
-    char *ret = NULL;
-    if (g_str_has_prefix(lo, "sf pro") || g_str_has_prefix(lo, "sfpro"))
-        ret = g_strdup("system-ui");
-    else if (strcmp(lo, "arial") == 0 ||
-             strcmp(lo, "helvetica") == 0 ||
-             strcmp(lo, "segoe ui") == 0 ||
-             g_str_has_prefix(lo, "roboto") ||
-             g_str_has_prefix(lo, "optimistic text"))
-        ret = g_strdup("sans-serif");
-    g_free(lo);
-    return ret;
-}
-
-static gboolean (*g_font_available_cb)(const char *family);
-static guint64 (*g_font_generation_cb)(void);
-static guint g_font_oracle_serial;
-
-static const char *
-platform_family_for_generic(const char *generic)
-{
-#ifdef __APPLE__
-    static const char *const families[][2] = {
-        { "system-ui",  "System Font" },
-        { "sans-serif", "Helvetica" },
-        { "serif",      "Times" },
-        { "monospace",  "Menlo" },
-        { "cursive",    "Apple Chancery" },
-        { "fantasy",    "Papyrus" },
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(families); i++)
-        if (strcmp(generic, families[i][0]) == 0 &&
-            g_font_available_cb && g_font_available_cb(families[i][1]))
-            return families[i][1];
-#endif
-    if (strcmp(generic, "system-ui") == 0)
-        return platform_family_for_generic("sans-serif");
-    return generic;
-}
-
-static gboolean
-platform_has_system_font(void)
-{
-    return strcmp(platform_family_for_generic("system-ui"),
-                  platform_family_for_generic("sans-serif")) != 0;
-}
-
-void
-ns_css_set_font_available_cb(gboolean (*cb)(const char *family))
-{
-    g_font_available_cb = cb;
-    g_font_oracle_serial++;
-}
-
-void
-ns_css_set_font_generation_cb(guint64 (*cb)(void))
-{
-    g_font_generation_cb = cb;
-    g_font_oracle_serial++;
-}
-
-static void (*g_font_metrics_cb)(const char *family, double size_px,
-                                 int weight, gboolean italic,
-                                 ns_css_font_metrics *out);
-
-void
-ns_css_set_font_metrics_cb(
-    void (*cb)(const char *family, double size_px, int weight,
-               gboolean italic, ns_css_font_metrics *out))
-{
-    g_font_metrics_cb = cb;
-}
-
-static double
-font_relative_unit_px(ns_css_unit unit, double font_px,
-                      const char *family, int weight, gboolean italic)
-{
-    ns_css_font_metrics m = {
-        .ex_px  = font_px * 0.5,
-        .ch_px  = font_px * 0.5,
-        .cap_px = font_px * 0.7,
-        .ic_px  = font_px,
-    };
-    if (g_font_metrics_cb && font_px > 0)
-        g_font_metrics_cb(family, font_px, weight, italic, &m);
-    switch (unit) {
-    case NS_CSS_UNIT_EX:  return m.ex_px;
-    case NS_CSS_UNIT_CH:  return m.ch_px;
-    case NS_CSS_UNIT_CAP: return m.cap_px;
-    case NS_CSS_UNIT_IC:  return m.ic_px;
-    default:              return font_px;
-    }
-}
-
 static void
 legacy_em_normalize(double *val, ns_css_unit *unit)
 {
@@ -1005,122 +837,6 @@ legacy_em_normalize(double *val, ns_css_unit *unit)
     case NS_CSS_UNIT_IC:  *unit = NS_CSS_UNIT_EM; break;
     default: break;
     }
-}
-
-static char *
-font_family_resolve(const char *css_family)
-{
-    char *fallback = NULL;
-    const char *p = css_family;
-    while (*p) {
-        while (*p == ',') p++;
-        const char *start = p;
-        char quote = 0;
-        while (*p) {
-            if (quote) {
-                if (*p == '\\' && p[1]) p++;
-                else if (*p == quote) quote = 0;
-            } else if (*p == '"' || *p == '\'') {
-                quote = *p;
-            } else if (*p == ',') {
-                break;
-            }
-            p++;
-        }
-        char *token = font_family_token_clean(start, (gsize)(p - start));
-        if (token && *token) {
-            char *lo = g_ascii_strdown(token, -1);
-            gboolean skip = strcmp(lo, "inherit") == 0 ||
-                            strcmp(lo, "initial") == 0 ||
-                            strcmp(lo, "unset") == 0 ||
-                            strcmp(lo, "revert") == 0 ||
-                            strcmp(lo, "revert-layer") == 0 ||
-                            strstr(lo, "linux libertine") != NULL ||
-                            g_str_has_prefix(lo, "libertinus") ||
-                            g_str_has_prefix(lo, "var(");
-            gboolean system_alias = strcmp(lo, "-apple-system") == 0 ||
-                                    strcmp(lo, "blinkmacsystemfont") == 0;
-            g_free(lo);
-            if (system_alias && platform_has_system_font()) {
-                g_free(token);
-                g_free(fallback);
-                return g_strdup("system-ui");
-            } else if (system_alias) {
-                if (!fallback) fallback = g_strdup("sans-serif");
-            } else if (!skip) {
-                char *mapped = font_family_map_generic(token);
-                if (mapped) {
-                    g_free(token);
-                    g_free(fallback);
-                    return mapped;
-                }
-                if (!g_font_available_cb || g_font_available_cb(token)) {
-                    g_free(fallback);
-                    return token;
-                }
-                char *substitute = font_family_substitute(token);
-                if (substitute) {
-                    g_free(token);
-                    g_free(fallback);
-                    return substitute;
-                }
-                if (!fallback) fallback = g_strdup("sans-serif");
-            }
-        }
-        g_free(token);
-        if (*p == ',') p++;
-    }
-    return fallback ? fallback : g_strdup("sans-serif");
-}
-
-static int
-font_weight_relative(int parent, gboolean bolder)
-{
-    if (bolder)
-        return parent < 350 ? 400 : parent < 550 ? 700 : 900;
-    if (parent < 100) return parent;
-    return parent < 550 ? 100 : parent < 750 ? 400 : 700;
-}
-
-char *
-ns_css_font_family_for_pango(const char *css_family)
-{
-    static __thread GHashTable *memo;
-    static __thread guint64 memo_generation;
-    static __thread guint memo_oracle;
-    if (!css_family || !*css_family) return g_strdup("sans-serif");
-    guint64 generation = g_font_generation_cb ? g_font_generation_cb() : 0;
-    if (!memo)
-        memo = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-    if (generation != memo_generation || memo_oracle != g_font_oracle_serial ||
-        g_hash_table_size(memo) >= 1024) {
-        g_hash_table_remove_all(memo);
-        memo_generation = generation;
-        memo_oracle = g_font_oracle_serial;
-    }
-    const char *hit = g_hash_table_lookup(memo, css_family);
-    if (hit) return g_strdup(hit);
-    char *generic = font_family_resolve(css_family);
-    char *resolved = g_strdup(platform_family_for_generic(generic));
-    g_free(generic);
-    g_hash_table_insert(memo, g_strdup(css_family), g_strdup(resolved));
-    return resolved;
-}
-
-int
-ns_css_font_weight_number(const ns_css_value *v, int fallback)
-{
-    if (!v || v->kind != NS_CSS_V_KEYWORD || !v->u.keyword) return fallback;
-    const char *kw = v->u.keyword;
-    if (strcmp(kw, "normal") == 0) return 400;
-    if (strcmp(kw, "bold") == 0) return 700;
-    if (strcmp(kw, "bolder") == 0 || strcmp(kw, "lighter") == 0)
-        return font_weight_relative(fallback > 0 ? fallback : 400,
-                                    kw[0] == 'b');
-    if (g_ascii_isdigit(kw[0])) {
-        return ns_parse_int(kw, fallback > 0 ? fallback : 400, 1, 1000);
-    }
-    return fallback;
 }
 
 #define NS_CALC_MAX_DEPTH 64
@@ -2065,21 +1781,6 @@ parse_one_selector_rel(const char **pp, const char *end, int depth,
     return sel;
 }
 
-static double
-font_size_keyword_px(const char *t)
-{
-    if (!t) return -1;
-    if (g_ascii_strcasecmp(t, "xx-small")  == 0) return 9;
-    if (g_ascii_strcasecmp(t, "x-small")   == 0) return 10;
-    if (g_ascii_strcasecmp(t, "small")     == 0) return 13;
-    if (g_ascii_strcasecmp(t, "medium")    == 0) return 16;
-    if (g_ascii_strcasecmp(t, "large")     == 0) return 18;
-    if (g_ascii_strcasecmp(t, "x-large")   == 0) return 24;
-    if (g_ascii_strcasecmp(t, "xx-large")  == 0) return 32;
-    if (g_ascii_strcasecmp(t, "xxx-large") == 0) return 48;
-    return -1;
-}
-
 static const char *
 match_close_paren(const char *p, const char *end)
 {
@@ -2142,140 +1843,12 @@ parse_bg_size_component(const char *tok, double *out_v, ns_css_unit *out_unit)
     return ok;
 }
 
-static gboolean
-font_family_ident_valid(const char *tok, gsize len)
-{
-    if (len == 0) return FALSE;
-    gsize i = 0;
-    if (tok[0] == '-') {
-        i = 1;
-        if (len == 1) return FALSE;
-        if (tok[1] == '-') i = 2;
-    }
-    if (i >= len) return FALSE;
-    unsigned char first = (unsigned char)tok[i];
-    if (!(g_ascii_isalpha(first) || first == '_' || first >= 0x80 || first == '\\'))
-        return FALSE;
-    for (gsize k = i; k < len; k++) {
-        unsigned char c = (unsigned char)tok[k];
-        if (c == '\\') { k++; continue; }
-        if (!(g_ascii_isalnum(c) || c == '-' || c == '_' || c >= 0x80))
-            return FALSE;
-    }
-    return TRUE;
-}
-
-static gboolean
-font_family_is_generic(const char *tok, gsize len)
-{
-    static const char *const generic[] = {
-        "serif", "sans-serif", "cursive", "fantasy", "monospace",
-        "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace",
-        "ui-rounded", "math", "emoji", "fangsong", "inherit", "initial",
-        "unset", "revert", "revert-layer", "default",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(generic); i++)
-        if (strlen(generic[i]) == len &&
-            g_ascii_strncasecmp(tok, generic[i], len) == 0)
-            return TRUE;
-    return FALSE;
-}
-
-static gboolean is_font_stretch_keyword(const char *s);
 static ns_css_value *parse_value_for(ns_css_prop prop, const char *text);
-
-static int
-split_ws_paren(const char *text, char **out, int max)
-{
-    int n = 0;
-    const char *p = text, *end = text + strlen(text);
-    while (p < end && n < max) {
-        while (p < end && is_ws(*p)) p++;
-        if (p >= end) break;
-        const char *start = p;
-        int depth = 0;
-        char quote = 0;
-        while (p < end) {
-            char c = *p;
-            if (quote) { if (c == quote) quote = 0; p++; continue; }
-            if (c == '\\' && p + 1 < end) { p += 2; continue; }
-            if (c == '"' || c == '\'') { quote = c; p++; continue; }
-            if (c == '(') depth++;
-            else if (c == ')') { if (depth) depth--; }
-            else if (is_ws(c) && depth == 0) break;
-            p++;
-        }
-        out[n++] = g_strndup(start, (gsize)(p - start));
-    }
-    return n;
-}
-
-static gboolean
-font_size_token_valid(const char *tok)
-{
-    if (font_size_keyword_px(tok) > 0) return TRUE;
-    if (g_ascii_strcasecmp(tok, "larger") == 0 ||
-        g_ascii_strcasecmp(tok, "smaller") == 0)
-        return TRUE;
-    if (g_ascii_strncasecmp(tok, "calc(", 5) == 0 ||
-        g_ascii_strncasecmp(tok, "min(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "max(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "clamp(", 6) == 0) {
-        ns_css_value *cv = ns_css_parse_calc(tok);
-        if (!cv) return FALSE;
-        ns_css_value_free(cv);
-        return TRUE;
-    }
-    double v; ns_css_unit u;
-    return ns_css_parse_length(tok, &v, &u) && u != NS_CSS_UNIT_NUMBER && v >= 0;
-}
-
-static gboolean
-font_line_height_token_valid(const char *tok)
-{
-    if (g_ascii_strcasecmp(tok, "normal") == 0) return TRUE;
-    if (g_ascii_strncasecmp(tok, "calc(", 5) == 0 ||
-        g_ascii_strncasecmp(tok, "min(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "max(", 4) == 0 ||
-        g_ascii_strncasecmp(tok, "clamp(", 6) == 0) {
-        ns_css_value *cv = ns_css_parse_calc(tok);
-        if (!cv) return FALSE;
-        ns_css_value_free(cv);
-        return TRUE;
-    }
-    double v; ns_css_unit u;
-    return ns_css_parse_length(tok, &v, &u) && v >= 0;
-}
-
-static char *
-font_shorthand_slash(char *tok)
-{
-    int depth = 0;
-    for (char *q = tok; *q; q++) {
-        if (*q == '(') depth++;
-        else if (*q == ')') { if (depth) depth--; }
-        else if (*q == '/' && depth == 0) return q;
-    }
-    return NULL;
-}
-
-static gboolean
-font_shorthand_is_size_token(const char *tok)
-{
-    char *copy = g_strdup(tok);
-    char *slash = font_shorthand_slash(copy);
-    if (slash) *slash = '\0';
-    gboolean ok = *copy && font_size_token_valid(copy) &&
-                  !(g_ascii_isdigit((guchar)copy[0]) &&
-                    strspn(copy, "0123456789.") == strlen(copy));
-    g_free(copy);
-    return ok;
-}
 
 static ns_css_value *
 font_shorthand_size_value(const char *size_only)
 {
-    double kw = font_size_keyword_px(size_only);
+    double kw = ns_css_font_size_keyword_px(size_only);
     ns_css_value *v = NULL;
     if (kw > 0 || g_ascii_strcasecmp(size_only, "larger") == 0 ||
         g_ascii_strcasecmp(size_only, "smaller") == 0) {
@@ -2292,320 +1865,6 @@ font_shorthand_size_value(const char *size_only)
         return v;
     }
     return parse_value_for(NS_CSS_FONT_SIZE, size_only);
-}
-
-char *
-ns_css_font_shorthand_canonical(const char *text)
-{
-    if (!text) return NULL;
-    char *tokens[24] = {0};
-    int n = split_ws_paren(text, tokens, 24);
-    char *result = NULL;
-    const char *style = NULL, *variant = NULL, *weight = NULL, *stretch = NULL;
-    int prefix = 0;
-    int i = 0;
-    for (; i < n && prefix < 4; i++) {
-        const char *t = tokens[i];
-        if (g_ascii_strcasecmp(t, "normal") == 0) { prefix++; continue; }
-        if (g_ascii_strcasecmp(t, "italic") == 0 ||
-            g_ascii_strcasecmp(t, "oblique") == 0) {
-            if (style) goto done;
-            style = t; prefix++; continue;
-        }
-        if (g_ascii_strcasecmp(t, "small-caps") == 0) {
-            if (variant) goto done;
-            variant = t; prefix++; continue;
-        }
-        if (g_ascii_strcasecmp(t, "bold") == 0 ||
-            g_ascii_strcasecmp(t, "bolder") == 0 ||
-            g_ascii_strcasecmp(t, "lighter") == 0) {
-            if (weight) goto done;
-            weight = t; prefix++; continue;
-        }
-        if (g_ascii_isdigit((guchar)t[0])) {
-            char *endp = NULL;
-            double w = g_ascii_strtod(t, &endp);
-            if (endp && *endp == '\0' && w >= 1 && w <= 1000 &&
-                !(i + 1 < n && FALSE)) {
-                if (weight) goto done;
-                weight = t; prefix++; continue;
-            }
-        }
-        if (is_font_stretch_keyword(t)) {
-            if (stretch) goto done;
-            stretch = t; prefix++; continue;
-        }
-        break;
-    }
-    if (i >= n) goto done;
-    char *size_tok = tokens[i];
-    char *lh_tok = NULL;
-    char *slash = NULL;
-    {
-        int depth = 0;
-        for (char *q = size_tok; *q; q++) {
-            if (*q == '(') depth++;
-            else if (*q == ')') { if (depth) depth--; }
-            else if (*q == '/' && depth == 0) { slash = q; break; }
-        }
-    }
-    char *size_only = slash ? g_strndup(size_tok, (gsize)(slash - size_tok))
-                            : g_strdup(size_tok);
-    int fam_start = i + 1;
-    if (slash) {
-        if (slash[1]) lh_tok = g_strdup(slash + 1);
-        else if (fam_start < n) lh_tok = g_strdup(tokens[fam_start++]);
-        else { g_free(size_only); goto done; }
-    } else if (fam_start < n && tokens[fam_start][0] == '/') {
-        if (tokens[fam_start][1]) lh_tok = g_strdup(tokens[fam_start] + 1);
-        else if (fam_start + 1 < n) { lh_tok = g_strdup(tokens[fam_start + 1]); fam_start++; }
-        fam_start++;
-    }
-    if (!*size_only || !font_size_token_valid(size_only) ||
-        (lh_tok && !font_line_height_token_valid(lh_tok)) || fam_start >= n) {
-        g_free(size_only);
-        g_free(lh_tok);
-        goto done;
-    }
-    GString *fam = g_string_new(NULL);
-    for (int j = fam_start; j < n; j++) {
-        if (j > fam_start) g_string_append_c(fam, ' ');
-        g_string_append(fam, tokens[j]);
-    }
-    char *family = ns_css_font_family_canonical(fam->str);
-    g_string_free(fam, TRUE);
-    if (!family) {
-        g_free(size_only);
-        g_free(lh_tok);
-        goto done;
-    }
-    GString *out = g_string_new(NULL);
-    if (style) { g_string_append(out, g_ascii_strcasecmp(style, "italic") == 0 ? "italic" : "oblique"); }
-    if (variant) { if (out->len) g_string_append_c(out, ' '); g_string_append(out, "small-caps"); }
-    if (weight) {
-        if (out->len) g_string_append_c(out, ' ');
-        char *lw = g_ascii_strdown(weight, -1);
-        g_string_append(out, lw);
-        g_free(lw);
-    }
-    if (stretch) {
-        if (out->len) g_string_append_c(out, ' ');
-        char *ls = g_ascii_strdown(stretch, -1);
-        g_string_append(out, ls);
-        g_free(ls);
-    }
-    if (out->len) g_string_append_c(out, ' ');
-    {
-        char *ls = font_size_keyword_px(size_only) > 0 ||
-                   g_ascii_strcasecmp(size_only, "larger") == 0 ||
-                   g_ascii_strcasecmp(size_only, "smaller") == 0
-            ? g_ascii_strdown(size_only, -1) : g_strdup(size_only);
-        g_string_append(out, ls);
-        g_free(ls);
-    }
-    if (lh_tok && g_ascii_strcasecmp(lh_tok, "normal") != 0) {
-        g_string_append(out, " / ");
-        g_string_append(out, lh_tok);
-    }
-    g_string_append_c(out, ' ');
-    g_string_append(out, family);
-    g_free(family);
-    g_free(size_only);
-    g_free(lh_tok);
-    result = g_string_free(out, FALSE);
-done:
-    for (int k = 0; k < n; k++) g_free(tokens[k]);
-    return result;
-}
-
-#define NS_CSS_RANDOM_ITEM_MAX_DEPTH 16
-
-static gboolean
-font_family_random_item_valid(const char *item, gsize ilen)
-{
-    static __thread int nesting;
-    if (nesting >= NS_CSS_RANDOM_ITEM_MAX_DEPTH) return FALSE;
-    const char *open = memchr(item, '(', ilen);
-    if (!open || item[ilen - 1] != ')') return FALSE;
-    char *body = g_strndup(open + 1, (gsize)(item + ilen - 1 - (open + 1)));
-    GPtrArray *args = g_ptr_array_new_with_free_func(g_free);
-    const char *seg = body;
-    int depth = 0;
-    for (const char *q = body; ; q++) {
-        if (*q == '(' || *q == '{' || *q == '[') depth++;
-        else if ((*q == ')' || *q == '}' || *q == ']') && depth > 0) depth--;
-        if ((*q == ',' && depth == 0) || !*q) {
-            char *piece = g_strndup(seg, (gsize)(q - seg));
-            g_strstrip(piece);
-            g_ptr_array_add(args, piece);
-            if (!*q) break;
-            seg = q + 1;
-        }
-    }
-    g_free(body);
-    gboolean ok = args->len >= 2;
-    if (ok) {
-        const char *first = args->pdata[0];
-        char *tok[3] = {0};
-        int n = split_ws_limit(first, tok, 3);
-        ok = n >= 1 && n <= 2;
-        for (int i = 0; i < n && ok; i++) {
-            const char *t = tok[i];
-            if (i == 1 && g_ascii_strcasecmp(tok[0], "fixed") == 0) {
-                char *endp = NULL;
-                g_ascii_strtod(t, &endp);
-                ok = endp && *endp == '\0';
-            } else {
-                ok = font_family_ident_valid(t, strlen(t)) ||
-                     (g_str_has_prefix(t, "--") && t[2]);
-            }
-        }
-        for (int i = 0; i < n; i++) g_free(tok[i]);
-    }
-    for (guint i = 1; i < args->len && ok; i++) {
-        const char *a = args->pdata[i];
-        gsize alen = strlen(a);
-        if (!alen) continue;
-        char *inner = NULL;
-        if (a[0] == '{') {
-            if (a[alen - 1] != '}') { ok = FALSE; break; }
-            inner = g_strndup(a + 1, alen - 2);
-        } else if (memchr(a, '{', alen) || memchr(a, '}', alen)) {
-            ok = FALSE;
-            break;
-        } else {
-            inner = g_strdup(a);
-        }
-        nesting++;
-        char *canon = ns_css_font_family_canonical(inner);
-        nesting--;
-        ok = canon != NULL;
-        g_free(canon);
-        g_free(inner);
-    }
-    g_ptr_array_free(args, TRUE);
-    return ok;
-}
-
-char *
-ns_css_font_family_canonical(const char *text)
-{
-    if (!text) return NULL;
-    GString *out = g_string_new(NULL);
-    const char *p = text;
-    const char *end = text + strlen(text);
-    gboolean any = FALSE;
-    while (p <= end) {
-        while (p < end && is_ws(*p)) p++;
-        const char *item_start = p;
-        char term = 0;
-        const char *item_end = css_scan_until(p, end, ",", &term);
-        gsize ilen = (gsize)(item_end - item_start);
-        while (ilen > 0 && is_ws(item_start[ilen - 1])) ilen--;
-        if (ilen == 0) { g_string_free(out, TRUE); return NULL; }
-        if (any) g_string_append(out, ", ");
-        any = TRUE;
-        if (item_start[0] == '"' || item_start[0] == '\'') {
-            char q = item_start[0];
-            if (ilen < 2 || item_start[ilen - 1] != q) {
-                g_string_free(out, TRUE);
-                return NULL;
-            }
-            const char *body = item_start + 1;
-            gsize blen = ilen - 2;
-            gboolean ident_like = blen > 0 && !is_ws(body[0]) &&
-                                  !is_ws(body[blen - 1]) &&
-                                  !memchr(body, '\\', blen);
-            if (ident_like) {
-                const char *w = body, *wend = body + blen;
-                while (w < wend && ident_like) {
-                    const char *tok = w;
-                    while (w < wend && !is_ws(*w)) w++;
-                    gsize tlen = (gsize)(w - tok);
-                    if (!font_family_ident_valid(tok, tlen) ||
-                        font_family_is_generic(tok, tlen))
-                        ident_like = FALSE;
-                    if (w < wend && (w + 1 >= wend || is_ws(w[1])))
-                        ident_like = FALSE;
-                    w++;
-                }
-            }
-            if (ident_like) {
-                g_string_append_len(out, body, (gssize)blen);
-            } else {
-                g_string_append_c(out, '"');
-                for (gsize k = 0; k < blen; k++) {
-                    char c = body[k];
-                    if (c == '\\' && k + 1 < blen) {
-                        g_string_append_c(out, c);
-                        g_string_append_c(out, body[++k]);
-                        continue;
-                    }
-                    if (c == '"') g_string_append_c(out, '\\');
-                    g_string_append_c(out, c);
-                }
-                g_string_append_c(out, '"');
-            }
-        } else if (item_start[ilen - 1] == ')' &&
-                   (g_ascii_strncasecmp(item_start, "random-item(", 12) == 0 ||
-                    g_ascii_strncasecmp(item_start, "-webkit-generic(", 16) == 0)) {
-            if (g_ascii_strncasecmp(item_start, "random-item(", 12) == 0 &&
-                !font_family_random_item_valid(item_start, ilen)) {
-                g_string_free(out, TRUE);
-                return NULL;
-            }
-            g_string_append_len(out, item_start, (gssize)ilen);
-        } else {
-            const char *q = item_start, *qend = item_start + ilen;
-            gboolean first = TRUE;
-            {
-                static const char *const reserved[] = {
-                    "inherit", "initial", "unset", "revert", "revert-layer",
-                    "default",
-                };
-                for (gsize k = 0; k < G_N_ELEMENTS(reserved); k++)
-                    if (strlen(reserved[k]) == ilen &&
-                        g_ascii_strncasecmp(item_start, reserved[k], ilen) == 0) {
-                        g_string_free(out, TRUE);
-                        return NULL;
-                    }
-            }
-            while (q < qend) {
-                while (q < qend && is_ws(*q)) q++;
-                const char *tok = q;
-                while (q < qend && !is_ws(*q)) q++;
-                gsize tlen = (gsize)(q - tok);
-                if (tlen == 0) break;
-                static const char *const strict_generic[] = {
-                    "serif", "sans-serif", "cursive", "fantasy", "monospace",
-                };
-                gboolean strict = FALSE;
-                for (gsize k = 0; k < G_N_ELEMENTS(strict_generic); k++)
-                    if (strlen(strict_generic[k]) == tlen &&
-                        g_ascii_strncasecmp(tok, strict_generic[k], tlen) == 0)
-                        strict = TRUE;
-                if (!font_family_ident_valid(tok, tlen) ||
-                    ((!first || q < qend) && strict)) {
-                    g_string_free(out, TRUE);
-                    return NULL;
-                }
-                if (!first) g_string_append_c(out, ' ');
-                if (first && q >= qend && font_family_is_generic(tok, tlen)) {
-                    char *lower = g_ascii_strdown(tok, (gssize)tlen);
-                    g_string_append(out, lower);
-                    g_free(lower);
-                } else {
-                    g_string_append_len(out, tok, (gssize)tlen);
-                }
-                first = FALSE;
-            }
-        }
-        if (term != ',') break;
-        p = item_end + 1;
-        if (p >= end) { g_string_free(out, TRUE); return NULL; }
-    }
-    if (!any) { g_string_free(out, TRUE); return NULL; }
-    return g_string_free(out, FALSE);
 }
 
 static gboolean text_is_ident(const char *t);
@@ -3885,7 +3144,7 @@ static char *
 counter_list_canonical(const char *text, ns_css_prop prop)
 {
     char *toks[64] = { 0 };
-    int n = split_ws_paren(text, toks, 64);
+    int n = ns_css_split_ws_paren(text, toks, 64);
     if (n == 0) return NULL;
     if (n == 1 && g_ascii_strcasecmp(toks[0], "none") == 0) {
         g_free(toks[0]);
@@ -3944,7 +3203,7 @@ static char *
 list_style_type_canonical(const char *text)
 {
     char *toks[4] = { 0 };
-    int n = split_ws_paren(text, toks, 4);
+    int n = ns_css_split_ws_paren(text, toks, 4);
     char *r = NULL;
     if (n == 1) {
         const char *tok = toks[0];
@@ -3973,7 +3232,7 @@ static char *
 overflow_clip_margin_canonical(const char *text)
 {
     char *toks[3] = { 0 };
-    int n = split_ws_paren(text, toks, 3);
+    int n = ns_css_split_ws_paren(text, toks, 3);
     const char *box = NULL;
     char *len = NULL;
     gboolean ok = n >= 1 && n <= 2;
@@ -4031,7 +3290,7 @@ list_style_split(const char *text, char **out_type, char **out_position,
                  char **out_image)
 {
     char *tokens[8] = {0};
-    int n = split_ws_paren(text, tokens, 8);
+    int n = ns_css_split_ws_paren(text, tokens, 8);
     char *type = NULL, *position = NULL, *image = NULL;
     int nones = 0;
     gboolean ok = n >= 1 && n <= 3;
@@ -4139,7 +3398,7 @@ parse_anim_value(const char *text, gboolean is_animation)
                  got_iter = FALSE, got_dir = FALSE, got_fill = FALSE,
                  got_play = FALSE, got_name = FALSE, got_behavior = FALSE;
         char *toks[16] = { 0 };
-        int nt = split_ws_paren(item, toks, 16);
+        int nt = ns_css_split_ws_paren(item, toks, 16);
         for (int j = 0; j < nt && valid; j++) {
             char *tok = g_strstrip(toks[j]);
             if (!*tok) continue;
@@ -4733,9 +3992,6 @@ ns_css_specified_canonical(const char *prop, const char *value)
     return ns_css_math_canonical(value);
 }
 
-static gboolean is_font_ligatures_value(const char *s);
-static gboolean is_font_feature_settings_value(const char *s);
-static gboolean is_font_variation_settings_value(const char *s);
 
 static ns_tval_type css_time_sum_depth(const char *s, const char *e, int depth);
 static ns_tval_type css_time_product(const char **pp, const char *e, int depth);
@@ -6342,7 +5598,7 @@ parse_value_for(ns_css_prop prop, const char *text)
                 v->u.length.unit = NS_CSS_UNIT_EM;
                 break;
             }
-            double fs = font_size_keyword_px(t);
+            double fs = ns_css_font_size_keyword_px(t);
             if (fs > 0) {
                 v = g_new0(ns_css_value, 1);
                 v->kind = NS_CSS_V_LENGTH;
@@ -6858,7 +6114,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     }
     case NS_CSS_FONT_STRETCH: {
         char *kw = ascii_lower(t, strlen(t));
-        if (is_font_stretch_keyword(kw)) {
+        if (ns_css_font_stretch_keyword(kw)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_KEYWORD;
             v->u.keyword = kw;
@@ -6891,7 +6147,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     }
     case NS_CSS_FONT_VARIANT_LIGATURES: {
         char *kw = ascii_lower(t, strlen(t));
-        if (is_font_ligatures_value(kw)) {
+        if (ns_css_font_ligatures_valid(kw)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_KEYWORD;
             v->u.keyword = kw;
@@ -6902,7 +6158,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     }
     case NS_CSS_FONT_FEATURE_SETTINGS: {
         char *kw = ascii_lower(t, strlen(t));
-        if (strcmp(kw, "normal") == 0 || is_font_feature_settings_value(t)) {
+        if (strcmp(kw, "normal") == 0 || ns_css_font_feature_settings_valid(t)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_KEYWORD;
             v->u.keyword = strcmp(kw, "normal") == 0 ? kw : g_strdup(t);
@@ -6914,7 +6170,7 @@ parse_value_for(ns_css_prop prop, const char *text)
     }
     case NS_CSS_FONT_VARIATION_SETTINGS: {
         char *kw = ascii_lower(t, strlen(t));
-        if (strcmp(kw, "normal") == 0 || is_font_variation_settings_value(t)) {
+        if (strcmp(kw, "normal") == 0 || ns_css_font_variation_settings_valid(t)) {
             v = g_new0(ns_css_value, 1);
             v->kind = NS_CSS_V_KEYWORD;
             v->u.keyword = strcmp(kw, "normal") == 0 ? kw : g_strdup(t);
@@ -7335,38 +6591,6 @@ ns_css_named_declaration_valid(const char *name, const char *text)
     return TRUE;
 }
 
-int
-ns_css_font_stretch_rank(const ns_css_value *v)
-{
-    if (!v) return 4;
-    if (v->kind == NS_CSS_V_KEYWORD && v->u.keyword) {
-        const char *kw = v->u.keyword;
-        if (strcmp(kw, "ultra-condensed") == 0) return 0;
-        if (strcmp(kw, "extra-condensed") == 0) return 1;
-        if (strcmp(kw, "condensed") == 0) return 2;
-        if (strcmp(kw, "semi-condensed") == 0) return 3;
-        if (strcmp(kw, "normal") == 0) return 4;
-        if (strcmp(kw, "semi-expanded") == 0) return 5;
-        if (strcmp(kw, "expanded") == 0) return 6;
-        if (strcmp(kw, "extra-expanded") == 0) return 7;
-        if (strcmp(kw, "ultra-expanded") == 0) return 8;
-    }
-    if (v->kind == NS_CSS_V_LENGTH &&
-        v->u.length.unit == NS_CSS_UNIT_PERCENT) {
-        double p = v->u.length.v;
-        if (p <= 56.25) return 0;
-        if (p <= 68.75) return 1;
-        if (p <= 81.25) return 2;
-        if (p <= 93.75) return 3;
-        if (p <= 106.25) return 4;
-        if (p <= 118.75) return 5;
-        if (p <= 137.5) return 6;
-        if (p <= 175.0) return 7;
-        return 8;
-    }
-    return 4;
-}
-
 static void
 emit_quad(GArray *decls, ns_css_prop t, ns_css_prop r,
           ns_css_prop b, ns_css_prop l,
@@ -7735,159 +6959,6 @@ is_color_keyword(const char *s)
 {
     return s && (g_ascii_strcasecmp(s, "currentcolor") == 0 ||
                  g_ascii_strcasecmp(s, "transparent") == 0);
-}
-
-static gboolean
-is_font_stretch_keyword(const char *s)
-{
-    return s &&
-        (g_ascii_strcasecmp(s, "ultra-condensed") == 0 ||
-         g_ascii_strcasecmp(s, "extra-condensed") == 0 ||
-         g_ascii_strcasecmp(s, "condensed") == 0 ||
-         g_ascii_strcasecmp(s, "semi-condensed") == 0 ||
-         g_ascii_strcasecmp(s, "normal") == 0 ||
-         g_ascii_strcasecmp(s, "semi-expanded") == 0 ||
-         g_ascii_strcasecmp(s, "expanded") == 0 ||
-         g_ascii_strcasecmp(s, "extra-expanded") == 0 ||
-         g_ascii_strcasecmp(s, "ultra-expanded") == 0);
-}
-
-static gboolean
-is_font_ligature_token(const char *s)
-{
-    return s &&
-        (strcmp(s, "common-ligatures") == 0 ||
-         strcmp(s, "no-common-ligatures") == 0 ||
-         strcmp(s, "discretionary-ligatures") == 0 ||
-         strcmp(s, "no-discretionary-ligatures") == 0 ||
-         strcmp(s, "historical-ligatures") == 0 ||
-         strcmp(s, "no-historical-ligatures") == 0 ||
-         strcmp(s, "contextual") == 0 ||
-         strcmp(s, "no-contextual") == 0);
-}
-
-static gboolean
-is_font_ligatures_value(const char *s)
-{
-    if (!s || !*s) return FALSE;
-    if (strcmp(s, "normal") == 0 || strcmp(s, "none") == 0) return TRUE;
-    char **tokens = g_strsplit_set(s, " \t\r\n\f", -1);
-    gboolean any = FALSE;
-    gboolean ok = TRUE;
-    for (int i = 0; tokens[i]; i++) {
-        if (!*tokens[i]) continue;
-        any = TRUE;
-        if (!is_font_ligature_token(tokens[i])) {
-            ok = FALSE;
-            break;
-        }
-    }
-    g_strfreev(tokens);
-    return any && ok;
-}
-
-static const char *
-font_feature_skip_ws(const char *p)
-{
-    while (*p && g_ascii_isspace((unsigned char)*p)) p++;
-    return p;
-}
-
-static gboolean
-font_feature_read_tag(const char **pp, char tag[5])
-{
-    const char *p = font_feature_skip_ws(*pp);
-    if (*p != '"' && *p != '\'') return FALSE;
-    char quote = *p++;
-    const char *s = p;
-    while (*p && *p != quote) p++;
-    if (*p != quote || p - s != 4) return FALSE;
-    for (int i = 0; i < 4; i++) {
-        unsigned char c = (unsigned char)s[i];
-        if (c < 0x20 || c > 0x7e) return FALSE;
-        tag[i] = (char)c;
-    }
-    tag[4] = '\0';
-    *pp = p + 1;
-    return TRUE;
-}
-
-static gboolean
-font_feature_read_optional_value(const char **pp)
-{
-    const char *p = font_feature_skip_ws(*pp);
-    if (!*p || *p == ',') {
-        *pp = p;
-        return TRUE;
-    }
-    if (g_ascii_isalpha((unsigned char)*p)) {
-        const char *s = p;
-        while (g_ascii_isalpha((unsigned char)*p) || *p == '-') p++;
-        char *kw = ascii_lower(s, (gsize)(p - s));
-        gboolean ok = strcmp(kw, "on") == 0 || strcmp(kw, "off") == 0;
-        g_free(kw);
-        if (!ok) return FALSE;
-        *pp = font_feature_skip_ws(p);
-        return TRUE;
-    }
-    if (!g_ascii_isdigit((unsigned char)*p)) return FALSE;
-    char *endp = NULL;
-    (void)g_ascii_strtoll(p, &endp, 10);
-    if (!endp || endp == p) return FALSE;
-    *pp = font_feature_skip_ws(endp);
-    return TRUE;
-}
-
-static gboolean
-is_font_feature_settings_value(const char *s)
-{
-    if (!s || !*s) return FALSE;
-    const char *p = font_feature_skip_ws(s);
-    if (!*p) return FALSE;
-    while (*p) {
-        char tag[5];
-        if (!font_feature_read_tag(&p, tag)) return FALSE;
-        if (!font_feature_read_optional_value(&p)) return FALSE;
-        if (*p == ',') {
-            p = font_feature_skip_ws(p + 1);
-            if (!*p) return FALSE;
-            continue;
-        }
-        return *p == '\0';
-    }
-    return FALSE;
-}
-
-static gboolean
-font_variation_read_value(const char **pp)
-{
-    const char *p = font_feature_skip_ws(*pp);
-    if (!*p || *p == ',') return FALSE;
-    char *endp = NULL;
-    double v = g_ascii_strtod(p, &endp);
-    if (!endp || endp == p || !isfinite(v)) return FALSE;
-    *pp = font_feature_skip_ws(endp);
-    return TRUE;
-}
-
-static gboolean
-is_font_variation_settings_value(const char *s)
-{
-    if (!s || !*s) return FALSE;
-    const char *p = font_feature_skip_ws(s);
-    if (!*p) return FALSE;
-    while (*p) {
-        char tag[5];
-        if (!font_feature_read_tag(&p, tag)) return FALSE;
-        if (!font_variation_read_value(&p)) return FALSE;
-        if (*p == ',') {
-            p = font_feature_skip_ws(p + 1);
-            if (!*p) return FALSE;
-            continue;
-        }
-        return *p == '\0';
-    }
-    return FALSE;
 }
 
 static gboolean
@@ -9894,11 +8965,11 @@ parse_declaration_block(const char **pp, const char *end,
                 g_free(canon);
             }
             char *tokens[24] = {0};
-            int n = split_ws_paren(vtext, tokens, (int)G_N_ELEMENTS(tokens));
+            int n = ns_css_split_ws_paren(vtext, tokens, (int)G_N_ELEMENTS(tokens));
             char *family_buf = NULL;
             int size_idx = -1;
             for (int i = 0; i < n; i++) {
-                if (font_shorthand_is_size_token(tokens[i])) {
+                if (ns_css_font_shorthand_is_size_token(tokens[i])) {
                     size_idx = i;
                     break;
                 }
@@ -9936,7 +9007,7 @@ parse_declaration_block(const char **pp, const char *end,
                     }
                 } else if (g_ascii_strcasecmp(t, "small-caps") == 0) {
                     prop = NS_CSS_FONT_VARIANT; kw = "small-caps";
-                } else if (is_font_stretch_keyword(t)) {
+                } else if (ns_css_font_stretch_keyword(t)) {
                     prop = NS_CSS_FONT_STRETCH; kw = t;
                 }
                 if (prop != NS_CSS_PROP_COUNT) {
@@ -9951,7 +9022,7 @@ parse_declaration_block(const char **pp, const char *end,
             }
             if (size_idx >= 0) {
                 char *size_tok = tokens[size_idx];
-                char *slash = font_shorthand_slash(size_tok);
+                const char *slash = ns_css_font_shorthand_slash(size_tok);
                 char *size_only = slash
                     ? g_strndup(size_tok, (gsize)(slash - size_tok))
                     : g_strdup(size_tok);
@@ -18438,21 +17509,21 @@ syntax_ctx_for_style(ns_css_syntax_ctx *ctx, const ns_style *s, double root_px)
     ctx->root_font_size = root_px;
     ctx->line_height = syntax_line_height_px(s, font_px);
     ctx->root_line_height = root_line;
-    ctx->ex_px  = font_relative_unit_px(NS_CSS_UNIT_EX, font_px, family,
+    ctx->ex_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_EX, font_px, family,
                                         weight, italic);
-    ctx->ch_px  = font_relative_unit_px(NS_CSS_UNIT_CH, font_px, family,
+    ctx->ch_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_CH, font_px, family,
                                         weight, italic);
-    ctx->cap_px = font_relative_unit_px(NS_CSS_UNIT_CAP, font_px, family,
+    ctx->cap_px = ns_css_font_relative_unit_px(NS_CSS_UNIT_CAP, font_px, family,
                                         weight, italic);
-    ctx->ic_px  = font_relative_unit_px(NS_CSS_UNIT_IC, font_px, family,
+    ctx->ic_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_IC, font_px, family,
                                         weight, italic);
-    ctx->root_ex_px  = font_relative_unit_px(NS_CSS_UNIT_EX, root_px, NULL,
+    ctx->root_ex_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_EX, root_px, NULL,
                                              400, FALSE);
-    ctx->root_ch_px  = font_relative_unit_px(NS_CSS_UNIT_CH, root_px, NULL,
+    ctx->root_ch_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_CH, root_px, NULL,
                                              400, FALSE);
-    ctx->root_cap_px = font_relative_unit_px(NS_CSS_UNIT_CAP, root_px, NULL,
+    ctx->root_cap_px = ns_css_font_relative_unit_px(NS_CSS_UNIT_CAP, root_px, NULL,
                                              400, FALSE);
-    ctx->root_ic_px  = font_relative_unit_px(NS_CSS_UNIT_IC, root_px, NULL,
+    ctx->root_ic_px  = ns_css_font_relative_unit_px(NS_CSS_UNIT_IC, root_px, NULL,
                                              400, FALSE);
     ctx->viewport_w = ns_css_viewport_resolve(100, NS_CSS_UNIT_VW);
     ctx->viewport_h = ns_css_viewport_resolve(100, NS_CSS_UNIT_VH);
@@ -18598,7 +17669,7 @@ attr_function_value(const char *args, const ns_node *node, int depth,
     char *head = css_trim_dup_range(args, comma ? comma : end);
     char *fallback = comma ? css_trim_dup_range(comma + 1, end) : NULL;
     char *toks[4] = { 0 };
-    int n = split_ws_paren(head, toks, 4);
+    int n = ns_css_split_ws_paren(head, toks, 4);
     char *result = NULL;
     *invalid = FALSE;
     if (n < 1 || n > 2 || !ns_css_content_ident_valid(toks[0])) {
@@ -18765,7 +17836,7 @@ attr_args_syntax_valid(const char *args)
     const char *comma = css_find_top_level_char(args, end, ',');
     char *head = css_trim_dup_range(args, comma ? comma : end);
     char *toks[4] = { 0 };
-    int n = split_ws_paren(head, toks, 4);
+    int n = ns_css_split_ws_paren(head, toks, 4);
     gboolean ok = n >= 1 && n <= 2 && ns_css_content_ident_valid(toks[0]);
     if (ok && n == 2) {
         const char *type = toks[1];
@@ -19183,7 +18254,7 @@ resolve_font_size_px(const ns_style *s, const ns_style *parent_style)
             (ns_css_keyword_is(parent_style->values[NS_CSS_FONT_STYLE], "italic") ||
              ns_css_keyword_is(parent_style->values[NS_CSS_FONT_STYLE], "oblique"));
         return fs->u.length.v *
-               font_relative_unit_px(fs->u.length.unit, parent_px, pf, pw, pi);
+               ns_css_font_relative_unit_px(fs->u.length.unit, parent_px, pf, pw, pi);
     }
     case NS_CSS_UNIT_VW:
     case NS_CSS_UNIT_VH:
@@ -19494,7 +18565,7 @@ resolve_em_units(ns_style *out, const ns_style *parent_style, double root_px)
         case NS_CSS_UNIT_CAP:
         case NS_CSS_UNIT_IC:
             v = ns_css_value_cow(out, i);
-            v->u.length.v *= font_relative_unit_px(v->u.length.unit, my_font_px,
+            v->u.length.v *= ns_css_font_relative_unit_px(v->u.length.unit, my_font_px,
                                                    fr_family, fr_weight,
                                                    fr_italic);
             v->u.length.unit = NS_CSS_UNIT_PX;
@@ -19729,7 +18800,7 @@ cascade_for(GArray *matches, ns_style *out, const ns_style *parent_style,
             ns_css_keyword_is(out->values[NS_CSS_FONT_WEIGHT], "bolder");
         ns_css_value_free(out->values[NS_CSS_FONT_WEIGHT]);
         out->values[NS_CSS_FONT_WEIGHT] = keyword_value(
-            g_strdup_printf("%d", font_weight_relative(parent_weight, bolder)));
+            g_strdup_printf("%d", ns_css_font_weight_relative(parent_weight, bolder)));
     }
     {
         const ns_css_prop color_props[] = {

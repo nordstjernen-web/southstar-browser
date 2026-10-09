@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod container;
+mod font;
 mod grid;
 mod image;
 mod lex;
@@ -16,6 +17,7 @@ use southstar_glib::{self as glib, GBoolean};
 use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
+pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub use value::NsCssValue;
 
 const COLOR_SCHEME_DARK: c_int = 1;
@@ -25,6 +27,7 @@ unsafe extern "C" {
     fn ns_css_viewport_w() -> c_double;
     fn ns_css_viewport_h() -> c_double;
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
+    fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
     fn g_ascii_formatd(
         buffer: *mut c_char,
         buf_len: c_int,
@@ -39,6 +42,11 @@ pub(crate) fn prefers_dark() -> bool {
 
 pub(crate) fn viewport() -> (f64, f64) {
     unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
+}
+
+pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
+    let text = std::ffi::CString::new(text).unwrap_or_default();
+    unsafe { ns_parse_int(text.as_ptr(), default, min, max) }
 }
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {

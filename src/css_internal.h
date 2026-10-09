@@ -74,6 +74,19 @@ char         *ns_css_add_leading_zeros(char *v);
 char         *ns_css_normalize_negative_zero(char *v);
 GPtrArray    *ns_css_split_top_level_commas(const char *text);
 
+double        ns_css_font_relative_unit_px(ns_css_unit unit, double font_px,
+                                           const char *family, int weight,
+                                           gboolean italic);
+int           ns_css_font_weight_relative(int parent, gboolean bolder);
+double        ns_css_font_size_keyword_px(const char *t);
+int           ns_css_split_ws_paren(const char *text, char **out, int max);
+const char   *ns_css_font_shorthand_slash(const char *tok);
+gboolean      ns_css_font_shorthand_is_size_token(const char *tok);
+gboolean      ns_css_font_stretch_keyword(const char *s);
+gboolean      ns_css_font_ligatures_valid(const char *s);
+gboolean      ns_css_font_feature_settings_valid(const char *s);
+gboolean      ns_css_font_variation_settings_valid(const char *s);
+
 char         *ns_css_read_ident(const char **pp, const char *end);
 char         *ns_css_read_string(const char **pp, const char *end);
 
@@ -114,7 +127,8 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 offsetof(ns_css_tracks, line_names) == 2148 &&
                 sizeof(ns_css_tracks) == 3048 &&
                 sizeof(ns_css_area_rect) == 24 &&
-                sizeof(ns_css_areas) == 784);
+                sizeof(ns_css_areas) == 784 &&
+                sizeof(ns_css_font_metrics) == 56);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8
