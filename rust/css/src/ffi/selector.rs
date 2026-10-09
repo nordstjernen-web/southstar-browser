@@ -15,50 +15,50 @@ use crate::selector::{
 
 #[repr(C)]
 pub(super) struct RawSelector {
-    compounds: *mut GPtrArray,
-    combinators: *mut GArray,
-    pseudo_element: c_uint,
-    spec_a: c_int,
-    spec_b: c_int,
-    spec_c: c_int,
-    ancestor_hashes: [u32; 4],
-    n_ancestor_hashes: c_uint,
-    n_ancestor_attr_hashes: c_uint,
+    pub(super) compounds: *mut GPtrArray,
+    pub(super) combinators: *mut GArray,
+    pub(super) pseudo_element: c_uint,
+    pub(super) spec_a: c_int,
+    pub(super) spec_b: c_int,
+    pub(super) spec_c: c_int,
+    pub(super) ancestor_hashes: [u32; 4],
+    pub(super) n_ancestor_hashes: c_uint,
+    pub(super) n_ancestor_attr_hashes: c_uint,
 }
 
 #[repr(C)]
-struct RawSimple {
-    type_: *mut c_char,
-    id: *mut c_char,
-    classes: *mut GPtrArray,
-    class_lens: *mut GArray,
-    attrs: *mut GArray,
-    pseudos: *mut GArray,
-    matches_any: *mut GPtrArray,
-    matches_none: *mut GPtrArray,
-    has_groups: *mut GPtrArray,
-    never_match: GBoolean,
-    ns_none: GBoolean,
+pub(super) struct RawSimple {
+    pub(super) type_: *mut c_char,
+    pub(super) id: *mut c_char,
+    pub(super) classes: *mut GPtrArray,
+    pub(super) class_lens: *mut GArray,
+    pub(super) attrs: *mut GArray,
+    pub(super) pseudos: *mut GArray,
+    pub(super) matches_any: *mut GPtrArray,
+    pub(super) matches_none: *mut GPtrArray,
+    pub(super) has_groups: *mut GPtrArray,
+    pub(super) never_match: GBoolean,
+    pub(super) ns_none: GBoolean,
 }
 
 #[repr(C)]
-struct RawAttrPred {
-    name: *mut c_char,
-    op: c_uint,
-    value: *mut c_char,
-    case_insensitive: GBoolean,
-    case_sensitive: GBoolean,
-    html_ci: GBoolean,
-    name_bit: u64,
+pub(super) struct RawAttrPred {
+    pub(super) name: *mut c_char,
+    pub(super) op: c_uint,
+    pub(super) value: *mut c_char,
+    pub(super) case_insensitive: GBoolean,
+    pub(super) case_sensitive: GBoolean,
+    pub(super) html_ci: GBoolean,
+    pub(super) name_bit: u64,
 }
 
 #[repr(C)]
-struct RawPseudoPred {
-    kind: c_uint,
-    a: c_int,
-    b: c_int,
-    arg: *mut c_char,
-    of_group: *mut GPtrArray,
+pub(super) struct RawPseudoPred {
+    pub(super) kind: c_uint,
+    pub(super) a: c_int,
+    pub(super) b: c_int,
+    pub(super) arg: *mut c_char,
+    pub(super) of_group: *mut GPtrArray,
 }
 
 #[cfg(target_pointer_width = "64")]

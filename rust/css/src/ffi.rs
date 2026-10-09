@@ -16,9 +16,11 @@ mod host_scope;
 mod image;
 mod inline;
 mod lex;
+mod matcher;
 mod nesting;
 mod property;
 mod selector;
+mod selector_view;
 mod sheet;
 mod shorthand;
 mod supports;
@@ -41,6 +43,11 @@ pub(crate) use element_state::{
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
+pub(crate) use matcher::{
+    active_node, focus_node, focus_visible_node, fullscreen_node, hover_node, match_scope,
+    set_match_scope,
+};
+pub(crate) use selector_view::{CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef};
 pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;

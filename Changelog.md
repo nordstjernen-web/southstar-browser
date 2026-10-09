@@ -469,6 +469,15 @@ Southstar Browser (unreleased):
   functions. Values substitute as before (checked identical over 7.5
   million generated calls); a type() whose syntax has no <...> no longer
   leaks the parsed syntax.
+* Selector matching is Rust: type, id, class and attribute tests (every
+  operator, i and s flags, HTML case-insensitive attributes), the
+  structural, nth (with "of S"), hover, focus, active, fullscreen, scope
+  and defined pseudo-classes, :is()/:where()/:not(), relative :has()
+  with its per-pass memo, combinators matched right to left under the
+  same operation budget, nth positions cached per query batch, and
+  @scope roots, limits and proximity. querySelector, matches() and the
+  cascade match as before (checked identical over 20 million generated
+  selector/element pairs in every mode) at the same speed.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

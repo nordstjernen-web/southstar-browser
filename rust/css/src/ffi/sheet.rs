@@ -100,9 +100,9 @@ pub(crate) struct PageRule {
 }
 
 #[repr(C)]
-struct RawScope {
-    roots: *mut GPtrArray,
-    limits: *mut GPtrArray,
+pub(super) struct RawScope {
+    pub(super) roots: *mut GPtrArray,
+    pub(super) limits: *mut GPtrArray,
 }
 
 #[cfg(target_pointer_width = "64")]

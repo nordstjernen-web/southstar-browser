@@ -59,6 +59,18 @@ gboolean      ns_css_element_state_matches(const ns_node *el,
                                            ns_css_pseudo kind,
                                            const char *arg);
 void          ns_css_language_cache_reset(void);
+const ns_node *ns_css_match_scope(void);
+const ns_node *ns_css_focus_node(void);
+const ns_node *ns_css_hover_node(void);
+const ns_node *ns_css_active_node(void);
+const ns_node *ns_css_fullscreen_node(void);
+void          ns_css_has_memo_begin(void);
+void          ns_css_has_memo_end(void);
+gboolean      ns_css_rule_selector_matches(const ns_css_rule *rule,
+                                           const ns_css_selector *sel,
+                                           const ns_node *el,
+                                           ns_css_pseudo_element pe,
+                                           int *scope_order);
 char         *ns_css_substitute_attrs(const char *text, const ns_node *node,
                                       gboolean *tainted);
 void          ns_css_property_rule_clear(gpointer data);
