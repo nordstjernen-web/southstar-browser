@@ -10,6 +10,7 @@ use crate::animation::{self, Longhand};
 use crate::container;
 use crate::content;
 use crate::counter;
+use crate::declarations::{self, Collected};
 use crate::ffi::{self, SheetDecl};
 use crate::font;
 use crate::gradient::text_starts_gradient;
@@ -22,7 +23,7 @@ use crate::scan::{
     is_ident, is_ws, match_close_paren, scan_until, skip_to_block_end, skip_ws_comments,
     split_ws_limit, split_ws_paren, starts_with_ci, strip, strip_important, trim_range,
 };
-use crate::shorthand::{ANIMATION_LONGHANDS, TRANSITION_LONGHANDS};
+use crate::shorthand::{self, ANIMATION_LONGHANDS, TRANSITION_LONGHANDS};
 use crate::text::{add_leading_zeros, normalize_negative_zero, split_top_level_commas};
 use crate::values;
 
@@ -500,7 +501,7 @@ fn all_covered(name: &[u8]) -> bool {
     !name.starts_with(b"-")
         && !eq(name, b"direction")
         && !eq(name, b"unicode-bidi")
-        && ffi::named_property_supported(name)
+        && declarations::named_property_supported(name)
 }
 
 fn under_prefix(name: &[u8], prefix: Option<&[u8]>) -> bool {
@@ -520,7 +521,7 @@ fn all_value_for(style: &[u8], prefix: Option<&[u8]>) -> Option<Vec<u8>> {
         let (value, important) = strip_important(value);
         let value = strip(value);
         if eq(name, b"all")
-            && ffi::named_declaration_valid(b"all", value)
+            && declarations::named_declaration_valid(b"all", value)
             && (all.is_none() || important || !all_important)
         {
             all = Some(value.to_vec());
@@ -528,7 +529,7 @@ fn all_value_for(style: &[u8], prefix: Option<&[u8]>) -> Option<Vec<u8>> {
         } else if all.is_some()
             && all_covered(name)
             && under_prefix(name, prefix)
-            && ffi::named_declaration_valid(name, value)
+            && declarations::named_declaration_valid(name, value)
             && (important || !all_important)
         {
             all = None;
@@ -820,7 +821,7 @@ pub(crate) fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
         }
     }
     let id = ffi::prop_named(prop);
-    if id.is_none() && ffi::named_property_supported(prop) {
+    if id.is_none() && declarations::named_property_supported(prop) {
         if let Some(all) = all_value_for(style, None) {
             return keep(Some(all));
         }
@@ -904,8 +905,8 @@ fn parsed_declarations(style: &[u8]) -> Vec<InlineDecl> {
         let value = strip(value);
         if name.is_empty()
             || value.is_empty()
-            || !ffi::named_property_supported(&name)
-            || !ffi::named_declaration_valid(&name, value)
+            || !declarations::named_property_supported(&name)
+            || !declarations::named_declaration_valid(&name, value)
         {
             continue;
         }
@@ -1151,17 +1152,24 @@ fn members_expanded(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
         );
     }
     let text = [prop, b": ", value, b";"].concat();
+    let mut collected = Collected {
+        declarations: Vec::new(),
+    };
+    declarations::parse_block(&text, 0, &mut collected);
     let mut out = Vec::new();
-    for (id, serialized) in ffi::declarations_serialized(&text) {
-        let Some(id) = id.filter(|&id| id != Prop::Animation && id != Prop::Transition) else {
-            continue;
-        };
-        if !out.is_empty() {
-            out.extend_from_slice(b"; ");
+    for (name, text, _) in &collected.declarations {
+        let decls = shorthand::expand(name, text);
+        for (i, decl) in decls.iter().enumerate() {
+            if decl.prop == Prop::Animation || decl.prop == Prop::Transition {
+                continue;
+            }
+            if !out.is_empty() {
+                out.extend_from_slice(b"; ");
+            }
+            out.extend_from_slice(decl.prop.name());
+            out.extend_from_slice(b": ");
+            out.extend_from_slice(&values::serialize(shorthand::slot_value(&decls, i), false));
         }
-        out.extend_from_slice(id.name());
-        out.extend_from_slice(b": ");
-        out.extend_from_slice(&serialized);
     }
     (!out.is_empty()).then_some(out)
 }

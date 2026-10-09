@@ -400,6 +400,15 @@ Southstar Browser (unreleased):
   transforms, border-radius, animations, colours, shadows, times and the
   other properties with a canonical spelling. Values serialize and
   animate as before.
+* Reading a declaration block is Rust: each declaration's name and value
+  with !important, custom properties and the values that wait for var(),
+  attr() or container units set aside on the rule, var() fallbacks
+  substituted in values that need no other substitution, the syntax
+  checks for unbalanced brackets, stray semicolons and bad attr() types,
+  and the validity checks element.style, CSS.supports() and @supports
+  ask of one declaration. So is choosing an image width from an
+  <img sizes> list. Style sheets parse and images pick their sources as
+  before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

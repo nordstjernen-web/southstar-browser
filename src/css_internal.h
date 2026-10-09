@@ -98,8 +98,11 @@ char         *ns_css_list_style_type_canonical(const char *text);
 ns_css_value *ns_css_parse_value_for(ns_css_prop prop, const char *text);
 gboolean      ns_css_bg_token_is_box(const char *tok);
 
-void          ns_css_expand_declaration(const char *name, const char *text,
-                                        gboolean important, GArray *decls_out);
+const char   *ns_css_parse_declaration_block(const char *p, const char *end,
+                                             GArray *decls_out,
+                                             ns_css_rule *capture);
+gboolean      ns_css_declaration_value_syntax_valid(const char *text);
+gboolean      ns_css_attr_unit_ident_valid(const char *unit);
 char         *ns_css_border_radius_canonical(const char *value);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);

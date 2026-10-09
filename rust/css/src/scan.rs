@@ -60,7 +60,7 @@ pub(crate) fn match_close_paren(s: &[u8], mut p: usize, end: usize) -> Option<us
     None
 }
 
-fn skip_comment(s: &[u8], p: usize, end: usize) -> usize {
+pub(crate) fn skip_comment(s: &[u8], p: usize, end: usize) -> usize {
     if p + 1 >= end || s[p] != b'/' || s[p + 1] != b'*' {
         return p;
     }

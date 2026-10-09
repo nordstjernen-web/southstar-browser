@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of declaration expansion: a declaration's longhands appended to css.c's array of ns_css_decl, sharing one value where css.c shares it, and the property-name lookup expansion makes into css.c.
+//! Southstar — a declaration's longhands appended to css.c's array of ns_css_decl, sharing one value where css.c shares it, and the property-name lookup expansion makes into css.c.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -36,20 +36,15 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_expand_declaration(
-    name: *const c_char,
-    text: *const c_char,
-    important: GBoolean,
+pub(super) unsafe fn append_expanded(
+    name: &[u8],
+    text: &[u8],
+    important: bool,
     decls: *mut GArray,
 ) {
-    let (Some(name), Some(text), false) = (
-        unsafe { bytes(name) },
-        unsafe { bytes(text) },
-        decls.is_null(),
-    ) else {
+    if decls.is_null() {
         return;
-    };
+    }
     let mut raw: Vec<RawDecl> = Vec::new();
     for decl in shorthand::expand(name, text) {
         let value = match decl.slot {
@@ -59,7 +54,7 @@ pub unsafe extern "C" fn ns_css_expand_declaration(
         raw.push(RawDecl {
             prop: id_of(decl.prop),
             value,
-            important,
+            important: glib::boolean(important),
         });
     }
     if !raw.is_empty() {

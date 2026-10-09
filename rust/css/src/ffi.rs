@@ -5,6 +5,7 @@
 mod animation;
 mod border_image;
 mod container;
+mod declarations;
 mod display;
 mod font;
 mod grid;
@@ -25,11 +26,9 @@ use southstar_glib::{self as glib, GBoolean};
 use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
+pub(crate) use declarations::{media_query_matches, supports_declaration, syntax_def_valid};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
-pub(crate) use inline::{
-    SheetDecl, declarations_serialized, named_declaration_valid, named_property_supported,
-    sheet_declarations,
-};
+pub(crate) use inline::{SheetDecl, sheet_declarations};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
 

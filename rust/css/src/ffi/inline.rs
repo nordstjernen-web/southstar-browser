@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the inline style text, and the css.c stylesheet parser and declaration checks it still calls.
+//! Southstar — the C ABI of the inline style text, and the css.c stylesheet parser it still calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,6 +8,7 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
 
+use super::declarations::RawRule;
 use super::property::prop_of;
 use super::shorthand::RawDecl;
 use super::values::text_of;
@@ -19,19 +20,9 @@ struct RawSheet {
     rules: *mut GPtrArray,
 }
 
-#[repr(C)]
-struct RawRule {
-    selectors: *mut GPtrArray,
-    decls: *mut GArray,
-}
-
 unsafe extern "C" {
     fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
     fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-    fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
-    fn ns_css_declarations_free(decls: *mut GArray);
-    fn ns_css_named_property_supported(name: *const c_char) -> GBoolean;
-    fn ns_css_named_declaration_valid(name: *const c_char, text: *const c_char) -> GBoolean;
 }
 
 pub(crate) struct SheetDecl {
@@ -89,27 +80,6 @@ pub(crate) fn sheet_declarations(
         unsafe { ns_css_stylesheet_free(sheet) };
     }
     out
-}
-
-pub(crate) fn declarations_serialized(text: &[u8]) -> Vec<(Option<Prop>, Vec<u8>)> {
-    let text = c_string(text);
-    let decls = unsafe { ns_css_parse_declarations(text.as_ptr()) };
-    let out = unsafe { decls_of(decls) }
-        .iter()
-        .map(|decl| (prop_of(decl.prop), unsafe { text_of(decl.value, false) }))
-        .collect();
-    unsafe { ns_css_declarations_free(decls) };
-    out
-}
-
-pub(crate) fn named_property_supported(name: &[u8]) -> bool {
-    let name = c_string(name);
-    unsafe { ns_css_named_property_supported(name.as_ptr()) != 0 }
-}
-
-pub(crate) fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
-    let (name, text) = (c_string(name), c_string(text));
-    unsafe { ns_css_named_declaration_valid(name.as_ptr(), text.as_ptr()) != 0 }
 }
 
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {

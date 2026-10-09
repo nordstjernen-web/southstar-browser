@@ -262,6 +262,15 @@ fn chain(values: Vec<Value>) -> Option<Value> {
     Some(head)
 }
 
+pub(crate) fn slot_value(decls: &[Decl], mut index: usize) -> &Value {
+    loop {
+        match &decls[index].slot {
+            Slot::Own(value) => return value,
+            Slot::Dup(of) => index = *of,
+        }
+    }
+}
+
 pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
     let mut out = Out::default();
     match name {
