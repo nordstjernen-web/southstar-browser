@@ -1,4 +1,4 @@
-/* Southstar — minimal WebSocket client (libcurl-backed), implemented in rust/websocket.
+/* Southstar — minimal WebSocket client, implemented in rust/websocket.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -42,6 +42,7 @@ gboolean ns_ws_send_binary(ns_ws *ws, const guint8 *data, gsize len);
 void     ns_ws_close(ns_ws *ws, int code, const char *reason);
 
 int      ns_ws_state_get(ns_ws *ws);
+char    *ns_ws_protocol(ns_ws *ws);
 
 void     ns_ws_free(ns_ws *ws);
 

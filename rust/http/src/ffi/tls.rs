@@ -256,6 +256,12 @@ impl Tls {
                 if should_abort() {
                     return Err(Handshake::Cancelled);
                 }
+                let events = if err == SSL_ERROR_WANT_WRITE {
+                    super::socket::POLLOUT
+                } else {
+                    super::socket::POLLIN
+                };
+                super::socket::wait(fd, events, 250);
                 continue;
             }
             let verify_result = unsafe { SSL_get_verify_result(ssl) };

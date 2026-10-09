@@ -4,8 +4,8 @@
 
 mod client;
 mod decode;
-mod ffi;
 mod fetch;
+mod ffi;
 mod frame;
 mod h1;
 mod h2;
@@ -14,7 +14,7 @@ mod hpack_tables;
 mod proxy;
 mod transfer;
 
-pub use client::{Outcome, Request, Version, perform, shutdown};
+pub use client::{Outcome, Received, Request, Upgraded, Version, perform, shutdown, upgrade};
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
 pub use ffi::tls::Settings as TlsSettings;

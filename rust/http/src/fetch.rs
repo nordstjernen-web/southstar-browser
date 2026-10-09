@@ -43,12 +43,19 @@ pub fn parse_target(url: &[u8]) -> Option<Target> {
             Some(p) if !p.is_empty() => Some(core::str::from_utf8(p).ok()?.parse().ok()?),
             _ => None,
         };
-        (&authority[..=close], port.unwrap_or(default_port), port.is_some())
+        (
+            &authority[..=close],
+            port.unwrap_or(default_port),
+            port.is_some(),
+        )
     } else {
         match authority.iter().position(|&c| c == b':') {
             Some(colon) if colon + 1 < authority.len() => (
                 &authority[..colon],
-                core::str::from_utf8(&authority[colon + 1..]).ok()?.parse().ok()?,
+                core::str::from_utf8(&authority[colon + 1..])
+                    .ok()?
+                    .parse()
+                    .ok()?,
                 true,
             ),
             Some(colon) => (&authority[..colon], default_port, false),
@@ -132,8 +139,10 @@ pub fn resolve(base: &[u8], location: &[u8]) -> Option<Vec<u8>> {
             .unwrap_or(after.len());
     let origin = &base[..authority_end];
     let base_path_full = &base[authority_end..];
-    let base_path_full =
-        &base_path_full[..base_path_full.iter().position(|&c| c == b'#').unwrap_or(base_path_full.len())];
+    let base_path_full = &base_path_full[..base_path_full
+        .iter()
+        .position(|&c| c == b'#')
+        .unwrap_or(base_path_full.len())];
     let query_at = base_path_full.iter().position(|&c| c == b'?');
     let base_path = &base_path_full[..query_at.unwrap_or(base_path_full.len())];
     if location.is_empty() {

@@ -327,10 +327,16 @@ pub fn connect_addr(
             }
         }
     }
-    stream
-        .set_nonblocking(false)
-        .map_err(|_| ConnectError::Failed)?;
     Ok(stream)
+}
+
+pub fn wait(fd: Raw, events: c_short, timeout_ms: i32) -> bool {
+    let mut fds = [PollFd {
+        fd,
+        events,
+        revents: 0,
+    }];
+    matches!(poll_fds(&mut fds, timeout_ms), Ok(n) if n > 0)
 }
 
 pub struct Wake {

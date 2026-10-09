@@ -28,7 +28,10 @@ pub fn route(target: &[u8], host: &str) -> Route {
         .filter(|p| !p.is_empty())
         .and_then(southstar_http::parse_proxy)
         .filter(|_| {
-            !southstar_http::proxy_bypassed(text(ns_net_configured_no_proxy()).unwrap_or_default(), host)
+            !southstar_http::proxy_bypassed(
+                text(ns_net_configured_no_proxy()).unwrap_or_default(),
+                host,
+            )
         });
     let opt_in = southstar_config::get().is_some_and(|c| c.tls_allow_insecure_override != 0);
     let pinned = url::host_from(target).is_some_and(|h| hsts::should_upgrade(&h));

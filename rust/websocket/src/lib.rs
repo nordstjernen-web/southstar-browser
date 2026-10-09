@@ -1,4 +1,4 @@
-//! Southstar — WebSocket client over libcurl's native WebSocket API: frame reassembly, the close handshake and the outgoing queue.
+//! Southstar — WebSocket client: the RFC 6455 frame codec and handshake checks, frame reassembly, the close handshake and the outgoing queue.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -48,6 +48,7 @@ pub struct Shared {
     pub url: Vec<u8>,
     pub origin: Option<Vec<u8>>,
     pub protocols: Vec<Vec<u8>>,
+    pub protocol: Mutex<Vec<u8>>,
     queue: Mutex<VecDeque<Out>>,
     wake: Condvar,
     pub state: AtomicI32,
@@ -62,6 +63,7 @@ impl Shared {
             url,
             origin,
             protocols,
+            protocol: Mutex::new(Vec::new()),
             queue: Mutex::new(VecDeque::new()),
             wake: Condvar::new(),
             state: AtomicI32::new(STATE_CONNECTING),
@@ -242,5 +244,196 @@ impl Assembly {
             return Frame::BadUtf8;
         }
         Frame::Message { text, data }
+    }
+}
+
+pub const OP_CONTINUATION: u8 = 0;
+pub const OP_TEXT: u8 = 1;
+pub const OP_BINARY: u8 = 2;
+pub const OP_CLOSE: u8 = 8;
+pub const OP_PING: u8 = 9;
+pub const OP_PONG: u8 = 10;
+
+pub fn encode_frame(opcode: u8, payload: &[u8], mask: [u8; 4]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(payload.len() + 14);
+    out.push(0x80 | opcode);
+    let len = payload.len();
+    if len < 126 {
+        out.push(0x80 | len as u8);
+    } else if len <= 0xffff {
+        out.push(0x80 | 126);
+        out.extend_from_slice(&(len as u16).to_be_bytes());
+    } else {
+        out.push(0x80 | 127);
+        out.extend_from_slice(&(len as u64).to_be_bytes());
+    }
+    out.extend_from_slice(&mask);
+    out.extend(payload.iter().enumerate().map(|(i, &b)| b ^ mask[i % 4]));
+    out
+}
+
+pub struct RawFrame {
+    pub meta: FrameMeta,
+    pub opcode: u8,
+    pub payload: Vec<u8>,
+}
+
+pub enum Decoded {
+    Frame(RawFrame),
+    NeedMore,
+    TooBig,
+    ProtocolError,
+}
+
+#[derive(Default)]
+pub struct Decoder {
+    buf: Vec<u8>,
+    message_flag: i32,
+}
+
+impl Decoder {
+    pub fn push(&mut self, data: &[u8]) {
+        self.buf.extend_from_slice(data);
+    }
+
+    pub fn next_frame(&mut self) -> Decoded {
+        let b = &self.buf;
+        if b.len() < 2 {
+            return Decoded::NeedMore;
+        }
+        let fin = b[0] & 0x80 != 0;
+        let opcode = b[0] & 0x0f;
+        if b[0] & 0x70 != 0 || b[1] & 0x80 != 0 {
+            return Decoded::ProtocolError;
+        }
+        let (len, header) = match b[1] & 0x7f {
+            126 => {
+                if b.len() < 4 {
+                    return Decoded::NeedMore;
+                }
+                (u64::from(u16::from_be_bytes([b[2], b[3]])), 4)
+            }
+            127 => {
+                if b.len() < 10 {
+                    return Decoded::NeedMore;
+                }
+                let mut n = [0u8; 8];
+                n.copy_from_slice(&b[2..10]);
+                (u64::from_be_bytes(n), 10)
+            }
+            n => (u64::from(n), 2),
+        };
+        let control = opcode & 0x08 != 0;
+        if control && (len > 125 || !fin) {
+            return Decoded::ProtocolError;
+        }
+        if !matches!(
+            opcode,
+            OP_CONTINUATION | OP_TEXT | OP_BINARY | OP_CLOSE | OP_PING | OP_PONG
+        ) {
+            return Decoded::ProtocolError;
+        }
+        if len > MAX_MESSAGE as u64 {
+            return Decoded::TooBig;
+        }
+        let total = header + len as usize;
+        if b.len() < total {
+            return Decoded::NeedMore;
+        }
+        let payload = b[header..total].to_vec();
+        self.buf.drain(..total);
+        let cont = if fin { 0 } else { WS_CONT };
+        let flags = match opcode {
+            OP_TEXT | OP_BINARY => {
+                if self.message_flag != 0 {
+                    return Decoded::ProtocolError;
+                }
+                let kind = if opcode == OP_TEXT {
+                    WS_TEXT
+                } else {
+                    WS_BINARY
+                };
+                self.message_flag = if fin { 0 } else { kind };
+                kind | cont
+            }
+            OP_CONTINUATION => {
+                let kind = self.message_flag;
+                if kind == 0 {
+                    return Decoded::ProtocolError;
+                }
+                if fin {
+                    self.message_flag = 0;
+                }
+                kind | cont
+            }
+            OP_CLOSE => WS_CLOSE,
+            OP_PING => WS_PING,
+            _ => 0,
+        };
+        Decoded::Frame(RawFrame {
+            meta: FrameMeta {
+                flags,
+                offset: 0,
+                bytes_left: 0,
+            },
+            opcode,
+            payload,
+        })
+    }
+}
+
+pub const ACCEPT_GUID: &[u8] = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+pub fn base64(input: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        out.push(B64[(n >> 18) as usize & 63]);
+        out.push(B64[(n >> 12) as usize & 63]);
+        out.push(if chunk.len() > 1 {
+            B64[(n >> 6) as usize & 63]
+        } else {
+            b'='
+        });
+        out.push(if chunk.len() > 2 {
+            B64[n as usize & 63]
+        } else {
+            b'='
+        });
+    }
+    out
+}
+
+pub fn header<'a>(headers: &'a [(Vec<u8>, Vec<u8>)], name: &[u8]) -> Option<&'a [u8]> {
+    headers
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.as_slice())
+}
+
+pub fn has_token(value: &[u8], token: &[u8]) -> bool {
+    value
+        .split(|&c| c == b',')
+        .any(|t| t.trim_ascii().eq_ignore_ascii_case(token))
+}
+
+pub fn ws_to_http(url: &[u8]) -> Option<Vec<u8>> {
+    if url.len() >= 6 && url[..6].eq_ignore_ascii_case(b"wss://") {
+        Some([&b"https://"[..], &url[6..]].concat())
+    } else if url.len() >= 5 && url[..5].eq_ignore_ascii_case(b"ws://") {
+        Some([&b"http://"[..], &url[5..]].concat())
+    } else if url.len() >= 8 && url[..8].eq_ignore_ascii_case(b"https://")
+        || url.len() >= 7 && url[..7].eq_ignore_ascii_case(b"http://")
+    {
+        Some(url.to_vec())
+    } else {
+        None
     }
 }

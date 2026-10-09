@@ -250,6 +250,7 @@ impl Stream {
             if abort() {
                 return None;
             }
+            socket::wait(self.raw(), socket::POLLIN, 250);
         }
     }
 
@@ -268,8 +269,11 @@ impl Stream {
                     _ => return false,
                 },
             };
-            if n == 0 && abort() {
-                return false;
+            if n == 0 {
+                if abort() {
+                    return false;
+                }
+                socket::wait(self.raw(), socket::POLLOUT, 250);
             }
             buf = &buf[n..];
         }
@@ -337,11 +341,7 @@ fn tcp_connect_to(
             break;
         }
         match socket::connect_addr(addr, &remaining, cancelled) {
-            Ok(s) => {
-                let _ = s.set_read_timeout(Some(Duration::from_secs(1)));
-                let _ = s.set_write_timeout(Some(Duration::from_secs(1)));
-                return Ok((s, *addr));
-            }
+            Ok(s) => return Ok((s, *addr)),
             Err(ConnectError::Cancelled | ConnectError::TimedOut) => break,
             Err(ConnectError::Failed) => {}
         }
@@ -354,6 +354,7 @@ fn open(
     t: &Transfer,
     connect_deadline: Instant,
     out: &mut Outcome,
+    allow_h2: bool,
 ) -> Option<Connected> {
     let cancelled = || t.handler.should_abort();
     let connected = tcp_connect(req, connect_deadline, &cancelled);
@@ -388,7 +389,7 @@ fn open(
             req.host,
             req.port,
             verify,
-            true,
+            allow_h2,
             &req.tls,
             &abort,
         ) {
@@ -1134,7 +1135,7 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
                 (conn, token)
             }
             Attach::Connector => {
-                let Some(connected) = open(req, &t, connect_deadline, &mut out) else {
+                let Some(connected) = open(req, &t, connect_deadline, &mut out, true) else {
                     connect_done(&origin, None);
                     out.total_ms = t.ms_since_start();
                     return out;
@@ -1219,4 +1220,162 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
         }));
     }
     out
+}
+
+struct Abort<'a>(&'a dyn Fn() -> bool);
+
+impl Handler for Abort<'_> {
+    fn should_abort(&self) -> bool {
+        (self.0)()
+    }
+
+    fn status_line(&mut self, _line: &[u8]) {}
+
+    fn header(&mut self, _line: &[u8], _name: &[u8], _value: &[u8]) {}
+
+    fn body(&mut self, _data: &[u8]) -> bool {
+        false
+    }
+}
+
+pub enum Received {
+    Data(usize),
+    Idle,
+    Closed,
+    Failed,
+}
+
+pub struct Upgraded {
+    pub status: i64,
+    pub headers: Vec<(Vec<u8>, Vec<u8>)>,
+    pub tls_warning: Option<String>,
+    stream: Stream,
+    buffered: Vec<u8>,
+    poll_ms: i32,
+}
+
+impl Upgraded {
+    pub fn set_poll_interval(&mut self, interval: Duration) {
+        self.poll_ms = interval.as_millis().min(i32::MAX as u128) as i32;
+    }
+
+    pub fn read(&mut self, buf: &mut [u8]) -> Received {
+        match self.read_now(buf) {
+            Received::Idle if socket::wait(self.stream.raw(), socket::POLLIN, self.poll_ms) => {
+                self.read_now(buf)
+            }
+            other => other,
+        }
+    }
+
+    fn read_now(&mut self, buf: &mut [u8]) -> Received {
+        if !self.buffered.is_empty() {
+            let n = buf.len().min(self.buffered.len());
+            buf[..n].copy_from_slice(&self.buffered[..n]);
+            self.buffered.drain(..n);
+            return Received::Data(n);
+        }
+        match &mut self.stream {
+            Stream::Plain(s) => match s.read(buf) {
+                Ok(0) => Received::Closed,
+                Ok(n) => Received::Data(n),
+                Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => Received::Idle,
+                Err(_) => Received::Failed,
+            },
+            Stream::Tls(t, _) => match t.read(buf) {
+                Io::Done(n) => Received::Data(n),
+                Io::Closed => Received::Closed,
+                Io::WouldBlock => Received::Idle,
+                Io::Failed => Received::Failed,
+            },
+        }
+    }
+
+    pub fn write_all(&mut self, data: &[u8], abort: &dyn Fn() -> bool) -> bool {
+        self.stream.write_all(data, abort)
+    }
+}
+
+pub fn upgrade(req: &Request, abort: &dyn Fn() -> bool) -> Result<Upgraded, String> {
+    let start = Instant::now();
+    let deadline = start
+        .checked_add(req.connect_timeout)
+        .unwrap_or_else(|| start + Duration::from_secs(3600));
+    let mut quiet = Abort(abort);
+    let t = Transfer::new(&mut quiet, start, deadline);
+    let mut out = Outcome::new();
+    let Some(connected) = open(req, &t, deadline, &mut out, false) else {
+        return Err(out.error.unwrap_or_else(|| {
+            String::from(if out.cancelled {
+                "aborted"
+            } else {
+                "connect failed"
+            })
+        }));
+    };
+    let mut stream = connected.stream;
+    let give_up = || abort() || Instant::now() > deadline;
+    if !stream.write_all(&h1_head_upgrade(req), &give_up) {
+        return Err(String::from("failed to send the upgrade request"));
+    }
+    let mut buf = Vec::new();
+    let mut pos = 0usize;
+    let mut status = 0;
+    let mut headers = Vec::new();
+    loop {
+        let Some((start, end)) = read_line(&mut stream, &mut buf, &mut pos, &give_up) else {
+            return Err(String::from("connection closed during the upgrade"));
+        };
+        let line = h1::until_nul(&buf[start..end]).to_vec();
+        if line.is_empty() {
+            if status / 100 == 1 && status != 101 {
+                status = 0;
+                headers.clear();
+                continue;
+            }
+            break;
+        }
+        if status == 0 {
+            status = h1::status_code(&line).unwrap_or(0);
+        } else if let Some((name, value)) = h1::split_header(&line) {
+            headers.push((name.to_vec(), value.trim_ascii_end().to_vec()));
+        }
+    }
+    let buffered = buf[pos..].to_vec();
+    Ok(Upgraded {
+        status,
+        headers,
+        tls_warning: out.tls_warning,
+        stream,
+        buffered,
+        poll_ms: 10,
+    })
+}
+
+fn h1_head_upgrade(req: &Request) -> Vec<u8> {
+    let mut fields: Vec<(&[u8], &[u8])> = Vec::new();
+    if let Some(ua) = req.user_agent {
+        fields.push((b"User-Agent", ua));
+    }
+    let forward = forward_proxy(req);
+    let auth = forward
+        .and_then(Proxy::authorization)
+        .map(|a| [&b"Proxy-Authorization: "[..], &a].concat());
+    let mut extra: Vec<&[u8]> = req.extra_headers.clone();
+    if let Some(a) = &auth {
+        extra.push(a);
+    }
+    let mut head = h1::request_head(
+        b"GET",
+        if forward.is_some() { req.url } else { req.path },
+        req.authority,
+        &fields,
+        &extra,
+        0,
+        true,
+    );
+    let tail = b"Connection: keep-alive\r\n\r\n";
+    head.truncate(head.len() - tail.len());
+    head.extend_from_slice(b"Connection: Upgrade\r\n\r\n");
+    head
 }

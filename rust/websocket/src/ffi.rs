@@ -1,8 +1,8 @@
-//! Southstar — the C ABI of WebSocket, as declared in src/ws.h, the libcurl connection and main-loop dispatch.
+//! Southstar — the C ABI of WebSocket, as declared in src/ws.h, the connection over rust/http's HTTP/1.1 upgrade and main-loop dispatch.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::Arc;
@@ -12,9 +12,12 @@ use std::time::Duration;
 
 use southstar_glib::{self as glib, FALSE, GBoolean};
 
+use southstar_http::{Received, Request, Upgraded};
+
 use crate::{
-    Assembly, Frame, FrameMeta, Out, Post, STATE_CLOSED, STATE_CLOSING, STATE_OPEN, Shared,
-    WS_BINARY, WS_TEXT,
+    ACCEPT_GUID, Assembly, Decoded, Decoder, Frame, OP_BINARY, OP_CLOSE, OP_PONG, OP_TEXT, Out,
+    Post, STATE_CLOSED, STATE_CLOSING, STATE_OPEN, Shared, base64, encode_frame, has_token, header,
+    ws_to_http,
 };
 
 #[repr(C)]
@@ -42,90 +45,13 @@ pub struct WebSocket {
     thread: Option<JoinHandle<()>>,
 }
 
-#[repr(C)]
-struct Curl {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct CurlSlist {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct WsFrame {
-    age: c_int,
-    flags: c_int,
-    offset: i64,
-    bytesleft: i64,
-    len: usize,
-}
-
-#[repr(C)]
-struct VersionInfo {
-    age: c_int,
-    version: *const c_char,
-    version_num: c_uint,
-    host: *const c_char,
-    features: c_int,
-    ssl_version: *const c_char,
-    ssl_version_num: c_long,
-    libz_version: *const c_char,
-    protocols: *const *const c_char,
-}
-
-type XferInfoFn = unsafe extern "C" fn(*mut c_void, i64, i64, i64, i64) -> c_int;
 type SourceFn = unsafe extern "C" fn(*mut c_void) -> GBoolean;
 
-const CURLE_OK: c_int = 0;
-const CURLE_AGAIN: c_int = 81;
-const CURLOPT_URL: c_int = 10002;
-const CURLOPT_ERRORBUFFER: c_int = 10010;
-const CURLOPT_TIMEOUT: c_int = 13;
-const CURLOPT_USERAGENT: c_int = 10018;
-const CURLOPT_HTTPHEADER: c_int = 10023;
-const CURLOPT_NOPROGRESS: c_int = 43;
-const CURLOPT_XFERINFODATA: c_int = 10057;
-const CURLOPT_CONNECTTIMEOUT: c_int = 78;
-const CURLOPT_HTTP_VERSION: c_int = 84;
-const CURLOPT_NOSIGNAL: c_int = 99;
-const CURLOPT_CONNECT_ONLY: c_int = 141;
-const CURLOPT_XFERINFOFUNCTION: c_int = 20219;
-const CURLINFO_RESPONSE_CODE: c_int = 0x0020_0000 + 2;
-const CURL_HTTP_VERSION_1_1: c_long = 2;
-const CURL_ERROR_SIZE: usize = 256;
-const CURLVERSION_FOURTH: c_int = 3;
-const CURLWS_CLOSE: c_uint = 1 << 3;
-const CURLWS_PONG: c_uint = 1 << 6;
+const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 unsafe extern "C" {
-    fn curl_easy_init() -> *mut Curl;
-    fn curl_easy_setopt(curl: *mut Curl, option: c_int, ...) -> c_int;
-    fn curl_easy_getinfo(curl: *mut Curl, info: c_int, ...) -> c_int;
-    fn curl_easy_perform(curl: *mut Curl) -> c_int;
-    fn curl_easy_cleanup(curl: *mut Curl);
-    fn curl_easy_strerror(code: c_int) -> *const c_char;
-    fn curl_slist_append(list: *mut CurlSlist, text: *const c_char) -> *mut CurlSlist;
-    fn curl_slist_free_all(list: *mut CurlSlist);
-    fn curl_version_info(stamp: c_int) -> *const VersionInfo;
-    fn curl_ws_recv(
-        curl: *mut Curl,
-        buffer: *mut c_void,
-        buflen: usize,
-        recv: *mut usize,
-        meta: *mut *const WsFrame,
-    ) -> c_int;
-    fn curl_ws_send(
-        curl: *mut Curl,
-        buffer: *const c_void,
-        buflen: usize,
-        sent: *mut usize,
-        fragsize: i64,
-        flags: c_uint,
-    ) -> c_int;
-    fn ns_net_apply_curl_tls(curl: *mut c_void);
-    fn ns_net_apply_curl_proxy(curl: *mut c_void, url: *const c_char);
-    fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
+    fn SHA1(data: *const u8, len: usize, digest: *mut u8) -> *mut u8;
+    fn RAND_bytes(buf: *mut u8, num: c_int) -> c_int;
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
 }
@@ -232,183 +158,124 @@ fn post_close(socket: &Arc<Socket>, code: i32, reason: &[u8], clean: bool) {
 }
 
 struct Connection {
-    curl: *mut Curl,
-    headers: *mut CurlSlist,
-}
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.headers.is_null() {
-                curl_slist_free_all(self.headers);
-            }
-            curl_easy_cleanup(self.curl);
-        }
-    }
+    stream: Upgraded,
+    decoder: Decoder,
 }
 
 impl Connection {
-    fn send(&self, shared: &Shared, data: &[u8], flags: c_uint) -> bool {
-        let mut off = 0;
-        let mut stalls = 0;
-        loop {
-            if shared.exiting() {
-                return false;
-            }
-            let remain = &data[off..];
-            let buffer: *const c_void = if remain.is_empty() {
-                c"".as_ptr().cast()
-            } else {
-                remain.as_ptr().cast()
-            };
-            let mut sent = 0;
-            let rc = unsafe { curl_ws_send(self.curl, buffer, remain.len(), &mut sent, 0, flags) };
-            if rc == CURLE_AGAIN {
-                stalls += 1;
-                if stalls > 5000 {
-                    return false;
-                }
-                std::thread::sleep(Duration::from_micros(2000));
-                continue;
-            }
-            if rc != CURLE_OK {
-                return false;
-            }
-            off += sent;
-            if off >= data.len() {
-                return true;
-            }
-            if sent == 0 {
-                stalls += 1;
-                if stalls > 5000 {
-                    return false;
-                }
-                std::thread::sleep(Duration::from_micros(2000));
-            } else {
-                stalls = 0;
-            }
-        }
+    fn send(&mut self, shared: &Shared, opcode: u8, payload: &[u8]) -> bool {
+        let frame = encode_frame(opcode, payload, mask_key());
+        self.stream.write_all(&frame, &|| shared.exiting())
     }
 
-    fn send_close(&self, code: i32, reason: Option<&[u8]>) {
-        let frame = crate::close_frame(code, reason);
-        let buffer: *const c_void = if frame.is_empty() {
-            c"".as_ptr().cast()
-        } else {
-            frame.as_ptr().cast()
-        };
-        let mut sent = 0;
-        unsafe { curl_ws_send(self.curl, buffer, frame.len(), &mut sent, 0, CURLWS_CLOSE) };
-    }
-
-    fn send_pong(&self, payload: &[u8]) {
-        let buffer: *const c_void = if payload.is_empty() {
-            ptr::null()
-        } else {
-            payload.as_ptr().cast()
-        };
-        let mut sent = 0;
-        unsafe { curl_ws_send(self.curl, buffer, payload.len(), &mut sent, 0, CURLWS_PONG) };
+    fn send_close(&mut self, shared: &Shared, code: i32, reason: Option<&[u8]>) {
+        let payload = crate::close_frame(code, reason);
+        self.send(shared, OP_CLOSE, &payload);
     }
 }
 
-unsafe extern "C" fn handshake_progress(
-    clientp: *mut c_void,
-    _: i64,
-    _: i64,
-    _: i64,
-    _: i64,
-) -> c_int {
-    let socket = unsafe { &*clientp.cast::<Socket>() };
-    c_int::from(socket.shared.exiting())
+fn random(buf: &mut [u8]) {
+    unsafe { RAND_bytes(buf.as_mut_ptr(), buf.len() as c_int) };
 }
 
-fn error_text(errbuf: &[c_char; CURL_ERROR_SIZE], rc: c_int) -> Vec<u8> {
-    if errbuf[0] != 0 {
-        unsafe { CStr::from_ptr(errbuf.as_ptr()) }
-            .to_bytes()
-            .to_vec()
-    } else {
-        unsafe { CStr::from_ptr(curl_easy_strerror(rc)) }
-            .to_bytes()
-            .to_vec()
-    }
+fn mask_key() -> [u8; 4] {
+    let mut key = [0u8; 4];
+    random(&mut key);
+    key
 }
 
-fn worker(socket: Arc<Socket>) {
+fn accept_for(key: &[u8]) -> Vec<u8> {
+    let input = [key, ACCEPT_GUID].concat();
+    let mut digest = [0u8; 20];
+    unsafe { SHA1(input.as_ptr(), input.len(), digest.as_mut_ptr()) };
+    base64(&digest)
+}
+
+fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
     let shared = &socket.shared;
-    let curl = unsafe { curl_easy_init() };
-    if curl.is_null() {
-        post(&socket, Post::Error(b"curl init failed".to_vec()));
-        post_close(&socket, 1006, b"init failed", false);
-        return;
-    }
-    let mut connection = Connection {
-        curl,
-        headers: ptr::null_mut(),
-    };
-    let url = cstring(&shared.url);
-    let mut add_header = |text: &[u8]| {
-        let text = cstring(text);
-        connection.headers = unsafe { curl_slist_append(connection.headers, text.as_ptr()) };
-    };
+    let url = crate::until_nul(&shared.url);
+    let http_url = ws_to_http(url).ok_or_else(|| b"unsupported URL scheme".to_vec())?;
+    let target = southstar_http::parse_target(&http_url).ok_or_else(|| b"invalid URL".to_vec())?;
+    let mut nonce = [0u8; 16];
+    random(&mut nonce);
+    let key = base64(&nonce);
+    let mut lines = vec![
+        b"Upgrade: websocket".to_vec(),
+        b"Sec-WebSocket-Version: 13".to_vec(),
+        [&b"Sec-WebSocket-Key: "[..], &key].concat(),
+    ];
     if let Some(origin) = shared.origin.as_deref().filter(|o| !o.is_empty()) {
-        add_header(&[b"Origin: ".as_slice(), origin].concat());
+        lines.push([b"Origin: ".as_slice(), crate::until_nul(origin)].concat());
     }
     if !shared.protocols.is_empty() {
-        add_header(
-            &[
+        lines.push(
+            [
                 b"Sec-WebSocket-Protocol: ".as_slice(),
                 &shared.protocols.join(&b", "[..]),
             ]
             .concat(),
         );
     }
-    let mut errbuf = [0 as c_char; CURL_ERROR_SIZE];
-    let socket_ptr = Arc::as_ptr(&socket).cast_mut().cast::<c_void>();
-    let rc = unsafe {
-        curl_easy_setopt(curl, CURLOPT_URL, url.as_ptr());
-        curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2 as c_long);
-        curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, ns_user_agent_for_mode(ptr::null()));
-        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1 as c_long);
-        ns_net_apply_curl_tls(curl.cast());
-        ns_net_apply_curl_proxy(curl.cast(), url.as_ptr());
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15 as c_long);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0 as c_long);
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0 as c_long);
-        curl_easy_setopt(
-            curl,
-            CURLOPT_XFERINFOFUNCTION,
-            handshake_progress as XferInfoFn,
-        );
-        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, socket_ptr);
-        if !connection.headers.is_null() {
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, connection.headers);
-        }
-        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf.as_mut_ptr());
-        curl_easy_perform(curl)
+    let route = southstar_net::route::route(&http_url, &target.host);
+    let request = Request {
+        url: &http_url,
+        https: target.https,
+        host: &target.host,
+        port: target.port,
+        authority: &target.authority,
+        path: &target.path,
+        method: b"GET",
+        user_agent: Some(southstar_net::route::user_agent()),
+        referer: None,
+        cookie: None,
+        extra_headers: lines.iter().map(Vec::as_slice).collect(),
+        body: b"",
+        timeout: Duration::MAX,
+        connect_timeout: Duration::from_secs(15),
+        allow_insecure: route.allow_insecure,
+        tls: route.tls,
+        proxy: route.proxy,
     };
-    if rc != CURLE_OK || shared.exiting() {
-        let message = if rc != CURLE_OK {
-            error_text(&errbuf, rc)
-        } else {
-            b"aborted".to_vec()
-        };
-        if rc != CURLE_OK {
-            post(&socket, Post::Error(message.clone()));
+    let mut stream =
+        southstar_http::upgrade(&request, &|| shared.exiting()).map_err(String::into_bytes)?;
+    if stream.status != 101 {
+        return Err(format!("WebSocket handshake failed (HTTP {})", stream.status).into_bytes());
+    }
+    let upgraded = header(&stream.headers, b"upgrade").is_some_and(|v| has_token(v, b"websocket"))
+        && header(&stream.headers, b"connection").is_some_and(|v| has_token(v, b"upgrade"));
+    let accepted = header(&stream.headers, b"sec-websocket-accept") == Some(&accept_for(&key)[..]);
+    if !upgraded || !accepted {
+        return Err(b"WebSocket handshake failed (bad upgrade response)".to_vec());
+    }
+    if let Some(chosen) = header(&stream.headers, b"sec-websocket-protocol") {
+        if !shared.protocols.iter().any(|p| p.as_slice() == chosen) {
+            return Err(b"WebSocket handshake failed (unrequested subprotocol)".to_vec());
         }
-        post_close(&socket, 1006, &message, false);
-        return;
+        *shared.protocol.lock().unwrap_or_else(|e| e.into_inner()) = chosen.to_vec();
     }
-    let mut code: c_long = 0;
-    unsafe { curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &mut code as *mut c_long) };
-    if code != 0 && code != 101 {
-        let message = format!("WebSocket handshake failed (HTTP {code})").into_bytes();
-        post(&socket, Post::Error(message.clone()));
-        post_close(&socket, 1006, &message, false);
-        return;
-    }
+    stream.set_poll_interval(POLL_INTERVAL);
+    Ok(Connection {
+        stream,
+        decoder: Decoder::default(),
+    })
+}
+
+fn worker(socket: Arc<Socket>) {
+    let shared = &socket.shared;
+    let mut connection = match handshake(&socket) {
+        Ok(c) if !shared.exiting() => c,
+        Ok(_) => {
+            post_close(&socket, 1006, b"aborted", false);
+            return;
+        }
+        Err(message) => {
+            if !shared.exiting() {
+                post(&socket, Post::Error(message.clone()));
+            }
+            post_close(&socket, 1006, &message, false);
+            return;
+        }
+    };
     shared.set_state(STATE_OPEN);
     post(&socket, Post::Open);
 
@@ -417,121 +284,97 @@ fn worker(socket: Arc<Socket>) {
     let mut close_reason: Option<Vec<u8>> = None;
     let mut peer_reason: Option<Vec<u8>> = None;
     let mut assembly = Assembly::default();
-    let mut buf = vec![0u8; 8192];
+    let mut buf = vec![0u8; 16_384];
 
     'outer: while !shared.exiting() {
         while let Some(out) = shared.pop() {
             match out {
                 Out::Text(data) => {
-                    connection.send(shared, &data, WS_TEXT as c_uint);
+                    connection.send(shared, OP_TEXT, &data);
                 }
                 Out::Binary(data) => {
-                    connection.send(shared, &data, WS_BINARY as c_uint);
+                    connection.send(shared, OP_BINARY, &data);
                 }
                 Out::Close { code, reason } => {
                     close_code = code;
                     close_reason = reason.map(|r| crate::until_nul(&r).to_vec());
                     shared.set_state(STATE_CLOSING);
-                    connection.send_close(close_code, close_reason.as_deref());
+                    connection.send_close(shared, close_code, close_reason.as_deref());
                     clean_close = true;
                     break 'outer;
                 }
             }
         }
-        let mut got = 0;
-        let mut meta: *const WsFrame = ptr::null();
-        let rc = unsafe {
-            curl_ws_recv(
-                curl,
-                buf.as_mut_ptr().cast(),
-                buf.len(),
-                &mut got,
-                &mut meta,
-            )
-        };
-        if rc == CURLE_AGAIN {
-            shared.wait();
-            continue;
+        loop {
+            let frame = match connection.decoder.next_frame() {
+                Decoded::NeedMore => break,
+                Decoded::Frame(frame) => frame,
+                Decoded::TooBig => {
+                    shared.set_state(STATE_CLOSING);
+                    connection.send_close(shared, 1009, Some(b"message too big"));
+                    close_code = 1009;
+                    close_reason = Some(b"message too big".to_vec());
+                    break 'outer;
+                }
+                Decoded::ProtocolError => {
+                    shared.set_state(STATE_CLOSING);
+                    connection.send_close(shared, 1002, Some(b"protocol error"));
+                    post(&socket, Post::Error(b"WebSocket protocol error".to_vec()));
+                    close_code = 1002;
+                    close_reason = Some(b"protocol error".to_vec());
+                    break 'outer;
+                }
+            };
+            match assembly.frame(&frame.payload, &frame.meta) {
+                Frame::Close { code, reason } => {
+                    shared.set_state(STATE_CLOSING);
+                    connection.send_close(shared, crate::echo_close_code(code), None);
+                    clean_close = true;
+                    close_code = code;
+                    close_reason = reason.clone();
+                    peer_reason = reason;
+                    break 'outer;
+                }
+                Frame::Ping(len) => {
+                    connection.send(shared, OP_PONG, &frame.payload[..len]);
+                }
+                Frame::Message { text, data } => post(&socket, Post::Message { text, data }),
+                Frame::TooBig => {
+                    shared.set_state(STATE_CLOSING);
+                    connection.send_close(shared, 1009, Some(b"message too big"));
+                    close_code = 1009;
+                    close_reason = Some(b"message too big".to_vec());
+                    break 'outer;
+                }
+                Frame::BadUtf8 => {
+                    shared.set_state(STATE_CLOSING);
+                    connection.send_close(shared, 1007, Some(b"invalid utf-8"));
+                    close_code = 1007;
+                    close_reason = Some(b"invalid utf-8".to_vec());
+                    break 'outer;
+                }
+                Frame::Ignored | Frame::Assembled => {}
+            }
         }
-        if rc != CURLE_OK {
-            let message = error_text(&errbuf, rc);
-            post(&socket, Post::Error(message.clone()));
-            close_code = 1006;
-            close_reason = Some(message);
-            break;
-        }
-        let Some(meta) = (unsafe { meta.as_ref() }) else {
-            continue;
-        };
-        let data = &buf[..got];
-        let frame = assembly.frame(
-            data,
-            &FrameMeta {
-                flags: meta.flags,
-                offset: meta.offset,
-                bytes_left: meta.bytesleft,
-            },
-        );
-        match frame {
-            Frame::Close { code, reason } => {
-                shared.set_state(STATE_CLOSING);
-                connection.send_close(crate::echo_close_code(code), None);
-                clean_close = true;
-                close_code = code;
-                close_reason = reason.clone();
-                peer_reason = reason;
+        match connection.stream.read(&mut buf) {
+            Received::Data(n) => connection.decoder.push(&buf[..n]),
+            Received::Idle => shared.wait(),
+            Received::Closed | Received::Failed => {
+                let message = b"connection closed".to_vec();
+                post(&socket, Post::Error(message.clone()));
+                close_code = 1006;
+                close_reason = Some(message);
                 break;
             }
-            Frame::Ping(len) => connection.send_pong(&data[..len]),
-            Frame::Message { text, data } => post(&socket, Post::Message { text, data }),
-            Frame::TooBig => {
-                shared.set_state(STATE_CLOSING);
-                connection.send_close(1009, Some(b"message too big"));
-                clean_close = false;
-                close_code = 1009;
-                close_reason = Some(b"message too big".to_vec());
-                break;
-            }
-            Frame::BadUtf8 => {
-                shared.set_state(STATE_CLOSING);
-                connection.send_close(1007, Some(b"invalid utf-8"));
-                clean_close = false;
-                close_code = 1007;
-                close_reason = Some(b"invalid utf-8".to_vec());
-                break;
-            }
-            Frame::Ignored | Frame::Assembled => {}
         }
     }
     let reason = close_reason.or(peer_reason).unwrap_or_default();
     post_close(&socket, close_code, &reason, clean_close);
 }
 
-fn curl_native() -> bool {
-    let info = unsafe { curl_version_info(CURLVERSION_FOURTH) };
-    let Some(info) = (unsafe { info.as_ref() }) else {
-        return false;
-    };
-    if info.protocols.is_null() {
-        return false;
-    }
-    let mut i = 0;
-    loop {
-        let protocol = unsafe { *info.protocols.add(i) };
-        if protocol.is_null() {
-            return false;
-        }
-        let name = unsafe { CStr::from_ptr(protocol) }.to_bytes();
-        if name.eq_ignore_ascii_case(b"ws") || name.eq_ignore_ascii_case(b"wss") {
-            return true;
-        }
-        i += 1;
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_ws_available() -> GBoolean {
-    glib::boolean(curl_native())
+    glib::boolean(true)
 }
 
 #[unsafe(no_mangle)]
@@ -545,9 +388,6 @@ pub unsafe extern "C" fn ns_ws_new(
     let Some(url) = (unsafe { glib::bytes(url) }) else {
         return ptr::null_mut();
     };
-    if !curl_native() {
-        return ptr::null_mut();
-    }
     let mut list = Vec::new();
     if !protocols.is_null() {
         let mut i = 0;
@@ -622,6 +462,15 @@ pub unsafe extern "C" fn ns_ws_close(ws: *mut WebSocket, code: c_int, reason: *c
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_ws_state_get(ws: *mut WebSocket) -> c_int {
     unsafe { shared(ws) }.map_or(STATE_CLOSED, Shared::state)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_ws_protocol(ws: *mut WebSocket) -> *mut c_char {
+    let Some(shared) = (unsafe { shared(ws) }) else {
+        return core::ptr::null_mut();
+    };
+    let protocol = shared.protocol.lock().unwrap_or_else(|e| e.into_inner());
+    glib::strdup(&protocol)
 }
 
 #[unsafe(no_mangle)]

@@ -25,6 +25,17 @@ Southstar Browser (unreleased):
   of libcurl, following redirects, honouring the proxy settings, opening as
   soon as the response headers arrive and reconnecting with Last-Event-ID as
   before.
+* WebSocket runs on the Rust HTTP client instead of libcurl's WebSocket
+  API: an HTTP/1.1 upgrade over the same connection code (TLS, proxies) and
+  an in-tree RFC 6455 frame codec with masking, fragmented messages,
+  ping/pong and the close handshake. The server's Sec-WebSocket-Accept is
+  verified, and WebSocket.protocol now reports the subprotocol the server
+  chose (it was always empty). WebSocket no longer depends on the libcurl
+  version.
+* HTTP/1.1 responses from a server that pauses for more than a second no
+  longer fail on Windows: the Rust client waits for sockets with poll()
+  instead of socket timeouts, which Windows reports as errors rather than
+  as "try again".
 * The logo has a large serif S behind the star, as Nordstjernen's had an N:
   the application and window icon, the Windows icon, the animated start-page
   logo and the two badges.

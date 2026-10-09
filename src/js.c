@@ -24147,6 +24147,10 @@ ns_js_ws_on_open(gpointer user_data)
     ns_budget_guard bg = {0};
     ns_js_budget_push(s->js, &bg);
     JS_SetPropertyStr(ctx, s->wrapper, "readyState", JS_NewInt32(ctx, 1));
+    char *protocol = s->ws ? ns_ws_protocol(s->ws) : NULL;
+    JS_SetPropertyStr(ctx, s->wrapper, "protocol",
+                      JS_NewString(ctx, protocol ? protocol : ""));
+    g_free(protocol);
     ns_js_ws_dispatch(ctx, s->wrapper, "onopen", ns_js_ws_event(ctx, "open"));
     ns_js_budget_pop(s->js, &bg);
 }

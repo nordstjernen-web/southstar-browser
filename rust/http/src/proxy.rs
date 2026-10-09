@@ -5,6 +5,8 @@
 use std::io::{Read, Write};
 use std::net::{IpAddr, TcpStream, ToSocketAddrs};
 
+use crate::ffi::socket;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     Http,
@@ -237,10 +239,11 @@ fn read_exact(
         match stream.read(&mut buf[got..]) {
             Ok(0) => return Err(Failure::Io),
             Ok(n) => got += n,
-            Err(e) if crate::ffi::socket::retryable(e.raw_os_error().unwrap_or(0)) => {
+            Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => {
                 if abort() {
                     return Err(Failure::Io);
                 }
+                socket::wait(socket::raw(stream), socket::POLLIN, 250);
             }
             Err(_) => return Err(Failure::Io),
         }
@@ -257,10 +260,11 @@ fn write_all(
         match stream.write(buf) {
             Ok(0) => return Err(Failure::Io),
             Ok(n) => buf = &buf[n..],
-            Err(e) if crate::ffi::socket::retryable(e.raw_os_error().unwrap_or(0)) => {
+            Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => {
                 if abort() {
                     return Err(Failure::Io);
                 }
+                socket::wait(socket::raw(stream), socket::POLLOUT, 250);
             }
             Err(_) => return Err(Failure::Io),
         }
