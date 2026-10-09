@@ -7,16 +7,8 @@
 gboolean      ns_css_parse_length(const char *text, double *out_v,
                                   ns_css_unit *out_unit);
 ns_css_value *ns_css_parse_calc(const char *text);
-gboolean      ns_css_resolve_to_px_pct(const char *text, gsize len,
-                                       double *out_px, double *out_pct);
-gboolean      ns_css_resolve_to_px_pct_font(const char *text, gsize len,
-                                            double *out_px, double *out_pct,
-                                            double *out_em, double *out_rem);
 double        ns_css_viewport_resolve(double v, ns_css_unit unit);
-const char   *ns_css_unit_suffix(int unit);
 char         *ns_css_number_str(double n);
-gboolean      ns_css_value_has_relative_unit(const char *s);
-char         *ns_css_angle_expr_rewrite(const char *s, gboolean to_radians);
 
 #define NS_CSS_CONTAINER_BYTES 40
 
@@ -30,71 +22,22 @@ gsize         ns_css_container_stack_copy(guint8 *out, gsize max_bytes);
 gboolean      ns_css_container_rule_matches(const char *condition,
                                             ns_css_container_query **cache);
 
-char         *ns_css_color_text(guint8 r, guint8 g, guint8 b, guint8 a);
-void          ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b,
-                                  guint8 a);
-gboolean      ns_css_position_is_h_edge(const char *t);
-gboolean      ns_css_position_is_v_edge(const char *t);
-char         *ns_css_position_canonical_ex(const char *text,
-                                           gboolean expand_single,
-                                           gboolean allow_three);
-gboolean      ns_css_math_text_has_unit(const char *t,
-                                        const char *const *units,
-                                        gsize n_units);
-double        ns_css_parse_angle_deg(const char *s);
-gboolean      ns_css_text_starts_gradient(const char *t);
-gboolean      ns_css_text_starts_image_set(const char *t);
-ns_css_value *ns_css_parse_gradient(const char *t);
-char         *ns_css_gradient_serialize(const ns_css_gradient *gr);
-char         *ns_css_image_set_canonical(const char *text, gboolean computed);
-char         *ns_css_content_symbols_canonical(const char *args);
 gboolean      ns_css_content_ident_valid(const char *s);
 const char   *ns_css_quoted_end(const char *u, char quote);
-char         *ns_css_unescape_url(const char *u, gsize len);
-char         *ns_css_pick_image_set_url(const char *t);
 
 ns_css_value *ns_css_parse_transform(const char *text);
-ns_css_value *ns_css_parse_transform_origin(const char *text);
 ns_css_value *ns_css_parse_translate_prop(const char *text);
 ns_css_value *ns_css_parse_rotate_prop(const char *text);
 ns_css_value *ns_css_parse_scale_prop(const char *text);
-char         *ns_css_transform_serialize(const ns_css_transform *tf);
-char         *ns_css_transform_list_canonical(const char *value);
-char         *ns_css_individual_transform_canonical(const char *value,
-                                                    ns_css_prop prop);
-char         *ns_css_transform_origin_canonical(const char *value,
-                                                gboolean two_only);
 gboolean      ns_css_is_math_fn_start(const char *s);
-char         *ns_css_add_leading_zeros(char *v);
-char         *ns_css_normalize_negative_zero(char *v);
-GPtrArray    *ns_css_split_top_level_commas(const char *text);
 
 double        ns_css_font_relative_unit_px(ns_css_unit unit, double font_px,
                                            const char *family, int weight,
                                            gboolean italic);
 int           ns_css_font_weight_relative(int parent, gboolean bolder);
 int           ns_css_split_ws_paren(const char *text, char **out, int max);
-gboolean      ns_css_font_ligatures_valid(const char *s);
-gboolean      ns_css_font_feature_settings_valid(const char *s);
-gboolean      ns_css_font_variation_settings_valid(const char *s);
-
-ns_css_value *ns_css_parse_time_property(const char *t);
-ns_css_value *ns_css_parse_animation_duration(const char *t);
-ns_css_value *ns_css_parse_anim_longhand(ns_css_prop prop, const char *t);
-ns_css_value *ns_css_parse_anim_value(const char *t, gboolean is_animation);
-gboolean      ns_css_anim_range_shorthand_expand(const char *text,
-                                                 char **out_start,
-                                                 char **out_end);
-char         *ns_css_ident_decode(const char *tok);
-gboolean      ns_css_starts_math_fn(const char *s, const char *e);
-
-char         *ns_css_display_normalize(const char *text);
-char         *ns_css_overflow_clip_margin_canonical(const char *text);
-char         *ns_css_counter_list_canonical(const char *text, ns_css_prop prop);
-char         *ns_css_list_style_type_canonical(const char *text);
 
 ns_css_value *ns_css_parse_value_for(ns_css_prop prop, const char *text);
-gboolean      ns_css_bg_token_is_box(const char *tok);
 
 const char   *ns_css_parse_declaration_block(const char *p, const char *end,
                                              GArray *decls_out,
@@ -102,7 +45,6 @@ const char   *ns_css_parse_declaration_block(const char *p, const char *end,
 gboolean      ns_css_declaration_value_syntax_valid(const char *text);
 gboolean      ns_css_attr_unit_ident_valid(const char *unit);
 
-gboolean      ns_css_supports_selector(const char *text, gsize len);
 gboolean      ns_css_selector_attr_ancestor_hashes(void);
 guint32       ns_css_identifier_hash(char kind, const char *name, gsize len);
 guint32       ns_css_attr_value_hash(const char *name, const char *value,
@@ -111,34 +53,6 @@ gboolean      ns_css_anb_int_strict(const char *text, int *out);
 
 char         *ns_css_flatten_nesting(const char *text, gssize len);
 void          ns_css_property_rule_clear(gpointer data);
-char         *ns_css_border_radius_canonical(const char *value);
-
-ns_css_value *ns_css_parse_border_image_slice(const char *t);
-ns_css_value *ns_css_parse_border_image_width(const char *t);
-ns_css_value *ns_css_parse_border_image_outset(const char *t);
-ns_css_value *ns_css_parse_border_image_repeat(const char *t);
-
-ns_css_value *ns_css_parse_box_shadow(const char *text);
-char         *ns_css_shadow_specified_canonical(const char *text,
-                                                gboolean is_text);
-char         *ns_css_shadow_serialize(const ns_css_shadow_list *list);
-
-char         *ns_css_read_string(const char **pp, const char *end);
-
-ns_css_value *ns_css_parse_tracks(const char *text);
-ns_css_value *ns_css_parse_areas(const char *text);
-char         *ns_css_grid_line_canonical(const char *text,
-                                         gboolean *ident_only);
-char         *ns_css_grid_placement_canonical(const char *text,
-                                              gboolean area);
-char         *ns_css_grid_track_text_canonical(const char *text);
-gboolean      ns_css_grid_template_parse(const char *text, char *out[3],
-                                         char **canon);
-gboolean      ns_css_grid_shorthand_parse(const char *text, char *out[6],
-                                          char **canon);
-char         *ns_css_grid_auto_flow_canonical(const char *text);
-char         *ns_css_grid_template_compose(char *const v[3]);
-char         *ns_css_grid_compose(char *const v[6]);
 
 #if GLIB_SIZEOF_VOID_P == 8
 G_STATIC_ASSERT(sizeof(ns_css_gradient_stop) == 40 &&
