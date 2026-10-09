@@ -555,40 +555,8 @@ ns_ctx_state(JSContext *ctx, JSValueConst this_val)
 
 typedef struct { double pos, r, g, b, a; } ns_conic_stop;
 
-static int
-ns_conic_stop_cmp(const void *pa, const void *pb)
-{
-    double da = ((const ns_conic_stop *)pa)->pos;
-    double db = ((const ns_conic_stop *)pb)->pos;
-    return da < db ? -1 : da > db ? 1 : 0;
-}
-
-static void
-ns_conic_color_at(const ns_conic_stop *stops, guint n, double t,
-                  double *r, double *g, double *b, double *a)
-{
-    if (n == 0) { *r = *g = *b = 0; *a = 0; return; }
-    if (t <= stops[0].pos) {
-        *r = stops[0].r; *g = stops[0].g; *b = stops[0].b; *a = stops[0].a;
-        return;
-    }
-    if (t >= stops[n - 1].pos) {
-        *r = stops[n - 1].r; *g = stops[n - 1].g;
-        *b = stops[n - 1].b; *a = stops[n - 1].a;
-        return;
-    }
-    for (guint i = 1; i < n; i++) {
-        if (t <= stops[i].pos) {
-            double span = stops[i].pos - stops[i - 1].pos;
-            double f = span > 0 ? (t - stops[i - 1].pos) / span : 0;
-            *r = stops[i - 1].r + (stops[i].r - stops[i - 1].r) * f;
-            *g = stops[i - 1].g + (stops[i].g - stops[i - 1].g) * f;
-            *b = stops[i - 1].b + (stops[i].b - stops[i - 1].b) * f;
-            *a = stops[i - 1].a + (stops[i].a - stops[i - 1].a) * f;
-            return;
-        }
-    }
-}
+cairo_pattern_t *ns_canvas_conic_pattern(double cx, double cy, double angle,
+                                         ns_conic_stop *stops, guint n);
 
 static cairo_pattern_t *
 ns_ctx_build_conic_pattern(JSContext *ctx, JSValueConst obj)
@@ -621,31 +589,8 @@ ns_ctx_build_conic_pattern(JSContext *ctx, JSValueConst obj)
     }
     JS_FreeValue(ctx, stops);
     if (sa->len == 0) { g_array_free(sa, TRUE); return NULL; }
-    g_array_sort(sa, ns_conic_stop_cmp);
-    const ns_conic_stop *cs = &g_array_index(sa, ns_conic_stop, 0);
-
-    cairo_pattern_t *pat = cairo_pattern_create_mesh();
-    const int sectors = 256;
-    const double radius = 1e5;
-    for (int i = 0; i < sectors; i++) {
-        double t0 = (double)i / sectors;
-        double t1 = (double)(i + 1) / sectors;
-        double a0 = angle + t0 * 2.0 * G_PI;
-        double a1 = angle + t1 * 2.0 * G_PI;
-        double r0, g0, b0, al0, r1, g1, b1, al1;
-        ns_conic_color_at(cs, sa->len, t0, &r0, &g0, &b0, &al0);
-        ns_conic_color_at(cs, sa->len, t1, &r1, &g1, &b1, &al1);
-        cairo_mesh_pattern_begin_patch(pat);
-        cairo_mesh_pattern_move_to(pat, cx, cy);
-        cairo_mesh_pattern_line_to(pat, cx + radius * cos(a0), cy + radius * sin(a0));
-        cairo_mesh_pattern_line_to(pat, cx + radius * cos(a1), cy + radius * sin(a1));
-        cairo_mesh_pattern_line_to(pat, cx, cy);
-        cairo_mesh_pattern_set_corner_color_rgba(pat, 0, r0, g0, b0, al0);
-        cairo_mesh_pattern_set_corner_color_rgba(pat, 1, r0, g0, b0, al0);
-        cairo_mesh_pattern_set_corner_color_rgba(pat, 2, r1, g1, b1, al1);
-        cairo_mesh_pattern_set_corner_color_rgba(pat, 3, r1, g1, b1, al1);
-        cairo_mesh_pattern_end_patch(pat);
-    }
+    cairo_pattern_t *pat = ns_canvas_conic_pattern(cx, cy, angle,
+        (ns_conic_stop *)(void *)sa->data, sa->len);
     g_array_free(sa, TRUE);
     return pat;
 }
@@ -760,40 +705,6 @@ ns_ctx_global_alpha(JSContext *ctx, JSValueConst this_val)
     if (ga < 0) ga = 0;
     if (ga > 1) ga = 1;
     return ga;
-}
-
-cairo_operator_t
-ns_ctx_parse_composite(const char *s)
-{
-    if (!s)                                    return CAIRO_OPERATOR_OVER;
-    if (!strcmp(s, "source-over"))             return CAIRO_OPERATOR_OVER;
-    if (!strcmp(s, "source-in"))               return CAIRO_OPERATOR_IN;
-    if (!strcmp(s, "source-out"))              return CAIRO_OPERATOR_OUT;
-    if (!strcmp(s, "source-atop"))             return CAIRO_OPERATOR_ATOP;
-    if (!strcmp(s, "destination-over"))        return CAIRO_OPERATOR_DEST_OVER;
-    if (!strcmp(s, "destination-in"))          return CAIRO_OPERATOR_DEST_IN;
-    if (!strcmp(s, "destination-out"))         return CAIRO_OPERATOR_DEST_OUT;
-    if (!strcmp(s, "destination-atop"))        return CAIRO_OPERATOR_DEST_ATOP;
-    if (!strcmp(s, "lighter"))                 return CAIRO_OPERATOR_ADD;
-    if (!strcmp(s, "copy"))                    return CAIRO_OPERATOR_SOURCE;
-    if (!strcmp(s, "xor"))                     return CAIRO_OPERATOR_XOR;
-    if (!strcmp(s, "clear"))                   return CAIRO_OPERATOR_CLEAR;
-    if (!strcmp(s, "multiply"))                return CAIRO_OPERATOR_MULTIPLY;
-    if (!strcmp(s, "screen"))                  return CAIRO_OPERATOR_SCREEN;
-    if (!strcmp(s, "overlay"))                 return CAIRO_OPERATOR_OVERLAY;
-    if (!strcmp(s, "darken"))                  return CAIRO_OPERATOR_DARKEN;
-    if (!strcmp(s, "lighten"))                 return CAIRO_OPERATOR_LIGHTEN;
-    if (!strcmp(s, "color-dodge"))             return CAIRO_OPERATOR_COLOR_DODGE;
-    if (!strcmp(s, "color-burn"))              return CAIRO_OPERATOR_COLOR_BURN;
-    if (!strcmp(s, "hard-light"))              return CAIRO_OPERATOR_HARD_LIGHT;
-    if (!strcmp(s, "soft-light"))              return CAIRO_OPERATOR_SOFT_LIGHT;
-    if (!strcmp(s, "difference"))              return CAIRO_OPERATOR_DIFFERENCE;
-    if (!strcmp(s, "exclusion"))               return CAIRO_OPERATOR_EXCLUSION;
-    if (!strcmp(s, "hue"))                     return CAIRO_OPERATOR_HSL_HUE;
-    if (!strcmp(s, "saturation"))              return CAIRO_OPERATOR_HSL_SATURATION;
-    if (!strcmp(s, "color"))                   return CAIRO_OPERATOR_HSL_COLOR;
-    if (!strcmp(s, "luminosity"))              return CAIRO_OPERATOR_HSL_LUMINOSITY;
-    return CAIRO_OPERATOR_OVER;
 }
 
 void
@@ -958,52 +869,6 @@ ns_ctx_has_shadow(const ns_canvas_state *st)
 {
     if (!st || st->shadow_a <= 0) return FALSE;
     return st->shadow_ox != 0 || st->shadow_oy != 0 || st->shadow_blur > 0;
-}
-
-void
-ns_box_blur_argb(uint8_t *data, int w, int h, int stride, int radius)
-{
-    if (radius <= 0 || w <= 0 || h <= 0) return;
-    if (radius > 64) radius = 64;
-    int span = radius * 2 + 1;
-    uint8_t *tmp = g_try_malloc((size_t)w * (size_t)h * 4u);
-    if (!tmp) return;
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            int sa = 0, sr = 0, sg = 0, sb = 0, n = 0;
-            for (int k = -radius; k <= radius; k++) {
-                int xx = x + k;
-                if (xx < 0 || xx >= w) continue;
-                const uint8_t *p = data + y * stride + xx * 4;
-                sb += p[0]; sg += p[1]; sr += p[2]; sa += p[3];
-                n++;
-            }
-            uint8_t *q = tmp + (y * w + x) * 4;
-            q[0] = (uint8_t)(sb / (n ? n : 1));
-            q[1] = (uint8_t)(sg / (n ? n : 1));
-            q[2] = (uint8_t)(sr / (n ? n : 1));
-            q[3] = (uint8_t)(sa / (n ? n : 1));
-        }
-    }
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            int sa = 0, sr = 0, sg = 0, sb = 0, n = 0;
-            for (int k = -radius; k <= radius; k++) {
-                int yy = y + k;
-                if (yy < 0 || yy >= h) continue;
-                const uint8_t *p = tmp + (yy * w + x) * 4;
-                sb += p[0]; sg += p[1]; sr += p[2]; sa += p[3];
-                n++;
-            }
-            uint8_t *q = data + y * stride + x * 4;
-            q[0] = (uint8_t)(sb / (n ? n : 1));
-            q[1] = (uint8_t)(sg / (n ? n : 1));
-            q[2] = (uint8_t)(sr / (n ? n : 1));
-            q[3] = (uint8_t)(sa / (n ? n : 1));
-        }
-    }
-    g_free(tmp);
-    (void)span;
 }
 
 void
@@ -1248,13 +1113,6 @@ ns_replay_path2d(cairo_t *target, JSValueConst path_v)
     cairo_new_path(target);
     cairo_append_path(target, cp);
     cairo_path_destroy(cp);
-}
-
-cairo_fill_rule_t
-ns_parse_fill_rule(const char *s)
-{
-    if (s && !strcmp(s, "evenodd")) return CAIRO_FILL_RULE_EVEN_ODD;
-    return CAIRO_FILL_RULE_WINDING;
 }
 
 cairo_path_t *

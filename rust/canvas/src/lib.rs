@@ -6,4 +6,5 @@ mod color;
 mod ffi;
 mod font;
 mod path;
+mod raster;
 mod validate;
