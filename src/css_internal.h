@@ -53,6 +53,8 @@ gboolean      ns_css_anb_int_strict(const char *text, int *out);
 
 char         *ns_css_scoped_css(const char *css, gsize len,
                                 const char *host_id, gboolean frame_scope);
+char         *ns_css_presentational_hints(const ns_node *el);
+gboolean      ns_css_is_presentational_attr(const char *name);
 void          ns_css_property_rule_clear(gpointer data);
 
 #if GLIB_SIZEOF_VOID_P == 8

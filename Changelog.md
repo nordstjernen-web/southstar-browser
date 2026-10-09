@@ -444,6 +444,15 @@ Southstar Browser (unreleased):
   per host. Shadow trees and frames style as before; a host whose scope
   id is longer than 78 characters is no longer cut off in the rewritten
   selectors.
+* Presentational hints are Rust: the declarations legacy HTML attributes
+  stand for (bgcolor, background, text, width and height, hspace and
+  vspace, align and valign, border, cellspacing and cellpadding, table
+  rules and frame, font color, face and size, body margins, hr size,
+  color and noshade, list type, nowrap, textarea wrap, iframe
+  frameborder, image and canvas aspect ratios, picture sources' sizes)
+  and SVG presentation attributes, with the HTML legacy colour parser.
+  Pages with legacy markup style as before (checked identical over a
+  million generated elements).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
