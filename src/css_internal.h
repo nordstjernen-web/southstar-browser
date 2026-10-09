@@ -117,6 +117,11 @@ guint32       ns_css_identifier_hash(char kind, const char *name, gsize len);
 guint32       ns_css_attr_value_hash(const char *name, const char *value,
                                      gsize value_len);
 gboolean      ns_css_anb_int_strict(const char *text, int *out);
+
+char         *ns_css_flatten_nesting(const char *text, gssize len);
+const char   *ns_css_skip_invalid_qualified_rule(const char *p,
+                                                 const char *end,
+                                                 gboolean nested);
 char         *ns_css_border_radius_canonical(const char *value);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);

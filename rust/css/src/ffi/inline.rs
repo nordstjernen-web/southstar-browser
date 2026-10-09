@@ -82,6 +82,28 @@ pub(crate) fn sheet_declarations(
     out
 }
 
+pub(crate) fn first_rule_declares(css: &[u8]) -> bool {
+    let text = c_string(css);
+    let sheet = unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) };
+    let Some(sheet_ref) = (unsafe { sheet.as_ref() }) else {
+        return false;
+    };
+    let declares = unsafe {
+        let first = sheet_ref
+            .rules
+            .as_ref()
+            .filter(|rules| rules.len > 0 && !rules.pdata.is_null())
+            .and_then(|rules| (*rules.pdata).cast::<RawRule>().as_ref());
+        first.is_some_and(|rule| {
+            rule.decls.as_ref().is_some_and(|d| d.len > 0)
+                || (!rule.vars.is_null() && glib::g_hash_table_size(rule.vars) > 0)
+                || rule.pending.as_ref().is_some_and(|p| p.len > 0)
+        })
+    };
+    unsafe { ns_css_stylesheet_free(sheet) };
+    declares
+}
+
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }

@@ -12,10 +12,12 @@ mod grid;
 mod image;
 mod inline;
 mod lex;
+mod nesting;
 mod property;
 mod selector;
 mod shadow;
 mod shorthand;
+mod supports;
 mod transform;
 mod value;
 mod values;
@@ -27,9 +29,9 @@ use southstar_glib::{self as glib, GBoolean};
 use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
-pub(crate) use declarations::{media_query_matches, supports_declaration, syntax_def_valid};
+pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
-pub(crate) use inline::{SheetDecl, sheet_declarations};
+pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
 

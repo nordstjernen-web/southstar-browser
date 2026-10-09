@@ -13,6 +13,7 @@ use crate::scan::{
     skip_ws_comments, split_ws_paren, strip, strip_important, trim_range,
 };
 use crate::shorthand;
+use crate::supports;
 use crate::{animation, calc};
 
 pub(crate) trait Sink {
@@ -436,7 +437,7 @@ pub(crate) fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
                 return true;
             }
         }
-        return ffi::supports_declaration(name, text);
+        return supports::declaration(name, text);
     }
     contains(text, b"var(") || wide_keyword(text).is_some()
 }

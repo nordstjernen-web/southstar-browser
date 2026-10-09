@@ -417,6 +417,14 @@ Southstar Browser (unreleased):
   ancestor hashes the Bloom filter uses, and @supports selector(). The
   selectors css.c matches are built from it with the same structure, so
   selectors match, count specificity and report validity as before.
+* CSS nesting is flattened in Rust before a style sheet is parsed: nested
+  style rules joined to their parents through :is() and &, nested
+  @media, @supports, @container, @layer and @scope rules lifted around
+  their parents, with the same selector budget against exponential
+  growth. @supports conditions and CSS.supports() are Rust too:
+  declarations, selector(), not, and and or, and functions such as
+  font-tech() reported unsupported. Style sheets flatten and conditions
+  evaluate as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

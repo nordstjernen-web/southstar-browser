@@ -18,9 +18,9 @@ use crate::declarations::{self, Sink};
 pub(super) struct RawRule {
     pub(super) selectors: *mut GPtrArray,
     pub(super) decls: *mut GArray,
-    vars: *mut GHashTable,
+    pub(super) vars: *mut GHashTable,
     var_important: *mut GHashTable,
-    pending: *mut GArray,
+    pub(super) pending: *mut GArray,
 }
 
 #[repr(C)]
@@ -39,7 +39,6 @@ unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn ns_css_value_free(v: *mut NsCssValue);
-    fn ns_css_supports_declaration(property: *const c_char, value: *const c_char) -> GBoolean;
     fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);
@@ -47,11 +46,6 @@ unsafe extern "C" {
 
 fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
-}
-
-pub(crate) fn supports_declaration(name: &[u8], text: &[u8]) -> bool {
-    let (name, text) = (c_string(name), c_string(text));
-    unsafe { ns_css_supports_declaration(name.as_ptr(), text.as_ptr()) != 0 }
 }
 
 pub(crate) fn media_query_matches(query: &[u8]) -> bool {
