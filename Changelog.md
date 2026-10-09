@@ -13,6 +13,9 @@ Southstar Browser (unreleased):
   http_backend meson option is now "rust" (the default) or "curl". libcurl is
   still used for proxied and FTP requests, WebSocket, Server-Sent Events and
   the audio helper, and goes away once those move to the new client.
+* The Rust HTTP client records Strict-Transport-Security headers itself,
+  into the same HSTS list curl kept, so hosts seen over valid HTTPS are
+  upgraded from http:// on later visits as before.
 * The logo has a large serif S behind the star, as Nordstjernen's had an N:
   the application and window icon, the Windows icon, the animated start-page
   logo and the two badges.

@@ -1,4 +1,4 @@
-//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies, written into the body and header sinks, with proxied and FTP hops still handed to curl.
+//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies and HSTS recording, written into the body and header sinks, with proxied and FTP hops still handed to curl.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -42,6 +42,7 @@ struct Sinks<'a> {
     wctx: &'a mut NsWriteCtx,
     hctx: &'a mut NsHeaderCtx,
     cancellable: *mut c_void,
+    sts: Option<Vec<u8>>,
 }
 
 impl Handler for Sinks<'_> {
@@ -60,6 +61,9 @@ impl Handler for Sinks<'_> {
             if let Some(jar) = self.jar {
                 cookies::store_in(self.url, value, jar);
             }
+        }
+        if name.eq_ignore_ascii_case(b"strict-transport-security") && self.sts.is_none() {
+            self.sts = Some(value.to_vec());
         }
         sinks::feed(self.hctx, line);
     }
@@ -157,8 +161,16 @@ pub unsafe extern "C" fn ns_hop_transport(
         wctx: unsafe { &mut *wctx },
         hctx: unsafe { &mut *hctx },
         cancellable,
+        sts: None,
     };
     let outcome = southstar_http::perform(&request, &mut sinks);
+    if let Some(sts) = sinks
+        .sts
+        .as_deref()
+        .filter(|_| https && outcome.ok && outcome.tls_warning.is_none())
+    {
+        hsts::record(&parts.hostname, sts);
+    }
 
     out.t_namelookup_ms = outcome.namelookup_ms;
     out.t_connect_ms = outcome.connect_ms;
