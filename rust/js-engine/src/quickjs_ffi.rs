@@ -822,6 +822,10 @@ pub mod quickjs {
         value.into_raw()
     }
 
+    pub fn raw(value: &Value) -> JSValue {
+        value.raw
+    }
+
     pub unsafe fn call_native(
         ctx: *mut JSContext,
         this_val: JSValue,

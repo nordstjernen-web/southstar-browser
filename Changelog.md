@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The Performance API is Rust: performance.now(), mark(), measure(), the
+  entry getters and clear methods, resource timing with its Timing-Allow-Origin
+  and CORS rules, each frame's own clock and timeline, and
+  PerformanceObserver. Checked against the C build on local and HTTP-served
+  pages, including cross-origin, Timing-Allow-Origin and frame resources, with
+  identical results.
 * The WebIDL brand checks on DOM interface members (calling a Node or
   Element method on the wrong kind of object throws, rejects or is ignored
   as the member requires) are applied from Rust, with identical results over

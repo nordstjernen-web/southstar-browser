@@ -40,6 +40,7 @@ southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
 southstar-js-brand = { path = "../js-brand" }
 southstar-js-intl = { path = "../js-intl" }
+southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-layout = { path = "../layout" }
@@ -99,6 +100,7 @@ quickjs-original = [
     "southstar-extensions/quickjs-original",
     "southstar-js-brand/quickjs-original",
     "southstar-js-intl/quickjs-original",
+    "southstar-js-perf/quickjs-original",
     "southstar-js-realm/quickjs-original",
     "southstar-js-temporal/quickjs-original",
     "southstar-idb/quickjs-original",

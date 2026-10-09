@@ -916,6 +916,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `css.c` | 31,867 | `rust/css` (ported section by section, from the value parsers to the cascade walk; parsed sheets, rules, selectors, values and computed styles stay the structs `css.h` declares, built and read through asserted `#[repr(C)]` mirrors, so layout, paint and script read them unchanged; the user-agent sheet is plain CSS in `ua.css` and `ua-quirks.css`) | 6 (style) |
 | `js_realm.c` | 172 | `rust/js-realm` (ShadowRealm on the engine-neutral layer, which gained detached realms, `is_function`, plain errors and rejected promises for it, so it runs on Boa too) | 7 (JavaScript bindings) |
 | `js_brand.c` | 150 | `rust/js-brand` (the walk uses new engine-neutral reflection — own keys, own descriptors, prototypes, object identity; the fork's function brands are reached through `js-engine`'s `quickjs` module and are no-ops on the original QuickJS, as before) | 7 (JavaScript bindings) |
+| `js_perf.c` | 1,331 | `rust/js-perf` (the timelines, observers and frame clocks moved out of `ns_js` into per-page Rust state; js.c keeps the page's time origin, navigation timing and log behind small accessors; the Performance object is a GC-traced host object, so the timing, navigation and eventCounts objects it holds are still marked) | 7 (JavaScript bindings) |
 
 ### Being ported
 

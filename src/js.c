@@ -27595,11 +27595,11 @@ ns_worker_js_new(ns_worker_host *host)
     js->pending_aborts = g_ptr_array_new();
     js->listeners = g_ptr_array_new();
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
-    js->perf_entries = g_ptr_array_new_with_free_func(ns_perf_entry_free);
+    ns_perf_init(js);
 
     js->rt = JS_NewRuntime();
     if (!js->rt) {
-        if (js->perf_entries) g_ptr_array_free(js->perf_entries, TRUE);
+        ns_perf_teardown(js);
         if (js->timers) g_hash_table_destroy(js->timers);
         if (js->pending_fetches) g_ptr_array_free(js->pending_fetches, TRUE);
         if (js->fetch_states_by_id) g_hash_table_destroy(js->fetch_states_by_id);
@@ -27624,7 +27624,7 @@ ns_worker_js_new(ns_worker_host *host)
     if (js->ctx) ns_js_add_engine_private_names(js->ctx);
     if (!js->ctx) {
         JS_FreeRuntime(js->rt);
-        if (js->perf_entries) g_ptr_array_free(js->perf_entries, TRUE);
+        ns_perf_teardown(js);
         if (js->timers) g_hash_table_destroy(js->timers);
         if (js->pending_fetches) g_ptr_array_free(js->pending_fetches, TRUE);
         if (js->fetch_states_by_id) g_hash_table_destroy(js->fetch_states_by_id);
@@ -56531,7 +56531,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
         js->navigation_timing.origin_real_ms = js->time_origin_real_ms;
     }
     ns_js_coarsen_navigation_timing(js);
-    js->perf_entries         = g_ptr_array_new_with_free_func(ns_perf_entry_free);
+    ns_perf_init(js);
     js->rt = JS_NewRuntime();
     if (js->rt) {
         const ns_config *c = ns_config_get();
@@ -61064,20 +61064,7 @@ ns_js_reset_runtime_state(ns_js *js)
         }
     }
 
-    if (js->perf_observers) {
-        for (guint i = 0; i < js->perf_observers->len; i++) {
-            ns_perf_observer *o = g_ptr_array_index(js->perf_observers, i);
-            if (!o) continue;
-            o->disconnected = TRUE;
-            if (o->records) g_ptr_array_set_size(o->records, 0);
-            if (o->entry_types) g_ptr_array_set_size(o->entry_types, 0);
-            if (o->pinned) {
-                o->pinned = FALSE;
-                JS_FreeValue(js->ctx, o->wrapper);
-            }
-        }
-    }
-    js->perf_drain_scheduled = FALSE;
+    ns_perf_reset_observers(js);
 
     if (js->orphan_nodes) {
         GList *list = g_hash_table_get_keys(js->orphan_nodes);
@@ -61735,22 +61722,7 @@ ns_js_free(ns_js *js)
         g_ptr_array_free(js->history_entries, TRUE);
         js->history_entries = NULL;
     }
-    if (js->perf_entries) g_ptr_array_free(js->perf_entries, TRUE);
-    if (js->perf_observers) {
-        for (guint i = 0; i < js->perf_observers->len; i++) {
-            ns_perf_observer *o = g_ptr_array_index(js->perf_observers, i);
-            if (!o) continue;
-            o->disconnected = TRUE;
-            if (o->records) g_ptr_array_set_size(o->records, 0);
-            if (o->entry_types) g_ptr_array_set_size(o->entry_types, 0);
-            if (o->pinned) {
-                o->pinned = FALSE;
-                JS_FreeValue(js->ctx, o->wrapper);
-            }
-        }
-        g_ptr_array_free(js->perf_observers, TRUE);
-        js->perf_observers = NULL;
-    }
+    ns_perf_teardown(js);
     if (js->node_iters) {
         g_ptr_array_free(js->node_iters, TRUE);
         js->node_iters = NULL;
@@ -66297,6 +66269,42 @@ const char *
 ns_js_storage_partition(const ns_js *js)
 {
     return js ? js->partition_key : NULL;
+}
+
+gint64
+ns_js_page_time_origin_us(const ns_js *js)
+{
+    return js->time_origin_us;
+}
+
+double
+ns_js_page_time_origin_real_ms(const ns_js *js)
+{
+    return js->time_origin_real_ms;
+}
+
+JSContext *
+ns_js_main_realm(const ns_js *js)
+{
+    return js->main_realm_ctx;
+}
+
+JSContext *
+ns_js_main_context(const ns_js *js)
+{
+    return js->ctx;
+}
+
+const ns_js_navigation_timing *
+ns_js_page_navigation_timing(const ns_js *js)
+{
+    return &js->navigation_timing;
+}
+
+void
+ns_js_log_line(ns_js *js, const char *line)
+{
+    if (js->log_cb) js->log_cb(line, js->log_user_data);
 }
 
 void

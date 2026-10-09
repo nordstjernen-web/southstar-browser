@@ -50,16 +50,6 @@ typedef struct ns_image_bitmap {
     gboolean origin_clean;
 } ns_image_bitmap;
 
-typedef struct ns_perf_observer {
-    JSValue   cb;
-    JSValue   wrapper;
-    gconstpointer realm;   /* the realm whose timeline the observer watches */
-    gboolean  disconnected;
-    gboolean  pinned;
-    GPtrArray *entry_types;
-    GPtrArray *records;
-} ns_perf_observer;
-
 struct ns_js {
     JSRuntime    *rt;
     JSContext    *ctx;
@@ -228,9 +218,6 @@ struct ns_js {
     GHashTable   *window_outwards;
     GQueue       *message_tasks;
     GHashTable   *realm_cloners;
-    /* Frame realms' time origins, by JSContext, and the navigation start
-     * of a frame element whose new document has no realm yet. */
-    GHashTable   *realm_origins;
     JSValue       navigator_brand;   /* WeakSet of the frame realms'
                                         navigators the Navigator getters
                                         accept */
@@ -295,9 +282,6 @@ struct ns_js {
     gint64        time_origin_us;
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
-    GPtrArray    *perf_entries;
-    GPtrArray    *perf_observers;
-    gboolean      perf_drain_scheduled;
     GPtrArray    *node_iters;
     GHashTable   *console_counts;
     GHashTable   *console_timers;
@@ -759,12 +743,6 @@ gboolean ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
                              gboolean *was_set);
 
 double ns_perf_now_ms(const ns_js *js);
-/* A frame realm's own time origin (its document's start), the page's for
- * every other realm. */
-typedef struct ns_realm_origin {
-    gint64 origin_us;
-    double origin_real_ms;
-} ns_realm_origin;
 gint64 ns_js_time_origin_us(const ns_js *js, gconstpointer realm);
 double ns_js_time_origin_real_ms(const ns_js *js, gconstpointer realm);
 double ns_perf_realm_now_ms(JSContext *ctx);
@@ -789,6 +767,16 @@ typedef struct ns_perf_resource_info {
     long          status;
     gint64        body_size;
 } ns_perf_resource_info;
+G_STATIC_ASSERT(sizeof(ns_perf_resource_info) == 56);
+void ns_perf_init(ns_js *js);
+void ns_perf_reset_observers(ns_js *js);
+void ns_perf_teardown(ns_js *js);
+gint64 ns_js_page_time_origin_us(const ns_js *js);
+double ns_js_page_time_origin_real_ms(const ns_js *js);
+JSContext *ns_js_main_realm(const ns_js *js);
+JSContext *ns_js_main_context(const ns_js *js);
+const ns_js_navigation_timing *ns_js_page_navigation_timing(const ns_js *js);
+void ns_js_log_line(ns_js *js, const char *line);
 struct ns_response;
 void ns_perf_add_resource_timed(ns_js *js, const ns_perf_resource_info *info,
                                 const char *url, const char *initiator,
@@ -807,7 +795,6 @@ JSValue ns_window_performance_time_origin_get(JSContext *ctx,
 JSValue ns_window_performance_object_get(JSContext *ctx,
                                          JSValueConst this_val, int argc,
                                          JSValueConst *argv, int magic);
-void ns_perf_entry_free(gpointer p);
 JSValue ns_perf_supported_entry_types(JSContext *ctx);
 void ns_perf_install_entry_list(JSContext *ctx, JSValueConst global);
 JSValue ns_perf_observer_ctor(JSContext *ctx, JSValueConst this_val,

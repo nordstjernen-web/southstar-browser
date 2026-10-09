@@ -37,6 +37,7 @@ pub use southstar_image_decoders;
 pub use southstar_ipc;
 pub use southstar_js_brand;
 pub use southstar_js_intl;
+pub use southstar_js_perf;
 pub use southstar_js_realm;
 pub use southstar_js_temporal;
 pub use southstar_layout;

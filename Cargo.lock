@@ -1591,6 +1591,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-js-brand",
  "southstar-js-intl",
+ "southstar-js-perf",
  "southstar-js-realm",
  "southstar-js-temporal",
  "southstar-layout",
@@ -1759,6 +1760,14 @@ dependencies = [
  "southstar-glib",
  "southstar-i18n",
  "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-perf"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-js-engine",
+ "southstar-net",
 ]
 
 [[package]]
