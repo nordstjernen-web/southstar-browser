@@ -16,6 +16,7 @@ mod shadow;
 mod shorthand;
 mod transform;
 mod value;
+mod values;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
 
@@ -27,7 +28,7 @@ pub(crate) use container::{Container, container_map};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub(crate) use inline::{
     SheetDecl, declarations_serialized, named_declaration_valid, named_property_supported,
-    sheet_declarations, specified_canonical,
+    sheet_declarations,
 };
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;

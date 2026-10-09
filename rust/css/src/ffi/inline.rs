@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the inline style text, and the css.c stylesheet parser, declaration checks and value serialization it still calls.
+//! Southstar — the C ABI of the inline style text, and the css.c stylesheet parser and declaration checks it still calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -10,7 +10,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
 
 use super::property::prop_of;
 use super::shorthand::RawDecl;
-use super::value::NsCssValue;
+use super::values::text_of;
 use crate::inline;
 use crate::prop::Prop;
 
@@ -28,13 +28,10 @@ struct RawRule {
 unsafe extern "C" {
     fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
     fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-    fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_char;
-    fn ns_css_value_serialize_specified(v: *const NsCssValue) -> *mut c_char;
     fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
     fn ns_css_declarations_free(decls: *mut GArray);
     fn ns_css_named_property_supported(name: *const c_char) -> GBoolean;
     fn ns_css_named_declaration_valid(name: *const c_char, text: *const c_char) -> GBoolean;
-    fn ns_css_specified_canonical(prop: *const c_char, value: *const c_char) -> *mut c_char;
 }
 
 pub(crate) struct SheetDecl {
@@ -45,10 +42,6 @@ pub(crate) struct SheetDecl {
 
 fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
-}
-
-fn take(s: *mut c_char) -> Option<Vec<u8>> {
-    unsafe { glib::GStr::take(s) }.map(|s| s.to_bytes().to_vec())
 }
 
 unsafe fn decls_of<'a>(array: *const GArray) -> &'a [RawDecl] {
@@ -88,8 +81,7 @@ pub(crate) fn sheet_declarations(
                 }
                 out.push(SheetDecl {
                     prop,
-                    text: take(unsafe { ns_css_value_serialize_specified(decl.value) })
-                        .unwrap_or_default(),
+                    text: unsafe { text_of(decl.value, true) },
                     important: decl.important != 0,
                 });
             }
@@ -104,10 +96,7 @@ pub(crate) fn declarations_serialized(text: &[u8]) -> Vec<(Option<Prop>, Vec<u8>
     let decls = unsafe { ns_css_parse_declarations(text.as_ptr()) };
     let out = unsafe { decls_of(decls) }
         .iter()
-        .map(|decl| {
-            let serialized = take(unsafe { ns_css_value_serialize(decl.value) });
-            (prop_of(decl.prop), serialized.unwrap_or_default())
-        })
+        .map(|decl| (prop_of(decl.prop), unsafe { text_of(decl.value, false) }))
         .collect();
     unsafe { ns_css_declarations_free(decls) };
     out
@@ -121,11 +110,6 @@ pub(crate) fn named_property_supported(name: &[u8]) -> bool {
 pub(crate) fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
     let (name, text) = (c_string(name), c_string(text));
     unsafe { ns_css_named_declaration_valid(name.as_ptr(), text.as_ptr()) != 0 }
-}
-
-pub(crate) fn specified_canonical(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-    let (prop, value) = (c_string(prop), c_string(value));
-    take(unsafe { ns_css_specified_canonical(prop.as_ptr(), value.as_ptr()) })
 }
 
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {

@@ -24,6 +24,7 @@ use crate::scan::{
 };
 use crate::shorthand::{ANIMATION_LONGHANDS, TRANSITION_LONGHANDS};
 use crate::text::{add_leading_zeros, normalize_negative_zero, split_top_level_commas};
+use crate::values;
 
 const DECL_SHEETS_MAX: usize = 4096;
 const GET_MEMO: usize = 32;
@@ -910,7 +911,7 @@ fn parsed_declarations(style: &[u8]) -> Vec<InlineDecl> {
         }
         let mut value = value_canonical(&name, value.to_vec());
         if !custom {
-            if let Some(canonical) = ffi::specified_canonical(&name, &value) {
+            if let Some(canonical) = values::specified_canonical(Some(&name), &value) {
                 value = canonical;
             }
         }

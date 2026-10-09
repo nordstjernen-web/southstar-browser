@@ -392,6 +392,14 @@ Southstar Browser (unreleased):
   animation, transition and list-style longhands), and cssText with
   complete shorthands collapsed and every value in canonical form.
   element.style reads, writes and serializes as before.
+* Serializing computed values, interpolating them for transitions and
+  animations (lengths, mixed lengths and percentages as calc(), numeric
+  and length keywords, colours, shadows, clip rects, and transform lists
+  including none against a transform) and comparing them are Rust, as is
+  the canonical specified text element.style reports for display,
+  transforms, border-radius, animations, colours, shadows, times and the
+  other properties with a canonical spelling. Values serialize and
+  animate as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

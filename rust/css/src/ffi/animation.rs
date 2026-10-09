@@ -84,7 +84,7 @@ impl RawList {
         list
     }
 
-    unsafe fn entries(&self) -> Vec<Entry> {
+    pub(super) unsafe fn entries(&self) -> Vec<Entry> {
         let n = usize::try_from(self.n).unwrap_or(0).min(ENTRIES_MAX);
         self.entries[..n]
             .iter()
