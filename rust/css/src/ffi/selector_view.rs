@@ -253,6 +253,28 @@ impl<'a> SheetRef<'a> {
         unsafe { sheet.cast::<RawSheet>().as_ref() }.map(SheetRef)
     }
 
+    pub(super) unsafe fn list(
+        ua: *const c_void,
+        author: *const *const c_void,
+        n_author: usize,
+    ) -> Vec<SheetRef<'a>> {
+        let author: &[*const c_void] = if author.is_null() || n_author == 0 {
+            &[]
+        } else {
+            unsafe { slice::from_raw_parts(author, n_author) }
+        };
+        core::iter::once(ua)
+            .chain(author.iter().copied())
+            .filter_map(|sheet| unsafe { SheetRef::from_ptr(sheet) })
+            .collect()
+    }
+
+    pub(crate) fn layer_names(self) -> impl Iterator<Item = &'a [u8]> {
+        unsafe { pointers::<c_char>(self.0.layer_names) }
+            .iter()
+            .filter_map(|&name| unsafe { text(name) }.map(CStr::to_bytes))
+    }
+
     pub(crate) fn rules(self) -> impl Iterator<Item = RuleRef<'a>> {
         unsafe { pointers::<RawRule>(self.0.rules) }
             .iter()

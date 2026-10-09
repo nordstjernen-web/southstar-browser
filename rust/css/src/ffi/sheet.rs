@@ -24,7 +24,7 @@ use crate::transform::Transform;
 pub(super) struct RawSheet {
     pub(super) rules: *mut GPtrArray,
     imports: *mut GArray,
-    layer_names: *mut GPtrArray,
+    pub(super) layer_names: *mut GPtrArray,
     layers: *mut GHashTable,
     font_faces: *mut GArray,
     keyframes: *mut GArray,

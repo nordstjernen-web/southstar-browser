@@ -64,6 +64,9 @@ char         *ns_css_substitute_vars(const char *value,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
 struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
+GHashTable *ns_css_layer_ranks_build(const ns_css_stylesheet *ua,
+                                     const ns_css_stylesheet *const *author,
+                                     gsize n_author);
 gboolean ns_css_restyle_prepare(const ns_css_stylesheet *ua,
                                 const ns_css_stylesheet *const *author,
                                 gsize n_author, guint64 sig);

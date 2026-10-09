@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_void};
-use core::slice;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -22,15 +21,7 @@ pub unsafe extern "C" fn ns_css_restyle_prepare(
     n_author: usize,
     sig: u64,
 ) -> GBoolean {
-    let author: &[*const c_void] = if author.is_null() || n_author == 0 {
-        &[]
-    } else {
-        unsafe { slice::from_raw_parts(author, n_author) }
-    };
-    let sheets: Vec<SheetRef<'_>> = core::iter::once(ua)
-        .chain(author.iter().copied())
-        .filter_map(|sheet| unsafe { SheetRef::from_ptr(sheet) })
-        .collect();
+    let sheets = unsafe { SheetRef::list(ua, author, n_author) };
     glib::boolean(restyle::prepare(&sheets, sig))
 }
 

@@ -532,6 +532,12 @@ Southstar Browser (unreleased):
   only repaint. Looking a property up by name is about 13 times faster
   (a hash lookup instead of a scan of all 242 names); the results are
   identical (checked over 8 million generated names).
+* Cascade layer order is Rust: the layers a style pass's sheets declare,
+  and every dotted prefix of them, ranked so sibling layers keep the
+  order they were first declared in and a layer's sublayers come before
+  the layer's own rules. The ranks are identical (checked over 400,000
+  generated sets of @layer statements, blocks, nested and anonymous
+  layers and layered @imports).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -17,6 +17,7 @@ mod hints;
 mod host_scope;
 mod image;
 mod inline;
+mod layers;
 mod lex;
 mod matcher;
 mod nesting;
