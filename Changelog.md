@@ -318,6 +318,9 @@ Southstar Browser (unreleased):
   rects, URLs, image-set() and gradients, layered background and mask
   lists, and the structured values the earlier sections parse). Every
   property parses as before.
+* The initial values getComputedStyle and the animation engine fall back
+  to for properties without a computed spelling of their own come from a
+  Rust table, with the same values as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

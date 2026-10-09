@@ -189,3 +189,10 @@ pub unsafe extern "C" fn ns_css_bg_repeat_canonical(
 pub unsafe extern "C" fn ns_css_bg_clip_canonical(text: *const c_char) -> *mut c_char {
     strdup_opt(unsafe { bytes(text) }.and_then(property::bg_clip_canonical))
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_initial_value_text(name: *const c_char) -> *const c_char {
+    unsafe { bytes(name) }
+        .and_then(crate::initial::initial_value)
+        .map_or(ptr::null(), CStr::as_ptr)
+}
