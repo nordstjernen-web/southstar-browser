@@ -1,13 +1,11 @@
-//! Southstar — the C ABI of the per-property value parser: css.c's property ids resolved to Rust properties, and parsed values built as the ns_css_value css.c owns.
+//! Southstar — the C ABI of the property table and the per-property value parser: property ids, names, aliases, inheritance and paint-only properties, and parsed values built as the ns_css_value css.c owns.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
-use std::collections::HashMap;
-use std::sync::OnceLock;
 
-use southstar_glib as glib;
+use southstar_glib::{self as glib, GBoolean};
 
 use super::animation::RawList;
 use super::value::{
@@ -17,48 +15,34 @@ use crate::calc::Parsed;
 use crate::prop::Prop;
 use crate::property::{self, Body, Value};
 
-unsafe extern "C" {
-    fn ns_css_prop_name(prop: c_int) -> *const c_char;
-}
-
-struct Tables {
-    by_id: Vec<Option<Prop>>,
-    by_prop: HashMap<Prop, c_int>,
-}
-
-fn tables() -> &'static Tables {
-    static TABLES: OnceLock<Tables> = OnceLock::new();
-    TABLES.get_or_init(|| {
-        let names: HashMap<&[u8], Prop> = Prop::ALL.iter().map(|&p| (p.name(), p)).collect();
-        let mut by_id = Vec::new();
-        loop {
-            let name = unsafe { ns_css_prop_name(by_id.len() as c_int) };
-            if name.is_null() {
-                break;
-            }
-            by_id.push(
-                names
-                    .get(unsafe { CStr::from_ptr(name) }.to_bytes())
-                    .copied(),
-            );
-        }
-        let by_prop = by_id
-            .iter()
-            .enumerate()
-            .filter_map(|(id, prop)| Some(((*prop)?, id as c_int)))
-            .collect();
-        Tables { by_id, by_prop }
-    })
-}
-
 pub(crate) fn id_of(prop: Prop) -> c_int {
-    tables().by_prop.get(&prop).copied().unwrap_or(-1)
+    prop.id() as c_int
 }
 
 pub(crate) fn prop_of(id: c_int) -> Option<Prop> {
-    usize::try_from(id)
-        .ok()
-        .and_then(|i| tables().by_id.get(i).copied().flatten())
+    usize::try_from(id).ok().and_then(Prop::from_id)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_prop_id(name: *const c_char) -> c_int {
+    unsafe { bytes(name) }
+        .and_then(Prop::from_name)
+        .map_or(-1, id_of)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_prop_name(prop: c_int) -> *const c_char {
+    prop_of(prop).map_or(ptr::null(), |p| p.c_name().as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_prop_inherits(prop: c_int) -> GBoolean {
+    glib::boolean(prop_of(prop).is_some_and(Prop::inherits))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_css_prop_affects_layout(prop: c_int) -> GBoolean {
+    glib::boolean(prop_of(prop).is_none_or(Prop::affects_layout))
 }
 
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {

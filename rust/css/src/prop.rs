@@ -1,6 +1,10 @@
-//! Southstar — the CSS properties css.h enumerates, named so Rust can match on them and resolve their ids from css.c's property table.
+//! Southstar — the CSS properties css.h enumerates, in its order so a property's id is its discriminant, with their names, the aliases and logical properties that resolve to them, whether they inherit and whether they only repaint.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+use core::ffi::CStr;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Prop {
@@ -495,249 +499,433 @@ impl Prop {
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
+        self.c_name().to_bytes()
+    }
+
+    pub(crate) fn id(self) -> usize {
+        self as usize
+    }
+
+    pub(crate) fn from_id(id: usize) -> Option<Prop> {
+        Prop::ALL.get(id).copied()
+    }
+
+    pub(crate) fn from_name(name: &[u8]) -> Option<Prop> {
+        names().get(name.to_ascii_lowercase().as_slice()).copied()
+    }
+
+    pub(crate) fn inherits(self) -> bool {
+        matches!(
+            self,
+            Prop::Color
+                | Prop::FontSize
+                | Prop::FontWeight
+                | Prop::FontStyle
+                | Prop::FontStretch
+                | Prop::FontKerning
+                | Prop::FontVariantLigatures
+                | Prop::FontFeatureSettings
+                | Prop::FontVariationSettings
+                | Prop::FontFamily
+                | Prop::FontVariant
+                | Prop::LineHeight
+                | Prop::LetterSpacing
+                | Prop::WordSpacing
+                | Prop::WhiteSpace
+                | Prop::Hyphens
+                | Prop::Direction
+                | Prop::WritingMode
+                | Prop::TextOrientation
+                | Prop::CaptionSide
+                | Prop::BorderCollapse
+                | Prop::BorderSpacing
+                | Prop::TextAlign
+                | Prop::TextIndent
+                | Prop::TextTransform
+                | Prop::ListStyleType
+                | Prop::ListStylePosition
+                | Prop::ListStyleImage
+                | Prop::UserSelect
+                | Prop::Quotes
+                | Prop::Visibility
+                | Prop::Cursor
+                | Prop::PointerEvents
+                | Prop::ScrollbarColor
+                | Prop::ImageRendering
+                | Prop::TabSize
+                | Prop::WordBreak
+                | Prop::OverflowWrap
+                | Prop::CaretColor
+                | Prop::AccentColor
+                | Prop::Fill
+                | Prop::FillOpacity
+                | Prop::FillRule
+                | Prop::Stroke
+                | Prop::StrokeWidth
+                | Prop::StrokeOpacity
+                | Prop::StrokeLinecap
+                | Prop::StrokeLinejoin
+                | Prop::StrokeMiterlimit
+                | Prop::StrokeDasharray
+                | Prop::StrokeDashoffset
+                | Prop::ClipRule
+                | Prop::TextAnchor
+                | Prop::PaintOrder
+                | Prop::ShapeRendering
+                | Prop::TextShadow
+                | Prop::Orphans
+                | Prop::Widows
+                | Prop::DominantBaseline
+        )
+    }
+
+    pub(crate) fn affects_layout(self) -> bool {
+        !matches!(
+            self,
+            Prop::Opacity
+                | Prop::Color
+                | Prop::BackgroundColor
+                | Prop::Transform
+                | Prop::Visibility
+                | Prop::BoxShadow
+                | Prop::TextShadow
+                | Prop::Filter
+                | Prop::BorderTopColor
+                | Prop::BorderRightColor
+                | Prop::BorderBottomColor
+                | Prop::BorderLeftColor
+                | Prop::OutlineColor
+        )
+    }
+
+    pub(crate) fn c_name(self) -> &'static CStr {
         match self {
-            Prop::Display => b"display",
-            Prop::Color => b"color",
-            Prop::BackgroundColor => b"background-color",
-            Prop::FontSize => b"font-size",
-            Prop::FontWeight => b"font-weight",
-            Prop::FontStyle => b"font-style",
-            Prop::FontStretch => b"font-stretch",
-            Prop::FontKerning => b"font-kerning",
-            Prop::FontVariantLigatures => b"font-variant-ligatures",
-            Prop::FontFeatureSettings => b"font-feature-settings",
-            Prop::FontVariationSettings => b"font-variation-settings",
-            Prop::FontFamily => b"font-family",
-            Prop::TextAlign => b"text-align",
-            Prop::MarginTop => b"margin-top",
-            Prop::MarginRight => b"margin-right",
-            Prop::MarginBottom => b"margin-bottom",
-            Prop::MarginLeft => b"margin-left",
-            Prop::PaddingTop => b"padding-top",
-            Prop::PaddingRight => b"padding-right",
-            Prop::PaddingBottom => b"padding-bottom",
-            Prop::PaddingLeft => b"padding-left",
-            Prop::BorderTopWidth => b"border-top-width",
-            Prop::BorderRightWidth => b"border-right-width",
-            Prop::BorderBottomWidth => b"border-bottom-width",
-            Prop::BorderLeftWidth => b"border-left-width",
-            Prop::BorderTopColor => b"border-top-color",
-            Prop::BorderRightColor => b"border-right-color",
-            Prop::BorderBottomColor => b"border-bottom-color",
-            Prop::BorderLeftColor => b"border-left-color",
-            Prop::BorderTopStyle => b"border-top-style",
-            Prop::BorderRightStyle => b"border-right-style",
-            Prop::BorderBottomStyle => b"border-bottom-style",
-            Prop::BorderLeftStyle => b"border-left-style",
-            Prop::Width => b"width",
-            Prop::Height => b"height",
-            Prop::MaxWidth => b"max-width",
-            Prop::MaxHeight => b"max-height",
-            Prop::MinWidth => b"min-width",
-            Prop::MinHeight => b"min-height",
-            Prop::LineHeight => b"line-height",
-            Prop::TextDecoration => b"text-decoration",
-            Prop::Position => b"position",
-            Prop::Top => b"top",
-            Prop::Right => b"right",
-            Prop::Bottom => b"bottom",
-            Prop::Left => b"left",
-            Prop::ZIndex => b"z-index",
-            Prop::Opacity => b"opacity",
-            Prop::Cursor => b"cursor",
-            Prop::PointerEvents => b"pointer-events",
-            Prop::LetterSpacing => b"letter-spacing",
-            Prop::WordSpacing => b"word-spacing",
-            Prop::WhiteSpace => b"white-space",
-            Prop::BoxSizing => b"box-sizing",
-            Prop::TextIndent => b"text-indent",
-            Prop::TextTransform => b"text-transform",
-            Prop::ListStyleType => b"list-style-type",
-            Prop::VerticalAlign => b"vertical-align",
-            Prop::Visibility => b"visibility",
-            Prop::Overflow => b"overflow",
-            Prop::FontVariant => b"font-variant",
-            Prop::BorderRadius => b"border-radius",
-            Prop::BorderTopLeftRadius => b"border-top-left-radius",
-            Prop::BorderTopRightRadius => b"border-top-right-radius",
-            Prop::BorderBottomRightRadius => b"border-bottom-right-radius",
-            Prop::BorderBottomLeftRadius => b"border-bottom-left-radius",
-            Prop::FlexDirection => b"flex-direction",
-            Prop::FlexWrap => b"flex-wrap",
-            Prop::JustifyContent => b"justify-content",
-            Prop::AlignItems => b"align-items",
-            Prop::AlignSelf => b"align-self",
-            Prop::Gap => b"gap",
-            Prop::RowGap => b"row-gap",
-            Prop::ColumnGap => b"column-gap",
-            Prop::FlexGrow => b"flex-grow",
-            Prop::FlexShrink => b"flex-shrink",
-            Prop::FlexBasis => b"flex-basis",
-            Prop::Order => b"order",
-            Prop::Float => b"float",
-            Prop::Clear => b"clear",
-            Prop::BoxShadow => b"box-shadow",
-            Prop::OutlineWidth => b"outline-width",
-            Prop::OutlineStyle => b"outline-style",
-            Prop::OutlineColor => b"outline-color",
-            Prop::OutlineOffset => b"outline-offset",
-            Prop::BackgroundImage => b"background-image",
-            Prop::BackgroundRepeat => b"background-repeat",
-            Prop::BackgroundPositionX => b"background-position-x",
-            Prop::BackgroundPositionY => b"background-position-y",
-            Prop::BackgroundSize => b"background-size",
-            Prop::BackgroundClip => b"background-clip",
-            Prop::BackgroundOrigin => b"background-origin",
-            Prop::BackgroundAttachment => b"background-attachment",
-            Prop::ScrollbarWidth => b"scrollbar-width",
-            Prop::ScrollbarColor => b"scrollbar-color",
-            Prop::ImageRendering => b"image-rendering",
-            Prop::Content => b"content",
-            Prop::GridTemplateColumns => b"grid-template-columns",
-            Prop::GridTemplateRows => b"grid-template-rows",
-            Prop::GridTemplateAreas => b"grid-template-areas",
-            Prop::GridColumn => b"grid-column",
-            Prop::GridRow => b"grid-row",
-            Prop::GridColumnStart => b"grid-column-start",
-            Prop::GridColumnEnd => b"grid-column-end",
-            Prop::GridRowStart => b"grid-row-start",
-            Prop::GridRowEnd => b"grid-row-end",
-            Prop::GridArea => b"grid-area",
-            Prop::GridAutoRows => b"grid-auto-rows",
-            Prop::GridAutoColumns => b"grid-auto-columns",
-            Prop::GridAutoFlow => b"grid-auto-flow",
-            Prop::Transform => b"transform",
-            Prop::TransformOrigin => b"transform-origin",
-            Prop::Transition => b"transition",
-            Prop::Animation => b"animation",
-            Prop::AspectRatio => b"aspect-ratio",
-            Prop::TextShadow => b"text-shadow",
-            Prop::OverflowWrap => b"overflow-wrap",
-            Prop::WordBreak => b"word-break",
-            Prop::Hyphens => b"hyphens",
-            Prop::TextOverflow => b"text-overflow",
-            Prop::TextDecorationColor => b"text-decoration-color",
-            Prop::TextDecorationStyle => b"text-decoration-style",
-            Prop::ListStylePosition => b"list-style-position",
-            Prop::ListStyleImage => b"list-style-image",
-            Prop::UserSelect => b"user-select",
-            Prop::Quotes => b"quotes",
-            Prop::ColumnCount => b"column-count",
-            Prop::ColumnWidth => b"column-width",
-            Prop::ColumnRuleWidth => b"column-rule-width",
-            Prop::ColumnRuleStyle => b"column-rule-style",
-            Prop::ColumnRuleColor => b"column-rule-color",
-            Prop::Filter => b"filter",
-            Prop::ClipPath => b"clip-path",
-            Prop::MixBlendMode => b"mix-blend-mode",
-            Prop::AccentColor => b"accent-color",
-            Prop::CounterReset => b"counter-reset",
-            Prop::CounterIncrement => b"counter-increment",
-            Prop::LineClamp => b"-webkit-line-clamp",
-            Prop::ObjectFit => b"object-fit",
-            Prop::ObjectPositionX => b"object-position-x",
-            Prop::ObjectPositionY => b"object-position-y",
-            Prop::MaskImage => b"mask-image",
-            Prop::OverflowX => b"overflow-x",
-            Prop::OverflowY => b"overflow-y",
-            Prop::Appearance => b"appearance",
-            Prop::TableLayout => b"table-layout",
-            Prop::CaptionSide => b"caption-side",
-            Prop::BorderCollapse => b"border-collapse",
-            Prop::BorderSpacing => b"border-spacing",
-            Prop::ContainerType => b"container-type",
-            Prop::ContainerName => b"container-name",
-            Prop::CaretColor => b"caret-color",
-            Prop::TabSize => b"tab-size",
-            Prop::JustifyItems => b"justify-items",
-            Prop::JustifySelf => b"justify-self",
-            Prop::AlignContent => b"align-content",
-            Prop::Direction => b"direction",
-            Prop::UnicodeBidi => b"unicode-bidi",
-            Prop::Translate => b"translate",
-            Prop::Rotate => b"rotate",
-            Prop::Scale => b"scale",
-            Prop::Perspective => b"perspective",
-            Prop::PerspectiveOrigin => b"perspective-origin",
-            Prop::TransformBox => b"transform-box",
-            Prop::TransformStyle => b"transform-style",
-            Prop::BackfaceVisibility => b"backface-visibility",
-            Prop::AnimationPlayState => b"animation-play-state",
-            Prop::Clip => b"clip",
-            Prop::ContentVisibility => b"content-visibility",
-            Prop::WritingMode => b"writing-mode",
-            Prop::TextOrientation => b"text-orientation",
-            Prop::TransitionDelay => b"transition-delay",
-            Prop::TransitionDuration => b"transition-duration",
-            Prop::AnimationDelay => b"animation-delay",
-            Prop::AnimationDuration => b"animation-duration",
-            Prop::Orphans => b"orphans",
-            Prop::Widows => b"widows",
-            Prop::MaxLines => b"max-lines",
-            Prop::HyphenateLimitLines => b"hyphenate-limit-lines",
-            Prop::ColumnSpan => b"column-span",
-            Prop::BreakBefore => b"break-before",
-            Prop::BreakAfter => b"break-after",
-            Prop::BreakInside => b"break-inside",
-            Prop::ScrollSnapType => b"scroll-snap-type",
-            Prop::ScrollSnapAlign => b"scroll-snap-align",
-            Prop::ScrollSnapStop => b"scroll-snap-stop",
-            Prop::ScrollPaddingTop => b"scroll-padding-top",
-            Prop::ScrollPaddingRight => b"scroll-padding-right",
-            Prop::ScrollPaddingBottom => b"scroll-padding-bottom",
-            Prop::ScrollPaddingLeft => b"scroll-padding-left",
-            Prop::ScrollMarginTop => b"scroll-margin-top",
-            Prop::ScrollMarginRight => b"scroll-margin-right",
-            Prop::ScrollMarginBottom => b"scroll-margin-bottom",
-            Prop::ScrollMarginLeft => b"scroll-margin-left",
-            Prop::BorderImageSource => b"border-image-source",
-            Prop::BorderImageSlice => b"border-image-slice",
-            Prop::BorderImageWidth => b"border-image-width",
-            Prop::BorderImageOutset => b"border-image-outset",
-            Prop::BorderImageRepeat => b"border-image-repeat",
-            Prop::Fill => b"fill",
-            Prop::FillOpacity => b"fill-opacity",
-            Prop::FillRule => b"fill-rule",
-            Prop::Stroke => b"stroke",
-            Prop::StrokeWidth => b"stroke-width",
-            Prop::StrokeOpacity => b"stroke-opacity",
-            Prop::StrokeLinecap => b"stroke-linecap",
-            Prop::StrokeLinejoin => b"stroke-linejoin",
-            Prop::StrokeMiterlimit => b"stroke-miterlimit",
-            Prop::StrokeDasharray => b"stroke-dasharray",
-            Prop::StrokeDashoffset => b"stroke-dashoffset",
-            Prop::StopColor => b"stop-color",
-            Prop::StopOpacity => b"stop-opacity",
-            Prop::ClipRule => b"clip-rule",
-            Prop::TextAnchor => b"text-anchor",
-            Prop::DominantBaseline => b"dominant-baseline",
-            Prop::PaintOrder => b"paint-order",
-            Prop::VectorEffect => b"vector-effect",
-            Prop::ShapeRendering => b"shape-rendering",
-            Prop::SvgX => b"x",
-            Prop::SvgY => b"y",
-            Prop::Cx => b"cx",
-            Prop::Cy => b"cy",
-            Prop::R => b"r",
-            Prop::Rx => b"rx",
-            Prop::Ry => b"ry",
-            Prop::AnimationName => b"animation-name",
-            Prop::AnimationTimingFunction => b"animation-timing-function",
-            Prop::AnimationIterationCount => b"animation-iteration-count",
-            Prop::AnimationDirection => b"animation-direction",
-            Prop::AnimationFillMode => b"animation-fill-mode",
-            Prop::TransitionProperty => b"transition-property",
-            Prop::TransitionTimingFunction => b"transition-timing-function",
-            Prop::TransitionBehavior => b"transition-behavior",
-            Prop::AnimationTimeline => b"animation-timeline",
-            Prop::AnimationRangeStart => b"animation-range-start",
-            Prop::AnimationRangeEnd => b"animation-range-end",
-            Prop::AnimationComposition => b"animation-composition",
-            Prop::CounterSet => b"counter-set",
-            Prop::OverflowClipMargin => b"overflow-clip-margin",
-            Prop::WebkitBoxOrient => b"-webkit-box-orient",
-            Prop::MaskClip => b"mask-clip",
-            Prop::MaskComposite => b"mask-composite",
+            Prop::Display => c"display",
+            Prop::Color => c"color",
+            Prop::BackgroundColor => c"background-color",
+            Prop::FontSize => c"font-size",
+            Prop::FontWeight => c"font-weight",
+            Prop::FontStyle => c"font-style",
+            Prop::FontStretch => c"font-stretch",
+            Prop::FontKerning => c"font-kerning",
+            Prop::FontVariantLigatures => c"font-variant-ligatures",
+            Prop::FontFeatureSettings => c"font-feature-settings",
+            Prop::FontVariationSettings => c"font-variation-settings",
+            Prop::FontFamily => c"font-family",
+            Prop::TextAlign => c"text-align",
+            Prop::MarginTop => c"margin-top",
+            Prop::MarginRight => c"margin-right",
+            Prop::MarginBottom => c"margin-bottom",
+            Prop::MarginLeft => c"margin-left",
+            Prop::PaddingTop => c"padding-top",
+            Prop::PaddingRight => c"padding-right",
+            Prop::PaddingBottom => c"padding-bottom",
+            Prop::PaddingLeft => c"padding-left",
+            Prop::BorderTopWidth => c"border-top-width",
+            Prop::BorderRightWidth => c"border-right-width",
+            Prop::BorderBottomWidth => c"border-bottom-width",
+            Prop::BorderLeftWidth => c"border-left-width",
+            Prop::BorderTopColor => c"border-top-color",
+            Prop::BorderRightColor => c"border-right-color",
+            Prop::BorderBottomColor => c"border-bottom-color",
+            Prop::BorderLeftColor => c"border-left-color",
+            Prop::BorderTopStyle => c"border-top-style",
+            Prop::BorderRightStyle => c"border-right-style",
+            Prop::BorderBottomStyle => c"border-bottom-style",
+            Prop::BorderLeftStyle => c"border-left-style",
+            Prop::Width => c"width",
+            Prop::Height => c"height",
+            Prop::MaxWidth => c"max-width",
+            Prop::MaxHeight => c"max-height",
+            Prop::MinWidth => c"min-width",
+            Prop::MinHeight => c"min-height",
+            Prop::LineHeight => c"line-height",
+            Prop::TextDecoration => c"text-decoration",
+            Prop::Position => c"position",
+            Prop::Top => c"top",
+            Prop::Right => c"right",
+            Prop::Bottom => c"bottom",
+            Prop::Left => c"left",
+            Prop::ZIndex => c"z-index",
+            Prop::Opacity => c"opacity",
+            Prop::Cursor => c"cursor",
+            Prop::PointerEvents => c"pointer-events",
+            Prop::LetterSpacing => c"letter-spacing",
+            Prop::WordSpacing => c"word-spacing",
+            Prop::WhiteSpace => c"white-space",
+            Prop::BoxSizing => c"box-sizing",
+            Prop::TextIndent => c"text-indent",
+            Prop::TextTransform => c"text-transform",
+            Prop::ListStyleType => c"list-style-type",
+            Prop::VerticalAlign => c"vertical-align",
+            Prop::Visibility => c"visibility",
+            Prop::Overflow => c"overflow",
+            Prop::FontVariant => c"font-variant",
+            Prop::BorderRadius => c"border-radius",
+            Prop::BorderTopLeftRadius => c"border-top-left-radius",
+            Prop::BorderTopRightRadius => c"border-top-right-radius",
+            Prop::BorderBottomRightRadius => c"border-bottom-right-radius",
+            Prop::BorderBottomLeftRadius => c"border-bottom-left-radius",
+            Prop::FlexDirection => c"flex-direction",
+            Prop::FlexWrap => c"flex-wrap",
+            Prop::JustifyContent => c"justify-content",
+            Prop::AlignItems => c"align-items",
+            Prop::AlignSelf => c"align-self",
+            Prop::Gap => c"gap",
+            Prop::RowGap => c"row-gap",
+            Prop::ColumnGap => c"column-gap",
+            Prop::FlexGrow => c"flex-grow",
+            Prop::FlexShrink => c"flex-shrink",
+            Prop::FlexBasis => c"flex-basis",
+            Prop::Order => c"order",
+            Prop::Float => c"float",
+            Prop::Clear => c"clear",
+            Prop::BoxShadow => c"box-shadow",
+            Prop::OutlineWidth => c"outline-width",
+            Prop::OutlineStyle => c"outline-style",
+            Prop::OutlineColor => c"outline-color",
+            Prop::OutlineOffset => c"outline-offset",
+            Prop::BackgroundImage => c"background-image",
+            Prop::BackgroundRepeat => c"background-repeat",
+            Prop::BackgroundPositionX => c"background-position-x",
+            Prop::BackgroundPositionY => c"background-position-y",
+            Prop::BackgroundSize => c"background-size",
+            Prop::BackgroundClip => c"background-clip",
+            Prop::BackgroundOrigin => c"background-origin",
+            Prop::BackgroundAttachment => c"background-attachment",
+            Prop::ScrollbarWidth => c"scrollbar-width",
+            Prop::ScrollbarColor => c"scrollbar-color",
+            Prop::ImageRendering => c"image-rendering",
+            Prop::Content => c"content",
+            Prop::GridTemplateColumns => c"grid-template-columns",
+            Prop::GridTemplateRows => c"grid-template-rows",
+            Prop::GridTemplateAreas => c"grid-template-areas",
+            Prop::GridColumn => c"grid-column",
+            Prop::GridRow => c"grid-row",
+            Prop::GridColumnStart => c"grid-column-start",
+            Prop::GridColumnEnd => c"grid-column-end",
+            Prop::GridRowStart => c"grid-row-start",
+            Prop::GridRowEnd => c"grid-row-end",
+            Prop::GridArea => c"grid-area",
+            Prop::GridAutoRows => c"grid-auto-rows",
+            Prop::GridAutoColumns => c"grid-auto-columns",
+            Prop::GridAutoFlow => c"grid-auto-flow",
+            Prop::Transform => c"transform",
+            Prop::TransformOrigin => c"transform-origin",
+            Prop::Transition => c"transition",
+            Prop::Animation => c"animation",
+            Prop::AspectRatio => c"aspect-ratio",
+            Prop::TextShadow => c"text-shadow",
+            Prop::OverflowWrap => c"overflow-wrap",
+            Prop::WordBreak => c"word-break",
+            Prop::Hyphens => c"hyphens",
+            Prop::TextOverflow => c"text-overflow",
+            Prop::TextDecorationColor => c"text-decoration-color",
+            Prop::TextDecorationStyle => c"text-decoration-style",
+            Prop::ListStylePosition => c"list-style-position",
+            Prop::ListStyleImage => c"list-style-image",
+            Prop::UserSelect => c"user-select",
+            Prop::Quotes => c"quotes",
+            Prop::ColumnCount => c"column-count",
+            Prop::ColumnWidth => c"column-width",
+            Prop::ColumnRuleWidth => c"column-rule-width",
+            Prop::ColumnRuleStyle => c"column-rule-style",
+            Prop::ColumnRuleColor => c"column-rule-color",
+            Prop::Filter => c"filter",
+            Prop::ClipPath => c"clip-path",
+            Prop::MixBlendMode => c"mix-blend-mode",
+            Prop::AccentColor => c"accent-color",
+            Prop::CounterReset => c"counter-reset",
+            Prop::CounterIncrement => c"counter-increment",
+            Prop::LineClamp => c"-webkit-line-clamp",
+            Prop::ObjectFit => c"object-fit",
+            Prop::ObjectPositionX => c"object-position-x",
+            Prop::ObjectPositionY => c"object-position-y",
+            Prop::MaskImage => c"mask-image",
+            Prop::OverflowX => c"overflow-x",
+            Prop::OverflowY => c"overflow-y",
+            Prop::Appearance => c"appearance",
+            Prop::TableLayout => c"table-layout",
+            Prop::CaptionSide => c"caption-side",
+            Prop::BorderCollapse => c"border-collapse",
+            Prop::BorderSpacing => c"border-spacing",
+            Prop::ContainerType => c"container-type",
+            Prop::ContainerName => c"container-name",
+            Prop::CaretColor => c"caret-color",
+            Prop::TabSize => c"tab-size",
+            Prop::JustifyItems => c"justify-items",
+            Prop::JustifySelf => c"justify-self",
+            Prop::AlignContent => c"align-content",
+            Prop::Direction => c"direction",
+            Prop::UnicodeBidi => c"unicode-bidi",
+            Prop::Translate => c"translate",
+            Prop::Rotate => c"rotate",
+            Prop::Scale => c"scale",
+            Prop::Perspective => c"perspective",
+            Prop::PerspectiveOrigin => c"perspective-origin",
+            Prop::TransformBox => c"transform-box",
+            Prop::TransformStyle => c"transform-style",
+            Prop::BackfaceVisibility => c"backface-visibility",
+            Prop::AnimationPlayState => c"animation-play-state",
+            Prop::Clip => c"clip",
+            Prop::ContentVisibility => c"content-visibility",
+            Prop::WritingMode => c"writing-mode",
+            Prop::TextOrientation => c"text-orientation",
+            Prop::TransitionDelay => c"transition-delay",
+            Prop::TransitionDuration => c"transition-duration",
+            Prop::AnimationDelay => c"animation-delay",
+            Prop::AnimationDuration => c"animation-duration",
+            Prop::Orphans => c"orphans",
+            Prop::Widows => c"widows",
+            Prop::MaxLines => c"max-lines",
+            Prop::HyphenateLimitLines => c"hyphenate-limit-lines",
+            Prop::ColumnSpan => c"column-span",
+            Prop::BreakBefore => c"break-before",
+            Prop::BreakAfter => c"break-after",
+            Prop::BreakInside => c"break-inside",
+            Prop::ScrollSnapType => c"scroll-snap-type",
+            Prop::ScrollSnapAlign => c"scroll-snap-align",
+            Prop::ScrollSnapStop => c"scroll-snap-stop",
+            Prop::ScrollPaddingTop => c"scroll-padding-top",
+            Prop::ScrollPaddingRight => c"scroll-padding-right",
+            Prop::ScrollPaddingBottom => c"scroll-padding-bottom",
+            Prop::ScrollPaddingLeft => c"scroll-padding-left",
+            Prop::ScrollMarginTop => c"scroll-margin-top",
+            Prop::ScrollMarginRight => c"scroll-margin-right",
+            Prop::ScrollMarginBottom => c"scroll-margin-bottom",
+            Prop::ScrollMarginLeft => c"scroll-margin-left",
+            Prop::BorderImageSource => c"border-image-source",
+            Prop::BorderImageSlice => c"border-image-slice",
+            Prop::BorderImageWidth => c"border-image-width",
+            Prop::BorderImageOutset => c"border-image-outset",
+            Prop::BorderImageRepeat => c"border-image-repeat",
+            Prop::Fill => c"fill",
+            Prop::FillOpacity => c"fill-opacity",
+            Prop::FillRule => c"fill-rule",
+            Prop::Stroke => c"stroke",
+            Prop::StrokeWidth => c"stroke-width",
+            Prop::StrokeOpacity => c"stroke-opacity",
+            Prop::StrokeLinecap => c"stroke-linecap",
+            Prop::StrokeLinejoin => c"stroke-linejoin",
+            Prop::StrokeMiterlimit => c"stroke-miterlimit",
+            Prop::StrokeDasharray => c"stroke-dasharray",
+            Prop::StrokeDashoffset => c"stroke-dashoffset",
+            Prop::StopColor => c"stop-color",
+            Prop::StopOpacity => c"stop-opacity",
+            Prop::ClipRule => c"clip-rule",
+            Prop::TextAnchor => c"text-anchor",
+            Prop::DominantBaseline => c"dominant-baseline",
+            Prop::PaintOrder => c"paint-order",
+            Prop::VectorEffect => c"vector-effect",
+            Prop::ShapeRendering => c"shape-rendering",
+            Prop::SvgX => c"x",
+            Prop::SvgY => c"y",
+            Prop::Cx => c"cx",
+            Prop::Cy => c"cy",
+            Prop::R => c"r",
+            Prop::Rx => c"rx",
+            Prop::Ry => c"ry",
+            Prop::AnimationName => c"animation-name",
+            Prop::AnimationTimingFunction => c"animation-timing-function",
+            Prop::AnimationIterationCount => c"animation-iteration-count",
+            Prop::AnimationDirection => c"animation-direction",
+            Prop::AnimationFillMode => c"animation-fill-mode",
+            Prop::TransitionProperty => c"transition-property",
+            Prop::TransitionTimingFunction => c"transition-timing-function",
+            Prop::TransitionBehavior => c"transition-behavior",
+            Prop::AnimationTimeline => c"animation-timeline",
+            Prop::AnimationRangeStart => c"animation-range-start",
+            Prop::AnimationRangeEnd => c"animation-range-end",
+            Prop::AnimationComposition => c"animation-composition",
+            Prop::CounterSet => c"counter-set",
+            Prop::OverflowClipMargin => c"overflow-clip-margin",
+            Prop::WebkitBoxOrient => c"-webkit-box-orient",
+            Prop::MaskClip => c"mask-clip",
+            Prop::MaskComposite => c"mask-composite",
         }
     }
+}
+
+const ALIASES: [(&[u8], Prop); 16] = [
+    (b"word-wrap", Prop::OverflowWrap),
+    (b"text-decoration-line", Prop::TextDecoration),
+    (b"line-clamp", Prop::LineClamp),
+    (b"text-wrap", Prop::WhiteSpace),
+    (b"text-wrap-mode", Prop::WhiteSpace),
+    (b"-webkit-mask-image", Prop::MaskImage),
+    (b"-webkit-mask-clip", Prop::MaskClip),
+    (b"-webkit-mask-composite", Prop::MaskComposite),
+    (b"-webkit-background-clip", Prop::BackgroundClip),
+    (b"-webkit-border-radius", Prop::BorderRadius),
+    (b"-webkit-border-top-left-radius", Prop::BorderTopLeftRadius),
+    (
+        b"-webkit-border-top-right-radius",
+        Prop::BorderTopRightRadius,
+    ),
+    (
+        b"-webkit-border-bottom-right-radius",
+        Prop::BorderBottomRightRadius,
+    ),
+    (
+        b"-webkit-border-bottom-left-radius",
+        Prop::BorderBottomLeftRadius,
+    ),
+    (b"-webkit-appearance", Prop::Appearance),
+    (b"-moz-appearance", Prop::Appearance),
+];
+
+const LOGICAL: [(&[u8], &[u8]); 34] = [
+    (b"margin-block-start", b"margin-top"),
+    (b"margin-block-end", b"margin-bottom"),
+    (b"margin-inline-start", b"margin-left"),
+    (b"margin-inline-end", b"margin-right"),
+    (b"padding-block-start", b"padding-top"),
+    (b"padding-block-end", b"padding-bottom"),
+    (b"padding-inline-start", b"padding-left"),
+    (b"padding-inline-end", b"padding-right"),
+    (b"border-block-start-width", b"border-top-width"),
+    (b"border-block-end-width", b"border-bottom-width"),
+    (b"border-inline-start-width", b"border-left-width"),
+    (b"border-inline-end-width", b"border-right-width"),
+    (b"border-block-start-style", b"border-top-style"),
+    (b"border-block-end-style", b"border-bottom-style"),
+    (b"border-inline-start-style", b"border-left-style"),
+    (b"border-inline-end-style", b"border-right-style"),
+    (b"border-block-start-color", b"border-top-color"),
+    (b"border-block-end-color", b"border-bottom-color"),
+    (b"border-inline-start-color", b"border-left-color"),
+    (b"border-inline-end-color", b"border-right-color"),
+    (b"border-start-start-radius", b"border-top-left-radius"),
+    (b"border-start-end-radius", b"border-top-right-radius"),
+    (b"border-end-start-radius", b"border-bottom-left-radius"),
+    (b"border-end-end-radius", b"border-bottom-right-radius"),
+    (b"inset-block-start", b"top"),
+    (b"inset-block-end", b"bottom"),
+    (b"inset-inline-start", b"left"),
+    (b"inset-inline-end", b"right"),
+    (b"block-size", b"height"),
+    (b"inline-size", b"width"),
+    (b"min-block-size", b"min-height"),
+    (b"min-inline-size", b"min-width"),
+    (b"max-block-size", b"max-height"),
+    (b"max-inline-size", b"max-width"),
+];
+
+fn names() -> &'static HashMap<Vec<u8>, Prop> {
+    static NAMES: OnceLock<HashMap<Vec<u8>, Prop>> = OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = HashMap::new();
+        for prop in Prop::ALL {
+            names.entry(prop.name().to_vec()).or_insert(prop);
+        }
+        for (alias, prop) in ALIASES {
+            names.entry(alias.to_vec()).or_insert(prop);
+        }
+        for (logical, physical) in LOGICAL {
+            if let Some(prop) = Prop::ALL.iter().find(|p| p.name() == physical) {
+                names.entry(logical.to_vec()).or_insert(*prop);
+            }
+        }
+        names
+    })
 }

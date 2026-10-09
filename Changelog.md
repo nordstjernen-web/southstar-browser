@@ -526,6 +526,12 @@ Southstar Browser (unreleased):
   units, root sizes, viewport, container and currentcolor, the context
   built only when a typed property needs it. Values are identical
   (checked over 320,000 generated styles and registries).
+* The CSS property table is Rust: property names, the vendor and legacy
+  aliases (-webkit-*, word-wrap, text-wrap, line-clamp, …) and logical
+  properties that resolve to them, which properties inherit and which
+  only repaint. Looking a property up by name is about 13 times faster
+  (a hash lookup instead of a scan of all 242 names); the results are
+  identical (checked over 8 million generated names).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

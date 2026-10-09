@@ -2,18 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint};
-use std::ffi::CString;
+use core::ffi::{c_int, c_uint};
 
 use southstar_glib::{self as glib, GArray, GBoolean};
 
-use super::property::{id_of, prop_of, to_c};
+use super::property::{id_of, to_c};
 use super::value::NsCssValue;
 use crate::prop::Prop;
 use crate::shorthand::{self, Slot};
 
 unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_css_value_dup(v: *const NsCssValue) -> *mut NsCssValue;
 }
 
@@ -27,8 +25,7 @@ pub(super) struct RawDecl {
 const _: () = assert!(core::mem::size_of::<RawDecl>() == 24);
 
 pub(crate) fn prop_named(name: &[u8]) -> Option<Prop> {
-    let name = CString::new(name).ok()?;
-    prop_of(unsafe { ns_css_prop_id(name.as_ptr()) })
+    Prop::from_name(name)
 }
 
 pub(super) unsafe fn append_expanded(
