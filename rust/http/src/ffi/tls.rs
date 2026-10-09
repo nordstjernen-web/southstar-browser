@@ -49,6 +49,11 @@ unsafe extern "C" {
     fn SSL_SESSION_free(session: *mut SslSession);
     fn SSL_shutdown(ssl: *mut SslRaw) -> c_int;
     fn X509_verify_cert_error_string(n: c_long) -> *const c_char;
+    fn OPENSSL_init_ssl(options: u64, settings: *const c_void) -> c_int;
+}
+
+pub fn init() {
+    unsafe { OPENSSL_init_ssl(0, core::ptr::null()) };
 }
 
 const SSL_CTRL_MODE: c_int = 33;
@@ -153,6 +158,7 @@ fn context(verify: bool, h2: bool, settings: &Settings) -> Option<*mut SslCtx> {
                 }
                 _ => {
                     SSL_CTX_set_default_verify_paths(ctx);
+                    add_system_roots(ctx);
                 }
             }
             SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, core::ptr::null());
@@ -165,6 +171,71 @@ fn context(verify: bool, h2: bool, settings: &Settings) -> Option<*mut SslCtx> {
     *slot = Some(Ctx(ctx));
     Some(ctx)
 }
+
+#[cfg(windows)]
+mod roots {
+    use core::ffi::{c_long, c_void};
+
+    #[repr(C)]
+    struct CertContext {
+        encoding: u32,
+        encoded: *const u8,
+        encoded_len: u32,
+        info: *mut c_void,
+        store: *mut c_void,
+    }
+
+    #[link(name = "crypt32")]
+    unsafe extern "system" {
+        fn CertOpenSystemStoreW(provider: usize, name: *const u16) -> *mut c_void;
+        fn CertEnumCertificatesInStore(
+            store: *mut c_void,
+            prev: *const CertContext,
+        ) -> *const CertContext;
+        fn CertCloseStore(store: *mut c_void, flags: u32) -> i32;
+    }
+
+    unsafe extern "C" {
+        fn SSL_CTX_get_cert_store(ctx: *const super::SslCtx) -> *mut c_void;
+        fn d2i_X509(out: *mut *mut c_void, input: *mut *const u8, len: c_long) -> *mut c_void;
+        fn X509_STORE_add_cert(store: *mut c_void, cert: *mut c_void) -> i32;
+        fn X509_free(cert: *mut c_void);
+    }
+
+    pub fn add(ctx: *mut super::SslCtx) {
+        let name: Vec<u16> = "ROOT".encode_utf16().chain(Some(0)).collect();
+        let system = unsafe { CertOpenSystemStoreW(0, name.as_ptr()) };
+        if system.is_null() {
+            return;
+        }
+        let store = unsafe { SSL_CTX_get_cert_store(ctx) };
+        let mut cert: *const CertContext = core::ptr::null();
+        loop {
+            cert = unsafe { CertEnumCertificatesInStore(system, cert) };
+            let Some(c) = (unsafe { cert.as_ref() }) else {
+                break;
+            };
+            let mut der = c.encoded;
+            let x509 =
+                unsafe { d2i_X509(core::ptr::null_mut(), &mut der, c.encoded_len as c_long) };
+            if !x509.is_null() {
+                unsafe {
+                    X509_STORE_add_cert(store, x509);
+                    X509_free(x509);
+                }
+            }
+        }
+        unsafe { CertCloseStore(system, 0) };
+    }
+}
+
+#[cfg(windows)]
+fn add_system_roots(ctx: *mut SslCtx) {
+    roots::add(ctx);
+}
+
+#[cfg(not(windows))]
+fn add_system_roots(_ctx: *mut SslCtx) {}
 
 pub fn verify_error_text(code: c_long) -> String {
     let p = unsafe { X509_verify_cert_error_string(code) };

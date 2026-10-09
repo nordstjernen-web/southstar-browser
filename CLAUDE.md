@@ -302,7 +302,8 @@ it all down. Proxies (HTTP forward and CONNECT, SOCKS4/4a/5/5h, credentials,
 no-proxy matching) are in `rust/http/src/proxy.rs`.
 
 **libcurl is being removed.** It is still linked for what has not moved
-yet: the audio helper and the `curl` value of the `http_backend` option.
+yet: the `curl` value of the `http_backend` option and the curl plumbing in
+`rust/net` behind it. The media helpers download through `rust/helper-ffi`.
 FTP is `rust/http/src/ftp.rs`.
 WebSocket (`rust/websocket`) upgrades through `southstar_http::upgrade`. Other crates reach the network through `southstar_http::fetch`
 (redirects followed) with `southstar_net::route` supplying TLS settings and

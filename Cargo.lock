@@ -1656,6 +1656,7 @@ dependencies = [
 name = "southstar-helper-ffi"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-http",
  "southstar-sandbox",
 ]
 

@@ -16,6 +16,11 @@ mod proxy;
 mod transfer;
 
 pub use client::{Outcome, Received, Request, Upgraded, Version, perform, shutdown, upgrade};
+
+pub fn init() {
+    ffi::tls::init();
+    ffi::socket::init();
+}
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
 pub use ffi::tls::Settings as TlsSettings;

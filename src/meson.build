@@ -261,7 +261,7 @@ if sdl2_dep.found()
     install: false,
   )
 
-  audio_deps = [dependency('libcurl'), sdl2_dep, libplmpeg]
+  audio_deps = [sdl2_dep, libplmpeg, southstar_helper_rust_dep]
   if have_libav
     audio_deps += [libavformat, libavcodec, libavutil, libswresample]
   endif
@@ -283,9 +283,6 @@ if sdl2_dep.found()
   # profile as the renderer once its audio device and network stack are up,
   # so attacker-controlled codec bytes are decoded inside the sandbox.
   audio_sandbox_sources = []
-  if host_machine.system() == 'linux'
-    audio_deps += [southstar_helper_rust_dep]
-  endif
 
   executable(
     'southstar-audio',

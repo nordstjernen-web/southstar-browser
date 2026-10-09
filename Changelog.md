@@ -36,6 +36,13 @@ Southstar Browser (unreleased):
   with anonymous or URL credentials, a CWD per path segment as curl did,
   EPSV with a PASV fallback, and proxies for both connections. Page loads
   no longer use libcurl at all.
+* The audio helper downloads media through the Rust HTTP client (and
+  decodes data: URLs itself) instead of libcurl, so southstar-audio no
+  longer links libcurl. The helpers' Rust library is now built on every
+  platform, not only Linux.
+* On Windows the Rust HTTP client trusts the certificates in the Windows
+  root store when no CA bundle file is found, as curl did with its native
+  CA option, so HTTPS keeps working on machines without a bundle.
 * HTTP/1.1 responses from a server that pauses for more than a second no
   longer fail on Windows: the Rust client waits for sockets with poll()
   instead of socket timeouts, which Windows reports as errors rather than

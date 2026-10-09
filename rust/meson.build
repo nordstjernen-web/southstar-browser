@@ -109,26 +109,26 @@ southstar_rust_dep = declare_dependency(
   dependencies: southstar_rust_link_deps,
 )
 
-if host_machine.system() == 'linux'
-  southstar_helper_rust_features = have_seccomp ? ['seccomp'] : []
-  southstar_helper_rust_lib = custom_target(
-    'southstar-helper-rust',
-    output: 'libsouthstar_helper_ffi.a',
-    depfile: 'libsouthstar_helper_ffi.a.d',
-    command: [
-      cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
-      meson.current_build_dir() / 'cargo-target',
-      ns_is_release ? 'release' : 'dev',
-      'southstar-helper-ffi', '@OUTPUT@', '@DEPFILE@',
-    ] + southstar_helper_rust_features,
-    env: southstar_rust_env,
-    console: true,
-    build_by_default: true,
-  )
+southstar_helper_rust_features = have_seccomp ? ['seccomp'] : []
+southstar_helper_rust_lib = custom_target(
+  'southstar-helper-rust',
+  output: 'libsouthstar_helper_ffi.a',
+  depfile: 'libsouthstar_helper_ffi.a.d',
+  command: [
+    cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
+    meson.current_build_dir() / 'cargo-target',
+    ns_is_release ? 'release' : 'dev',
+    'southstar-helper-ffi', '@OUTPUT@', '@DEPFILE@',
+  ] + southstar_helper_rust_features,
+  env: southstar_rust_env,
+  console: true,
+  build_by_default: true,
+)
 
-  southstar_helper_rust_dep = declare_dependency(
-    link_with: southstar_helper_rust_lib,
-    link_args: rust_native_libs,
-    dependencies: [glib] + (have_seccomp ? [libseccomp] : []),
-  )
-endif
+southstar_helper_rust_dep = declare_dependency(
+  link_with: southstar_helper_rust_lib,
+  link_args: rust_native_libs,
+  dependencies: [glib, libssl, libcrypto, dependency('zlib')] + (have_seccomp ? [libseccomp] : [])
+    + (host_machine.system() == 'windows' ? [meson.get_compiler('c').find_library('crypt32')] : []),
+)
+

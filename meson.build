@@ -240,6 +240,9 @@ if http_backend == 'rust'
   libbrotlidec_http = dependency('libbrotlidec', required: false)
   libzstd_http = dependency('libzstd', required: false)
   http_backend_deps += [libssl, libcrypto, zlib_http]
+  if host_machine.system() == 'windows'
+    http_backend_deps += [cc.find_library('crypt32')]
+  endif
   if libbrotlidec_http.found()
     http_backend_deps += [libbrotlidec_http]
     have_http_brotli = true
