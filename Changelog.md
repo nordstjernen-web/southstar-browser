@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The canvas objects' JavaScript interfaces are Rust: CanvasRenderingContext2D
+  and its offscreen twin, CanvasGradient, CanvasPattern, TextMetrics, ImageData,
+  OffscreenCanvas and the Path2D and ImageBitmap interface objects, with their
+  attribute validation, error messages and structured cloning unchanged (checked
+  property by property against the C build). The drawing itself is still C.
 * The canvas 2D API starts moving to Rust (rust/canvas): colour parsing and
   the colour strings fillStyle, strokeStyle and shadowColor report, and the
   filter and letter/word-spacing checks, the serialized font and the SVG

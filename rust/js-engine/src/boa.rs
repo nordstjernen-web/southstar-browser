@@ -245,6 +245,10 @@ impl Scope<'_> {
         self.native_function(name, arity, f, true)
     }
 
+    pub fn constructor_or_function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        self.native_function(name, arity, f, true)
+    }
+
     pub fn function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
         self.native_function(name, arity, f, false)
     }
@@ -336,6 +340,27 @@ impl Scope<'_> {
         attributes: Attributes,
     ) -> Result<(), Value> {
         self.define_key(object, JsString::from(key), value, attributes)
+    }
+
+    pub fn define_accessor(
+        &mut self,
+        object: &Value,
+        key: &str,
+        getter: Option<&Value>,
+        setter: Option<&Value>,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        let object = self.object(object)?;
+        let accessor = |value: Option<&Value>| value.and_then(|v| v.0.as_object());
+        let descriptor = BoaPropertyDescriptor::builder()
+            .maybe_get(accessor(getter))
+            .maybe_set(accessor(setter))
+            .enumerable(attributes.enumerable)
+            .configurable(attributes.configurable);
+        object
+            .define_property_or_throw(JsString::from(key), descriptor, self.ctx)
+            .map(|_| ())
+            .map_err(|e| self.error(e))
     }
 
     pub fn define_to_string_tag(&mut self, object: &Value, tag: &str) -> Result<(), Value> {

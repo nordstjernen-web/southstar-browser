@@ -98,6 +98,7 @@ seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 webgpu = ["southstar-net/webgpu"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
+    "southstar-canvas/quickjs-original",
     "southstar-extensions/quickjs-original",
     "southstar-js-brand/quickjs-original",
     "southstar-js-intl/quickjs-original",

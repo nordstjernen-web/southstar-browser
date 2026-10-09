@@ -1465,6 +1465,7 @@ name = "southstar-canvas"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]

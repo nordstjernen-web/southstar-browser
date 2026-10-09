@@ -687,6 +687,7 @@ enum {
     NS_HK_PRECISION,
 };
 void ns_canvas_register_classes(JSRuntime *rt);
+void ns_canvas_state_adopt_node(ns_js *js, ns_node *el);
 gpointer ns_hidden_ptr(JSValueConst v);
 void ns_hidden_set_ptr(JSValueConst v, gpointer ptr);
 JSValue ns_hidden_new(JSContext *realm, int kind, JSValueConst proto);

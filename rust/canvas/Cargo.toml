@@ -9,6 +9,10 @@ publish.workspace = true
 
 [dependencies]
 southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[features]
+quickjs-original = ["southstar-js-engine/quickjs-original"]
 
 [lints]
 workspace = true

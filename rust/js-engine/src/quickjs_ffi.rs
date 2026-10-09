@@ -201,6 +201,14 @@ unsafe extern "C" {
         prop: *const c_char,
         val: JSValue,
     ) -> c_int;
+    fn JS_DefinePropertyGetSet(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        prop: JSAtom,
+        getter: JSValue,
+        setter: JSValue,
+        flags: c_int,
+    ) -> c_int;
     fn JS_DefinePropertyValueStr(
         ctx: *mut JSContext,
         this_obj: JSValue,
@@ -642,6 +650,18 @@ unsafe extern "C" fn call_native(
     }
 }
 
+const CFUNC_CONSTRUCTOR_OR_FUNC_MAGIC: c_int = 5;
+
+unsafe extern "C" fn call_native_magic(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+    magic: c_int,
+) -> JSValue {
+    unsafe { call_native(ctx, this_val, argc, argv, magic, ptr::null_mut()) }
+}
+
 unsafe extern "C" fn call_bound(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -826,6 +846,60 @@ pub mod quickjs {
         value.raw
     }
 
+    pub fn result_raw(scope: &mut Scope<'_>, result: Result<Value, Value>) -> JSValue {
+        match result {
+            Ok(value) => value.into_raw(),
+            Err(error) => unsafe { super::JS_Throw(scope.ctx, error.into_raw()) },
+        }
+    }
+
+    pub const TYPED_ARRAY_UINT8C: c_int = 0;
+
+    unsafe extern "C" {
+        fn JS_GetTypedArrayType(obj: JSValue) -> c_int;
+        fn JS_NewArrayBufferCopy(ctx: *mut JSContext, buf: *const u8, len: usize) -> JSValue;
+        fn JS_GetOpaque(obj: JSValue, class_id: u32) -> *mut c_void;
+    }
+
+    pub fn typed_array_type(value: &Value) -> c_int {
+        unsafe { JS_GetTypedArrayType(value.raw) }
+    }
+
+    pub fn array_buffer_copy(scope: &mut Scope<'_>, bytes: &[u8]) -> Result<Value, Value> {
+        let raw = unsafe { JS_NewArrayBufferCopy(scope.ctx, bytes.as_ptr(), bytes.len()) };
+        scope.take(raw)
+    }
+
+    pub unsafe fn with_host<T: core::any::Any, R>(
+        raw: JSValue,
+        f: impl FnOnce(&T) -> R,
+    ) -> Option<R> {
+        if raw.tag != super::TAG_OBJECT {
+            return None;
+        }
+        let host = unsafe { JS_GetOpaque(raw, super::HOST_CLASS_ID) }.cast::<super::HostData>();
+        let host = unsafe { host.as_ref() }?;
+        host.data.downcast_ref::<T>().map(f)
+    }
+
+    pub fn call_c_function(
+        scope: &mut Scope<'_>,
+        f: JSCFunction,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value> {
+        let mut raw_args: Vec<JSValue> = args.iter().map(|arg| arg.raw).collect();
+        let raw = unsafe {
+            f(
+                scope.ctx,
+                this.raw,
+                raw_args.len() as c_int,
+                raw_args.as_mut_ptr(),
+            )
+        };
+        scope.take(raw)
+    }
+
     pub unsafe fn call_native(
         ctx: *mut JSContext,
         this_val: JSValue,
@@ -848,6 +922,28 @@ pub mod quickjs {
             Ok(value) => value.into_raw(),
             Err(error) => unsafe { super::JS_Throw(ctx, error.into_raw()) },
         }
+    }
+
+    pub type JSCFunctionMagic = unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+        magic: c_int,
+    ) -> JSValue;
+
+    pub(super) fn c_function_with(
+        scope: &mut Scope<'_>,
+        name: &str,
+        arity: u32,
+        f: JSCFunction,
+        cproto: c_int,
+        magic: c_int,
+    ) -> Value {
+        let name = super::c_text(name);
+        let raw =
+            unsafe { JS_NewCFunction2(scope.ctx, f, name.as_ptr(), arity as c_int, cproto, magic) };
+        Value::own(scope.ctx, raw)
     }
 
     pub fn c_function(scope: &mut Scope<'_>, name: &str, arity: u32, f: JSCFunction) -> Value {
@@ -1134,6 +1230,19 @@ impl Scope<'_> {
         self.native_function(name, arity, f, true)
     }
 
+    pub fn constructor_or_function(&mut self, name: &str, arity: u32, f: NativeFn) -> Value {
+        let trampoline: quickjs::JSCFunctionMagic = call_native_magic;
+        let generic: quickjs::JSCFunction = unsafe { mem::transmute(trampoline) };
+        quickjs::c_function_with(
+            self,
+            name,
+            arity,
+            generic,
+            CFUNC_CONSTRUCTOR_OR_FUNC_MAGIC,
+            native_index(f),
+        )
+    }
+
     pub fn bound_function(&mut self, name: &str, arity: u32, f: BoundFn, data: &[Value]) -> Value {
         let mut raw_data: Vec<JSValue> = data.iter().map(|value| value.raw).collect();
         let raw = unsafe {
@@ -1199,6 +1308,32 @@ impl Scope<'_> {
                 prop_flags(attributes),
             )
         };
+        self.status(status)
+    }
+
+    pub fn define_accessor(
+        &mut self,
+        object: &Value,
+        key: &str,
+        getter: Option<&Value>,
+        setter: Option<&Value>,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        let key = c_text(key);
+        let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
+        let accessor =
+            |value: Option<&Value>| value.cloned().unwrap_or_else(Value::undefined).into_raw();
+        let status = unsafe {
+            JS_DefinePropertyGetSet(
+                self.ctx,
+                object.raw,
+                atom,
+                accessor(getter),
+                accessor(setter),
+                prop_flags(attributes),
+            )
+        };
+        unsafe { JS_FreeAtom(self.ctx, atom) };
         self.status(status)
     }
 

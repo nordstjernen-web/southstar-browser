@@ -343,27 +343,6 @@ ns_reject_image_decode(JSContext *ctx, JSValue resolvers[2])
 }
 
 JSValue
-ns_canvas_throw_dom(JSContext *ctx, const char *name, const char *msg)
-{
-    JSValue g = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, g, "DOMException");
-    JS_FreeValue(ctx, g);
-    JSValue args[2] = { JS_NewString(ctx, msg), JS_NewString(ctx, name) };
-    JSValue exc = JS_CallConstructor(ctx, ctor, 2, args);
-    JS_FreeValue(ctx, args[0]);
-    JS_FreeValue(ctx, args[1]);
-    JS_FreeValue(ctx, ctor);
-    if (JS_IsException(exc) || !JS_IsObject(exc)) {
-        if (JS_IsException(exc)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, exc);
-        exc = JS_NewError(ctx);
-        JS_SetPropertyStr(ctx, exc, "name", JS_NewString(ctx, name));
-        JS_SetPropertyStr(ctx, exc, "message", JS_NewString(ctx, msg));
-    }
-    return JS_Throw(ctx, exc);
-}
-
-JSValue
 ns_window_create_image_bitmap(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -509,6 +488,13 @@ ns_canvas_dim_from_attr(const ns_node *el, const char *name, int defv)
     int n = ns_parse_int(v, defv, 0, 8192);
     if (n < 1) return defv;
     return n;
+}
+
+void
+ns_canvas_state_adopt_node(ns_js *js, ns_node *el)
+{
+    ns_canvas_state *st = ns_canvas_state_for(js, el);
+    if (st) st->owned_node = el;
 }
 
 ns_canvas_state *
