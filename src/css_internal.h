@@ -37,9 +37,6 @@ void          ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b,
 gboolean      ns_css_wide_keyword_or_default(const char *item);
 gboolean      ns_css_position_is_h_edge(const char *t);
 gboolean      ns_css_position_is_v_edge(const char *t);
-gboolean      ns_css_position_is_keyword(const char *t);
-void          ns_css_position_split(const char *text, char **out_x,
-                                    char **out_y);
 char         *ns_css_position_canonical_ex(const char *text,
                                            gboolean expand_single,
                                            gboolean allow_three);
@@ -78,11 +75,7 @@ double        ns_css_font_relative_unit_px(ns_css_unit unit, double font_px,
                                            const char *family, int weight,
                                            gboolean italic);
 int           ns_css_font_weight_relative(int parent, gboolean bolder);
-double        ns_css_font_size_keyword_px(const char *t);
 int           ns_css_split_ws_paren(const char *text, char **out, int max);
-const char   *ns_css_font_shorthand_slash(const char *tok);
-gboolean      ns_css_font_shorthand_is_size_token(const char *tok);
-gboolean      ns_css_font_stretch_keyword(const char *s);
 gboolean      ns_css_font_ligatures_valid(const char *s);
 gboolean      ns_css_font_feature_settings_valid(const char *s);
 gboolean      ns_css_font_variation_settings_valid(const char *s);
@@ -91,8 +84,6 @@ ns_css_value *ns_css_parse_time_property(const char *t);
 ns_css_value *ns_css_parse_animation_duration(const char *t);
 ns_css_value *ns_css_parse_anim_longhand(ns_css_prop prop, const char *t);
 ns_css_value *ns_css_parse_anim_value(const char *t, gboolean is_animation);
-char         *ns_css_anim_entry_longhand_text(const ns_css_anim_entry *e,
-                                              ns_css_prop prop);
 gboolean      ns_css_anim_range_shorthand_expand(const char *text,
                                                  char **out_start,
                                                  char **out_end);
@@ -105,21 +96,18 @@ char         *ns_css_counter_list_canonical(const char *text, ns_css_prop prop);
 char         *ns_css_list_style_type_canonical(const char *text);
 
 ns_css_value *ns_css_parse_value_for(ns_css_prop prop, const char *text);
-const char   *ns_css_mask_box_keyword(const char *t);
-const char   *ns_css_mask_composite_keyword(const char *t);
-gboolean      ns_css_bg_repeat_token(const char *tok, gboolean allow_axis);
-char         *ns_css_bg_repeat_canonical(const char *a, const char *b);
-char         *ns_css_bg_clip_canonical(const char *text);
+gboolean      ns_css_bg_token_is_box(const char *tok);
+
+void          ns_css_expand_declaration(const char *name, const char *text,
+                                        gboolean important, GArray *decls_out);
+char         *ns_css_border_radius_canonical(const char *value);
+gboolean      ns_css_list_style_split(const char *text, char **out_type,
+                                      char **out_position, char **out_image);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);
 ns_css_value *ns_css_parse_border_image_width(const char *t);
 ns_css_value *ns_css_parse_border_image_outset(const char *t);
 ns_css_value *ns_css_parse_border_image_repeat(const char *t);
-char         *ns_css_border_image_length_serialize(const char *token,
-                                                   gboolean allow_auto,
-                                                   gboolean allow_percent);
-gboolean      ns_css_border_image_tile_keyword(const char *token);
-GPtrArray    *ns_css_border_image_tokens(const char *text);
 
 ns_css_value *ns_css_parse_box_shadow(const char *text);
 char         *ns_css_shadow_specified_canonical(const char *text,
@@ -133,9 +121,6 @@ ns_css_value *ns_css_parse_tracks(const char *text);
 ns_css_value *ns_css_parse_areas(const char *text);
 char         *ns_css_grid_line_canonical(const char *text,
                                          gboolean *ident_only);
-int           ns_css_grid_placement_expand(const char *text, gboolean area,
-                                           char *out[4],
-                                           gboolean ident_only[4]);
 char         *ns_css_grid_placement_canonical(const char *text,
                                               gboolean area);
 char         *ns_css_grid_track_text_canonical(const char *text);
@@ -177,6 +162,9 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 sizeof(ns_css_anim_list) == 968);
 G_STATIC_ASSERT(sizeof(ns_display) == 5);
 G_STATIC_ASSERT(sizeof(ns_border_image) == 176);
+G_STATIC_ASSERT(sizeof(ns_css_decl) == 24 &&
+                offsetof(ns_css_decl, value) == 8 &&
+                offsetof(ns_css_decl, important) == 16);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

@@ -23,6 +23,7 @@ unsafe extern "C" {
 
 struct Tables {
     by_id: Vec<Option<Prop>>,
+    by_prop: HashMap<Prop, c_int>,
 }
 
 fn tables() -> &'static Tables {
@@ -41,8 +42,17 @@ fn tables() -> &'static Tables {
                     .copied(),
             );
         }
-        Tables { by_id }
+        let by_prop = by_id
+            .iter()
+            .enumerate()
+            .filter_map(|(id, prop)| Some(((*prop)?, id as c_int)))
+            .collect();
+        Tables { by_id, by_prop }
     })
+}
+
+pub(crate) fn id_of(prop: Prop) -> c_int {
+    tables().by_prop.get(&prop).copied().unwrap_or(-1)
 }
 
 pub(crate) fn prop_of(id: c_int) -> Option<Prop> {
@@ -126,68 +136,8 @@ pub unsafe extern "C" fn ns_css_parse_value_for(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_mask_box_keyword(t: *const c_char) -> *const c_char {
-    let Some(found) = unsafe { bytes(t) }.and_then(property::mask_box_keyword) else {
-        return ptr::null();
-    };
-    static_text(found)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_mask_composite_keyword(t: *const c_char) -> *const c_char {
-    let Some(found) = unsafe { bytes(t) }.and_then(property::mask_composite_keyword) else {
-        return ptr::null();
-    };
-    static_text(found)
-}
-
-fn static_text(word: &[u8]) -> *const c_char {
-    static WORDS: OnceLock<HashMap<&'static [u8], std::ffi::CString>> = OnceLock::new();
-    let words = WORDS.get_or_init(|| {
-        [
-            &b"border-box"[..],
-            b"padding-box",
-            b"content-box",
-            b"fill-box",
-            b"stroke-box",
-            b"view-box",
-            b"no-clip",
-            b"add",
-            b"subtract",
-            b"intersect",
-            b"exclude",
-        ]
-        .into_iter()
-        .map(|w| (w, std::ffi::CString::new(w).unwrap_or_default()))
-        .collect()
-    });
-    words.get(word).map_or(ptr::null(), |c| c.as_ptr())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_bg_repeat_token(
-    tok: *const c_char,
-    allow_axis: GBoolean,
-) -> GBoolean {
-    glib::boolean(
-        unsafe { bytes(tok) }.is_some_and(|t| property::bg_repeat_token(t, allow_axis != 0)),
-    )
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_bg_repeat_canonical(
-    a: *const c_char,
-    b: *const c_char,
-) -> *mut c_char {
-    let Some(a) = (unsafe { bytes(a) }) else {
-        return ptr::null_mut();
-    };
-    glib::strdup(&property::bg_repeat_canonical(a, unsafe { bytes(b) }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_bg_clip_canonical(text: *const c_char) -> *mut c_char {
-    strdup_opt(unsafe { bytes(text) }.and_then(property::bg_clip_canonical))
+pub unsafe extern "C" fn ns_css_bg_token_is_box(tok: *const c_char) -> GBoolean {
+    glib::boolean(unsafe { bytes(tok) }.is_some_and(property::bg_token_is_box))
 }
 
 #[unsafe(no_mangle)]

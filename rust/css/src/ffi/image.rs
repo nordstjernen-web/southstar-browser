@@ -63,24 +63,6 @@ pub unsafe extern "C" fn ns_css_position_is_v_edge(t: *const c_char) -> GBoolean
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_position_is_keyword(t: *const c_char) -> GBoolean {
-    test(t, position::is_keyword)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_position_split(
-    text: *const c_char,
-    out_x: *mut *mut c_char,
-    out_y: *mut *mut c_char,
-) {
-    let (x, y) = position::split(unsafe { bytes(text) }.unwrap_or_default());
-    unsafe {
-        *out_x = glib::strdup(&x);
-        *out_y = glib::strdup(&y);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_position_canonical_ex(
     text: *const c_char,
     expand_single: GBoolean,

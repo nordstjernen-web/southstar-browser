@@ -147,11 +147,6 @@ pub unsafe extern "C" fn ns_css_font_stretch_rank(v: *const NsCssValue) -> c_int
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_size_keyword_px(t: *const c_char) -> c_double {
-    unsafe { bytes(t) }.map_or(-1.0, font::size_keyword_px)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_split_ws_paren(
     text: *const c_char,
     out: *mut *mut c_char,
@@ -168,18 +163,6 @@ pub unsafe extern "C" fn ns_css_split_ws_paren(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_shorthand_slash(tok: *const c_char) -> *const c_char {
-    unsafe { bytes(tok) }
-        .and_then(font::shorthand_slash)
-        .map_or(ptr::null(), |at| unsafe { tok.add(at) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_shorthand_is_size_token(tok: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(tok) }.is_some_and(font::shorthand_is_size_token))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_font_shorthand_canonical(text: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(text) }.and_then(font::shorthand_canonical))
 }
@@ -187,11 +170,6 @@ pub unsafe extern "C" fn ns_css_font_shorthand_canonical(text: *const c_char) ->
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_font_family_canonical(text: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(text) }.and_then(font::family_canonical))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_stretch_keyword(s: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(s) }.is_some_and(font::is_stretch_keyword))
 }
 
 #[unsafe(no_mangle)]

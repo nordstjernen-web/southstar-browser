@@ -65,7 +65,7 @@ pub(crate) struct Value {
 }
 
 impl Value {
-    fn of(body: Body) -> Value {
+    pub(crate) fn of(body: Body) -> Value {
         Value {
             body,
             image_set_text: None,
@@ -74,11 +74,11 @@ impl Value {
         }
     }
 
-    fn keyword(text: impl Into<Vec<u8>>) -> Value {
+    pub(crate) fn keyword(text: impl Into<Vec<u8>>) -> Value {
         Value::of(Body::Keyword(text.into()))
     }
 
-    fn length(v: f64, unit: Unit) -> Value {
+    pub(crate) fn length(v: f64, unit: Unit) -> Value {
         Value::of(Body::Length(v, unit))
     }
 
@@ -90,28 +90,28 @@ impl Value {
     }
 }
 
-fn c_text(bytes: &[u8]) -> CString {
+pub(crate) fn c_text(bytes: &[u8]) -> CString {
     let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..len]).unwrap_or_default()
 }
 
-fn lower(t: &[u8]) -> Vec<u8> {
+pub(crate) fn lower(t: &[u8]) -> Vec<u8> {
     t.to_ascii_lowercase()
 }
 
-fn eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn eq(a: &[u8], b: &[u8]) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
-fn contains(hay: &[u8], needle: &[u8]) -> bool {
+pub(crate) fn contains(hay: &[u8], needle: &[u8]) -> bool {
     hay.windows(needle.len()).any(|w| w == needle)
 }
 
-fn length(t: &[u8]) -> Option<(f64, Unit)> {
+pub(crate) fn length(t: &[u8]) -> Option<(f64, Unit)> {
     units::parse_length(&c_text(t))
 }
 
-fn calc_value(t: &[u8]) -> Option<Parsed> {
+pub(crate) fn calc_value(t: &[u8]) -> Option<Parsed> {
     calc::parse_calc(&c_text(t))
 }
 
@@ -128,7 +128,7 @@ const CSS_WIDE: [&[u8]; 6] = [
     b"revert-rule",
 ];
 
-fn wide_keyword(t: &[u8]) -> Option<Value> {
+pub(crate) fn wide_keyword(t: &[u8]) -> Option<Value> {
     let start = t.iter().position(|&c| !is_ws(c)).unwrap_or(t.len());
     let kw = lower(trim_range(t, start, t.len()));
     CSS_WIDE
@@ -587,7 +587,7 @@ pub(crate) fn bg_repeat_canonical(a: &[u8], b: Option<&[u8]>) -> Vec<u8> {
     }
 }
 
-fn bg_token_is_box(tok: &[u8]) -> bool {
+pub(crate) fn bg_token_is_box(tok: &[u8]) -> bool {
     eq(tok, b"border-box") || eq(tok, b"padding-box") || eq(tok, b"content-box")
 }
 

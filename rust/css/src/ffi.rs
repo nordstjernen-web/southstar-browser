@@ -12,6 +12,7 @@ mod image;
 mod lex;
 mod property;
 mod shadow;
+mod shorthand;
 mod transform;
 mod value;
 
@@ -23,6 +24,7 @@ use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
+pub(crate) use shorthand::{list_style_split, prop_named};
 pub use value::NsCssValue;
 
 const COLOR_SCHEME_DARK: c_int = 1;

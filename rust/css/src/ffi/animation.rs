@@ -301,17 +301,6 @@ pub unsafe extern "C" fn ns_css_animation_shorthand_canonical(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_entry_longhand_text(
-    e: *const RawEntry,
-    prop: c_int,
-) -> *mut c_char {
-    let (Some(e), Some(lh)) = (unsafe { e.as_ref() }, longhand_of(prop)) else {
-        return ptr::null_mut();
-    };
-    owned(animation::entry_longhand_text(&unsafe { e.entry() }, lh))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_time_specified(value: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(value) }.and_then(|v| time::list_serialize(v, false)))
 }

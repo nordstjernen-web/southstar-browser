@@ -321,6 +321,15 @@ Southstar Browser (unreleased):
 * The initial values getComputedStyle and the animation engine fall back
   to for properties without a computed spelling of their own come from a
   Rust table, with the same values as before.
+* Expanding a CSS declaration into its longhands is Rust: all, the border,
+  border side, logical border, outline and column-rule shorthands, the
+  background and mask layer lists, background-position and
+  object-position, grid-template, grid, gap and grid placements, the
+  place-* pairs, columns, text-decoration, font with the system fonts,
+  flex and flex-flow, list-style, border-radius, inset, margin, padding
+  and their logical forms, text-wrap, container, animation-range, the
+  animation and transition longhands, and the legacy and logical
+  property aliases. Style sheets and inline styles expand as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

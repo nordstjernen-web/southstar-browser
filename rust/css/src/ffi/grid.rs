@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -64,28 +64,6 @@ pub unsafe extern "C" fn ns_css_grid_line_canonical(
         unsafe { *ident_only = glib::boolean(only) };
     }
     glib::strdup(&canon)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_grid_placement_expand(
-    text: *const c_char,
-    area: GBoolean,
-    out: *mut *mut c_char,
-    ident_only: *mut GBoolean,
-) -> c_int {
-    let Some(parts) = unsafe { bytes(text) }.and_then(|t| grid::placement_expand(t, area != 0))
-    else {
-        return 0;
-    };
-    for (i, (part, only)) in parts.iter().enumerate() {
-        unsafe {
-            *out.add(i) = glib::strdup(part);
-            if !ident_only.is_null() {
-                *ident_only.add(i) = glib::boolean(*only);
-            }
-        }
-    }
-    parts.len() as c_int
 }
 
 #[unsafe(no_mangle)]
