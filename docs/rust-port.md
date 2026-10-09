@@ -914,6 +914,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `render.c` | 737 | `rust/render` (the render context and profile mirrors moved here from `rust/engine`; computed styles are compared through full `ns_style` and `ns_css_value` mirrors in `rust/style`, whose layouts `css.h` now asserts) | 6 (paint and text) |
 | `anim.c` | 2,049 | `rust/anim` (values stay css.c's refcounted `ns_css_value`s, held through handles that dup and free them so the engine's pointer-identity checks behave as before; per-element state is kept in node-address order rather than GLib's pointer-hash order, which already differed from run to run) | 6 (style) |
 | `css.c` | 31,867 | `rust/css` (ported section by section, from the value parsers to the cascade walk; parsed sheets, rules, selectors, values and computed styles stay the structs `css.h` declares, built and read through asserted `#[repr(C)]` mirrors, so layout, paint and script read them unchanged; the user-agent sheet is plain CSS in `ua.css` and `ua-quirks.css`) | 6 (style) |
+| `js_realm.c` | 172 | `rust/js-realm` (ShadowRealm on the engine-neutral layer, which gained detached realms, `is_function`, plain errors and rejected promises for it, so it runs on Boa too) | 7 (JavaScript bindings) |
 
 ### Being ported
 

@@ -233,6 +233,9 @@ unsafe extern "C" {
     fn JS_ExecutePendingJob(rt: *mut JSRuntime, pctx: *mut *mut JSContext) -> c_int;
     fn JS_PromiseState(ctx: *mut JSContext, promise: JSValue) -> c_int;
     fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
+    fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
+    fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> bool;
+    fn JS_NewError(ctx: *mut JSContext) -> JSValue;
     fn JS_SetModuleLoaderFunc(
         rt: *mut JSRuntime,
         module_normalize: Option<JSModuleNormalizeFunc>,
@@ -632,6 +635,16 @@ pub mod quickjs {
 
     pub fn raw_context(scope: &Scope<'_>) -> *mut JSContext {
         scope.ctx
+    }
+}
+
+pub struct Realm {
+    ctx: *mut JSContext,
+}
+
+impl Drop for Realm {
+    fn drop(&mut self) {
+        unsafe { JS_FreeContext(self.ctx) };
     }
 }
 
@@ -1072,6 +1085,33 @@ impl Scope<'_> {
 
     pub fn gc(&mut self) {
         unsafe { JS_RunGC(self.rt()) };
+    }
+
+    pub fn is_function(&mut self, value: &Value) -> bool {
+        unsafe { JS_IsFunction(self.ctx, value.raw) }
+    }
+
+    pub fn new_error(&mut self) -> Value {
+        Value::own(self.ctx, unsafe { JS_NewError(self.ctx) })
+    }
+
+    pub fn rejected_promise(&mut self, reason: &Value) -> Result<Value, Value> {
+        let mut resolving = [UNDEFINED; 2];
+        let promise = unsafe { JS_NewPromiseCapability(self.ctx, resolving.as_mut_ptr()) };
+        let promise = self.take(promise)?;
+        let [resolve, reject] = resolving.map(|raw| Value::own(self.ctx, raw));
+        drop(resolve);
+        self.call(&reject, &Value::undefined(), core::slice::from_ref(reason))?;
+        Ok(promise)
+    }
+
+    pub fn new_detached_realm(&mut self) -> Option<Realm> {
+        let ctx = unsafe { JS_NewContext(self.rt()) };
+        (!ctx.is_null()).then_some(Realm { ctx })
+    }
+
+    pub fn in_realm<R>(&mut self, realm: &Realm, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        f(&mut Scope::of(realm.ctx))
     }
 
     pub fn new_realm(&mut self, init: RealmInit) -> Result<Value, Value> {

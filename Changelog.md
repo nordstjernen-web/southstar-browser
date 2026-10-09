@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* ShadowRealm is Rust, written on the engine-neutral JavaScript layer like
+  Temporal and Intl, so it also runs on Boa. evaluate(), wrapped callables
+  and importValue() behave as before on both QuickJS engines.
 * libcurl is no longer used or linked. Every network request — page loads,
   subresources, preconnects, EventSource, WebSocket, FTP and the audio
   helper's downloads — goes through the in-tree Rust HTTP client, and the

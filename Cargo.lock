@@ -1590,6 +1590,7 @@ dependencies = [
  "southstar-image-decoders",
  "southstar-ipc",
  "southstar-js-intl",
+ "southstar-js-realm",
  "southstar-js-temporal",
  "southstar-layout",
  "southstar-mat4",
@@ -1749,6 +1750,13 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
  "southstar-i18n",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-realm"
+version = "1.0.30-dev"
+dependencies = [
  "southstar-js-engine",
 ]
 

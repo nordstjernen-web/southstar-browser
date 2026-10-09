@@ -19,7 +19,7 @@ use quickjs_ffi as backend;
 
 #[cfg(feature = "quickjs")]
 pub use backend::quickjs;
-pub use backend::{ENGINE_NAME, Engine, Scope, Value, engine_version};
+pub use backend::{ENGINE_NAME, Engine, Realm, Scope, Value, engine_version};
 
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
 

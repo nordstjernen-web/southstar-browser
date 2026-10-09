@@ -49,7 +49,6 @@ southstar_engine_sources += files(
   'js_canvas.c',
   'js_canvas_api.c',
   'js_perf.c',
-  'js_realm.c',
   'wasm.c',
   'webgl.c',
 )

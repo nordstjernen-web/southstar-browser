@@ -39,6 +39,7 @@ southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
 southstar-js-intl = { path = "../js-intl" }
+southstar-js-realm = { path = "../js-realm" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-layout = { path = "../layout" }
 southstar-i18n = { path = "../i18n" }
@@ -96,6 +97,7 @@ quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-extensions/quickjs-original",
     "southstar-js-intl/quickjs-original",
+    "southstar-js-realm/quickjs-original",
     "southstar-js-temporal/quickjs-original",
     "southstar-idb/quickjs-original",
     "southstar-webaudio/quickjs-original",

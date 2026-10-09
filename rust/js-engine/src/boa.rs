@@ -117,6 +117,8 @@ impl Engine {
     }
 }
 
+pub struct Realm(boa_engine::realm::Realm);
+
 pub struct Scope<'a> {
     ctx: &'a mut Context,
 }
@@ -493,6 +495,34 @@ impl Scope<'_> {
 
     pub fn gc(&mut self) {
         boa_gc::force_collect();
+    }
+
+    pub fn is_function(&mut self, value: &Value) -> bool {
+        value.0.is_callable()
+    }
+
+    pub fn new_error(&mut self) -> Value {
+        Value(JsNativeError::error().into_opaque(self.ctx).into())
+    }
+
+    pub fn rejected_promise(&mut self, reason: &Value) -> Result<Value, Value> {
+        let error = JsError::from_opaque(reason.0.clone());
+        JsPromise::reject(error, self.ctx)
+            .map(|promise| Value(promise.into()))
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn new_detached_realm(&mut self) -> Option<Realm> {
+        self.ctx.create_realm().ok().map(Realm)
+    }
+
+    pub fn in_realm<R>(&mut self, realm: &Realm, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        let previous = self.ctx.enter_realm(realm.0.clone());
+        let result = f(&mut Scope {
+            ctx: &mut *self.ctx,
+        });
+        self.ctx.enter_realm(previous);
+        result
     }
 
     pub fn new_realm(&mut self, init: RealmInit) -> Result<Value, Value> {
