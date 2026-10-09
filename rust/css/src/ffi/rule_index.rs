@@ -15,19 +15,19 @@ use super::sheet::RawSheet;
 use crate::rule_index::{self, Key, Table};
 
 #[repr(C)]
-struct RawIndex {
-    by_id: *mut GHashTable,
-    by_class: *mut GHashTable,
-    by_tag: *mut GHashTable,
-    by_attr: *mut GHashTable,
-    universal: *mut GArray,
+pub(super) struct RawIndex {
+    pub(super) by_id: *mut GHashTable,
+    pub(super) by_class: *mut GHashTable,
+    pub(super) by_tag: *mut GHashTable,
+    pub(super) by_attr: *mut GHashTable,
+    pub(super) universal: *mut GArray,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct Candidate {
-    rule_idx: c_uint,
-    selector_idx: c_uint,
+pub(super) struct Candidate {
+    pub(super) rule_idx: c_uint,
+    pub(super) selector_idx: c_uint,
 }
 
 #[cfg(target_pointer_width = "64")]

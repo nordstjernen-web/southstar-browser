@@ -564,6 +564,15 @@ Southstar Browser (unreleased):
   keyword an axis is used with, the border-image source and which
   colors came from currentcolor. The answers are identical (checked
   with 172 million generated queries).
+* Gathering the rules that match an element is Rust: candidates are
+  looked up in each sheet's rule index by id, class, tag and attribute,
+  filtered by @container conditions and the ancestor Bloom filter
+  (which css.c's tree walk now feeds through Rust), matched through the
+  per-pass selector cache, and recorded per pseudo-element with each
+  rule's most specific matching selector and scope proximity. The
+  gathered declarations, custom properties and pending declarations are
+  identical and in the same order (checked over 2.75 million generated
+  element and sheet combinations), at the same speed.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

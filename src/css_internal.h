@@ -64,6 +64,19 @@ char         *ns_css_substitute_vars(const char *value,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
 struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
+const struct ns_css_rule_index *ns_css_rule_index_ensure(
+    const ns_css_stylesheet *sheet);
+void ns_css_gather_matches(const ns_css_stylesheet *sheet, int origin,
+                           int sheet_index, const ns_node *el,
+                           const void *dests, guint n_dests,
+                           GHashTable *layer_ranks);
+void ns_css_ancestor_filter_begin(gboolean attr_hashes);
+void ns_css_ancestor_filter_end(void);
+void ns_css_ancestor_filter_subject(const ns_node *node);
+gboolean ns_css_ancestor_filter_enter(const ns_node *node);
+void ns_css_ancestor_filter_leave(const ns_node *node);
+void *ns_css_ancestor_filter_save(void);
+void ns_css_ancestor_filter_restore(void *saved);
 void ns_css_resolve_pending(const GArray *pending_matches,
                             const struct ns_var_map *vars,
                             GHashTable *registered, GArray *matches,

@@ -93,7 +93,18 @@ impl RawPending {
     pub(super) fn important(&self) -> bool {
         self.important != 0
     }
+
+    pub(super) fn decl_slot(&self) -> c_int {
+        let rank = if self.decl_rank < DECL_SLOT_SPAN - 1 {
+            self.decl_rank
+        } else {
+            DECL_SLOT_SPAN - 2
+        };
+        self.decl_index * DECL_SLOT_SPAN - DECL_SLOT_SPAN + 1 + rank
+    }
 }
+
+pub(super) const DECL_SLOT_SPAN: c_int = 64;
 
 pub(super) struct RuleSink {
     decls: *mut GArray,

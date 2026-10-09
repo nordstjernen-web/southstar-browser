@@ -16,19 +16,19 @@ use super::vars::{RawVarMap, substitute_in};
 use crate::pending::{self, Pending};
 
 #[repr(C)]
-struct RawPendingMatch {
-    origin: c_int,
-    spec_a: c_int,
-    spec_b: c_int,
-    spec_c: c_int,
-    sheet_index: c_int,
-    layer_order: c_int,
-    scope_order: c_int,
-    source_order: c_int,
-    decl_order_base: c_int,
-    inline_style: GBoolean,
-    rule: *const c_void,
-    pd: *const RawPending,
+pub(super) struct RawPendingMatch {
+    pub(super) origin: c_int,
+    pub(super) spec_a: c_int,
+    pub(super) spec_b: c_int,
+    pub(super) spec_c: c_int,
+    pub(super) sheet_index: c_int,
+    pub(super) layer_order: c_int,
+    pub(super) scope_order: c_int,
+    pub(super) source_order: c_int,
+    pub(super) decl_order_base: c_int,
+    pub(super) inline_style: GBoolean,
+    pub(super) rule: *const c_void,
+    pub(super) pd: *const RawPending,
 }
 
 #[cfg(target_pointer_width = "64")]

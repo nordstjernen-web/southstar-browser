@@ -38,7 +38,7 @@ pub(super) struct RawSheet {
     pub(super) pseudo_mask: c_uint,
     serial: u64,
     resolved_base: *mut c_char,
-    index: *mut c_void,
+    pub(super) index: *mut c_void,
 }
 
 #[repr(C)]

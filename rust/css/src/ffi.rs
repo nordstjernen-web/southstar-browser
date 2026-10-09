@@ -13,6 +13,7 @@ mod declarations;
 mod display;
 mod element_state;
 mod font;
+mod gather;
 mod grid;
 mod hints;
 mod host_scope;

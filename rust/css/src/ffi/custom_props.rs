@@ -22,21 +22,21 @@ use crate::prop::Prop;
 use crate::units::{self, CAP, CH, EX, IC, VH, VW};
 
 #[repr(C)]
-struct RawVarMatch {
-    origin: c_int,
-    spec_a: c_int,
-    spec_b: c_int,
-    spec_c: c_int,
-    sheet_index: c_int,
-    layer_order: c_int,
-    scope_order: c_int,
-    source_order: c_int,
-    decl_order: c_int,
-    important: GBoolean,
-    inline_style: GBoolean,
-    rule: *const c_void,
-    name: *const c_char,
-    text: *const c_char,
+pub(super) struct RawVarMatch {
+    pub(super) origin: c_int,
+    pub(super) spec_a: c_int,
+    pub(super) spec_b: c_int,
+    pub(super) spec_c: c_int,
+    pub(super) sheet_index: c_int,
+    pub(super) layer_order: c_int,
+    pub(super) scope_order: c_int,
+    pub(super) source_order: c_int,
+    pub(super) decl_order: c_int,
+    pub(super) important: GBoolean,
+    pub(super) inline_style: GBoolean,
+    pub(super) rule: *const c_void,
+    pub(super) name: *const c_char,
+    pub(super) text: *const c_char,
 }
 
 #[cfg(target_pointer_width = "64")]
