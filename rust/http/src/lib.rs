@@ -10,9 +10,11 @@ mod h1;
 mod h2;
 mod hpack;
 mod hpack_tables;
+mod proxy;
 mod transfer;
 
 pub use client::{Outcome, Request, Version, perform, shutdown};
 pub use decode::accept_encoding;
 pub use ffi::tls::Settings as TlsSettings;
+pub use proxy::{Proxy, bypassed as proxy_bypassed, parse as parse_proxy};
 pub use transfer::Handler;

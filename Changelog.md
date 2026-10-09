@@ -16,6 +16,11 @@ Southstar Browser (unreleased):
 * The Rust HTTP client records Strict-Transport-Security headers itself,
   into the same HSTS list curl kept, so hosts seen over valid HTTPS are
   upgraded from http:// on later visits as before.
+* Proxied requests go through the Rust HTTP client too: HTTP proxies
+  (plain requests forwarded, https:// tunnelled with CONNECT), SOCKS4,
+  SOCKS4a, SOCKS5 and SOCKS5h, each with optional user and password, and
+  the no-proxy list matching hosts, domains and IP ranges. Only FTP still
+  goes through libcurl for page loads.
 * The logo has a large serif S behind the star, as Nordstjernen's had an N:
   the application and window icon, the Windows icon, the animated start-page
   logo and the two badges.

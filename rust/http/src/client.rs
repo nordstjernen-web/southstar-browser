@@ -14,6 +14,7 @@ use crate::ffi::tls::{self, Handshake, Io, Settings, Tls};
 use crate::frame;
 use crate::h1;
 use crate::h2::{Connection, Event};
+use crate::proxy::{self, Kind, Proxy};
 use crate::transfer::{Handler, Transfer};
 
 const MAX_CONCURRENT: usize = 64;
@@ -51,6 +52,7 @@ pub struct Request<'a> {
     pub connect_timeout: Duration,
     pub allow_insecure: bool,
     pub tls: Settings,
+    pub proxy: Option<Proxy>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -168,15 +170,22 @@ fn h1_head(req: &Request) -> Vec<u8> {
             (name, v)
         })
         .collect();
-    let extra: Vec<&[u8]> = req
+    let mut extra: Vec<&[u8]> = req
         .extra_headers
         .iter()
         .copied()
         .filter(|line| h1::split_header(line).is_some_and(|(n, _)| !is_reserved(n)))
         .collect();
+    let forward = forward_proxy(req);
+    let auth = forward
+        .and_then(Proxy::authorization)
+        .map(|a| [&b"Proxy-Authorization: "[..], &a].concat());
+    if let Some(a) = &auth {
+        extra.push(a);
+    }
     h1::request_head(
         request_method(req),
-        req.path,
+        if forward.is_some() { req.url } else { req.path },
         req.authority,
         &titled,
         &extra,
@@ -185,9 +194,18 @@ fn h1_head(req: &Request) -> Vec<u8> {
     )
 }
 
+fn forward_proxy<'a>(req: &'a Request) -> Option<&'a Proxy> {
+    req.proxy
+        .as_ref()
+        .filter(|p| p.kind == Kind::Http && !req.https)
+}
+
 fn origin_key(req: &Request) -> String {
     let scheme = if req.https { "https" } else { "http" };
-    format!("{scheme}://{}:{}", req.host, req.port)
+    match &req.proxy {
+        Some(p) => format!("{scheme}://{}:{} via {}", req.host, req.port, p.key()),
+        None => format!("{scheme}://{}:{}", req.host, req.port),
+    }
 }
 
 fn resolve_host(host: &str) -> &str {
@@ -264,16 +282,44 @@ fn tcp_connect(
     deadline: Instant,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(TcpStream, SocketAddr), String> {
+    let (mut stream, addr) = match &req.proxy {
+        Some(p) => tcp_connect_to(&p.host, p.port, deadline, cancelled)
+            .map_err(|e| format!("proxy {}:{}: {e}", p.host, p.port))?,
+        None => tcp_connect_to(req.host, req.port, deadline, cancelled)?,
+    };
+    let Some(p) = &req.proxy else {
+        return Ok((stream, addr));
+    };
+    let abort = || cancelled() || Instant::now() > deadline;
+    let host = resolve_host(req.host);
+    let result = match p.kind {
+        Kind::Http if req.https => proxy::connect_tunnel(p, &mut stream, host, req.port, &abort),
+        Kind::Http => Ok(()),
+        _ => proxy::socks_handshake(p, &mut stream, host, req.port, &abort),
+    };
+    match result {
+        Ok(()) => Ok((stream, addr)),
+        Err(proxy::Failure::Refused(message)) => Err(message),
+        Err(proxy::Failure::Io) => Err(format!("proxy {}:{} handshake failed", p.host, p.port)),
+    }
+}
+
+fn tcp_connect_to(
+    host_name: &str,
+    port: u16,
+    deadline: Instant,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<(TcpStream, SocketAddr), String> {
     if !socket::init() {
         return Err(String::from("socket initialization failed"));
     }
-    let host = resolve_host(req.host);
-    let addrs: Vec<SocketAddr> = match (host, req.port).to_socket_addrs() {
+    let host = resolve_host(host_name);
+    let addrs: Vec<SocketAddr> = match (host, port).to_socket_addrs() {
         Ok(a) => a.collect(),
-        Err(_) => return Err(format!("could not resolve host {}", req.host)),
+        Err(_) => return Err(format!("could not resolve host {host_name}")),
     };
     if addrs.is_empty() {
-        return Err(format!("could not resolve host {}", req.host));
+        return Err(format!("could not resolve host {host_name}"));
     }
     let remaining = || {
         deadline
@@ -294,7 +340,7 @@ fn tcp_connect(
             Err(ConnectError::Failed) => {}
         }
     }
-    Err(format!("could not connect to {}:{}", req.host, req.port))
+    Err(format!("could not connect to {host_name}:{port}"))
 }
 
 fn open(

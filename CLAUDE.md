@@ -298,10 +298,11 @@ and br/zstd through libbrotlidec/libzstd when present
 connection**: an I/O thread per connection drives the sans-I/O
 `h2::Connection`, workers queue a request and wait for its stream events,
 and connecting to an origin is serialized; `ns_net_backend_shutdown()` tears
-it all down.
+it all down. Proxies (HTTP forward and CONNECT, SOCKS4/4a/5/5h, credentials,
+no-proxy matching) are in `rust/http/src/proxy.rs`.
 
 **libcurl is being removed.** It is still linked for what has not moved
-yet: proxied and FTP hops (handed to `ns_hop_transport_curl()`), WebSocket,
+yet: FTP hops (handed to `ns_hop_transport_curl()`), WebSocket,
 Server-Sent Events and the audio helper. Each of these moves onto
 `rust/http` next; when the last one does, the `curl` backend and the
 libcurl dependency are deleted. Extend `rust/http` — don't add new libcurl

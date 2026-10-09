@@ -1,4 +1,4 @@
-//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies and HSTS recording, written into the body and header sinks, with proxied and FTP hops still handed to curl.
+//! Southstar — the hop transport over the in-tree Rust HTTP client: one HTTP or HTTPS request with the jar's cookies and HSTS recording, written into the body and header sinks, directly or through an HTTP or SOCKS proxy, with FTP hops still handed to curl.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -87,7 +87,9 @@ pub unsafe extern "C" fn ns_hop_transport(
 ) -> GBoolean {
     let (hop, out) = unsafe { (&*req, &mut *out) };
     let url_bytes = text(hop.url).unwrap_or_default();
-    if text(hop.proxy).is_some_and(|p| !p.is_empty())
+    let proxy_spec = text(hop.proxy).filter(|p| !p.is_empty());
+    let proxy = proxy_spec.and_then(southstar_http::parse_proxy);
+    if (proxy_spec.is_some() && proxy.is_none())
         || hop.request_ftp != 0
         || !url::is_http_or_https(url_bytes)
     {
@@ -109,6 +111,8 @@ pub unsafe extern "C" fn ns_hop_transport(
         _ => 80,
     };
     let host = String::from_utf8_lossy(&parts.hostname).into_owned();
+    let no_proxy = text(hop.no_proxy).unwrap_or_default();
+    let proxy = proxy.filter(|_| !southstar_http::proxy_bypassed(no_proxy, &host));
     let authority = if parts.port.is_empty() {
         parts.hostname.clone()
     } else {
@@ -154,6 +158,7 @@ pub unsafe extern "C" fn ns_hop_transport(
             ca_bundle: text(ns_net_ca_bundle_path()).map(<[u8]>::to_vec),
             curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),
         },
+        proxy,
     };
     let mut sinks = Sinks {
         url: url_bytes,
