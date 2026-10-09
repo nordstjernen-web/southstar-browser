@@ -643,6 +643,15 @@ impl Scope<'_> {
         Value(JsNativeError::error().into_opaque(self.ctx).into())
     }
 
+    pub fn new_promise(&mut self) -> Result<(Value, Value, Value), Value> {
+        let (promise, resolvers) = JsPromise::new_pending(self.ctx);
+        Ok((
+            Value(promise.into()),
+            Value(resolvers.resolve.into()),
+            Value(resolvers.reject.into()),
+        ))
+    }
+
     pub fn rejected_promise(&mut self, reason: &Value) -> Result<Value, Value> {
         let error = JsError::from_opaque(reason.0.clone());
         JsPromise::reject(error, self.ctx)

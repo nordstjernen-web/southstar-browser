@@ -10,8 +10,10 @@ use southstar_glib as glib;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
+use super::cairo::Surface;
 use super::cairo::{Cairo, Context};
 use super::text;
+use crate::bitmap::{ImageBitmap, Source};
 use crate::hidden::{self, Hidden};
 use crate::path2d::Path2D;
 
@@ -81,11 +83,9 @@ pub(crate) mod c {
         ns_ctx_transform,
         ns_ctx_translate,
         ns_ctx_gradient_addColorStop,
-        ns_image_bitmap_close,
         ns_offscreen_convertToBlob,
         ns_offscreen_getContext,
         ns_offscreen_transferToImageBitmap,
-        ns_window_create_image_bitmap,
     );
 }
 
@@ -100,10 +100,22 @@ pub struct NsNode {
 }
 
 unsafe extern "C" {
-    fn ns_image_bitmap_is(v: JSValue) -> c_int;
-    fn ns_image_bitmap_clone(ctx: *mut JSContext, v: JSValue) -> JSValue;
-    fn ns_image_bitmap_define_members(ctx: *mut JSContext, global: JSValue);
-    fn ns_canvas_register_image_bitmap_class(rt: *mut c_void);
+    fn ns_ctx_drawimage_source(
+        ctx: *mut JSContext,
+        src: JSValue,
+        out_w: *mut c_int,
+        out_h: *mut c_int,
+        origin_clean: *mut c_int,
+    ) -> *mut c_void;
+    fn ns_image_decode_bytes_to_pixels(
+        data: *const u8,
+        len: usize,
+        out_w: *mut c_int,
+        out_h: *mut c_int,
+        out_stride: *mut usize,
+        out_buf_len: *mut usize,
+        out_format: *mut c_int,
+    ) -> *mut u8;
     fn ns_canvas_state_for(js: *mut NsJs, el: *const NsNode) -> *mut c_void;
     fn ns_canvas_state_adopt_node(js: *mut NsJs, el: *mut NsNode);
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> *mut JSContext;
@@ -189,8 +201,99 @@ pub unsafe extern "C" fn ns_extract_radii(
     c_int::from(valid)
 }
 
-pub(crate) fn is_image_bitmap(value: &Value) -> bool {
-    unsafe { ns_image_bitmap_is(quickjs::raw(value)) != 0 }
+pub(crate) fn with_bitmap<R>(value: &Value, f: impl FnOnce(&ImageBitmap) -> R) -> Option<R> {
+    unsafe { quickjs::with_host::<ImageBitmap, R>(quickjs::raw(value), f) }
+}
+
+pub(crate) struct Decoded {
+    pub pixels: Vec<u8>,
+    pub width: i32,
+    pub height: i32,
+    pub stride: usize,
+}
+
+pub(crate) fn decode_image(bytes: &[u8]) -> Option<Decoded> {
+    let (mut w, mut h, mut stride, mut buf_len, mut format) = (0, 0, 0usize, 0usize, 0);
+    let pixels = unsafe {
+        ns_image_decode_bytes_to_pixels(
+            bytes.as_ptr(),
+            bytes.len(),
+            &mut w,
+            &mut h,
+            &mut stride,
+            &mut buf_len,
+            &mut format,
+        )
+    };
+    if pixels.is_null() {
+        return None;
+    }
+    let copy = unsafe { core::slice::from_raw_parts(pixels, buf_len) }.to_vec();
+    unsafe { glib::g_free(pixels.cast()) };
+    Some(Decoded {
+        pixels: copy,
+        width: w,
+        height: h,
+        stride,
+    })
+}
+
+pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Source> {
+    let (mut w, mut h, mut clean) = (0, 0, 1);
+    let ctx = quickjs::raw_context(scope);
+    let surface =
+        unsafe { ns_ctx_drawimage_source(ctx, quickjs::raw(src), &mut w, &mut h, &mut clean) };
+    let surface = unsafe { Surface::from_raw(surface) }?;
+    Some(Source {
+        surface,
+        size: (w, h),
+        origin_clean: clean != 0,
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_bitmap_is(v: JSValue) -> c_int {
+    let found = unsafe { quickjs::with_host::<ImageBitmap, ()>(v, |_| ()) };
+    c_int::from(found.is_some())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_bitmap_make(
+    ctx: *mut JSContext,
+    surface: *mut c_void,
+    w: c_int,
+    h: c_int,
+    origin_clean: c_int,
+) -> JSValue {
+    let surface = unsafe { Surface::from_raw(surface) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let bitmap = crate::bitmap::make(scope, surface, (w, h), origin_clean != 0);
+            quickjs::into_raw(bitmap)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_bitmap_surface(
+    v: JSValue,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+    origin_clean: *mut c_int,
+) -> *mut c_void {
+    let Some(source) = (unsafe { bitmap_source(v) }) else {
+        return ptr::null_mut();
+    };
+    unsafe {
+        *out_w = source.size.0;
+        *out_h = source.size.1;
+        *origin_clean = c_int::from(source.origin_clean);
+    }
+    source.surface.into_raw()
+}
+
+unsafe fn bitmap_source(v: JSValue) -> Option<Source> {
+    unsafe { quickjs::with_host::<ImageBitmap, Option<Source>>(v, ImageBitmap::source) }.flatten()
 }
 
 fn js_of(scope: &Scope<'_>) -> *mut NsJs {
@@ -212,23 +315,6 @@ pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
     let computed = unsafe { ns_js_computed_text(ctx, el as *const NsNode, c"color".as_ptr()) };
     let text = unsafe { glib::GStr::take(computed) }?;
     Some(text.to_bytes().to_vec())
-}
-
-pub(crate) fn image_bitmap_define_members(scope: &mut Scope<'_>, global: &Value) {
-    unsafe { ns_image_bitmap_define_members(quickjs::raw_context(scope), quickjs::raw(global)) };
-}
-
-unsafe extern "C" fn clone_image_bitmap(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    _argc: c_int,
-    _argv: *mut JSValue,
-) -> JSValue {
-    unsafe { ns_image_bitmap_clone(ctx, this_val) }
-}
-
-pub(crate) fn image_bitmap_clone(scope: &mut Scope<'_>, value: &Value) -> Result<Value, Value> {
-    quickjs::call_c_function(scope, clone_image_bitmap, value, &[])
 }
 
 pub(crate) fn element_attr(el: usize, name: &str) -> Option<Vec<u8>> {
@@ -275,9 +361,7 @@ pub(crate) unsafe extern "C" fn ns_pattern_set_transform(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_canvas_register_classes(rt: *mut c_void) {
-    unsafe {
-        ns_canvas_register_image_bitmap_class(rt);
-    }
+    let _ = rt;
 }
 
 #[unsafe(no_mangle)]

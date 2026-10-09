@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* ImageBitmap and createImageBitmap() are Rust, with unchanged results for
+  ImageData, Blob and canvas sources, cropping, cloning and close().
 * A Path2D can no longer break the canvas it is drawn on. An ellipse() with a
   zero radius, or an addPath() with a singular or NaN transform, used to put
   the path into cairo's error state, and drawing it then left that canvas

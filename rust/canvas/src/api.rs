@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::path2d;
+use crate::{bitmap, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -250,7 +250,7 @@ static PATH2D_METHODS: [Method; 11] = [
     native("roundRect", path2d::round_rect, 4),
 ];
 
-static IMAGE_BITMAP_METHODS: [Method; 1] = [method("close", c::ns_image_bitmap_close, 0)];
+static IMAGE_BITMAP_METHODS: [Method; 1] = [native("close", bitmap::close, 0)];
 
 static OFFSCREEN_METHODS: [Method; 3] = [
     method("convertToBlob", c::ns_offscreen_convertToBlob, 0),
@@ -342,7 +342,7 @@ fn branded(brand: Brand, value: &Value) -> bool {
     match brand {
         Brand::Kind(kind) => hidden::is(value, kind),
         Brand::Path2D => ffi::is_path2d(value),
-        Brand::ImageBitmap => ffi::is_image_bitmap(value),
+        Brand::ImageBitmap => bitmap::is(value),
     }
 }
 
@@ -676,12 +676,7 @@ fn install_illegal(scope: &mut Scope<'_>, global: &Value, index: usize, table: u
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value, window: bool) {
-    let create = quickjs::c_function(
-        scope,
-        "createImageBitmap",
-        1,
-        c::ns_window_create_image_bitmap,
-    );
+    let create = scope.function("createImageBitmap", 1, bitmap::create);
     let _ = scope.set(global, "createImageBitmap", create);
     if window {
         install_illegal(scope, global, 0, TABLE_CTX2D);
@@ -694,7 +689,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value, window: bool) {
     install_illegal(scope, global, 3, TABLE_PATTERN);
     install_illegal(scope, global, 4, TABLE_TEXTMETRICS);
     install_illegal(scope, global, 5, TABLE_IMAGEBITMAP);
-    ffi::image_bitmap_define_members(scope, global);
+    bitmap::define_members(scope);
     let ctor = scope.constructor_or_function("ImageData", 2, imagedata_construct);
     let proto = interface(scope, global, "ImageData", ctor, None);
     define_members(scope, &proto, TABLE_IMAGEDATA);
@@ -1161,8 +1156,8 @@ pub(crate) fn clone_object(scope: &mut Scope<'_>, v: &Value) -> Result<Value, Va
     if hidden::is(v, KIND_IMAGEDATA) {
         return imagedata_clone(scope, v);
     }
-    if ffi::is_image_bitmap(v) {
-        return ffi::image_bitmap_clone(scope, v);
+    if bitmap::is(v) {
+        return bitmap::clone(scope, v);
     }
     if hidden::kind_of(v).is_some() || ffi::is_path2d(v) {
         return Err(throw_dom(

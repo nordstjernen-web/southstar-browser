@@ -78,6 +78,91 @@ unsafe extern "C" {
     fn cairo_copy_path(cr: *mut Cairo) -> *mut CairoPathData;
     fn cairo_append_path(cr: *mut Cairo, path: *const CairoPathData);
     fn cairo_path_destroy(path: *mut CairoPathData);
+    fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut c_void;
+    fn cairo_image_surface_get_width(surface: *mut c_void) -> c_int;
+    fn cairo_image_surface_get_height(surface: *mut c_void) -> c_int;
+    fn cairo_image_surface_get_data(surface: *mut c_void) -> *mut u8;
+    fn cairo_image_surface_get_stride(surface: *mut c_void) -> c_int;
+    fn cairo_surface_status(surface: *mut c_void) -> c_int;
+    fn cairo_surface_flush(surface: *mut c_void);
+    fn cairo_surface_mark_dirty(surface: *mut c_void);
+    fn cairo_surface_reference(surface: *mut c_void) -> *mut c_void;
+    fn cairo_set_source_surface(cr: *mut Cairo, surface: *mut c_void, x: c_double, y: c_double);
+    fn cairo_set_operator(cr: *mut Cairo, op: c_int);
+    fn cairo_paint(cr: *mut Cairo);
+}
+
+const FORMAT_ARGB32: c_int = 0;
+
+const OPERATOR_SOURCE: c_int = 1;
+
+pub(crate) struct Surface(*mut c_void);
+
+impl Surface {
+    pub unsafe fn from_raw(surface: *mut c_void) -> Option<Surface> {
+        (!surface.is_null()).then_some(Surface(surface))
+    }
+
+    pub fn into_raw(self) -> *mut c_void {
+        let raw = self.0;
+        core::mem::forget(self);
+        raw
+    }
+
+    pub fn reference(&self) -> Surface {
+        Surface(unsafe { cairo_surface_reference(self.0) })
+    }
+
+    pub fn image(width: i32, height: i32) -> Surface {
+        Surface(unsafe { cairo_image_surface_create(FORMAT_ARGB32, width, height) })
+    }
+
+    pub fn is_ok(&self) -> bool {
+        unsafe { cairo_surface_status(self.0) == 0 }
+    }
+
+    pub fn size(&self) -> (i32, i32) {
+        unsafe {
+            (
+                cairo_image_surface_get_width(self.0),
+                cairo_image_surface_get_height(self.0),
+            )
+        }
+    }
+
+    pub fn write_pixels(&self, f: impl FnOnce(&mut [u8], usize)) {
+        unsafe { cairo_surface_flush(self.0) };
+        let data = unsafe { cairo_image_surface_get_data(self.0) };
+        let stride = unsafe { cairo_image_surface_get_stride(self.0) };
+        let (_, height) = self.size();
+        if data.is_null() || stride <= 0 || height <= 0 {
+            return;
+        }
+        let len = stride as usize * height as usize;
+        f(
+            unsafe { core::slice::from_raw_parts_mut(data, len) },
+            stride as usize,
+        );
+        unsafe { cairo_surface_mark_dirty(self.0) };
+    }
+
+    pub fn paint_onto(&self, target: &Surface, offset: (f64, f64), replace: bool) {
+        unsafe {
+            let cr = cairo_create(target.0);
+            cairo_set_source_surface(cr, self.0, offset.0, offset.1);
+            if replace {
+                cairo_set_operator(cr, OPERATOR_SOURCE);
+            }
+            cairo_paint(cr);
+            cairo_destroy(cr);
+        }
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe { cairo_surface_destroy(self.0) };
+    }
 }
 
 #[derive(Clone, Copy)]

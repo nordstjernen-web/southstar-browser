@@ -1635,6 +1635,14 @@ impl Scope<'_> {
         Value::own(self.ctx, unsafe { JS_NewError(self.ctx) })
     }
 
+    pub fn new_promise(&mut self) -> Result<(Value, Value, Value), Value> {
+        let mut resolving = [UNDEFINED; 2];
+        let promise = unsafe { JS_NewPromiseCapability(self.ctx, resolving.as_mut_ptr()) };
+        let promise = self.take(promise)?;
+        let [resolve, reject] = resolving.map(|raw| Value::own(self.ctx, raw));
+        Ok((promise, resolve, reject))
+    }
+
     pub fn rejected_promise(&mut self, reason: &Value) -> Result<Value, Value> {
         let mut resolving = [UNDEFINED; 2];
         let promise = unsafe { JS_NewPromiseCapability(self.ctx, resolving.as_mut_ptr()) };

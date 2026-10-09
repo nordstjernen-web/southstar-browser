@@ -39,12 +39,6 @@ typedef struct ns_canvas_state {
     int context_kind;
 } ns_canvas_state;
 
-typedef struct ns_image_bitmap {
-    cairo_surface_t *surf;
-    int w, h;
-    gboolean origin_clean;
-} ns_image_bitmap;
-
 struct ns_js {
     JSRuntime    *rt;
     JSContext    *ctx;
@@ -386,30 +380,16 @@ const ns_node *ns_unwrap_element(JSValueConst val);
 
 /* Canvas API implemented in js_canvas.c */
 void
-ns_image_bitmap_finalizer(JSRuntime *rt, JSValue val);
-void
 ns_canvas_state_free(gpointer data);
-JSValue
-ns_image_bitmap_close(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv);
 JSValue
 ns_image_bitmap_make(JSContext *ctx, cairo_surface_t *surf, int w, int h,
                      gboolean origin_clean);
-cairo_surface_t *
-ns_image_bitmap_from_imagedata(JSContext *ctx, JSValueConst src,
-                               int *out_w, int *out_h);
-cairo_surface_t *
-ns_image_bitmap_crop(cairo_surface_t *src, int sw, int sh,
-                     int sx, int sy, int rw, int rh);
 gboolean
 ns_image_bitmap_is(JSValueConst v);
-JSValue
-ns_image_bitmap_clone(JSContext *ctx, JSValueConst v);
+cairo_surface_t *
+ns_image_bitmap_surface(JSValueConst v, int *out_w, int *out_h, int *origin_clean);
 JSValue
 ns_canvas_clone_object(JSContext *ctx, JSValueConst v);
-JSValue
-ns_window_create_image_bitmap(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv);
 JSValue
 ns_offscreen_transferToImageBitmap(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv);
@@ -625,8 +605,6 @@ JSValue
 ns_offscreen_convertToBlob(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv);
 
-void ns_canvas_register_image_bitmap_class(JSRuntime *rt);
-void ns_image_bitmap_define_members(JSContext *ctx, JSValueConst global);
 
 /* The canvas objects' WebIDL surface (js_canvas_api.c). */
 enum {
