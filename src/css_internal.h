@@ -104,6 +104,16 @@ char         *ns_css_overflow_clip_margin_canonical(const char *text);
 char         *ns_css_counter_list_canonical(const char *text, ns_css_prop prop);
 char         *ns_css_list_style_type_canonical(const char *text);
 
+ns_css_value *ns_css_parse_border_image_slice(const char *t);
+ns_css_value *ns_css_parse_border_image_width(const char *t);
+ns_css_value *ns_css_parse_border_image_outset(const char *t);
+ns_css_value *ns_css_parse_border_image_repeat(const char *t);
+char         *ns_css_border_image_length_serialize(const char *token,
+                                                   gboolean allow_auto,
+                                                   gboolean allow_percent);
+gboolean      ns_css_border_image_tile_keyword(const char *token);
+GPtrArray    *ns_css_border_image_tokens(const char *text);
+
 ns_css_value *ns_css_parse_box_shadow(const char *text);
 char         *ns_css_shadow_specified_canonical(const char *text,
                                                 gboolean is_text);
@@ -159,6 +169,7 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 offsetof(ns_css_anim_entry, iterations) == 88 &&
                 sizeof(ns_css_anim_list) == 968);
 G_STATIC_ASSERT(sizeof(ns_display) == 5);
+G_STATIC_ASSERT(sizeof(ns_border_image) == 176);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::{offset_of, size_of};
 
 use southstar_glib as glib;
@@ -262,4 +262,18 @@ pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
     value_ref.kind = KIND_ANIM;
     value_ref.u.anim = *list;
     value
+}
+
+pub(crate) unsafe fn style_value<'a>(style: *const c_void, prop: c_int) -> Option<&'a NsCssValue> {
+    let index = usize::try_from(prop).ok()?;
+    let values = style.cast::<*const NsCssValue>();
+    unsafe { (*values.add(index)).as_ref() }
+}
+
+pub(crate) unsafe fn keyword_of(v: Option<&NsCssValue>) -> Option<&[u8]> {
+    let v = v?;
+    if v.kind != KIND_KEYWORD || unsafe { v.u.keyword }.is_null() {
+        return None;
+    }
+    Some(unsafe { core::ffi::CStr::from_ptr(v.u.keyword) }.to_bytes())
 }

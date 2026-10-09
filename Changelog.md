@@ -307,6 +307,10 @@ Southstar Browser (unreleased):
   lists with reversed(), list-style-type with symbols() and strings, the
   list-style shorthand's text, and overflow-clip-margin. Boxes lay out,
   count and serialize as before.
+* border-image is Rust: the slice, width, outset and repeat longhands in
+  canonical form, the tokens of the border-image shorthand, and the
+  slices, widths, outsets and tiling painting reads from a computed
+  style. Border images paint and serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

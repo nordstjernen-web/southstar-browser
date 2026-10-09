@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::value::{self, KIND_KEYWORD, NsCssValue};
+use super::value::{self, NsCssValue};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
 use crate::time;
 use crate::timing::{self, Timing};
@@ -149,22 +149,13 @@ fn longhand_of(prop: c_int) -> Option<Longhand> {
         .map(|i| Longhand::ALL[i])
 }
 
-fn prop_of(lh: Longhand) -> usize {
+fn prop_of(lh: Longhand) -> c_int {
     let i = Longhand::ALL.iter().position(|&l| l == lh).unwrap_or(0);
-    usize::try_from(prop_ids()[i]).unwrap_or(0)
+    prop_ids()[i]
 }
 
-unsafe fn style_value<'a>(style: *const c_void, lh: Longhand) -> Option<&'a NsCssValue> {
-    let values = style.cast::<*const NsCssValue>();
-    unsafe { (*values.add(prop_of(lh))).as_ref() }
-}
-
-unsafe fn keyword_of(v: Option<&NsCssValue>) -> Option<&[u8]> {
-    let v = v?;
-    if v.kind != KIND_KEYWORD {
-        return None;
-    }
-    unsafe { bytes(v.u.keyword) }
+unsafe fn longhand_value<'a>(style: *const c_void, lh: Longhand) -> Option<&'a NsCssValue> {
+    unsafe { value::style_value(style, prop_of(lh)) }
 }
 
 #[unsafe(no_mangle)]
@@ -241,7 +232,7 @@ pub unsafe extern "C" fn ns_css_style_may_animate(style: *const c_void) -> GBool
         return 0;
     }
     glib::boolean(animation::may_animate(|lh| {
-        unsafe { style_value(style, lh) }.is_some()
+        unsafe { longhand_value(style, lh) }.is_some()
     }))
 }
 
@@ -258,8 +249,8 @@ pub unsafe extern "C" fn ns_css_anim_effective(
         Vec::new()
     } else {
         animation::effective(
-            |lh| unsafe { keyword_of(style_value(style, lh)) },
-            |lh| unsafe { style_value(style, lh) }.is_some(),
+            |lh| unsafe { value::keyword_of(longhand_value(style, lh)) },
+            |lh| unsafe { longhand_value(style, lh) }.is_some(),
             is_animation != 0,
         )
     };
@@ -280,7 +271,7 @@ pub unsafe extern "C" fn ns_css_anim_lists(
         (Vec::new(), false)
     } else {
         animation::lists(
-            |lh| unsafe { keyword_of(style_value(style, lh)) },
+            |lh| unsafe { value::keyword_of(longhand_value(style, lh)) },
             is_animation != 0,
         )
     };
