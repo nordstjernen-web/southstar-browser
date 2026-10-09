@@ -11,6 +11,8 @@ pub mod lexbor;
 pub mod netlog;
 pub mod proxy;
 pub mod queue;
+#[cfg(not(feature = "http-curl"))]
+pub mod rust_hop;
 pub mod sinks;
 pub mod storage;
 pub mod sys;

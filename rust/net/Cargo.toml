@@ -12,12 +12,15 @@ southstar-about-style = { path = "../about-style" }
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 southstar-html-util = { path = "../html-util" }
+southstar-http = { path = "../http" }
 southstar-http-cache = { path = "../http-cache" }
 
 [features]
 avif = []
 enchant = []
-http-nghttp2 = []
+http-brotli = ["southstar-http/brotli"]
+http-curl = []
+http-zstd = ["southstar-http/zstd"]
 libav = []
 ns-pango = []
 poppler = []

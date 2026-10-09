@@ -798,7 +798,7 @@ the existing ones, not a test suite.
 | D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small |
 | D5 | Keep the no-comments rule in Rust, including no `// SAFETY:` comments? | Keep it; confine `unsafe` to `ffi` modules |
 | D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |
-| D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Keep FFI during the port |
+| D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Decided (October 2026): neither. libcurl and libnghttp2 are replaced by an in-tree Rust client, `rust/http`, on threads (no async runtime), with TLS through OpenSSL |
 | D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Either targets `js-engine`, not an engine; decide after the phase 2 pilot, with a lean toward WebIDL generation now that several backends must be served |
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
@@ -910,6 +910,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `engine.c` | 1,500 | `rust/engine` (ported in three sections; style sheets stay C `ns_css_stylesheet`s collected into GLib pointer arrays, and the render context and profile are `#[repr(C)]` mirrors asserted on both sides) | 6 (pipeline driver) |
 | `libsouthstar.c` | 4,472 | `rust/browser` (ported in three sections; `struct ns_browser` became a Rust struct with C's field layout and `Cell` fields, so the script callbacks that re-enter a page while it relays out stay sound) | 6 (pipeline driver) |
 | `net.c` | 6,925 | `rust/net` (ported in nine sections; `ns_response` stays a `#[repr(C)]` struct the C reads, transfers still run on libcurl's easy and multi handles, the HTTP cache is called through `rust/http-cache` directly, and `net_http2.c` stays C behind the `ns_hop_transport` seam, chosen by the `http-nghttp2` Cargo feature) | 5 |
+| `net_http2.c` | 2,684 | `rust/http` (rewritten rather than translated: the client no longer uses libnghttp2, ngtcp2, nghttp3 or gnutls; HTTP/1.1 and HTTP/2 with in-tree framing and HPACK over OpenSSL, the default transport for page fetches; HTTP/3 is dropped; libcurl remains only for proxied and FTP hops, WebSocket, Server-Sent Events and the audio helper until they move over) | 5 |
 | `render.c` | 737 | `rust/render` (the render context and profile mirrors moved here from `rust/engine`; computed styles are compared through full `ns_style` and `ns_css_value` mirrors in `rust/style`, whose layouts `css.h` now asserts) | 6 (paint and text) |
 | `anim.c` | 2,049 | `rust/anim` (values stay css.c's refcounted `ns_css_value`s, held through handles that dup and free them so the engine's pointer-identity checks behave as before; per-element state is kept in node-address order rather than GLib's pointer-hash order, which already differed from run to run) | 6 (style) |
 

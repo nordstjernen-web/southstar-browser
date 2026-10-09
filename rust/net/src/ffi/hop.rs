@@ -1,4 +1,4 @@
-//! Southstar — one HTTP or FTP hop over a libcurl easy handle: the request and result structs net_backend.h declares, the curl transport, and the backend seam when the nghttp2 backend is not built.
+//! Southstar — one HTTP or FTP hop over a libcurl easy handle: the request and result structs net_backend.h declares, the curl transport, and the backend seam when the curl backend is chosen.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -98,24 +98,15 @@ impl HopOut {
     }
 }
 
-#[cfg(feature = "http-nghttp2")]
-unsafe extern "C" {
-    pub fn ns_hop_transport(
-        req: *const HopReq,
-        wctx: *mut NsWriteCtx,
-        hctx: *mut NsHeaderCtx,
-        out: *mut HopOut,
-        cancellable: *mut c_void,
-    ) -> GBoolean;
-    fn ns_net_backend_shutdown();
-}
+#[cfg(not(feature = "http-curl"))]
+pub use super::rust_hop::ns_hop_transport;
 
-#[cfg(feature = "http-nghttp2")]
+#[cfg(not(feature = "http-curl"))]
 pub fn backend_shutdown() {
-    unsafe { ns_net_backend_shutdown() };
+    southstar_http::shutdown();
 }
 
-#[cfg(not(feature = "http-nghttp2"))]
+#[cfg(feature = "http-curl")]
 pub fn backend_shutdown() {}
 
 unsafe extern "C" {
@@ -456,7 +447,7 @@ pub unsafe extern "C" fn ns_hop_transport_curl(
     1
 }
 
-#[cfg(not(feature = "http-nghttp2"))]
+#[cfg(feature = "http-curl")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_hop_transport(
     req: *const HopReq,
@@ -468,6 +459,6 @@ pub unsafe extern "C" fn ns_hop_transport(
     unsafe { ns_hop_transport_curl(req, wctx, hctx, out, cancellable) }
 }
 
-#[cfg(not(feature = "http-nghttp2"))]
+#[cfg(feature = "http-curl")]
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_backend_shutdown() {}

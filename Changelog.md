@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Pages and subresources are fetched by a new HTTP client written in Rust,
+  rust/http, instead of libcurl. It speaks HTTP/1.1 and HTTP/2, with its own
+  HTTP/2 framing, flow control and HPACK header compression, over OpenSSL;
+  HTTP/2 requests to one origin share a single pooled connection, and
+  responses are decoded from gzip, deflate, br and zstd as they arrive. It
+  replaces the optional nghttp2 backend (src/net_http2.c), so libnghttp2,
+  ngtcp2, nghttp3 and gnutls are no longer used and HTTP/3 is gone. The
+  http_backend meson option is now "rust" (the default) or "curl". libcurl is
+  still used for proxied and FTP requests, WebSocket, Server-Sent Events and
+  the audio helper, and goes away once those move to the new client.
 * The logo has a large serif S behind the star, as Nordstjernen's had an N:
   the application and window icon, the Windows icon, the animated start-page
   logo and the two badges.

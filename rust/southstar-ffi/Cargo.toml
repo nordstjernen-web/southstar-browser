@@ -86,7 +86,9 @@ ns-pango = [
     "southstar-net/ns-pango",
 ]
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]
-http-nghttp2 = ["southstar-net/http-nghttp2"]
+http-brotli = ["southstar-net/http-brotli"]
+http-curl = ["southstar-net/http-curl"]
+http-zstd = ["southstar-net/http-zstd"]
 libav = ["southstar-headless/libav", "southstar-net/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 webgpu = ["southstar-net/webgpu"]

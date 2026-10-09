@@ -1682,6 +1682,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-http"
+version = "1.0.30-dev"
+
+[[package]]
 name = "southstar-http-cache"
 version = "1.0.30-dev"
 dependencies = [
@@ -1791,6 +1795,7 @@ dependencies = [
  "southstar-config",
  "southstar-glib",
  "southstar-html-util",
+ "southstar-http",
  "southstar-http-cache",
 ]
 

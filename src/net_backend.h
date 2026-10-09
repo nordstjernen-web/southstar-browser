@@ -1,4 +1,4 @@
-/* Southstar — HTTP transport backend seam (libcurl or libnghttp2). */
+/* Southstar — HTTP transport backend seam (the Rust client in rust/http, or libcurl). */
 
 #ifndef NS_NET_BACKEND_H
 #define NS_NET_BACKEND_H
@@ -109,8 +109,6 @@ void     ns_body_sink_init(ns_write_ctx *ctx, GByteArray *body);
 gboolean ns_body_sink_write(ns_write_ctx *ctx, const void *data, size_t len);
 void     ns_header_sink_feed(ns_header_ctx *ctx, const char *line, size_t len);
 
-/* Release any transport-backend global state (the nghttp2 connection pool
- * and TLS session cache). A no-op for the curl backend. */
 void     ns_net_backend_shutdown(void);
 
 const char *ns_net_ec_curves(void);

@@ -62,6 +62,25 @@ pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
         return None;
     }
     let parts = url::parts(target).filter(|p| !p.hostname.is_empty())?;
+    let site = url::site_from(target).filter(|s| !s.is_empty())?;
+    let jars = [
+        storage::cookie_jar_path(Some(&site), false),
+        storage::cookie_jar_path(Some(&site), true),
+    ];
+    collect_from(&parts, &jars, include_httponly)
+}
+
+#[cfg(not(feature = "http-curl"))]
+pub fn collect_in(target: &[u8], jars: &[Option<Vec<u8>>]) -> Option<Vec<u8>> {
+    let parts = url::parts(target).filter(|p| !p.hostname.is_empty())?;
+    collect_from(&parts, jars, true)
+}
+
+fn collect_from(
+    parts: &url::Parts,
+    jars: &[Option<Vec<u8>>],
+    include_httponly: bool,
+) -> Option<Vec<u8>> {
     let host = &parts.hostname;
     let path: &[u8] = if parts.pathname.is_empty() {
         b"/"
@@ -69,11 +88,6 @@ pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
         &parts.pathname
     };
     let is_https = parts.protocol.eq_ignore_ascii_case(b"https:");
-    let site = url::site_from(target).filter(|s| !s.is_empty())?;
-    let jars = [
-        storage::cookie_jar_path(Some(&site), false),
-        storage::cookie_jar_path(Some(&site), true),
-    ];
     let now = sys::now_seconds();
     let mut order: Vec<Vec<u8>> = Vec::new();
     let mut values: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
@@ -238,41 +252,48 @@ fn default_path(request_path: &[u8]) -> Vec<u8> {
     }
 }
 
-pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
+struct Parsed {
+    name: Vec<u8>,
+    value: Vec<u8>,
+    a: Attributes,
+    file_domain: Vec<u8>,
+    tail: &'static [u8],
+    path: Vec<u8>,
+    site: Vec<u8>,
+    now: i64,
+}
+
+fn parse(target: &[u8], cookie: &[u8]) -> Option<Parsed> {
     if target.is_empty() || !url::is_http_or_https(target) || cookie.iter().any(|&c| c < 0x20) {
-        return;
+        return None;
     }
-    let Some(parts) = url::parts(target).filter(|p| !p.hostname.is_empty()) else {
-        return;
-    };
+    let parts = url::parts(target).filter(|p| !p.hostname.is_empty())?;
     let semi = cookie.iter().position(|&c| c == b';');
     let pair = &cookie[..semi.unwrap_or(cookie.len())];
-    let Some(eq) = pair.iter().position(|&c| c == b'=').filter(|&e| e > 0) else {
-        return;
-    };
+    let eq = pair.iter().position(|&c| c == b'=').filter(|&e| e > 0)?;
     let name = trim_blanks(&pair[..eq]);
     let value = trim_blanks(&pair[eq + 1..]);
     if name.is_empty() {
-        return;
+        return None;
     }
     let now = sys::now_seconds();
     let a = semi.map_or_else(Attributes::default, |s| parse_attributes(&cookie[s..], now));
     let is_https = parts.protocol.eq_ignore_ascii_case(b"https:");
     if a.secure && !is_https {
-        return;
+        return None;
     }
     if has_prefix_ignore_case(name, b"__Secure-") && !(a.secure && is_https) {
-        return;
+        return None;
     }
     let domain_attr = a.domain.as_deref().filter(|d| !d.is_empty());
     let path_attr = a.path.as_deref().filter(|p| !p.is_empty());
     if has_prefix_ignore_case(name, b"__Host-")
         && (!a.secure || !is_https || domain_attr.is_some() || path_attr.is_some_and(|p| p != b"/"))
     {
-        return;
+        return None;
     }
     let host = &parts.hostname;
-    let (file_domain, tail): (Vec<u8>, &[u8]) = match domain_attr {
+    let (file_domain, tail): (Vec<u8>, &'static [u8]) = match domain_attr {
         Some(d) => {
             let d = d.strip_prefix(b".").unwrap_or(d);
             let ok = host.eq_ignore_ascii_case(d)
@@ -280,7 +301,7 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
                     && host[host.len() - d.len() - 1] == b'.'
                     && host[host.len() - d.len()..].eq_ignore_ascii_case(d));
             if !ok || d.is_empty() || sys::is_public_suffix(&d.to_ascii_lowercase()) {
-                return;
+                return None;
             }
             ([&b"."[..], d].concat(), b"TRUE")
         }
@@ -290,21 +311,58 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
         Some(p) if p.first() == Some(&b'/') => p.to_vec(),
         _ => default_path(&parts.pathname),
     };
-    let Some(site) = url::site_from(target).filter(|s| !s.is_empty()) else {
+    let site = url::site_from(target).filter(|s| !s.is_empty())?;
+    Some(Parsed {
+        name: name.to_vec(),
+        value: value.to_vec(),
+        a,
+        file_domain,
+        tail,
+        path,
+        site,
+        now,
+    })
+}
+
+pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
+    let Some(c) = parse(target, cookie) else {
         return;
     };
-    let Some(jar) = storage::cookie_jar_path(Some(&site), !from_http) else {
+    let Some(jar) = storage::cookie_jar_path(Some(&c.site), !from_http) else {
         return;
     };
+    write_cookie(&jar, from_http, &c);
+}
+
+#[cfg(not(feature = "http-curl"))]
+pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8]) {
+    if let Some(c) = parse(target, cookie) {
+        write_cookie(jar, true, &c);
+    }
+}
+
+fn write_cookie(jar: &[u8], from_http: bool, c: &Parsed) {
+    let Parsed {
+        name,
+        value,
+        a,
+        file_domain,
+        tail,
+        path,
+        site,
+        now,
+    } = c;
+    let (name, value, file_domain, path, now) =
+        (&name[..], &value[..], &file_domain[..], &path[..], *now);
     if !from_http {
-        let http_jar = storage::cookie_jar_path(Some(&site), false);
-        if http_jar.is_some_and(|j| jar_has_httponly(&j, &file_domain, &path, name, now)) {
+        let http_jar = storage::cookie_jar_path(Some(site), false);
+        if http_jar.is_some_and(|j| jar_has_httponly(&j, file_domain, path, name, now)) {
             return;
         }
     }
     let mut out = Vec::new();
     let mut blocked_httponly = false;
-    if let Some(contents) = read_jar(&jar) {
+    if let Some(contents) = read_jar(jar) {
         for line in contents.split(|&c| c == b'\n') {
             if line.is_empty() {
                 continue;
@@ -314,7 +372,7 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
                 if let Some(rest) = line.strip_prefix(HTTP_ONLY) {
                     let f = fields(rest);
                     let same = f.len() >= 7
-                        && f[0].eq_ignore_ascii_case(&file_domain)
+                        && f[0].eq_ignore_ascii_case(file_domain)
                         && f[2] == path
                         && f[5] == name;
                     if same {
@@ -336,7 +394,7 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
                 continue;
             }
             let expiry = expiry_of(f[4]);
-            let same = f[0].eq_ignore_ascii_case(&file_domain) && f[2] == path && f[5] == name;
+            let same = f[0].eq_ignore_ascii_case(file_domain) && f[2] == path && f[5] == name;
             let dead = expiry != 0 && expiry < now;
             if !same && !dead {
                 out.extend_from_slice(line);
@@ -351,11 +409,11 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
             b""
         };
         out.extend_from_slice(prefix);
-        out.extend_from_slice(&file_domain);
+        out.extend_from_slice(file_domain);
         out.push(b'\t');
         out.extend_from_slice(tail);
         out.push(b'\t');
-        out.extend_from_slice(&path);
+        out.extend_from_slice(path);
         out.push(b'\t');
         out.extend_from_slice(if a.secure { b"TRUE" } else { b"FALSE" });
         out.extend_from_slice(format!("\t{}\t", a.expiry).as_bytes());
@@ -364,7 +422,7 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
         out.extend_from_slice(value);
         out.push(b'\n');
     }
-    if sys::write_file(&jar, &out) {
-        sys::chmod(&jar, 0o600);
+    if sys::write_file(jar, &out) {
+        sys::chmod(jar, 0o600);
     }
 }

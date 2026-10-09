@@ -62,10 +62,6 @@ if have_avif
   southstar_engine_sources += files('image_avif.c')
 endif
 
-if http_backend == 'nghttp2'
-  southstar_engine_sources += files('net_http2.c')
-endif
-
 if have_webgpu
   southstar_engine_sources += files('webgpu.c')
 endif
@@ -134,9 +130,7 @@ endif
 
 southstar_deps += [libpsl]
 
-if http_backend == 'nghttp2'
-  southstar_deps += http_backend_deps
-endif
+southstar_deps += http_backend_deps
 
 # macOS WebGL: src/glctx.c creates the offscreen GL context through CGL, whose
 # symbols live in the OpenGL framework. Unused targets drop it via

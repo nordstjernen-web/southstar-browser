@@ -70,9 +70,16 @@ endif
 if have_libav
   southstar_rust_features += ['libav']
 endif
-if http_backend == 'nghttp2'
-  southstar_rust_features += ['http-nghttp2']
+if http_backend == 'curl'
+  southstar_rust_features += ['http-curl']
 endif
+if have_http_brotli
+  southstar_rust_features += ['http-brotli']
+endif
+if have_http_zstd
+  southstar_rust_features += ['http-zstd']
+endif
+southstar_rust_link_deps += http_backend_deps
 if have_webgpu
   southstar_rust_features += ['webgpu']
 endif

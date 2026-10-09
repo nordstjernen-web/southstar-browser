@@ -187,7 +187,7 @@ pub fn gstring_append(out: *mut GString, bytes: &[u8]) {
     unsafe { g_string_append_len(out, bytes.as_ptr().cast(), bytes.len() as isize) };
 }
 
-fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
+pub fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
     let bytes = data.len() as u64;
     if bytes == 0 || bytes > u64::from(u32::MAX) {
         return 0;
@@ -308,7 +308,7 @@ fn keep_raw(hc: &mut NsHeaderCtx, line: &[u8]) {
     }
 }
 
-fn feed(hc: &mut NsHeaderCtx, line: &[u8]) {
+pub fn feed(hc: &mut NsHeaderCtx, line: &[u8]) {
     keep_raw(hc, line);
     let captured = unsafe {
         capture(line, b"Content-Type:", hc.content_type_out)
