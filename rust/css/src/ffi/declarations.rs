@@ -81,9 +81,31 @@ unsafe extern "C" fn pending_clear(data: *mut c_void) {
     }
 }
 
+impl RawPending {
+    pub(super) fn name(&self) -> Option<&[u8]> {
+        (!self.pname.is_null()).then(|| unsafe { CStr::from_ptr(self.pname) }.to_bytes())
+    }
+
+    pub(super) fn raw_text(&self) -> Option<&[u8]> {
+        (!self.raw_vtext.is_null()).then(|| unsafe { CStr::from_ptr(self.raw_vtext) }.to_bytes())
+    }
+
+    pub(super) fn important(&self) -> bool {
+        self.important != 0
+    }
+}
+
 pub(super) struct RuleSink {
     decls: *mut GArray,
     rule: *mut RawRule,
+}
+
+pub(super) fn parse_decls_into(text: &[u8], decls: *mut GArray) {
+    let mut sink = RuleSink {
+        decls,
+        rule: ptr::null_mut(),
+    };
+    declarations::parse_block(text, 0, &mut sink);
 }
 
 impl RuleSink {

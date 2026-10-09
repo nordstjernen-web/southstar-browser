@@ -548,6 +548,13 @@ Southstar Browser (unreleased):
   flex or grid items, the legacy -webkit-box forms, and the overflow
   pair. Styles come out identical (checked over 480,000 generated
   elements, 116 million property values) and about 30% faster.
+* Declarations that wait on var() or attr() are resolved in Rust: in
+  cascade order each one's value is substituted from the element's
+  variables and attributes, dropped when attr() taints a non-custom
+  property or the result smuggles in !important, parsed into its
+  longhands as matched declarations, or set to unset when it cannot
+  stand. The matched declarations are identical (checked over 320,000
+  generated elements, 4.5 million declarations).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

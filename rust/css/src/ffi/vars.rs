@@ -91,6 +91,19 @@ impl Lookup for Chain<'_> {
     }
 }
 
+pub(super) fn substitute_in(
+    value: &[u8],
+    map: *const RawVarMap,
+    registered: *mut GHashTable,
+) -> Option<Vec<u8>> {
+    let chain = Chain {
+        map: unsafe { map.as_ref() },
+        registered,
+    };
+    let lookup: Option<&dyn Lookup> = Some(&chain);
+    vars::substitute(value, lookup.filter(|_| !map.is_null()), 0)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_substitute_vars(
     value: *const c_char,

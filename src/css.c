@@ -133,18 +133,6 @@ ns_css_text_orientation(const ns_style *s)
 static gboolean
 is_ws(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
 
-static gboolean
-is_ident_start(char c)
-{
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '-' || (unsigned char)c >= 128;
-}
-
-static gboolean
-is_ident(char c)
-{
-    return is_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static gunichar
 css_unescape_cp(gunichar cp)
 {
@@ -182,13 +170,6 @@ ns_css_append_unescaped(GString *out, const char **pp)
     *pp = p;
 }
 
-static const char *css_skip_ws_comments(const char *p, const char *end);
-static const char *css_scan_until(const char *p, const char *end,
-                                  const char *terminators, char *terminator);
-static const char *css_find_top_level_char(const char *p, const char *end,
-                                           char needle);
-static const char *css_skip_comment(const char *p, const char *end);
-static void css_strip_important(char *text, gboolean *important);
 
 ns_css_value *
 ns_css_value_dup(const ns_css_value *v)
@@ -475,114 +456,6 @@ ns_css_resolve_style_vars(const char *text, const ns_style *style)
 {
     return ns_css_substitute_vars(text, style ? style->vars : NULL,
                                   g_registered_props, 0);
-}
-
-static const char *
-css_skip_comment(const char *p, const char *end)
-{
-    if (p + 1 >= end || p[0] != '/' || p[1] != '*') return p;
-    p += 2;
-    while (p + 1 < end && !(p[0] == '*' && p[1] == '/')) p++;
-    return p + 1 < end ? p + 2 : end;
-}
-
-static const char *
-css_skip_ws_comments(const char *p, const char *end)
-{
-    for (;;) {
-        while (p < end && is_ws(*p)) p++;
-        if (p + 1 < end && p[0] == '/' && p[1] == '*') {
-            p = css_skip_comment(p, end);
-            continue;
-        }
-        return p;
-    }
-}
-
-static const char *
-css_scan_until(const char *p, const char *end,
-               const char *terminators, char *terminator)
-{
-    char quote = 0;
-    int paren = 0, bracket = 0, brace = 0;
-    if (terminator) *terminator = 0;
-    while (p < end) {
-        char c = *p;
-        if (quote) {
-            if (c == '\\' && p + 1 < end) {
-                p += 2;
-                continue;
-            }
-            if (c == quote) quote = 0;
-            else if (c == '\n' || c == '\r' || c == '\f') quote = 0;
-            p++;
-            continue;
-        }
-        if (c == '/' && p + 1 < end && p[1] == '*') {
-            p = css_skip_comment(p, end);
-            continue;
-        }
-        if (c == '\\' && p + 1 < end) {
-            p += 2;
-            continue;
-        }
-        if (c == '"' || c == '\'') {
-            quote = c;
-            p++;
-            continue;
-        }
-        if (paren == 0 && bracket == 0 && brace == 0 &&
-            strchr(terminators, c)) {
-            if (terminator) *terminator = c;
-            return p;
-        }
-        if (c == '(') paren++;
-        else if (c == ')' && paren > 0) paren--;
-        else if (c == '[') bracket++;
-        else if (c == ']' && bracket > 0) bracket--;
-        else if (c == '{') brace++;
-        else if (c == '}' && brace > 0) brace--;
-        p++;
-    }
-    return p;
-}
-
-static const char *
-css_find_top_level_char(const char *p, const char *end, char needle)
-{
-    char terms[2] = { needle, 0 };
-    char term = 0;
-    const char *q = css_scan_until(p, end, terms, &term);
-    return term == needle ? q : NULL;
-}
-
-static void
-css_strip_important(char *text, gboolean *important)
-{
-    if (important) *important = FALSE;
-    if (!text) return;
-    const char *start = text;
-    const char *end = text + strlen(text);
-    const char *p = start;
-    const char *bang = NULL;
-    while (p < end) {
-        const char *q = css_find_top_level_char(p, end, '!');
-        if (!q) break;
-        bang = q;
-        p = q + 1;
-    }
-    if (!bang) return;
-    const char *tail = css_skip_ws_comments(bang + 1, end);
-    if ((gsize)(end - tail) < 9 ||
-        g_ascii_strncasecmp(tail, "important", 9) != 0)
-        return;
-    const char *after = tail + 9;
-    if (after < end && is_ident(*after)) return;
-    after = css_skip_ws_comments(after, end);
-    if (after != end) return;
-    *((char *)bang) = '\0';
-    g_strchomp(text);
-    if (important) *important = TRUE;
 }
 
 static void
@@ -1032,14 +905,6 @@ css_pending_decl_slot(const ns_css_pending_decl *pd)
 }
 
 static int
-css_layer_cmp(int a, int b, gboolean important)
-{
-    if (a == b) return 0;
-    if (important) return a > b ? -1 : 1;
-    return a < b ? -1 : 1;
-}
-
-static int
 css_layer_rank_for(GHashTable *layer_ranks, const char *layer_name)
 {
     if (!layer_name || !layer_ranks) return NS_CSS_LAYER_NONE;
@@ -1443,30 +1308,6 @@ gather_matches_multi(const ns_css_stylesheet *sheet, int origin,
     (void)cands;
 }
 
-static int
-pending_match_cmp(gconstpointer a_, gconstpointer b_)
-{
-    const pending_match *a = a_;
-    const pending_match *b = b_;
-    gboolean ai = a->pd && a->pd->important;
-    gboolean bi = b->pd && b->pd->important;
-    if (ai != bi) return ai ? 1 : -1;
-    if (a->origin    != b->origin)
-        return ai ? (a->origin > b->origin ? -1 : 1)
-                  : (a->origin < b->origin ? -1 : 1);
-    if (a->inline_style != b->inline_style) return a->inline_style ? 1 : -1;
-    int layer_cmp = css_layer_cmp(a->layer_order, b->layer_order, ai);
-    if (layer_cmp != 0) return layer_cmp;
-    if (a->spec_a    != b->spec_a)    return a->spec_a < b->spec_a ? -1 : 1;
-    if (a->spec_b    != b->spec_b)    return a->spec_b < b->spec_b ? -1 : 1;
-    if (a->spec_c    != b->spec_c)    return a->spec_c < b->spec_c ? -1 : 1;
-    if (a->scope_order != b->scope_order)
-        return a->scope_order < b->scope_order ? -1 : 1;
-    if (a->sheet_index  != b->sheet_index)
-        return a->sheet_index < b->sheet_index ? -1 : 1;
-    return a->source_order < b->source_order ? -1 : 1;
-}
-
 static void
 css_collect_property_rules(GHashTable *reg, const ns_css_stylesheet *sh)
 {
@@ -1487,90 +1328,6 @@ pending_uses_attr(const GArray *pending_matches)
         if (e->pd && e->pd->raw_vtext && strstr(e->pd->raw_vtext, "attr(")) return TRUE;
     }
     return FALSE;
-}
-
-static gboolean
-append_pending_decls(const pending_match *pm, const char *value_text,
-                     GArray *matches, GPtrArray *owned_values)
-{
-    char *synth = g_strdup_printf("%s: %s;}", pm->pd->pname, value_text);
-    GArray *temp = g_array_new(FALSE, FALSE, sizeof(ns_css_decl));
-    const char *sp = synth;
-    ns_css_parse_declaration_block(sp, synth + strlen(synth), temp, NULL);
-    g_free(synth);
-    gboolean any = FALSE;
-    for (guint i = 0; i < temp->len; i++) {
-        ns_css_decl *d = &g_array_index(temp, ns_css_decl, i);
-        if (!d->value) continue;
-        g_ptr_array_add(owned_values, d->value);
-        match_entry me = {
-            .origin = pm->origin,
-            .spec_a = pm->spec_a, .spec_b = pm->spec_b, .spec_c = pm->spec_c,
-            .sheet_index = pm->sheet_index,
-            .layer_order = pm->layer_order,
-            .scope_order = pm->scope_order,
-            .source_order = pm->source_order,
-            .decl_order = pm->decl_order_base,
-            .important = pm->pd->important || d->important,
-            .inline_style = pm->inline_style,
-            .rule = pm->rule,
-            .value = d->value,
-            .prop  = d->prop,
-        };
-        g_array_append_val(matches, me);
-        any = TRUE;
-    }
-    g_array_free(temp, TRUE);
-    return any;
-}
-
-static char *
-pending_substituted_value(const pending_match *pm, const ns_var_map *vars,
-                          const ns_node *node)
-{
-    gboolean custom = pm->pd->pname[0] == '-' && pm->pd->pname[1] == '-';
-    char *substituted = ns_css_substitute_vars(pm->pd->raw_vtext, vars,
-                                               g_registered_props, 0);
-    if (substituted && strstr(substituted, "attr(")) {
-        gboolean tainted = FALSE;
-        char *with_attrs = ns_css_substitute_attrs(substituted, node, &tainted);
-        g_free(substituted);
-        substituted = with_attrs;
-        if (substituted && tainted && !custom) {
-            g_free(substituted);
-            substituted = NULL;
-        }
-    }
-    if (substituted) {
-        gboolean important = FALSE;
-        css_strip_important(substituted, &important);
-        if (important) {
-            g_free(substituted);
-            substituted = NULL;
-        }
-    }
-    return substituted;
-}
-
-static void
-resolve_pending_into_matches(GArray *pending_matches,
-                             const ns_var_map *vars,
-                             GArray *matches,
-                             GPtrArray *owned_values,
-                             const ns_node *node)
-{
-    if (!pending_matches || pending_matches->len == 0) return;
-    g_array_sort(pending_matches, pending_match_cmp);
-    for (guint pmi = 0; pmi < pending_matches->len; pmi++) {
-        pending_match *pm = &g_array_index(pending_matches, pending_match, pmi);
-        if (!pm->pd || !pm->pd->pname || !pm->pd->raw_vtext) continue;
-        char *substituted = pending_substituted_value(pm, vars, node);
-        gboolean applied = substituted &&
-            append_pending_decls(pm, substituted, matches, owned_values);
-        g_free(substituted);
-        if (!applied && !(pm->pd->pname[0] == '-' && pm->pd->pname[1] == '-'))
-            append_pending_decls(pm, "unset", matches, owned_values);
-    }
 }
 
 static const char *kUa =
@@ -2571,8 +2328,8 @@ cascade_walk(ns_node *node,
             s->vars = ns_css_build_vars(parent_style ? parent_style->vars : NULL,
                                         var_matches, g_registered_props,
                                         g_var_adjust_cache);
-            resolve_pending_into_matches(pending_matches, s->vars,
-                                         matches, owned_values, node);
+            ns_css_resolve_pending(pending_matches, s->vars, g_registered_props,
+                                   matches, owned_values, node);
 
             ns_css_cascade_apply(matches, s, parent_style, layout_parent,
                                  node->parent &&
@@ -2599,7 +2356,8 @@ cascade_walk(ns_node *node,
                 ns_style *ps = ns_style_alloc();
                 ps->vars = ns_css_build_vars(s->vars, pe_vars, g_registered_props,
                                          g_var_adjust_cache);
-                resolve_pending_into_matches(pe_pending, ps->vars, pm, pe_owned, node);
+                ns_css_resolve_pending(pe_pending, ps->vars, g_registered_props,
+                                       pm, pe_owned, node);
                 ns_css_cascade_apply(pm, ps, s,
                                      pe == NS_CSS_PE_BEFORE ||
                                          pe == NS_CSS_PE_AFTER

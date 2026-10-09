@@ -22,6 +22,7 @@ mod layers;
 mod lex;
 mod matcher;
 mod nesting;
+mod pending;
 mod property;
 mod restyle;
 mod rule_index;

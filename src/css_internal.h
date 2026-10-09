@@ -64,6 +64,10 @@ char         *ns_css_substitute_vars(const char *value,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
 struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
+void ns_css_resolve_pending(const GArray *pending_matches,
+                            const struct ns_var_map *vars,
+                            GHashTable *registered, GArray *matches,
+                            GPtrArray *owned_values, const ns_node *node);
 void ns_css_cascade_apply(const GArray *matches, ns_style *out,
                           const ns_style *parent_style,
                           const ns_style *layout_parent, gboolean is_root,
