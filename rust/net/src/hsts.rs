@@ -110,7 +110,6 @@ pub fn upgrade(target: &[u8]) -> Option<Vec<u8>> {
     should_upgrade(&host).then(|| [&b"https://"[..], rest].concat())
 }
 
-#[cfg(not(feature = "http-curl"))]
 mod recording {
     use super::{CACHE, strip};
     use crate::ffi::sys;
@@ -223,7 +222,6 @@ mod recording {
     }
 }
 
-#[cfg(not(feature = "http-curl"))]
 pub use recording::record;
 
 pub fn shutdown() {

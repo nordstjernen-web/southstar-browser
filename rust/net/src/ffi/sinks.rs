@@ -1,8 +1,8 @@
-//! Southstar — the body and header sinks transports write into: the budgeted body append behind curl's write callback and ns_body_sink_write, and the header callback that captures the headers the fetch path reads and hands them over.
+//! Southstar — the body and header sinks the transport writes into: the budgeted body append, and the header lines that capture the headers the fetch path reads and hand them over.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_uint, c_void};
+use core::ffi::{c_char, c_uint};
 use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -64,17 +64,6 @@ impl NsWriteCtx {
             next_recheck: RECHECK_BYTES,
             exceeded: 0,
         }
-    }
-
-    pub fn restart(&mut self) {
-        unsafe { g_byte_array_set_size(self.body, 0) };
-        self.total = 0;
-        self.next_recheck = RECHECK_BYTES;
-        self.exceeded = 0;
-    }
-
-    pub fn budget(&self) -> u64 {
-        self.budget
     }
 
     pub fn total(&self) -> u64 {
@@ -155,10 +144,6 @@ impl NsHeaderCtx {
         }
     }
 
-    pub fn has_location(&self) -> bool {
-        unsafe { glib::bytes(self.location) }.is_some_and(|l| !l.is_empty())
-    }
-
     pub fn take(&mut self) -> Captured {
         Captured {
             etag: take_text(&mut self.etag),
@@ -176,7 +161,6 @@ impl NsHeaderCtx {
 unsafe extern "C" {
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
-    fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_set_size(string: *mut GString, len: usize) -> *mut GString;
@@ -203,42 +187,6 @@ pub fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
     unsafe { g_byte_array_append(ctx.body, data.as_ptr(), bytes as c_uint) };
     ctx.total += bytes;
     data.len()
-}
-
-fn total_size(size: usize, count: usize) -> Option<usize> {
-    size.checked_mul(count)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_write_cb(
-    data: *mut c_char,
-    size: usize,
-    nmemb: usize,
-    userdata: *mut c_void,
-) -> usize {
-    let Some(bytes) = total_size(size, nmemb) else {
-        return 0;
-    };
-    let ctx = unsafe { &mut *userdata.cast::<NsWriteCtx>() };
-    write(ctx, unsafe { glib::slice(data.cast(), bytes) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_body_sink_init(ctx: *mut NsWriteCtx, body: *mut GByteArray) {
-    unsafe { ctx.write(NsWriteCtx::new(body)) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_body_sink_write(
-    ctx: *mut NsWriteCtx,
-    data: *const c_void,
-    len: usize,
-) -> GBoolean {
-    if len == 0 {
-        return 1;
-    }
-    let ctx = unsafe { &mut *ctx };
-    glib::boolean(write(ctx, unsafe { glib::slice(data.cast(), len) }) == len)
 }
 
 fn header_value(line: &[u8], prefix_len: usize) -> Vec<u8> {
@@ -337,33 +285,4 @@ pub fn feed(hc: &mut NsHeaderCtx, line: &[u8]) {
     if !captured && has_name(line, b"Set-Cookie:") {
         hc.set_cookie_seen = 1;
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_header_cb(
-    buffer: *mut c_char,
-    size: usize,
-    nitems: usize,
-    userdata: *mut c_void,
-) -> usize {
-    let Some(bytes) = total_size(size, nitems) else {
-        return 0;
-    };
-    let hc = unsafe { &mut *userdata.cast::<NsHeaderCtx>() };
-    feed(hc, unsafe { glib::slice(buffer.cast(), bytes) });
-    bytes
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_header_sink_feed(
-    ctx: *mut NsHeaderCtx,
-    line: *const c_char,
-    len: usize,
-) {
-    if line.is_null() || len == 0 {
-        return;
-    }
-    feed(unsafe { &mut *ctx }, unsafe {
-        glib::slice(line.cast(), len)
-    });
 }

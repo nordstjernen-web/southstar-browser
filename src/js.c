@@ -30,7 +30,6 @@ JSClassID ns_new_class_id(JSClassID *pclass_id)
 #include <zlib.h>
 
 #include <cairo.h>
-#include <curl/curl.h>
 #include <gio/gio.h>
 #include <glib/gstdio.h>
 #include "ns_pango.h"
@@ -24410,12 +24409,6 @@ ns_window_websocket_ctor(JSContext *ctx, JSValueConst this_val,
         g_free(target);
         return JS_ThrowTypeError(ctx,
             "WebSocket: blocked by Content-Security-Policy connect-src");
-    }
-
-    if (!ns_ws_available()) {
-        g_free(target);
-        return JS_ThrowTypeError(ctx,
-            "WebSocket unsupported: libcurl built without websocket protocol");
     }
 
     GPtrArray *protos_terminated = NULL;
@@ -59799,9 +59792,9 @@ ns_cookie_parse_attrs(const char *attrs, ns_cookie_attrs *out)
         } else if (klen == 7 && g_ascii_strncasecmp(attrs, "expires", 7) == 0 &&
                    eq && vlen && !out->has_max_age) {
             g_autofree char *date = g_strndup(vp, vlen);
-            time_t expiry = curl_getdate(date, NULL);
-            if (expiry != (time_t)-1 &&
-                expiry <= (time_t)(g_get_real_time() / G_USEC_PER_SEC))
+            gint64 expiry = ns_net_http_date(date);
+            if (expiry != -1 &&
+                expiry <= g_get_real_time() / G_USEC_PER_SEC)
                 out->expired = TRUE;
         } else if (klen == 6 && g_ascii_strncasecmp(attrs, "domain", 6) == 0 &&
                    eq && vlen) {

@@ -168,22 +168,6 @@ pub fn post_quantum_curves(ssl_version: &[u8]) -> bool {
     parsed.is_some_and(|(major, minor)| major > 3 || (major == 3 && minor >= 5))
 }
 
-pub fn accept_encoding(zlib: bool, brotli: bool, zstd: bool) -> Vec<u8> {
-    let mut out = Vec::new();
-    if zlib {
-        out.extend_from_slice(b"gzip, deflate");
-    }
-    for (on, name) in [(brotli, &b"br"[..]), (zstd, b"zstd")] {
-        if on {
-            if !out.is_empty() {
-                out.extend_from_slice(b", ");
-            }
-            out.extend_from_slice(name);
-        }
-    }
-    out
-}
-
 pub fn response_budget() -> u64 {
     let available = sys::available_memory_bytes();
     if available == 0 {

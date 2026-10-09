@@ -1,6 +1,6 @@
 [package]
 name = "southstar-net"
-description = "Networking from src/net.h: fetching, the curl transport, URLs, cookies, HSTS, the network log, error pages, about: pages, data: URLs, file: and FTP listings and view-source: documents"
+description = "Networking from src/net.h: fetching over rust/http, URLs, cookies, HSTS, the network log, error pages, about: pages, data: URLs, file: and FTP listings and view-source: documents"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,7 +19,6 @@ southstar-http-cache = { path = "../http-cache" }
 avif = []
 enchant = []
 http-brotli = ["southstar-http/brotli"]
-http-curl = []
 http-zstd = ["southstar-http/zstd"]
 libav = []
 ns-pango = []

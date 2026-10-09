@@ -11,13 +11,10 @@ use std::time::{Duration, Instant};
 use southstar_glib::{self as glib, GBoolean, GError};
 
 use super::NsResponse;
-use super::curl;
 use super::fetch::{self, Failure, Fetch, Response};
-use super::hop::{self, Easy};
-use super::proxy::ns_net_apply_curl_proxy;
+use super::hop;
 use super::transport::{
-    ns_net_aborting, ns_net_apply_curl_tls, ns_net_begin_abort, ns_net_join_rng,
-    ns_net_multi_shutdown, ns_net_share, ns_net_transport_shutdown, ns_xferinfo_cb,
+    ns_net_aborting, ns_net_begin_abort, ns_net_join_rng, ns_net_transport_shutdown,
 };
 use crate::coalesce::{Claim, Coalescer, Shareable};
 use crate::request::MAX_TIMEOUT_S;
@@ -456,7 +453,6 @@ pub extern "C" fn ns_net_idle() -> GBoolean {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_shutdown() {
     ns_net_join_rng();
-    ns_net_multi_shutdown();
     if !drain(DRAIN_TIMEOUT) {
         return;
     }
@@ -476,6 +472,33 @@ pub extern "C" fn ns_net_preload_clear() {
     lock(&SHARED).coalescer.clear();
 }
 
+fn preconnect(url: &[u8]) {
+    let Some(target) = southstar_http::parse_target(url) else {
+        return;
+    };
+    let route = crate::route::route(url, &target.host);
+    let request = southstar_http::Request {
+        url,
+        https: target.https,
+        host: &target.host,
+        port: target.port,
+        authority: &target.authority,
+        path: &target.path,
+        method: b"GET",
+        user_agent: None,
+        referer: None,
+        cookie: None,
+        extra_headers: Vec::new(),
+        body: b"",
+        timeout: Duration::from_secs(PRECONNECT_TIMEOUT_S as u64),
+        connect_timeout: Duration::from_secs(PRECONNECT_CONNECT_TIMEOUT_S as u64),
+        allow_insecure: route.allow_insecure,
+        tls: route.tls,
+        proxy: route.proxy,
+    };
+    southstar_http::preconnect(&request, &aborting);
+}
+
 unsafe extern "C" fn preconnect_thread(
     task: *mut c_void,
     _source: *mut c_void,
@@ -484,23 +507,8 @@ unsafe extern "C" fn preconnect_thread(
 ) {
     let url = task_data.cast::<c_char>().cast_const();
     lock(&THROTTLE).preconnects += 1;
-    if let Some(easy) = (!aborting()).then(Easy::new).flatten() {
-        easy.text(curl::OPT_URL, url);
-        easy.long(curl::OPT_CONNECT_ONLY, 1);
-        let share = ns_net_share();
-        if !share.is_null() {
-            easy.ptr(curl::OPT_SHARE, share);
-        }
-        easy.long(curl::OPT_CONNECTTIMEOUT, PRECONNECT_CONNECT_TIMEOUT_S as _);
-        easy.long(curl::OPT_TIMEOUT, PRECONNECT_TIMEOUT_S as _);
-        easy.long(curl::OPT_NOSIGNAL, 1);
-        easy.long(curl::OPT_NOPROGRESS, 0);
-        easy.ptr(curl::OPT_XFERINFOFUNCTION, ns_xferinfo_cb as *const c_void);
-        unsafe {
-            ns_net_apply_curl_proxy(easy.handle(), url);
-            ns_net_apply_curl_tls(easy.handle());
-        }
-        easy.perform();
+    if let Some(url) = text(url).filter(|_| !aborting()) {
+        preconnect(url);
     }
     {
         let mut throttle = lock(&THROTTLE);

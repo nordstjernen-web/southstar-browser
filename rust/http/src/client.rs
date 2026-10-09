@@ -1379,3 +1379,33 @@ fn h1_head_upgrade(req: &Request) -> Vec<u8> {
     head.extend_from_slice(b"Connection: Upgrade\r\n\r\n");
     head
 }
+
+pub fn preconnect(req: &Request, abort: &dyn Fn() -> bool) {
+    let origin = origin_key(req);
+    {
+        let mut guard = pool_lock();
+        let pool = guard.get_or_insert_with(|| Pool {
+            entries: HashMap::new(),
+        });
+        let entry = pool.entries.entry(origin.clone()).or_insert_with(|| Entry {
+            conns: Vec::new(),
+            connecting: false,
+        });
+        let live = entry.conns.iter().any(|c| !lock(c).dead());
+        if live || entry.connecting {
+            return;
+        }
+        entry.connecting = true;
+    }
+    let start = Instant::now();
+    let connect_deadline = start
+        .checked_add(req.connect_timeout)
+        .unwrap_or_else(|| start + Duration::from_secs(60));
+    let mut quiet = Abort(abort);
+    let t = Transfer::new(&mut quiet, start, connect_deadline);
+    let mut out = Outcome::new();
+    let conn = open(req, &t, connect_deadline, &mut out, true)
+        .filter(|c| c.h2)
+        .and_then(|c| start_h2(c.stream, c.remote));
+    connect_done(&origin, conn);
+}

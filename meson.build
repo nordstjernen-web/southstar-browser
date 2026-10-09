@@ -124,7 +124,7 @@ use_ns_pango = get_option('ns-pango').allowed()
 # ns-pango enforces the text-stack floors from inside the subproject, where a
 # too-old library surfaces as a bare version mismatch and only the first of
 # several is reported. Checking every hard floor here first names them all.
-ns_dependency_floors = [['libcurl', '>=8.5']]
+ns_dependency_floors = []
 if use_ns_pango
   ns_dependency_floors += [
     ['glib-2.0', '>=2.80'],
@@ -218,42 +218,26 @@ if gtk_feature.allowed()
   endif
 endif
 gmodule = dependency('gmodule-2.0')
-libcurl = dependency('libcurl', version: '>=8.5')
-if libcurl.version().version_compare('<8.11')
-  warning('libcurl @0@ predates stable WebSocket support (curl 8.11): WebSocket will be unavailable at runtime unless this libcurl was built with the ws/wss protocols.'.format(libcurl.version()))
-endif
 libcrypto = dependency('libcrypto')
 libssl = dependency('libssl')
 libm = cc.find_library('m', required: false)
 
-# HTTP transport backend. 'rust' (default) fetches pages and subresources
-# through the in-tree Rust client (rust/http) over OpenSSL, zlib and, when
-# present, libbrotlidec and libzstd; 'curl' drives libcurl for every hop.
-# libcurl stays linked either way for now: WebSocket, Server-Sent Events, the
-# audio helper and proxied or FTP hops still use it.
-http_backend = get_option('http_backend')
-http_backend_deps = []
-have_http_brotli = false
-have_http_zstd = false
-if http_backend == 'rust'
-  zlib_http = dependency('zlib')
-  libbrotlidec_http = dependency('libbrotlidec', required: false)
-  libzstd_http = dependency('libzstd', required: false)
-  http_backend_deps += [libssl, libcrypto, zlib_http]
-  if host_machine.system() == 'windows'
-    http_backend_deps += [cc.find_library('crypt32')]
-  endif
-  if libbrotlidec_http.found()
-    http_backend_deps += [libbrotlidec_http]
-    have_http_brotli = true
-  endif
-  if libzstd_http.found()
-    http_backend_deps += [libzstd_http]
-    have_http_zstd = true
-  endif
-  message('HTTP backend: rust (rust/http over OpenSSL; libcurl for proxied and FTP hops)')
-else
-  message('HTTP backend: curl (libcurl)')
+# The HTTP client is rust/http: OpenSSL for TLS, zlib for gzip/deflate, and
+# libbrotlidec and libzstd for br and zstd when they are present. On Windows
+# crypt32 lets it trust the system root store when there is no CA bundle.
+http_backend_deps = [libssl, libcrypto, dependency('zlib')]
+libbrotlidec_http = dependency('libbrotlidec', required: false)
+libzstd_http = dependency('libzstd', required: false)
+have_http_brotli = libbrotlidec_http.found()
+have_http_zstd = libzstd_http.found()
+if have_http_brotli
+  http_backend_deps += [libbrotlidec_http]
+endif
+if have_http_zstd
+  http_backend_deps += [libzstd_http]
+endif
+if host_machine.system() == 'windows'
+  http_backend_deps += [cc.find_library('crypt32')]
 endif
 
 libuchardet = dependency('uchardet')

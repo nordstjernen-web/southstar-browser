@@ -3,8 +3,7 @@
 Southstar ("Southstar Browser") is a web
 browser written from scratch in **C**, now being ported to **Rust**
 module by module (`docs/rust-port.md`), using **GTK 4** for the UI and
-an in-tree Rust HTTP client for networking (libcurl is being phased out —
-see "HTTP client" below). Targets Linux,
+an in-tree Rust HTTP client for networking (see "HTTP client" below). Targets Linux,
 macOS, and Windows.
 
 See `README.md` for the product vision. Southstar is a fresh
@@ -277,40 +276,33 @@ extraction, and host extraction through `lxb_url_parse` /
 library or build option — it's part of the same `liblexbor_static.a`
 that the HTML parser uses.
 
-### HTTP client: the Rust client in `rust/http`, replacing libcurl
+### HTTP client: `rust/http`
 
-Page and subresource fetches go through the transport seam
-`ns_hop_transport()` (`src/net_backend.h`). The `http_backend` meson option
-picks the implementation: `rust` (default) is the in-tree Rust HTTP client,
-`rust/http` (`southstar-http`); `curl` drives a libcurl easy handle on the
-shared multi-handle thread. Everything above one hop — redirects, HSTS,
-referer, cache, cookie partitioning — lives in `rust/net` and is shared by
-both, so they fetch through identical browser policy.
+All networking goes through `rust/http` (`southstar-http`), an HTTP client
+written from scratch in Rust with no crates.io dependency; libcurl and
+libnghttp2 are not used. It speaks HTTP/1.1 and HTTP/2 with its own framing,
+flow control and HPACK (the static table and Huffman code are generated from
+RFC 7541), FTP (`ftp.rs`), HTTP CONNECT and SOCKS4/4a/5/5h proxies with
+no-proxy matching (`proxy.rs`), redirect-following fetches for callers outside
+the page fetch path (`fetch.rs`) and the HTTP/1.1 upgrade WebSocket uses.
+TLS is OpenSSL's libssl behind `rust/http/src/ffi/tls.rs` (ALPN, per-host
+session resumption, the insecure-certificate override, the Windows root store
+when no CA bundle is found); gzip/deflate go through zlib and br/zstd through
+libbrotlidec/libzstd when present (`rust/http/src/ffi/codec.rs`). HTTP/2
+connections are pooled per `scheme://host:port` and **multiplex concurrent
+requests over one connection**: an I/O thread per connection drives the
+sans-I/O `h2::Connection`, workers queue a request and wait for its stream
+events, and connecting to an origin is serialized. Sockets are non-blocking
+after connect and every wait is a `poll()` (never a socket timeout, which
+Windows reports as an error).
 
-`rust/http` is written from scratch, with no crates.io dependency: HTTP/1.1,
-and HTTP/2 with its own framing, flow control and HPACK (the static table and
-Huffman code are generated from RFC 7541). TLS is OpenSSL's libssl behind
-`rust/http/src/ffi/tls.rs` (ALPN `h2`/`http/1.1`, per-host session
-resumption, the insecure-certificate override); gzip/deflate go through zlib
-and br/zstd through libbrotlidec/libzstd when present
-(`rust/http/src/ffi/codec.rs`). HTTP/2 connections are pooled per
-`scheme://host:port` and **multiplex concurrent requests over one
-connection**: an I/O thread per connection drives the sans-I/O
-`h2::Connection`, workers queue a request and wait for its stream events,
-and connecting to an origin is serialized; `ns_net_backend_shutdown()` tears
-it all down. Proxies (HTTP forward and CONNECT, SOCKS4/4a/5/5h, credentials,
-no-proxy matching) are in `rust/http/src/proxy.rs`.
-
-**libcurl is being removed.** It is still linked for what has not moved
-yet: the `curl` value of the `http_backend` option and the curl plumbing in
-`rust/net` behind it. The media helpers download through `rust/helper-ffi`.
-FTP is `rust/http/src/ftp.rs`.
-WebSocket (`rust/websocket`) upgrades through `southstar_http::upgrade`. Other crates reach the network through `southstar_http::fetch`
-(redirects followed) with `southstar_net::route` supplying TLS settings and
-the proxy. Each of these moves onto
-`rust/http` next; when the last one does, the `curl` backend and the
-libcurl dependency are deleted. Extend `rust/http` — don't add new libcurl
-uses. HTTP/3 (QUIC) is not supported by the Rust client.
+Everything above one hop — redirects, HSTS (recorded by `rust/net/src/hsts.rs`),
+referer, cache, cookie partitioning — lives in `rust/net`
+(`rust/net/src/ffi/hop.rs` is the hop). Other crates reach the network
+through `southstar_http::fetch` with `southstar_net::route` supplying TLS
+settings and the proxy; the media helpers download through `rust/helper-ffi`.
+Extend `rust/http`; don't reintroduce libcurl. Not supported: HTTP/3, DNS over
+HTTPS, TLS Encrypted Client Hello.
 
 ### Charset detection: uchardet
 

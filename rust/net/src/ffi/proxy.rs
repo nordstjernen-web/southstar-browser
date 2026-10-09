@@ -1,8 +1,8 @@
-//! Southstar — the C ABI of proxy settings: the command-line override, the configured HTTP, HTTPS and no-proxy values, and applying them to a curl handle.
+//! Southstar — the C ABI of proxy settings: the command-line override and the configured HTTP, HTTPS and no-proxy values.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::c_char;
 use core::ptr;
 
 use southstar_config::NsConfig;
@@ -10,14 +10,7 @@ use southstar_glib as glib;
 
 use crate::storage::Slot;
 
-const CURLOPT_PROXY: c_int = 10004;
-const CURLOPT_NOPROXY: c_int = 10177;
-
 static OVERRIDE: Slot = Slot::new();
-
-unsafe extern "C" {
-    fn curl_easy_setopt(handle: *mut c_void, option: c_int, ...) -> c_int;
-}
 
 fn config() -> Option<&'static NsConfig> {
     southstar_config::get()
@@ -73,18 +66,6 @@ pub extern "C" fn ns_net_configured_no_proxy() -> *const c_char {
     config()
         .and_then(|cfg| non_empty(cfg.no_proxy))
         .unwrap_or(ptr::null())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_apply_curl_proxy(curl_handle: *mut c_void, url: *const c_char) {
-    let proxy = unsafe { ns_net_pick_configured_proxy(url) };
-    if unsafe { glib::bytes(proxy) }.is_some_and(|p| !p.is_empty()) {
-        unsafe { curl_easy_setopt(curl_handle, CURLOPT_PROXY, proxy) };
-    }
-    let no_proxy = ns_net_configured_no_proxy();
-    if unsafe { glib::bytes(no_proxy) }.is_some_and(|p| !p.is_empty()) {
-        unsafe { curl_easy_setopt(curl_handle, CURLOPT_NOPROXY, no_proxy) };
-    }
 }
 
 #[unsafe(no_mangle)]

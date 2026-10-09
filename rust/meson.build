@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libcurl, libuchardet, cairo, libpsl, pango]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, cairo, libpsl, pango]
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif
@@ -70,9 +70,6 @@ endif
 if have_libav
   southstar_rust_features += ['libav']
 endif
-if http_backend == 'curl'
-  southstar_rust_features += ['http-curl']
-endif
 if have_http_brotli
   southstar_rust_features += ['http-brotli']
 endif
@@ -128,7 +125,6 @@ southstar_helper_rust_lib = custom_target(
 southstar_helper_rust_dep = declare_dependency(
   link_with: southstar_helper_rust_lib,
   link_args: rust_native_libs,
-  dependencies: [glib, libssl, libcrypto, dependency('zlib')] + (have_seccomp ? [libseccomp] : [])
-    + (host_machine.system() == 'windows' ? [meson.get_compiler('c').find_library('crypt32')] : []),
+  dependencies: [glib] + http_backend_deps + (have_seccomp ? [libseccomp] : []),
 )
 

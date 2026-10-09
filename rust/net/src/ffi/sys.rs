@@ -85,7 +85,6 @@ unsafe extern "C" {
         text: *const c_char,
         length: isize,
     ) -> *mut c_char;
-    fn curl_getdate(datestring: *const c_char, now: *const i64) -> i64;
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
@@ -446,9 +445,7 @@ pub fn sha256_hex(text: &[u8]) -> Vec<u8> {
 }
 
 pub fn http_date(text: &[u8]) -> Option<i64> {
-    let text = c(text);
-    let t = unsafe { curl_getdate(text.as_ptr(), ptr::null()) };
-    (t != -1).then_some(t)
+    crate::http_date::parse(text)
 }
 
 pub fn is_public_suffix(domain: &[u8]) -> bool {

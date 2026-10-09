@@ -85,7 +85,6 @@ southstar_deps = [
   pangocairo,
   epoxy,
   gmodule,
-  libcurl,
   libcrypto,
   libm,
   libquickjs,
@@ -163,13 +162,13 @@ if host_machine.system() == 'windows'
   southstar_link_args += ['-lbcrypt', '-ladvapi32', '-lshell32', '-luser32']
 endif
 
-# NetBSD pkgsrc libunistring (pulled in transitively through the libcurl /
-# libpsl / libidn2 / gnutls stack) carries an undefined reference to libc's
+# NetBSD pkgsrc libunistring (pulled in transitively through the libpsl /
+# libidn2 stack) carries an undefined reference to libc's
 # mbrtoc32, which the hardened --no-undefined link rejects even though the
 # dynamic linker resolves it at runtime. Allow undefined symbols originating
 # from shared libraries on NetBSD only; our own objects are still checked.
 # Every binary that links that stack needs this — the executables below and
-# the audio/video helpers, which pull in libunistring via libcurl.
+# the audio/video helpers.
 if host_machine.system() == 'netbsd'
   southstar_link_args += cc.get_supported_link_arguments(
     ['-Wl,--allow-shlib-undefined'],

@@ -49,7 +49,6 @@ impl Slot {
 pub static COOKIE_DIR: Slot = Slot::new();
 pub static PRIVATE_ROOT: Slot = Slot::new();
 pub static HSTS_PATH: Slot = Slot::new();
-pub static ALTSVC_PATH: Slot = Slot::new();
 
 pub fn is_private() -> bool {
     southstar_config::private_mode()
@@ -117,13 +116,6 @@ pub fn hsts_path() -> Option<Vec<u8>> {
     })
 }
 
-pub fn altsvc_path() -> Option<Vec<u8>> {
-    if is_private() {
-        return None;
-    }
-    data_path(&ALTSVC_PATH, b"altsvc.txt")
-}
-
 pub fn cookie_jar_path(top_origin: Option<&[u8]>, js: bool) -> Option<Vec<u8>> {
     let dir = cookie_dir()?;
     let key = top_origin.filter(|o| !o.is_empty()).unwrap_or(b"default");
@@ -148,7 +140,6 @@ pub fn clear_site_storage() {
 pub fn shutdown() {
     COOKIE_DIR.take();
     HSTS_PATH.take();
-    ALTSVC_PATH.take();
     if let Some(root) = PRIVATE_ROOT.take() {
         sys::remove_tree(&root);
     }

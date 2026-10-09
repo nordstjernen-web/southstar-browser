@@ -1,4 +1,4 @@
-/* Southstar — libcurl-backed async fetcher API.
+/* Southstar — asynchronous fetcher API, implemented in rust/net over rust/http.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -234,8 +234,7 @@ void  ns_net_set_log_fetches(gboolean on);
 void  ns_net_perf_snapshot(guint64 *fetches, guint64 *bytes,
                            double *sum_ms, double *span_ms);
 char *ns_net_proxy_mask(const char *proxy_url);
-void  ns_net_apply_curl_proxy(void *curl_handle, const char *url);
-void  ns_net_apply_curl_tls(void *curl_handle);
+gint64 ns_net_http_date(const char *date);
 const char *ns_net_proxy_override(void);
 const char *ns_net_http_proxy(void);
 const char *ns_net_https_proxy(void);

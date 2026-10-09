@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-pub mod curl;
 pub mod fetch;
 pub mod forms;
 pub mod hop;
@@ -11,8 +10,6 @@ pub mod lexbor;
 pub mod netlog;
 pub mod proxy;
 pub mod queue;
-#[cfg(not(feature = "http-curl"))]
-pub mod rust_hop;
 pub mod sinks;
 pub mod storage;
 pub mod sys;

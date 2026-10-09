@@ -12,8 +12,7 @@ use southstar_http_cache as http_cache;
 use super::hop::{self, HopOut, HopReq};
 use super::proxy::{ns_net_configured_no_proxy, ns_net_pick_configured_proxy};
 use super::sinks::{NsHeaderCtx, NsWriteCtx};
-use super::transport::{ns_net_accept_encoding, ns_net_http_version, ns_net_slist_serialize};
-use super::{GByteArray, NsResponse, curl};
+use super::{GByteArray, NsResponse};
 use crate::request::{self, DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S};
 use crate::{hsts, netlog, storage, transport, url};
 
@@ -177,27 +176,6 @@ impl Response {
 impl Drop for Response {
     fn drop(&mut self) {
         unsafe { super::ns_response_free(self.as_ptr()) };
-    }
-}
-
-struct HeaderList(*mut curl::Slist);
-
-impl HeaderList {
-    fn new(lines: &[Vec<u8>]) -> HeaderList {
-        let mut list = ptr::null_mut();
-        for line in lines {
-            let line = cstr(line);
-            list = unsafe { curl::curl_slist_append(list, line.as_ptr()) };
-        }
-        HeaderList(list)
-    }
-}
-
-impl Drop for HeaderList {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe { curl::curl_slist_free_all(self.0) };
-        }
     }
 }
 
@@ -548,7 +526,6 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         glib::stderr_write(&[b"NS_NET ", method, b" ", &url, b"\n"].concat());
     }
 
-    let max_redirs = request::clamp_redirects(cfg.map(|c| i64::from(c.max_redirects)));
     let timeout = timeout_seconds(f.headers);
     let lines = shape_headers(
         f,
@@ -560,7 +537,6 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         cached.as_ref(),
         request_http,
     );
-    let header_list = HeaderList::new(&lines);
 
     let raw = resp.as_ptr();
     let mut wctx = NsWriteCtx::new(unsafe { (*raw).body });
@@ -578,52 +554,34 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     };
 
     let url_c = cstr(&url);
-    let method_c = opt_cstr(f.method);
-    let ua_c = cstr(&ua);
-    let referer_c = opt_cstr(referer.as_deref());
-    let jar_c = opt_cstr(cookie_jar.as_deref());
     let js_jar = cookie_jar
         .as_ref()
         .and_then(|_| storage::cookie_jar_path(Some(&partition), true));
-    let js_jar_c = opt_cstr(js_jar.as_deref());
-    let accept_encoding = ns_net_accept_encoding();
+    let proxy = text(unsafe { ns_net_pick_configured_proxy(url_c.as_ptr()) });
     let req = HopReq {
-        url: url_c.as_ptr(),
-        method: opt_ptr(&method_c),
-        body: f.body.map_or(ptr::null(), |b| b.as_ptr().cast()),
-        body_len: f.body.map_or(0, <[u8]>::len),
-        headers: header_list.0,
-        user_agent: ua_c.as_ptr(),
-        referer: opt_ptr(&referer_c),
-        referer_policy,
-        accept_encoding: if accept_encoding.is_null() {
-            c"".as_ptr()
-        } else {
-            accept_encoding
-        },
+        url: &url,
+        method: f.method,
+        body: f.body,
+        headers: &lines,
+        user_agent: &ua,
+        referer: referer.as_deref(),
         timeout_s: timeout,
         connect_timeout_s: if is_navigation {
             request::NAVIGATION_CONNECT_TIMEOUT_S
         } else {
             request::SUBRESOURCE_CONNECT_TIMEOUT_S
         } as c_long,
-        proxy: unsafe { ns_net_pick_configured_proxy(url_c.as_ptr()) },
-        no_proxy: ns_net_configured_no_proxy(),
-        cookie_jar_path: opt_ptr(&jar_c),
-        cookie_js_path: opt_ptr(&js_jar_c),
-        follow_redirects: 0,
-        max_redirs: max_redirs as c_long,
-        is_navigation: glib::boolean(is_navigation),
-        request_ftp: glib::boolean(request_ftp),
-        initial_https: glib::boolean(url.starts_with(b"https://")),
-        http_version_pref: ns_net_http_version(),
+        proxy,
+        no_proxy: text(ns_net_configured_no_proxy()),
+        cookie_jar_path: cookie_jar.as_deref(),
+        cookie_js_path: js_jar.as_deref(),
+        request_ftp,
     };
 
     let mut out = HopOut::new();
     let start_us = monotonic_us();
     let start_real_ms = unsafe { g_get_real_time() } as f64 / 1000.0;
-    let produced =
-        unsafe { hop::ns_hop_transport(&req, &mut wctx, &mut hctx, &mut out, f.cancellable) } != 0;
+    let produced = hop::transport(&req, &mut wctx, &mut hctx, &mut out, f.cancellable);
     let mut captured = hctx.take();
 
     if !produced {
@@ -637,7 +595,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
                     .to_vec(),
             )
         };
-        unsafe { hop::ns_hop_out_clear(&mut out) };
+        out.clear();
         return Err(failure);
     }
 
@@ -694,7 +652,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         };
         r.error = glib::strdup(&message);
     }
-    unsafe { hop::ns_hop_out_clear(&mut out) };
+    out.clear();
 
     if transport_ok
         && request_http
@@ -745,7 +703,13 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let end_us = monotonic_us();
     let body_len = body_len(r) as u64;
     super::netlog::ns_net_perf_record(start_us, end_us, body_len);
-    let sent = unsafe { ns_net_slist_serialize(header_list.0) };
+    let sent = if lines.is_empty() {
+        ptr::null_mut()
+    } else {
+        glib::strdup(&transport::serialize_headers(
+            lines.iter().map(Vec::as_slice),
+        ))
+    };
     let method_log = opt_cstr(f.method);
     unsafe {
         super::netlog::ns_net_log_record(

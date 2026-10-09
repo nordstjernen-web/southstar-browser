@@ -70,7 +70,6 @@ pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
     collect_from(&parts, &jars, include_httponly)
 }
 
-#[cfg(not(feature = "http-curl"))]
 pub fn collect_in(target: &[u8], jars: &[Option<Vec<u8>>]) -> Option<Vec<u8>> {
     let parts = url::parts(target).filter(|p| !p.hostname.is_empty())?;
     collect_from(&parts, jars, true)
@@ -334,7 +333,6 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
     write_cookie(&jar, from_http, &c);
 }
 
-#[cfg(not(feature = "http-curl"))]
 pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8]) {
     if let Some(c) = parse(target, cookie) {
         write_cookie(jar, true, &c);

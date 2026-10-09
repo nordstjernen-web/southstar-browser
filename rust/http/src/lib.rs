@@ -15,7 +15,18 @@ mod hpack_tables;
 mod proxy;
 mod transfer;
 
-pub use client::{Outcome, Received, Request, Upgraded, Version, perform, shutdown, upgrade};
+pub use client::{
+    Outcome, Received, Request, Upgraded, Version, perform, preconnect, shutdown, upgrade,
+};
+
+pub fn description() -> &'static [u8] {
+    match (cfg!(feature = "brotli"), cfg!(feature = "zstd")) {
+        (true, true) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate, br, zstd)",
+        (true, false) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate, br)",
+        (false, true) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate, zstd)",
+        (false, false) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate)",
+    }
+}
 
 pub fn init() {
     ffi::tls::init();

@@ -41,6 +41,11 @@ fn config_flag(flag: impl Fn(&southstar_config::NsConfig) -> GBoolean) -> bool {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_net_http_date(date: *const c_char) -> i64 {
+    text(date).and_then(crate::http_date::parse).unwrap_or(-1)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean {
     glib::boolean(text(url).is_some_and(url::is_http_or_https))
 }

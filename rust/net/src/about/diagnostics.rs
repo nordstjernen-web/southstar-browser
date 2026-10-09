@@ -120,7 +120,7 @@ pub fn html() -> Vec<u8> {
         kv(&mut s, "Video (FFmpeg libav*)", v.libav.as_deref());
     }
     kv(&mut s, "TLS / crypto", v.openssl.as_deref());
-    kv(&mut s, "Networking", v.curl.as_deref());
+    kv(&mut s, "Networking", Some(&v.networking));
 
     let rust = sys::rust_info();
     s.extend_from_slice(b"<h3>Rust</h3>");

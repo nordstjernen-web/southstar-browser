@@ -373,11 +373,6 @@ fn worker(socket: Arc<Socket>) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_ws_available() -> GBoolean {
-    glib::boolean(true)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_ws_new(
     url: *const c_char,
     origin: *const c_char,

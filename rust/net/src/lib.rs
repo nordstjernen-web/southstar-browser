@@ -13,6 +13,7 @@ mod file;
 mod forms;
 mod ftp;
 mod hsts;
+mod http_date;
 mod listing;
 mod netlog;
 mod request;

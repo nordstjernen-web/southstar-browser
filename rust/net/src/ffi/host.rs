@@ -56,7 +56,6 @@ unsafe extern "C" {
     fn sqlite3_libversion() -> *const c_char;
     fn WebPGetDecoderVersion() -> c_int;
     fn OpenSSL_version(kind: c_int) -> *const c_char;
-    fn curl_version() -> *mut c_char;
     fn ns_rust_compiler_version() -> *const c_char;
     fn ns_rust_minimum_version() -> *const c_char;
     fn ns_rust_build_profile() -> *const c_char;
@@ -271,7 +270,7 @@ pub struct Versions {
     pub webp: i32,
     pub libav: Option<Vec<u8>>,
     pub openssl: Option<Vec<u8>>,
-    pub curl: Option<Vec<u8>>,
+    pub networking: Vec<u8>,
 }
 
 #[cfg(feature = "libav")]
@@ -295,7 +294,7 @@ pub fn versions() -> Versions {
             webp: WebPGetDecoderVersion(),
             libav: libav_version(),
             openssl: borrowed(OpenSSL_version(OPENSSL_VERSION)),
-            curl: borrowed(curl_version()),
+            networking: southstar_http::description().to_vec(),
         }
     }
 }

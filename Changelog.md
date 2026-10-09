@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* libcurl is no longer used or linked. Every network request — page loads,
+  subresources, preconnects, EventSource, WebSocket, FTP and the audio
+  helper's downloads — goes through the in-tree Rust HTTP client, and the
+  http_backend build option is gone. Dates in cookies and cache headers are
+  parsed in-tree with the same rules curl_getdate used (checked identical
+  over 300,000 generated dates). about:southstar names the HTTP client
+  instead of the libcurl version. DNS over HTTPS (the doh_url setting) and
+  TLS Encrypted Client Hello, which came from libcurl, are not supported for
+  now.
 * Pages and subresources are fetched by a new HTTP client written in Rust,
   rust/http, instead of libcurl. It speaks HTTP/1.1 and HTTP/2, with its own
   HTTP/2 framing, flow control and HPACK header compression, over OpenSSL;

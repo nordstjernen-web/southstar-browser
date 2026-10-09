@@ -31,16 +31,6 @@ pub extern "C" fn ns_net_cookie_dir() -> *const c_char {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_net_hsts_curl_path() -> *const c_char {
-    slot_ptr(&storage::HSTS_PATH, storage::hsts_path())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_altsvc_path() -> *const c_char {
-    slot_ptr(&storage::ALTSVC_PATH, storage::altsvc_path())
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_cookie_path_for_partition(
     top_origin: *const c_char,
 ) -> *mut c_char {
