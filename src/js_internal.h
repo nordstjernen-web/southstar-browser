@@ -385,8 +385,6 @@ ns_canvas_state *
 ns_canvas_state_for(ns_js *js, const ns_node *el);
 ns_canvas_state *
 ns_ctx_state(JSContext *ctx, JSValueConst this_val);
-cairo_pattern_t *
-ns_ctx_build_pattern(JSContext *ctx, JSValueConst obj, gboolean *origin_clean);
 gboolean
 ns_js_resource_origin_clean(ns_js *js, JSContext *ctx, const char *url,
                             const char *cors_allow_origin);
@@ -435,39 +433,12 @@ JSValue
 ns_ctx_fillText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue
 ns_ctx_measureText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_clip(JSContext *ctx, JSValueConst this_val,
-            int argc, JSValueConst *argv);
-JSValue
-ns_ctx_setLineDash(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv);
-JSValue
-ns_ctx_getLineDash(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv);
-JSValue
-ns_ctx_gradient_addColorStop(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv);
 cairo_surface_t *
 ns_ctx_drawimage_source(JSContext *ctx, JSValueConst src, int *out_w, int *out_h,
                         gboolean *origin_clean);
 JSValue
 ns_ctx_drawImage(JSContext *ctx, JSValueConst this_val,
                  int argc, JSValueConst *argv);
-JSValue
-ns_ctx_createPattern(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv);
-JSValue
-ns_ctx_createLinearGradient(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv);
-JSValue
-ns_ctx_createRadialGradient(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv);
-JSValue
-ns_ctx_createConicGradient(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv);
-JSValue
-ns_ctx_createImageData(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv);
 JSValue
 ns_ctx_getImageData(JSContext *ctx, JSValueConst this_val,
                     int argc, JSValueConst *argv);
@@ -483,15 +454,6 @@ ns_round_rect_subpath(cairo_t *cr, double x, double y, double w, double h,
 gboolean
 ns_extract_radii(JSContext *ctx, JSValueConst v,
                  double *rtl, double *rtr, double *rbr, double *rbl);
-JSValue
-ns_ctx_reset(JSContext *ctx, JSValueConst this_val,
-             int argc, JSValueConst *argv);
-JSValue
-ns_ctx_isPointInPath(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv);
-JSValue
-ns_ctx_isPointInStroke(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv);
 void
 ns_path2d_parse_svg(cairo_t *cr, const char *d);
 JSValue

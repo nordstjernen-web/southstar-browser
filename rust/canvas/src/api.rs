@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, context, ctxpath, draw, path2d};
+use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -152,13 +152,13 @@ macro_rules! ctx2d_methods {
             native("beginPath", ctxpath::begin_path, 0),
             native("bezierCurveTo", ctxpath::bezier_curve_to, 6),
             native("clearRect", draw::clear_rect, 4),
-            method("clip", c::ns_ctx_clip, 0),
+            native("clip", ctxmisc::clip, 0),
             native("closePath", ctxpath::close_path, 0),
-            method("createConicGradient", c::ns_ctx_createConicGradient, 3),
-            method("createImageData", c::ns_ctx_createImageData, 1),
-            method("createLinearGradient", c::ns_ctx_createLinearGradient, 4),
-            method("createPattern", c::ns_ctx_createPattern, 2),
-            method("createRadialGradient", c::ns_ctx_createRadialGradient, 6),
+            native("createConicGradient", gradient::create_conic_gradient, 3),
+            native("createImageData", ctxmisc::create_image_data, 1),
+            native("createLinearGradient", gradient::create_linear_gradient, 4),
+            native("createPattern", gradient::create_pattern, 2),
+            native("createRadialGradient", gradient::create_radial_gradient, 6),
             $($extra,)*
             method("drawImage", c::ns_ctx_drawImage, 3),
             native("ellipse", ctxpath::ellipse, 7),
@@ -167,25 +167,25 @@ macro_rules! ctx2d_methods {
             method("fillText", c::ns_ctx_fillText, 3),
             native("getContextAttributes", context::get_attributes, 0),
             method("getImageData", c::ns_ctx_getImageData, 4),
-            method("getLineDash", c::ns_ctx_getLineDash, 0),
+            native("getLineDash", ctxmisc::get_line_dash, 0),
             native("getTransform", ctxpath::get_transform, 0),
             native("isContextLost", context::is_context_lost, 0),
-            method("isPointInPath", c::ns_ctx_isPointInPath, 2),
-            method("isPointInStroke", c::ns_ctx_isPointInStroke, 2),
+            native("isPointInPath", ctxmisc::is_point_in_path, 2),
+            native("isPointInStroke", ctxmisc::is_point_in_stroke, 2),
             native("lineTo", ctxpath::line_to, 2),
             method("measureText", c::ns_ctx_measureText, 1),
             native("moveTo", ctxpath::move_to, 2),
             method("putImageData", c::ns_ctx_putImageData, 3),
             native("quadraticCurveTo", ctxpath::quadratic_curve_to, 4),
             native("rect", ctxpath::rect, 4),
-            method("reset", c::ns_ctx_reset, 0),
+            native("reset", ctxmisc::reset, 0),
             native("resetTransform", ctxpath::reset_transform, 0),
             native("restore", draw::restore, 0),
             native("rotate", ctxpath::rotate, 1),
             native("roundRect", ctxpath::round_rect, 4),
             native("save", draw::save, 0),
             native("scale", ctxpath::scale, 2),
-            method("setLineDash", c::ns_ctx_setLineDash, 1),
+            native("setLineDash", ctxmisc::set_line_dash, 1),
             native("setTransform", ctxpath::set_transform, 0),
             native("stroke", draw::stroke, 0),
             native("strokeRect", draw::stroke_rect, 4),
@@ -204,7 +204,7 @@ static CTX2D_METHODS: [Method; 45] = ctx2d_methods!(native(
 
 static OFFSCREEN_CTX2D_METHODS: [Method; 44] = ctx2d_methods!();
 
-static GRADIENT_METHODS: [Method; 1] = [method("addColorStop", c::ns_ctx_gradient_addColorStop, 2)];
+static GRADIENT_METHODS: [Method; 1] = [native("addColorStop", gradient::add_color_stop, 2)];
 
 static PATTERN_METHODS: [Method; 1] = [method("setTransform", ffi::ns_pattern_set_transform, 0)];
 

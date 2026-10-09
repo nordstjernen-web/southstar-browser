@@ -69,7 +69,7 @@ fn style(
         return core::ptr::null_mut();
     }
     if v.is_object() {
-        let (pattern, clean) = crate::ffi::build_pattern(scope, &v);
+        let (pattern, clean) = crate::gradient::build_pattern(scope, &v);
         if !clean {
             st.origin_clean = 0;
         }

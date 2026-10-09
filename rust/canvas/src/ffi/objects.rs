@@ -37,24 +37,12 @@ pub(crate) mod c {
     use super::{JSContext, JSValue, c_int};
 
     jscfunctions!(
-        ns_ctx_clip,
-        ns_ctx_createConicGradient,
-        ns_ctx_createImageData,
-        ns_ctx_createLinearGradient,
-        ns_ctx_createPattern,
-        ns_ctx_createRadialGradient,
         ns_ctx_drawImage,
         ns_ctx_fillText,
         ns_ctx_getImageData,
-        ns_ctx_getLineDash,
-        ns_ctx_isPointInPath,
-        ns_ctx_isPointInStroke,
         ns_ctx_measureText,
         ns_ctx_putImageData,
-        ns_ctx_reset,
-        ns_ctx_setLineDash,
         ns_ctx_strokeText,
-        ns_ctx_gradient_addColorStop,
     );
 }
 
@@ -275,6 +263,42 @@ pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::ca
     let el = super::state::Node::from_addr(hidden::ptr(this));
     let st = crate::state::state_for(js, el)?;
     unsafe { super::cairo::Context::from_raw((*st).cr) }
+}
+
+fn this_realm(scope: &Scope<'_>, this: &Value) -> *mut JSContext {
+    canvas_realm(quickjs::raw_context(scope), hidden::ptr(this))
+}
+
+pub(crate) fn new_gradient(scope: &mut Scope<'_>, this: &Value, kind: &[u8]) -> Value {
+    let realm = this_realm(scope, this);
+    let obj = unsafe { new_in_realm(realm, hidden::KIND_GRADIENT, "CanvasGradient") };
+    crate::api::gradient_finish(scope, &obj, kind);
+    obj
+}
+
+pub(crate) fn new_pattern(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    source: &Value,
+    repetition: &[u8],
+) -> Value {
+    let realm = this_realm(scope, this);
+    let obj = unsafe { new_in_realm(realm, hidden::KIND_PATTERN, "CanvasPattern") };
+    crate::api::pattern_finish(scope, &obj, source, repetition);
+    obj
+}
+
+pub(crate) fn new_imagedata(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    size: (i32, i32),
+) -> Result<Value, Value> {
+    let realm = this_realm(scope, this);
+    unsafe {
+        quickjs::with_context(realm, |realm| {
+            crate::api::imagedata_new(scope, realm, size, None)
+        })
+    }
 }
 
 pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {

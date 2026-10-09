@@ -143,6 +143,135 @@ unsafe extern "C" fn collect_png(closure: *mut c_void, data: *const u8, length: 
     0
 }
 
+unsafe extern "C" {
+    fn cairo_pattern_create_linear(
+        x0: c_double,
+        y0: c_double,
+        x1: c_double,
+        y1: c_double,
+    ) -> *mut c_void;
+    fn cairo_pattern_create_radial(
+        cx0: c_double,
+        cy0: c_double,
+        r0: c_double,
+        cx1: c_double,
+        cy1: c_double,
+        r1: c_double,
+    ) -> *mut c_void;
+    fn cairo_pattern_create_for_surface(surface: *mut c_void) -> *mut c_void;
+    fn cairo_pattern_create_mesh() -> *mut c_void;
+    fn cairo_pattern_destroy(pattern: *mut c_void);
+    fn cairo_pattern_set_extend(pattern: *mut c_void, extend: c_int);
+    fn cairo_pattern_set_matrix(pattern: *mut c_void, matrix: *const Matrix);
+    fn cairo_pattern_add_color_stop_rgba(
+        pattern: *mut c_void,
+        offset: c_double,
+        r: c_double,
+        g: c_double,
+        b: c_double,
+        a: c_double,
+    );
+    fn cairo_matrix_invert(matrix: *mut Matrix) -> c_int;
+    fn cairo_mesh_pattern_begin_patch(pattern: *mut c_void);
+    fn cairo_mesh_pattern_end_patch(pattern: *mut c_void);
+    fn cairo_mesh_pattern_move_to(pattern: *mut c_void, x: c_double, y: c_double);
+    fn cairo_mesh_pattern_line_to(pattern: *mut c_void, x: c_double, y: c_double);
+    fn cairo_mesh_pattern_set_corner_color_rgba(
+        pattern: *mut c_void,
+        corner: c_uint,
+        r: c_double,
+        g: c_double,
+        b: c_double,
+        a: c_double,
+    );
+    fn cairo_clip_preserve(cr: *mut Cairo);
+    fn cairo_reset_clip(cr: *mut Cairo);
+    fn cairo_in_fill(cr: *mut Cairo, x: c_double, y: c_double) -> c_int;
+    fn cairo_in_stroke(cr: *mut Cairo, x: c_double, y: c_double) -> c_int;
+}
+
+pub(crate) struct Pattern(*mut c_void);
+
+impl Pattern {
+    pub fn linear(p0: (f64, f64), p1: (f64, f64)) -> Pattern {
+        Pattern(unsafe { cairo_pattern_create_linear(p0.0, p0.1, p1.0, p1.1) })
+    }
+
+    pub fn radial(c0: (f64, f64, f64), c1: (f64, f64, f64)) -> Pattern {
+        Pattern(unsafe { cairo_pattern_create_radial(c0.0, c0.1, c0.2, c1.0, c1.1, c1.2) })
+    }
+
+    pub fn for_surface(surface: &Surface) -> Pattern {
+        Pattern(unsafe { cairo_pattern_create_for_surface(surface.0) })
+    }
+
+    pub fn conic(center: (f64, f64), sectors: &[crate::raster::Sector]) -> Pattern {
+        let pattern = unsafe { cairo_pattern_create_mesh() };
+        for sector in sectors {
+            unsafe {
+                cairo_mesh_pattern_begin_patch(pattern);
+                cairo_mesh_pattern_move_to(pattern, center.0, center.1);
+                cairo_mesh_pattern_line_to(pattern, sector.edges[0].0, sector.edges[0].1);
+                cairo_mesh_pattern_line_to(pattern, sector.edges[1].0, sector.edges[1].1);
+                cairo_mesh_pattern_line_to(pattern, center.0, center.1);
+                for (corner, color) in [(0, 0), (1, 0), (2, 1), (3, 1)] {
+                    let [r, g, b, a] = sector.colors[color];
+                    cairo_mesh_pattern_set_corner_color_rgba(pattern, corner, r, g, b, a);
+                }
+                cairo_mesh_pattern_end_patch(pattern);
+            }
+        }
+        Pattern(pattern)
+    }
+
+    pub fn set_extend(&self, extend: i32) {
+        unsafe { cairo_pattern_set_extend(self.0, extend) };
+    }
+
+    pub fn set_inverse_matrix(&self, m: [f64; 6]) {
+        let mut matrix = Matrix::from(m);
+        if unsafe { cairo_matrix_invert(&mut matrix) } == 0 {
+            unsafe { cairo_pattern_set_matrix(self.0, &matrix) };
+        }
+    }
+
+    pub fn add_color_stop(&self, offset: f64, rgba: [f64; 4]) {
+        unsafe {
+            cairo_pattern_add_color_stop_rgba(self.0, offset, rgba[0], rgba[1], rgba[2], rgba[3])
+        };
+    }
+
+    pub fn into_raw(self) -> *mut c_void {
+        let raw = self.0;
+        core::mem::forget(self);
+        raw
+    }
+}
+
+impl Drop for Pattern {
+    fn drop(&mut self) {
+        unsafe { cairo_pattern_destroy(self.0) };
+    }
+}
+
+impl Context {
+    pub fn clip_preserve(self) {
+        unsafe { cairo_clip_preserve(self.0) };
+    }
+
+    pub fn reset_clip(self) {
+        unsafe { cairo_reset_clip(self.0) };
+    }
+
+    pub fn in_fill(self, x: f64, y: f64) -> bool {
+        unsafe { cairo_in_fill(self.0, x, y) != 0 }
+    }
+
+    pub fn in_stroke(self, x: f64, y: f64) -> bool {
+        unsafe { cairo_in_stroke(self.0, x, y) != 0 }
+    }
+}
+
 const FORMAT_ARGB32: c_int = 0;
 
 const OPERATOR_SOURCE: c_int = 1;

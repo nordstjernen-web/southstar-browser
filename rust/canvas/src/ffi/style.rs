@@ -2,28 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_double, c_int, c_void};
+use core::ffi::{c_double, c_int};
 
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 use super::cairo::{Cairo, Context};
 use super::state::CanvasState;
-
-unsafe extern "C" {
-    fn ns_ctx_build_pattern(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        origin_clean: *mut c_int,
-    ) -> *mut c_void;
-}
-
-pub(crate) fn build_pattern(scope: &mut Scope<'_>, obj: &Value) -> (*mut c_void, bool) {
-    let mut clean: c_int = 1;
-    let pattern =
-        unsafe { ns_ctx_build_pattern(quickjs::raw_context(scope), quickjs::raw(obj), &mut clean) };
-    (pattern, clean != 0)
-}
 
 unsafe fn with_this<R>(
     ctx: *mut JSContext,

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_double, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -17,12 +17,10 @@ mod style;
 
 pub(crate) use draw::{ctx_state, mark_mutated};
 
-pub(crate) use style::build_pattern;
-
 pub(crate) use objects::{
     c, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, drawimage_source,
-    element_attr, is_path2d, new_offscreen_canvas_node, ns_pattern_set_transform, path2d_context,
-    set_element_attr, with_bitmap, with_hidden,
+    element_attr, is_path2d, new_gradient, new_imagedata, new_offscreen_canvas_node, new_pattern,
+    ns_pattern_set_transform, path2d_context, set_element_attr, with_bitmap, with_hidden,
 };
 
 unsafe extern "C" {
@@ -65,19 +63,6 @@ unsafe extern "C" {
         angle1: c_double,
         angle2: c_double,
     );
-    fn cairo_pattern_create_mesh() -> *mut CairoPattern;
-    fn cairo_mesh_pattern_begin_patch(pattern: *mut CairoPattern);
-    fn cairo_mesh_pattern_end_patch(pattern: *mut CairoPattern);
-    fn cairo_mesh_pattern_move_to(pattern: *mut CairoPattern, x: c_double, y: c_double);
-    fn cairo_mesh_pattern_line_to(pattern: *mut CairoPattern, x: c_double, y: c_double);
-    fn cairo_mesh_pattern_set_corner_color_rgba(
-        pattern: *mut CairoPattern,
-        corner: c_uint,
-        red: c_double,
-        green: c_double,
-        blue: c_double,
-        alpha: c_double,
-    );
     fn cairo_arc_negative(
         cr: *mut Cairo,
         xc: c_double,
@@ -86,11 +71,6 @@ unsafe extern "C" {
         angle1: c_double,
         angle2: c_double,
     );
-}
-
-#[repr(C)]
-pub struct CairoPattern {
-    _private: [u8; 0],
 }
 
 #[repr(C)]
@@ -259,35 +239,4 @@ pub unsafe extern "C" fn ns_ctx_parse_composite(s: *const c_char) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_parse_fill_rule(s: *const c_char) -> c_int {
     crate::raster::fill_rule(unsafe { text(s) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_conic_pattern(
-    cx: c_double,
-    cy: c_double,
-    angle: c_double,
-    stops: *mut crate::raster::ConicStop,
-    n: c_uint,
-) -> *mut CairoPattern {
-    if stops.is_null() || n == 0 {
-        return ptr::null_mut();
-    }
-    let stops = unsafe { core::slice::from_raw_parts_mut(stops, n as usize) };
-    crate::raster::sort_stops(stops);
-    let pattern = unsafe { cairo_pattern_create_mesh() };
-    for sector in crate::raster::conic_sectors((cx, cy), angle, stops) {
-        unsafe {
-            cairo_mesh_pattern_begin_patch(pattern);
-            cairo_mesh_pattern_move_to(pattern, cx, cy);
-            cairo_mesh_pattern_line_to(pattern, sector.edges[0].0, sector.edges[0].1);
-            cairo_mesh_pattern_line_to(pattern, sector.edges[1].0, sector.edges[1].1);
-            cairo_mesh_pattern_line_to(pattern, cx, cy);
-            for (corner, color) in [(0, 0), (1, 0), (2, 1), (3, 1)] {
-                let [r, g, b, a] = sector.colors[color];
-                cairo_mesh_pattern_set_corner_color_rgba(pattern, corner, r, g, b, a);
-            }
-            cairo_mesh_pattern_end_patch(pattern);
-        }
-    }
-    pattern
 }
