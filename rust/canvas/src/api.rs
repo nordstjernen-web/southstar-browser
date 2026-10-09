@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 use crate::ffi::{self, c};
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, path2d};
+use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, images, path2d};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -160,13 +160,13 @@ macro_rules! ctx2d_methods {
             native("createPattern", gradient::create_pattern, 2),
             native("createRadialGradient", gradient::create_radial_gradient, 6),
             $($extra,)*
-            method("drawImage", c::ns_ctx_drawImage, 3),
+            native("drawImage", images::draw_image, 3),
             native("ellipse", ctxpath::ellipse, 7),
             native("fill", draw::fill, 0),
             native("fillRect", draw::fill_rect, 4),
             method("fillText", c::ns_ctx_fillText, 3),
             native("getContextAttributes", context::get_attributes, 0),
-            method("getImageData", c::ns_ctx_getImageData, 4),
+            native("getImageData", images::get_image_data, 4),
             native("getLineDash", ctxmisc::get_line_dash, 0),
             native("getTransform", ctxpath::get_transform, 0),
             native("isContextLost", context::is_context_lost, 0),
@@ -175,7 +175,7 @@ macro_rules! ctx2d_methods {
             native("lineTo", ctxpath::line_to, 2),
             method("measureText", c::ns_ctx_measureText, 1),
             native("moveTo", ctxpath::move_to, 2),
-            method("putImageData", c::ns_ctx_putImageData, 3),
+            native("putImageData", images::put_image_data, 3),
             native("quadraticCurveTo", ctxpath::quadratic_curve_to, 4),
             native("rect", ctxpath::rect, 4),
             native("reset", ctxmisc::reset, 0),

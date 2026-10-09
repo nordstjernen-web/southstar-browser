@@ -19,8 +19,9 @@ pub(crate) use draw::{ctx_state, mark_mutated};
 
 pub(crate) use objects::{
     c, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, drawimage_source,
-    element_attr, is_path2d, new_gradient, new_imagedata, new_offscreen_canvas_node, new_pattern,
-    ns_pattern_set_transform, path2d_context, set_element_attr, with_bitmap, with_hidden,
+    element_attr, is_path2d, new_gradient, new_imagedata, new_imagedata_from,
+    new_offscreen_canvas_node, new_pattern, ns_pattern_set_transform, path2d_context,
+    set_element_attr, with_bitmap, with_hidden,
 };
 
 unsafe extern "C" {

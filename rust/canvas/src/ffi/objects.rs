@@ -36,14 +36,7 @@ macro_rules! jscfunctions {
 pub(crate) mod c {
     use super::{JSContext, JSValue, c_int};
 
-    jscfunctions!(
-        ns_ctx_drawImage,
-        ns_ctx_fillText,
-        ns_ctx_getImageData,
-        ns_ctx_measureText,
-        ns_ctx_putImageData,
-        ns_ctx_strokeText,
-    );
+    jscfunctions!(ns_ctx_fillText, ns_ctx_measureText, ns_ctx_strokeText,);
 }
 
 #[repr(C)]
@@ -297,6 +290,57 @@ pub(crate) fn new_imagedata(
     unsafe {
         quickjs::with_context(realm, |realm| {
             crate::api::imagedata_new(scope, realm, size, None)
+        })
+    }
+}
+
+pub(crate) fn new_imagedata_from(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    size: (i32, i32),
+    rgba: &[u8],
+) -> Result<Value, Value> {
+    let realm = this_realm(scope, this);
+    unsafe {
+        quickjs::with_context(realm, |realm| {
+            crate::api::imagedata_new(scope, realm, size, Some(rgba))
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_drawimage_source_surface(
+    ctx: *mut JSContext,
+    src: JSValue,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+    threw: *mut c_int,
+) -> *mut c_void {
+    unsafe {
+        *out_w = 0;
+        *out_h = 0;
+        *threw = 0;
+    }
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let src = quickjs::borrow_value(scope, src);
+            let Some(source) = drawimage_source(scope, &src) else {
+                return ptr::null_mut();
+            };
+            if !source.origin_clean {
+                drop(source);
+                *threw = 1;
+                let error = crate::api::throw_dom(
+                    scope,
+                    "SecurityError",
+                    "The image source is not origin-clean.",
+                );
+                let _ = quickjs::result_raw(scope, Err(error));
+                return ptr::null_mut();
+            }
+            *out_w = source.size.0;
+            *out_h = source.size.1;
+            source.surface.into_raw()
         })
     }
 }

@@ -437,15 +437,6 @@ cairo_surface_t *
 ns_ctx_drawimage_source(JSContext *ctx, JSValueConst src, int *out_w, int *out_h,
                         gboolean *origin_clean);
 JSValue
-ns_ctx_drawImage(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv);
-JSValue
-ns_ctx_getImageData(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
-JSValue
-ns_ctx_putImageData(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv);
-JSValue
 ns_ctx_strokeText(JSContext *ctx, JSValueConst this_val,
                   int argc, JSValueConst *argv);
 void

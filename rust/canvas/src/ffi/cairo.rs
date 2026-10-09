@@ -184,6 +184,10 @@ unsafe extern "C" {
         b: c_double,
         a: c_double,
     );
+    fn cairo_clip(cr: *mut Cairo);
+    fn cairo_paint_with_alpha(cr: *mut Cairo, alpha: c_double);
+    fn cairo_get_source(cr: *mut Cairo) -> *mut c_void;
+    fn cairo_pattern_set_filter(pattern: *mut c_void, filter: c_int);
     fn cairo_clip_preserve(cr: *mut Cairo);
     fn cairo_reset_clip(cr: *mut Cairo);
     fn cairo_in_fill(cr: *mut Cairo, x: c_double, y: c_double) -> c_int;
@@ -255,6 +259,18 @@ impl Drop for Pattern {
 }
 
 impl Context {
+    pub fn clip(self) {
+        unsafe { cairo_clip(self.0) };
+    }
+
+    pub fn paint_with_alpha(self, alpha: f64) {
+        unsafe { cairo_paint_with_alpha(self.0, alpha) };
+    }
+
+    pub fn set_source_filter(self, filter: i32) {
+        unsafe { cairo_pattern_set_filter(cairo_get_source(self.0), filter) };
+    }
+
     pub fn clip_preserve(self) {
         unsafe { cairo_clip_preserve(self.0) };
     }
@@ -312,6 +328,22 @@ impl Surface {
                 cairo_image_surface_get_height(self.0),
             )
         }
+    }
+
+    pub fn read_pixels<R>(&self, f: impl FnOnce(&[u8], usize, (i32, i32)) -> R) -> Option<R> {
+        unsafe { cairo_surface_flush(self.0) };
+        let data = unsafe { cairo_image_surface_get_data(self.0) };
+        let stride = unsafe { cairo_image_surface_get_stride(self.0) };
+        let size = self.size();
+        if data.is_null() || stride <= 0 || size.1 <= 0 {
+            return None;
+        }
+        let len = stride as usize * size.1 as usize;
+        Some(f(
+            unsafe { core::slice::from_raw_parts(data, len) },
+            stride as usize,
+            size,
+        ))
     }
 
     pub fn write_pixels(&self, f: impl FnOnce(&mut [u8], usize)) {
