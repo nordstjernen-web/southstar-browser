@@ -16,13 +16,17 @@ use crate::transform::Transform;
 
 pub(crate) const KIND_KEYWORD: c_uint = 0;
 pub(crate) const KIND_LENGTH: c_uint = 1;
+pub(crate) const KIND_SIZE: c_uint = 2;
+pub(crate) const KIND_COLOR: c_uint = 3;
 pub(crate) const KIND_CALC: c_uint = 4;
 pub(crate) const KIND_SHADOW: c_uint = 5;
 pub(crate) const KIND_GRADIENT: c_uint = 6;
 pub(crate) const KIND_TRACKS: c_uint = 7;
+pub(crate) const KIND_URL: c_uint = 8;
 pub(crate) const KIND_TRANSFORM: c_uint = 9;
 pub(crate) const KIND_AREAS: c_uint = 10;
 pub(crate) const KIND_ANIM: c_uint = 11;
+pub(crate) const KIND_RECT: c_uint = 12;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -77,8 +81,40 @@ pub(crate) struct RawAreas {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct RawSize {
+    pub w: f64,
+    pub h: f64,
+    pub w_unit: c_uint,
+    pub h_unit: c_uint,
+    pub w_auto: c_int,
+    pub h_auto: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct RawColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct RawRect {
+    pub v: [f64; 4],
+    pub unit: [c_uint; 4],
+    pub is_auto: [c_int; 4],
+}
+
+#[repr(C)]
 pub(crate) union ValueUnion {
     pub length: Length,
+    pub size: RawSize,
+    pub color: RawColor,
+    pub rect: RawRect,
+    pub url: *mut c_char,
     pub calc: RawCalc,
     pub gradient: Gradient,
     pub transform: Transform,
@@ -110,6 +146,8 @@ const _: () = assert!(
         && size_of::<RawCalc>() == 152
         && size_of::<RawAreaRect>() == 24
         && size_of::<RawAreas>() == 784
+        && size_of::<RawSize>() == 32
+        && size_of::<RawRect>() == 64
 );
 
 impl RawCalc {
@@ -276,4 +314,10 @@ pub(crate) unsafe fn keyword_of(v: Option<&NsCssValue>) -> Option<&[u8]> {
         return None;
     }
     Some(unsafe { core::ffi::CStr::from_ptr(v.u.keyword) }.to_bytes())
+}
+
+pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    unsafe { (*value).kind = kind };
+    value
 }

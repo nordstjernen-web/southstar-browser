@@ -311,6 +311,13 @@ Southstar Browser (unreleased):
   canonical form, the tokens of the border-image shorthand, and the
   slices, widths, outsets and tiling painting reads from a computed
   style. Border images paint and serialize as before.
+* The value parser behind every CSS declaration is Rust: for each of the
+  242 properties it turns the declared text into the value css.c stores
+  (keywords and their accepted sets, lengths with the per-property rules
+  for negatives, bare numbers and keywords, calc(), colours, sizes,
+  rects, URLs, image-set() and gradients, layered background and mask
+  lists, and the structured values the earlier sections parse). Every
+  property parses as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

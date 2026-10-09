@@ -10,6 +10,7 @@ mod font;
 mod grid;
 mod image;
 mod lex;
+mod property;
 mod shadow;
 mod transform;
 mod value;

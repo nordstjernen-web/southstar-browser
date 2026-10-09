@@ -104,6 +104,13 @@ char         *ns_css_overflow_clip_margin_canonical(const char *text);
 char         *ns_css_counter_list_canonical(const char *text, ns_css_prop prop);
 char         *ns_css_list_style_type_canonical(const char *text);
 
+ns_css_value *ns_css_parse_value_for(ns_css_prop prop, const char *text);
+const char   *ns_css_mask_box_keyword(const char *t);
+const char   *ns_css_mask_composite_keyword(const char *t);
+gboolean      ns_css_bg_repeat_token(const char *tok, gboolean allow_axis);
+char         *ns_css_bg_repeat_canonical(const char *a, const char *b);
+char         *ns_css_bg_clip_canonical(const char *text);
+
 ns_css_value *ns_css_parse_border_image_slice(const char *t);
 ns_css_value *ns_css_parse_border_image_width(const char *t);
 ns_css_value *ns_css_parse_border_image_outset(const char *t);
