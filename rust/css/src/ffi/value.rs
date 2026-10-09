@@ -10,11 +10,13 @@ use southstar_glib as glib;
 use crate::calc::{Calc, CalcArg, Parsed};
 use crate::gradient::Gradient;
 use crate::grid::{AREAS_MAX, Areas, Tracks};
+use crate::shadow::ShadowList;
 use crate::transform::Transform;
 
 pub(crate) const KIND_KEYWORD: c_uint = 0;
 pub(crate) const KIND_LENGTH: c_uint = 1;
 pub(crate) const KIND_CALC: c_uint = 4;
+pub(crate) const KIND_SHADOW: c_uint = 5;
 pub(crate) const KIND_GRADIENT: c_uint = 6;
 pub(crate) const KIND_TRACKS: c_uint = 7;
 pub(crate) const KIND_TRANSFORM: c_uint = 9;
@@ -78,6 +80,7 @@ pub(crate) union ValueUnion {
     pub calc: RawCalc,
     pub gradient: Gradient,
     pub transform: Transform,
+    pub shadow: ShadowList,
     pub tracks: Tracks,
     pub areas: RawAreas,
     pub keyword: *mut c_char,
@@ -231,5 +234,13 @@ pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
             c1: rect.c1,
         };
     }
+    value
+}
+
+pub(crate) fn new_shadow(list: &ShadowList) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_SHADOW;
+    value_ref.u.shadow = *list;
     value
 }

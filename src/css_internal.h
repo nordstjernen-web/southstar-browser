@@ -87,6 +87,11 @@ gboolean      ns_css_font_ligatures_valid(const char *s);
 gboolean      ns_css_font_feature_settings_valid(const char *s);
 gboolean      ns_css_font_variation_settings_valid(const char *s);
 
+ns_css_value *ns_css_parse_box_shadow(const char *text);
+char         *ns_css_shadow_specified_canonical(const char *text,
+                                                gboolean is_text);
+char         *ns_css_shadow_serialize(const ns_css_shadow_list *list);
+
 char         *ns_css_read_ident(const char **pp, const char *end);
 char         *ns_css_read_string(const char **pp, const char *end);
 
@@ -128,7 +133,9 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 sizeof(ns_css_tracks) == 3048 &&
                 sizeof(ns_css_area_rect) == 24 &&
                 sizeof(ns_css_areas) == 784 &&
-                sizeof(ns_css_font_metrics) == 56);
+                sizeof(ns_css_font_metrics) == 56 &&
+                sizeof(ns_css_shadow) == 112 &&
+                sizeof(ns_css_shadow_list) == 904);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

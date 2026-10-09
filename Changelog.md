@@ -289,6 +289,10 @@ Southstar Browser (unreleased):
   font-variant-ligatures, the ex, ch, cap and ic units from the painter's
   font metrics, and resolving a family list to the font Pango loads.
   Text picks the same fonts and serializes as before.
+* box-shadow and text-shadow are Rust: shadow lists with their offsets,
+  blur, spread, colours, inset and font-relative or calc() lengths, their
+  canonical specified spelling and their computed text. Shadows paint and
+  serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.
