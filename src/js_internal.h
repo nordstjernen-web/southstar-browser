@@ -714,6 +714,8 @@ JSValue ns_api_throw_new_required(JSContext *ctx, const char *iface);
 JSValue ns_api_interface(JSContext *ctx, JSValueConst global, const char *name,
                          JSValue ctor, const char *parent);
 char *ns_canvas_color_string(const char *css);
+gboolean ns_canvas_filter_valid(const char *s);
+gboolean ns_canvas_length_valid(const char *s);
 char *ns_canvas_font_string(const char *css);
 void ns_ctx2d_init_state(JSContext *ctx, JSValueConst obj);
 JSValue ns_ctx2d_new(JSContext *ctx, const ns_node *el, JSValueConst canvas_obj,

@@ -18,6 +18,7 @@ southstar-bookmarks = { path = "../bookmarks" }
 southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-camera = { path = "../camera" }
+southstar-canvas = { path = "../canvas" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
 southstar-css = { path = "../css" }

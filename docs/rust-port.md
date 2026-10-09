@@ -923,3 +923,4 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | Module | Sections so far | Crate |
 |---|---|---|
 | `layout.c` | choosing the image an `<img>` loads: srcset candidates against sizes and the device pixel ratio, a `<picture>`'s matching `<source>`, and the lazy-loading `data-src`/`data-srcset` attributes; the image-map `<area>` under a point (the usemap's `<map>` in the image's tree scope, coordinate lists, circle, polygon, default and rectangle shapes) (DOM through `rust/dom`'s node handle; `src/layout_internal.h` declares the Rust functions only layout.c calls) | `rust/layout` |
+| `js_canvas.c`, `js_canvas_api.c` | colours: CSS and `color()` (sRGB, display-p3) parsing and the serialized `fillStyle`/`strokeStyle`/`shadowColor` strings, including `lab()`, `lch()`, `oklab()` and `oklch()`; the `filter` and `letterSpacing`/`wordSpacing` syntax checks (`src/js_internal.h` declares the Rust functions) | `rust/canvas` |
