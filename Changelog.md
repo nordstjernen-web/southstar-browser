@@ -453,6 +453,16 @@ Southstar Browser (unreleased):
   and SVG presentation attributes, with the HTML legacy colour parser.
   Pages with legacy markup style as before (checked identical over a
   million generated elements).
+* The element state behind pseudo-classes is Rust: :checked, :default,
+  :indeterminate, :valid and :invalid (with :user-valid/:user-invalid,
+  required values, email and URL syntax, number parsing, range and step,
+  pattern and length limits), :in-range and :out-of-range, :read-write,
+  :placeholder-shown, :blank, :required, :disabled, :empty, links and
+  :visited, :target and :target-within, :lang() with the
+  Content-Language pragma and wildcard ranges, :dir() with dir=auto and
+  bdi resolution, :heading(), and the open, popover, modal and media
+  states. Selectors match as before (checked identical over 50 million
+  element/pseudo-class tests).
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

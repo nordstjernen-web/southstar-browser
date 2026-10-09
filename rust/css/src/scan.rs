@@ -350,3 +350,25 @@ pub(crate) fn strtol10(text: &[u8]) -> (i64, usize) {
     }
     (value, p)
 }
+
+pub(crate) fn utf8_char(s: &[u8], p: usize) -> (u32, usize) {
+    let c = s[p];
+    let (mask, len): (u8, usize) = match c {
+        0x00..=0x7f => (0x7f, 1),
+        _ if c & 0xe0 == 0xc0 => (0x1f, 2),
+        _ if c & 0xf0 == 0xe0 => (0x0f, 3),
+        _ if c & 0xf8 == 0xf0 => (0x07, 4),
+        _ if c & 0xfc == 0xf8 => (0x03, 5),
+        _ if c & 0xfe == 0xfc => (0x01, 6),
+        _ => return (u32::MAX, 1),
+    };
+    let next = (p + len).min(s.len());
+    let mut value = u32::from(c & mask);
+    for i in 1..len {
+        match s.get(p + i) {
+            Some(&b) if b & 0xc0 == 0x80 => value = (value << 6) | u32::from(b & 0x3f),
+            _ => return (u32::MAX, next),
+        }
+    }
+    (value, next)
+}

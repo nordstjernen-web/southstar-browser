@@ -55,6 +55,10 @@ char         *ns_css_scoped_css(const char *css, gsize len,
                                 const char *host_id, gboolean frame_scope);
 char         *ns_css_presentational_hints(const ns_node *el);
 gboolean      ns_css_is_presentational_attr(const char *name);
+gboolean      ns_css_element_state_matches(const ns_node *el,
+                                           ns_css_pseudo kind,
+                                           const char *arg);
+void          ns_css_language_cache_reset(void);
 void          ns_css_property_rule_clear(gpointer data);
 
 #if GLIB_SIZEOF_VOID_P == 8

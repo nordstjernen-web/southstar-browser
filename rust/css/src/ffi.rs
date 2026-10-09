@@ -7,6 +7,7 @@ mod border_image;
 mod container;
 mod declarations;
 mod display;
+mod element_state;
 mod font;
 mod grid;
 mod hints;
@@ -32,6 +33,10 @@ use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
+pub(crate) use element_state::{
+    regex_matches_whole, unichar_is_alpha, unichar_is_rtl_script, url_is_valid_absolute,
+    url_resolve,
+};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};

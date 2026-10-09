@@ -155,15 +155,6 @@ calc_viewport_refresh_px(const ns_css_value *v)
                              v->u.calc.parsed_vh);
 }
 
-static char *g_target_fragment = NULL;
-
-void
-ns_css_set_target_fragment(const char *fragment)
-{
-    g_free(g_target_fragment);
-    g_target_fragment = (fragment && *fragment) ? g_strdup(fragment) : NULL;
-}
-
 static const ns_node *g_css_focus_node = NULL;
 
 const ns_node *
@@ -1910,270 +1901,6 @@ ns_css_selector_batch_end(void)
 static gboolean match_simple(const ns_css_simple *sel, const ns_node *el);
 
 static gboolean
-ns_input_is_text_entry(const ns_node *el)
-{
-    const char *type = ns_element_get_attr(el, "type");
-    if (!type || !*type) return TRUE;
-    return g_ascii_strcasecmp(type, "text") == 0 ||
-           g_ascii_strcasecmp(type, "search") == 0 ||
-           g_ascii_strcasecmp(type, "url") == 0 ||
-           g_ascii_strcasecmp(type, "tel") == 0 ||
-           g_ascii_strcasecmp(type, "email") == 0 ||
-           g_ascii_strcasecmp(type, "password") == 0 ||
-           g_ascii_strcasecmp(type, "number") == 0;
-}
-
-static gboolean
-ns_el_is_read_write(const ns_node *el)
-{
-    if (!el->name) return FALSE;
-    if (strcmp(el->name, "input") == 0)
-        return ns_input_type_supports_readonly(ns_element_get_attr(el, "type")) &&
-               !ns_element_get_attr(el, "readonly") &&
-               !ns_element_effectively_disabled(el);
-    if (strcmp(el->name, "textarea") == 0)
-        return !ns_element_get_attr(el, "readonly") &&
-               !ns_element_effectively_disabled(el);
-    const char *ce = ns_element_get_attr(el, "contenteditable");
-    if (ce && (!*ce || g_ascii_strcasecmp(ce, "true") == 0 ||
-               g_ascii_strcasecmp(ce, "plaintext-only") == 0))
-        return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_el_placeholder_shown(const ns_node *el)
-{
-    if (!el->name) return FALSE;
-    const char *ph = ns_element_get_attr(el, "placeholder");
-    if (!ph) return FALSE;
-    if (strcmp(el->name, "input") == 0) {
-        if (!ns_input_is_text_entry(el)) return FALSE;
-        const char *v = ns_element_get_attr(el, "value");
-        return !v || !*v;
-    }
-    if (strcmp(el->name, "textarea") == 0) {
-        char *txt = ns_node_collect_text(el);
-        gboolean empty = TRUE;
-        if (txt) {
-            for (const char *q = txt; *q; q++)
-                if (!is_ws(*q)) { empty = FALSE; break; }
-            g_free(txt);
-        }
-        return empty;
-    }
-    return FALSE;
-}
-
-static gboolean
-ns_el_is_checked(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "option")) {
-        if (ns_element_get_attr(el, "selected")) return TRUE;
-        const ns_node *sel = el->parent;
-        if (ns_node_is_element_named(sel, "optgroup")) sel = sel->parent;
-        return ns_node_is_element_named(sel, "select") &&
-               !ns_element_get_attr(sel, "multiple") &&
-               ns_select_chosen_option(sel) == el;
-    }
-    if (!ns_node_is_element_named(el, "input"))
-        return FALSE;
-    const char *type = ns_element_get_attr(el, "type");
-    if (!type || (g_ascii_strcasecmp(type, "checkbox") != 0 &&
-                  g_ascii_strcasecmp(type, "radio") != 0))
-        return FALSE;
-    return ns_input_is_checked(el);
-}
-
-static gboolean
-ns_el_is_submit_button(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "input")) {
-        const char *type = ns_element_get_attr(el, "type");
-        return type && (g_ascii_strcasecmp(type, "submit") == 0 ||
-                        g_ascii_strcasecmp(type, "image") == 0);
-    }
-    if (!ns_node_is_element_named(el, "button")) return FALSE;
-    const char *type = ns_element_get_attr(el, "type");
-    return !type || !*type ||
-           g_ascii_strcasecmp(type, "submit") == 0 ||
-           g_ascii_strcasecmp(type, "auto") == 0;
-}
-
-static const ns_node *
-ns_css_first_submit_button_for(const ns_node *scan, const ns_node *doc,
-                               const ns_node *owner, int depth)
-{
-    if (!scan || depth >= 512) return NULL;
-    if (scan->kind == NS_NODE_ELEMENT &&
-        ns_el_is_submit_button(scan) &&
-        !ns_element_effectively_disabled(scan) &&
-        ns_form_owner(scan, doc) == owner)
-        return scan;
-    if (ns_node_is_element_named(scan, "template")) return NULL;
-    for (const ns_node *c = scan->first_child; c; c = c->next_sibling) {
-        const ns_node *hit =
-            ns_css_first_submit_button_for(c, doc, owner, depth + 1);
-        if (hit) return hit;
-    }
-    return NULL;
-}
-
-static gboolean
-ns_el_is_default(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "option"))
-        return ns_element_get_attr(el, "selected") != NULL;
-    if (ns_node_is_element_named(el, "input")) {
-        const char *type = ns_element_get_attr(el, "type");
-        if (type && (g_ascii_strcasecmp(type, "checkbox") == 0 ||
-                     g_ascii_strcasecmp(type, "radio") == 0))
-            return ns_element_get_attr(el, "checked") != NULL;
-    }
-    if (!ns_el_is_submit_button(el)) return FALSE;
-    const ns_node *doc = ns_node_root(el);
-    const ns_node *owner = ns_form_owner(el, doc);
-    if (!owner) return FALSE;
-    return ns_css_first_submit_button_for(doc ? doc : owner, doc, owner, 0) == el;
-}
-
-static gboolean
-ns_css_radio_group_has_checked(const ns_node *scan, const ns_node *doc,
-                               const ns_node *owner, const char *name,
-                               int depth)
-{
-    if (!scan || depth >= 512) return FALSE;
-    if (ns_node_is_element_named(scan, "input")) {
-        const char *type = ns_element_get_attr(scan, "type");
-        if (type && g_ascii_strcasecmp(type, "radio") == 0) {
-            const char *scan_name = ns_element_get_attr(scan, "name");
-            if (!scan_name) scan_name = "";
-            if (strcmp(scan_name, name) == 0 &&
-                ns_form_owner(scan, doc) == owner &&
-                ns_input_is_checked(scan))
-                return TRUE;
-        }
-    }
-    if (ns_node_is_element_named(scan, "template")) return FALSE;
-    for (const ns_node *c = scan->first_child; c; c = c->next_sibling)
-        if (ns_css_radio_group_has_checked(c, doc, owner, name, depth + 1))
-            return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_el_is_indeterminate(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "progress"))
-        return ns_element_get_attr(el, "value") == NULL;
-    if (!ns_node_is_element_named(el, "input")) return FALSE;
-    const char *type = ns_element_get_attr(el, "type");
-    if (!type || g_ascii_strcasecmp(type, "radio") != 0) return FALSE;
-    const char *name = ns_element_get_attr(el, "name");
-    if (!name) name = "";
-    const ns_node *doc = ns_node_root(el);
-    const ns_node *owner = ns_form_owner(el, doc);
-    return !ns_css_radio_group_has_checked(doc ? doc : el, doc, owner, name, 0);
-}
-
-static gboolean
-ns_el_range_state(const ns_node *el, gboolean *under, gboolean *over)
-{
-    if (under) *under = FALSE;
-    if (over) *over = FALSE;
-    if (!ns_node_is_element_named(el, "input")) return FALSE;
-    const char *type = ns_element_get_attr(el, "type");
-    if (!ns_input_type_has_number_value(type)) return FALSE;
-    if (!ns_element_get_attr(el, "min") && !ns_element_get_attr(el, "max"))
-        return FALSE;
-    const char *value = ns_element_get_attr(el, "value");
-    if (!value || !*value) return FALSE;
-    return ns_input_value_range_state(el, value, under, over);
-}
-
-static gboolean
-ns_el_is_blank(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "input")) {
-        if (!ns_input_is_text_entry(el)) return FALSE;
-        const char *value = ns_element_get_attr(el, "value");
-        return !value || !*value;
-    }
-    if (!ns_node_is_element_named(el, "textarea")) return FALSE;
-    char *txt = ns_node_collect_text(el);
-    gboolean blank = TRUE;
-    for (const char *p = txt ? txt : ""; *p; p++) {
-        if (!is_ws(*p)) {
-            blank = FALSE;
-            break;
-        }
-    }
-    g_free(txt);
-    return blank;
-}
-
-static gboolean
-ns_el_is_empty(const ns_node *el)
-{
-    for (const ns_node *c = el ? el->first_child : NULL; c; c = c->next_sibling) {
-        if (c->kind == NS_NODE_ELEMENT) return FALSE;
-        if (c->kind == NS_NODE_TEXT && c->text && c->text[0] != '\0')
-            return FALSE;
-    }
-    return TRUE;
-}
-
-static gboolean
-ns_el_is_link(const ns_node *el)
-{
-    if (!ns_element_get_attr(el, "href")) return FALSE;
-    return ns_node_is_element_named(el, "a") ||
-           ns_node_is_element_named(el, "area");
-}
-
-static GHashTable *g_visited_urls = NULL;
-static char       *g_css_doc_base = NULL;
-static char       *g_css_doc_language = NULL;
-
-void
-ns_css_mark_visited(const char *abs_url)
-{
-    if (!abs_url || !*abs_url) return;
-    if (!g_visited_urls)
-        g_visited_urls = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                               g_free, NULL);
-    if (!g_hash_table_contains(g_visited_urls, abs_url))
-        g_hash_table_add(g_visited_urls, g_strdup(abs_url));
-}
-
-void
-ns_css_set_doc_base(const char *base_url)
-{
-    g_free(g_css_doc_base);
-    g_css_doc_base = (base_url && *base_url) ? g_strdup(base_url) : NULL;
-}
-
-void
-ns_css_set_doc_language(const char *lang)
-{
-    g_free(g_css_doc_language);
-    g_css_doc_language = (lang && *lang) ? g_strdup(lang) : NULL;
-}
-
-static gboolean
-ns_el_is_visited_link(const ns_node *el)
-{
-    if (!g_visited_urls || !g_css_doc_base || !ns_el_is_link(el)) return FALSE;
-    const char *href = ns_element_get_attr(el, "href");
-    if (!href || !*href) return FALSE;
-    char *abs_url = ns_url_resolve(g_css_doc_base, href);
-    if (!abs_url) return FALSE;
-    gboolean v = g_hash_table_contains(g_visited_urls, abs_url);
-    g_free(abs_url);
-    return v;
-}
-
-static gboolean
 selector_group_matches_element(const GPtrArray *group, const ns_node *el)
 {
     for (guint i = 0; group && i < group->len; i++) {
@@ -2264,354 +1991,6 @@ ns_css_sibling_counts_for_nth(const ns_node *el, const ns_css_pseudo_pred *pc,
         return FALSE;
     *idx_out = idx;
     return TRUE;
-}
-
-static __thread const ns_node *g_pragma_doc;
-static __thread const char    *g_pragma_lang;
-static __thread gboolean       g_pragma_valid;
-
-static void
-ns_css_pragma_language_scan(const ns_node *n, const char **found, int depth)
-{
-    if (!n || depth >= 512) return;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            g_ascii_strcasecmp(c->name, "meta") == 0) {
-            const char *he = ns_element_get_attr(c, "http-equiv");
-            const char *content = he &&
-                g_ascii_strcasecmp(he, "content-language") == 0
-                ? ns_element_get_attr(c, "content") : NULL;
-            if (content && !strchr(content, ',')) {
-                const char *s = content;
-                while (*s && g_ascii_isspace((guchar)*s)) s++;
-                const char *e = s;
-                while (*e && !g_ascii_isspace((guchar)*e)) e++;
-                if (e > s) {
-                    static __thread char buf[128];
-                    gsize len = (gsize)(e - s);
-                    if (len >= sizeof buf) len = sizeof buf - 1;
-                    memcpy(buf, s, len);
-                    buf[len] = '\0';
-                    *found = buf;
-                }
-            }
-        }
-        ns_css_pragma_language_scan(c, found, depth + 1);
-    }
-}
-
-static const char *
-ns_css_node_language(const ns_node *el)
-{
-    static const char xml_ns[] = "http://www.w3.org/XML/1998/namespace";
-    for (const ns_node *n = el; n; n = n->parent) {
-        if (n->kind != NS_NODE_ELEMENT) continue;
-        const ns_attr *xa = ns_element_find_attr_ns(n, xml_ns, "lang");
-        if (xa) return xa->value ? xa->value : "";
-        const ns_attr *la = ns_element_find_attr_ns(n, NULL, "lang");
-        if (la && !(n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS)))
-            return la->value ? la->value : "";
-    }
-    const ns_node *root = el;
-    while (root && root->parent) root = root->parent;
-    if (!g_pragma_valid || g_pragma_doc != root) {
-        const char *found = NULL;
-        if (root) ns_css_pragma_language_scan(root, &found, 0);
-        g_pragma_doc = root;
-        g_pragma_lang = found;
-        g_pragma_valid = TRUE;
-    }
-    return g_pragma_lang ? g_pragma_lang : g_css_doc_language;
-}
-
-static gboolean
-ns_css_lang_one_matches(const char *lang, const char *want)
-{
-    if (!lang || !want || !*want) return FALSE;
-    while (*want == ' ' || *want == '\'' || *want == '"') want++;
-    gsize wlen = strlen(want);
-    while (wlen > 0 && (is_ws(want[wlen - 1]) ||
-                        want[wlen - 1] == '\'' || want[wlen - 1] == '"'))
-        wlen--;
-    if (wlen == 0) return FALSE;
-    if (wlen == 1 && want[0] == '*') return TRUE;
-    if (want[0] == '*' && want[1] == '-') {
-        const char *needle = want + 2;
-        gsize nlen = wlen - 2;
-        const char *p = lang;
-        while ((p = strchr(p, '-')) != NULL) {
-            p++;
-            if (g_ascii_strncasecmp(p, needle, nlen) == 0 &&
-                (p[nlen] == '\0' || p[nlen] == '-'))
-                return TRUE;
-        }
-        return FALSE;
-    }
-    if (g_ascii_strncasecmp(lang, want, wlen) != 0) return FALSE;
-    return lang[wlen] == '\0' || lang[wlen] == '-';
-}
-
-static gboolean
-ns_css_lang_matches(const ns_node *el, const char *arg)
-{
-    const char *lang = ns_css_node_language(el);
-    if (!lang || !arg) return FALSE;
-    const char *p = arg;
-    const char *end = arg + strlen(arg);
-    while (p < end) {
-        char term = 0;
-        const char *seg = css_scan_until(p, end, ",", &term);
-        char *want = css_trim_dup_range(p, seg);
-        gboolean ok = ns_css_lang_one_matches(lang, want);
-        g_free(want);
-        if (ok) return TRUE;
-        p = term == ',' ? seg + 1 : seg;
-    }
-    return FALSE;
-}
-
-static gboolean
-ns_dir_is_rtl_script(GUnicodeScript s)
-{
-    switch (s) {
-    case G_UNICODE_SCRIPT_HEBREW:
-    case G_UNICODE_SCRIPT_ARABIC:
-    case G_UNICODE_SCRIPT_SYRIAC:
-    case G_UNICODE_SCRIPT_THAANA:
-    case G_UNICODE_SCRIPT_NKO:
-    case G_UNICODE_SCRIPT_SAMARITAN:
-    case G_UNICODE_SCRIPT_MANDAIC:
-        return TRUE;
-    default:
-        return FALSE;
-    }
-}
-
-static const char *
-ns_dir_first_strong(const ns_node *n, int depth)
-{
-    if (!n || depth > 256) return NULL;
-    if (n->kind == NS_NODE_TEXT && n->text) {
-        for (const char *p = n->text; *p; p = g_utf8_next_char(p)) {
-            gunichar c = g_utf8_get_char(p);
-            if (ns_dir_is_rtl_script(g_unichar_get_script(c))) return "rtl";
-            if (g_unichar_isalpha(c)) return "ltr";
-        }
-        return NULL;
-    }
-    if (n->kind != NS_NODE_ELEMENT) return NULL;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        gboolean html_ns = c->kind == NS_NODE_ELEMENT &&
-            !(c->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS));
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            ((html_ns &&
-              (g_ascii_strcasecmp(c->name, "script") == 0 ||
-               g_ascii_strcasecmp(c->name, "style") == 0 ||
-               g_ascii_strcasecmp(c->name, "textarea") == 0 ||
-               g_ascii_strcasecmp(c->name, "bdi") == 0)) ||
-             ns_element_get_attr(c, "dir")))
-            continue;
-        const char *d = ns_dir_first_strong(c, depth + 1);
-        if (d) return d;
-    }
-    return NULL;
-}
-
-static const char *
-ns_dir_first_strong_str(const char *s)
-{
-    if (!s) return NULL;
-    for (const char *p = s; *p; p = g_utf8_next_char(p)) {
-        gunichar c = g_utf8_get_char(p);
-        if (ns_dir_is_rtl_script(g_unichar_get_script(c))) return "rtl";
-        if (g_unichar_isalpha(c)) return "ltr";
-    }
-    return NULL;
-}
-
-static const char *
-ns_dir_form_control_value(const ns_node *n)
-{
-    if (!n->name) return NULL;
-    if (g_ascii_strcasecmp(n->name, "textarea") == 0)
-        return ns_node_editable_value(n);
-    if (g_ascii_strcasecmp(n->name, "input") != 0) return NULL;
-    const char *type = ns_element_get_attr(n, "type");
-    if (type) {
-        static const char *const uses[] = { "hidden", "text", "search", "tel",
-            "url", "email", "password", "submit", "reset", "button", NULL };
-        gboolean ok = FALSE;
-        for (int i = 0; uses[i]; i++)
-            if (g_ascii_strcasecmp(type, uses[i]) == 0) { ok = TRUE; break; }
-        if (!ok) return NULL;
-    }
-    return ns_node_editable_value(n);
-}
-
-static const char *
-ns_dir_auto_resolve(const ns_node *n)
-{
-    const char *val = ns_dir_form_control_value(n);
-    if (val) {
-        const char *d = ns_dir_first_strong_str(val);
-        return d ? d : "ltr";
-    }
-    const char *d = ns_dir_first_strong(n, 0);
-    return d ? d : "ltr";
-}
-
-const char *
-ns_css_node_dir(const ns_node *el)
-{
-    for (const ns_node *n = el; n; n = n->parent) {
-        if (n->kind != NS_NODE_ELEMENT) continue;
-        const char *dir = ns_element_get_attr(n, "dir");
-        gboolean is_bdi = n->name && g_ascii_strcasecmp(n->name, "bdi") == 0;
-        if (dir) {
-            if (g_ascii_strcasecmp(dir, "ltr") == 0) return "ltr";
-            if (g_ascii_strcasecmp(dir, "rtl") == 0) return "rtl";
-            if (g_ascii_strcasecmp(dir, "auto") == 0)
-                return ns_dir_auto_resolve(n);
-        } else if (is_bdi) {
-            const char *d = ns_dir_first_strong(n, 0);
-            return d ? d : "ltr";
-        }
-        if (n == el && n->name && g_ascii_strcasecmp(n->name, "input") == 0) {
-            const char *type = ns_element_get_attr(n, "type");
-            if (type && g_ascii_strcasecmp(type, "tel") == 0) return "ltr";
-        }
-    }
-    return "ltr";
-}
-
-static gboolean
-ns_css_node_is_target(const ns_node *el)
-{
-    if (!g_target_fragment || !el) return FALSE;
-    const char *eid = ns_element_get_attr(el, "id");
-    if (eid && strcmp(eid, g_target_fragment) == 0) return TRUE;
-    if (el->name && g_ascii_strcasecmp(el->name, "a") == 0) {
-        const char *nm = ns_element_get_attr(el, "name");
-        if (nm && strcmp(nm, g_target_fragment) == 0) return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-ns_css_node_has_target_within(const ns_node *el, int depth)
-{
-    if (!el || depth >= 512) return FALSE;
-    if (el->kind == NS_NODE_ELEMENT && ns_css_node_is_target(el))
-        return TRUE;
-    if (ns_node_is_element_named(el, "template")) return FALSE;
-    for (const ns_node *c = el->first_child; c; c = c->next_sibling)
-        if (ns_css_node_has_target_within(c, depth + 1))
-            return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_css_value_matches_pattern(const char *value, const char *pattern)
-{
-    if (!pattern || !*pattern) return TRUE;
-    char *anchored = g_strdup_printf("^(?:%s)$", pattern);
-    GError *err = NULL;
-    GRegex *re = g_regex_new(anchored, 0, 0, &err);
-    g_free(anchored);
-    if (!re) { g_clear_error(&err); return TRUE; }
-    gboolean ok = g_regex_match(re, value ? value : "", 0, NULL);
-    g_regex_unref(re);
-    return ok;
-}
-
-static gboolean
-ns_css_node_will_validate(const ns_node *el)
-{
-    if (!el || el->kind != NS_NODE_ELEMENT || !el->name) return FALSE;
-    gboolean is_input = strcmp(el->name, "input") == 0;
-    if (!is_input &&
-        strcmp(el->name, "textarea") != 0 &&
-        strcmp(el->name, "select") != 0)
-        return FALSE;
-    if (ns_element_effectively_disabled(el)) return FALSE;
-    if (ns_form_control_readonly_bars_validation(el)) return FALSE;
-    const char *type = is_input ? ns_element_get_attr(el, "type") : NULL;
-    if (type && (g_ascii_strcasecmp(type, "submit") == 0 ||
-                 g_ascii_strcasecmp(type, "button") == 0 ||
-                 g_ascii_strcasecmp(type, "reset")  == 0 ||
-                 g_ascii_strcasecmp(type, "image")  == 0 ||
-                 g_ascii_strcasecmp(type, "hidden") == 0))
-        return FALSE;
-    return TRUE;
-}
-
-static char *
-ns_css_control_value_dup(const ns_node *el)
-{
-    if (!el || !el->name) return g_strdup("");
-    if (strcmp(el->name, "textarea") == 0)
-        return ns_node_collect_text(el);
-    if (strcmp(el->name, "select") == 0) {
-        const ns_node *opt = ns_element_get_attr(el, "multiple")
-            ? ns_select_first_selected_option(el)
-            : ns_select_chosen_option(el);
-        return opt ? ns_option_value_dup(opt) : g_strdup("");
-    }
-    return g_strdup(ns_element_get_attr(el, "value") ?
-                    ns_element_get_attr(el, "value") : "");
-}
-
-static gboolean
-ns_css_control_is_valid(const ns_node *el)
-{
-    if (!ns_css_node_will_validate(el)) return FALSE;
-    const char *custom = ns_element_get_attr(el, NS_CUSTOM_VALIDITY_ATTR);
-    if (custom && *custom) return FALSE;
-    char *owned = ns_css_control_value_dup(el);
-    const char *value = owned ? owned : "";
-    gboolean valid = TRUE;
-    const char *type = el->name && strcmp(el->name, "input") == 0
-        ? ns_element_get_attr(el, "type") : NULL;
-    if (ns_form_control_supports_required(el) &&
-        ns_element_get_attr(el, "required") &&
-        ns_form_control_value_missing(el, value, ns_node_root(el)))
-        valid = FALSE;
-    if (valid && *value && type) {
-        if (g_ascii_strcasecmp(type, "email") == 0) {
-            if (!ns_input_email_value_valid(el, value))
-                valid = FALSE;
-        } else if (g_ascii_strcasecmp(type, "url") == 0) {
-            if (!ns_url_is_valid_absolute(value))
-                valid = FALSE;
-        } else if (ns_input_type_has_number_value(type)) {
-            double parsed;
-            if (!ns_input_value_to_number(type, value, &parsed)) valid = FALSE;
-        }
-        if (valid) {
-            gboolean under = FALSE, over = FALSE;
-            if (ns_input_value_range_state(el, value, &under, &over) &&
-                (under || over))
-                valid = FALSE;
-        }
-        if (valid && ns_input_value_step_mismatch(el, value))
-            valid = FALSE;
-    }
-    if (valid && *value &&
-        el->name && strcmp(el->name, "input") == 0 &&
-        ns_input_type_supports_text_constraints(type) &&
-        !ns_css_value_matches_pattern(value, ns_element_get_attr(el, "pattern")))
-        valid = FALSE;
-    if (valid && *value && ns_form_control_length_limits_apply(el)) {
-        glong vlen = (glong)g_utf8_strlen(value, -1);
-        const char *minlen = ns_element_get_attr(el, "minlength");
-        const char *maxlen = ns_element_get_attr(el, "maxlength");
-        if (minlen && vlen < (glong)ns_parse_int(minlen, 0, 0, 1000000))
-            valid = FALSE;
-        if (maxlen && vlen > (glong)ns_parse_int(maxlen, 0, 0, 1000000))
-            valid = FALSE;
-    }
-    g_free(owned);
-    return valid;
 }
 
 static gboolean
@@ -2913,7 +2292,43 @@ match_simple(const ns_css_simple *sel, const ns_node *el)
                 break;
             }
             case NS_CSS_PC_EMPTY:
-                if (!ns_el_is_empty(el)) return FALSE;
+            case NS_CSS_PC_CHECKED:
+            case NS_CSS_PC_DISABLED:
+            case NS_CSS_PC_ENABLED:
+            case NS_CSS_PC_REQUIRED:
+            case NS_CSS_PC_OPTIONAL:
+            case NS_CSS_PC_VALID:
+            case NS_CSS_PC_INVALID:
+            case NS_CSS_PC_IN_RANGE:
+            case NS_CSS_PC_OUT_OF_RANGE:
+            case NS_CSS_PC_DEFAULT:
+            case NS_CSS_PC_INDETERMINATE:
+            case NS_CSS_PC_ANY_LINK:
+            case NS_CSS_PC_LINK:
+            case NS_CSS_PC_VISITED:
+            case NS_CSS_PC_TARGET:
+            case NS_CSS_PC_TARGET_WITHIN:
+            case NS_CSS_PC_PLACEHOLDER_SHOWN:
+            case NS_CSS_PC_READ_ONLY:
+            case NS_CSS_PC_READ_WRITE:
+            case NS_CSS_PC_BLANK:
+            case NS_CSS_PC_LANG:
+            case NS_CSS_PC_DIR:
+            case NS_CSS_PC_OPEN:
+            case NS_CSS_PC_POPOVER_OPEN:
+            case NS_CSS_PC_MODAL:
+            case NS_CSS_PC_HEADING:
+            case NS_CSS_PC_USER_VALID:
+            case NS_CSS_PC_USER_INVALID:
+            case NS_CSS_PC_AUTOFILL:
+            case NS_CSS_PC_PLAYING:
+            case NS_CSS_PC_PAUSED:
+            case NS_CSS_PC_MUTED:
+            case NS_CSS_PC_SEEKING:
+            case NS_CSS_PC_BUFFERING:
+            case NS_CSS_PC_STALLED:
+                if (!ns_css_element_state_matches(el, pc->kind, pc->arg))
+                    return FALSE;
                 break;
             case NS_CSS_PC_ROOT:
                 if (!el->parent || el->parent->kind != NS_NODE_DOCUMENT ||
@@ -2926,58 +2341,6 @@ match_simple(const ns_css_simple *sel, const ns_node *el)
                 } else if (el->parent && el->parent->kind == NS_NODE_ELEMENT) {
                     return FALSE;
                 }
-                break;
-            case NS_CSS_PC_CHECKED:
-                if (!ns_el_is_checked(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_DISABLED:
-                if (!ns_element_supports_disabled(el) ||
-                    !ns_element_effectively_disabled(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_ENABLED:
-                if (!ns_element_supports_disabled(el) ||
-                    ns_element_effectively_disabled(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_REQUIRED:
-                if (!ns_form_control_supports_required(el) ||
-                    !ns_element_get_attr(el, "required"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_OPTIONAL:
-                if (!ns_form_control_supports_required(el) ||
-                    ns_element_get_attr(el, "required"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_VALID:
-                if (!ns_css_node_will_validate(el) ||
-                    !ns_css_control_is_valid(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_INVALID:
-                if (!ns_css_node_will_validate(el) ||
-                    ns_css_control_is_valid(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_IN_RANGE: {
-                gboolean under = FALSE, over = FALSE;
-                if (!ns_el_range_state(el, &under, &over) || under || over)
-                    return FALSE;
-                break;
-            }
-            case NS_CSS_PC_OUT_OF_RANGE: {
-                gboolean under = FALSE, over = FALSE;
-                if (!ns_el_range_state(el, &under, &over) || (!under && !over))
-                    return FALSE;
-                break;
-            }
-            case NS_CSS_PC_DEFAULT:
-                if (!ns_el_is_default(el)) return FALSE;
-                break;
-            case NS_CSS_PC_INDETERMINATE:
-                if (!ns_el_is_indeterminate(el)) return FALSE;
                 break;
             case NS_CSS_PC_NTH_CHILD:
             case NS_CSS_PC_NTH_LAST_CHILD:
@@ -2995,16 +2358,6 @@ match_simple(const ns_css_simple *sel, const ns_node *el)
                 }
                 break;
             }
-            case NS_CSS_PC_ANY_LINK:
-                if (!ns_el_is_link(el)) return FALSE;
-                break;
-            case NS_CSS_PC_LINK:
-                if (!ns_el_is_link(el) || ns_el_is_visited_link(el))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_VISITED:
-                if (!ns_el_is_visited_link(el)) return FALSE;
-                break;
             case NS_CSS_PC_HOVER: {
                 if (!g_css_hover_node) return FALSE;
                 gboolean on = FALSE;
@@ -3038,128 +2391,13 @@ match_simple(const ns_css_simple *sel, const ns_node *el)
                 if (!within) return FALSE;
                 break;
             }
-            case NS_CSS_PC_TARGET: {
-                if (!ns_css_node_is_target(el)) return FALSE;
-                break;
-            }
-            case NS_CSS_PC_TARGET_WITHIN:
-                if (!g_target_fragment ||
-                    !ns_css_node_has_target_within(el, 0))
-                    return FALSE;
-                break;
             case NS_CSS_PC_DEFINED:
                 if (!el->name) return FALSE;
                 if (!strchr(el->name, '-')) break;
                 if (ns_css_is_defined_element(el->name)) break;
                 return FALSE;
-            case NS_CSS_PC_PLACEHOLDER_SHOWN:
-                if (!ns_el_placeholder_shown(el)) return FALSE;
-                break;
-            case NS_CSS_PC_READ_WRITE:
-                if (!ns_el_is_read_write(el)) return FALSE;
-                break;
-            case NS_CSS_PC_READ_ONLY:
-                if (ns_el_is_read_write(el)) return FALSE;
-                break;
-            case NS_CSS_PC_BLANK:
-                if (!ns_el_is_blank(el)) return FALSE;
-                break;
-            case NS_CSS_PC_LANG:
-                if (!ns_css_lang_matches(el, pc->arg)) return FALSE;
-                break;
-            case NS_CSS_PC_DIR:
-                if (!pc->arg || strcmp(ns_css_node_dir(el), pc->arg) != 0)
-                    return FALSE;
-                break;
-            case NS_CSS_PC_OPEN:
-                if ((!ns_node_is_element_named(el, "details") &&
-                     !ns_node_is_element_named(el, "dialog")) ||
-                    !ns_element_get_attr(el, "open"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_POPOVER_OPEN:
-                if (!ns_element_get_attr(el, "popover") ||
-                    !ns_element_get_attr(el, "data-nd-popover-open"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_MODAL:
-                if (!ns_element_get_attr(el, "data-nd-modal")) return FALSE;
-                break;
             case NS_CSS_PC_FULLSCREEN:
                 if (g_css_fullscreen_node != el) return FALSE;
-                break;
-            case NS_CSS_PC_HEADING: {
-                int level = 0;
-                if (el->kind == NS_NODE_ELEMENT && el->name &&
-                    el->name[0] == 'h' && el->name[1] >= '1' &&
-                    el->name[1] <= '6' && el->name[2] == '\0')
-                    level = el->name[1] - '0';
-                if (level == 0) return FALSE;
-                if (pc->arg) {
-                    char **items = g_strsplit(pc->arg, ",", -1);
-                    gboolean any = FALSE;
-                    for (int hi = 0; items[hi] && !any; hi++) {
-                        int v = 0;
-                        if (ns_css_anb_int_strict(g_strstrip(items[hi]), &v) &&
-                            level == v)
-                            any = TRUE;
-                    }
-                    g_strfreev(items);
-                    if (!any) return FALSE;
-                }
-                break;
-            }
-            case NS_CSS_PC_USER_VALID:
-                if (!ns_css_node_will_validate(el) || !ns_css_control_is_valid(el) ||
-                    !ns_element_get_attr(el, "data-nd-vdirty"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_USER_INVALID:
-                if (!ns_css_node_will_validate(el) || ns_css_control_is_valid(el) ||
-                    !ns_element_get_attr(el, "data-nd-vdirty"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_AUTOFILL:
-                if (!ns_element_get_attr(el, "autofill") &&
-                    !ns_element_get_attr(el, "data-nd-autofill"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_PLAYING:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    !ns_element_get_attr(el, "data-nd-playing"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_PAUSED:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    ns_element_get_attr(el, "data-nd-playing"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_MUTED:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    (!ns_element_get_attr(el, "muted") &&
-                     !ns_element_get_attr(el, "data-nd-muted")))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_SEEKING:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    !ns_element_get_attr(el, "data-nd-seeking"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_BUFFERING:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    !ns_element_get_attr(el, "data-nd-buffering"))
-                    return FALSE;
-                break;
-            case NS_CSS_PC_STALLED:
-                if ((!ns_node_is_element_named(el, "video") &&
-                     !ns_node_is_element_named(el, "audio")) ||
-                    !ns_element_get_attr(el, "data-nd-stalled"))
-                    return FALSE;
                 break;
             }
         }
@@ -8387,7 +7625,7 @@ ns_css_compute(ns_node *doc,
     GHashTable *out = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                             NULL, (GDestroyNotify)ns_style_free);
 
-    g_pragma_valid = FALSE;
+    ns_css_language_cache_reset();
 
     const ns_css_stylesheet *cached_ua = ua_sheet_for(doc);
 
