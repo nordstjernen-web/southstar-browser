@@ -63,6 +63,7 @@ char         *ns_css_substitute_vars(const char *value,
                                      const struct ns_var_map *map,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
+struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
 const ns_node *ns_css_match_scope(void);
 const ns_node *ns_css_focus_node(void);
 const ns_node *ns_css_hover_node(void);

@@ -35,7 +35,7 @@ pub(super) struct RawSheet {
     has_hover_rules: GBoolean,
     has_active_rules: GBoolean,
     cached: GBoolean,
-    pseudo_mask: c_uint,
+    pub(super) pseudo_mask: c_uint,
     serial: u64,
     resolved_base: *mut c_char,
     index: *mut c_void,

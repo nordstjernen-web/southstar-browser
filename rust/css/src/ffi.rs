@@ -19,6 +19,7 @@ mod lex;
 mod matcher;
 mod nesting;
 mod property;
+mod rule_index;
 mod selector;
 mod selector_view;
 mod sheet;
