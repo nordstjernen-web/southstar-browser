@@ -11,4 +11,5 @@ mod hidden;
 mod path;
 mod path2d;
 mod raster;
+mod state;
 mod validate;

@@ -85,7 +85,6 @@ pub(crate) mod c {
         ns_ctx_gradient_addColorStop,
         ns_offscreen_convertToBlob,
         ns_offscreen_getContext,
-        ns_offscreen_transferToImageBitmap,
     );
 }
 
@@ -116,8 +115,6 @@ unsafe extern "C" {
         out_buf_len: *mut usize,
         out_format: *mut c_int,
     ) -> *mut u8;
-    fn ns_canvas_state_for(js: *mut NsJs, el: *const NsNode) -> *mut c_void;
-    fn ns_canvas_state_adopt_node(js: *mut NsJs, el: *mut NsNode);
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> *mut JSContext;
     fn ns_js_computed_text(
         ctx: *mut JSContext,
@@ -301,10 +298,8 @@ fn js_of(scope: &Scope<'_>) -> *mut NsJs {
 }
 
 pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {
-    let js = js_of(scope);
-    if !js.is_null() {
-        unsafe { ns_canvas_state_for(js, el as *const NsNode) };
-    }
+    let js = super::state::js_of(scope);
+    let _ = crate::state::state_for(js, super::state::Node::from_addr(el));
 }
 
 pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
@@ -331,7 +326,10 @@ pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
 
 pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
     let el = unsafe { ns_node_new_element(glib::strdup(b"canvas")) };
-    unsafe { ns_canvas_state_adopt_node(js_of(scope), el) };
+    let js = super::state::js_of(scope);
+    if let Some(st) = crate::state::state_for(js, super::state::Node::from_addr(el as usize)) {
+        unsafe { (*st).owned_node = el.cast() };
+    }
     el as usize
 }
 

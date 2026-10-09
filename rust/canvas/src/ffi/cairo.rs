@@ -103,6 +103,10 @@ impl Surface {
         (!surface.is_null()).then_some(Surface(surface))
     }
 
+    pub unsafe fn from_borrowed(surface: *mut c_void) -> Option<Surface> {
+        (!surface.is_null()).then(|| Surface(unsafe { cairo_surface_reference(surface) }))
+    }
+
     pub fn into_raw(self) -> *mut c_void {
         let raw = self.0;
         core::mem::forget(self);

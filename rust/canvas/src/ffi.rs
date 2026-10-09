@@ -10,6 +10,7 @@ use southstar_glib as glib;
 
 pub(crate) mod cairo;
 mod objects;
+pub(crate) mod state;
 
 pub(crate) use objects::{
     c, canvas_state_for, computed_color, decode_image, drawimage_source, element_attr, is_path2d,

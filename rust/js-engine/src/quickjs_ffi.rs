@@ -846,6 +846,18 @@ pub mod quickjs {
         value.raw
     }
 
+    pub fn raw_is_object(raw: JSValue) -> bool {
+        raw.tag == super::TAG_OBJECT
+    }
+
+    pub const UNDEFINED: JSValue = super::UNDEFINED;
+
+    pub unsafe fn free_raw(rt: *mut c_void, raw: JSValue) {
+        if !rt.is_null() {
+            unsafe { super::JS_FreeValueRT(rt.cast(), raw) };
+        }
+    }
+
     pub fn result_raw(scope: &mut Scope<'_>, result: Result<Value, Value>) -> JSValue {
         match result {
             Ok(value) => value.into_raw(),

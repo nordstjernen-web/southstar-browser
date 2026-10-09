@@ -255,9 +255,9 @@ static IMAGE_BITMAP_METHODS: [Method; 1] = [native("close", bitmap::close, 0)];
 static OFFSCREEN_METHODS: [Method; 3] = [
     method("convertToBlob", c::ns_offscreen_convertToBlob, 0),
     method("getContext", c::ns_offscreen_getContext, 1),
-    method(
+    native(
         "transferToImageBitmap",
-        c::ns_offscreen_transferToImageBitmap,
+        ffi::state::transfer_to_image_bitmap,
         0,
     ),
 ];

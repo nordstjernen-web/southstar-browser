@@ -13,6 +13,7 @@ southstar-js-engine = { path = "../js-engine", default-features = false, feature
 
 [features]
 quickjs-original = ["southstar-js-engine/quickjs-original"]
+webgpu = []
 
 [lints]
 workspace = true

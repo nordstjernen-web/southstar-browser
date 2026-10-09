@@ -38,6 +38,10 @@ typedef struct ns_canvas_state {
     ns_node *owned_node;
     int context_kind;
 } ns_canvas_state;
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_canvas_state) == 232);
+G_STATIC_ASSERT(G_STRUCT_OFFSET(ns_canvas_state, ctx2d) == 184);
+#endif
 
 struct ns_js {
     JSRuntime    *rt;
@@ -170,7 +174,6 @@ struct ns_js {
     gboolean       has_last_mouse[2];
     gint64         user_activation_us;
     gboolean       user_ever_activated;
-    GHashTable   *canvas_states;
     ns_image_cache *image_cache;
     struct ns_anim *anim;
     GHashTable   *js_image_loads;
@@ -379,8 +382,6 @@ JSValue ns_make_element(JSContext *ctx, const ns_node *cnode);
 const ns_node *ns_unwrap_element(JSValueConst val);
 
 /* Canvas API implemented in js_canvas.c */
-void
-ns_canvas_state_free(gpointer data);
 JSValue
 ns_image_bitmap_make(JSContext *ctx, cairo_surface_t *surf, int w, int h,
                      gboolean origin_clean);
@@ -390,9 +391,6 @@ cairo_surface_t *
 ns_image_bitmap_surface(JSValueConst v, int *out_w, int *out_h, int *origin_clean);
 JSValue
 ns_canvas_clone_object(JSContext *ctx, JSValueConst v);
-JSValue
-ns_offscreen_transferToImageBitmap(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv);
 JSValue
 ns_offscreen_getContext(JSContext *ctx, JSValueConst this_val,
                         int argc, JSValueConst *argv);
@@ -620,6 +618,7 @@ enum {
 };
 void ns_canvas_register_classes(JSRuntime *rt);
 void ns_canvas_state_adopt_node(ns_js *js, ns_node *el);
+void ns_canvas_states_teardown(ns_js *js);
 gpointer ns_hidden_ptr(JSValueConst v);
 void ns_hidden_set_ptr(JSValueConst v, gpointer ptr);
 JSValue ns_hidden_new(JSContext *realm, int kind, JSValueConst proto);

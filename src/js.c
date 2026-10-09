@@ -61738,7 +61738,7 @@ ns_js_free(ns_js *js)
         }
         g_array_free(js->raf_pending, TRUE);
     }
-    if (js->canvas_states) g_hash_table_destroy(js->canvas_states);
+    ns_canvas_states_teardown(js);
     if (js->js_image_loads) {
         g_hash_table_destroy(js->js_image_loads);
         js->js_image_loads = NULL;

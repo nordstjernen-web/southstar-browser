@@ -95,7 +95,7 @@ http-brotli = ["southstar-net/http-brotli"]
 http-zstd = ["southstar-net/http-zstd"]
 libav = ["southstar-headless/libav", "southstar-net/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
-webgpu = ["southstar-net/webgpu"]
+webgpu = ["southstar-canvas/webgpu", "southstar-net/webgpu"]
 quickjs-original = [
     "southstar-bytecode-cache/quickjs-original",
     "southstar-canvas/quickjs-original",
