@@ -18,6 +18,8 @@ pub(crate) const COMB_CHILD: u32 = 2;
 pub(crate) const COMB_ADJACENT: u32 = 3;
 pub(crate) const COMB_SIBLING: u32 = 4;
 
+pub(crate) const PE_NONE: u32 = 0;
+
 pub(crate) const ATTR_PRESENT: u32 = 0;
 pub(crate) const ATTR_EQ: u32 = 1;
 const ATTR_PREFIX: u32 = 2;

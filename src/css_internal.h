@@ -29,12 +29,10 @@ void          ns_css_container_stack_pop(void);
 gsize         ns_css_container_stack_copy(guint8 *out, gsize max_bytes);
 gboolean      ns_css_container_rule_matches(const char *condition,
                                             ns_css_container_query **cache);
-void          ns_css_container_query_free(ns_css_container_query *query);
 
 char         *ns_css_color_text(guint8 r, guint8 g, guint8 b, guint8 a);
 void          ns_css_append_color(GString *s, guint8 r, guint8 g, guint8 b,
                                   guint8 a);
-gboolean      ns_css_wide_keyword_or_default(const char *item);
 gboolean      ns_css_position_is_h_edge(const char *t);
 gboolean      ns_css_position_is_v_edge(const char *t);
 char         *ns_css_position_canonical_ex(const char *text,
@@ -104,13 +102,6 @@ const char   *ns_css_parse_declaration_block(const char *p, const char *end,
 gboolean      ns_css_declaration_value_syntax_valid(const char *text);
 gboolean      ns_css_attr_unit_ident_valid(const char *unit);
 
-void          ns_css_selector_free(ns_css_selector *sel);
-GPtrArray    *ns_css_parse_selector_group(const char *text, gsize len,
-                                          int depth);
-gboolean      ns_css_parse_rule_selectors(const char *p, const char *end,
-                                          GPtrArray *out,
-                                          gboolean *has_hover,
-                                          gboolean *has_active);
 gboolean      ns_css_supports_selector(const char *text, gsize len);
 gboolean      ns_css_selector_attr_ancestor_hashes(void);
 guint32       ns_css_identifier_hash(char kind, const char *name, gsize len);
@@ -119,9 +110,7 @@ guint32       ns_css_attr_value_hash(const char *name, const char *value,
 gboolean      ns_css_anb_int_strict(const char *text, int *out);
 
 char         *ns_css_flatten_nesting(const char *text, gssize len);
-const char   *ns_css_skip_invalid_qualified_rule(const char *p,
-                                                 const char *end,
-                                                 gboolean nested);
+void          ns_css_property_rule_clear(gpointer data);
 char         *ns_css_border_radius_canonical(const char *value);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);
@@ -134,7 +123,6 @@ char         *ns_css_shadow_specified_canonical(const char *text,
                                                 gboolean is_text);
 char         *ns_css_shadow_serialize(const ns_css_shadow_list *list);
 
-char         *ns_css_read_ident(const char **pp, const char *end);
 char         *ns_css_read_string(const char **pp, const char *end);
 
 ns_css_value *ns_css_parse_tracks(const char *text);
@@ -197,6 +185,18 @@ G_STATIC_ASSERT(sizeof(ns_css_selector) == 56 &&
                 sizeof(ns_css_pseudo_pred) == 32 &&
                 offsetof(ns_css_pseudo_pred, arg) == 16 &&
                 sizeof(ns_css_comb) == 4);
+G_STATIC_ASSERT(sizeof(ns_css_rule) == 80 &&
+                offsetof(ns_css_rule, scopes) == 64 &&
+                sizeof(ns_css_import) == 24 &&
+                sizeof(ns_css_property_rule) == 40 &&
+                sizeof(ns_css_keyframe_stop) == 2176 &&
+                offsetof(ns_css_keyframe_stop, has_transform) == 2144 &&
+                offsetof(ns_css_keyframe_stop, raw_props) == 2168 &&
+                sizeof(ns_css_keyframes) == 24 &&
+                sizeof(ns_css_stylesheet) == 112 &&
+                offsetof(ns_css_stylesheet, has_container_rules) == 64 &&
+                offsetof(ns_css_stylesheet, serial) == 88 &&
+                offsetof(ns_css_stylesheet, index) == 104);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

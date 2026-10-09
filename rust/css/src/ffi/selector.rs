@@ -14,7 +14,7 @@ use crate::selector::{
 };
 
 #[repr(C)]
-struct RawSelector {
+pub(super) struct RawSelector {
     compounds: *mut GPtrArray,
     combinators: *mut GArray,
     pseudo_element: c_uint,
@@ -116,7 +116,7 @@ unsafe extern "C" fn selector_free_notify(data: *mut c_void) {
     unsafe { ns_css_selector_free(data.cast()) };
 }
 
-fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
+pub(super) fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
     let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(selector_free_notify)) };
     for sel in group {
         unsafe { glib::g_ptr_array_add(array, selector_to_c(sel).cast()) };
@@ -193,7 +193,7 @@ fn simple_to_c(c: &Compound) -> *mut RawSimple {
     }
 }
 
-fn selector_to_c(sel: &Selector) -> *mut RawSelector {
+pub(super) fn selector_to_c(sel: &Selector) -> *mut RawSelector {
     unsafe {
         let compounds = glib::g_ptr_array_new();
         for c in &sel.compounds {

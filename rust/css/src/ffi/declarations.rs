@@ -19,21 +19,31 @@ pub(super) struct RawRule {
     pub(super) selectors: *mut GPtrArray,
     pub(super) decls: *mut GArray,
     pub(super) vars: *mut GHashTable,
-    var_important: *mut GHashTable,
+    pub(super) var_important: *mut GHashTable,
     pub(super) pending: *mut GArray,
+    pub(super) layer_name: *mut c_char,
+    pub(super) container_condition: *mut c_char,
+    pub(super) container_query: *mut c_void,
+    pub(super) scopes: *mut GPtrArray,
+    pub(super) source_order: c_int,
+    pub(super) pe_mask: c_uint,
 }
 
 #[repr(C)]
-struct RawPending {
+pub(super) struct RawPending {
     pname: *mut c_char,
-    raw_vtext: *mut c_char,
+    pub(super) raw_vtext: *mut c_char,
     important: GBoolean,
     decl_index: c_int,
     decl_rank: c_int,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawPending>() == 32 && size_of::<RawRule>() == 40);
+const _: () = assert!(
+    size_of::<RawPending>() == 32
+        && size_of::<RawRule>() == 80
+        && core::mem::offset_of!(RawRule, scopes) == 64
+);
 
 unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
@@ -71,12 +81,16 @@ unsafe extern "C" fn pending_clear(data: *mut c_void) {
     }
 }
 
-struct RuleSink {
+pub(super) struct RuleSink {
     decls: *mut GArray,
     rule: *mut RawRule,
 }
 
 impl RuleSink {
+    pub(super) fn new(decls: *mut GArray, rule: *mut RawRule) -> RuleSink {
+        RuleSink { decls, rule }
+    }
+
     fn rule(&mut self) -> Option<&mut RawRule> {
         unsafe { self.rule.as_mut() }
     }

@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the inline style text, and the css.c stylesheet parser it still calls.
+//! Southstar — the C ABI of the inline style text, and the declarations it reads back out of parsed style sheets.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,23 +6,22 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GArray, GBoolean};
 
 use super::declarations::RawRule;
 use super::property::prop_of;
+use super::sheet::{RawSheet, ns_css_stylesheet_parse};
 use super::shorthand::RawDecl;
 use super::values::text_of;
 use crate::inline;
 use crate::prop::Prop;
 
-#[repr(C)]
-struct RawSheet {
-    rules: *mut GPtrArray,
+unsafe extern "C" {
+    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
 }
 
-unsafe extern "C" {
-    fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
-    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
+unsafe fn parse_sheet(text: &CStr) -> *mut RawSheet {
+    unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) }.cast()
 }
 
 pub(crate) struct SheetDecl {
@@ -49,7 +48,7 @@ pub(crate) fn sheet_declarations(
     wanted: impl Fn(Option<Prop>) -> bool,
 ) -> Vec<SheetDecl> {
     let text = c_string(css);
-    let sheet = unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) };
+    let sheet = unsafe { parse_sheet(&text) };
     let mut out = Vec::new();
     if let Some(sheet_ref) = unsafe { sheet.as_ref() } {
         let rules = match unsafe { sheet_ref.rules.as_ref() } {
@@ -84,7 +83,7 @@ pub(crate) fn sheet_declarations(
 
 pub(crate) fn first_rule_declares(css: &[u8]) -> bool {
     let text = c_string(css);
-    let sheet = unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) };
+    let sheet = unsafe { parse_sheet(&text) };
     let Some(sheet_ref) = (unsafe { sheet.as_ref() }) else {
         return false;
     };

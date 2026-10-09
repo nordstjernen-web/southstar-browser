@@ -425,6 +425,17 @@ Southstar Browser (unreleased):
   declarations, selector(), not, and and or, and functions such as
   font-tech() reported unsupported. Style sheets flatten and conditions
   evaluate as before.
+* The style sheet parser is Rust: style rules and their declarations,
+  @media, @supports, @container and @scope blocks, @layer blocks and
+  statements with anonymous layers, @import with layer() and media,
+  @font-face (the best src URL chosen by format), @keyframes with their
+  stops, @property with its syntax and initial value checked, and @page
+  size and margins. So are resolving a sheet's URLs against its base and
+  moving an imported sheet into a layer. The rules, layers and at-rules
+  css.c's cascade reads are built with the same structure, so pages style
+  as before (checked identical over 170,000 generated and mutated sheets);
+  only an @font-face font-weight of "nan" now reads as no weight instead
+  of an undefined integer conversion.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

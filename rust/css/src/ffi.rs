@@ -16,6 +16,7 @@ mod nesting;
 mod property;
 mod selector;
 mod shadow;
+mod sheet;
 mod shorthand;
 mod supports;
 mod transform;
@@ -32,6 +33,7 @@ pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
+pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
 pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
 
