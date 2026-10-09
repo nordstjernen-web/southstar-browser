@@ -87,6 +87,18 @@ gboolean      ns_css_font_ligatures_valid(const char *s);
 gboolean      ns_css_font_feature_settings_valid(const char *s);
 gboolean      ns_css_font_variation_settings_valid(const char *s);
 
+ns_css_value *ns_css_parse_time_property(const char *t);
+ns_css_value *ns_css_parse_animation_duration(const char *t);
+ns_css_value *ns_css_parse_anim_longhand(ns_css_prop prop, const char *t);
+ns_css_value *ns_css_parse_anim_value(const char *t, gboolean is_animation);
+char         *ns_css_anim_entry_longhand_text(const ns_css_anim_entry *e,
+                                              ns_css_prop prop);
+gboolean      ns_css_anim_range_shorthand_expand(const char *text,
+                                                 char **out_start,
+                                                 char **out_end);
+char         *ns_css_ident_decode(const char *tok);
+gboolean      ns_css_starts_math_fn(const char *s, const char *e);
+
 ns_css_value *ns_css_parse_box_shadow(const char *text);
 char         *ns_css_shadow_specified_canonical(const char *text,
                                                 gboolean is_text);
@@ -135,7 +147,12 @@ G_STATIC_ASSERT(sizeof(ns_css_track) == 88 &&
                 sizeof(ns_css_areas) == 784 &&
                 sizeof(ns_css_font_metrics) == 56 &&
                 sizeof(ns_css_shadow) == 112 &&
-                sizeof(ns_css_shadow_list) == 904);
+                sizeof(ns_css_shadow_list) == 904 &&
+                sizeof(ns_css_timing) == 48 &&
+                sizeof(ns_css_anim_entry) == 120 &&
+                offsetof(ns_css_anim_entry, timing) == 32 &&
+                offsetof(ns_css_anim_entry, iterations) == 88 &&
+                sizeof(ns_css_anim_list) == 968);
 #endif
 
 #if GLIB_SIZEOF_VOID_P == 8

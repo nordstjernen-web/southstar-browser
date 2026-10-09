@@ -293,6 +293,14 @@ Southstar Browser (unreleased):
   blur, spread, colours, inset and font-relative or calc() lengths, their
   canonical specified spelling and their computed text. Shadows paint and
   serialize as before.
+* CSS time values, easing functions and the animation and transition
+  properties are Rust: times built from s, ms and the math functions,
+  their specified and computed spelling, steps(), cubic-bezier(),
+  linear() and the easing keywords, every animation and transition
+  longhand list with its canonical form, animation-range, the animation
+  and transition shorthands, the per-element lists the animation engine
+  runs, and their serialization in getComputedStyle and element.style.
+  Animations and transitions run and serialize as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

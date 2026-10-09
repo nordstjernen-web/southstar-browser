@@ -8,7 +8,9 @@ use crate::calc::{self, Parsed};
 use crate::container;
 use crate::lex::{ident_serialize, read_ident, read_string};
 use crate::math;
-use crate::scan::{is_ws, scan_until, skip_ws, split_ws_limit, starts_with_ci, trim_range};
+use crate::scan::{
+    is_ws, scan_until, skip_ws, split_ws_limit, starts_with_ci, strtol10, trim_range,
+};
 use crate::transform::is_math_fn_start;
 use crate::units::{
     self, CAP, CH, CQH, CQMAX, CQMIN, CQW, EM, EX, IC, LH, NUMBER, PERCENT, PX, REM, RLH,
@@ -113,41 +115,6 @@ pub(crate) struct Areas {
 fn c_text(bytes: &[u8]) -> CString {
     let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..len]).unwrap_or_default()
-}
-
-fn strtol10(text: &[u8]) -> (i64, usize) {
-    let mut p = 0;
-    while p < text.len() && (text[p] == b' ' || (b'\t'..=b'\r').contains(&text[p])) {
-        p += 1;
-    }
-    let negative = text.get(p) == Some(&b'-');
-    if matches!(text.get(p), Some(b'+' | b'-')) {
-        p += 1;
-    }
-    let digits = p;
-    let mut value: i64 = 0;
-    let mut overflow = false;
-    while p < text.len() && text[p].is_ascii_digit() {
-        let digit = i64::from(text[p] - b'0');
-        match value.checked_mul(10).and_then(|v| {
-            if negative {
-                v.checked_sub(digit)
-            } else {
-                v.checked_add(digit)
-            }
-        }) {
-            Some(v) => value = v,
-            None => overflow = true,
-        }
-        p += 1;
-    }
-    if p == digits {
-        return (0, 0);
-    }
-    if overflow {
-        value = if negative { i64::MIN } else { i64::MAX };
-    }
-    (value, p)
 }
 
 fn track_token(tok: &[u8]) -> Option<Track> {

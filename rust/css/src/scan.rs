@@ -229,3 +229,38 @@ pub(crate) fn match_paren_quoted(s: &[u8], p: usize, end: usize) -> Option<usize
     }
     None
 }
+
+pub(crate) fn strtol10(text: &[u8]) -> (i64, usize) {
+    let mut p = 0;
+    while p < text.len() && (text[p] == b' ' || (b'\t'..=b'\r').contains(&text[p])) {
+        p += 1;
+    }
+    let negative = text.get(p) == Some(&b'-');
+    if matches!(text.get(p), Some(b'+' | b'-')) {
+        p += 1;
+    }
+    let digits = p;
+    let mut value: i64 = 0;
+    let mut overflow = false;
+    while p < text.len() && text[p].is_ascii_digit() {
+        let digit = i64::from(text[p] - b'0');
+        match value.checked_mul(10).and_then(|v| {
+            if negative {
+                v.checked_sub(digit)
+            } else {
+                v.checked_add(digit)
+            }
+        }) {
+            Some(v) => value = v,
+            None => overflow = true,
+        }
+        p += 1;
+    }
+    if p == digits {
+        return (0, 0);
+    }
+    if overflow {
+        value = if negative { i64::MIN } else { i64::MAX };
+    }
+    (value, p)
+}

@@ -7,6 +7,7 @@ use core::mem::{offset_of, size_of};
 
 use southstar_glib as glib;
 
+use super::animation::RawList;
 use crate::calc::{Calc, CalcArg, Parsed};
 use crate::gradient::Gradient;
 use crate::grid::{AREAS_MAX, Areas, Tracks};
@@ -21,6 +22,7 @@ pub(crate) const KIND_GRADIENT: c_uint = 6;
 pub(crate) const KIND_TRACKS: c_uint = 7;
 pub(crate) const KIND_TRANSFORM: c_uint = 9;
 pub(crate) const KIND_AREAS: c_uint = 10;
+pub(crate) const KIND_ANIM: c_uint = 11;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -81,6 +83,7 @@ pub(crate) union ValueUnion {
     pub gradient: Gradient,
     pub transform: Transform,
     pub shadow: ShadowList,
+    pub anim: RawList,
     pub tracks: Tracks,
     pub areas: RawAreas,
     pub keyword: *mut c_char,
@@ -242,5 +245,21 @@ pub(crate) fn new_shadow(list: &ShadowList) -> *mut NsCssValue {
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_SHADOW;
     value_ref.u.shadow = *list;
+    value
+}
+
+pub(crate) fn new_keyword(text: &[u8]) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_KEYWORD;
+    value_ref.u.keyword = glib::strdup(text);
+    value
+}
+
+pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
+    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value_ref = unsafe { &mut *value };
+    value_ref.kind = KIND_ANIM;
+    value_ref.u.anim = *list;
     value
 }
