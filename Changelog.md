@@ -573,6 +573,10 @@ Southstar Browser (unreleased):
   gathered declarations, custom properties and pending declarations are
   identical and in the same order (checked over 2.75 million generated
   element and sheet combinations), at the same speed.
+* The user-agent style sheet, the default styles of HTML elements and
+  the quirks-mode additions, now lives as plain CSS in rust/css
+  (ua.css, ua-quirks.css) instead of C string literals; each is parsed
+  once per process from the same text as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

@@ -64,6 +64,7 @@ char         *ns_css_substitute_vars(const char *value,
                                      GHashTable *registered, int depth);
 int           ns_css_custom_value_wide_kind(const char *text);
 struct ns_css_rule_index *ns_css_rule_index_build(ns_css_stylesheet *sheet);
+const ns_css_stylesheet *ns_css_ua_sheet(gboolean quirks);
 const struct ns_css_rule_index *ns_css_rule_index_ensure(
     const ns_css_stylesheet *sheet);
 void ns_css_gather_matches(const ns_css_stylesheet *sheet, int origin,
