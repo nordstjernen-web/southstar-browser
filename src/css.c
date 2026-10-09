@@ -419,15 +419,6 @@ prop_is_alignment(ns_css_prop p)
            p == NS_CSS_JUSTIFY_ITEMS || p == NS_CSS_JUSTIFY_SELF;
 }
 
-static ns_css_value *
-keyword_value(char *owned)
-{
-    ns_css_value *v = g_new0(ns_css_value, 1);
-    v->kind = NS_CSS_V_KEYWORD;
-    v->u.keyword = owned;
-    return v;
-}
-
 const ns_css_value *
 ns_css_border_image_source(const ns_style *s)
 {
@@ -1008,7 +999,7 @@ typedef struct var_match {
 } var_match;
 
 #if GLIB_SIZEOF_VOID_P == 8
-G_STATIC_ASSERT(sizeof(var_match) == 72);
+G_STATIC_ASSERT(sizeof(var_match) == 72 && sizeof(match_entry) == 72);
 #endif
 
 typedef struct pending_match {
@@ -1048,45 +1039,12 @@ css_layer_cmp(int a, int b, gboolean important)
     return a < b ? -1 : 1;
 }
 
-static gboolean
-css_same_revert_origin(int rollback_origin, int candidate_origin)
-{
-    if (rollback_origin == NS_CSS_ORIGIN_AUTHOR)
-        return candidate_origin == NS_CSS_ORIGIN_AUTHOR ||
-               candidate_origin == NS_CSS_ORIGIN_PRESENTATIONAL;
-    return rollback_origin == candidate_origin;
-}
-
 static int
 css_layer_rank_for(GHashTable *layer_ranks, const char *layer_name)
 {
     if (!layer_name || !layer_ranks) return NS_CSS_LAYER_NONE;
     gpointer v = g_hash_table_lookup(layer_ranks, layer_name);
     return v ? GPOINTER_TO_INT(v) - 1 : NS_CSS_LAYER_NONE;
-}
-
-static int
-match_cmp(gconstpointer a_, gconstpointer b_)
-{
-    const match_entry *a = a_;
-    const match_entry *b = b_;
-    if (a->important != b->important) return a->important ? 1 : -1;
-    if (a->origin    != b->origin)
-        return a->important ? (a->origin > b->origin ? -1 : 1)
-                            : (a->origin < b->origin ? -1 : 1);
-    if (a->inline_style != b->inline_style) return a->inline_style ? 1 : -1;
-    int layer_cmp = css_layer_cmp(a->layer_order, b->layer_order, a->important);
-    if (layer_cmp != 0) return layer_cmp;
-    if (a->spec_a    != b->spec_a)    return a->spec_a < b->spec_a ? -1 : 1;
-    if (a->spec_b    != b->spec_b)    return a->spec_b < b->spec_b ? -1 : 1;
-    if (a->spec_c    != b->spec_c)    return a->spec_c < b->spec_c ? -1 : 1;
-    if (a->scope_order != b->scope_order)
-        return a->scope_order < b->scope_order ? -1 : 1;
-    if (a->sheet_index  != b->sheet_index)
-        return a->sheet_index < b->sheet_index ? -1 : 1;
-    if (a->source_order != b->source_order)
-        return a->source_order < b->source_order ? -1 : 1;
-    return a->decl_order < b->decl_order ? -1 : 1;
 }
 
 #define CSS_GATHER_DESTS_MAX (NS_CSS_PE_FILE_SELECTOR_BUTTON + 1)
@@ -1830,311 +1788,6 @@ ua_sheet_for(const ns_node *doc)
     }
     if (!standard) standard = ns_css_stylesheet_parse(kUa, -1);
     return standard;
-}
-
-static gboolean
-value_is_inherit(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "inherit") == 0;
-}
-
-static gboolean
-value_is_initial(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "initial") == 0;
-}
-
-static gboolean
-value_is_unset(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "unset") == 0;
-}
-
-static gboolean
-value_is_revert(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "revert") == 0;
-}
-
-static gboolean
-value_is_revert_layer(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "revert-layer") == 0;
-}
-
-static gboolean
-value_is_revert_rule(const ns_css_value *v)
-{
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "revert-rule") == 0;
-}
-
-static const ns_css_value *
-cascade_rollback_value(GArray *matches, gint before,
-                       const match_entry *rollback)
-{
-    gboolean layer_only = value_is_revert_layer(rollback->value);
-    gboolean rule_only = value_is_revert_rule(rollback->value);
-    for (gint j = before; j >= 0; j--) {
-        match_entry *prev = &g_array_index(matches, match_entry, (guint)j);
-        if (prev->prop != rollback->prop) continue;
-        if (rule_only) {
-            if (prev->rule == rollback->rule) continue;
-        } else if (layer_only) {
-            if (prev->origin == rollback->origin) {
-                if (rollback->inline_style) {
-                    if (prev->inline_style)
-                        continue;
-                } else if (rollback->layer_order == NS_CSS_LAYER_NONE) {
-                    if (prev->layer_order == NS_CSS_LAYER_NONE)
-                        continue;
-                } else if (prev->layer_order >= rollback->layer_order) {
-                    continue;
-                }
-            }
-        } else if (css_same_revert_origin(rollback->origin, prev->origin)) {
-            continue;
-        }
-        if (value_is_revert(prev->value) ||
-            value_is_revert_layer(prev->value) ||
-            value_is_revert_rule(prev->value))
-            return cascade_rollback_value(matches, j - 1, prev);
-        return prev->value;
-    }
-    return NULL;
-}
-
-static gboolean
-style_is_out_of_flow(const ns_style *s)
-{
-    const ns_css_value *pos = s->values[NS_CSS_POSITION];
-    if (ns_css_keyword_is(pos, "absolute") || ns_css_keyword_is(pos, "fixed"))
-        return TRUE;
-    const ns_css_value *flt = s->values[NS_CSS_FLOAT];
-    return flt && flt->kind == NS_CSS_V_KEYWORD && flt->u.keyword &&
-           strcmp(flt->u.keyword, "none") != 0;
-}
-
-static ns_display
-legacy_webkit_box_display(ns_style *s, ns_display d)
-{
-    const ns_css_value *disp = s->values[NS_CSS_DISPLAY];
-    if (!disp || disp->kind != NS_CSS_V_KEYWORD || !disp->u.keyword ||
-        strncmp(disp->u.keyword, "-webkit-", 8) != 0)
-        return d;
-    const ns_css_value *orient = s->values[NS_CSS_WEBKIT_BOX_ORIENT];
-    if (!ns_css_keyword_is(orient, "vertical") &&
-        !ns_css_keyword_is(orient, "block-axis"))
-        return d;
-    const ns_css_value *clamp = s->values[NS_CSS_LINE_CLAMP];
-    if (clamp && clamp->kind == NS_CSS_V_LENGTH && clamp->u.length.v >= 1) {
-        d.inner = NS_DISPLAY_INNER_FLOW_ROOT;
-        return d;
-    }
-    ns_css_value_free(s->values[NS_CSS_FLEX_DIRECTION]);
-    s->values[NS_CSS_FLEX_DIRECTION] = keyword_value_dup("column");
-    return d;
-}
-
-static ns_display
-display_after_blockification(ns_display d, const ns_style *s,
-                             const ns_style *layout_parent, gboolean is_root)
-{
-    if (d.box == NS_DISPLAY_BOX_NONE) return d;
-    if (is_root) {
-        if (d.box == NS_DISPLAY_BOX_CONTENTS) {
-            d.box = NS_DISPLAY_BOX_NORMAL;
-            d.inner = NS_DISPLAY_INNER_FLOW;
-        }
-        return ns_css_display_blockified(d);
-    }
-    if (d.box != NS_DISPLAY_BOX_NORMAL) return d;
-    if (style_is_out_of_flow(s)) return ns_css_display_blockified(d);
-    ns_display parent = ns_css_display_of(layout_parent);
-    if (ns_display_is_flex_container(parent) ||
-        ns_display_is_grid_container(parent))
-        return ns_css_display_blockified(d);
-    return d;
-}
-
-static void
-overflow_pair_normalize(ns_style *out)
-{
-    const ns_css_value *x = out->values[NS_CSS_OVERFLOW_X];
-    const ns_css_value *y = out->values[NS_CSS_OVERFLOW_Y];
-    const char *kx = x && x->kind == NS_CSS_V_KEYWORD ? x->u.keyword : NULL;
-    const char *ky = y && y->kind == NS_CSS_V_KEYWORD ? y->u.keyword : NULL;
-    gboolean x_vis = !kx || strcmp(kx, "visible") == 0;
-    gboolean y_vis = !ky || strcmp(ky, "visible") == 0;
-    gboolean x_scrolls = kx && strcmp(kx, "visible") != 0 && strcmp(kx, "clip") != 0;
-    gboolean y_scrolls = ky && strcmp(ky, "visible") != 0 && strcmp(ky, "clip") != 0;
-    if (x_vis && y_scrolls) {
-        ns_css_value_free(out->values[NS_CSS_OVERFLOW_X]);
-        out->values[NS_CSS_OVERFLOW_X] = keyword_value(g_strdup("auto"));
-    } else if (y_vis && x_scrolls) {
-        ns_css_value_free(out->values[NS_CSS_OVERFLOW_Y]);
-        out->values[NS_CSS_OVERFLOW_Y] = keyword_value(g_strdup("auto"));
-    }
-}
-
-static ns_css_value *
-initial_value_of(int prop)
-{
-    static __thread ns_css_value *parsed[NS_CSS_PROP_COUNT];
-    static __thread gboolean tried[NS_CSS_PROP_COUNT];
-    if (!tried[prop]) {
-        tried[prop] = TRUE;
-        const char *text = ns_css_initial_value_text(ns_css_prop_name(prop));
-        if (text) parsed[prop] = ns_css_parse_value_for((ns_css_prop)prop, text);
-    }
-    return ns_css_value_dup(parsed[prop]);
-}
-
-static void
-cascade_for(GArray *matches, ns_style *out, const ns_style *parent_style,
-            const ns_style *layout_parent, gboolean is_root, double root_px)
-{
-    g_array_sort(matches, match_cmp);
-    for (guint i = 0; i < matches->len; i++) {
-        match_entry *m = &g_array_index(matches, match_entry, i);
-        if (value_is_revert(m->value) || value_is_revert_layer(m->value) ||
-            value_is_revert_rule(m->value)) {
-            const ns_css_value *fallback =
-                cascade_rollback_value(matches, (gint)i - 1, m);
-            ns_css_value_free(out->values[m->prop]);
-            out->values[m->prop] = ns_css_value_dup(fallback);
-            continue;
-        }
-        ns_css_value_free(out->values[m->prop]);
-        out->values[m->prop] = ns_css_value_dup(m->value);
-    }
-    gboolean explicit_initial[NS_CSS_PROP_COUNT] = {0};
-    overflow_pair_normalize(out);
-    for (int i = 0; i < NS_CSS_PROP_COUNT; i++) {
-        if (value_is_inherit(out->values[i])) {
-            ns_css_value_free(out->values[i]);
-            out->values[i] = parent_style && parent_style->values[i]
-                             ? ns_css_value_dup(parent_style->values[i])
-                             : NULL;
-        } else if (value_is_initial(out->values[i])) {
-            ns_css_value_free(out->values[i]);
-            out->values[i] = ns_css_prop_inherits(i) ? initial_value_of(i)
-                                                           : NULL;
-            explicit_initial[i] = TRUE;
-        } else if (value_is_unset(out->values[i])) {
-            ns_css_value_free(out->values[i]);
-            out->values[i] = NULL;
-        }
-    }
-    if (parent_style) {
-        for (int i = 0; i < NS_CSS_PROP_COUNT; i++) {
-            if (out->values[i]) continue;
-            if (explicit_initial[i]) continue;
-            if (!ns_css_prop_inherits(i)) continue;
-            if (parent_style->values[i])
-                out->values[i] = ns_css_value_dup(parent_style->values[i]);
-        }
-    }
-    if (ns_css_keyword_is(out->values[NS_CSS_COLOR], "currentcolor")) {
-        ns_css_value_free(out->values[NS_CSS_COLOR]);
-        out->values[NS_CSS_COLOR] = parent_style
-            ? ns_css_value_dup(parent_style->values[NS_CSS_COLOR])
-            : initial_value_of(NS_CSS_COLOR);
-    }
-    if (ns_css_keyword_is(out->values[NS_CSS_FONT_WEIGHT], "bolder") ||
-        ns_css_keyword_is(out->values[NS_CSS_FONT_WEIGHT], "lighter")) {
-        int parent_weight = parent_style
-            ? ns_css_font_weight_number(
-                  parent_style->values[NS_CSS_FONT_WEIGHT], 400)
-            : 400;
-        gboolean bolder =
-            ns_css_keyword_is(out->values[NS_CSS_FONT_WEIGHT], "bolder");
-        ns_css_value_free(out->values[NS_CSS_FONT_WEIGHT]);
-        out->values[NS_CSS_FONT_WEIGHT] = keyword_value(
-            g_strdup_printf("%d", ns_css_font_weight_relative(parent_weight, bolder)));
-    }
-    {
-        const ns_css_prop color_props[] = {
-            NS_CSS_BACKGROUND_COLOR,
-            NS_CSS_BORDER_TOP_COLOR, NS_CSS_BORDER_RIGHT_COLOR,
-            NS_CSS_BORDER_BOTTOM_COLOR, NS_CSS_BORDER_LEFT_COLOR,
-            NS_CSS_OUTLINE_COLOR,
-            NS_CSS_TEXT_DECORATION_COLOR,
-            NS_CSS_COLUMN_RULE_COLOR,
-            NS_CSS_ACCENT_COLOR,
-            NS_CSS_CARET_COLOR,
-            NS_CSS_FILL,
-            NS_CSS_STROKE,
-            NS_CSS_STOP_COLOR,
-        };
-        for (gsize i = 0; i < G_N_ELEMENTS(color_props); i++) {
-            ns_css_value *v = out->values[color_props[i]];
-            if (!v || v->kind != NS_CSS_V_KEYWORD || !v->u.keyword) continue;
-            if (strcmp(v->u.keyword, "currentcolor") == 0) {
-                ns_css_value_free(out->values[color_props[i]]);
-                out->values[color_props[i]] = out->values[NS_CSS_COLOR]
-                    ? ns_css_value_dup(out->values[NS_CSS_COLOR])
-                    : NULL;
-                out->currentcolor_bits |= 1u << i;
-            } else if (strcmp(v->u.keyword, "transparent") == 0) {
-                ns_css_value_free(out->values[color_props[i]]);
-                ns_css_value *t = g_new0(ns_css_value, 1);
-                t->kind = NS_CSS_V_COLOR;
-                t->u.color.r = t->u.color.g = t->u.color.b = 0;
-                t->u.color.a = 0;
-                out->values[color_props[i]] = t;
-            }
-        }
-        const ns_css_prop shadow_props[] = { NS_CSS_BOX_SHADOW, NS_CSS_TEXT_SHADOW };
-        const ns_css_value *cur = out->values[NS_CSS_COLOR];
-        for (gsize i = 0; i < G_N_ELEMENTS(shadow_props); i++) {
-            ns_css_value *v = out->values[shadow_props[i]];
-            if (!v || v->kind != NS_CSS_V_SHADOW) continue;
-            gboolean needs = FALSE;
-            for (int k = 0; k < v->u.shadow.n; k++)
-                if (v->u.shadow.s[k].currentcolor) needs = TRUE;
-            if (!needs) continue;
-            v = ns_css_value_cow(out, shadow_props[i]);
-            for (int k = 0; k < v->u.shadow.n; k++) {
-                ns_css_shadow *sh = &v->u.shadow.s[k];
-                if (!sh->currentcolor) continue;
-                sh->currentcolor = FALSE;
-                if (cur && cur->kind == NS_CSS_V_COLOR) {
-                    sh->r = cur->u.color.r;
-                    sh->g = cur->u.color.g;
-                    sh->b = cur->u.color.b;
-                    sh->a = cur->u.color.a;
-                } else {
-                    sh->r = sh->g = sh->b = 0;
-                    sh->a = 255;
-                }
-            }
-        }
-    }
-    {
-        const ns_css_value *disp = out->values[NS_CSS_DISPLAY];
-        ns_display d = { .outer = NS_DISPLAY_OUTER_INLINE };
-        if (disp && disp->kind == NS_CSS_V_KEYWORD && disp->u.keyword)
-            d = ns_css_display_from_keyword(disp->u.keyword);
-        out->specified_inline = d.box == NS_DISPLAY_BOX_NORMAL &&
-                                d.outer == NS_DISPLAY_OUTER_INLINE;
-        ns_display used = display_after_blockification(
-            legacy_webkit_box_display(out, d), out, layout_parent, is_root);
-        if (memcmp(&d, &used, sizeof d) != 0) {
-            ns_css_value *nv = g_new0(ns_css_value, 1);
-            nv->kind = NS_CSS_V_KEYWORD;
-            nv->u.keyword = ns_css_display_serialize(used);
-            ns_css_value_free(out->values[NS_CSS_DISPLAY]);
-            out->values[NS_CSS_DISPLAY] = nv;
-        }
-        out->display = used;
-    }
-    ns_css_resolve_em_units(out, parent_style, root_px);
 }
 
 #define NS_CSS_MAX_CASCADE_DEPTH 512
@@ -2921,9 +2574,10 @@ cascade_walk(ns_node *node,
             resolve_pending_into_matches(pending_matches, s->vars,
                                          matches, owned_values, node);
 
-            cascade_for(matches, s, parent_style, layout_parent,
-                    node->parent &&
-                        node->parent->kind == NS_NODE_DOCUMENT, *root_px);
+            ns_css_cascade_apply(matches, s, parent_style, layout_parent,
+                                 node->parent &&
+                                     node->parent->kind == NS_NODE_DOCUMENT,
+                                 *root_px);
             ns_css_compute_registered_vars(s, parent_style, g_registered_props,
                                            *root_px);
             strip_native_widget_decorations(node, s);
@@ -2946,10 +2600,11 @@ cascade_walk(ns_node *node,
                 ps->vars = ns_css_build_vars(s->vars, pe_vars, g_registered_props,
                                          g_var_adjust_cache);
                 resolve_pending_into_matches(pe_pending, ps->vars, pm, pe_owned, node);
-                cascade_for(pm, ps, s,
-                            pe == NS_CSS_PE_BEFORE || pe == NS_CSS_PE_AFTER
-                                ? s : NULL,
-                            FALSE, *root_px);
+                ns_css_cascade_apply(pm, ps, s,
+                                     pe == NS_CSS_PE_BEFORE ||
+                                         pe == NS_CSS_PE_AFTER
+                                         ? s : NULL,
+                                     FALSE, *root_px);
                 ns_css_compute_registered_vars(ps, s, g_registered_props,
                                                *root_px);
                 gboolean keep = TRUE;

@@ -5,6 +5,7 @@
 mod animation;
 mod attr_fn;
 mod border_image;
+mod cascade;
 mod computed_units;
 mod container;
 mod custom_props;

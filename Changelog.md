@@ -538,6 +538,16 @@ Southstar Browser (unreleased):
   the layer's own rules. The ranks are identical (checked over 400,000
   generated sets of @layer statements, blocks, nested and anonymous
   layers and layered @imports).
+* Applying an element's matched declarations is Rust: cascade order
+  (importance, origin, inline style, layer, specificity, scope
+  proximity, sheet and source order), revert, revert-layer and
+  revert-rule rolled back to the declaration they reveal, inherit,
+  initial and unset, inheritance from the parent, currentcolor and
+  transparent in the color properties and shadows, bolder and lighter,
+  display blockification for roots, floats, positioned elements and
+  flex or grid items, the legacy -webkit-box forms, and the overflow
+  pair. Styles come out identical (checked over 480,000 generated
+  elements, 116 million property values) and about 30% faster.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

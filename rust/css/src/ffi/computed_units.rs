@@ -14,6 +14,7 @@ use super::value::{
 };
 use super::vars::RawVarMap;
 use crate::computed_units;
+use crate::display::Display;
 use crate::grid::Tracks;
 use crate::prop::Prop;
 use crate::shadow::ShadowList;
@@ -25,13 +26,13 @@ pub(crate) const PROP_COUNT: usize = Prop::ALL.len();
 
 #[repr(C)]
 pub(crate) struct RawStyle {
-    values: [*mut NsCssValue; PROP_COUNT],
-    _display: [u8; 5],
-    _specified_inline: u8,
+    pub(super) values: [*mut NsCssValue; PROP_COUNT],
+    pub(super) display: Display,
+    pub(super) specified_inline: u8,
     _pseudo_styles: [*mut c_void; 11],
     _share_id: u64,
     _ref_count: c_int,
-    _currentcolor_bits: u32,
+    pub(super) currentcolor_bits: u32,
     pub(super) vars: *mut RawVarMap,
 }
 
@@ -104,7 +105,7 @@ fn slot_mut(v: &mut NsCssValue) -> SlotMut<'_> {
     }
 }
 
-pub(crate) struct ComputedStyle<'a>(&'a mut RawStyle);
+pub(crate) struct ComputedStyle<'a>(pub(super) &'a mut RawStyle);
 
 pub(crate) struct StyleView<'a>(pub(super) &'a RawStyle);
 
@@ -141,7 +142,7 @@ impl StyleView<'_> {
     }
 }
 
-unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
+pub(super) unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
     let Some(&value) = style.values.get(prop) else {
         return ptr::null_mut();
     };

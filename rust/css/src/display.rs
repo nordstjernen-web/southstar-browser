@@ -10,22 +10,22 @@ use crate::scan::{is_ws, split_ws_limit, split_ws_paren, trim_range};
 use crate::time::starts_math_fn;
 use crate::units::{self, NUMBER, PERCENT, number_text};
 
-const BOX_NORMAL: u8 = 0;
-const BOX_NONE: u8 = 1;
-const BOX_CONTENTS: u8 = 2;
+pub(crate) const BOX_NORMAL: u8 = 0;
+pub(crate) const BOX_NONE: u8 = 1;
+pub(crate) const BOX_CONTENTS: u8 = 2;
 
-const OUTER_INLINE: u8 = 0;
+pub(crate) const OUTER_INLINE: u8 = 0;
 const OUTER_BLOCK: u8 = 1;
 const OUTER_RUN_IN: u8 = 2;
 
-const INNER_FLOW: u8 = 0;
-const INNER_FLOW_ROOT: u8 = 1;
+pub(crate) const INNER_FLOW: u8 = 0;
+pub(crate) const INNER_FLOW_ROOT: u8 = 1;
 const INNER_TABLE: u8 = 2;
-const INNER_FLEX: u8 = 3;
-const INNER_GRID: u8 = 4;
+pub(crate) const INNER_FLEX: u8 = 3;
+pub(crate) const INNER_GRID: u8 = 4;
 const INNER_RUBY: u8 = 5;
 
-const INTERNAL_NONE: u8 = 0;
+pub(crate) const INTERNAL_NONE: u8 = 0;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
