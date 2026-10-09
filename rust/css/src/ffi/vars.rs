@@ -22,6 +22,23 @@ pub(super) struct RawVarMap {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<RawVarMap>() == 32);
 
+pub(super) unsafe fn new_map(own: *mut GHashTable, parent: *mut RawVarMap) -> *mut RawVarMap {
+    let map = unsafe { glib::g_malloc0(size_of::<RawVarMap>()) }.cast::<RawVarMap>();
+    unsafe {
+        (*map).ref_count = 1;
+        (*map).own = own;
+        (*map).parent = parent;
+    }
+    map
+}
+
+pub(super) unsafe fn map_ref(map: *mut RawVarMap) -> *mut RawVarMap {
+    if let Some(m) = unsafe { map.as_mut() } {
+        m.ref_count += 1;
+    }
+    map
+}
+
 unsafe extern "C" {
     fn g_ptr_array_ref(array: *mut GPtrArray) -> *mut GPtrArray;
     fn g_ptr_array_sort(
@@ -43,7 +60,7 @@ struct Chain<'a> {
     registered: *mut GHashTable,
 }
 
-fn chain_lookup<'a>(mut map: Option<&'a RawVarMap>, name: &[u8]) -> Option<&'a [u8]> {
+pub(super) fn chain_lookup<'a>(mut map: Option<&'a RawVarMap>, name: &[u8]) -> Option<&'a [u8]> {
     let key = c_string(name);
     while let Some(m) = map {
         if !m.own.is_null() {

@@ -69,6 +69,10 @@ gboolean ns_css_restyle_prepare(const ns_css_stylesheet *ua,
                                 gsize n_author, guint64 sig);
 gboolean ns_css_restyle_dirty(const ns_node *node);
 void ns_css_restyle_dirty_clear(void);
+struct ns_var_map *ns_css_build_vars(struct ns_var_map *parent,
+                                     GArray *var_matches,
+                                     GHashTable *registered,
+                                     GHashTable *adjust_cache);
 const ns_node *ns_css_match_scope(void);
 const ns_node *ns_css_focus_node(void);
 const ns_node *ns_css_hover_node(void);

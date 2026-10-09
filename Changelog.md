@@ -499,6 +499,14 @@ Southstar Browser (unreleased):
   subjects above it), so the next style pass recomputes only those. The
   same elements are marked as before (checked over 20 million node
   comparisons after generated attribute and child-list mutations).
+* The custom-property cascade is Rust: an element's matched --*
+  declarations put in cascade order, revert, revert-layer and
+  revert-rule rolled back to the declaration they reveal, inherit,
+  initial and unset applied, var() references expanded, and registered
+  @property values checked against their syntax and falling back to
+  their initial or inherited value, into the variable map its style
+  carries. Maps come out identical (checked over 1.9 million generated
+  cascades) and building one is about a fifth faster.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

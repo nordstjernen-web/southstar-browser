@@ -6,6 +6,7 @@ mod animation;
 mod attr_fn;
 mod border_image;
 mod container;
+mod custom_props;
 mod declarations;
 mod display;
 mod element_state;

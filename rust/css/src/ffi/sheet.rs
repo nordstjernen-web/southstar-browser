@@ -88,6 +88,27 @@ pub(super) struct RawPropertyRule {
     pub(super) has_initial: GBoolean,
 }
 
+impl RawPropertyRule {
+    pub(super) fn inherits(&self) -> bool {
+        self.inherits != 0
+    }
+
+    pub(super) fn initial(&self) -> Option<&[u8]> {
+        if self.has_initial == 0 || self.initial_value.is_null() {
+            return None;
+        }
+        Some(unsafe { CStr::from_ptr(self.initial_value) }.to_bytes())
+    }
+
+    pub(super) fn rejects(&self, value: &[u8]) -> bool {
+        if self.syntax.is_null() || unsafe { ns_css_syntax_def_universal(self.syntax) } != 0 {
+            return false;
+        }
+        let value = c_string(value);
+        unsafe { ns_css_syntax_def_matches(self.syntax, value.as_ptr()) == 0 }
+    }
+}
+
 #[repr(C)]
 #[derive(Default)]
 pub(crate) struct PageRule {

@@ -919,16 +919,6 @@ G_STATIC_ASSERT(sizeof(ns_var_map) == 32);
 static __thread GHashTable *g_registered_props;
 
 static ns_var_map *
-ns_var_map_new(GHashTable *own, ns_var_map *parent)
-{
-    ns_var_map *m = g_new0(ns_var_map, 1);
-    m->ref = 1;
-    m->own = own;
-    m->parent = parent;
-    return m;
-}
-
-static ns_var_map *
 ns_var_map_ref(ns_var_map *m)
 {
     if (m) m->ref++;
@@ -1499,6 +1489,10 @@ typedef struct var_match {
     const char *text;
 } var_match;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(var_match) == 72);
+#endif
+
 typedef struct pending_match {
     int origin;
     int spec_a, spec_b, spec_c;
@@ -2068,78 +2062,6 @@ gather_matches_multi(const ns_css_stylesheet *sheet, int origin,
 }
 
 static int
-var_match_cmp(gconstpointer a_, gconstpointer b_)
-{
-    const var_match *a = a_;
-    const var_match *b = b_;
-    if (a->important != b->important) return a->important ? 1 : -1;
-    if (a->origin    != b->origin)
-        return a->important ? (a->origin > b->origin ? -1 : 1)
-                            : (a->origin < b->origin ? -1 : 1);
-    if (a->inline_style != b->inline_style) return a->inline_style ? 1 : -1;
-    int layer_cmp = css_layer_cmp(a->layer_order, b->layer_order, a->important);
-    if (layer_cmp != 0) return layer_cmp;
-    if (a->spec_a    != b->spec_a)    return a->spec_a < b->spec_a ? -1 : 1;
-    if (a->spec_b    != b->spec_b)    return a->spec_b < b->spec_b ? -1 : 1;
-    if (a->spec_c    != b->spec_c)    return a->spec_c < b->spec_c ? -1 : 1;
-    if (a->scope_order != b->scope_order)
-        return a->scope_order < b->scope_order ? -1 : 1;
-    if (a->sheet_index  != b->sheet_index)
-        return a->sheet_index < b->sheet_index ? -1 : 1;
-    if (a->source_order != b->source_order)
-        return a->source_order < b->source_order ? -1 : 1;
-    return a->decl_order < b->decl_order ? -1 : 1;
-}
-
-static const var_match *
-var_rollback_match(GArray *matches, gint before, const var_match *rollback,
-                   ns_custom_prop_wide kind)
-{
-    gboolean layer_only = kind == NS_CUSTOM_WIDE_REVERT_LAYER;
-    gboolean rule_only = kind == NS_CUSTOM_WIDE_REVERT_RULE;
-    for (gint j = before; j >= 0; j--) {
-        var_match *prev = &g_array_index(matches, var_match, (guint)j);
-        if (!prev->name || strcmp(prev->name, rollback->name) != 0) continue;
-        if (rule_only) {
-            if (prev->rule == rollback->rule) continue;
-        } else if (layer_only) {
-            if (prev->origin == rollback->origin) {
-                if (rollback->inline_style) {
-                    if (prev->inline_style)
-                        continue;
-                } else if (rollback->layer_order == NS_CSS_LAYER_NONE) {
-                    if (prev->layer_order == NS_CSS_LAYER_NONE)
-                        continue;
-                } else if (prev->layer_order >= rollback->layer_order) {
-                    continue;
-                }
-            }
-        } else if (css_same_revert_origin(rollback->origin, prev->origin)) {
-            continue;
-        }
-        ns_custom_prop_wide prev_kind = ns_css_custom_value_wide_kind(prev->text);
-        if (prev_kind == NS_CUSTOM_WIDE_REVERT ||
-            prev_kind == NS_CUSTOM_WIDE_REVERT_LAYER ||
-            prev_kind == NS_CUSTOM_WIDE_REVERT_RULE)
-            return var_rollback_match(matches, j - 1, prev, prev_kind);
-        return prev;
-    }
-    return NULL;
-}
-
-static const var_match *
-var_resolved_match(GArray *matches, guint index)
-{
-    var_match *match = &g_array_index(matches, var_match, index);
-    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(match->text);
-    if (kind == NS_CUSTOM_WIDE_REVERT ||
-        kind == NS_CUSTOM_WIDE_REVERT_LAYER ||
-        kind == NS_CUSTOM_WIDE_REVERT_RULE)
-        return var_rollback_match(matches, (gint)index - 1, match, kind);
-    return match;
-}
-
-static int
 pending_match_cmp(gconstpointer a_, gconstpointer b_)
 {
     const pending_match *a = a_;
@@ -2172,175 +2094,6 @@ css_collect_property_rules(GHashTable *reg, const ns_css_stylesheet *sh)
             &g_array_index(sh->property_rules, ns_css_property_rule, i);
         if (pr->name) g_hash_table_replace(reg, pr->name, pr);
     }
-}
-
-static GHashTable *
-var_prefill_plain_values(GHashTable *own, GArray *matches)
-{
-    GHashTable *last = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                             g_free, NULL);
-    GHashTable *prefilled = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                  g_free, NULL);
-    for (guint i = 0; i < matches->len; i++) {
-        var_match *vm = &g_array_index(matches, var_match, i);
-        if (!vm->name || !vm->text) continue;
-        gboolean plain = !strstr(vm->text, "var(") &&
-            ns_css_custom_value_wide_kind(vm->text) == NS_CUSTOM_WIDE_NONE &&
-            !(g_registered_props &&
-              g_hash_table_lookup(g_registered_props, vm->name));
-        gpointer seen = g_hash_table_lookup(last, vm->name);
-        guint state = plain && (!seen || GPOINTER_TO_UINT(seen) & 1u)
-            ? ((i + 1) << 1) | 1u : 2u;
-        g_hash_table_replace(last, g_strdup(vm->name), GUINT_TO_POINTER(state));
-    }
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, last);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        guint state = GPOINTER_TO_UINT(v);
-        if (!(state & 1u)) continue;
-        var_match *vm = &g_array_index(matches, var_match, (state >> 1) - 1);
-        g_hash_table_replace(own, g_strdup(vm->name), g_strdup(vm->text));
-        g_hash_table_add(prefilled, g_strdup(vm->name));
-    }
-    g_hash_table_destroy(last);
-    return prefilled;
-}
-
-static void
-var_map_apply_unregistered(GHashTable *own, const ns_var_map *parent,
-                           GArray *matches, guint index)
-{
-    var_match *current = &g_array_index(matches, var_match, index);
-    const var_match *resolved = var_resolved_match(matches, index);
-    if (!resolved) {
-        g_hash_table_remove(own, current->name);
-        return;
-    }
-    const char *value_text = resolved->text;
-    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(value_text);
-    char *expanded = NULL;
-    if (kind == NS_CUSTOM_WIDE_NONE && strstr(resolved->text, "var(")) {
-        ns_var_map scope = { .ref = 1, .own = own,
-                             .parent = (ns_var_map *)parent };
-        expanded = ns_css_substitute_vars(value_text, &scope,
-                                          g_registered_props, 0);
-        kind = ns_css_custom_value_wide_kind(expanded);
-    }
-    if (kind == NS_CUSTOM_WIDE_REVERT ||
-        kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
-        resolved = var_rollback_match(matches, (gint)index - 1, current, kind);
-        if (resolved) {
-            value_text = resolved->text;
-            kind = ns_css_custom_value_wide_kind(value_text);
-        }
-    }
-    if (kind == NS_CUSTOM_WIDE_INHERIT || kind == NS_CUSTOM_WIDE_UNSET ||
-        kind == NS_CUSTOM_WIDE_REVERT ||
-        kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
-        g_hash_table_remove(own, current->name);
-    } else if (kind == NS_CUSTOM_WIDE_INITIAL) {
-        g_hash_table_replace(own, g_strdup(current->name), g_strdup("initial"));
-    } else {
-        g_hash_table_replace(own, g_strdup(current->name),
-                             g_strdup(value_text));
-    }
-    g_free(expanded);
-}
-
-static void
-var_map_restore_default(GHashTable *vars, const ns_var_map *parent,
-                        const char *name, const ns_css_property_rule *pr,
-                        gboolean inherit)
-{
-    const char *parent_value = inherit && parent
-        ? ns_var_map_lookup(parent, name) : NULL;
-    if (parent_value) {
-        g_hash_table_replace(vars, g_strdup(name), g_strdup(parent_value));
-    } else if (pr && pr->has_initial) {
-        g_hash_table_replace(vars, g_strdup(name),
-                             g_strdup(pr->initial_value));
-    } else if (inherit || ns_var_map_lookup(parent, name)) {
-        g_hash_table_replace(vars, g_strdup(name), g_strdup("initial"));
-    } else {
-        g_hash_table_remove(vars, name);
-    }
-}
-
-static void
-var_map_reset_registered(GHashTable *own, const ns_var_map *parent)
-{
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, g_registered_props);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        const ns_css_property_rule *pr = v;
-        const char *inherited = ns_var_map_lookup(parent, k);
-        const char *start = pr->inherits && inherited ? inherited
-                          : pr->has_initial ? pr->initial_value : NULL;
-        if (start) {
-            if (g_strcmp0(inherited, start) != 0)
-                g_hash_table_replace(own, g_strdup(k), g_strdup(start));
-        } else if (inherited && g_ascii_strcasecmp(inherited, "initial") != 0) {
-            g_hash_table_replace(own, g_strdup(k), g_strdup("initial"));
-        }
-    }
-}
-
-static void
-var_map_apply_registered(GHashTable *vars, const ns_var_map *parent,
-                         GArray *matches, guint index)
-{
-    var_match *current = &g_array_index(matches, var_match, index);
-    const var_match *resolved = var_resolved_match(matches, index);
-    ns_css_property_rule *pr = g_registered_props
-        ? g_hash_table_lookup(g_registered_props, current->name) : NULL;
-    if (!resolved) {
-        var_map_restore_default(vars, parent, current->name, pr,
-                                !pr || pr->inherits);
-        return;
-    }
-    const char *value_text = resolved->text;
-    ns_custom_prop_wide kind = ns_css_custom_value_wide_kind(value_text);
-    char *expanded = NULL;
-    if (kind == NS_CUSTOM_WIDE_NONE && strstr(resolved->text, "var(")) {
-        ns_var_map scope = { .ref = 1, .own = vars,
-                             .parent = (ns_var_map *)parent };
-        expanded = ns_css_substitute_vars(value_text, &scope,
-                                          g_registered_props, 0);
-        kind = ns_css_custom_value_wide_kind(expanded);
-    }
-    if (kind == NS_CUSTOM_WIDE_REVERT ||
-        kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
-        resolved = var_rollback_match(matches, (gint)index - 1, current, kind);
-        if (resolved) {
-            value_text = resolved->text;
-            kind = ns_css_custom_value_wide_kind(value_text);
-        }
-    }
-    if (kind == NS_CUSTOM_WIDE_INHERIT) {
-        var_map_restore_default(vars, parent, current->name, pr, TRUE);
-    } else if (kind == NS_CUSTOM_WIDE_UNSET) {
-        var_map_restore_default(vars, parent, current->name, pr,
-                                !pr || pr->inherits);
-    } else if (kind == NS_CUSTOM_WIDE_INITIAL) {
-        var_map_restore_default(vars, parent, current->name, pr, FALSE);
-        if (!pr || !pr->has_initial)
-            g_hash_table_replace(vars, g_strdup(current->name),
-                                 g_strdup("initial"));
-    } else if (kind == NS_CUSTOM_WIDE_REVERT ||
-               kind == NS_CUSTOM_WIDE_REVERT_LAYER) {
-        var_map_restore_default(vars, parent, current->name, pr,
-                                !pr || pr->inherits);
-    } else if (pr && pr->syntax && !ns_css_syntax_def_universal(pr->syntax) &&
-               !ns_css_syntax_def_matches(pr->syntax,
-                                          expanded ? expanded : value_text)) {
-        var_map_restore_default(vars, parent, current->name, pr, pr->inherits);
-    } else {
-        g_hash_table_replace(vars, g_strdup(current->name),
-                             g_strdup(value_text));
-    }
-    g_free(expanded);
 }
 
 static double
@@ -2564,65 +2317,6 @@ compute_registered_vars(ns_style *s, const ns_style *parent_style,
         if (computed) g_hash_table_iter_replace(&it, computed);
     }
     g_free(current_color);
-}
-
-static ns_var_map *
-build_vars_for_element(const ns_style *parent_style, GArray *var_matches)
-{
-    ns_var_map *parent = parent_style ? parent_style->vars : NULL;
-    gboolean parent_has = parent != NULL;
-    gboolean have_regs  = g_registered_props &&
-                          g_hash_table_size(g_registered_props) > 0;
-    gboolean have_local = var_matches && var_matches->len > 0;
-    if (!parent_has && !have_regs && !have_local)
-        return NULL;
-
-    if (!have_regs) {
-        if (!have_local)
-            return ns_var_map_ref(parent);
-        GHashTable *own = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                g_free, g_free);
-        g_array_sort(var_matches, var_match_cmp);
-        GHashTable *prefilled = var_prefill_plain_values(own, var_matches);
-        for (guint i = 0; i < var_matches->len; i++) {
-            var_match *vm = &g_array_index(var_matches, var_match, i);
-            if (!vm->name || !vm->text) continue;
-            if (g_hash_table_contains(prefilled, vm->name)) continue;
-            var_map_apply_unregistered(own, parent, var_matches, i);
-        }
-        g_hash_table_destroy(prefilled);
-        return ns_var_map_new(own, ns_var_map_ref(parent));
-    }
-
-    if (parent_has && !have_local && g_var_adjust_cache) {
-        ns_var_map *hit = g_hash_table_lookup(g_var_adjust_cache, parent);
-        if (hit) return ns_var_map_ref(hit);
-    }
-    GHashTable *own = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                            g_free, g_free);
-    var_map_reset_registered(own, parent);
-    if (have_local) {
-        g_array_sort(var_matches, var_match_cmp);
-        GHashTable *prefilled = var_prefill_plain_values(own, var_matches);
-        for (guint i = 0; i < var_matches->len; i++) {
-            var_match *vm = &g_array_index(var_matches, var_match, i);
-            if (!vm->name || !vm->text) continue;
-            if (g_hash_table_contains(prefilled, vm->name)) continue;
-            var_map_apply_registered(own, parent, var_matches, i);
-        }
-        g_hash_table_destroy(prefilled);
-    }
-    ns_var_map *built;
-    if (parent_has && !have_local && g_hash_table_size(own) == 0) {
-        g_hash_table_destroy(own);
-        built = ns_var_map_ref(parent);
-    } else {
-        built = ns_var_map_new(own, ns_var_map_ref(parent));
-    }
-    if (parent_has && !have_local && g_var_adjust_cache)
-        g_hash_table_insert(g_var_adjust_cache, ns_var_map_ref(parent),
-                            ns_var_map_ref(built));
-    return built;
 }
 
 static gboolean
@@ -4384,7 +4078,9 @@ cascade_walk(ns_node *node,
             g_ptr_array_set_size(owned_values, 0);
         } else {
             s->share_id = ++g_style_share_next_id;
-            s->vars = build_vars_for_element(parent_style, var_matches);
+            s->vars = ns_css_build_vars(parent_style ? parent_style->vars : NULL,
+                                        var_matches, g_registered_props,
+                                        g_var_adjust_cache);
             resolve_pending_into_matches(pending_matches, s->vars,
                                          matches, owned_values, node);
 
@@ -4409,7 +4105,8 @@ cascade_walk(ns_node *node,
                     g_ptr_array_new_with_free_func(
                         (GDestroyNotify)ns_css_value_free);
                 ns_style *ps = ns_style_alloc();
-                ps->vars = build_vars_for_element(s, pe_vars);
+                ps->vars = ns_css_build_vars(s->vars, pe_vars, g_registered_props,
+                                         g_var_adjust_cache);
                 resolve_pending_into_matches(pe_pending, ps->vars, pm, pe_owned, node);
                 cascade_for(pm, ps, s,
                             pe == NS_CSS_PE_BEFORE || pe == NS_CSS_PE_AFTER
