@@ -15,7 +15,7 @@ pub(crate) fn is_ident(c: u8) -> bool {
 }
 
 pub(crate) fn is_gspace(c: u8) -> bool {
-    c == b' ' || (b'\t'..=b'\r').contains(&c)
+    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
 }
 
 pub(crate) fn strip(s: &[u8]) -> &[u8] {
