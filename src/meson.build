@@ -36,7 +36,6 @@ streaming_h = custom_target(
 )
 
 southstar_engine_sources = files(
-  'css.c',
   'image_wuffs.c',
   'layout.c',
   'paint.c',

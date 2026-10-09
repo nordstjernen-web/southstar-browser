@@ -24,13 +24,13 @@ carry forward from the 1.0.21 pass.
 
 | Concern | Source |
 |---------|--------|
-| Tokenizer, parser, cascade, selector matching | `src/css.c`, `src/css.h` |
-| Value/unit resolution, `calc()` | `src/css.c` (`length_resolve` in `src/layout.c`) |
+| Tokenizer, parser, cascade, selector matching | `rust/css` (`sheet.rs`, `selector.rs`, `matcher.rs`, `cascade.rs`, `ffi/compute.rs`), `src/css.h` |
+| Value/unit resolution, `calc()` | `rust/css` (`units.rs`, `calc.rs`, `computed_units.rs`; `length_resolve` in `src/layout.c`) |
 | Box layout (block/inline/flex/grid/table/multicol/float/position) | `src/layout.c`, `src/layout.h` |
-| Paint (Cairo): backgrounds, borders, shadows, gradients, filters | `src/paint.c`, `src/render.c` |
+| Paint (Cairo): backgrounds, borders, shadows, gradients, filters | `src/paint.c`, `rust/render` |
 | Text / fonts (Pango) | `rust/font`, `src/paint.c` |
-| Transitions / `@keyframes` animation | `src/anim.c` |
-| UA stylesheet | the `kUa` sheet embedded in `src/css.c` |
+| Transitions / `@keyframes` animation | `rust/anim` |
+| UA stylesheet | `rust/css/src/ua.css` and `ua-quirks.css`, compiled into the binary |
 
 ---
 
@@ -38,11 +38,11 @@ carry forward from the 1.0.21 pass.
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| Tokenizer / declaration & rule parsing | ✅ | `src/css.c`; tolerant of malformed input per spec error-recovery |
+| Tokenizer / declaration & rule parsing | ✅ | `rust/css`; tolerant of malformed input per spec error-recovery |
 | Selector lists, declaration blocks | ✅ | |
 | `@import` | ✅ | external stylesheets are fetched and cascaded; nested `@import` chains are expanded before the importing sheet, `media` filters are honoured, and `<link>` / `<style>` author sheets cascade in document order |
 | Origins & specificity ordering | ✅ | UA → presentational hints → author; `!important` honoured; specificity (id/class/type) computed and ordered |
-| Inheritance | ✅ | per-property inheritance table (`prop_inherits` in `src/css.c`) |
+| Inheritance | ✅ | per-property inheritance table (`Prop::inherits` in `rust/css/src/prop.rs`) |
 | `inherit` / `initial` / `unset` / `revert` | ✅ | CSS-wide keywords honoured in the cascade; `revert` rolls author declarations back to lower-origin UA results, while `revert-layer` remains folded into the simplified layer model |
 | Shorthand expansion | ✅ | `margin`/`padding`/`border`/`background`/`font`/`flex`/`grid`/`gap`/`place-*`/`columns`/`outline`/`column-rule`/`inset`/`text-decoration` and the logical-property shorthands |
 | Custom properties (`--x`) + `var()` | ✅ | registered and substituted; `@property` registers `initial-value`/`inherits`/`syntax` (syntax parsed, not type-validated) |
@@ -54,9 +54,9 @@ carry forward from the 1.0.21 pass.
 | `px`, `%`, `em`, `rem` | ✅ | `em`/`rem` resolved against a 16px root in the layout fast path |
 | Viewport units `vw`/`vh`/`vmin`/`vmax`, `sv*`/`lv*`/`dv*`, `vi`/`vb` | ✅ | |
 | Container units `cqw`/`cqh`/`cqi`/`cqb`/`cqmin`/`cqmax` | ✅ | resolved against the nearest container (`container-type`/`container-name`) |
-| Font-relative `cap`, `ic`, `ch`, `ex` | ✅ | font-measured at cascade time (`resolve_em_units` in `src/css.c` via a Pango metrics callback in `src/paint.c`): `ch` is the advance of `0`, `ex` the x-height of `x`, `cap` the cap-height of `H`, `ic` the advance of `水`, all measured for the element's computed family/size/weight/style; they respond to the actual font (e.g. `1ch` differs between monospace, serif, and bold). Falls back to the old `0.5/0.7/1.0em` factors if no metrics provider is registered, and `calc()`/`background-size`/box-shadow keep the factor-based approximation |
+| Font-relative `cap`, `ic`, `ch`, `ex` | ✅ | font-measured at cascade time (`rust/css/src/computed_units.rs` via a Pango metrics callback in `src/paint.c`): `ch` is the advance of `0`, `ex` the x-height of `x`, `cap` the cap-height of `H`, `ic` the advance of `水`, all measured for the element's computed family/size/weight/style; they respond to the actual font (e.g. `1ch` differs between monospace, serif, and bold). Falls back to the old `0.5/0.7/1.0em` factors if no metrics provider is registered, and `calc()`/`background-size`/box-shadow keep the factor-based approximation |
 | Absolute `Q`, `pt`, `cm`, `mm`, `in`, `pc` | ✅ | exact CSS ratios from `1in = 96px = 2.54cm` (`pt = 96/72`, `cm = 96/2.54`, `mm = 96/25.4`, `Q = 96/101.6`) |
-| `calc()` | ✅ | percentage + px mix; nested. Specified values serialize per the Values 4 "serialize a math function" rules (`css.c`'s typed math sum): terms of the same type are summed, absolute lengths/angles/times/frequencies/resolutions fold to their canonical unit (`px`/`deg`/`s`/`hz`/`dppx`), products and quotients by a number distribute, and a sum that cannot reduce to one term serializes sorted — number, then percentage, then dimensions in ASCII-alphabetical unit order — so `calc(1px + 1%)` is `calc(1% + 1px)`, `calc(1px + 2em + 3rem + 4%)` is `calc(4% + 2em + 1px + 3rem)`, and `calc(2 * (1px + 1em))` is `calc(2em + 2px)`. A single-argument `min()`/`max()` reduces to `calc()`; a comparison that needs layout (`min(20px, 10%)`) stays as authored |
+| `calc()` | ✅ | percentage + px mix; nested. Specified values serialize per the Values 4 "serialize a math function" rules (`rust/css`'s typed math sum): terms of the same type are summed, absolute lengths/angles/times/frequencies/resolutions fold to their canonical unit (`px`/`deg`/`s`/`hz`/`dppx`), products and quotients by a number distribute, and a sum that cannot reduce to one term serializes sorted — number, then percentage, then dimensions in ASCII-alphabetical unit order — so `calc(1px + 1%)` is `calc(1% + 1px)`, `calc(1px + 2em + 3rem + 4%)` is `calc(4% + 2em + 1px + 3rem)`, and `calc(2 * (1px + 1em))` is `calc(2em + 2px)`. A single-argument `min()`/`max()` reduces to `calc()`; a comparison that needs layout (`min(20px, 10%)`) stays as authored |
 | Math `round()` / `mod()` / `rem()` / `abs()` / `min()` / `max()` / `clamp()` | ✅ | the Values 4 length-math subset |
 
 ## Box model & sizing (Box 3, Sizing 3, Overflow 3)
@@ -249,7 +249,7 @@ carry forward from the 1.0.21 pass.
 | `@property` | ✅ | `initial-value` + `inherits` honoured; `syntax` parsed |
 | `@scope` | ✅ | roots/limits, `:scope`, proximity |
 | `@container` + `container-type`/`container-name` | ✅ | container query units resolve |
-| `@layer` | ✅ | layers are ordered as a tree (`css_layer_ranks_finalize` in `src/css.c`): sublayers sort within their parent in first-declaration order, a layer's own un-sublayered declarations act as its implicit final sublayer, and nested anonymous layers stay nested |
+| `@layer` | ✅ | layers are ordered as a tree (`rust/css/src/layers.rs`): sublayers sort within their parent in first-declaration order, a layer's own un-sublayered declarations act as its implicit final sublayer, and nested anonymous layers stay nested |
 | `@page` | ✅ | sheet size from a name (`A4`, `letter`, `legal`, `ledger`, the A/B series), from one or two lengths, or from `portrait`/`landscape`, plus its margins (`src/print.c`) |
 | `@media print` | ✅ | the media type is the one being laid out for, so a print stylesheet applies while paginating |
 

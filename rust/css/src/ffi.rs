@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the ported css.c sections, and the GLib and css.c calls they make.
+//! Southstar — the C ABI of the style engine css.h declares, and the GLib calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -27,6 +27,7 @@ mod lex;
 mod matcher;
 mod nesting;
 mod pending;
+mod preferences;
 mod property;
 mod registry;
 mod restyle;
@@ -77,10 +78,7 @@ pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
 pub(crate) use value::RawCalc;
 
-const COLOR_SCHEME_DARK: c_int = 1;
-
 unsafe extern "C" {
-    fn ns_css_get_color_scheme() -> c_int;
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
     fn g_ascii_formatd(
@@ -92,7 +90,7 @@ unsafe extern "C" {
 }
 
 pub(crate) fn prefers_dark() -> bool {
-    unsafe { ns_css_get_color_scheme() == COLOR_SCHEME_DARK }
+    preferences::ns_css_get_color_scheme() == preferences::COLOR_SCHEME_DARK
 }
 
 pub(crate) fn viewport() -> (f64, f64) {

@@ -613,6 +613,11 @@ Southstar Browser (unreleased):
   restyle that reuses the previous pass's styles for clean elements. It
   produces the same styles and reuses the same ones as before, and a
   large document's styles compute 6-15% faster.
+* css.c is gone: the style engine, from the CSS value parsers to the
+  cascade walk, is now the rust/css crate. The last helpers moved with it
+  (reading one escaped character of CSS text, the colour-scheme and
+  reduced-motion preferences, scaling a style's font size), and the
+  layout, paint and script code reads the same css.h structs as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

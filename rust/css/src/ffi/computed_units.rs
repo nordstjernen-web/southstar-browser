@@ -216,3 +216,15 @@ pub unsafe extern "C" fn ns_css_tracks_computed_serialize(
     );
     glib::strdup(&text)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_css_style_scale_font_size(s: *mut RawStyle, factor: f64) {
+    let Some(style) = (unsafe { s.as_mut() }) else {
+        return;
+    };
+    let font_size = Prop::FontSize.id();
+    if unsafe { style.values[font_size].as_ref() }.is_none_or(|v| v.kind != KIND_LENGTH) {
+        return;
+    }
+    unsafe { (*cow(style, font_size)).u.length.v *= factor };
+}

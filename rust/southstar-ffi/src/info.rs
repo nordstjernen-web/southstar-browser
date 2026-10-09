@@ -19,6 +19,7 @@ const PORTED: &[&str] = &[
     "camera.c",
     "config.c",
     "csp.c",
+    "css.c",
     "css_media.c",
     "css_prop_syntax.c",
     "css_syntax.c",
