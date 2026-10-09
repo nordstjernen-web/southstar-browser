@@ -11,18 +11,23 @@ pub struct Cairo {
 }
 
 #[repr(C)]
-pub struct CairoPathData {
-    _private: [u8; 0],
+#[derive(Clone, Copy)]
+struct PathHeader {
+    kind: c_int,
+    length: c_int,
 }
 
 #[repr(C)]
-struct Matrix {
-    xx: c_double,
-    yx: c_double,
-    xy: c_double,
-    yy: c_double,
-    x0: c_double,
-    y0: c_double,
+union PathData {
+    header: PathHeader,
+    point: [c_double; 2],
+}
+
+#[repr(C)]
+pub struct CairoPathData {
+    status: c_int,
+    data: *mut PathData,
+    num_data: c_int,
 }
 
 const CONTENT_COLOR_ALPHA: c_int = 0x3000;
@@ -51,7 +56,6 @@ unsafe extern "C" {
     fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
     fn cairo_rotate(cr: *mut Cairo, angle: c_double);
     fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
-    fn cairo_transform(cr: *mut Cairo, matrix: *const Matrix);
     fn cairo_rectangle(cr: *mut Cairo, x: c_double, y: c_double, w: c_double, h: c_double);
     fn cairo_arc(
         cr: *mut Cairo,
@@ -80,6 +84,33 @@ unsafe extern "C" {
 pub(crate) struct Context(*mut Cairo);
 
 pub(crate) struct Path(*mut CairoPathData);
+
+impl Path {
+    pub fn is_ok(&self) -> bool {
+        unsafe { self.0.as_ref() }.is_some_and(|path| path.status == 0)
+    }
+
+    pub fn transform(&mut self, m: [f64; 6]) {
+        let Some(path) = (unsafe { self.0.as_mut() }) else {
+            return;
+        };
+        if path.data.is_null() || path.num_data <= 0 {
+            return;
+        }
+        let data = unsafe { core::slice::from_raw_parts_mut(path.data, path.num_data as usize) };
+        let total = data.len();
+        let mut i = 0;
+        while i < total {
+            let length = unsafe { data[i].header.length }.max(1) as usize;
+            let end = (i + length).min(total);
+            for entry in &mut data[i + 1..end] {
+                let [x, y] = unsafe { entry.point };
+                entry.point = [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+            }
+            i += length;
+        }
+    }
+}
 
 impl Drop for Path {
     fn drop(&mut self) {
@@ -162,18 +193,6 @@ impl Context {
         unsafe { cairo_scale(self.0, x, y) };
     }
 
-    pub fn transform(self, m: [f64; 6]) {
-        let matrix = Matrix {
-            xx: m[0],
-            yx: m[1],
-            xy: m[2],
-            yy: m[3],
-            x0: m[4],
-            y0: m[5],
-        };
-        unsafe { cairo_transform(self.0, &matrix) };
-    }
-
     pub fn rectangle(self, x: f64, y: f64, w: f64, h: f64) {
         unsafe { cairo_rectangle(self.0, x, y, w, h) };
     }
@@ -205,7 +224,9 @@ impl Context {
     }
 
     pub fn append_path(self, path: &Path) {
-        unsafe { cairo_append_path(self.0, path.0) };
+        if path.is_ok() {
+            unsafe { cairo_append_path(self.0, path.0) };
+        }
     }
 }
 

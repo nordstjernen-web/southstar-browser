@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* A Path2D can no longer break the canvas it is drawn on. An ellipse() with a
+  zero radius, or an addPath() with a singular or NaN transform, used to put
+  the path into cairo's error state, and drawing it then left that canvas
+  blank for good. Zero-radius ellipses now trace their flattened outline,
+  non-finite ellipse() arguments are ignored, negative radii throw
+  IndexSizeError, a singular addPath() transform collapses the path and a
+  non-finite one is ignored.
 * Path2D is Rust, from the path it records to its methods and the
   rounded-rectangle geometry roundRect() shares with the 2D context. Arguments
   are now converted left to right, as WebIDL asks; the C converted some of

@@ -93,7 +93,39 @@ pub(crate) struct Ellipse {
     pub ccw: bool,
 }
 
+const DEGENERATE_ELLIPSE_STEPS: u32 = 64;
+
+fn degenerate_ellipse(cr: Context, e: &Ellipse) {
+    let (a0, mut a1) = e.angles;
+    let full = 2.0 * PI;
+    if e.ccw {
+        while a1 > a0 {
+            a1 -= full;
+        }
+    } else {
+        while a1 < a0 {
+            a1 += full;
+        }
+    }
+    let (cos_r, sin_r) = (e.rotation.cos(), e.rotation.sin());
+    for step in 0..=DEGENERATE_ELLIPSE_STEPS {
+        let t = a0 + (a1 - a0) * f64::from(step) / f64::from(DEGENERATE_ELLIPSE_STEPS);
+        let (px, py) = (e.radii.0 * t.cos(), e.radii.1 * t.sin());
+        let x = e.center.0 + px * cos_r - py * sin_r;
+        let y = e.center.1 + px * sin_r + py * cos_r;
+        if step == 0 && !cr.has_current_point() {
+            cr.move_to(x, y);
+        } else {
+            cr.line_to(x, y);
+        }
+    }
+}
+
 pub(crate) fn ellipse(cr: Context, e: &Ellipse) {
+    if e.radii.0 == 0.0 || e.radii.1 == 0.0 {
+        degenerate_ellipse(cr, e);
+        return;
+    }
     cr.save();
     cr.translate(e.center.0, e.center.1);
     cr.rotate(e.rotation);
@@ -233,6 +265,16 @@ pub(crate) fn ellipse_method(
     if args.len() >= 7 {
         let v: Vec<f64> = (0..7).map(|i| arg(scope, args, i)).collect();
         let ccw = args.len() >= 8 && scope.to_bool(&args[7]);
+        if v.iter().any(|n| !n.is_finite()) {
+            return Ok(Value::undefined());
+        }
+        if v[2] < 0.0 || v[3] < 0.0 {
+            return Err(crate::api::throw_dom(
+                scope,
+                "IndexSizeError",
+                "ellipse radius must not be negative",
+            ));
+        }
         let e = Ellipse {
             center: (v[0], v[1]),
             radii: (v[2], v[3]),
@@ -292,19 +334,19 @@ pub(crate) fn add_path(
     let Some(src) = args.first().and_then(path2d_context) else {
         return Ok(Value::undefined());
     };
-    let path = src.copy_path();
-    cr.save();
+    let mut path = src.copy_path();
     if let Some(m) = args.get(1).filter(|v| v.is_object()) {
         let mut matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
         for (slot, key) in matrix.iter_mut().zip(MATRIX_KEYS) {
             let value = scope.get(m, key);
             *slot = to_number_or_nan(scope, value);
         }
-        cr.transform(matrix);
+        if matrix.iter().any(|n| !n.is_finite()) {
+            return Ok(Value::undefined());
+        }
+        path.transform(matrix);
     }
     cr.append_path(&path);
-    drop(path);
-    cr.restore();
     Ok(Value::undefined())
 }
 
