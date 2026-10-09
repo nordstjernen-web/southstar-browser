@@ -4,4 +4,5 @@
 
 mod color;
 mod ffi;
+mod font;
 mod validate;

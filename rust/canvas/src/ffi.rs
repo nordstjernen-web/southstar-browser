@@ -22,6 +22,7 @@ unsafe extern "C" {
         b: *mut u8,
         a: *mut u8,
     ) -> c_int;
+    fn ns_css_font_shorthand_canonical(css: *const c_char) -> *mut c_char;
 }
 
 unsafe fn text<'a>(s: *const c_char) -> Option<&'a [u8]> {
@@ -93,4 +94,12 @@ pub unsafe extern "C" fn ns_canvas_filter_valid(s: *const c_char) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_canvas_length_valid(s: *const c_char) -> c_int {
     c_int::from(unsafe { text(s) }.is_some_and(crate::validate::length_valid))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_canvas_font_string(css: *const c_char) -> *mut c_char {
+    let Some(canon) = (unsafe { glib::GStr::take(ns_css_font_shorthand_canonical(css)) }) else {
+        return ptr::null_mut();
+    };
+    glib::strdup(&crate::font::canonical(canon.to_bytes()))
 }
