@@ -914,3 +914,9 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `render.c` | 737 | `rust/render` (the render context and profile mirrors moved here from `rust/engine`; computed styles are compared through full `ns_style` and `ns_css_value` mirrors in `rust/style`, whose layouts `css.h` now asserts) | 6 (paint and text) |
 | `anim.c` | 2,049 | `rust/anim` (values stay css.c's refcounted `ns_css_value`s, held through handles that dup and free them so the engine's pointer-identity checks behave as before; per-element state is kept in node-address order rather than GLib's pointer-hash order, which already differed from run to run) | 6 (style) |
 | `css.c` | 31,867 | `rust/css` (ported section by section, from the value parsers to the cascade walk; parsed sheets, rules, selectors, values and computed styles stay the structs `css.h` declares, built and read through asserted `#[repr(C)]` mirrors, so layout, paint and script read them unchanged; the user-agent sheet is plain CSS in `ua.css` and `ua-quirks.css`) | 6 (style) |
+
+### Being ported
+
+| Module | Sections so far | Crate |
+|---|---|---|
+| `layout.c` | choosing the image an `<img>` loads: srcset candidates against sizes and the device pixel ratio, a `<picture>`'s matching `<source>`, and the lazy-loading `data-src`/`data-srcset` attributes (DOM through `rust/dom`'s node handle; `src/layout_internal.h` declares the Rust functions only layout.c calls) | `rust/layout` |

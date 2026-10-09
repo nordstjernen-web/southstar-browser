@@ -1,6 +1,6 @@
 [package]
 name = "southstar-layout"
-description = "The box tree of src/layout.h: the ns_box layout and borrowed box handles over it"
+description = "The box tree of src/layout.h: the ns_box layout and borrowed box handles over it, and layout.c ported by section: so far choosing the image an <img> loads"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 
 [lints]

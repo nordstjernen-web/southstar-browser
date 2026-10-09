@@ -618,6 +618,11 @@ Southstar Browser (unreleased):
   (reading one escaped character of CSS text, the colour-scheme and
   reduced-motion preferences, scaling a style's font size), and the
   layout, paint and script code reads the same css.h structs as before.
+* Choosing the image an <img> loads is Rust, the first section of
+  layout.c's port: srcset candidates with width and density descriptors
+  against sizes and the device pixel ratio, a <picture>'s first <source>
+  whose type and media match, and the data-src and data-srcset attributes
+  lazy-loading sites use, preferring a real URL over a data: placeholder.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

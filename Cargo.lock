@@ -1591,6 +1591,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-js-intl",
  "southstar-js-temporal",
+ "southstar-layout",
  "southstar-mat4",
  "southstar-mathml",
  "southstar-mic",
@@ -1772,6 +1773,7 @@ dependencies = [
 name = "southstar-layout"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-glib",
 ]
 
