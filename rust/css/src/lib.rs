@@ -1,4 +1,4 @@
-//! Southstar — css.c ported to Rust section by section: so far the colour parser, lengths with calc() and the other math functions, container queries, gradients, positions and image values, transforms, grid values, font values, shadows, time values, easing functions and animation lists, display, counter and list values, border-image, the per-property value parser, and shorthand expansion.
+//! Southstar — css.c ported to Rust section by section: so far the colour parser, lengths with calc() and the other math functions, container queries, gradients, positions and image values, transforms, grid values, font values, shadows, time values, easing functions and animation lists, display, counter and list values, border-image, the per-property value parser, shorthand expansion, and the inline style text behind element.style.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -16,6 +16,7 @@ mod gradient;
 mod grid;
 mod image;
 mod initial;
+mod inline;
 mod lex;
 mod math;
 mod position;

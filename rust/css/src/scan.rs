@@ -71,6 +71,92 @@ fn skip_comment(s: &[u8], p: usize, end: usize) -> usize {
     if p + 1 < end { p + 2 } else { end }
 }
 
+pub(crate) fn skip_ws_comments(s: &[u8], mut p: usize, end: usize) -> usize {
+    loop {
+        p = skip_ws(s, p, end);
+        if p + 1 < end && s[p] == b'/' && s[p + 1] == b'*' {
+            p = skip_comment(s, p, end);
+            continue;
+        }
+        return p;
+    }
+}
+
+pub(crate) fn skip_to_block_end(s: &[u8], mut p: usize, end: usize) -> usize {
+    let mut depth = 0i32;
+    let mut quote = 0u8;
+    while p < end {
+        let c = s[p];
+        if quote != 0 {
+            if c == b'\\' && p + 1 < end {
+                p += 2;
+                continue;
+            }
+            if c == quote || matches!(c, b'\n' | b'\r' | 0x0c) {
+                quote = 0;
+            }
+            p += 1;
+            continue;
+        }
+        if c == b'/' && p + 1 < end && s[p + 1] == b'*' {
+            p = skip_comment(s, p, end);
+            continue;
+        }
+        if c == b'\\' && p + 1 < end {
+            p += 2;
+            continue;
+        }
+        if c == b'"' || c == b'\'' {
+            quote = c;
+            p += 1;
+            continue;
+        }
+        if c == b'{' {
+            depth += 1;
+        } else if c == b'}' {
+            depth -= 1;
+            if depth <= 0 {
+                return p + 1;
+            }
+        }
+        p += 1;
+    }
+    end
+}
+
+pub(crate) fn strip_important(text: &[u8]) -> (&[u8], bool) {
+    let end = text.len();
+    let mut p = 0;
+    let mut bang = None;
+    while p < end {
+        let (q, term) = scan_until(text, p, end, b"!");
+        if term != b'!' {
+            break;
+        }
+        bang = Some(q);
+        p = q + 1;
+    }
+    let Some(bang) = bang else {
+        return (text, false);
+    };
+    let tail = skip_ws_comments(text, bang + 1, end);
+    if end - tail < 9 || !text[tail..tail + 9].eq_ignore_ascii_case(b"important") {
+        return (text, false);
+    }
+    let after = tail + 9;
+    if after < end && is_ident(text[after]) {
+        return (text, false);
+    }
+    if skip_ws_comments(text, after, end) != end {
+        return (text, false);
+    }
+    let mut stop = bang;
+    while stop > 0 && is_gspace(text[stop - 1]) {
+        stop -= 1;
+    }
+    (&text[..stop], true)
+}
+
 pub(crate) fn scan_until(s: &[u8], mut p: usize, end: usize, terminators: &[u8]) -> (usize, u8) {
     let mut quote = 0u8;
     let (mut paren, mut bracket, mut brace) = (0u32, 0u32, 0u32);

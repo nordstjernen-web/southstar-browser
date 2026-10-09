@@ -383,6 +383,15 @@ Southstar Browser (unreleased):
   and their logical forms, text-wrap, container, animation-range, the
   animation and transition longhands, and the legacy and logical
   property aliases. Style sheets and inline styles expand as before.
+* The inline style text behind element.style is Rust: reading one
+  property from a style attribute (rebuilding the margin, padding and
+  border quads, overflow, outline, list-style, background,
+  background-position, grid, grid-template, font, animation, transition
+  and animation-range shorthands from their longhands, and honouring all
+  and !important), setting one (all, a shorthand written after it, and the
+  animation, transition and list-style longhands), and cssText with
+  complete shorthands collapsed and every value in canonical form.
+  element.style reads, writes and serializes as before.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

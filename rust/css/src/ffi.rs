@@ -9,6 +9,7 @@ mod display;
 mod font;
 mod grid;
 mod image;
+mod inline;
 mod lex;
 mod property;
 mod shadow;
@@ -24,7 +25,11 @@ use crate::{calc, color, math, units};
 
 pub(crate) use container::{Container, container_map};
 pub(crate) use font::{font_available, font_generation, font_oracle_serial};
-pub(crate) use shorthand::{list_style_split, prop_named};
+pub(crate) use inline::{
+    SheetDecl, declarations_serialized, named_declaration_valid, named_property_supported,
+    sheet_declarations, specified_canonical,
+};
+pub(crate) use shorthand::prop_named;
 pub use value::NsCssValue;
 
 const COLOR_SCHEME_DARK: c_int = 1;

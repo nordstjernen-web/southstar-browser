@@ -1235,11 +1235,6 @@ char *ns_css_font_family_canonical(const char *text);
 char *ns_css_font_shorthand_canonical(const char *text);
 char *ns_css_image_value_canonical(const char *text);
 char *ns_css_background_position_join(const char *xs, const char *ys);
-char *ns_css_background_shorthand_serialize(const char *image, const char *position,
-                                            const char *size, const char *repeat,
-                                            const char *attachment,
-                                            const char *origin, const char *clip,
-                                            const char *color);
 char *ns_css_content_canonical(const char *text);
 ns_css_value *ns_css_value_interpolate(const ns_css_value *a, const ns_css_value *b, double t);
 gboolean ns_css_value_equal(const ns_css_value *a, const ns_css_value *b);

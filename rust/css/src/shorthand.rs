@@ -10,6 +10,7 @@ use crate::font;
 use crate::gradient::text_starts_gradient;
 use crate::grid;
 use crate::image::{image_value_canonical, text_starts_image_set};
+use crate::inline;
 use crate::math::math_canonical;
 use crate::position;
 use crate::prop::Prop;
@@ -196,7 +197,7 @@ const ALIASES: [(&[u8], Prop); 41] = [
     (b"page-break-inside", Prop::BreakInside),
 ];
 
-const ANIMATION_LONGHANDS: [(Prop, Longhand); 11] = [
+pub(crate) const ANIMATION_LONGHANDS: [(Prop, Longhand); 11] = [
     (Prop::AnimationName, Longhand::AnimationName),
     (Prop::AnimationDuration, Longhand::AnimationDuration),
     (Prop::AnimationDelay, Longhand::AnimationDelay),
@@ -216,7 +217,7 @@ const ANIMATION_LONGHANDS: [(Prop, Longhand); 11] = [
     (Prop::AnimationRangeEnd, Longhand::AnimationRangeEnd),
 ];
 
-const TRANSITION_LONGHANDS: [(Prop, Longhand); 5] = [
+pub(crate) const TRANSITION_LONGHANDS: [(Prop, Longhand); 5] = [
     (Prop::TransitionProperty, Longhand::TransitionProperty),
     (Prop::TransitionDuration, Longhand::TransitionDuration),
     (Prop::TransitionDelay, Longhand::TransitionDelay),
@@ -1484,7 +1485,7 @@ fn flex_flow(out: &mut Out, text: &[u8]) {
 }
 
 fn list_style(out: &mut Out, text: &[u8]) {
-    let Some([kind, position, image]) = ffi::list_style_split(text) else {
+    let Some([kind, position, image]) = inline::list_style_split(text) else {
         return;
     };
     out.emit(Prop::ListStyleType, &kind);

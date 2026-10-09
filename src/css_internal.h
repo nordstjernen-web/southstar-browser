@@ -101,8 +101,6 @@ gboolean      ns_css_bg_token_is_box(const char *tok);
 void          ns_css_expand_declaration(const char *name, const char *text,
                                         gboolean important, GArray *decls_out);
 char         *ns_css_border_radius_canonical(const char *value);
-gboolean      ns_css_list_style_split(const char *text, char **out_type,
-                                      char **out_position, char **out_image);
 
 ns_css_value *ns_css_parse_border_image_slice(const char *t);
 ns_css_value *ns_css_parse_border_image_width(const char *t);
