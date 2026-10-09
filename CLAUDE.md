@@ -302,8 +302,10 @@ it all down. Proxies (HTTP forward and CONNECT, SOCKS4/4a/5/5h, credentials,
 no-proxy matching) are in `rust/http/src/proxy.rs`.
 
 **libcurl is being removed.** It is still linked for what has not moved
-yet: FTP hops (handed to `ns_hop_transport_curl()`), WebSocket,
-Server-Sent Events and the audio helper. Each of these moves onto
+yet: FTP hops (handed to `ns_hop_transport_curl()`), WebSocket and the
+audio helper. Other crates reach the network through `southstar_http::fetch`
+(redirects followed) with `southstar_net::route` supplying TLS settings and
+the proxy. Each of these moves onto
 `rust/http` next; when the last one does, the `curl` backend and the
 libcurl dependency are deleted. Extend `rust/http` — don't add new libcurl
 uses. HTTP/3 (QUIC) is not supported by the Rust client.

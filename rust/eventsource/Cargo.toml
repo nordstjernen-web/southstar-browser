@@ -1,6 +1,6 @@
 [package]
 name = "southstar-eventsource"
-description = "EventSource (Server-Sent Events): the stream parser, reconnection and a libcurl worker thread that posts events to the main loop"
+description = "EventSource (Server-Sent Events): the stream parser, reconnection and a worker thread on rust/http that posts events to the main loop"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 southstar-glib = { path = "../glib" }
+southstar-http = { path = "../http" }
+southstar-net = { path = "../net" }
 
 [lints]
 workspace = true

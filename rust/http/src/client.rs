@@ -81,6 +81,12 @@ pub struct Outcome {
     pub error: Option<String>,
 }
 
+pub(crate) fn failed(error: String) -> Outcome {
+    let mut out = Outcome::new();
+    out.error = Some(error);
+    out
+}
+
 impl Outcome {
     fn new() -> Outcome {
         Outcome {
@@ -501,6 +507,7 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer) -> bool {
                 continue;
             }
             headers_complete = true;
+            t.handler.headers_done();
             break;
         }
         if !status_parsed {
@@ -1055,6 +1062,9 @@ fn wait_stream(conn: &Conn, token: u64, t: &mut Transfer) -> StreamResult {
                     for (name, value) in &fields {
                         t.h2_header(name, value, b"HTTP/2");
                     }
+                    if !t.informational && t.status_line_fed && !t.proto_error {
+                        t.handler.headers_done();
+                    }
                 }
                 Event::Data { bytes, .. } => t.body(&bytes),
                 Event::Closed { .. } => {}
@@ -1100,7 +1110,9 @@ fn wait_stream(conn: &Conn, token: u64, t: &mut Transfer) -> StreamResult {
 pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
     let mut out = Outcome::new();
     let start = Instant::now();
-    let deadline = start + req.timeout;
+    let deadline = start
+        .checked_add(req.timeout)
+        .unwrap_or_else(|| start + Duration::from_secs(10 * 365 * 86_400));
     let connect_deadline = (start + req.connect_timeout).min(deadline);
     let mut t = Transfer::new(handler, start, deadline);
     let origin = origin_key(req);

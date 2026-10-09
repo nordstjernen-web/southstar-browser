@@ -21,6 +21,10 @@ Southstar Browser (unreleased):
   SOCKS4a, SOCKS5 and SOCKS5h, each with optional user and password, and
   the no-proxy list matching hosts, domains and IP ranges. Only FTP still
   goes through libcurl for page loads.
+* EventSource (Server-Sent Events) streams over the Rust HTTP client instead
+  of libcurl, following redirects, honouring the proxy settings, opening as
+  soon as the response headers arrive and reconnecting with Last-Event-ID as
+  before.
 * The logo has a large serif S behind the star, as Nordstjernen's had an N:
   the application and window icon, the Windows icon, the animated start-page
   logo and the two badges.

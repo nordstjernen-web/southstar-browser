@@ -14,6 +14,7 @@ pub trait Handler {
     fn status_line(&mut self, line: &[u8]);
     fn header(&mut self, line: &[u8], name: &[u8], value: &[u8]);
     fn body(&mut self, data: &[u8]) -> bool;
+    fn headers_done(&mut self) {}
 }
 
 pub struct Transfer<'h> {

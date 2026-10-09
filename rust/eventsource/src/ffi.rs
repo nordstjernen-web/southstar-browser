@@ -1,9 +1,8 @@
-//! Southstar — the C ABI of EventSource, as declared in src/eventsource.h, the libcurl transfer and main-loop dispatch.
+//! Southstar — the C ABI of EventSource, as declared in src/eventsource.h, the transfer over rust/http and main-loop dispatch.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_uint, c_void};
 use std::ffi::CString;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -11,6 +10,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use southstar_glib::{self as glib, FALSE, GBoolean};
+use southstar_http::{Fetch, Handler};
 
 use crate::{Parser, Post, Shared};
 
@@ -44,48 +44,9 @@ pub struct EventSource {
     thread: Option<JoinHandle<()>>,
 }
 
-#[repr(C)]
-struct Curl {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct CurlSlist {
-    _private: [u8; 0],
-}
-
-type WriteFn = unsafe extern "C" fn(*mut c_char, usize, usize, *mut c_void) -> usize;
-type XferInfoFn = unsafe extern "C" fn(*mut c_void, i64, i64, i64, i64) -> c_int;
 type SourceFn = unsafe extern "C" fn(*mut c_void) -> GBoolean;
 
-const CURLOPT_WRITEDATA: c_int = 10001;
-const CURLOPT_URL: c_int = 10002;
-const CURLOPT_WRITEFUNCTION: c_int = 20011;
-const CURLOPT_TIMEOUT: c_int = 13;
-const CURLOPT_USERAGENT: c_int = 10018;
-const CURLOPT_HTTPHEADER: c_int = 10023;
-const CURLOPT_HEADERDATA: c_int = 10029;
-const CURLOPT_NOPROGRESS: c_int = 43;
-const CURLOPT_FOLLOWLOCATION: c_int = 52;
-const CURLOPT_XFERINFODATA: c_int = 10057;
-const CURLOPT_CONNECTTIMEOUT: c_int = 78;
-const CURLOPT_HEADERFUNCTION: c_int = 20079;
-const CURLOPT_NOSIGNAL: c_int = 99;
-const CURLOPT_ACCEPT_ENCODING: c_int = 10102;
-const CURLOPT_XFERINFOFUNCTION: c_int = 20219;
-const CURLOPT_PROTOCOLS_STR: c_int = 10318;
-const CURLOPT_REDIR_PROTOCOLS_STR: c_int = 10319;
-
 unsafe extern "C" {
-    fn curl_easy_init() -> *mut Curl;
-    fn curl_easy_setopt(curl: *mut Curl, option: c_int, ...) -> c_int;
-    fn curl_easy_perform(curl: *mut Curl) -> c_int;
-    fn curl_easy_cleanup(curl: *mut Curl);
-    fn curl_slist_append(list: *mut CurlSlist, text: *const c_char) -> *mut CurlSlist;
-    fn curl_slist_free_all(list: *mut CurlSlist);
-    fn ns_net_apply_curl_tls(curl: *mut c_void);
-    fn ns_net_apply_curl_proxy(curl: *mut c_void, url: *const c_char);
-    fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
 }
@@ -165,120 +126,80 @@ struct Transfer {
     parser: Parser,
 }
 
-unsafe fn chunk<'a>(ptr: *const c_char, size: usize, nitems: usize) -> Option<&'a [u8]> {
-    if size != 0 && nitems > usize::MAX / size {
-        return None;
-    }
-    Some(unsafe { glib::slice(ptr.cast(), size * nitems) })
-}
-
-unsafe extern "C" fn header_cb(
-    buffer: *mut c_char,
-    size: usize,
-    nitems: usize,
-    userdata: *mut c_void,
-) -> usize {
-    let transfer = unsafe { &mut *userdata.cast::<Transfer>() };
-    let Some(header) = (unsafe { chunk(buffer, size, nitems) }) else {
-        return 0;
-    };
-    let source = Arc::clone(&transfer.source);
-    transfer
-        .parser
-        .header(header, &mut |message| post(&source, message));
-    if transfer.source.shared.exiting() {
-        0
-    } else {
-        header.len()
+impl Transfer {
+    fn post_header(&mut self, line: &[u8]) {
+        let source = Arc::clone(&self.source);
+        self.parser
+            .header(line, &mut |message| post(&source, message));
     }
 }
 
-unsafe extern "C" fn write_cb(
-    ptr: *mut c_char,
-    size: usize,
-    nmemb: usize,
-    userdata: *mut c_void,
-) -> usize {
-    let transfer = unsafe { &mut *userdata.cast::<Transfer>() };
-    if transfer.source.shared.exiting() || transfer.parser.fatal {
-        return 0;
+impl Handler for Transfer {
+    fn should_abort(&self) -> bool {
+        self.source.shared.exiting()
     }
-    let Some(data) = (unsafe { chunk(ptr, size, nmemb) }) else {
-        return 0;
-    };
-    let source = Arc::clone(&transfer.source);
-    transfer
-        .parser
-        .feed(data, &source.shared, &mut |message| post(&source, message));
-    data.len()
-}
 
-unsafe extern "C" fn progress_cb(clientp: *mut c_void, _: i64, _: i64, _: i64, _: i64) -> c_int {
-    let source = unsafe { &*clientp.cast::<Source>() };
-    c_int::from(source.shared.exiting())
+    fn status_line(&mut self, line: &[u8]) {
+        self.post_header(line);
+    }
+
+    fn header(&mut self, line: &[u8], _name: &[u8], _value: &[u8]) {
+        self.post_header(line);
+    }
+
+    fn headers_done(&mut self) {
+        self.post_header(
+            b"
+",
+        );
+    }
+
+    fn body(&mut self, data: &[u8]) -> bool {
+        if self.source.shared.exiting() || self.parser.fatal {
+            return false;
+        }
+        let source = Arc::clone(&self.source);
+        self.parser
+            .feed(data, &source.shared, &mut |message| post(&source, message));
+        true
+    }
 }
 
 fn connect_once(source: &Arc<Source>) -> bool {
-    let curl = unsafe { curl_easy_init() };
-    if curl.is_null() {
-        return false;
-    }
     let mut transfer = Transfer {
         source: Arc::clone(source),
         parser: Parser::new(),
     };
     let shared = &source.shared;
-    let url = cstring(&shared.url);
-    let redirect_protocols = if shared.url.starts_with(b"https://") {
-        c"https"
-    } else {
-        c"http,https"
-    };
-    let mut headers: *mut CurlSlist = ptr::null_mut();
-    let mut add_header = |text: &[u8]| {
-        let text = cstring(text);
-        headers = unsafe { curl_slist_append(headers, text.as_ptr()) };
-    };
-    add_header(b"Accept: text/event-stream");
-    add_header(b"Cache-Control: no-cache");
+    let mut headers = vec![
+        b"Accept: text/event-stream".to_vec(),
+        b"Cache-Control: no-cache".to_vec(),
+    ];
     if let Some(origin) = shared.origin.as_deref().filter(|o| !o.is_empty()) {
-        add_header(&[b"Origin: ".as_slice(), origin].concat());
+        headers.push([b"Origin: ".as_slice(), until_nul(origin)].concat());
     }
     let last_id = shared.last_event_id();
     if !last_id.is_empty() {
-        add_header(&[b"Last-Event-ID: ".as_slice(), &last_id].concat());
+        headers.push([b"Last-Event-ID: ".as_slice(), until_nul(&last_id)].concat());
     }
-    let userdata = (&raw mut transfer).cast::<c_void>();
-    let source_ptr = Arc::as_ptr(source).cast_mut().cast::<c_void>();
-    unsafe {
-        curl_easy_setopt(curl, CURLOPT_URL, url.as_ptr());
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, ns_user_agent_for_mode(ptr::null()));
-        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1 as c_long);
-        ns_net_apply_curl_tls(curl.cast());
-        ns_net_apply_curl_proxy(curl.cast(), url.as_ptr());
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1 as c_long);
-        curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, c"http,https".as_ptr());
-        curl_easy_setopt(
-            curl,
-            CURLOPT_REDIR_PROTOCOLS_STR,
-            redirect_protocols.as_ptr(),
-        );
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30 as c_long);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0 as c_long);
-        curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, c"".as_ptr());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb as WriteFn);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, userdata);
-        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_cb as WriteFn);
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, userdata);
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0 as c_long);
-        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_cb as XferInfoFn);
-        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, source_ptr);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_perform(curl);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-    }
+    let request = Fetch {
+        url: until_nul(&shared.url).to_vec(),
+        method: b"GET",
+        body: b"",
+        user_agent: Some(southstar_net::route::user_agent()),
+        headers,
+        timeout: Duration::MAX,
+        connect_timeout: Duration::from_secs(30),
+        max_redirects: 50,
+        https_only_redirects: shared.url.starts_with(b"https://"),
+        route: &southstar_net::route::route,
+    };
+    southstar_http::fetch(&request, &mut transfer);
     !transfer.parser.fatal
+}
+
+fn until_nul(bytes: &[u8]) -> &[u8] {
+    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 
 fn worker(source: Arc<Source>) {

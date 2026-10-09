@@ -1540,6 +1540,8 @@ name = "southstar-eventsource"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-http",
+ "southstar-net",
 ]
 
 [[package]]

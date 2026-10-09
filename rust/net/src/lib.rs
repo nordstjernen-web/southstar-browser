@@ -16,6 +16,7 @@ mod hsts;
 mod listing;
 mod netlog;
 mod request;
+pub mod route;
 mod storage;
 mod transport;
 mod url;
