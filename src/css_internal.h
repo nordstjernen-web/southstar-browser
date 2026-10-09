@@ -51,7 +51,8 @@ guint32       ns_css_attr_value_hash(const char *name, const char *value,
                                      gsize value_len);
 gboolean      ns_css_anb_int_strict(const char *text, int *out);
 
-char         *ns_css_flatten_nesting(const char *text, gssize len);
+char         *ns_css_scoped_css(const char *css, gsize len,
+                                const char *host_id, gboolean frame_scope);
 void          ns_css_property_rule_clear(gpointer data);
 
 #if GLIB_SIZEOF_VOID_P == 8

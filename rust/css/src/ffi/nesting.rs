@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the style sheet text passes css.c's rule parser calls: nesting flattened, an invalid qualified rule skipped, and the container-unit check.
+//! Southstar — the C ABI of the style sheet text passes: an invalid qualified rule skipped, and the container-unit check.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -15,14 +15,6 @@ unsafe fn text_of<'a>(text: *const c_char, len: isize) -> Option<&'a [u8]> {
     let len =
         usize::try_from(len).unwrap_or_else(|_| unsafe { CStr::from_ptr(text) }.to_bytes().len());
     Some(unsafe { core::slice::from_raw_parts(text.cast(), len) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_flatten_nesting(text: *const c_char, len: isize) -> *mut c_char {
-    match unsafe { text_of(text, len) } {
-        Some(text) => glib::strdup(&nesting::flatten(text)),
-        None => core::ptr::null_mut(),
-    }
 }
 
 #[unsafe(no_mangle)]

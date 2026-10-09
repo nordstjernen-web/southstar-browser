@@ -436,6 +436,14 @@ Southstar Browser (unreleased):
   as before (checked identical over 170,000 generated and mutated sheets);
   only an @font-face font-weight of "nan" now reads as no weight instead
   of an undefined integer conversion.
+* Scoping a shadow tree's or framed document's style sheet to its host is
+  Rust: :host, :host(), :host-context() and ::slotted() rewritten to the
+  host's scope attribute, html and :root selectors attached to it, every
+  other selector confined beneath it, through @media, @supports,
+  @container, @layer and @scope blocks, with the scoped text remembered
+  per host. Shadow trees and frames style as before; a host whose scope
+  id is longer than 78 characters is no longer cut off in the rewritten
+  selectors.
 * Printing's pagination is Rust: the page setup and @page rules, forced
   and avoided page breaks, keeping lines of text whole across sheets, and
   painting each sheet, with the same sheets as before.

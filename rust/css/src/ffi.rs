@@ -9,6 +9,7 @@ mod declarations;
 mod display;
 mod font;
 mod grid;
+mod host_scope;
 mod image;
 mod inline;
 mod lex;
