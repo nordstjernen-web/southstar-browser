@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* fillRect(), strokeRect() and clearRect() no longer touch the canvas's
+  current path. They drew their rectangle onto it, so a path built with
+  beginPath()/arc()/rect() was filled, stroked or cleared along with the
+  rectangle and then lost before the page's own fill() or stroke().
 * ImageBitmap and createImageBitmap() are Rust, with unchanged results for
   ImageData, Blob and canvas sources, cropping, cloning and close().
 * A Path2D can no longer break the canvas it is drawn on. An ellipse() with a

@@ -142,6 +142,14 @@ fn plain_source(scope: &mut Scope<'_>, this: &Value, cr: Context, rgba: [f64; 4]
     cr.set_source_rgba([rgba[0], rgba[1], rgba[2], rgba[3] * ga]);
 }
 
+fn on_own_path(cr: Context, draw: impl FnOnce(Context)) {
+    let saved = cr.copy_path();
+    cr.new_path();
+    draw(cr);
+    cr.new_path();
+    cr.append_path(&saved);
+}
+
 fn rect_args(scope: &mut Scope<'_>, args: &[Value]) -> [f64; 4] {
     [
         arg(scope, args, 0),
@@ -172,8 +180,10 @@ pub(crate) fn fill_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
             plain_source(scope, this, cr, st.fill);
         }
         crate::style::apply_composite(scope, this, cr);
-        cr.rectangle(x, y, w, h);
-        cr.fill();
+        on_own_path(cr, |cr| {
+            cr.rectangle(x, y, w, h);
+            cr.fill();
+        });
         cr.set_operator(OPERATOR_OVER);
     });
     mark_mutated(scope);
@@ -199,8 +209,10 @@ pub(crate) fn stroke_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
         }
         crate::style::apply_composite(scope, this, cr);
         cr.set_line_width(lw);
-        cr.rectangle(x, y, w, h);
-        cr.stroke();
+        on_own_path(cr, |cr| {
+            cr.rectangle(x, y, w, h);
+            cr.stroke();
+        });
         cr.set_operator(OPERATOR_OVER);
     });
     mark_mutated(scope);
@@ -218,8 +230,10 @@ pub(crate) fn clear_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     if let Some(cr) = main_context(st) {
         cr.save();
         cr.set_operator(OPERATOR_CLEAR);
-        cr.rectangle(x, y, w, h);
-        cr.fill();
+        on_own_path(cr, |cr| {
+            cr.rectangle(x, y, w, h);
+            cr.fill();
+        });
         cr.restore();
     }
     mark_mutated(scope);
