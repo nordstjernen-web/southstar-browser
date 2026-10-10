@@ -64,8 +64,6 @@ struct ns_js {
     JSContext    *main_realm_ctx;
     JSContext    *module_ctx;
     GPtrArray    *frame_ctxs;
-    GHashTable   *frame_contexts;
-    GHashTable   *frame_windows;
     GArray       *font_ready_resolvers;
     ns_js_log_cb  log_cb;
     gpointer      log_user_data;
@@ -102,8 +100,6 @@ struct ns_js {
     char         *current_url;
     char         *document_origin;
     ns_node       *current_doc;
-    GHashTable    *frame_urls;
-    GHashTable    *frame_referrers;
     gpointer       realm_scope_base;
     /* While a frame's code runs, current_url is the frame's URL and the
      * top-level document's URL is held in the slot this points at. */
@@ -152,11 +148,9 @@ struct ns_js {
     char         *referrer;
     int           ready_state;
     GHashTable   *doc_ready_states;
-    GHashTable   *initial_blank_realms;
     GHashTable   *window_forwards;
     GHashTable   *window_outwards;
     GQueue       *message_tasks;
-    GHashTable   *realm_cloners;
     JSValue       navigator_brand;   /* WeakSet of the frame realms'
                                         navigators the Navigator getters
                                         accept */
@@ -181,8 +175,6 @@ struct ns_js {
     GPtrArray    *deferred_script_roots;
     GPtrArray    *async_script_roots;
     guint         async_script_source;
-    GPtrArray    *pending_iframe_loads;
-    GPtrArray    *deferred_iframe_loads;
     GHashTable   *pending_rejections;
     GHashTable   *reported_rejections;
     GHashTable   *iframe_globals;
@@ -722,6 +714,85 @@ gboolean ns_iframe_origin_is_opaque(ns_node *frame);
 const char *ns_js_document_origin(const ns_js *js);
 const char *ns_js_frame_url(const ns_js *js, const ns_node *frame);
 JSContext *ns_js_frame_context(const ns_js *js, const ns_node *frame);
+ns_node *ns_js_frame_of_realm(const ns_js *js, JSContext *realm);
+JSContext *ns_js_node_realm_context(const ns_js *js, const ns_node *node);
+void ns_js_frame_set_source(ns_js *js, const ns_node *frame, const char *url,
+                            const char *referrer);
+void ns_js_frames_forget_node(ns_js *js, const ns_node *node);
+JSContext *ns_js_frame_take_initial_blank(ns_js *js, const ns_node *frame);
+void ns_js_frames_clear_initial_blank(ns_js *js);
+void ns_js_frames_reset(ns_js *js);
+void ns_js_frames_teardown(ns_js *js);
+JSValue ns_realm_proto_for(ns_js *js, JSContext *realm, JSValueConst proto);
+gboolean ns_realm_cloners_made(const ns_js *js);
+unsigned ns_iframe_effective_sandbox(const ns_node *node);
+JSValue ns_iframe_make_scope(JSContext *ctx, JSValue iframe_doc,
+                             const char *initial_url, const char *doc_url,
+                             unsigned sandbox);
+JSContext *ns_iframe_make_realm_context(ns_js *js, ns_node *iframe,
+                                        JSValueConst iframe_doc,
+                                        const char *initial_url,
+                                        const char *doc_url, unsigned sandbox,
+                                        JSContext *reuse, JSValue *out_window,
+                                        JSValue *out_location,
+                                        JSValue *out_history);
+void ns_iframe_store_realm_window(ns_js *js, ns_node *iframe,
+                                  JSValueConst window);
+JSValue ns_iframe_lookup_realm_window(ns_js *js, ns_node *iframe);
+JSValue ns_iframe_realm_window(JSContext *ctx, JSValueConst this_val,
+                               ns_node *n);
+JSValue ns_iframe_content_document(JSContext *ctx, JSValueConst this_val,
+                                   ns_node *n);
+JSValue ns_iframe_platform_names(JSContext *fctx, ns_js *js);
+JSContext *ns_js_new_frame_context(ns_js *js);
+JSValue ns_js_frame_window_events(JSContext *fctx);
+void ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
+                              JSValueConst parent_global);
+const char *ns_js_node_doc_base(ns_js *js, const ns_node *el);
+JSValue ns_js_navigator_brand(const ns_js *js);
+JSValue ns_js_pristine_promise(const ns_js *js);
+JSClassID ns_js_storage_class_id(void);
+JSClassID ns_js_window_named_class_id(void);
+void ns_js_run_iframe_modules(ns_js *js, ns_node **modules, unsigned count,
+                              const char *origin, JSValue iframe_doc,
+                              JSValueConst iframe_scope, unsigned sandbox);
+typedef struct ns_iframe_exposed_names ns_iframe_exposed_names;
+ns_iframe_exposed_names *ns_iframe_exposed_names_new(void);
+void ns_iframe_exposed_names_scan(ns_iframe_exposed_names *names,
+                                  const char *src, size_t len);
+char *ns_iframe_exposed_names_script(const ns_iframe_exposed_names *names);
+void ns_iframe_exposed_names_free(ns_iframe_exposed_names *names);
+JSValue ns_js_iframe_proto_snapshot(JSContext *ctx);
+void ns_js_iframe_proto_cleanup(JSContext *ctx, JSValueConst before);
+void ns_js_iframe_clear_global_zone(JSContext *ctx);
+void ns_js_iframe_restore_globals(JSContext *ctx);
+unsigned ns_js_pending_iframe_count(const ns_js *js);
+gboolean ns_js_pending_iframe_add(ns_js *js, ns_node *frame);
+ns_node *ns_js_pending_iframe_first(const ns_js *js);
+void ns_js_pending_iframe_remove_first(ns_js *js);
+void ns_js_deferred_iframe_add(ns_js *js, ns_node *frame);
+void ns_js_deferred_iframe_remove(ns_js *js, ns_node *frame);
+void ns_js_promote_deferred_iframes(ns_js *js);
+void ns_js_purge_subtree_pending_iframes(ns_js *js, ns_node *root);
+gboolean ns_js_iframe_beyond_load_range(ns_js *js, ns_node *iframe);
+void ns_js_schedule_iframe_load(ns_js *js, ns_node *iframe);
+void ns_js_run_script_element(ns_js *js, ns_node *n, const char *origin);
+JSValue ns_window_addEventListener(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_window_removeEventListener(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_window_dispatchEvent(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_element_addEventListener(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+JSValue ns_element_removeEventListener(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv);
+JSValue ns_element_dispatchEvent(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+JSValue ns_window_requestAnimationFrame(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv);
+JSValue ns_window_cancelAnimationFrame(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv);
 void *ns_js_realm_url_enter(ns_js *js, JSContext *realm);
 void ns_js_realm_url_leave(ns_js *js, void *token);
 void ns_js_dispatch_main_window_event(ns_js *js, const char *type,

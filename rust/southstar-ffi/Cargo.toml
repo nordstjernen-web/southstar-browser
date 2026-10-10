@@ -51,6 +51,7 @@ southstar-js-dom-factory = { path = "../js-dom-factory" }
 southstar-js-events = { path = "../js-events" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-html = { path = "../js-html" }
 southstar-js-intl = { path = "../js-intl" }

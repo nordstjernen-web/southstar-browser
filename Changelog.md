@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Iframe browsing contexts and their realms (the realm cloner, the frame
+  bootstraps, the frame table, sandbox flags, the frame load queues and the
+  frame-script helpers) moved from js.c to Rust (rust/js-frames), with
+  unchanged results.
 * innerHTML, outerHTML, getHTML, setHTMLUnsafe, insertAdjacentHTML,
   insertAdjacentElement, insertAdjacentText, textContent, XMLSerializer and
   the microdata API moved from js.c to Rust (rust/js-html). Markup
