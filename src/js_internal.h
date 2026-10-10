@@ -1286,8 +1286,6 @@ const ns_node *ns_js_focused_doc(const ns_js *js);
 void           ns_js_clear_focused_node(ns_js *js);
 void           ns_js_unorphan_node(ns_js *js, ns_node *n);
 void     ns_element_replace_all_recorded(ns_js *js, ns_node *n, ns_node *added);
-void     ns_element_insert_before_single(ns_js *js, ns_node *parent, ns_node *newc,
-                                         ns_node *ref);
 gboolean ns_document_is_realm_document(JSContext *ctx, JSValueConst doc);
 void     ns_js_seed_cookies_from_jar(ns_js *js);
 JSValue  ns_document_get_documentElement(JSContext *ctx, JSValueConst this_val);
