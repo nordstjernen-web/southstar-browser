@@ -23,10 +23,8 @@ pub fn next_in_subtree<'a>(
     root: Option<Node<'a>>,
     descend: bool,
 ) -> Option<Node<'a>> {
-    if descend {
-        if let Some(child) = node.first_child() {
-            return Some(child);
-        }
+    if descend && let Some(child) = node.first_child() {
+        return Some(child);
     }
     let mut cur = Some(node);
     while let Some(n) = cur.filter(|n| Some(*n) != root) {
@@ -309,10 +307,10 @@ fn id_add(table: IdTable, node: Node) {
     if !node.is_element() {
         return;
     }
-    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty()) {
-        if !table.contains(id) {
-            table.insert(id, node);
-        }
+    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty())
+        && !table.contains(id)
+    {
+        table.insert(id, node);
     }
 }
 
@@ -320,10 +318,10 @@ fn id_remove(table: IdTable, node: Node) {
     if !node.is_element() {
         return;
     }
-    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty()) {
-        if table.lookup(id) == Some(node) {
-            table.remove(id);
-        }
+    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty())
+        && table.lookup(id) == Some(node)
+    {
+        table.remove(id);
     }
 }
 
@@ -343,18 +341,18 @@ pub fn id_build(doc: Node) {
 }
 
 pub fn id_register(doc: Node, id: &CStr, node: Node) {
-    if let Some(table) = doc.id_table().filter(|_| !id.is_empty()) {
-        if !table.contains(id) {
-            table.insert(id, node);
-        }
+    if let Some(table) = doc.id_table().filter(|_| !id.is_empty())
+        && !table.contains(id)
+    {
+        table.insert(id, node);
     }
 }
 
 pub fn id_unregister(doc: Node, id: &CStr, node: Option<Node>) {
-    if let Some(table) = doc.id_table().filter(|_| !id.is_empty()) {
-        if table.lookup(id) == node {
-            table.remove(id);
-        }
+    if let Some(table) = doc.id_table().filter(|_| !id.is_empty())
+        && table.lookup(id) == node
+    {
+        table.remove(id);
     }
 }
 
@@ -573,17 +571,18 @@ pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
         }
         doc = parent;
     }
-    if doc != root && doc.kind() == Kind::Document {
-        if let Some(table) = doc.id_table() {
-            if let Some(hit) = indexed_hit(table, root, id) {
-                return Some(hit);
-            }
-            let found = by_id_walk(root, id, 0);
-            if let Some(found) = found {
-                table.replace(id, found);
-            }
-            return found;
+    if doc != root
+        && doc.kind() == Kind::Document
+        && let Some(table) = doc.id_table()
+    {
+        if let Some(hit) = indexed_hit(table, root, id) {
+            return Some(hit);
         }
+        let found = by_id_walk(root, id, 0);
+        if let Some(found) = found {
+            table.replace(id, found);
+        }
+        return found;
     }
     by_id_walk(root, id, 0)
 }

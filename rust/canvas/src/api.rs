@@ -941,7 +941,7 @@ fn imagedata_from_array(
 ) -> Result<Value, Value> {
     let data = &args[0];
     let blen = scope.with_typed_array(data, |t| t.bytes.len()).unwrap_or(0);
-    if blen % 4 != 0 {
+    if !blen.is_multiple_of(4) {
         return Err(throw_dom(
             scope,
             "InvalidStateError",
@@ -957,7 +957,7 @@ fn imagedata_from_array(
         ));
     }
     let pixels = (blen / 4) as u64;
-    if pixels % u64::from(sw) != 0 {
+    if !pixels.is_multiple_of(u64::from(sw)) {
         return Err(throw_dom(
             scope,
             "InvalidStateError",

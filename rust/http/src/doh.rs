@@ -223,10 +223,10 @@ pub fn resolve(host: &str, abort: &dyn Fn() -> bool) -> Lookup {
             return Lookup::System;
         }
         let key = host.to_ascii_lowercase();
-        if let Some((addrs, expires)) = resolver.cache.get(&key) {
-            if *expires > Instant::now() {
-                return Lookup::Found(addrs.clone());
-            }
+        if let Some((addrs, expires)) = resolver.cache.get(&key)
+            && *expires > Instant::now()
+        {
+            return Lookup::Found(addrs.clone());
         }
         (
             resolver.url.clone(),

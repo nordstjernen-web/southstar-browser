@@ -35,9 +35,10 @@ On Alpine (musl libc):
 The brotli and zstd packages are optional: without them the HTTP client
 simply does not advertise `br` / `zstd` content encodings.
 
-Rust 1.85 or newer is required. On Ubuntu 24.04, whose default is 1.75,
-install `rustc-1.85 cargo-1.85` instead and put `/usr/lib/rust-1.85/bin`
-first on `PATH`, or use [rustup](https://rustup.rs).
+Rust 1.91 or newer is required (the Boa JavaScript engine needs it). On
+Ubuntu 24.04 install `rustc-1.91 cargo-1.91` and put `/usr/lib/rust-1.91/bin`
+first on `PATH`; on Debian 13 use trixie-backports or
+[rustup](https://rustup.rs).
 
 Alpine builds against musl rather than glibc, so the resulting binary
 is not interchangeable with the glibc portable zip — run a musl build

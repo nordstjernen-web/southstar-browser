@@ -23,6 +23,7 @@ use crate::scan::{scan_until, split_ws_limit, split_ws_paren, starts_with_ci, st
 use crate::text::{add_leading_zeros, split_top_level_commas};
 use crate::units::{EM, NUMBER, PERCENT, PX};
 
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Slot {
     Own(Value),
     Dup(usize),
@@ -925,44 +926,36 @@ fn bg_layer_parse(
         }
         i += 1;
     }
-    if ok {
-        if let Some(pos) = &pos {
-            match position::canonical_ex(pos, true, true) {
-                Some(canon) => {
-                    let (x, y) = position_split_specified(&canon);
-                    out.pos_x = Some(x);
-                    out.pos_y = Some(y);
-                }
-                None => ok = false,
+    if ok && let Some(pos) = &pos {
+        match position::canonical_ex(pos, true, true) {
+            Some(canon) => {
+                let (x, y) = position_split_specified(&canon);
+                out.pos_x = Some(x);
+                out.pos_y = Some(y);
             }
+            None => ok = false,
         }
     }
-    if ok {
-        if let Some(size) = &size {
-            if parse(Prop::BackgroundSize, size).is_some() {
-                out.size = Some(add_leading_zeros(size));
-            } else {
-                ok = false;
-            }
+    if ok && let Some(size) = &size {
+        if parse(Prop::BackgroundSize, size).is_some() {
+            out.size = Some(add_leading_zeros(size));
+        } else {
+            ok = false;
         }
     }
     if ok && n_repeat > 0 {
         out.repeat = Some(bg_repeat_canonical(repeat_a, repeat_b));
     }
-    if ok {
-        if let Some(clip) = clip_only {
-            out.clip = Some(clip);
-            if out.origin.is_none() {
-                out.origin = Some(b"border-box".to_vec());
-            }
+    if ok && let Some(clip) = clip_only {
+        out.clip = Some(clip);
+        if out.origin.is_none() {
+            out.origin = Some(b"border-box".to_vec());
         }
     }
-    if ok {
-        if let Some(img) = &out.image {
-            match image_value_canonical(img) {
-                Some(canon) => out.image = Some(canon),
-                None => ok = eq(img, b"none"),
-            }
+    if ok && let Some(img) = &out.image {
+        match image_value_canonical(img) {
+            Some(canon) => out.image = Some(canon),
+            None => ok = eq(img, b"none"),
         }
     }
     ok
@@ -1382,10 +1375,10 @@ fn font_shorthand(out: &mut Out, text: &[u8]) {
             }
             None => size_ok = false,
         }
-        if let Some(lh) = lh_text.filter(|lh| !eq(lh, b"normal")) {
-            if !out.emit(Prop::LineHeight, lh) {
-                size_ok = false;
-            }
+        if let Some(lh) = lh_text.filter(|lh| !eq(lh, b"normal"))
+            && !out.emit(Prop::LineHeight, lh)
+        {
+            size_ok = false;
         }
         if family_start < n {
             family = Some(join(&tokens[family_start..], b" "));

@@ -191,10 +191,10 @@ fn parse_rule(scope: &mut Scope<'_>, value: &Value) -> Option<Rule> {
         _ => return None,
     };
     let mut rule = Rule::new(allow);
-    if let Ok(priority) = scope.get(value, "priority") {
-        if priority.is_number() {
-            rule.priority = scope.to_int32(&priority).unwrap_or(1);
-        }
+    if let Ok(priority) = scope.get(value, "priority")
+        && priority.is_number()
+    {
+        rule.priority = scope.to_int32(&priority).unwrap_or(1);
     }
     if let Some(condition) = object_property(scope, value, "condition") {
         rule.url_filter = string_property(scope, &condition, "urlFilter");
@@ -294,10 +294,10 @@ impl Extension {
                 Ok(flag) if flag.is_bool() => scope.to_bool(&flag),
                 _ => true,
             };
-            if let Some(path) = string_property(scope, &item, "path") {
-                if enabled {
-                    self.load_rule_file(scope, &path);
-                }
+            if let Some(path) = string_property(scope, &item, "path")
+                && enabled
+            {
+                self.load_rule_file(scope, &path);
             }
         }
     }

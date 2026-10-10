@@ -690,21 +690,21 @@ fn put_in(
         return Err(Failure::Sql);
     }
     insert_index_entries(scope, db, store, key, &args[5])?;
-    if let Some(numeric) = numeric.filter(|n| *n >= 1.0) {
-        if let Some(st) = db.prepare(c"UPDATE stores SET key_gen=max(key_gen, ?) WHERE name=?") {
-            let next = numeric + 1.0;
-            st.bind_int64(
-                1,
-                if next >= 9_223_372_036_854_775_807.0 {
-                    i64::MAX
-                } else {
-                    next as i64
-                },
-            );
-            st.bind_text(2, Some(&c(store)));
-            if st.step_result() != Step::Done {
-                return Err(Failure::Sql);
-            }
+    if let Some(numeric) = numeric.filter(|n| *n >= 1.0)
+        && let Some(st) = db.prepare(c"UPDATE stores SET key_gen=max(key_gen, ?) WHERE name=?")
+    {
+        let next = numeric + 1.0;
+        st.bind_int64(
+            1,
+            if next >= 9_223_372_036_854_775_807.0 {
+                i64::MAX
+            } else {
+                next as i64
+            },
+        );
+        st.bind_text(2, Some(&c(store)));
+        if st.step_result() != Step::Done {
+            return Err(Failure::Sql);
         }
     }
     if origin_pages(scope, handle) > max_origin_pages() {

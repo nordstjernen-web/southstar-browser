@@ -147,15 +147,15 @@ impl Rule {
         if domain_list_match(&self.excluded_initiator_domains, initiator) {
             return false;
         }
-        if let Some(filter) = &self.url_filter {
-            if !url_filter_match(filter, url, self.case_sensitive) {
-                return false;
-            }
+        if let Some(filter) = &self.url_filter
+            && !url_filter_match(filter, url, self.case_sensitive)
+        {
+            return false;
         }
-        if let Some(regex) = &self.regex {
-            if !regex.is_match(url) {
-                return false;
-            }
+        if let Some(regex) = &self.regex
+            && !regex.is_match(url)
+        {
+            return false;
         }
         if !self.resource_types.is_empty() || !self.excluded_resource_types.is_empty() {
             let kind = infer_type(url);

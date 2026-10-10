@@ -155,10 +155,10 @@ pub(crate) fn substitute(
             let url = url_function_at(text, p);
             stack.push(url);
             url_depth += i32::from(url);
-        } else if c == b')' {
-            if let Some(url) = stack.pop() {
-                url_depth -= i32::from(url);
-            }
+        } else if c == b')'
+            && let Some(url) = stack.pop()
+        {
+            url_depth -= i32::from(url);
         }
         if starts_ci(&text[p..], b"attr(") && (p == 0 || !is_ident(text[p - 1])) {
             if url_depth > 0 {

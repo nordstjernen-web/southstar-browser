@@ -765,11 +765,11 @@ pub(crate) fn line_canonical(text: &[u8]) -> Option<(Vec<u8>, bool)> {
             return None;
         }
         let mut out = b"span".to_vec();
-        if let Some(int_text) = &int_text {
-            if !(literal && int_value == 1 && ident.is_some()) {
-                out.push(b' ');
-                out.extend_from_slice(int_text);
-            }
+        if let Some(int_text) = &int_text
+            && !(literal && int_value == 1 && ident.is_some())
+        {
+            out.push(b' ');
+            out.extend_from_slice(int_text);
         }
         if let Some(ident) = &ident {
             out.push(b' ');
@@ -980,10 +980,10 @@ fn names_append(acc: &mut Vec<u8>, tok: &[u8]) -> bool {
 }
 
 fn track_token_canonical(tok: &[u8]) -> Vec<u8> {
-    if let Some((v, NUMBER)) = units::parse_length(&c_text(tok)) {
-        if v == 0.0 {
-            return b"0px".to_vec();
-        }
+    if let Some((v, NUMBER)) = units::parse_length(&c_text(tok))
+        && v == 0.0
+    {
+        return b"0px".to_vec();
     }
     for keyword in [
         &b"auto"[..],
@@ -1238,10 +1238,10 @@ fn template_areas_form(
         parts_append(canon, &row);
         parts_append(areas, &row);
         parts_append(rows, size.as_deref().unwrap_or(b"auto"));
-        if let Some(size) = &size {
-            if size != b"auto" {
-                parts_append(canon, size);
-            }
+        if let Some(size) = &size
+            && size != b"auto"
+        {
+            parts_append(canon, size);
         }
         if i < n && t[i].kind == TokKind::Names {
             let ok = names_append(&mut names, t[i].text);

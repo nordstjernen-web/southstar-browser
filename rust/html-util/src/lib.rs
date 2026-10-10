@@ -479,11 +479,11 @@ fn encoding_label_to_name(label: &[u8]) -> Option<&'static str> {
 pub fn declared_charset(body: Option<&[u8]>, content_type: Option<&[u8]>) -> Option<&'static str> {
     let mut from_meta = false;
     let mut label = content_type.and_then(|ct| charset_value_in(until_nul(ct)));
-    if label.is_none() {
-        if let Some(body) = body {
-            label = charset_value_in(&body[..body.len().min(1024)]);
-            from_meta = label.is_some();
-        }
+    if label.is_none()
+        && let Some(body) = body
+    {
+        label = charset_value_in(&body[..body.len().min(1024)]);
+        from_meta = label.is_some();
     }
     let name = encoding_label_to_name(&label?)?;
     Some(if from_meta && name.starts_with("UTF-16") {
@@ -527,10 +527,10 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
         return ((ffi::utf8_make_valid(&body[3..])), utf8());
     }
     for (bom, from) in [(b"\xff\xfe", "UTF-16LE"), (b"\xfe\xff", "UTF-16BE")] {
-        if body.starts_with(bom) {
-            if let Some(out) = ffi::convert(&body[2..], from.as_bytes()) {
-                return (Decoded::Glib(out), Some(from.as_bytes().to_vec()));
-            }
+        if body.starts_with(bom)
+            && let Some(out) = ffi::convert(&body[2..], from.as_bytes())
+        {
+            return (Decoded::Glib(out), Some(from.as_bytes().to_vec()));
         }
     }
     let mut declared = content_type.and_then(|ct| charset_value_in(until_nul(ct)));
@@ -542,10 +542,10 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
         let charset = charset_normalize(&declared);
         if charset.eq_ignore_ascii_case(b"UTF-8") {
             declared_utf8 = true;
-        } else if !charset_is_dangerous(&charset) {
-            if let Some(out) = ffi::convert(body, &charset) {
-                return (Decoded::Glib(out), Some(charset));
-            }
+        } else if !charset_is_dangerous(&charset)
+            && let Some(out) = ffi::convert(body, &charset)
+        {
+            return (Decoded::Glib(out), Some(charset));
         }
     }
     if ffi::utf8_validate(body) {
@@ -554,12 +554,11 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
     if declared_utf8 {
         return ((ffi::utf8_make_valid(body)), utf8());
     }
-    if let Some(charset) = ffi::detect_charset(&body[..body.len().min(1024 * 1024)]) {
-        if !charset_is_dangerous(&charset) {
-            if let Some(out) = ffi::convert(body, &charset) {
-                return (Decoded::Glib(out), Some(charset));
-            }
-        }
+    if let Some(charset) = ffi::detect_charset(&body[..body.len().min(1024 * 1024)])
+        && !charset_is_dangerous(&charset)
+        && let Some(out) = ffi::convert(body, &charset)
+    {
+        return (Decoded::Glib(out), Some(charset));
     }
     if let Some(out) = ffi::convert(body, b"WINDOWS-1252") {
         return (Decoded::Glib(out), Some(b"WINDOWS-1252".to_vec()));

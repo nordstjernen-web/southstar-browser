@@ -105,10 +105,10 @@ impl Shared {
         if state == STATE_CLOSED || (!is_close && state == STATE_CLOSING) {
             return false;
         }
-        if let Out::Text(data) | Out::Binary(data) = &out {
-            if data.len() > MAX_MESSAGE {
-                return false;
-            }
+        if let Out::Text(data) | Out::Binary(data) = &out
+            && data.len() > MAX_MESSAGE
+        {
+            return false;
         }
         self.queue().push_back(out);
         self.wake.notify_one();

@@ -124,19 +124,19 @@ pub(crate) fn used_column_count(style: Option<&StyleView<'_>>, avail_w: f64) -> 
         }
     }
     let mut n = 1;
-    if let Some(Slot::Length(count)) = style.get(Prop::ColumnCount.id()) {
-        if count.v >= 2.0 {
-            n = (count.v + 0.5) as i32;
-        }
+    if let Some(Slot::Length(count)) = style.get(Prop::ColumnCount.id())
+        && count.v >= 2.0
+    {
+        n = (count.v + 0.5) as i32;
     }
-    if n == 1 {
-        if let Some(width @ Slot::Length(_)) = style.get(Prop::ColumnWidth.id()) {
-            let colw = column_len_px(Some(width), avail_w, 0.0);
-            if colw > 1.0 && avail_w > colw + gap {
-                let fit = ((avail_w + gap) / (colw + gap)) as i32;
-                if fit > 1 {
-                    n = fit;
-                }
+    if n == 1
+        && let Some(width @ Slot::Length(_)) = style.get(Prop::ColumnWidth.id())
+    {
+        let colw = column_len_px(Some(width), avail_w, 0.0);
+        if colw > 1.0 && avail_w > colw + gap {
+            let fit = ((avail_w + gap) / (colw + gap)) as i32;
+            if fit > 1 {
+                n = fit;
             }
         }
     }

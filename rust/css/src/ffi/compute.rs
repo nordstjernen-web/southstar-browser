@@ -343,10 +343,10 @@ impl Walk<'_> {
             if computed.display.box_ != BOX_CONTENTS {
                 child_layout_parent = style;
             }
-            if self.root_px <= 0.0 {
-                if let Some(px) = font_size_px(computed) {
-                    self.root_px = px;
-                }
+            if self.root_px <= 0.0
+                && let Some(px) = font_size_px(computed)
+            {
+                self.root_px = px;
             }
             recurse_dirty = dirty;
         }

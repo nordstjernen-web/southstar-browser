@@ -305,15 +305,13 @@ pub fn import_raw<'a>(
             None => failed("DataError: EC raw import"),
         };
     }
-    if raw {
-        if let Some(okp) = okp_name(algo) {
-            let Some(pkey) = Pkey::raw_public(okp, data) else {
-                return failed("DataError: raw import");
-            };
-            let mut key = attrs.with_pkey(KeyType::Public, pkey);
-            key.curve = None;
-            return Ok(key);
-        }
+    if raw && let Some(okp) = okp_name(algo) {
+        let Some(pkey) = Pkey::raw_public(okp, data) else {
+            return failed("DataError: raw import");
+        };
+        let mut key = attrs.with_pkey(KeyType::Public, pkey);
+        key.curve = None;
+        return Ok(key);
     }
     let (pkey, kind) = match format {
         Some(b"spki") => (Pkey::from_spki(data), KeyType::Public),
@@ -474,10 +472,8 @@ pub fn export_okp_jwk(key: &Key<'_>) -> Result<OkpJwk> {
 
 pub fn export_raw(format: Option<&[u8]>, key: &Key<'_>) -> Result<Vec<u8>> {
     let raw = format == Some(b"raw");
-    if raw {
-        if let Some(bytes) = key.raw {
-            return Ok(bytes.to_vec());
-        }
+    if raw && let Some(bytes) = key.raw {
+        return Ok(bytes.to_vec());
     }
     let Some(pkey) = key.pkey else {
         return plain("NotSupportedError: export");
@@ -723,7 +719,7 @@ fn aes(key: &Key<'_>, params: &Params<'_>, data: &[u8], encrypt: bool) -> Result
             return plain("OperationError: invalid AES-GCM IV");
         }
     } else if kw {
-        if data.len() % 8 != 0 || data.len() < if encrypt { 16 } else { 24 } {
+        if !data.len().is_multiple_of(8) || data.len() < if encrypt { 16 } else { 24 } {
             return plain("OperationError: invalid AES-KW length");
         }
     } else {

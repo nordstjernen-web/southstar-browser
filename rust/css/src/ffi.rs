@@ -205,10 +205,10 @@ pub unsafe extern "C" fn ns_css_math_canonical(s: *const c_char) -> *mut c_char 
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_length_or(v: *const NsCssValue, fallback: c_double) -> c_double {
-    if let Some(length) = unsafe { value::length_of(v) } {
-        if length.unit == units::PX || length.unit == units::NUMBER {
-            return length.v;
-        }
+    if let Some(length) = unsafe { value::length_of(v) }
+        && (length.unit == units::PX || length.unit == units::NUMBER)
+    {
+        return length.v;
     }
     unsafe { value::calc_of(v) }.map_or(fallback, |calc| calc.px)
 }

@@ -315,11 +315,11 @@ impl Names {
             self.ids.insert(id.to_vec());
             return true;
         }
-        if let Some(first) = c.classes().next().map(until_nul) {
-            if !first.is_empty() {
-                self.classes.insert(first.to_vec());
-                return true;
-            }
+        if let Some(first) = c.classes().next().map(until_nul)
+            && !first.is_empty()
+        {
+            self.classes.insert(first.to_vec());
+            return true;
         }
         if let Some(first) = c.attrs().first() {
             self.attrs.extend(attr_dep(first));
@@ -405,18 +405,17 @@ impl Anchor {
     }
 
     fn matches(&self, n: Node<'_>) -> bool {
-        if let Some(tag) = &self.tag {
-            if !n
+        if let Some(tag) = &self.tag
+            && !n
                 .name()
                 .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(tag))
-            {
-                return false;
-            }
+        {
+            return false;
         }
-        if let Some(id) = &self.id {
-            if attr(n, c"id") != Some(id.as_slice()) {
-                return false;
-            }
+        if let Some(id) = &self.id
+            && attr(n, c"id") != Some(id.as_slice())
+        {
+            return false;
         }
         self.classes.iter().all(|cls| attrs::has_class(n, cls))
             && self.attrs.iter().all(|dep| dep.matches(n))
@@ -838,10 +837,10 @@ impl State {
     }
 
     fn mark_attr(&mut self, target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>) {
-        if let (Some(name), Some(old)) = (name, old) {
-            if CString::new(name).is_ok_and(|name| attr(target, &name) == Some(old)) {
-                return;
-            }
+        if let (Some(name), Some(old)) = (name, old)
+            && CString::new(name).is_ok_and(|name| attr(target, &name) == Some(old))
+        {
+            return;
         }
         if !self.attr_may_affect_style(name) {
             return;
@@ -861,12 +860,11 @@ impl State {
             (Some(keys), None) => keys.sibling_loose,
         };
         self.mark(target);
-        if sibling {
-            if let Some(next) = target.next_sibling() {
-                if !self.mark_following_siblings(next) {
-                    self.mark(fallback);
-                }
-            }
+        if sibling
+            && let Some(next) = target.next_sibling()
+            && !self.mark_following_siblings(next)
+        {
+            self.mark(fallback);
         }
     }
 }

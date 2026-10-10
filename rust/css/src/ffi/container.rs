@@ -184,21 +184,21 @@ pub unsafe extern "C" fn ns_css_container_map_add(
         sibling_index: 1,
         sibling_count: 1,
     };
-    if let Some(element) = unsafe { Node::from_ptr(node.cast()) } {
-        if let Some(parent) = element.parent() {
-            let mut count = 0;
-            let mut sibling = parent.first_child();
-            while let Some(sib) = sibling {
-                if sib.is_element() {
-                    count += 1;
-                    if sib.as_ptr() == element.as_ptr() {
-                        container.sibling_index = count;
-                    }
+    if let Some(element) = unsafe { Node::from_ptr(node.cast()) }
+        && let Some(parent) = element.parent()
+    {
+        let mut count = 0;
+        let mut sibling = parent.first_child();
+        while let Some(sib) = sibling {
+            if sib.is_element() {
+                count += 1;
+                if sib.as_ptr() == element.as_ptr() {
+                    container.sibling_index = count;
                 }
-                sibling = sib.next_sibling();
             }
-            container.sibling_count = count;
+            sibling = sib.next_sibling();
         }
+        container.sibling_count = count;
     }
     unsafe {
         let slot = glib::g_malloc0(size_of::<Container>()).cast::<Container>();

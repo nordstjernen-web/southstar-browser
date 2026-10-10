@@ -1437,10 +1437,10 @@ pub unsafe extern "C" fn ns_browser_scroll_at_full(
         return 0;
     };
     let (consumed, snapped) = input::scroll_at(b, x, y, dx, dy);
-    if consumed != 0 {
-        if let Some(out) = unsafe { out_snapped.as_mut() } {
-            *out = bool_int(snapped);
-        }
+    if consumed != 0
+        && let Some(out) = unsafe { out_snapped.as_mut() }
+    {
+        *out = bool_int(snapped);
     }
     consumed
 }
@@ -1611,10 +1611,8 @@ pub unsafe extern "C" fn ns_browser_release_click(
         *out = 0;
     }
     let (nav, changed) = input::release_click(b);
-    if changed {
-        if let Some(out) = unsafe { out_changed.as_mut() } {
-            *out = 1;
-        }
+    if changed && let Some(out) = unsafe { out_changed.as_mut() } {
+        *out = 1;
     }
     take_or_null(nav)
 }
@@ -1645,10 +1643,10 @@ pub unsafe extern "C" fn ns_browser_click(
     }
     unsafe { southstar_glib::g_free(nav.cast()) };
     let out = unsafe { ns_browser_release_click(b, ptr::null_mut()) };
-    if out.is_null() || unsafe { *out } == 0 {
-        if let Some(b) = unsafe { browser(b) } {
-            hit::video_click_toggle(b, x, y);
-        }
+    if (out.is_null() || unsafe { *out } == 0)
+        && let Some(b) = unsafe { browser(b) }
+    {
+        hit::video_click_toggle(b, x, y);
     }
     out
 }
@@ -1677,10 +1675,8 @@ pub unsafe extern "C" fn ns_browser_key_full(
         mods,
     };
     let (nav, prevented) = input::key(b, &ev);
-    if prevented {
-        if let Some(out) = unsafe { out_prevented.as_mut() } {
-            *out = 1;
-        }
+    if prevented && let Some(out) = unsafe { out_prevented.as_mut() } {
+        *out = 1;
     }
     take_or_null(nav)
 }

@@ -140,13 +140,14 @@ impl<'a> Measure<'a> {
         if ctx.shape_path(n, st) && cr.has_current_point() {
             let (x0, y0, mut x1, mut y1) = cr.path_extents();
             let (mut x0, mut y0) = (x0, y0);
-            if x0 == x1 && y0 == y1 {
-                if let Some((px, py)) = lone_point(ctx) {
-                    x0 = px;
-                    y0 = py;
-                    x1 = x0;
-                    y1 = y0;
-                }
+            if x0 == x1
+                && y0 == y1
+                && let Some((px, py)) = lone_point(ctx)
+            {
+                x0 = px;
+                y0 = py;
+                x1 = x0;
+                y1 = y0;
             }
             own.add_point(x0, y0);
             own.add_point(x1, y1);

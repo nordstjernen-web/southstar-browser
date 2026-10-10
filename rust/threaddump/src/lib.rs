@@ -40,11 +40,11 @@ pub fn parse_stat(line: &[u8], tick: f64) -> ThreadStat {
     };
     let open = line.iter().position(|&byte| byte == b'(');
     let close = line.iter().rposition(|&byte| byte == b')');
-    if let (Some(open), Some(close)) = (open, close) {
-        if close > open + 1 {
-            let comm = &line[open + 1..close];
-            stat.comm = comm[..comm.len().min(63)].to_vec();
-        }
+    if let (Some(open), Some(close)) = (open, close)
+        && close > open + 1
+    {
+        let comm = &line[open + 1..close];
+        stat.comm = comm[..comm.len().min(63)].to_vec();
     }
     let Some(close) = close else {
         return stat;

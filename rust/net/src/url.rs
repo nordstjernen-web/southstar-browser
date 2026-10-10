@@ -487,12 +487,13 @@ fn parts_at_depth(url: &[u8], depth: u32) -> Option<Parts> {
         b"null".to_vec()
     };
     let pathname = u.serialize_path().unwrap_or_default();
-    if depth == 0 && protocol == b"blob:" && !pathname.is_empty() {
-        if let Some(inner) = parts_at_depth(&pathname, depth + 1) {
-            if inner.protocol == b"http:" || inner.protocol == b"https:" {
-                origin = inner.origin;
-            }
-        }
+    if depth == 0
+        && protocol == b"blob:"
+        && !pathname.is_empty()
+        && let Some(inner) = parts_at_depth(&pathname, depth + 1)
+        && (inner.protocol == b"http:" || inner.protocol == b"https:")
+    {
+        origin = inner.origin;
     }
     Some(Parts {
         href,

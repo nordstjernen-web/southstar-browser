@@ -421,10 +421,10 @@ pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&StyleView<'_>
         let Some(slot) = out.slot(prop) else {
             continue;
         };
-        if !is_finite(slot) {
-            if let Some(slot) = out.make_mut(prop) {
-                clamp_value(slot);
-            }
+        if !is_finite(slot)
+            && let Some(slot) = out.make_mut(prop)
+        {
+            clamp_value(slot);
         }
         let Some(change) = out.slot(prop).and_then(|slot| change_for(prop, slot)) else {
             continue;

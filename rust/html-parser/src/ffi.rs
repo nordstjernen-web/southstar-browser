@@ -579,10 +579,10 @@ unsafe fn parse_fragment_in_namespace(
             return ptr::null_mut();
         }
         let out = ns_node_new_document();
-        if scripting == 0 {
-            if let Some(node) = Node::from_ptr(out) {
-                node.add_flags(NODE_SCRIPTING_DISABLED);
-            }
+        if scripting == 0
+            && let Some(node) = Node::from_ptr(out)
+        {
+            node.add_flags(NODE_SCRIPTING_DISABLED);
         }
         walk_into(fragment, out);
         ns_node_attach_backing(out, doc.cast(), Some(destroy_document));
@@ -653,10 +653,11 @@ pub unsafe extern "C" fn ns_xml_well_formed(
         return glib::FALSE;
     }
     let (ok, root_ns) = crate::xml_well_formed(unsafe { input_bytes(input, len) });
-    if ok && !out_root_ns.is_null() {
-        if let Some(ns) = root_ns {
-            unsafe { *out_root_ns = glib::strdup(&ns) };
-        }
+    if ok
+        && !out_root_ns.is_null()
+        && let Some(ns) = root_ns
+    {
+        unsafe { *out_root_ns = glib::strdup(&ns) };
     }
     glib::boolean(ok)
 }

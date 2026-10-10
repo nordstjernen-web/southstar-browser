@@ -268,22 +268,22 @@ pub(crate) fn symbols_canonical(args: &[u8]) -> Option<Vec<u8>> {
     let toks = tokenize(args)?;
     let mut system: Option<&[u8]> = None;
     let mut i = 0;
-    if let Some(first) = toks.first() {
-        if first.kind == Kind::Ident {
-            system = SYSTEMS
-                .iter()
-                .rev()
-                .find(|s| first.text.eq_ignore_ascii_case(s))
-                .copied();
-            system?;
-            i = 1;
-        }
+    if let Some(first) = toks.first()
+        && first.kind == Kind::Ident
+    {
+        system = SYSTEMS
+            .iter()
+            .rev()
+            .find(|s| first.text.eq_ignore_ascii_case(s))
+            .copied();
+        system?;
+        i = 1;
     }
     let mut out = Vec::new();
-    if let Some(system) = system {
-        if system != b"symbolic" {
-            out.extend_from_slice(system);
-        }
+    if let Some(system) = system
+        && system != b"symbolic"
+    {
+        out.extend_from_slice(system);
     }
     let mut n_symbols = 0;
     for t in &toks[i..] {

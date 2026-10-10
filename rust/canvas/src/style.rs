@@ -142,10 +142,10 @@ pub(crate) fn sync(scope: &mut Scope<'_>, this: &Value, st: &mut CanvasState) {
     st.shadow_ox = 0.0;
     st.shadow_oy = 0.0;
     let v = attr(scope, this, "shadowColor");
-    if let Some(css) = text(scope, &v) {
-        if let Some(rgba) = crate::color::parse(&css) {
-            st.shadow = rgba;
-        }
+    if let Some(css) = text(scope, &v)
+        && let Some(rgba) = crate::color::parse(&css)
+    {
+        st.shadow = rgba;
     }
     let v = attr(scope, this, "shadowBlur");
     if let Some(blur) = number(scope, &v).filter(|&b| b >= 0.0) {

@@ -312,7 +312,10 @@ other way:
 
 Decision D3 picks between "MSRV 1.85, gtk4 0.10" and "MSRV 1.92+, distro
 builds use backports/versioned compilers". CI pins the chosen version with
-`rust-toolchain.toml`.
+`rust-toolchain.toml`. Settled in October 2026: the minimum is **1.91**,
+because Boa needs it and becomes the default engine. Ubuntu 24.04 builds
+with `rustc-1.91`, Debian 13 with trixie-backports, and anything older with
+rustup.
 
 ### 5.5 CI
 
@@ -325,7 +328,7 @@ The workflows that build today all gain a Rust toolchain:
 | `windows.yml` | MSYS2 MINGW64 | MSYS2's `mingw-w64-x86_64-rust` (`x86_64-pc-windows-gnu`, the ABI the C side already uses) |
 | `musl.yml` | Alpine 3.24 | Alpine's `rust`/`cargo` packages |
 | `freebsd.yml`, `netbsd.yml` | VMs, nightly | `pkg`/pkgsrc `rust` |
-| `release.yml` | `ubuntu:24.04`, `ubuntu:26.04`, `debian:trixie` containers | distro packages (`rustc-1.85` on Ubuntu 24.04, whose default `rustc` is 1.75) |
+| `release.yml` | `ubuntu:24.04`, `ubuntu:26.04`, `debian:trixie` containers | distro packages (`rustc-1.91` on Ubuntu 24.04, whose default `rustc` is 1.75; rustup where no packaged 1.91 exists) |
 
 Every workflow adds `cargo clippy --all-targets -- -D warnings` and
 `cargo fmt --check`, the Rust form of "no new warnings".
@@ -668,8 +671,8 @@ as an alias until phase 7 ends) and maps to the `js-engine` features. Like
 WebGPU and wgpu-native, an optional engine is never vendored into the tree:
 Boa and Nova come from crates.io through Cargo (vendored only in release
 tarballs, D4), and a default build contains no trace of them. They need a
-newer compiler than the 1.85 floor (Boa 1.91, Nova 1.95), so selecting them
-selects that toolchain; the default build keeps 1.85 (D3). The About page and
+compiler of at least 1.91; that is now the floor for every build (D3).
+Nova needs 1.95, so selecting it selects that toolchain. The About page and
 `--print-config` report the engine a build uses.
 
 **Comparing engines.** Every backend is measured the same way, and the
@@ -713,8 +716,8 @@ but it is much less complete, so it stays an experiment.
    `rust/js-perf`, …) are moved onto it.
 2. **`-Djs_engine=quickjs-ng|quickjs|boa`.** The meson option maps to the
    `js-engine` features and replaces `-Dquickjs` (kept as an alias for a
-   while). Selecting Boa selects its toolchain (Rust 1.91, D3) and its
-   crates.io dependencies (D4); the default build is unchanged. About and
+   while). Selecting Boa brings in its crates.io dependencies (D4); Rust 1.91,
+   which Boa needs, is already the floor for every build (D3). About and
    `--print-config` name the engine.
 3. **Boa runs the browser.** Once the C bindings are gone (the end of phase
    7), the Boa build runs the same bindings. Until then it can build and run
@@ -850,7 +853,7 @@ the existing ones, not a test suite.
 |---|---|---|
 | D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep lexbor and uchardet behind FFI |
 | D2 | Incremental port in place (this plan) or a clean rewrite in a new tree? | Incremental: the C browser already passes 98% of the tracked WPT slice, and a rewrite would have to reach that bar again before it could replace anything |
-| D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | 1.85 — every build environment above can provide it; revisit when the shell port (phase 4) needs GTK 4.22 APIs |
+| D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | Decided (October 2026): 1.91, the version Boa needs. Ubuntu 24.04 uses its versioned `rustc-1.91`, Debian 13 trixie-backports; a later move to 1.92 for gtk-rs 0.11 is a separate step |
 | D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small |
 | D5 | Keep the no-comments rule in Rust, including no `// SAFETY:` comments? | Keep it; confine `unsafe` to `ffi` modules |
 | D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |

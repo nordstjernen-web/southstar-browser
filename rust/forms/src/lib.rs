@@ -182,10 +182,10 @@ pub(crate) fn collect_inputs(
     if depth >= MAX_DEPTH {
         return;
     }
-    if let Some(tag) = node.element_name().filter(|tag| SUBMITTABLE.contains(tag)) {
-        if let Some(name) = submission_name(form, node) {
-            collect_control(node, tag, name, query, submitter);
-        }
+    if let Some(tag) = node.element_name().filter(|tag| SUBMITTABLE.contains(tag))
+        && let Some(name) = submission_name(form, node)
+    {
+        collect_control(node, tag, name, query, submitter);
     }
     for child in children(node) {
         collect_inputs(form, Some(child), query, submitter, depth + 1);
@@ -296,14 +296,13 @@ pub(crate) fn first_invalid<'a>(
     if depth >= MAX_DEPTH {
         return None;
     }
-    if let Some(tag) = node.element_name().filter(|tag| VALIDATED.contains(tag)) {
-        if belongs_to(form, node)
-            && !controls::effectively_disabled(node)
-            && !controls::readonly_bars_validation(node)
-            && control_invalid(node, tag, doc)
-        {
-            return Some(node);
-        }
+    if let Some(tag) = node.element_name().filter(|tag| VALIDATED.contains(tag))
+        && belongs_to(form, node)
+        && !controls::effectively_disabled(node)
+        && !controls::readonly_bars_validation(node)
+        && control_invalid(node, tag, doc)
+    {
+        return Some(node);
     }
     children(node).find_map(|child| first_invalid(form, Some(child), doc, depth + 1))
 }

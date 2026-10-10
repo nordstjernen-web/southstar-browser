@@ -607,6 +607,7 @@ pub(crate) fn bg_clip_canonical(text: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn radius_corner(t: &[u8]) -> Result<Option<Vec<u8>>, Option<Value>> {
     let pair = split_ws_limit(t, 3);
     match pair.as_slice() {
@@ -817,10 +818,11 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         v = None;
     }
     let mut v = v?;
-    if let Body::Length(_, unit) = &mut v.body {
-        if *unit == NUMBER && bare_number_is_length(prop) {
-            *unit = PX;
-        }
+    if let Body::Length(_, unit) = &mut v.body
+        && *unit == NUMBER
+        && bare_number_is_length(prop)
+    {
+        *unit = PX;
     }
     if prop == Prop::Opacity {
         match &mut v.body {
@@ -970,10 +972,10 @@ fn individual_prop(prop: Prop, t: &[u8]) -> Option<Value> {
 }
 
 fn perspective(t: &[u8]) -> Option<Value> {
-    if let Some((plain, NUMBER)) = length(t) {
-        if plain != 0.0 {
-            return None;
-        }
+    if let Some((plain, NUMBER)) = length(t)
+        && plain != 0.0
+    {
+        return None;
     }
     let (ok, r) = calc::resolve_to_px_pct(t, false);
     if ok && r.px > 0.0 && r.pct == 0.0 {

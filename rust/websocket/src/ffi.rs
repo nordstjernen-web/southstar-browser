@@ -70,13 +70,12 @@ unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
     let socket = unsafe { &(*dispatch).socket };
     let detached = socket.shared.detached.load(Ordering::SeqCst);
     let user_data = socket.user_data;
-    if !detached {
-        if let Some(busy) = socket.callbacks.busy {
-            if unsafe { busy(user_data) } != FALSE {
-                unsafe { g_timeout_add(4, dispatch_run, data) };
-                return FALSE;
-            }
-        }
+    if !detached
+        && let Some(busy) = socket.callbacks.busy
+        && unsafe { busy(user_data) } != FALSE
+    {
+        unsafe { g_timeout_add(4, dispatch_run, data) };
+        return FALSE;
     }
     let dispatch = unsafe { Box::from_raw(dispatch) };
     if !detached {

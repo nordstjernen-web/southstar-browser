@@ -75,10 +75,11 @@ pub(crate) fn style_element_text(style: Node) -> Option<Vec<u8>> {
     if style.element_name() != Some(b"style") {
         return None;
     }
-    if let Some(media) = style.attr(c"media") {
-        if !media.is_empty() && !media_query_matches(media.to_bytes()) {
-            return None;
-        }
+    if let Some(media) = style.attr(c"media")
+        && !media.is_empty()
+        && !media_query_matches(media.to_bytes())
+    {
+        return None;
     }
     let mut text = Vec::new();
     append_text_children(style, &mut text, 0);

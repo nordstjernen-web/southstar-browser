@@ -435,11 +435,11 @@ fn freshness(cache_control: Option<&[u8]>, expires_header: Option<&[u8]>) -> i64
         if contains(cc, b"no-cache") {
             return 0;
         }
-        if let Some(at) = find(cc, b"max-age") {
-            if let Some(eq) = cc[at..].iter().position(|&c| c == b'=') {
-                let ma = ffi::ascii_strtoll(&cc[at + eq + 1..]).clamp(0, 86400 * 3650);
-                return ffi::now_seconds() + ma;
-            }
+        if let Some(at) = find(cc, b"max-age")
+            && let Some(eq) = cc[at..].iter().position(|&c| c == b'=')
+        {
+            let ma = ffi::ascii_strtoll(&cc[at + eq + 1..]).clamp(0, 86400 * 3650);
+            return ffi::now_seconds() + ma;
         }
         if contains(cc, b"immutable") {
             return ffi::now_seconds() + 86400 * 30;

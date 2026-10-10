@@ -520,10 +520,10 @@ pub(crate) fn pick_image_set_url(t: &[u8]) -> Option<Vec<u8>> {
                 }
                 Some(e)
             };
-            if let Some(end) = end {
-                if end > u {
-                    url = Some(unescape_url(&t[u..end]));
-                }
+            if let Some(end) = end
+                && end > u
+            {
+                url = Some(unescape_url(&t[u..end]));
             }
             p = end.unwrap_or(p + 4);
             while at(p) != 0 && at(p) != b')' {

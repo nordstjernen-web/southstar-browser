@@ -237,11 +237,12 @@ fn frame_base<'a>(n: Option<Node<'a>>, dflt: &'a CStr) -> &'a CStr {
         return dflt;
     };
     for p in ancestors(n) {
-        if ffi::is_named(p, c"iframe") || ffi::is_named(p, c"frame") || ffi::is_named(p, c"object")
+        if (ffi::is_named(p, c"iframe")
+            || ffi::is_named(p, c"frame")
+            || ffi::is_named(p, c"object"))
+            && let Some(url) = p.attr(c"data-nd-frame-url").filter(|u| !u.is_empty())
         {
-            if let Some(url) = p.attr(c"data-nd-frame-url").filter(|u| !u.is_empty()) {
-                return url;
-            }
+            return url;
         }
     }
     dflt

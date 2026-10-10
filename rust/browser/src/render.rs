@@ -111,7 +111,7 @@ fn dump_frame(surface: &Surface) {
         return;
     };
     let frame = FRAME_NO.fetch_add(1, Ordering::Relaxed);
-    if frame % FRAME_DUMP_EVERY == 0 {
+    if frame.is_multiple_of(FRAME_DUMP_EVERY) {
         let mut path = dir.to_bytes().to_vec();
         path.extend_from_slice(format!("/frame-{frame:05}.png").as_bytes());
         if let Some(path) = ffi::gstr_from(&path) {

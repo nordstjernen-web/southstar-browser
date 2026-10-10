@@ -234,25 +234,24 @@ pub fn proc_info(pid: c_int) -> ProcInfo {
         };
         let line = bytes.split(|&b| b == b'\n').next().unwrap_or_default();
         let line = &line[..line.len().min(511)];
-        if let Some(close) = line.iter().rposition(|&b| b == b')') {
-            if line.get(close + 1) == Some(&b' ') {
-                if let Some(&code) = line.get(close + 2) {
-                    info.state = Some(match code {
-                        b'S' | b'D' => "sleeping",
-                        b'T' | b't' => "stopped",
-                        b'Z' | b'X' => "terminated",
-                        _ => "running",
-                    });
-                }
-            }
+        if let Some(close) = line.iter().rposition(|&b| b == b')')
+            && line.get(close + 1) == Some(&b' ')
+            && let Some(&code) = line.get(close + 2)
+        {
+            info.state = Some(match code {
+                b'S' | b'D' => "sleeping",
+                b'T' | b't' => "stopped",
+                b'Z' | b'X' => "terminated",
+                _ => "running",
+            });
         }
         if let Ok(statm) = std::fs::read_to_string(format!("/proc/{pid}/statm")) {
             let mut fields = statm.split_ascii_whitespace();
-            if let (Some(_), Some(resident)) = (fields.next(), fields.next()) {
-                if let Ok(resident) = resident.parse::<c_long>() {
-                    let page = sys::page_size();
-                    info.rss_kb = Some(resident * if page > 0 { page / 1024 } else { 4 });
-                }
+            if let (Some(_), Some(resident)) = (fields.next(), fields.next())
+                && let Ok(resident) = resident.parse::<c_long>()
+            {
+                let page = sys::page_size();
+                info.rss_kb = Some(resident * if page > 0 { page / 1024 } else { 4 });
             }
         }
         info.alive = true;

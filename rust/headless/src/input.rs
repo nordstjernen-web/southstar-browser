@@ -82,10 +82,10 @@ fn edit_replace(fc: &Ctx, lo: usize, hi: usize, ins: Option<&[u8]>) {
         }
     }
     let value = [&cur[..lo], ins.as_slice(), &cur[hi..]].concat();
-    if let Some(js) = fc.js {
-        if js.dispatch_checked(t, c"beforeinput") {
-            return;
-        }
+    if let Some(js) = fc.js
+        && js.dispatch_checked(t, c"beforeinput")
+    {
+        return;
     }
     ffi::set_editable_value(t, &value);
     fc.caret.set(lo + ins.len());
@@ -105,13 +105,14 @@ pub fn submit_form_from(fc: &Ctx, nav: &NavCapture, trigger: Node) {
         return;
     };
     let root = doc.unwrap_or(form);
-    if form.attr(c"novalidate").is_none() && trigger.attr(c"formnovalidate").is_none() {
-        if let Some(bad) = ffi::first_invalid(form, root) {
-            let name = bad.attr(c"name").filter(|n| !n.is_empty());
-            let name = name.map_or(&b"(unnamed)"[..], CStr::to_bytes);
-            err(&[b"[headless] form blocked by invalid field ", name, b"\n"].concat());
-            return;
-        }
+    if form.attr(c"novalidate").is_none()
+        && trigger.attr(c"formnovalidate").is_none()
+        && let Some(bad) = ffi::first_invalid(form, root)
+    {
+        let name = bad.attr(c"name").filter(|n| !n.is_empty());
+        let name = name.map_or(&b"(unnamed)"[..], CStr::to_bytes);
+        err(&[b"[headless] form blocked by invalid field ", name, b"\n"].concat());
+        return;
     }
     if let Some(js) = fc.js {
         let prevented = js.dispatch_submit(form, trigger);
@@ -173,12 +174,11 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
         fc.set_focused(None);
         return;
     };
-    if form_target.is_none() {
-        if let Some(label) = ancestors_and_self(dom).find(|n| ffi::is_named(*n, c"label")) {
-            if let Some(tgt) = label_target(fc, label).filter(|t| t.as_ptr() != dom.as_ptr()) {
-                dom = tgt;
-            }
-        }
+    if form_target.is_none()
+        && let Some(label) = ancestors_and_self(dom).find(|n| ffi::is_named(*n, c"label"))
+        && let Some(tgt) = label_target(fc, label).filter(|t| t.as_ptr() != dom.as_ptr())
+    {
+        dom = tgt;
     }
     let hit_img = hit
         .and_then(ffi::box_dom)
@@ -210,10 +210,10 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     }
     if let Some(editable) = editable {
         ffi::flatten_editable(editable);
-        if let (Some(js), Some(focused)) = (fc.js, fc.focused()) {
-            if focused.as_ptr() != editable.as_ptr() {
-                js.dispatch(focused, c"blur");
-            }
+        if let (Some(js), Some(focused)) = (fc.js, fc.focused())
+            && focused.as_ptr() != editable.as_ptr()
+        {
+            js.dispatch(focused, c"blur");
         }
         fc.set_focused(Some(editable));
         let caret = if ffi::has_editable_value(editable) {
@@ -233,58 +233,56 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     if prevented {
         return;
     }
-    if let Some(js) = fc.js {
-        if js.click_activate(dom) {
-            ffi::consume_mutated(Some(js));
-        }
+    if let Some(js) = fc.js
+        && js.click_activate(dom)
+    {
+        ffi::consume_mutated(Some(js));
     }
     if let Some(trigger) = ancestors_and_self(dom).find(|n| ffi::is_submit_trigger(*n)) {
         submit_form_from(fc, nav, trigger);
         return;
     }
-    if let (Some(img_node), Some(doc)) = (hit_img, fc.doc()) {
-        if let Some(usemap) = img_node.attr(c"usemap").filter(|u| !u.is_empty()) {
-            if let Some(href) =
-                ffi::image_map_resolve(doc, usemap, (x - img.0, y - img.1), (img.2, img.3))
-            {
-                nav.set_pending(href);
-                return;
-            }
-        }
+    if let (Some(img_node), Some(doc)) = (hit_img, fc.doc())
+        && let Some(usemap) = img_node.attr(c"usemap").filter(|u| !u.is_empty())
+        && let Some(href) =
+            ffi::image_map_resolve(doc, usemap, (x - img.0, y - img.1), (img.2, img.3))
+    {
+        nav.set_pending(href);
+        return;
     }
     if let Some(href) = link_href {
         nav.set_pending(href);
         return;
     }
-    if let Some(a) = ancestors_and_self(dom).find(|n| ffi::is_named(*n, c"a")) {
-        if let Some(href) = a.attr(c"href").filter(|h| !h.is_empty()) {
-            let url = match hit_img.filter(|i| i.attr(c"ismap").is_some()) {
-                Some(_) => {
-                    let ix = ((x - img.0) as c_int).max(0);
-                    let iy = ((y - img.1) as c_int).max(0);
-                    [href.to_bytes(), format!("?{ix},{iy}").as_bytes()].concat()
-                }
-                None => href.to_bytes().to_vec(),
-            };
-            nav.set_pending(url);
-            return;
-        }
+    if let Some(a) = ancestors_and_self(dom).find(|n| ffi::is_named(*n, c"a"))
+        && let Some(href) = a.attr(c"href").filter(|h| !h.is_empty())
+    {
+        let url = match hit_img.filter(|i| i.attr(c"ismap").is_some()) {
+            Some(_) => {
+                let ix = ((x - img.0) as c_int).max(0);
+                let iy = ((y - img.1) as c_int).max(0);
+                [href.to_bytes(), format!("?{ix},{iy}").as_bytes()].concat()
+            }
+            None => href.to_bytes().to_vec(),
+        };
+        nav.set_pending(url);
+        return;
     }
     for cur in ancestors_and_self(dom) {
-        if element_named(cur, b"summary") {
-            if let Some(details) = cur.parent().filter(|p| ffi::is_named(*p, c"details")) {
-                let now_open = details.attr(c"open").is_none();
-                if now_open {
-                    ffi::set_attr(details, c"open", c"");
-                } else {
-                    ffi::remove_attr(details, c"open");
-                }
-                if let Some(js) = fc.js {
-                    js.details_toggle_open(details, now_open);
-                    ffi::consume_mutated(Some(js));
-                }
-                return;
+        if element_named(cur, b"summary")
+            && let Some(details) = cur.parent().filter(|p| ffi::is_named(*p, c"details"))
+        {
+            let now_open = details.attr(c"open").is_none();
+            if now_open {
+                ffi::set_attr(details, c"open", c"");
+            } else {
+                ffi::remove_attr(details, c"open");
             }
+            if let Some(js) = fc.js {
+                js.details_toggle_open(details, now_open);
+                ffi::consume_mutated(Some(js));
+            }
+            return;
         }
         if element_named(cur, b"input") {
             let kind = cur.attr(c"type").map(CStr::to_bytes);
@@ -568,15 +566,15 @@ fn step_number(fc: &Ctx, t: Node, cur: &[u8], up: bool) {
         southstar_glib::ascii_strtod(cur)
     };
     val += if up { step } else { -step };
-    if let Some(min) = t.attr(c"min").filter(|m| !m.is_empty()).map(parse) {
-        if val < min {
-            val = min;
-        }
+    if let Some(min) = t.attr(c"min").filter(|m| !m.is_empty()).map(parse)
+        && val < min
+    {
+        val = min;
     }
-    if let Some(max) = t.attr(c"max").filter(|m| !m.is_empty()).map(parse) {
-        if val > max {
-            val = max;
-        }
+    if let Some(max) = t.attr(c"max").filter(|m| !m.is_empty()).map(parse)
+        && val > max
+    {
+        val = max;
     }
     let buf = fmt_g(val);
     ffi::set_editable_value(t, buf.as_bytes());

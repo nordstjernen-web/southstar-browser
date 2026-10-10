@@ -277,18 +277,20 @@ pub(crate) fn overflow_clip_margin_canonical(text: &[u8]) -> Option<Vec<u8>> {
                 continue;
             }
             let text = CString::new(tok).ok()?;
-            if let Some((v, u)) = units::parse_length(&text) {
-                if u != PERCENT && (u != NUMBER || v == 0.0) && v >= 0.0 {
-                    len = Some(if v == 0.0 {
-                        b"0px".to_vec()
-                    } else {
-                        let (_, end) = ffi::strtod(&text, 0);
-                        let mut out = number_text(v);
-                        out.extend_from_slice(&text.to_bytes()[end..].to_ascii_lowercase());
-                        out
-                    });
-                    continue;
-                }
+            if let Some((v, u)) = units::parse_length(&text)
+                && u != PERCENT
+                && (u != NUMBER || v == 0.0)
+                && v >= 0.0
+            {
+                len = Some(if v == 0.0 {
+                    b"0px".to_vec()
+                } else {
+                    let (_, end) = ffi::strtod(&text, 0);
+                    let mut out = number_text(v);
+                    out.extend_from_slice(&text.to_bytes()[end..].to_ascii_lowercase());
+                    out
+                });
+                continue;
             }
         }
         return None;

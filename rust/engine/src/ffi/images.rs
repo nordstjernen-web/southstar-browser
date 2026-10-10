@@ -215,18 +215,18 @@ unsafe extern "C" fn on_session_image_fetched(
 ) {
     let item = unsafe { Box::from_raw(ud.cast::<SessionItem>()) };
     let s = unsafe { &*item.session };
-    if let Some(resp) = unsafe { net::finish(result) } {
-        if !s.dead.get() {
-            s.cache.store(item.abs, &resp);
-        }
+    if let Some(resp) = unsafe { net::finish(result) }
+        && !s.dead.get()
+    {
+        s.cache.store(item.abs, &resp);
     }
     if s.outstanding.get() > 0 {
         s.outstanding.set(s.outstanding.get() - 1);
     }
-    if !s.dead.get() {
-        if let Some(cb) = s.arrived_cb.get() {
-            unsafe { cb(s.user_data) };
-        }
+    if !s.dead.get()
+        && let Some(cb) = s.arrived_cb.get()
+    {
+        unsafe { cb(s.user_data) };
     }
     unsafe { session_unref(item.session) };
     unsafe { glib::g_free(item.abs.cast()) };

@@ -331,7 +331,7 @@ impl Decls {
         self.entries()
             .iter()
             .filter(|d| d.prop == prop)
-            .last()
+            .next_back()
             .map_or(Borrowed::NULL, |d| Borrowed(d.value))
     }
 

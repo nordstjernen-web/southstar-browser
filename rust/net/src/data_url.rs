@@ -43,11 +43,11 @@ fn decode_base64<S: Sink>(data: &[u8], out: &mut Budgeted<'_, S>) -> Result<(), 
     let mut i = 0;
     while i < data.len() {
         let mut c = data[i];
-        if c == b'%' {
-            if let Some(b) = percent_byte(data, i) {
-                c = b;
-                i += 2;
-            }
+        if c == b'%'
+            && let Some(b) = percent_byte(data, i)
+        {
+            c = b;
+            i += 2;
         }
         i += 1;
         if is_ascii_space(c) {

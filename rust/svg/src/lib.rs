@@ -346,10 +346,10 @@ impl<'a> Ctx<'a> {
             }
             let mut c = root.first_child();
             while let Some(n) = c {
-                if is_element(n) {
-                    if let Some(id) = n.attr(c"id").map(CStr::to_bytes).filter(|r| !r.is_empty()) {
-                        ids.entry(id).or_insert(n);
-                    }
+                if is_element(n)
+                    && let Some(id) = n.attr(c"id").map(CStr::to_bytes).filter(|r| !r.is_empty())
+                {
+                    ids.entry(id).or_insert(n);
                 }
                 c = ffi::next_in_subtree(n, root, is_element(n));
             }
@@ -412,17 +412,17 @@ impl<'a> Ctx<'a> {
         fallback: f64,
     ) -> (f64, bool) {
         let s = self.style(n);
-        if let Some(s) = s {
-            if let Some(v) = s.value(prop) {
-                match v.get() {
-                    Value::Keyword(Some(k)) if eq_ci(k.to_bytes(), b"auto") => {
-                        return (fallback, true);
-                    }
-                    Value::Length(..) | Value::Calc => {
-                        return (css_number(s, prop, basis, fallback), false);
-                    }
-                    _ => {}
+        if let Some(s) = s
+            && let Some(v) = s.value(prop)
+        {
+            match v.get() {
+                Value::Keyword(Some(k)) if eq_ci(k.to_bytes(), b"auto") => {
+                    return (fallback, true);
                 }
+                Value::Length(..) | Value::Calc => {
+                    return (css_number(s, prop, basis, fallback), false);
+                }
+                _ => {}
             }
         }
         let Some(a) = self.prop(n, attr) else {

@@ -1181,10 +1181,8 @@ fn match_single(
             } else {
                 !reserved_ident(&got)
             };
-            if ok {
-                if let Some(emit) = emit {
-                    emit.out.extend_from_slice(until_nul(&got));
-                }
+            if ok && let Some(emit) = emit {
+                emit.out.extend_from_slice(until_nul(&got));
             }
             return ok;
         }
@@ -1209,10 +1207,8 @@ fn match_single(
             } else {
                 image_function(name)
             };
-            if ok {
-                if let Some(emit) = emit {
-                    emit.out.extend_from_slice(input.text_of(first));
-                }
+            if ok && let Some(emit) = emit {
+                emit.out.extend_from_slice(input.text_of(first));
             }
             return ok;
         }
@@ -1234,13 +1230,11 @@ fn match_single(
                 ffi::parse_color(text)
             };
             let ok = current || parsed.is_some() || first.kind == Kind::Function;
-            if ok {
-                if let Some(emit) = emit {
-                    match (current, emit.ctx.and_then(|ctx| ctx.current_color), parsed) {
-                        (true, Some(color), _) => emit.out.extend_from_slice(color),
-                        (_, _, Some(rgba)) => append_color(emit.out, rgba),
-                        _ => emit.out.extend_from_slice(text),
-                    }
+            if ok && let Some(emit) = emit {
+                match (current, emit.ctx.and_then(|ctx| ctx.current_color), parsed) {
+                    (true, Some(color), _) => emit.out.extend_from_slice(color),
+                    (_, _, Some(rgba)) => append_color(emit.out, rgba),
+                    _ => emit.out.extend_from_slice(text),
                 }
             }
             return ok;
@@ -1297,13 +1291,11 @@ fn match_single(
             }
             let name = input.value(first);
             ok = ok && argc > 0 && transform_function(name.unwrap_or_default(), argc);
-            if ok {
-                if let (Some(emit), Some(args)) = (emit.as_mut(), args) {
-                    emit.out.extend_from_slice(name.unwrap_or(b"(null)"));
-                    emit.out.push(b'(');
-                    emit.out.extend_from_slice(&args);
-                    emit.out.push(b')');
-                }
+            if ok && let (Some(emit), Some(args)) = (emit.as_mut(), args) {
+                emit.out.extend_from_slice(name.unwrap_or(b"(null)"));
+                emit.out.push(b'(');
+                emit.out.extend_from_slice(&args);
+                emit.out.push(b')');
             }
             return ok;
         }
@@ -1349,10 +1341,10 @@ fn match_space_list(
         };
         piece.trim();
         if piece.lo < piece.hi {
-            if let Some(emit) = emit.as_mut() {
-                if count > 0 {
-                    emit.out.push(b' ');
-                }
+            if let Some(emit) = emit.as_mut()
+                && count > 0
+            {
+                emit.out.push(b' ');
             }
             if !match_single(input, kind, ident, piece, independent, emit.as_deref_mut()) {
                 return false;
@@ -1400,10 +1392,10 @@ fn match_component(
                     lo: start,
                     hi: i,
                 };
-                if let Some(emit) = emit.as_mut() {
-                    if count > 0 {
-                        emit.out.extend_from_slice(b", ");
-                    }
+                if let Some(emit) = emit.as_mut()
+                    && count > 0
+                {
+                    emit.out.extend_from_slice(b", ");
                 }
                 if !match_single(
                     input,

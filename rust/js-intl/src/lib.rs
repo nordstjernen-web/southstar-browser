@@ -103,12 +103,11 @@ fn arg_locale(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
         let locale = c_string(scope, value).ok().and_then(|s| norm_locale(&s));
         return locale.unwrap_or_else(default_locale);
     }
-    if value.is_array() {
-        if let Ok(first) = scope.get_index(value, 0) {
-            if first.is_string() {
-                return arg_locale(scope, &first);
-            }
-        }
+    if value.is_array()
+        && let Ok(first) = scope.get_index(value, 0)
+        && first.is_string()
+    {
+        return arg_locale(scope, &first);
     }
     default_locale()
 }
@@ -209,10 +208,10 @@ fn instance_proto(scope: &mut Scope<'_>, this: &Value, service: &str) -> Option<
     if let Some(proto) = object_property(scope, this, "prototype") {
         return Some(proto);
     }
-    if let Ok(constructor) = scope.get(this, service) {
-        if let Some(proto) = object_property(scope, &constructor, "prototype") {
-            return Some(proto);
-        }
+    if let Ok(constructor) = scope.get(this, service)
+        && let Some(proto) = object_property(scope, &constructor, "prototype")
+    {
+        return Some(proto);
     }
     let global = scope.global();
     let constructor = scope
@@ -274,10 +273,10 @@ fn join_parts(scope: &mut Scope<'_>, parts: &Value) -> Value {
         let value = scope
             .get_index(parts, i)
             .and_then(|part| scope.get(&part, "value"));
-        if let Ok(value) = value {
-            if let Ok(piece) = c_string(scope, &value) {
-                joined.extend_from_slice(&piece);
-            }
+        if let Ok(value) = value
+            && let Ok(piece) = c_string(scope, &value)
+        {
+            joined.extend_from_slice(&piece);
         }
     }
     text(scope, &joined)
@@ -313,10 +312,10 @@ fn supported_locales_of(
         out.push_value(scope, locales.clone());
     } else if locales.is_array() {
         for i in 0..length(scope, locales) {
-            if let Ok(entry) = scope.get_index(locales, i) {
-                if entry.is_string() {
-                    out.push_value(scope, entry);
-                }
+            if let Ok(entry) = scope.get_index(locales, i)
+                && entry.is_string()
+            {
+                out.push_value(scope, entry);
             }
         }
     }

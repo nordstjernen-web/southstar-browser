@@ -223,10 +223,8 @@ fn stop_color_specified(tok: &[u8]) -> Vec<u8> {
         || [&b"rgb("[..], b"rgba(", b"hsl(", b"hsla("]
             .iter()
             .any(|name| starts_with_ci(tok, name));
-    if legacy {
-        if let Some(rgba) = color::parse_color(&c_text(tok)) {
-            return color_text(rgba);
-        }
+    if legacy && let Some(rgba) = color::parse_color(&c_text(tok)) {
+        return color_text(rgba);
     }
     if tok.contains(&b'(') {
         tok.to_vec()
@@ -1069,15 +1067,14 @@ pub(crate) fn serialize_specified(gp: &GradientParse) -> Vec<u8> {
     } else if gr.to_side != 0 && gr.to_side != TO_BOTTOM {
         append_part(&mut pre, &to_side_text(gr.to_side));
     }
-    if let Some(position) = &gp.position_text {
-        if (gr.radial != 0 || gr.conic != 0)
-            && !position.eq_ignore_ascii_case(b"center")
-            && !position.eq_ignore_ascii_case(b"center center")
-        {
-            let mut t = b"at ".to_vec();
-            t.extend_from_slice(position);
-            append_part(&mut pre, &t);
-        }
+    if let Some(position) = &gp.position_text
+        && (gr.radial != 0 || gr.conic != 0)
+        && !position.eq_ignore_ascii_case(b"center")
+        && !position.eq_ignore_ascii_case(b"center center")
+    {
+        let mut t = b"at ".to_vec();
+        t.extend_from_slice(position);
+        append_part(&mut pre, &t);
     }
     if !gr.interp().is_empty() {
         let mut t = b"in ".to_vec();

@@ -35,10 +35,10 @@ unsafe impl Sync for Texture {}
 impl Drop for Texture {
     fn drop(&mut self) {
         let user = self.user_data.get_mut().unwrap_or_else(|e| e.into_inner());
-        if let Some(destroy) = user.destroy {
-            if !user.data.is_null() {
-                unsafe { destroy(user.data) };
-            }
+        if let Some(destroy) = user.destroy
+            && !user.data.is_null()
+        {
+            unsafe { destroy(user.data) };
         }
     }
 }
@@ -94,11 +94,11 @@ pub unsafe extern "C" fn ns_texture_unref(texture: *mut Texture) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_texture_clear(texture: *mut *mut Texture) {
-    if let Some(slot) = unsafe { texture.as_mut() } {
-        if !slot.is_null() {
-            unsafe { ns_texture_unref(*slot) };
-            *slot = ptr::null_mut();
-        }
+    if let Some(slot) = unsafe { texture.as_mut() }
+        && !slot.is_null()
+    {
+        unsafe { ns_texture_unref(*slot) };
+        *slot = ptr::null_mut();
     }
 }
 
@@ -147,10 +147,10 @@ pub unsafe extern "C" fn ns_texture_set_user_data(
     destroy: GDestroyNotify,
 ) {
     let Some(texture) = (unsafe { borrow(texture) }) else {
-        if let Some(destroy) = destroy {
-            if !data.is_null() {
-                unsafe { destroy(data) };
-            }
+        if let Some(destroy) = destroy
+            && !data.is_null()
+        {
+            unsafe { destroy(data) };
         }
         return;
     };
@@ -161,9 +161,10 @@ pub unsafe extern "C" fn ns_texture_set_user_data(
         user.destroy = destroy;
         previous
     };
-    if let (old, Some(old_destroy)) = previous {
-        if !old.is_null() && old != data {
-            unsafe { old_destroy(old) };
-        }
+    if let (old, Some(old_destroy)) = previous
+        && !old.is_null()
+        && old != data
+    {
+        unsafe { old_destroy(old) };
     }
 }

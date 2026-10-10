@@ -1169,21 +1169,20 @@ fn zoned_from(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Val
     let mut t = Temporal::new(Kind::ZonedDateTime);
     t.tz = Some("UTC".to_owned());
     let source = arg(args, 0);
-    if !args.is_empty() && source.is_string() {
-        if let Some(text) = text_of(scope, &source) {
-            if let Some(p) = parse_datetime(&text) {
-                t.epoch_sec =
-                    epoch_of(p.y, p.mo, p.d, p.h, p.mi, p.sec) - i64::from(p.off.wrapping_mul(60));
-                t.nanos = p.ms * 1_000_000 + p.us * 1000 + p.ns;
-                if let Some(open) = text.iter().position(|&c| c == b'[') {
-                    if let Some(close) = text[open..].iter().position(|&c| c == b']') {
-                        if close > 1 {
-                            let zone = &text[open + 1..open + close];
-                            t.tz = Some(String::from_utf8_lossy(zone).into_owned());
-                        }
-                    }
-                }
-            }
+    if !args.is_empty()
+        && source.is_string()
+        && let Some(text) = text_of(scope, &source)
+        && let Some(p) = parse_datetime(&text)
+    {
+        t.epoch_sec =
+            epoch_of(p.y, p.mo, p.d, p.h, p.mi, p.sec) - i64::from(p.off.wrapping_mul(60));
+        t.nanos = p.ms * 1_000_000 + p.us * 1000 + p.ns;
+        if let Some(open) = text.iter().position(|&c| c == b'[')
+            && let Some(close) = text[open..].iter().position(|&c| c == b']')
+            && close > 1
+        {
+            let zone = &text[open + 1..open + close];
+            t.tz = Some(String::from_utf8_lossy(zone).into_owned());
         }
     }
     Ok(make(scope, prototype, t))

@@ -447,10 +447,10 @@ fn parse_function(name: &[u8], targs: &[Vec<u8>], nt: usize, op: &mut Op) -> boo
             if let Some(v) = parse_scale_number(&targs[1]) {
                 op.b = v;
             }
-            if nt >= 3 {
-                if let Some(v) = parse_scale_number(&targs[2]) {
-                    op.c = v;
-                }
+            if nt >= 3
+                && let Some(v) = parse_scale_number(&targs[2])
+            {
+                op.c = v;
             }
             true
         }
@@ -582,10 +582,10 @@ pub(crate) fn parse_transform_origin(text: &[u8]) -> Option<Transform> {
     op.a_is_percent = axp;
     op.b = bx;
     op.b_is_percent = bxp;
-    if let Some(zc) = zc {
-        if let Some((value, percent)) = parse_transform_len(zc) {
-            op.c = if percent { 0.0 } else { value };
-        }
+    if let Some(zc) = zc
+        && let Some((value, percent)) = parse_transform_len(zc)
+    {
+        op.c = if percent { 0.0 } else { value };
     }
     tf.ops[0] = op;
     Some(tf)
@@ -1283,10 +1283,10 @@ fn arg_canonical(arg: &[u8], want: u32, scale_percent: bool) -> Option<Vec<u8>> 
         if want & TX_ANGLE != 0 && parse_angle_any(arg).is_some() {
             return Some(math_canonical_or_zeros(arg));
         }
-        if want & TX_NUMBER != 0 {
-            if let Some(n) = eval_calc_number(arg) {
-                return Some(serialize_calc_number(n));
-            }
+        if want & TX_NUMBER != 0
+            && let Some(n) = eval_calc_number(arg)
+        {
+            return Some(serialize_calc_number(n));
         }
         return None;
     }

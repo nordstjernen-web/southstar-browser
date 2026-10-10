@@ -222,10 +222,10 @@ impl Connection {
     }
 
     fn handle(&mut self, h: &Header, payload: &[u8]) -> Result<(), ConnectionError> {
-        if let Some(block) = &self.block {
-            if h.kind != frame::CONTINUATION || h.stream != block.stream {
-                return Err(self.connection_error(frame::PROTOCOL_ERROR));
-            }
+        if let Some(block) = &self.block
+            && (h.kind != frame::CONTINUATION || h.stream != block.stream)
+        {
+            return Err(self.connection_error(frame::PROTOCOL_ERROR));
         }
         match h.kind {
             frame::DATA => self.on_data(h, payload),
@@ -387,7 +387,7 @@ impl Connection {
         if h.flags & frame::FLAG_ACK != 0 {
             return Ok(());
         }
-        if payload.len() % 6 != 0 {
+        if !payload.len().is_multiple_of(6) {
             return Err(self.connection_error(frame::FRAME_SIZE_ERROR));
         }
         for entry in payload.chunks(6) {

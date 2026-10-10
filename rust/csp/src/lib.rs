@@ -397,10 +397,10 @@ impl Policy {
         let Some(list) = self.inline_script_sources() else {
             return true;
         };
-        if let Some(nonce) = nonce.filter(|nonce| !nonce.is_empty()) {
-            if has_token(list, &[NONCE_PREFIX, nonce, b"'"].concat()) {
-                return true;
-            }
+        if let Some(nonce) = nonce.filter(|nonce| !nonce.is_empty())
+            && has_token(list, &[NONCE_PREFIX, nonce, b"'"].concat())
+        {
+            return true;
         }
         if !body.is_empty() && list.iter().any(|source| hash_token_matches(source, body)) {
             return true;

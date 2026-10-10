@@ -139,11 +139,11 @@ impl Encoder<'_> {
             Value::undefined()
         };
         node.push(scope, stack);
-        if let Ok(cause) = scope.get(value, "cause") {
-            if !cause.is_undefined() {
-                let encoded = self.encode(scope, &cause)?;
-                node.push(scope, encoded);
-            }
+        if let Ok(cause) = scope.get(value, "cause")
+            && !cause.is_undefined()
+        {
+            let encoded = self.encode(scope, &cause)?;
+            node.push(scope, encoded);
         }
         node.done()
     }

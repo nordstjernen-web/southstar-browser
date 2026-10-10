@@ -639,17 +639,16 @@ pub(crate) fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<V
     let Some(prop) = prop else {
         return math_canonical(&c_text(value));
     };
-    if prop == b"display" {
-        if let Some(text) = display::canonical(value) {
-            return Some(text);
-        }
+    if prop == b"display"
+        && let Some(text) = display::canonical(value)
+    {
+        return Some(text);
     }
-    if prop == b"transform" {
-        if let Some(text) =
+    if prop == b"transform"
+        && let Some(text) =
             transform::list_canonical(value).or_else(|| transform::transform_canonical(value))
-        {
-            return Some(text);
-        }
+    {
+        return Some(text);
     }
     let individual = match prop {
         b"scale" => Some(Individual::Scale),
@@ -660,20 +659,20 @@ pub(crate) fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<V
     if let Some(text) = individual.and_then(|which| transform::individual_canonical(value, which)) {
         return Some(text);
     }
-    if prop == b"transform-origin" || prop == b"perspective-origin" {
-        if let Some(text) = transform::origin_canonical(value, prop[0] == b'p') {
-            return Some(text);
-        }
+    if (prop == b"transform-origin" || prop == b"perspective-origin")
+        && let Some(text) = transform::origin_canonical(value, prop[0] == b'p')
+    {
+        return Some(text);
     }
-    if prop == b"border-radius" || prop == b"-webkit-border-radius" {
-        if let Some(text) = border_radius_canonical(value) {
-            return Some(text);
-        }
+    if (prop == b"border-radius" || prop == b"-webkit-border-radius")
+        && let Some(text) = border_radius_canonical(value)
+    {
+        return Some(text);
     }
-    if prop == b"animation" || prop == b"transition" {
-        if let Some(text) = animation::shorthand_canonical(value, prop[0] == b'a') {
-            return Some(text);
-        }
+    if (prop == b"animation" || prop == b"transition")
+        && let Some(text) = animation::shorthand_canonical(value, prop[0] == b'a')
+    {
+        return Some(text);
     }
     if KEYWORD_CANONICAL_PROPS.contains(&prop) {
         let parsed = ffi::prop_named(prop).and_then(|id| property::parse(id, value));
@@ -685,23 +684,22 @@ pub(crate) fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<V
             return Some(text);
         }
     }
-    if COLOR_PROPS.contains(&prop) {
-        if let Some(text) = color_canonical(value) {
-            return Some(text);
-        }
+    if COLOR_PROPS.contains(&prop)
+        && let Some(text) = color_canonical(value)
+    {
+        return Some(text);
     }
     if matches!(
         prop,
         b"background-clip" | b"background-origin" | b"background-attachment" | b"background-repeat"
-    ) {
-        if let Some(text) = parsed_text(ffi::prop_named(prop), value) {
-            return Some(text);
-        }
+    ) && let Some(text) = parsed_text(ffi::prop_named(prop), value)
+    {
+        return Some(text);
     }
-    if prop == b"box-shadow" || prop == b"text-shadow" {
-        if let Some(text) = shadow::specified_canonical(value, prop[0] == b't') {
-            return Some(text);
-        }
+    if (prop == b"box-shadow" || prop == b"text-shadow")
+        && let Some(text) = shadow::specified_canonical(value, prop[0] == b't')
+    {
+        return Some(text);
     }
     if prop == b"aspect-ratio" {
         return parsed_text(Some(Prop::AspectRatio), value);

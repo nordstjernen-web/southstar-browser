@@ -217,14 +217,15 @@ pub fn select(
             any_unit_density = true;
         }
     }
-    if let Some(src) = src.filter(|s| !s.is_empty()) {
-        if !any_width && !any_unit_density {
-            candidates.push(Candidate {
-                url: src.to_vec(),
-                density: 1.0,
-                width: -1.0,
-            });
-        }
+    if let Some(src) = src.filter(|s| !s.is_empty())
+        && !any_width
+        && !any_unit_density
+    {
+        candidates.push(Candidate {
+            url: src.to_vec(),
+            density: 1.0,
+            width: -1.0,
+        });
     }
     let mut best: Option<usize> = None;
     let mut largest: Option<usize> = None;

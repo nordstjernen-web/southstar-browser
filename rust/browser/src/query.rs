@@ -260,19 +260,20 @@ fn collect_links(
         return;
     }
     for c in children(node) {
-        if ffi::is_named(c, c"a") {
-            if let Some(href) = c.attr(c"href") {
-                let h = href.to_bytes();
-                if !h.is_empty() && h[0] != b'#' && !h.starts_with(b"javascript:") {
-                    if let Some(abs) = ffi::url_resolve(base, href).filter(|a| !a.is_empty()) {
-                        if seen.insert(abs.to_bytes().to_vec()) {
-                            if !out.is_empty() {
-                                out.push(b'\n');
-                            }
-                            out.extend_from_slice(abs.to_bytes());
-                        }
-                    }
+        if ffi::is_named(c, c"a")
+            && let Some(href) = c.attr(c"href")
+        {
+            let h = href.to_bytes();
+            if !h.is_empty()
+                && h[0] != b'#'
+                && !h.starts_with(b"javascript:")
+                && let Some(abs) = ffi::url_resolve(base, href).filter(|a| !a.is_empty())
+                && seen.insert(abs.to_bytes().to_vec())
+            {
+                if !out.is_empty() {
+                    out.push(b'\n');
                 }
+                out.extend_from_slice(abs.to_bytes());
             }
         }
         collect_links(c, base, out, seen, depth + 1);
@@ -299,12 +300,11 @@ fn find_icon_href(node: Node<'_>, depth: c_int) -> Option<&CStr> {
         return None;
     }
     for c in children(node) {
-        if ffi::is_named(c, c"link") {
-            if let Some(href) = c.attr(c"href").filter(|h| !h.is_empty()) {
-                if rel_token_is_icon(c.attr(c"rel")) {
-                    return Some(href);
-                }
-            }
+        if ffi::is_named(c, c"link")
+            && let Some(href) = c.attr(c"href").filter(|h| !h.is_empty())
+            && rel_token_is_icon(c.attr(c"rel"))
+        {
+            return Some(href);
         }
         if let Some(found) = find_icon_href(c, depth + 1) {
             return Some(found);

@@ -437,10 +437,10 @@ pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
     }
     let min = value_to_number(ty, input.attr(c"min"));
     let max = value_to_number(ty, input.attr(c"max"));
-    if let (Some(min), Some(max)) = (min, max) {
-        if min > max {
-            return Step::Unchanged;
-        }
+    if let (Some(min), Some(max)) = (min, max)
+        && min > max
+    {
+        return Step::Unchanged;
     }
     let mut value = value_to_number(ty, used_value(input)).unwrap_or(0.0);
     let before = value;
@@ -453,15 +453,15 @@ pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
     } else {
         value += f64::from(sign) * n * step;
     }
-    if let Some(bound) = value_to_number(ty, input.attr(c"min")) {
-        if value < bound {
-            value = base + ((bound - base) / step).ceil() * step;
-        }
+    if let Some(bound) = value_to_number(ty, input.attr(c"min"))
+        && value < bound
+    {
+        value = base + ((bound - base) / step).ceil() * step;
     }
-    if let Some(bound) = value_to_number(ty, input.attr(c"max")) {
-        if value > bound {
-            value = base + ((bound - base) / step).floor() * step;
-        }
+    if let Some(bound) = value_to_number(ty, input.attr(c"max"))
+        && value > bound
+    {
+        value = base + ((bound - base) / step).floor() * step;
     }
     if (sign > 0 && value < before) || (sign < 0 && value > before) {
         return Step::Unchanged;
@@ -668,10 +668,10 @@ pub fn used_value(node: Node<'_>) -> Option<&CStr> {
         }
         return Some(first_text_child(node).unwrap_or(c""));
     }
-    if value_is_dirty_mode(node) {
-        if let Some(dirty) = node.attr(c"data-nd-value") {
-            return Some(dirty);
-        }
+    if value_is_dirty_mode(node)
+        && let Some(dirty) = node.attr(c"data-nd-value")
+    {
+        return Some(dirty);
     }
     node.attr(c"value")
 }
@@ -706,10 +706,10 @@ pub fn textarea_normalized(value: &[u8]) -> Vec<u8> {
 }
 
 pub fn textarea_value(node: Option<Node>) -> Vec<u8> {
-    if let Some(n) = node {
-        if n.attr(c"data-nd-vdirty").is_some() {
-            return textarea_normalized(n.attr(c"data-nd-value").map_or(&[][..], CStr::to_bytes));
-        }
+    if let Some(n) = node
+        && n.attr(c"data-nd-vdirty").is_some()
+    {
+        return textarea_normalized(n.attr(c"data-nd-value").map_or(&[][..], CStr::to_bytes));
     }
     textarea_normalized(&textarea_default_value(node))
 }

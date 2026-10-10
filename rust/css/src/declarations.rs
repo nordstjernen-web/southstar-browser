@@ -432,10 +432,10 @@ pub(crate) fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
         return wide_keyword(text).is_some() || animation::range_shorthand_expand(text).is_some();
     }
     if !eq(name, b"all") {
-        if let Some(prop) = ffi::prop_named(name) {
-            if declaration_valid(Some(prop), text) {
-                return true;
-            }
+        if let Some(prop) = ffi::prop_named(name)
+            && declaration_valid(Some(prop), text)
+        {
+            return true;
         }
         return supports::declaration(name, text);
     }

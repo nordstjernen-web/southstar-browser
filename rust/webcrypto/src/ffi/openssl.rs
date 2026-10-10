@@ -1060,25 +1060,25 @@ pub fn rsa_oaep(
             && EVP_PKEY_CTX_set_rsa_oaep_md(c, md.0) > 0
             && EVP_PKEY_CTX_set_rsa_mgf1_md(c, md.0) > 0
     };
-    if let Some(label) = label.filter(|label| !label.is_empty()) {
-        if ok {
-            let copy = c_len(label.len()).map(|len| {
-                (
-                    unsafe { CRYPTO_memdup(label.as_ptr().cast(), label.len(), FILE.as_ptr(), 0) },
-                    len,
-                )
-            });
-            ok = match copy {
-                Some((lbl, len)) if !lbl.is_null() => {
-                    let set = unsafe { EVP_PKEY_CTX_set0_rsa_oaep_label(c, lbl, len) } > 0;
-                    if !set {
-                        unsafe { openssl_free(lbl.cast()) };
-                    }
-                    set
+    if let Some(label) = label.filter(|label| !label.is_empty())
+        && ok
+    {
+        let copy = c_len(label.len()).map(|len| {
+            (
+                unsafe { CRYPTO_memdup(label.as_ptr().cast(), label.len(), FILE.as_ptr(), 0) },
+                len,
+            )
+        });
+        ok = match copy {
+            Some((lbl, len)) if !lbl.is_null() => {
+                let set = unsafe { EVP_PKEY_CTX_set0_rsa_oaep_label(c, lbl, len) } > 0;
+                if !set {
+                    unsafe { openssl_free(lbl.cast()) };
                 }
-                _ => false,
-            };
-        }
+                set
+            }
+            _ => false,
+        };
     }
     if !ok {
         return None;

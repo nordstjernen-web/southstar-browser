@@ -102,10 +102,10 @@ impl Environment<'_> {
             .filter(|s| !s.is_empty());
         let lazy_srcset = non_empty(img, &[c"data-srcset", c"data-lazy-srcset"]);
         let sizes = attr(img, c"sizes");
-        if let Some((url, density)) = self.select(lazy_srcset, sizes, None) {
-            if srcset::has_width_descriptor(lazy_srcset) || lazy_src.is_none() {
-                return (Some(url), density);
-            }
+        if let Some((url, density)) = self.select(lazy_srcset, sizes, None)
+            && (srcset::has_width_descriptor(lazy_srcset) || lazy_src.is_none())
+        {
+            return (Some(url), density);
         }
         if let Some(lazy_src) = lazy_src {
             return (Some(lazy_src.to_vec()), 1.0);

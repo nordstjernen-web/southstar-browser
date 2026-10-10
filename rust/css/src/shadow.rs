@@ -277,11 +277,11 @@ pub(crate) fn parse_list(text: &[u8]) -> Option<ShadowList> {
             depth = depth.saturating_sub(1);
         }
         if (c == b',' && depth == 0) || q == text.len() {
-            if (list.n as usize) < SHADOWS_MAX {
-                if let Some(shadow) = parse_one(&text[seg..q]) {
-                    list.s[list.n as usize] = shadow;
-                    list.n += 1;
-                }
+            if (list.n as usize) < SHADOWS_MAX
+                && let Some(shadow) = parse_one(&text[seg..q])
+            {
+                list.s[list.n as usize] = shadow;
+                list.n += 1;
             }
             seg = q + 1;
         }

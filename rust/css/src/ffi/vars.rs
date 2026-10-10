@@ -169,10 +169,10 @@ unsafe extern "C" fn name_cmp(a: *const c_void, b: *const c_void) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_var_map_names(map: *const c_void) -> *mut GPtrArray {
     let raw = map.cast::<RawVarMap>().cast_mut();
-    if let Some(m) = unsafe { raw.as_ref() } {
-        if !m.names.is_null() {
-            return unsafe { g_ptr_array_ref(m.names) };
-        }
+    if let Some(m) = unsafe { raw.as_ref() }
+        && !m.names.is_null()
+    {
+        return unsafe { g_ptr_array_ref(m.names) };
     }
     let names = unsafe { glib::g_ptr_array_new_with_free_func(Some(glib::g_free)) };
     let mut seen: HashSet<Vec<u8>> = HashSet::new();

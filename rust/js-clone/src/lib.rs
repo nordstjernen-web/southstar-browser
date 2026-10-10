@@ -389,12 +389,11 @@ impl Cloner {
         if stack.is_string() {
             let _ = scope.set(&clone, "stack", stack);
         }
-        if let Ok(cause) = scope.get(value, "cause") {
-            if !cause.is_undefined() {
-                if let Ok(cause) = self.clone(scope, &cause) {
-                    let _ = scope.set(&clone, "cause", cause);
-                }
-            }
+        if let Ok(cause) = scope.get(value, "cause")
+            && !cause.is_undefined()
+            && let Ok(cause) = self.clone(scope, &cause)
+        {
+            let _ = scope.set(&clone, "cause", cause);
         }
         self.remember(value, &clone);
         Ok(clone)

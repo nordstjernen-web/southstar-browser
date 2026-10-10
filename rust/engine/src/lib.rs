@@ -147,19 +147,17 @@ pub fn dump_layout(b: BoxRef, indent: i32, out: &mut Out) {
         out.append(b" ");
     }
     out.box_line(b);
-    if let Some(dom) = ffi::box_dom(b) {
-        if let Some(name) = dom.name() {
-            let id = dom
-                .is_element()
-                .then(|| dom.attr(c"id"))
-                .flatten()
-                .filter(|id| !id.is_empty());
-            match id {
-                Some(id) => {
-                    out.append(&[b" <", name.to_bytes(), b"#", id.to_bytes(), b">"].concat())
-                }
-                None => out.append(&[b" <", name.to_bytes(), b">"].concat()),
-            }
+    if let Some(dom) = ffi::box_dom(b)
+        && let Some(name) = dom.name()
+    {
+        let id = dom
+            .is_element()
+            .then(|| dom.attr(c"id"))
+            .flatten()
+            .filter(|id| !id.is_empty());
+        match id {
+            Some(id) => out.append(&[b" <", name.to_bytes(), b"#", id.to_bytes(), b">"].concat()),
+            None => out.append(&[b" <", name.to_bytes(), b">"].concat()),
         }
     }
     if let Some(src) = b.media().and_then(|m| m.image_src()) {

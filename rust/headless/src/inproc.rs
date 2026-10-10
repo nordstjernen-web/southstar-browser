@@ -353,10 +353,10 @@ fn reveal_fragment(doc: Node, frag: &CStr) {
         if ffi::hidden_until_found(cur) {
             items.push((cur, Reveal::Hidden));
         }
-        if let Some(parent) = cur.parent() {
-            if ffi::details_fragment_needs_open(parent, cur) {
-                items.push((parent, Reveal::Details));
-            }
+        if let Some(parent) = cur.parent()
+            && ffi::details_fragment_needs_open(parent, cur)
+        {
+            items.push((parent, Reveal::Details));
         }
         if cur.as_ptr() == doc.as_ptr() {
             break;
@@ -417,24 +417,22 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
         let mut made = None;
         if let Some(src) = want_src.as_deref().filter(|s| is_inline_video(s)) {
             let src = cstring(src);
-            if let Some(resp) = ffi::fetch(&src, Some(base)) {
-                if let (None, Some(body)) =
+            if let Some(resp) = ffi::fetch(&src, Some(base))
+                && let (None, Some(body)) =
                     (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
-                {
-                    made = Video::from_player(&src, body);
-                }
+            {
+                made = Video::from_player(&src, body);
             }
         }
-        if made.is_none() {
-            if let Some(poster) = want_poster.as_deref() {
-                let poster = cstring(poster);
-                if let Some(resp) = ffi::fetch(&poster, Some(base)) {
-                    if let (None, Some(body)) =
-                        (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
-                    {
-                        made = Video::from_poster(&poster, body);
-                    }
-                }
+        if made.is_none()
+            && let Some(poster) = want_poster.as_deref()
+        {
+            let poster = cstring(poster);
+            if let Some(resp) = ffi::fetch(&poster, Some(base))
+                && let (None, Some(body)) =
+                    (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
+            {
+                made = Video::from_poster(&poster, body);
             }
         }
 

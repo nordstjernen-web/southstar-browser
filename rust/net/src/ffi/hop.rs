@@ -113,10 +113,10 @@ impl Handler for Sinks<'_> {
     }
 
     fn header(&mut self, line: &[u8], name: &[u8], value: &[u8]) {
-        if name.eq_ignore_ascii_case(b"set-cookie") {
-            if let Some(jar) = self.jar {
-                cookies::store_in(self.url, value, jar);
-            }
+        if name.eq_ignore_ascii_case(b"set-cookie")
+            && let Some(jar) = self.jar
+        {
+            cookies::store_in(self.url, value, jar);
         }
         if name.eq_ignore_ascii_case(b"strict-transport-security") && self.sts.is_none() {
             self.sts = Some(value.to_vec());

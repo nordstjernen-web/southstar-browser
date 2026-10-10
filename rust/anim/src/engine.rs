@@ -1191,22 +1191,21 @@ impl Anim {
         if !cur.is_null() && ch.current.is_some() && cur == Borrowed::of(ch.current.as_ref()) {
             return;
         }
-        if !ch.has_last {
-            if let Some(prev) = prev_style.filter(|p| p.as_ptr() != style.as_ptr()) {
-                ch.last = Val::retain(css::style_value(prev, prop));
-                ch.last_currentcolor = css::from_currentcolor(prev, prop);
-                ch.has_last = true;
-            }
+        if !ch.has_last
+            && let Some(prev) = prev_style.filter(|p| p.as_ptr() != style.as_ptr())
+        {
+            ch.last = Val::retain(css::style_value(prev, prop));
+            ch.last_currentcolor = css::from_currentcolor(prev, prop);
+            ch.has_last = true;
         }
-        if !ch.has_last {
-            if let Some(before) = node
+        if !ch.has_last
+            && let Some(before) = node
                 .style_before_change()
                 .filter(|b| b.as_ptr() != style.as_ptr())
-            {
-                ch.last = Val::retain(css::style_value(before, prop));
-                ch.last_currentcolor = css::from_currentcolor(before, prop);
-                ch.has_last = true;
-            }
+        {
+            ch.last = Val::retain(css::style_value(before, prop));
+            ch.last_currentcolor = css::from_currentcolor(before, prop);
+            ch.has_last = true;
         }
         if !ch.has_last {
             ch.last = Val::retain(cur);
@@ -1409,10 +1408,11 @@ impl Anim {
             self.shared.now_us = now_us;
         }
         let now_us = self.shared.now_us;
-        if let Some(s) = self.states.get(&node.key()) {
-            if s.prev_style_ptr() == style.as_ptr() && !s.is_active() {
-                return;
-            }
+        if let Some(s) = self.states.get(&node.key())
+            && s.prev_style_ptr() == style.as_ptr()
+            && !s.is_active()
+        {
+            return;
         }
         let mut tv = AnimList::effective(style, false);
         let mut av = AnimList::effective(style, true);

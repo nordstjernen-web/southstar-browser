@@ -413,10 +413,10 @@ fn with_language<R>(el: Node<'_>, f: impl FnOnce(Option<&[u8]>) -> R) -> R {
         if let Some(xml) = attrs::find_ns(n, Some(XML_NS), c"lang") {
             return f(Some(xml.value().map_or(&b""[..], CStr::to_bytes)));
         }
-        if let Some(lang) = attrs::find_ns(n, None, c"lang") {
-            if n.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0 {
-                return f(Some(lang.value().map_or(&b""[..], CStr::to_bytes)));
-            }
+        if let Some(lang) = attrs::find_ns(n, None, c"lang")
+            && n.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0
+        {
+            return f(Some(lang.value().map_or(&b""[..], CStr::to_bytes)));
         }
     }
     let mut root = el;
@@ -671,21 +671,22 @@ fn control_is_valid(el: Node<'_>) -> bool {
     let mut valid = !(controls::supports_required(el)
         && has(el, c"required")
         && controls::value_missing(el, Some(&value), Some(el.root())));
-    if valid && !bytes.is_empty() {
-        if let Some(t) = ty.map(CStr::to_bytes) {
-            if eq(t, b"email") {
-                valid = controls::email_value_valid(Some(el), Some(&value));
-            } else if eq(t, b"url") {
-                valid = ffi::url_is_valid_absolute(&value);
-            } else if controls::type_has_number_value(ty) {
-                valid = controls::value_to_number(ty, Some(&value)).is_some();
-            }
-            if valid && controls::value_range_state(el, Some(&value)).is_some_and(|(u, o)| u || o) {
-                valid = false;
-            }
-            if valid && controls::value_step_mismatch(el, Some(&value)) {
-                valid = false;
-            }
+    if valid
+        && !bytes.is_empty()
+        && let Some(t) = ty.map(CStr::to_bytes)
+    {
+        if eq(t, b"email") {
+            valid = controls::email_value_valid(Some(el), Some(&value));
+        } else if eq(t, b"url") {
+            valid = ffi::url_is_valid_absolute(&value);
+        } else if controls::type_has_number_value(ty) {
+            valid = controls::value_to_number(ty, Some(&value)).is_some();
+        }
+        if valid && controls::value_range_state(el, Some(&value)).is_some_and(|(u, o)| u || o) {
+            valid = false;
+        }
+        if valid && controls::value_step_mismatch(el, Some(&value)) {
+            valid = false;
         }
     }
     if valid

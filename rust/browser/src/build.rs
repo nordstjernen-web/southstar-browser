@@ -36,10 +36,9 @@ fn find_meta_refresh(n: Node<'_>, depth: c_int) -> Option<&CStr> {
     if ffi::is_named(n, c"meta")
         && n.attr(c"http-equiv")
             .is_some_and(|e| e.to_bytes().eq_ignore_ascii_case(b"refresh"))
+        && let Some(content) = n.attr(c"content").filter(|c| !c.is_empty())
     {
-        if let Some(content) = n.attr(c"content").filter(|c| !c.is_empty()) {
-            return Some(content);
-        }
+        return Some(content);
     }
     children(n).find_map(|c| find_meta_refresh(c, depth + 1))
 }
@@ -80,10 +79,9 @@ fn apply_meta_csp(js: ffi::Js, node: Node<'_>, depth: c_int) {
                 he.to_bytes()
                     .eq_ignore_ascii_case(b"content-security-policy")
             })
+            && let Some(content) = c.attr(c"content").filter(|c| !c.is_empty())
         {
-            if let Some(content) = c.attr(c"content").filter(|c| !c.is_empty()) {
-                js.add_csp_header(Some(content));
-            }
+            js.add_csp_header(Some(content));
         }
         apply_meta_csp(js, c, depth + 1);
     }
@@ -238,13 +236,14 @@ pub fn submit_form(b: &NsBrowser, clicked: Option<Node<'_>>) {
     let Some(form) = form else {
         return;
     };
-    if form.attr(c"novalidate").is_none() && clicked.attr(c"formnovalidate").is_none() {
-        if let Some(bad) = ffi::form_first_invalid(form, doc) {
-            if let Some(js) = b.js() {
-                js.dispatch_event(bad, c"invalid");
-            }
-            return;
+    if form.attr(c"novalidate").is_none()
+        && clicked.attr(c"formnovalidate").is_none()
+        && let Some(bad) = ffi::form_first_invalid(form, doc)
+    {
+        if let Some(js) = b.js() {
+            js.dispatch_event(bad, c"invalid");
         }
+        return;
     }
     if let Some(js) = b.js() {
         let prevented = js.dispatch_submit_event(form, clicked);

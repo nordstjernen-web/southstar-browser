@@ -286,12 +286,11 @@ fn collect_font_usage(root: Node<'_>, styles: StyleTable, families: &mut HashMap
                 add_pseudo(node, style.before(), families);
                 add_pseudo(node, style.after(), families);
             }
-        } else if node.is_text() {
-            if let (Some(text), Some(parent)) =
+        } else if node.is_text()
+            && let (Some(text), Some(parent)) =
                 (node.text().filter(|t| !t.is_empty()), node.parent())
-            {
-                add_styled(styles.get(parent), text.to_bytes(), families);
-            }
+        {
+            add_styled(styles.get(parent), text.to_bytes(), families);
         }
         cur = southstar_dom::index::next_in_subtree(node, Some(root), descend);
     }
@@ -327,10 +326,10 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
             let Some(abs) = (unsafe { GStr::take(abs) }) else {
                 continue;
             };
-            if let Some(allowed) = c.font_allowed {
-                if unsafe { allowed(abs.as_ptr(), c.cb_ud) } == 0 {
-                    continue;
-                }
+            if let Some(allowed) = c.font_allowed
+                && unsafe { allowed(abs.as_ptr(), c.cb_ud) } == 0
+            {
+                continue;
             }
             unsafe { ns_font_request(face.family, abs.as_ptr(), c.base_url, face.descriptors) };
         }

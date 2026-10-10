@@ -873,11 +873,11 @@ fn parse_in_parens(t: &Text<'_>, pp: &mut usize, end: usize, depth: i32) -> Opti
         let inner = p + 1;
         let close = t.close_paren(inner, end);
         let mut cp = inner;
-        if let Some(cond) = parse_condition(t, &mut cp, close, true, depth + 1) {
-            if t.skip_ws(cp, close) == close {
-                *pp = after(close);
-                return Some(Node::And(vec![cond]));
-            }
+        if let Some(cond) = parse_condition(t, &mut cp, close, true, depth + 1)
+            && t.skip_ws(cp, close) == close
+        {
+            *pp = after(close);
+            return Some(Node::And(vec![cond]));
         }
         if let Some(feature) = parse_feature(t, inner, close) {
             *pp = after(close);
@@ -971,12 +971,12 @@ fn parse_query(t: &Text<'_>, s: usize, e: usize) -> Query {
         return out;
     }
     let mut p = s;
-    if let Some(cond) = parse_condition(t, &mut p, e, true, 0) {
-        if t.skip_ws(p, e) == e {
-            out.cond = Some(cond);
-            out.valid = true;
-            return out;
-        }
+    if let Some(cond) = parse_condition(t, &mut p, e, true, 0)
+        && t.skip_ws(p, e) == e
+    {
+        out.cond = Some(cond);
+        out.valid = true;
+        return out;
     }
     let mut p = s;
     let Some((q, ident)) = t.read_ident(p, e, 64) else {
@@ -1292,11 +1292,11 @@ fn serialize_node(out: &mut Vec<u8>, n: &Node, depth: i32) {
                 out.extend_from_slice(def.name.as_bytes());
             } else if f.plain {
                 let mut name = def.name;
-                if f.minmax != 0 {
-                    if let Some(rest) = name.strip_prefix("-webkit-") {
-                        out.extend_from_slice(b"-webkit-");
-                        name = rest;
-                    }
+                if f.minmax != 0
+                    && let Some(rest) = name.strip_prefix("-webkit-")
+                {
+                    out.extend_from_slice(b"-webkit-");
+                    name = rest;
                 }
                 match f.minmax {
                     1 => out.extend_from_slice(b"min-"),

@@ -274,10 +274,9 @@ fn collect(dir: &Path, root: &Path, out: &mut Vec<String>) {
             collect(&path, root, out);
         } else if path.extension().is_some_and(|e| e == "js")
             && !path.to_string_lossy().contains("_FIXTURE")
+            && let Ok(relative) = path.strip_prefix(root)
         {
-            if let Ok(relative) = path.strip_prefix(root) {
-                out.push(relative.to_string_lossy().replace('\\', "/"));
-            }
+            out.push(relative.to_string_lossy().replace('\\', "/"));
         }
     }
 }

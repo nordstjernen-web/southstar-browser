@@ -157,7 +157,7 @@ fn currency_symbol(code: &[u8]) -> Vec<u8> {
 fn group(digits: &[u8], separator: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(digits.len() * 2);
     for (i, &digit) in digits.iter().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.extend_from_slice(separator);
         }
         out.push(digit);
@@ -207,11 +207,12 @@ pub(crate) fn parts(scope: &mut Scope<'_>, format: &Value, number: f64) -> Value
     }
 
     let mut suffix: &[u8] = b"";
-    if compact && magnitude >= 1000.0 {
-        if let Some(&(unit, label)) = COMPACT_UNITS.iter().find(|(unit, _)| magnitude >= *unit) {
-            magnitude /= unit;
-            suffix = label;
-        }
+    if compact
+        && magnitude >= 1000.0
+        && let Some(&(unit, label)) = COMPACT_UNITS.iter().find(|(unit, _)| magnitude >= *unit)
+    {
+        magnitude /= unit;
+        suffix = label;
     }
 
     if minimum_fraction < 0 {

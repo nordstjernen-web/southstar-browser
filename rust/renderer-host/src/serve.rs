@@ -320,19 +320,18 @@ impl<F: Framebuffer> Session<F> {
         let wheel_x = long(body, "wheel_x");
         let wheel_y = long(body, "wheel_y");
         let viewport = long(body, "wheel_viewport");
-        if let Some(cur) = self.cur.as_mut() {
-            if viewport == 0
-                && cur.scroll_at_full(
-                    wheel_x as c_int,
-                    wheel_y as c_int,
-                    dx as c_int,
-                    dy as c_int,
-                    &mut rv.wheel_snapped,
-                )
-            {
-                self.frame_valid = false;
-                return;
-            }
+        if let Some(cur) = self.cur.as_mut()
+            && viewport == 0
+            && cur.scroll_at_full(
+                wheel_x as c_int,
+                wheel_y as c_int,
+                dx as c_int,
+                dy as c_int,
+                &mut rv.wheel_snapped,
+            )
+        {
+            self.frame_valid = false;
+            return;
         }
         let max_x = max_scroll(rv.page_w, rv.vw, rv.scale);
         let max_y = max_scroll(rv.page_h, rv.vh, rv.scale);
@@ -862,15 +861,15 @@ impl<F: Framebuffer> Session<F> {
                 let (x, y) = xy(body);
                 let paths = text(body, "paths");
                 let mut changed = 0;
-                if let (Some(cur), Some(paths)) = (self.cur.as_mut(), &paths) {
-                    if !paths.as_bytes().is_empty() {
-                        let list: Vec<CString> = paths
-                            .as_bytes()
-                            .split(|&b| b == b'\n')
-                            .map(engine::cstring)
-                            .collect();
-                        changed = cur.drop_files(x, y, &list);
-                    }
+                if let (Some(cur), Some(paths)) = (self.cur.as_mut(), &paths)
+                    && !paths.as_bytes().is_empty()
+                {
+                    let list: Vec<CString> = paths
+                        .as_bytes()
+                        .split(|&b| b == b'\n')
+                        .map(engine::cstring)
+                        .collect();
+                    changed = cur.drop_files(x, y, &list);
                 }
                 if changed > 0 {
                     self.frame_valid = false;
@@ -982,12 +981,12 @@ impl<F: Framebuffer> Session<F> {
                 let (mut pw, mut ph, mut ok) = (0, 0, 0);
                 self.frame_valid = false;
                 self.apply_device_pixel_ratio(body);
-                if let Some(cur) = self.cur.as_mut() {
-                    if cur.set_viewport(vw, f64::from(vh)) == 0 {
-                        cur.window_action_applied();
-                        cur.page_size(&mut pw, &mut ph);
-                        ok = 1;
-                    }
+                if let Some(cur) = self.cur.as_mut()
+                    && cur.set_viewport(vw, f64::from(vh)) == 0
+                {
+                    cur.window_action_applied();
+                    cur.page_size(&mut pw, &mut ph);
+                    ok = 1;
                 }
                 json_reply(
                     fd,

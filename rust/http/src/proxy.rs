@@ -139,10 +139,9 @@ pub fn bypassed(no_proxy: &[u8], host: &str) -> bool {
                 net.parse::<IpAddr>(),
                 bits.parse::<u32>(),
                 host.parse::<IpAddr>(),
-            ) {
-                if in_cidr(ip, net, bits) {
-                    return true;
-                }
+            ) && in_cidr(ip, net, bits)
+            {
+                return true;
             }
             continue;
         }

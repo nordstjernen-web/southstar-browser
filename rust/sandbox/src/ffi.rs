@@ -94,10 +94,10 @@ static WRITABLE_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static EXEC_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 
 fn remember(list: &Mutex<Vec<CString>>, dir: *const c_char) {
-    if let Some(dir) = unsafe { glib::bytes(dir) }.filter(|dir| !dir.is_empty()) {
-        if let Ok(dir) = CString::new(dir) {
-            list.lock().unwrap_or_else(|e| e.into_inner()).push(dir);
-        }
+    if let Some(dir) = unsafe { glib::bytes(dir) }.filter(|dir| !dir.is_empty())
+        && let Ok(dir) = CString::new(dir)
+    {
+        list.lock().unwrap_or_else(|e| e.into_inner()).push(dir);
     }
 }
 
@@ -378,12 +378,12 @@ mod linux {
                 .as_deref()
                 .map(|home| build_filename(&[home, b"Downloads"])),
         };
-        if let (Some(downloads), Some(home)) = (&downloads, &home) {
-            if downloads.starts_with(home) {
-                super::mkdir_with_parents(downloads);
-                if file_test(downloads, glib::FILE_TEST_IS_DIR) {
-                    rules.allow(fs_rw, downloads);
-                }
+        if let (Some(downloads), Some(home)) = (&downloads, &home)
+            && downloads.starts_with(home)
+        {
+            super::mkdir_with_parents(downloads);
+            if file_test(downloads, glib::FILE_TEST_IS_DIR) {
+                rules.allow(fs_rw, downloads);
             }
         }
 

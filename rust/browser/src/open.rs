@@ -223,12 +223,11 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<&'st
         return open(&real, view, post);
     }
 
-    if post.is_none() {
-        if let Some(host) = ffi::url_host_from(url) {
-            if ffi::safebrowsing_blocked(&host) {
-                return Some(show_interstitial(url, &host, view));
-            }
-        }
+    if post.is_none()
+        && let Some(host) = ffi::url_host_from(url)
+        && ffi::safebrowsing_blocked(&host)
+    {
+        return Some(show_interstitial(url, &host, view));
     }
 
     let file_url = resolve_local_path(url);
@@ -263,18 +262,20 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<&'st
         Some(r) => Some(r),
         None => Response::navigate(fetch_url, referrer.as_deref(), user_activated, post),
     };
-    if let Some(r) = resp.as_mut() {
-        if post.is_none() && (r.error().is_some() || r.status() >= 400) && r.body().is_empty() {
-            error_page(r, fetch_url);
-        }
+    if let Some(r) = resp.as_mut()
+        && post.is_none()
+        && (r.error().is_some() || r.status() >= 400)
+        && r.body().is_empty()
+    {
+        error_page(r, fetch_url);
     }
     let mut resp = resp.filter(|r| r.error().is_none() && r.has_body())?;
 
     let mut base = ffi::dup_text(resp.final_url().unwrap_or(fetch_url));
-    if post.is_none() {
-        if let Some(stripped) = base.as_deref().and_then(ffi::url_strip_tracking_params) {
-            base = Some(stripped);
-        }
+    if post.is_none()
+        && let Some(stripped) = base.as_deref().and_then(ffi::url_strip_tracking_params)
+    {
+        base = Some(stripped);
     }
     let base_bytes = base.as_deref().map_or(&b""[..], CStr::to_bytes);
     let bfcache_ok = post.is_none()

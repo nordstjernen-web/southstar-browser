@@ -21,10 +21,10 @@ pub fn out(bytes: &[u8]) {
         if i > 0 {
             unsafe { putchar(0) };
         }
-        if let Ok(run) = CString::new(run) {
-            if !run.is_empty() {
-                unsafe { printf(c"%s".as_ptr(), run.as_ptr()) };
-            }
+        if let Ok(run) = CString::new(run)
+            && !run.is_empty()
+        {
+            unsafe { printf(c"%s".as_ptr(), run.as_ptr()) };
         }
     }
 }

@@ -119,10 +119,11 @@ pub unsafe extern "C" fn ns_css_style_effective_transform(
     let style = unsafe { style.as_ref() };
     let value = |prop: Prop| style.and_then(|s| unsafe { s.value(prop.id()).as_ref() });
     for prop in [Prop::Translate, Prop::Rotate, Prop::Scale] {
-        if let Some(tf) = value(prop).and_then(transform_of) {
-            if tf.n_ops > 0 && (out.n_ops as usize) < OPS_MAX {
-                unsafe { push_op(out, &tf.ops[0]) };
-            }
+        if let Some(tf) = value(prop).and_then(transform_of)
+            && tf.n_ops > 0
+            && (out.n_ops as usize) < OPS_MAX
+        {
+            unsafe { push_op(out, &tf.ops[0]) };
         }
     }
     let tf = unsafe { transform_override.as_ref() }

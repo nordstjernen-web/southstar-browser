@@ -132,11 +132,11 @@ fn attr_dimension(frame: Node, attr: &CStr) -> Option<f64> {
 fn frame_dimensions(frame: Node) -> (Option<f64>, Option<f64>) {
     let mut w = style_attr_dimension(frame, b"width");
     let mut h = style_attr_dimension(frame, b"height");
-    if w.is_none() || h.is_none() {
-        if let Some((lw, lh)) = ffi::layout_frame_viewport(frame) {
-            w = w.or(Some(lw));
-            h = h.or(Some(lh));
-        }
+    if (w.is_none() || h.is_none())
+        && let Some((lw, lh)) = ffi::layout_frame_viewport(frame)
+    {
+        w = w.or(Some(lw));
+        h = h.or(Some(lh));
     }
     (w, h)
 }
@@ -162,10 +162,10 @@ pub fn frame_viewport_measured(frame: Node) -> (f64, f64) {
 }
 
 fn frame_viewport_record(frame: Node, w: f64, h: f64) {
-    if let Ok(mut guard) = FRAME_VIEWPORTS.lock() {
-        if let Some(map) = guard.as_mut() {
-            map.insert(frame.as_ptr() as usize, (w, h));
-        }
+    if let Ok(mut guard) = FRAME_VIEWPORTS.lock()
+        && let Some(map) = guard.as_mut()
+    {
+        map.insert(frame.as_ptr() as usize, (w, h));
     }
 }
 
@@ -265,10 +265,10 @@ fn append_expanded(
                 render_blocking: x.render_blocking,
                 in_frame: x.in_frame,
             };
-            if let Some(bytes) = fetch::fetch_css_bytes(&f, x.cache) {
-                if let Some(child) = ffi::parse_import_cached(&abs, import.layer_name, &bytes) {
-                    append_expanded(out, child, Some(&abs), x, seen, depth + 1);
-                }
+            if let Some(bytes) = fetch::fetch_css_bytes(&f, x.cache)
+                && let Some(child) = ffi::parse_import_cached(&abs, import.layer_name, &bytes)
+            {
+                append_expanded(out, child, Some(&abs), x, seen, depth + 1);
             }
         }
     }

@@ -470,10 +470,10 @@ fn parse_in_parens(
         }
         if s[inner] == b'(' || word_at(s, inner, inner_end, b"not") {
             let mut sub_ok = true;
-            if let Some(query) = parse_query(s, inner, inner_end, &mut sub_ok, depth + 1) {
-                if sub_ok {
-                    return Some(QueryNode::Group(Box::new(query)));
-                }
+            if let Some(query) = parse_query(s, inner, inner_end, &mut sub_ok, depth + 1)
+                && sub_ok
+            {
+                return Some(QueryNode::Group(Box::new(query)));
             }
         }
         let text = &s[inner..inner_end];
@@ -647,11 +647,12 @@ fn split_commas(text: &[u8]) -> Vec<&[u8]> {
     let mut seg = 0;
     let mut q = 0;
     loop {
-        if q < end && text[q] == b'(' {
-            if let Some(close) = match_paren_quoted(text, q, end) {
-                q = close + 1;
-                continue;
-            }
+        if q < end
+            && text[q] == b'('
+            && let Some(close) = match_paren_quoted(text, q, end)
+        {
+            q = close + 1;
+            continue;
         }
         if q >= end || text[q] == b',' {
             parts.push(strip(&text[seg..q.min(end)]));

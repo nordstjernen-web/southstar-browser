@@ -321,11 +321,11 @@ fn color_into(value: &[u8], out: &mut [u8; 4]) -> bool {
 }
 
 fn push_op(tf: &mut Transform, parsed: Option<Transform>) {
-    if let Some(parsed) = parsed {
-        if (tf.n_ops as usize) < OPS_MAX {
-            tf.ops[tf.n_ops as usize] = parsed.ops[0];
-            tf.n_ops += 1;
-        }
+    if let Some(parsed) = parsed
+        && (tf.n_ops as usize) < OPS_MAX
+    {
+        tf.ops[tf.n_ops as usize] = parsed.ops[0];
+        tf.n_ops += 1;
     }
 }
 
@@ -992,16 +992,17 @@ impl Parser<'_> {
             }
         }
         self.sheet.ensure_font_faces();
-        if let (Some(family), Some(src_url)) = (family, src_url) {
-            if !family.is_empty() && !src_url.is_empty() {
-                self.sheet.push_font_face(FontFace {
-                    family,
-                    src_url,
-                    unicode_range,
-                    weight,
-                    slant,
-                });
-            }
+        if let (Some(family), Some(src_url)) = (family, src_url)
+            && !family.is_empty()
+            && !src_url.is_empty()
+        {
+            self.sheet.push_font_face(FontFace {
+                family,
+                src_url,
+                unicode_range,
+                weight,
+                slant,
+            });
         }
         block_end
     }

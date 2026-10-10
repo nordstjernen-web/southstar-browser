@@ -321,10 +321,10 @@ fn synthesized(f: &Fetch, resp: &Response) -> bool {
 
 fn upgraded(url: &[u8]) -> Vec<u8> {
     let mut current = url.to_vec();
-    if let Some(ascii) = url::to_ascii(&current) {
-        if ascii != current {
-            current = ascii;
-        }
+    if let Some(ascii) = url::to_ascii(&current)
+        && ascii != current
+    {
+        current = ascii;
     }
     if let Some(https) = hsts::upgrade(&current) {
         current = https;

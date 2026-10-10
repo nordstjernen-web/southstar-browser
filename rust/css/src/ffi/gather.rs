@@ -220,10 +220,10 @@ fn cached_match(
         )
     });
     let result = (order.is_some(), order.unwrap_or(0));
-    if let Some(map) = cache.as_mut() {
-        if map.len() < SELECTOR_CACHE_MAX {
-            map.insert(key, result);
-        }
+    if let Some(map) = cache.as_mut()
+        && map.len() < SELECTOR_CACHE_MAX
+    {
+        map.insert(key, result);
     }
     result
 }

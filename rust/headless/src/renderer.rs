@@ -204,11 +204,11 @@ fn run_actions(r: &Renderer, spec: &[u8], mut vw: c_int, mut vh: c_int, settle_m
             err(format!("[headless] wait {ms}ms\n").as_bytes());
             let end = ffi::monotonic_us().wrapping_add(ms.wrapping_mul(1000));
             while ffi::monotonic_us() < end {
-                if let Some(nav) = r.render(vw, vh).and_then(|f| f.nav()) {
-                    if !nav.is_empty() {
-                        follow_nav(r, Some(nav), vw, vh, settle_ms);
-                        continue;
-                    }
+                if let Some(nav) = r.render(vw, vh).and_then(|f| f.nav())
+                    && !nav.is_empty()
+                {
+                    follow_nav(r, Some(nav), vw, vh, settle_ms);
+                    continue;
                 }
                 ffi::usleep(33000);
             }

@@ -320,15 +320,15 @@ fn sibling(node: Node<'_>, reverse: bool) -> Option<Node<'_>> {
 fn nth_index(el: Node<'_>, pc: &PseudoRef) -> Option<i32> {
     let kind = pc.kind();
     let of_group = pc.of_group();
-    if of_group.is_none() {
-        if let Some(pos) = position_of(el) {
-            return Some(match kind {
-                PC_NTH_CHILD => pos.child,
-                PC_NTH_LAST_CHILD => pos.last_child,
-                PC_NTH_OF_TYPE => pos.of_type,
-                _ => pos.last_of_type,
-            });
-        }
+    if of_group.is_none()
+        && let Some(pos) = position_of(el)
+    {
+        return Some(match kind {
+            PC_NTH_CHILD => pos.child,
+            PC_NTH_LAST_CHILD => pos.last_child,
+            PC_NTH_OF_TYPE => pos.of_type,
+            _ => pos.last_of_type,
+        });
     }
     let reverse = kind == PC_NTH_LAST_CHILD || kind == PC_NTH_LAST_OF_TYPE;
     let typed = kind == PC_NTH_OF_TYPE || kind == PC_NTH_LAST_OF_TYPE;
@@ -437,10 +437,10 @@ pub(crate) fn matches_compound(sel: CompoundRef<'_>, el: Node<'_>) -> bool {
     if !type_matches(sel, el) {
         return false;
     }
-    if let Some(id) = sel.id() {
-        if attrs::get(el, c"id").map(|v| v.to_bytes()) != Some(id) {
-            return false;
-        }
+    if let Some(id) = sel.id()
+        && attrs::get(el, c"id").map(|v| v.to_bytes()) != Some(id)
+    {
+        return false;
     }
     if !sel.classes().all(|class| attrs::has_class(el, class)) {
         return false;

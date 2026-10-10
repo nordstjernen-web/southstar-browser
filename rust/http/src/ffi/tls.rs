@@ -137,15 +137,15 @@ fn context(verify: bool, h2: bool, settings: &Settings) -> Option<*mut SslCtx> {
         );
         SSL_CTX_set_cipher_list(ctx, CIPHERS.as_ptr());
         SSL_CTX_set_ciphersuites(ctx, SUITES.as_ptr());
-        if let Ok(curves) = CString::new(settings.curves.clone()) {
-            if !settings.curves.is_empty() {
-                SSL_CTX_ctrl(
-                    ctx,
-                    SSL_CTRL_SET_GROUPS_LIST,
-                    0,
-                    curves.as_ptr() as *mut c_void,
-                );
-            }
+        if let Ok(curves) = CString::new(settings.curves.clone())
+            && !settings.curves.is_empty()
+        {
+            SSL_CTX_ctrl(
+                ctx,
+                SSL_CTRL_SET_GROUPS_LIST,
+                0,
+                curves.as_ptr() as *mut c_void,
+            );
         }
         if verify {
             match settings

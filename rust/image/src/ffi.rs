@@ -1071,10 +1071,10 @@ pub unsafe extern "C" fn ns_image_cache_get(
         if let Some(img) = cached.as_mut() {
             img.generation = (*cache).generation;
             if images_disabled() {
-                if let Some(cb) = cb {
-                    if img.loaded != 0 || img.failed != 0 {
-                        cb(cached, user_data);
-                    }
+                if let Some(cb) = cb
+                    && (img.loaded != 0 || img.failed != 0)
+                {
+                    cb(cached, user_data);
                 }
                 return cached;
             }

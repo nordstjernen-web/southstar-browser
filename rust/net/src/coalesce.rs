@@ -84,10 +84,10 @@ impl<R: Shareable, W> Coalescer<R, W> {
     }
 
     pub fn leave(&mut self, key: &[u8], is_waiter: impl Fn(&W) -> bool) {
-        if let Some(group) = self.groups.get_mut(key) {
-            if let Some(at) = group.iter().position(is_waiter) {
-                group.swap_remove(at);
-            }
+        if let Some(group) = self.groups.get_mut(key)
+            && let Some(at) = group.iter().position(is_waiter)
+        {
+            group.swap_remove(at);
         }
     }
 

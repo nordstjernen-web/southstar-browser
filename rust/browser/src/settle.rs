@@ -74,12 +74,12 @@ pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
         note_videos(b, now);
         videos.tick(now);
     }
-    if let Some(anim) = b.anim() {
-        if anim.tick(now) {
-            b.cascade_dirty.set(true);
-            if anim.needs_layout() {
-                b.dirty.set(true);
-            }
+    if let Some(anim) = b.anim()
+        && anim.tick(now)
+    {
+        b.cascade_dirty.set(true);
+        if anim.needs_layout() {
+            b.dirty.set(true);
         }
     }
     if let (Some(anim), Some(js)) = (b.anim(), b.js()) {
@@ -182,13 +182,13 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
                 changed = true;
             }
         }
-        if let Some(anim) = b.anim() {
-            if anim.tick(now) {
-                changed = true;
-                b.cascade_dirty.set(true);
-                if anim.needs_layout() {
-                    b.dirty.set(true);
-                }
+        if let Some(anim) = b.anim()
+            && anim.tick(now)
+        {
+            changed = true;
+            b.cascade_dirty.set(true);
+            if anim.needs_layout() {
+                b.dirty.set(true);
             }
         }
         if let (Some(anim), Some(js)) = (b.anim(), b.js()) {

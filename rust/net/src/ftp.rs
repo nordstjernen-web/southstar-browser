@@ -73,10 +73,10 @@ fn parse_unix(line: &[u8]) -> Option<Parsed> {
         return None;
     }
     let mut name = tokens[8];
-    if kind == b'l' {
-        if let Some(arrow) = find(name, b" -> ") {
-            name = &name[..arrow];
-        }
+    if kind == b'l'
+        && let Some(arrow) = find(name, b" -> ")
+    {
+        name = &name[..arrow];
     }
     Some(Parsed {
         name: real_name(name)?,

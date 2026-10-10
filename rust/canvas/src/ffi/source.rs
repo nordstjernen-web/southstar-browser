@@ -140,15 +140,15 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     };
     let ctx = quickjs::raw_context(scope);
     let origin_clean = unsafe { ns_js_resource_origin_clean(js, ctx, found.url, allow) } != 0;
-    if let Some(image) = found.cacheable {
-        if let Some(cached) = unsafe { Surface::from_borrowed(image.render_surface()) } {
-            let size = cached.size();
-            return Some(Source {
-                surface: cached,
-                size,
-                origin_clean,
-            });
-        }
+    if let Some(image) = found.cacheable
+        && let Some(cached) = unsafe { Surface::from_borrowed(image.render_surface()) }
+    {
+        let size = cached.size();
+        return Some(Source {
+            surface: cached,
+            size,
+            origin_clean,
+        });
     }
     let surface = texture_surface(found.texture)?;
     if let Some(image) = found.cacheable {

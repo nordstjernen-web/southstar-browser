@@ -73,10 +73,10 @@ impl<'h> Transfer<'h> {
     }
 
     fn note_header(&mut self, name: &[u8], value: &[u8]) {
-        if name.eq_ignore_ascii_case(b"content-encoding") {
-            if let Some(e) = classify(value) {
-                self.encoding = e;
-            }
+        if name.eq_ignore_ascii_case(b"content-encoding")
+            && let Some(e) = classify(value)
+        {
+            self.encoding = e;
         }
     }
 

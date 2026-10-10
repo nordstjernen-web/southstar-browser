@@ -130,10 +130,10 @@ fn append_text_descendants(node: Node, out: &mut Vec<u8>, depth: i32) {
     if depth >= SCRIPT_TEXT_DEPTH {
         return;
     }
-    if node.is_text() {
-        if let Some(text) = node.text() {
-            out.extend_from_slice(text.to_bytes());
-        }
+    if node.is_text()
+        && let Some(text) = node.text()
+    {
+        out.extend_from_slice(text.to_bytes());
     }
     for child in children(node) {
         append_text_descendants(child, out, depth + 1);
@@ -283,10 +283,10 @@ fn jsonld_video_object_url(node: Node, key: &[u8], depth: i32) -> Option<Vec<u8>
             .is_some_and(|t| ieq(t, "application/ld+json"))
     {
         let text = script_text(node);
-        if find(&text, b"VideoObject").is_some() {
-            if let Some(url) = json_first_url_for_key(&text, key).filter(|u| !u.is_empty()) {
-                return Some(url);
-            }
+        if find(&text, b"VideoObject").is_some()
+            && let Some(url) = json_first_url_for_key(&text, key).filter(|u| !u.is_empty())
+        {
+            return Some(url);
         }
     }
     children(node).find_map(|child| jsonld_video_object_url(child, key, depth + 1))

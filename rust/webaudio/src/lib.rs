@@ -227,13 +227,13 @@ fn sum_inputs(
     walk.depth += 1;
     let mut index = 0;
     while index < count && walk.renders_left > 0 {
-        if let Ok(source) = scope.get_index(&inputs, index) {
-            if source.is_object() {
-                scratch.fill(0.0);
-                render(scope, &source, frames, rate, &mut scratch, walk);
-                for (sample, input) in out.iter_mut().zip(&scratch) {
-                    *sample += input;
-                }
+        if let Ok(source) = scope.get_index(&inputs, index)
+            && source.is_object()
+        {
+            scratch.fill(0.0);
+            render(scope, &source, frames, rate, &mut scratch, walk);
+            for (sample, input) in out.iter_mut().zip(&scratch) {
+                *sample += input;
             }
         }
         index += 1;

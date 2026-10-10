@@ -529,10 +529,10 @@ fn cell_hints(out: &mut Vec<u8>, el: Node<'_>, part_table: Option<Node<'_>>, par
         out.extend_from_slice(b"border-width: 1px; border-style: inset;");
     }
     let color = part_table.and_then(|t| non_empty(t, c"bordercolor"));
-    if let Some(color) = color.filter(|_| border.is_some() || part_rules != 0) {
-        if let Some(color) = attr_color(color) {
-            rgba(out, "border-color", color);
-        }
+    if let Some(color) = color.filter(|_| border.is_some() || part_rules != 0)
+        && let Some(color) = attr_color(color)
+    {
+        rgba(out, "border-color", color);
     }
     match part_rules {
         RULES_COLS => out.extend_from_slice(
@@ -562,15 +562,15 @@ fn table_part_align_hints(out: &mut Vec<u8>, el: Node<'_>) {
             _ => {}
         }
     }
-    if let Some(valign) = non_empty(el, c"valign").map(lower) {
-        if matches!(
+    if let Some(valign) = non_empty(el, c"valign").map(lower)
+        && matches!(
             valign.as_slice(),
             b"top" | b"middle" | b"bottom" | b"baseline"
-        ) {
-            out.extend_from_slice(b"vertical-align: ");
-            out.extend_from_slice(&valign);
-            out.push(b';');
-        }
+        )
+    {
+        out.extend_from_slice(b"vertical-align: ");
+        out.extend_from_slice(&valign);
+        out.push(b';');
     }
 }
 
@@ -676,10 +676,10 @@ pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
         || matches!(tag, b"object" | b"embed" | b"marquee");
 
     list_style_hints(&mut out, el, tag);
-    if let Some(background) = non_empty(el, c"background") {
-        if is_body || is_table || is_table_part {
-            background_hint(&mut out, background);
-        }
+    if let Some(background) = non_empty(el, c"background")
+        && (is_body || is_table || is_table_part)
+    {
+        background_hint(&mut out, background);
     }
     if let Some(color) = non_empty(el, c"bgcolor").and_then(attr_color) {
         rgba(&mut out, "background-color", color);

@@ -511,32 +511,33 @@ fn dropdown_click(b: &NsBrowser, node: Node<'_>) -> bool {
             break;
         }
     }
-    if let (Some(sel), Some(opt)) = (select, option) {
-        if !is_dropdown_select(sel) && sel.attr(c"disabled").is_none() {
-            let toggle = sel.attr(c"multiple").is_some() && b.press_mods.get() & 2 != 0;
-            if let Some(js) = b.js() {
-                if toggle {
-                    js.select_toggle_option(opt);
-                } else {
-                    js.select_choose_option(opt);
-                }
-                js.consume_mutated();
+    if let (Some(sel), Some(opt)) = (select, option)
+        && !is_dropdown_select(sel)
+        && sel.attr(c"disabled").is_none()
+    {
+        let toggle = sel.attr(c"multiple").is_some() && b.press_mods.get() & 2 != 0;
+        if let Some(js) = b.js() {
+            if toggle {
+                js.select_toggle_option(opt);
+            } else {
+                js.select_choose_option(opt);
             }
-            b.dirty.set(true);
-            return true;
+            js.consume_mutated();
         }
+        b.dirty.set(true);
+        return true;
     }
-    if let (Some(open), Some(opt)) = (b.open_select.get(), option) {
-        if same(select, Some(open)) {
-            if let Some(js) = b.js() {
-                if js.select_choose_option(opt) {
-                    js.consume_mutated();
-                    b.open_select.set(None);
-                }
-            }
-            b.dirty.set(true);
-            return true;
+    if let (Some(open), Some(opt)) = (b.open_select.get(), option)
+        && same(select, Some(open))
+    {
+        if let Some(js) = b.js()
+            && js.select_choose_option(opt)
+        {
+            js.consume_mutated();
+            b.open_select.set(None);
         }
+        b.dirty.set(true);
+        return true;
     }
     if let Some(sel) = select.filter(|&s| is_dropdown_select(s) && s.attr(c"disabled").is_none()) {
         b.open_select.set(if same(b.open_select.get(), Some(sel)) {
@@ -562,11 +563,11 @@ fn follow_link(b: &NsBrowser, node: Option<Node<'_>>, x: c_int, y: c_int) {
         if href.is_some() {
             break;
         }
-        if hit::is_hyperlink(a) {
-            if let Some(h) = a.attr(c"href").filter(|h| !h.is_empty()) {
-                href = Some(h);
-                download = a.attr(c"download");
-            }
+        if hit::is_hyperlink(a)
+            && let Some(h) = a.attr(c"href").filter(|h| !h.is_empty())
+        {
+            href = Some(h);
+            download = a.attr(c"download");
         }
         cur = a.parent();
     }
@@ -876,27 +877,30 @@ pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<GStr>, bool) {
             }
             b.keydown_prevented.set(kind == 0 && prevented);
             note_mutation(b);
-            if kind == 0 && !prevented && mods & 4 != 0 && mods & (2 | 8) == 0 {
-                if let (Some(k), Some(doc)) = (
+            if kind == 0
+                && !prevented
+                && mods & 4 != 0
+                && mods & (2 | 8) == 0
+                && let (Some(k), Some(doc)) = (
                     key.filter(|k| ffi::utf8_validate(k) && ffi::utf8_strlen(k) == 1),
                     b.doc(),
-                ) {
-                    if let Some(ak) = find_accesskey(doc, k, 0) {
-                        js.set_focus(ak);
-                        js.activate_element(ak);
-                        note_mutation(b);
-                        prevented_out = true;
-                    }
-                }
+                )
+                && let Some(ak) = find_accesskey(doc, k, 0)
+            {
+                js.set_focus(ak);
+                js.activate_element(ak);
+                note_mutation(b);
+                prevented_out = true;
             }
             if !prevented && kind == 0 {
                 keydown_default(b, ev, &mut prevented_out);
-            } else if !prevented && kind == 1 {
-                if let Some(f) = js.focused_node() {
-                    if mods & (2 | 4 | 8) == 0 && js.keyboard_activate(f, key, true) {
-                        b.dirty.set(true);
-                    }
-                }
+            } else if !prevented
+                && kind == 1
+                && let Some(f) = js.focused_node()
+                && mods & (2 | 4 | 8) == 0
+                && js.keyboard_activate(f, key, true)
+            {
+                b.dirty.set(true);
             }
         }
     }

@@ -196,11 +196,11 @@ impl<'m> Cascade<'_, 'm> {
                 .as_deref()
                 .map_or(Wide::None, vars::wide_kind);
         }
-        if matches!(value.kind, Wide::Revert | Wide::RevertLayer) {
-            if let Some(back) = rollback(self.matches, index, index, value.kind) {
-                value.text = self.matches[back].text;
-                value.kind = vars::wide_kind(value.text);
-            }
+        if matches!(value.kind, Wide::Revert | Wide::RevertLayer)
+            && let Some(back) = rollback(self.matches, index, index, value.kind)
+        {
+            value.text = self.matches[back].text;
+            value.kind = vars::wide_kind(value.text);
         }
         value
     }

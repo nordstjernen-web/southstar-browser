@@ -126,10 +126,10 @@ pub fn cursor_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<&'static [u8]> {
             .map(|a| b.style_for(a))
             .find(|s| !s.is_null())
     })?;
-    if let Some(kw) = ffi::style_keyword_raw(style, ffi::css_prop_id(c"cursor")) {
-        if let Some(found) = cursor_keyword(kw) {
-            return Some(found);
-        }
+    if let Some(kw) = ffi::style_keyword_raw(style, ffi::css_prop_id(c"cursor"))
+        && let Some(found) = cursor_keyword(kw)
+    {
+        return Some(found);
     }
     if ffi::hit_link(layout, f64::from(x), f64::from(y)).is_some() {
         return None;
@@ -159,14 +159,13 @@ fn media_box(hit: Option<BoxRef<'_>>) -> Option<BoxRef<'_>> {
         let has_media_url = b
             .media()
             .is_some_and(|m| m.video_src().is_some() || m.video_audio_src().is_some());
-        if let Some(dom) = ffi::box_dom(b) {
-            if ffi::is_named(dom, c"video")
+        if let Some(dom) = ffi::box_dom(b)
+            && (ffi::is_named(dom, c"video")
                 || ffi::is_named(dom, c"audio")
                 || has_media_url
-                || has_media_attr(dom)
-            {
-                return Some(b);
-            }
+                || has_media_attr(dom))
+        {
+            return Some(b);
         }
         cur = b.parent();
     }
@@ -305,10 +304,10 @@ pub fn video_click_toggle(b: &NsBrowser, x: c_int, y: c_int) {
             if video.is_camera() || !video.has_player() {
                 return;
             }
-            if let (Some(js), Some(dom)) = (b.js(), ffi::box_dom(bx)) {
-                if js.node_has_click_handler(dom) {
-                    return;
-                }
+            if let (Some(js), Some(dom)) = (b.js(), ffi::box_dom(bx))
+                && js.node_has_click_handler(dom)
+            {
+                return;
             }
             video.toggle(Some(videos), ffi::monotonic_us());
             b.dirty.set(true);

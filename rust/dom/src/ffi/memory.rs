@@ -161,10 +161,10 @@ impl<'a> Node<'a> {
     pub fn attach_backing(self, backing: *mut c_void, destroy: BackingFree) {
         unsafe {
             let n = self.raw();
-            if !(*n).backing.is_null() {
-                if let Some(free) = (*n).backing_free {
-                    free((*n).backing);
-                }
+            if !(*n).backing.is_null()
+                && let Some(free) = (*n).backing_free
+            {
+                free((*n).backing);
             }
             (*n).backing = backing;
             (*n).backing_free = destroy;
@@ -337,10 +337,10 @@ unsafe fn free_one(cur: *mut NsNode) {
             free_attr(attr);
             attr = next;
         }
-        if !(*cur).backing.is_null() {
-            if let Some(free) = (*cur).backing_free {
-                free((*cur).backing);
-            }
+        if !(*cur).backing.is_null()
+            && let Some(free) = (*cur).backing_free
+        {
+            free((*cur).backing);
         }
         for table in [
             &raw mut (*cur).id_index,

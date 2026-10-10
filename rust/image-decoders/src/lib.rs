@@ -119,7 +119,7 @@ fn decode_dib_entry(p: &[u8]) -> Option<Decoded> {
     let mut pixels = ffi::wuffs_decode_to_bgra(&bmp)?;
     drop(bmp);
 
-    let and_row = (u64::from(w) + 31) / 32 * 4;
+    let and_row = u64::from(w).div_ceil(32) * 4;
     let and_off = pixel_off as u64 + xor_size as u64;
     let and_size = and_row * u64::from(real_h);
     if pixels.width == w as i32 && pixels.height == real_h as i32 && and_off + and_size <= len {

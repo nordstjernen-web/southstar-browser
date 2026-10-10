@@ -48,11 +48,12 @@ fn reveal_fragment_target(b: &NsBrowser, target: Node<'_>) -> bool {
             ffi::remove_attr(node, c"hidden");
             changed = true;
         }
-        if let Some(parent) = node.parent() {
-            if ffi::details_fragment_needs_open(parent, node) && parent.attr(c"open").is_none() {
-                ffi::set_attr(parent, c"open", c"");
-                changed = true;
-            }
+        if let Some(parent) = node.parent()
+            && ffi::details_fragment_needs_open(parent, node)
+            && parent.attr(c"open").is_none()
+        {
+            ffi::set_attr(parent, c"open", c"");
+            changed = true;
         }
         if b.doc()
             .is_some_and(|doc| core::ptr::eq(doc.as_ptr(), node.as_ptr()))
@@ -113,12 +114,12 @@ pub fn follow_scroll_anchor(b: &NsBrowser) {
         b.scroll_anchor.set(None);
         return;
     }
-    if let Some(y) = target_scroll_y(b, anchor) {
-        if y != b.scroll_anchor_y.get() {
-            b.scroll_anchor_y.set(y);
-            b.pending_scroll_y.set(y);
-            b.pending_scroll.set(true);
-        }
+    if let Some(y) = target_scroll_y(b, anchor)
+        && y != b.scroll_anchor_y.get()
+    {
+        b.scroll_anchor_y.set(y);
+        b.pending_scroll_y.set(y);
+        b.pending_scroll.set(true);
     }
     if !settle::animating(b) && !b.pending_scroll.get() {
         b.scroll_anchor.set(None);

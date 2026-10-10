@@ -175,13 +175,13 @@ pub fn parse(text: &[u8]) -> Option<i64> {
             parts += 1;
             i = end;
         } else if c.is_ascii_digit() {
-            if time.is_none() {
-                if let Some((t, end)) = clock(text, i) {
-                    time = Some(t);
-                    parts += 1;
-                    i = end;
-                    continue;
-                }
+            if time.is_none()
+                && let Some((t, end)) = clock(text, i)
+            {
+                time = Some(t);
+                parts += 1;
+                i = end;
+                continue;
             }
             let end = i + text[i..].iter().take_while(|c| c.is_ascii_digit()).count();
             let len = end - i;

@@ -110,13 +110,13 @@ fn restore_scroll(b: Option<BoxRef<'_>>, map: &HashMap<usize, (f64, f64)>) {
     let Some(b) = b else {
         return;
     };
-    if !b.dom_ptr().is_null() {
-        if let Some(&(x, y)) = map.get(&(b.dom_ptr() as usize)) {
-            b.set_scroll(
-                clamp_scroll(x, b.scroll_max_x()),
-                clamp_scroll(y, b.scroll_max_y()),
-            );
-        }
+    if !b.dom_ptr().is_null()
+        && let Some(&(x, y)) = map.get(&(b.dom_ptr() as usize))
+    {
+        b.set_scroll(
+            clamp_scroll(x, b.scroll_max_x()),
+            clamp_scroll(y, b.scroll_max_y()),
+        );
     }
     for c in children(b) {
         restore_scroll(Some(c), map);

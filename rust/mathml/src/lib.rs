@@ -77,11 +77,11 @@ fn render_token(
     let ascent = f64::from(token.baseline()) / ffi::PANGO_SCALE;
     let (width, height) = token.logical_size();
     let total = f64::from(height) / ffi::PANGO_SCALE;
-    if let Some(canvas) = canvas {
-        if !text.is_empty() {
-            canvas.move_to(x, by - ascent);
-            token.show(canvas);
-        }
+    if let Some(canvas) = canvas
+        && !text.is_empty()
+    {
+        canvas.move_to(x, by - ascent);
+        token.show(canvas);
     }
     Extent {
         width: f64::from(width) / ffi::PANGO_SCALE,

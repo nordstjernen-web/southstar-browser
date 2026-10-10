@@ -536,13 +536,14 @@ pub fn json_string(v: &[u8]) -> Option<Vec<u8>> {
                 if let Some(high) = hex4(v, i + 1) {
                     i += 4;
                     let mut cp = high;
-                    if (0xD800..=0xDBFF).contains(&cp) && at(i + 1) == b'\\' && at(i + 2) == b'u' {
-                        if let Some(low) =
+                    if (0xD800..=0xDBFF).contains(&cp)
+                        && at(i + 1) == b'\\'
+                        && at(i + 2) == b'u'
+                        && let Some(low) =
                             hex4(v, i + 3).filter(|low| (0xDC00..=0xDFFF).contains(low))
-                        {
-                            cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
-                            i += 6;
-                        }
+                    {
+                        cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                        i += 6;
                     }
                     utf8_encode(cp, &mut out);
                 }

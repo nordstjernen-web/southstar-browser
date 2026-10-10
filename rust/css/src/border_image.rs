@@ -199,12 +199,12 @@ pub(crate) fn params(slice: &[u8], width: &[u8], outset: &[u8], repeat: &[u8]) -
     for tok in split_ws_limit(slice, 5) {
         if tok.eq_ignore_ascii_case(b"fill") {
             out.fill = 1;
-        } else if count < 4 {
-            if let Some((num, unit)) = length(tok) {
-                out.slice[count] = num;
-                out.slice_percent[count] = i32::from(unit == PERCENT);
-                count += 1;
-            }
+        } else if count < 4
+            && let Some((num, unit)) = length(tok)
+        {
+            out.slice[count] = num;
+            out.slice_percent[count] = i32::from(unit == PERCENT);
+            count += 1;
         }
     }
     if count == 0 {
@@ -247,12 +247,12 @@ pub(crate) fn params(slice: &[u8], width: &[u8], outset: &[u8], repeat: &[u8]) -
 
     count = 0;
     for tok in split_ws_limit(outset, 4) {
-        if count < 4 {
-            if let Some((num, unit)) = length(tok) {
-                out.outset[count] = num;
-                out.outset_unit[count] = unit;
-                count += 1;
-            }
+        if count < 4
+            && let Some((num, unit)) = length(tok)
+        {
+            out.outset[count] = num;
+            out.outset_unit[count] = unit;
+            count += 1;
         }
     }
     for i in count..4 {

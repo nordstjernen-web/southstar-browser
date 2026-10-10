@@ -548,10 +548,10 @@ pub(crate) fn constructor(
         }
     }
     for key in STYLE_KEYS {
-        if opt_present(scope, &options, key) {
-            if let Ok(value) = scope.get(&options, key) {
-                set(scope, &fields, key, value);
-            }
+        if opt_present(scope, &options, key)
+            && let Ok(value) = scope.get(&options, key)
+        {
+            set(scope, &fields, key, value);
         }
     }
     let mut any = false;
@@ -839,15 +839,13 @@ fn windows_zone() -> Option<Vec<u8>> {
             .rposition(|&c| c == b'-')
             .map(|at| &locale[at + 1..])
     });
-    if let Some(region) = region {
-        if key == b"W. Europe Standard Time" {
-            if let Some((_, zone)) = WEST_EUROPE
-                .iter()
-                .find(|(known, _)| known.eq_ignore_ascii_case(region))
-            {
-                return Some(zone.to_vec());
-            }
-        }
+    if let Some(region) = region
+        && key == b"W. Europe Standard Time"
+        && let Some((_, zone)) = WEST_EUROPE
+            .iter()
+            .find(|(known, _)| known.eq_ignore_ascii_case(region))
+    {
+        return Some(zone.to_vec());
     }
     WINDOWS_ZONES
         .iter()
@@ -904,10 +902,10 @@ fn resolved(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Valu
             Ok(fields) => scope.get(fields, key),
             Err(error) => Err(error.clone()),
         };
-        if let Ok(value) = value {
-            if !value.is_undefined() {
-                set(scope, &options, key, value);
-            }
+        if let Ok(value) = value
+            && !value.is_undefined()
+        {
+            set(scope, &options, key, value);
         }
     }
     Ok(options)

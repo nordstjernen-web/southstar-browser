@@ -249,34 +249,33 @@ fn serialize_urls(value: &[u8]) -> Vec<u8> {
         if end - p >= 4
             && value[p..p + 4].eq_ignore_ascii_case(b"url(")
             && (p == 0 || !is_ident(value[p - 1]))
+            && let Some(close) = match_close_paren(value, p + 4, end)
         {
-            if let Some(close) = match_close_paren(value, p + 4, end) {
-                let mut start = p + 4;
-                while start < close && is_ws(value[start]) {
-                    start += 1;
-                }
-                let mut stop = close;
-                while stop > start && is_ws(value[stop - 1]) {
-                    stop -= 1;
-                }
-                if stop > start
-                    && ((value[start] == b'"' && value[stop - 1] == b'"')
-                        || (value[start] == b'\'' && value[stop - 1] == b'\''))
-                {
-                    start += 1;
-                    stop -= 1;
-                }
-                out.extend_from_slice(b"url(\"");
-                for q in start..stop {
-                    if value[q] == b'"' && (q == start || value[q - 1] != b'\\') {
-                        out.push(b'\\');
-                    }
-                    out.push(value[q]);
-                }
-                out.extend_from_slice(b"\")");
-                p = close + 1;
-                continue;
+            let mut start = p + 4;
+            while start < close && is_ws(value[start]) {
+                start += 1;
             }
+            let mut stop = close;
+            while stop > start && is_ws(value[stop - 1]) {
+                stop -= 1;
+            }
+            if stop > start
+                && ((value[start] == b'"' && value[stop - 1] == b'"')
+                    || (value[start] == b'\'' && value[stop - 1] == b'\''))
+            {
+                start += 1;
+                stop -= 1;
+            }
+            out.extend_from_slice(b"url(\"");
+            for q in start..stop {
+                if value[q] == b'"' && (q == start || value[q - 1] != b'\\') {
+                    out.push(b'\\');
+                }
+                out.push(value[q]);
+            }
+            out.extend_from_slice(b"\")");
+            p = close + 1;
+            continue;
         }
         out.push(value[p]);
         p += 1;
@@ -378,10 +377,10 @@ fn value_canonical(prop: &[u8], mut value: Vec<u8>) -> Vec<u8> {
             return canon;
         }
     }
-    if prop == b"grid-auto-flow" {
-        if let Some(canon) = grid::auto_flow_canonical(&value) {
-            return canon;
-        }
+    if prop == b"grid-auto-flow"
+        && let Some(canon) = grid::auto_flow_canonical(&value)
+    {
+        return canon;
     }
     value = add_leading_zeros(&value);
     value = normalize_negative_zero(&value);
@@ -427,11 +426,11 @@ pub(crate) fn list_style_split(text: &[u8]) -> Option<[Vec<u8>; 3]> {
             image = Some(value_canonical(b"list-style-image", tok.to_vec()));
             continue;
         }
-        if kind.is_none() {
-            if let Some(canon) = counter::list_style_type_canonical(tok) {
-                kind = Some(canon);
-                continue;
-            }
+        if kind.is_none()
+            && let Some(canon) = counter::list_style_type_canonical(tok)
+        {
+            kind = Some(canon);
+            continue;
         }
         return None;
     }
@@ -493,7 +492,7 @@ fn expanded_value(name: &[u8], value: &[u8], prop: Prop) -> Option<(Vec<u8>, boo
     declaration_sheet(name, value)
         .iter()
         .filter(|decl| decl.prop == Some(prop))
-        .last()
+        .next_back()
         .map(|decl| (decl.text.clone(), decl.important))
 }
 
@@ -765,10 +764,10 @@ pub(crate) fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
     if eq(prop, b"overflow") {
         return keep(overflow_value(style).map(|(text, _)| text));
     }
-    if eq(prop, b"font") {
-        if let Some(all) = all_value_for(style, Some(b"font")) {
-            return keep(Some(all));
-        }
+    if eq(prop, b"font")
+        && let Some(all) = all_value_for(style, Some(b"font"))
+    {
+        return keep(Some(all));
     }
     if eq(prop, b"animation") || eq(prop, b"transition") {
         return keep(anim_shorthand_value(style, prop[0] == b'a'));
@@ -801,30 +800,32 @@ pub(crate) fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
         };
         return keep(text);
     }
-    if eq(prop, b"background") {
-        if let Some((text, _)) = background_value(style) {
-            return keep(Some(text));
-        }
+    if eq(prop, b"background")
+        && let Some((text, _)) = background_value(style)
+    {
+        return keep(Some(text));
     }
     if eq(prop, b"background-position") {
         let xs = get(style, b"background-position-x");
         let ys = get(style, b"background-position-y");
-        if let (Some(xs), Some(ys)) = (xs, ys) {
-            if let Some(text) = background_position_zip(&xs, &ys) {
-                return keep(Some(text));
-            }
-        }
-    }
-    if (eq(prop, b"grid") || eq(prop, b"grid-template")) && !contains(style, b"var(") {
-        if let Some(text) = grid_value(style, prop.len() == 4) {
+        if let (Some(xs), Some(ys)) = (xs, ys)
+            && let Some(text) = background_position_zip(&xs, &ys)
+        {
             return keep(Some(text));
         }
     }
+    if (eq(prop, b"grid") || eq(prop, b"grid-template"))
+        && !contains(style, b"var(")
+        && let Some(text) = grid_value(style, prop.len() == 4)
+    {
+        return keep(Some(text));
+    }
     let id = ffi::prop_named(prop);
-    if id.is_none() && declarations::named_property_supported(prop) {
-        if let Some(all) = all_value_for(style, None) {
-            return keep(Some(all));
-        }
+    if id.is_none()
+        && declarations::named_property_supported(prop)
+        && let Some(all) = all_value_for(style, None)
+    {
+        return keep(Some(all));
     }
     let custom = is_custom(prop);
     let mut winner: Option<Vec<u8>> = None;
@@ -911,10 +912,8 @@ fn parsed_declarations(style: &[u8]) -> Vec<InlineDecl> {
             continue;
         }
         let mut value = value_canonical(&name, value.to_vec());
-        if !custom {
-            if let Some(canonical) = values::specified_canonical(Some(&name), &value) {
-                value = canonical;
-            }
+        if !custom && let Some(canonical) = values::specified_canonical(Some(&name), &value) {
+            value = canonical;
         }
         let existing = {
             let custom = is_custom(&name);
@@ -1260,6 +1259,7 @@ pub(crate) fn background_position_zip(xs: &[u8], ys: &[u8]) -> Option<Vec<u8>> {
     Some(with_important(out, x_important))
 }
 
+#[allow(clippy::needless_range_loop)]
 fn background_shorthand_serialize(texts: [&[u8]; 7], color: Option<&[u8]>) -> Option<Vec<u8>> {
     let lists = texts.map(split_top_level_commas);
     let n = lists[0].len();

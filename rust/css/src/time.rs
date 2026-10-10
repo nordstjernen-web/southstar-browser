@@ -428,29 +428,29 @@ pub(crate) fn list_serialize(value: &[u8], computed: bool) -> Option<Vec<u8>> {
             out.extend_from_slice(b", ");
         }
         let mut did = false;
-        if computed || starts_math_fn(&b[is..ie]) {
-            if let Some(sec) = seconds_in(&text, is, ie) {
-                if computed {
-                    if sec.is_finite() {
-                        out.extend_from_slice(&number_text(sec));
-                        out.push(b's');
-                        did = true;
-                    }
-                } else if sec.is_finite() {
-                    out.extend_from_slice(b"calc(");
+        if (computed || starts_math_fn(&b[is..ie]))
+            && let Some(sec) = seconds_in(&text, is, ie)
+        {
+            if computed {
+                if sec.is_finite() {
                     out.extend_from_slice(&number_text(sec));
-                    out.extend_from_slice(b"s)");
-                    did = true;
-                } else if sec.is_nan() {
-                    out.extend_from_slice(b"calc(NaN * 1s)");
-                    did = true;
-                } else if sec < 0.0 {
-                    out.extend_from_slice(b"calc(-infinity * 1s)");
-                    did = true;
-                } else {
-                    out.extend_from_slice(b"calc(infinity * 1s)");
+                    out.push(b's');
                     did = true;
                 }
+            } else if sec.is_finite() {
+                out.extend_from_slice(b"calc(");
+                out.extend_from_slice(&number_text(sec));
+                out.extend_from_slice(b"s)");
+                did = true;
+            } else if sec.is_nan() {
+                out.extend_from_slice(b"calc(NaN * 1s)");
+                did = true;
+            } else if sec < 0.0 {
+                out.extend_from_slice(b"calc(-infinity * 1s)");
+                did = true;
+            } else {
+                out.extend_from_slice(b"calc(infinity * 1s)");
+                did = true;
             }
         }
         changed |= did;

@@ -91,10 +91,8 @@ fn get_2d(
         return Value::null();
     }
     let (attrs, opaque) = attrs_2d(scope, options);
-    if opaque {
-        if let Some(surface) = host::surface_of(st) {
-            surface.fill_opaque_black();
-        }
+    if opaque && let Some(surface) = host::surface_of(st) {
+        surface.fill_opaque_black();
     }
     let obj = crate::ffi::ctx2d_new(scope, el.addr(), canvas, offscreen, attrs);
     host::attach_ctx2d(scope, st, &obj, KIND_2D);
@@ -260,17 +258,18 @@ pub(crate) fn convert_to_blob(
     let el = Node::from_addr(crate::api::offscreen_node(this));
     let js = crate::ffi::state::js_of(scope);
     let mut outcome: Result<Value, Value> = Ok(Value::null());
-    if !el.is_null() && !js.is_null() {
-        if let Some(st) = crate::state::state_for(js, el) {
-            if !host::origin_clean(st) {
-                outcome = Err(crate::api::throw_dom(
-                    scope,
-                    "SecurityError",
-                    "Tainted canvases may not be exported.",
-                ));
-            } else if let Some(surface) = host::surface_of(st) {
-                outcome = png_blob(scope, &surface);
-            }
+    if !el.is_null()
+        && !js.is_null()
+        && let Some(st) = crate::state::state_for(js, el)
+    {
+        if !host::origin_clean(st) {
+            outcome = Err(crate::api::throw_dom(
+                scope,
+                "SecurityError",
+                "Tainted canvases may not be exported.",
+            ));
+        } else if let Some(surface) = host::surface_of(st) {
+            outcome = png_blob(scope, &surface);
         }
     }
     let (settle, value) = match outcome {
@@ -292,12 +291,11 @@ pub(crate) fn dommatrix(scope: &mut Scope<'_>, m: [f64; 6]) -> Value {
     let ctor = scope
         .get(&global, "DOMMatrix")
         .unwrap_or_else(|_| Value::undefined());
-    if scope.is_function(&ctor) {
-        if let Ok(matrix) = scope.construct(&ctor, &[init]) {
-            if matrix.is_object() {
-                return matrix;
-            }
-        }
+    if scope.is_function(&ctor)
+        && let Ok(matrix) = scope.construct(&ctor, &[init])
+        && matrix.is_object()
+    {
+        return matrix;
     }
     let plain = scope.new_object();
     for (key, v) in MATRIX_KEYS.iter().zip(m) {
