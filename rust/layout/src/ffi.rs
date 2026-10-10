@@ -53,16 +53,16 @@ pub struct NsBox {
     content_width: f64,
     content_height: f64,
     _first_baseline: f64,
-    _definite_height: f64,
-    _definite_height_before_flex: f64,
-    _flex_pass_x: f64,
-    _flex_pass_y: f64,
-    _last_layout_width: f64,
-    _definite_height_read: GBoolean,
-    _measured_content_height: f64,
+    definite_height: f64,
+    definite_height_before_flex: f64,
+    flex_pass_x: f64,
+    flex_pass_y: f64,
+    last_layout_width: f64,
+    definite_height_read: GBoolean,
+    measured_content_height: f64,
     _cb_height_override: f64,
-    _flex_main_size: f64,
-    _has_flex_main: GBoolean,
+    flex_main_size: f64,
+    has_flex_main: GBoolean,
     _is_rendered_legend: GBoolean,
     _inline_split_tail: GBoolean,
     _margin_top_through: f64,
@@ -632,6 +632,67 @@ impl<'a> BoxRef<'a> {
 
     pub fn set_border(self, e: Edges) {
         unsafe { (*self.0.as_ptr()).border = e };
+    }
+
+    pub fn definite_height(self) -> f64 {
+        self.raw().definite_height
+    }
+
+    pub fn set_definite_height(self, h: f64) {
+        unsafe { (*self.0.as_ptr()).definite_height = h };
+    }
+
+    pub fn definite_height_before_flex(self) -> f64 {
+        self.raw().definite_height_before_flex
+    }
+
+    pub fn set_definite_height_before_flex(self, h: f64) {
+        unsafe { (*self.0.as_ptr()).definite_height_before_flex = h };
+    }
+
+    pub fn definite_height_read(self) -> bool {
+        self.raw().definite_height_read != 0
+    }
+
+    pub fn flex_pass(self) -> (f64, f64) {
+        let b = self.raw();
+        (b.flex_pass_x, b.flex_pass_y)
+    }
+
+    pub fn set_flex_pass(self, x: f64, y: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).flex_pass_x = x;
+            (*b).flex_pass_y = y;
+        }
+    }
+
+    pub fn last_layout_width(self) -> f64 {
+        self.raw().last_layout_width
+    }
+
+    pub fn measured_content_height(self) -> f64 {
+        self.raw().measured_content_height
+    }
+
+    pub fn set_measured_content_height(self, h: f64) {
+        unsafe { (*self.0.as_ptr()).measured_content_height = h };
+    }
+
+    pub fn set_flex_main(self, size: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).flex_main_size = size;
+            (*b).has_flex_main = 1;
+        }
+    }
+
+    pub fn set_scroll_overflow_y(self, max_y: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).scrolls = 1;
+            (*b).scroll_max_y = max_y;
+        }
     }
 
     pub fn edges_mut(self) -> (*mut Edges, *mut Edges, *mut Edges) {

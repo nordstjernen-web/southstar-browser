@@ -1652,6 +1652,7 @@ dependencies = [
  "southstar-js-window",
  "southstar-js-workers",
  "southstar-layout",
+ "southstar-layout-flex",
  "southstar-layout-table",
  "southstar-mat4",
  "southstar-mathml",
@@ -2139,6 +2140,16 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-layout-flex"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]

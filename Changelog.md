@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Flexbox layout (row, wrapping and column flex containers) moved from
+  layout.c to Rust (rust/layout-flex), with identical layout.
 * Table layout (column widths for auto and fixed table-layout, spans, col
   and colgroup, border-spacing and collapsed borders, row heights, vertical-
   align, captions and intrinsic widths) moved from layout.c to Rust

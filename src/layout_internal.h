@@ -15,6 +15,16 @@ void ns_layout_table(ns_box *box, double parent_content_width,
                      const ns_style *inherited_style);
 double ns_layout_table_intrinsic_width(ns_box *box, const ns_style *inherited,
                                        gboolean min);
+void ns_layout_flex_row(ns_box *box, double cw, double inner_x, double inner_y,
+                        const ns_style *child_inherited, gboolean reverse,
+                        double parent_content_width, double *cursor_y_out);
+void ns_layout_flex_row_wrap(ns_box *box, double cw, double inner_x,
+                             double inner_y, const ns_style *child_inherited,
+                             gboolean reverse, double *cursor_y_out);
+void ns_layout_flex_column(ns_box *box, double cw, double inner_x,
+                           double inner_y, const ns_style *child_inherited,
+                           gboolean reverse, double parent_content_height,
+                           double *cursor_y_out);
 double ns_layout_length_resolve(const ns_css_value *v, double basis,
                                 double fallback);
 gboolean ns_layout_value_is_percent(const ns_css_value *v);
@@ -37,5 +47,33 @@ void ns_layout_legacy_align_block_child(ns_box *c, double avail_x,
                                         const ns_style *inherited);
 void ns_layout_shift_box_tree(ns_box *b, double dx, double dy);
 void ns_layout_translate_subtree(ns_box *box, double dx, double dy);
+double ns_layout_resolve_height_with_basis(const ns_css_value *hv,
+                                           double width_basis,
+                                           double height_basis, double fallback);
+double ns_layout_containing_block_definite_height(const ns_box *box);
+gboolean ns_layout_size_keyword_is_intrinsic(const ns_css_value *v);
+gboolean ns_layout_height_keyword_stretches(const ns_css_value *v);
+double ns_layout_intrinsic_keyword_width(ns_box *box, const char *kw,
+                                         const ns_style *mi, double avail);
+gboolean ns_layout_box_is_scroll_container(const ns_box *b);
+double ns_layout_box_read_definite_height(const ns_box *box);
+gboolean ns_layout_style_is_absolute_or_fixed(const ns_style *s);
+gboolean ns_layout_style_is_flex_container(const ns_style *s);
+const char *ns_layout_keyword_or(const ns_style *s, ns_css_prop p,
+                                 const char *fallback);
+const char *ns_layout_overflow_axis_keyword(const ns_style *s, ns_css_prop axis);
+gboolean ns_layout_overflow_kw_scrolls(const char *ov);
+double ns_layout_aspect_ratio_number(const ns_css_value *v, gboolean *with_auto);
+double ns_layout_gap_px(const ns_css_value *specific,
+                        const ns_css_value *shorthand, double basis);
+gboolean ns_layout_flex_box_is_border_box(const ns_box *c);
+double ns_layout_flex_grow_of(const ns_box *c);
+double ns_layout_flex_shrink_of(const ns_box *c);
+double ns_layout_flex_gap_of(const ns_style *s, double basis);
+gboolean ns_layout_flex_wraps(const ns_style *s);
+const char *ns_layout_flex_item_align(const ns_box *c,
+                                      const char *container_align);
+gboolean ns_layout_flex_align_is_baseline(const char *align);
+double ns_layout_flex_item_baseline(const ns_box *c, double fallback);
 
 #endif
