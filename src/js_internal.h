@@ -1327,6 +1327,63 @@ JSValue  ns_element_prepend(JSContext *ctx, JSValueConst this_val, int argc,
 JSValue  ns_element_replaceChildren(JSContext *ctx, JSValueConst this_val, int argc,
                                     JSValueConst *argv);
 
+JSValue  ns_document_createElement(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_document_createElementNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_document_createTextNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_document_createComment(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_document_createCDATASection(JSContext *ctx, JSValueConst this_val, int argc,
+                                        JSValueConst *argv);
+JSValue  ns_document_createProcessingInstruction(JSContext *ctx, JSValueConst this_val,
+                                                 int argc, JSValueConst *argv);
+JSValue  ns_document_createAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_document_createAttributeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_document_createEvent(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_document_createDocumentFragment(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv);
+JSValue  ns_document_import_node(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_document_adopt_node(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_cloneNode(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_attr_cloneNode(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_element_lookupNamespaceURI(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_element_lookupPrefix(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_isDefaultNamespace(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_impl_create_html_document(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_impl_create_document(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_impl_create_document_type(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_document_implementation(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_anchor_part_get(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_anchor_href_set(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val, int magic);
+JSValue  ns_element_url_part_set(JSContext *ctx, JSValueConst this_val,
+                                 JSValueConst val, int magic);
+char    *ns_element_anchor_resolved_href(const ns_node *n, ns_js *js);
+gboolean ns_valid_attr_name(const char *s);
+JSValue  ns_validate_attr_ns(JSContext *ctx, const char *ns_uri, const char *qname);
+gboolean ns_doc_wrapper_is_xml(JSContext *ctx, JSValueConst doc_val);
+void     ns_tag_owner_document(JSContext *ctx, JSValueConst doc_val,
+                               JSValueConst node_val);
+JSValue  ns_make_realm_document(JSContext *ctx, ns_node *doc_node, const char *url,
+                                const char *charset, const char *content_type,
+                                gboolean is_xml, gboolean inert);
+JSValue  ns_make_synth_xml_document(JSContext *ctx);
+
 const char    *ns_js_cookie_value(const ns_js *js);
 void           ns_js_set_cookie_value(ns_js *js, const char *value);
 const char    *ns_js_partition_key(const ns_js *js);

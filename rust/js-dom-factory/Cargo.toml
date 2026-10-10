@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-dom-factory"
+description = "Document factories, DOMImplementation, importNode/adoptNode/cloneNode, name validation, namespace lookups and the hyperlink URL-part accessors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

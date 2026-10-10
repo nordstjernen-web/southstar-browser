@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The document factories (createElement, createElementNS, createTextNode,
+  createComment and the rest), cloneNode, importNode, adoptNode,
+  DOMImplementation, the namespace lookups and the a/area URL-part accessors
+  moved from js.c to Rust (rust/js-dom-factory), with unchanged results.
 * Focus, click() and keyboard activation, the Fullscreen API and Pointer
   Lock moved from js.c to Rust (rust/js-focus), with unchanged results.
 * Reflected HTML attributes (string, URL, enumerated, integer and boolean
