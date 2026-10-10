@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-services"
+description = "The window-level services: navigator and its sub-objects, the window console, Notification and queueMicrotask"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

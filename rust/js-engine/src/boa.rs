@@ -867,6 +867,16 @@ impl Scope<'_> {
         Ok(())
     }
 
+    pub fn enqueue_call(&mut self, function: &Value, args: &[Value]) -> Result<(), Value> {
+        let Some(callable) = function.0.as_callable() else {
+            return Err(self.type_error("not a function"));
+        };
+        let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
+        let native = PromiseJob::new(move |ctx| callable.call(&JsValue::undefined(), &args, ctx));
+        self.ctx.enqueue_job(native.into());
+        Ok(())
+    }
+
     pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {
         let object = self.object(object)?;
         Ok(match object.prototype() {

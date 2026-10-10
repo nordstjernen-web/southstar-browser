@@ -46,6 +46,7 @@ southstar-js-intl = { path = "../js-intl" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
+southstar-js-services = { path = "../js-services" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }

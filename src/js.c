@@ -164,6 +164,20 @@ ns_js_has_transient_activation(ns_js *js)
                NS_TRANSIENT_ACTIVATION_US;
 }
 
+gboolean
+ns_js_user_activation_state(ns_js *js, gboolean *ever_activated)
+{
+    *ever_activated = js && js->user_ever_activated;
+    return ns_js_has_transient_activation(js);
+}
+
+int
+ns_js_clipboard_write(ns_js *js, const char *text)
+{
+    if (!js || !js->clipboard_write_cb) return -1;
+    return js->clipboard_write_cb(text, js->clipboard_write_user_data) ? 1 : 0;
+}
+
 static void
 ns_js_consume_user_activation(ns_js *js)
 {
@@ -410,8 +424,6 @@ static JSValue ns_target_removeEventListener(JSContext *ctx, JSValueConst this_v
                                              int argc, JSValueConst *argv);
 static JSValue ns_element_dispatchEvent(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv);
-static JSValue ns_target_dispatchEvent(JSContext *ctx, JSValueConst this_val,
-                                       int argc, JSValueConst *argv);
 static void ns_js_purge_subtree_rafs(ns_js *js, ns_node *root);
 static JSValue ns_make_realm_document(JSContext *ctx, ns_node *doc_node,
                                       const char *url, const char *charset,
@@ -1461,31 +1473,6 @@ ns_drain_mutations(ns_js *js)
     js->mutated = FALSE;
     ns_storage_schedule_flush(js);
     ns_js_run_due_timers(js);
-}
-
-static int
-ns_nav_hardware_concurrency(void)
-{
-    int n = (int)g_get_num_processors();
-    if (n < 1) n = 1;
-    if (n > 32) n = 32;
-    return n;
-}
-
-static int
-ns_nav_device_memory(void)
-{
-#ifdef G_OS_WIN32
-    MEMORYSTATUSEX status = {0};
-    status.dwLength = sizeof status;
-    if (GlobalMemoryStatusEx(&status)) {
-        double gib = (double)status.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
-        int bucket = 1;
-        while ((double)bucket < gib && bucket < 4) bucket *= 2;
-        return bucket;
-    }
-#endif
-    return 4;
 }
 
 static void
@@ -11138,52 +11125,11 @@ ns_cam_enumerate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *
 }
 
 static JSValue
-ns_storage_estimate(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue est = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, est, "usage", JS_NewInt64(ctx, 0));
-    JS_SetPropertyStr(ctx, est, "quota",
-                      JS_NewInt64(ctx, (int64_t)2 * 1024 * 1024 * 1024));
-    JS_SetPropertyStr(ctx, est, "usageDetails", JS_NewObject(ctx));
-    return ns_promise_resolve_take(ctx, est);
-}
-
-static JSValue
-ns_returns_false(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_FALSE;
-}
-
-static JSValue
 ns_returns_null(JSContext *ctx, JSValueConst this_val,
                 int argc, JSValueConst *argv)
 {
     (void)ctx; (void)this_val; (void)argc; (void)argv;
     return JS_NULL;
-}
-
-static JSValue
-ns_navigator_get_battery(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue battery = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, battery, "charging", JS_TRUE);
-    JS_SetPropertyStr(ctx, battery, "chargingTime", JS_NewFloat64(ctx, 0));
-    JS_SetPropertyStr(ctx, battery, "dischargingTime",
-                      JS_NewFloat64(ctx, INFINITY));
-    JS_SetPropertyStr(ctx, battery, "level", JS_NewFloat64(ctx, 1.0));
-    JS_SetPropertyStr(ctx, battery, "onchargingchange", JS_NULL);
-    JS_SetPropertyStr(ctx, battery, "onchargingtimechange", JS_NULL);
-    JS_SetPropertyStr(ctx, battery, "ondischargingtimechange", JS_NULL);
-    JS_SetPropertyStr(ctx, battery, "onlevelchange", JS_NULL);
-    JS_SetPropertyStr(ctx, battery, "_listeners", JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, battery);
-    return ns_promise_resolve_take(ctx, battery);
 }
 
 JSValue
@@ -11225,79 +11171,6 @@ ns_promise_reject_dom(JSContext *ctx, const char *name, const char *message)
     JS_FreeValue(ctx, resolvers[0]);
     JS_FreeValue(ctx, resolvers[1]);
     return promise;
-}
-
-static JSValue
-ns_media_reject_not_found(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_promise_reject_dom(ctx, "NotFoundError",
-        "Requested device not found");
-}
-
-static JSValue
-ns_clipboard_reject_not_allowed(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_promise_reject_dom(ctx, "NotAllowedError",
-        "Read permission denied");
-}
-
-static gboolean
-ns_protocol_scheme_valid(const char *scheme)
-{
-    static const char *const safelist[] = {
-        "bitcoin", "cabal", "dat", "did", "doi", "dweb", "ed2k", "eth",
-        "ftp", "ftps", "geo", "gopher", "hcp", "im", "ipfs", "ipns", "irc",
-        "ircs", "magnet", "mailto", "matrix", "mms", "news", "nntp",
-        "openpgp4fpr", "sip", "sms", "smsto", "ssb", "ssh", "tel", "urn",
-        "webcal", "wtai", "xmpp", NULL
-    };
-    if (!scheme || !*scheme) return FALSE;
-    if (g_str_has_prefix(scheme, "web+")) {
-        const char *p = scheme + 4;
-        if (!*p) return FALSE;
-        for (; *p; p++)
-            if (*p < 'a' || *p > 'z') return FALSE;
-        return TRUE;
-    }
-    for (int i = 0; safelist[i]; i++)
-        if (g_ascii_strcasecmp(scheme, safelist[i]) == 0) return TRUE;
-    return FALSE;
-}
-
-static JSValue
-ns_navigator_register_protocol_handler(JSContext *ctx, JSValueConst this_val,
-                                       int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'registerProtocolHandler' on 'Navigator': "
-            "2 arguments required");
-    const char *scheme = JS_ToCString(ctx, argv[0]);
-    const char *url    = JS_ToCString(ctx, argv[1]);
-    JSValue ret = JS_UNDEFINED;
-    if (!ns_protocol_scheme_valid(scheme)) {
-        char *msg = g_strdup_printf(
-            "Failed to execute 'registerProtocolHandler' on 'Navigator': "
-            "The scheme '%s' doesn't belong to the scheme allowlist.",
-            scheme ? scheme : "");
-        ret = ns_throw_dom_exception(ctx, "SecurityError", 18, msg);
-        g_free(msg);
-    } else if (!url || !strstr(url, "%s")) {
-        char *msg = g_strdup_printf(
-            "Failed to execute 'registerProtocolHandler' on 'Navigator': "
-            "The url provided ('%s') does not contain '%%s'.",
-            url ? url : "");
-        ret = ns_throw_dom_exception(ctx, "SyntaxError", 12, msg);
-        g_free(msg);
-    }
-    if (scheme) JS_FreeCString(ctx, scheme);
-    if (url)    JS_FreeCString(ctx, url);
-    return ret;
 }
 
 static JSValue
@@ -11347,194 +11220,11 @@ ns_cache_open(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *arg
     return ns_promise_resolve_take(ctx, cache);
 }
 
-static gboolean
-ns_compat_is_firefox(void)
-{
-    const ns_config *c = ns_config_get();
-    if (c && c->user_agent && *c->user_agent)
-        return strstr(c->user_agent, "Firefox") && !strstr(c->user_agent, "Chrome");
-    return c && c->compat_mode &&
-           g_ascii_strcasecmp(c->compat_mode, "firefox") == 0;
-}
-
-static gboolean
-ns_compat_has_client_hints(const char *nav_ua)
-{
-    return ns_user_agent_has_client_hints(nav_ua);
-}
-
-static void
-ns_navigator_set_languages(JSContext *ctx, JSValueConst navigator)
-{
-    char **language_names = ns_net_navigator_languages();
-    JS_SetPropertyStr(ctx, navigator, "language",
-                      JS_NewString(ctx, language_names[0]));
-    JSValue languages = JS_NewArray(ctx);
-    for (uint32_t i = 0; language_names[i]; i++)
-        JS_SetPropertyUint32(ctx, languages, i,
-                             JS_NewString(ctx, language_names[i]));
-    JS_SetPropertyStr(ctx, navigator, "languages", languages);
-    g_strfreev(language_names);
-}
-
-static JSValue
-ns_ua_client_hint_brands(JSContext *ctx, gboolean full_version)
-{
-    JSValue arr = JS_NewArray(ctx);
-    const struct { const char *brand; const char *version; } entries[] = {
-        { "Southstar", full_version ? NS_VERSION : "1" },
-        { "Not=A?Brand",   full_version ? "24.0.0.0" : "24" },
-    };
-    for (uint32_t i = 0; i < G_N_ELEMENTS(entries); i++) {
-        JSValue o = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, o, "brand",   JS_NewString(ctx, entries[i].brand));
-        JS_SetPropertyStr(ctx, o, "version", JS_NewString(ctx, entries[i].version));
-        JS_SetPropertyUint32(ctx, arr, i, o);
-    }
-    return arr;
-}
-
-static JSValue
-ns_ua_client_hint_form_factors(JSContext *ctx)
-{
-    JSValue values = JS_NewArray(ctx);
-    JS_SetPropertyUint32(ctx, values, 0,
-        JS_NewString(ctx, ns_net_is_mobile_mode() ? "Mobile" : "Desktop"));
-    return values;
-}
-
-static const char *
-ns_ua_client_hint_architecture(void)
-{
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-    return "x86";
-#elif defined(__aarch64__) || defined(_M_ARM64) || defined(__arm__) || defined(_M_ARM)
-    return "arm";
-#else
-    return "";
-#endif
-}
-
-static void
-ns_ua_set_requested_high_entropy_hint(JSContext *ctx, JSValueConst obj,
-                                      const char *key)
-{
-    if (strcmp(key, "architecture") == 0) {
-        JS_SetPropertyStr(ctx, obj, key,
-            JS_NewString(ctx, ns_ua_client_hint_architecture()));
-    } else if (strcmp(key, "bitness") == 0) {
-        JS_SetPropertyStr(ctx, obj, key,
-            JS_NewString(ctx, sizeof(void *) == 8 ? "64" : "32"));
-    } else if (strcmp(key, "formFactors") == 0) {
-        JS_SetPropertyStr(ctx, obj, key,
-            ns_ua_client_hint_form_factors(ctx));
-    } else if (strcmp(key, "fullVersionList") == 0) {
-        JS_SetPropertyStr(ctx, obj, key,
-            ns_ua_client_hint_brands(ctx, TRUE));
-    } else if (strcmp(key, "model") == 0 ||
-               strcmp(key, "platformVersion") == 0) {
-        JS_SetPropertyStr(ctx, obj, key, JS_NewString(ctx, ""));
-    } else if (strcmp(key, "uaFullVersion") == 0) {
-        JS_SetPropertyStr(ctx, obj, key, JS_NewString(ctx, NS_VERSION));
-    } else if (strcmp(key, "wow64") == 0) {
-        JS_SetPropertyStr(ctx, obj, key, JS_FALSE);
-    }
-}
-
-static JSValue
-ns_navigator_high_entropy_values(JSContext *ctx, JSValueConst this_val,
-                                 int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "brands", ns_ua_client_hint_brands(ctx, FALSE));
-    JS_SetPropertyStr(ctx, obj, "mobile",
-                      JS_NewBool(ctx, ns_net_is_mobile_mode()));
-    JS_SetPropertyStr(ctx, obj, "platform",
-                      JS_NewString(ctx, ns_net_ua_hint_platform()));
-    if (argc > 0 && JS_IsArray(argv[0])) {
-        JSValue reqs = argv[0];
-        uint32_t len = ns_js_array_length(ctx, reqs);
-        for (uint32_t i = 0; i < len; i++) {
-            JSValue item = JS_GetPropertyUint32(ctx, reqs, i);
-            const char *key = JS_ToCString(ctx, item);
-            if (key) {
-                ns_ua_set_requested_high_entropy_hint(ctx, obj, key);
-                JS_FreeCString(ctx, key);
-            }
-            JS_FreeValue(ctx, item);
-        }
-    }
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    JS_Call(ctx, resolvers[0], JS_UNDEFINED, 1, &obj);
-    JS_FreeValue(ctx, obj);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
-    return promise;
-}
-
-static JSValue
-ns_navigator_ua_data_to_json(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)argc;
-    (void)argv;
-    JSValue obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, obj, "brands",
-                      JS_GetPropertyStr(ctx, this_val, "brands"));
-    JS_SetPropertyStr(ctx, obj, "mobile",
-                      JS_GetPropertyStr(ctx, this_val, "mobile"));
-    JS_SetPropertyStr(ctx, obj, "platform",
-                      JS_GetPropertyStr(ctx, this_val, "platform"));
-    return obj;
-}
-
 static JSValue
 ns_microtask_job(JSContext *ctx, int argc, JSValueConst *argv)
 {
     (void)argc;
     return JS_Call(ctx, argv[0], JS_UNDEFINED, 0, NULL);
-}
-
-static JSValue
-ns_geolocation_error_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    (void)argc;
-    if (!JS_IsFunction(ctx, argv[0])) return JS_UNDEFINED;
-    JSValue err = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, err, "code", JS_NewInt32(ctx, 1));
-    JS_SetPropertyStr(ctx, err, "message",
-                      JS_NewString(ctx, "User denied Geolocation"));
-    JS_SetPropertyStr(ctx, err, "PERMISSION_DENIED",    JS_NewInt32(ctx, 1));
-    JS_SetPropertyStr(ctx, err, "POSITION_UNAVAILABLE", JS_NewInt32(ctx, 2));
-    JS_SetPropertyStr(ctx, err, "TIMEOUT",              JS_NewInt32(ctx, 3));
-    JSValueConst args[1] = { err };
-    JSValue r = JS_Call(ctx, argv[0], JS_UNDEFINED, 1, args);
-    JS_FreeValue(ctx, r);
-    JS_FreeValue(ctx, err);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_geolocation_get_current_position(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc >= 2 && JS_IsFunction(ctx, argv[1])) {
-        JSValueConst job_args[1] = { argv[1] };
-        JS_EnqueueJob(ctx, ns_geolocation_error_job, 1, job_args);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_geolocation_watch_position(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    ns_geolocation_get_current_position(ctx, this_val, argc, argv);
-    return JS_NewInt32(ctx, 1);
 }
 
 
@@ -12713,75 +12403,6 @@ ns_subtle_digest(JSContext *ctx, JSValueConst this_val,
     return promise;
 }
 
-static JSValue
-ns_clipboard_writeText(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->clipboard_write_cb) {
-        ns_js_promise_reject(ctx, resolvers,
-            "NotAllowedError: clipboard write not available");
-        return promise;
-    }
-    const char *text = argc >= 1 ? JS_ToCString(ctx, argv[0]) : NULL;
-    gboolean ok = js->clipboard_write_cb(text ? text : "",
-                                          js->clipboard_write_user_data);
-    if (text) JS_FreeCString(ctx, text);
-    if (ok) {
-        JSValue ret = JS_Call(ctx, resolvers[0], JS_UNDEFINED, 0, NULL);
-        if (JS_IsException(ret)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, ret);
-        JS_FreeValue(ctx, resolvers[0]);
-        JS_FreeValue(ctx, resolvers[1]);
-    } else {
-        ns_js_promise_reject(ctx, resolvers,
-            "NotAllowedError: clipboard write denied");
-    }
-    return promise;
-}
-
-static void
-ns_clipboard_install_write(JSContext *ctx, JSValueConst clipboard)
-{
-    static const char *const src =
-        "(function(c){"
-        "function plain(item){"
-        "if(!item)return Promise.resolve('');"
-        "var types=item.types||[];"
-        "if(Array.prototype.indexOf.call(types,'text/plain')<0)"
-        "return Promise.resolve('');"
-        "return Promise.resolve(item.getType('text/plain')).then(function(v){"
-        "if(v&&typeof v.text==='function')return v.text();"
-        "return v==null?'':String(v);"
-        "});"
-        "}"
-        "c.write=function(items){"
-        "var list=items?Array.prototype.slice.call(items):[];"
-        "return Promise.all(list.map(plain)).then(function(parts){"
-        "return c.writeText(parts.join(''));"
-        "});"
-        "};"
-        "})";
-    JSValue fn = JS_Eval(ctx, src, strlen(src), "<clipboard-write>",
-                         JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(fn)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, fn);
-        return;
-    }
-    JSValue arg = JS_DupValue(ctx, clipboard);
-    JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 1, &arg);
-    if (JS_IsException(r))
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
-    JS_FreeValue(ctx, arg);
-    JS_FreeValue(ctx, fn);
-}
-
 static gboolean
 ns_document_command_run(ns_js *js, const char *cmd)
 {
@@ -12864,56 +12485,7 @@ ns_returns_rejected(JSContext *ctx, JSValueConst this_val,
     return promise;
 }
 
-static JSValue
-ns_permissions_query(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    static const char *const supported[] = {
-        "accelerometer", "ambient-light-sensor", "background-sync",
-        "bluetooth", "camera", "clipboard-read", "clipboard-write",
-        "display-capture", "geolocation", "gyroscope", "idle-detection",
-        "local-fonts", "magnetometer", "microphone", "midi",
-        "notifications", "payment-handler", "persistent-storage", "push",
-        "speaker-selection", "storage-access", "window-management",
-    };
-    if (argc < 1 || !JS_IsObject(argv[0]))
-        return ns_promise_reject_dom(ctx, "TypeError",
-                                     "Permission descriptor required");
-    JSValue name_value = JS_GetPropertyStr(ctx, argv[0], "name");
-    const char *name = JS_ToCString(ctx, name_value);
-    gboolean known = FALSE;
-    if (name) {
-        for (gsize i = 0; i < G_N_ELEMENTS(supported); i++) {
-            if (strcmp(name, supported[i]) == 0) {
-                known = TRUE;
-                break;
-            }
-        }
-    }
-    if (name) JS_FreeCString(ctx, name);
-    JS_FreeValue(ctx, name_value);
-    if (!known)
-        return ns_promise_reject_dom(ctx, "TypeError",
-                                     "Permission name is not supported");
-
-    JSValue status = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, status, "state", JS_NewString(ctx, "prompt"));
-    JS_SetPropertyStr(ctx, status, "onchange", JS_NULL);
-    JS_SetPropertyStr(ctx, status, "_listeners", JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, status);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, "PermissionStatus");
-    JSValue proto = JS_IsObject(ctor)
-        ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
-    if (JS_IsObject(proto)) JS_SetPrototype(ctx, status, proto);
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-    JS_FreeValue(ctx, global);
-    return ns_promise_resolve_take(ctx, status);
-}
-
-static JSValue
+JSValue
 ns_eme_request_access(JSContext *ctx, JSValueConst this_val,
                       int argc, JSValueConst *argv)
 {
@@ -13071,7 +12643,7 @@ ns_media_config_supported(JSContext *ctx, JSValueConst config)
     return ok;
 }
 
-static JSValue
+JSValue
 ns_media_capabilities_info(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -18077,7 +17649,7 @@ ns_event_dispatch_guard(JSContext *ctx, JSValueConst event)
  * dispatchEvent() (worker messages and errors): it stays trusted. */
 static __thread void *ns_engine_dispatch_event;
 
-static JSValue
+JSValue
 ns_target_dispatchEvent(JSContext *ctx, JSValueConst this_val,
                         int argc, JSValueConst *argv)
 {
@@ -24334,48 +23906,8 @@ ns_worker_js_new(ns_worker_host *host)
     JS_SetPropertyStr(ctx, global, "onmessageerror", JS_NULL);
     JS_SetPropertyStr(ctx, global, "onerror", JS_NULL);
 
-    const ns_config *wkr_cfg = ns_config_get();
-    const char *wkr_ua = (wkr_cfg && wkr_cfg->user_agent && *wkr_cfg->user_agent)
-        ? wkr_cfg->user_agent
-        : ns_user_agent_for_mode(wkr_cfg ? wkr_cfg->compat_mode : NULL);
-    JSValue navigator = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, navigator, "userAgent",
-                      JS_NewString(ctx, wkr_ua));
-    JS_SetPropertyStr(ctx, navigator, "appName", JS_NewString(ctx, "Netscape"));
-    JS_SetPropertyStr(ctx, navigator, "appCodeName", JS_NewString(ctx, "Mozilla"));
-    const char *wkr_app_version = wkr_ua;
-    if (g_str_has_prefix(wkr_app_version, "Mozilla/"))
-        wkr_app_version += strlen("Mozilla/");
-    JS_SetPropertyStr(ctx, navigator, "appVersion",
-                      JS_NewString(ctx, wkr_app_version));
-    JS_SetPropertyStr(ctx, navigator, "platform",
-                      JS_NewString(ctx, ns_net_navigator_platform()));
-    JS_SetPropertyStr(ctx, navigator, "product", JS_NewString(ctx, "Gecko"));
-    JS_SetPropertyStr(ctx, navigator, "deviceMemory",
-                      JS_NewInt32(ctx, ns_nav_device_memory()));
-    ns_navigator_set_languages(ctx, navigator);
-    JS_SetPropertyStr(ctx, navigator, "onLine", JS_TRUE);
-    JS_SetPropertyStr(ctx, navigator, "hardwareConcurrency",
-                      JS_NewInt32(ctx, ns_nav_hardware_concurrency()));
-    JS_SetPropertyStr(ctx, navigator, "doNotTrack",
-                      (!c || c->do_not_track) ? JS_NewString(ctx, "1") : JS_NULL);
-    JS_SetPropertyStr(ctx, navigator, "globalPrivacyControl",
-                      JS_NewBool(ctx, !c || c->global_privacy_control));
-    if (ns_compat_has_client_hints(wkr_ua)) {
-        /* the same User-Agent Client Hints as the window's navigator */
-        JSValue ua_data = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, ua_data, "brands",
-                          ns_ua_client_hint_brands(ctx, FALSE));
-        JS_SetPropertyStr(ctx, ua_data, "mobile",
-                          JS_NewBool(ctx, ns_net_is_mobile_mode()));
-        JS_SetPropertyStr(ctx, ua_data, "platform",
-                          JS_NewString(ctx, ns_net_ua_hint_platform()));
-        ns_bind_fn(ctx, ua_data, "getHighEntropyValues",
-                   ns_navigator_high_entropy_values, 1);
-        ns_bind_fn(ctx, ua_data, "toJSON", ns_navigator_ua_data_to_json, 0);
-        JS_SetPropertyStr(ctx, navigator, "userAgentData", ua_data);
-    }
-    JS_SetPropertyStr(ctx, global, "navigator", navigator);
+    JS_SetPropertyStr(ctx, global, "navigator",
+                      ns_services_worker_navigator(ctx));
 
     JSValue performance = JS_NewObject(ctx);
     ns_bind_fn(ctx, performance, "now", ns_worker_performance_now, 0);
@@ -48609,7 +48141,7 @@ ns_beacon_done(GObject *src, GAsyncResult *result, gpointer user_data)
     g_clear_error(&err);
 }
 
-static JSValue
+JSValue
 ns_navigator_sendBeacon(JSContext *ctx, JSValueConst this_val,
                         int argc, JSValueConst *argv)
 {
@@ -50253,21 +49785,6 @@ static const char *const ns_parent_query_methods[] = {
     "querySelector", "querySelectorAll",
 };
 
-static JSValue
-ns_user_activation_get_is_active(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return JS_NewBool(ctx, ns_js_has_transient_activation(js_from_ctx(ctx)));
-}
-
-static JSValue
-ns_user_activation_get_has_been_active(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    return JS_NewBool(ctx, js && js->user_ever_activated);
-}
-
 static void
 ns_proto_define_getset(JSContext *ctx, JSValueConst proto, const char *name,
                        JSValue (*getter)(JSContext *, JSValueConst),
@@ -51024,187 +50541,13 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_window_bind_post_message(ctx, global);
 
     ns_bind_ctor(ctx, global, "Navigator", ns_illegal_constructor, 0);
-    const ns_config *nav_cfg = ns_config_get();
-    const char *nav_ua = (nav_cfg && nav_cfg->user_agent && *nav_cfg->user_agent)
-                         ? nav_cfg->user_agent
-                         : ns_user_agent_for_mode(nav_cfg ? nav_cfg->compat_mode
-                                                          : NULL);
-    JSValue navigator = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, navigator, "userAgent",
-                      JS_NewString(ctx, nav_ua));
-    JS_SetPropertyStr(ctx, navigator, "appName",
-                      JS_NewString(ctx, "Netscape"));
-    JS_SetPropertyStr(ctx, navigator, "appCodeName",
-                      JS_NewString(ctx, "Mozilla"));
-    const char *nav_app_version = nav_ua;
-    if (g_str_has_prefix(nav_app_version, "Mozilla/"))
-        nav_app_version += strlen("Mozilla/");
-    JS_SetPropertyStr(ctx, navigator, "appVersion",
-                      JS_NewString(ctx, nav_app_version));
-    JS_SetPropertyStr(ctx, navigator, "platform",
-                      JS_NewString(ctx, ns_net_navigator_platform()));
-    ns_navigator_set_languages(ctx, navigator);
-    JS_SetPropertyStr(ctx, navigator, "onLine", JS_TRUE);
-    JS_SetPropertyStr(ctx, navigator, "doNotTrack",
-                      (!nav_cfg || nav_cfg->do_not_track)
-                          ? JS_NewString(ctx, "1") : JS_NULL);
-    JS_SetPropertyStr(ctx, navigator, "globalPrivacyControl",
-                      JS_NewBool(ctx, !nav_cfg || nav_cfg->global_privacy_control));
-    JS_SetPropertyStr(ctx, navigator, "cookieEnabled", JS_TRUE);
-    JS_SetPropertyStr(ctx, navigator, "hardwareConcurrency",
-                      JS_NewInt32(ctx, ns_nav_hardware_concurrency()));
-    gboolean nav_firefox = ns_compat_is_firefox();
-    gboolean nav_chrome_compat = strstr(nav_ua, "Chrome/") != NULL;
-    JS_SetPropertyStr(ctx, navigator, "vendor",
-                      JS_NewString(ctx, nav_firefox ? "" : "Google Inc."));
-    JS_SetPropertyStr(ctx, navigator, "product",
-                      JS_NewString(ctx, "Gecko"));
-    JS_SetPropertyStr(ctx, navigator, "productSub",
-                      JS_NewString(ctx, nav_firefox ? "20100101" : "20030107"));
-    if (nav_firefox) {
-        JS_SetPropertyStr(ctx, navigator, "oscpu",
-                          JS_NewString(ctx, ns_net_navigator_platform()));
-        JS_SetPropertyStr(ctx, navigator, "buildID",
-                          JS_NewString(ctx, "20181001000000"));
-    }
-    JS_SetPropertyStr(ctx, navigator, "maxTouchPoints",
-                      JS_NewInt32(ctx, 0));
-
-    JS_SetPropertyStr(ctx, navigator, "deviceMemory",
-                      JS_NewInt32(ctx, ns_nav_device_memory()));
-    JS_SetPropertyStr(ctx, navigator, "pdfViewerEnabled", JS_TRUE);
-    JS_SetPropertyStr(ctx, navigator, "webdriver", JS_FALSE);
-
-    if (nav_chrome_compat) {
-        JSValue connection = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, connection, "effectiveType",
-                          JS_NewString(ctx, "4g"));
-        JS_SetPropertyStr(ctx, connection, "type",
-                          JS_NewString(ctx, "wifi"));
-        JS_SetPropertyStr(ctx, connection, "downlink",
-                          JS_NewFloat64(ctx, 10.0));
-        JS_SetPropertyStr(ctx, connection, "downlinkMax",
-                          JS_NewFloat64(ctx, 10.0));
-        JS_SetPropertyStr(ctx, connection, "rtt",
-                          JS_NewInt32(ctx, 50));
-        JS_SetPropertyStr(ctx, connection, "saveData", JS_FALSE);
-        JS_SetPropertyStr(ctx, connection, "_listeners", JS_NewArray(ctx));
-        ns_bind_event_target_listeners(ctx, connection);
-        JS_SetPropertyStr(ctx, navigator, "connection", connection);
-    }
-
-    JSValue geolocation = JS_NewObject(ctx);
-    ns_bind_fn(ctx, geolocation, "getCurrentPosition",
-               ns_geolocation_get_current_position, 3);
-    ns_bind_fn(ctx, geolocation, "watchPosition",
-               ns_geolocation_watch_position, 3);
-    ns_bind_fn(ctx, geolocation, "clearWatch", ns_event_noop, 1);
-    JS_SetPropertyStr(ctx, navigator, "geolocation", geolocation);
-
-    JSValue clipboard = JS_NewObject(ctx);
-    ns_bind_fn(ctx, clipboard, "writeText", ns_clipboard_writeText, 1);
-    ns_bind_fn(ctx, clipboard, "readText",  ns_clipboard_reject_not_allowed, 0);
-    ns_bind_fn(ctx, clipboard, "read",      ns_clipboard_reject_not_allowed, 0);
-    ns_clipboard_install_write(ctx, clipboard);
-    JS_SetPropertyStr(ctx, navigator, "clipboard", clipboard);
-
-    JSValue permissions = JS_NewObject(ctx);
-    ns_bind_fn(ctx, permissions, "query", ns_permissions_query, 1);
-    ns_set_tostring_tag(ctx, permissions, "Permissions");
-    JS_SetPropertyStr(ctx, navigator, "permissions", permissions);
-
-    JSValue media_devices = JS_NewObject(ctx);
-    ns_bind_fn(ctx, media_devices, "getUserMedia",            ns_media_reject_not_found, 1);
-    ns_bind_fn(ctx, media_devices, "getDisplayMedia",         ns_media_reject_not_found, 1);
-    ns_bind_fn(ctx, media_devices, "enumerateDevices",        ns_returns_resolved_empty_array, 0);
-    ns_bind_fn(ctx, media_devices, "getSupportedConstraints", ns_event_noop,       0);
-    JS_SetPropertyStr(ctx, media_devices, "_listeners", JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, media_devices);
-    ns_bind_fn(ctx, media_devices, "dispatchEvent", ns_target_dispatchEvent, 1);
-    JS_SetPropertyStr(ctx, media_devices, "ondevicechange", JS_NULL);
-    ns_set_tostring_tag(ctx, media_devices, "MediaDevices");
-    JS_SetPropertyStr(ctx, navigator, "mediaDevices", media_devices);
+    JSValue navigator = ns_services_window_navigator(ctx);
 
     ns_bind_fn(ctx, global, "__nd_camera_request",   ns_cam_request,   2);
     ns_bind_fn(ctx, global, "__nd_camera_release",   ns_cam_release,   0);
     ns_bind_fn(ctx, global, "__nd_mic_release",      ns_mic_release_js, 0);
     ns_bind_fn(ctx, global, "__nd_camera_label",     ns_cam_label,     0);
     ns_bind_fn(ctx, global, "__nd_camera_enumerate", ns_cam_enumerate, 0);
-
-    ns_bind_fn(ctx, navigator, "share",                     ns_returns_rejected, 1);
-    ns_bind_fn(ctx, navigator, "canShare",                  ns_event_noop,       1);
-    ns_bind_fn(ctx, navigator, "vibrate",                   ns_event_noop,       1);
-    ns_bind_fn(ctx, navigator, "sendBeacon",                ns_navigator_sendBeacon, 2);
-    ns_bind_fn(ctx, navigator, "registerProtocolHandler",
-               ns_navigator_register_protocol_handler, 2);
-    ns_bind_fn(ctx, navigator, "unregisterProtocolHandler", ns_event_noop,       2);
-
-    if (ns_compat_has_client_hints(nav_ua)) {
-        JSValue userAgentData = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, userAgentData, "brands",
-                          ns_ua_client_hint_brands(ctx, FALSE));
-        JS_SetPropertyStr(ctx, userAgentData, "mobile",
-                          JS_NewBool(ctx, ns_net_is_mobile_mode()));
-        JS_SetPropertyStr(ctx, userAgentData, "platform",
-                          JS_NewString(ctx, ns_net_ua_hint_platform()));
-        ns_bind_fn(ctx, userAgentData, "getHighEntropyValues",
-                   ns_navigator_high_entropy_values, 1);
-        ns_bind_fn(ctx, userAgentData, "toJSON",
-                   ns_navigator_ua_data_to_json, 0);
-        JS_SetPropertyStr(ctx, navigator, "userAgentData", userAgentData);
-    }
-
-    JSValue plugins = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, plugins, "length", JS_NewInt32(ctx, 0),
-                              JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-    ns_bind_fn(ctx, plugins, "item",      ns_returns_null, 1);
-    ns_bind_fn(ctx, plugins, "namedItem", ns_returns_null, 1);
-    ns_bind_fn(ctx, plugins, "refresh",   ns_event_noop, 0);
-    JS_SetPropertyStr(ctx, navigator, "plugins", plugins);
-
-    JSValue mime_types = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, mime_types, "length", JS_NewInt32(ctx, 0),
-                              JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-    ns_bind_fn(ctx, mime_types, "item",      ns_returns_null, 1);
-    ns_bind_fn(ctx, mime_types, "namedItem", ns_returns_null, 1);
-    JS_SetPropertyStr(ctx, navigator, "mimeTypes", mime_types);
-
-    ns_bind_fn(ctx, navigator, "javaEnabled",       ns_returns_false, 0);
-    ns_bind_fn(ctx, navigator, "taintEnabled",      ns_returns_false, 0);
-    ns_bind_fn(ctx, navigator, "getAutoplayPolicy", ns_event_noop, 1);
-    ns_bind_fn(ctx, navigator, "getBattery",  ns_navigator_get_battery, 0);
-    ns_bind_fn(ctx, navigator, "getGamepads", ns_event_empty_array, 0);
-    ns_bind_fn(ctx, navigator, "requestMIDIAccess",            ns_returns_rejected, 1);
-    ns_bind_fn(ctx, navigator, "requestMediaKeySystemAccess",  ns_eme_request_access, 2);
-
-    JSValue media_caps = JS_NewObject(ctx);
-    ns_bind_fn(ctx, media_caps, "decodingInfo",
-               ns_media_capabilities_info, 1);
-    ns_bind_fn(ctx, media_caps, "encodingInfo",
-               ns_media_capabilities_info, 1);
-    JS_SetPropertyStr(ctx, navigator, "mediaCapabilities", media_caps);
-
-    JS_SetPropertyStr(ctx, navigator, "vendorSub", JS_NewString(ctx, ""));
-
-    JSValue user_activation = JS_NewObject(ctx);
-    ns_proto_define_getset(ctx, user_activation, "hasBeenActive",
-                           ns_user_activation_get_has_been_active, NULL);
-    ns_proto_define_getset(ctx, user_activation, "isActive",
-                           ns_user_activation_get_is_active, NULL);
-    JS_SetPropertyStr(ctx, navigator, "userActivation", user_activation);
-
-    JSValue storage = JS_NewObject(ctx);
-    ns_bind_fn(ctx, storage, "estimate",  ns_storage_estimate,       0);
-    ns_bind_fn(ctx, storage, "persist",   ns_returns_resolved_false, 0);
-    ns_bind_fn(ctx, storage, "persisted", ns_returns_resolved_false, 0);
-    JS_SetPropertyStr(ctx, navigator, "storage", storage);
-
-    ns_bind_fn(ctx, navigator, "getInstalledRelatedApps",
-               ns_returns_resolved_empty_array, 0);
-    ns_bind_fn(ctx, navigator, "setAppBadge",
-               ns_returns_resolved_undefined, 1);
-    ns_bind_fn(ctx, navigator, "clearAppBadge",
-               ns_returns_resolved_undefined, 0);
 
     ns_sw_install_container(ctx, navigator);
 
@@ -51214,6 +50557,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
 
     JS_SetPropertyStr(ctx, global, "navigator", navigator);
 
+    gboolean nav_chrome_compat = ns_services_chrome_compat();
     if (nav_chrome_compat)
         ns_install_window_chrome(ctx, global);
 

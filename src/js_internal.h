@@ -759,4 +759,20 @@ gboolean ns_listener_parse_options(JSContext *ctx, JSValueConst opts,
                                    JSValue *signal_out, gboolean strict_signal);
 void    ns_listeners_compact_dead(JSContext *ctx, JSValueConst owner);
 
+/* navigator and the other window services (rust/js-services) and the
+ * js.c helpers they call. */
+JSValue ns_services_window_navigator(JSContext *ctx);
+JSValue ns_services_worker_navigator(JSContext *ctx);
+gboolean ns_services_chrome_compat(void);
+JSValue ns_target_dispatchEvent(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_navigator_sendBeacon(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_eme_request_access(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv);
+JSValue ns_media_capabilities_info(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+gboolean ns_js_user_activation_state(ns_js *js, gboolean *ever_activated);
+int ns_js_clipboard_write(ns_js *js, const char *text);
+
 #endif

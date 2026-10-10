@@ -367,6 +367,13 @@ fn job_index(f: Job) -> i32 {
     })
 }
 
+unsafe extern "C" fn call_job(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue {
+    if argc < 1 || argv.is_null() {
+        return UNDEFINED;
+    }
+    unsafe { JS_Call(ctx, *argv, UNDEFINED, argc - 1, argv.add(1)) }
+}
+
 unsafe extern "C" fn run_job(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue {
     if argc < 1 || argv.is_null() {
         return UNDEFINED;
@@ -2085,6 +2092,16 @@ impl Scope<'_> {
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
         let mut index = Value::int(job_index(job)).into_raw();
         let status = unsafe { JS_EnqueueJob(self.ctx, run_job, 1, &mut index) };
+        self.status(status)
+    }
+
+    pub fn enqueue_call(&mut self, function: &Value, args: &[Value]) -> Result<(), Value> {
+        let mut raw: Vec<JSValue> = core::iter::once(function)
+            .chain(args)
+            .map(|value| value.raw)
+            .collect();
+        let status =
+            unsafe { JS_EnqueueJob(self.ctx, call_job, raw.len() as c_int, raw.as_mut_ptr()) };
         self.status(status)
     }
 
