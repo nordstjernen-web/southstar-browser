@@ -7,10 +7,12 @@ mod body;
 mod fetch;
 mod ffi;
 mod headers;
+mod socket;
 mod xhr;
 
 use core::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Weak;
 
 use southstar_js_engine::{Scope, Value};
 
@@ -23,6 +25,7 @@ pub(crate) struct Page {
     pub fetches: HashMap<u32, fetch::FetchState>,
     pub aborts: HashMap<u32, abort::AbortTimeout>,
     pub xhrs: HashMap<u32, xhr::XhrState>,
+    pub sockets: Vec<Weak<socket::Socket>>,
     pub body_helper: Option<Value>,
 }
 
@@ -72,7 +75,30 @@ pub(crate) fn page_teardown(js: Js) {
         .try_with(|pages| pages.try_borrow_mut().ok()?.remove(&js))
         .ok()
         .flatten();
+    if let Some(page) = &page {
+        for socket in page.sockets.iter().filter_map(Weak::upgrade) {
+            socket.shut_down();
+        }
+    }
     drop(page);
+}
+
+pub(crate) fn pending_sockets(js: Js) -> usize {
+    existing_page(js, |page| {
+        page.sockets
+            .iter()
+            .filter_map(Weak::upgrade)
+            .filter(|s| s.kind == socket::Kind::WebSocket)
+            .count()
+    })
+    .unwrap_or(0)
+}
+
+pub(crate) fn track_socket(js: Js, socket: Weak<socket::Socket>) {
+    with_page(js, |page| {
+        page.sockets.retain(|s| s.strong_count() > 0);
+        page.sockets.push(socket);
+    });
 }
 
 pub(crate) fn pending_fetches(js: Js) -> usize {
@@ -181,4 +207,49 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
 
 pub(crate) fn ascii_starts_with(text: &[u8], prefix: &[u8]) -> bool {
     text.len() >= prefix.len() && text[..prefix.len()].eq_ignore_ascii_case(prefix)
+}
+
+fn link_interface(scope: &mut Scope<'_>, global: &Value, child: &str, parent: &str) {
+    let child = prop(scope, global, child);
+    let parent = prop(scope, global, parent);
+    if !child.is_object() || !parent.is_object() {
+        return;
+    }
+    let child_proto = prop(scope, &child, "prototype");
+    let parent_proto = prop(scope, &parent, "prototype");
+    if child_proto.is_object() && parent_proto.is_object() {
+        let _ = scope.set_prototype(&child_proto, &parent_proto);
+        let _ = scope.set_prototype(&child, &parent);
+    }
+}
+
+pub(crate) fn install_interfaces(scope: &mut Scope<'_>, global: &Value) {
+    ffi::install_host_interfaces(scope, global);
+    if Js::of(scope).is_worker() {
+        let proto = proto_of(scope, "XMLHttpRequest");
+        if proto.is_object() {
+            let _ = scope.delete(&proto, "responseXML");
+        }
+    }
+    ffi::install_neighbours(scope, global);
+    for iface in [
+        "AbortSignal",
+        "BroadcastChannel",
+        "FileReader",
+        "MessagePort",
+        "XMLHttpRequestEventTarget",
+    ] {
+        link_interface(scope, global, iface, "EventTarget");
+        let proto = proto_of(scope, iface);
+        if proto.is_object() {
+            ffi::bind_event_target(scope, &proto);
+        }
+    }
+    link_interface(scope, global, "XMLHttpRequest", "XMLHttpRequestEventTarget");
+    link_interface(
+        scope,
+        global,
+        "XMLHttpRequestUpload",
+        "XMLHttpRequestEventTarget",
+    );
 }

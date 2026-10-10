@@ -186,7 +186,6 @@ struct ns_js {
     GHashTable   *pinned_wrappers_set;
     GPtrArray    *attr_wrappers;
     GHashTable   *attribute_maps;
-    GPtrArray    *pending_ws;
     GPtrArray    *filereader_idles;
     GHashTable   *local_storage;
     GHashTable   *session_storage;
@@ -852,8 +851,9 @@ void ns_js_source_remove(ns_js *js, guint id);
 GMainContext *ns_js_glib_context(const ns_js *js);
 void ns_event_adopt_interface(JSContext *ctx, JSValueConst ev, const char *iface);
 
-/* fetch, Request, Response, AbortController and XMLHttpRequest
- * (rust/js-net), and the js.c helpers they call. */
+/* fetch, Request, Response, AbortController, XMLHttpRequest, WebSocket,
+ * EventSource and the network interfaces (rust/js-net), and the js.c helpers
+ * they call. */
 JSValue ns_js_fetch(JSContext *ctx, JSValueConst this_val, int argc,
                     JSValueConst *argv);
 JSValue ns_window_response_ctor(JSContext *ctx, JSValueConst this_val,
@@ -868,6 +868,18 @@ void    ns_js_net_reset(ns_js *js);
 void    ns_js_net_teardown(ns_js *js);
 guint   ns_js_net_pending_fetches(const ns_js *js);
 guint   ns_js_net_pending_xhrs(const ns_js *js);
+guint   ns_js_net_pending_sockets(const ns_js *js);
+JSValue ns_window_websocket_ctor(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+JSValue ns_window_eventsource_ctor(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+void    ns_js_net_install_sockets(JSContext *ctx, JSValueConst global);
+void    ns_net_install_interfaces(JSContext *ctx, JSValueConst global);
+gpointer ns_js_net_enter_handler_realm(JSContext *ctx, JSValueConst obj,
+                                       const char *type);
+void     ns_js_net_leave_handler_realm(JSContext *ctx, gpointer scope);
+void     ns_ho_install_attrs(JSContext *ctx, JSValueConst global);
+void     ns_net_install_file_reader(JSContext *ctx, JSValueConst global);
 JSValue ns_window_xhr_ctor(JSContext *ctx, JSValueConst this_val, int argc,
                            JSValueConst *argv);
 void    ns_xhr_install_interface(JSContext *ctx, JSValueConst global);

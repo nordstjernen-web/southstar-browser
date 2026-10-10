@@ -2,14 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::quickjs::JSContext;
 use southstar_js_engine::{Scope, Value};
 
-use crate::ffi::{self, HO_ABORT_CONTROLLER, HO_ABORT_SIGNAL, Js};
+use crate::ffi::{self, HO_ABORT_CONTROLLER, HO_ABORT_SIGNAL, Js, Realm};
 use crate::{JsResult, bool_prop, is_nullish, prop, set, set_str};
 
 pub(crate) struct AbortTimeout {
-    ctx: *mut JSContext,
+    realm: Realm,
     signal: Value,
 }
 
@@ -138,7 +137,7 @@ fn static_timeout(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsRes
     }
     let id = crate::next_id();
     let entry = AbortTimeout {
-        ctx: ffi::context_of(scope),
+        realm: Realm::of(scope),
         signal: signal.clone(),
     };
     crate::with_page(js, |page| page.aborts.insert(id, entry));
@@ -159,7 +158,7 @@ pub(crate) fn timeout_fired(ticket: TimeoutTicket) {
     let Some(entry) = crate::existing_page(js, |page| page.aborts.remove(&id)).flatten() else {
         return;
     };
-    ffi::with_context(entry.ctx, |scope| {
+    entry.realm.enter(|scope| {
         if bool_prop(scope, &entry.signal, "aborted") {
             return;
         }

@@ -4,10 +4,9 @@
 
 use std::ffi::CString;
 
-use southstar_js_engine::quickjs::JSContext;
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, Cancellable, Js, Request, Response, cstring};
+use crate::ffi::{self, Cancellable, Js, Realm, Request, Response, cstring};
 use crate::headers;
 use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str, string_prop};
 
@@ -27,8 +26,8 @@ const DRAIN_SOURCE: &str = "(function(stream){\
 })";
 
 pub(crate) struct FetchState {
-    ctx: *mut JSContext,
-    timeline: *mut JSContext,
+    realm: Realm,
+    timeline: Realm,
     resolve: Value,
     reject: Value,
     requested_url: Vec<u8>,
@@ -251,11 +250,11 @@ fn url_source(scope: &mut Scope<'_>, input: &Value) -> Value {
 }
 
 fn base_url(scope: &Scope<'_>, js: Js) -> Option<Vec<u8>> {
-    let ctx = ffi::context_of(scope);
-    if js.is_null() || ctx == js.main_context() {
+    let realm = Realm::of(scope);
+    if js.is_null() || realm == js.main_context() {
         return None;
     }
-    js.realm_url(ctx)
+    js.realm_url(realm)
 }
 
 fn reject_with_abort(scope: &mut Scope<'_>, reject: &Value, signal: Option<&Value>) {
@@ -373,7 +372,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     let top = base.filter(|b| !b.is_empty()).or_else(|| js.page_url());
     let mut state = FetchState {
-        ctx: ffi::context_of(scope),
+        realm: Realm::of(scope),
         timeline: js.main_context(),
         resolve,
         reject,
@@ -660,7 +659,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
 
 fn finish(state: FetchState) {
     if let (Some(signal), Some(handler)) = (&state.signal, &state.abort_handler) {
-        ffi::with_context(state.ctx, |scope| {
+        state.realm.enter(|scope| {
             let kind = scope.string("abort");
             crate::call_method(
                 scope,
@@ -713,7 +712,7 @@ fn deliver(delivery: Delivery) {
         {
             resp.set_error(b"blocked after redirect (mixed content or connect-src CSP)");
         }
-        ffi::with_context(state.ctx, |scope| {
+        state.realm.enter(|scope| {
             let failure = if resp.is_null() {
                 Some(error.clone().unwrap_or_else(|| b"fetch failed".to_vec()))
             } else {

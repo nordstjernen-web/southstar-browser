@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
@@ -35,6 +36,19 @@ impl Js {
 
     fn ptr(self) -> *mut NsJs {
         self.0 as *mut NsJs
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Realm(*mut JSContext);
+
+impl Realm {
+    pub fn of(scope: &Scope<'_>) -> Realm {
+        Realm(quickjs::raw_context(scope))
+    }
+
+    pub fn enter<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        unsafe { quickjs::with_context(self.0, f) }
     }
 }
 
@@ -102,6 +116,104 @@ pub(crate) const HO_XHR_UPLOAD: c_int = 11;
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 type GAsyncReadyCallback =
     unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
+
+#[repr(C)]
+struct WsCallbacks {
+    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
+    on_text: Option<unsafe extern "C" fn(*const c_char, usize, *mut c_void)>,
+    on_binary: Option<unsafe extern "C" fn(*const u8, usize, *mut c_void)>,
+    on_close: Option<unsafe extern "C" fn(c_int, *const c_char, GBoolean, *mut c_void)>,
+    on_error: Option<unsafe extern "C" fn(*const c_char, *mut c_void)>,
+    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
+}
+
+#[repr(C)]
+struct EsCallbacks {
+    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
+    on_message:
+        Option<unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *mut c_void)>,
+    on_error: Option<unsafe extern "C" fn(GBoolean, *mut c_void)>,
+    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
+}
+
+unsafe extern "C" {
+    fn ns_ws_new(
+        url: *const c_char,
+        origin: *const c_char,
+        protocols: *const *const c_char,
+        cbs: *const WsCallbacks,
+        user_data: *mut c_void,
+    ) -> *mut c_void;
+    fn ns_ws_send_text(ws: *mut c_void, text: *const c_char, len: usize) -> GBoolean;
+    fn ns_ws_send_binary(ws: *mut c_void, data: *const u8, len: usize) -> GBoolean;
+    fn ns_ws_close(ws: *mut c_void, code: c_int, reason: *const c_char);
+    fn ns_ws_state_get(ws: *mut c_void) -> c_int;
+    fn ns_ws_protocol(ws: *mut c_void) -> *mut c_char;
+    fn ns_ws_free(ws: *mut c_void);
+    fn ns_es_new(
+        url: *const c_char,
+        origin: *const c_char,
+        last_event_id: *const c_char,
+        cbs: *const EsCallbacks,
+        user_data: *mut c_void,
+    ) -> *mut c_void;
+    fn ns_es_close(es: *mut c_void);
+    fn ns_es_free(es: *mut c_void);
+    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
+    fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
+    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
+    fn ns_js_net_enter_handler_realm(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        kind: *const c_char,
+    ) -> *mut c_void;
+    fn ns_js_net_leave_handler_realm(ctx: *mut JSContext, scope: *mut c_void);
+    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
+    fn ns_event_define_cancel_bubble(ctx: *mut JSContext, ev: JSValue);
+    fn ns_event_adopt_interface(ctx: *mut JSContext, ev: JSValue, iface: *const c_char);
+    fn ns_event_prevent_default(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_event_stop_propagation(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_event_stop_immediate(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_event_composed_path(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_target_dispatchEvent(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
+    fn ns_bind_fn(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        name: *const c_char,
+        f: quickjs::JSCFunction,
+        argc: c_int,
+    );
+    fn ns_ho_install_attrs(ctx: *mut JSContext, global: JSValue);
+    fn ns_net_install_form_data(ctx: *mut JSContext, global: JSValue);
+    fn ns_net_install_ports(ctx: *mut JSContext, global: JSValue);
+    fn ns_net_install_file_reader(ctx: *mut JSContext, global: JSValue);
+}
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
@@ -302,6 +414,329 @@ pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message
     quickjs::take_exception(scope)
 }
 
+pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {
+    let url = cstring(url);
+    unsafe { take_gstr(ns_url_host_from(url.as_ptr())) }
+}
+
+pub(crate) fn hsts_should_upgrade(host: &[u8]) -> bool {
+    let host = cstring(host);
+    unsafe { ns_net_hsts_should_upgrade(host.as_ptr()) != 0 }
+}
+
+pub(crate) struct HandlerRealm(*mut c_void);
+
+pub(crate) fn enter_handler_realm(
+    scope: &mut Scope<'_>,
+    target: &Value,
+    kind: &str,
+) -> HandlerRealm {
+    let ctx = quickjs::raw_context(scope);
+    let kind = cstring(kind.as_bytes());
+    HandlerRealm(unsafe { ns_js_net_enter_handler_realm(ctx, quickjs::raw(target), kind.as_ptr()) })
+}
+
+pub(crate) fn leave_handler_realm(scope: &mut Scope<'_>, entered: HandlerRealm) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe { ns_js_net_leave_handler_realm(ctx, entered.0) };
+}
+
+fn bind_c(
+    scope: &mut Scope<'_>,
+    object: &Value,
+    name: &CStr,
+    f: quickjs::JSCFunction,
+    argc: c_int,
+) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe { ns_bind_fn(ctx, quickjs::raw(object), name.as_ptr(), f, argc) };
+}
+
+pub(crate) fn socket_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
+    let ctx = quickjs::raw_context(scope);
+    let event = unsafe { quickjs::take_value(scope, ns_event_new(ctx)) };
+    crate::set_str(scope, &event, "type", kind.to_bytes());
+    crate::set(scope, &event, "bubbles", Value::boolean(false));
+    crate::set(scope, &event, "cancelable", Value::boolean(false));
+    crate::set(scope, &event, "defaultPrevented", Value::boolean(false));
+    bind_c(
+        scope,
+        &event,
+        c"preventDefault",
+        ns_event_prevent_default,
+        0,
+    );
+    bind_c(
+        scope,
+        &event,
+        c"stopPropagation",
+        ns_event_stop_propagation,
+        0,
+    );
+    unsafe { ns_event_define_cancel_bubble(ctx, quickjs::raw(&event)) };
+    crate::set(scope, &event, "_is_trusted", Value::boolean(true));
+    bind_c(
+        scope,
+        &event,
+        c"stopImmediatePropagation",
+        ns_event_stop_immediate,
+        0,
+    );
+    bind_c(scope, &event, c"composedPath", ns_event_composed_path, 0);
+    event
+}
+
+pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &CStr) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe { ns_event_adopt_interface(ctx, quickjs::raw(event), iface.as_ptr()) };
+}
+
+pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe { ns_bind_event_target_listeners(ctx, quickjs::raw(object)) };
+    bind_c(scope, object, c"dispatchEvent", ns_target_dispatchEvent, 1);
+}
+
+pub(crate) fn bind_socket_ctors(scope: &mut Scope<'_>, global: &Value) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe {
+        ns_bind_ctor(
+            ctx,
+            quickjs::raw(global),
+            c"WebSocket".as_ptr(),
+            ns_window_websocket_ctor,
+            2,
+        );
+        ns_bind_ctor(
+            ctx,
+            quickjs::raw(global),
+            c"EventSource".as_ptr(),
+            ns_window_eventsource_ctor,
+            2,
+        );
+    }
+}
+
+pub(crate) fn install_host_interfaces(scope: &mut Scope<'_>, global: &Value) {
+    let ctx = quickjs::raw_context(scope);
+    let raw = quickjs::raw(global);
+    unsafe { ns_ho_install_attrs(ctx, raw) };
+}
+
+pub(crate) fn install_neighbours(scope: &mut Scope<'_>, global: &Value) {
+    let ctx = quickjs::raw_context(scope);
+    let raw = quickjs::raw(global);
+    unsafe {
+        ns_net_install_form_data(ctx, raw);
+        ns_net_install_ports(ctx, raw);
+        ns_net_install_file_reader(ctx, raw);
+    }
+}
+
+pub(crate) enum Transport {
+    None,
+    WebSocket(*mut c_void),
+    EventSource(*mut c_void),
+}
+
+unsafe fn socket_ref(data: *mut c_void) -> Rc<crate::socket::Socket> {
+    let ptr = data.cast_const().cast::<crate::socket::Socket>();
+    unsafe {
+        Rc::increment_strong_count(ptr);
+        Rc::from_raw(ptr)
+    }
+}
+
+unsafe fn text_arg<'a>(text: *const c_char) -> &'a [u8] {
+    unsafe { glib::bytes(text) }.unwrap_or_default()
+}
+
+unsafe extern "C" fn socket_busy(data: *mut c_void) -> GBoolean {
+    let socket = unsafe { socket_ref(data) };
+    glib::boolean(socket.js.in_pump())
+}
+
+unsafe extern "C" fn socket_on_open(data: *mut c_void) {
+    let socket = unsafe { socket_ref(data) };
+    crate::socket::on_open(&socket);
+}
+
+unsafe extern "C" fn ws_on_text(text: *const c_char, len: usize, data: *mut c_void) {
+    let socket = unsafe { socket_ref(data) };
+    let text = if text.is_null() {
+        &[][..]
+    } else {
+        unsafe { glib::slice(text.cast(), len) }
+    };
+    crate::socket::on_text(&socket, text);
+}
+
+unsafe extern "C" fn ws_on_binary(bytes: *const u8, len: usize, data: *mut c_void) {
+    let socket = unsafe { socket_ref(data) };
+    let bytes = if bytes.is_null() {
+        &[][..]
+    } else {
+        unsafe { glib::slice(bytes, len) }
+    };
+    crate::socket::on_binary(&socket, bytes);
+}
+
+unsafe extern "C" fn ws_on_close(
+    code: c_int,
+    reason: *const c_char,
+    clean: GBoolean,
+    data: *mut c_void,
+) {
+    let socket = unsafe { socket_ref(data) };
+    crate::socket::on_close(&socket, code, unsafe { text_arg(reason) }, clean != 0);
+}
+
+unsafe extern "C" fn ws_on_error(message: *const c_char, data: *mut c_void) {
+    let socket = unsafe { socket_ref(data) };
+    crate::socket::on_error(&socket, unsafe { text_arg(message) });
+}
+
+unsafe extern "C" fn es_on_message(
+    event: *const c_char,
+    text: *const c_char,
+    last_id: *const c_char,
+    data: *mut c_void,
+) {
+    let socket = unsafe { socket_ref(data) };
+    let (event, text, last_id) = unsafe { (text_arg(event), text_arg(text), text_arg(last_id)) };
+    crate::socket::on_event_message(&socket, event, text, last_id);
+}
+
+unsafe extern "C" fn es_on_error(fatal: GBoolean, data: *mut c_void) {
+    let socket = unsafe { socket_ref(data) };
+    crate::socket::on_event_error(&socket, fatal != 0);
+}
+
+impl Transport {
+    pub fn none() -> Transport {
+        Transport::None
+    }
+
+    pub fn websocket(
+        url: &[u8],
+        origin: &[u8],
+        protocols: Option<&[Vec<u8>]>,
+        socket: &Rc<crate::socket::Socket>,
+    ) -> Transport {
+        let url = cstring(url);
+        let origin = cstring(origin);
+        let list: Option<Vec<CString>> = protocols.map(|p| p.iter().map(|p| cstring(p)).collect());
+        let pointers: Option<Vec<*const c_char>> = list.as_ref().map(|list| {
+            list.iter()
+                .map(|p| p.as_ptr())
+                .chain(core::iter::once(ptr::null()))
+                .collect()
+        });
+        let callbacks = WsCallbacks {
+            on_open: Some(socket_on_open),
+            on_text: Some(ws_on_text),
+            on_binary: Some(ws_on_binary),
+            on_close: Some(ws_on_close),
+            on_error: Some(ws_on_error),
+            busy: Some(socket_busy),
+        };
+        let ws = unsafe {
+            ns_ws_new(
+                url.as_ptr(),
+                origin.as_ptr(),
+                pointers.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
+                &callbacks,
+                Rc::as_ptr(socket).cast_mut().cast(),
+            )
+        };
+        if ws.is_null() {
+            Transport::None
+        } else {
+            Transport::WebSocket(ws)
+        }
+    }
+
+    pub fn event_source(
+        url: &[u8],
+        origin: &[u8],
+        socket: &Rc<crate::socket::Socket>,
+    ) -> Transport {
+        let url = cstring(url);
+        let origin = cstring(origin);
+        let callbacks = EsCallbacks {
+            on_open: Some(socket_on_open),
+            on_message: Some(es_on_message),
+            on_error: Some(es_on_error),
+            busy: Some(socket_busy),
+        };
+        let es = unsafe {
+            ns_es_new(
+                url.as_ptr(),
+                origin.as_ptr(),
+                ptr::null(),
+                &callbacks,
+                Rc::as_ptr(socket).cast_mut().cast(),
+            )
+        };
+        if es.is_null() {
+            Transport::None
+        } else {
+            Transport::EventSource(es)
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(self, Transport::None)
+    }
+
+    pub fn ws_state(&self) -> i32 {
+        match self {
+            Transport::WebSocket(ws) => unsafe { ns_ws_state_get(*ws) },
+            _ => 3,
+        }
+    }
+
+    pub fn protocol(&self) -> Vec<u8> {
+        match self {
+            Transport::WebSocket(ws) => {
+                unsafe { take_gstr(ns_ws_protocol(*ws)) }.unwrap_or_default()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn send_text(&self, text: &[u8]) {
+        if let Transport::WebSocket(ws) = self {
+            unsafe { ns_ws_send_text(*ws, text.as_ptr().cast(), text.len()) };
+        }
+    }
+
+    pub fn send_binary(&self, bytes: &[u8]) {
+        if let Transport::WebSocket(ws) = self {
+            unsafe { ns_ws_send_binary(*ws, bytes.as_ptr(), bytes.len()) };
+        }
+    }
+
+    pub fn close(&self, code: i32, reason: Option<&[u8]>) {
+        match self {
+            Transport::WebSocket(ws) => {
+                let reason = reason.map(cstring);
+                unsafe { ns_ws_close(*ws, code, opt_ptr(reason.as_ref())) };
+            }
+            Transport::EventSource(es) => unsafe { ns_es_close(*es) },
+            Transport::None => {}
+        }
+    }
+
+    pub fn free(&mut self) {
+        match core::mem::replace(self, Transport::None) {
+            Transport::WebSocket(ws) => unsafe { ns_ws_free(ws) },
+            Transport::EventSource(es) => unsafe { ns_es_free(es) },
+            Transport::None => {}
+        }
+    }
+}
+
 pub(crate) fn abort_error(scope: &mut Scope<'_>) -> Value {
     let ctx = quickjs::raw_context(scope);
     let raw = unsafe { ns_make_abort_error(ctx) };
@@ -412,6 +847,14 @@ pub(crate) fn bind_illegal_ctor(scope: &mut Scope<'_>, global: &Value, name: &CS
 }
 
 impl Js {
+    pub fn log_line(self, line: &[u8]) {
+        if self.is_null() {
+            return;
+        }
+        let line = cstring(line);
+        unsafe { ns_js_log_line(self.ptr(), line.as_ptr()) };
+    }
+
     pub fn page_url(self) -> Option<Vec<u8>> {
         if self.is_null() {
             return None;
@@ -445,11 +888,11 @@ impl Js {
         }
     }
 
-    pub fn main_context(self) -> *mut JSContext {
+    pub fn main_context(self) -> Realm {
         if self.is_null() {
-            return ptr::null_mut();
+            return Realm(ptr::null_mut());
         }
-        unsafe { ns_js_main_context(self.ptr()) }
+        Realm(unsafe { ns_js_main_context(self.ptr()) })
     }
 
     pub fn is_worker(self) -> bool {
@@ -460,11 +903,11 @@ impl Js {
         !self.is_null() && unsafe { ns_js_in_pump(self.ptr()) } != 0
     }
 
-    pub fn realm_url(self, realm: *mut JSContext) -> Option<Vec<u8>> {
+    pub fn realm_url(self, realm: Realm) -> Option<Vec<u8>> {
         if self.is_null() {
             return None;
         }
-        borrowed(unsafe { ns_js_realm_url(self.ptr(), realm) })
+        borrowed(unsafe { ns_js_realm_url(self.ptr(), realm.0) })
     }
 
     pub fn perf_now_ms(self) -> f64 {
@@ -480,8 +923,8 @@ impl Js {
 
     pub fn add_resource_timing(self, timing: &Timing<'_>, resp: &Response) {
         let info = NsPerfResourceInfo {
-            timeline: timing.timeline.cast(),
-            document_url: unsafe { ns_js_realm_document_url(self.ptr(), timing.timeline) },
+            timeline: timing.timeline.0.cast(),
+            document_url: unsafe { ns_js_realm_document_url(self.ptr(), timing.timeline.0) },
             render_blocking: 0,
             cors_mode: glib::boolean(timing.cors_mode),
             next_hop_protocol: ptr::null(),
@@ -559,7 +1002,7 @@ pub(crate) fn timeout_add(ms: u32, func: GSourceFunc, data: *mut c_void) {
 }
 
 pub(crate) struct Timing<'a> {
-    pub timeline: *mut JSContext,
+    pub timeline: Realm,
     pub cors_mode: bool,
     pub url: &'a [u8],
     pub initiator: &'a CStr,
@@ -865,6 +1308,36 @@ pub unsafe extern "C" fn ns_xhr_install_interface(ctx: *mut JSContext, global: J
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_websocket_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::socket::websocket_ctor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_eventsource_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::socket::event_source_ctor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_net_install_sockets(ctx: *mut JSContext, global: JSValue) {
+    unsafe { with_global(ctx, global, crate::socket::install) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_net_install_interfaces(ctx: *mut JSContext, global: JSValue) {
+    unsafe { with_global(ctx, global, crate::install_interfaces) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_abort_controller_ctor(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -902,6 +1375,11 @@ pub unsafe extern "C" fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint {
     crate::pending_xhrs(Js::of_ptr(js)) as c_uint
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint {
+    crate::pending_sockets(Js::of_ptr(js)) as c_uint
 }
 
 #[unsafe(no_mangle)]
@@ -1021,12 +1499,4 @@ pub(crate) unsafe extern "C" fn on_abort_timeout(data: *mut c_void) -> GBoolean 
 pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::TimeoutTicket) {
     let data = Box::into_raw(Box::new(ticket)).cast();
     js.attach_timeout(ms, on_abort_timeout, data);
-}
-
-pub(crate) fn with_context<R>(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-    unsafe { quickjs::with_context(ctx, f) }
-}
-
-pub(crate) fn context_of(scope: &Scope<'_>) -> *mut JSContext {
-    quickjs::raw_context(scope)
 }

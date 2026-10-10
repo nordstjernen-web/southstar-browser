@@ -4,10 +4,9 @@
 
 use std::ffi::CString;
 
-use southstar_js_engine::quickjs::JSContext;
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, HO_XHR, HO_XHR_UPLOAD, Js, Request, Response, cstring};
+use crate::ffi::{self, HO_XHR, HO_XHR_UPLOAD, Js, Realm, Request, Response, cstring};
 use crate::headers;
 use crate::{JsResult, bool_prop, c_bytes, int_prop, is_nullish, prop, set, set_str};
 
@@ -35,8 +34,8 @@ const UPLOAD_HANDLERS: [&str; 7] = [
 ];
 
 pub(crate) struct XhrState {
-    ctx: *mut JSContext,
-    timeline: *mut JSContext,
+    realm: Realm,
+    timeline: Realm,
     obj: Value,
     url: Vec<u8>,
     origin_url: Option<Vec<u8>>,
@@ -359,7 +358,7 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         .and_then(|page| ffi::url_resolve(Some(page), &url))
         .unwrap_or(url);
     let state = XhrState {
-        ctx: ffi::context_of(scope),
+        realm: Realm::of(scope),
         timeline: js.main_context(),
         obj: this.clone(),
         url: resolved.clone(),
@@ -733,7 +732,7 @@ fn deliver(delivery: Delivery) {
         return;
     };
     js.with_budget(|| {
-        ffi::with_context(state.ctx, |scope| {
+        state.realm.enter(|scope| {
             if generation(scope, &state.obj) != state.generation {
                 return;
             }
@@ -782,7 +781,7 @@ pub(crate) fn blocked(ticket: Ticket) {
         return;
     };
     js.with_budget(|| {
-        ffi::with_context(state.ctx, |scope| {
+        state.realm.enter(|scope| {
             let obj = &state.obj;
             if generation(scope, obj) != state.generation {
                 return;
