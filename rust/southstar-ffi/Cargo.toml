@@ -46,6 +46,7 @@ southstar-js-collections = { path = "../js-collections" }
 southstar-js-crypto = { path = "../js-crypto" }
 southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
+southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-dom-factory = { path = "../js-dom-factory" }
 southstar-js-events = { path = "../js-events" }

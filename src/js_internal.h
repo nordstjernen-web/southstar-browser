@@ -132,8 +132,6 @@ struct ns_js {
     struct ns_anim *anim;
     GHashTable   *js_image_loads;
     GHashTable   *orphan_nodes;
-    GPtrArray    *listeners;
-    GHashTable   *listener_index;
     GHashTable   *pinned_wrappers_set;
     GHashTable   *attribute_maps;
     GPtrArray    *filereader_idles;
@@ -168,16 +166,11 @@ struct ns_js {
     GString      *document_write_buffer;
     ns_node      *document_write_script;
     gboolean      document_write_parser_open;
-    GHashTable   *pending_rejections;
-    GHashTable   *reported_rejections;
     GHashTable   *iframe_globals;
     int           iframe_load_depth;
     gint64        last_pump_us;
     gint64        last_orphan_sweep_us;
     int           dispatch_depth;
-    /* listener lists copied for a dispatch in progress (kept from sweeps) */
-    int           listener_snapshots;
-    guint         listener_tombstones;
     int           callback_depth;
     guint         observer_tick_source;
     guint         raf_tick_source;
@@ -197,17 +190,8 @@ struct ns_js {
     GHashTable   *platform_globals;
     int           throw_on_dynamic_markup;
     int           ignore_destructive_writes;
-    int           in_error_report;
     JSValue       form_data_helper;
     int           form_data_helper_set;
-    JSAtom        atom_capture;
-    JSAtom        atom_once;
-    JSAtom        atom_signal;
-    JSAtom        atom_passive;
-    JSAtom        atom_aborted;
-    JSAtom        atom_immediate_stopped;
-    JSAtom        atom_propagation_stopped;
-    int           listener_atoms_set;
     JSValue       proto_node;
     JSValue       proto_element;
     JSValue       proto_htmlelement;
@@ -225,8 +209,6 @@ struct ns_js {
     JSValue       proto_document;
     GHashTable   *per_tag_protos;
     int           dom_protos_set;
-    GPtrArray    *current_dispatch_path;
-    gboolean      current_dispatch_window;
     gboolean      in_hashchange;
 };
 
@@ -1895,5 +1877,49 @@ JSValue  ns_element_attr_setter_sandbox(JSContext *ctx, JSValueConst this_val,
                                         JSValueConst val);
 JSValue  ns_element_get_tabIndex(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_element_set_tabIndex(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+
+#define NS_JS_SCOPE_BYTES 128
+void     ns_js_set_realm(ns_js *js, JSContext *ctx, ns_node *doc);
+void     ns_js_dispatch_scope_enter(ns_js *js, JSContext *ctx, ns_node *doc,
+                                    ns_node *frame, void *buf);
+void     ns_js_dispatch_scope_leave(ns_js *js, void *buf);
+void     ns_js_realm_scope_push(ns_js *js, JSContext *realm, void *buf);
+void     ns_js_realm_scope_pop(ns_js *js, void *buf);
+void     ns_js_dispatch_depth_add(ns_js *js, int delta);
+void     ns_js_dispatch_finish(ns_js *js);
+void     ns_js_microtask_checkpoint(ns_js *js);
+ns_node *ns_window_document_for(JSContext *ctx, JSValueConst window);
+gboolean ns_iframe_is_cross_origin(ns_js *js, const ns_node *iframe);
+gboolean ns_node_has_activation_behavior(const ns_node *cur);
+JSValue  ns_document_addEventListener(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue  ns_document_removeEventListener(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv);
+JSValue  ns_document_dispatchEvent(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue  ns_window_report_error(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+void     ns_js_install_event_target(JSContext *ctx, JSValueConst global);
+void     ns_js_dispatch_window_only_event(ns_js *js, const ns_node *target_doc,
+                                          const char *type, JSValue event,
+                                          gboolean *default_prevented);
+gboolean ns_js_path_has_active_listener(ns_js *js, const ns_node *target,
+                                        const char *type);
+void     ns_install_event_handler_props(JSContext *ctx, JSValueConst target);
+void     ns_install_event_handler_accessors(JSContext *ctx, JSValueConst proto);
+void     ns_js_report_uncaught(ns_js *js, JSValueConst ex, const char *origin);
+void     ns_target_report_exception(ns_js *js, JSContext *ctx, const char *type);
+void     ns_js_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
+                                         JSValueConst reason,
+                                         ns_js_bool is_handled, void *opaque);
+void     ns_js_report_pending_rejections(ns_js *js);
+void     ns_js_drop_pending_rejections(ns_js *js);
+void     ns_dispatch_forget_node(ns_js *js, const ns_node *node);
+void     ns_dispatch_reset(ns_js *js);
+void     ns_dispatch_teardown_listeners(ns_js *js);
+void     ns_dispatch_teardown(ns_js *js);
+guint    ns_dispatch_listener_count(const ns_js *js);
+JSValue  ns_js_event_window_for_document(ns_js *js, const ns_node *doc);
+void     ns_js_note_user_activation(ns_js *js);
 
 #endif

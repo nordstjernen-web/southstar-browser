@@ -632,6 +632,48 @@ fn c_text(text: &str) -> CString {
     CString::new(text.replace('\0', "\u{fffd}")).unwrap_or_default()
 }
 
+const INLINE_KEY: usize = 64;
+
+enum CKey {
+    Inline([u8; INLINE_KEY]),
+    Heap(CString),
+}
+
+impl CKey {
+    fn as_ptr(&self) -> *const c_char {
+        match self {
+            CKey::Inline(bytes) => bytes.as_ptr().cast(),
+            CKey::Heap(text) => text.as_ptr(),
+        }
+    }
+}
+
+fn c_key(key: &str) -> CKey {
+    let bytes = key.as_bytes();
+    if bytes.len() < INLINE_KEY && !bytes.contains(&0) {
+        let mut inline = [0u8; INLINE_KEY];
+        inline[..bytes.len()].copy_from_slice(bytes);
+        CKey::Inline(inline)
+    } else {
+        CKey::Heap(c_text(key))
+    }
+}
+
+const INLINE_ARGS: usize = 8;
+
+fn with_raw_args<R>(args: &[Value], f: impl FnOnce(&mut [JSValue]) -> R) -> R {
+    if args.len() <= INLINE_ARGS {
+        let mut inline = [UNDEFINED; INLINE_ARGS];
+        for (slot, arg) in inline.iter_mut().zip(args) {
+            *slot = arg.raw;
+        }
+        f(&mut inline[..args.len()])
+    } else {
+        let mut heap: Vec<JSValue> = args.iter().map(|arg| arg.raw).collect();
+        f(&mut heap)
+    }
+}
+
 fn nul_terminated(source: &str) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(source.len() + 1);
     bytes.extend_from_slice(source.as_bytes());
@@ -1618,7 +1660,7 @@ impl Scope<'_> {
     }
 
     pub fn get(&mut self, object: &Value, key: &str) -> Result<Value, Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let raw = unsafe { JS_GetPropertyStr(self.ctx, object.raw, key.as_ptr()) };
         self.take(raw)
     }
@@ -1635,7 +1677,7 @@ impl Scope<'_> {
     }
 
     pub fn set(&mut self, object: &Value, key: &str, value: Value) -> Result<(), Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let raw = value.into_raw();
         let status = unsafe { JS_SetPropertyStr(self.ctx, object.raw, key.as_ptr(), raw) };
         self.status(status)
@@ -1648,7 +1690,7 @@ impl Scope<'_> {
         value: Value,
         attributes: Attributes,
     ) -> Result<(), Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let raw = value.into_raw();
         let status = unsafe {
             JS_DefinePropertyValueStr(
@@ -1670,7 +1712,7 @@ impl Scope<'_> {
         setter: Option<&Value>,
         attributes: Attributes,
     ) -> Result<(), Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
         let accessor =
             |value: Option<&Value>| value.cloned().unwrap_or_else(Value::undefined).into_raw();
@@ -1704,7 +1746,7 @@ impl Scope<'_> {
     }
 
     pub fn has_property(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
         let status = unsafe { JS_HasProperty(self.ctx, object.raw, atom) };
         unsafe { JS_FreeAtom(self.ctx, atom) };
@@ -1712,7 +1754,7 @@ impl Scope<'_> {
     }
 
     pub fn delete(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
-        let key = c_text(key);
+        let key = c_key(key);
         let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
         let status = unsafe { JS_DeleteProperty(self.ctx, object.raw, atom, 0) };
         unsafe { JS_FreeAtom(self.ctx, atom) };
@@ -1720,8 +1762,7 @@ impl Scope<'_> {
     }
 
     pub fn call(&mut self, function: &Value, this: &Value, args: &[Value]) -> Result<Value, Value> {
-        let mut raw_args: Vec<JSValue> = args.iter().map(|arg| arg.raw).collect();
-        let raw = unsafe {
+        let raw = with_raw_args(args, |raw_args| unsafe {
             JS_Call(
                 self.ctx,
                 function.raw,
@@ -1729,7 +1770,7 @@ impl Scope<'_> {
                 raw_args.len() as c_int,
                 raw_args.as_mut_ptr(),
             )
-        };
+        });
         self.take(raw)
     }
 

@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* EventTarget and event dispatch (addEventListener, removeEventListener,
+  dispatchEvent, the dispatch path, inline and IDL event handlers, error
+  reporting and unhandled rejections) moved from js.c to Rust (rust/js-
+  dispatch). unhandledrejection events now fire in the order the promises
+  were rejected, and a nested dispatch no longer clears the outer event's
+  composedPath().
 * Text tracks (VTTCue, textTracks, addTextTrack), CSS Font Loading
   (FontFace, document.fonts) and ElementInternals (attachInternals,
   CustomStateSet) moved from js.c to Rust (rust/js-media, rust/js-fonts,

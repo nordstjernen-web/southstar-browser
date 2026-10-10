@@ -173,6 +173,10 @@ impl<'a> Node<'a> {
         self.get().flags
     }
 
+    pub fn has_js_wrapper(self) -> bool {
+        !self.get()._js_wrapper.is_null()
+    }
+
     pub fn attr_gen(self) -> u32 {
         self.get().attr_gen
     }
