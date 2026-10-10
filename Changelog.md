@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Hit testing (the point-to-element, form-control, link and scroll-container
+  lookups behind clicks and elementFromPoint) moved from layout.c to Rust
+  (rust/layout-hit), with identical results.
 * document.open, write, writeln and close, the script-inserted parser write
   path and the documents of frames, DOMParser and DOMImplementation moved
   from js.c to Rust (rust/js-document), with unchanged results.

@@ -8,8 +8,8 @@ mod image_source;
 mod srcset;
 
 pub use ffi::{
-    BoxKind, BoxRef, Edges, InlineAtomic, InlineAttr, MediaRef, NsBox, NsBoxMedia, Style,
-    TableColHint, inline_kind,
+    BoxKind, BoxRef, Edges, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, NsBoxMedia,
+    Style, TableColHint, inline_kind,
 };
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {

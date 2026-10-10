@@ -21,8 +21,6 @@
 
 #define length_or ns_css_length_or
 
-static void hit_enter_box(const ns_box *b, double *x, double *y);
-
 static double
 length_resolve(const ns_css_value *v, double basis, double fallback)
 {
@@ -469,7 +467,6 @@ text_is_ws_only(const char *text)
         if (!g_ascii_isspace((unsigned char)*p)) return FALSE;
     return TRUE;
 }
-
 
 static double
 border_side_width(const ns_style *s, ns_css_prop width_prop,
@@ -6591,9 +6588,6 @@ inline_layout(ns_box *box, double content_width, const ns_style *parent_style)
     g_object_unref(layout);
 }
 
-static gboolean style_blocks_hit_testing(const ns_style *s);
-static gboolean node_is_form_hit_target(const ns_node *n);
-
 static gboolean
 inline_attr_is_form_hit(ns_inline_attr_kind k)
 {
@@ -6680,7 +6674,7 @@ inline_box_form_hit(const ns_box *box, double local_x, double local_y,
                     &g_array_index(box->inline_atomics, ns_inline_atomic, i);
                 if (!a->box || idx < a->byte_off || idx >= a->byte_off + 3)
                     continue;
-                if (node_is_form_hit_target(a->box->dom))
+                if (ns_layout_node_is_form_hit_target(a->box->dom))
                     atomic_hit = a->box->dom;
             }
         }
@@ -6691,7 +6685,7 @@ inline_box_form_hit(const ns_box *box, double local_x, double local_y,
                 if (!inline_attr_is_form_hit(r->kind)) continue;
                 if (!r->dom) continue;
                 const ns_style *rs = r->style ? r->style : parent_style;
-                if (style_blocks_hit_testing(rs)) continue;
+                if (ns_layout_style_blocks_hit_testing(rs)) continue;
                 if (idx < r->start || idx >= r->start + r->len) continue;
                 if (inline_attr_is_button_hit(r->kind)) button_hit = r->dom;
                 else if (!field_hit)             field_hit = r->dom;
@@ -6705,7 +6699,7 @@ inline_box_form_hit(const ns_box *box, double local_x, double local_y,
             if (!inline_attr_is_form_hit(r->kind)) continue;
             if (!r->dom) continue;
             const ns_style *rs = r->style ? r->style : parent_style;
-            if (style_blocks_hit_testing(rs)) continue;
+            if (ns_layout_style_blocks_hit_testing(rs)) continue;
             NsPangoRectangle r0, r1;
             ns_pango_layout_index_to_pos(layout, (int)r->start, &r0);
             ns_pango_layout_index_to_pos(layout, (int)(r->start + r->len - 1), &r1);
@@ -7005,182 +6999,6 @@ gboolean
 ns_box_clips_out_point(const ns_box *b, double x, double y)
 {
     return box_clips_children(b) && !box_padding_contains(b, x, y);
-}
-
-static gboolean
-box_border_contains(const ns_box *b, double x, double y)
-{
-    double x0 = b->x + b->margin.left;
-    double y0 = b->y + b->margin.top;
-    double x1 = x0 + b->border.left + b->padding.left + b->content_width +
-                b->padding.right + b->border.right;
-    double y1 = y0 + b->border.top + b->padding.top + b->content_height +
-                b->padding.bottom + b->border.bottom;
-    return x >= x0 && x <= x1 && y >= y0 && y <= y1;
-}
-
-static gboolean
-node_is_form_hit_target(const ns_node *n)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT || !n->name) return FALSE;
-    return strcmp(n->name, "button") == 0 ||
-           strcmp(n->name, "input") == 0 ||
-           strcmp(n->name, "select") == 0 ||
-           strcmp(n->name, "textarea") == 0;
-}
-
-static gboolean
-style_visibility_hidden(const ns_style *s)
-{
-    const char *vis = ns_style_keyword(s, NS_CSS_VISIBILITY);
-    return vis && (strcmp(vis, "hidden") == 0 || strcmp(vis, "collapse") == 0);
-}
-
-static gboolean
-style_blocks_hit_testing(const ns_style *s)
-{
-    return s && (ns_css_keyword_is(s->values[NS_CSS_POINTER_EVENTS], "none") ||
-                 style_visibility_hidden(s));
-}
-
-static gboolean
-box_blocks_hit_testing(const ns_box *b)
-{
-    return b && style_blocks_hit_testing(b->style);
-}
-
-static int
-hit_box_stack_key(const ns_box *b)
-{
-    if (!b || !b->style) return 0;
-    const ns_css_value *p = b->style->values[NS_CSS_POSITION];
-    if (!p || p->kind != NS_CSS_V_KEYWORD || !p->u.keyword) return 0;
-    const char *kw = p->u.keyword;
-    if (strcmp(kw, "relative") && strcmp(kw, "absolute") &&
-        strcmp(kw, "fixed") && strcmp(kw, "sticky")) return 0;
-    const ns_css_value *v = b->style->values[NS_CSS_Z_INDEX];
-    if (!v || v->kind != NS_CSS_V_LENGTH) return 0;
-    return (int)v->u.length.v;
-}
-
-typedef struct {
-    const ns_box *box;
-    int          key;
-    guint        order;
-} hit_stack_entry;
-
-/* Boxes of one stack level are stacked in tree order, which the box tree
-   does not keep: it puts out-of-flow boxes after their in-flow siblings. */
-static int
-hit_tree_order_cmp(const ns_box *a, const ns_box *b, guint order_a,
-                   guint order_b)
-{
-    if (a->dom && b->dom && a->dom != b->dom) {
-        int c = ns_node_document_order_cmp(a->dom, b->dom);
-        if (c) return c;
-    }
-    return order_a < order_b ? -1 : order_a > order_b ? 1 : 0;
-}
-
-static int
-hit_stack_cmp(const void *a, const void *b)
-{
-    const hit_stack_entry *pa = a, *pb = b;
-    if (pa->key != pb->key) return pa->key < pb->key ? -1 : 1;
-    return hit_tree_order_cmp(pa->box, pb->box, pa->order, pb->order);
-}
-
-static const ns_box **
-hit_children_stacked(const ns_box *parent, guint *out_n)
-{
-    guint n = 0;
-    gboolean need = FALSE;
-    for (const ns_box *c = parent->first_child; c; c = c->next_sibling) {
-        if (hit_box_stack_key(c) != 0) need = TRUE;
-        n++;
-    }
-    if (!need || n == 0) { *out_n = 0; return NULL; }
-    hit_stack_entry *e = g_new(hit_stack_entry, n);
-    guint i = 0;
-    for (const ns_box *c = parent->first_child; c; c = c->next_sibling) {
-        e[i].box = c;
-        e[i].key = hit_box_stack_key(c);
-        e[i].order = i;
-        i++;
-    }
-    qsort(e, n, sizeof(*e), hit_stack_cmp);
-    const ns_box **arr = g_new(const ns_box *, n);
-    for (i = 0; i < n; i++) arr[i] = e[i].box;
-    g_free(e);
-    *out_n = n;
-    return arr;
-}
-
-static gboolean box_hit_untransform_point(const ns_box *b, double *x,
-                                          double *y);
-
-static void
-inline_atomic_hit_point(const ns_box *owner, const ns_inline_atomic *atomic,
-                        double x, double y, double *child_x, double *child_y)
-{
-    double dx = owner->x + atomic->owner_offset_x + atomic->box->rel_dx -
-                atomic->box->x;
-    double dy = owner->y + atomic->owner_offset_y + atomic->box->rel_dy -
-                atomic->box->y;
-    *child_x = x - dx;
-    *child_y = y - dy;
-}
-
-static const ns_node *
-ns_form_hit_walk(const ns_box *box, double x, double y,
-                 const ns_style *inherited)
-{
-    if (!box) return NULL;
-    hit_enter_box(box, &x, &y);
-    if (!box_hit_untransform_point(box, &x, &y)) return NULL;
-    const ns_style *child_inherited = box->style ? box->style : inherited;
-    const ns_node *self_hit = NULL;
-    if (node_is_form_hit_target(box->dom) &&
-        box_border_contains(box, x, y) &&
-        !box_blocks_hit_testing(box))
-        self_hit = box->dom;
-    if (box->kind == NS_BOX_INLINE) {
-        const ns_node *m = inline_box_form_hit(
-            box, x - box->x, y - box->y, child_inherited);
-        if (m) return m;
-    }
-    if (box_clips_children(box) && !box_padding_contains(box, x, y))
-        return NULL;
-    if (ns_paint_3d_registered(box)) return self_hit;
-    double cx = x + box->scroll_x;
-    double cy = y + box->scroll_y;
-    const ns_node *best = NULL;
-    guint sn = 0;
-    const ns_box **stacked = hit_children_stacked(box, &sn);
-    if (stacked) {
-        for (guint i = 0; i < sn; i++) {
-            const ns_node *m = ns_form_hit_walk(stacked[i], cx, cy, child_inherited);
-            if (m) best = m;
-        }
-        g_free(stacked);
-    } else {
-        for (const ns_box *c = box->first_child; c; c = c->next_sibling) {
-            const ns_node *m = ns_form_hit_walk(c, cx, cy, child_inherited);
-            if (m) best = m;
-        }
-    }
-    if (box->inline_atomics)
-        for (guint i = 0; i < box->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(box->inline_atomics, ns_inline_atomic, i);
-            const ns_box *ab = atomic->box;
-            if (!ab) continue;
-            double ax, ay;
-            inline_atomic_hit_point(box, atomic, cx, cy, &ax, &ay);
-            const ns_node *m = ns_form_hit_walk(ab, ax, ay, child_inherited);
-            if (m) best = m;
-        }
-    return best ? best : self_hit;
 }
 
 static double
@@ -10668,47 +10486,6 @@ box_can_host_fixed(const ns_box *anc)
     return TRUE;
 }
 
-static gboolean
-box_hit_untransform_point(const ns_box *b, double *x, double *y)
-{
-    const ns_style *s = b->style;
-    if (!s) return TRUE;
-    if (!(s->values[NS_CSS_TRANSFORM] || s->values[NS_CSS_TRANSLATE] ||
-          s->values[NS_CSS_ROTATE] || s->values[NS_CSS_SCALE]))
-        return TRUE;
-    ns_css_transform eff;
-    eff.n_ops = 0;
-    ns_css_style_effective_transform(s, NULL, &eff);
-    if (eff.n_ops == 0) return TRUE;
-    double bx = b->x + b->margin.left;
-    double by = b->y + b->margin.top;
-    double bw = b->content_width + b->padding.left + b->padding.right +
-                b->border.left + b->border.right;
-    double bh = b->content_height + b->padding.top + b->padding.bottom +
-                b->border.top + b->border.bottom;
-    double ox = bx + bw / 2.0;
-    double oy = by + bh / 2.0;
-    const ns_css_value *origin = s->values[NS_CSS_TRANSFORM_ORIGIN];
-    if (origin && origin->kind == NS_CSS_V_TRANSFORM &&
-        origin->u.transform.n_ops > 0) {
-        const ns_css_transform_op *o = &origin->u.transform.ops[0];
-        ox = bx + (o->a_is_percent ? o->a / 100.0 * bw : o->a);
-        oy = by + (o->b_is_percent ? o->b / 100.0 * bh : o->b);
-    }
-    ns_mat4 m;
-    ns_css_transform_to_mat4(&eff, bw, bh, &m);
-    if (!ns_mat4_is_affine2d(&m)) return TRUE;
-    cairo_matrix_t cm;
-    cairo_matrix_init(&cm, m.m[0], m.m[4], m.m[1], m.m[5], m.m[3], m.m[7]);
-    if (cairo_matrix_invert(&cm) != CAIRO_STATUS_SUCCESS) return FALSE;
-    double px = *x - ox, py = *y - oy;
-    double qx = cm.xx * px + cm.xy * py + cm.x0;
-    double qy = cm.yx * px + cm.yy * py + cm.y0;
-    *x = qx + ox;
-    *y = qy + oy;
-    return TRUE;
-}
-
 static double
 abs_height_limit(const ns_box *abox, const ns_css_value *v, double width_basis,
                  double cb_h, double inset_h, double sizing_extras)
@@ -10774,7 +10551,6 @@ process_absolute_boxes(ns_box *root, GHashTable *styles, double viewport_width)
             if (anc && box_can_host_fixed(anc))
                 paint_parent = anc;
         }
-
 
         int pp_depth = 0;
         for (const ns_box *p = paint_parent; p; p = p->parent)
@@ -11250,46 +11026,6 @@ ns_box_match_ordinal(const ns_box *root, const char *needle,
     return 0;
 }
 
-const ns_node *
-ns_box_hit_form_dom(const ns_box *root, double x, double y)
-{
-    return ns_form_hit_walk(root, x, y, NULL);
-}
-
-ns_box *
-ns_box_hit_scrollable(ns_box *root, double x, double y)
-{
-    if (!root) return NULL;
-    hit_enter_box(root, &x, &y);
-    if (!box_hit_untransform_point(root, &x, &y)) return NULL;
-    if (root->paint_bottom > root->paint_top &&
-        (y < root->paint_top - 1.0 || y > root->paint_bottom + 1.0))
-        return NULL;
-    gboolean clipped = box_clips_children(root);
-    if (clipped && !box_padding_contains(root, x, y))
-        return NULL;
-    double cx = x + root->scroll_x;
-    double cy = y + root->scroll_y;
-    for (ns_box *c = root->first_child; c; c = c->next_sibling) {
-        ns_box *m = ns_box_hit_scrollable(c, cx, cy);
-        if (m) return m;
-    }
-    if (root->inline_atomics)
-        for (guint i = 0; i < root->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(root->inline_atomics, ns_inline_atomic, i);
-            if (!atomic->box) continue;
-            double ax, ay;
-            inline_atomic_hit_point(root, atomic, cx, cy, &ax, &ay);
-            ns_box *m = ns_box_hit_scrollable(atomic->box, ax, ay);
-            if (m) return m;
-        }
-    if (root->scrolls && (root->scroll_max_x > 0 || root->scroll_max_y > 0) &&
-        box_padding_contains(root, x, y))
-        return root;
-    return NULL;
-}
-
 typedef struct {
     double   best;
     double   prev;
@@ -11483,74 +11219,6 @@ ns_box_scroll_snap(ns_box *scroller)
     if (scroller)
         ns_box_scroll_snap_from(scroller, scroller->scroll_x,
                                 scroller->scroll_y);
-}
-
-ns_box *
-ns_box_hit_scrollbar(ns_box *root, double x, double y, double *lx, double *ly)
-{
-    if (!root) return NULL;
-    hit_enter_box(root, &x, &y);
-    if (!box_hit_untransform_point(root, &x, &y)) return NULL;
-    if (root->paint_bottom > root->paint_top &&
-        (y < root->paint_top - 1.0 || y > root->paint_bottom + 1.0))
-        return NULL;
-    gboolean clipped = box_clips_children(root);
-    if (clipped && !box_padding_contains(root, x, y))
-        return NULL;
-    double cx = x + root->scroll_x;
-    double cy = y + root->scroll_y;
-    for (ns_box *c = root->first_child; c; c = c->next_sibling) {
-        ns_box *m = ns_box_hit_scrollbar(c, cx, cy, lx, ly);
-        if (m) return m;
-    }
-    if (root->inline_atomics)
-        for (guint i = 0; i < root->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(root->inline_atomics, ns_inline_atomic, i);
-            if (!atomic->box) continue;
-            double ax, ay;
-            inline_atomic_hit_point(root, atomic, cx, cy, &ax, &ay);
-            ns_box *m = ns_box_hit_scrollbar(atomic->box, ax, ay, lx, ly);
-            if (m) return m;
-        }
-    if (root->scrolls && (root->scroll_max_x > 0 || root->scroll_max_y > 0) &&
-        box_padding_contains(root, x, y)) {
-        if (lx) *lx = x;
-        if (ly) *ly = y;
-        return root;
-    }
-    return NULL;
-}
-
-typedef struct {
-    const ns_box *box;
-    double x, y;
-    guint order;
-    int   z;
-} hit_deferred;
-
-static __thread GArray       *g_hit_deferred;
-static __thread int           g_hit_defer_depth;
-static __thread const ns_box *g_hit_flush_box;
-static __thread double        g_hit_local_x, g_hit_local_y;
-static double g_hit_vp_x, g_hit_vp_y;
-
-void
-ns_box_set_hit_viewport(double scroll_x, double scroll_y)
-{
-    g_hit_vp_x = isfinite(scroll_x) ? scroll_x : 0;
-    g_hit_vp_y = isfinite(scroll_y) ? scroll_y : 0;
-}
-
-gboolean
-ns_box_is_fixed(const ns_box *b)
-{
-    if (!b || !b->style ||
-        !keyword_is(b->style->values[NS_CSS_POSITION], "fixed"))
-        return FALSE;
-    for (const ns_box *p = b->parent; p; p = p->parent)
-        if (style_creates_fixed_cb(p->style)) return FALSE;
-    return TRUE;
 }
 
 static void
@@ -11758,270 +11426,6 @@ ns_sticky_y_offset(const ns_sticky_y *m, double scroll_y)
     return dy;
 }
 
-void
-ns_box_hit_offset(const ns_box *b, double *dx, double *dy)
-{
-    *dx = 0;
-    *dy = 0;
-    if (!b || !b->style) return;
-    const ns_css_value *pv = b->style->values[NS_CSS_POSITION];
-    if (!pv || pv->kind != NS_CSS_V_KEYWORD || !pv->u.keyword) return;
-    if (strcmp(pv->u.keyword, "fixed") == 0) {
-        if (ns_box_is_fixed(b)) {
-            *dx = g_hit_vp_x;
-            *dy = g_hit_vp_y;
-        }
-    } else if (strcmp(pv->u.keyword, "sticky") == 0) {
-        ns_box_sticky_offset(b, g_hit_vp_x, g_hit_vp_y,
-                             g_hit_vp_x + ns_css_viewport_w(),
-                             g_hit_vp_y + ns_css_viewport_h(), dx, dy);
-    }
-}
-
-static void
-hit_enter_box(const ns_box *b, double *x, double *y)
-{
-    double dx, dy;
-    ns_box_hit_offset(b, &dx, &dy);
-    *x -= dx;
-    *y -= dy;
-}
-
-static gboolean
-box_defers_hit_layer(const ns_box *b, int *out_z)
-{
-    if (!b || !b->style) return FALSE;
-    const ns_css_value *p = b->style->values[NS_CSS_POSITION];
-    if (!p || p->kind != NS_CSS_V_KEYWORD || !p->u.keyword) return FALSE;
-    const char *kw = p->u.keyword;
-    if (strcmp(kw, "relative") && strcmp(kw, "absolute") &&
-        strcmp(kw, "fixed") && strcmp(kw, "sticky")) return FALSE;
-    const ns_css_value *v = b->style->values[NS_CSS_Z_INDEX];
-    int z = (v && v->kind == NS_CSS_V_LENGTH) ? (int)v->u.length.v : 0;
-    if (z < 0) return FALSE;
-    if (out_z) *out_z = z;
-    return TRUE;
-}
-
-static gboolean
-box_has_hit_transform(const ns_box *b)
-{
-    const ns_style *s = b ? b->style : NULL;
-    return s && (s->values[NS_CSS_TRANSFORM] || s->values[NS_CSS_TRANSLATE] ||
-                 s->values[NS_CSS_ROTATE] || s->values[NS_CSS_SCALE]);
-}
-
-static gboolean
-box_svg_yields_hit(const ns_box *b)
-{
-    if (!b || b->kind != NS_BOX_SVG) return FALSE;
-    const ns_style *s = b->style;
-    if (!s) return TRUE;
-    const ns_css_value *pe = s->values[NS_CSS_POINTER_EVENTS];
-    if (pe && pe->kind == NS_CSS_V_KEYWORD && pe->u.keyword &&
-        strcmp(pe->u.keyword, "all") == 0)
-        return FALSE;
-    const ns_css_value *bg = s->values[NS_CSS_BACKGROUND_COLOR];
-    if (bg && bg->kind == NS_CSS_V_COLOR && bg->u.color.a > 0) return FALSE;
-    const ns_css_value *bi = s->values[NS_CSS_BACKGROUND_IMAGE];
-    if (bi && (bi->kind == NS_CSS_V_URL || bi->kind == NS_CSS_V_GRADIENT))
-        return FALSE;
-    return b->border.top <= 0 && b->border.right <= 0 &&
-           b->border.bottom <= 0 && b->border.left <= 0;
-}
-
-static int
-hit_deferred_cmp(const void *a, const void *b)
-{
-    const hit_deferred *pa = a, *pb = b;
-    if (pa->z != pb->z) return pa->z < pb->z ? -1 : 1;
-    return hit_tree_order_cmp(pa->box, pb->box, pa->order, pb->order);
-}
-
-static const ns_box *box_hit_test_tree(const ns_box *root, double x, double y);
-
-static const ns_box *
-hit_flush_deferred(GArray *list)
-{
-    if (!list || list->len == 0) return NULL;
-    g_array_sort(list, hit_deferred_cmp);
-    const ns_box *best = NULL;
-    const ns_box *saved_flush = g_hit_flush_box;
-    for (guint i = 0; i < list->len; i++) {
-        const hit_deferred *d = &g_array_index(list, hit_deferred, i);
-        g_hit_flush_box = d->box;
-        const ns_box *m = box_hit_test_tree(d->box, d->x, d->y);
-        if (m) best = m;
-    }
-    g_hit_flush_box = saved_flush;
-    return best;
-}
-
-static const ns_box *
-box_hit_test_tree(const ns_box *root, double x, double y)
-{
-    if (!root) return NULL;
-    int defer_z = 0;
-    if (g_hit_defer_depth > 0 && root != g_hit_flush_box &&
-        box_defers_hit_layer(root, &defer_z)) {
-        if (!g_hit_deferred)
-            g_hit_deferred = g_array_new(FALSE, FALSE, sizeof(hit_deferred));
-        hit_deferred d = { root, x, y, g_hit_deferred->len, defer_z };
-        g_array_append_val(g_hit_deferred, d);
-        return NULL;
-    }
-    hit_enter_box(root, &x, &y);
-    if (!box_hit_untransform_point(root, &x, &y)) return NULL;
-    if (root->paint_bottom > root->paint_top &&
-        (y < root->paint_top - 1.0 || y > root->paint_bottom + 1.0))
-        return NULL;
-    gboolean clipped = box_clips_children(root);
-    if (clipped && !box_padding_contains(root, x, y))
-        goto self_test;
-    if (ns_paint_3d_registered(root)) {
-        const ns_box *m3 = ns_paint_3d_pick(root, x, y);
-        if (m3) return m3;
-        goto self_test;
-    }
-    const ns_box *best = NULL;
-    double cx = x + root->scroll_x;
-    double cy = y + root->scroll_y;
-    gboolean own_scope = root->parent == NULL || root == g_hit_flush_box ||
-                         clipped || box_has_hit_transform(root);
-    GArray *saved_deferred = NULL;
-    if (own_scope) {
-        saved_deferred = g_hit_deferred;
-        g_hit_deferred = NULL;
-        g_hit_defer_depth++;
-    }
-    guint sn = 0;
-    const ns_box **stacked = hit_children_stacked(root, &sn);
-    if (stacked) {
-        for (guint i = 0; i < sn; i++) {
-            const ns_box *m = box_hit_test_tree(stacked[i], cx, cy);
-            if (m) best = m;
-        }
-        g_free(stacked);
-    } else {
-        for (const ns_box *c = root->first_child; c; c = c->next_sibling) {
-            const ns_box *m = box_hit_test_tree(c, cx, cy);
-            if (m) best = m;
-        }
-    }
-    if (root->inline_atomics)
-        for (guint i = 0; i < root->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(root->inline_atomics, ns_inline_atomic, i);
-            const ns_box *ab = atomic->box;
-            if (!ab) continue;
-            double ax, ay;
-            inline_atomic_hit_point(root, atomic, cx, cy, &ax, &ay);
-            const ns_box *m = box_hit_test_tree(ab, ax, ay);
-            if (m) best = m;
-        }
-    if (own_scope) {
-        GArray *mine = g_hit_deferred;
-        g_hit_deferred = saved_deferred;
-        g_hit_defer_depth--;
-        const ns_box *m = hit_flush_deferred(mine);
-        if (m) best = m;
-        if (mine) g_array_free(mine, TRUE);
-    }
-    if (best) return best;
-self_test: ;
-    double x0 = root->x;
-    double y0 = root->y;
-    gboolean block_edges = root->kind == NS_BOX_BLOCK ||
-                           root->kind == NS_BOX_TABLE_CAPTION;
-    double x1 = x0 + root->content_width
-              + (block_edges ? root->padding.left + root->padding.right +
-                               root->border.left + root->border.right +
-                               root->margin.left + root->margin.right : 0);
-    double y1 = y0 + root->content_height
-              + (block_edges ? root->padding.top + root->padding.bottom +
-                               root->border.top + root->border.bottom +
-                               root->margin.top + root->margin.bottom : 0);
-    if (!box_blocks_hit_testing(root) && !box_svg_yields_hit(root) &&
-        x >= x0 && x <= x1 && y >= y0 && y <= y1 && root->dom) {
-        g_hit_local_x = x;
-        g_hit_local_y = y;
-        return root;
-    }
-    return NULL;
-}
-
-static const ns_box *
-box_hit_test_root(const ns_box *root, double x, double y)
-{
-    GArray *saved_list = g_hit_deferred;
-    int saved_depth = g_hit_defer_depth;
-    const ns_box *saved_flush = g_hit_flush_box;
-    g_hit_deferred = NULL;
-    g_hit_defer_depth = 0;
-    g_hit_flush_box = root;
-    const ns_box *m = box_hit_test_tree(root, x, y);
-    g_hit_deferred = saved_list;
-    g_hit_defer_depth = saved_depth;
-    g_hit_flush_box = saved_flush;
-    return m;
-}
-
-static const ns_box *
-box_for_dom_node(const ns_box *root, const ns_node *node)
-{
-    if (!root) return NULL;
-    if (root->dom == node) return root;
-    for (const ns_box *c = root->first_child; c; c = c->next_sibling) {
-        const ns_box *m = box_for_dom_node(c, node);
-        if (m) return m;
-    }
-    return NULL;
-}
-
-const ns_box *
-ns_box_hit_test(const ns_box *root, double x, double y)
-{
-    const ns_node *modal = ns_dom_active_modal();
-    if (modal) {
-        const ns_box *top = box_for_dom_node(root, modal);
-        if (top && top != root) {
-            const ns_box *any = box_hit_test_root(root, x, y);
-            for (const ns_node *n = any ? any->dom : NULL; n; n = n->parent)
-                if (n == modal) return any;
-            const ns_box *m = box_hit_test_root(top, x, y);
-            if (m) return m;
-        }
-    }
-    return box_hit_test_root(root, x, y);
-}
-
-const ns_box *
-ns_box_hit_test_local(const ns_box *root, double x, double y,
-                      double *local_x, double *local_y)
-{
-    const ns_box *hit = ns_box_hit_test(root, x, y);
-    *local_x = g_hit_local_x;
-    *local_y = g_hit_local_y;
-    return hit;
-}
-
-const ns_node *
-ns_box_hit_node(const ns_box *root, double x, double y)
-{
-    double local_x = 0, local_y = 0;
-    const ns_box *hit = ns_box_hit_test_local(root, x, y, &local_x, &local_y);
-    const ns_node *target = hit ? hit->dom : NULL;
-    const ns_node *inline_target = ns_box_hit_inline_dom(root, x, y);
-    if (inline_target) target = inline_target;
-    const ns_node *form_target = ns_box_hit_form_dom(root, x, y);
-    if (form_target) target = form_target;
-    if (hit && target == hit->dom) {
-        const ns_node *area = ns_box_image_map_area(hit, local_x, local_y);
-        if (area) target = area;
-    }
-    return target;
-}
-
 const ns_box *
 ns_box_find_by_id(const ns_box *root, const char *id)
 {
@@ -12055,144 +11459,6 @@ ns_box_find_by_id_or_name(const ns_box *root, const char *frag)
         if (m) return m;
     }
     return NULL;
-}
-
-const ns_link_range *
-ns_box_hit_link_range(const ns_box *root, double x, double y)
-{
-    if (!root) return NULL;
-    if (!box_hit_untransform_point(root, &x, &y)) return NULL;
-    if (root->inline_atomics)
-        for (guint i = 0; i < root->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(root->inline_atomics, ns_inline_atomic, i);
-            const ns_box *ab = atomic->box;
-            if (!ab) continue;
-            double ax, ay;
-            inline_atomic_hit_point(root, atomic,
-                                    x + root->scroll_x,
-                                    y + root->scroll_y, &ax, &ay);
-            const ns_link_range *r = ns_box_hit_link_range(ab, ax, ay);
-            if (r) return r;
-        }
-    if (!box_blocks_hit_testing(root) &&
-        root->kind == NS_BOX_INLINE && root->links &&
-        root->links->len > 0) {
-        double box_x0 = root->x;
-        double box_y0 = root->y;
-        double box_y1 = box_y0 + root->content_height;
-        if (x >= box_x0 && x <= box_x0 + root->content_width &&
-            y >= box_y0 && y <= box_y1) {
-            gsize byte = 0;
-            if (ns_paint_inline_xy_to_byte(root, x - box_x0, y - box_y0, &byte)) {
-                for (guint i = 0; i < root->links->len; i++) {
-                    const ns_link_range *r = &g_array_index(root->links, ns_link_range, i);
-                    if (byte >= r->start && byte < r->start + r->len)
-                        return r;
-                }
-            }
-            return NULL;
-        }
-    }
-    if (box_clips_children(root) && !box_padding_contains(root, x, y))
-        return NULL;
-    double cx = x + root->scroll_x;
-    double cy = y + root->scroll_y;
-    const ns_link_range *best = NULL;
-    guint sn = 0;
-    const ns_box **stacked = hit_children_stacked(root, &sn);
-    if (stacked) {
-        for (guint i = 0; i < sn; i++) {
-            const ns_link_range *r = ns_box_hit_link_range(stacked[i], cx, cy);
-            if (r) best = r;
-        }
-        g_free(stacked);
-    } else {
-        for (const ns_box *c = root->first_child; c; c = c->next_sibling) {
-            const ns_link_range *r = ns_box_hit_link_range(c, cx, cy);
-            if (r) best = r;
-        }
-    }
-    return best;
-}
-
-const char *
-ns_box_hit_link(const ns_box *root, double x, double y)
-{
-    const ns_link_range *r = ns_box_hit_link_range(root, x, y);
-    return r ? r->href : NULL;
-}
-
-const ns_node *
-ns_box_hit_inline_dom(const ns_box *root, double x, double y)
-{
-    if (!root) return NULL;
-    hit_enter_box(root, &x, &y);
-    if (!box_hit_untransform_point(root, &x, &y)) return NULL;
-    if (root->paint_bottom > root->paint_top &&
-        (y < root->paint_top - 1.0 || y > root->paint_bottom + 1.0))
-        return NULL;
-    if (root->inline_atomics)
-        for (guint i = 0; i < root->inline_atomics->len; i++) {
-            const ns_inline_atomic *atomic =
-                &g_array_index(root->inline_atomics, ns_inline_atomic, i);
-            const ns_box *ab = atomic->box;
-            if (!ab) continue;
-            double ax, ay;
-            inline_atomic_hit_point(root, atomic,
-                                    x + root->scroll_x,
-                                    y + root->scroll_y, &ax, &ay);
-            const ns_node *m = ns_box_hit_inline_dom(ab, ax, ay);
-            if (m) return m;
-        }
-    if (!box_blocks_hit_testing(root) &&
-        root->kind == NS_BOX_INLINE && root->attrs &&
-        root->attrs->len > 0 && root->text && *root->text) {
-        double box_x0 = root->x;
-        double box_y0 = root->y;
-        double box_y1 = box_y0 + root->content_height;
-        if (x >= box_x0 && x <= box_x0 + root->content_width &&
-            y >= box_y0 && y <= box_y1) {
-            gsize byte = 0;
-            if (ns_paint_inline_xy_to_byte(root, x - box_x0, y - box_y0, &byte)) {
-                const ns_node *best = NULL;
-                gsize best_len = 0;
-                for (guint i = 0; i < root->attrs->len; i++) {
-                    const ns_inline_attr *r =
-                        &g_array_index(root->attrs, ns_inline_attr, i);
-                    if (r->kind != NS_INLINE_ELEMENT || !r->dom) continue;
-                    if (byte < r->start || byte >= r->start + r->len) continue;
-                    if (!best || r->len < best_len) {
-                        best = r->dom;
-                        best_len = r->len;
-                    }
-                }
-                if (best) return best;
-            }
-            return NULL;
-        }
-    }
-    if (box_clips_children(root) && !box_padding_contains(root, x, y))
-        return NULL;
-    if (ns_paint_3d_registered(root)) return NULL;
-    double cx = x + root->scroll_x;
-    double cy = y + root->scroll_y;
-    const ns_node *best = NULL;
-    guint sn = 0;
-    const ns_box **stacked = hit_children_stacked(root, &sn);
-    if (stacked) {
-        for (guint i = 0; i < sn; i++) {
-            const ns_node *m = ns_box_hit_inline_dom(stacked[i], cx, cy);
-            if (m) best = m;
-        }
-        g_free(stacked);
-    } else {
-        for (const ns_box *c = root->first_child; c; c = c->next_sibling) {
-            const ns_node *m = ns_box_hit_inline_dom(c, cx, cy);
-            if (m) best = m;
-        }
-    }
-    return best;
 }
 
 static const ns_inline_attr *
@@ -12501,4 +11767,23 @@ double
 ns_layout_flex_item_baseline(const ns_box *c, double fallback)
 {
     return flex_item_baseline(c, fallback);
+}
+
+const ns_node *
+ns_layout_inline_box_form_hit(const ns_box *box, double local_x, double local_y,
+                              const ns_style *parent_style)
+{
+    return inline_box_form_hit(box, local_x, local_y, parent_style);
+}
+
+gboolean
+ns_layout_box_clips_children(const ns_box *b)
+{
+    return box_clips_children(b);
+}
+
+gboolean
+ns_layout_style_creates_fixed_cb(const ns_style *s)
+{
+    return style_creates_fixed_cb(s);
 }

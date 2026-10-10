@@ -1,0 +1,18 @@
+[package]
+name = "southstar-layout-hit"
+description = "Hit testing ported from layout.c: the box, element, form control, link, scroll container and scrollbar under a point, through stacking order, fixed and sticky offsets, transforms, clips, scroll offsets, pointer-events and visibility"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-layout = { path = "../layout" }
+southstar-mat4 = { path = "../mat4" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

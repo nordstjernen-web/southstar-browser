@@ -95,5 +95,12 @@ void ns_layout_grid_static_position(ns_box *abox, const ns_box *cb,
                                     gboolean static_x, gboolean static_y);
 double ns_layout_grid_static_align_offset(const char *align, double free_space,
                                           gboolean flip);
+gboolean ns_layout_style_blocks_hit_testing(const ns_style *s);
+gboolean ns_layout_node_is_form_hit_target(const ns_node *n);
+const ns_node *ns_layout_inline_box_form_hit(const ns_box *box, double local_x,
+                                             double local_y,
+                                             const ns_style *parent_style);
+gboolean ns_layout_box_clips_children(const ns_box *b);
+gboolean ns_layout_style_creates_fixed_cb(const ns_style *s);
 
 #endif

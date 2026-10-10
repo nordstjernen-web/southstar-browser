@@ -90,7 +90,7 @@ pub struct NsBox {
     _inline_min_cache_width: f64,
     _inline_min_cache_valid: GBoolean,
     paint_layout: *mut c_void,
-    _links: *mut GArray,
+    links: *mut GArray,
     attrs: *mut GArray,
     inline_atomics: *mut GArray,
     atomic_line_heights: *mut GArray,
@@ -169,6 +169,36 @@ impl InlineAtomic {
 
     pub fn box_ref(&self) -> Option<BoxRef<'_>> {
         unsafe { BoxRef::from_ptr(self.b) }
+    }
+
+    pub fn owner_offset(&self) -> (f64, f64) {
+        (self.owner_offset_x, self.owner_offset_y)
+    }
+}
+
+#[repr(C)]
+pub struct LinkRange {
+    pub start: usize,
+    pub len: usize,
+    href: *const c_char,
+    target: *const c_char,
+    dom: *const c_void,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<LinkRange>() == 40);
+
+impl LinkRange {
+    pub fn href_ptr(&self) -> *const c_char {
+        self.href
+    }
+
+    pub fn target_ptr(&self) -> *const c_char {
+        self.target
+    }
+
+    pub fn dom_ptr(&self) -> *const c_void {
+        self.dom
     }
 }
 
@@ -556,6 +586,16 @@ impl<'a> BoxRef<'a> {
             return &[];
         }
         unsafe { core::slice::from_raw_parts(attrs.data.cast::<InlineAttr>(), attrs.len as usize) }
+    }
+
+    pub fn links(self) -> &'a [LinkRange] {
+        let Some(links) = (unsafe { self.raw().links.as_ref() }) else {
+            return &[];
+        };
+        if links.len == 0 {
+            return &[];
+        }
+        unsafe { core::slice::from_raw_parts(links.data.cast::<LinkRange>(), links.len as usize) }
     }
 
     pub fn has_attrs(self) -> bool {
