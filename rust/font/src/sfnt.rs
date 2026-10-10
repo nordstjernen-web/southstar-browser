@@ -31,8 +31,8 @@ fn padded(len: c_ulong) -> usize {
 }
 
 fn checksum(bytes: &[u8]) -> u32 {
-    bytes.chunks_exact(4).fold(0u32, |sum, word| {
-        sum.wrapping_add(u32::from_be_bytes([word[0], word[1], word[2], word[3]]))
+    bytes.as_chunks::<4>().0.iter().fold(0u32, |sum, &word| {
+        sum.wrapping_add(u32::from_be_bytes(word))
     })
 }
 

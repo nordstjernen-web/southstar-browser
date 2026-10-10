@@ -178,11 +178,10 @@ fn hash(bytes: &[u8], seed: u64) -> u64 {
         seed ^ 0xc2b2_ae3d_27d4_eb4f,
         seed ^ 0x1656_67b1_9e37_79f9,
     ];
-    let blocks = bytes.chunks_exact(32);
-    let tail = blocks.remainder();
+    let (blocks, tail) = bytes.as_chunks::<32>();
     for block in blocks {
-        for (l, word) in block.chunks_exact(8).enumerate() {
-            let word = u64::from_ne_bytes(word.try_into().unwrap_or_default());
+        for (l, &word) in block.as_chunks::<8>().0.iter().enumerate() {
+            let word = u64::from_ne_bytes(word);
             lane[l] = (lane[l] ^ word).wrapping_mul(K);
             lane[l] ^= lane[l] >> 29;
         }

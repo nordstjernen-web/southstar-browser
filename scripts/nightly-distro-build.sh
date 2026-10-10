@@ -32,8 +32,8 @@ install_apt() {
         || pip3 install --upgrade 'meson>=1.4'
     apt-get install -y --no-install-recommends cargo rustc
     if ! rust_new_enough; then
-        if apt-get install -y --no-install-recommends rustc-1.91 cargo-1.91; then
-            export PATH="/usr/lib/rust-1.91/bin:$PATH"
+        if apt-get install -y --no-install-recommends rustc-1.99 cargo-1.99; then
+            export PATH="/usr/lib/rust-1.99/bin:$PATH"
         else
             install_rustup
         fi
@@ -41,11 +41,11 @@ install_apt() {
 }
 
 rust_new_enough() {
-    rustc --version | awk '{ split($2, v, "."); exit !(v[1] > 1 || (v[1] == 1 && v[2] >= 91)) }'
+    rustc --version | awk '{ split($2, v, "."); exit !(v[1] > 1 || (v[1] == 1 && v[2] >= 99)) }'
 }
 
 install_rustup() {
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs         | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs         | sh -s -- -y --profile minimal --default-toolchain 1.99.0
     export PATH="$HOME/.cargo/bin:$PATH"
 }
 

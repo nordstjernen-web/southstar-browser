@@ -167,10 +167,9 @@ pub fn parse(text: &[u8]) -> Option<i64> {
                 .flatten()
             {
                 month = Some(m as i64 + 1);
-            } else if let Some(z) = offset.is_none().then(|| zone(word)).flatten() {
-                offset = Some(z);
             } else {
-                return None;
+                let z = offset.is_none().then(|| zone(word)).flatten()?;
+                offset = Some(z);
             }
             parts += 1;
             i = end;

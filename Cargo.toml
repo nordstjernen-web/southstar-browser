@@ -5,7 +5,7 @@ members = ["rust/*"]
 [workspace.package]
 version = "1.0.30-dev"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.99"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 publish = false
 

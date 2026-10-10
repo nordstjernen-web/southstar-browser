@@ -158,13 +158,8 @@ fn tokenize(text: &[u8]) -> Option<Vec<Token>> {
                 while q < text.len() {
                     let d = text[q];
                     if d == b'"' || d == b'\'' {
-                        match scan_string_end(text, q) {
-                            Some(e) => {
-                                q = e + 1;
-                                continue;
-                            }
-                            None => return None,
-                        }
+                        q = scan_string_end(text, q)? + 1;
+                        continue;
                     }
                     if d == b'(' {
                         depth += 1;

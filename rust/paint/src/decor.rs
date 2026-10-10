@@ -897,10 +897,9 @@ fn paint_border_image(
         return false;
     }
     let owned: Surface;
-    let surf;
     let iw;
     let ih;
-    if src.kind() == Kind::Url {
+    let surf = if src.kind() == Kind::Url {
         let Some(img) = b
             .media()
             .and_then(|m| unsafe { ImageRef::from_ptr(m.border_image()) })
@@ -919,7 +918,7 @@ fn paint_border_image(
         let Some(s) = texture_surface_cached(tex, None) else {
             return false;
         };
-        surf = s;
+        s
     } else {
         let Some(gr) = src.gradient() else {
             return false;
@@ -937,8 +936,8 @@ fn paint_border_image(
                 CornerRadii::default(),
             );
         }
-        surf = owned.as_ref();
-    }
+        owned.as_ref()
+    };
 
     let mut slice = [0.0; 4];
     for (i, sl) in slice.iter_mut().enumerate() {

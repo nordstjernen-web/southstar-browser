@@ -167,8 +167,10 @@ fn from_imagedata(scope: &mut Scope<'_>, src: &Value) -> Option<(Surface, i32, i
     surface.write_pixels(|dst, stride| {
         for (y, src_row) in rgba.chunks_exact(row).enumerate() {
             let dst_row = &mut dst[y * stride..y * stride + row];
-            for (d, s) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(4)) {
-                d.copy_from_slice(&premultiply(s[0], s[1], s[2], s[3]));
+            let (dst_px, _) = dst_row.as_chunks_mut::<4>();
+            let (src_px, _) = src_row.as_chunks::<4>();
+            for (d, &[r, g, b, a]) in dst_px.iter_mut().zip(src_px) {
+                *d = premultiply(r, g, b, a);
             }
         }
     });

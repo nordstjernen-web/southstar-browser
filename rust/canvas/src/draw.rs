@@ -86,7 +86,7 @@ pub(crate) fn with_shadow(st: &CanvasState, mut draw: impl FnMut(Context)) {
     off.write_pixels(|data, stride| {
         for y in 0..sh as usize {
             let row = &mut data[y * stride..y * stride + sw as usize * 4];
-            for px in row.chunks_exact_mut(4) {
+            for px in row.as_chunks_mut::<4>().0 {
                 let na = (f64::from(px[3]) * alpha) as u8;
                 px[0] = (b * f64::from(na)) as u8;
                 px[1] = (g * f64::from(na)) as u8;

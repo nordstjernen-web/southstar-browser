@@ -92,9 +92,11 @@ pub fn yuyv_to_bgra(
             break;
         };
         let out = &mut dst[row * dst_stride..row * dst_stride + pairs * 8];
-        for (pixel, chunk) in out.chunks_exact_mut(8).zip(line.chunks_exact(4)) {
-            let (u, v) = (i32::from(chunk[1]) - 128, i32::from(chunk[3]) - 128);
-            for (k, luma) in [chunk[0], chunk[2]].into_iter().enumerate() {
+        let (pixels, _) = out.as_chunks_mut::<8>();
+        let (samples, _) = line.as_chunks::<4>();
+        for (pixel, &[y0, u, y1, v]) in pixels.iter_mut().zip(samples) {
+            let (u, v) = (i32::from(u) - 128, i32::from(v) - 128);
+            for (k, luma) in [y0, y1].into_iter().enumerate() {
                 let y = i32::from(luma) - 16;
                 let r = (298 * y + 409 * v + 128) >> 8;
                 let g = (298 * y - 100 * u - 208 * v + 128) >> 8;

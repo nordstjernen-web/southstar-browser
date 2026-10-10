@@ -23,8 +23,8 @@ BuildRequires:  gcc-c++
 BuildRequires:  meson >= 1.0
 BuildRequires:  ninja
 BuildRequires:  pkgconfig
-BuildRequires:  cargo >= 1.91
-BuildRequires:  rust >= 1.91
+BuildRequires:  cargo >= 1.99
+BuildRequires:  rust >= 1.99
 BuildRequires:  update-desktop-files
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(enchant-2)

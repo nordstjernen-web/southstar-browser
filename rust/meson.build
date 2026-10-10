@@ -1,5 +1,5 @@
-cargo = find_program('cargo', version: '>=1.91')
-rustc = find_program('rustc', version: '>=1.91')
+cargo = find_program('cargo', version: '>=1.99')
+rustc = find_program('rustc', version: '>=1.99')
 cargo_build_py = files('../scripts/cargo-build.py')
 cargo_python = import('python').find_installation()
 

@@ -51,7 +51,7 @@ mod sys {
         iov: *mut Iovec,
         iovlen: usize,
         control: *mut c_void,
-        controllen: usize,
+        controllen: CmsgLen,
         flags: c_int,
     }
 
@@ -63,7 +63,7 @@ mod sys {
         iov: *mut Iovec,
         iovlen: c_int,
         control: *mut c_void,
-        controllen: u32,
+        controllen: CmsgLen,
         flags: c_int,
     }
 
@@ -218,7 +218,7 @@ mod sys {
                 break r;
             }
         };
-        if received <= 0 || (msg.controllen as usize) < CMSG_HEADER {
+        if received <= 0 || msg.controllen < CMSG_HEADER as CmsgLen {
             return -1;
         }
         let int_at = |at: usize| {

@@ -593,8 +593,9 @@ impl WebGl {
 }
 
 fn copy_row(row: &mut [u8], src: &[u8], alpha: bool) {
-    let opaque = !alpha || src.chunks_exact(4).all(|p| p[3] == 255);
-    for (o, p) in row.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+    let (pixels, _) = src.as_chunks::<4>();
+    let opaque = !alpha || pixels.iter().all(|p| p[3] == 255);
+    for (o, p) in row.as_chunks_mut::<4>().0.iter_mut().zip(pixels) {
         let (r, g, b, a) = (
             u32::from(p[0]),
             u32::from(p[1]),

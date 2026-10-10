@@ -16,8 +16,8 @@ BuildRequires:  ninja-build
 BuildRequires:  ninja
 %endif
 BuildRequires:  pkgconfig
-BuildRequires:  cargo >= 1.91
-BuildRequires:  rust >= 1.91
+BuildRequires:  cargo >= 1.99
+BuildRequires:  rust >= 1.99
 BuildRequires:  cmake
 BuildRequires:  pkgconfig(gtk4) >= 4.6
 BuildRequires:  pkgconfig(epoxy)

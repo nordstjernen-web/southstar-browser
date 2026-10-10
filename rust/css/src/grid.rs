@@ -744,14 +744,13 @@ pub(crate) fn line_canonical(text: &[u8]) -> Option<(Vec<u8>, bool)> {
             literal = tok_literal;
             int_value = value;
             int_text = Some(canon);
-        } else if let Some(canon) = custom_ident_canonical(t) {
+        } else {
+            let canon = custom_ident_canonical(t)?;
             if ident_at.is_some() {
                 return None;
             }
             ident_at = Some(i);
             ident = Some(canon);
-        } else {
-            return None;
         }
     }
     if int_at.is_none() && ident_at.is_none() {

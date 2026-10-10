@@ -330,8 +330,7 @@ impl Decls {
     pub fn value_of(&self, prop: i32) -> Borrowed {
         self.entries()
             .iter()
-            .filter(|d| d.prop == prop)
-            .next_back()
+            .rfind(|d| d.prop == prop)
             .map_or(Borrowed::NULL, |d| Borrowed(d.value))
     }
 

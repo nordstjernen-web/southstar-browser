@@ -109,10 +109,7 @@ pub(crate) fn with_view<R>(
 
 fn typed_words(s: &mut Scope<'_>, v: &Value, max: usize) -> Vec<[u8; 4]> {
     s.with_buffer_bytes_mut(v, |b| {
-        b.chunks_exact(4)
-            .take(max)
-            .map(|w| [w[0], w[1], w[2], w[3]])
-            .collect()
+        b.as_chunks::<4>().0.iter().take(max).copied().collect()
     })
     .unwrap_or_default()
 }

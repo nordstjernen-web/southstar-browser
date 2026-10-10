@@ -266,10 +266,10 @@ fn sfnt_extension(cff: bool) -> &'static [u8] {
 
 fn convert(data: &[u8]) -> Option<(Vec<u8>, &'static [u8])> {
     #[cfg(feature = "freetype")]
-    if data.starts_with(b"wOFF") || data.starts_with(b"wOF2") {
-        if let Some((bytes, cff)) = ffi::Face::open(data).and_then(|face| sfnt::from_face(&face)) {
-            return Some((bytes, sfnt_extension(cff)));
-        }
+    if (data.starts_with(b"wOFF") || data.starts_with(b"wOF2"))
+        && let Some((bytes, cff)) = ffi::Face::open(data).and_then(|face| sfnt::from_face(&face))
+    {
+        return Some((bytes, sfnt_extension(cff)));
     }
     #[cfg(feature = "woff2")]
     if let Some(sfnt) = southstar_woff2::to_sfnt(data) {

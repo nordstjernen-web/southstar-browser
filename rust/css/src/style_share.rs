@@ -22,13 +22,11 @@ impl Hasher for WordHasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        let mut words = bytes.chunks_exact(8);
-        for word in &mut words {
-            let mut w = [0; 8];
-            w.copy_from_slice(word);
-            self.0 = (self.0 ^ u64::from_ne_bytes(w)).wrapping_mul(FNV_PRIME);
+        let (words, tail) = bytes.as_chunks::<8>();
+        for &word in words {
+            self.0 = (self.0 ^ u64::from_ne_bytes(word)).wrapping_mul(FNV_PRIME);
         }
-        for &b in words.remainder() {
+        for &b in tail {
             self.0 = (self.0 ^ u64::from(b)).wrapping_mul(FNV_PRIME);
         }
     }

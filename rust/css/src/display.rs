@@ -149,14 +149,13 @@ pub(crate) fn parse(lowered: &[u8]) -> Option<Display> {
             }
             have_outer = true;
             out.outer = slot;
-        } else if let Some(slot) = inner_from_token(tok) {
+        } else {
+            let slot = inner_from_token(tok)?;
             if have_inner {
                 return None;
             }
             have_inner = true;
             out.inner = slot;
-        } else {
-            return None;
         }
     }
     if out.list_item != 0 && out.inner != INNER_FLOW && out.inner != INNER_FLOW_ROOT {

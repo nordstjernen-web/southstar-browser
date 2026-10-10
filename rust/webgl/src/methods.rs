@@ -1011,7 +1011,8 @@ fn source_pixels(
         let sy = if flip_y { hu - 1 - y } else { y };
         let srow = &data[sy * stride..sy * stride + wu * 4];
         let orow = &mut out[y * wu * comps..(y + 1) * wu * comps];
-        for (p, o) in srow.chunks_exact(4).zip(orow.chunks_exact_mut(comps)) {
+        let (pixels, _) = srow.as_chunks::<4>();
+        for (p, o) in pixels.iter().zip(orow.chunks_exact_mut(comps)) {
             let (mut b, mut gg, mut r, a) = (
                 u32::from(p[0]),
                 u32::from(p[1]),

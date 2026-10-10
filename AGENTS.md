@@ -120,7 +120,7 @@ Southstar is being ported from C to Rust in place, module by module
 by meson: `rust/meson.build` runs `scripts/cargo-build.py`, which builds
 `rust/southstar-ffi` — the one static library every C target links — and hands
 ninja cargo's dependency file, so Rust rebuilds only when Rust changes. Rust
-1.91 or newer is required; `rust-toolchain.toml` pins 1.91.0 for rustup users,
+1.99 or newer is required; `rust-toolchain.toml` pins 1.99.0 for rustup users,
 so local builds and CI compile with the minimum supported version.
 
 - A ported module is a crate under `rust/` that exports the same `ns_*`
@@ -276,10 +276,10 @@ sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel
 
 (`ffmpeg-devel` comes from Packman.)
 
-Rust must be 1.91 or newer (the Boa JavaScript engine needs it). Rolling
-distributions ship it; on Ubuntu 24.04 install `rustc-1.91 cargo-1.91` and
-put `/usr/lib/rust-1.91/bin` first on `PATH`; on Debian 13 use
-trixie-backports or rustup.
+Rust must be 1.99 or newer. Rolling distributions ship it; elsewhere,
+Ubuntu 24.04 (whose newest packaged compiler is `rustc-1.91`) and Debian 13
+included, install it with rustup, which reads `rust-toolchain.toml` and
+selects 1.99.0.
 
 `libseccomp` is required on Linux — `meson setup` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.

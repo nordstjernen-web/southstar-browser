@@ -136,10 +136,10 @@ meson setup builddir && meson compile -C builddir
 ./builddir/src/gtk/southstar
 ```
 
-Rust 1.91 or newer is required (the Boa JavaScript engine needs it). Rolling
-distributions ship it; on Ubuntu 24.04 install `rustc-1.91 cargo-1.91` and put
-`/usr/lib/rust-1.91/bin` first on `PATH`; on Debian 13 use trixie-backports
-or [rustup](https://rustup.rs). Windows, Fedora, openSUSE and macOS
+Rust 1.99 or newer is required. Rolling distributions ship it; elsewhere,
+Ubuntu 24.04 and Debian 13 included, install it with
+[rustup](https://rustup.rs), which reads `rust-toolchain.toml` and selects
+1.99.0 in this tree. Windows, Fedora, openSUSE and macOS
 instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).

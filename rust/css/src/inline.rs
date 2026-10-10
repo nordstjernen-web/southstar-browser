@@ -491,8 +491,7 @@ fn expanded_value(name: &[u8], value: &[u8], prop: Prop) -> Option<(Vec<u8>, boo
     }
     declaration_sheet(name, value)
         .iter()
-        .filter(|decl| decl.prop == Some(prop))
-        .next_back()
+        .rfind(|decl| decl.prop == Some(prop))
         .map(|decl| (decl.text.clone(), decl.important))
 }
 

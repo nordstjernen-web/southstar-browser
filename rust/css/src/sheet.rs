@@ -147,7 +147,7 @@ fn font_src_score(url: &[u8]) -> i32 {
             20
         };
     }
-    let end = [b'?', b'#']
+    let end = b"?#"
         .iter()
         .filter_map(|c| url.iter().position(|b| b == c))
         .min()

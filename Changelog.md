@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Rust 1.99 is now required, and rust-toolchain.toml pins 1.99.0 so local
+  and CI builds use that version. The Rust code is updated for it: fixed-size
+  pixel and hash loops use as_chunks, and nested conditions use let chains.
+  Ubuntu 24.04 (whose newest packaged compiler is rustc-1.91) and Debian 13
+  build with rustup.
 * WebAssembly runs on wasmi, a pure-Rust interpreter (rust/js-wasm), in
   place of the vendored WAMR C runtime, which is gone along with src/wasm.c.
   Funcref tables can now be read from JavaScript (WAMR crashed on
@@ -12,7 +17,7 @@ Southstar Browser (unreleased):
   (rust/js-workers), with unchanged results.
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
   through an adapter) is gone, the first step toward replacing QuickJS with
-  the Rust engine Boa. Rust 1.91 is now required.
+  the Rust engine Boa.
 * History (pushState, replaceState, back, forward, go, popstate), the
   Navigation API, Location and window.open() are Rust (rust/js-window), with
   unchanged results.

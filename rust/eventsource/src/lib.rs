@@ -169,12 +169,10 @@ impl Parser {
             }
             b"event" => self.event_type = (!value.is_empty()).then(|| value.to_vec()),
             b"id" => shared.stream().last_event_id = value.to_vec(),
-            b"retry" => {
-                if !value.is_empty() && value.iter().all(u8::is_ascii_digit) {
-                    let ms = strtoll_saturating(value);
-                    if ms > 0 {
-                        shared.stream().reconnect_ms = ms.min(86_400_000);
-                    }
+            b"retry" if !value.is_empty() && value.iter().all(u8::is_ascii_digit) => {
+                let ms = strtoll_saturating(value);
+                if ms > 0 {
+                    shared.stream().reconnect_ms = ms.min(86_400_000);
                 }
             }
             _ => {}
