@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* URL, URLSearchParams, atob, btoa, TextEncoder, TextDecoder, object URLs
+  and FileReader moved from js.c to Rust (rust/js-url). Passing a value that
+  cannot become a string (such as a Symbol) to btoa, atob or encode now
+  throws instead of returning an empty result.
 * localStorage and sessionStorage moved from js.c to Rust (rust/js-storage).
   Keys now enumerate in the same order as key(n); the on-disk format is
   unchanged.

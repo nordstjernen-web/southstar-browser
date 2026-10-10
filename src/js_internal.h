@@ -268,10 +268,6 @@ struct ns_js {
     JSValue       live_node_proto;
     JSValue       live_radionode_proto;
     int           live_protos_set;
-    JSValue       url_helper;
-    int           url_helper_set;
-    JSValue       search_params_helper;
-    int           search_params_helper_set;
     JSValue       form_data_helper;
     int           form_data_helper_set;
     JSAtom        atom_capture;
@@ -1072,5 +1068,39 @@ JSValue ns_js_frame_realm_window(ns_js *js, const ns_node *frame);
 gboolean ns_js_inline_handlers_allowed(const ns_js *js);
 void    ns_js_fire_element_handlers(ns_js *js, const ns_node *element,
                                     const char *type, JSValueConst event);
+
+JSValue  ns_window_btoa(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_window_atob(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_window_url_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_window_url_can_parse(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_window_url_parse_static(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_window_url_create_object(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_window_url_update_object(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_window_url_revoke_object(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_window_usp_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_window_text_encoder_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_window_text_decoder_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_window_filereader_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+void     ns_url_install_interface(JSContext *ctx);
+void     ns_usp_install_interface(JSContext *ctx);
+void     ns_net_install_text_codecs(JSContext *ctx, JSValueConst global);
+void     ns_filereader_run(JSContext *ctx, JSValueConst self, gint64 gen);
+void     ns_url_teardown(ns_js *js);
+void     ns_js_filereader_schedule(JSContext *ctx, JSValueConst self, gint64 gen);
+void     ns_js_blob_urls_put(ns_js *js, const char *url, const guint8 *bytes, gsize len,
+                             const char *type);
+void     ns_js_blob_urls_remove(ns_js *js, const char *url);
+gboolean ns_js_bytes_view(JSContext *ctx, JSValueConst value, const uint8_t **out_data,
+                          size_t *out_len, JSValue *out_holder);
 
 #endif
