@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Range, Selection, TreeWalker and NodeIterator moved from js.c to Rust
+  (rust/js-traversal). A NodeIterator is now traced by the garbage
+  collector, so cycles through it no longer leak.
 * The WebRTC stubs (RTCPeerConnection, RTCDataChannel), ClipboardItem and
   navigator.sendBeacon moved from js.c to Rust (rust/js-services, rust/js-
   net), with unchanged results.

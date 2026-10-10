@@ -255,7 +255,6 @@ struct ns_js {
     gint64        time_origin_us;
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
-    GPtrArray    *node_iters;
     GHashTable   *blob_urls;
     const ns_node *ce_main_doc;
     GHashTable   *platform_globals;
@@ -1104,5 +1103,20 @@ void     ns_js_blob_urls_put(ns_js *js, const char *url, const guint8 *bytes, gs
 void     ns_js_blob_urls_remove(ns_js *js, const char *url);
 gboolean ns_js_bytes_view(JSContext *ctx, JSValueConst value, const uint8_t **out_data,
                           size_t *out_len, JSValue *out_holder);
+
+JSValue  ns_window_get_selection(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_document_create_range(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_native_range(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_document_create_tree_walker(JSContext *ctx, JSValueConst this_val, int argc,
+                                        JSValueConst *argv);
+JSValue  ns_document_create_node_iterator(JSContext *ctx, JSValueConst this_val, int argc,
+                                          JSValueConst *argv);
+void     ns_tree_walker_install_proto(JSContext *ctx, JSValueConst proto);
+void     ns_node_iters_pre_remove(ns_js *js, ns_node *removed);
+void     ns_traversal_teardown(ns_js *js);
+gboolean ns_js_selection_state(const ns_js *js, const char **text, double rect[4]);
+void     ns_js_track_orphan(ns_js *js, ns_node *node);
 
 #endif

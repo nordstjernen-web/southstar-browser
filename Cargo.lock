@@ -1632,6 +1632,7 @@ dependencies = [
  "southstar-js-services",
  "southstar-js-storage",
  "southstar-js-temporal",
+ "southstar-js-traversal",
  "southstar-js-url",
  "southstar-js-wasm",
  "southstar-js-window",
@@ -1926,6 +1927,15 @@ name = "southstar-js-temporal"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-datetime",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-traversal"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
 ]

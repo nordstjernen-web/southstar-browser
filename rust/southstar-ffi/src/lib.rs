@@ -52,6 +52,7 @@ pub use southstar_js_realm;
 pub use southstar_js_services;
 pub use southstar_js_storage;
 pub use southstar_js_temporal;
+pub use southstar_js_traversal;
 pub use southstar_js_url;
 #[cfg(feature = "wasm")]
 pub use southstar_js_wasm;
