@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The input events the shell sends into the page (mouse and pointer events
+  with iframe coordinate mapping, wheel, touch, clipboard and drag events
+  with their drag sessions) and the WPT test-driver input hooks moved from
+  js.c to Rust (rust/js-input), with unchanged results.
 * Positioned layout (relative, absolute, fixed and sticky offsets) moved
   from layout.c to Rust (rust/layout-position), with identical layout.
 * Hit testing (the point-to-element, form-control, link and scroll-container

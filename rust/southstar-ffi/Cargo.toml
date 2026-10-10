@@ -56,6 +56,7 @@ southstar-js-forms = { path = "../js-forms" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-html = { path = "../js-html" }
+southstar-js-input = { path = "../js-input" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-media = { path = "../js-media" }

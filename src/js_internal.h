@@ -123,9 +123,6 @@ struct ns_js {
     char          *change_baseline;
     gboolean      autofocus_processed;
     const ns_node *active_modal;
-    double         last_mouse_x[2];
-    double         last_mouse_y[2];
-    gboolean       has_last_mouse[2];
     gint64         user_activation_us;
     gboolean       user_ever_activated;
     ns_image_cache *image_cache;
@@ -1935,5 +1932,8 @@ void     ns_dispatch_teardown(ns_js *js);
 guint    ns_dispatch_listener_count(const ns_js *js);
 JSValue  ns_js_event_window_for_document(ns_js *js, const ns_node *doc);
 void     ns_js_note_user_activation(ns_js *js);
+void     ns_js_input_install_wpt(JSContext *ctx, JSValueConst global);
+void     ns_js_input_teardown(ns_js *js);
+gboolean ns_js_wpt_hooks_enabled(const ns_js *js);
 
 #endif

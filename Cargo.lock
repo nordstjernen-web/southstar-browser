@@ -1633,6 +1633,7 @@ dependencies = [
  "southstar-js-frames",
  "southstar-js-geometry",
  "southstar-js-html",
+ "southstar-js-input",
  "southstar-js-intl",
  "southstar-js-loader",
  "southstar-js-media",
@@ -1967,6 +1968,16 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-input"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
+ "southstar-layout",
 ]
 
 [[package]]
