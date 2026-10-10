@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-services"
-description = "The window-level services: navigator and its sub-objects, the window console, Notification and queueMicrotask"
+description = "The window-level services: navigator and its sub-objects, the window console, screen, matchMedia, Notification and queueMicrotask"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

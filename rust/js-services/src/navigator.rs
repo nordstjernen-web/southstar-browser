@@ -185,7 +185,7 @@ fn reject_message(scope: &mut Scope<'_>, message: &str) -> Result<Value, Value> 
     scope.rejected_promise(&error)
 }
 
-fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
+pub(crate) fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
     Ok(Value::undefined())
 }
 
@@ -214,7 +214,11 @@ fn resolved_empty_array(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result
     resolved(scope, array)
 }
 
-fn rejected_not_supported(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
+pub(crate) fn rejected_not_supported(
+    scope: &mut Scope<'_>,
+    _: &Value,
+    _: &[Value],
+) -> Result<Value, Value> {
     reject_message(scope, "not supported")
 }
 

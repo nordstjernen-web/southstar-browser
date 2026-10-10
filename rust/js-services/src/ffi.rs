@@ -7,17 +7,34 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{NativeFn, Scope, Value};
 
-use crate::navigator;
+use crate::screen::{self, Metrics};
+use crate::{console, media, navigator, window};
 
 #[repr(C)]
-struct NsJs {
+pub(crate) struct NsJs {
     _private: [u8; 0],
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*const NsJs);
+
+impl Js {
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    pub fn key(self) -> usize {
+        self.0 as usize
+    }
+}
+
+pub(crate) struct DisplayMetrics {
+    pub width: i32,
+    pub height: i32,
+    pub work_area: Option<(i32, i32, i32, i32)>,
+}
 
 pub(crate) enum CMethod {
     DispatchEvent,
@@ -61,6 +78,164 @@ unsafe extern "C" {
     fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
     fn ns_user_agent_has_client_hints(user_agent: *const c_char) -> GBoolean;
     fn g_get_num_processors() -> c_uint;
+    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
+    fn ns_js_log_line(js: *const NsJs, line: *const c_char);
+    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_target_fire_event(ctx: *mut JSContext, obj: JSValue, kind: *const c_char);
+    fn ns_target_make_event(ctx: *mut JSContext, target: JSValue, kind: *const c_char) -> JSValue;
+    fn ns_target_dispatch_with_event(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        kind: *const c_char,
+        event: JSValue,
+    );
+    fn ns_event_adopt_interface(ctx: *mut JSContext, event: JSValue, iface: *const c_char);
+    fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
+    fn ns_css_media_list_serialize(query: *const c_char) -> *mut c_char;
+    fn ns_css_set_device_size(width: f64, height: f64);
+}
+
+fn c_string(text: &str) -> CString {
+    CString::new(text.replace('\0', "")).unwrap_or_default()
+}
+
+fn c_ptr(text: &Option<CString>) -> *const c_char {
+    text.as_ref()
+        .map_or(core::ptr::null(), |text| text.as_ptr())
+}
+
+pub(crate) fn log_enabled(js: Js) -> bool {
+    !js.is_null() && unsafe { ns_js_log_enabled(js.0) } != 0
+}
+
+pub(crate) fn log_line(js: Js, line: &str) {
+    if js.is_null() {
+        return;
+    }
+    let line = c_string(line);
+    unsafe { ns_js_log_line(js.0, line.as_ptr()) };
+}
+
+pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
+    if js.is_null() {
+        return None;
+    }
+    let ctx = unsafe { ns_js_main_context(js.0) };
+    if ctx.is_null() {
+        return None;
+    }
+    Some(unsafe { quickjs::with_context(ctx, f) })
+}
+
+pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &str) {
+    let kind = c_string(kind);
+    unsafe {
+        ns_target_fire_event(
+            quickjs::raw_context(scope),
+            quickjs::raw(target),
+            kind.as_ptr(),
+        )
+    };
+}
+
+pub(crate) fn make_event(scope: &mut Scope<'_>, target: &Value, kind: &str) -> Value {
+    let kind = c_string(kind);
+    let raw = unsafe {
+        ns_target_make_event(
+            quickjs::raw_context(scope),
+            quickjs::raw(target),
+            kind.as_ptr(),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
+    let iface = c_string(iface);
+    unsafe {
+        ns_event_adopt_interface(
+            quickjs::raw_context(scope),
+            quickjs::raw(event),
+            iface.as_ptr(),
+        )
+    };
+}
+
+pub(crate) fn dispatch_with_event(
+    scope: &mut Scope<'_>,
+    target: &Value,
+    kind: &str,
+    event: &Value,
+) {
+    let kind = c_string(kind);
+    unsafe {
+        ns_target_dispatch_with_event(
+            quickjs::raw_context(scope),
+            quickjs::raw(target),
+            kind.as_ptr(),
+            quickjs::raw(event),
+        )
+    };
+}
+
+pub(crate) fn media_query_matches(query: Option<&str>) -> bool {
+    let query = query.map(c_string);
+    unsafe { ns_css_media_query_matches(c_ptr(&query)) != 0 }
+}
+
+pub(crate) fn media_list_serialize(query: Option<&str>) -> String {
+    let query = query.map(c_string);
+    let serialized = unsafe { ns_css_media_list_serialize(c_ptr(&query)) };
+    let out = text(serialized);
+    if !serialized.is_null() {
+        unsafe { glib::g_free(serialized.cast()) };
+    }
+    out
+}
+
+pub(crate) fn set_device_size(width: i32, height: i32) {
+    unsafe { ns_css_set_device_size(f64::from(width), f64::from(height)) };
+}
+
+#[cfg(windows)]
+pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
+    #[repr(C)]
+    struct Rect {
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+    const SM_CXSCREEN: c_int = 0;
+    const SM_CYSCREEN: c_int = 1;
+    const SPI_GETWORKAREA: c_uint = 0x0030;
+    unsafe extern "system" {
+        fn GetSystemMetrics(index: c_int) -> c_int;
+        fn SystemParametersInfoW(
+            action: c_uint,
+            param: c_uint,
+            pv_param: *mut core::ffi::c_void,
+            win_ini: c_uint,
+        ) -> c_int;
+    }
+    let mut area = Rect {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+    };
+    let has_area =
+        unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, (&raw mut area).cast(), 0) } != 0;
+    Some(DisplayMetrics {
+        width: unsafe { GetSystemMetrics(SM_CXSCREEN) },
+        height: unsafe { GetSystemMetrics(SM_CYSCREEN) },
+        work_area: has_area.then_some((area.left, area.top, area.right, area.bottom)),
+    })
+}
+
+#[cfg(not(windows))]
+pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
+    None
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -231,4 +406,128 @@ pub unsafe extern "C" fn ns_services_worker_navigator(ctx: *mut JSContext) -> JS
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_services_chrome_compat() -> GBoolean {
     glib::boolean(navigator::chrome_compat())
+}
+
+unsafe fn native(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+    f: NativeFn,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+}
+
+macro_rules! export_native {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub unsafe extern "C" fn $name(
+                ctx: *mut JSContext,
+                this_val: JSValue,
+                argc: c_int,
+                argv: *mut JSValue,
+            ) -> JSValue {
+                unsafe { native(ctx, this_val, argc, argv, $f) }
+            }
+        )*
+    };
+}
+
+export_native! {
+    ns_services_alert => console::alert,
+    ns_services_queue_microtask => window::queue_microtask,
+    ns_services_notification_ctor => window::notification,
+    ns_services_match_media => media::match_media,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_install_console(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            console::install(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_install_screen(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            screen::install(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_console_emit(
+    js: *const NsJs,
+    prefix: *const c_char,
+    ctx: *mut JSContext,
+    argc: c_int,
+    argv: *mut JSValue,
+) {
+    let prefix = text(prefix);
+    let raw_args = if argv.is_null() || argc <= 0 {
+        &[][..]
+    } else {
+        unsafe { core::slice::from_raw_parts(argv, argc as usize) }
+    };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let args: Vec<Value> = raw_args
+                .iter()
+                .map(|&raw| quickjs::borrow_value(scope, raw))
+                .collect();
+            console::emit(scope, Js(js), &prefix, &args);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_screen_metrics(
+    width: *mut c_int,
+    height: *mut c_int,
+    avail_width: *mut c_int,
+    avail_height: *mut c_int,
+    avail_left: *mut c_int,
+    avail_top: *mut c_int,
+) {
+    let Metrics {
+        width: w,
+        height: h,
+        avail_width: aw,
+        avail_height: ah,
+        avail_left: al,
+        avail_top: at,
+    } = screen::metrics();
+    for (out, value) in [
+        (width, w),
+        (height, h),
+        (avail_width, aw),
+        (avail_height, ah),
+        (avail_left, al),
+        (avail_top, at),
+    ] {
+        if !out.is_null() {
+            unsafe { *out = value };
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_reeval_media_queries(js: *const NsJs) {
+    media::reevaluate(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_reset(js: *const NsJs) {
+    crate::reset(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_teardown(js: *const NsJs) {
+    crate::teardown(Js(js));
 }

@@ -255,7 +255,6 @@ struct ns_js {
     guint         listener_tombstones;
     int           callback_depth;
     int           synthetic_click_depth;
-    GPtrArray    *media_query_lists;
     guint         observer_tick_source;
     guint         raf_tick_source;
     gint64        raf_host_us;
@@ -275,8 +274,6 @@ struct ns_js {
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
     GPtrArray    *node_iters;
-    GHashTable   *console_counts;
-    GHashTable   *console_timers;
     GHashTable   *blob_urls;
     GHashTable   *ce_registry;
     const ns_node *ce_main_doc;
@@ -795,6 +792,26 @@ JSValue ns_media_capabilities_info(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv);
 gboolean ns_js_user_activation_state(ns_js *js, gboolean *ever_activated);
 int ns_js_clipboard_write(ns_js *js, const char *text);
+JSValue ns_services_alert(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv);
+JSValue ns_services_queue_microtask(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+JSValue ns_services_notification_ctor(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_services_match_media(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+void ns_services_install_console(JSContext *ctx, JSValueConst global);
+void ns_services_install_screen(JSContext *ctx, JSValueConst global);
+void ns_services_console_emit(ns_js *js, const char *prefix, JSContext *ctx,
+                              int argc, JSValueConst *argv);
+void ns_services_screen_metrics(int *width, int *height,
+                                int *avail_width, int *avail_height,
+                                int *avail_left, int *avail_top);
+void ns_services_reeval_media_queries(ns_js *js);
+void ns_services_reset(ns_js *js);
+void ns_services_teardown(ns_js *js);
+gboolean ns_js_log_enabled(const ns_js *js);
+void ns_event_adopt_interface(JSContext *ctx, JSValueConst ev, const char *iface);
 
 /* fetch, Request, Response and AbortController (rust/js-net), and the js.c
  * helpers they call. */

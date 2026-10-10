@@ -892,6 +892,25 @@ impl Scope<'_> {
         Ok(())
     }
 
+    pub fn is_error(&mut self, value: &Value) -> bool {
+        value
+            .0
+            .as_object()
+            .is_some_and(|object| object.is::<boa_engine::builtins::error::Error>())
+    }
+
+    pub fn json_stringify(&mut self, value: &Value) -> Result<Value, Value> {
+        let json = self.ctx.intrinsics().objects().json();
+        let stringify = json
+            .get(boa_engine::js_string!("stringify"), self.ctx)
+            .map_err(|e| self.error(e))?;
+        self.call(
+            &Value(stringify),
+            &Value(json.into()),
+            core::slice::from_ref(value),
+        )
+    }
+
     pub fn enqueue_call(&mut self, function: &Value, args: &[Value]) -> Result<(), Value> {
         let Some(callable) = function.0.as_callable() else {
             return Err(self.type_error("not a function"));

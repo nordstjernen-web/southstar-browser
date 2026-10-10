@@ -306,6 +306,12 @@ unsafe extern "C" {
     fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
     fn JS_SetPrototype(ctx: *mut JSContext, obj: JSValue, proto: JSValue) -> c_int;
     fn JS_MarkValue(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void);
+    fn JS_JSONStringify(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        replacer: JSValue,
+        space0: JSValue,
+    ) -> JSValue;
     fn JS_EnqueueJob(
         ctx: *mut JSContext,
         job_func: JobFunc,
@@ -2123,6 +2129,15 @@ impl Scope<'_> {
         let mut index = Value::int(job_index(job)).into_raw();
         let status = unsafe { JS_EnqueueJob(self.ctx, run_job, 1, &mut index) };
         self.status(status)
+    }
+
+    pub fn is_error(&mut self, value: &Value) -> bool {
+        quickjs::is_error(value)
+    }
+
+    pub fn json_stringify(&mut self, value: &Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_JSONStringify(self.ctx, value.raw, UNDEFINED, UNDEFINED) };
+        self.take(raw)
     }
 
     pub fn enqueue_call(&mut self, function: &Value, args: &[Value]) -> Result<(), Value> {
