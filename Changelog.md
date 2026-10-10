@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* DOMTokenList (classList, relList and the other token lists),
+  element.dataset, element.attributes and Attr nodes moved from js.c to Rust
+  (rust/js-attrs), with unchanged results.
 * The Document property bindings (cookie, title, dir, body and head, the
   legacy colours, readyState, referrer, compatMode, activeElement,
   scrollingElement, scripts and anchors) moved from js.c to Rust (rust/js-

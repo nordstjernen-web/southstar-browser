@@ -154,7 +154,6 @@ struct ns_js {
     GPtrArray    *listeners;
     GHashTable   *listener_index;
     GHashTable   *pinned_wrappers_set;
-    GPtrArray    *attr_wrappers;
     GHashTable   *attribute_maps;
     GPtrArray    *filereader_idles;
     char         *cookie_value;
@@ -1260,5 +1259,64 @@ void     ns_node_iters_pre_remove(ns_js *js, ns_node *removed);
 void     ns_traversal_teardown(ns_js *js);
 gboolean ns_js_selection_state(const ns_js *js, const char **text, double rect[4]);
 void     ns_js_track_orphan(ns_js *js, ns_node *node);
+
+void     ns_js_set_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
+                                    const char *prefix, const char *local_name,
+                                    const char *name, const char *value);
+void     ns_js_remove_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
+                                       const char *local_name);
+gboolean ns_valid_element_local_name(const char *s);
+ns_node *ns_token_list_node(JSValueConst this_val, const char **out_attr);
+ns_node *ns_dataset_node(JSValueConst obj);
+ns_node *ns_namedmap_owner(JSValueConst this_val);
+void    *ns_attr_opaque(JSValueConst value);
+JSValue  ns_attr_new_object(JSContext *ctx, void *state);
+void     ns_attr_apply_proto(JSContext *ctx, JSValueConst obj);
+JSValue  ns_tlist_contains(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_add(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_remove(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_toggle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_replace(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_item(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_supports(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_toString(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_tlist_get_length(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_tlist_get_value(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_tlist_set_value(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+char    *ns_tlist_named_token(JSValueConst obj, const char *name);
+char    *ns_dataset_named_value(JSValueConst obj, const char *name);
+char   **ns_dataset_names(JSValueConst obj);
+int      ns_dataset_named_set(JSContext *ctx, JSValueConst obj, const char *name,
+                              JSValueConst val);
+void     ns_dataset_named_delete(JSContext *ctx, JSValueConst obj, const char *name);
+gboolean ns_element_has_dataset(const ns_node *el);
+JSValue  ns_namedmap_getNamedItem(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_namedmap_getNamedItemNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_namedmap_setNamedItem(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_namedmap_removeNamedItem(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_namedmap_removeNamedItemNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_namedmap_item(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_namedmap_get_length(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_getAttributeNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_element_getAttributeNodeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_element_setAttributeNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_element_removeAttributeNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                        JSValueConst *argv);
+JSValue  ns_attr_to_js(JSContext *ctx, JSValueConst owner, const ns_attr *a,
+                       gboolean include_base);
+ns_node *ns_attr_owner(JSValueConst value);
+void     ns_attr_state_release(void *state);
+void     ns_attr_detach_matching(ns_js *js, ns_node *owner, const char *namespace_uri,
+                                 const char *local_name);
+void     ns_attr_detach_owner(ns_js *js, ns_node *owner);
+void     ns_attr_detach_all(ns_js *js);
 
 #endif

@@ -39,6 +39,7 @@ southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
+southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-brand = { path = "../js-brand" }
 southstar-js-clone = { path = "../js-clone" }
 southstar-js-crypto = { path = "../js-crypto" }

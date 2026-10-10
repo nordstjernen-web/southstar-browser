@@ -246,6 +246,10 @@ pub struct Attr<'a> {
 }
 
 impl<'a> Attr<'a> {
+    pub unsafe fn from_ptr(attr: *const NsAttr) -> Option<Self> {
+        Self::link(attr)
+    }
+
     fn link(attr: *const NsAttr) -> Option<Self> {
         NonNull::new(attr.cast_mut()).map(|attr| Attr {
             attr,
