@@ -15,7 +15,6 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 [features]
 default = ["quickjs"]
 quickjs = ["southstar-js-engine/quickjs"]
-quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
 boa = ["southstar-js-engine/boa"]
 
 [lints]

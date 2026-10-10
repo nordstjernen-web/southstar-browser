@@ -718,9 +718,9 @@ behind the same neutral API:
   would come in as a git dependency and a `js_engine` option once its
   numbers can go into the comparison table.
 
-Bellard's original QuickJS (`-Dquickjs=quickjs`) is dropped first, since the
-goal is to retire QuickJS altogether. Keeping its adapter (`src/ns_quickjs.c`)
-in step with every new neutral-API helper costs more than it gives.
+Bellard's original QuickJS (`-Dquickjs=quickjs`) was dropped in October 2026,
+the first step toward retiring QuickJS: keeping its adapter (`src/ns_quickjs.c`)
+in step with every new neutral-API helper cost more than it gave.
 
 1. **Neutral API first.** Each binding ported out of js.c uses only the
    neutral `js-engine` API, apart from the transitional C glue. Capabilities

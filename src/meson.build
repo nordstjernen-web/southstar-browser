@@ -3,7 +3,7 @@ python = import('python').find_installation()
 qjsc_prog = find_program('qjsc', required: false)
 qjs_prog  = find_program('qjs',  required: false)
 
-if not meson.is_cross_build() and not quickjs_original and qjsc_prog.found() and qjs_prog.found()
+if not meson.is_cross_build() and qjsc_prog.found() and qjs_prog.found()
   # files() so the script path is absolute — a raw '../scripts/...' string would
   # be resolved relative to the build dir and break out-of-tree builds.
   verify_polyfills_py = files('../scripts/verify-polyfills.py')
@@ -47,9 +47,6 @@ southstar_engine_sources += files(
   'js.c',
   'wasm.c',
 )
-if quickjs_original
-  southstar_engine_sources += files('ns_quickjs.c')
-endif
 
 if have_avif
   southstar_engine_sources += files('image_avif.c')

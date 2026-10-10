@@ -94,10 +94,7 @@ const TAG_FLOAT64: i64 = 8;
 const EVAL_TYPE_GLOBAL: c_int = 0;
 const EVAL_TYPE_MODULE: c_int = 1;
 const EVAL_FLAG_COMPILE_ONLY: c_int = 1 << 5;
-#[cfg(not(feature = "quickjs-original"))]
 const EVAL_FLAG_HIDE_SOURCE: c_int = 1 << 8;
-#[cfg(feature = "quickjs-original")]
-const EVAL_FLAG_HIDE_SOURCE: c_int = 0;
 const PROMISE_PENDING: c_int = 0;
 const PROMISE_FULFILLED: c_int = 1;
 const PROMISE_REJECTED: c_int = 2;
@@ -135,7 +132,6 @@ unsafe extern "C" {
     fn JS_IsArrayBuffer(obj: JSValue) -> bool;
     fn JS_GetTypedArrayType(obj: JSValue) -> c_int;
     fn JS_NewArrayBufferCopy(ctx: *mut JSContext, buf: *const u8, len: usize) -> JSValue;
-    #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_new_typed_array")]
     fn JS_NewTypedArray(
         ctx: *mut JSContext,
         argc: c_int,
@@ -318,76 +314,12 @@ unsafe extern "C" {
     fn JS_GetVersion() -> *const c_char;
 }
 
-#[cfg(not(feature = "quickjs-original"))]
 unsafe extern "C" {
     fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
     fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
     fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
     fn JS_DupValueRT(rt: *mut JSRuntime, v: JSValue) -> JSValue;
     fn JS_IsArray(val: JSValue) -> bool;
-}
-
-#[cfg(feature = "quickjs-original")]
-unsafe extern "C" {
-    #[link_name = "ns_quickjs_is_array"]
-    fn JS_IsArray(val: JSValue) -> bool;
-}
-
-#[cfg(feature = "quickjs-original")]
-unsafe extern "C" {
-    fn __JS_FreeValue(ctx: *mut JSContext, v: JSValue);
-    fn __JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
-}
-
-#[cfg(feature = "quickjs-original")]
-#[allow(non_snake_case)]
-unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
-    if v.tag < 0 {
-        unsafe {
-            let count = ref_count(v);
-            *count -= 1;
-            if *count <= 0 {
-                __JS_FreeValueRT(rt, v);
-            }
-        }
-    }
-}
-
-#[cfg(feature = "quickjs-original")]
-#[allow(non_snake_case)]
-unsafe fn JS_DupValueRT(_rt: *mut JSRuntime, v: JSValue) -> JSValue {
-    if v.tag < 0 {
-        unsafe { *ref_count(v) += 1 };
-    }
-    v
-}
-
-#[cfg(feature = "quickjs-original")]
-unsafe fn ref_count(v: JSValue) -> *mut c_int {
-    unsafe { v.u.ptr.cast::<c_int>().sub(1) }
-}
-
-#[cfg(feature = "quickjs-original")]
-#[allow(non_snake_case)]
-unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
-    if v.tag < 0 {
-        unsafe {
-            let count = ref_count(v);
-            *count -= 1;
-            if *count <= 0 {
-                __JS_FreeValue(ctx, v);
-            }
-        }
-    }
-}
-
-#[cfg(feature = "quickjs-original")]
-#[allow(non_snake_case)]
-unsafe fn JS_DupValue(_ctx: *mut JSContext, v: JSValue) -> JSValue {
-    if v.tag < 0 {
-        unsafe { *ref_count(v) += 1 };
-    }
-    v
 }
 
 const fn mkval(tag: i64, int32: i32) -> JSValue {
@@ -862,7 +794,6 @@ pub mod quickjs {
         fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     unsafe extern "C" {
         fn JS_GetFunctionRealm(ctx: *mut JSContext, func_obj: JSValue) -> *mut JSContext;
     }
@@ -950,7 +881,6 @@ pub mod quickjs {
             pbyte_length: *mut usize,
             pbytes_per_element: *mut usize,
         ) -> JSValue;
-        #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_new_typed_array")]
         fn JS_NewTypedArray(
             ctx: *mut JSContext,
             argc: c_int,
@@ -962,7 +892,6 @@ pub mod quickjs {
         fn JS_IsMap(v: JSValue) -> bool;
         fn JS_IsSet(v: JSValue) -> bool;
         fn JS_IsDataView(v: JSValue) -> bool;
-        #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_is_error")]
         fn JS_IsError(v: JSValue) -> bool;
         fn JS_GetBoxedPrimitiveKind(v: JSValue) -> c_int;
         fn JS_IsInstanceOf(ctx: *mut JSContext, val: JSValue, obj: JSValue) -> c_int;
@@ -986,15 +915,8 @@ pub mod quickjs {
         ) -> c_int;
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     unsafe extern "C" {
         fn JS_IsEngineFunction(v: JSValue) -> bool;
-    }
-
-    #[cfg(feature = "quickjs-original")]
-    #[allow(non_snake_case)]
-    unsafe fn JS_IsEngineFunction(_v: JSValue) -> bool {
-        true
     }
 
     pub fn identity(value: &Value) -> usize {
@@ -1324,7 +1246,6 @@ pub mod quickjs {
         Value::own(scope.ctx, raw)
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     pub fn function_realm(
         scope: &mut Scope<'_>,
         function: &Value,
@@ -1335,14 +1256,6 @@ pub mod quickjs {
         } else {
             Ok(realm)
         }
-    }
-
-    #[cfg(feature = "quickjs-original")]
-    pub fn function_realm(
-        scope: &mut Scope<'_>,
-        _function: &Value,
-    ) -> Result<*mut JSContext, Value> {
-        Ok(scope.ctx)
     }
 
     pub fn runtime(scope: &Scope<'_>) -> *mut c_void {
@@ -1376,7 +1289,6 @@ pub mod quickjs {
         Ignore,
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     unsafe extern "C" {
         fn JS_NewCFunctionBrand(
             ctx: *mut JSContext,
@@ -1391,12 +1303,10 @@ pub mod quickjs {
         );
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     pub fn new_function_brand(scope: &mut Scope<'_>, class_ids: &[u32]) -> i32 {
         unsafe { JS_NewCFunctionBrand(scope.ctx, class_ids.as_ptr(), class_ids.len() as _) }
     }
 
-    #[cfg(not(feature = "quickjs-original"))]
     pub fn set_function_brand(
         scope: &mut Scope<'_>,
         function: &Value,
@@ -1404,20 +1314,6 @@ pub mod quickjs {
         mode: BrandMode,
     ) {
         unsafe { JS_SetCFunctionBrand(scope.ctx, function.raw, brand, mode) };
-    }
-
-    #[cfg(feature = "quickjs-original")]
-    pub fn new_function_brand(_scope: &mut Scope<'_>, _class_ids: &[u32]) -> i32 {
-        0
-    }
-
-    #[cfg(feature = "quickjs-original")]
-    pub fn set_function_brand(
-        _scope: &mut Scope<'_>,
-        _function: &Value,
-        _brand: i32,
-        _mode: BrandMode,
-    ) {
     }
 }
 

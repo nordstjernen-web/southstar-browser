@@ -42,17 +42,8 @@ fn lock() -> MutexGuard<'static, Cache> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-#[cfg(feature = "quickjs-original")]
-const ENGINE_DIR: Option<&str> = Some(concat!("quickjs-", env!("NS_QUICKJS_ORIGINAL_VERSION")));
-#[cfg(not(feature = "quickjs-original"))]
-const ENGINE_DIR: Option<&str> = None;
-
 fn cache_dir() -> PathBuf {
-    let dir = ffi::user_cache_dir().join(APP_DIR_NAME).join("jsbc");
-    match ENGINE_DIR {
-        Some(engine) => dir.join(engine),
-        None => dir,
-    }
+    ffi::user_cache_dir().join(APP_DIR_NAME).join("jsbc")
 }
 
 impl Cache {

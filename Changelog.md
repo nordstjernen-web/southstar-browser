@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
+  through an adapter) is gone, the first step toward replacing QuickJS with
+  the Rust engine Boa. Rust 1.91 is now required.
 * MutationObserver, IntersectionObserver and ResizeObserver are Rust
   (rust/js-observers), with unchanged results.
 * FormData, constraint validation (checkValidity(), validity,

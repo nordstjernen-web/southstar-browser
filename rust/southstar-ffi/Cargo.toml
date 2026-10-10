@@ -103,22 +103,6 @@ http-zstd = ["southstar-net/http-zstd"]
 libav = ["southstar-headless/libav", "southstar-net/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 webgpu = ["southstar-canvas/webgpu", "southstar-net/webgpu"]
-quickjs-original = [
-    "southstar-bytecode-cache/quickjs-original",
-    "southstar-canvas/quickjs-original",
-    "southstar-extensions/quickjs-original",
-    "southstar-js-brand/quickjs-original",
-    "southstar-js-clone/quickjs-original",
-    "southstar-js-forms/quickjs-original",
-    "southstar-js-intl/quickjs-original",
-    "southstar-js-observers/quickjs-original",
-    "southstar-js-perf/quickjs-original",
-    "southstar-js-realm/quickjs-original",
-    "southstar-js-temporal/quickjs-original",
-    "southstar-idb/quickjs-original",
-    "southstar-webaudio/quickjs-original",
-    "southstar-webgl/quickjs-original",
-]
 woff2 = ["dep:southstar-woff2", "southstar-font/woff2"]
 
 [lints]

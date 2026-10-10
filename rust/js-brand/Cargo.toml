@@ -10,8 +10,5 @@ publish.workspace = true
 [dependencies]
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
 
-[features]
-quickjs-original = ["southstar-js-engine/quickjs-original"]
-
 [lints]
 workspace = true

@@ -11,8 +11,5 @@ publish.workspace = true
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 
-[features]
-quickjs-original = []
-
 [lints]
 workspace = true

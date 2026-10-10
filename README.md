@@ -16,12 +16,11 @@ Java/JVM versions have been removed.
 **JavaScript engine:** Southstar runs page JavaScript on
 [QuickJS-ng](https://github.com/quickjs-ng/quickjs), an interpreter (no JIT)
 that is forked into the tree at `src/quickjs/` and extended there with the
-browser's hooks. A build option, `-Dquickjs=quickjs`, swaps in Fabrice
-Bellard's original [QuickJS](https://github.com/bellard/quickjs) instead.
-The Rust bindings go through an engine-neutral layer (`rust/js-engine`), which
-can also drive the Rust engine [Boa](https://github.com/boa-dev/boa). For now
-that is only used by the standalone test shell (`southstar-jsshell`); the
-browser itself always uses QuickJS.
+browser's hooks. The bindings are being rewritten in Rust against an
+engine-neutral layer (`rust/js-engine`) so that the pure-Rust engine
+[Boa](https://github.com/boa-dev/boa) can take over: Boa becomes the default
+once the bindings run on it, and QuickJS is then removed. Until then Boa runs
+only the standalone test shell (`southstar-jsshell`).
 
 Supported platforms:
 * Linux
@@ -81,9 +80,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   (`crypto.subtle` over OpenSSL), custom elements including customized
   built-ins (`is=` / `{extends}`), and the `Navigation` API for single-page
   routing, plus Web Workers, IndexedDB (over SQLite), WebSocket and
-  `EventSource`. The QuickJS engine is selectable at build time: the in-tree
-  quickjs-ng fork by default, or Fabrice Bellard's original QuickJS with
-  `-Dquickjs=quickjs`.
+  `EventSource`.
 - **Networking** over an in-tree Rust HTTP client (`rust/http`) — HTTP/1.1
   and multiplexed HTTP/2 with its own framing and HPACK over OpenSSL, FTP,
   HTTP CONNECT and SOCKS proxies, plus HSTS, CSP, subresource-integrity
@@ -182,10 +179,8 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
 PDF), libavif (AVIF images), Enchant (spell checking), fontconfig / pangoft2
 (extra font backends), libbrotlidec and libzstd (`br` and `zstd` content
-decoding), [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
-WebGPU) and Fabrice Bellard's original
-[QuickJS](https://github.com/bellard/quickjs) (`-Dquickjs=quickjs`, fetched
-through a meson wrap).
+decoding), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
+WebGPU).
 
 ## License
 

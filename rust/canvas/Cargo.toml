@@ -16,7 +16,6 @@ southstar-layout = { path = "../layout" }
 
 [features]
 ns-pango = []
-quickjs-original = ["southstar-js-engine/quickjs-original"]
 webgpu = []
 
 [lints]

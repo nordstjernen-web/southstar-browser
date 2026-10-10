@@ -16,7 +16,6 @@ southstar-sqlite = { path = "../sqlite" }
 [features]
 default = ["quickjs"]
 quickjs = ["southstar-js-engine/quickjs"]
-quickjs-original = ["quickjs", "southstar-js-engine/quickjs-original"]
 boa = ["southstar-js-engine/boa"]
 
 [lints]

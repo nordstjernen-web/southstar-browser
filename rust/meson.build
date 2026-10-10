@@ -19,12 +19,6 @@ southstar_rust_env = {
   'NS_BUILD_DATE': build_date,
   'NS_LEXBOR_VERSION': lexbor_version,
 }
-if quickjs_original
-  southstar_rust_features += ['quickjs-original']
-  southstar_rust_env += {
-    'NS_QUICKJS_ORIGINAL_VERSION': quickjs_version,
-  }
-endif
 if use_ns_pango
   southstar_rust_features += ['ns-pango']
 endif
