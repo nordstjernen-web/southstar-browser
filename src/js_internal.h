@@ -163,9 +163,6 @@ struct ns_js {
     GPtrArray    *pending_scrollend;
     gboolean      pending_scrollend_doc;
     int           eval_depth;
-    GString      *document_write_buffer;
-    ns_node      *document_write_script;
-    gboolean      document_write_parser_open;
     GHashTable   *iframe_globals;
     int           iframe_load_depth;
     gint64        last_pump_us;
@@ -188,7 +185,6 @@ struct ns_js {
     GHashTable   *blob_urls;
     const ns_node *ce_main_doc;
     GHashTable   *platform_globals;
-    int           throw_on_dynamic_markup;
     int           ignore_destructive_writes;
     JSValue       form_data_helper;
     int           form_data_helper_set;
@@ -1493,6 +1489,24 @@ JSValue  ns_make_realm_document(JSContext *ctx, ns_node *doc_node, const char *u
                                 const char *charset, const char *content_type,
                                 gboolean is_xml, gboolean inert);
 JSValue  ns_make_synth_xml_document(JSContext *ctx);
+JSValue  ns_document_open(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_document_close(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_document_write(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_document_writeln(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_document_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+void     ns_document_install_funcs(JSContext *ctx, JSValueConst doc);
+void     ns_document_define_doctype_getter(JSContext *ctx, JSValueConst doc);
+void     ns_document_lift_methods_to_proto(JSContext *ctx, JSValueConst document);
+void     ns_realmdoc_deny_cookie(JSContext *ctx, JSValueConst doc);
+void     ns_js_flush_document_write(ns_js *js);
+void     ns_document_write_teardown(ns_js *js);
+void     ns_js_orphan_children(ns_js *js, ns_node *n);
+int      ns_js_ignore_destructive_writes(const ns_js *js);
 
 const char    *ns_js_cookie_value(const ns_js *js);
 void           ns_js_set_cookie_value(ns_js *js, const char *value);

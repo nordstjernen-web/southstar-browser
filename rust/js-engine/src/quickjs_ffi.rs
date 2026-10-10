@@ -1226,6 +1226,38 @@ pub mod quickjs {
         })
     }
 
+    pub fn define_by_key_with(
+        scope: &mut Scope<'_>,
+        object: &Value,
+        key: &Value,
+        value: Value,
+        attributes: crate::Attributes,
+    ) -> Result<(), Value> {
+        with_atom(scope, key, |scope, atom| {
+            let status = unsafe {
+                super::JS_DefinePropertyValue(
+                    scope.ctx,
+                    object.raw,
+                    atom,
+                    value.into_raw(),
+                    super::prop_flags(attributes),
+                )
+            };
+            scope.status(status)
+        })
+    }
+
+    pub fn delete_by_key(
+        scope: &mut Scope<'_>,
+        object: &Value,
+        key: &Value,
+    ) -> Result<bool, Value> {
+        with_atom(scope, key, |scope, atom| {
+            let status = unsafe { super::JS_DeleteProperty(scope.ctx, object.raw, atom, 0) };
+            scope.status(status).map(|()| status > 0)
+        })
+    }
+
     pub enum OwnSlot {
         Missing,
         Accessor,
@@ -2200,6 +2232,20 @@ impl Scope<'_> {
 
     pub fn define_entry(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
         quickjs::define_by_key(self, object, key, value)
+    }
+
+    pub fn define_with_key(
+        &mut self,
+        object: &Value,
+        key: &Value,
+        value: Value,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        quickjs::define_by_key_with(self, object, key, value, attributes)
+    }
+
+    pub fn delete_key(&mut self, object: &Value, key: &Value) -> Result<bool, Value> {
+        quickjs::delete_by_key(self, object, key)
     }
 
     pub fn is_native_function(&mut self, value: &Value) -> bool {

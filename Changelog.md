@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* document.open, write, writeln and close, the script-inserted parser write
+  path and the documents of frames, DOMParser and DOMImplementation moved
+  from js.c to Rust (rust/js-document), with unchanged results.
 * Grid layout (track sizing, placement, alignment, subgrid and grid-
   positioned absolute boxes) moved from layout.c to Rust (rust/layout-grid),
   with identical layout.

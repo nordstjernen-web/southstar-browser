@@ -256,6 +256,27 @@ impl<'a> Node<'a> {
         }
     }
 
+    pub fn insert_after(self, child: Node) {
+        if self == child || self.parent().is_none() {
+            return;
+        }
+        child.detach();
+        unsafe {
+            let reference = self.raw();
+            let parent = (*reference).parent;
+            let child = child.raw();
+            (*child).parent = parent;
+            (*child).prev_sibling = reference;
+            (*child).next_sibling = (*reference).next_sibling;
+            if (*reference).next_sibling.is_null() {
+                (*parent).last_child = child;
+            } else {
+                (*(*reference).next_sibling).prev_sibling = child;
+            }
+            (*reference).next_sibling = child;
+        }
+    }
+
     pub fn push_attr(self, attr: NewAttr) {
         let a = unsafe { glib::g_malloc0(size_of::<NsAttr>()) }.cast::<NsAttr>();
         unsafe {

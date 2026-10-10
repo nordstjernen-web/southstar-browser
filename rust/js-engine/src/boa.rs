@@ -894,6 +894,25 @@ impl Scope<'_> {
             .map_err(|e| self.error(e))
     }
 
+    pub fn define_with_key(
+        &mut self,
+        object: &Value,
+        key: &Value,
+        value: Value,
+        attributes: Attributes,
+    ) -> Result<(), Value> {
+        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        self.define_key(object, key, value, attributes)
+    }
+
+    pub fn delete_key(&mut self, object: &Value, key: &Value) -> Result<bool, Value> {
+        let target = self.object(object)?;
+        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        target
+            .delete_property_or_throw(key, self.ctx)
+            .map_err(|e| self.error(e))
+    }
+
     pub fn define_entry(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
         let target = self.object(object)?;
         let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;

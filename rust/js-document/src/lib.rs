@@ -1,4 +1,4 @@
-//! Southstar — the Document property bindings: cookie, title, dir, body and head, the legacy colours, readyState, referrer, compatMode and the document's element getters.
+//! Southstar — the Document bindings: cookie, title, dir, body and head, the legacy colours, readyState, referrer, compatMode, the element getters, document.open/write/close and the realm documents of frames and DOMImplementation.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,6 +6,8 @@ mod cookie;
 mod elements;
 mod ffi;
 mod props;
+mod realm;
+mod write;
 
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
