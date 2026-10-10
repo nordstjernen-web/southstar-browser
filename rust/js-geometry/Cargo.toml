@@ -1,0 +1,20 @@
+[package]
+name = "southstar-js-geometry"
+description = "CSSOM View geometry and scrolling: getBoundingClientRect and getClientRects, the offset, client and scroll metrics, element and window scrolling with scrollIntoView, and the SVG geometry behind getBBox, getCTM, getScreenCTM and path lengths"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-layout = { path = "../layout" }
+southstar-mat4 = { path = "../mat4" }
+southstar-style = { path = "../style" }
+southstar-svg = { path = "../svg" }
+
+[lints]
+workspace = true

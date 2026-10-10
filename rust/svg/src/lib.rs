@@ -12,9 +12,12 @@ use std::collections::HashMap;
 
 use core::ffi::CStr;
 
+pub use ffi::{Matrix, SvgGeometry};
+pub use measure::node_geometry;
+
 use ffi::{
-    Canvas, EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, Matrix,
-    OwnedCanvas, PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout, Texture,
+    Canvas, EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, OwnedCanvas,
+    PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout, Texture,
 };
 use parse::{eq_ci, is_ws};
 use southstar_dom::{Kind, Node, children};

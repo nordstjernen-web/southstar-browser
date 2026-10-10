@@ -1319,4 +1319,70 @@ void     ns_attr_detach_matching(ns_js *js, ns_node *owner, const char *namespac
 void     ns_attr_detach_owner(ns_js *js, ns_node *owner);
 void     ns_attr_detach_all(ns_js *js);
 
+double   ns_window_scroll_prop(JSContext *ctx, const char *prop);
+void     ns_js_scroll_viewport(ns_js *js, double x, double y);
+void     ns_js_queue_scrollend(ns_js *js, const ns_node *el);
+void     ns_js_notify_scroll_to(ns_js *js, const ns_node *target);
+JSValue  ns_element_int_attr_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_make_svg_animated_length(JSContext *ctx, const ns_node *n, const char *attr);
+JSValue  ns_element_img_natural_width(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_img_natural_height(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_dimension_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_svg_beginElement(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_svg_setCurrentTime(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue  ns_element_getBoundingClientRect(JSContext *ctx, JSValueConst this_val, int argc,
+                                          JSValueConst *argv);
+JSValue  ns_element_getClientRects(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_getBBox(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_element_getCTM(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_element_getScreenCTM(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_getTotalLength(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_getPointAtLength(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_element_createSVGPoint(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_createSVGRect(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_createSVGMatrix(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_element_createSVGTransform(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_element_get_ownerSVGElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_offsetWidth(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_offsetHeight(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_offsetTop(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_offsetLeft(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_offsetParent(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_clientWidth(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_clientHeight(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_clientTop(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_clientLeft(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_scrollTop(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_scrollLeft(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_scrollWidth(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_scrollHeight(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_scrollTop(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_set_scrollLeft(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_scroll_to(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_element_scroll_by(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_element_scrollIntoView(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_window_scroll_to(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_window_scroll_by(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_window_scroll_by_lines(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_window_scroll_by_pages(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+
 #endif

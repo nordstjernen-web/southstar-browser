@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* CSSOM View geometry and scrolling (client rects, offset, client and scroll
+  metrics, element and window scrolling, scrollIntoView) and SVG geometry
+  (getBBox, getCTM, getScreenCTM, path length and point-at-length) moved
+  from js.c to Rust (rust/js-geometry), with unchanged results.
 * DOMTokenList (classList, relList and the other token lists),
   element.dataset, element.attributes and Attr nodes moved from js.c to Rust
   (rust/js-attrs), with unchanged results.

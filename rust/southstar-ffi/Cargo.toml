@@ -48,6 +48,7 @@ southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-events = { path = "../js-events" }
 southstar-js-forms = { path = "../js-forms" }
+southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-media = { path = "../js-media" }
 southstar-js-net = { path = "../js-net" }
