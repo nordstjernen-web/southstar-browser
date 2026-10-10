@@ -802,8 +802,12 @@ impl Scope<'_> {
     }
 
     pub fn own_enumerable_keys(&mut self, object: &Value) -> Result<Vec<Value>, Value> {
-        let keys = OrdinaryObject::keys(&JsValue::undefined(), &[object.0.clone()], self.ctx)
-            .map_err(|e| self.error(e))?;
+        let keys = OrdinaryObject::keys(
+            &JsValue::undefined(),
+            std::slice::from_ref(&object.0),
+            self.ctx,
+        )
+        .map_err(|e| self.error(e))?;
         let keys = Value(keys);
         let count = self.get(&keys, "length")?;
         let count = self.to_number(&count)? as u32;
