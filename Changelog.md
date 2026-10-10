@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Text tracks (VTTCue, textTracks, addTextTrack), CSS Font Loading
+  (FontFace, document.fonts) and ElementInternals (attachInternals,
+  CustomStateSet) moved from js.c to Rust (rust/js-media, rust/js-fonts,
+  rust/js-forms), with unchanged results.
 * Flexbox layout (row, wrapping and column flex containers) moved from
   layout.c to Rust (rust/layout-flex), with identical layout.
 * Table layout (column widths for auto and fixed table-layout, spans, col

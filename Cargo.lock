@@ -1627,6 +1627,7 @@ dependencies = [
  "southstar-js-dom-factory",
  "southstar-js-events",
  "southstar-js-focus",
+ "southstar-js-fonts",
  "southstar-js-forms",
  "southstar-js-frames",
  "southstar-js-geometry",
@@ -1903,6 +1904,13 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-fonts"
+version = "1.0.30-dev"
+dependencies = [
  "southstar-js-engine",
 ]
 

@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-forms"
-description = "The forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation and submission"
+description = "The forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation, submission and ElementInternals"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

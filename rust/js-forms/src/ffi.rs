@@ -24,6 +24,7 @@ pub(crate) struct Page(*mut NsJs);
 unsafe extern "C" {
     fn ns_unwrap_element(v: JSValue) -> *const NsNode;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
+    fn ns_element_get_shadowRoot(ctx: *mut JSContext, this_val: JSValue) -> JSValue;
     fn ns_throw_dom_exception(
         ctx: *mut JSContext,
         name: *const c_char,
@@ -159,6 +160,12 @@ pub(crate) fn element(value: &Value) -> Option<Element> {
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
     let ctx = quickjs::raw_context(scope);
     let raw = unsafe { ns_make_element(ctx, Node::ptr_or_null(node)) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn shadow_root(scope: &mut Scope<'_>, element: &Value) -> Value {
+    let ctx = quickjs::raw_context(scope);
+    let raw = unsafe { ns_element_get_shadowRoot(ctx, quickjs::raw(element)) };
     unsafe { quickjs::take_value(scope, raw) }
 }
 
@@ -543,6 +550,50 @@ pub unsafe extern "C" fn ns_form_listed_controls(
     };
     for control in crate::listed_controls(form, include_image != 0) {
         unsafe { glib::g_ptr_array_add(out, mut_ptr(control).cast()) };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_attachInternals(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::internals::attach_internals,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_get_internals(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+) -> JSValue {
+    unsafe { getter(ctx, this_val, crate::internals::internals) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_custom_state_set_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::internals::custom_state_set,
+        )
     }
 }
 

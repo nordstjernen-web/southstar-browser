@@ -1,4 +1,4 @@
-//! Southstar — the media bindings: HTMLMediaElement, media type support, the MSE natives, the Web Audio API surface over rust/webaudio and the EME entry points.
+//! Southstar — the media bindings: HTMLMediaElement, media type support, the MSE natives, text tracks, the Web Audio API surface over rust/webaudio and the EME entry points.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,6 +9,7 @@ mod ffi;
 mod hooks;
 mod mse;
 mod support;
+mod tracks;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 

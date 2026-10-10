@@ -64,7 +64,6 @@ struct ns_js {
     JSContext    *main_realm_ctx;
     JSContext    *module_ctx;
     GPtrArray    *frame_ctxs;
-    GArray       *font_ready_resolvers;
     ns_js_log_cb  log_cb;
     gpointer      log_user_data;
     ns_js_mutated_cb mut_cb;
@@ -286,6 +285,11 @@ JSValue ns_element_check_validity(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv);
 JSValue ns_element_setCustomValidity(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
+JSValue ns_element_attachInternals(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_element_get_internals(JSContext *ctx, JSValueConst this_val);
+JSValue ns_custom_state_set_ctor(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
 gboolean ns_node_is_submit_trigger(const ns_node *el);
 gboolean ns_node_is_reset_trigger(const ns_node *el);
 JSValue ns_js_request_submit_form(JSContext *ctx, const ns_node *form,
@@ -913,6 +917,15 @@ JSValue ns_media_get_defaultPlaybackRate(JSContext *ctx, JSValueConst this_val);
 JSValue ns_media_get_volume(JSContext *ctx, JSValueConst this_val);
 JSValue ns_media_get_muted(JSContext *ctx, JSValueConst this_val);
 JSValue ns_media_get_srcObject(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_textTracks(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_addTextTrack(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv);
+JSValue ns_vtt_cue_ctor(JSContext *ctx, JSValueConst this_val,
+                        int argc, JSValueConst *argv);
+JSValue ns_window_fontface_ctor(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_document_get_fonts(JSContext *ctx, JSValueConst this_val);
+void    ns_js_fonts_teardown(ns_js *js);
 JSValue ns_media_set_current_time(JSContext *ctx, JSValueConst this_val,
                                   JSValueConst val);
 JSValue ns_media_set_playbackRate(JSContext *ctx, JSValueConst this_val,

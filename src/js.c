@@ -4144,60 +4144,6 @@ ns_promise_resolve_take(JSContext *ctx, JSValue value)
     return promise;
 }
 
-static void ns_js_resolve_when_fonts_loaded(JSContext *ctx, ns_js *js,
-                                            JSValue resolve, JSValue value);
-
-static JSValue
-ns_fontface_load(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JS_SetPropertyStr(ctx, this_val, "status", JS_NewString(ctx, "loaded"));
-    ns_js *js = js_from_ctx(ctx);
-    if (js) ns_js_flush_layout(js);
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    JS_FreeValue(ctx, resolvers[1]);
-    ns_js_resolve_when_fonts_loaded(ctx, js, resolvers[0],
-                                    JS_DupValue(ctx, this_val));
-    return promise;
-}
-
-static JSValue
-ns_window_fontface_ctor(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue f = JS_NewObject(ctx);
-    const char *family = argc >= 1 ? JS_ToCString(ctx, argv[0]) : NULL;
-    JS_SetPropertyStr(ctx, f, "family", JS_NewString(ctx, family ? family : ""));
-    if (family) JS_FreeCString(ctx, family);
-
-    static const struct { const char *k; const char *def; } descs[] = {
-        { "style", "normal" }, { "weight", "normal" }, { "stretch", "normal" },
-        { "unicodeRange", "U+0-10FFFF" }, { "variant", "normal" },
-        { "featureSettings", "normal" }, { "variationSettings", "normal" },
-        { "display", "auto" }, { "ascentOverride", "normal" },
-        { "descentOverride", "normal" }, { "lineGapOverride", "normal" },
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(descs); i++) {
-        JSValue v = JS_UNDEFINED;
-        if (argc >= 3 && JS_IsObject(argv[2]))
-            v = JS_GetPropertyStr(ctx, argv[2], descs[i].k);
-        if (JS_IsUndefined(v) || JS_IsException(v)) {
-            JS_FreeValue(ctx, v);
-            v = JS_NewString(ctx, descs[i].def);
-        }
-        JS_SetPropertyStr(ctx, f, descs[i].k, v);
-    }
-    JS_SetPropertyStr(ctx, f, "status", JS_NewString(ctx, "unloaded"));
-    JS_SetPropertyStr(ctx, f, "loaded",
-                      ns_promise_resolve_take(ctx, JS_DupValue(ctx, f)));
-    ns_bind_fn(ctx, f, "load", ns_fontface_load, 0);
-    return f;
-}
-
 JSValue
 ns_returns_resolved_false(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
@@ -9950,55 +9896,6 @@ ns_element_get_ownerDocument(JSContext *ctx, JSValueConst this_val)
 }
 
 static JSValue
-ns_internals_check_validity(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_TRUE;
-}
-
-static JSValue
-ns_element_attachInternals(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue internals = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, internals, "shadowRoot",
-                      ns_element_get_shadowRoot(ctx, this_val));
-    JS_SetPropertyStr(ctx, internals, "form", JS_NULL);
-    JS_SetPropertyStr(ctx, internals, "willValidate", JS_TRUE);
-    JS_SetPropertyStr(ctx, internals, "validationMessage", JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, internals, "labels", JS_NewArray(ctx));
-
-    JSValue validity = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, validity, "valid", JS_TRUE);
-    JS_SetPropertyStr(ctx, internals, "validity", validity);
-
-    JSValue states = JS_NewObject(ctx);
-    ns_bind_fn(ctx, states, "add",     ns_event_noop, 1);
-    ns_bind_fn(ctx, states, "delete",  ns_event_noop, 1);
-    ns_bind_fn(ctx, states, "has",     ns_event_noop, 1);
-    ns_bind_fn(ctx, states, "clear",   ns_event_noop, 0);
-    ns_bind_fn(ctx, states, "forEach", ns_event_noop, 1);
-    JS_SetPropertyStr(ctx, internals, "states", states);
-
-    ns_bind_fn(ctx, internals, "setFormValue",   ns_event_noop, 2);
-    ns_bind_fn(ctx, internals, "setValidity",    ns_event_noop, 3);
-    ns_bind_fn(ctx, internals, "associateForm",  ns_event_noop, 1);
-    ns_bind_fn(ctx, internals, "_connect",       ns_event_noop, 1);
-    ns_bind_fn(ctx, internals, "_disconnect",    ns_event_noop, 0);
-    ns_bind_fn(ctx, internals, "checkValidity",  ns_internals_check_validity, 0);
-    ns_bind_fn(ctx, internals, "reportValidity", ns_internals_check_validity, 0);
-    return internals;
-}
-
-static JSValue
-ns_element_get_internals(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_element_attachInternals(ctx, this_val, 0, NULL);
-}
-
-static JSValue
 ns_element_get_namespaceURI(JSContext *ctx, JSValueConst this_val)
 {
     const ns_node *n = ns_unwrap_element(this_val);
@@ -12894,7 +12791,7 @@ static const JSCFunctionListEntry ns_element_proto_funcs[] = {
     JS_CFUNC_DEF("load",                0, ns_media_load),
     JS_CFUNC_DEF("canPlayType",         1, ns_media_canPlayType),
     JS_CFUNC_DEF("fastSeek",            1, ns_media_fast_seek),
-    JS_CFUNC_DEF("addTextTrack",        3, ns_event_noop),
+    JS_CFUNC_DEF("addTextTrack",        3, ns_media_addTextTrack),
     JS_CFUNC_DEF("setMediaKeys",        1, ns_media_set_media_keys),
     JS_CFUNC_DEF("getVideoPlaybackQuality", 0, ns_media_get_video_playback_quality),
     JS_CFUNC_DEF("requestVideoFrameCallback", 1, ns_media_request_video_frame_callback),
@@ -12927,7 +12824,7 @@ static const JSCFunctionListEntry ns_element_proto_funcs[] = {
     JS_CGETSET_DEF("seekable",          ns_media_get_seekable_ranges,     ns_element_noop_set),
     JS_CGETSET_DEF("buffered",          ns_media_get_buffered_ranges,     ns_element_noop_set),
     JS_CGETSET_DEF("played",            ns_media_get_played_ranges,       ns_element_noop_set),
-    JS_CGETSET_DEF("textTracks",        ns_element_get_empty_array_prop,  ns_element_noop_set),
+    JS_CGETSET_DEF("textTracks",        ns_media_get_textTracks,          ns_element_noop_set),
     JS_CGETSET_DEF("videoTracks",       ns_element_get_empty_array_prop,  ns_element_noop_set),
     JS_CGETSET_DEF("audioTracks",       ns_element_get_empty_array_prop,  ns_element_noop_set),
     JS_CGETSET_DEF("valueAsNumber",     ns_element_get_value_as_number,   ns_element_set_value_as_number),
@@ -13420,86 +13317,6 @@ ns_document_get_all(JSContext *ctx, JSValueConst this_val)
     return all;
 }
 
-static void
-ns_js_fonts_idle(gpointer user_data)
-{
-    ns_js *js = user_data;
-    if (!js || !js->font_ready_resolvers) return;
-    js->mutated = TRUE;
-    GArray *resolvers = js->font_ready_resolvers;
-    js->font_ready_resolvers = NULL;
-    for (guint i = 0; i + 1 < resolvers->len; i += 2) {
-        JSValue fn = g_array_index(resolvers, JSValue, i);
-        JSValue value = g_array_index(resolvers, JSValue, i + 1);
-        JSValue r = JS_Call(js->ctx, fn, JS_UNDEFINED, 1,
-                            (JSValueConst[]){ value });
-        JS_FreeValue(js->ctx, r);
-        JS_FreeValue(js->ctx, fn);
-        JS_FreeValue(js->ctx, value);
-    }
-    g_array_free(resolvers, TRUE);
-    ns_drain_microtasks(js);
-}
-
-static void
-ns_js_resolve_when_fonts_loaded(JSContext *ctx, ns_js *js, JSValue resolve,
-                                JSValue value)
-{
-    if (js && ns_font_pending_count() > 0) {
-        if (!js->font_ready_resolvers)
-            js->font_ready_resolvers = g_array_new(FALSE, FALSE, sizeof(JSValue));
-        g_array_append_val(js->font_ready_resolvers, resolve);
-        g_array_append_val(js->font_ready_resolvers, value);
-        ns_font_add_idle_cb(ns_js_fonts_idle, js);
-        return;
-    }
-    JSValue r = JS_Call(ctx, resolve, JS_UNDEFINED, 1, (JSValueConst[]){ value });
-    JS_FreeValue(ctx, r);
-    JS_FreeValue(ctx, resolve);
-    JS_FreeValue(ctx, value);
-}
-
-static JSValue
-ns_fontfaceset_load(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (js) ns_js_flush_layout(js);
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    JS_FreeValue(ctx, resolvers[1]);
-    ns_js_resolve_when_fonts_loaded(ctx, js, resolvers[0], JS_NewArray(ctx));
-    return promise;
-}
-
-static JSValue
-ns_document_get_fonts(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (js) ns_js_flush_layout(js);
-    JSValue fs = JS_NewObject(ctx);
-    JSValue resolvers[2];
-    JSValue ready = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(ready)) { JS_FreeValue(ctx, fs); return ready; }
-    gboolean loading = js && ns_font_pending_count() > 0;
-    ns_js_resolve_when_fonts_loaded(ctx, js, resolvers[0], JS_DupValue(ctx, fs));
-    JS_FreeValue(ctx, resolvers[1]);
-    JS_SetPropertyStr(ctx, fs, "ready",  ready);
-    JS_SetPropertyStr(ctx, fs, "status",
-                      JS_NewString(ctx, loading ? "loading" : "loaded"));
-    ns_bind_fn(ctx, fs, "check", ns_event_true,                    1);
-    ns_bind_fn(ctx, fs, "load",  ns_fontfaceset_load,              2);
-    ns_bind_fn(ctx, fs, "add",   ns_event_noop,                    1);
-    ns_bind_fn(ctx, fs, "delete",  ns_event_noop, 1);
-    ns_bind_fn(ctx, fs, "clear",   ns_event_noop, 0);
-    ns_bind_fn(ctx, fs, "forEach", ns_event_noop, 1);
-    JS_SetPropertyStr(ctx, fs, "size", JS_NewInt32(ctx, 0));
-    return fs;
-}
-
 static gboolean
 ns_point_in_hit_bounds(ns_js *js, double x, double y)
 {
@@ -13978,52 +13795,6 @@ ns_static_range_ctor(JSContext *ctx, JSValueConst this_val,
     JS_SetPropertyStr(ctx, r, "endOffset",      JS_NewInt32(ctx, eo));
     JS_SetPropertyStr(ctx, r, "collapsed",      JS_NewBool(ctx, collapsed));
     return r;
-}
-
-static JSValue
-ns_vtt_cue_ctor(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    double start = 0, end = 0;
-    if (argc >= 1) JS_ToFloat64(ctx, &start, argv[0]);
-    if (argc >= 2) JS_ToFloat64(ctx, &end, argv[1]);
-    const char *text = (argc >= 3) ? JS_ToCString(ctx, argv[2]) : NULL;
-    JSValue c = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, c, "startTime",   JS_NewFloat64(ctx, start));
-    JS_SetPropertyStr(ctx, c, "endTime",     JS_NewFloat64(ctx, end));
-    JS_SetPropertyStr(ctx, c, "text",        JS_NewString(ctx, text ? text : ""));
-    if (text) JS_FreeCString(ctx, text);
-    JS_SetPropertyStr(ctx, c, "id",          JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, c, "pauseOnExit", JS_FALSE);
-    JS_SetPropertyStr(ctx, c, "track",       JS_NULL);
-    JS_SetPropertyStr(ctx, c, "vertical",    JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, c, "snapToLines", JS_TRUE);
-    JS_SetPropertyStr(ctx, c, "line",        JS_NewString(ctx, "auto"));
-    JS_SetPropertyStr(ctx, c, "lineAlign",   JS_NewString(ctx, "start"));
-    JS_SetPropertyStr(ctx, c, "position",    JS_NewString(ctx, "auto"));
-    JS_SetPropertyStr(ctx, c, "positionAlign", JS_NewString(ctx, "auto"));
-    JS_SetPropertyStr(ctx, c, "size",        JS_NewInt32(ctx, 100));
-    JS_SetPropertyStr(ctx, c, "align",       JS_NewString(ctx, "center"));
-    JS_SetPropertyStr(ctx, c, "region",      JS_NULL);
-    JS_SetPropertyStr(ctx, c, "onenter",     JS_NULL);
-    JS_SetPropertyStr(ctx, c, "onexit",      JS_NULL);
-    JS_SetPropertyStr(ctx, c, "_listeners",  JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, c);
-    return c;
-}
-
-static JSValue
-ns_custom_state_set_ctor(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue set_ctor = JS_GetPropertyStr(ctx, global, "Set");
-    JS_FreeValue(ctx, global);
-    JSValue set = JS_CallConstructor(ctx, set_ctor, 0, NULL);
-    JS_FreeValue(ctx, set_ctor);
-    return set;
 }
 
 static gboolean
@@ -18469,13 +18240,7 @@ ns_js_free(ns_js *js)
     }
     ns_js_frames_clear_initial_blank(js);
     ns_top_layer_clear(js);
-    ns_font_remove_idle_cb(ns_js_fonts_idle, js);
-    if (js->font_ready_resolvers) {
-        for (guint i = 0; i < js->font_ready_resolvers->len; i++)
-            JS_FreeValue(js->ctx, g_array_index(js->font_ready_resolvers, JSValue, i));
-        g_array_free(js->font_ready_resolvers, TRUE);
-        js->font_ready_resolvers = NULL;
-    }
+    ns_js_fonts_teardown(js);
     if (js->lifecycle_source) {
         ns_js_source_remove(js, js->lifecycle_source);
         js->lifecycle_source = 0;

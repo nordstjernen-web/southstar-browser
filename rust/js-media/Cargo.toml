@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-media"
-description = "The media bindings: HTMLMediaElement, canPlayType, mediaCapabilities, the MSE natives, AudioContext, OfflineAudioContext, their AudioNodes, AudioParams and AudioBuffers, and the EME entry points"
+description = "The media bindings: HTMLMediaElement, canPlayType, mediaCapabilities, the MSE natives, VTTCue and textTracks, AudioContext, OfflineAudioContext, their AudioNodes, AudioParams and AudioBuffers, and the EME entry points"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

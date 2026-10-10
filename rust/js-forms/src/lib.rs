@@ -1,10 +1,11 @@
-//! Southstar — the forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation and submission.
+//! Southstar — the forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation, submission and ElementInternals.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod checkable;
 mod ffi;
 mod form_data;
+mod internals;
 mod labels;
 mod select;
 mod selection;

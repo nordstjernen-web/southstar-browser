@@ -12,7 +12,7 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::hooks::{self, Hook};
-use crate::{audio, element, eme, mse, support};
+use crate::{audio, element, eme, mse, support, tracks};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -124,8 +124,12 @@ fn node_ptr(element: Element) -> *const c_void {
     element.as_ptr().cast()
 }
 
-pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
+pub(crate) fn bind_listeners(scope: &mut Scope<'_>, object: &Value) {
     unsafe { ns_bind_event_target_listeners(ctx_of(scope), quickjs::raw(object)) };
+}
+
+pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
+    bind_listeners(scope, object);
     let dispatch = quickjs::c_function(scope, "dispatchEvent", 1, ns_target_dispatchEvent);
     crate::set(scope, object, "dispatchEvent", dispatch);
 }
@@ -401,6 +405,8 @@ methods! {
     ns_window_mse_buffered_start => mse::buffered_start;
     ns_window_mse_remove => mse::remove;
     ns_window_mse_bytes => mse::bytes;
+    ns_vtt_cue_ctor => tracks::vtt_cue;
+    ns_media_addTextTrack => tracks::add_text_track;
 }
 
 getters! {
@@ -420,6 +426,7 @@ getters! {
     ns_media_get_volume => element::volume;
     ns_media_get_muted => element::muted;
     ns_media_get_srcObject => element::src_object;
+    ns_media_get_textTracks => tracks::text_tracks;
 }
 
 setters! {
