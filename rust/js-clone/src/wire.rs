@@ -299,7 +299,7 @@ impl Encoder<'_> {
     }
 }
 
-pub(crate) fn encode_value(scope: &mut Scope<'_>, value: &Value, ports: &Value) -> Result {
+pub fn encode_value(scope: &mut Scope<'_>, value: &Value, ports: &Value) -> Result {
     let mut encoder = Encoder {
         memo: HashMap::new(),
         ports,
@@ -535,7 +535,7 @@ impl Decoder<'_> {
     }
 }
 
-pub(crate) fn decode_value(scope: &mut Scope<'_>, wire: &Value, ports: &Value) -> Result {
+pub fn decode_value(scope: &mut Scope<'_>, wire: &Value, ports: &Value) -> Result {
     let mut decoder = Decoder {
         memo: HashMap::new(),
         ports,

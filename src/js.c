@@ -392,7 +392,6 @@ static void ns_js_name_engine_members(JSContext *ctx);
 static void ns_js_link_interfaces(JSContext *ctx);
 static JSValue ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer);
 static JSValue ns_iframe_cross_origin_window(JSContext *ctx, JSValue target);
-static void ns_event_define_cancel_bubble(JSContext *ctx, JSValueConst ev);
 static void ns_hide_shared_array_buffer(JSContext *ctx, JSValueConst global);
 static void ns_target_report_exception(ns_js *js, JSContext *ctx, const char *type);
 static gboolean ns_js_image_loads_pending(const ns_js *js);
@@ -684,6 +683,21 @@ ns_js_budget_pop(ns_js *js, ns_budget_guard *g)
     js->eval_deadline_us = g->saved;
     if (g->saved == 0)
         js->js_monitor_deadline_us = 0;
+}
+
+gint64
+ns_js_budget_enter(ns_js *js)
+{
+    ns_budget_guard g = {0};
+    ns_js_budget_push(js, &g);
+    return g.saved;
+}
+
+void
+ns_js_budget_leave(ns_js *js, gint64 saved)
+{
+    ns_budget_guard g = { saved };
+    ns_js_budget_pop(js, &g);
 }
 
 typedef struct ns_listener {
@@ -1123,7 +1137,7 @@ ns_js_run_message_task(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-static void
+void
 ns_js_queue_message_task(JSContext *ctx, JSJobFunc *func, int argc,
                          JSValueConst *argv)
 {
@@ -2085,7 +2099,7 @@ ns_proto_is_event(JSContext *ctx, JSValueConst proto)
     return is_event;
 }
 
-static JSValue
+JSValue
 ns_event_new(JSContext *ctx)
 {
     return ns_event_new_proto(ctx, JS_UNDEFINED);
@@ -8834,7 +8848,7 @@ ns_get_bool_atom(JSContext *ctx, JSValueConst obj, JSAtom atom, gboolean *was_se
     return truthy;
 }
 
-static gboolean
+gboolean
 ns_listener_parse_options(JSContext *ctx, JSValueConst opts,
                           gboolean *capture, gboolean *once,
                           gboolean *passive, gboolean *passive_set,
@@ -10325,6 +10339,43 @@ JSValue
 ns_form_data_construct(JSContext *ctx, JSValueConst new_target)
 {
     return ns_ho_construct(ctx, new_target, NS_HO_FORM_DATA);
+}
+
+gboolean
+ns_js_value_is_message_port(JSValueConst v)
+{
+    return ns_ho_of(v, NS_HO_MESSAGE_PORT) != NULL;
+}
+
+gboolean
+ns_js_value_is_broadcast_channel(JSValueConst v)
+{
+    return ns_ho_of(v, NS_HO_BROADCAST_CHANNEL) != NULL;
+}
+
+JSValue
+ns_message_port_state(JSContext *ctx, JSValueConst v)
+{
+    ns_hostobj *d = ns_ho_of(v, NS_HO_MESSAGE_PORT);
+    return d ? JS_DupValue(ctx, d->state) : JS_UNDEFINED;
+}
+
+JSValue
+ns_message_port_new_object(JSContext *ctx)
+{
+    return ns_ho_new_default(ctx, NS_HO_MESSAGE_PORT);
+}
+
+JSValue
+ns_message_channel_construct(JSContext *ctx, JSValueConst new_target)
+{
+    return ns_ho_construct(ctx, new_target, NS_HO_MESSAGE_CHANNEL);
+}
+
+JSValue
+ns_broadcast_channel_construct(JSContext *ctx, JSValueConst new_target)
+{
+    return ns_ho_construct(ctx, new_target, NS_HO_BROADCAST_CHANNEL);
 }
 
 typedef enum {
@@ -13565,7 +13616,7 @@ ns_offline_audio_context_ctor(JSContext *ctx, JSValueConst this_val,
     return a;
 }
 
-static void
+void
 ns_listeners_compact_dead(JSContext *ctx, JSValueConst owner)
 {
     JSValue live = JS_GetPropertyStr(ctx, owner, "_listeners");
@@ -13594,7 +13645,7 @@ ns_freeze_array(JSContext *ctx, JSValueConst array)
     return JS_DupValue(ctx, array);
 }
 
-static JSContext *
+JSContext *
 ns_target_handler_realm(JSContext *ctx, JSValueConst obj, const char *type,
                         const char *listener_key)
 {
@@ -13632,149 +13683,6 @@ ns_target_handler_realm(JSContext *ctx, JSValueConst obj, const char *type,
     return realm;
 }
 
-static JSContext *
-ns_port_receiving_realm(JSContext *ctx, JSValueConst port)
-{
-    return ns_target_handler_realm(ctx, port, "message", "fn");
-}
-
-/* An event dispatched at a target outside the node tree is at its target
- * while the listeners run; afterwards it has no current target and no
- * phase, as after any dispatch. A dispatch that was already running when
- * this one started gets its state back. */
-typedef struct {
-    JSValue phase;
-    JSValue current;
-    gboolean nested;
-} ns_event_at_target;
-
-static void
-ns_event_at_target_begin(JSContext *ctx, JSValueConst ev, JSValueConst target,
-                         ns_event_at_target *st)
-{
-    JSValue dispatching = JS_GetPropertyStr(ctx, ev, "_dispatching");
-    st->nested = JS_ToBool(ctx, dispatching) > 0;
-    JS_FreeValue(ctx, dispatching);
-    st->phase = JS_GetPropertyStr(ctx, ev, "eventPhase");
-    st->current = JS_GetPropertyStr(ctx, ev, "currentTarget");
-    JS_SetPropertyStr(ctx, ev, "currentTarget", JS_DupValue(ctx, target));
-    JS_SetPropertyStr(ctx, ev, "eventPhase", JS_NewInt32(ctx, 2));
-    JS_SetPropertyStr(ctx, ev, "_dispatching", JS_TRUE);
-}
-
-static void
-ns_event_at_target_end(JSContext *ctx, JSValueConst ev, ns_event_at_target *st)
-{
-    if (st->nested) {
-        JS_SetPropertyStr(ctx, ev, "eventPhase", st->phase);
-        JS_SetPropertyStr(ctx, ev, "currentTarget", st->current);
-        return;
-    }
-    JS_FreeValue(ctx, st->phase);
-    JS_FreeValue(ctx, st->current);
-    JS_SetPropertyStr(ctx, ev, "eventPhase", JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, ev, "currentTarget", JS_NULL);
-    JS_SetPropertyStr(ctx, ev, "_dispatching", JS_FALSE);
-}
-
-static JSValue
-ns_port_deliver_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    JSValueConst port = argv[0];
-    JSValueConst data_in = argv[1];
-
-    JSValue shipped_to = JS_GetPropertyStr(ctx, port, "_shipped_to");
-    if (JS_IsObject(shipped_to)) {
-        /* The port moved to another realm while this message was queued;
-         * its messages move with it. */
-        JSValue started = JS_GetPropertyStr(ctx, shipped_to, "_started");
-        gboolean is_started = JS_ToBool(ctx, started);
-        JS_FreeValue(ctx, started);
-        if (is_started) {
-            JSValueConst job_args[3] = { shipped_to, data_in,
-                                         argc >= 3 ? argv[2] : JS_UNDEFINED };
-            JSValue r = ns_port_deliver_job(ctx, 3, job_args);
-            JS_FreeValue(ctx, shipped_to);
-            return r;
-        }
-        JSValue queue = JS_GetPropertyStr(ctx, shipped_to, "_queue");
-        if (JS_IsArray(queue)) {
-            JSValue message = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, message, "_portMessage", JS_TRUE);
-            JS_SetPropertyStr(ctx, message, "data", JS_DupValue(ctx, data_in));
-            JS_SetPropertyStr(ctx, message, "ports",
-                              argc >= 3 ? JS_DupValue(ctx, argv[2]) : JS_NewArray(ctx));
-            JS_SetPropertyUint32(ctx, queue, ns_js_array_length(ctx, queue),
-                                 message);
-        }
-        JS_FreeValue(ctx, queue);
-        JS_FreeValue(ctx, shipped_to);
-        return JS_UNDEFINED;
-    }
-    JS_FreeValue(ctx, shipped_to);
-
-    JSValue closed = JS_GetPropertyStr(ctx, port, "_closed");
-    gboolean is_closed = JS_ToBool(ctx, closed);
-    JS_FreeValue(ctx, closed);
-    if (is_closed) return JS_UNDEFINED;
-    JSContext *realm = ns_port_receiving_realm(ctx, port);
-    JSValue data = JS_DupValue(ctx, data_in);
-    if (realm && realm != ctx && JS_IsObject(data)) {
-        JSValue ports_in = argc >= 3 ? JS_DupValue(ctx, argv[2]) : JS_UNDEFINED;
-        JSValue adopted = ns_structured_clone_value(realm, data,
-            JS_IsArray(ports_in) ? (JSValueConst)ports_in : JS_UNDEFINED);
-        JS_FreeValue(ctx, ports_in);
-        if (JS_IsException(adopted)) {
-            JS_FreeValue(realm, JS_GetException(realm));
-        } else {
-            JS_FreeValue(ctx, data);
-            data = adopted;
-        }
-    }
-
-    JSValue port_origin = JS_GetPropertyStr(ctx, port, "_origin");
-    const char *po = JS_IsString(port_origin) ? JS_ToCString(ctx, port_origin)
-                                              : NULL;
-    JSValue ev = ns_event_new(realm);
-    JS_SetPropertyStr(ctx, ev, "type",             JS_NewString(ctx, "message"));
-    JS_SetPropertyStr(ctx, ev, "data",             JS_DupValue(ctx, data));
-    JS_SetPropertyStr(ctx, ev, "origin",           JS_NewString(ctx, po ? po : ""));
-    if (po) JS_FreeCString(ctx, po);
-    JS_FreeValue(ctx, port_origin);
-    JS_SetPropertyStr(ctx, ev, "lastEventId",      JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, ev, "source",           JS_NULL);
-    JSValue event_ports = JS_NewArray(realm);
-    if (argc >= 3 && JS_IsArray(argv[2])) {
-        uint32_t n = ns_js_array_length(ctx, argv[2]);
-        for (uint32_t i = 0; i < n; i++)
-            JS_SetPropertyUint32(realm, event_ports, i,
-                                 JS_GetPropertyUint32(ctx, argv[2], i));
-    }
-    JSValue frozen_ports = ns_freeze_array(realm, event_ports);
-    JS_FreeValue(ctx, event_ports);
-    JS_SetPropertyStr(ctx, ev, "ports", frozen_ports);
-    JS_SetPropertyStr(ctx, ev, "target",           JS_DupValue(ctx, port));
-    JS_SetPropertyStr(ctx, ev, "currentTarget",    JS_DupValue(ctx, port));
-    JS_SetPropertyStr(ctx, ev, "defaultPrevented", JS_FALSE);
-    JS_DefinePropertyValueStr(ctx, ev, "isTrusted", JS_TRUE, JS_PROP_C_W_E);
-    JS_SetPropertyStr(ctx, ev, "bubbles",          JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "cancelable",       JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "composed",         JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "_is_trusted",      JS_TRUE);
-    ns_event_define_cancel_bubble(realm, ev);
-
-    ns_js *js = js_from_ctx(ctx);
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(js, &bg);
-    ns_target_dispatch_with_event(ctx, port, "message", ev);
-    ns_js_budget_pop(js, &bg);
-
-    JS_FreeValue(ctx, ev);
-    JS_FreeValue(ctx, data);
-    return JS_UNDEFINED;
-}
-
 
 static JSValue
 ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer)
@@ -13782,178 +13690,6 @@ ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer)
     return ns_structured_clone_transfer(ctx, v,
         JS_IsArray(transfer) ? JS_DupValue(ctx, transfer) : JS_UNDEFINED,
         JS_UNDEFINED, JS_UNDEFINED);
-}
-
-static void
-ns_port_enable(JSContext *ctx, JSValueConst port)
-{
-    JSValue started = JS_GetPropertyStr(ctx, port, "_started");
-    gboolean was = JS_ToBool(ctx, started);
-    JS_FreeValue(ctx, started);
-    JS_SetPropertyStr(ctx, port, "_started", JS_TRUE);
-    if (was) return;
-    JSValue queue = JS_GetPropertyStr(ctx, port, "_queue");
-    if (JS_IsArray(queue)) {
-        uint32_t len = ns_js_array_length(ctx, queue);
-        for (uint32_t i = 0; i < len; i++) {
-            JSValue item = JS_GetPropertyUint32(ctx, queue, i);
-            JSValue marker = JS_GetPropertyStr(ctx, item, "_portMessage");
-            if (JS_ToBool(ctx, marker)) {
-                JSValue data = JS_GetPropertyStr(ctx, item, "data");
-                JSValue ports = JS_GetPropertyStr(ctx, item, "ports");
-                JSValueConst job_args[3] = { port, data, ports };
-                ns_js_queue_message_task(ctx, ns_port_deliver_job, 3, job_args);
-                JS_FreeValue(ctx, ports);
-                JS_FreeValue(ctx, data);
-            } else {
-                JSValueConst job_args[2] = { port, item };
-                ns_js_queue_message_task(ctx, ns_port_deliver_job, 2, job_args);
-            }
-            JS_FreeValue(ctx, marker);
-            JS_FreeValue(ctx, item);
-        }
-        JS_SetPropertyStr(ctx, port, "_queue", JS_NewArray(ctx));
-    }
-    JS_FreeValue(ctx, queue);
-}
-
-static JSValue
-ns_port_start(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    NS_HO_THIS(ctx, this_val, NS_HO_MESSAGE_PORT);
-    ns_port_enable(ctx, this_val);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_port_onmessage_get(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_hostobj *d = ns_ho_of(this_val, NS_HO_MESSAGE_PORT);
-    if (!d) return ns_ho_illegal(ctx);
-    JSValue v = JS_GetPropertyStr(ctx, d->state, "onmessage");
-    if (JS_IsUndefined(v)) { JS_FreeValue(ctx, v); return JS_NULL; }
-    return v;
-}
-
-static JSValue
-ns_port_onmessage_set(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    ns_hostobj *d = ns_ho_of(this_val, NS_HO_MESSAGE_PORT);
-    if (!d) return ns_ho_illegal(ctx);
-    JSValueConst val = argc >= 1 ? argv[0] : JS_UNDEFINED;
-    JS_SetPropertyStr(ctx, d->state, "onmessage",
-                      JS_IsObject(val) ? JS_DupValue(ctx, val) : JS_NULL);
-    ns_port_enable(ctx, this_val);
-    return JS_UNDEFINED;
-}
-
-static JSValue ns_port_bridge_send(JSContext *ctx, JSValueConst port,
-                                   guint64 id, JSValueConst data);
-
-static guint64
-ns_port_bridge_id(JSContext *ctx, JSValueConst port)
-{
-    JSValue v = JS_GetPropertyStr(ctx, port, "_bridge_id");
-    guint64 id = 0;
-    if (JS_IsNumber(v)) {
-        double d = 0;
-        JS_ToFloat64(ctx, &d, v);
-        if (d > 0) id = (guint64)d;
-    }
-    JS_FreeValue(ctx, v);
-    return id;
-}
-
-static JSContext *ns_port_realm(JSContext *ctx, JSValueConst port);
-static int ns_port_transfer_prepare(JSContext *ctx, JSValueConst transfer,
-                                   JSValueConst source_port, JSContext *realm,
-                                   JSValue *old_ports, JSValue *new_ports);
-static void ns_port_transfer_commit(JSContext *ctx, JSValueConst old_ports,
-                                    JSValueConst new_ports);
-
-static JSValue
-ns_port_post_message(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    NS_HO_THIS(ctx, this_val, NS_HO_MESSAGE_PORT);
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx, "Failed to execute 'postMessage' on "
-            "'MessagePort': 1 argument required, but only 0 present.");
-    JSValueConst data = argv[0];
-
-    JSValue closed = JS_GetPropertyStr(ctx, this_val, "_closed");
-    gboolean is_closed = JS_ToBool(ctx, closed);
-    JS_FreeValue(ctx, closed);
-    if (is_closed) return JS_UNDEFINED;
-
-    guint64 bridge_id = ns_port_bridge_id(ctx, this_val);
-    if (bridge_id)
-        return ns_port_bridge_send(ctx, this_val, bridge_id, data);
-
-    JSValue transfer = JS_UNDEFINED;
-    if (argc >= 2 && JS_IsArray(argv[1])) {
-        transfer = JS_DupValue(ctx, argv[1]);
-    } else if (argc >= 2 && JS_IsObject(argv[1])) {
-        transfer = JS_GetPropertyStr(ctx, argv[1], "transfer");
-    }
-    if (JS_IsException(transfer)) return JS_EXCEPTION;
-    JSValue pair = JS_GetPropertyStr(ctx, this_val, "_pair");
-    JSContext *realm = JS_IsObject(pair) ? ns_port_realm(ctx, pair) : ctx;
-    JSValue old_ports, ports;
-    if (ns_port_transfer_prepare(ctx, transfer, this_val, realm,
-                                 &old_ports, &ports) < 0) {
-        JS_FreeValue(ctx, pair);
-        JS_FreeValue(ctx, transfer);
-        return JS_EXCEPTION;
-    }
-    JSValue cloned = ns_structured_clone_transfer(ctx, data, transfer,
-                                                  old_ports, ports);
-    if (JS_IsException(cloned)) {
-        JS_FreeValue(ctx, old_ports);
-        JS_FreeValue(ctx, ports);
-        JS_FreeValue(ctx, pair);
-        return JS_EXCEPTION;
-    }
-    ns_port_transfer_commit(ctx, old_ports, ports);
-    JS_FreeValue(ctx, old_ports);
-    JS_FreeValue(ctx, pair);
-    pair = JS_GetPropertyStr(ctx, this_val, "_pair");
-
-    if (JS_IsUndefined(pair) || JS_IsNull(pair)) {
-        JS_FreeValue(ctx, pair);
-        JS_FreeValue(ctx, ports);
-        JS_FreeValue(ctx, cloned);
-        return JS_UNDEFINED;
-    }
-
-    JSValue started = JS_GetPropertyStr(ctx, pair, "_started");
-    gboolean pair_started = JS_ToBool(ctx, started);
-    JS_FreeValue(ctx, started);
-    if (pair_started) {
-        JSValueConst job_args[3] = { pair, cloned, ports };
-        ns_js_queue_message_task(ctx, ns_port_deliver_job, 3, job_args);
-    } else {
-        JSValue queue = JS_GetPropertyStr(ctx, pair, "_queue");
-        if (!JS_IsArray(queue)) {
-            JS_FreeValue(ctx, queue);
-            queue = JS_NewArray(ctx);
-            JS_SetPropertyStr(ctx, pair, "_queue", JS_DupValue(ctx, queue));
-        }
-        JSValue message = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, message, "_portMessage", JS_TRUE);
-        JS_SetPropertyStr(ctx, message, "data", JS_DupValue(ctx, cloned));
-        JS_SetPropertyStr(ctx, message, "ports", JS_DupValue(ctx, ports));
-        JS_SetPropertyUint32(ctx, queue, ns_js_array_length(ctx, queue), message);
-        JS_FreeValue(ctx, queue);
-    }
-    JS_FreeValue(ctx, ports);
-    JS_FreeValue(ctx, cloned);
-    JS_FreeValue(ctx, pair);
-    return JS_UNDEFINED;
 }
 
 static gboolean
@@ -13969,253 +13705,6 @@ ns_target_entry_signal_aborted(JSContext *ctx, JSValueConst entry)
     }
     JS_FreeValue(ctx, sigv);
     return aborted;
-}
-
-static JSValue
-ns_port_add_event_listener(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv)
-{
-    if (argc < 2 || !JS_IsObject(argv[1])) return JS_UNDEFINED;
-    const char *type = JS_ToCString(ctx, argv[0]);
-    if (!type) return JS_UNDEFINED;
-    gboolean capture = FALSE, once = FALSE;
-    JSValue signal = JS_NULL;
-    if (argc >= 3 &&
-        !ns_listener_parse_options(ctx, argv[2], &capture, &once, NULL, NULL, &signal,
-                                   TRUE)) {
-        JS_FreeCString(ctx, type);
-        return JS_EXCEPTION;
-    }
-    if (ns_signal_is_aborted(ctx, signal)) {
-        JS_FreeValue(ctx, signal);
-        JS_FreeCString(ctx, type);
-        return JS_UNDEFINED;
-    }
-    JSValue listeners = JS_GetPropertyStr(ctx, this_val, "_listeners");
-    if (!JS_IsArray(listeners)) {
-        JS_FreeValue(ctx, listeners);
-        listeners = JS_NewArray(ctx);
-        JS_SetPropertyStr(ctx, this_val, "_listeners", JS_DupValue(ctx, listeners));
-    }
-    uint32_t len = ns_js_array_length(ctx, listeners);
-    for (uint32_t i = 0; i < len; i++) {
-        JSValue e = JS_GetPropertyUint32(ctx, listeners, i);
-        JSValue tv = JS_GetPropertyStr(ctx, e, "type");
-        JSValue cbv = JS_GetPropertyStr(ctx, e, "cb");
-        const char *ts = JS_ToCString(ctx, tv);
-        gboolean dup = ts && strcmp(ts, type) == 0 &&
-                       JS_VALUE_GET_PTR(cbv) == JS_VALUE_GET_PTR(argv[1]) &&
-                       !ns_target_entry_signal_aborted(ctx, e);
-        if (ts) JS_FreeCString(ctx, ts);
-        JS_FreeValue(ctx, tv);
-        JS_FreeValue(ctx, cbv);
-        JS_FreeValue(ctx, e);
-        if (dup) {
-            JS_FreeValue(ctx, listeners);
-            JS_FreeValue(ctx, signal);
-            JS_FreeCString(ctx, type);
-            return JS_UNDEFINED;
-        }
-    }
-    JSValue entry = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, entry, "type", JS_NewString(ctx, type));
-    JS_SetPropertyStr(ctx, entry, "cb",   JS_DupValue(ctx, argv[1]));
-    if (once) JS_SetPropertyStr(ctx, entry, "once", JS_TRUE);
-    if (JS_IsObject(signal))
-        JS_SetPropertyStr(ctx, entry, "signal", JS_DupValue(ctx, signal));
-    JS_SetPropertyUint32(ctx, listeners, len, entry);
-    JS_FreeValue(ctx, listeners);
-    JS_FreeValue(ctx, signal);
-    JS_FreeCString(ctx, type);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_port_remove_event_listener(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    const char *type = JS_ToCString(ctx, argv[0]);
-    if (!type) return JS_UNDEFINED;
-    JSValue listeners = JS_GetPropertyStr(ctx, this_val, "_listeners");
-    if (JS_IsArray(listeners)) {
-        uint32_t len = ns_js_array_length(ctx, listeners);
-        for (uint32_t i = 0; i < len; i++) {
-            JSValue entry = JS_GetPropertyUint32(ctx, listeners, i);
-            JSValue type_v = JS_GetPropertyStr(ctx, entry, "type");
-            JSValue cb_v   = JS_GetPropertyStr(ctx, entry, "cb");
-            const char *ts = JS_ToCString(ctx, type_v);
-            gboolean match = ts && strcmp(ts, type) == 0 &&
-                             JS_VALUE_GET_PTR(cb_v) == JS_VALUE_GET_PTR(argv[1]);
-            if (ts) JS_FreeCString(ctx, ts);
-            JS_FreeValue(ctx, type_v);
-            JS_FreeValue(ctx, cb_v);
-            if (match) {
-                JS_SetPropertyStr(ctx, entry, "_dead", JS_TRUE);
-                JS_FreeValue(ctx, entry);
-                ns_listeners_compact_dead(ctx, this_val);
-                break;
-            }
-            JS_FreeValue(ctx, entry);
-        }
-    }
-    JS_FreeValue(ctx, listeners);
-    JS_FreeCString(ctx, type);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_port_close(JSContext *ctx, JSValueConst this_val,
-              int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    NS_HO_THIS(ctx, this_val, NS_HO_MESSAGE_PORT);
-    JS_SetPropertyStr(ctx, this_val, "_closed", JS_TRUE);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_port_realm_marker(JSContext *ctx, JSValueConst this_val, int argc,
-                     JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_port_new(JSContext *ctx)
-{
-    JSValue p = ns_ho_new_default(ctx, NS_HO_MESSAGE_PORT);
-    if (JS_IsException(p)) return p;
-    JS_SetPropertyStr(ctx, p, "onmessage", JS_NULL);
-    JS_SetPropertyStr(ctx, p, "onmessageerror", JS_NULL);
-    JS_DefinePropertyValueStr(ctx, p, "_realm",
-        JS_NewCFunction(ctx, ns_port_realm_marker, "", 0), 0);
-    JS_SetPropertyStr(ctx, p, "_is_port",       JS_TRUE);
-    JS_SetPropertyStr(ctx, p, "_closed",        JS_FALSE);
-    JS_SetPropertyStr(ctx, p, "_started",       JS_FALSE);
-    JS_SetPropertyStr(ctx, p, "_queue",         JS_NewArray(ctx));
-    return p;
-}
-
-static JSContext *
-ns_port_realm(JSContext *ctx, JSValueConst port)
-{
-    JSValue marker = JS_GetPropertyStr(ctx, port, "_realm");
-    if (JS_IsException(marker)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JSContext *realm = ns_function_realm(ctx, marker);
-    JS_FreeValue(ctx, marker);
-    return realm;
-}
-
-static gboolean
-ns_port_flag(JSContext *ctx, JSValueConst port, const char *name)
-{
-    JSValue v = JS_GetPropertyStr(ctx, port, name);
-    gboolean set = JS_ToBool(ctx, v) > 0;
-    JS_FreeValue(ctx, v);
-    return set;
-}
-
-static void
-ns_port_ship(JSContext *ctx, JSValueConst port, JSValueConst shipped)
-{
-    JSValue pair = JS_GetPropertyStr(ctx, port, "_pair");
-    if (JS_IsObject(pair)) {
-        JS_SetPropertyStr(ctx, pair, "_pair", JS_DupValue(ctx, shipped));
-        JS_SetPropertyStr(ctx, shipped, "_pair", JS_DupValue(ctx, pair));
-    }
-    JS_FreeValue(ctx, pair);
-    JSValue origin = JS_GetPropertyStr(ctx, port, "_origin");
-    if (JS_IsString(origin)) JS_SetPropertyStr(ctx, shipped, "_origin", origin);
-    else JS_FreeValue(ctx, origin);
-    JS_SetPropertyStr(ctx, shipped, "_closed",
-                      JS_GetPropertyStr(ctx, port, "_closed"));
-    JSValue queue = JS_GetPropertyStr(ctx, port, "_queue");
-    if (JS_IsArray(queue)) JS_SetPropertyStr(ctx, shipped, "_queue", queue);
-    else JS_FreeValue(ctx, queue);
-    JS_SetPropertyStr(ctx, port, "_queue", JS_NewArray(ctx));
-    JS_SetPropertyStr(ctx, port, "_pair", JS_NULL);
-    JS_SetPropertyStr(ctx, port, "_closed", JS_TRUE);
-    JS_SetPropertyStr(ctx, port, "_shipped", JS_TRUE);
-    JS_DefinePropertyValueStr(ctx, port, "_shipped_to",
-                              JS_DupValue(ctx, shipped), 0);
-}
-
-/* Checks the MessagePorts in a postMessage transfer list and makes the
- * receiving realm's replacement for each one.  Nothing is detached yet, so a
- * failed clone leaves the sender's ports usable; ns_port_transfer_commit then
- * moves each port's entanglement and queued messages to its replacement. */
-static int
-ns_port_transfer_prepare(JSContext *ctx, JSValueConst transfer,
-                         JSValueConst source_port, JSContext *realm,
-                         JSValue *old_ports, JSValue *new_ports)
-{
-    *old_ports = JS_NewArray(ctx);
-    *new_ports = JS_NewArray(realm);
-    uint32_t len = JS_IsArray(transfer) ? ns_js_array_length(ctx, transfer) : 0;
-    GPtrArray *seen = g_ptr_array_new();
-    gboolean bad = FALSE;
-    uint32_t k = 0;
-    for (uint32_t i = 0; i < len && !bad; i++) {
-        JSValue item = JS_GetPropertyUint32(ctx, transfer, i);
-        if (ns_ho_of(item, NS_HO_MESSAGE_PORT)) {
-            void *ptr = JS_VALUE_GET_PTR(item);
-            bad = g_ptr_array_find(seen, ptr, NULL) ||
-                  (JS_IsObject(source_port) &&
-                   ptr == JS_VALUE_GET_PTR(source_port)) ||
-                  ns_port_flag(ctx, item, "_shipped");
-            g_ptr_array_add(seen, ptr);
-            if (!bad) {
-                JSValue shipped = ns_port_bridge_id(ctx, item)
-                    ? JS_DupValue(ctx, item) : ns_port_new(realm);
-                JS_SetPropertyUint32(realm, *new_ports, k, shipped);
-                JS_SetPropertyUint32(ctx, *old_ports, k++,
-                                     JS_DupValue(ctx, item));
-            }
-        }
-        JS_FreeValue(ctx, item);
-    }
-    g_ptr_array_free(seen, TRUE);
-    if (!bad) return 0;
-    JS_FreeValue(ctx, *old_ports);
-    JS_FreeValue(realm, *new_ports);
-    *old_ports = *new_ports = JS_UNDEFINED;
-    ns_throw_dom_exception(ctx, "DataCloneError", 25,
-        "Failed to execute 'postMessage': a MessagePort in the transfer list "
-        "is the source port, a duplicate, or already transferred.");
-    return -1;
-}
-
-static void
-ns_port_transfer_commit(JSContext *ctx, JSValueConst old_ports,
-                        JSValueConst new_ports)
-{
-    uint32_t n = JS_IsArray(old_ports) ? ns_js_array_length(ctx, old_ports) : 0;
-    for (uint32_t i = 0; i < n; i++) {
-        JSValue from = JS_GetPropertyUint32(ctx, old_ports, i);
-        JSValue to = JS_GetPropertyUint32(ctx, new_ports, i);
-        if (JS_VALUE_GET_PTR(from) != JS_VALUE_GET_PTR(to))
-            ns_port_ship(ctx, from, to);
-        JS_FreeValue(ctx, from);
-        JS_FreeValue(ctx, to);
-    }
-}
-
-static JSValue
-ns_window_message_channel(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue mc = ns_ho_construct(ctx, this_val, NS_HO_MESSAGE_CHANNEL);
-    if (JS_IsException(mc)) return mc;
-    JSValue port1 = ns_port_new(ctx);
-    JSValue port2 = ns_port_new(ctx);
-    JS_SetPropertyStr(ctx, port1, "_pair", JS_DupValue(ctx, port2));
-    JS_SetPropertyStr(ctx, port2, "_pair", JS_DupValue(ctx, port1));
-    JS_SetPropertyStr(ctx, mc, "port1", port1);
-    JS_SetPropertyStr(ctx, mc, "port2", port2);
-    return mc;
 }
 
 static void
@@ -14751,179 +14240,6 @@ ns_window_bind_post_message(JSContext *ctx, JSValueConst global)
                ns_window_post_message_this, 3);
     ns_bind_fn(ctx, global, "__nsPostMessageFrom",
                ns_window_post_message_from, 5);
-}
-
-static JSValue
-ns_broadcast_registry(JSContext *ctx)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue reg = JS_GetPropertyStr(ctx, global, "__ns_broadcast_channels");
-    if (!JS_IsArray(reg)) {
-        JS_FreeValue(ctx, reg);
-        reg = JS_NewArray(ctx);
-        JS_SetPropertyStr(ctx, global, "__ns_broadcast_channels",
-                          JS_DupValue(ctx, reg));
-    }
-    JS_FreeValue(ctx, global);
-    return reg;
-}
-
-static JSValue
-ns_broadcast_post_message(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    NS_HO_THIS(ctx, this_val, NS_HO_BROADCAST_CHANNEL);
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx, "Failed to execute 'postMessage' on "
-            "'BroadcastChannel': 1 argument required, but only 0 present.");
-    JSValue closed = JS_GetPropertyStr(ctx, this_val, "_closed");
-    gboolean is_closed = JS_ToBool(ctx, closed);
-    JS_FreeValue(ctx, closed);
-    if (is_closed)
-        return ns_throw_dom_exception(ctx, "InvalidStateError", 11,
-            "BroadcastChannel.postMessage: channel is closed");
-
-    JSValueConst msg = argv[0];
-    JSValue data;
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue clone = JS_GetPropertyStr(ctx, global, "structuredClone");
-    JS_FreeValue(ctx, global);
-    if (JS_IsFunction(ctx, clone)) {
-        JSValueConst cargs[1] = { msg };
-        data = JS_Call(ctx, clone, JS_UNDEFINED, 1, cargs);
-        if (JS_IsException(data)) {
-            JS_FreeValue(ctx, clone);
-            return JS_EXCEPTION;
-        }
-    } else {
-        data = JS_DupValue(ctx, msg);
-    }
-    JS_FreeValue(ctx, clone);
-
-    JSValue name = JS_GetPropertyStr(ctx, this_val, "name");
-    const char *ns = JS_ToCString(ctx, name);
-
-    JSValue reg = ns_broadcast_registry(ctx);
-    uint32_t len = ns_js_array_length(ctx, reg);
-    for (uint32_t i = 0; i < len; i++) {
-        JSValue ch = JS_GetPropertyUint32(ctx, reg, i);
-        if (JS_VALUE_GET_PTR(ch) == JS_VALUE_GET_PTR(this_val)) {
-            JS_FreeValue(ctx, ch);
-            continue;
-        }
-        JSValue cclosed = JS_GetPropertyStr(ctx, ch, "_closed");
-        gboolean cc = JS_ToBool(ctx, cclosed);
-        JS_FreeValue(ctx, cclosed);
-        JSValue cname = JS_GetPropertyStr(ctx, ch, "name");
-        const char *cns = JS_ToCString(ctx, cname);
-        gboolean same = ns && cns && strcmp(ns, cns) == 0;
-        if (cns) JS_FreeCString(ctx, cns);
-        JS_FreeValue(ctx, cname);
-        if (!cc && same) {
-            JSValueConst job_args[2] = { ch, data };
-            ns_js_queue_message_task(ctx, ns_port_deliver_job, 2, job_args);
-        }
-        JS_FreeValue(ctx, ch);
-    }
-    JS_FreeValue(ctx, reg);
-    if (ns) JS_FreeCString(ctx, ns);
-    JS_FreeValue(ctx, name);
-    JS_FreeValue(ctx, data);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_broadcast_close(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    NS_HO_THIS(ctx, this_val, NS_HO_BROADCAST_CHANNEL);
-    JS_SetPropertyStr(ctx, this_val, "_closed", JS_TRUE);
-    JSValue reg = ns_broadcast_registry(ctx);
-    uint32_t len = ns_js_array_length(ctx, reg);
-    for (uint32_t i = 0; i < len; i++) {
-        JSValue ch = JS_GetPropertyUint32(ctx, reg, i);
-        gboolean match = JS_VALUE_GET_PTR(ch) == JS_VALUE_GET_PTR(this_val);
-        JS_FreeValue(ctx, ch);
-        if (match) {
-            JSValue splice = JS_GetPropertyStr(ctx, reg, "splice");
-            JSValueConst sargs[2] = { JS_NewUint32(ctx, i), JS_NewInt32(ctx, 1) };
-            JSValue r = JS_Call(ctx, splice, reg, 2, sargs);
-            JS_FreeValue(ctx, r);
-            JS_FreeValue(ctx, sargs[0]);
-            JS_FreeValue(ctx, sargs[1]);
-            JS_FreeValue(ctx, splice);
-            break;
-        }
-    }
-    JS_FreeValue(ctx, reg);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_window_broadcast_channel(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    JSValue bc = ns_ho_construct(ctx, this_val, NS_HO_BROADCAST_CHANNEL);
-    if (JS_IsException(bc)) return bc;
-    if (argc < 1) {
-        JS_FreeValue(ctx, bc);
-        return JS_ThrowTypeError(ctx, "Failed to construct 'BroadcastChannel': "
-            "1 argument required, but only 0 present.");
-    }
-    const char *name = JS_ToCString(ctx, argv[0]);
-    if (!name) {
-        JS_FreeValue(ctx, bc);
-        return JS_EXCEPTION;
-    }
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue loc = JS_GetPropertyStr(ctx, global, "location");
-    JSValue origin = JS_IsObject(loc) ? JS_GetPropertyStr(ctx, loc, "origin")
-                                      : JS_UNDEFINED;
-    const char *os = JS_IsString(origin) ? JS_ToCString(ctx, origin) : NULL;
-    JS_SetPropertyStr(ctx, bc, "_origin", JS_NewString(ctx, os ? os : "null"));
-    if (os) JS_FreeCString(ctx, os);
-    JS_FreeValue(ctx, origin);
-    JS_FreeValue(ctx, loc);
-    JS_FreeValue(ctx, global);
-
-    JS_SetPropertyStr(ctx, bc, "name", JS_NewString(ctx, name));
-    JS_FreeCString(ctx, name);
-    JS_SetPropertyStr(ctx, bc, "_closed",    JS_FALSE);
-    JS_SetPropertyStr(ctx, bc, "onmessage",      JS_NULL);
-    JS_SetPropertyStr(ctx, bc, "onmessageerror", JS_NULL);
-
-    JSValue reg = ns_broadcast_registry(ctx);
-    uint32_t len = ns_js_array_length(ctx, reg);
-    JS_SetPropertyUint32(ctx, reg, len, JS_DupValue(ctx, bc));
-    JS_FreeValue(ctx, reg);
-    return bc;
-}
-
-static void
-ns_net_install_ports(JSContext *ctx, JSValueConst global)
-{
-    JSValue port = ns_proto_of(ctx, global, "MessagePort");
-    if (JS_IsObject(port)) {
-        ns_bind_fn(ctx, port, "close", ns_port_close, 0);
-        ns_bind_fn(ctx, port, "postMessage", ns_port_post_message, 1);
-        ns_bind_fn(ctx, port, "start", ns_port_start, 0);
-        JSAtom atom = JS_NewAtom(ctx, "onmessage");
-        JS_DefinePropertyGetSet(ctx, port, atom,
-            JS_NewCFunction2(ctx, ns_port_onmessage_get, "get onmessage", 0,
-                             JS_CFUNC_generic, 0),
-            JS_NewCFunction2(ctx, ns_port_onmessage_set, "set onmessage", 1,
-                             JS_CFUNC_generic, 0),
-            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, atom);
-    }
-    JS_FreeValue(ctx, port);
-    JSValue channel = ns_proto_of(ctx, global, "BroadcastChannel");
-    if (JS_IsObject(channel)) {
-        ns_bind_fn(ctx, channel, "close", ns_broadcast_close, 0);
-        ns_bind_fn(ctx, channel, "postMessage", ns_broadcast_post_message, 1);
-    }
-    JS_FreeValue(ctx, channel);
 }
 
 static JSValue
@@ -22757,7 +22073,7 @@ gboolean
 ns_worker_transfer_is_port(JSContext *ctx, JSValueConst v)
 {
     (void)ctx;
-    return ns_ho_of(v, NS_HO_MESSAGE_PORT) != NULL;
+    return ns_js_value_is_message_port(v);
 }
 
 static void
@@ -23706,7 +23022,7 @@ ns_worker_msg_send(ns_worker_host *host, ns_worker_message *msg,
     }
 }
 
-static JSValue
+JSValue
 ns_port_bridge_send(JSContext *ctx, JSValueConst port, guint64 id,
                     JSValueConst data)
 {
@@ -26375,7 +25691,7 @@ ns_event_define_legacy_accessors(JSContext *ctx, JSValueConst obj)
                              ns_event_get_src_element, NULL);
 }
 
-static void
+void
 ns_event_define_cancel_bubble(JSContext *ctx, JSValueConst ev)
 {
     JSValue global = JS_GetGlobalObject(ctx);

@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* MessagePort, MessageChannel and BroadcastChannel are Rust
+  (rust/js-workers), with unchanged results.
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
   through an adapter) is gone, the first step toward replacing QuickJS with
   the Rust engine Boa. Rust 1.91 is now required.

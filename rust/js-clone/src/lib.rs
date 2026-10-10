@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod wire;
+pub mod wire;
 
 use std::collections::HashMap;
 
@@ -600,7 +600,7 @@ fn transferred_in_place(scope: &Scope<'_>, value: &Value) -> bool {
     ffi::is_port(scope, value) || ffi::is_image_bitmap(value)
 }
 
-pub(crate) fn clone_transfer(
+pub fn clone_transfer(
     scope: &mut Scope<'_>,
     value: &Value,
     transfer: &Value,

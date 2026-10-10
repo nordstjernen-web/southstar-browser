@@ -710,4 +710,53 @@ void ns_target_dispatch_with_event(JSContext *ctx, JSValueConst obj,
 void ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj);
 JSValue ns_make_window_event(JSContext *ctx, const char *type);
 
+/* MessagePort, MessageChannel and BroadcastChannel (rust/js-workers) and the
+ * js.c helpers they call. */
+typedef struct {
+    JSValue  phase;
+    JSValue  current;
+    gboolean nested;
+} ns_event_at_target;
+void ns_event_at_target_begin(JSContext *ctx, JSValueConst ev, JSValueConst target,
+                              ns_event_at_target *st);
+void ns_event_at_target_end(JSContext *ctx, JSValueConst ev, ns_event_at_target *st);
+JSValue ns_port_deliver_job(JSContext *ctx, int argc, JSValueConst *argv);
+JSValue ns_port_new(JSContext *ctx);
+guint64 ns_port_bridge_id(JSContext *ctx, JSValueConst port);
+int     ns_port_transfer_prepare(JSContext *ctx, JSValueConst transfer,
+                                 JSValueConst source_port, JSContext *realm,
+                                 JSValue *old_ports, JSValue *new_ports);
+void    ns_port_transfer_commit(JSContext *ctx, JSValueConst old_ports,
+                                JSValueConst new_ports);
+JSValue ns_window_message_channel(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+JSValue ns_window_broadcast_channel(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+JSValue ns_port_add_event_listener(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_port_remove_event_listener(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+void    ns_net_install_ports(JSContext *ctx, JSValueConst global);
+JSValue ns_port_bridge_send(JSContext *ctx, JSValueConst port, guint64 id,
+                            JSValueConst data);
+JSContext *ns_target_handler_realm(JSContext *ctx, JSValueConst obj,
+                                   const char *type, const char *listener_key);
+JSValue ns_event_new(JSContext *ctx);
+void    ns_event_define_cancel_bubble(JSContext *ctx, JSValueConst ev);
+gint64  ns_js_budget_enter(ns_js *js);
+void    ns_js_budget_leave(ns_js *js, gint64 saved);
+void    ns_js_queue_message_task(JSContext *ctx, JSJobFunc *func, int argc,
+                                 JSValueConst *argv);
+gboolean ns_js_value_is_message_port(JSValueConst v);
+gboolean ns_js_value_is_broadcast_channel(JSValueConst v);
+JSValue ns_message_port_state(JSContext *ctx, JSValueConst v);
+JSValue ns_message_port_new_object(JSContext *ctx);
+JSValue ns_message_channel_construct(JSContext *ctx, JSValueConst new_target);
+JSValue ns_broadcast_channel_construct(JSContext *ctx, JSValueConst new_target);
+gboolean ns_listener_parse_options(JSContext *ctx, JSValueConst opts,
+                                   gboolean *capture, gboolean *once,
+                                   gboolean *passive, gboolean *passive_set,
+                                   JSValue *signal_out, gboolean strict_signal);
+void    ns_listeners_compact_dead(JSContext *ctx, JSValueConst owner);
+
 #endif

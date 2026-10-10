@@ -48,6 +48,7 @@ southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-js-window = { path = "../js-window" }
+southstar-js-workers = { path = "../js-workers" }
 southstar-layout = { path = "../layout" }
 southstar-i18n = { path = "../i18n" }
 southstar-image = { path = "../image" }
