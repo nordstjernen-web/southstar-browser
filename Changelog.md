@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Custom elements (customElements.define, get, whenDefined, upgrade and
+  getName, element upgrades and the lifecycle callbacks) moved from js.c to
+  Rust (rust/js-custom-elements), with unchanged results.
 * crypto.getRandomValues, crypto.randomUUID, crypto.subtle and CryptoKey
   moved from js.c to Rust (rust/js-crypto), which calls rust/webcrypto
   directly. CryptoKey objects now inherit from CryptoKey.prototype

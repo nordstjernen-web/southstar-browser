@@ -267,15 +267,8 @@ struct ns_js {
     ns_js_navigation_timing navigation_timing;
     GPtrArray    *node_iters;
     GHashTable   *blob_urls;
-    GHashTable   *ce_registry;
     const ns_node *ce_main_doc;
-    GHashTable   *ce_pending;
     GHashTable   *platform_globals;
-    GHashTable   *ce_under_construction;
-    ns_node      *ce_upgrading;
-    void         *ce_upgrading_wrapper;
-    int           ce_in_attr_callback;
-    int           ce_defer_upgrades;
     int           throw_on_dynamic_markup;
     int           ignore_destructive_writes;
     int           in_error_report;
@@ -1040,5 +1033,29 @@ void    ns_install_event_attribute_getters(JSContext *ctx, JSValueConst global);
 void    ns_events_install_window_base(JSContext *ctx, JSValueConst global);
 void    ns_events_install_window(JSContext *ctx, JSValueConst global);
 void    ns_events_install_worker(JSContext *ctx, JSValueConst global);
+
+JSValue  ns_ce_define(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_ce_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_ce_when_defined(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_ce_upgrade(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_ce_get_name(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+gboolean ns_ce_name_valid(const char *name);
+JSValue  ns_ce_html_element_construct(JSContext *ctx, JSValueConst new_target);
+JSValue  ns_ce_class_for_node(ns_js *js, const ns_node *node);
+void     ns_ce_upgrade_element(ns_js *js, ns_node *node);
+void     ns_ce_upgrade_subtree_all(ns_js *js, ns_node *root);
+void     ns_ce_upgrade_subtree_detached(ns_js *js, ns_node *root);
+void     ns_ce_disconnect_subtree(ns_js *js, ns_node *root);
+void     ns_ce_attribute_changed(ns_js *js, ns_node *node, const char *attr,
+                                 const char *old_value, const char *new_value);
+gboolean ns_ce_has_pending(const ns_js *js);
+gboolean ns_ce_upgrading(const ns_js *js);
+void     ns_ce_reset(ns_js *js);
+void     ns_ce_teardown(ns_js *js);
+const ns_node *ns_js_ce_main_doc(const ns_js *js);
+JSValue  ns_js_node_wrapper(JSContext *ctx, const ns_node *node);
+gboolean ns_js_wrapper_pinned(const ns_js *js, const ns_node *node);
+void     ns_js_popover_removing(ns_js *js, ns_node *el);
+JSValue  ns_js_new_orphan_element(JSContext *ctx, const char *name);
 
 #endif

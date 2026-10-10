@@ -186,12 +186,7 @@ static void ns_js_orphan_node(ns_js *js, ns_node *n);
 static void ns_qcache_invalidate(ns_js *js);
 static void ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
                                const char *old_value, const char *new_value);
-static void ns_ce_upgrade_subtree_all(ns_js *js, ns_node *root);
 static void ns_js_scroll_viewport(ns_js *js, double x, double y);
-static void ns_ce_upgrade_subtree_detached(ns_js *js, ns_node *root);
-static void ns_ce_disconnect_subtree(ns_js *js, ns_node *root);
-static gboolean ns_ce_constructor_registered(ns_js *js, JSValueConst ctor);
-static JSValue ns_ce_class_for_node(ns_js *js, const ns_node *node);
 static const ns_node *ns_node_owner_iframe(const ns_node *n);
 static double ns_window_scroll_prop(JSContext *ctx, const char *prop);
 static JSValue ns_document_element_from_point(JSContext *ctx,
@@ -1676,7 +1671,6 @@ static ns_node *ns_unwrap_element_mut(JSValueConst val);
 static void ns_tag_owner_document(JSContext *ctx, JSValueConst doc_val,
                                   JSValueConst node_val);
 static void ns_tag_caller_document(JSContext *ctx, JSValueConst node_val);
-static char *ns_ce_key_name(const char *key);
 
 typedef struct {
     JSValue element;
@@ -3206,8 +3200,6 @@ ns_node_arm_js_invalidate(ns_node *n)
 {
     if (n && !n->js_invalidate) n->js_invalidate = ns_invalidate_wrapper;
 }
-
-static gboolean ns_ce_name_valid(const char *s);
 
 static int
 ns_cmp_tag_name(const void *a, const void *b)
@@ -11797,39 +11789,9 @@ ns_window_event_ctor(JSContext *ctx, JSValueConst this_val,
                      int argc, JSValueConst *argv)
 {
     ns_js *js = js_from_ctx(ctx);
-    if (js && js->ce_upgrading && js->ce_upgrading_wrapper &&
-        ns_ce_constructor_registered(js, this_val)) {
-        JSValue wrap = JS_MKPTR(JS_TAG_OBJECT, js->ce_upgrading_wrapper);
-        return JS_DupValue(ctx, wrap);
-    }
-    if (js && js->ce_registry && JS_IsObject(this_val)) {
-        GHashTableIter it;
-        gpointer k, v;
-        const char *tag = NULL;
-        g_hash_table_iter_init(&it, js->ce_registry);
-        while (g_hash_table_iter_next(&it, &k, &v)) {
-            JSValue *slot = v;
-            if (slot && JS_VALUE_GET_PTR(*slot) == JS_VALUE_GET_PTR(this_val)) {
-                tag = k;
-                break;
-            }
-        }
-        if (tag) {
-            ns_node *node = ns_node_new_element(ns_ce_key_name(tag));
-            if (node) {
-                ns_node_arm_js_invalidate(node);
-                if (js->orphan_nodes) g_hash_table_add(js->orphan_nodes, node);
-                JSValue elem = ns_make_element(ctx, node);
-                ns_tag_caller_document(ctx, elem);
-                JSValue proto = JS_GetPropertyStr(ctx, this_val, "prototype");
-                if (JS_IsObject(proto)) JS_SetPrototype(ctx, elem, proto);
-                JS_FreeValue(ctx, proto);
-                JS_DefinePropertyValueStr(ctx, elem, "__nd_ce_class",
-                                          JS_DupValue(ctx, this_val),
-                                          JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-                return elem;
-            }
-        }
+    if (js) {
+        JSValue elem = ns_ce_html_element_construct(ctx, this_val);
+        if (!JS_IsUndefined(elem)) return elem;
     }
     JSValue obj;
     JSValue proto = JS_IsObject(this_val)
@@ -14121,7 +14083,7 @@ ns_js_has_pending_work(const ns_js *js)
     if (js->async_script_source) return TRUE;
     if (js->async_script_roots && js->async_script_roots->len > 0)
         return TRUE;
-    if (js->ce_pending && g_hash_table_size(js->ce_pending) > 0)
+    if (ns_ce_has_pending(js))
         return TRUE;
     if (ns_workers_pending(js)) return TRUE;
     return FALSE;
@@ -20579,6 +20541,7 @@ ns_shadow_disabled_for_custom_element(JSContext *ctx, const ns_node *host)
     JSValue klass = ns_ce_class_for_node(js, host);
     if (!JS_IsObject(klass)) return FALSE;
     JSValue features = JS_GetPropertyStr(ctx, klass, "disabledFeatures");
+    JS_FreeValue(ctx, klass);
     gboolean disabled = FALSE;
     if (JS_IsArray(features)) {
         uint32_t len = ns_js_array_length(ctx, features);
@@ -33622,469 +33585,44 @@ ns_js_engine_name_js(JSContext *ctx, JSValueConst this_val, int argc, JSValueCon
     return JS_NewString(ctx, "quickjs");
 }
 
-static gboolean
-ns_ce_name_valid(const char *s)
+const ns_node *
+ns_js_ce_main_doc(const ns_js *js)
 {
-    if (!s || !*s) return FALSE;
-    if (s[0] < 'a' || s[0] > 'z') return FALSE;
-    gboolean has_hyphen = FALSE;
-    for (const char *p = s; *p; p++) {
-        char c = *p;
-        if (c == '-') has_hyphen = TRUE;
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-              c == '-' || c == '.' || c == '_')) return FALSE;
-    }
-    return has_hyphen;
+    return js ? js->ce_main_doc : NULL;
 }
 
-static void
-ns_ce_value_free(gpointer p)
+JSValue
+ns_js_node_wrapper(JSContext *ctx, const ns_node *node)
 {
-    JSValue *v = p;
-    if (!v) return;
-    ns_js *js = ns_active_js();
-    if (js && js->ctx)
-        JS_FreeValue(js->ctx, *v);
-    g_free(v);
+    if (!ctx || !node || !node->js_wrapper) return JS_UNDEFINED;
+    return JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper));
 }
 
-static void
-ns_ce_pending_array_free(gpointer p)
+gboolean
+ns_js_wrapper_pinned(const ns_js *js, const ns_node *node)
 {
-    GPtrArray *a = p;
-    if (!a) return;
-    ns_js *js = ns_active_js();
-    if (js && js->ctx) {
-        for (guint i = 0; i < a->len; i++) {
-            JSValue *v = g_ptr_array_index(a, i);
-            if (v) { JS_FreeValue(js->ctx, *v); g_free(v); }
-        }
-    }
-    g_ptr_array_free(a, TRUE);
+    return js && node && node->js_wrapper && js->pinned_wrappers_set &&
+           g_hash_table_contains(js->pinned_wrappers_set, node);
 }
 
-static const ns_node *
-ns_ce_realm_document(JSContext *ctx)
+void
+ns_js_popover_removing(ns_js *js, ns_node *el)
 {
-    JSContext *rctx = JS_GetCallerRealm(ctx);
-    JSValue global = JS_GetGlobalObject(rctx);
-    JSValue doc = JS_GetPropertyStr(rctx, global, "document");
-    const ns_node *node = JS_IsObject(doc) ? ns_unwrap_element(doc) : NULL;
-    JS_FreeValue(rctx, doc);
-    JS_FreeValue(rctx, global);
-    return node;
+    if (js && js->popover_info && el && el->kind == NS_NODE_ELEMENT)
+        ns_popover_removing_steps(js, el);
 }
 
-static const ns_node *
-ns_ce_node_document(ns_js *js, const ns_node *node)
+JSValue
+ns_js_new_orphan_element(JSContext *ctx, const char *name)
 {
-    for (const ns_node *p = node; p; p = p->parent)
-        if (p->kind == NS_NODE_DOCUMENT && !(p->flags & NS_NODE_FRAGMENT))
-            return p;
-    if (node && node->js_wrapper && js && js->ctx) {
-        JSValue w = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
-        JSValue owner = JS_GetPropertyStr(js->ctx, w, "__ndOwnerDoc");
-        const ns_node *doc = JS_IsObject(owner) ? ns_unwrap_element(owner) : NULL;
-        JS_FreeValue(js->ctx, owner);
-        if (doc) return doc;
-    }
-    return js ? js->current_doc : NULL;
-}
-
-static char *
-ns_ce_key(const ns_js *js, const char *lower_name, const ns_node *doc)
-{
-    if (!doc || !js || doc == js->ce_main_doc) return g_strdup(lower_name);
-    return g_strdup_printf("%s\x1f%p", lower_name, (const void *)doc);
-}
-
-static char *
-ns_ce_key_name(const char *key)
-{
-    const char *sep = key ? strchr(key, '\x1f') : NULL;
-    return sep ? g_strndup(key, (gsize)(sep - key)) : g_strdup(key);
-}
-
-static JSValue
-ns_ce_lookup_klass(JSContext *ctx, ns_js *js, const char *name)
-{
-    if (!js || !js->ce_registry || !name) return JS_UNDEFINED;
-    char *lower = g_ascii_strdown(name, -1);
-    char *key = ns_ce_key(js, lower, ns_ce_realm_document(ctx));
-    JSValue *slot = g_hash_table_lookup(js->ce_registry, key);
-    g_free(key);
-    g_free(lower);
-    return slot ? JS_DupValue(js->ctx, *slot) : JS_UNDEFINED;
-}
-
-static JSValue
-ns_ce_getName(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
     ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->ce_registry || argc < 1 || !JS_IsObject(argv[0]))
-        return JS_NULL;
-    void *want = JS_VALUE_GET_PTR(argv[0]);
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, js->ce_registry);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        const JSValue *slot = v;
-        if (slot && JS_VALUE_GET_PTR(*slot) == want) {
-            char *name = ns_ce_key_name(k);
-            JSValue r = JS_NewString(ctx, name);
-            g_free(name);
-            return r;
-        }
-    }
-    return JS_NULL;
-}
-
-static gboolean
-ns_ce_constructor_registered(ns_js *js, JSValueConst ctor)
-{
-    if (!js || !js->ce_registry || !JS_IsObject(ctor)) return FALSE;
-    void *want = JS_VALUE_GET_PTR(ctor);
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, js->ce_registry);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        JSValue *slot = v;
-        if (slot && JS_VALUE_GET_PTR(*slot) == want) return TRUE;
-    }
-    return FALSE;
-}
-
-static void
-ns_ce_log_error(ns_js *js, const char *cb_name)
-{
-    if (!js || !js->ctx) return;
-    JSValue ex = JS_GetException(js->ctx);
-    if (JS_IsNull(ex) || JS_IsUndefined(ex)) {
-        JS_FreeValue(js->ctx, ex);
-        return;
-    }
-    const char *msg = JS_ToCString(js->ctx, ex);
-    if (msg && js->log_cb) {
-        JSValue stack = JS_GetPropertyStr(js->ctx, ex, "stack");
-        const char *stk = NULL;
-        if (!JS_IsUndefined(stack) && !JS_IsNull(stack))
-            stk = JS_ToCString(js->ctx, stack);
-        char *line = g_strdup_printf("custom element %s threw: %s%s%s",
-                                     cb_name, msg, stk ? "\n" : "", stk ? stk : "");
-        js->log_cb(line, js->log_user_data);
-        g_free(line);
-        if (stk) JS_FreeCString(js->ctx, stk);
-        JS_FreeValue(js->ctx, stack);
-    }
-    if (msg) JS_FreeCString(js->ctx, msg);
-    JS_FreeValue(js->ctx, ex);
-}
-
-static void
-ns_ce_call_callback(JSContext *ctx, JSValue elem, JSValueConst klass,
-                    const char *cb_name, int argc, JSValueConst *argv)
-{
-    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
-    if (!JS_IsObject(proto)) { JS_FreeValue(ctx, proto); return; }
-    JSValue cb = JS_GetPropertyStr(ctx, proto, cb_name);
-    JS_FreeValue(ctx, proto);
-    if (JS_IsFunction(ctx, cb)) {
-        JSValue r = JS_Call(ctx, cb, elem, argc, argv);
-        if (JS_IsException(r)) ns_ce_log_error(js_from_ctx(ctx), cb_name);
-        JS_FreeValue(ctx, r);
-    }
-    JS_FreeValue(ctx, cb);
-}
-
-static gboolean
-ns_ce_node_connected(ns_js *js, const ns_node *node)
-{
-    return ns_js_node_in_page(js, node);
-}
-
-static void
-ns_ce_fire_connected_if_needed(JSContext *ctx, ns_js *js, ns_node *node,
-                               JSValue elem, JSValueConst klass)
-{
-    if (!ns_ce_node_connected(js, node)) return;
-    JSValue prev = JS_GetPropertyStr(ctx, elem, "__nd_ce_connected");
-    gboolean was = JS_ToBool(ctx, prev) > 0;
-    JS_FreeValue(ctx, prev);
-    if (was) return;
-    JS_DefinePropertyValueStr(ctx, elem, "__nd_ce_connected", JS_TRUE,
-                              JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    ns_ce_call_callback(ctx, elem, klass, "connectedCallback", 0, NULL);
-}
-
-static void
-ns_ce_reclaim_shadowed_props(JSContext *ctx, JSValueConst elem)
-{
-    JSPropertyEnum *tab = NULL;
-    uint32_t len = 0;
-    if (JS_GetOwnPropertyNames(ctx, &tab, &len, elem,
-                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) != 0)
-        return;
-    for (uint32_t i = 0; i < len; i++) {
-        JSAtom atom = tab[i].atom;
-        const char *name = JS_AtomToCString(ctx, atom);
-        gboolean internal = !name || g_str_has_prefix(name, "__nd") ||
-                            g_str_has_prefix(name, "_");
-        if (name) JS_FreeCString(ctx, name);
-        if (internal) continue;
-
-        JSPropertyDescriptor own;
-        if (JS_GetOwnProperty(ctx, &own, elem, atom) != 1) continue;
-        gboolean own_is_data = !(own.flags & JS_PROP_GETSET);
-        JSValue value = own_is_data ? JS_DupValue(ctx, own.value) : JS_UNDEFINED;
-        JS_FreeValue(ctx, own.value);
-        JS_FreeValue(ctx, own.getter);
-        JS_FreeValue(ctx, own.setter);
-        if (!own_is_data) continue;
-
-        gboolean shadowed = FALSE;
-        JSValue proto = JS_GetPrototype(ctx, elem);
-        for (int depth = 0; depth < 8 && JS_IsObject(proto); depth++) {
-            JSPropertyDescriptor pd;
-            int has = JS_GetOwnProperty(ctx, &pd, proto, atom);
-            if (has == 1) {
-                shadowed = (pd.flags & JS_PROP_GETSET) &&
-                           JS_IsFunction(ctx, pd.setter);
-                JS_FreeValue(ctx, pd.value);
-                JS_FreeValue(ctx, pd.getter);
-                JS_FreeValue(ctx, pd.setter);
-                break;
-            }
-            JSValue next = JS_GetPrototype(ctx, proto);
-            JS_FreeValue(ctx, proto);
-            proto = next;
-        }
-        JS_FreeValue(ctx, proto);
-
-        if (shadowed) {
-            JS_DeleteProperty(ctx, elem, atom, 0);
-            if (JS_SetProperty(ctx, elem, atom, value) < 0)
-                JS_FreeValue(ctx, JS_GetException(ctx));
-        } else {
-            JS_FreeValue(ctx, value);
-        }
-    }
-    JS_FreePropertyEnum(ctx, tab, len);
-}
-
-static JSValue ns_ce_observed_attributes(JSContext *ctx, JSValueConst klass);
-static void ns_ce_upgrade_subtree_all_rec(ns_js *js, ns_node *root, int depth);
-
-static void
-ns_ce_upgrade_element_with(ns_js *js, ns_node *node, JSValueConst klass_arg,
-                           int depth)
-{
-    if (!js || !node || !js->ctx) return;
-    if (js->ce_under_construction &&
-        g_hash_table_contains(js->ce_under_construction, node))
-        return;
-    JSContext *ctx = js->ctx;
+    ns_node *node = ns_node_new_element(g_strdup(name));
+    if (!node) return JS_UNDEFINED;
+    ns_node_arm_js_invalidate(node);
+    if (js && js->orphan_nodes) g_hash_table_add(js->orphan_nodes, node);
     JSValue elem = ns_make_element(ctx, node);
-    if (!JS_IsObject(elem)) { JS_FreeValue(ctx, elem); return; }
-    JSValue klass = JS_DupValue(ctx, klass_arg);
-
-    JSValue marker = JS_GetPropertyStr(ctx, elem, "__nd_ce_class");
-    gboolean already = !JS_IsUndefined(marker) && JS_IsStrictEqual(ctx, marker, klass);
-    JS_FreeValue(ctx, marker);
-    if (already) {
-        ns_ce_fire_connected_if_needed(ctx, js, node, elem, klass);
-        JS_FreeValue(ctx, klass);
-        JS_FreeValue(ctx, elem);
-        return;
-    }
-
-    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
-    if (JS_IsObject(proto)) JS_SetPrototype(ctx, elem, proto);
-    JS_FreeValue(ctx, proto);
-
-    JS_DefinePropertyValueStr(ctx, elem, "__nd_ce_class",
-                              JS_DupValue(ctx, klass),
-                              JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-
-    if (!js->ce_under_construction)
-        js->ce_under_construction = g_hash_table_new(NULL, NULL);
-    g_hash_table_add(js->ce_under_construction, node);
-
-    {
-        ns_node *prev = js->ce_upgrading;
-        void *prev_wrapper = js->ce_upgrading_wrapper;
-        js->ce_upgrading = node;
-        js->ce_upgrading_wrapper = JS_VALUE_GET_PTR(elem);
-        JSValue ctor_result = JS_CallConstructor(ctx, klass, 0, NULL);
-        if (JS_IsException(ctor_result)) ns_ce_log_error(js, "constructor");
-        JS_FreeValue(ctx, ctor_result);
-        js->ce_upgrading = prev;
-        js->ce_upgrading_wrapper = prev_wrapper;
-    }
-
-    ns_ce_reclaim_shadowed_props(ctx, elem);
-
-    JSValue observed = ns_ce_observed_attributes(ctx, klass);
-    if (JS_IsArray(observed)) {
-        JSValue len_v = JS_GetPropertyStr(ctx, observed, "length");
-        int32_t len = 0; JS_ToInt32(ctx, &len, len_v);
-        JS_FreeValue(ctx, len_v);
-        js->ce_in_attr_callback++;
-        for (int i = 0; i < len; i++) {
-            JSValue av = JS_GetPropertyUint32(ctx, observed, i);
-            const char *aname = JS_ToCString(ctx, av);
-            if (aname) {
-                const char *current = ns_element_get_attr(node, aname);
-                if (current) {
-                    JSValue val = JS_NewString(ctx, current);
-                    JSValueConst args[3] = { av, JS_NULL, val };
-                    ns_ce_call_callback(ctx, elem, klass,
-                                        "attributeChangedCallback", 3, args);
-                    JS_FreeValue(ctx, val);
-                }
-                JS_FreeCString(ctx, aname);
-            }
-            JS_FreeValue(ctx, av);
-        }
-        js->ce_in_attr_callback--;
-    }
-    JS_FreeValue(ctx, observed);
-
-    g_hash_table_remove(js->ce_under_construction, node);
-
-    ns_ce_fire_connected_if_needed(ctx, js, node, elem, klass);
-
-    if (js->ce_defer_upgrades == 0)
-        for (ns_node *c = node->first_child; c; c = c->next_sibling)
-            if (ns_ce_node_connected(js, c))
-                ns_ce_upgrade_subtree_all_rec(js, c, depth + 1);
-
-    JS_FreeValue(ctx, klass);
-    JS_FreeValue(ctx, elem);
-}
-
-static void
-ns_ce_disconnect_subtree_rec(ns_js *js, ns_node *root, int depth)
-{
-    if (!js || !root || !js->ctx || depth >= 512) return;
-    if (js->popover_info && root->kind == NS_NODE_ELEMENT)
-        ns_popover_removing_steps(js, root);
-    if (root->kind == NS_NODE_ELEMENT && root->js_wrapper) {
-        JSContext *ctx = js->ctx;
-        JSValue elem = JS_MKPTR(JS_TAG_OBJECT, root->js_wrapper);
-        JSValue conn = JS_GetPropertyStr(ctx, elem, "__nd_ce_connected");
-        gboolean was = JS_ToBool(ctx, conn) > 0;
-        JS_FreeValue(ctx, conn);
-        if (was) {
-            JSValue klass = JS_GetPropertyStr(ctx, elem, "__nd_ce_class");
-            JS_DefinePropertyValueStr(ctx, elem, "__nd_ce_connected", JS_FALSE,
-                                      JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-            if (JS_IsObject(klass))
-                ns_ce_call_callback(ctx, elem, klass,
-                                    "disconnectedCallback", 0, NULL);
-            JS_FreeValue(ctx, klass);
-        }
-    }
-    for (ns_node *c = root->first_child; c; c = c->next_sibling)
-        ns_ce_disconnect_subtree_rec(js, c, depth + 1);
-}
-
-static void
-ns_ce_disconnect_subtree(ns_js *js, ns_node *root)
-{
-    ns_ce_disconnect_subtree_rec(js, root, 0);
-}
-
-static JSValue
-ns_ce_class_for_node(ns_js *js, const ns_node *node)
-{
-    if (!js || !js->ce_registry || !js->ctx || !node ||
-        node->kind != NS_NODE_ELEMENT || !node->name)
-        return JS_UNDEFINED;
-    JSContext *ctx = js->ctx;
-    const ns_node *doc = ns_ce_node_document(js, node);
-    gboolean autonomous = strchr(node->name, '-') != NULL;
-    const char *name = autonomous ? node->name : ns_element_get_attr(node, "is");
-    if (!name || !*name) return JS_UNDEFINED;
-    char *lower = g_ascii_strdown(name, -1);
-    char *key = ns_ce_key(js, lower, doc);
-    g_free(lower);
-    JSValue *slot = g_hash_table_lookup(js->ce_registry, key);
-    if (!slot) {
-        g_free(key);
-        return JS_UNDEFINED;
-    }
-    JSValue klass = JS_DupValue(ctx, *slot);
-    JSValue ext = JS_GetPropertyStr(ctx, klass, "__nd_ce_extends");
-    gboolean match = FALSE;
-    if (!autonomous && JS_IsString(ext)) {
-        const char *e = JS_ToCString(ctx, ext);
-        match = e && g_ascii_strcasecmp(e, node->name) == 0;
-        if (e) JS_FreeCString(ctx, e);
-    } else if (autonomous) {
-        match = !JS_IsString(ext);
-    }
-    JS_FreeValue(ctx, ext);
-    slot = js->ce_registry ? g_hash_table_lookup(js->ce_registry, key) : NULL;
-    g_free(key);
-    JSValue result = JS_UNDEFINED;
-    if (match && slot && JS_VALUE_GET_PTR(*slot) == JS_VALUE_GET_PTR(klass))
-        result = *slot;
-    JS_FreeValue(ctx, klass);
-    return result;
-}
-
-static void
-ns_ce_upgrade_subtree_named_rec(ns_js *js, ns_node *root,
-                                const char *target_name, int depth)
-{
-    if (!js || !root || !target_name || depth >= 512) return;
-    if (js->ce_defer_upgrades > 0) return;
-    if (ns_node_in_template_content(root)) return;
-    if (root->kind == NS_NODE_ELEMENT && root->name) {
-        JSValue *tslot = g_hash_table_lookup(js->ce_registry, target_name);
-        JSValue klass = ns_ce_class_for_node(js, root);
-        if (tslot && JS_IsObject(klass) &&
-            JS_VALUE_GET_PTR(klass) == JS_VALUE_GET_PTR(*tslot))
-            ns_ce_upgrade_element_with(js, root, klass, depth);
-    }
-    for (ns_node *c = root->first_child; c; c = c->next_sibling)
-        ns_ce_upgrade_subtree_named_rec(js, c, target_name, depth + 1);
-}
-
-static void
-ns_ce_upgrade_subtree_named(ns_js *js, ns_node *root, const char *target_name)
-{
-    if (!ns_ce_node_connected(js, root)) return;
-    ns_ce_upgrade_subtree_named_rec(js, root, target_name, 0);
-}
-
-static void
-ns_ce_upgrade_subtree_all_rec(ns_js *js, ns_node *root, int depth)
-{
-    if (!js || !root || !js->ce_registry || depth >= 512) return;
-    if (g_hash_table_size(js->ce_registry) == 0) return;
-    if (js->ce_defer_upgrades > 0) return;
-    if (ns_node_in_template_content(root)) return;
-    if (root->kind == NS_NODE_ELEMENT && root->name) {
-        JSValue klass = ns_ce_class_for_node(js, root);
-        if (JS_IsObject(klass)) ns_ce_upgrade_element_with(js, root, klass, depth);
-    }
-    for (ns_node *c = root->first_child; c; c = c->next_sibling)
-        ns_ce_upgrade_subtree_all_rec(js, c, depth + 1);
-}
-
-static void
-ns_ce_upgrade_subtree_all(ns_js *js, ns_node *root)
-{
-    if (!ns_ce_node_connected(js, root)) return;
-    ns_ce_upgrade_subtree_all_rec(js, root, 0);
-}
-
-static void
-ns_ce_upgrade_subtree_detached(ns_js *js, ns_node *root)
-{
-    ns_ce_upgrade_subtree_all_rec(js, root, 0);
+    ns_tag_caller_document(ctx, elem);
+    return elem;
 }
 
 static void
@@ -34100,275 +33638,8 @@ ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
         ns_js_script_needs_prepare(js, node);
         return;
     }
-    if (!js || !node || !node->js_wrapper || !attr) return;
-    if (js->ce_in_attr_callback) return;
-    JSContext *ctx = js->ctx;
-    if (!ctx) return;
-    if (js->halted) return;
-    if (!js->pinned_wrappers_set ||
-        !g_hash_table_contains(js->pinned_wrappers_set, node))
-        return;
-    JSValue elem = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
-    JSValue klass = JS_GetPropertyStr(ctx, elem, "__nd_ce_class");
-    if (!JS_IsObject(klass)) { JS_FreeValue(ctx, klass); return; }
-
-    JSValue observed = ns_ce_observed_attributes(ctx, klass);
-    gboolean watched = FALSE;
-    if (JS_IsArray(observed)) {
-        JSValue len_v = JS_GetPropertyStr(ctx, observed, "length");
-        int32_t len = 0; JS_ToInt32(ctx, &len, len_v);
-        JS_FreeValue(ctx, len_v);
-        for (int i = 0; i < len; i++) {
-            JSValue av = JS_GetPropertyUint32(ctx, observed, i);
-            const char *aname = JS_ToCString(ctx, av);
-            if (aname && g_ascii_strcasecmp(aname, attr) == 0) watched = TRUE;
-            if (aname) JS_FreeCString(ctx, aname);
-            JS_FreeValue(ctx, av);
-            if (watched) break;
-        }
-    }
-    JS_FreeValue(ctx, observed);
-    if (watched) {
-        js->ce_in_attr_callback++;
-        JSValue name_v = JS_NewString(ctx, attr);
-        JSValue old_v  = old_value ? JS_NewString(ctx, old_value) : JS_NULL;
-        JSValue new_v  = new_value ? JS_NewString(ctx, new_value) : JS_NULL;
-        JSValueConst args[3] = { name_v, old_v, new_v };
-        ns_ce_call_callback(ctx, elem, klass,
-                            "attributeChangedCallback", 3, args);
-        JS_FreeValue(ctx, name_v);
-        if (!JS_IsNull(old_v)) JS_FreeValue(ctx, old_v);
-        if (!JS_IsNull(new_v)) JS_FreeValue(ctx, new_v);
-        js->ce_in_attr_callback--;
-    }
-    JS_FreeValue(ctx, klass);
-}
-
-static int
-ns_ce_capture_observed_attributes(JSContext *ctx, JSValueConst klass)
-{
-    JSValue proto = JS_GetPropertyStr(ctx, klass, "prototype");
-    if (JS_IsException(proto)) return -1;
-    JSValue acc = JS_IsObject(proto)
-        ? JS_GetPropertyStr(ctx, proto, "attributeChangedCallback")
-        : JS_UNDEFINED;
-    JS_FreeValue(ctx, proto);
-    if (JS_IsException(acc)) return -1;
-    gboolean observes = JS_IsFunction(ctx, acc);
-    JS_FreeValue(ctx, acc);
-    if (!observes) return 0;
-    JSValue observed = JS_GetPropertyStr(ctx, klass, "observedAttributes");
-    if (JS_IsException(observed)) return -1;
-    JSValue names = JS_NewArray(ctx);
-    if (JS_IsArray(observed)) {
-        JSValue len_v = JS_GetPropertyStr(ctx, observed, "length");
-        int32_t len = 0;
-        JS_ToInt32(ctx, &len, len_v);
-        JS_FreeValue(ctx, len_v);
-        for (int32_t i = 0; i < len; i++) {
-            JSValue item = JS_GetPropertyUint32(ctx, observed, i);
-            JSValue name = JS_ToString(ctx, item);
-            JS_FreeValue(ctx, item);
-            if (JS_IsException(name)) {
-                JS_FreeValue(ctx, names);
-                JS_FreeValue(ctx, observed);
-                return -1;
-            }
-            JS_SetPropertyUint32(ctx, names, (uint32_t)i, name);
-        }
-    }
-    JS_FreeValue(ctx, observed);
-    JS_DefinePropertyValueStr(ctx, klass, "__nd_ce_observed", names,
-                              JS_PROP_CONFIGURABLE);
-    return 0;
-}
-
-static JSValue
-ns_ce_observed_attributes(JSContext *ctx, JSValueConst klass)
-{
-    JSValue cached = JS_GetPropertyStr(ctx, klass, "__nd_ce_observed");
-    if (JS_IsArray(cached)) return cached;
-    JS_FreeValue(ctx, cached);
-    return JS_GetPropertyStr(ctx, klass, "observedAttributes");
-}
-
-static JSValue
-ns_ce_define(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx, "customElements.define: name and class required");
-    if (!JS_IsFunction(ctx, argv[1]) && !JS_IsConstructor(ctx, argv[1]))
-        return JS_ThrowTypeError(ctx, "customElements.define: class must be a constructor");
-    const char *raw = JS_ToCString(ctx, argv[0]);
-    if (!raw) return JS_EXCEPTION;
-    if (!ns_ce_name_valid(raw)) {
-        JSValue r = JS_ThrowTypeError(ctx, "customElements.define: invalid name '%s'", raw);
-        JS_FreeCString(ctx, raw);
-        return r;
-    }
-    char *name = g_ascii_strdown(raw, -1);
-    JS_FreeCString(ctx, raw);
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) { g_free(name); return JS_UNDEFINED; }
-    if (argc >= 3 && JS_IsObject(argv[2])) {
-        JSValue ext = JS_GetPropertyStr(ctx, argv[2], "extends");
-        if (JS_IsString(ext)) {
-            const char *e = JS_ToCString(ctx, ext);
-            if (e && *e) {
-                if (ns_ce_name_valid(e)) {
-                    JS_FreeCString(ctx, e);
-                    JS_FreeValue(ctx, ext);
-                    g_free(name);
-                    return ns_throw_dom_exception(ctx, "NotSupportedError", 9,
-                        "customElements.define: cannot extend a custom element name");
-                }
-                char *elow = g_ascii_strdown(e, -1);
-                JS_DefinePropertyValueStr(ctx, argv[1], "__nd_ce_extends",
-                                          JS_NewString(ctx, elow),
-                                          JS_PROP_CONFIGURABLE);
-                g_free(elow);
-            }
-            if (e) JS_FreeCString(ctx, e);
-        }
-        JS_FreeValue(ctx, ext);
-    }
-    if (ns_ce_capture_observed_attributes(ctx, argv[1]) < 0) {
-        g_free(name);
-        return JS_EXCEPTION;
-    }
-    if (!js->ce_registry)
-        js->ce_registry = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                g_free, ns_ce_value_free);
-    JSValue *slot = g_new0(JSValue, 1);
-    *slot = JS_DupValue(ctx, argv[1]);
-    const ns_node *def_doc = ns_ce_realm_document(ctx);
-    char *key = ns_ce_key(js, name, def_doc);
-    g_hash_table_replace(js->ce_registry, g_strdup(key), slot);
-    ns_css_register_defined_element(name);
-
-    ns_node *upgrade_root = def_doc ? (ns_node *)def_doc : js->current_doc;
-    if (upgrade_root) {
-        int saved = js->ce_defer_upgrades;
-        js->ce_defer_upgrades = 0;
-        ns_ce_upgrade_subtree_named(js, upgrade_root, key);
-        js->ce_defer_upgrades = saved;
-    }
-
-    gpointer pending_key = NULL, pending_value = NULL;
-    if (js->ce_pending &&
-        g_hash_table_steal_extended(js->ce_pending, key, &pending_key,
-                                    &pending_value)) {
-        GPtrArray *waiters = pending_value;
-        if (waiters) {
-            for (guint i = 0; i < waiters->len; i++) {
-                JSValue *fn = g_ptr_array_index(waiters, i);
-                if (fn) {
-                    JSValue arg = JS_DupValue(ctx, argv[1]);
-                    JSValue r = JS_Call(ctx, *fn, JS_UNDEFINED, 1,
-                                        (JSValueConst[]){ arg });
-                    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-                    JS_FreeValue(ctx, r);
-                    JS_FreeValue(ctx, arg);
-                    JS_FreeValue(ctx, *fn);
-                    g_free(fn);
-                }
-            }
-            g_ptr_array_free(waiters, TRUE);
-        }
-        g_free(pending_key);
-    }
-
-    g_free(key);
-    g_free(name);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_ce_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1) return JS_UNDEFINED;
-    const char *raw = JS_ToCString(ctx, argv[0]);
-    if (!raw) return JS_EXCEPTION;
-    ns_js *js = js_from_ctx(ctx);
-    JSValue r = ns_ce_lookup_klass(ctx, js, raw);
-    JS_FreeCString(ctx, raw);
-    return r;
-}
-
-static JSValue
-ns_ce_whenDefined(JSContext *ctx, JSValueConst this_val,
-                  int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue resolving[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
-    if (JS_IsException(promise)) return promise;
-    if (argc < 1) {
-        JS_Call(ctx, resolving[1], JS_UNDEFINED, 0, NULL);
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        return promise;
-    }
-    const char *raw = JS_ToCString(ctx, argv[0]);
-    if (!raw) {
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        JS_FreeValue(ctx, promise);
-        return JS_EXCEPTION;
-    }
-    if (!ns_ce_name_valid(raw)) {
-        JS_FreeCString(ctx, raw);
-        JSValue err = JS_NewError(ctx);
-        JS_SetPropertyStr(ctx, err, "message",
-                          JS_NewString(ctx, "Invalid custom element name"));
-        JS_Call(ctx, resolving[1], JS_UNDEFINED, 1, (JSValueConst[]){ err });
-        JS_FreeValue(ctx, err);
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        return promise;
-    }
-    ns_js *js = js_from_ctx(ctx);
-    char *name = g_ascii_strdown(raw, -1);
-    JS_FreeCString(ctx, raw);
-    JSValue existing = ns_ce_lookup_klass(ctx, js, name);
-    char *pending_key = ns_ce_key(js, name, ns_ce_realm_document(ctx));
-    if (JS_IsObject(existing)) {
-        JS_Call(ctx, resolving[0], JS_UNDEFINED, 1, (JSValueConst[]){ existing });
-        JS_FreeValue(ctx, existing);
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-    } else {
-        JS_FreeValue(ctx, existing);
-        if (!js->ce_pending)
-            js->ce_pending = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                   g_free, ns_ce_pending_array_free);
-        GPtrArray *waiters = g_hash_table_lookup(js->ce_pending, pending_key);
-        if (!waiters) {
-            waiters = g_ptr_array_new();
-            g_hash_table_insert(js->ce_pending, g_strdup(pending_key), waiters);
-        }
-        JSValue *slot = g_new0(JSValue, 1);
-        *slot = resolving[0];
-        g_ptr_array_add(waiters, slot);
-        JS_FreeValue(ctx, resolving[1]);
-    }
-    g_free(pending_key);
-    g_free(name);
-    return promise;
-}
-
-static JSValue
-ns_ce_upgrade(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1) return JS_UNDEFINED;
-    ns_node *root = ns_unwrap_element_mut(argv[0]);
-    if (!root) return JS_UNDEFINED;
-    ns_js *js = js_from_ctx(ctx);
-    ns_ce_upgrade_subtree_all_rec(js, root, 0);
-    return JS_UNDEFINED;
+    if (!js || !node || !attr || !js->ctx || js->halted) return;
+    ns_ce_attribute_changed(js, node, attr, old_value, new_value);
 }
 
 static int
@@ -36967,8 +36238,8 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_bind_fn(ctx, custom_elements, "define",      ns_ce_define,      3);
     ns_bind_fn(ctx, custom_elements, "get",         ns_ce_get,         1);
     ns_bind_fn(ctx, custom_elements, "upgrade",     ns_ce_upgrade,     1);
-    ns_bind_fn(ctx, custom_elements, "whenDefined", ns_ce_whenDefined, 1);
-    ns_bind_fn(ctx, custom_elements, "getName",     ns_ce_getName,     1);
+    ns_bind_fn(ctx, custom_elements, "whenDefined", ns_ce_when_defined, 1);
+    ns_bind_fn(ctx, custom_elements, "getName",     ns_ce_get_name,    1);
     JS_SetPropertyStr(ctx, global, "customElements", custom_elements);
 
     ns_canvas_register_classes(js->rt);
@@ -37876,10 +37147,7 @@ ns_document_createElement(JSContext *ctx, JSValueConst this_val,
     g_hash_table_add(js->orphan_nodes, el);
     JSValue wrapper = ns_make_element(ctx, el);
     ns_tag_owner_document(ctx, this_val, wrapper);
-    if (js->ce_registry) {
-        JSValue klass = ns_ce_class_for_node(js, el);
-        if (JS_IsObject(klass)) ns_ce_upgrade_element_with(js, el, klass, 0);
-    }
+    ns_ce_upgrade_element(js, el);
     return wrapper;
 }
 
@@ -40150,13 +39418,9 @@ ns_js_reset_runtime_state(ns_js *js)
 
     ns_js_net_reset(js);
 
-    if (js->ce_registry) g_hash_table_remove_all(js->ce_registry);
+    ns_ce_reset(js);
     ns_css_clear_defined_elements();
     ns_css_clear_registered_properties();
-    if (js->ce_pending)  g_hash_table_remove_all(js->ce_pending);
-    if (js->ce_under_construction)
-        g_hash_table_remove_all(js->ce_under_construction);
-    js->ce_in_attr_callback = 0;
 
     if (js->async_script_source) {
         g_source_remove(js->async_script_source);
@@ -40966,19 +40230,8 @@ ns_js_free(ns_js *js)
         js->dom_protos_set = 0;
     }
     ns_observers_teardown(js);
-    if (js->ce_registry) {
-        g_hash_table_destroy(js->ce_registry);
-        js->ce_registry = NULL;
-    }
+    ns_ce_teardown(js);
     g_clear_pointer(&js->platform_globals, g_hash_table_destroy);
-    if (js->ce_pending) {
-        g_hash_table_destroy(js->ce_pending);
-        js->ce_pending = NULL;
-    }
-    if (js->ce_under_construction) {
-        g_hash_table_destroy(js->ce_under_construction);
-        js->ce_under_construction = NULL;
-    }
     if (js->local_storage)   g_hash_table_destroy(js->local_storage);
     if (js->session_storage) g_hash_table_destroy(js->session_storage);
     if (js->session_storage_buckets)
@@ -42813,7 +42066,7 @@ ns_js_run_inserted_scripts(ns_js *js, ns_node *root)
     if (js->js_image_loads && g_hash_table_size(js->js_image_loads) > 0)
         ns_js_rescan_subtree_images(js, root, 0);
     if (js->in_pump) return;
-    if (js->ce_upgrading) return;
+    if (ns_ce_upgrading(js)) return;
     if (!ns_js_root_connected(js, root)) return;
     ns_js_schedule_static_iframes(js, root);
     GPtrArray *sheets = g_ptr_array_new();
@@ -43541,8 +42794,8 @@ ns_js_iframe_restore_custom_elements(JSContext *ctx)
         ns_bind_fn(ctx, ce, "define",      ns_ce_define,      3);
         ns_bind_fn(ctx, ce, "get",         ns_ce_get,         1);
         ns_bind_fn(ctx, ce, "upgrade",     ns_ce_upgrade,     1);
-        ns_bind_fn(ctx, ce, "whenDefined", ns_ce_whenDefined, 1);
-        ns_bind_fn(ctx, ce, "getName",     ns_ce_getName,     1);
+        ns_bind_fn(ctx, ce, "whenDefined", ns_ce_when_defined, 1);
+        ns_bind_fn(ctx, ce, "getName",     ns_ce_get_name,    1);
     }
     JS_FreeValue(ctx, ce);
     JS_FreeValue(ctx, g);
