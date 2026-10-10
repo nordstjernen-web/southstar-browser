@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* crypto.getRandomValues, crypto.randomUUID, crypto.subtle and CryptoKey
+  moved from js.c to Rust (rust/js-crypto), which calls rust/webcrypto
+  directly. CryptoKey objects now inherit from CryptoKey.prototype
+  (instanceof works) and subtle methods accept DataView input.
 * The Web Audio bindings (AudioContext, OfflineAudioContext, the audio
   nodes, AudioParam, AudioBuffer and offline rendering) and EME's
   requestMediaKeySystemAccess and setMediaKeys moved from js.c to Rust

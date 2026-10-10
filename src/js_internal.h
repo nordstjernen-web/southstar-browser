@@ -1006,6 +1006,10 @@ void    ns_worker_install_location(JSContext *ctx, JSValueConst global,
 void    ns_sw_install_scope(JSContext *ctx, JSValueConst global);
 void    ns_worker_shape_global(JSContext *ctx, gboolean service_worker);
 
+void    ns_crypto_install_window(JSContext *ctx, JSValueConst global);
+void    ns_crypto_install_window_subtle(JSContext *ctx, JSValueConst global);
+void    ns_crypto_install_worker(JSContext *ctx, JSValueConst global);
+
 /* getComputedStyle, element.style, the CSS namespace and the Web Animations
  * hooks (rust/js-cssom) and the js.c helpers they call. */
 void     ns_cssom_install_window(JSContext *ctx, JSValueConst global);

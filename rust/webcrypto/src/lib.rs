@@ -61,6 +61,60 @@ impl Drop for NewKey<'_> {
     }
 }
 
+pub struct StoredKey {
+    pub kind: KeyType,
+    pub algo: Option<Vec<u8>>,
+    pub hash: Option<Vec<u8>>,
+    pub curve: Option<Vec<u8>>,
+    pub bits: i32,
+    pub extractable: bool,
+    pub usages: u32,
+    raw: Option<Vec<u8>>,
+    pkey: Option<Pkey>,
+}
+
+impl StoredKey {
+    pub fn view(&self) -> Key<'_> {
+        Key {
+            kind: self.kind,
+            algo: self.algo.as_deref().unwrap_or_default(),
+            hash: self.hash.as_deref(),
+            curve: self.curve.as_deref(),
+            bits: self.bits,
+            raw: self.raw.as_deref(),
+            pkey: self.pkey.as_ref().map(Pkey::as_ref),
+        }
+    }
+
+    pub fn raw(&self) -> Option<&[u8]> {
+        self.raw.as_deref()
+    }
+}
+
+impl From<NewKey<'_>> for StoredKey {
+    fn from(mut key: NewKey<'_>) -> StoredKey {
+        StoredKey {
+            kind: key.kind,
+            algo: key.algo.map(<[u8]>::to_vec),
+            hash: key.hash.map(<[u8]>::to_vec),
+            curve: key.curve.map(<[u8]>::to_vec),
+            bits: key.bits,
+            extractable: key.extractable,
+            usages: key.usages,
+            raw: key.raw.take().filter(|raw| !raw.is_empty()),
+            pkey: key.pkey.take(),
+        }
+    }
+}
+
+impl Drop for StoredKey {
+    fn drop(&mut self) {
+        if let Some(raw) = self.raw.as_mut() {
+            openssl::cleanse(raw);
+        }
+    }
+}
+
 pub struct KeyAttrs<'a> {
     pub algo: Option<&'a [u8]>,
     pub hash: Option<&'a [u8]>,

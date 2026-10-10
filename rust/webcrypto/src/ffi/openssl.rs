@@ -481,18 +481,8 @@ impl Pkey {
         NonNull::new(p).map(Pkey)
     }
 
-    pub unsafe fn from_owned(p: *mut c_void) -> Option<Pkey> {
-        Pkey::from_raw(p.cast())
-    }
-
     pub fn as_ref(&self) -> PkeyRef<'_> {
         PkeyRef(self.0, PhantomData)
-    }
-
-    pub fn into_raw(self) -> *mut c_void {
-        let p = self.0.as_ptr();
-        core::mem::forget(self);
-        p.cast()
     }
 
     pub fn from_spki(der: &[u8]) -> Option<Pkey> {
@@ -537,10 +527,6 @@ impl Pkey {
 }
 
 impl<'a> PkeyRef<'a> {
-    pub unsafe fn from_ptr(p: *mut c_void) -> Option<PkeyRef<'a>> {
-        NonNull::new(p.cast()).map(|p| PkeyRef(p, PhantomData))
-    }
-
     fn ptr(self) -> *mut EvpPkey {
         self.0.as_ptr()
     }

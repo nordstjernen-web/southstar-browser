@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-crypto"
+description = "The WebCrypto bindings: the crypto object, getRandomValues, randomUUID, crypto.subtle and CryptoKey"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-webcrypto = { path = "../webcrypto" }
+
+[lints]
+workspace = true

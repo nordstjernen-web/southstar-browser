@@ -1618,6 +1618,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-js-brand",
  "southstar-js-clone",
+ "southstar-js-crypto",
  "southstar-js-cssom",
  "southstar-js-events",
  "southstar-js-forms",
@@ -1790,6 +1791,15 @@ name = "southstar-js-clone"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-crypto"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-js-engine",
+ "southstar-webcrypto",
 ]
 
 [[package]]
@@ -2113,9 +2123,6 @@ dependencies = [
 [[package]]
 name = "southstar-webcrypto"
 version = "1.0.30-dev"
-dependencies = [
- "southstar-glib",
-]
 
 [[package]]
 name = "southstar-webgl"
