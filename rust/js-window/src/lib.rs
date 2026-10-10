@@ -1,11 +1,13 @@
-//! Southstar — the window's navigation bindings: History, the Navigation API, Location, window.open, postMessage between windows and frames, and each page's session history.
+//! Southstar — the window's bindings: History, the Navigation API, Location, window.open, postMessage, session history, the browsing-context members and named access.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod context;
 mod ffi;
 mod history;
 mod location;
 mod message;
+mod named;
 mod navigation;
 
 use std::cell::RefCell;

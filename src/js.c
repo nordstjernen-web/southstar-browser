@@ -2286,74 +2286,18 @@ ns_unwrap_element(JSValueConst val)
 }
 
 static ns_node *ns_window_document_for(JSContext *ctx, JSValueConst window);
-static ns_node *ns_window_current_document_for(JSContext *ctx, JSValueConst window);
-static JSValue ns_window_child_frame_window(JSContext *ctx, ns_node *doc,
-                                            uint32_t index, const char *name,
-                                            gboolean raw);
-
-static gboolean
-ns_window_named_take(JSContext *ctx, JSValue win, JSValue *out)
-{
-    if (JS_IsException(win)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return FALSE;
-    }
-    if (!JS_IsObject(win)) {
-        JS_FreeValue(ctx, win);
-        return FALSE;
-    }
-    *out = win;
-    return TRUE;
-}
-
-static gboolean
-ns_window_named_value(JSContext *ctx, ns_node *doc, JSAtom prop, JSValue *out)
-{
-    if (!doc) return FALSE;
-    uint32_t index = 0;
-    if (JS_AtomIsArrayIndex(ctx, &index, prop))
-        return ns_window_named_take(ctx,
-            ns_window_child_frame_window(ctx, doc, index, NULL, FALSE), out);
-    JSValue keyv = JS_AtomToValue(ctx, prop);
-    int is_str = JS_IsString(keyv);
-    JS_FreeValue(ctx, keyv);
-    if (!is_str) return FALSE;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return FALSE;
-    if (ns_window_named_take(ctx,
-            ns_window_child_frame_window(ctx, doc, 0, name, FALSE), out)) {
-        JS_FreeCString(ctx, name);
-        return TRUE;
-    }
-    ns_node *el = *name ? ns_node_find_by_id(doc, name) : NULL;
-    JS_FreeCString(ctx, name);
-    if (!el) return FALSE;
-    *out = ns_make_element(ctx, el);
-    return TRUE;
-}
-
-static _Thread_local int ns_window_named_resolving;
-
-static ns_node *
-ns_window_named_document(JSContext *ctx, JSValueConst window)
-{
-    if (ns_window_named_resolving) return NULL;
-    ns_window_named_resolving++;
-    ns_node *doc = ns_window_current_document_for(ctx, window);
-    ns_window_named_resolving--;
-    return doc;
-}
 
 static int
-ns_window_named_get(JSContext *ctx, JSPropertyDescriptor *desc,
-                    JSValueConst obj, JSAtom prop)
+ns_window_named_fill(JSContext *ctx, JSPropertyDescriptor *desc,
+                     JSValueConst window, JSAtom prop)
 {
-    (void)obj;
-    JSValue global = JS_GetGlobalObject(ctx);
-    ns_node *doc = ns_window_named_document(ctx, global);
-    JS_FreeValue(ctx, global);
-    JSValue value;
-    if (!ns_window_named_value(ctx, doc, prop, &value)) return 0;
+    JSValue key = JS_AtomToValue(ctx, prop);
+    JSValue value = ns_window_named_property(ctx, window, key);
+    JS_FreeValue(ctx, key);
+    if (!JS_IsObject(value)) {
+        JS_FreeValue(ctx, value);
+        return 0;
+    }
     if (!desc) {
         JS_FreeValue(ctx, value);
         return 1;
@@ -2366,20 +2310,23 @@ ns_window_named_get(JSContext *ctx, JSPropertyDescriptor *desc,
 }
 
 static int
+ns_window_named_get(JSContext *ctx, JSPropertyDescriptor *desc,
+                    JSValueConst obj, JSAtom prop)
+{
+    (void)obj;
+    JSValue global = JS_GetGlobalObject(ctx);
+    int found = ns_window_named_fill(ctx, desc, global, prop);
+    JS_FreeValue(ctx, global);
+    return found;
+}
+
+static int
 ns_window_named_get_receiver(JSContext *ctx, JSPropertyDescriptor *desc,
                              JSValueConst obj, JSAtom prop,
                              JSValueConst receiver)
 {
     (void)obj;
-    JSValue value;
-    if (!ns_window_named_value(ctx, ns_window_named_document(ctx, receiver),
-                               prop, &value))
-        return 0;
-    desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE;
-    desc->value  = value;
-    desc->getter = JS_UNDEFINED;
-    desc->setter = JS_UNDEFINED;
-    return 1;
+    return ns_window_named_fill(ctx, desc, receiver, prop);
 }
 
 static JSClassExoticMethods ns_window_named_exotic = {
@@ -6638,7 +6585,7 @@ ns_window_frame_document(JSContext *ctx, JSValueConst window, ns_node *stale)
     return doc ? doc : stale;
 }
 
-static ns_node *
+ns_node *
 ns_window_current_document_for(JSContext *ctx, JSValueConst window)
 {
     ns_js *js = js_from_ctx(ctx);
@@ -9193,9 +9140,9 @@ ns_fire_window_property_handlers(ns_js *js, const ns_node *target,
     char prop_name[48];
     g_snprintf(prop_name, sizeof prop_name, "on%s", type);
     JSValue global = JS_GetGlobalObject(ctx);
-    ns_window_named_resolving++;
+    ns_window_named_suspend();
     JSValue handler = JS_GetPropertyStr(ctx, global, prop_name);
-    ns_window_named_resolving--;
+    ns_window_named_resume();
     if (JS_IsException(handler)) {
         JS_FreeValue(ctx, JS_GetException(ctx));
         handler = JS_UNDEFINED;
@@ -15603,13 +15550,11 @@ ns_media_request_video_frame_callback(JSContext *ctx, JSValueConst this_val,
     return JS_NewInt32(ctx, e.id);
 }
 
-static JSValue
-ns_window_invoke_action(JSContext *ctx, const char *action)
+void
+ns_js_window_action(ns_js *js, const char *action)
 {
-    ns_js *js = js_from_ctx(ctx);
     if (js && js->window_action_cb)
         js->window_action_cb(action, js->window_action_user_data);
-    return JS_UNDEFINED;
 }
 
 static JSValue
@@ -15787,22 +15732,6 @@ ns_document_exit_fullscreen(JSContext *ctx, JSValueConst this_val,
     return ns_returns_resolved_undefined(ctx, this_val, 0, NULL);
 }
 
-static JSValue
-ns_window_print(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_window_invoke_action(ctx, "print");
-}
-
-static JSValue
-ns_window_stop(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_window_invoke_action(ctx, "stop");
-}
-
 void
 ns_js_scroll_viewport(ns_js *js, double x, double y)
 {
@@ -15812,14 +15741,6 @@ ns_js_scroll_viewport(ns_js *js, double x, double y)
     if (js->viewport_scroll_cb)
         js->viewport_scroll_cb(&x, &y, js->viewport_scroll_user_data);
     ns_js_note_viewport_scroll(js, x, y);
-}
-
-static JSValue
-ns_window_focus(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_window_invoke_action(ctx, "focus");
 }
 
 static ns_node *
@@ -17602,60 +17523,11 @@ ns_element_get_contentWindow(JSContext *ctx, JSValueConst this_val)
     return ns_iframe_cross_origin_window(ctx, win);
 }
 
-static const ns_node *
-ns_window_find_child_frame(const ns_node *n, uint32_t *index,
-                           const char *name, int depth)
-{
-    if (!n || depth >= 256) return NULL;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            (g_ascii_strcasecmp(c->name, "iframe") == 0 ||
-             g_ascii_strcasecmp(c->name, "frame") == 0)) {
-            if (name) {
-                const char *frame_name = ns_element_get_attr(c, "name");
-                if (frame_name && strcmp(frame_name, name) == 0) return c;
-            } else if ((*index)-- == 0) {
-                return c;
-            }
-            continue;
-        }
-        const ns_node *hit =
-            ns_window_find_child_frame(c, index, name, depth + 1);
-        if (hit) return hit;
-    }
-    return NULL;
-}
-
-static const ns_node *
-ns_window_find_indexed_iframe(const ns_node *doc, uint32_t index,
-                              const char *name)
-{
-    GPtrArray *iframes = ns_doc_tag_index_lookup(doc, "iframe");
-    for (guint i = 0; iframes && i < iframes->len; i++) {
-        const ns_node *f = g_ptr_array_index(iframes, i);
-        const ns_node *owner = f->parent;
-        while (owner && owner->kind != NS_NODE_DOCUMENT) owner = owner->parent;
-        if (owner != doc) continue;
-        if (name) {
-            const char *frame_name = ns_element_get_attr(f, "name");
-            if (frame_name && strcmp(frame_name, name) == 0) return f;
-        } else if (index-- == 0) {
-            return f;
-        }
-    }
-    return NULL;
-}
-
-static JSValue
+JSValue
 ns_window_child_frame_window(JSContext *ctx, ns_node *doc, uint32_t index,
                              const char *name, gboolean raw)
 {
-    if (!doc || (name && !*name)) return JS_UNDEFINED;
-    const ns_node *frame = NULL;
-    if (doc->tag_index && !ns_node_find_first_element(doc, "frame"))
-        frame = ns_window_find_indexed_iframe(doc, index, name);
-    else
-        frame = ns_window_find_child_frame(doc, &index, name, 0);
+    const ns_node *frame = ns_window_child_frame(doc, index, name);
     if (!frame) return JS_UNDEFINED;
     JSValue el = ns_make_element(ctx, frame);
     JSValue win = JS_UNDEFINED;
@@ -17690,50 +17562,6 @@ ns_iframe_child_frame_of(JSContext *ctx, JSValueConst this_val, int argc,
     }
     JS_FreeAtom(ctx, key);
     return win;
-}
-
-static JSValue
-ns_window_get_window(JSContext *ctx, JSValueConst this_val, int argc,
-                     JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return JS_GetGlobalObject(ctx);
-}
-
-static JSValue
-ns_window_get_frames(JSContext *ctx, JSValueConst this_val, int argc,
-                     JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return JS_GetGlobalObject(ctx);
-}
-
-static uint32_t
-ns_count_child_frames(const ns_node *n, int depth)
-{
-    uint32_t count = 0;
-    if (!n || depth >= 256) return 0;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            (g_ascii_strcasecmp(c->name, "iframe") == 0 ||
-             g_ascii_strcasecmp(c->name, "frame") == 0)) {
-            count++;
-            continue;
-        }
-        count += ns_count_child_frames(c, depth + 1);
-    }
-    return count;
-}
-
-/* window.length counts the child frames; it does not make their windows,
- * which reading it while the document is installed used to do. */
-static JSValue
-ns_window_get_length(JSContext *ctx, JSValueConst this_val, int argc,
-                     JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_node *doc = ns_window_current_document_for(ctx, this_val);
-    return JS_NewUint32(ctx, doc ? ns_count_child_frames(doc, 0) : 0);
 }
 
 static JSValue
@@ -19000,35 +18828,6 @@ ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
     }
     if (!js || !node || !attr || !js->ctx || js->halted) return;
     ns_ce_attribute_changed(js, node, attr, old_value, new_value);
-}
-
-static int
-ns_js_viewport_metric(double value, int fallback)
-{
-    if (!isfinite(value) || value <= 0)
-        return fallback;
-    return (int)(value + 0.5);
-}
-
-void
-ns_js_sync_window_metrics(ns_js *js)
-{
-    if (!js || !js->ctx) return;
-    JSContext *ctx = js->ctx;
-    int vw = ns_js_viewport_metric(ns_css_viewport_w(), 1000);
-    int vh = ns_js_viewport_metric(ns_css_viewport_h(), 800);
-    int sw, sh, saw, sah, sal, sat;
-    ns_services_screen_metrics(&sw, &sh, &saw, &sah, &sal, &sat);
-    int ow = MIN(vw + 16, sw);
-    int oh = MIN(vh + 95, sh);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, global, "innerWidth",  JS_NewInt32(ctx, vw));
-    JS_SetPropertyStr(ctx, global, "innerHeight", JS_NewInt32(ctx, vh));
-    JS_SetPropertyStr(ctx, global, "outerWidth",  JS_NewInt32(ctx, ow));
-    JS_SetPropertyStr(ctx, global, "outerHeight", JS_NewInt32(ctx, oh));
-    JS_SetPropertyStr(ctx, global, "devicePixelRatio",
-                      JS_NewFloat64(ctx, ns_css_device_pixel_ratio()));
-    JS_FreeValue(ctx, global);
 }
 
 void
@@ -21351,15 +21150,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     JS_SetPropertyStr(ctx, global, "pageXOffset", JS_NewInt32(ctx, 0));
     ns_js_sync_window_metrics(js);
 
-    static const ns_fn_def window_noops[] = {
-        { "close", 0 }, { "blur", 0 },
-        { "moveTo", 2 }, { "moveBy", 2 },
-        { "resizeTo", 2 }, { "resizeBy", 2 },
-    };
-    ns_bind_fns(ctx, global, ns_event_noop, window_noops, G_N_ELEMENTS(window_noops));
-    ns_bind_fn(ctx, global, "print", ns_window_print, 0);
-    ns_bind_fn(ctx, global, "stop",  ns_window_stop,  0);
-    ns_bind_fn(ctx, global, "focus", ns_window_focus, 0);
+    ns_window_install_actions(ctx, global);
     ns_bind_fn(ctx, global, "find",  ns_window_find,  7);
     ns_bind_fn(ctx, global, "scrollTo", ns_window_scroll_to, 2);
     ns_bind_fn(ctx, global, "scrollBy", ns_window_scroll_by, 2);
@@ -21806,47 +21597,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
         JS_FreeValue(ctx, pm_ret);
     }
 
-    {
-        JSAtom window_atom = JS_NewAtom(ctx, "window");
-        JSValue win_g = JS_NewCFunction2(ctx, ns_window_get_window, "get window", 0,
-                                         JS_CFUNC_generic, 0);
-        JSValue win_s = JS_NewCFunction2(ctx, (JSCFunction *)(void *)ns_element_noop_set,
-                                         "set window", 1, JS_CFUNC_setter, 0);
-        JS_DefinePropertyGetSet(ctx, global, window_atom, win_g, win_s,
-                                JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, window_atom);
-    }
-    JS_SetPropertyStr(ctx, global, "self",   JS_DupValue(ctx, global));
-    JS_SetPropertyStr(ctx, global, "top",    JS_DupValue(ctx, global));
-    JS_SetPropertyStr(ctx, global, "parent", JS_DupValue(ctx, global));
-    JS_SetPropertyStr(ctx, global, "globalThis", JS_DupValue(ctx, global));
-    {
-        static const char *window_tag_src =
-            "try{Object.defineProperty(globalThis,Symbol.toStringTag,"
-            "{value:'Window',writable:false,enumerable:false,configurable:true});}"
-            "catch(e){}";
-        JSValue tag_ret = JS_Eval(ctx, window_tag_src, strlen(window_tag_src),
-                                  "<window-tag>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-        JS_FreeValue(ctx, tag_ret);
-    }
-    {
-        JSAtom frames_atom = JS_NewAtom(ctx, "frames");
-        JSValue fr_g = JS_NewCFunction2(ctx, ns_window_get_frames, "get frames", 0,
-                                        JS_CFUNC_generic, 0);
-        JSValue fr_s = JS_NewCFunction2(ctx, (JSCFunction *)(void *)ns_element_noop_set,
-                                        "set frames", 1, JS_CFUNC_setter, 0);
-        JS_DefinePropertyGetSet(ctx, global, frames_atom, fr_g, fr_s,
-                                JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, frames_atom);
-        JSAtom length_atom = JS_NewAtom(ctx, "length");
-        JSValue len_g = JS_NewCFunction2(ctx, ns_window_get_length, "get length", 0,
-                                         JS_CFUNC_generic, 0);
-        JSValue len_s = JS_NewCFunction2(ctx, (JSCFunction *)(void *)ns_element_noop_set,
-                                         "set length", 1, JS_CFUNC_setter, 0);
-        JS_DefinePropertyGetSet(ctx, global, length_atom, len_g, len_s,
-                                JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, length_atom);
-    }
+    ns_window_install_browsing_context(ctx, global);
 
     static const char *const window_event_handlers[] = {
         "onload", "onunload", "onbeforeunload", "onhashchange", "onpopstate",
@@ -21863,19 +21614,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_bind_fn(ctx, global, "cancelIdleCallback",  ns_services_clear_timer,                1);
     ns_install_idle_deadline(ctx, global);
 
-    JS_SetPropertyStr(ctx, global, "screenX",     JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, global, "screenY",     JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, global, "screenLeft",  JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, global, "screenTop",   JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, global, "isSecureContext",
-                      js->current_url && g_str_has_prefix(js->current_url, "https:") ? JS_TRUE : JS_FALSE);
-    JS_SetPropertyStr(ctx, global, "origin",
-                      JS_NewString(ctx, js->current_url ? js->current_url : ""));
-    JS_SetPropertyStr(ctx, global, "name",   JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, global, "status", JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, global, "closed", JS_FALSE);
-    JS_SetPropertyStr(ctx, global, "opener", JS_NULL);
-    JS_SetPropertyStr(ctx, global, "event",  JS_UNDEFINED);
+    ns_window_install_state(js, ctx, global);
 
     ns_services_install_screen(ctx, global);
 
@@ -23465,50 +23204,6 @@ ns_document_write_parent(ns_js *js, ns_node **out_ref)
 }
 
 static void
-ns_define_missing_named_value(JSContext *ctx, JSValueConst obj,
-                              const char *name, JSValueConst value)
-{
-    if (!name || !*name) return;
-    JSAtom atom = JS_NewAtom(ctx, name);
-    if (JS_HasProperty(ctx, obj, atom) <= 0)
-        JS_DefinePropertyValue(ctx, obj, atom, JS_DupValue(ctx, value),
-                               JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-    JS_FreeAtom(ctx, atom);
-}
-
-static void
-ns_document_expose_legacy_named_in(JSContext *ctx, JSValueConst document,
-                                   const ns_node *n, int depth)
-{
-    if (!n || depth >= 512) return;
-    if (ns_node_is_element_named(n, "form")) {
-        JSValue element = ns_make_element(ctx, n);
-        ns_define_missing_named_value(ctx, document,
-                                      ns_element_get_attr(n, "name"), element);
-        JS_FreeValue(ctx, element);
-    } else if (ns_node_is_element_named(n, "img")) {
-        const char *name = ns_element_get_attr(n, "name");
-        if (name && *name) {
-            JSValue element = ns_make_element(ctx, n);
-            ns_define_missing_named_value(ctx, document,
-                                          ns_element_get_attr(n, "id"), element);
-            ns_define_missing_named_value(ctx, document, name, element);
-            JS_FreeValue(ctx, element);
-        }
-    }
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_document_expose_legacy_named_in(ctx, document, c, depth + 1);
-}
-
-static void
-ns_document_expose_legacy_named(ns_js *js, const ns_node *root,
-                                JSValueConst document)
-{
-    if (!js || !root || !JS_IsObject(document)) return;
-    ns_document_expose_legacy_named_in(js->ctx, document, root, 0);
-}
-
-static void
 ns_js_flush_document_write(ns_js *js)
 {
     if (!js || !js->document_write_buffer) return;
@@ -23557,7 +23252,8 @@ ns_js_flush_document_write(ns_js *js)
         JSValue global = JS_GetGlobalObject(js->ctx);
         JSValue document = JS_GetPropertyStr(js->ctx, global, "document");
         for (guint i = 0; i < inserted->len; i++)
-            ns_document_expose_legacy_named(js, g_ptr_array_index(inserted, i),
+            ns_document_expose_legacy_named(js->ctx,
+                                            g_ptr_array_index(inserted, i),
                                             document);
         JS_FreeValue(js->ctx, document);
         JS_FreeValue(js->ctx, global);
@@ -24271,7 +23967,7 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
             JS_FreeValue(ctx, proto);
         }
     }
-    ns_document_expose_legacy_named(js, js->current_doc, document);
+    ns_document_expose_legacy_named(js->ctx, js->current_doc, document);
     JS_SetPropertyStr(ctx, global, "document", document);
 
     JSValue location = ns_window_make_location(ctx);

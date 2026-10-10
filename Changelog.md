@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The window's browsing-context members (window, self, frames, length, top,
+  parent, name, closed, opener, print, stop, focus), its viewport metrics
+  and named access on window and document moved from js.c to Rust (rust/js-
+  window), with unchanged results.
 * Selector queries (querySelector, querySelectorAll, matches, closest,
   getElementById, getElementsBy*), the per-page query cache and live
   HTMLCollection, NodeList and RadioNodeList moved from js.c to Rust

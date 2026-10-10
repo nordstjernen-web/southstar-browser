@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-window"
-description = "The window's navigation bindings: History, the Navigation API, Location, window.open, postMessage between windows and frames, and each page's session history"
+description = "The window's bindings: History, the Navigation API, Location, window.open, postMessage, session history, the browsing-context members and named access"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
 

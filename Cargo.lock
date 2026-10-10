@@ -2050,6 +2050,7 @@ dependencies = [
 name = "southstar-js-window"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
 ]

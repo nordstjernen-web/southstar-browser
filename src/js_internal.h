@@ -738,6 +738,22 @@ void *ns_js_realm_url_enter(ns_js *js, JSContext *realm);
 void ns_js_realm_url_leave(ns_js *js, void *token);
 void ns_js_dispatch_main_window_event(ns_js *js, const char *type,
                                       JSValue event);
+void ns_window_install_browsing_context(JSContext *ctx, JSValueConst global);
+void ns_window_install_state(ns_js *js, JSContext *ctx, JSValueConst global);
+void ns_window_install_actions(JSContext *ctx, JSValueConst global);
+JSValue ns_window_named_property(JSContext *ctx, JSValueConst window,
+                                 JSValueConst key);
+void ns_window_named_suspend(void);
+void ns_window_named_resume(void);
+const ns_node *ns_window_child_frame(const ns_node *doc, uint32_t index,
+                                     const char *name);
+void ns_document_expose_legacy_named(JSContext *ctx, const ns_node *root,
+                                     JSValueConst document);
+ns_node *ns_window_current_document_for(JSContext *ctx, JSValueConst window);
+JSValue ns_window_child_frame_window(JSContext *ctx, ns_node *doc,
+                                     uint32_t index, const char *name,
+                                     gboolean raw);
+void ns_js_window_action(ns_js *js, const char *action);
 
 /* MessagePort, MessageChannel and BroadcastChannel (rust/js-workers) and the
  * js.c helpers they call. */

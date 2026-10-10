@@ -1,20 +1,16 @@
-//! Southstar — the C ABI of the window's navigation bindings as declared in src/js_internal.h, and the js.c and URL calls they make.
+//! Southstar — the C ABI of the window bindings as declared in src/js_internal.h, and the js.c, DOM and URL calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
+use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{history, location, message, navigation, set};
-
-#[repr(C)]
-struct NsNode {
-    _private: [u8; 0],
-}
+use crate::{context, history, location, message, named, navigation, set};
 
 type JobFunc =
     unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
@@ -673,4 +669,188 @@ pub unsafe extern "C" fn ns_window_open_method(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_history_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
+}
+
+unsafe extern "C" {
+    fn ns_window_current_document_for(ctx: *mut JSContext, window: JSValue) -> *mut NsNode;
+    fn ns_window_child_frame_window(
+        ctx: *mut JSContext,
+        doc: *mut NsNode,
+        index: u32,
+        name: *const c_char,
+        raw: GBoolean,
+    ) -> JSValue;
+    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
+    fn ns_js_window_action(js: *mut NsJs, action: *const c_char);
+    fn ns_css_viewport_w() -> f64;
+    fn ns_css_viewport_h() -> f64;
+    fn ns_css_device_pixel_ratio() -> f64;
+    fn ns_services_screen_metrics(
+        width: *mut c_int,
+        height: *mut c_int,
+        avail_width: *mut c_int,
+        avail_height: *mut c_int,
+        avail_left: *mut c_int,
+        avail_top: *mut c_int,
+    );
+}
+
+pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
+    let doc = unsafe {
+        ns_window_current_document_for(quickjs::raw_context(scope), quickjs::raw(window))
+    };
+    unsafe { Node::from_ptr(doc) }
+}
+
+pub(crate) fn child_frame_window(
+    scope: &mut Scope<'_>,
+    doc: Node<'_>,
+    index: u32,
+    name: Option<&CStr>,
+) -> Value {
+    let raw = unsafe {
+        ns_window_child_frame_window(
+            quickjs::raw_context(scope),
+            doc.as_mut_ptr(),
+            index,
+            name.map_or(core::ptr::null(), CStr::as_ptr),
+            southstar_glib::FALSE,
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value).unwrap_or_else(|_| Value::undefined())
+}
+
+pub(crate) fn wrap(scope: &mut Scope<'_>, node: Node<'_>) -> Value {
+    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn window_action(js: Js, action: &str) {
+    let action = c_string(action.as_bytes());
+    unsafe { ns_js_window_action(js.ptr(), action.as_ptr()) };
+}
+
+pub(crate) fn viewport_width() -> f64 {
+    unsafe { ns_css_viewport_w() }
+}
+
+pub(crate) fn viewport_height() -> f64 {
+    unsafe { ns_css_viewport_h() }
+}
+
+pub(crate) fn device_pixel_ratio() -> f64 {
+    unsafe { ns_css_device_pixel_ratio() }
+}
+
+pub(crate) fn screen_size() -> (i32, i32) {
+    let (mut width, mut height) = (0, 0);
+    unsafe {
+        ns_services_screen_metrics(
+            &mut width,
+            &mut height,
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+            core::ptr::null_mut(),
+        )
+    };
+    (width, height)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_install_browsing_context(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            context::install_browsing_context(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_install_state(
+    js: *const NsJs,
+    ctx: *mut JSContext,
+    global: JSValue,
+) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            context::install_state(scope, Js::of(js), &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_install_actions(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            context::install_actions(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
+    with_main_context(Js::of(js), context::sync_metrics);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_named_property(
+    ctx: *mut JSContext,
+    window: JSValue,
+    key: JSValue,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let window = quickjs::borrow_value(scope, window);
+            let key = quickjs::borrow_value(scope, key);
+            quickjs::into_raw(named::named_property(scope, &window, &key))
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_window_named_suspend() {
+    named::suspend();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_window_named_resume() {
+    named::resume();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_child_frame(
+    doc: *const NsNode,
+    index: u32,
+    name: *const c_char,
+) -> *const NsNode {
+    let Some(doc) = (unsafe { Node::from_ptr(doc) }) else {
+        return core::ptr::null();
+    };
+    let name = (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) });
+    Node::ptr_or_null(named::child_frame(doc, index, name))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_document_expose_legacy_named(
+    ctx: *mut JSContext,
+    root: *const NsNode,
+    document: JSValue,
+) {
+    let Some(root) = (unsafe { Node::from_ptr(root) }) else {
+        return;
+    };
+    if ctx.is_null() {
+        return;
+    }
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let document = quickjs::borrow_value(scope, document);
+            named::expose_legacy_named(scope, root, &document);
+        })
+    }
 }
