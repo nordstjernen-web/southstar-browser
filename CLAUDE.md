@@ -180,6 +180,13 @@ so local builds and CI compile with the minimum supported version.
   engine code and stay out.
 - No `#[test]`s. Check a port against the C it replaces with a throwaway
   differential harness, then in the browser itself.
+- **Goal: a pure-Rust browser, the JavaScript engine included.** QuickJS-ng
+  and Boa coexist as build options for a while; Boa becomes the default once
+  it meets the bar in docs/rust-port.md ("The JavaScript engine track"), and
+  QuickJS is then removed. So bindings ported out of js.c use the neutral
+  `js-engine` API (`Scope`, `Value`); its `quickjs` module is only for the
+  transitional C glue. New capabilities go on the neutral API, with a Boa
+  implementation.
 - JavaScript engines: `rust/js-engine` is the engine-neutral layer (feature
   `quickjs`, the default, over the in-tree fork; feature `boa`, optional, needs
   Rust 1.91+). `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on

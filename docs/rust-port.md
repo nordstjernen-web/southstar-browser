@@ -30,14 +30,20 @@ commit still builds, launches and passes the same checks as today:
 4. **Vendored C libraries are decided one by one.** Some are replaced during
    the port where a Rust crate is a clear win (Wuffs, WAMR); lexbor, Cairo,
    ns-pango and GTK stay C behind FFI until a separate decision.
-5. **The JavaScript engine becomes a build-time choice.** The Rust bindings
-   are written once against an engine-neutral layer, so the in-tree
-   QuickJS-ng fork stays the default while pure-Rust engines (Boa first, Nova
-   as an experiment) can be built in and compared on the same pages, tests
-   and benchmarks (§6, "JavaScript engines").
+5. **The JavaScript engine moves to Rust too.** The Rust bindings are written
+   once against an engine-neutral layer (`rust/js-engine`). QuickJS-ng and a
+   pure-Rust engine ([Boa](https://github.com/boa-dev/boa); Nova as an
+   experiment) live side by side for a while as a configure-time choice
+   (`-Djs_engine=`), compared on the same pages, tests and benchmarks. Boa
+   becomes the default once it meets the bar in "The JavaScript engine track"
+   (§6), and QuickJS is retired after that (D12, decided October 2026).
 
-The end state of this plan: all **project** code is Rust; C remains only in
-third-party libraries that are deliberately kept (phase 9 and §9).
+The end state of this plan (goal set October 2026): **a pure-Rust browser.**
+All project code is Rust, and so is the JavaScript engine. No C stays in the
+tree: the vendored C libraries (QuickJS, lexbor, WAMR, Wuffs, pl_mpeg/minimp3)
+are replaced one by one (phase 9, D13). System libraries reached through FFI
+(GTK, Cairo, Pango, OpenSSL, FFmpeg, SQLite, SDL2, …) are not tree code; each
+one is a separate, later decision (§9).
 
 | Phase | What | Project C retired (lines) |
 |---|---|---:|
@@ -63,6 +69,9 @@ only estimates given. Decisions that need an owner are collected in §11.
 **Goals**
 
 - All project code in Rust, with `unsafe` confined to FFI layers.
+- A pure-Rust JavaScript engine: first as a build option next to QuickJS-ng,
+  then as the default, and finally as the only engine.
+- No vendored C left in the tree.
 - Same platforms as today: Linux (glibc and musl), Windows (MSYS2/MinGW),
   macOS, FreeBSD, NetBSD.
 - Feature parity at every step, including the curl and nghttp2 HTTP backends,
@@ -75,8 +84,9 @@ only estimates given. Decisions that need an owner are collected in §11.
 **Non-goals of the port itself**
 
 - New features or behaviour changes mixed into port commits.
-- Replacing the rendering stack (Cairo, ns-pango, GTK) or the JavaScript
-  engine while porting. These are separate decisions (§9, §11).
+- Replacing the rendering stack (Cairo, ns-pango, GTK) while porting. That is
+  a separate decision (§9, §11). The JavaScript engine is no longer a non-goal:
+  see "The JavaScript engine track" in §6.
 - Bringing back Android, iOS or a JVM binding.
 
 ## 3. Project rules and what they mean in Rust
@@ -561,7 +571,13 @@ Scope (77.7k lines): `js.c` and its siblings (`js_canvas*.c`, `js_intl.c`,
 - **Bindings target `js-engine`, not an engine.** The ported bindings call
   the engine-neutral layer described in "JavaScript engines" below, never a
   `-sys` crate directly, so every engine backend runs the same DOM, events,
-  fetch and worker code.
+  fetch and worker code. `js-engine`'s `quickjs` module is only transitional
+  glue: raw `JSValue` conversion at the C boundary while js.c still exists,
+  and calls into C that has not been ported yet. Every capability a binding
+  needs belongs on the neutral `Scope`/`Value` API, with a Boa
+  implementation. Helpers that early ports put in the `quickjs` module (the
+  reflection `rust/js-clone` uses, for example) move onto the neutral API in
+  step 1 of the JavaScript engine track below.
 - **Own `quickjs-sys`, not `rquickjs`.** `rquickjs` bundles its own
   quickjs-ng and has none of the fork's hooks (`get_own_property_receiver`,
   host-function mode, brands, engine-private names, realm queries,
@@ -675,6 +691,46 @@ hang or a crash costs one test, not the run) and the Octane suite, and
 rewrites `docs/js-engines.md`. Whether a pure-Rust engine ever becomes the default
 is decision D12, made on these numbers, not in advance.
 
+#### The JavaScript engine track
+
+This runs alongside phase 7. It ends with a pure-Rust engine, Boa, as the
+default and QuickJS retired. QuickJS-ng and Boa coexist as configure-time
+options for as long as that takes.
+
+Why Boa: it is the most complete pure-Rust engine (94.4% of test262 against
+QuickJS-ng's 83.3%, with real `Intl` support), maintained independently of
+any browser vendor, and published on crates.io under MIT/Unlicense. It
+already has a working `js-engine` backend and runs `southstar-jsshell`. Its
+weaknesses are speed (about 3–4× slower on Octane, no JIT, like QuickJS), a
+newer minimum Rust (1.91), a few crashes and timeouts in test262, and missing
+embedder hooks. Nova (`nova_vm`) is a data-oriented engine that may be faster,
+but it is much less complete, so it stays an experiment.
+
+1. **Neutral API first.** Each binding ported out of js.c uses only the
+   neutral `js-engine` API, apart from the transitional C glue. Capabilities
+   go on that API with both a QuickJS and a Boa implementation. Earlier ports
+   that reached into the `quickjs` module (`rust/js-clone`, `rust/canvas`,
+   `rust/js-perf`, …) are moved onto it.
+2. **`-Djs_engine=quickjs-ng|quickjs|boa`.** The meson option maps to the
+   `js-engine` features and replaces `-Dquickjs` (kept as an alias for a
+   while). Selecting Boa selects its toolchain (Rust 1.91, D3) and its
+   crates.io dependencies (D4); the default build is unchanged. About and
+   `--print-config` name the engine.
+3. **Boa runs the browser.** Once the C bindings are gone (the end of phase
+   7), the Boa build runs the same bindings. Until then it can build and run
+   `southstar-jsshell` and every binding crate that is already engine-neutral.
+   The gaps found along the way are closed in the Boa backend or reported
+   upstream: interrupts for runaway scripts, receiver-aware property access,
+   function brands, engine-private names, realm queries, and repointing
+   ArrayBuffers.
+4. **Compare.** The table below runs on the browser, not only the shell:
+   test262, the WPT slice, Speedometer, start-up, memory and size.
+5. **Switch the default** once the Boa build matches the QuickJS-ng build on
+   the WPT slice and is acceptable on speed and memory.
+6. **Retire QuickJS.** Delete `src/quickjs/`, `src/ns_quickjs.c`, the
+   `quickjs` wrap and the `quickjs` module in `js-engine`. That takes out
+   about 101,000 lines of vendored C.
+
 ### Phase 8 — Remaining web platform features
 
 Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),
@@ -699,8 +755,8 @@ What is left is third-party C. Each library gets its own decision:
 |---|---:|---|
 | Wuffs | ~97k | Replaced in phase 2 by Rust image crates |
 | WAMR | ~73k | Replace with `wasmi` (D9) |
-| QuickJS-ng fork | ~101k | Keep as the default `js_engine` backend; Boa and Nova are optional backends behind the same bindings, and D12 decides on the comparison results whether a pure-Rust engine replaces it |
-| lexbor | ~289k | Keep for HTML parsing and URLs unless D1 allows writing Southstar's own (an HTML5 tokenizer and tree builder plus a WHATWG URL parser) |
+| QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
+| lexbor | ~289k | Replace with Southstar's own Rust HTML5 tokenizer, tree builder and WHATWG URL parser, written from the specs (D1 still keeps Servo's `html5ever` and `url` out); the largest remaining piece of vendored C |
 | pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
 | ns-pango, Cairo, GTK 4, libcurl, OpenSSL, SQLite, FFmpeg, SDL2, uchardet, libpsl, libseccomp | system / subproject | Keep behind FFI |
 
@@ -803,7 +859,8 @@ the existing ones, not a test suite.
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
 | D11 | Which JavaScript engines get backends? | QuickJS-ng (default) and Bellard's QuickJS, Boa (optional), Nova (optional, experimental). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (lacks the fork's hooks) |
-| D12 | Should a pure-Rust engine become the default? | Not decided in advance: decide from the comparison table once phase 7's bindings run on both QuickJS-ng and Boa |
+| D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired |
+| D13 | Pure-Rust end state: replace all vendored C (lexbor, WAMR, Wuffs, pl_mpeg/minimp3, QuickJS)? | Decided (October 2026): yes. System libraries behind FFI are decided separately |
 
 ## 12. Tracking
 
