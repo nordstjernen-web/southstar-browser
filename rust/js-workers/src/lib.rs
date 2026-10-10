@@ -5,6 +5,9 @@
 mod broadcast;
 mod ffi;
 mod ports;
+mod scope;
+mod service;
+mod worker;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
@@ -82,4 +85,21 @@ pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32
 
 pub(crate) fn arg(args: &[Value], index: usize) -> Value {
     args.get(index).cloned().unwrap_or_else(Value::undefined)
+}
+
+pub(crate) fn bind_if_not_callable(
+    scope: &mut Scope<'_>,
+    object: &Value,
+    name: &str,
+    arity: u32,
+    f: NativeFn,
+) {
+    let current = scope.get(object, name).ok();
+    if !current.is_some_and(|current| scope.is_function(&current)) {
+        bind(scope, object, name, arity, f);
+    }
+}
+
+pub(crate) fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+    Ok(Value::undefined())
 }

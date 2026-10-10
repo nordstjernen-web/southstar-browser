@@ -13,8 +13,8 @@ Southstar Browser (unreleased):
   Funcref tables can now be read from JavaScript (WAMR crashed on
   Table.get), a memory passed in as an import keeps its size, and the -Dwasm
   option now builds on every platform, NetBSD and 32-bit x86 included.
-* MessagePort, MessageChannel and BroadcastChannel are Rust
-  (rust/js-workers), with unchanged results.
+* MessagePort, MessageChannel, BroadcastChannel, dedicated workers and
+  service workers are Rust (rust/js-workers), with unchanged results.
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
   through an adapter) is gone, the first step toward replacing QuickJS with
   the Rust engine Boa.

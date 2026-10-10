@@ -237,6 +237,7 @@ unsafe extern "C" {
         flags: c_int,
     ) -> c_int;
     fn JS_HasProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> c_int;
+    fn JS_DeleteProperty(ctx: *mut JSContext, obj: JSValue, prop: JSAtom, flags: c_int) -> c_int;
     fn JS_NewAtom(ctx: *mut JSContext, str: *const c_char) -> JSAtom;
     fn JS_FreeAtom(ctx: *mut JSContext, v: JSAtom);
     fn JS_ValueToAtom(ctx: *mut JSContext, val: JSValue) -> JSAtom;
@@ -1706,6 +1707,14 @@ impl Scope<'_> {
         let key = c_text(key);
         let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
         let status = unsafe { JS_HasProperty(self.ctx, object.raw, atom) };
+        unsafe { JS_FreeAtom(self.ctx, atom) };
+        self.status(status).map(|()| status > 0)
+    }
+
+    pub fn delete(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
+        let key = c_text(key);
+        let atom = unsafe { JS_NewAtom(self.ctx, key.as_ptr()) };
+        let status = unsafe { JS_DeleteProperty(self.ctx, object.raw, atom, 0) };
         unsafe { JS_FreeAtom(self.ctx, atom) };
         self.status(status).map(|()| status > 0)
     }

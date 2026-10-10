@@ -134,7 +134,6 @@ struct ns_js {
     gboolean      mutated;
     GHashTable   *timers;
     GMainContext *main_context;
-    GPtrArray    *workers;
     ns_worker_host *worker_host;
     int           next_timer_id;
     int           timer_nesting_level;
@@ -888,4 +887,88 @@ void     ns_bind_ctor(JSContext *ctx, JSValueConst obj, const char *name,
 JSValue  ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv);
 JSValue  ns_make_abort_error(JSContext *ctx);
+
+/* Dedicated and service workers (rust/js-workers) and the js.c realm
+ * installers and helpers they call. */
+typedef struct ns_worker_realm {
+    ns_worker_host *host;
+    GMainContext   *context;
+    const char     *url;
+    const char     *base_url;
+    const char     *origin;
+    const char     *name;
+    gboolean        is_service_worker;
+} ns_worker_realm;
+ns_js  *ns_worker_js_new(const ns_worker_realm *p);
+int     ns_worker_js_eval(ns_js *js, const char *src, gsize len, const char *url,
+                          gboolean module, JSValue *exception);
+ns_worker_host *ns_js_worker_host(const ns_js *js);
+void    ns_js_halt(ns_js *js);
+gboolean ns_js_csp_allows_worker(ns_js *js, const char *url);
+void    ns_js_report_error_event_in(ns_js *js, JSContext *ctx, const char *message,
+                                    const char *filename, int lineno, int colno);
+void    ns_js_dispatch_engine_event(JSContext *ctx, JSValueConst target,
+                                    JSValueConst ev);
+void    ns_drain_microtasks(ns_js *js);
+char   *ns_js_exception_message(JSContext *ctx, JSValueConst ex);
+JSValue ns_make_ctor(JSContext *ctx, JSCFunction *fn, const char *name, int argc);
+void    ns_install_namespace_object(JSContext *ctx, JSValueConst global,
+                                    const char *name, JSValue obj, const char *tag);
+void    ns_js_link_interface_ctors(JSContext *ctx);
+void    ns_js_lock_global_prototypes(JSContext *ctx);
+char   *ns_js_doc_base_url(ns_js *js);
+char   *ns_js_decode_data_url(const char *url, gsize *out_len);
+JSValue ns_event_prevent_default(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue ns_event_stop_propagation(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue ns_event_stop_immediate(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue ns_event_composed_path(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue ns_target_addEventListener(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue ns_target_removeEventListener(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_returns_resolved_undefined(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_returns_resolved_false(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+JSValue ns_returns_resolved_empty_array(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv);
+JSValue ns_cache_open(JSContext *ctx, JSValueConst this_val, int argc,
+                      JSValueConst *argv);
+JSValue ns_window_event_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+void    ns_worker_install_constructor(JSContext *ctx, JSValueConst global);
+void    ns_sw_install_container(JSContext *ctx, JSValueConst navigator);
+gboolean ns_worker_report_exception(ns_js *js, JSValueConst ex);
+gboolean ns_worker_host_closing(const ns_worker_host *host);
+const char *ns_worker_host_base_url(const ns_worker_host *host);
+gboolean ns_workers_pending(const ns_js *js);
+void    ns_workers_teardown(ns_js *js);
+void    ns_worker_log_cb(const char *line, gpointer user_data);
+void    ns_worker_promise_rejection_tracker(JSContext *ctx, JSValueConst promise,
+                                            JSValueConst reason,
+                                            ns_js_bool is_handled, void *opaque);
+JSValue ns_worker_global_post_message(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_worker_global_close(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue ns_worker_import_scripts(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue ns_worker_report_error(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue ns_worker_performance_now(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue ns_worker_performance_entries(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_worker_performance_clear(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+void    ns_worker_install_console(JSContext *ctx, JSValueConst global);
+void    ns_worker_install_location(JSContext *ctx, JSValueConst global,
+                                   const char *url);
+void    ns_sw_install_scope(JSContext *ctx, JSValueConst global);
+void    ns_worker_shape_global(JSContext *ctx, gboolean service_worker);
+
 #endif

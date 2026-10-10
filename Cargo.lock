@@ -1886,6 +1886,7 @@ dependencies = [
 name = "southstar-js-workers"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-glib",
  "southstar-js-clone",
  "southstar-js-engine",
 ]

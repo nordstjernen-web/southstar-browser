@@ -187,7 +187,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     }
     let bridge = bridge_id(scope, this);
     if bridge != 0 {
-        return ffi::bridge_send(scope, this, bridge, data);
+        return crate::worker::bridge_send(scope, this, bridge, data);
     }
     let options = arg(args, 1);
     let transfer = if options.is_array() {

@@ -457,6 +457,13 @@ impl Scope<'_> {
             .map_err(|e| self.error(e))
     }
 
+    pub fn delete(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
+        let object = self.object(object)?;
+        object
+            .delete_property_or_throw(JsString::from(key), self.ctx)
+            .map_err(|e| self.error(e))
+    }
+
     pub fn call(&mut self, function: &Value, this: &Value, args: &[Value]) -> Result<Value, Value> {
         let Some(callable) = function.0.as_callable() else {
             return Err(self.type_error("not a function"));
