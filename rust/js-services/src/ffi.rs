@@ -10,7 +10,7 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::screen::{self, Metrics};
-use crate::{console, media, navigator, timers, window};
+use crate::{clipboard_item, console, media, navigator, rtc, timers, window};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -666,6 +666,26 @@ pub unsafe extern "C" fn ns_services_install_console(ctx: *mut JSContext, global
         quickjs::with_context(ctx, |scope| {
             let global = quickjs::borrow_value(scope, global);
             console::install(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_install_rtc(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            rtc::install(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_install_clipboard_item(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            clipboard_item::install(scope, &global);
         })
     }
 }

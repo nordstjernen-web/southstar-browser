@@ -789,6 +789,8 @@ JSValue ns_services_match_media(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv);
 void ns_services_install_console(JSContext *ctx, JSValueConst global);
 void ns_services_install_screen(JSContext *ctx, JSValueConst global);
+void ns_services_install_rtc(JSContext *ctx, JSValueConst global);
+void ns_services_install_clipboard_item(JSContext *ctx, JSValueConst global);
 void ns_services_console_emit(ns_js *js, const char *prefix, JSContext *ctx,
                               int argc, JSValueConst *argv);
 void ns_services_screen_metrics(int *width, int *height,

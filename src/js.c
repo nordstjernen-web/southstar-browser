@@ -7881,145 +7881,6 @@ ns_promise_resolve_take(JSContext *ctx, JSValue value)
     return promise;
 }
 
-static JSValue
-ns_rtc_object_with_prototype(JSContext *ctx, const char *constructor)
-{
-    JSValue obj = JS_NewObject(ctx);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, constructor);
-    JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-    if (JS_IsObject(proto)) JS_SetPrototype(ctx, obj, proto);
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-    JS_FreeValue(ctx, global);
-    return obj;
-}
-
-static JSValue
-ns_rtc_data_channel_close(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JS_SetPropertyStr(ctx, (JSValue)this_val, "readyState",
-                      JS_NewString(ctx, "closed"));
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_rtc_data_channel_send(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_throw_dom_exception(ctx, "InvalidStateError", 11,
-                                  "RTCDataChannel is not open");
-}
-
-static JSValue
-ns_rtc_peer_connection_data_channel(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    const char *label = argc >= 1 ? JS_ToCString(ctx, argv[0]) : NULL;
-    JSValue channel = ns_rtc_object_with_prototype(ctx, "RTCDataChannel");
-    JS_SetPropertyStr(ctx, channel, "label", JS_NewString(ctx, label ? label : ""));
-    if (label) JS_FreeCString(ctx, label);
-    JS_SetPropertyStr(ctx, channel, "readyState", JS_NewString(ctx, "connecting"));
-    JS_SetPropertyStr(ctx, channel, "bufferedAmount", JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, channel, "bufferedAmountLowThreshold", JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, channel, "binaryType", JS_NewString(ctx, "arraybuffer"));
-    JS_SetPropertyStr(ctx, channel, "ordered", JS_TRUE);
-    JS_SetPropertyStr(ctx, channel, "maxPacketLifeTime", JS_NULL);
-    JS_SetPropertyStr(ctx, channel, "maxRetransmits", JS_NULL);
-    JS_SetPropertyStr(ctx, channel, "negotiated", JS_FALSE);
-    JS_SetPropertyStr(ctx, channel, "id", JS_NULL);
-    JS_SetPropertyStr(ctx, channel, "protocol", JS_NewString(ctx, ""));
-    ns_bind_event_target_listeners(ctx, channel);
-    ns_bind_fn(ctx, channel, "close", ns_rtc_data_channel_close, 0);
-    ns_bind_fn(ctx, channel, "send", ns_rtc_data_channel_send, 1);
-    return channel;
-}
-
-static JSValue
-ns_rtc_peer_connection_description(JSContext *ctx, const char *type)
-{
-    JSValue description = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, description, "type", JS_NewString(ctx, type));
-    JS_SetPropertyStr(ctx, description, "sdp", JS_NewString(ctx, "v=0\r\n"));
-    return ns_promise_resolve_take(ctx, description);
-}
-
-static JSValue
-ns_rtc_peer_connection_offer(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_rtc_peer_connection_description(ctx, "offer");
-}
-
-static JSValue
-ns_rtc_peer_connection_answer(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_rtc_peer_connection_description(ctx, "answer");
-}
-
-static JSValue
-ns_rtc_peer_connection_set_description(JSContext *ctx, JSValueConst this_val,
-                                       int argc, JSValueConst *argv)
-{
-    JS_SetPropertyStr(ctx, (JSValue)this_val, "localDescription",
-                      argc >= 1 ? JS_DupValue(ctx, argv[0]) : JS_NULL);
-    return ns_returns_resolved_undefined(ctx, this_val, argc, argv);
-}
-
-static JSValue
-ns_rtc_peer_connection_close(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JS_SetPropertyStr(ctx, (JSValue)this_val, "connectionState",
-                      JS_NewString(ctx, "closed"));
-    JS_SetPropertyStr(ctx, (JSValue)this_val, "iceConnectionState",
-                      JS_NewString(ctx, "closed"));
-    JS_SetPropertyStr(ctx, (JSValue)this_val, "signalingState",
-                      JS_NewString(ctx, "closed"));
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_rtc_peer_connection_ctor(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue connection = ns_rtc_object_with_prototype(ctx, "RTCPeerConnection");
-    JS_SetPropertyStr(ctx, connection, "connectionState", JS_NewString(ctx, "new"));
-    JS_SetPropertyStr(ctx, connection, "iceConnectionState", JS_NewString(ctx, "new"));
-    JS_SetPropertyStr(ctx, connection, "iceGatheringState", JS_NewString(ctx, "new"));
-    JS_SetPropertyStr(ctx, connection, "signalingState", JS_NewString(ctx, "stable"));
-    JS_SetPropertyStr(ctx, connection, "canTrickleIceCandidates", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "localDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "remoteDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "currentLocalDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "currentRemoteDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "pendingLocalDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "pendingRemoteDescription", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "sctp", JS_NULL);
-    JS_SetPropertyStr(ctx, connection, "_configuration",
-                      argc >= 1 && JS_IsObject(argv[0])
-                          ? JS_DupValue(ctx, argv[0]) : JS_NewObject(ctx));
-    ns_bind_event_target_listeners(ctx, connection);
-    static const char *const handlers[] = {
-        "onconnectionstatechange", "ondatachannel", "onicecandidate",
-        "onicecandidateerror", "oniceconnectionstatechange",
-        "onicegatheringstatechange", "onnegotiationneeded",
-        "onsignalingstatechange", "ontrack",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(handlers); i++)
-        JS_SetPropertyStr(ctx, connection, handlers[i], JS_NULL);
-    return connection;
-}
-
 static void ns_js_resolve_when_fonts_loaded(JSContext *ctx, ns_js *js,
                                             JSValue resolve, JSValue value);
 
@@ -8202,24 +8063,6 @@ ns_throw_dom_exception(JSContext *ctx, const char *name, int code,
 }
 
 static JSValue
-ns_promise_reject_dom(JSContext *ctx, const char *name, const char *message)
-{
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    JSValue err = JS_NewError(ctx);
-    JS_DefinePropertyValueStr(ctx, err, "name", JS_NewString(ctx, name),
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyValueStr(ctx, err, "message", JS_NewString(ctx, message),
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_Call(ctx, resolvers[1], JS_UNDEFINED, 1, &err);
-    JS_FreeValue(ctx, err);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
-    return promise;
-}
-
-static JSValue
 ns_window_find(JSContext *ctx, JSValueConst this_val,
                int argc, JSValueConst *argv)
 {
@@ -8335,18 +8178,6 @@ ns_document_queryCommandEnabled(JSContext *ctx, JSValueConst this_val,
     }
     if (cmd) JS_FreeCString(ctx, cmd);
     return ok ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_returns_rejected(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    ns_js_promise_reject(ctx, resolvers, "not supported");
-    return promise;
 }
 
 static gboolean
@@ -31820,82 +31651,6 @@ ns_js_fire_page_transition(ns_js *js, const char *type, gboolean persisted)
     ns_js_dispatch_window_only_event(js, js->current_doc, type, ev, NULL);
 }
 
-static void
-ns_beacon_done(GObject *src, GAsyncResult *result, gpointer user_data)
-{
-    (void)src; (void)user_data;
-    GError *err = NULL;
-    ns_response *resp = ns_net_fetch_finish(result, &err);
-    ns_response_free(resp);
-    g_clear_error(&err);
-}
-
-JSValue
-ns_navigator_sendBeacon(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1 || !JS_IsString(argv[0])) return JS_FALSE;
-    const char *raw_url = JS_ToCString(ctx, argv[0]);
-    if (!raw_url) return JS_FALSE;
-    ns_js *js = js_from_ctx(ctx);
-    char *abs_url = (js && js->current_url)
-        ? ns_url_resolve(js->current_url, raw_url)
-        : g_strdup(raw_url);
-    JS_FreeCString(ctx, raw_url);
-    if (!abs_url)
-        return JS_ThrowTypeError(ctx, "sendBeacon: invalid URL");
-    if (!ns_url_is_http_or_https(abs_url)) {
-        g_free(abs_url);
-        return JS_ThrowTypeError(ctx, "sendBeacon: URL scheme must be http or https");
-    }
-
-    char *body = NULL;
-    gsize body_len = 0;
-    char *content_type = NULL;
-
-    if (argc >= 2 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
-        JSValueConst b = argv[1];
-        if (ns_js_value_is_form_data(ctx, b)) {
-            body = ns_js_form_data_serialize(ctx, b, &body_len, &content_type);
-        } else if (ns_js_value_is_url_search_params(ctx, b)) {
-            body = ns_js_usp_serialize(ctx, b, &body_len, &content_type);
-        } else if (JS_IsString(b)) {
-            size_t l = 0;
-            const char *s = JS_ToCStringLen(ctx, &l, b);
-            if (s) {
-                body = g_strndup(s, l);
-                body_len = l;
-                JS_FreeCString(ctx, s);
-                content_type = g_strdup("text/plain;charset=UTF-8");
-            }
-        } else {
-            body = ns_js_body_bytes(ctx, b, &body_len);
-            if (body && JS_IsObject(b)) {
-                JSValue tv = JS_GetPropertyStr(ctx, b, "type");
-                if (JS_IsString(tv)) {
-                    const char *t = JS_ToCString(ctx, tv);
-                    if (t && *t && ns_header_value_is_safe(t))
-                        content_type = g_strdup(t);
-                    if (t) JS_FreeCString(ctx, t);
-                }
-                JS_FreeValue(ctx, tv);
-            }
-        }
-    }
-
-    ns_net_request_async(abs_url,
-                         js ? js->current_url : NULL,
-                         "POST", body, body_len,
-                         content_type,
-                         NULL, NULL,
-                         ns_beacon_done, NULL);
-    g_free(abs_url);
-    g_free(body);
-    g_free(content_type);
-    return JS_TRUE;
-}
-
 JSValue
 ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
@@ -31985,60 +31740,6 @@ ns_vtt_cue_ctor(JSContext *ctx, JSValueConst this_val,
     JS_SetPropertyStr(ctx, c, "_listeners",  JS_NewArray(ctx));
     ns_bind_event_target_listeners(ctx, c);
     return c;
-}
-
-static JSValue
-ns_clipboard_item_get_type(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv)
-{
-    if (argc < 1) return ns_returns_rejected(ctx, this_val, 0, NULL);
-    JSValue store = JS_GetPropertyStr(ctx, this_val, "__data");
-    JSValue value = JS_UNDEFINED;
-    if (JS_IsObject(store)) {
-        const char *type = JS_ToCString(ctx, argv[0]);
-        if (type) {
-            value = JS_GetPropertyStr(ctx, store, type);
-            JS_FreeCString(ctx, type);
-        }
-    }
-    JS_FreeValue(ctx, store);
-    if (JS_IsUndefined(value) || JS_IsException(value)) {
-        JS_FreeValue(ctx, value);
-        return ns_promise_reject_dom(ctx, "NotFoundError",
-            "The type was not found");
-    }
-    return ns_promise_resolve_take(ctx, value);
-}
-
-static JSValue
-ns_clipboard_item_ctor(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue item = JS_NewObject(ctx);
-    JSValue types = JS_NewArray(ctx);
-    JSValue data = JS_NewObject(ctx);
-    uint32_t out = 0;
-    if (argc >= 1 && JS_IsObject(argv[0])) {
-        JSPropertyEnum *tab = NULL;
-        uint32_t n = 0;
-        if (JS_GetOwnPropertyNames(ctx, &tab, &n, argv[0],
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
-            for (uint32_t i = 0; i < n; i++) {
-                JSValue key = JS_AtomToString(ctx, tab[i].atom);
-                JSValue val = JS_GetProperty(ctx, argv[0], tab[i].atom);
-                JS_SetProperty(ctx, data, tab[i].atom, val);
-                JS_SetPropertyUint32(ctx, types, out++, key);
-            }
-            JS_FreePropertyEnum(ctx, tab, n);
-        }
-    }
-    JS_SetPropertyStr(ctx, item, "types", types);
-    JS_SetPropertyStr(ctx, item, "presentationStyle",
-                      JS_NewString(ctx, "unspecified"));
-    JS_DefinePropertyValueStr(ctx, item, "__data", data, 0);
-    ns_bind_fn(ctx, item, "getType", ns_clipboard_item_get_type, 1);
-    return item;
 }
 
 static JSValue
@@ -34339,7 +34040,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     }
     ns_bind_ctor(ctx, global, "StaticRange",  ns_static_range_ctor,   1);
     ns_bind_ctor(ctx, global, "VTTCue",       ns_vtt_cue_ctor,        3);
-    ns_bind_ctor(ctx, global, "ClipboardItem", ns_clipboard_item_ctor, 1);
+    ns_services_install_clipboard_item(ctx, global);
     ns_bind_ctor(ctx, global, "CustomStateSet", ns_custom_state_set_ctor, 0);
     ns_webgl_install(ctx, global);
     ns_bind_ctor(ctx, global, "Audio",           ns_window_audio_ctor,           1);
@@ -34798,30 +34499,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_bind_ctor(ctx, global, "MessageChannel",   ns_window_message_channel,   0);
     ns_bind_ctor(ctx, global, "MessagePort",      ns_illegal_constructor,      0);
     ns_bind_ctor(ctx, global, "BroadcastChannel", ns_window_broadcast_channel, 1);
-    ns_bind_ctor(ctx, global, "RTCPeerConnection", ns_rtc_peer_connection_ctor, 1);
-    ns_bind_ctor(ctx, global, "RTCDataChannel", ns_illegal_constructor, 0);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "createDataChannel", ns_rtc_peer_connection_data_channel, 2);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "createOffer", ns_rtc_peer_connection_offer, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "createAnswer", ns_rtc_peer_connection_answer, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "setLocalDescription", ns_rtc_peer_connection_set_description, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "setRemoteDescription", ns_returns_resolved_undefined, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "addIceCandidate", ns_returns_resolved_undefined, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "getStats", ns_returns_resolved_empty_array, 1);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "getSenders", ns_event_empty_array, 0);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "getReceivers", ns_event_empty_array, 0);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "getTransceivers", ns_event_empty_array, 0);
-    ns_bind_ctor_proto_fn(ctx, global, "RTCPeerConnection",
-                          "close", ns_rtc_peer_connection_close, 0);
+    ns_services_install_rtc(ctx, global);
     ns_bind_ctor(ctx, global, "Notification",   ns_services_notification_ctor, 2);
     ns_worker_install_constructor(ctx, global);
     ns_new_class_id(&ns_zlib_class_id);

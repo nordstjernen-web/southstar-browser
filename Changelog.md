@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The WebRTC stubs (RTCPeerConnection, RTCDataChannel), ClipboardItem and
+  navigator.sendBeacon moved from js.c to Rust (rust/js-services, rust/js-
+  net), with unchanged results.
 * URL, URLSearchParams, atob, btoa, TextEncoder, TextDecoder, object URLs
   and FileReader moved from js.c to Rust (rust/js-url). Passing a value that
   cannot become a string (such as a Symbol) to btoa, atob or encode now

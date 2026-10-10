@@ -230,6 +230,7 @@ unsafe extern "C" {
     fn ns_url_resolve(base: *const c_char, url: *const c_char) -> *mut c_char;
     fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
     fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
+    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
     fn ns_net_request_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -394,6 +395,11 @@ pub(crate) fn url_resolve(base: Option<&[u8]>, url: &[u8]) -> Option<Vec<u8>> {
     let base = base.map(cstring);
     let url = cstring(url);
     unsafe { take_gstr(ns_url_resolve(opt_ptr(base.as_ref()), url.as_ptr())) }
+}
+
+pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
+    let url = cstring(url);
+    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
 }
 
 pub(crate) fn url_same_origin(a: Option<&[u8]>, b: Option<&[u8]>) -> bool {
@@ -1268,6 +1274,16 @@ pub unsafe extern "C" fn ns_js_fetch(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_navigator_sendBeacon(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::beacon::send_beacon) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_response_ctor(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -1429,6 +1445,14 @@ pub unsafe extern "C" fn ns_cors_allows(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_header_value_is_safe(value: *const c_char) -> GBoolean {
     glib::boolean(borrowed(value).is_some_and(|v| crate::headers::value_is_safe(&v)))
+}
+
+pub(crate) unsafe extern "C" fn on_beacon_done(
+    _source: *mut c_void,
+    result: *mut c_void,
+    _data: *mut c_void,
+) {
+    drop(unsafe { Response::finish(result) });
 }
 
 pub(crate) unsafe extern "C" fn on_fetch_done(

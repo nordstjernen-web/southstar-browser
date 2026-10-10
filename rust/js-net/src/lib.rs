@@ -1,8 +1,9 @@
-//! Southstar — the networking bindings: fetch, Request, Response, AbortController, XMLHttpRequest, WebSocket and EventSource.
+//! Southstar — the networking bindings: fetch, Request, Response, AbortController, XMLHttpRequest, WebSocket, EventSource and sendBeacon.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod abort;
+mod beacon;
 mod body;
 mod fetch;
 mod ffi;
