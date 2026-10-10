@@ -1586,4 +1586,66 @@ JSValue  ns_form_elements_named_lookup(JSContext *ctx, JSValueConst this_val,
                                        const char *name);
 ns_node *ns_document_root_for(JSContext *ctx, JSValueConst this_val);
 
+JSValue  ns_make_token_list(JSContext *ctx, JSValueConst element, const char *attr);
+JSValue  ns_element_async_method(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+void     ns_js_set_src_recorded(ns_js *js, ns_node *n, const char *s, gsize slen);
+gboolean ns_js_image_natural_size(ns_js *js, const ns_node *n, int *width, int *height);
+JSValue  ns_element_reflect_str_get(JSContext *ctx, JSValueConst this_val,
+                                    const char *attr, gboolean null_if_absent);
+JSValue  ns_element_reflect_str_set(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val, const char *attr);
+const char *ns_enum_normalize(const char *attr, const char *v);
+gboolean ns_node_is_custom_element(const ns_node *n);
+gboolean ns_html_parse_int(const char *s, gint64 *out);
+int      ns_int_attr_index(const char *attr);
+JSValue  ns_element_attr_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_attr_setter(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                                int magic);
+JSValue  ns_element_enum_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_enum_setter(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                                int magic);
+JSValue  ns_element_aria_string_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_aria_string_setter(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst val, int magic);
+JSValue  ns_element_int_attr_setter(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val, int magic);
+JSValue  ns_element_dimension_setter(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val, int magic);
+JSValue  ns_element_bool_attr_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_bool_attr_setter(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val, int magic);
+JSValue  ns_element_boolattr_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_element_boolattr_setter(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val, int magic);
+JSValue  ns_element_get_autocomplete(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_autocomplete(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_dir(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_dir(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_translate(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_translate(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_type(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_autocapitalize(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_autocapitalize(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst val);
+JSValue  ns_element_get_spellcheck(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_spellcheck(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_htmlFor(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_htmlFor(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_draggable(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_draggable(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_contentEditable(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_contentEditable(JSContext *ctx, JSValueConst this_val,
+                                        JSValueConst val);
+JSValue  ns_element_get_id(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_id(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_className(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_className(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_attr_setter_sizes(JSContext *ctx, JSValueConst this_val,
+                                      JSValueConst val);
+JSValue  ns_element_attr_setter_sandbox(JSContext *ctx, JSValueConst this_val,
+                                        JSValueConst val);
+JSValue  ns_element_get_tabIndex(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_tabIndex(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+
 #endif

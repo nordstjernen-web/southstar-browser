@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Reflected HTML attributes (string, URL, enumerated, integer and boolean
+  accessors, dir, translate, autocomplete, autocapitalize, tabIndex,
+  contentEditable and the rest) moved from js.c to Rust (rust/js-reflect),
+  with unchanged results.
 * The window's browsing-context members (window, self, frames, length, top,
   parent, name, closed, opener, print, stop, focus), its viewport metrics
   and named access on window and document moved from js.c to Rust (rust/js-

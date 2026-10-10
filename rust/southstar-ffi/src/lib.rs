@@ -54,6 +54,7 @@ pub use southstar_js_node;
 pub use southstar_js_observers;
 pub use southstar_js_perf;
 pub use southstar_js_realm;
+pub use southstar_js_reflect;
 pub use southstar_js_services;
 pub use southstar_js_shadow;
 pub use southstar_js_storage;

@@ -57,6 +57,7 @@ southstar-js-node = { path = "../js-node" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
+southstar-js-reflect = { path = "../js-reflect" }
 southstar-js-services = { path = "../js-services" }
 southstar-js-shadow = { path = "../js-shadow" }
 southstar-js-storage = { path = "../js-storage" }
