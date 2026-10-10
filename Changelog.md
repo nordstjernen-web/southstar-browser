@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* DNS over HTTPS works again. With doh_url (or NS_DOH_URL) set to an https://
+  resolver, host names are looked up with RFC 8484 A and AAAA queries sent
+  through the Rust HTTP client and cached for their TTL; when the resolver
+  gives no answer the lookup fails rather than falling back to the system
+  resolver.
 * fillRect(), strokeRect() and clearRect() no longer touch the canvas's
   current path. They drew their rectangle onto it, so a path built with
   beginPath()/arc()/rect() was filled, stroked or cleared along with the
@@ -50,9 +55,8 @@ Southstar Browser (unreleased):
   http_backend build option is gone. Dates in cookies and cache headers are
   parsed in-tree with the same rules curl_getdate used (checked identical
   over 300,000 generated dates). about:southstar names the HTTP client
-  instead of the libcurl version. DNS over HTTPS (the doh_url setting) and
-  TLS Encrypted Client Hello, which came from libcurl, are not supported for
-  now.
+  instead of the libcurl version. TLS Encrypted Client Hello, which came
+  from libcurl, is not supported for now.
 * Pages and subresources are fetched by a new HTTP client written in Rust,
   rust/http, instead of libcurl. It speaks HTTP/1.1 and HTTP/2, with its own
   HTTP/2 framing, flow control and HPACK header compression, over OpenSSL;

@@ -1,4 +1,4 @@
-//! Southstar — how a URL outside the fetch path reaches the network through rust/http: the TLS settings, the configured proxy unless the no-proxy list exempts the host, and the insecure-certificate override.
+//! Southstar — how a URL reaches the network through rust/http: the TLS settings, DNS over HTTPS, the configured proxy unless the no-proxy list exempts the host, and the insecure-certificate override.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -22,7 +22,13 @@ pub fn tls_settings() -> TlsSettings {
     }
 }
 
+pub fn apply_dns_over_https() {
+    let url = southstar_config::get().and_then(|c| text(c.doh_url));
+    southstar_http::set_dns_over_https(url, tls_settings());
+}
+
 pub fn route(target: &[u8], host: &str) -> Route {
+    apply_dns_over_https();
     let target_c = std::ffi::CString::new(target).unwrap_or_default();
     let proxy = text(unsafe { ns_net_pick_configured_proxy(target_c.as_ptr()) })
         .filter(|p| !p.is_empty())

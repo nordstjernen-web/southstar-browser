@@ -9,6 +9,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::doh::{self, Lookup};
 use crate::ffi::socket::{self, ConnectError, PollFd, Wake};
 use crate::ffi::tls::{self, Handshake, Io, Settings, Tls};
 use crate::frame;
@@ -324,9 +325,20 @@ pub(crate) fn tcp_connect_to(
         return Err(String::from("socket initialization failed"));
     }
     let host = resolve_host(host_name);
-    let addrs: Vec<SocketAddr> = match (host, port).to_socket_addrs() {
-        Ok(a) => a.collect(),
-        Err(_) => return Err(format!("could not resolve host {host_name}")),
+    let addrs: Vec<SocketAddr> = match doh::resolve(host, cancelled) {
+        Lookup::Found(ips) => ips
+            .into_iter()
+            .map(|ip| SocketAddr::new(ip, port))
+            .collect(),
+        Lookup::Failed => {
+            return Err(format!(
+                "could not resolve host {host_name} over DNS over HTTPS"
+            ));
+        }
+        Lookup::System => match (host, port).to_socket_addrs() {
+            Ok(a) => a.collect(),
+            Err(_) => return Err(format!("could not resolve host {host_name}")),
+        },
     };
     if addrs.is_empty() {
         return Err(format!("could not resolve host {host_name}"));

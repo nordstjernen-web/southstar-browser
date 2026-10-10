@@ -145,6 +145,7 @@ pub fn transport(
     cancellable: *mut c_void,
 ) -> bool {
     let url_bytes = hop.url;
+    crate::route::apply_dns_over_https();
     out.effective_url = glib::strdup(url_bytes);
     let proxy_spec = hop.proxy.filter(|p| !p.is_empty());
     let proxy = proxy_spec.and_then(southstar_http::parse_proxy);

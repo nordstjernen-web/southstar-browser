@@ -4,6 +4,7 @@
 
 mod client;
 mod decode;
+mod doh;
 mod fetch;
 mod ffi;
 mod frame;
@@ -26,6 +27,10 @@ pub fn description() -> &'static [u8] {
         (false, true) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate, zstd)",
         (false, false) => b"southstar-http (HTTP/1.1, HTTP/2; gzip, deflate)",
     }
+}
+
+pub fn set_dns_over_https(url: Option<&[u8]>, tls: TlsSettings) {
+    doh::configure(url, tls);
 }
 
 pub fn init() {
