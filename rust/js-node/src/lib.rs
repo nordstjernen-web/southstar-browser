@@ -1,11 +1,17 @@
-//! Southstar — node tree mutation: appendChild, insertBefore, removeChild, replaceChild, moveBefore, the ChildNode and ParentNode methods and pre-insertion validity.
+//! Southstar — the Node bindings: tree mutation and pre-insertion validity, the tree getters and comparisons, node names and the attribute methods.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod attributes;
 mod child;
 mod ffi;
+mod names;
+mod owner;
 mod sequence;
+mod tree;
 mod validity;
+
+use core::ffi::CStr;
 
 use southstar_dom::{Kind, MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};
@@ -15,7 +21,9 @@ use crate::ffi::Js;
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
-const FLAG_FRAGMENT: u32 = 1 << 2;
+pub(crate) const FLAG_FRAGMENT: u32 = 1 << 2;
+pub(crate) const FLAG_CDATA: u32 = 1 << 10;
+pub(crate) const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 pub(crate) const HIERARCHY_REQUEST_ERR: i32 = 3;
 pub(crate) const NOT_FOUND_ERR: i32 = 8;
 

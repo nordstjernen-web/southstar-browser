@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-node"
-description = "Node tree mutation: appendChild, insertBefore, removeChild, replaceChild, moveBefore, the ChildNode and ParentNode methods and pre-insertion validity"
+description = "Node bindings: tree mutation and pre-insertion validity, tree getters, compareDocumentPosition, isEqualNode, node names and the attribute methods"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

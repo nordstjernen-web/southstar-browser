@@ -1429,6 +1429,70 @@ JSValue  ns_element_prepend(JSContext *ctx, JSValueConst this_val, int argc,
                             JSValueConst *argv);
 JSValue  ns_element_replaceChildren(JSContext *ctx, JSValueConst this_val, int argc,
                                     JSValueConst *argv);
+JSValue  ns_element_getAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_hasAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_setAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_removeAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_element_toggleAttribute(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_element_getAttributeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_hasAttributeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_setAttributeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_removeAttributeNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_element_getAttributeNames(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_element_hasAttributes(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_isSameNode(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue  ns_element_isEqualNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_compareDocumentPosition(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv);
+JSValue  ns_element_contains(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_element_hasChildNodes(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_get_parentElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_parentNode(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_firstChild(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_lastChild(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_nextSibling(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_previousSibling(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_firstElementChild(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_lastElementChild(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_nextElementSibling(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_previousElementSibling(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_childElementCount(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_children(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_childNodes(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_nodeType(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_nodeName(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_tagName(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_localName(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_prefix(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_namespaceURI(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_isConnected(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_baseURI(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_ownerDocument(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_template_content(JSContext *ctx, JSValueConst this_val);
+gboolean ns_js_img_src_layout_neutral(const ns_node *n);
+void     ns_body_forward_content_handler(JSContext *ctx, const ns_node *n,
+                                         const char *name, const char *code);
+void     ns_js_record_attr_change(ns_js *js, ns_node *target, const char *name,
+                                  const char *old_value);
+void     ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
+                            const char *old_value, const char *new_value);
+void     ns_js_start_image_load(ns_js *js, ns_node *el, const char *src);
+void     ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe, gboolean force);
 
 JSValue  ns_document_createElement(JSContext *ctx, JSValueConst this_val, int argc,
                                    JSValueConst *argv);

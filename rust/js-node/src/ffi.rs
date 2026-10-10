@@ -13,6 +13,10 @@ use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::Element;
 
+mod query;
+
+pub(crate) use query::*;
+
 #[repr(C)]
 pub(crate) struct NsJs {
     _private: [u8; 0],

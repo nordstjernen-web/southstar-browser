@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The Node tree getters (firstChild, nextSibling, parentNode and the rest),
+  compareDocumentPosition, isEqualNode, contains, nodeName, tagName and the
+  other names, and getAttribute, setAttribute and the other attribute
+  methods moved from js.c to Rust (rust/js-node). The hot getters are as
+  fast or faster than before.
 * The input events the shell sends into the page (mouse and pointer events
   with iframe coordinate mapping, wheel, touch, clipboard and drag events
   with their drag sessions) and the WPT test-driver input hooks moved from

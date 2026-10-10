@@ -161,16 +161,10 @@ static int ns_js_module_set_import_meta(JSContext *ctx,
                                         gboolean is_main);
 static void ns_attribute_map_release_owner(ns_js *js, ns_node *owner);
 static void ns_attribute_maps_release_all(ns_js *js);
-static void ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
-                               const char *old_value, const char *new_value);
 static const ns_node *ns_node_owner_iframe(const ns_node *n);
 static JSValue ns_make_performance_object(JSContext *ctx, ns_js *js,
                                           gboolean include_memory);
-static void ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe,
-                                            gboolean force);
 static void ns_js_process_pending_iframes(ns_js *js);
-static void ns_js_record_attr_change(ns_js *js, ns_node *target,
-                                     const char *name, const char *old_value);
 static JSValue ns_element_get_list_ref(JSContext *ctx, JSValueConst this_val);
 static JSValue ns_proto_of(JSContext *ctx, JSValueConst global,
                            const char *ctor_name);
@@ -1917,7 +1911,7 @@ ns_compile_inline_handler(JSContext *ctx, const char *body)
     return fn;
 }
 
-static void
+void
 ns_body_forward_content_handler(JSContext *ctx, const ns_node *n,
                                 const char *name, const char *code)
 {
@@ -2084,7 +2078,6 @@ static JSClassDef ns_window_named_class = {
     .exotic     = &ns_window_named_exotic,
 };
 
-static void ns_js_start_image_load(ns_js *js, ns_node *el, const char *src);
 static void ns_js_flush_ready_images(ns_js *js);
 static void ns_js_rescan_subtree_images(ns_js *js, ns_node *root, int depth);
 
@@ -2427,53 +2420,6 @@ ns_install_hasinstance(JSContext *ctx, JSValueConst global)
 }
 
 static JSValue
-ns_element_qualified_upper(JSContext *ctx, const ns_node *n)
-{
-    const char *pfx = ns_element_get_attr(n, "data-nd-ns-prefix");
-    if (!pfx) return JS_UNDEFINED;
-    char *q = g_strdup_printf("%s:%s", pfx, n->name);
-    char *up = g_ascii_strup(q, -1);
-    JSValue v = JS_NewString(ctx, up);
-    g_free(q);
-    g_free(up);
-    return v;
-}
-
-static JSValue ns_element_get_ownerDocument(JSContext *ctx, JSValueConst this_val);
-
-static JSValue
-ns_element_get_tagName(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || !n->name) return JS_NULL;
-    gboolean foreign = (n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS)) != 0;
-    JSValue owner_doc = ns_element_get_ownerDocument(ctx, this_val);
-    gboolean doc_is_xml = FALSE;
-    if (JS_IsObject(owner_doc))
-        doc_is_xml = ns_doc_wrapper_is_xml(ctx, owner_doc);
-    JS_FreeValue(ctx, owner_doc);
-    gboolean is_xml = foreign || doc_is_xml;
-    if (is_xml) {
-        const char *pfx = ns_element_get_attr(n, "data-nd-ns-prefix");
-        if (pfx && *pfx) {
-            char *q = g_strdup_printf("%s:%s", pfx, n->name);
-            JSValue v = JS_NewString(ctx, q);
-            g_free(q);
-            return v;
-        }
-        return JS_NewString(ctx, n->name);
-    }
-    if (n->kind == NS_NODE_ELEMENT) {
-        JSValue q = ns_element_qualified_upper(ctx, n);
-        if (!JS_IsUndefined(q)) return q;
-    }
-    char *up = g_ascii_strup(n->name, -1);
-    JSValue v = JS_NewString(ctx, up);
-    g_free(up);
-    return v;
-}
-
-static JSValue
 ns_element_get_accessKeyLabel(JSContext *ctx, JSValueConst this_val)
 {
     const ns_node *n = ns_unwrap_element(this_val);
@@ -2483,38 +2429,7 @@ ns_element_get_accessKeyLabel(JSContext *ctx, JSValueConst this_val)
     return JS_NewString(ctx, key);
 }
 
-static JSValue
-ns_element_get_localName(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || !n->name) return JS_NULL;
-    if ((n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS)) &&
-        ns_element_get_attr(n, "data-nd-ns-uri")) {
-        const char *colon = strchr(n->name, ':');
-        if (colon) return JS_NewString(ctx, colon + 1);
-    }
-    return JS_NewString(ctx, n->name);
-}
-
-static JSValue
-ns_element_get_prefix(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || !n->name) return JS_NULL;
-    if (n->kind == NS_NODE_ELEMENT) {
-        const char *stored = ns_element_get_attr(n, "data-nd-ns-prefix");
-        if (stored) return JS_NewString(ctx, stored);
-    }
-    if ((n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS)) &&
-        ns_element_get_attr(n, "data-nd-ns-uri")) {
-        const char *colon = strchr(n->name, ':');
-        if (colon)
-            return JS_NewStringLen(ctx, n->name, (size_t)(colon - n->name));
-    }
-    return JS_NULL;
-}
-
-static gboolean
+gboolean
 ns_js_img_src_layout_neutral(const ns_node *n)
 {
     if (!n || !n->name || strcmp(n->name, "img") != 0) return FALSE;
@@ -3078,71 +2993,6 @@ void
 ns_mark_scripts_already_started(ns_node *root)
 {
     ns_mark_scripts_already_started_rec(root, 0);
-}
-
-static inline const char *
-ns_attr_name_normalize(const ns_node *n, const char *raw_name, char **out_lowered)
-{
-    *out_lowered = NULL;
-    if (!n || !raw_name) return raw_name;
-    if (n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS))
-        return raw_name;
-    gboolean needs_lower = FALSE;
-    for (const char *p = raw_name; *p; p++) {
-        if ((unsigned char)*p >= 'A' && (unsigned char)*p <= 'Z') {
-            needs_lower = TRUE;
-            break;
-        }
-    }
-    if (!needs_lower) return raw_name;
-    *out_lowered = g_ascii_strdown(raw_name, -1);
-    return *out_lowered ? *out_lowered : raw_name;
-}
-
-static JSValue
-ns_element_getAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || argc < 1) return JS_NULL;
-    const char *raw_name = JS_ToCString(ctx, argv[0]);
-    if (!raw_name) return JS_NULL;
-    char *lowered = NULL;
-    const char *name = ns_attr_name_normalize(n, raw_name, &lowered);
-    const char *val = NULL;
-    gsize val_len = 0;
-    for (const ns_attr *a = n->attrs; a; a = a->next) {
-        if (!a->name || ns_attr_name_is_internal(a->name)) continue;
-        if (strcmp(a->name, name) == 0) {
-            val = a->value;
-            val_len = a->value_len;
-            break;
-        }
-    }
-    JS_FreeCString(ctx, raw_name);
-    g_free(lowered);
-    return val ? JS_NewStringLen(ctx, val, val_len) : JS_NULL;
-}
-
-static JSValue
-ns_element_hasAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || argc < 1) return JS_FALSE;
-    const char *raw_name = JS_ToCString(ctx, argv[0]);
-    if (!raw_name) return JS_FALSE;
-    char *lowered = NULL;
-    const char *name = ns_attr_name_normalize(n, raw_name, &lowered);
-    gboolean found = FALSE;
-    for (const ns_attr *a = n->attrs; a; a = a->next) {
-        if (!a->name || ns_attr_name_is_internal(a->name)) continue;
-        if (strcmp(a->name, name) == 0) {
-            found = TRUE;
-            break;
-        }
-    }
-    JS_FreeCString(ctx, raw_name);
-    g_free(lowered);
-    return found ? JS_TRUE : JS_FALSE;
 }
 
 JSValue
@@ -5187,16 +5037,6 @@ ns_node_scope_document(ns_node *node)
     return NULL;
 }
 
-/* The parent of n within its own node tree: a shadow root and a frame's
- * document are roots there, whatever node holds them in the engine. */
-static const ns_node *
-ns_dom_tree_parent(const ns_node *n)
-{
-    if (!n || ns_node_is_shadow_root(n) || ns_node_is_embedded_doc(n))
-        return NULL;
-    return n->parent;
-}
-
 /* True when n belongs to a shadow tree rather than its document's tree. */
 static gboolean
 ns_node_in_shadow_tree(const ns_node *n)
@@ -5367,7 +5207,7 @@ ns_js_record_attr_change_ns(ns_js *js, ns_node *target,
                        NULL, NULL, name, namespace_uri, old_value);
 }
 
-static void
+void
 ns_js_record_attr_change(ns_js *js, ns_node *target,
                          const char *name, const char *old_value)
 {
@@ -6235,9 +6075,6 @@ static JSClassDef ns_attr_class = {
     .finalizer = ns_attr_finalizer,
 };
 
-static JSValue ns_element_isSameNode(JSContext *ctx, JSValueConst this_val,
-                                     int argc, JSValueConst *argv);
-
 void *
 ns_attr_opaque(JSValueConst value)
 {
@@ -6292,36 +6129,6 @@ ns_element_get_attributes(JSContext *ctx, JSValueConst this_val)
     }
     return arr;
 }
-
-static JSValue
-ns_element_getAttributeNames(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    const ns_node *n = ns_unwrap_element(this_val);
-    JSValue arr = JS_NewArray(ctx);
-    if (!n || n->kind != NS_NODE_ELEMENT) return arr;
-    uint32_t i = 0;
-    for (const ns_attr *a = n->attrs; a; a = a->next)
-        if (a->name && !ns_attr_name_is_internal(a->name))
-            JS_SetPropertyUint32(ctx, arr, i++, JS_NewString(ctx, a->name));
-    return arr;
-}
-
-static JSValue
-ns_element_hasAttributes(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)argc; (void)argv;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || n->kind != NS_NODE_ELEMENT) return JS_FALSE;
-    for (const ns_attr *a = n->attrs; a; a = a->next)
-        if (a->name && !ns_attr_name_is_internal(a->name)) return JS_TRUE;
-    return JS_FALSE;
-}
-
-static JSValue ns_element_setAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-static JSValue ns_element_removeAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
 static JSValue
 ns_anim_finish_job(JSContext *ctx, int argc, JSValueConst *argv)
@@ -6409,702 +6216,10 @@ ns_element_animate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst
     return anim;
 }
 
-static JSValue
-ns_element_toggleAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx,
-            "1 argument required, but only 0 present");
-    if (!n) return JS_FALSE;
-    size_t raw_len = 0;
-    const char *raw_name = JS_ToCStringLen(ctx, &raw_len, argv[0]);
-    if (!raw_name) return JS_FALSE;
-    if (strlen(raw_name) != raw_len || !ns_valid_attr_name(raw_name)) {
-        JS_FreeCString(ctx, raw_name);
-        return ns_throw_dom_exception(ctx, "InvalidCharacterError", 5,
-                                      "toggleAttribute: invalid attribute name");
-    }
-    char *lowered = NULL;
-    const char *name = ns_attr_name_normalize(n, raw_name, &lowered);
-    if (ns_attr_name_is_internal(name)) {
-        JS_FreeCString(ctx, raw_name);
-        g_free(lowered);
-        return JS_FALSE;
-    }
-    gboolean had = ns_element_get_attr(n, name) != NULL;
-    gboolean want;
-    if (argc >= 2 && !JS_IsUndefined(argv[1]))
-        want = JS_ToBool(ctx, argv[1]) ? TRUE : FALSE;
-    else
-        want = !had;
-    ns_js *_j = js_from_ctx(ctx);
-    if (want && !had)      ns_js_set_attr_recorded(_j, n, name, "");
-    else if (!want && had) ns_js_remove_attr_recorded(_j, n, name);
-    JS_FreeCString(ctx, raw_name);
-    g_free(lowered);
-    return want ? JS_TRUE : JS_FALSE;
-}
-
-static const ns_attr *
-ns_element_attr_by_namespace(const ns_node *n, const char *namespace_uri,
-                             const char *local)
-{
-    const ns_attr *a = ns_element_find_attr_ns(n, namespace_uri, local);
-    return a && !ns_attr_name_is_internal(a->name) ? a : NULL;
-}
-
-static const ns_attr *
-ns_page_attr_by_namespace(const ns_node *n, const char *namespace_uri,
-                          const char *local_name)
-{
-    const ns_attr *a = ns_element_attr_by_namespace(n, namespace_uri,
-                                                    local_name);
-    return a && a->name && ns_attr_name_is_internal(a->name) ? NULL : a;
-}
-
-static JSValue
-ns_element_getAttributeNS(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_NULL;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || n->kind != NS_NODE_ELEMENT) return JS_NULL;
-    gboolean ns_null = JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]);
-    const char *ns_raw = ns_null ? NULL : JS_ToCString(ctx, argv[0]);
-    const char *ns_uri = ns_raw && *ns_raw ? ns_raw : NULL;
-    const char *local = JS_ToCString(ctx, argv[1]);
-    if (!local) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        return JS_NULL;
-    }
-    const ns_attr *a = ns_page_attr_by_namespace(n, ns_uri, local);
-    if (ns_raw) JS_FreeCString(ctx, ns_raw);
-    JS_FreeCString(ctx, local);
-    return a ? JS_NewString(ctx, a->value ? a->value : "") : JS_NULL;
-}
-
-static JSValue
-ns_element_hasAttributeNS(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_FALSE;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || n->kind != NS_NODE_ELEMENT) return JS_FALSE;
-    gboolean ns_null = JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]);
-    const char *ns_raw = ns_null ? NULL : JS_ToCString(ctx, argv[0]);
-    const char *ns_uri = ns_raw && *ns_raw ? ns_raw : NULL;
-    const char *local = JS_ToCString(ctx, argv[1]);
-    if (!local) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        return JS_FALSE;
-    }
-    const ns_attr *a = ns_page_attr_by_namespace(n, ns_uri, local);
-    if (ns_raw) JS_FreeCString(ctx, ns_raw);
-    JS_FreeCString(ctx, local);
-    return a ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_element_setAttributeNS(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (argc < 3)
-        return JS_ThrowTypeError(ctx,
-            "3 arguments required, but only %d present", argc);
-    gboolean ns_null = JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]);
-    const char *ns_raw = ns_null ? NULL : JS_ToCString(ctx, argv[0]);
-    const char *ns_uri = ns_raw && *ns_raw ? ns_raw : NULL;
-    size_t name_len = 0;
-    const char *name = JS_ToCStringLen(ctx, &name_len, argv[1]);
-    if (!name) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        return JS_EXCEPTION;
-    }
-    if (strlen(name) != name_len) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        JS_FreeCString(ctx, name);
-        return ns_throw_dom_exception(ctx, "InvalidCharacterError", 5,
-            "invalid qualified name");
-    }
-    JSValue verr = ns_validate_attr_ns(ctx, ns_uri, name);
-    if (JS_IsException(verr)) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        JS_FreeCString(ctx, name);
-        return verr;
-    }
-    if (!n || n->kind != NS_NODE_ELEMENT) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        JS_FreeCString(ctx, name);
-        return JS_UNDEFINED;
-    }
-    const char *val  = JS_ToCString(ctx, argv[2]);
-    const char *colon = name ? strchr(name, ':') : NULL;
-    g_autofree char *prefix = colon ? g_strndup(name, (gsize)(colon - name)) : NULL;
-    const char *local = colon ? colon + 1 : name;
-    if (name && val && local && !ns_attr_name_is_internal(name))
-        ns_js_set_attr_ns_recorded(js_from_ctx(ctx), n, ns_uri, prefix,
-                                   local, name, val);
-    if (ns_raw) JS_FreeCString(ctx, ns_raw);
-    if (name) JS_FreeCString(ctx, name);
-    if (val)  JS_FreeCString(ctx, val);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_element_removeAttributeNS(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (!n || n->kind != NS_NODE_ELEMENT) return JS_UNDEFINED;
-    gboolean ns_null = JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]);
-    const char *ns_raw = ns_null ? NULL : JS_ToCString(ctx, argv[0]);
-    const char *ns_uri = ns_raw && *ns_raw ? ns_raw : NULL;
-    const char *local = JS_ToCString(ctx, argv[1]);
-    if (!local) {
-        if (ns_raw) JS_FreeCString(ctx, ns_raw);
-        return JS_UNDEFINED;
-    }
-    if (ns_page_attr_by_namespace(n, ns_uri, local))
-        ns_js_remove_attr_ns_recorded(js_from_ctx(ctx), n, ns_uri, local);
-    if (ns_raw) JS_FreeCString(ctx, ns_raw);
-    JS_FreeCString(ctx, local);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_element_setAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (argc < 2) return JS_UNDEFINED;
-    size_t raw_len = 0;
-    const char *raw_name = JS_ToCStringLen(ctx, &raw_len, argv[0]);
-    if (!raw_name || strlen(raw_name) != raw_len || !ns_valid_attr_name(raw_name)) {
-        if (raw_name) JS_FreeCString(ctx, raw_name);
-        return ns_throw_dom_exception(ctx, "InvalidCharacterError", 5,
-            "setAttribute: invalid attribute name");
-    }
-    if (!n || n->kind != NS_NODE_ELEMENT) {
-        JS_FreeCString(ctx, raw_name);
-        return JS_UNDEFINED;
-    }
-    char *lowered = NULL;
-    const char *name = ns_attr_name_normalize(n, raw_name, &lowered);
-    size_t val_len = 0;
-    const char *val  = JS_ToCStringLen(ctx, &val_len, argv[1]);
-    if (name && val && !ns_attr_name_is_internal(name)) {
-        gsize old_len = 0;
-        const char *old = ns_element_get_attr_len(n, name, &old_len);
-        gboolean changed = !old || old_len != val_len ||
-                           memcmp(old, val, val_len) != 0;
-        char *old_copy = old ? ns_value_dup_len(old, old_len) : NULL;
-        ns_js *_j = js_from_ctx(ctx);
-        gboolean img_src_paint_only =
-            changed && g_ascii_strcasecmp(name, "src") == 0 &&
-            ns_js_img_src_layout_neutral(n);
-        if (changed) {
-            ns_element_set_attr_len(n, name, val, (gssize)val_len);
-        }
-        ns_body_forward_content_handler(ctx, n, name, val);
-        if (changed && _j) {
-            if (!img_src_paint_only && ns_css_attr_may_affect_style(n, name))
-                _j->mutated = TRUE;
-            if (img_src_paint_only && _j->repaint_cb)
-                _j->repaint_cb(_j->repaint_user_data);
-        }
-        if (_j) ns_js_record_attr_change(_j, n, name, old_copy);
-        if (_j) ns_ce_attr_changed(_j, n, name, old_copy, val);
-        if (changed && g_ascii_strcasecmp(name, "type") == 0 &&
-            ns_node_is_element_named(n, "input"))
-            ns_input_resanitize_value(n);
-        if (g_ascii_strcasecmp(name, "open") == 0 && !old_copy &&
-            ns_node_is_element_named(n, "details"))
-            ns_js_details_toggle_open(_j, n, TRUE);
-        g_free(old_copy);
-        if (changed && g_ascii_strcasecmp(name, "src") == 0 &&
-            n->name && strcmp(n->name, "img") == 0)
-            ns_js_start_image_load(js_from_ctx(ctx), n, val);
-        if (n->name && strcmp(n->name, "iframe") == 0 &&
-            (g_ascii_strcasecmp(name, "src") == 0 ||
-             g_ascii_strcasecmp(name, "srcdoc") == 0))
-            ns_js_schedule_iframe_load_full(js_from_ctx(ctx), n, TRUE);
-        else if (changed && n->name && strcmp(n->name, "object") == 0 &&
-                 g_ascii_strcasecmp(name, "data") == 0)
-            ns_js_schedule_iframe_load(js_from_ctx(ctx), n);
-    }
-    if (raw_name) JS_FreeCString(ctx, raw_name);
-    g_free(lowered);
-    if (val)  JS_FreeCString(ctx, val);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_element_removeAttribute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (!n || argc < 1 || n->kind != NS_NODE_ELEMENT) return JS_UNDEFINED;
-    const char *raw_name = JS_ToCString(ctx, argv[0]);
-    if (!raw_name) return JS_UNDEFINED;
-    char *lowered = NULL;
-    const char *name = ns_attr_name_normalize(n, raw_name, &lowered);
-    if (ns_attr_name_is_internal(name)) {
-        JS_FreeCString(ctx, raw_name);
-        g_free(lowered);
-        return JS_UNDEFINED;
-    }
-    if (ns_element_find_attr(n, name)) {
-        ns_js *_j = js_from_ctx(ctx);
-        ns_js_remove_attr_recorded(_j, n, name);
-        if (g_ascii_strcasecmp(name, "open") == 0 &&
-            ns_node_is_element_named(n, "details"))
-            ns_js_details_toggle_open(_j, n, FALSE);
-    }
-    ns_body_forward_content_handler(ctx, n, name, NULL);
-    JS_FreeCString(ctx, raw_name);
-    g_free(lowered);
-    return JS_UNDEFINED;
-}
-
-static const ns_node *
-next_element_sibling(const ns_node *n)
-{
-    for (const ns_node *s = n ? n->next_sibling : NULL; s; s = s->next_sibling)
-        if (s->kind == NS_NODE_ELEMENT && !ns_node_is_shadow_root(s)) return s;
-    return NULL;
-}
-
-static const ns_node *
-prev_element_sibling(const ns_node *n)
-{
-    for (const ns_node *s = n ? n->prev_sibling : NULL; s; s = s->prev_sibling)
-        if (s->kind == NS_NODE_ELEMENT && !ns_node_is_shadow_root(s)) return s;
-    return NULL;
-}
-
-static const ns_node *
-first_element_child(const ns_node *n)
-{
-    for (const ns_node *c = n ? n->first_child : NULL; c; c = c->next_sibling)
-        if (c->kind == NS_NODE_ELEMENT && !ns_node_is_shadow_root(c)) return c;
-    return NULL;
-}
-
-static JSValue
-ns_element_get_parentElement(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || n->kind == NS_NODE_DOCUMENT || ns_node_is_shadow_root(n))
-        return JS_NULL;
-    if (!n->parent || n->parent->kind != NS_NODE_ELEMENT ||
-        ns_node_is_shadow_root(n->parent))
-        return JS_NULL;
-    return ns_make_element(ctx, n->parent);
-}
-
-static JSValue
-ns_element_get_parentNode(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || n->kind == NS_NODE_DOCUMENT || !n->parent ||
-        ns_node_is_shadow_root(n))
-        return JS_NULL;
-    return ns_make_element(ctx, n->parent);
-}
-
-static JSValue
-ns_element_get_firstElementChild(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (ns_node_is_element_named(n, "template")) return JS_NULL;
-    return ns_make_element(ctx, first_element_child(n));
-}
-
-static JSValue
-ns_element_get_nextElementSibling(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_make_element(ctx, next_element_sibling(ns_unwrap_element(this_val)));
-}
-
-static JSValue
-ns_element_get_previousElementSibling(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_make_element(ctx, prev_element_sibling(ns_unwrap_element(this_val)));
-}
-
-static JSValue
-ns_element_get_children(JSContext *ctx, JSValueConst this_val)
-{
-    if (!ns_unwrap_element(this_val)) return JS_NewArray(ctx);
-    return ns_make_live(ctx, this_val, NS_LIVE_CHILDREN, NULL);
-}
-
 static gboolean
 ns_dom_hidden_child(const ns_node *c)
 {
     return ns_node_is_embedded_doc(c) || ns_node_is_shadow_root(c);
-}
-
-static ns_node *
-ns_dom_first_child(const ns_node *n)
-{
-    ns_node *c = n ? n->first_child : NULL;
-    while (ns_dom_hidden_child(c)) c = c->next_sibling;
-    return c;
-}
-
-static ns_node *
-ns_dom_last_child(const ns_node *n)
-{
-    ns_node *c = n ? n->last_child : NULL;
-    while (ns_dom_hidden_child(c)) c = c->prev_sibling;
-    return c;
-}
-
-static ns_node *
-ns_dom_next_sibling(const ns_node *n)
-{
-    ns_node *c = n ? n->next_sibling : NULL;
-    while (ns_dom_hidden_child(c)) c = c->next_sibling;
-    return c;
-}
-
-static ns_node *
-ns_dom_prev_sibling(const ns_node *n)
-{
-    ns_node *c = n ? n->prev_sibling : NULL;
-    while (ns_dom_hidden_child(c)) c = c->prev_sibling;
-    return c;
-}
-
-static JSValue
-ns_element_get_firstChild(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (ns_node_is_element_named(n, "template")) return JS_NULL;
-    return ns_make_element(ctx, ns_dom_first_child(n));
-}
-
-static JSValue
-ns_element_get_lastChild(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (ns_node_is_element_named(n, "template")) return JS_NULL;
-    return ns_make_element(ctx, ns_dom_last_child(n));
-}
-
-static JSValue
-ns_element_get_lastElementChild(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || ns_node_is_element_named(n, "template")) return JS_NULL;
-    for (const ns_node *c = n->last_child; c; c = c->prev_sibling)
-        if (c->kind == NS_NODE_ELEMENT && !ns_node_is_shadow_root(c))
-            return ns_make_element(ctx, c);
-    return JS_NULL;
-}
-
-static JSValue
-ns_element_get_nextSibling(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    return ns_make_element(ctx, ns_dom_next_sibling(n));
-}
-
-static JSValue
-ns_element_get_previousSibling(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    return ns_make_element(ctx, ns_dom_prev_sibling(n));
-}
-
-static JSValue
-ns_element_get_childNodes(JSContext *ctx, JSValueConst this_val)
-{
-    if (!ns_unwrap_element(this_val)) return JS_NewArray(ctx);
-    JSValue cached = JS_GetPropertyStr(ctx, this_val, "__ndChildNodes");
-    if (JS_IsObject(cached)) return cached;
-    JS_FreeValue(ctx, cached);
-    JSValue list = ns_make_live(ctx, this_val, NS_LIVE_CHILDNODES, NULL);
-    JS_DefinePropertyValueStr(ctx, this_val, "__ndChildNodes",
-                              JS_DupValue(ctx, list), 0);
-    return list;
-}
-
-static JSValue
-ns_element_get_childElementCount(JSContext *ctx, JSValueConst this_val)
-{
-    (void)ctx;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n || ns_node_is_element_named(n, "template")) return JS_NewInt32(ctx, 0);
-    int count = 0;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        if (c->kind == NS_NODE_ELEMENT && !ns_node_is_shadow_root(c)) count++;
-    return JS_NewInt32(ctx, count);
-}
-
-static JSValue
-ns_element_contains(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)ctx;
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (!el || argc < 1) return JS_FALSE;
-    const ns_node *other = ns_unwrap_element(argv[0]);
-    if (!other) return JS_FALSE;
-    for (const ns_node *cur = other; cur; cur = ns_dom_tree_parent(cur))
-        if (cur == el) return JS_TRUE;
-    return JS_FALSE;
-}
-
-static JSValue
-ns_element_hasChildNodes(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)argc; (void)argv;
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (!el || ns_node_is_element_named(el, "template")) return JS_FALSE;
-    for (const ns_node *c = el->first_child; c; c = c->next_sibling)
-        if (!ns_dom_hidden_child(c)) return JS_TRUE;
-    return JS_FALSE;
-}
-
-static gboolean
-ns_attr_lookup_equal_value(const ns_attr *a, const ns_attr *want,
-                           const char **out)
-{
-    for (; a; a = a->next) {
-        if (g_strcmp0(a->namespace_uri, want->namespace_uri) == 0 &&
-            strcmp(ns_attr_local_name(a), ns_attr_local_name(want)) == 0) {
-            if (out) *out = a->value;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static guint
-ns_attr_count(const ns_attr *a)
-{
-    guint n = 0;
-    for (; a; a = a->next) {
-        if (!a->name || ns_attr_name_is_internal(a->name)) continue;
-        n++;
-    }
-    return n;
-}
-
-static gboolean
-ns_node_attrs_equal(const ns_node *a, const ns_node *b)
-{
-    if (ns_attr_count(a->attrs) != ns_attr_count(b->attrs)) return FALSE;
-    for (const ns_attr *p = a->attrs; p; p = p->next) {
-        if (!p->name || ns_attr_name_is_internal(p->name)) continue;
-        const char *bv = NULL;
-        if (!ns_attr_lookup_equal_value(b->attrs, p, &bv)) return FALSE;
-        const char *av = p->value ? p->value : "";
-        bv = bv ? bv : "";
-        if (strcmp(av, bv) != 0) return FALSE;
-    }
-    return TRUE;
-}
-
-static const char *
-ns_node_namespace_uri(const ns_node *n)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return NULL;
-    const char *stored = ns_element_get_attr(n, "data-nd-ns-uri");
-    if (stored) return stored;
-    if (n->flags & NS_NODE_SVG_NS)
-        return "http://www.w3.org/2000/svg";
-    if ((n->flags & NS_NODE_FOREIGN_NS) || (n->flags & NS_NODE_XML_DOC))
-        return NULL;
-    return "http://www.w3.org/1999/xhtml";
-}
-
-static const char *
-ns_node_prefix(const ns_node *n, char *buf, size_t buf_sz)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return NULL;
-    const char *stored = ns_element_get_attr(n, "data-nd-ns-prefix");
-    if (stored) return stored;
-    if (n->name) {
-        const char *colon = strchr(n->name, ':');
-        if (colon) {
-            size_t len = (size_t)(colon - n->name);
-            if (len < buf_sz) {
-                memcpy(buf, n->name, len);
-                buf[len] = '\0';
-                return buf;
-            }
-        }
-    }
-    return NULL;
-}
-
-static const char *
-ns_node_local_name(const ns_node *n)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return NULL;
-    if (n->name) {
-        const char *colon = strchr(n->name, ':');
-        if (colon) return colon + 1;
-        return n->name;
-    }
-    return NULL;
-}
-
-static gboolean
-ns_node_equal(const ns_node *a, const ns_node *b, int depth)
-{
-    if (a == b) return TRUE;
-    if (!a || !b || depth >= 512) return FALSE;
-    if (a->kind != b->kind) return FALSE;
-    if (a->kind == NS_NODE_ELEMENT) {
-        if (g_strcmp0(ns_node_namespace_uri(a), ns_node_namespace_uri(b)) != 0)
-            return FALSE;
-        char buf_a[64], buf_b[64];
-        const char *pfx_a = ns_node_prefix(a, buf_a, sizeof(buf_a));
-        const char *pfx_b = ns_node_prefix(b, buf_b, sizeof(buf_b));
-        if (g_strcmp0(pfx_a, pfx_b) != 0)
-            return FALSE;
-        if (g_strcmp0(ns_node_local_name(a), ns_node_local_name(b)) != 0)
-            return FALSE;
-    } else if (a->kind == NS_NODE_COMMENT) {
-        if ((a->flags & NS_NODE_PI) != (b->flags & NS_NODE_PI))
-            return FALSE;
-        if ((a->flags & NS_NODE_PI) && g_strcmp0(a->name, b->name) != 0)
-            return FALSE;
-    } else if (a->kind == NS_NODE_DOCTYPE) {
-        if (g_strcmp0(a->name, b->name) != 0) return FALSE;
-    }
-    if ((a->text == NULL) != (b->text == NULL)) return FALSE;
-    if (a->text && b->text && strcmp(a->text, b->text) != 0) return FALSE;
-    if (!ns_node_attrs_equal(a, b)) return FALSE;
-    const ns_node *ca = a->first_child, *cb = b->first_child;
-    while (ca && cb) {
-        if (!ns_node_equal(ca, cb, depth + 1)) return FALSE;
-        ca = ca->next_sibling;
-        cb = cb->next_sibling;
-    }
-    return ca == NULL && cb == NULL;
-}
-
-static JSValue
-ns_element_isEqualNode(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv)
-{
-    (void)ctx;
-    const ns_node *a = ns_unwrap_element(this_val);
-    if (!a || argc < 1) return JS_FALSE;
-    if (JS_IsNull(argv[0]) || JS_IsUndefined(argv[0])) return JS_FALSE;
-    const ns_node *b = ns_unwrap_element(argv[0]);
-    if (!b) return JS_FALSE;
-    return ns_node_equal(a, b, 0) ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_element_isSameNode(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)ctx;
-    if (argc < 1 || !JS_IsObject(argv[0])) return JS_FALSE;
-    return (JS_VALUE_GET_PTR(this_val) == JS_VALUE_GET_PTR(argv[0])) ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_element_compareDocumentPosition(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv)
-{
-    const ns_node *a = ns_unwrap_element(this_val);
-    if (!a || argc < 1) return JS_NewInt32(ctx, 0);
-    const ns_node *b = ns_unwrap_element(argv[0]);
-    if (!b) return JS_NewInt32(ctx, 1);
-    if (a == b) return JS_NewInt32(ctx, 0);
-    for (const ns_node *p = ns_dom_tree_parent(a); p; p = ns_dom_tree_parent(p))
-        if (p == b) return JS_NewInt32(ctx, 0x02 | 0x08);
-    for (const ns_node *p = ns_dom_tree_parent(b); p; p = ns_dom_tree_parent(p))
-        if (p == a) return JS_NewInt32(ctx, 0x04 | 0x10);
-    const ns_node *anc_a = a, *anc_b = b;
-    GPtrArray *pa = g_ptr_array_new();
-    GPtrArray *pb = g_ptr_array_new();
-    for (; anc_a; anc_a = ns_dom_tree_parent(anc_a))
-        g_ptr_array_add(pa, (gpointer)anc_a);
-    for (; anc_b; anc_b = ns_dom_tree_parent(anc_b))
-        g_ptr_array_add(pb, (gpointer)anc_b);
-    const ns_node *common = NULL;
-    guint ia = pa->len, ib = pb->len;
-    while (ia > 0 && ib > 0 && pa->pdata[ia - 1] == pb->pdata[ib - 1]) {
-        common = pa->pdata[ia - 1];
-        ia--; ib--;
-    }
-    int32_t result = 0x01 | 0x20 | (a < b ? 0x04 : 0x02);
-    if (common && ia > 0 && ib > 0) {
-        const ns_node *child_a = pa->pdata[ia - 1];
-        const ns_node *child_b = pb->pdata[ib - 1];
-        for (const ns_node *c = common->first_child; c; c = c->next_sibling) {
-            if (c == child_a) { result = 0x04; break; }
-            if (c == child_b) { result = 0x02; break; }
-        }
-    }
-    g_ptr_array_free(pa, TRUE);
-    g_ptr_array_free(pb, TRUE);
-    return JS_NewInt32(ctx, result);
-}
-
-static JSValue
-ns_element_get_nodeType(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (!el) return JS_NewInt32(ctx, 0);
-    if ((el->flags & NS_NODE_FRAGMENT) || ns_node_is_shadow_root(el))
-        return JS_NewInt32(ctx, 11);
-    switch (el->kind) {
-        case NS_NODE_ELEMENT: return JS_NewInt32(ctx, 1);
-        case NS_NODE_TEXT:
-            return JS_NewInt32(ctx, (el->flags & NS_NODE_CDATA) ? 4 : 3);
-        case NS_NODE_COMMENT:
-            return JS_NewInt32(ctx, (el->flags & NS_NODE_PI) ? 7 : 8);
-        case NS_NODE_DOCUMENT:return JS_NewInt32(ctx, 9);
-        case NS_NODE_DOCTYPE: return JS_NewInt32(ctx, 10);
-    }
-    return JS_NewInt32(ctx, 0);
-}
-
-static JSValue
-ns_element_get_nodeName(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (!el) return JS_NewString(ctx, "#text");
-    if ((el->flags & NS_NODE_FRAGMENT) || ns_node_is_shadow_root(el))
-        return JS_NewString(ctx, "#document-fragment");
-    switch (el->kind) {
-        case NS_NODE_TEXT:
-            return JS_NewString(ctx, (el->flags & NS_NODE_CDATA)
-                                ? "#cdata-section" : "#text");
-        case NS_NODE_COMMENT:
-            if ((el->flags & NS_NODE_PI) && el->name)
-                return JS_NewString(ctx, el->name);
-            return JS_NewString(ctx, "#comment");
-        case NS_NODE_DOCUMENT: return JS_NewString(ctx, "#document");
-        case NS_NODE_DOCTYPE:
-            return JS_NewString(ctx, el->name ? el->name : "html");
-        case NS_NODE_ELEMENT:
-            break;
-    }
-    if (!el->name) return JS_NewString(ctx, "");
-    if (el->flags & NS_NODE_KEEP_CASE)
-        return JS_NewString(ctx, el->name);
-    {
-        JSValue q = ns_element_qualified_upper(ctx, el);
-        if (!JS_IsUndefined(q)) return q;
-    }
-    if (el->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS))
-        return JS_NewString(ctx, el->name);
-    for (const char *p = el->name; *p; p++)
-        if (*p >= 'A' && *p <= 'Z')
-            return JS_NewString(ctx, el->name);
-    char *up = g_ascii_strup(el->name, -1);
-    JSValue v = JS_NewString(ctx, up);
-    g_free(up);
-    return v;
 }
 
 static void
@@ -7338,92 +6453,6 @@ ns_element_set_form_enctype(JSContext *ctx, JSValueConst this_val,
         JS_FreeCString(ctx, s);
     }
     return JS_UNDEFINED;
-}
-
-static JSValue
-ns_element_get_isConnected(JSContext *ctx, JSValueConst this_val)
-{
-    (void)ctx;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n) return JS_FALSE;
-    const ns_node *root = n;
-    while (root->parent) root = root->parent;
-    return root->kind == NS_NODE_DOCUMENT && !(root->flags & NS_NODE_FRAGMENT)
-        ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_element_get_baseURI(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NewString(ctx, "about:blank");
-    g_autofree char *base = ns_js_doc_base_url(js);
-    return JS_NewString(ctx, base && *base ? base : "about:blank");
-}
-
-static JSValue
-ns_element_get_ownerDocument(JSContext *ctx, JSValueConst this_val)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NULL;
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (el && el->kind == NS_NODE_DOCUMENT && !(el->flags & NS_NODE_FRAGMENT))
-        return JS_NULL;
-    ns_node *attr_owner = ns_attr_owner(this_val);
-    if (attr_owner) {
-        JSValue owner_elem = ns_make_element(ctx, attr_owner);
-        JSValue doc = ns_element_get_ownerDocument(ctx, owner_elem);
-        JS_FreeValue(ctx, owner_elem);
-        return doc;
-    }
-    if (el) {
-        const ns_node *doc_anc = NULL;
-        for (const ns_node *p = el->parent; p; p = p->parent)
-            if (p->kind == NS_NODE_DOCUMENT && !(p->flags & NS_NODE_FRAGMENT)) {
-                doc_anc = p;
-                break;
-            }
-        if (doc_anc) {
-            if (doc_anc != js->current_doc) {
-                const ns_node *host = doc_anc->parent;
-                if (host && host->js_wrapper &&
-                    (ns_node_is_element_named(host, "iframe") ||
-                     ns_node_is_element_named(host, "object"))) {
-                    JSValue hw = JS_MKPTR(JS_TAG_OBJECT, host->js_wrapper);
-                    JSValue realm = JS_GetPropertyStr(ctx, hw, "__ndRealmDoc");
-                    if (JS_IsObject(realm)) return realm;
-                    JS_FreeValue(ctx, realm);
-                }
-                return ns_make_element(ctx, doc_anc);
-            }
-            return ns_make_element(ctx, js->current_doc);
-        }
-    }
-    JSValue own = JS_GetPropertyStr(ctx, this_val, "__ndOwnerDoc");
-    if (JS_IsObject(own)) return own;
-    JS_FreeValue(ctx, own);
-    JSValue noown = JS_GetPropertyStr(ctx, this_val, "__ndNoOwnerDoc");
-    gboolean no_owner = JS_ToBool(ctx, noown) > 0;
-    JS_FreeValue(ctx, noown);
-    if (no_owner) return JS_NULL;
-    if (!js->current_doc) return JS_NULL;
-    return ns_make_element(ctx, js->current_doc);
-}
-
-static JSValue
-ns_element_get_namespaceURI(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (n && n->kind == NS_NODE_ELEMENT) {
-        const char *stored = ns_element_get_attr(n, "data-nd-ns-uri");
-        if (stored) return JS_NewString(ctx, stored);
-    }
-    if (n && (n->flags & NS_NODE_SVG_NS))
-        return JS_NewString(ctx, "http://www.w3.org/2000/svg");
-    if (n && (n->flags & NS_NODE_FOREIGN_NS))
-        return JS_NULL;
-    return JS_NewString(ctx, "http://www.w3.org/1999/xhtml");
 }
 
 static JSValue
@@ -7893,27 +6922,6 @@ ns_element_get_list_ref(JSContext *ctx, JSValueConst this_val)
         g_ascii_strcasecmp(found->name, "datalist") != 0)
         return JS_NULL;
     return ns_make_element(ctx, found);
-}
-
-static JSValue
-ns_element_template_content(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *t = ns_unwrap_element(this_val);
-    if (!t || !t->name) return JS_NewString(ctx, "");
-    if (g_ascii_strcasecmp(t->name, "template") == 0) {
-        JSValue cached = JS_GetPropertyStr(ctx, this_val, "__nd_template_content");
-        if (JS_IsException(cached)) return cached;
-        if (!JS_IsUndefined(cached)) return cached;
-        JS_FreeValue(ctx, cached);
-        ns_node *frag = ns_template_content_get(ns_unwrap_element_mut(this_val));
-        if (!frag) return JS_NULL;
-        JSValue wrapped = ns_make_element(ctx, frag);
-        JS_DefinePropertyValueStr(ctx, this_val, "__nd_template_content",
-                                  JS_DupValue(ctx, wrapped),
-                                  JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-        return wrapped;
-    }
-    return ns_element_reflect_str_get(ctx, this_val, "content", FALSE);
 }
 
 static JSValue
@@ -9135,7 +8143,7 @@ ns_js_on_image_ready(ns_image *img, gpointer user_data)
         r->ready_idle = g_idle_add(ns_js_image_ready_idle, r);
 }
 
-static void
+void
 ns_js_start_image_load(ns_js *js, ns_node *el, const char *src)
 {
     if (!js || !js->image_cache || !el) return;
@@ -10935,7 +9943,7 @@ ns_js_new_orphan_element(JSContext *ctx, const char *name)
     return elem;
 }
 
-static void
+void
 ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
                    const char *old_value, const char *new_value)
 {
@@ -15222,7 +14230,7 @@ ns_js_iframe_source_loaded(ns_js *js, ns_node *iframe)
     return same;
 }
 
-static void
+void
 ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe, gboolean force)
 {
     if (!js || !iframe || js->halted) return;

@@ -285,6 +285,13 @@ impl<'a> Attr<'a> {
         self.get().value_len
     }
 
+    pub fn value_bytes(self) -> Option<&'a [u8]> {
+        let attr = self.get();
+        (!attr.value.is_null()).then(|| unsafe {
+            core::slice::from_raw_parts(attr.value.cast::<u8>(), attr.value_len as usize)
+        })
+    }
+
     pub fn namespace_uri(self) -> Option<&'a CStr> {
         c_str(self.get().namespace_uri)
     }
