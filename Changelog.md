@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Positioned layout (relative, absolute, fixed and sticky offsets) moved
+  from layout.c to Rust (rust/layout-position), with identical layout.
 * Hit testing (the point-to-element, form-control, link and scroll-container
   lookups behind clicks and elementFromPoint) moved from layout.c to Rust
   (rust/layout-hit), with identical results.

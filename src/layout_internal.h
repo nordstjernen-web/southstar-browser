@@ -102,5 +102,21 @@ const ns_node *ns_layout_inline_box_form_hit(const ns_box *box, double local_x,
                                              const ns_style *parent_style);
 gboolean ns_layout_box_clips_children(const ns_box *b);
 gboolean ns_layout_style_creates_fixed_cb(const ns_style *s);
+double ns_layout_estimate_natural_width(const ns_box *b, double cap);
+const char *ns_layout_flex_direction_of(const ns_style *s);
+void ns_layout_box_append_child(ns_box *parent, ns_box *child);
+const ns_node *ns_layout_flat_parent(const ns_node *n);
+guint ns_layout_abs_pending_len(void);
+gboolean ns_layout_abs_pending_entry(guint i, const ns_node **dom,
+                                     const ns_style **pseudo, gboolean *fixed);
+void ns_layout_abs_pending_clear(void);
+ns_box *ns_layout_abs_static_run(const ns_node *dom, double *rel_x,
+                                 double *rel_y);
+ns_box *ns_layout_abs_build_box(const ns_node *dom, const ns_style *pseudo,
+                                GHashTable *styles);
+void ns_layout_apply_position_offsets(ns_box *box, double parent_w,
+                                      double parent_h);
+void ns_layout_process_absolute_boxes(ns_box *root, GHashTable *styles,
+                                      double viewport_width);
 
 #endif

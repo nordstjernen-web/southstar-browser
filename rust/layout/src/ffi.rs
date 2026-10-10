@@ -542,6 +542,14 @@ impl<'a> BoxRef<'a> {
         self.raw().rel_dy
     }
 
+    pub fn set_rel_offset(self, dx: f64, dy: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).rel_dx = dx;
+            (*b).rel_dy = dy;
+        }
+    }
+
     pub fn paint_top(self) -> f64 {
         self.raw().paint_top
     }

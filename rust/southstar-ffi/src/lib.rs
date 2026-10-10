@@ -78,6 +78,7 @@ pub use southstar_layout;
 pub use southstar_layout_flex;
 pub use southstar_layout_grid;
 pub use southstar_layout_hit;
+pub use southstar_layout_position;
 pub use southstar_layout_table;
 pub use southstar_mat4;
 pub use southstar_mathml;
