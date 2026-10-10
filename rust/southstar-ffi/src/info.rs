@@ -55,6 +55,7 @@ const PORTED: &[&str] = &[
     "mic.c",
     "net.c",
     "netutil.c",
+    "paint.c",
     "pdf.c",
     "print.c",
     "render.c",

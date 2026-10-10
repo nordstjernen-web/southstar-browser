@@ -776,7 +776,7 @@ fn paint_selection_rects(
     layout: &Layout,
     ox: f64,
     oy: f64,
-    run: engine::SelectionRun,
+    run: crate::walk::SelectionRun,
 ) -> Vec<SelRect> {
     let mut out = Vec::new();
     let mut iter = layout.iter();
@@ -839,7 +839,7 @@ fn paint_selection_background(
     layout: &Layout,
     ox: f64,
     oy: f64,
-    run: engine::SelectionRun,
+    run: crate::walk::SelectionRun,
 ) {
     let rects = paint_selection_rects(layout, ox, oy, run);
     if rects.is_empty() {
@@ -862,7 +862,7 @@ fn paint_selection_foreground(
     layout: &Layout,
     ox: f64,
     oy: f64,
-    run: engine::SelectionRun,
+    run: crate::walk::SelectionRun,
 ) {
     let Some(fg) = selection_pseudo_color(b, P::Color) else {
         return;
@@ -1674,7 +1674,7 @@ fn paint_inline_atomics(
         b.set_atomic_owner_offset(i, sx - b.x(), sy - b.y());
         cr.save();
         cr.translate(sx + ab.rel_dx() - ab.x(), sy + ab.rel_dy() - ab.y());
-        engine::paint_walk_atomic(cr, ab, highlight);
+        crate::walk::paint_walk_atomic(cr, ab, highlight);
         cr.restore();
     }
 }
@@ -1817,7 +1817,7 @@ pub fn paint_inline(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
         }
     }
     debug_text(cr, b, color, text_x, y_origin);
-    let sel_run = engine::selection_run(b);
+    let sel_run = crate::walk::selection_run(b);
     if let Some(run) = sel_run {
         paint_selection_background(cr, b, &layout, text_x, y_origin, run);
     }

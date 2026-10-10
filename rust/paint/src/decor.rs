@@ -1126,7 +1126,7 @@ fn bg_layer_origin_area(
 ) -> (f64, f64, f64, f64) {
     let s = style_of(b);
     if bg_layer_keyword(s, P::BackgroundAttachment, li) == Some(b"fixed") {
-        let (have, vx, vy) = engine::viewport_origin();
+        let (have, vx, vy) = crate::walk::viewport_origin();
         return (
             if have { vx } else { 0.0 },
             if have { vy } else { 0.0 },

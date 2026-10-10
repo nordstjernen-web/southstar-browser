@@ -15,6 +15,14 @@ Southstar Browser (unreleased):
   option now builds on every platform, NetBSD and 32-bit x86 included.
 * MessagePort, MessageChannel, BroadcastChannel, dedicated workers and
   service workers are Rust (rust/js-workers), with unchanged results.
+* Painting is all Rust (`rust/paint`); paint.c is gone. The last section
+  moved the box tree walk — stacking order and deferred positioned layers,
+  opacity groups, blend modes, transforms, sticky and fixed offsets, overflow
+  clips and scrollbars, column rules, CSS 3D contexts and picking — and the
+  viewport layer planner the tiled renderer composites. Rendering is
+  unchanged.
+* MessagePort, MessageChannel and BroadcastChannel are Rust
+  (rust/js-workers), with unchanged results.
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
   through an adapter) is gone, the first step toward replacing QuickJS with
   the Rust engine Boa.

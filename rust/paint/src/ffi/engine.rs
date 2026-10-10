@@ -10,9 +10,10 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
-use southstar_style::{Gradient, NsCssValue, StyleRef, ValueRef};
+use southstar_mat4::Mat4;
+use southstar_style::{Gradient, NsCssValue, PropId, StyleRef, Transform, ValueRef};
 
-use super::cairo::Cr;
+use super::cairo::{Cr, SurfaceRef};
 use super::pango::{AttrList, Layout};
 use crate::util::Rgba;
 
@@ -306,18 +307,6 @@ unsafe extern "C" {
         y0: *mut c_double,
         y1: *mut c_double,
     ) -> GBoolean;
-    fn ns_paint_viewport_origin(x: *mut c_double, y: *mut c_double) -> GBoolean;
-    fn ns_paint_selection_runs() -> *mut GHashTable;
-    fn ns_paint_walk_atomic(cr: *mut c_void, b: *const NsBox, highlight: *const c_char);
-    fn ns_paint_layers_mode() -> c_int;
-    fn ns_paint_layers_note_video(cr: *mut c_void);
-    fn ns_paint_video_hole_record(
-        cr: *mut c_void,
-        x: c_double,
-        y: c_double,
-        w: c_double,
-        h: c_double,
-    );
     fn ns_inline_text_indent_px(b: *const NsBox, s: *const Style, basis: c_double) -> c_double;
     fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
@@ -471,43 +460,6 @@ pub fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64, f64)> {
     (found != 0).then_some((inset, x0, x1, y0, y1))
 }
 
-pub fn viewport_origin() -> (bool, f64, f64) {
-    let (mut x, mut y) = (0.0, 0.0);
-    let have = unsafe { ns_paint_viewport_origin(&mut x, &mut y) } != 0;
-    (have, x, y)
-}
-
-pub fn selection_run(b: BoxRef<'_>) -> Option<SelectionRun> {
-    let runs = unsafe { ns_paint_selection_runs() };
-    if runs.is_null() {
-        return None;
-    }
-    let run = unsafe { southstar_glib::g_hash_table_lookup(runs, b.as_ptr().cast()) };
-    unsafe { run.cast::<SelectionRun>().as_ref() }.copied()
-}
-
-pub fn paint_walk_atomic(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
-    unsafe {
-        ns_paint_walk_atomic(
-            cr.raw(),
-            b.as_ptr(),
-            highlight.map_or(ptr::null(), CStr::as_ptr),
-        )
-    };
-}
-
-pub fn layers_mode() -> i32 {
-    unsafe { ns_paint_layers_mode() }
-}
-
-pub fn layers_note_video(cr: Cr) {
-    unsafe { ns_paint_layers_note_video(cr.raw()) };
-}
-
-pub fn video_hole_record(cr: Cr, x: f64, y: f64, w: f64, h: f64) {
-    unsafe { ns_paint_video_hole_record(cr.raw(), x, y, w, h) };
-}
-
 pub fn inline_text_indent_px(b: BoxRef<'_>, s: Option<StyleRef<'_>>, basis: f64) -> f64 {
     let s = s.map_or(ptr::null(), StyleRef::as_ptr);
     unsafe { ns_inline_text_indent_px(b.as_ptr(), s, basis) }
@@ -556,6 +508,116 @@ pub fn svg_render_node(cr: Cr, b: BoxRef<'_>, w: f64, h: f64) {
 
 pub fn math_paint(cr: Cr, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {
     unsafe { ns_math_paint(cr.raw(), b.dom_ptr(), x, y, font_px, c.r, c.g, c.b, c.a) };
+}
+
+unsafe extern "C" {
+    fn ns_anim_get_opacity(anim: *mut c_void, dom: *const c_void, out: *mut c_double) -> GBoolean;
+    fn ns_anim_get_transform(anim: *mut c_void, dom: *const c_void) -> *const Transform;
+    fn ns_css_style_effective_transform(
+        st: *const Style,
+        over: *const Transform,
+        out: *mut Transform,
+    );
+    fn ns_css_transform_to_mat4(tf: *const Transform, bw: c_double, bh: c_double, out: *mut Mat4);
+    fn ns_css_transform_is_3d(tf: *const Transform) -> GBoolean;
+    fn ns_css_used_column_count(
+        s: *const Style,
+        avail_w: c_double,
+        out_gap: *mut c_double,
+    ) -> c_int;
+    fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
+    fn ns_box_in_scroller(b: *const NsBox) -> GBoolean;
+    fn ns_box_sticky_offset(
+        b: *const NsBox,
+        x0: c_double,
+        y0: c_double,
+        x1: c_double,
+        y1: c_double,
+        dx: *mut c_double,
+        dy: *mut c_double,
+    );
+    fn ns_box_hit_test(root: *const NsBox, x: c_double, y: c_double) -> *const NsBox;
+    fn ns_dom_active_modal() -> *const NsNode;
+    fn ns_selection_ranges(root: *const NsBox, sel: *const c_void) -> *mut GHashTable;
+    fn ns_js_canvas_surface(js: *mut c_void, n: *const c_void) -> *mut c_void;
+}
+
+pub fn anim_opacity(b: BoxRef<'_>) -> Option<f64> {
+    let anim = crate::state::anim();
+    if anim.is_null() {
+        return None;
+    }
+    let mut o = 0.0;
+    (unsafe { ns_anim_get_opacity(anim, b.dom_ptr(), &mut o) } != 0).then_some(o)
+}
+
+pub fn effective_transform(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Transform {
+    let anim = crate::state::anim();
+    let anim_tf = if anim.is_null() {
+        ptr::null()
+    } else {
+        unsafe { ns_anim_get_transform(anim, b.dom_ptr()) }
+    };
+    let mut eff = Transform::default();
+    let has_style = s.is_some_and(|s| {
+        s.get(PropId::Transform).is_some()
+            || s.get(PropId::Translate).is_some()
+            || s.get(PropId::Rotate).is_some()
+            || s.get(PropId::Scale).is_some()
+    });
+    if !anim_tf.is_null() || has_style {
+        let st = s.map_or(ptr::null(), StyleRef::as_ptr);
+        unsafe { ns_css_style_effective_transform(st, anim_tf, &mut eff) };
+    }
+    eff
+}
+
+pub fn transform_to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
+    let mut m = Mat4::IDENTITY;
+    unsafe { ns_css_transform_to_mat4(tf, bw, bh, &mut m) };
+    m
+}
+
+pub fn transform_is_3d(tf: &Transform) -> bool {
+    unsafe { ns_css_transform_is_3d(tf) != 0 }
+}
+
+pub fn used_column_count(s: StyleRef<'_>, avail_w: f64, gap: &mut f64) -> i32 {
+    unsafe { ns_css_used_column_count(s.as_ptr(), avail_w, gap) }
+}
+
+pub fn box_is_fixed(b: BoxRef<'_>) -> bool {
+    unsafe { ns_box_is_fixed(b.as_ptr()) != 0 }
+}
+
+pub fn box_in_scroller(b: BoxRef<'_>) -> bool {
+    unsafe { ns_box_in_scroller(b.as_ptr()) != 0 }
+}
+
+pub fn box_sticky_offset(b: BoxRef<'_>, clip: (f64, f64, f64, f64)) -> (f64, f64) {
+    let (mut dx, mut dy) = (0.0, 0.0);
+    unsafe { ns_box_sticky_offset(b.as_ptr(), clip.0, clip.1, clip.2, clip.3, &mut dx, &mut dy) };
+    (dx, dy)
+}
+
+pub fn box_hit_test(root: BoxRef<'_>, x: f64, y: f64) -> *const NsBox {
+    unsafe { ns_box_hit_test(root.as_ptr(), x, y) }
+}
+
+pub fn active_modal<'a>() -> Option<Node<'a>> {
+    unsafe { Node::from_ptr(ns_dom_active_modal()) }
+}
+
+pub unsafe fn selection_ranges(root: BoxRef<'_>, sel: *const c_void) -> *mut GHashTable {
+    unsafe { ns_selection_ranges(root.as_ptr(), sel) }
+}
+
+pub fn canvas_surface(b: BoxRef<'_>) -> Option<SurfaceRef> {
+    let js = crate::state::js();
+    if js.is_null() {
+        return None;
+    }
+    unsafe { SurfaceRef::from_raw(ns_js_canvas_surface(js, b.dom_ptr())) }
 }
 
 pub fn monotonic_time() -> i64 {

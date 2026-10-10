@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/paint.h, and of src/paint_internal.h while paint.c is ported, over the cairo, ns-pango and engine bindings.
+//! Southstar — the C ABI of src/paint.h and of the paint calls src/layout.h declares, over the cairo, ns-pango and engine bindings.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -17,7 +17,9 @@ use southstar_style::StyleRef;
 use self::cairo::Cr;
 use self::engine::FontMetrics;
 use self::pango::{AttrList, Layout, RawAttribute};
-use crate::{decor, filter, inline, marker, mask, media, state, text};
+use crate::document::{self, DocLayers, LayerPlan};
+use crate::walk::{UpperFn, VpCapture};
+use crate::{inline, marker, state, text, three_d};
 
 fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
@@ -104,8 +106,7 @@ pub unsafe extern "C" fn ns_paint_font_variations_attr_from_values(
         .map_or(core::ptr::null_mut(), pango::Attribute::into_raw)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_font_metrics(
+unsafe extern "C" fn font_metrics_cb(
     family: *const c_char,
     size_px: c_double,
     weight: c_int,
@@ -128,7 +129,7 @@ unsafe extern "C" fn font_generation_cb() -> u64 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_paint_register_font_oracle() {
-    engine::set_font_oracle(font_available_cb, font_generation_cb, ns_paint_font_metrics);
+    engine::set_font_oracle(font_available_cb, font_generation_cb, font_metrics_cb);
 }
 
 #[unsafe(no_mangle)]
@@ -191,13 +192,6 @@ pub unsafe extern "C" fn ns_paint_li_marker_text(
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_marker(cr: *mut c_void, b: *const NsBox) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        marker::paint_marker(unsafe { Cr::from_raw(cr) }, b);
-    }
-}
-
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
@@ -224,127 +218,6 @@ pub unsafe extern "C" fn ns_paint_set_anim(anim: *mut c_void) {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_paint_set_caret_visible(visible: GBoolean) {
     state::set_caret_visible(visible != 0);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_paint_js() -> *mut c_void {
-    state::js()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_paint_anim() -> *mut c_void {
-    state::anim()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_block(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        decor::paint_block(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_hr(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        decor::paint_hr(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_inline(
-    c: *mut c_void,
-    b: *const NsBox,
-    highlight: *const c_char,
-) {
-    if let Some(b) = box_ref(b) {
-        inline::paint_inline(cr(c), b, c_str(highlight));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_image(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        media::paint_image(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_video(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        media::paint_video(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_math(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        media::paint_math(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_svg(c: *mut c_void, b: *const NsBox) {
-    if let Some(b) = box_ref(b) {
-        media::paint_svg(cr(c), b);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_box_content_clip(c: *mut c_void, b: *const NsBox) -> GBoolean {
-    boolean(box_ref(b).is_some_and(|b| media::apply_box_content_clip(cr(c), b)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_box_radii_path(
-    c: *mut c_void,
-    b: *const NsBox,
-    x: c_double,
-    y: c_double,
-    w: c_double,
-    h: c_double,
-) {
-    let radii = crate::radii::box_border_radii(box_ref(b));
-    if radii.is_zero() {
-        cr(c).rectangle(x, y, w, h);
-    } else {
-        crate::radii::rounded_rect_path(cr(c), x, y, w, h, radii);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_apply_image_filter(
-    data: *mut u8,
-    stride: c_int,
-    w: c_int,
-    h: c_int,
-    filter: *const c_char,
-) {
-    if data.is_null() || stride <= 0 || h <= 0 {
-        return;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts_mut(data, stride as usize * h as usize) };
-    filter::apply_image_filter(bytes, stride, w, h, c_str(filter));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_filter_has_bitmap_effect(filter: *const c_char) -> GBoolean {
-    boolean(filter::filter_has_bitmap_effect(c_str(filter)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_mask_layers_paintable(s: *const Style) -> GBoolean {
-    boolean(mask::mask_layers_paintable(style(s)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_mask_layers_pattern(
-    c: *mut c_void,
-    b: *const NsBox,
-) -> *mut c_void {
-    match box_ref(b) {
-        Some(b) => mask::mask_layers_pattern(cr(c), b).into_raw(),
-        None => core::ptr::null_mut(),
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -429,4 +302,120 @@ pub unsafe extern "C" fn ns_paint_inline_range_extents(
         }
     }
     1
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint(c: *mut c_void, root: *const NsBox, highlight: *const c_char) {
+    if let Some(root) = box_ref(root) {
+        document::paint_document(cr(c), root, c_str(highlight), core::ptr::null());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_with_selection(
+    c: *mut c_void,
+    root: *const NsBox,
+    highlight: *const c_char,
+    sel: *const c_void,
+) {
+    if let Some(root) = box_ref(root) {
+        document::paint_document(cr(c), root, c_str(highlight), sel);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_canvas_color(
+    root: *const NsBox,
+    rgba_out: *mut c_double,
+) -> GBoolean {
+    let (found, bg) = document::canvas_color(box_ref(root));
+    if !rgba_out.is_null() {
+        let out = unsafe { core::slice::from_raw_parts_mut(rgba_out, 4) };
+        out.copy_from_slice(&[bg.r, bg.g, bg.b, bg.a]);
+    }
+    boolean(found)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_layer_plan_init(plan: *mut LayerPlan) {
+    if let Some(plan) = unsafe { plan.as_mut() } {
+        document::plan_init(plan);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_layer_plan_clear(plan: *mut LayerPlan) {
+    if let Some(plan) = unsafe { plan.as_mut() } {
+        document::plan_clear(plan);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_plan_layers(
+    c: *mut c_void,
+    root: *const NsBox,
+    plan: *mut LayerPlan,
+) {
+    if let Some(plan) = unsafe { plan.as_mut() } {
+        document::plan_layers(cr(c), box_ref(root), plan);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_doc_layers(
+    c: *mut c_void,
+    upper: Option<UpperFn>,
+    upper_data: *mut c_void,
+    root: *const NsBox,
+    highlight: *const c_char,
+    sel: *const c_void,
+    plan: *const LayerPlan,
+) -> GBoolean {
+    let (Some(root), Some(plan)) = (box_ref(root), unsafe { plan.as_ref() }) else {
+        return 1;
+    };
+    let up = DocLayers { upper, upper_data };
+    boolean(document::doc_layers(
+        cr(c),
+        up,
+        root,
+        c_str(highlight),
+        sel,
+        plan,
+    ))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_vp_layer(
+    c: *mut c_void,
+    root: *const NsBox,
+    layer: *const VpCapture,
+    vp_x: c_double,
+    vp_y: c_double,
+    highlight: *const c_char,
+    sel: *const c_void,
+) {
+    let (Some(root), Some(layer)) = (box_ref(root), unsafe { layer.as_ref() }) else {
+        return;
+    };
+    document::vp_layer(cr(c), root, layer, (vp_x, vp_y), c_str(highlight), sel);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_paint_3d_invalidate() {
+    three_d::invalidate();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_3d_registered(b: *const NsBox) -> GBoolean {
+    boolean(box_ref(b).is_some_and(three_d::registered))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_paint_3d_pick(
+    root3d: *const NsBox,
+    x: c_double,
+    y: c_double,
+) -> *const NsBox {
+    box_ref(root3d).map_or(core::ptr::null(), |root| three_d::pick(root, x, y))
 }

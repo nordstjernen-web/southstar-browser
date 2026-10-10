@@ -1,6 +1,6 @@
 [package]
 name = "southstar-paint"
-description = "Painting the layout box tree with cairo and ns-pango, ported from paint.c section by section: so far page text setup, fonts, line heights, list markers, box decorations, replaced content, masks and inline text"
+description = "Painting the layout box tree with cairo and ns-pango: the walk with stacking, clips, transforms and 3D, box decorations, replaced content, masks, inline text, list markers, page text setup and the viewport layer planner"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
+southstar-mat4 = { path = "../mat4" }
 southstar-style = { path = "../style" }
 
 [features]

@@ -631,7 +631,7 @@ pub fn paint_video(cr: Cr, b: BoxRef<'_>) {
             Some(b"scale-down") => 4,
             _ => 1,
         };
-        if engine::layers_mode() == 0 {
+        if crate::walk::layers_mode() == crate::walk::LAYERS_OFF {
             paint_video_note_rects(cr, b, v, fit_mode);
         }
     }
@@ -648,8 +648,8 @@ pub fn paint_video(cr: Cr, b: BoxRef<'_>) {
     }
     cr.save();
     if punched {
-        engine::layers_note_video(cr);
-        engine::video_hole_record(cr, b.x(), b.y(), b.content_width(), b.content_height());
+        crate::walk::layers_note_video(cr);
+        crate::walk::video_hole_record(cr, b.x(), b.y(), b.content_width(), b.content_height());
         cr.set_operator(cairo::OPERATOR_CLEAR);
         cr.rectangle(b.x(), b.y(), b.content_width(), b.content_height());
         cr.fill();

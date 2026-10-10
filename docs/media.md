@@ -84,7 +84,7 @@ switching and cue positioning settings (`line`/`position`/`align`) are not
 wired.
 
 The cue active at the video's current time is drawn by `paint_video_caption`
-(`src/paint.c`) as centred, white-on-translucent-black lines across the
+(`rust/paint`) as centred, white-on-translucent-black lines across the
 bottom of the video box. The captions are painted into the **html page
 surface**, after the video rectangle is punched out — and because the shell
 composites the page surface *last, over* the video-process frame (see the

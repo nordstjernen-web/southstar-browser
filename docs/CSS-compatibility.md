@@ -27,8 +27,8 @@ carry forward from the 1.0.21 pass.
 | Tokenizer, parser, cascade, selector matching | `rust/css` (`sheet.rs`, `selector.rs`, `matcher.rs`, `cascade.rs`, `ffi/compute.rs`), `src/css.h` |
 | Value/unit resolution, `calc()` | `rust/css` (`units.rs`, `calc.rs`, `computed_units.rs`; `length_resolve` in `src/layout.c`) |
 | Box layout (block/inline/flex/grid/table/multicol/float/position) | `src/layout.c`, `src/layout.h` |
-| Paint (Cairo): backgrounds, borders, shadows, gradients, filters | `src/paint.c`, `rust/render` |
-| Text / fonts (Pango) | `rust/font`, `src/paint.c` |
+| Paint (Cairo): backgrounds, borders, shadows, gradients, filters | `rust/paint`, `rust/render` |
+| Text / fonts (Pango) | `rust/font`, `rust/paint` |
 | Transitions / `@keyframes` animation | `rust/anim` |
 | UA stylesheet | `rust/css/src/ua.css` and `ua-quirks.css`, compiled into the binary |
 
@@ -54,7 +54,7 @@ carry forward from the 1.0.21 pass.
 | `px`, `%`, `em`, `rem` | ✅ | `em`/`rem` resolved against a 16px root in the layout fast path |
 | Viewport units `vw`/`vh`/`vmin`/`vmax`, `sv*`/`lv*`/`dv*`, `vi`/`vb` | ✅ | |
 | Container units `cqw`/`cqh`/`cqi`/`cqb`/`cqmin`/`cqmax` | ✅ | resolved against the nearest container (`container-type`/`container-name`) |
-| Font-relative `cap`, `ic`, `ch`, `ex` | ✅ | font-measured at cascade time (`rust/css/src/computed_units.rs` via a Pango metrics callback in `src/paint.c`): `ch` is the advance of `0`, `ex` the x-height of `x`, `cap` the cap-height of `H`, `ic` the advance of `水`, all measured for the element's computed family/size/weight/style; they respond to the actual font (e.g. `1ch` differs between monospace, serif, and bold). Falls back to the old `0.5/0.7/1.0em` factors if no metrics provider is registered, and `calc()`/`background-size`/box-shadow keep the factor-based approximation |
+| Font-relative `cap`, `ic`, `ch`, `ex` | ✅ | font-measured at cascade time (`rust/css/src/computed_units.rs` via a Pango metrics callback in `rust/paint`): `ch` is the advance of `0`, `ex` the x-height of `x`, `cap` the cap-height of `H`, `ic` the advance of `水`, all measured for the element's computed family/size/weight/style; they respond to the actual font (e.g. `1ch` differs between monospace, serif, and bold). Falls back to the old `0.5/0.7/1.0em` factors if no metrics provider is registered, and `calc()`/`background-size`/box-shadow keep the factor-based approximation |
 | Absolute `Q`, `pt`, `cm`, `mm`, `in`, `pc` | ✅ | exact CSS ratios from `1in = 96px = 2.54cm` (`pt = 96/72`, `cm = 96/2.54`, `mm = 96/25.4`, `Q = 96/101.6`) |
 | `calc()` | ✅ | percentage + px mix; nested. Specified values serialize per the Values 4 "serialize a math function" rules (`rust/css`'s typed math sum): terms of the same type are summed, absolute lengths/angles/times/frequencies/resolutions fold to their canonical unit (`px`/`deg`/`s`/`hz`/`dppx`), products and quotients by a number distribute, and a sum that cannot reduce to one term serializes sorted — number, then percentage, then dimensions in ASCII-alphabetical unit order — so `calc(1px + 1%)` is `calc(1% + 1px)`, `calc(1px + 2em + 3rem + 4%)` is `calc(4% + 2em + 1px + 3rem)`, and `calc(2 * (1px + 1em))` is `calc(2em + 2px)`. A single-argument `min()`/`max()` reduces to `calc()`; a comparison that needs layout (`min(20px, 10%)`) stays as authored |
 | Math `round()` / `mod()` / `rem()` / `abs()` / `min()` / `max()` / `clamp()` | ✅ | the Values 4 length-math subset |
@@ -125,7 +125,7 @@ carry forward from the 1.0.21 pass.
 | `column-count` | ✅ | distributes block-level children across balanced columns |
 | `column-width` / `columns` shorthand | ✅ | used column count derived per spec (`floor((avail+gap)/(width+gap))`); verified on `<ol>`/`<ul>` reference lists |
 | `column-gap` | ✅ | |
-| `column-rule` (`-width`/`-style`/`-color`) | ✅ | divider painted between filled columns (`src/paint.c`) |
+| `column-rule` (`-width`/`-style`/`-color`) | ✅ | divider painted between filled columns (`rust/paint`) |
 | Fragmenting a single inline/text run across columns | ✅ | plain inline text runs are split by wrapped line into balanced column fragments; links and text-style ranges are preserved |
 
 ## Tables (Tables 3)
@@ -143,9 +143,9 @@ carry forward from the 1.0.21 pass.
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| `list-style-type` (disc/circle/square, decimal & leading-zero, lower/upper alpha/latin/roman, lower-greek, `none`) | ✅ | `format_ordered_label` in `src/paint.c` |
+| `list-style-type` (disc/circle/square, decimal & leading-zero, lower/upper alpha/latin/roman, lower-greek, `none`) | ✅ | `format_ordered_label` in `rust/paint` |
 | `list-style-position` (`outside`/`inside`) | ✅ | |
-| `list-style-image` | ✅ | `url(...)` markers fetched through the page image pipeline and painted in place of the bullet (`paint_marker` in `src/paint.c`), scaled down to the line's font size when larger; falls back to the generated marker until the image loads |
+| `list-style-image` | ✅ | `url(...)` markers fetched through the page image pipeline and painted in place of the bullet (`paint_marker` in `rust/paint`), scaled down to the line's font size when larger; falls back to the generated marker until the image loads |
 | `list-style` shorthand | ✅ | type/position/`url()`/`none` |
 | `::marker` | ✅ | see Selectors; `content` overrides win over `list-style-image` |
 | Legacy `<ol start/reversed/type>` / `<li value/type>` / `<ul type>` | ✅ | presentational hints + ordinal numbering |
@@ -191,7 +191,7 @@ carry forward from the 1.0.21 pass.
 | Gradients: `linear-gradient` / `radial-gradient` / `conic-gradient` | ✅ | incl. `repeating-*` variants (stop pattern tiles via `CAIRO_EXTEND_REPEAT` / angular modulo), `%` and `px` colour-stop positions, the double-position shorthand (`#222 0 20px`), and `at <position>` centring (radial sizes to the farthest corner from the centre) |
 | `background-clip` (`border-box`/`padding-box`/`content-box`) | ✅ | clips background colour/image/gradient to the chosen box; `text` falls back to border-box |
 | `box-shadow` (incl. inset, multiple) | ✅ | |
-| `border-image` | ✅ | the five longhands (`-source`/`-slice`/`-width`/`-outset`/`-repeat`), the `border-image` shorthand and the `-webkit-border-image` alias parse, cascade and serialize canonically (`getComputedStyle` reports each longhand, and the `border` shorthand resets them). `paint_border_image` in `src/paint.c` nine-slices the source — a `url()` raster image or a gradient rasterized to the border-image area — honouring `fill`, number and percentage slices, `auto`/length/percentage/number widths, outsets, and `stretch`/`repeat`/`round`/`space` on both axes; while it renders it replaces the element's border style. Block-level boxes only — an inline box's border image is not painted
+| `border-image` | ✅ | the five longhands (`-source`/`-slice`/`-width`/`-outset`/`-repeat`), the `border-image` shorthand and the `-webkit-border-image` alias parse, cascade and serialize canonically (`getComputedStyle` reports each longhand, and the `border` shorthand resets them). `paint_border_image` in `rust/paint` nine-slices the source — a `url()` raster image or a gradient rasterized to the border-image area — honouring `fill`, number and percentage slices, `auto`/length/percentage/number widths, outsets, and `stretch`/`repeat`/`round`/`space` on both axes; while it renders it replaces the element's border style. Block-level boxes only — an inline box's border image is not painted
 | `outline` (`-width`/`-style`/`-color`/`-offset`) | ✅ | |
 
 ## Color (Color 4/5)

@@ -35,7 +35,7 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 | WHATWG URL | lexbor URL module via `src/net.c` (`ns_url_*`) |
 | CSS cascade / selectors | `src/css.c`, `src/css.h` |
 | Layout (block/inline/flex/grid/table) | `src/layout.c`, `src/layout.h` |
-| Paint (Cairo) / text (Pango) | `src/paint.c`, `src/render.c`, `rust/font` |
+| Paint (Cairo) / text (Pango) | `rust/paint`, `src/render.c`, `rust/font` |
 | JavaScript (QuickJS-ng, interpreter) | `src/js.c`, `src/js.h` |
 | Networking | `src/net.c`, cookies/cache in `src/cache.c` |
 | Images / media | `src/image*.c`, `src/video.c`, `src/video_decode.c`, `rust/webaudio`, `src/audio/` |
@@ -50,7 +50,7 @@ is a thin shell (`src/gtk/procview.c`) that spawns
 one sandboxed `southstar-renderer` process per tab
 (`rust/renderer-host`) and drive it over a control channel +
 shared-memory framebuffer (`rust/renderer-client`). The engine
-(`src/css.c`, `src/layout.c`, `src/js.c`, `rust/dom`, `src/paint.c`,
+(`src/css.c`, `src/layout.c`, `src/js.c`, `rust/dom`, `rust/paint`,
 `src/net.c`, images) runs entirely inside the sandboxed child (Linux
 Landlock + seccomp); the UI process only blits frames and forwards
 input. `./southstar` (the entry point in `src/gtk/appmain.c`) launches
@@ -186,10 +186,10 @@ elements (`head title meta link style script noscript template`) to
 | `embed` / `object` | 🚫 | no NPAPI/PPAPI plugin dispatch |
 | `video` | 🟡 | plays **inline** for MPEG-1 (`.mpg`/`.mpeg`/`.m1v`, always) and VP9/VP8 WebM (`.webm`, with FFmpeg libav), honouring `autoplay`/`loop`/`muted`/`poster`, play/pause, seeking, volume, `played` and timed events. `MediaSource`/`SourceBuffer` streams use the same standards path: YouTube- and Vimeo-style WebM segments are accumulated in the renderer, video is decoded in `southstar-video`, audio in `southstar-audio`, and old prefix segments are evicted when the page calls `SourceBuffer.remove()`. `SourceBuffer.buffered` exposes the retained demux timestamp range after eviction. Unsupported codecs retain the poster + play overlay. See [media.md](media.md) |
 | `audio` | 🟡 | MP3 (always) and, when FFmpeg libav is built in, Opus/Vorbis (`.opus`/`.webm`/`.ogg`) play via the unsandboxed `southstar-audio` helper; other codecs hand the source URL to the system media player. See [media.md](media.md) |
-| `track` (captions) | 🟡 | parsed; `kind`/`src`/`srclang`/`label`/`default` reflected via the standard typed-reflection path. **Rendered**: a `<track default>` whose `kind` is `subtitles`/`captions` (the missing-value default) is fetched, its WebVTT parsed into timed cues (`ns_vtt_parse` in `src/video.c` — `[HH:]MM:SS.mmm` timings, cue-setting/identifier/`NOTE` skipping, `<…>` tag and entity stripping), and the cue active at the video's current time is painted as centred captions over the bottom of the inline video (`paint_video_caption` in `src/paint.c`). Only the `default` track auto-shows (per the spec's initial mode); JS `TextTrack.mode` switching and cue positioning settings (`line`/`position`/`align`) are not wired |
+| `track` (captions) | 🟡 | parsed; `kind`/`src`/`srclang`/`label`/`default` reflected via the standard typed-reflection path. **Rendered**: a `<track default>` whose `kind` is `subtitles`/`captions` (the missing-value default) is fetched, its WebVTT parsed into timed cues (`ns_vtt_parse` in `src/video.c` — `[HH:]MM:SS.mmm` timings, cue-setting/identifier/`NOTE` skipping, `<…>` tag and entity stripping), and the cue active at the video's current time is painted as centred captions over the bottom of the inline video (`paint_video_caption` in `rust/paint`). Only the `default` track auto-shows (per the spec's initial mode); JS `TextTrack.mode` switching and cue positioning settings (`line`/`position`/`align`) are not wired |
 | `map` / `area` (client-side image maps) | ✅ | `<img usemap>` clicks are hit-tested against the referenced `<map>`'s `<area>` elements — `rect`/`circle`/`poly`/`default` shapes in image-local coordinates — and the first matching area's `href` is navigated (`ns_image_map_resolve` in `rust/dom/src/image_map.rs`, wired into the GUI and headless click paths) |
 | `img ismap` (server-side image maps) | ✅ | clicking an `<img ismap>` nested in an `<a href>` appends the click position relative to the image's top-left corner as a `?x,y` suffix to the link URL before navigating (GUI path in `rust/browser`, headless click path in `rust/headless`); coordinates are clamped to non-negative |
-| MathML | ✅ | presentation MathML is laid out and painted over Pango/Cairo (`rust/mathml`), embedded inline on the surrounding text baseline through the replaced-element media-box path (`src/layout.c`, `src/paint.c`): `mrow`, the token elements `mi`/`mn`/`mo`/`ms`/`mtext` (with `mi` auto-italicising single letters and `mo` operator spacing), `msup`/`msub`/`msubsup`, `mfrac` (with rule), `msqrt`/`mroot` (drawn radical), `munder`/`mover`/`munderover`, `mtable`/`mtr`/`mtd`, `mspace`, `mphantom` (reserves its contents' metrics without painting), `mfenced` (synthesises the `open`/`close` fences and `separators`), and `semantics` (renders its first presentation child). Content MathML and `annotation`/`annotation-xml` payloads are not rendered |
+| MathML | ✅ | presentation MathML is laid out and painted over Pango/Cairo (`rust/mathml`), embedded inline on the surrounding text baseline through the replaced-element media-box path (`src/layout.c`, `rust/paint`): `mrow`, the token elements `mi`/`mn`/`mo`/`ms`/`mtext` (with `mi` auto-italicising single letters and `mo` operator spacing), `msup`/`msub`/`msubsup`, `mfrac` (with rule), `msqrt`/`mroot` (drawn radical), `munder`/`mover`/`munderover`, `mtable`/`mtr`/`mtd`, `mspace`, `mphantom` (reserves its contents' metrics without painting), `mfenced` (synthesises the `open`/`close` fences and `separators`), and `semantics` (renders its first presentation child). Content MathML and `annotation`/`annotation-xml` payloads are not rendered |
 
 ## §4.9 Tabular data
 
@@ -218,7 +218,7 @@ validation.
 
 | Control / feature | Status |
 |-------------------|:--:|
-| `input` text/password/search/email/url/tel/number | ✅ (editable with a rendered caret and a highlighted text selection; keyboard caret/selection navigation — arrows, Home/End, Shift+move to extend, Ctrl+A select-all, Ctrl+C/X copy/cut — and selection-replacing edits. **Rendering & CSS** (`collect_walk` in `src/layout.c`): the author `color`, `font-size`, and `font-family` of the control apply to the value text and field metrics; an unfocused value longer than the field is clipped according to `text-align` (`start`/`left` show the head, `center` shows a middle window, and `end`/`right` show the tail), while a focused field scrolls to keep the caret in view; disabled controls render their text greyed. Author `border`/`background`/`background-image`/`border-radius`/`padding` are honoured via the CSS-chrome path. The **`::placeholder`** pseudo-element is supported (parsed in `src/css.c`, resolved like the other pseudo-elements): placeholder text takes the pseudo's `color`, `font-style`, and `font-weight`, falling back to a muted UA grey (`#757575`) when unstyled; the legacy `::-webkit-input-placeholder` / `::-moz-placeholder` / `::-ms-input-placeholder` aliases map to it. When the control is positioned, a flex/grid item, or a `display:block` box, it gets a real layout box and the field chrome fills the assigned width (so e.g. a `flex:1` or `width:100%` search input fills the bar instead of staying at its intrinsic `size` width — `paint_inline` in `src/paint.c`). Short values are padded into the same `text-align` position, and values/placeholders stay on a single line) |
+| `input` text/password/search/email/url/tel/number | ✅ (editable with a rendered caret and a highlighted text selection; keyboard caret/selection navigation — arrows, Home/End, Shift+move to extend, Ctrl+A select-all, Ctrl+C/X copy/cut — and selection-replacing edits. **Rendering & CSS** (`collect_walk` in `src/layout.c`): the author `color`, `font-size`, and `font-family` of the control apply to the value text and field metrics; an unfocused value longer than the field is clipped according to `text-align` (`start`/`left` show the head, `center` shows a middle window, and `end`/`right` show the tail), while a focused field scrolls to keep the caret in view; disabled controls render their text greyed. Author `border`/`background`/`background-image`/`border-radius`/`padding` are honoured via the CSS-chrome path. The **`::placeholder`** pseudo-element is supported (parsed in `src/css.c`, resolved like the other pseudo-elements): placeholder text takes the pseudo's `color`, `font-style`, and `font-weight`, falling back to a muted UA grey (`#757575`) when unstyled; the legacy `::-webkit-input-placeholder` / `::-moz-placeholder` / `::-ms-input-placeholder` aliases map to it. When the control is positioned, a flex/grid item, or a `display:block` box, it gets a real layout box and the field chrome fills the assigned width (so e.g. a `flex:1` or `width:100%` search input fills the bar instead of staying at its intrinsic `size` width — `paint_inline` in `rust/paint`). Short values are padded into the same `text-align` position, and values/placeholders stay on a single line) |
 | `input` checkbox/radio | ✅ |
 | `input` button/submit/reset | ✅ |
 | `input type=number` | ✅ (Up/Down arrow keys step by `step`, default 1, clamped to `min`/`max`, firing input/change; non-numeric keystrokes filtered out; no rendered spin buttons) |
@@ -245,7 +245,7 @@ validation.
 | Element | Status | Notes |
 |---------|:--:|------|
 | `details` / `summary` | ✅ | UA-styled disclosure widget with a marker; the `<summary>`'s **activation behavior** toggles its parent `<details>` across every click path — scripted `summary.click()` (the activation behavior in `ns_element_click_default_action`), the renderer/GUI pointer-click path (`ns_js_activate_summary` in `ns_browser_release_click`, honouring `preventDefault()`), and the `open` IDL/attribute setters. Each toggle dispatches the spec's `ToggleEvent` pair — a `beforetoggle` then a `toggle`, carrying `oldState`/`newState` ∈ `"open"`/`"closed"` (`ns_js_details_toggle_open`); opening one `<details name="X">` closes the rest of the group per the exclusive-accordion rule; fragment/hash navigation into skipped details content sets `open` before scrolling. CSS open/close *animation* (`::details-content`/`interpolate-size`) is not supported — a rendering nicety, not part of the element's behaviour |
-| `dialog` | ✅ | `open`/`show()`/`showModal()`/`close(result)` and `returnValue` implemented (`src/js.c`); `method="dialog"` forms close the dialog with the submitter's value; `requestClose(returnValue?)` (and an Escape press on the topmost open modal) fires a cancelable `cancel` event and, if not prevented, closes the dialog and fires `close` — matching the spec's close-watcher semantics. `showModal()` now puts the dialog in the top layer (painted on top of an author `::backdrop` fill, `src/paint.c`), moves focus to its `autofocus`/first focusable descendant, traps focus by making the rest of the document inert, and restores focus to the opener on close |
+| `dialog` | ✅ | `open`/`show()`/`showModal()`/`close(result)` and `returnValue` implemented (`src/js.c`); `method="dialog"` forms close the dialog with the submitter's value; `requestClose(returnValue?)` (and an Escape press on the topmost open modal) fires a cancelable `cancel` event and, if not prevented, closes the dialog and fires `close` — matching the spec's close-watcher semantics. `showModal()` now puts the dialog in the top layer (painted on top of an author `::backdrop` fill, `rust/paint`), moves focus to its `autofocus`/first focusable descendant, traps focus by making the rest of the document inert, and restores focus to the opener on close |
 | `popover` attribute | 🟡 | open/closed state, `showPopover`/`hidePopover`/`togglePopover`, `popovertarget` activation, and target/action reflection; open/close transitions dispatch the spec `ToggleEvent` pair — a `beforetoggle` (cancelable on open, so `preventDefault()` keeps the popover closed) then a `toggle`, each with `oldState`/`newState`; limited top-layer behaviour |
 
 ## §4.12 Scripting
@@ -306,7 +306,7 @@ surface).
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| `hidden` attribute | ✅ | plain `hidden` maps to `display:none`; `hidden="until-found"` maps (via the UA stylesheet) to the real `content-visibility: hidden` — its subtree is laid out (so its text stays in the box tree and is findable) and the element is size-contained (collapses to a zero-height box, `style_content_visibility_hidden` in `src/layout.c`) but its contents are skipped while painting (`box_is_hidden` in `src/paint.c`). `HTMLElement.hidden` follows the spec's enumerated getter/setter for `"until-found"`; fragment/hash navigation runs the ancestor reveal path before scrolling, removing `hidden="until-found"` ancestors and opening skipped `<details>` ancestors, with `beforematch` fired for same-document hidden-until-found reveals — removing the attribute drops the containment and reveals the content. The `content-visibility` property is also honoured directly (`auto` is treated as always-rendered, skipping only the lazy-render optimisation) |
+| `hidden` attribute | ✅ | plain `hidden` maps to `display:none`; `hidden="until-found"` maps (via the UA stylesheet) to the real `content-visibility: hidden` — its subtree is laid out (so its text stays in the box tree and is findable) and the element is size-contained (collapses to a zero-height box, `style_content_visibility_hidden` in `src/layout.c`) but its contents are skipped while painting (`box_is_hidden` in `rust/paint`). `HTMLElement.hidden` follows the spec's enumerated getter/setter for `"until-found"`; fragment/hash navigation runs the ancestor reveal path before scrolling, removing `hidden="until-found"` ancestors and opening skipped `<details>` ancestors, with `beforematch` fired for same-document hidden-until-found reveals — removing the attribute drops the containment and reveals the content. The `content-visibility` property is also honoured directly (`auto` is treated as always-rendered, skipping only the lazy-render optimisation) |
 | `inert` attribute | ✅ | excludes the subtree from focus (`focus()`, sequential navigation) and click activation, and an open modal dialog makes the rest of the document inert (`ns_dom_set_active_modal` → `ns_element_effectively_inert`) |
 | Event dispatch / cancellation | ✅ | full capture → at-target → bubble propagation with `eventPhase`, `currentTarget`, `stopPropagation()`/`stopImmediatePropagation()`, `once`/`signal` listener removal, and inline `return false`; `preventDefault()` honours `event.cancelable` and is suppressed (a no-op) for `{passive:true}` listeners; `composedPath()` returns the live propagation path (target → ancestors → document → window) during dispatch and an empty array otherwise. A primary activation fires the full UI-Events button sequence `pointerdown`→`mousedown`→`pointerup`→`mouseup`→`click` (`ns_browser_click` in `src/libsouthstar.c`) |
 | Pointer hover (`:hover`, `mousemove`/`mouseover`/`mouseout`) | ✅ | the out-of-process renderer reports the hovered point each time the pointer moves (`NS_RPROC_MSG_HOVER` → `ns_browser_hover` in `src/libsouthstar.c`): it hit-tests the DOM, sets the CSS `:hover` state on the element under the pointer and its ancestors so `:hover` rules restyle and repaint, and fires the `pointermove`/`mousemove` and, on element transitions, `pointerover`/`mouseover`/`pointerout`/`mouseout`/`pointerenter`/`mouseenter`/`pointerleave`/`mouseleave` listeners. Restyle work is gated to pages that actually use `:hover` (`ns_css_stylesheet_has_hover_rules`) and skipped while a text selection is in progress. The thin GTK client (`src/gtk/procview.c`) drives this on every mouse-move and re-renders when the renderer reports a visual change |
@@ -505,7 +505,7 @@ references are recognised — DTD-declared entity sets are not.
 ## §15 Rendering
 
 Layout lives in `src/layout.c` (block/inline flow, flexbox, grid,
-positioning, floats, stacking); painting is Cairo (`src/paint.c`,
+positioning, floats, stacking); painting is Cairo (`rust/paint`,
 `src/render.c`) with Pango text. The UA stylesheet (`kUa` in
 `src/css.c`) supplies the default rendering the spec mandates for each
 element.
@@ -544,7 +544,7 @@ CSS support (abridged):
 - ✅ `border-image` — the `border-image-source`/`-slice`/`-width`/`-outset`/
   `-repeat` longhands, the `border-image` shorthand and the
   `-webkit-border-image` alias, with the `border` shorthand resetting them.
-  `paint_border_image` in `src/paint.c` nine-slices a `url()` raster image or
+  `paint_border_image` in `rust/paint` nine-slices a `url()` raster image or
   a gradient rasterized to the border-image area, honouring `fill`, number
   and percentage slices, `auto`/length/percentage/number widths, outsets and
   the `stretch`/`repeat`/`round`/`space` tiling modes on both axes; it
@@ -562,7 +562,7 @@ CSS support (abridged):
   — for the underline, line-through *and* overline of a run — since Pango
   has no dotted/dashed line style) and `text-decoration-color`, at paint
   time (`paint_inline` / `paint_inline_dashed_decorations` in
-  `src/paint.c`). This makes the UA `abbr[title]` dotted underline and
+  `rust/paint`). This makes the UA `abbr[title]` dotted underline and
   Firefox's `text-decoration` reftests render correctly. Decorations
   apply both
   to inline elements and to block-level boxes that propagate the property
@@ -628,11 +628,11 @@ CSS support (abridged):
   `font-variant-ligatures`, `font-feature-settings`,
   `font-variation-settings`, and `text-decoration: underline`. The
   first line's extent is taken from the wrapped Pango
-  layout at paint time (`apply_first_line_attrs` in `src/paint.c`), so
+  layout at paint time (`apply_first_line_attrs` in `rust/paint`), so
   it tracks the actual wrap width; cascades correctly with other
   `::first-line` rules and composes with `::first-letter`.
 - ✅ `::marker` — author `color`/`font-size` honoured for list-item
-  markers (`paint_marker` in `src/paint.c`); `display:none` hides the
+  markers (`paint_marker` in `rust/paint`); `display:none` hides the
   marker, and string / `counter(list-item)` `content` overrides the
   generated bullet/number. `list-style-image` paints a fetched `url(...)`
   image in place of the bullet (scaled down to the font size when
@@ -642,7 +642,7 @@ CSS support (abridged):
   (`src/selection.c`); the `-webkit-`/`-moz-` prefixed forms alias to it.
 - 🟡 `::backdrop` — author `background`/`background-color` painted as a
   full-viewport fill behind a modal dialog's top-layer box
-  (`paint_top_layer` in `src/paint.c`); only the modal-`dialog` top
+  (`paint_top_layer` in `rust/paint`); only the modal-`dialog` top
   layer is covered (popovers not yet), and only the backdrop's
   background paints.
 - 🟡 `subgrid` — a grid item that is itself a grid container with
@@ -669,7 +669,7 @@ CSS support (abridged):
   block/inline-block container in `vertical-rl` / `vertical-lr` (and the
   `sideways-*` aliases) lays its text out in vertical columns — measured with the
   inline and block axes swapped (`inline_layout` in `src/layout.c`) and painted in
-  `paint_inline` (`src/paint.c`). Two orientations render:
+  `paint_inline` (`rust/paint`). Two orientations render:
   `text-orientation: mixed` (the default) and `sideways` set each column's glyphs
   rotated 90° **clockwise** (per line, so horizontal-script/Latin runs read
   top-to-bottom by turning the page clockwise — the spec-correct default); columns
@@ -692,7 +692,7 @@ path in `src/layout.h`.
 | `applet` | 🚫 | no Java; `display:none` |
 | `marquee` | 🚫 | `display:none`; not rendered |
 | `basefont` `noembed` `isindex` | 🚫 | `display:none` / inert |
-| Presentational attributes (`align`, `bgcolor`, `<font>`) | 🟡 | a subset mapped to CSS where common (`presentational_hints_css` in `src/css.c`): `bgcolor`/`text`/`<font color/face/size>`, `width`/`height`, `hspace`/`vspace`, `<hr align/color/size/noshade>` (`color` drives the rule's `background-color`, `noshade` renders a solid grey bar), `<img align>` (left/right float plus top/middle/bottom `vertical-align`), `<textarea wrap=off>`→`white-space: pre`, `<table frame/rules>` (see §4.9), and the table family — `cellspacing`→`border-spacing`, `cellpadding`→cell `padding`, `<td/th align/valign/nowrap>`, `<table align=left/right>`→`float` and `align=center`→auto side margins (centred by `layout_table`), and **`<table border=N>`** maps the legacy grid: an outer table border plus a `1px solid` border on every `td`/`th` (the classic `border="1"` grid), while `border="0"` stays gridless. The legacy **list attributes** are honoured in `src/paint.c`: `<ol start>`/`<ol reversed>`/`<li value>` drive ordinal numbering (`list_item_ordinal` — start seeds the first number, reversed counts down, a `value` resets the running count), and `<ol type>`/`<ul type>`/`<li type>` map to `list-style-type` as a presentational hint (`presentational_hints_css` in `src/css.c`, applied at `NS_CSS_ORIGIN_PRESENTATIONAL` so it overrides the UA default but loses to author CSS): ol/li `1`/`a`/`A`/`i`/`I` → decimal / lower- and upper-alpha / lower- and upper-roman (case-sensitive), ul/li `disc`/`circle`/`square` (case-insensitive) |
+| Presentational attributes (`align`, `bgcolor`, `<font>`) | 🟡 | a subset mapped to CSS where common (`presentational_hints_css` in `src/css.c`): `bgcolor`/`text`/`<font color/face/size>`, `width`/`height`, `hspace`/`vspace`, `<hr align/color/size/noshade>` (`color` drives the rule's `background-color`, `noshade` renders a solid grey bar), `<img align>` (left/right float plus top/middle/bottom `vertical-align`), `<textarea wrap=off>`→`white-space: pre`, `<table frame/rules>` (see §4.9), and the table family — `cellspacing`→`border-spacing`, `cellpadding`→cell `padding`, `<td/th align/valign/nowrap>`, `<table align=left/right>`→`float` and `align=center`→auto side margins (centred by `layout_table`), and **`<table border=N>`** maps the legacy grid: an outer table border plus a `1px solid` border on every `td`/`th` (the classic `border="1"` grid), while `border="0"` stays gridless. The legacy **list attributes** are honoured in `rust/paint`: `<ol start>`/`<ol reversed>`/`<li value>` drive ordinal numbering (`list_item_ordinal` — start seeds the first number, reversed counts down, a `value` resets the running count), and `<ol type>`/`<ul type>`/`<li type>` map to `list-style-type` as a presentational hint (`presentational_hints_css` in `src/css.c`, applied at `NS_CSS_ORIGIN_PRESENTATIONAL` so it overrides the UA default but loses to author CSS): ol/li `1`/`a`/`A`/`i`/`I` → decimal / lower- and upper-alpha / lower- and upper-roman (case-sensitive), ul/li `disc`/`circle`/`square` (case-insensitive) |
 
 ---
 

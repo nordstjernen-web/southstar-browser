@@ -1,4 +1,4 @@
-/* Southstar — Cairo paint API.
+/* Southstar — Cairo paint API, implemented in rust/paint.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -17,23 +17,6 @@ G_BEGIN_DECLS
 
 struct ns_selection;
 struct ns_anim;
-typedef struct ns_paint_stats {
-    guint boxes_seen;
-    guint hidden;
-    guint skipped_top;
-    guint culled_bounds;
-    guint offscreen;
-    guint grouped;
-    guint overflow_clips;
-    guint sorted_parents;
-    guint sorted_children;
-    guint blocks;
-    guint inlines;
-    guint images;
-    guint videos;
-    guint canvases;
-} ns_paint_stats;
-
 void ns_paint(cairo_t *cr, const ns_box *root, const char *highlight_query);
 void ns_paint_with_selection(cairo_t *cr, const ns_box *root,
                              const char *highlight_query,
@@ -54,6 +37,11 @@ typedef struct ns_paint_layer_plan {
     GHashTable *kinds;
     GArray *vp;
 } ns_paint_layer_plan;
+
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_paint_vp_capture) == 64 &&
+                sizeof(ns_paint_layer_plan) == 24);
+#endif
 
 void ns_paint_layer_plan_init(ns_paint_layer_plan *plan);
 void ns_paint_layer_plan_clear(ns_paint_layer_plan *plan);
