@@ -122,9 +122,6 @@ struct ns_js {
     int           box_lookup_pending_count;
     const ns_node *change_pending;
     char          *change_baseline;
-    /* The innermost parser-blocking script run's held-back nodes
-     * (ns_parser_hold in js.c); the node-free hook clears freed ones. */
-    gpointer       parser_hold;
     gboolean      autofocus_processed;
     const ns_node *active_modal;
     double         last_mouse_x[2];
@@ -172,9 +169,6 @@ struct ns_js {
     GString      *document_write_buffer;
     ns_node      *document_write_script;
     gboolean      document_write_parser_open;
-    GPtrArray    *deferred_script_roots;
-    GPtrArray    *async_script_roots;
-    guint         async_script_source;
     GHashTable   *pending_rejections;
     GHashTable   *reported_rejections;
     GHashTable   *iframe_globals;
@@ -196,11 +190,6 @@ struct ns_js {
     char         *selection_text;
     gboolean      selection_has_range;
     double        selection_x, selection_y, selection_w, selection_h;
-    int           module_load_count;
-    gsize         module_load_bytes;
-    gint64        module_load_deadline_us;
-    gboolean      module_load_capped;
-    GPtrArray    *import_map;
     gint64        time_origin_us;
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
@@ -1373,6 +1362,61 @@ gboolean ns_node_in_template_content(const ns_node *n);
 void     ns_js_index_child_change(ns_js *js, ns_node *parent, ns_node *added,
                                   ns_node *removed);
 void     ns_js_run_inserted_scripts(ns_js *js, ns_node *root);
+typedef enum ns_script_schedule {
+    NS_SCRIPT_BLOCKING,
+    NS_SCRIPT_DEFERRED,
+    NS_SCRIPT_ASYNC,
+} ns_script_schedule;
+typedef struct ns_script_task {
+    ns_node *node;
+    ns_script_schedule schedule;
+} ns_script_task;
+gboolean ns_script_type_is_module(const ns_node *n);
+gboolean ns_content_type_is_javascript(const char *ct);
+gboolean ns_script_type_supported(const ns_node *n);
+gboolean ns_script_skipped_by_nomodule(const ns_node *n);
+void     ns_js_forget_script_roots_in(ns_js *js, const ns_node *root);
+void     ns_js_mark_scripts_already_started(ns_node *n);
+void     ns_js_collect_script_tasks(ns_node *n, GArray *tasks);
+void     ns_js_register_import_maps(ns_js *js, ns_node *root);
+void     ns_js_run_parser_blocking_scripts(ns_js *js, GArray *tasks,
+                                           const char *origin);
+void     ns_js_run_script_schedule(ns_js *js, GArray *tasks,
+                                   ns_script_schedule schedule,
+                                   const char *origin);
+gboolean ns_js_run_next_script_schedule(ns_js *js, GArray *tasks,
+                                        ns_script_schedule schedule,
+                                        const char *origin);
+void     ns_js_schedule_pending_script_drain(ns_js *js);
+void     ns_js_drain_load_event_scripts(ns_js *js);
+gboolean ns_js_has_pending_script_roots(const ns_js *js);
+gboolean ns_js_async_scripts_pending(const ns_js *js);
+void     ns_parser_hold_forget(ns_js *js, const ns_node *n);
+void     ns_js_cancel_async_scripts(ns_js *js);
+void     ns_js_loader_teardown(ns_js *js);
+char    *ns_js_module_resolve(ns_js *js, const char *base, const char *name);
+char    *ns_js_module_fetch(ns_js *js, JSContext *ctx, const char *name,
+                            gboolean json, gsize *out_len);
+void     ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
+                                  gsize length, const char *origin,
+                                  gboolean is_module);
+gboolean ns_js_dispatch_resource_event(ns_js *js, const ns_node *target,
+                                       const char *type);
+void     ns_js_element_perf_info(ns_js *js, const ns_node *el,
+                                 ns_perf_resource_info *info);
+struct ns_response *ns_js_fetch_subresource(ns_js *js, const char *url,
+                                            const char *top_url,
+                                            const char *const *headers,
+                                            GError **error,
+                                            const char *initiator,
+                                            const ns_perf_resource_info *info);
+char    *ns_js_node_document_base_url(ns_js *js, const ns_node *node);
+void     ns_js_schedule_static_iframes(ns_js *js, ns_node *n);
+void     ns_js_rescan_pending_images(ns_js *js, ns_node *root);
+int      ns_js_eval_depth(const ns_js *js);
+int      ns_js_callback_depth(const ns_js *js);
+int      ns_js_dispatch_depth(const ns_js *js);
+const ns_csp *ns_js_page_csp(const ns_js *js);
 JSValue  ns_element_appendChild(JSContext *ctx, JSValueConst this_val, int argc,
                                 JSValueConst *argv);
 JSValue  ns_element_removeChild(JSContext *ctx, JSValueConst this_val, int argc,

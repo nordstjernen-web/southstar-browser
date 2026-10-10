@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-loader"
+description = "Script, module and stylesheet loading: classic and module script scheduling with the parser-blocking, deferred and async lists, the parser hold, import maps, module resolution and fetching, script fetching with nosniff, CSP and integrity checks, load and error events on script and link, and stylesheet link loading"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

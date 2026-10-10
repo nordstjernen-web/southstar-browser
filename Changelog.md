@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Script, module and stylesheet loading (scheduling, the parser hold, import
+  maps, module fetching, the script and link load and error events) moved
+  from js.c to Rust (rust/js-loader). Module source now always reaches the
+  compiler NUL-terminated, so import() of a blob: URL no longer fails at
+  random with a SyntaxError.
 * Iframe browsing contexts and their realms (the realm cloner, the frame
   bootstraps, the frame table, sandbox flags, the frame load queues and the
   frame-script helpers) moved from js.c to Rust (rust/js-frames), with

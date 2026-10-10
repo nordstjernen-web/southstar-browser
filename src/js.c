@@ -172,15 +172,8 @@ static const ns_node *ns_node_owner_iframe(const ns_node *n);
 static JSValue ns_make_performance_object(JSContext *ctx, ns_js *js,
                                           gboolean include_memory);
 static void ns_js_flush_document_write(ns_js *js);
-static void ns_js_drain_deferred_scripts(ns_js *js);
-static void ns_js_drain_async_script_roots(ns_js *js);
-static void ns_js_schedule_pending_script_drain(ns_js *js);
-static void ns_js_element_perf_info(ns_js *js, const ns_node *el,
-                                    ns_perf_resource_info *info);
-static gboolean ns_script_type_is_module(const ns_node *n);
 static void ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe,
                                             gboolean force);
-static void ns_js_schedule_static_iframes(ns_js *js, ns_node *n);
 static void ns_js_report_uncaught(ns_js *js, JSValueConst ex, const char *origin);
 static gboolean ns_js_report_error_event(ns_js *js, const char *message,
                                          const char *filename, int lineno,
@@ -193,7 +186,6 @@ static gboolean ns_js_caller_position(JSContext *ctx, char **file, int *line,
 static void ns_js_process_pending_iframes(ns_js *js);
 static void ns_js_record_attr_change(ns_js *js, ns_node *target,
                                      const char *name, const char *old_value);
-static void ns_parser_hold_forget(ns_js *js, const ns_node *n);
 static JSValue ns_element_get_list_ref(JSContext *ctx, JSValueConst this_val);
 static JSValue ns_proto_of(JSContext *ctx, JSValueConst global,
                            const char *ctor_name);
@@ -344,7 +336,7 @@ ns_js_fetch_resource(ns_js *js, const char *url, const char *top_url,
 /* ns_js_fetch_resource for one of a document's own subresources, recorded
  * as a PerformanceResourceTiming entry with the given initiator type in the
  * timeline info names. */
-static ns_response *
+ns_response *
 ns_js_fetch_subresource(ns_js *js, const char *url, const char *top_url,
                         const char *const *headers, GError **error,
                         const char *initiator, const ns_perf_resource_info *info)
@@ -7854,9 +7846,7 @@ ns_js_has_pending_work(const ns_js *js)
     if (ns_js_pending_iframe_count(js) > 0) return TRUE;
     if (ns_mutation_drain_pending(js)) return TRUE;
     if (js->observer_tick_source) return TRUE;
-    if (js->async_script_source) return TRUE;
-    if (js->async_script_roots && js->async_script_roots->len > 0)
-        return TRUE;
+    if (ns_js_async_scripts_pending(js)) return TRUE;
     if (ns_ce_has_pending(js))
         return TRUE;
     if (ns_workers_pending(js)) return TRUE;
@@ -8197,7 +8187,7 @@ ns_js_fire_toggle_event(ns_js *js, const ns_node *target, const char *type,
                                       default_prevented);
 }
 
-static gboolean
+gboolean
 ns_js_dispatch_resource_event(ns_js *js, const ns_node *target, const char *type)
 {
     if (!js || !target || !type) return FALSE;
@@ -11580,7 +11570,7 @@ ns_js_element_render_blocking(const ns_node *el)
  * loaded for: the timeline of its document (the frame's realm, the frame
  * element for a frame without one yet, NULL for the page's own), that
  * document's URL, its render-blocking status and its CORS mode. */
-static void
+void
 ns_js_element_perf_info(ns_js *js, const ns_node *el,
                         ns_perf_resource_info *info)
 {
@@ -11593,7 +11583,7 @@ ns_js_element_perf_info(ns_js *js, const ns_node *el,
     info->cors_mode = el && ns_element_get_attr(el, "crossorigin") != NULL;
 }
 
-static char *
+char *
 ns_js_node_document_base_url(ns_js *js, const ns_node *node)
 {
     const ns_node *doc = NULL;
@@ -17959,12 +17949,7 @@ ns_js_reset_runtime_state(ns_js *js)
     ns_css_clear_defined_elements();
     ns_css_clear_registered_properties();
 
-    if (js->async_script_source) {
-        g_source_remove(js->async_script_source);
-        js->async_script_source = 0;
-    }
-    if (js->async_script_roots)
-        g_ptr_array_set_size(js->async_script_roots, 0);
+    ns_js_cancel_async_scripts(js);
 
     ns_attr_detach_all(js);
     ns_attribute_maps_release_all(js);
@@ -18502,7 +18487,6 @@ ns_js_free(ns_js *js)
     g_clear_pointer(&js->lifecycle_origin, g_free);
     ns_js_blob_registry_remove(js);
     ns_storage_flush(js);
-    if (js->import_map) g_ptr_array_free(js->import_map, TRUE);
     if (js->csp) { ns_csp_free(js->csp); js->csp = NULL; }
     g_free(js->early_inject_src);
     g_free(js->cookie_value);
@@ -18554,10 +18538,7 @@ ns_js_free(ns_js *js)
         g_source_remove(js->raf_tick_source);
         js->raf_tick_source = 0;
     }
-    if (js->async_script_source) {
-        g_source_remove(js->async_script_source);
-        js->async_script_source = 0;
-    }
+    ns_js_loader_teardown(js);
     if (js->filereader_idles) {
         for (guint i = 0; i < js->filereader_idles->len; i++) {
             ns_filereader_idle *fr = g_ptr_array_index(js->filereader_idles, i);
@@ -18591,14 +18572,6 @@ ns_js_free(ns_js *js)
         g_list_free(pinned);
         g_hash_table_destroy(js->pinned_wrappers_set);
         js->pinned_wrappers_set = NULL;
-    }
-    if (js->deferred_script_roots) {
-        g_ptr_array_free(js->deferred_script_roots, TRUE);
-        js->deferred_script_roots = NULL;
-    }
-    if (js->async_script_roots) {
-        g_ptr_array_free(js->async_script_roots, TRUE);
-        js->async_script_roots = NULL;
     }
     if (js->orphan_nodes) {
         GList *list = g_hash_table_get_keys(js->orphan_nodes);
@@ -19236,146 +19209,15 @@ ns_js_eval(ns_js *js, const char *src, gsize len, const char *origin)
 }
 
 #define NS_MAX_SCRIPT_BYTES (32u * 1024u * 1024u)
-#define NS_MODULE_LOAD_MAX_COUNT 1024
-#define NS_MODULE_LOAD_MAX_BYTES ((gsize)128u * 1024u * 1024u)
-
-typedef struct ns_import_map_entry {
-    char *key;
-    char *value;
-} ns_import_map_entry;
-
-static void
-ns_import_map_entry_free(gpointer p)
-{
-    ns_import_map_entry *e = p;
-    if (!e) return;
-    g_free(e->key);
-    g_free(e->value);
-    g_free(e);
-}
-
-static void
-ns_js_import_map_add(ns_js *js, const char *key, const char *value,
-                     const char *base)
-{
-    if (!js || !key || !*key || !value || !*value) return;
-    char *resolved = ns_url_resolve(base && *base ? base : NULL, value);
-    if (!resolved) resolved = g_strdup(value);
-    if (!js->import_map)
-        js->import_map = g_ptr_array_new_with_free_func(ns_import_map_entry_free);
-    for (guint i = 0; i < js->import_map->len; i++) {
-        ns_import_map_entry *e = g_ptr_array_index(js->import_map, i);
-        if (strcmp(e->key, key) == 0) {
-            g_free(e->value);
-            e->value = resolved;
-            return;
-        }
-    }
-    ns_import_map_entry *e = g_new0(ns_import_map_entry, 1);
-    e->key = g_strdup(key);
-    e->value = resolved;
-    g_ptr_array_add(js->import_map, e);
-}
-
-static void
-ns_js_register_import_map_json(ns_js *js, const char *text, gsize len,
-                               const char *base)
-{
-    if (!js || !text) return;
-    JSValue root = JS_ParseJSON(js->ctx, text, len, "importmap");
-    if (JS_IsException(root)) { JS_FreeValue(js->ctx, root); return; }
-    JSValue imports = JS_GetPropertyStr(js->ctx, root, "imports");
-    if (JS_IsObject(imports)) {
-        JSPropertyEnum *tab = NULL;
-        uint32_t n = 0;
-        if (JS_GetOwnPropertyNames(js->ctx, &tab, &n, imports,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
-            for (uint32_t i = 0; i < n; i++) {
-                const char *key = JS_AtomToCString(js->ctx, tab[i].atom);
-                JSValue v = JS_GetProperty(js->ctx, imports, tab[i].atom);
-                const char *val = JS_IsString(v) ? JS_ToCString(js->ctx, v) : NULL;
-                if (key && val) ns_js_import_map_add(js, key, val, base);
-                if (key) JS_FreeCString(js->ctx, key);
-                if (val) JS_FreeCString(js->ctx, val);
-                JS_FreeValue(js->ctx, v);
-                JS_FreeAtom(js->ctx, tab[i].atom);
-            }
-            js_free(js->ctx, tab);
-        }
-    }
-    JS_FreeValue(js->ctx, imports);
-    JS_FreeValue(js->ctx, root);
-}
-
-static void
-ns_js_register_import_maps_rec(ns_js *js, ns_node *root, int depth)
-{
-    if (!js || !root || depth >= 512 ||
-        (depth > 0 && ns_dom_hidden_child(root))) return;
-    if (ns_node_is_element_named(root, "script")) {
-        const char *type = ns_element_get_attr(root, "type");
-        if (type && g_ascii_strcasecmp(type, "importmap") == 0 &&
-            !ns_element_get_attr(root, NS_SCRIPT_ALREADY_STARTED)) {
-            ns_element_set_attr(root, NS_SCRIPT_ALREADY_STARTED, "1");
-            char *base = ns_js_node_document_base_url(js, root);
-            for (const ns_node *c = root->first_child; c; c = c->next_sibling) {
-                if (c->kind == NS_NODE_TEXT && c->text)
-                    ns_js_register_import_map_json(js, c->text,
-                                                   strlen(c->text), base);
-            }
-            g_free(base);
-        }
-        return;
-    }
-    if (ns_node_is_element_named(root, "template")) return;
-    for (ns_node *c = root->first_child; c; c = c->next_sibling)
-        ns_js_register_import_maps_rec(js, c, depth + 1);
-}
-
-static void
-ns_js_register_import_maps(ns_js *js, ns_node *root)
-{
-    ns_js_register_import_maps_rec(js, root, 0);
-}
-
-static char *
-ns_js_import_map_resolve(ns_js *js, const char *name)
-{
-    if (!js || !js->import_map || !name) return NULL;
-    ns_import_map_entry *best = NULL;
-    size_t best_len = 0;
-    for (guint i = 0; i < js->import_map->len; i++) {
-        ns_import_map_entry *e = g_ptr_array_index(js->import_map, i);
-        size_t klen = strlen(e->key);
-        if (strcmp(e->key, name) == 0)
-            return g_strdup(e->value);
-        if (klen > 0 && e->key[klen - 1] == '/' &&
-            strncmp(e->key, name, klen) == 0 && klen > best_len) {
-            best = e;
-            best_len = klen;
-        }
-    }
-    if (best)
-        return g_strconcat(best->value, name + best_len, NULL);
-    return NULL;
-}
 
 static char *
 ns_js_module_normalize(JSContext *ctx, const char *base_name,
                        const char *name, void *opaque)
 {
-    ns_js *js = opaque;
     if (!name) return NULL;
-    char *mapped = ns_js_import_map_resolve(js, name);
-    if (mapped) {
-        char *out = js_strdup(ctx, mapped);
-        g_free(mapped);
-        return out;
-    }
-    char *abs_url = ns_url_resolve(base_name && *base_name ? base_name : NULL, name);
-    if (!abs_url) abs_url = g_strdup(name);
-    char *out = js_strdup(ctx, abs_url);
-    g_free(abs_url);
+    char *resolved = ns_js_module_resolve(opaque, base_name, name);
+    char *out = js_strdup(ctx, resolved);
+    g_free(resolved);
     return out;
 }
 
@@ -19531,126 +19373,22 @@ ns_js_module_loader(JSContext *ctx, const char *module_name, void *opaque,
     ns_js *js = opaque;
     gboolean json_module = ns_js_attrs_type_is(ctx, attributes, "json");
     if (!module_name) return NULL;
-    if (js && (js->module_load_count > NS_MODULE_LOAD_MAX_COUNT ||
-               js->module_load_bytes > NS_MODULE_LOAD_MAX_BYTES)) {
-        if (!js->module_load_capped) {
-            js->module_load_capped = TRUE;
-            if (js->log_cb) {
-                char *line = g_strdup_printf(
-                    "module load limit reached, refusing %s", module_name);
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-        }
-        JS_ThrowRangeError(ctx, "module load limit exceeded");
-        return NULL;
-    }
-    if (g_str_has_prefix(module_name, "data:")) {
-        gsize body_len = 0;
-        char *body = ns_js_decode_data_url(module_name, &body_len);
-        if (!body) {
-            JS_ThrowReferenceError(ctx, "invalid data: module URL");
-            return NULL;
-        }
-        if (js) js->module_load_bytes += body_len;
-        if (json_module) {
-            JSModuleDef *m = ns_js_make_json_module(ctx, module_name,
-                                                    body, body_len);
-            g_free(body);
-            if (!m) ns_js_log_module_compile_error(js, ctx, module_name);
-            return m;
-        }
-        JSValue func_val =
-            ns_js_compile_module_cached(ctx, body, body_len, module_name);
-        g_free(body);
-        if (JS_IsException(func_val)) {
-            ns_js_log_module_compile_error(js, ctx, module_name);
-            return NULL;
-        }
-        JSModuleDef *m = JS_VALUE_GET_PTR(func_val);
-        JS_FreeValue(ctx, func_val);
-        return m;
-    }
-    if (g_str_has_prefix(module_name, "blob:")) {
-        GBytes *blob = ns_js_blob_url_lookup(js, module_name, NULL);
-        if (!blob) {
-            JS_ThrowReferenceError(ctx, "blob module URL not found: %s",
-                                   module_name);
-            return NULL;
-        }
-        gsize body_len = 0;
-        const char *body = g_bytes_get_data(blob, &body_len);
-        if (body_len > NS_MAX_SCRIPT_BYTES) {
-            JS_ThrowRangeError(ctx, "blob module exceeds script size limit");
-            return NULL;
-        }
-        if (js) {
-            js->module_load_count++;
-            js->module_load_bytes += body_len;
-        }
-        if (json_module)
-            return ns_js_make_json_module(ctx, module_name, body, body_len);
-        JSValue func_val =
-            ns_js_compile_module_cached(ctx, body, body_len, module_name);
-        if (JS_IsException(func_val)) {
-            ns_js_log_module_compile_error(js, ctx, module_name);
-            return NULL;
-        }
-        JSModuleDef *m = JS_VALUE_GET_PTR(func_val);
-        JS_FreeValue(ctx, func_val);
-        return m;
-    }
-    if (!ns_url_is_http_or_https(module_name)) {
-        JS_ThrowReferenceError(ctx,
-            "module specifier must be absolute http/https URL: %s", module_name);
-        return NULL;
-    }
-    if (js) js->module_load_count++;
-    GError *err = NULL;
-    const char *top_url = !js ? NULL
-        : (js->worker_host ? ns_worker_host_base_url(js->worker_host) : js->current_url);
-    ns_perf_resource_info info = {
-        .timeline = ctx,
-        .document_url = ns_js_realm_document_url(js, ctx),
-        .cors_mode = TRUE,
-    };
-    ns_response *resp = ns_js_fetch_subresource(js, module_name, top_url,
-        json_module ? NULL : ns_net_accept_headers_for(NS_FETCH_DEST_SCRIPT),
-        &err, "script", &info);
-    if (!resp || resp->error || !resp->body || resp->body->len == 0 ||
-        resp->body->len > NS_MAX_SCRIPT_BYTES) {
-        const char *why = err ? err->message :
-            (resp && resp->error ? resp->error : "fetch failed");
-        if (js && js->log_cb) {
-            char *line = g_strdup_printf("module %s: %s", module_name, why);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        if (resp) ns_response_free(resp);
-        g_clear_error(&err);
-        JS_ThrowReferenceError(ctx, "module fetch failed: %s", module_name);
-        return NULL;
-    }
-    if (js) js->module_load_bytes += resp->body->len;
-    char *copy = g_strndup((const char *)resp->body->data, resp->body->len);
-    gsize copy_len = resp->body->len;
-    ns_response_free(resp);
+    gsize body_len = 0;
+    char *body = ns_js_module_fetch(js, ctx, module_name, json_module, &body_len);
+    if (!body) return NULL;
+    JSModuleDef *m = NULL;
     if (json_module) {
-        JSModuleDef *m = ns_js_make_json_module(ctx, module_name,
-                                                copy, copy_len);
-        g_free(copy);
-        if (!m) ns_js_log_module_compile_error(js, ctx, module_name);
-        return m;
+        m = ns_js_make_json_module(ctx, module_name, body, body_len);
+    } else {
+        JSValue func_val =
+            ns_js_compile_module_cached(ctx, body, body_len, module_name);
+        if (!JS_IsException(func_val)) {
+            m = JS_VALUE_GET_PTR(func_val);
+            JS_FreeValue(ctx, func_val);
+        }
     }
-    JSValue func_val =
-        ns_js_compile_module_cached(ctx, copy, copy_len, module_name);
-    g_free(copy);
-    if (JS_IsException(func_val)) {
-        ns_js_log_module_compile_error(js, ctx, module_name);
-        return NULL;
-    }
-    JSModuleDef *m = JS_VALUE_GET_PTR(func_val);
-    JS_FreeValue(ctx, func_val);
+    g_free(body);
+    if (!m) ns_js_log_module_compile_error(js, ctx, module_name);
     return m;
 }
 
@@ -19716,122 +19454,7 @@ ns_js_eval_module(ns_js *js, const char *src, gsize len, const char *origin)
     ns_js_budget_pop(js, &bg);
 }
 
-typedef enum ns_script_schedule {
-    NS_SCRIPT_BLOCKING,
-    NS_SCRIPT_DEFERRED,
-    NS_SCRIPT_ASYNC,
-} ns_script_schedule;
-
-typedef struct ns_script_task {
-    ns_node *node;
-    ns_script_schedule schedule;
-} ns_script_task;
-
-static gboolean
-ns_script_type_is_module(const ns_node *n)
-{
-    const char *type = ns_element_get_attr(n, "type");
-    return type && g_ascii_strcasecmp(type, "module") == 0;
-}
-
-static gboolean
-ns_script_type_supported(const ns_node *n)
-{
-    const char *type = ns_element_get_attr(n, "type");
-    return !type || !*type ||
-           g_ascii_strcasecmp(type, "text/javascript") == 0 ||
-           g_ascii_strcasecmp(type, "application/javascript") == 0 ||
-           g_ascii_strcasecmp(type, "module") == 0;
-}
-
-static gboolean
-content_type_is_javascript(const char *ct)
-{
-    if (!ct || !*ct) return FALSE;
-    while (*ct == ' ' || *ct == '\t') ct++;
-    const char *end = ct;
-    while (*end && *end != ';' && *end != ' ' && *end != '\t') end++;
-    size_t len = (size_t)(end - ct);
-    static const char *const ok[] = {
-        "text/javascript", "application/javascript",
-        "application/ecmascript", "text/ecmascript",
-        "application/x-javascript", "text/x-javascript",
-        "application/x-ecmascript", "text/x-ecmascript",
-        "text/jscript", "text/livescript",
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(ok); i++)
-        if (len == strlen(ok[i]) && g_ascii_strncasecmp(ct, ok[i], len) == 0)
-            return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_script_skipped_by_nomodule(const ns_node *n)
-{
-    return !ns_script_type_is_module(n) &&
-           ns_element_get_attr(n, "nomodule") != NULL;
-}
-
-static ns_script_schedule
-ns_script_schedule_for(const ns_node *n)
-{
-    gboolean is_module = ns_script_type_is_module(n);
-    gboolean has_src = ns_element_get_attr(n, "src") != NULL;
-    gboolean has_async = ns_element_get_attr(n, "async") != NULL;
-    gboolean has_defer = ns_element_get_attr(n, "defer") != NULL;
-    if (has_async && (has_src || is_module)) return NS_SCRIPT_ASYNC;
-    if (is_module) return NS_SCRIPT_DEFERRED;
-    if (has_src && has_defer) return NS_SCRIPT_DEFERRED;
-    return NS_SCRIPT_BLOCKING;
-}
-
-static void
-ns_js_mark_scripts_already_started_rec(ns_node *n, int depth)
-{
-    if (!n || depth >= 512 || (depth > 0 && ns_dom_hidden_child(n))) return;
-    if (ns_node_is_element_named(n, "script")) {
-        ns_element_set_attr(n, NS_SCRIPT_ALREADY_STARTED, "1");
-        return;
-    }
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_js_mark_scripts_already_started_rec(c, depth + 1);
-}
-
-static void
-ns_js_mark_scripts_already_started(ns_node *n)
-{
-    ns_js_mark_scripts_already_started_rec(n, 0);
-}
-
-static void
-ns_js_collect_script_tasks_rec(ns_node *n, GArray *tasks, int depth)
-{
-    if (!n || depth >= 512 || (depth > 0 && ns_dom_hidden_child(n))) return;
-    if (ns_node_is_element_named(n, "script")) {
-        if (ns_element_get_attr(n, NS_SCRIPT_ALREADY_STARTED)) return;
-        if (!ns_script_type_supported(n) || ns_script_skipped_by_nomodule(n)) {
-            ns_element_set_attr(n, NS_SCRIPT_ALREADY_STARTED, "1");
-            return;
-        }
-        ns_script_task task = {
-            .node = n,
-            .schedule = ns_script_schedule_for(n),
-        };
-        g_array_append_val(tasks, task);
-        return;
-    }
-    if (ns_node_is_element_named(n, "template")) return;
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_js_collect_script_tasks_rec(c, tasks, depth + 1);
-}
-
-static void
-ns_js_collect_script_tasks(ns_node *n, GArray *tasks)
-{
-    ns_js_collect_script_tasks_rec(n, tasks, 0);
-}
-
-static void
+void
 ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
                          gsize length, const char *origin,
                          gboolean is_module)
@@ -19907,659 +19530,6 @@ ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
     ns_frame_url_leave(js, &fu);
     js->current_script = previous_script;
     js->current_doc = previous_doc;
-}
-
-static gboolean
-ns_script_source_is_empty(const ns_node *n)
-{
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        if (c->kind == NS_NODE_TEXT && c->text && *c->text) return FALSE;
-    return TRUE;
-}
-
-void
-ns_js_run_script_element(ns_js *js, ns_node *n, const char *origin)
-{
-    if (!js || !n || ns_element_get_attr(n, NS_SCRIPT_ALREADY_STARTED)) return;
-    g_autofree char *src = g_strdup(ns_element_get_attr(n, "src"));
-    ns_element_set_attr(n, NS_SCRIPT_ALREADY_STARTED, "1");
-    if (!src && ns_script_source_is_empty(n)) {
-        n->flags |= NS_NODE_NOT_PARSER_INSERTED;
-        ns_element_set_attr(n, NS_SCRIPT_EMPTY_SOURCE, "1");
-        return;
-    }
-    if (!ns_script_type_supported(n) || ns_script_skipped_by_nomodule(n))
-        return;
-    g_autofree char *nonce = g_strdup(ns_element_get_attr(n, "nonce"));
-    const char *integrity = ns_element_get_attr(n, "integrity");
-    gboolean is_module = ns_script_type_is_module(n);
-    if (src && !*src) {
-        ns_js_dispatch_resource_event(js, n, "error");
-        return;
-    }
-    if (src) {
-        if (g_str_has_prefix(src, "data:")) {
-            gsize blen = 0;
-            char *body = ns_js_decode_data_url(src, &blen);
-            if (body) {
-                ns_js_eval_script_source(js, n, body, blen, "data:",
-                                         is_module);
-                g_free(body);
-                ns_js_dispatch_resource_event(js, n, "load");
-            } else {
-                ns_js_dispatch_resource_event(js, n, "error");
-            }
-            return;
-        }
-        if (g_str_has_prefix(src, "blob:")) {
-            GBytes *b = ns_js_blob_url_lookup(js, src, NULL);
-            if (b) {
-                gsize blen = 0;
-                const char *data = g_bytes_get_data(b, &blen);
-                ns_js_eval_script_source(js, n, data, blen, src, is_module);
-                ns_js_dispatch_resource_event(js, n, "load");
-            } else {
-                ns_js_dispatch_resource_event(js, n, "error");
-            }
-            return;
-        }
-        char *abs_url = ns_url_resolve(origin, src);
-        if (!abs_url) return;
-        if (g_str_has_prefix(origin, "https://") &&
-            g_str_has_prefix(abs_url, "http://")) {
-            if (js->log_cb) {
-                char *line = g_strdup_printf(
-                    "mixed-content blocked: script %s on https page", abs_url);
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            g_free(abs_url);
-            ns_js_dispatch_resource_event(js, n, "error");
-            return;
-        }
-        gboolean parser_inserted = !(n->flags & NS_NODE_NOT_PARSER_INSERTED);
-        if (js->csp &&
-            !ns_csp_allows_with_nonce(js->csp, NS_CSP_SCRIPT, abs_url, origin,
-                                      nonce, parser_inserted)) {
-            if (js->log_cb) {
-                char *line = g_strdup_printf("CSP blocked: script %s", abs_url);
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            g_free(abs_url);
-            ns_js_dispatch_resource_event(js, n, "error");
-            return;
-        }
-        GError *err = NULL;
-        gboolean loaded = FALSE;
-        ns_perf_resource_info info = { 0 };
-        ns_js_element_perf_info(js, n, &info);
-        ns_response *resp = ns_js_fetch_subresource(js, abs_url, origin,
-            ns_net_accept_headers_for(NS_FETCH_DEST_SCRIPT), &err, "script",
-            &info);
-        if (resp && ns_net_header_is_nosniff(resp->x_content_type_options) &&
-            !content_type_is_javascript(resp->content_type)) {
-            if (js->log_cb) {
-                char *line = g_strdup_printf(
-                    "nosniff blocked: script %s (Content-Type %s)", abs_url,
-                    resp->content_type && *resp->content_type ?
-                        resp->content_type : "(none)");
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            ns_response_free(resp);
-            g_clear_error(&err);
-            g_free(abs_url);
-            ns_js_dispatch_resource_event(js, n, "error");
-            return;
-        }
-        if (resp && resp->status == 200 && resp->body &&
-            resp->body->len <= NS_MAX_SCRIPT_BYTES) {
-            if (!ns_security_sri_check(integrity,
-                                       resp->body->data, resp->body->len)) {
-                if (js->log_cb) {
-                    char *line = g_strdup_printf(
-                        "SRI mismatch: script %s (integrity=\"%s\")",
-                        abs_url, integrity);
-                    js->log_cb(line, js->log_user_data);
-                    g_free(line);
-                }
-            } else if (resp->body->len > 0) {
-                ns_js_eval_script_source(js, n,
-                                         (const char *)resp->body->data,
-                                         resp->body->len, abs_url, is_module);
-                loaded = TRUE;
-            } else {
-                loaded = TRUE;
-            }
-        } else if (js->log_cb) {
-            const char *why = err ? err->message :
-                (resp && resp->error ? resp->error :
-                 (resp ? "non-200 status" : "fetch failed"));
-            char *line = g_strdup_printf("script %s: %s", abs_url, why);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        ns_response_free(resp);
-        g_clear_error(&err);
-        g_free(abs_url);
-        ns_js_dispatch_resource_event(js, n, loaded ? "load" : "error");
-        return;
-    }
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (c->kind != NS_NODE_TEXT || !c->text) continue;
-        gsize tlen = strlen(c->text);
-        if (!ns_csp_inline_script_allowed(js->csp, c->text, tlen, nonce)) {
-            if (js->log_cb) {
-                char *line = g_strdup_printf(
-                    "CSP blocked: inline <script> on %s", origin);
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            continue;
-        }
-        ns_js_eval_script_source(js, n, c->text, tlen, origin, is_module);
-    }
-}
-
-/* Southstar parses a whole document before running its scripts, but a
- * parser-blocking script runs while the HTML parser has only reached its
- * end tag: nothing after it exists yet, so document.body is null in <head>
- * and the script is the last <script> in the document.  Before the first
- * such script, every node after it is taken out of the tree, each one on
- * its own, and before each later script the nodes up to and including it
- * are put back one at a time in document order, the way the parser inserts
- * them: at the end of their parent, after anything scripts inserted, and
- * each with the childList record a parser insertion produces.  The rest is
- * put back once the last parser-blocking script has run. */
-typedef struct ns_parser_held {
-    ns_node *parent;
-    ns_node *node;
-} ns_parser_held;
-
-typedef struct ns_parser_hold {
-    GArray *held;                   /* ns_parser_held, in document order */
-    guint next;                     /* first one not yet put back */
-    GHashTable *members;            /* every held node and parent */
-    struct ns_parser_hold *prev;
-} ns_parser_hold;
-
-static void
-ns_parser_hold_forget(ns_js *js, const ns_node *n)
-{
-    for (ns_parser_hold *h = js->parser_hold; h; h = h->prev) {
-        if (!g_hash_table_remove(h->members, n)) continue;
-        for (guint i = h->next; i < h->held->len; i++) {
-            ns_parser_held *e = &g_array_index(h->held, ns_parser_held, i);
-            if (e->parent == n) e->parent = NULL;
-            if (e->node == n) e->node = NULL;
-        }
-    }
-}
-
-static void
-ns_parser_hold_collect(ns_parser_hold *hold, ns_node *parent, ns_node *n,
-                       int depth)
-{
-    if (ns_dom_hidden_child(n)) return;
-    ns_parser_held e = { parent, n };
-    g_array_append_val(hold->held, e);
-    g_hash_table_add(hold->members, parent);
-    g_hash_table_add(hold->members, n);
-    if (depth >= 512 || ns_node_is_element_named(n, "template")) return;
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_parser_hold_collect(hold, n, c, depth + 1);
-}
-
-static void
-ns_js_parser_hold_after(ns_js *js, ns_node *script, ns_parser_hold *hold)
-{
-    hold->held = g_array_new(FALSE, FALSE, sizeof(ns_parser_held));
-    hold->next = 0;
-    hold->members = g_hash_table_new(g_direct_hash, g_direct_equal);
-    hold->prev = js->parser_hold;
-    js->parser_hold = hold;
-    GPtrArray *tops = g_ptr_array_new();
-    for (ns_node *n = script; n && n->parent && n->kind != NS_NODE_DOCUMENT;
-         n = n->parent)
-        for (ns_node *sib = n->next_sibling; sib; sib = sib->next_sibling)
-            if (!ns_dom_hidden_child(sib)) {
-                g_ptr_array_add(tops, sib);
-                ns_parser_hold_collect(hold, n->parent, sib, 0);
-            }
-    for (guint i = 0; i < tops->len; i++) {
-        ns_node *top = g_ptr_array_index(tops, i);
-        ns_node *parent = top->parent;
-        ns_js_index_child_change(js, parent, NULL, top);
-        ns_node_remove(top);
-    }
-    g_ptr_array_free(tops, TRUE);
-    for (guint i = 0; i < hold->held->len; i++) {
-        ns_parser_held *e = &g_array_index(hold->held, ns_parser_held, i);
-        ns_node_arm_js_invalidate(e->parent);
-        ns_node_arm_js_invalidate(e->node);
-        if (e->node->parent) ns_node_remove(e->node);
-    }
-}
-
-static void
-ns_js_parser_put_back(ns_js *js, ns_parser_hold *hold, guint upto)
-{
-    for (; hold->next < upto && hold->next < hold->held->len; hold->next++) {
-        ns_parser_held *e = &g_array_index(hold->held, ns_parser_held,
-                                           hold->next);
-        /* A freed parent keeps its content out, like markup the parser
-         * goes on inserting into an element no longer in the tree. */
-        if (!e->parent || !e->node || e->node->parent) continue;
-        ns_node *prev = e->parent->last_child;
-        ns_node_append_child(e->parent, e->node);
-        ns_js_record_child_change(js, e->parent, e->node, NULL, prev, NULL);
-        js->mutated = TRUE;
-    }
-}
-
-/* Puts back the held nodes up to script and its text. */
-static void
-ns_js_parser_reach(ns_js *js, ns_parser_hold *hold, const ns_node *script)
-{
-    guint i = hold->next;
-    while (i < hold->held->len &&
-           g_array_index(hold->held, ns_parser_held, i).node != script)
-        i++;
-    if (i == hold->held->len) return;
-    i++;
-    while (i < hold->held->len &&
-           g_array_index(hold->held, ns_parser_held, i).parent == script)
-        i++;
-    ns_js_parser_put_back(js, hold, i);
-}
-
-static void
-ns_js_parser_release(ns_js *js, ns_parser_hold *hold)
-{
-    ns_js_parser_put_back(js, hold, hold->held->len);
-    js->parser_hold = hold->prev;
-    g_hash_table_destroy(hold->members);
-    g_array_free(hold->held, TRUE);
-}
-
-/* The parser-blocking scripts of a document's initial parse, in order,
- * each seeing only the part of the document parsed before it. */
-static void
-ns_js_run_parser_blocking_scripts(ns_js *js, GArray *tasks, const char *origin)
-{
-    if (!js || !tasks) return;
-    ns_parser_hold hold;
-    gboolean holding = FALSE;
-    for (guint i = 0; i < tasks->len; i++) {
-        ns_script_task *task = &g_array_index(tasks, ns_script_task, i);
-        if (task->schedule != NS_SCRIPT_BLOCKING) continue;
-        if (!holding) {
-            ns_js_parser_hold_after(js, task->node, &hold);
-            holding = TRUE;
-        } else {
-            ns_js_parser_reach(js, &hold, task->node);
-        }
-        ns_js_run_script_element(js, task->node, origin);
-    }
-    if (holding) ns_js_parser_release(js, &hold);
-    ns_ce_upgrade_subtree_all(js, js->current_doc);
-}
-
-static void
-ns_js_run_script_schedule(ns_js *js, GArray *tasks, ns_script_schedule schedule,
-                          const char *origin)
-{
-    if (!js || !tasks) return;
-    for (guint i = 0; i < tasks->len; i++) {
-        ns_script_task *task = &g_array_index(tasks, ns_script_task, i);
-        if (task->schedule != schedule) continue;
-        ns_js_run_script_element(js, task->node, origin);
-    }
-    ns_ce_upgrade_subtree_all(js, js->current_doc);
-}
-
-static gboolean
-ns_js_run_next_script_schedule(ns_js *js, GArray *tasks,
-                               ns_script_schedule schedule,
-                               const char *origin)
-{
-    if (!js || !tasks) return FALSE;
-    for (guint i = 0; i < tasks->len; i++) {
-        ns_script_task *task = &g_array_index(tasks, ns_script_task, i);
-        if (task->schedule != schedule ||
-            ns_element_get_attr(task->node, NS_SCRIPT_ALREADY_STARTED))
-            continue;
-        ns_js_run_script_element(js, task->node, origin);
-        ns_ce_upgrade_subtree_all(js, js->current_doc);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-ns_subtree_has_pending_script_rec(const ns_node *n, int depth)
-{
-    if (!n || depth >= 512 || (depth > 0 && ns_dom_hidden_child(n)))
-        return FALSE;
-    if (ns_node_is_element_named(n, "script") &&
-        !ns_element_get_attr(n, NS_SCRIPT_ALREADY_STARTED))
-        return TRUE;
-    if (ns_node_is_element_named(n, "template")) return FALSE;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        if (ns_subtree_has_pending_script_rec(c, depth + 1)) return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_subtree_has_pending_script(const ns_node *n)
-{
-    return ns_subtree_has_pending_script_rec(n, 0);
-}
-
-static gboolean
-ns_link_is_loadable_stylesheet(const ns_node *n)
-{
-    if (!ns_node_is_element_named(n, "link")) return FALSE;
-    if (n->flags & NS_NODE_LINK_LOAD_FIRED) return FALSE;
-    const char *rel = ns_element_get_attr(n, "rel");
-    const char *href = ns_element_get_attr(n, "href");
-    if (!href || !*href || !rel) return FALSE;
-    gchar **parts = g_strsplit_set(rel, " \t\r\n\f", -1);
-    gboolean is_sheet = FALSE, is_alt = FALSE;
-    for (gchar **p = parts; *p; p++) {
-        if (g_ascii_strcasecmp(*p, "stylesheet") == 0) is_sheet = TRUE;
-        else if (g_ascii_strcasecmp(*p, "alternate") == 0) is_alt = TRUE;
-    }
-    g_strfreev(parts);
-    return is_sheet && !is_alt;
-}
-
-static void
-ns_js_collect_pending_stylesheets_rec(ns_node *n, GPtrArray *out, int depth)
-{
-    if (!n || depth >= 512 || (depth > 0 && ns_dom_hidden_child(n))) return;
-    if (ns_link_is_loadable_stylesheet(n)) {
-        g_ptr_array_add(out, n);
-        return;
-    }
-    if (ns_node_is_element_named(n, "template")) return;
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_js_collect_pending_stylesheets_rec(c, out, depth + 1);
-}
-
-static void
-ns_js_collect_pending_stylesheets(ns_node *n, GPtrArray *out)
-{
-    ns_js_collect_pending_stylesheets_rec(n, out, 0);
-}
-
-static void
-ns_js_load_stylesheet_element(ns_js *js, ns_node *n, const char *origin)
-{
-    if (!js || !n || (n->flags & NS_NODE_LINK_LOAD_FIRED)) return;
-    n->flags |= NS_NODE_LINK_LOAD_FIRED;
-    const char *href = ns_element_get_attr(n, "href");
-    if (!href || !*href) {
-        ns_js_dispatch_resource_event(js, n, "error");
-        return;
-    }
-    if (g_str_has_prefix(href, "data:")) {
-        ns_js_dispatch_resource_event(js, n, "load");
-        return;
-    }
-    char *abs_url = ns_url_resolve(origin, href);
-    if (!abs_url) {
-        ns_js_dispatch_resource_event(js, n, "error");
-        return;
-    }
-    gboolean loaded = FALSE;
-    if (js->csp && !ns_csp_allows(js->csp, NS_CSP_STYLE, abs_url, origin)) {
-        if (js->log_cb) {
-            char *line = g_strdup_printf("CSP blocked: stylesheet %s", abs_url);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-    } else {
-        GError *err = NULL;
-        ns_perf_resource_info info = { 0 };
-        ns_js_element_perf_info(js, n, &info);
-        ns_response *resp = ns_js_fetch_subresource(js, abs_url, origin, NULL,
-                                                    &err, "link", &info);
-        if (resp && resp->status == 200)
-            loaded = TRUE;
-        else if (js->log_cb) {
-            const char *why = err ? err->message :
-                (resp && resp->error ? resp->error :
-                 (resp ? "non-200 status" : "fetch failed"));
-            char *line = g_strdup_printf("stylesheet %s: %s", abs_url, why);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        ns_response_free(resp);
-        g_clear_error(&err);
-    }
-    g_free(abs_url);
-    ns_js_dispatch_resource_event(js, n, loaded ? "load" : "error");
-}
-
-static gboolean
-ns_js_root_connected(ns_js *js, const ns_node *root)
-{
-    return ns_js_node_in_page(js, root);
-}
-
-static gboolean
-ns_js_tasks_have_schedule(GArray *tasks, ns_script_schedule schedule)
-{
-    if (!tasks) return FALSE;
-    for (guint i = 0; i < tasks->len; i++) {
-        ns_script_task *task = &g_array_index(tasks, ns_script_task, i);
-        if (task->schedule == schedule) return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-ns_js_async_script_timer(gpointer data)
-{
-    ns_js *js = data;
-    if (!js) return G_SOURCE_REMOVE;
-    js->async_script_source = 0;
-    if (js->eval_depth > 0 || js->in_pump) {
-        ns_js_schedule_pending_script_drain(js);
-        return G_SOURCE_REMOVE;
-    }
-    ns_js_drain_deferred_scripts(js);
-    ns_js_drain_async_script_roots(js);
-    ns_js_schedule_pending_script_drain(js);
-    return G_SOURCE_REMOVE;
-}
-
-static void
-ns_js_schedule_pending_script_drain(ns_js *js)
-{
-    if (!js || js->async_script_source) return;
-    gboolean pending =
-        (js->deferred_script_roots && js->deferred_script_roots->len > 0) ||
-        (js->async_script_roots && js->async_script_roots->len > 0);
-    if (pending)
-        js->async_script_source =
-            ns_js_attach_timeout(js, 4, ns_js_async_script_timer, js);
-}
-
-static void
-ns_js_schedule_deferred_script_root(ns_js *js, ns_node *root)
-{
-    if (!js || !root) return;
-    if (!js->deferred_script_roots)
-        js->deferred_script_roots = g_ptr_array_new();
-    for (guint i = 0; i < js->deferred_script_roots->len; i++)
-        if (g_ptr_array_index(js->deferred_script_roots, i) == root) {
-            ns_js_schedule_pending_script_drain(js);
-            return;
-        }
-    g_ptr_array_add(js->deferred_script_roots, root);
-    ns_js_schedule_pending_script_drain(js);
-}
-
-static void
-ns_js_schedule_async_script_root(ns_js *js, ns_node *root)
-{
-    if (!js || !root) return;
-    if (!js->async_script_roots)
-        js->async_script_roots = g_ptr_array_new();
-    for (guint i = 0; i < js->async_script_roots->len; i++)
-        if (g_ptr_array_index(js->async_script_roots, i) == root) return;
-    g_ptr_array_add(js->async_script_roots, root);
-    ns_js_schedule_pending_script_drain(js);
-}
-
-static void
-ns_js_drain_async_script_roots(ns_js *js)
-{
-    if (!js || !js->async_script_roots || js->halted) return;
-    guint scanned = js->async_script_roots->len;
-    while (js->async_script_roots->len > 0 && scanned-- > 0 && !js->halted) {
-        ns_node *root = g_ptr_array_index(js->async_script_roots, 0);
-        g_ptr_array_remove_index(js->async_script_roots, 0);
-        if (!ns_js_root_connected(js, root)) continue;
-        g_autofree char *origin = ns_js_node_document_base_url(js, root);
-        if (!origin) origin = g_strdup("inline");
-        GArray *tasks = g_array_new(FALSE, FALSE, sizeof(ns_script_task));
-        ns_js_register_import_maps(js, root);
-        ns_js_collect_script_tasks(root, tasks);
-        ns_js_run_script_schedule(js, tasks, NS_SCRIPT_BLOCKING, origin);
-        ns_js_run_script_schedule(js, tasks, NS_SCRIPT_DEFERRED, origin);
-        ns_js_run_script_schedule(js, tasks, NS_SCRIPT_ASYNC, origin);
-        g_array_free(tasks, TRUE);
-        break;
-    }
-}
-
-void
-ns_js_script_needs_prepare(ns_js *js, ns_node *script)
-{
-    if (!js || !ns_node_is_element_named(script, "script") ||
-        !(script->flags & NS_NODE_NOT_PARSER_INSERTED) ||
-        !ns_element_get_attr(script, NS_SCRIPT_EMPTY_SOURCE) ||
-        !ns_js_root_connected(js, script))
-        return;
-    ns_element_remove_attr(script, NS_SCRIPT_EMPTY_SOURCE);
-    ns_element_remove_attr(script, NS_SCRIPT_ALREADY_STARTED);
-    ns_js_run_inserted_scripts(js, script);
-}
-
-void
-ns_js_run_inserted_scripts(ns_js *js, ns_node *root)
-{
-    if (!js || !root || !js->current_doc || js->halted) return;
-    if (root->parent && ns_node_is_element_named(root->parent, "script")) {
-        ns_js_script_needs_prepare(js, root->parent);
-        if (root->kind != NS_NODE_ELEMENT) return;
-    }
-    if (js->js_image_loads && g_hash_table_size(js->js_image_loads) > 0)
-        ns_js_rescan_subtree_images(js, root, 0);
-    if (js->in_pump) return;
-    if (ns_ce_upgrading(js)) return;
-    if (!ns_js_root_connected(js, root)) return;
-    ns_js_schedule_static_iframes(js, root);
-    GPtrArray *sheets = g_ptr_array_new();
-    ns_js_collect_pending_stylesheets(root, sheets);
-    if (!ns_subtree_has_pending_script(root) && sheets->len == 0) {
-        g_ptr_array_free(sheets, TRUE);
-        return;
-    }
-    g_autofree char *origin = ns_js_node_document_base_url(js, root);
-    if (!origin) origin = g_strdup("inline");
-    GArray *tasks = g_array_new(FALSE, FALSE, sizeof(ns_script_task));
-    ns_js_register_import_maps(js, root);
-    ns_js_collect_script_tasks(root, tasks);
-    gboolean have_external = FALSE;
-    for (guint i = 0; i < tasks->len; i++) {
-        ns_script_task *t = &g_array_index(tasks, ns_script_task, i);
-        /* While the initial parse is held at a script, a blocking script it
-         * writes runs before the parser goes on, even an external one. */
-        gboolean parser_paused = js->parser_hold && js->eval_depth == 0 &&
-                                 js->callback_depth == 0;
-        if (t->schedule == NS_SCRIPT_BLOCKING &&
-            (!ns_element_get_attr(t->node, "src") || parser_paused) &&
-            !ns_script_type_is_module(t->node))
-            ns_js_run_script_element(js, t->node, origin);
-        else
-            have_external = TRUE;
-    }
-    ns_ce_upgrade_subtree_all(js, js->current_doc);
-    if (js->eval_depth > 0 || js->callback_depth > 0 ||
-        js->dispatch_depth > 0) {
-        if (have_external || sheets->len > 0)
-            ns_js_schedule_deferred_script_root(js, root);
-        g_array_free(tasks, TRUE);
-        g_ptr_array_free(sheets, TRUE);
-        return;
-    }
-    if (have_external)
-        ns_js_schedule_async_script_root(js, root);
-    g_array_free(tasks, TRUE);
-    for (guint i = 0; i < sheets->len; i++)
-        ns_js_load_stylesheet_element(js, g_ptr_array_index(sheets, i), origin);
-    g_ptr_array_free(sheets, TRUE);
-}
-
-static void
-ns_js_drain_deferred_scripts(ns_js *js)
-{
-    if (!js || !js->deferred_script_roots) return;
-    guint scanned = js->deferred_script_roots->len;
-    while (js->deferred_script_roots->len > 0 && !js->halted && scanned-- > 0) {
-        ns_node *root = g_ptr_array_index(js->deferred_script_roots, 0);
-        g_ptr_array_remove_index(js->deferred_script_roots, 0);
-        if (!ns_js_root_connected(js, root)) continue;
-        GPtrArray *sheets = g_ptr_array_new();
-        ns_js_collect_pending_stylesheets(root, sheets);
-        if (!ns_subtree_has_pending_script(root) && sheets->len == 0) {
-            g_ptr_array_free(sheets, TRUE);
-            continue;
-        }
-        g_autofree char *origin = ns_js_node_document_base_url(js, root);
-        if (!origin) origin = g_strdup("inline");
-        GArray *tasks = g_array_new(FALSE, FALSE, sizeof(ns_script_task));
-        ns_js_register_import_maps(js, root);
-        ns_js_collect_script_tasks(root, tasks);
-        ns_js_run_script_schedule(js, tasks, NS_SCRIPT_BLOCKING, origin);
-        ns_js_run_script_schedule(js, tasks, NS_SCRIPT_DEFERRED, origin);
-        if (ns_js_tasks_have_schedule(tasks, NS_SCRIPT_ASYNC))
-            ns_js_schedule_async_script_root(js, root);
-        g_array_free(tasks, TRUE);
-        for (guint i = 0; i < sheets->len; i++)
-            ns_js_load_stylesheet_element(js, g_ptr_array_index(sheets, i),
-                                          origin);
-        g_ptr_array_free(sheets, TRUE);
-        break;
-    }
-}
-
-static gboolean
-ns_js_has_pending_script_roots(const ns_js *js)
-{
-    return js &&
-        ((js->deferred_script_roots && js->deferred_script_roots->len > 0) ||
-         (js->async_script_roots && js->async_script_roots->len > 0));
-}
-
-static void
-ns_js_drain_load_event_scripts(ns_js *js)
-{
-    if (js && !js->halted && ns_js_has_pending_script_roots(js)) {
-        ns_js_drain_deferred_scripts(js);
-        ns_js_drain_async_script_roots(js);
-        ns_drain_microtasks(js);
-    }
-    if (js && !ns_js_has_pending_script_roots(js) &&
-        js->async_script_source) {
-        g_source_remove(js->async_script_source);
-        js->async_script_source = 0;
-    }
 }
 
 /* The document.referrer of the document loading into iframe: the URL of
@@ -20727,20 +19697,7 @@ static void
 ns_js_purge_subtree_script_refs(ns_js *js, ns_node *root)
 {
     if (!js || !root) return;
-    GPtrArray *queues[] = {
-        js->deferred_script_roots,
-        js->async_script_roots,
-    };
-    for (guint q = 0; q < G_N_ELEMENTS(queues); q++) {
-        if (!queues[q]) continue;
-        guint i = 0;
-        while (i < queues[q]->len) {
-            if (ns_js_node_in_tree(g_ptr_array_index(queues[q], i), root))
-                g_ptr_array_remove_index(queues[q], i);
-            else
-                i++;
-        }
-    }
+    ns_js_forget_script_roots_in(js, root);
     if (js->lifecycle_tasks) {
         guint i = 0;
         while (i < js->lifecycle_tasks->len) {
@@ -20924,7 +19881,7 @@ ns_js_run_iframe_scripts(ns_js *js, ns_node *content_root,
                                                          &info);
                 gboolean nosniff_blocked = r &&
                     ns_net_header_is_nosniff(r->x_content_type_options) &&
-                    !content_type_is_javascript(r->content_type);
+                    !ns_content_type_is_javascript(r->content_type);
                 if (!nosniff_blocked && r && r->body && r->body->len > 0 &&
                     !r->error && (r->status == 200 || r->status == 0)) {
                     if (r->body->len <= expose_scan_cap)
@@ -21646,7 +20603,7 @@ ns_js_schedule_static_iframes_rec(ns_js *js, ns_node *n, int depth)
         ns_js_schedule_static_iframes_rec(js, c, depth + 1);
 }
 
-static void
+void
 ns_js_schedule_static_iframes(ns_js *js, ns_node *n)
 {
     ns_js_schedule_static_iframes_rec(js, n, 0);
@@ -21687,8 +20644,7 @@ ns_js_lifecycle_has_blockers(ns_js *js)
     return js->eval_depth > 0 || js->iframe_load_depth > 0 || js->in_pump ||
         ns_js_image_loads_pending(js) ||
         ns_js_pending_iframe_count(js) > 0 ||
-        (js->deferred_script_roots && js->deferred_script_roots->len > 0) ||
-        (js->async_script_roots && js->async_script_roots->len > 0) ||
+        ns_js_has_pending_script_roots(js) ||
         (js->load_delay_cb && js->load_delay_cb(js->load_delay_user_data));
 }
 
@@ -22399,6 +21355,37 @@ gboolean
 ns_js_log_enabled(const ns_js *js)
 {
     return js->log_cb != NULL;
+}
+
+int
+ns_js_eval_depth(const ns_js *js)
+{
+    return js ? js->eval_depth : 0;
+}
+
+int
+ns_js_callback_depth(const ns_js *js)
+{
+    return js ? js->callback_depth : 0;
+}
+
+int
+ns_js_dispatch_depth(const ns_js *js)
+{
+    return js ? js->dispatch_depth : 0;
+}
+
+const ns_csp *
+ns_js_page_csp(const ns_js *js)
+{
+    return js ? js->csp : NULL;
+}
+
+void
+ns_js_rescan_pending_images(ns_js *js, ns_node *root)
+{
+    if (js && js->js_image_loads && g_hash_table_size(js->js_image_loads) > 0)
+        ns_js_rescan_subtree_images(js, root, 0);
 }
 
 void

@@ -55,6 +55,7 @@ southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-html = { path = "../js-html" }
 southstar-js-intl = { path = "../js-intl" }
+southstar-js-loader = { path = "../js-loader" }
 southstar-js-media = { path = "../js-media" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-node = { path = "../js-node" }
