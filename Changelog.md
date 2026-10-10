@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Focus, click() and keyboard activation, the Fullscreen API and Pointer
+  Lock moved from js.c to Rust (rust/js-focus), with unchanged results.
 * Reflected HTML attributes (string, URL, enumerated, integer and boolean
   accessors, dir, translate, autocomplete, autocapitalize, tabIndex,
   contentEditable and the rest) moved from js.c to Rust (rust/js-reflect),

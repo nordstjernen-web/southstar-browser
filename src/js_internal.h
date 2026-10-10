@@ -99,8 +99,6 @@ struct ns_js {
     gpointer      clipboard_write_user_data;
     ns_js_window_action_cb window_action_cb;
     gpointer      window_action_user_data;
-    const ns_node *pending_fullscreen_event_target;
-    JSValue       pending_fullscreen_resolve;
     char         *current_url;
     char         *document_origin;
     ns_node       *current_doc;
@@ -126,22 +124,13 @@ struct ns_js {
     const void   *box_lookup_cache_root;
     const void   *box_lookup_pending_root;
     int           box_lookup_pending_count;
-    const ns_node *focused_node;
     const ns_node *change_pending;
     char          *change_baseline;
-    /* The document that has focus; NULL means the top-level document. */
-    const ns_node *focused_doc;
-    /* The innermost focus change in progress (ns_focus_guard in js.c); the
-     * node-free hook clears freed nodes from every one. */
-    gpointer       focus_guard;
     /* The innermost parser-blocking script run's held-back nodes
      * (ns_parser_hold in js.c); the node-free hook clears freed ones. */
     gpointer       parser_hold;
-    gboolean      pointer_input;
     gboolean      autofocus_processed;
-    const ns_node *focus_nav_start;
     const ns_node *active_modal;
-    const ns_node *pointer_lock_element;
     double         last_mouse_x[2];
     double         last_mouse_y[2];
     gboolean       has_last_mouse[2];
@@ -205,7 +194,6 @@ struct ns_js {
     int           listener_snapshots;
     guint         listener_tombstones;
     int           callback_depth;
-    int           synthetic_click_depth;
     guint         observer_tick_source;
     guint         raf_tick_source;
     gint64        raf_host_us;
@@ -1191,6 +1179,42 @@ gboolean ns_js_autofocus_processed(const ns_js *js);
 void     ns_js_set_autofocus_processed(ns_js *js);
 int      ns_js_ready_state(const ns_js *js);
 void     ns_js_set_active_modal(ns_js *js, const ns_node *modal);
+const ns_node *ns_js_active_modal(const ns_js *js);
+gboolean ns_js_has_window_action(const ns_js *js);
+void     ns_event_type_init_flags(const char *type, gboolean at_document,
+                                  gboolean *bubbles, gboolean *cancelable);
+void     ns_js_fire_window_focus_event(ns_js *js, ns_node *doc, const char *type);
+gboolean ns_node_is_disabled_form_control(const ns_node *el);
+const ns_node *ns_click_activation_target(const ns_node *el);
+JSValue  ns_element_activation_behavior(JSContext *ctx, const ns_node *act,
+                                        const ns_node *target);
+void     ns_js_synthetic_activation(ns_js *js, const ns_node *act,
+                                    const ns_node *target);
+void     ns_js_update_focus_visible(ns_js *js);
+void     ns_focus_forget_node(ns_js *js, const ns_node *n);
+void     ns_focus_forget_subtree(ns_js *js, const ns_node *root);
+void     ns_focus_reset(ns_js *js);
+void     ns_focus_teardown(ns_js *js);
+JSValue  ns_element_focus(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_element_blur(JSContext *ctx, JSValueConst this_val, int argc,
+                         JSValueConst *argv);
+JSValue  ns_document_has_focus(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue  ns_element_click(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_element_request_fullscreen(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv);
+JSValue  ns_document_exit_fullscreen(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue  ns_document_get_fullscreen_element(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_fullscreen_enabled(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_is_fullscreen(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_requestPointerLock(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv);
+JSValue  ns_document_exitPointerLock(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue  ns_document_get_pointerLockElement(JSContext *ctx, JSValueConst this_val);
 
 void    ns_storage_init(ns_js *js);
 void    ns_storage_teardown(ns_js *js);

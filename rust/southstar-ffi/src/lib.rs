@@ -45,6 +45,7 @@ pub use southstar_js_cssom;
 pub use southstar_js_custom_elements;
 pub use southstar_js_document;
 pub use southstar_js_events;
+pub use southstar_js_focus;
 pub use southstar_js_forms;
 pub use southstar_js_geometry;
 pub use southstar_js_intl;

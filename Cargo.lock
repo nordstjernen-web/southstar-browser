@@ -1625,6 +1625,7 @@ dependencies = [
  "southstar-js-custom-elements",
  "southstar-js-document",
  "southstar-js-events",
+ "southstar-js-focus",
  "southstar-js-forms",
  "southstar-js-geometry",
  "southstar-js-intl",
@@ -1874,6 +1875,15 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-events"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-focus"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-dom",

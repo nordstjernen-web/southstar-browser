@@ -196,10 +196,8 @@ static gboolean ns_js_caller_position(JSContext *ctx, char **file, int *line,
 static void ns_js_process_pending_iframes(ns_js *js);
 static void ns_js_record_attr_change(ns_js *js, ns_node *target,
                                      const char *name, const char *old_value);
-static gboolean ns_node_is_disabled_form_control(const ns_node *el);
 static JSValue ns_element_set_textContent(JSContext *ctx, JSValueConst this_val, JSValueConst val);
 static const ns_node *ns_node_ancestor_or_self(const ns_node *desc, const ns_node *root);
-static void ns_focus_guard_forget(ns_js *js, const ns_node *n);
 static void ns_parser_hold_forget(ns_js *js, const ns_node *n);
 static gboolean ns_valid_attr_name(const char *s);
 static gboolean ns_is_attr_qname(const char *s);
@@ -1988,11 +1986,8 @@ ns_invalidate_wrapper(ns_node *n)
         g_hash_table_remove(js->orphan_nodes, n);
     if (js && js->js_image_loads)
         g_hash_table_remove(js->js_image_loads, n);
-    if (js && js->focus_nav_start == n) js->focus_nav_start = NULL;
-    if (js && js->focused_node == n) js->focused_node = NULL;
+    if (js) ns_focus_forget_node(js, n);
     if (js && js->change_pending == n) ns_js_forget_pending_change(js);
-    if (js && js->focused_doc == n) js->focused_doc = NULL;
-    if (js) ns_focus_guard_forget(js, n);
     if (js) ns_parser_hold_forget(js, n);
     if (js && js->frame_urls) g_hash_table_remove(js->frame_urls, n);
     if (js && js->frame_referrers) g_hash_table_remove(js->frame_referrers, n);
@@ -8945,7 +8940,7 @@ ns_js_purge_subtree_rafs(ns_js *js, ns_node *root)
 /* The bubbles and cancelable flags the HTML, DOM and UI Events standards
  * give the events the browser itself fires.  Anything not listed bubbles
  * and can be cancelled, like click, submit, reset and beforeinput. */
-static void
+void
 ns_event_type_init_flags(const char *type, gboolean at_document,
                          gboolean *bubbles, gboolean *cancelable)
 {
@@ -11155,51 +11150,6 @@ ns_element_get_baseURI(JSContext *ctx, JSValueConst this_val)
 }
 
 static JSValue
-ns_element_requestPointerLock(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    const ns_node *el = ns_unwrap_element(this_val);
-    if (js && el && js->pointer_lock_element != el) {
-        js->pointer_lock_element = el;
-        if (js->current_doc)
-            ns_js_dispatch_event(js, js->current_doc,
-                                 "pointerlockchange", NULL);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_document_exitPointerLock(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (js && js->pointer_lock_element) {
-        js->pointer_lock_element = NULL;
-        if (js->current_doc)
-            ns_js_dispatch_event(js, js->current_doc,
-                                 "pointerlockchange", NULL);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_document_get_pointerLockElement(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->pointer_lock_element || !js->current_doc) return JS_NULL;
-    const ns_node *root = ns_node_root(js->current_doc);
-    for (const ns_node *n = root; n; n = ns_node_next_in_subtree(n, root, TRUE))
-        if (n == js->pointer_lock_element)
-            return ns_make_element(ctx, n);
-    js->pointer_lock_element = NULL;
-    return JS_NULL;
-}
-
-static JSValue
 ns_element_get_ownerDocument(JSContext *ctx, JSValueConst this_val)
 {
     ns_js *js = js_from_ctx(ctx);
@@ -12643,121 +12593,7 @@ ns_element_get_dataset(JSContext *ctx, JSValueConst this_val)
     return ds;
 }
 
-gboolean
-ns_node_tabindex(const ns_node *el, int *out)
-{
-    const char *ti = ns_element_get_attr(el, "tabindex");
-    if (!ti) return FALSE;
-    char *endp = NULL;
-    long v = strtol(ti, &endp, 10);
-    while (endp && *endp == ' ') endp++;
-    *out = (endp && *endp == '\0') ? (int)v : 0;
-    return TRUE;
-}
-
-gboolean
-ns_node_is_focusable(const ns_node *el)
-{
-    if (!el || el->kind != NS_NODE_ELEMENT || !el->name) return FALSE;
-    if (ns_element_effectively_disabled(el)) return FALSE;
-    if (ns_element_effectively_inert(el)) return FALSE;
-    if (ns_element_get_attr(el, "hidden")) return FALSE;
-    if (ns_element_get_attr(el, "tabindex")) return TRUE;
-    const char *n = el->name;
-    if (strcmp(n, "a") == 0 || strcmp(n, "area") == 0)
-        return ns_element_get_attr(el, "href") != NULL;
-    if (strcmp(n, "button") == 0 || strcmp(n, "select") == 0 ||
-        strcmp(n, "textarea") == 0 || strcmp(n, "iframe") == 0 ||
-        strcmp(n, "summary") == 0)
-        return TRUE;
-    if (strcmp(n, "input") == 0) {
-        const char *t = ns_element_get_attr(el, "type");
-        return !(t && g_ascii_strcasecmp(t, "hidden") == 0);
-    }
-    const char *ce = ns_element_get_attr(el, "contenteditable");
-    if (ce && g_ascii_strcasecmp(ce, "false") != 0) return TRUE;
-    return FALSE;
-}
-
-static gboolean
-ns_node_accepts_text_entry(const ns_node *el)
-{
-    if (ns_node_is_element_named(el, "textarea")) return TRUE;
-    if (ns_node_is_element_named(el, "input")) {
-        static const char *const non_text[] = {
-            "button", "checkbox", "color", "file", "hidden", "image",
-            "radio", "range", "reset", "submit",
-        };
-        const char *t = ns_element_get_attr(el, "type");
-        for (gsize i = 0; t && i < G_N_ELEMENTS(non_text); i++)
-            if (g_ascii_strcasecmp(t, non_text[i]) == 0) return FALSE;
-        return TRUE;
-    }
-    const char *ce = el ? ns_element_get_attr(el, "contenteditable") : NULL;
-    return ce && g_ascii_strcasecmp(ce, "false") != 0;
-}
-
-static void
-ns_js_update_focus_visible(ns_js *js)
-{
-    const ns_node *el = js->focused_node;
-    gboolean visible = el && (!js->pointer_input ||
-                              ns_node_accepts_text_entry(el));
-    ns_css_set_focus_visible_node(visible ? el : NULL);
-}
-
 void
-ns_js_note_pointer_input(ns_js *js, gboolean pointer)
-{
-    if (js) js->pointer_input = pointer;
-}
-
-typedef struct ns_focus_guard {
-    const ns_node *node[4];     /* old element, new element, old and new document */
-    struct ns_focus_guard *prev;
-} ns_focus_guard;
-
-static void
-ns_focus_guard_forget(ns_js *js, const ns_node *n)
-{
-    for (ns_focus_guard *g = js->focus_guard; g; g = g->prev)
-        for (gsize i = 0; i < G_N_ELEMENTS(g->node); i++)
-            if (g->node[i] == n) g->node[i] = NULL;
-}
-
-static ns_node *
-ns_node_owner_doc(const ns_node *n)
-{
-    for (const ns_node *p = n; p; p = p->parent)
-        if (p->kind == NS_NODE_DOCUMENT) return (ns_node *)p;
-    return NULL;
-}
-
-static ns_node *
-ns_js_focused_document(ns_js *js)
-{
-    if (js->focused_doc) return (ns_node *)js->focused_doc;
-    return ns_js_top_document(js->current_doc);
-}
-
-static void
-ns_js_dispatch_focus_event(ns_js *js, const ns_node *target, const char *type,
-                           const ns_node *related)
-{
-    if (js->halted || js->in_pump) return;
-    JSContext *ctx = js->ctx;
-    JSValue event = ns_make_event(ctx, type, target);
-    gboolean bubbles = FALSE, cancelable = FALSE;
-    ns_event_type_init_flags(type, FALSE, &bubbles, &cancelable);
-    JS_SetPropertyStr(ctx, event, "bubbles", JS_NewBool(ctx, bubbles));
-    JS_SetPropertyStr(ctx, event, "cancelable", JS_NewBool(ctx, cancelable));
-    JS_SetPropertyStr(ctx, event, "relatedTarget",
-                      related ? ns_make_element(ctx, related) : JS_NULL);
-    ns_js_dispatch_built_event(js, target, type, event, NULL);
-}
-
-/* focus or blur at the window of doc, in that window's realm. */
-static void
 ns_js_fire_window_focus_event(ns_js *js, ns_node *doc, const char *type)
 {
     if (!doc || js->halted || js->in_pump) return;
@@ -12778,71 +12614,6 @@ ns_js_fire_window_focus_event(ns_js *js, ns_node *doc, const char *type)
     JS_SetPropertyStr(js->ctx, ev, "relatedTarget", JS_NULL);
     ns_js_dispatch_window_only_event(js, doc, type, ev, NULL);
     ns_js_realm_scope_leave(js, &scope);
-}
-
-/* Moves focus to el, or with el NULL to no element of doc, following the
- * HTML focus update steps: blur and focusout on the old element while no
- * element has focus, blur and focus at the windows once focus has changed
- * document, then focus and focusin on the new element.  relatedTarget is
- * the other element when both are in one document. */
-static void
-ns_js_set_focus_in(ns_js *js, const ns_node *el, ns_node *doc)
-{
-    if (!js) return;
-    ns_node *old_doc = ns_js_focused_document(js);
-    ns_node *new_doc = el ? ns_node_owner_doc(el) : doc ? doc : old_doc;
-    if (js->focused_node == el && new_doc == old_doc) return;
-    const ns_node *old = js->focused_node;
-    gboolean same_doc = new_doc == old_doc;
-
-    /* Handlers run between the steps below and may free any of these
-     * nodes; the free hook clears them and the update stops. */
-    ns_focus_guard g = { { old, el, old_doc, new_doc }, js->focus_guard };
-    for (gsize i = 0; i < G_N_ELEMENTS(g.node); i++)
-        if (g.node[i]) ns_node_arm_js_invalidate((ns_node *)g.node[i]);
-    js->focus_guard = &g;
-
-    js->focused_node = NULL;
-    ns_js_update_focus_visible(js);
-    js->mutated = TRUE;
-    if (old) {
-        ns_js_commit_change(js, old);
-        if (js->focused_node) goto out;
-    }
-    if (g.node[0]) {
-        ns_js_dispatch_focus_event(js, old, "blur", same_doc ? el : NULL);
-        if (g.node[0])
-            ns_js_dispatch_focus_event(js, old, "focusout",
-                                       same_doc ? g.node[1] : NULL);
-        if (js->focused_node) goto out;
-    }
-    if (!same_doc) {
-        /* The windows hear about the move after the focused document has
-         * changed, so the old window's blur already sees it. */
-        if (!g.node[3]) goto out;
-        js->focused_doc = new_doc && new_doc->parent ? new_doc : NULL;
-        if (g.node[2]) ns_js_fire_window_focus_event(js, old_doc, "blur");
-        if (js->focused_node || !g.node[3]) goto out;
-        ns_js_fire_window_focus_event(js, new_doc, "focus");
-        if (js->focused_node) goto out;
-    }
-    if (!el || !g.node[1]) goto out;
-    js->focused_node = el;
-    js->focused_doc = new_doc && new_doc->parent ? new_doc : NULL;
-    ns_js_update_focus_visible(js);
-    js->focus_nav_start = NULL;
-    ns_js_dispatch_focus_event(js, el, "focus", same_doc ? g.node[0] : NULL);
-    if (g.node[1])
-        ns_js_dispatch_focus_event(js, el, "focusin",
-                                   same_doc ? g.node[0] : NULL);
-out:
-    js->focus_guard = g.prev;
-}
-
-void
-ns_js_set_focus(ns_js *js, const ns_node *el)
-{
-    ns_js_set_focus_in(js, el, NULL);
 }
 
 void
@@ -12866,186 +12637,6 @@ ns_js_commit_change(ns_js *js, const ns_node *el)
         g_strcmp0(ns_node_editable_value(el), js->change_baseline) != 0;
     ns_js_forget_pending_change(js);
     if (changed) ns_js_dispatch_event(js, el, "change", NULL);
-}
-
-void
-ns_js_set_focused_node(ns_js *js, const ns_node *el)
-{
-    if (!js || js->focused_node == el) return;
-    js->focused_node = el;
-    ns_js_update_focus_visible(js);
-    js->mutated = TRUE;
-}
-
-void
-ns_js_focus_from_pointer(ns_js *js, const ns_node *target)
-{
-    if (!js) return;
-    const ns_node *focus = NULL;
-    /* Look for a focusable ancestor only within the clicked document: a
-     * click on plain content in a frame focuses the frame's document, not
-     * the iframe element around it. */
-    for (const ns_node *a = target; a && !focus; a = a->parent) {
-        if (a->kind == NS_NODE_DOCUMENT) break;
-        if (ns_node_is_focusable(a)) focus = a;
-    }
-    ns_js_set_focus_in(js, focus, ns_node_owner_doc(target));
-    if (focus || !target) return;
-    js->focus_nav_start = target;
-    ns_node_arm_js_invalidate((ns_node *)target);
-}
-
-const ns_node *
-ns_js_focused_node(const ns_js *js)
-{
-    return js ? js->focused_node : NULL;
-}
-
-typedef struct focus_candidate {
-    const ns_node *node;
-    int            tabindex;
-    guint          order;
-} focus_candidate;
-
-static void
-collect_focus_candidates(const ns_node *root, GArray *out, guint *order,
-                         int depth)
-{
-    if (!root || depth >= 512) return;
-    for (const ns_node *c = root->first_child; c; c = c->next_sibling) {
-        if (c->kind != NS_NODE_ELEMENT) continue;
-        if (ns_node_in_template_content(c)) continue;
-        int ti = 0;
-        gboolean has_ti = ns_node_tabindex(c, &ti);
-        if (ns_node_is_focusable(c) && !(has_ti && ti < 0)) {
-            focus_candidate fc = { c, has_ti ? ti : 0, (*order)++ };
-            g_array_append_val(out, fc);
-        }
-        collect_focus_candidates(c, out, order, depth + 1);
-    }
-}
-
-static gboolean
-focus_candidates_before(const ns_node *root, const ns_node *target,
-                        guint *count, int depth)
-{
-    if (!root || depth >= 512) return FALSE;
-    for (const ns_node *c = root->first_child; c; c = c->next_sibling) {
-        if (c == target) return TRUE;
-        if (c->kind != NS_NODE_ELEMENT) continue;
-        if (ns_node_in_template_content(c)) continue;
-        int ti = 0;
-        gboolean has_ti = ns_node_tabindex(c, &ti);
-        if (ns_node_is_focusable(c) && !(has_ti && ti < 0)) (*count)++;
-        if (focus_candidates_before(c, target, count, depth + 1)) return TRUE;
-    }
-    return FALSE;
-}
-
-static int
-focus_index_from_start(const ns_node *scope, const ns_node *start,
-                       GArray *cands, gboolean backward)
-{
-    guint before = 0;
-    if (!start || !focus_candidates_before(scope, start, &before, 0))
-        return -1;
-    int found = -1;
-    for (guint i = 0; i < cands->len; i++) {
-        const focus_candidate *fc = &g_array_index(cands, focus_candidate, i);
-        if (fc->tabindex > 0) continue;
-        if (!backward && fc->order >= before) return (int)i;
-        if (backward && fc->order < before) found = (int)i;
-    }
-    return found;
-}
-
-static int
-focus_candidate_cmp(gconstpointer a, gconstpointer b)
-{
-    const focus_candidate *x = a, *y = b;
-    int kx = x->tabindex > 0 ? x->tabindex : 0x7fffffff;
-    int ky = y->tabindex > 0 ? y->tabindex : 0x7fffffff;
-    if (kx != ky) return kx < ky ? -1 : 1;
-    return x->order < y->order ? -1 : (x->order > y->order ? 1 : 0);
-}
-
-static gboolean
-node_reaches_root(const ns_node *root, const ns_node *node)
-{
-    for (const ns_node *p = node; p; p = p->parent)
-        if (p == root) return TRUE;
-    return FALSE;
-}
-
-static const ns_node *
-ns_js_focus_scope(ns_js *js)
-{
-    if (js->active_modal && js->current_doc &&
-        node_reaches_root(js->current_doc, js->active_modal))
-        return js->active_modal;
-    return js->current_doc;
-}
-
-const ns_node *
-ns_js_sequential_focus_target(ns_js *js, gboolean backward)
-{
-    if (!js || !js->current_doc) return NULL;
-    const ns_node *scope = ns_js_focus_scope(js);
-    if (!scope) return NULL;
-    GArray *cands = g_array_new(FALSE, FALSE, sizeof(focus_candidate));
-    guint order = 0;
-    collect_focus_candidates(scope, cands, &order, 0);
-    if (cands->len == 0) { g_array_free(cands, TRUE); return NULL; }
-    g_array_sort(cands, focus_candidate_cmp);
-    int cur = -1;
-    for (guint i = 0; i < cands->len; i++)
-        if (g_array_index(cands, focus_candidate, i).node == js->focused_node) {
-            cur = (int)i; break;
-        }
-    int next;
-    int from_start = cur < 0 ? focus_index_from_start(scope,
-                                   js->focus_nav_start, cands, backward) : -1;
-    if (from_start >= 0)
-        next = from_start;
-    else if (cur < 0)
-        next = backward ? (int)cands->len - 1 : 0;
-    else if (backward)
-        next = cur == 0 ? (int)cands->len - 1 : cur - 1;
-    else
-        next = (cur + 1) % (int)cands->len;
-    const ns_node *target = g_array_index(cands, focus_candidate, next).node;
-    g_array_free(cands, TRUE);
-    return target;
-}
-
-static JSValue
-ns_element_focus(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    const ns_node *el = ns_unwrap_element(this_val);
-    ns_js *js = js_from_ctx(ctx);
-    if (!el || !js) return JS_UNDEFINED;
-    /* Only a focusable element in this browser's document tree can take
-     * focus; focus() on anything else does nothing. */
-    if (!ns_node_is_focusable(el)) return JS_UNDEFINED;
-    if (!ns_node_ancestor_or_self(el, ns_js_top_document(js->current_doc)))
-        return JS_UNDEFINED;
-    ns_js_set_focus(js, el);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_element_blur(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    const ns_node *el = ns_unwrap_element(this_val);
-    ns_js *js = js_from_ctx(ctx);
-    if (!el || !js) return JS_UNDEFINED;
-    if (js->focused_node != el) return JS_UNDEFINED;
-    ns_js_set_focus(js, NULL);
-    return JS_UNDEFINED;
 }
 
 static JSValue
@@ -13148,7 +12739,7 @@ ns_element_releasePointerCapture(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static gboolean
+gboolean
 ns_node_is_disabled_form_control(const ns_node *el)
 {
     static const char *const controls[] = {
@@ -13245,7 +12836,7 @@ ns_node_has_activation_behavior(const ns_node *cur)
            ns_summary_toggle_target(cur) != NULL;
 }
 
-static const ns_node *
+const ns_node *
 ns_click_activation_target(const ns_node *el)
 {
     for (const ns_node *cur = el; cur; cur = cur->parent)
@@ -13301,7 +12892,7 @@ ns_js_anchor_fragment_navigate(ns_js *js, const char *abs_url)
     return TRUE;
 }
 
-static JSValue
+JSValue
 ns_element_activation_behavior(JSContext *ctx, const ns_node *act,
                                const ns_node *target)
 {
@@ -13368,90 +12959,6 @@ ns_element_activation_behavior(JSContext *ctx, const ns_node *act,
     }
     ns_popover_target_activation(js, (ns_node *)act, target);
     return JS_UNDEFINED;
-}
-
-static void
-ns_js_click_with_activation(ns_js *js, const ns_node *el)
-{
-    if (ns_element_effectively_inert(el)) return;
-    if (ns_node_is_disabled_form_control(el)) return;
-    const ns_node *act = ns_click_activation_target(el);
-    if (act && act != el && ns_element_effectively_inert(act))
-        act = NULL;
-    int kind = act ? ns_checkable_input_kind(act) : 0;
-    ns_checkable_click_state click_state = {0};
-    if (kind)
-        ns_checkable_pre_click(js, (ns_node *)act, kind, &click_state);
-    gboolean prevented = FALSE;
-    JSValue event = ns_make_event(js->ctx, "click", el);
-    JS_SetPropertyStr(js->ctx, event, "composed", JS_TRUE);
-    if (js->synthetic_click_depth > 0)
-        JS_SetPropertyStr(js->ctx, event, "_is_trusted", JS_FALSE);
-    ns_js_dispatch_built_event(js, el, "click", event, &prevented);
-    if (kind) {
-        ns_checkable_post_click(js, (ns_node *)act, kind, &click_state,
-                                prevented);
-        return;
-    }
-    if (prevented || !act) return;
-    ns_element_activation_behavior(js->ctx, act, el);
-}
-
-static JSValue
-ns_element_click(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_node *el = ns_unwrap_element_mut(this_val);
-    ns_js *_j = js_from_ctx(ctx);
-    if (!el || !_j) return JS_UNDEFINED;
-    if (el->flags & NS_NODE_CLICK_IN_PROGRESS) return JS_UNDEFINED;
-    el->flags |= NS_NODE_CLICK_IN_PROGRESS;
-    _j->synthetic_click_depth++;
-    ns_js_click_with_activation(_j, el);
-    _j->synthetic_click_depth--;
-    el->flags &= ~NS_NODE_CLICK_IN_PROGRESS;
-    return JS_UNDEFINED;
-}
-
-void
-ns_js_activate_element(ns_js *js, const ns_node *el)
-{
-    if (!js || !js->ctx || !el) return;
-    ns_js_click_with_activation(js, el);
-}
-
-gboolean
-ns_js_keyboard_activate(ns_js *js, const ns_node *el, const char *key,
-                        gboolean keyup)
-{
-    if (!js || !js->ctx || !el || !key || el->kind != NS_NODE_ELEMENT)
-        return FALSE;
-    gboolean enter = strcmp(key, "Enter") == 0;
-    gboolean space = strcmp(key, " ") == 0;
-    if ((!enter || keyup) && (!space || !keyup)) return FALSE;
-    if (ns_element_effectively_inert(el) ||
-        ns_element_effectively_disabled(el))
-        return FALSE;
-    gboolean link = (ns_node_is_element_named(el, "a") ||
-                     ns_node_is_element_named(el, "area")) &&
-                    ns_element_get_attr(el, "href");
-    gboolean summary = ns_summary_toggle_target(el) != NULL;
-    gboolean button = ns_node_is_button(el);
-    gboolean checkable = ns_checkable_input_kind(el) != 0;
-    if (enter ? !(link || button || summary)
-              : !(button || checkable || summary))
-        return FALSE;
-    ns_js_activate_element(js, el);
-    return TRUE;
-}
-
-gboolean
-ns_js_keyboard_activates(const ns_node *el, const char *key)
-{
-    if (!el || !key || strcmp(key, " ") != 0) return FALSE;
-    return ns_node_is_button(el) || ns_checkable_input_kind(el) != 0 ||
-           ns_summary_toggle_target(el) != NULL;
 }
 
 void
@@ -14088,11 +13595,8 @@ ns_element_dispatchEvent(JSContext *ctx, JSValueConst this_val,
     if (kind)
         ns_checkable_post_click(_j, (ns_node *)act, kind, &click_state,
                                 prevented);
-    else if (act && !prevented) {
-        _j->synthetic_click_depth++;
-        ns_element_activation_behavior(ctx, act, el);
-        _j->synthetic_click_depth--;
-    }
+    else if (act && !prevented)
+        ns_js_synthetic_activation(_j, act, el);
     JS_FreeCString(ctx, type);
     return prevented ? JS_FALSE : JS_TRUE;
 }
@@ -14425,181 +13929,6 @@ ns_js_window_action(ns_js *js, const char *action)
 {
     if (js && js->window_action_cb)
         js->window_action_cb(action, js->window_action_user_data);
-}
-
-static JSValue
-ns_document_get_fullscreen_element(JSContext *ctx, JSValueConst this_val)
-{
-    JSValue value = JS_GetPropertyStr(ctx, this_val,
-                                      "_nd_fullscreen_element");
-    if (!JS_IsUndefined(value)) return value;
-    JS_FreeValue(ctx, value);
-    return JS_NULL;
-}
-
-static JSValue
-ns_document_get_fullscreen_enabled(JSContext *ctx, JSValueConst this_val)
-{
-    (void)ctx;
-    (void)this_val;
-    return JS_TRUE;
-}
-
-static JSValue
-ns_document_get_is_fullscreen(JSContext *ctx, JSValueConst this_val)
-{
-    JSValue value = JS_GetPropertyStr(ctx, this_val,
-                                      "_nd_fullscreen_element");
-    gboolean active = !JS_IsUndefined(value) && !JS_IsNull(value);
-    JS_FreeValue(ctx, value);
-    return JS_NewBool(ctx, active);
-}
-
-static JSValue
-ns_fullscreen_change_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    const ns_node *target = argc > 0 ? ns_unwrap_element_mut(argv[0]) : NULL;
-    if (js && js->current_doc) {
-        if (!target) target = js->current_doc;
-        ns_js_dispatch_event(js, target, "fullscreenchange", NULL);
-        ns_js_dispatch_event(js, target,
-                             "webkitfullscreenchange", NULL);
-        ns_js_dispatch_event(js, target, "mozfullscreenchange", NULL);
-        ns_js_dispatch_event(js, target, "MSFullscreenChange", NULL);
-    }
-    return JS_UNDEFINED;
-}
-
-static void
-ns_dispatch_fullscreen_change(ns_js *js, const ns_node *target)
-{
-    if (!js || !js->current_doc) return;
-    if (!target) target = js->current_doc;
-    ns_js_dispatch_event(js, target, "fullscreenchange", NULL);
-    ns_js_dispatch_event(js, target, "webkitfullscreenchange", NULL);
-    ns_js_dispatch_event(js, target, "mozfullscreenchange", NULL);
-    ns_js_dispatch_event(js, target, "MSFullscreenChange", NULL);
-}
-
-static void
-ns_set_fullscreen_element(JSContext *ctx, JSValueConst element,
-                          const char *action)
-{
-    ns_js *js = js_from_ctx(ctx);
-    ns_node *node = JS_IsNull(element) ? NULL : ns_unwrap_element_mut(element);
-    ns_css_set_fullscreen_node(node);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue document = JS_GetPropertyStr(ctx, global, "document");
-    JSValue previous = JS_GetPropertyStr(ctx, document,
-                                         "_nd_fullscreen_element");
-    JSValue event_value = JS_IsNull(element)
-        ? JS_DupValue(ctx, previous) : JS_DupValue(ctx, element);
-    ns_node *event_target = ns_unwrap_element_mut(event_value);
-    JS_SetPropertyStr(ctx, document, "_nd_fullscreen_element",
-                      JS_DupValue(ctx, element));
-    JS_FreeValue(ctx, previous);
-    JS_FreeValue(ctx, document);
-    JS_FreeValue(ctx, global);
-    if (js && js->window_action_cb) {
-        js->pending_fullscreen_event_target = event_target
-            ? event_target : js->current_doc;
-        js->window_action_cb(action, js->window_action_user_data);
-    }
-    if (js) js->mutated = TRUE;
-    if (js && !js->window_action_cb) {
-        JSValueConst args[1] = { event_value };
-        JS_EnqueueJob(ctx, ns_fullscreen_change_job, 1, args);
-    }
-    JS_FreeValue(ctx, event_value);
-}
-
-static JSValue
-ns_fullscreen_transition_promise(JSContext *ctx)
-{
-    ns_js *js = js_from_ctx(ctx);
-    JSValue resolving[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
-    if (js && js->window_action_cb) {
-        JS_FreeValue(ctx, js->pending_fullscreen_resolve);
-        js->pending_fullscreen_resolve = JS_DupValue(ctx, resolving[0]);
-    } else {
-        JSValue result = JS_Call(ctx, resolving[0], JS_UNDEFINED, 0, NULL);
-        JS_FreeValue(ctx, result);
-    }
-    JS_FreeValue(ctx, resolving[0]);
-    JS_FreeValue(ctx, resolving[1]);
-    return promise;
-}
-
-static JSValue
-ns_fullscreen_error_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    const ns_node *target = argc > 0 ? ns_unwrap_element_mut(argv[0]) : NULL;
-    if (js && js->current_doc) {
-        if (!target) target = js->current_doc;
-        ns_js_dispatch_event(js, target, "fullscreenerror", NULL);
-        ns_js_dispatch_event(js, target, "webkitfullscreenerror", NULL);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_fullscreen_rejected_without_activation(JSContext *ctx,
-                                          JSValueConst element)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (js && js->log_cb)
-        js->log_cb("Blocked requestFullscreen(): the page has no recent "
-                   "user interaction", js->log_user_data);
-    JSValueConst args[1] = { element };
-    JS_EnqueueJob(ctx, ns_fullscreen_error_job, 1, args);
-    JSValue resolving[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
-    if (JS_IsException(promise)) return promise;
-    JSValue err = JS_NewError(ctx);
-    JS_SetPropertyStr(ctx, err, "name", JS_NewString(ctx, "TypeError"));
-    JS_SetPropertyStr(ctx, err, "message",
-                      JS_NewString(ctx, "Fullscreen request denied: "
-                                        "no transient user activation"));
-    JSValue r = JS_Call(ctx, resolving[1], JS_UNDEFINED, 1,
-                        (JSValueConst[]){ err });
-    JS_FreeValue(ctx, r);
-    JS_FreeValue(ctx, err);
-    JS_FreeValue(ctx, resolving[0]);
-    JS_FreeValue(ctx, resolving[1]);
-    return promise;
-}
-
-static JSValue
-ns_element_request_fullscreen(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    (void)argc;
-    (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (!ns_js_has_transient_activation(js))
-        return ns_fullscreen_rejected_without_activation(ctx, this_val);
-    ns_set_fullscreen_element(ctx, this_val, "fullscreen-enter");
-    return ns_fullscreen_transition_promise(ctx);
-}
-
-static JSValue
-ns_document_exit_fullscreen(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)argc;
-    (void)argv;
-    JSValue current = JS_GetPropertyStr(ctx, this_val,
-                                        "_nd_fullscreen_element");
-    gboolean active = !JS_IsUndefined(current) && !JS_IsNull(current);
-    JS_FreeValue(ctx, current);
-    if (active) {
-        ns_set_fullscreen_element(ctx, JS_NULL, "fullscreen-exit");
-        return ns_fullscreen_transition_promise(ctx);
-    }
-    return ns_returns_resolved_undefined(ctx, this_val, 0, NULL);
 }
 
 void
@@ -17175,20 +16504,6 @@ ns_document_get_fonts(JSContext *ctx, JSValueConst this_val)
     return fs;
 }
 
-static JSValue
-ns_document_has_focus(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    ns_node *doc = ns_document_root_for(ctx, this_val);
-    if (!js || !doc) return JS_FALSE;
-    /* A document has focus when the focused document is it or is nested
-     * inside it through frames. */
-    return JS_NewBool(ctx, ns_node_ancestor_or_self(ns_js_focused_document(js),
-                                                    doc) != NULL);
-}
-
 static gboolean
 ns_point_in_hit_bounds(ns_js *js, double x, double y)
 {
@@ -17685,7 +17000,8 @@ ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
                    const char *old_value, const char *new_value)
 {
     if (js && node && attr && js->ctx && !js->halted) {
-        if (node == js->focused_node && g_ascii_strcasecmp(attr, "type") == 0)
+        if (node == ns_js_focused_node(js) &&
+            g_ascii_strcasecmp(attr, "type") == 0)
             ns_js_update_focus_visible(js);
         ns_popover_attr_changed(js, node, attr, old_value, new_value);
     }
@@ -19824,7 +19140,6 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     js->soft_nav_cb = NULL;
     js->soft_nav_user_data = NULL;
     js->iframe_doc = JS_UNDEFINED;
-    js->pending_fullscreen_resolve = JS_UNDEFINED;
     js->main_context = g_main_context_default();
     js->frame_ctxs = g_ptr_array_new();
     js->frame_contexts = g_hash_table_new(g_direct_hash, g_direct_equal);
@@ -22593,10 +21908,8 @@ ns_js_reset_runtime_state(ns_js *js)
 {
     if (!js) return;
     ns_top_layer_clear(js);
-    js->focused_node = NULL;
+    ns_focus_reset(js);
     ns_js_forget_pending_change(js);
-    js->focused_doc = NULL;
-    js->pending_fullscreen_event_target = NULL;
     ns_storage_free_deferred_events(js);
 
     if (js->pending_scrollend) {
@@ -22743,8 +22056,6 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
 
     js->current_doc = doc;
     js->ce_main_doc = doc;
-    js->focused_node = NULL;
-    js->focused_doc = NULL;
     js->autofocus_processed = FALSE;
     js->active_modal = NULL;
     ns_dom_set_active_modal(NULL);
@@ -23336,7 +22647,7 @@ ns_js_free(ns_js *js)
         js->iframe_globals = NULL;
     }
     ns_storage_free_deferred_events(js);
-    JS_FreeValue(js->ctx, js->pending_fullscreen_resolve);
+    ns_focus_teardown(js);
     JS_FreeValue(js->ctx, js->pristine_promise);
     if (js->dom_protos_set) {
         JS_FreeValue(js->ctx, js->proto_node);
@@ -25530,9 +24841,7 @@ ns_js_purge_subtree_node_refs(ns_js *js, ns_node *root)
             g_array_remove_index(js->raf_pending, i - 1);
         }
     }
-    if (js->pending_fullscreen_event_target &&
-        ns_js_node_in_tree(js->pending_fullscreen_event_target, root))
-        js->pending_fullscreen_event_target = NULL;
+    ns_focus_forget_subtree(js, root);
 }
 
 static void
@@ -27260,23 +26569,6 @@ ns_js_set_window_action_cb(ns_js *js, ns_js_window_action_cb cb,
 }
 
 void
-ns_js_window_action_applied(ns_js *js)
-{
-    if (!js) return;
-    if (!JS_IsUndefined(js->pending_fullscreen_resolve)) {
-        JSValue result = JS_Call(js->ctx, js->pending_fullscreen_resolve,
-                                 JS_UNDEFINED, 0, NULL);
-        JS_FreeValue(js->ctx, result);
-        JS_FreeValue(js->ctx, js->pending_fullscreen_resolve);
-        js->pending_fullscreen_resolve = JS_UNDEFINED;
-    }
-    if (!js->pending_fullscreen_event_target) return;
-    const ns_node *target = js->pending_fullscreen_event_target;
-    js->pending_fullscreen_event_target = NULL;
-    ns_dispatch_fullscreen_change(js, target);
-}
-
-void
 ns_js_set_early_inject_src(ns_js *js, const char *src)
 {
     if (!js) return;
@@ -27618,6 +26910,18 @@ ns_js_ready_state(const ns_js *js)
     return js ? js->ready_state : 0;
 }
 
+const ns_node *
+ns_js_active_modal(const ns_js *js)
+{
+    return js ? js->active_modal : NULL;
+}
+
+gboolean
+ns_js_has_window_action(const ns_js *js)
+{
+    return js && js->window_action_cb;
+}
+
 void
 ns_js_set_active_modal(ns_js *js, const ns_node *modal)
 {
@@ -27640,18 +26944,6 @@ const ns_node *
 ns_js_current_script(const ns_js *js)
 {
     return js->current_script;
-}
-
-const ns_node *
-ns_js_focused_doc(const ns_js *js)
-{
-    return js->focused_doc;
-}
-
-void
-ns_js_clear_focused_node(ns_js *js)
-{
-    js->focused_node = NULL;
 }
 
 void
