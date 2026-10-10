@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Popovers, <dialog>, invoker commands (popovertarget, commandfor), the top
+  layer, the focusing steps and exclusive <details name> groups moved from
+  js.c to Rust (rust/js-top-layer), with unchanged results.
 * HTMLMediaElement's playback state and methods, the MSE natives,
   canPlayType, MediaSource.isTypeSupported and navigator.mediaCapabilities
   moved from js.c to Rust (rust/js-media), with unchanged results.

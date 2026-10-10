@@ -1633,6 +1633,7 @@ dependencies = [
  "southstar-js-storage",
  "southstar-js-temporal",
  "southstar-js-text",
+ "southstar-js-top-layer",
  "southstar-js-traversal",
  "southstar-js-url",
  "southstar-js-wasm",
@@ -1942,6 +1943,15 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-style",
+]
+
+[[package]]
+name = "southstar-js-top-layer"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]

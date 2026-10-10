@@ -141,17 +141,6 @@ struct ns_js {
     gboolean      autofocus_processed;
     const ns_node *focus_nav_start;
     const ns_node *active_modal;
-    GPtrArray     *close_watchers;
-    GPtrArray     *modal_dialogs;
-    ns_node       *dialog_pointerdown;
-    GPtrArray     *popover_auto;
-    GPtrArray     *popover_hint;
-    GHashTable    *popover_info;
-    ns_node       *popover_hint_parent;
-    ns_node       *popover_pointerdown;
-    gboolean       popover_showing;
-    int            popover_hiding_count;
-    GArray        *attr_element_refs;
     const ns_node *pointer_lock_element;
     double         last_mouse_x[2];
     double         last_mouse_y[2];
@@ -1082,6 +1071,52 @@ JSValue  ns_js_node_wrapper(JSContext *ctx, const ns_node *node);
 gboolean ns_js_wrapper_pinned(const ns_js *js, const ns_node *node);
 void     ns_js_popover_removing(ns_js *js, ns_node *el);
 JSValue  ns_js_new_orphan_element(JSContext *ctx, const char *name);
+
+JSValue  ns_element_showPopover(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_hidePopover(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_togglePopover(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_show(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_showModal(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_requestClose(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_get_popover(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_popover(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_popoverTargetElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_popoverTargetElement(JSContext *ctx, JSValueConst this_val,
+                                             JSValueConst val);
+JSValue  ns_dialog_get_returnValue(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_dialog_set_returnValue(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_dialog_get_closedBy(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_dialog_set_closedBy(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_button_get_command(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_button_set_command(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_button_get_commandForElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_button_set_commandForElement(JSContext *ctx, JSValueConst this_val,
+                                         JSValueConst val);
+void     ns_top_layer_forget_node(ns_js *js, const ns_node *n);
+void     ns_top_layer_clear(ns_js *js);
+void     ns_popover_attr_changed(ns_js *js, ns_node *el, const char *attr,
+                                 const char *old_value, const char *new_value);
+void     ns_js_popover_light_dismiss(ns_js *js, const ns_node *target, gboolean up);
+void     ns_js_dialog_light_dismiss(ns_js *js, const ns_node *target, gboolean up);
+ns_node *ns_summary_toggle_target(const ns_node *el);
+gboolean ns_node_is_button(const ns_node *el);
+void     ns_button_activation(ns_js *js, ns_node *button, const ns_node *event_target);
+void     ns_popover_target_activation(ns_js *js, ns_node *el, const ns_node *event_target);
+void     ns_js_flush_autofocus(ns_js *js);
+gboolean ns_js_fire_toggle_event(ns_js *js, const ns_node *target, const char *type,
+                                 const char *old_state, const char *new_state,
+                                 gboolean cancelable, const ns_node *source,
+                                 gboolean *default_prevented);
+void     ns_js_set_attr_recorded_len(ns_js *js, ns_node *n, const char *name,
+                                     const char *value, gssize len);
+void     ns_js_remove_attr_recorded(ns_js *js, ns_node *n, const char *name);
+ns_node *ns_node_assigned_slot_node(const ns_node *n);
+gboolean ns_node_tabindex(const ns_node *el, int *out);
+gboolean ns_js_autofocus_processed(const ns_js *js);
+void     ns_js_set_autofocus_processed(ns_js *js);
+int      ns_js_ready_state(const ns_js *js);
+void     ns_js_set_active_modal(ns_js *js, const ns_node *modal);
 
 void    ns_storage_init(ns_js *js);
 void    ns_storage_teardown(ns_js *js);

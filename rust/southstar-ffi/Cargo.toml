@@ -46,9 +46,9 @@ southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-events = { path = "../js-events" }
 southstar-js-forms = { path = "../js-forms" }
-southstar-js-net = { path = "../js-net" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-media = { path = "../js-media" }
+southstar-js-net = { path = "../js-net" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
@@ -56,6 +56,7 @@ southstar-js-services = { path = "../js-services" }
 southstar-js-storage = { path = "../js-storage" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-js-text = { path = "../js-text" }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-traversal = { path = "../js-traversal" }
 southstar-js-url = { path = "../js-url" }
 southstar-js-wasm = { path = "../js-wasm", optional = true }
