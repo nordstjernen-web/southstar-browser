@@ -96,6 +96,8 @@ const _: () = assert!(core::mem::size_of::<NsPerfResourceInfo>() == 56);
 
 pub(crate) const HO_ABORT_CONTROLLER: c_int = 1;
 pub(crate) const HO_ABORT_SIGNAL: c_int = 2;
+pub(crate) const HO_XHR: c_int = 10;
+pub(crate) const HO_XHR_UPLOAD: c_int = 11;
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 type GAsyncReadyCallback =
@@ -179,7 +181,25 @@ unsafe extern "C" {
         body_len: usize,
     );
 
+    fn ns_throw_dom_exception(
+        ctx: *mut JSContext,
+        name: *const c_char,
+        code: c_int,
+        message: *const c_char,
+    ) -> JSValue;
     fn ns_make_abort_error(ctx: *mut JSContext) -> JSValue;
+    fn ns_xhr_fire_progress_event(
+        ctx: *mut JSContext,
+        target: JSValue,
+        kind: *const c_char,
+        loaded: f64,
+        total: f64,
+        length_computable: GBoolean,
+    );
+    fn ns_js_net_host_state(ctx: *mut JSContext, v: JSValue, kind: c_int) -> JSValue;
+    fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
+    fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean;
+    fn ns_js_credit_pumped_time(js: *mut NsJs, pump_start_us: i64);
     fn ns_js_body_bytes(ctx: *mut JSContext, value: JSValue, out_len: *mut usize) -> *mut c_char;
     fn ns_js_value_is_form_data(ctx: *mut JSContext, v: JSValue) -> GBoolean;
     fn ns_js_form_data_serialize(
@@ -275,6 +295,13 @@ pub(crate) fn url_origin_from(url: Option<&[u8]>) -> Option<Vec<u8>> {
     unsafe { take_gstr(ns_url_origin_from(opt_ptr(url.as_ref()))) }
 }
 
+pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message: &str) -> Value {
+    let ctx = quickjs::raw_context(scope);
+    let message = cstring(message.as_bytes());
+    unsafe { ns_throw_dom_exception(ctx, name.as_ptr(), code, message.as_ptr()) };
+    quickjs::take_exception(scope)
+}
+
 pub(crate) fn abort_error(scope: &mut Scope<'_>) -> Value {
     let ctx = quickjs::raw_context(scope);
     let raw = unsafe { ns_make_abort_error(ctx) };
@@ -284,6 +311,34 @@ pub(crate) fn abort_error(scope: &mut Scope<'_>) -> Value {
 pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &CStr) {
     let ctx = quickjs::raw_context(scope);
     unsafe { ns_target_fire_event(ctx, quickjs::raw(target), kind.as_ptr()) };
+}
+
+pub(crate) fn fire_progress_event(
+    scope: &mut Scope<'_>,
+    target: &Value,
+    kind: &CStr,
+    loaded: f64,
+    total: f64,
+    computable: bool,
+) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe {
+        ns_xhr_fire_progress_event(
+            ctx,
+            quickjs::raw(target),
+            kind.as_ptr(),
+            loaded,
+            total,
+            glib::boolean(computable),
+        )
+    };
+}
+
+pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: c_int) -> Option<Value> {
+    let ctx = quickjs::raw_context(scope);
+    let raw = unsafe { ns_js_net_host_state(ctx, quickjs::raw(value), kind) };
+    let state = unsafe { quickjs::take_value(scope, raw) };
+    state.is_object().then_some(state)
 }
 
 pub(crate) fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
@@ -362,6 +417,21 @@ impl Js {
             return None;
         }
         borrowed(unsafe { ns_js_net_page_url(self.ptr()) })
+    }
+
+    pub fn url_parses(self, url: &[u8]) -> bool {
+        let url = cstring(url);
+        !self.is_null() && unsafe { ns_js_url_parses(self.ptr(), url.as_ptr()) } != 0
+    }
+
+    pub fn pump_iteration(self) -> bool {
+        !self.is_null() && unsafe { ns_js_net_pump_iteration(self.ptr()) } != 0
+    }
+
+    pub fn credit_pumped_time(self, start_us: i64) {
+        if !self.is_null() {
+            unsafe { ns_js_credit_pumped_time(self.ptr(), start_us) };
+        }
     }
 
     pub fn csp_allows_connect(self, url: &[u8], page: Option<&[u8]>) -> bool {
@@ -627,6 +697,10 @@ impl Response {
         self.get().and_then(|r| borrowed(r.final_url))
     }
 
+    pub fn content_type(&self) -> Option<Vec<u8>> {
+        self.get().and_then(|r| borrowed(r.content_type))
+    }
+
     pub fn cors_allow_origin(&self) -> Option<Vec<u8>> {
         self.get().and_then(|r| borrowed(r.cors_allow_origin))
     }
@@ -776,6 +850,21 @@ pub unsafe extern "C" fn ns_fetch_install_interfaces(ctx: *mut JSContext, global
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_xhr_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::xhr::construct) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_xhr_install_interface(ctx: *mut JSContext, global: JSValue) {
+    unsafe { with_global(ctx, global, crate::xhr::install) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_abort_controller_ctor(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -808,6 +897,11 @@ pub unsafe extern "C" fn ns_js_net_teardown(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint {
     crate::pending_fetches(Js::of_ptr(js)) as c_uint
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint {
+    crate::pending_xhrs(Js::of_ptr(js)) as c_uint
 }
 
 #[unsafe(no_mangle)]
@@ -882,6 +976,40 @@ pub(crate) fn schedule_fetch_idle(js: Js, delivery: crate::fetch::Delivery, retr
     } else {
         js.attach_idle(on_fetch_idle, data);
     }
+}
+
+pub(crate) unsafe extern "C" fn on_xhr_done(
+    _source: *mut c_void,
+    result: *mut c_void,
+    data: *mut c_void,
+) {
+    let ticket = unsafe { Box::from_raw(data.cast::<crate::xhr::Ticket>()) };
+    let (resp, error) = unsafe { Response::finish(result) };
+    crate::xhr::done(*ticket, resp, error.is_some());
+}
+
+unsafe extern "C" fn on_xhr_idle(data: *mut c_void) -> GBoolean {
+    let delivery = unsafe { Box::from_raw(data.cast::<crate::xhr::Delivery>()) };
+    crate::xhr::deliver_idle(*delivery);
+    glib::FALSE
+}
+
+pub(crate) fn schedule_xhr_delivery(delivery: crate::xhr::Delivery) {
+    timeout_add(4, on_xhr_idle, Box::into_raw(Box::new(delivery)).cast());
+}
+
+unsafe extern "C" fn on_xhr_blocked(data: *mut c_void) -> GBoolean {
+    let ticket = unsafe { Box::from_raw(data.cast::<crate::xhr::Ticket>()) };
+    crate::xhr::blocked(*ticket);
+    glib::FALSE
+}
+
+pub(crate) fn schedule_xhr_blocked(js: Js, ticket: crate::xhr::Ticket) {
+    js.attach_idle(on_xhr_blocked, Box::into_raw(Box::new(ticket)).cast());
+}
+
+pub(crate) fn schedule_xhr_blocked_retry(ticket: crate::xhr::Ticket) {
+    timeout_add(4, on_xhr_blocked, Box::into_raw(Box::new(ticket)).cast());
 }
 
 pub(crate) unsafe extern "C" fn on_abort_timeout(data: *mut c_void) -> GBoolean {

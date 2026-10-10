@@ -192,7 +192,6 @@ struct ns_js {
     GHashTable   *pinned_wrappers_set;
     GPtrArray    *attr_wrappers;
     GHashTable   *attribute_maps;
-    GPtrArray    *pending_xhrs;
     GPtrArray    *pending_ws;
     GPtrArray    *filereader_idles;
     GHashTable   *local_storage;
@@ -813,8 +812,8 @@ void ns_services_teardown(ns_js *js);
 gboolean ns_js_log_enabled(const ns_js *js);
 void ns_event_adopt_interface(JSContext *ctx, JSValueConst ev, const char *iface);
 
-/* fetch, Request, Response and AbortController (rust/js-net), and the js.c
- * helpers they call. */
+/* fetch, Request, Response, AbortController and XMLHttpRequest
+ * (rust/js-net), and the js.c helpers they call. */
 JSValue ns_js_fetch(JSContext *ctx, JSValueConst this_val, int argc,
                     JSValueConst *argv);
 JSValue ns_window_response_ctor(JSContext *ctx, JSValueConst this_val,
@@ -828,6 +827,16 @@ void    ns_install_abort_signal_interface(JSContext *ctx, JSValueConst global);
 void    ns_js_net_reset(ns_js *js);
 void    ns_js_net_teardown(ns_js *js);
 guint   ns_js_net_pending_fetches(const ns_js *js);
+guint   ns_js_net_pending_xhrs(const ns_js *js);
+JSValue ns_window_xhr_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+void    ns_xhr_install_interface(JSContext *ctx, JSValueConst global);
+JSValue ns_js_net_host_state(JSContext *ctx, JSValueConst v, int kind);
+gboolean ns_js_net_pump_iteration(ns_js *js);
+void     ns_xhr_fire_progress_event(JSContext *ctx, JSValueConst target,
+                                    const char *type, double loaded,
+                                    double total, gboolean length_computable);
+void     ns_js_credit_pumped_time(ns_js *js, gint64 pump_start_us);
 void    ns_js_net_sw_fetch_result(ns_js *js, guint id, int outcome, long status,
                                   const char *content_type,
                                   const char *raw_headers, const guint8 *body,

@@ -15,8 +15,8 @@ Southstar Browser (unreleased):
   mediaDevices, getBattery(), userAgentData, plugins, storage), the window
   console, alert(), screen, matchMedia(), Notification and queueMicrotask()
   are Rust (rust/js-services), with unchanged results.
-* fetch(), Request, Response, AbortController and AbortSignal are Rust
-  (rust/js-net), with unchanged results.
+* fetch(), Request, Response, AbortController, AbortSignal and
+  XMLHttpRequest are Rust (rust/js-net), with unchanged results.
 * MutationObserver, IntersectionObserver and ResizeObserver are Rust
   (rust/js-observers), with unchanged results.
 * FormData, constraint validation (checkValidity(), validity,

@@ -7,6 +7,7 @@ mod body;
 mod fetch;
 mod ffi;
 mod headers;
+mod xhr;
 
 use core::cell::RefCell;
 use std::collections::HashMap;
@@ -21,6 +22,7 @@ pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) struct Page {
     pub fetches: HashMap<u32, fetch::FetchState>,
     pub aborts: HashMap<u32, abort::AbortTimeout>,
+    pub xhrs: HashMap<u32, xhr::XhrState>,
     pub body_helper: Option<Value>,
 }
 
@@ -56,7 +58,12 @@ pub(crate) fn page_init(js: Js) {
 }
 
 pub(crate) fn page_reset(js: Js) {
-    let dropped = existing_page(js, |page| core::mem::take(&mut page.fetches));
+    let dropped = existing_page(js, |page| {
+        (
+            core::mem::take(&mut page.fetches),
+            core::mem::take(&mut page.xhrs),
+        )
+    });
     drop(dropped);
 }
 
@@ -70,6 +77,10 @@ pub(crate) fn page_teardown(js: Js) {
 
 pub(crate) fn pending_fetches(js: Js) -> usize {
     existing_page(js, |page| page.fetches.len()).unwrap_or(0)
+}
+
+pub(crate) fn pending_xhrs(js: Js) -> usize {
+    existing_page(js, |page| page.xhrs.len()).unwrap_or(0)
 }
 
 static NEXT_ID: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
@@ -114,6 +125,11 @@ pub(crate) fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> O
 pub(crate) fn bool_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
     let value = prop(scope, object, key);
     scope.to_bool(&value)
+}
+
+pub(crate) fn int_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> i32 {
+    let value = prop(scope, object, key);
+    scope.to_int32(&value).unwrap_or(0)
 }
 
 pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
