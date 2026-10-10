@@ -1605,6 +1605,7 @@ dependencies = [
  "southstar-js-clone",
  "southstar-js-forms",
  "southstar-js-intl",
+ "southstar-js-net",
  "southstar-js-observers",
  "southstar-js-perf",
  "southstar-js-realm",
@@ -1795,6 +1796,14 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
  "southstar-i18n",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-net"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
  "southstar-js-engine",
 ]
 

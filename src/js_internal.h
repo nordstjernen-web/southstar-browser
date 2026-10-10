@@ -18,6 +18,21 @@
 #include "layout.h"
 
 typedef struct ns_worker_host ns_worker_host;
+typedef enum ns_ho_kind {
+    NS_HO_NONE,
+    NS_HO_ABORT_CONTROLLER,
+    NS_HO_ABORT_SIGNAL,
+    NS_HO_BROADCAST_CHANNEL,
+    NS_HO_FILE_READER,
+    NS_HO_FORM_DATA,
+    NS_HO_MESSAGE_CHANNEL,
+    NS_HO_MESSAGE_PORT,
+    NS_HO_TEXT_ENCODER,
+    NS_HO_TEXT_DECODER,
+    NS_HO_XHR,
+    NS_HO_XHR_UPLOAD,
+    NS_HO_KIND_COUNT
+} ns_ho_kind;
 
 typedef struct ns_canvas_state {
     int w, h;
@@ -177,12 +192,8 @@ struct ns_js {
     GHashTable   *pinned_wrappers_set;
     GPtrArray    *attr_wrappers;
     GHashTable   *attribute_maps;
-    GPtrArray    *pending_fetches;
-    GHashTable   *fetch_states_by_id;
-    guint         next_fetch_id;
     GPtrArray    *pending_xhrs;
     GPtrArray    *pending_ws;
-    GPtrArray    *pending_aborts;
     GPtrArray    *filereader_idles;
     GHashTable   *local_storage;
     GHashTable   *session_storage;
@@ -293,8 +304,6 @@ struct ns_js {
     int           search_params_helper_set;
     JSValue       form_data_helper;
     int           form_data_helper_set;
-    JSValue       body_consumer_helper;
-    int           body_consumer_helper_set;
     JSAtom        atom_capture;
     JSAtom        atom_once;
     JSAtom        atom_signal;
@@ -787,4 +796,53 @@ JSValue ns_media_capabilities_info(JSContext *ctx, JSValueConst this_val,
 gboolean ns_js_user_activation_state(ns_js *js, gboolean *ever_activated);
 int ns_js_clipboard_write(ns_js *js, const char *text);
 
+/* fetch, Request, Response and AbortController (rust/js-net), and the js.c
+ * helpers they call. */
+JSValue ns_js_fetch(JSContext *ctx, JSValueConst this_val, int argc,
+                    JSValueConst *argv);
+JSValue ns_window_response_ctor(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_window_request_ctor(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv);
+void    ns_fetch_install_interfaces(JSContext *ctx, JSValueConst global);
+JSValue ns_window_abort_controller_ctor(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv);
+void    ns_install_abort_signal_interface(JSContext *ctx, JSValueConst global);
+void    ns_js_net_reset(ns_js *js);
+void    ns_js_net_teardown(ns_js *js);
+guint   ns_js_net_pending_fetches(const ns_js *js);
+void    ns_js_net_sw_fetch_result(ns_js *js, guint id, int outcome, long status,
+                                  const char *content_type,
+                                  const char *raw_headers, const guint8 *body,
+                                  gsize body_len, const char *error);
+gboolean ns_cors_allows(const char *doc_url, const char *resp_url,
+                        const char *cors_header);
+gboolean ns_header_value_is_safe(const char *value);
+const char *ns_js_net_page_url(const ns_js *js);
+gboolean ns_js_net_csp_allows_connect(const ns_js *js, const char *url,
+                                      const char *page);
+gboolean ns_js_net_host_is(JSValueConst v, int kind);
+void     ns_drain_mutations(ns_js *js);
+guint    ns_js_attach_idle(ns_js *js, GSourceFunc func, gpointer data);
+guint    ns_js_attach_timeout(ns_js *js, guint ms, GSourceFunc func, gpointer data);
+GBytes  *ns_js_blob_url_lookup(ns_js *js, const char *url, char **out_type);
+ns_worker_host *ns_sw_controller_for(ns_js *js, const char *abs_url);
+void     ns_sw_post_fetch_request(ns_worker_host *host, guint id,
+                                  const char *url, const char *method,
+                                  const char *const *headers,
+                                  const guint8 *body, gsize body_len);
+const char *ns_js_realm_url(ns_js *js, JSContext *realm);
+const char *ns_js_realm_document_url(ns_js *js, JSContext *realm);
+char    *ns_js_body_bytes(JSContext *ctx, JSValueConst value, gsize *out_len);
+gboolean ns_js_value_is_url_search_params(JSContext *ctx, JSValueConst v);
+char    *ns_js_usp_serialize(JSContext *ctx, JSValueConst usp, gsize *out_len,
+                             char **out_content_type);
+void     ns_target_fire_event(JSContext *ctx, JSValueConst obj, const char *type);
+JSValue  ns_ho_construct(JSContext *ctx, JSValueConst new_target, ns_ho_kind kind);
+JSValue  ns_ho_new_default(JSContext *ctx, ns_ho_kind kind);
+void     ns_bind_ctor(JSContext *ctx, JSValueConst obj, const char *name,
+                      JSCFunction *fn, int argc);
+JSValue  ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue  ns_make_abort_error(JSContext *ctx);
 #endif

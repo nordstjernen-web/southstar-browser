@@ -42,6 +42,7 @@ southstar-ipc = { path = "../ipc" }
 southstar-js-brand = { path = "../js-brand" }
 southstar-js-clone = { path = "../js-clone" }
 southstar-js-forms = { path = "../js-forms" }
+southstar-js-net = { path = "../js-net" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }

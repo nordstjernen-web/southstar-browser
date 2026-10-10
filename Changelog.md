@@ -14,6 +14,8 @@ Southstar Browser (unreleased):
 * navigator and its sub-objects (permissions, clipboard, geolocation,
   mediaDevices, getBattery(), userAgentData, plugins, storage) are Rust
   (rust/js-services), with unchanged results.
+* fetch(), Request, Response, AbortController and AbortSignal are Rust
+  (rust/js-net), with unchanged results.
 * MutationObserver, IntersectionObserver and ResizeObserver are Rust
   (rust/js-observers), with unchanged results.
 * FormData, constraint validation (checkValidity(), validity,

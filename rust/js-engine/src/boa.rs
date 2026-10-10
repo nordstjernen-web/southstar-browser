@@ -695,6 +695,31 @@ impl Scope<'_> {
         array.map(Value).map_err(|e| self.error(e))
     }
 
+    pub fn view_data(&mut self, value: &Value) -> Option<Vec<u8>> {
+        let object = value.0.as_object()?.clone();
+        let (buffer, byte_offset, length) = match JsTypedArray::from_object(object.clone()) {
+            Ok(array) => (
+                array.buffer(self.ctx).ok()?,
+                array.byte_offset(self.ctx).ok()?,
+                array.byte_length(self.ctx).ok()?,
+            ),
+            Err(_) => {
+                let view = JsDataView::from_object(object).ok()?;
+                (
+                    view.buffer(self.ctx).ok()?,
+                    usize::try_from(view.byte_offset(self.ctx).ok()?).ok()?,
+                    usize::try_from(view.byte_length(self.ctx).ok()?).ok()?,
+                )
+            }
+        };
+        let buffer = JsArrayBuffer::from_object(buffer.as_object()?.clone()).ok()?;
+        let data = buffer.data()?;
+        Some(
+            data.get(byte_offset..byte_offset.checked_add(length)?)?
+                .to_vec(),
+        )
+    }
+
     pub fn gc(&mut self) {
         boa_gc::force_collect();
     }

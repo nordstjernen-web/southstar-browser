@@ -235,11 +235,6 @@ static JSValue ns_document_elements_from_point(JSContext *ctx,
 static JSValue ns_make_performance_object(JSContext *ctx, ns_js *js,
                                           gboolean include_memory);
 static void ns_js_emit_audio(ns_js *js, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
-static ns_worker_host *ns_sw_controller_for(ns_js *js, const char *abs_url);
-static void ns_sw_post_fetch_request(ns_worker_host *host, guint id,
-                                     const char *url, const char *method,
-                                     const char *const *headers,
-                                     const guint8 *body, gsize body_len);
 static void ns_js_flush_document_write(ns_js *js);
 static void ns_js_flush_layout(ns_js *js);
 static void ns_js_flush_style(ns_js *js);
@@ -277,7 +272,6 @@ static void ns_text_selection_set_state(JSContext *ctx,
                                         uint32_t start, uint32_t end,
                                         const char *direction);
 static void ns_js_process_pending_iframes(ns_js *js);
-static GBytes *ns_js_blob_url_lookup(ns_js *js, const char *url, char **out_type);
 static void ns_js_record_child_change(ns_js *js, ns_node *parent,
                                       ns_node *added, ns_node *removed,
                                       ns_node *previous_sibling, ns_node *next_sibling);
@@ -362,22 +356,6 @@ static JSValue ns_window_mse_bytes(JSContext *ctx, JSValueConst this_val,
 static JSValue ns_window_url_update_object(JSContext *ctx, JSValueConst this_val,
                                             int argc, JSValueConst *argv);
 static const char *ns_http_status_text(int status);
-static void ns_attach_body_consumers(JSContext *ctx, JSValueConst obj);
-typedef enum ns_ho_kind {
-    NS_HO_NONE,
-    NS_HO_ABORT_CONTROLLER,
-    NS_HO_ABORT_SIGNAL,
-    NS_HO_BROADCAST_CHANNEL,
-    NS_HO_FILE_READER,
-    NS_HO_FORM_DATA,
-    NS_HO_MESSAGE_CHANNEL,
-    NS_HO_MESSAGE_PORT,
-    NS_HO_TEXT_ENCODER,
-    NS_HO_TEXT_DECODER,
-    NS_HO_XHR,
-    NS_HO_XHR_UPLOAD,
-    NS_HO_KIND_COUNT
-} ns_ho_kind;
 static JSValue ns_proto_of(JSContext *ctx, JSValueConst global,
                            const char *ctor_name);
 typedef struct ns_hostobj {
@@ -386,13 +364,9 @@ typedef struct ns_hostobj {
     gpointer   native;
     void     (*free_native)(JSRuntime *rt, gpointer native);
 } ns_hostobj;
-static JSValue ns_ho_new_default(JSContext *ctx, ns_ho_kind kind);
 static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
-static char *ns_fetch_normalize_method(const char *method);
 static JSValue ns_event_stop_immediate(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv);
-static void    ns_target_fire_event(JSContext *ctx, JSValueConst obj,
-                                    const char *type);
 static void    ns_event_adopt_interface(JSContext *ctx, JSValueConst ev,
                                         const char *iface);
 static JSValue ns_call_on_handler(ns_js *js, JSValue handler,
@@ -650,7 +624,7 @@ ns_js_fetch_subresource(ns_js *js, const char *url, const char *top_url,
 
 /* The URL of the document whose global is realm: a frame's own URL for a
  * frame realm, the page's otherwise. */
-static const char *
+const char *
 ns_js_realm_document_url(ns_js *js, JSContext *realm)
 {
     if (!js) return NULL;
@@ -912,7 +886,7 @@ ns_js_copy_bytes(const uint8_t *data, gsize len)
     return out;
 }
 
-static char *
+char *
 ns_js_body_bytes(JSContext *ctx, JSValueConst value, gsize *out_len)
 {
     if (out_len) *out_len = 0;
@@ -959,7 +933,7 @@ ns_js_value_is_form_data(JSContext *ctx, JSValueConst v)
     return ns_ho_of(v, NS_HO_FORM_DATA) != NULL;
 }
 
-static gboolean
+gboolean
 ns_js_value_is_url_search_params(JSContext *ctx, JSValueConst v)
 {
     if (!JS_IsObject(v) || JS_IsFunction(ctx, v)) return FALSE;
@@ -975,7 +949,7 @@ ns_js_value_is_url_search_params(JSContext *ctx, JSValueConst v)
     return ok;
 }
 
-static char *
+char *
 ns_js_usp_serialize(JSContext *ctx, JSValueConst usp,
                     gsize *out_len, char **out_content_type)
 {
@@ -1062,7 +1036,7 @@ ns_timer_free(gpointer data)
     g_free(t);
 }
 
-static guint
+guint
 ns_js_attach_timeout(ns_js *js, guint ms, GSourceFunc func, gpointer data)
 {
     GSource *source = g_timeout_source_new(ms);
@@ -1072,7 +1046,7 @@ ns_js_attach_timeout(ns_js *js, guint ms, GSourceFunc func, gpointer data)
     return id;
 }
 
-static guint
+guint
 ns_js_attach_idle(ns_js *js, GSourceFunc func, gpointer data)
 {
     GSource *source = g_idle_source_new();
@@ -1093,7 +1067,6 @@ typedef struct {
     JSValue argv[3];
 } ns_message_task;
 
-static void ns_drain_mutations(ns_js *js);
 static void ns_drain_microtasks(ns_js *js);
 
 static void
@@ -1288,7 +1261,7 @@ ns_js_frame_of_realm(ns_js *js, JSContext *realm)
     return NULL;
 }
 
-static const char *
+const char *
 ns_js_realm_url(ns_js *js, JSContext *realm)
 {
     if (!js || !realm) return NULL;
@@ -1464,7 +1437,7 @@ ns_js_run_due_timers(ns_js *js)
     js->running_due_timers = FALSE;
 }
 
-static void
+void
 ns_drain_mutations(ns_js *js)
 {
     ns_drain_microtasks(js);
@@ -9067,12 +9040,6 @@ ns_header_value_is_safe_length(const char *value, size_t length)
 }
 
 static gboolean
-ns_header_value_is_safe(const char *value)
-{
-    return value && ns_header_value_is_safe_length(value, strlen(value));
-}
-
-static gboolean
 ns_header_name_is_forbidden(const char *name)
 {
     if (!name) return TRUE;
@@ -9092,74 +9059,7 @@ ns_header_name_is_forbidden(const char *name)
     return FALSE;
 }
 
-typedef struct ns_js_fetch_state {
-    JSContext     *ctx;
-    JSContext     *timeline;   /* realm of the calling script, for timing */
-    ns_js         *js;
-    JSValue        promise;
-    JSValue        resolve;
-    JSValue        reject;
-    char          *requested_url;
-    char          *origin_url;
-    guint          id;
-    GCancellable  *cancellable;
-    JSValue        signal;
-    JSValue        abort_handler;
-    gboolean       aborted;
-    gboolean       settled;
-    gboolean       no_cors;
-    double         fetch_start_ms;
-    char          *fb_send_url;
-    char          *fb_top;
-    char          *fb_method;
-    char          *fb_content_type;
-    guint8        *fb_body;
-    gsize          fb_body_len;
-    char         **fb_headers;
-} ns_js_fetch_state;
-
-static void
-ns_js_fetch_state_free(ns_js_fetch_state *st)
-{
-    if (!st) return;
-    if (st->ctx) {
-        if (!JS_IsUndefined(st->signal) && !JS_IsNull(st->signal) &&
-            !JS_IsUndefined(st->abort_handler)) {
-            JSValue rem = JS_GetPropertyStr(st->ctx, st->signal,
-                                            "removeEventListener");
-            if (JS_IsFunction(st->ctx, rem)) {
-                JSValue type_v = JS_NewString(st->ctx, "abort");
-                JSValueConst args[2] = { type_v, st->abort_handler };
-                JSValue r = JS_Call(st->ctx, rem, st->signal, 2, args);
-                if (JS_IsException(r))
-                    JS_FreeValue(st->ctx, JS_GetException(st->ctx));
-                JS_FreeValue(st->ctx, r);
-                JS_FreeValue(st->ctx, type_v);
-            }
-            JS_FreeValue(st->ctx, rem);
-        }
-        JS_FreeValue(st->ctx, st->signal);
-        JS_FreeValue(st->ctx, st->abort_handler);
-        JS_FreeValue(st->ctx, st->promise);
-        JS_FreeValue(st->ctx, st->resolve);
-        JS_FreeValue(st->ctx, st->reject);
-    }
-    if (st->js && st->js->fetch_states_by_id && st->id)
-        g_hash_table_remove(st->js->fetch_states_by_id,
-                            GUINT_TO_POINTER(st->id));
-    if (st->cancellable) g_object_unref(st->cancellable);
-    g_free(st->requested_url);
-    g_free(st->origin_url);
-    g_free(st->fb_send_url);
-    g_free(st->fb_top);
-    g_free(st->fb_method);
-    g_free(st->fb_content_type);
-    g_free(st->fb_body);
-    g_strfreev(st->fb_headers);
-    g_free(st);
-}
-
-static JSValue
+JSValue
 ns_make_abort_error(JSContext *ctx)
 {
     JSValue g = JS_GetGlobalObject(ctx);
@@ -9187,76 +9087,6 @@ ns_make_abort_error(JSContext *ctx)
     return exc;
 }
 
-static void
-ns_fetch_reject_with_abort(JSContext *ctx, JSValue *reject,
-                            JSValueConst signal)
-{
-    JSValue reason = JS_UNDEFINED;
-    if (JS_IsObject(signal))
-        reason = JS_GetPropertyStr(ctx, signal, "reason");
-    if (JS_IsUndefined(reason) || JS_IsNull(reason)) {
-        JS_FreeValue(ctx, reason);
-        reason = ns_make_abort_error(ctx);
-    }
-    JSValue ret = JS_Call(ctx, *reject, JS_UNDEFINED, 1, (JSValueConst[]){ reason });
-    if (JS_IsException(ret)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, ret);
-    JS_FreeValue(ctx, reason);
-}
-
-static JSValue
-ns_fetch_on_signal_abort(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv, int magic,
-                          JSValueConst *func_data)
-{
-    (void)this_val; (void)argc; (void)argv; (void)magic;
-    int64_t id64 = 0;
-    JS_ToInt64(ctx, &id64, func_data[0]);
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->fetch_states_by_id) return JS_UNDEFINED;
-    ns_js_fetch_state *st = g_hash_table_lookup(js->fetch_states_by_id,
-                                                 GUINT_TO_POINTER((guint)id64));
-    if (!st || st->settled) return JS_UNDEFINED;
-    st->aborted = TRUE;
-    st->settled = TRUE;
-    if (st->cancellable) g_cancellable_cancel(st->cancellable);
-    ns_fetch_reject_with_abort(ctx, &st->reject, st->signal);
-    return JS_UNDEFINED;
-}
-
-static gboolean
-cors_allows(const char *doc_url, const char *resp_url, const char *cors_header)
-{
-    if (resp_url && (g_str_has_prefix(resp_url, "data:") ||
-                     g_str_has_prefix(resp_url, "blob:") ||
-                     g_str_has_prefix(resp_url, "about:"))) return TRUE;
-    if (resp_url && doc_url &&
-        g_str_has_prefix(resp_url, "file:") &&
-        g_str_has_prefix(doc_url, "file:")) return TRUE;
-    if (ns_url_same_origin(doc_url, resp_url)) return TRUE;
-    if (!cors_header || !*cors_header) return FALSE;
-    char *trimmed = g_strdup(cors_header);
-    g_strstrip(trimmed);
-    gboolean ok = FALSE;
-    if (strcmp(trimmed, "*") == 0) {
-        ok = TRUE;
-    } else if (*trimmed) {
-        char *doc_origin = ns_url_origin_from(doc_url);
-        if (doc_origin && *doc_origin &&
-            g_ascii_strcasecmp(trimmed, doc_origin) == 0)
-            ok = TRUE;
-        g_free(doc_origin);
-    }
-    g_free(trimmed);
-    return ok;
-}
-
-typedef struct ns_js_fetch_delivery {
-    ns_js_fetch_state *st;
-    ns_response       *resp;
-    GError            *err;
-} ns_js_fetch_delivery;
-
 static gboolean
 ns_raw_headers_have(const char *raw, const char *name)
 {
@@ -9275,49 +9105,6 @@ ns_raw_headers_have(const char *raw, const char *name)
     return FALSE;
 }
 
-static void
-ns_headers_init_add_raw(JSContext *ctx, JSValueConst init, const char *raw)
-{
-    if (!raw) return;
-    const char *p = raw;
-    while (*p) {
-        const char *eol = p;
-        while (*eol && *eol != '\n') eol++;
-        const char *lineend = eol;
-        if (lineend > p && lineend[-1] == '\r') lineend--;
-        const char *colon = memchr(p, ':', (size_t)(lineend - p));
-        if (colon && colon > p) {
-            gsize nlen = (gsize)(colon - p);
-            char *name = g_ascii_strdown(p, nlen);
-            const char *v = colon + 1;
-            gsize vlen = (gsize)(lineend - v);
-            while (vlen > 0 && (*v == ' ' || *v == '\t')) { v++; vlen--; }
-            while (vlen > 0 && (v[vlen - 1] == ' ' || v[vlen - 1] == '\t')) vlen--;
-            JSValue prev = JS_GetPropertyStr(ctx, init, name);
-            if (JS_IsString(prev)) {
-                const char *old = JS_ToCString(ctx, prev);
-                char *joined = old
-                    ? g_strdup_printf("%s, %.*s", old, (int)vlen, v) : NULL;
-                if (old) JS_FreeCString(ctx, old);
-                if (joined) {
-                    JS_SetPropertyStr(ctx, init, name, JS_NewString(ctx, joined));
-                    g_free(joined);
-                } else {
-                    JS_SetPropertyStr(ctx, init, name,
-                                      JS_NewStringLen(ctx, v, vlen));
-                }
-            } else {
-                JS_SetPropertyStr(ctx, init, name,
-                                  JS_NewStringLen(ctx, v, vlen));
-            }
-            JS_FreeValue(ctx, prev);
-            g_free(name);
-        }
-        if (!*eol) break;
-        p = eol + 1;
-    }
-}
-
 static gboolean
 ns_final_url_connect_blocked(ns_js *js, const char *final_url)
 {
@@ -9329,742 +9116,6 @@ ns_final_url_connect_blocked(ns_js *js, const char *final_url)
     gboolean csp = js->csp &&
         !ns_csp_allows(js->csp, NS_CSP_CONNECT, final_url, page);
     return mixed || csp;
-}
-
-static void
-ns_on_js_fetch_deliver(ns_js_fetch_state *st, ns_response *resp, GError *err)
-{
-    if (!st->ctx) {
-        ns_response_free(resp);
-        g_clear_error(&err);
-        ns_js_fetch_state_free(st);
-        return;
-    }
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(st->js, &bg);
-    if (st->js && st->js->pending_fetches)
-        g_ptr_array_remove_fast(st->js->pending_fetches, st);
-    if (st->settled) {
-        ns_response_free(resp);
-        g_clear_error(&err);
-        ns_js_budget_pop(st->js, &bg);
-        ns_js_fetch_state_free(st);
-        return;
-    }
-    if (st->js && st->requested_url) {
-        gint64 end_us = g_get_monotonic_time();
-        gint64 start_us = st->fetch_start_ms > 0
-            ? st->js->time_origin_us + (gint64)(st->fetch_start_ms * 1000.0)
-            : end_us;
-        ns_perf_resource_info info = {
-            .timeline = st->timeline,
-            .document_url = ns_js_realm_document_url(st->js, st->timeline),
-            .cors_mode = !st->no_cors,
-        };
-        /* The entry is named by the request's URL, resolved. */
-        char *abs = st->origin_url
-            ? ns_url_resolve(st->origin_url, st->requested_url) : NULL;
-        ns_perf_add_resource_timed(st->js, &info,
-                                   abs ? abs : st->requested_url, "fetch",
-                                   start_us, end_us, resp);
-        g_free(abs);
-    }
-    if (resp && !resp->error &&
-        ns_final_url_connect_blocked(st->js, resp->final_url))
-        resp->error = g_strdup(
-            "blocked after redirect (mixed content or connect-src CSP)");
-    if (!resp || resp->error) {
-        const char *msg = resp ? resp->error :
-                                (err ? err->message : "fetch failed");
-        JSValue m = JS_ThrowTypeError(st->ctx, "%s", msg ? msg : "fetch failed");
-        JSValue ex = JS_GetException(st->ctx);
-        JS_FreeValue(st->ctx, m);
-        JSValue call_ret = JS_Call(st->ctx, st->reject, JS_UNDEFINED, 1, &ex);
-        if (JS_IsException(call_ret)) JS_FreeValue(st->ctx, JS_GetException(st->ctx));
-        JS_FreeValue(st->ctx, call_ret);
-        JS_FreeValue(st->ctx, ex);
-        ns_response_free(resp);
-        g_clear_error(&err);
-    } else {
-        const char *origin_url = st->origin_url ? st->origin_url :
-                                 (st->js ? st->js->current_url : NULL);
-        gboolean allow = cors_allows(origin_url, resp->final_url,
-                                     resp->cors_allow_origin);
-        if (!allow && !st->no_cors) {
-            JS_ThrowTypeError(st->ctx, "Failed to fetch: CORS request blocked");
-            JSValue ex = JS_GetException(st->ctx);
-            JSValue call_ret = JS_Call(st->ctx, st->reject, JS_UNDEFINED, 1,
-                                       (JSValueConst *)&ex);
-            if (JS_IsException(call_ret))
-                JS_FreeValue(st->ctx, JS_GetException(st->ctx));
-            JS_FreeValue(st->ctx, call_ret);
-            JS_FreeValue(st->ctx, ex);
-            ns_response_free(resp);
-            ns_drain_mutations(st->js);
-            ns_js_budget_pop(st->js, &bg);
-            ns_js_fetch_state_free(st);
-            return;
-        }
-        JSValue r = JS_NewObject(st->ctx);
-        JS_SetPropertyStr(st->ctx, r, "ok",
-            JS_NewBool(st->ctx, allow && resp->status >= 200 && resp->status < 300));
-        long status = allow ? resp->status : 0;
-        JS_SetPropertyStr(st->ctx, r, "status",
-            JS_NewInt32(st->ctx, (int)status));
-        JS_SetPropertyStr(st->ctx, r, "statusText",
-            JS_NewString(st->ctx, ns_http_status_text((int)status)));
-        JS_SetPropertyStr(st->ctx, r, "url",
-            JS_NewString(st->ctx, allow && resp->final_url
-                                  ? resp->final_url : ""));
-        JS_SetPropertyStr(st->ctx, r, "type",
-            JS_NewString(st->ctx, !allow ? "opaque"
-                : ns_url_same_origin(origin_url, resp->final_url)
-                    ? "basic" : "cors"));
-        JS_SetPropertyStr(st->ctx, r, "redirected",
-            JS_NewBool(st->ctx, resp->redirect_count > 0));
-        JS_SetPropertyStr(st->ctx, r, "redirectCount",
-            JS_NewInt32(st->ctx, allow ? resp->redirect_count : 0));
-        JS_SetPropertyStr(st->ctx, r, "bodyUsed", JS_FALSE);
-        const char *body_data = "";
-        gsize body_data_len = 0;
-        if (allow && resp->body && resp->body->len > 0) {
-            body_data = (const char *)resp->body->data;
-            body_data_len = resp->body->len;
-        }
-        JS_SetPropertyStr(st->ctx, r, "_bodyBuffer",
-            JS_NewArrayBufferCopy(st->ctx,
-                (const uint8_t *)body_data, body_data_len));
-        JSValue header_init = JS_NewObject(st->ctx);
-        if (allow) {
-            gboolean same_origin = ns_url_same_origin(
-                st->js ? st->js->current_url : NULL, resp->final_url);
-            const char *raw = same_origin ? resp->raw_headers : NULL;
-            if (raw) ns_headers_init_add_raw(st->ctx, header_init, raw);
-            const struct { const char *name; const char *value; } known[] = {
-                { "content-type",                resp->content_type        },
-                { "content-disposition",         resp->content_disposition },
-                { "content-security-policy",     resp->csp_header          },
-                { "x-frame-options",             resp->xframe_options      },
-                { "access-control-allow-origin", resp->cors_allow_origin   },
-            };
-            for (gsize i = 0; i < G_N_ELEMENTS(known); i++) {
-                if (!known[i].value || !*known[i].value) continue;
-                if (ns_raw_headers_have(raw, known[i].name)) continue;
-                JS_SetPropertyStr(st->ctx, header_init, known[i].name,
-                                  JS_NewString(st->ctx, known[i].value));
-            }
-        }
-        JSValue global = JS_GetGlobalObject(st->ctx);
-        JSValue hdr_ctor = JS_GetPropertyStr(st->ctx, global, "Headers");
-        JS_FreeValue(st->ctx, global);
-        if (JS_IsConstructor(st->ctx, hdr_ctor)) {
-            JSValueConst hargs[1] = { header_init };
-            JSValue h_obj = JS_CallConstructor(st->ctx, hdr_ctor, 1, hargs);
-            if (JS_IsException(h_obj)) {
-                JS_FreeValue(st->ctx, JS_GetException(st->ctx));
-                JS_SetPropertyStr(st->ctx, r, "headers", JS_NewObject(st->ctx));
-            } else {
-                JS_SetPropertyStr(st->ctx, r, "headers", h_obj);
-            }
-        } else {
-            JS_SetPropertyStr(st->ctx, r, "headers", JS_NewObject(st->ctx));
-        }
-        JS_FreeValue(st->ctx, hdr_ctor);
-        JS_FreeValue(st->ctx, header_init);
-        ns_attach_body_consumers(st->ctx, r);
-        JSValue call_ret = JS_Call(st->ctx, st->resolve, JS_UNDEFINED, 1, &r);
-        if (JS_IsException(call_ret)) JS_FreeValue(st->ctx, JS_GetException(st->ctx));
-        JS_FreeValue(st->ctx, call_ret);
-        JS_FreeValue(st->ctx, r);
-        ns_response_free(resp);
-    }
-    ns_drain_mutations(st->js);
-    ns_js_budget_pop(st->js, &bg);
-    ns_js_fetch_state_free(st);
-}
-
-static gboolean
-ns_on_js_fetch_deliver_idle(gpointer user_data)
-{
-    ns_js_fetch_delivery *d = user_data;
-    if (d->st && d->st->js && d->st->js->in_pump) {
-        g_timeout_add(4, ns_on_js_fetch_deliver_idle, d);
-        return G_SOURCE_REMOVE;
-    }
-    ns_on_js_fetch_deliver(d->st, d->resp, d->err);
-    g_free(d);
-    return G_SOURCE_REMOVE;
-}
-
-static void
-ns_on_js_fetch_done(GObject *src, GAsyncResult *result, gpointer user_data)
-{
-    (void)src;
-    ns_js_fetch_state *st = user_data;
-    GError *err = NULL;
-    ns_response *resp = ns_net_fetch_finish(result, &err);
-    if (st->js && st->js->in_pump) {
-        ns_js_fetch_delivery *d = g_new0(ns_js_fetch_delivery, 1);
-        d->st = st;
-        d->resp = resp;
-        d->err = err;
-        ns_js_attach_idle(st->js, ns_on_js_fetch_deliver_idle, d);
-        return;
-    }
-    ns_on_js_fetch_deliver(st, resp, err);
-}
-
-static void
-ns_js_fetch_collect_headers(JSContext *ctx, JSValueConst headers,
-                            GPtrArray *extras, char **content_type)
-{
-    JSValue h_map = JS_IsObject(headers) ? JS_GetPropertyStr(ctx, headers, "__ndHeaderMap")
-                                         : JS_UNDEFINED;
-    if (JS_IsException(h_map)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        h_map = JS_UNDEFINED;
-    }
-    JSValueConst h_src = JS_IsObject(h_map) ? h_map : headers;
-    if (JS_IsObject(h_src)) {
-        JSPropertyEnum *props = NULL;
-        uint32_t plen = 0;
-        if (JS_GetOwnPropertyNames(ctx, &props, &plen, h_src,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
-            for (uint32_t i = 0; i < plen; i++) {
-                JSValue key_v = JS_AtomToValue(ctx, props[i].atom);
-                const char *key = JS_ToCString(ctx, key_v);
-                JS_FreeValue(ctx, key_v);
-                if (!key) {
-                    JS_FreeValue(ctx, JS_GetException(ctx));
-                    continue;
-                }
-                JSValue val_v = JS_GetProperty(ctx, h_src, props[i].atom);
-                if (JS_IsException(val_v)) {
-                    JS_FreeValue(ctx, JS_GetException(ctx));
-                    JS_FreeCString(ctx, key);
-                    continue;
-                }
-                const char *val = JS_ToCString(ctx, val_v);
-                if (val) {
-                    if (g_ascii_strcasecmp(key, "content-type") == 0) {
-                        if (ns_header_value_is_safe(val)) {
-                            g_free(*content_type);
-                            *content_type = g_strdup(val);
-                        }
-                    } else if (ns_header_name_is_token(key) &&
-                               !ns_header_name_is_forbidden(key) &&
-                               ns_header_value_is_safe(val)) {
-                        g_ptr_array_add(extras,
-                            g_strdup_printf("%s: %s", key, val));
-                    }
-                    JS_FreeCString(ctx, val);
-                } else {
-                    JS_FreeValue(ctx, JS_GetException(ctx));
-                }
-                JS_FreeValue(ctx, val_v);
-                JS_FreeCString(ctx, key);
-            }
-            for (uint32_t i = 0; i < plen; i++)
-                JS_FreeAtom(ctx, props[i].atom);
-            js_free(ctx, props);
-        } else {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-        }
-    }
-    JS_FreeValue(ctx, h_map);
-}
-
-static void
-ns_js_fetch_read_body(JSContext *ctx, JSValueConst obj,
-                      char **body, gsize *body_len, char **content_type)
-{
-    JSValue bbuf = JS_GetPropertyStr(ctx, obj, "_bodyBuffer");
-    if (!JS_IsException(bbuf) && JS_IsObject(bbuf)) {
-        size_t total = 0;
-        uint8_t *base = JS_GetArrayBuffer(ctx, &total, bbuf);
-        if (base) {
-            g_free(*body);
-            *body = ns_js_copy_bytes(base, (gsize)total);
-            *body_len = *body ? (gsize)total : 0;
-            JS_FreeValue(ctx, bbuf);
-            return;
-        }
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    }
-    JS_FreeValue(ctx, bbuf);
-
-    JSValue v = JS_GetPropertyStr(ctx, obj, "body");
-    if (JS_IsException(v)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return;
-    }
-    if (JS_IsUndefined(v) || JS_IsNull(v)) {
-        JS_FreeValue(ctx, v);
-        return;
-    }
-    if (ns_js_value_is_form_data(ctx, v)) {
-        g_free(*body);
-        g_free(*content_type);
-        *content_type = NULL;
-        *body = ns_js_form_data_serialize(ctx, v, body_len, content_type);
-        JS_FreeValue(ctx, v);
-        return;
-    }
-    if (ns_js_value_is_url_search_params(ctx, v)) {
-        g_free(*body);
-        g_free(*content_type);
-        *content_type = NULL;
-        *body = ns_js_usp_serialize(ctx, v, body_len, content_type);
-        JS_FreeValue(ctx, v);
-        return;
-    }
-    g_free(*body);
-    *body = ns_js_body_bytes(ctx, v, body_len);
-    if (!*body) *body_len = 0;
-    if (*body && !*content_type && JS_IsObject(v)) {
-        JSValue tv = JS_GetPropertyStr(ctx, v, "type");
-        if (JS_IsException(tv)) {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            JS_FreeValue(ctx, v);
-            return;
-        }
-        if (JS_IsString(tv)) {
-            const char *ts = JS_ToCString(ctx, tv);
-            if (ts && *ts && ns_header_value_is_safe(ts))
-                *content_type = g_strdup(ts);
-            if (ts) JS_FreeCString(ctx, ts);
-            else JS_FreeValue(ctx, JS_GetException(ctx));
-        }
-        JS_FreeValue(ctx, tv);
-    }
-    JS_FreeValue(ctx, v);
-}
-
-static gboolean
-ns_js_fetch_has_prop(JSContext *ctx, JSValueConst obj, const char *name)
-{
-    JSValue v = JS_GetPropertyStr(ctx, obj, name);
-    if (JS_IsException(v)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return FALSE;
-    }
-    gboolean has = !JS_IsUndefined(v);
-    JS_FreeValue(ctx, v);
-    return has;
-}
-
-static JSValue
-ns_js_fetch(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-
-static gboolean
-ns_fetch_body_is_stream(JSContext *ctx, JSValueConst obj, JSValue *out_stream)
-{
-    if (!JS_IsObject(obj)) return FALSE;
-    JSValue bb = JS_GetPropertyStr(ctx, obj, "_bodyBuffer");
-    if (JS_IsException(bb)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        bb = JS_UNDEFINED;
-    }
-    gboolean has_buf = JS_IsObject(bb);
-    JS_FreeValue(ctx, bb);
-    if (has_buf) return FALSE;
-    JSValue s = JS_GetPropertyStr(ctx, obj, "_bodyStream");
-    if (JS_IsException(s)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        s = JS_UNDEFINED;
-    }
-    if (!JS_IsObject(s)) {
-        JS_FreeValue(ctx, s);
-        s = JS_GetPropertyStr(ctx, obj, "body");
-        if (JS_IsException(s)) {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            return FALSE;
-        }
-    }
-    gboolean is_stream = FALSE;
-    if (JS_IsObject(s)) {
-        JSValue gr = JS_GetPropertyStr(ctx, s, "getReader");
-        if (JS_IsException(gr))
-            JS_FreeValue(ctx, JS_GetException(ctx));
-        else
-            is_stream = JS_IsFunction(ctx, gr);
-        JS_FreeValue(ctx, gr);
-    }
-    if (is_stream && out_stream)
-        *out_stream = s;
-    else
-        JS_FreeValue(ctx, s);
-    return is_stream;
-}
-
-static JSValue
-ns_fetch_stream_drained(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv, int magic, JSValue *data)
-{
-    (void)this_val;
-    if (magic == 0) {
-        if (argc >= 1 && JS_IsObject(argv[0]))
-            JS_DefinePropertyValueStr(ctx, data[2], "_bodyBuffer",
-                                      JS_DupValue(ctx, argv[0]),
-                                      JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-        JSValueConst fargs[2] = { data[0], data[1] };
-        int n = JS_IsUndefined(data[1]) ? 1 : 2;
-        JSValue inner = ns_js_fetch(ctx, data[5], n, fargs);
-        JSValueConst rargs[1] = { inner };
-        JSValue r = JS_Call(ctx, data[3], JS_UNDEFINED, 1, rargs);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-        JS_FreeValue(ctx, inner);
-    } else {
-        JSValueConst rargs[1] = { argc >= 1 ? argv[0] : JS_UNDEFINED };
-        JSValue r = JS_Call(ctx, data[4], JS_UNDEFINED, 1, rargs);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_fetch_defer_stream_body(JSContext *ctx, JSValueConst this_val,
-                           int argc, JSValueConst *argv,
-                           JSValueConst carrier, JSValue stream)
-{
-    JSValue resolving[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
-    if (JS_IsException(promise)) {
-        JS_FreeValue(ctx, stream);
-        return promise;
-    }
-    static const char *drain_src =
-        "(function(stream){"
-        " var rd = stream.getReader(), chunks = [], total = 0;"
-        " function pump(){ return rd.read().then(function(x){"
-        "  if (x.done) { var out = new Uint8Array(total), o = 0;"
-        "   for (var i = 0; i < chunks.length; i++) {"
-        "    out.set(chunks[i], o); o += chunks[i].length; }"
-        "   return out.buffer; }"
-        "  var c = (x.value instanceof Uint8Array)"
-        "   ? x.value : new Uint8Array(x.value);"
-        "  chunks.push(c); total += c.length; return pump(); }); }"
-        " return pump();"
-        "})";
-    JSValue drain = JS_Eval(ctx, drain_src, strlen(drain_src),
-                            "<fetch-drain>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    JSValue drain_p = JS_UNDEFINED;
-    if (!JS_IsException(drain)) {
-        JSValueConst dargs[1] = { stream };
-        drain_p = JS_Call(ctx, drain, JS_UNDEFINED, 1, dargs);
-    }
-    JS_FreeValue(ctx, drain);
-    JS_FreeValue(ctx, stream);
-    JSValue then_fn = JS_IsException(drain_p)
-        ? JS_UNDEFINED : JS_GetPropertyStr(ctx, drain_p, "then");
-    if (JS_IsException(drain_p) || !JS_IsFunction(ctx, then_fn)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, then_fn);
-        if (!JS_IsException(drain_p)) JS_FreeValue(ctx, drain_p);
-        JSValue err = JS_NewError(ctx);
-        JS_SetPropertyStr(ctx, err, "message",
-                          JS_NewString(ctx, "fetch: could not read body stream"));
-        JSValueConst rargs[1] = { err };
-        JSValue r = JS_Call(ctx, resolving[1], JS_UNDEFINED, 1, rargs);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-        JS_FreeValue(ctx, err);
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        return promise;
-    }
-    JSValue data[6];
-    data[0] = JS_DupValue(ctx, argv[0]);
-    data[1] = argc >= 2 ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED;
-    data[2] = JS_DupValue(ctx, carrier);
-    data[3] = resolving[0];
-    data[4] = resolving[1];
-    data[5] = JS_DupValue(ctx, this_val);
-    JSValue onful = JS_NewCFunctionData(ctx, ns_fetch_stream_drained, 1, 0, 6, data);
-    JSValue onrej = JS_NewCFunctionData(ctx, ns_fetch_stream_drained, 1, 1, 6, data);
-    for (int i = 0; i < 6; i++)
-        JS_FreeValue(ctx, data[i]);
-    JSValueConst targs[2] = { onful, onrej };
-    JSValue tr = JS_Call(ctx, then_fn, drain_p, 2, targs);
-    if (JS_IsException(tr)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, tr);
-    JS_FreeValue(ctx, onful);
-    JS_FreeValue(ctx, onrej);
-    JS_FreeValue(ctx, then_fn);
-    JS_FreeValue(ctx, drain_p);
-    return promise;
-}
-
-static char *
-ns_js_fetch_base_url(JSContext *ctx)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || ctx == js->ctx) return NULL;
-    return g_strdup(ns_js_realm_url(js, ctx));
-}
-
-static JSValue
-ns_js_fetch(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (!js_from_ctx(ctx) || argc < 1)
-        return JS_ThrowTypeError(ctx, "fetch requires a URL");
-    {
-        JSValue stream_body = JS_UNDEFINED;
-        JSValueConst carrier = JS_UNDEFINED;
-        if (argc >= 2 && ns_fetch_body_is_stream(ctx, argv[1], &stream_body))
-            carrier = argv[1];
-        else if (JS_IsObject(argv[0]) && !JS_IsString(argv[0]) &&
-                 ns_fetch_body_is_stream(ctx, argv[0], &stream_body))
-            carrier = argv[0];
-        if (!JS_IsUndefined(stream_body))
-            return ns_fetch_defer_stream_body(ctx, this_val, argc, argv,
-                                              carrier, stream_body);
-    }
-    JSValue resolving[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolving);
-    if (JS_IsException(promise)) return promise;
-    JSValue url_source = JS_DupValue(ctx, argv[0]);
-    if (JS_IsObject(argv[0]) && !JS_IsString(argv[0])) {
-        JSValue slot_url = JS_GetPropertyStr(ctx, argv[0], "__ns_url");
-        if (JS_IsException(slot_url)) {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            slot_url = JS_UNDEFINED;
-        }
-        if (!JS_IsString(slot_url)) {
-            JS_FreeValue(ctx, slot_url);
-            slot_url = JS_UNDEFINED;
-        }
-        JSValue href = JS_IsString(slot_url)
-            ? slot_url : JS_GetPropertyStr(ctx, argv[0], "href");
-        if (JS_IsString(href)) {
-            JS_FreeValue(ctx, url_source);
-            url_source = href;
-        } else {
-            JS_FreeValue(ctx, href);
-            JSValue inner_url = JS_GetPropertyStr(ctx, argv[0], "url");
-            if (JS_IsString(inner_url)) {
-                JS_FreeValue(ctx, url_source);
-                url_source = inner_url;
-            } else {
-                JS_FreeValue(ctx, inner_url);
-            }
-        }
-    }
-    const char *url = JS_ToCString(ctx, url_source);
-    JS_FreeValue(ctx, url_source);
-    if (!url) {
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        return promise;
-    }
-    g_autofree char *method = NULL;
-    g_autofree char *body = NULL;
-    g_autofree char *content_type = NULL;
-    g_autofree char *base_url = ns_js_fetch_base_url(ctx);
-    gsize body_len = 0;
-    GPtrArray *extras = g_ptr_array_new_with_free_func(g_free);
-    gboolean init_has_headers = argc >= 2 && JS_IsObject(argv[1]) &&
-                                ns_js_fetch_has_prop(ctx, argv[1], "headers");
-    if (JS_IsObject(argv[0]) && !JS_IsString(argv[0])) {
-        g_autofree char *m = ns_js_get_string_prop(ctx, argv[0], "__ns_method");
-        if (!m || !*m) {
-            g_free(m);
-            m = ns_js_get_string_prop(ctx, argv[0], "method");
-        }
-        if (m && *m) method = ns_fetch_normalize_method(m);
-        ns_js_fetch_read_body(ctx, argv[0], &body, &body_len, &content_type);
-        if (!init_has_headers) {
-            JSValue h = JS_GetPropertyStr(ctx, argv[0], "headers");
-            ns_js_fetch_collect_headers(ctx, h, extras, &content_type);
-            JS_FreeValue(ctx, h);
-        }
-    }
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        g_autofree char *m = ns_js_get_string_prop(ctx, argv[1], "method");
-        if (m) {
-            g_free(method);
-            method = ns_fetch_normalize_method(m);
-        }
-        ns_js_fetch_read_body(ctx, argv[1], &body, &body_len, &content_type);
-        JSValue h = JS_GetPropertyStr(ctx, argv[1], "headers");
-        ns_js_fetch_collect_headers(ctx, h, extras, &content_type);
-        JS_FreeValue(ctx, h);
-    }
-    gboolean no_cors = FALSE;
-    if (JS_IsObject(argv[0]) && !JS_IsString(argv[0])) {
-        g_autofree char *md = ns_js_get_string_prop(ctx, argv[0], "mode");
-        if (md) no_cors = strcmp(md, "no-cors") == 0;
-    }
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        g_autofree char *md = ns_js_get_string_prop(ctx, argv[1], "mode");
-        if (md) no_cors = strcmp(md, "no-cors") == 0;
-    }
-    if (method && (g_ascii_strcasecmp(method, "CONNECT") == 0 ||
-                   g_ascii_strcasecmp(method, "TRACE") == 0 ||
-                   g_ascii_strcasecmp(method, "TRACK") == 0)) {
-        JS_FreeCString(ctx, url);
-        g_ptr_array_free(extras, TRUE);
-        JS_ThrowTypeError(ctx, "fetch: '%s' is a forbidden method", method);
-        JSValue ex = JS_GetException(ctx);
-        JSValueConst rargs[1] = { ex };
-        JSValue r = JS_Call(ctx, resolving[1], JS_UNDEFINED, 1, rargs);
-        JS_FreeValue(ctx, r);
-        JS_FreeValue(ctx, ex);
-        JS_FreeValue(ctx, resolving[0]);
-        JS_FreeValue(ctx, resolving[1]);
-        return promise;
-    }
-    if (body && !content_type)
-        content_type = g_strdup("text/plain;charset=UTF-8");
-    g_ptr_array_add(extras, NULL);
-    ns_js_fetch_state *st = g_new0(ns_js_fetch_state, 1);
-    st->ctx = ctx;
-    st->js = js_from_ctx(ctx);
-    /* Frames share fetch() with the page, so the function's own realm is
-     * the page's; the realm running the calling script is js->ctx. */
-    st->timeline = st->js ? st->js->ctx : ctx;
-    st->promise = JS_DupValue(ctx, promise);
-    st->resolve = resolving[0];
-    st->reject  = resolving[1];
-    st->requested_url = g_strdup(url);
-    st->no_cors = no_cors;
-    st->fetch_start_ms = ns_perf_now_ms(st->js);
-    const char *top = base_url && *base_url ? base_url :
-                      (st->js ? st->js->current_url : NULL);
-    st->origin_url = g_strdup(top);
-    st->signal = JS_UNDEFINED;
-    st->abort_handler = JS_UNDEFINED;
-    if (st->js && st->js->pending_fetches)
-        g_ptr_array_add(st->js->pending_fetches, st);
-
-    JSValue signal_v = JS_UNDEFINED;
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        JSValue s = JS_GetPropertyStr(ctx, argv[1], "signal");
-        if (JS_IsObject(s)) signal_v = s;
-        else                JS_FreeValue(ctx, s);
-    }
-    if (JS_IsObject(signal_v)) {
-        JSValue ab = JS_GetPropertyStr(ctx, signal_v, "aborted");
-        gboolean already = JS_ToBool(ctx, ab);
-        JS_FreeValue(ctx, ab);
-        if (already) {
-            st->aborted = TRUE;
-            st->settled = TRUE;
-            ns_fetch_reject_with_abort(ctx, &st->reject, signal_v);
-            JS_FreeValue(ctx, signal_v);
-            if (st->js && st->js->pending_fetches)
-                g_ptr_array_remove_fast(st->js->pending_fetches, st);
-            ns_js_fetch_state_free(st);
-            g_ptr_array_free(extras, TRUE);
-            JS_FreeCString(ctx, url);
-            return promise;
-        }
-        st->id = ++st->js->next_fetch_id;
-        g_hash_table_insert(st->js->fetch_states_by_id,
-                            GUINT_TO_POINTER(st->id), st);
-        st->cancellable = g_cancellable_new();
-        st->signal = signal_v;
-        JSValue id_v = JS_NewInt64(ctx, (int64_t)st->id);
-        st->abort_handler =
-            JS_NewCFunctionData(ctx, ns_fetch_on_signal_abort, 0, 0, 1, &id_v);
-        JS_FreeValue(ctx, id_v);
-        JSValue add_fn = JS_GetPropertyStr(ctx, signal_v, "addEventListener");
-        if (JS_IsFunction(ctx, add_fn)) {
-            JSValue type_v = JS_NewString(ctx, "abort");
-            JSValueConst args[2] = { type_v, st->abort_handler };
-            JSValue r = JS_Call(ctx, add_fn, signal_v, 2, args);
-            if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-            JS_FreeValue(ctx, r);
-            JS_FreeValue(ctx, type_v);
-        }
-        JS_FreeValue(ctx, add_fn);
-    }
-    if (g_str_has_prefix(url, "blob:")) {
-        char *btype = NULL;
-        GBytes *b = ns_js_blob_url_lookup(st->js, url, &btype);
-        ns_response *resp = g_new0(ns_response, 1);
-        if (b) {
-            gsize blen = 0;
-            const guint8 *data = g_bytes_get_data(b, &blen);
-            resp->status = 200;
-            resp->final_url = g_strdup(url);
-            resp->content_type = g_strdup(btype && *btype ? btype
-                                          : "application/octet-stream");
-            resp->body = g_byte_array_sized_new(blen);
-            g_byte_array_append(resp->body, data, blen);
-        } else {
-            resp->error = g_strdup("blob URL not found");
-        }
-        ns_js_fetch_delivery *d = g_new0(ns_js_fetch_delivery, 1);
-        d->st = st;
-        d->resp = resp;
-        ns_js_attach_idle(st->js, ns_on_js_fetch_deliver_idle, d);
-        g_ptr_array_free(extras, TRUE);
-        JS_FreeCString(ctx, url);
-        return promise;
-    }
-    char *abs_url = top ? ns_url_resolve(top, url) : NULL;
-    const char *send_url = abs_url ? abs_url : url;
-    const char *use_method = method ? method : "GET";
-
-    gboolean blocked_mixed = top &&
-        g_ascii_strncasecmp(top, "https://", 8) == 0 &&
-        g_ascii_strncasecmp(send_url, "http://", 7) == 0;
-    gboolean blocked_csp = st->js && st->js->csp &&
-        !ns_csp_allows(st->js->csp, NS_CSP_CONNECT, send_url, top);
-    if (blocked_mixed || blocked_csp) {
-        ns_response *resp = g_new0(ns_response, 1);
-        resp->error = g_strdup(blocked_mixed
-            ? "blocked as mixed content (http resource on https page)"
-            : "blocked by Content-Security-Policy connect-src");
-        ns_js_fetch_delivery *d = g_new0(ns_js_fetch_delivery, 1);
-        d->st = st;
-        d->resp = resp;
-        ns_js_attach_idle(st->js, ns_on_js_fetch_deliver_idle, d);
-        g_ptr_array_free(extras, TRUE);
-        g_free(abs_url);
-        JS_FreeCString(ctx, url);
-        return promise;
-    }
-
-    ns_worker_host *sw = (st->js && !st->js->worker_host)
-        ? ns_sw_controller_for(st->js, send_url) : NULL;
-    if (sw) {
-        if (!st->id) {
-            st->id = ++st->js->next_fetch_id;
-            g_hash_table_insert(st->js->fetch_states_by_id,
-                                GUINT_TO_POINTER(st->id), st);
-        }
-        st->fb_send_url = g_strdup(send_url);
-        st->fb_top = g_strdup(top ? top : "");
-        st->fb_method = g_strdup(use_method);
-        st->fb_content_type = content_type ? g_strdup(content_type) : NULL;
-        if (body && body_len) {
-            st->fb_body = g_malloc(body_len);
-            memcpy(st->fb_body, body, body_len);
-            st->fb_body_len = body_len;
-        }
-        st->fb_headers = g_strdupv((char **)extras->pdata);
-        ns_sw_post_fetch_request(sw, st->id, send_url, use_method,
-                                 (const char *const *)extras->pdata,
-                                 (const guint8 *)body, body_len);
-        g_ptr_array_free(extras, TRUE);
-        g_free(abs_url);
-        JS_FreeCString(ctx, url);
-        return promise;
-    }
-
-    ns_net_request_async(send_url, top, use_method,
-                         body, body_len,
-                         content_type,
-                         (const char *const *)extras->pdata,
-                         st->cancellable, ns_on_js_fetch_done, st);
-    g_ptr_array_free(extras, TRUE);
-    g_free(abs_url);
-    JS_FreeCString(ctx, url);
-    return promise;
 }
 
 static JSValue
@@ -10295,7 +9346,7 @@ ns_ho_new(JSContext *ctx, ns_ho_kind kind, JSValueConst proto)
     return obj;
 }
 
-static JSValue
+JSValue
 ns_ho_new_default(JSContext *ctx, ns_ho_kind kind)
 {
     JSValue global = JS_GetGlobalObject(ctx);
@@ -10306,7 +9357,7 @@ ns_ho_new_default(JSContext *ctx, ns_ho_kind kind)
     return obj;
 }
 
-static JSValue
+JSValue
 ns_ho_construct(JSContext *ctx, JSValueConst new_target, ns_ho_kind kind)
 {
     if (!JS_IsObject(new_target))
@@ -10601,7 +9652,7 @@ ns_make_ctor(JSContext *ctx, JSCFunction *fn, const char *name, int argc)
     return func;
 }
 
-static void
+void
 ns_bind_ctor(JSContext *ctx, JSValueConst obj, const char *name,
              JSCFunction *fn, int argc)
 {
@@ -17505,7 +16556,7 @@ ns_event_report_listener_exception(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static void
+void
 ns_target_fire_event(JSContext *ctx, JSValueConst obj, const char *type)
 {
     JSValue ev = ns_target_make_event(ctx, obj, type);
@@ -17862,7 +16913,7 @@ ns_xhr_deliver(ns_xhr_state *st, ns_response *resp, GError *err)
     JSContext *ctx = st->ctx;
     gboolean response_allowed = FALSE;
     if (resp && !err) {
-        gboolean allow = cors_allows(st->origin_url, resp->final_url,
+        gboolean allow = ns_cors_allows(st->origin_url, resp->final_url,
                                      resp->cors_allow_origin)
                          && !ns_final_url_connect_blocked(js_from_ctx(ctx),
                                                           resp->final_url);
@@ -18797,208 +17848,6 @@ ns_xhr_install_interface(JSContext *ctx, JSValueConst global)
 }
 
 static JSValue
-ns_abort_signal_throw_if_aborted(JSContext *ctx, JSValueConst this_val,
-                                 int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    NS_HO_THIS(ctx, this_val, NS_HO_ABORT_SIGNAL);
-    JSValue ab = JS_GetPropertyStr(ctx, this_val, "aborted");
-    gboolean aborted = JS_ToBool(ctx, ab);
-    JS_FreeValue(ctx, ab);
-    if (aborted) {
-        JSValue reason = JS_GetPropertyStr(ctx, this_val, "reason");
-        if (JS_IsUndefined(reason) || JS_IsNull(reason)) {
-            JS_FreeValue(ctx, reason);
-            return JS_ThrowTypeError(ctx, "signal is aborted");
-        }
-        return JS_Throw(ctx, reason);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_abort_controller_abort(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    NS_HO_THIS(ctx, this_val, NS_HO_ABORT_CONTROLLER);
-    JSValue sig = JS_GetPropertyStr(ctx, this_val, "signal");
-    if (JS_IsObject(sig)) {
-        JSValue ab = JS_GetPropertyStr(ctx, sig, "aborted");
-        gboolean already = JS_ToBool(ctx, ab);
-        JS_FreeValue(ctx, ab);
-        if (!already) {
-            JS_SetPropertyStr(ctx, sig, "aborted", JS_TRUE);
-            JSValue reason = (argc >= 1 && !JS_IsUndefined(argv[0]))
-                ? JS_DupValue(ctx, argv[0])
-                : ns_make_abort_error(ctx);
-            JS_SetPropertyStr(ctx, sig, "reason", reason);
-            ns_target_fire_event(ctx, sig, "abort");
-        }
-    }
-    JS_FreeValue(ctx, sig);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_make_abort_signal(JSContext *ctx, gboolean aborted, JSValueConst reason)
-{
-    JSValue sig = ns_ho_new_default(ctx, NS_HO_ABORT_SIGNAL);
-    if (JS_IsException(sig)) return sig;
-    JS_SetPropertyStr(ctx, sig, "aborted", aborted ? JS_TRUE : JS_FALSE);
-    JS_SetPropertyStr(ctx, sig, "reason",
-                      aborted ? (JS_IsUndefined(reason)
-                                   ? ns_make_abort_error(ctx)
-                                   : JS_DupValue(ctx, reason))
-                              : JS_UNDEFINED);
-    JS_SetPropertyStr(ctx, sig, "onabort", JS_NULL);
-    return sig;
-}
-
-static JSValue
-ns_abort_signal_static_abort(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    return ns_make_abort_signal(ctx, TRUE,
-                                argc >= 1 ? argv[0] : JS_UNDEFINED);
-}
-
-static void
-ns_abort_signal_propagate(JSContext *ctx, JSValueConst combined,
-                          JSValueConst source)
-{
-    JSValue ab = JS_GetPropertyStr(ctx, combined, "aborted");
-    gboolean already = JS_ToBool(ctx, ab);
-    JS_FreeValue(ctx, ab);
-    if (already) return;
-    JSValue reason = JS_IsObject(source)
-        ? JS_GetPropertyStr(ctx, source, "reason") : JS_UNDEFINED;
-    if (JS_IsUndefined(reason) || JS_IsNull(reason)) {
-        JS_FreeValue(ctx, reason);
-        reason = ns_make_abort_error(ctx);
-    }
-    JS_SetPropertyStr(ctx, combined, "aborted", JS_TRUE);
-    JS_SetPropertyStr(ctx, combined, "reason", reason);
-    ns_target_fire_event(ctx, combined, "abort");
-}
-
-static JSValue
-ns_abort_signal_any_handler(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv, int magic,
-                            JSValueConst *func_data)
-{
-    (void)this_val; (void)argc; (void)argv; (void)magic;
-    ns_abort_signal_propagate(ctx, func_data[0], func_data[1]);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_abort_signal_static_any(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue combined = ns_make_abort_signal(ctx, FALSE, JS_UNDEFINED);
-    if (argc < 1 || !JS_IsObject(argv[0])) return combined;
-    uint32_t len = ns_js_array_length(ctx, argv[0]);
-    for (uint32_t i = 0; i < len; i++) {
-        JSValue sig = JS_GetPropertyUint32(ctx, argv[0], i);
-        if (!JS_IsObject(sig)) { JS_FreeValue(ctx, sig); continue; }
-        JSValue ab = JS_GetPropertyStr(ctx, sig, "aborted");
-        gboolean already = JS_ToBool(ctx, ab);
-        JS_FreeValue(ctx, ab);
-        if (already) {
-            ns_abort_signal_propagate(ctx, combined, sig);
-            JS_FreeValue(ctx, sig);
-            continue;
-        }
-        JSValueConst data[2] = { combined, sig };
-        JSValue handler = JS_NewCFunctionData(ctx,
-            ns_abort_signal_any_handler, 0, 0, 2, data);
-        JSValue add_fn = JS_GetPropertyStr(ctx, sig, "addEventListener");
-        if (JS_IsFunction(ctx, add_fn)) {
-            JSValue type_v = JS_NewString(ctx, "abort");
-            JSValueConst args[2] = { type_v, handler };
-            JSValue r = JS_Call(ctx, add_fn, sig, 2, args);
-            if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-            JS_FreeValue(ctx, r);
-            JS_FreeValue(ctx, type_v);
-        }
-        JS_FreeValue(ctx, add_fn);
-        JS_FreeValue(ctx, handler);
-        JS_FreeValue(ctx, sig);
-    }
-    return combined;
-}
-
-typedef struct {
-    JSContext *ctx;
-    JSValue    sig;
-} ns_abort_timeout;
-
-static gboolean
-ns_abort_signal_timeout_fire(gpointer user_data)
-{
-    ns_abort_timeout *t = user_data;
-    if (!t || !t->ctx) { g_free(t); return G_SOURCE_REMOVE; }
-    ns_js *abort_js = js_from_ctx(t->ctx);
-    if (abort_js && abort_js->in_pump) {
-        ns_js_attach_timeout(abort_js, 4, ns_abort_signal_timeout_fire, t);
-        return G_SOURCE_REMOVE;
-    }
-    JSValue aborted = JS_GetPropertyStr(t->ctx, t->sig, "aborted");
-    gboolean already = JS_ToBool(t->ctx, aborted);
-    JS_FreeValue(t->ctx, aborted);
-    if (!already) {
-        JS_SetPropertyStr(t->ctx, t->sig, "aborted", JS_TRUE);
-        JSValue reason = JS_NewError(t->ctx);
-        JS_SetPropertyStr(t->ctx, reason, "name",
-                          JS_NewString(t->ctx, "TimeoutError"));
-        JS_SetPropertyStr(t->ctx, reason, "message",
-                          JS_NewString(t->ctx, "signal timed out"));
-        JS_SetPropertyStr(t->ctx, t->sig, "reason", reason);
-        ns_target_fire_event(t->ctx, t->sig, "abort");
-    }
-    if (abort_js && abort_js->pending_aborts)
-        g_ptr_array_remove_fast(abort_js->pending_aborts, t);
-    JS_FreeValue(t->ctx, t->sig);
-    g_free(t);
-    return G_SOURCE_REMOVE;
-}
-
-static JSValue
-ns_abort_signal_static_timeout(JSContext *ctx, JSValueConst this_val,
-                               int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    int64_t ms = 0;
-    if (argc >= 1) JS_ToInt64(ctx, &ms, argv[0]);
-    if (ms < 0) ms = 0;
-    JSValue sig = ns_make_abort_signal(ctx, FALSE, JS_UNDEFINED);
-    ns_abort_timeout *t = g_new0(ns_abort_timeout, 1);
-    t->ctx = ctx;
-    t->sig = JS_DupValue(ctx, sig);
-    ns_js *abort_js = js_from_ctx(ctx);
-    if (abort_js) {
-        if (!abort_js->pending_aborts) abort_js->pending_aborts = g_ptr_array_new();
-        g_ptr_array_add(abort_js->pending_aborts, t);
-    }
-    ns_js_attach_timeout(abort_js, (guint)ms, ns_abort_signal_timeout_fire, t);
-    return sig;
-}
-
-static JSValue
-ns_window_abort_controller_ctor(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue obj = ns_ho_construct(ctx, this_val, NS_HO_ABORT_CONTROLLER);
-    if (JS_IsException(obj)) return obj;
-    JS_SetPropertyStr(ctx, obj, "signal",
-                      ns_make_abort_signal(ctx, FALSE, JS_UNDEFINED));
-    return obj;
-}
-
-static JSValue
 ns_close_watcher_fire(JSContext *ctx, JSValueConst this_val,
                       int argc, JSValueConst *argv)
 {
@@ -19593,7 +18442,7 @@ ns_window_url_revoke_object(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static GBytes *
+GBytes *
 ns_js_blob_url_lookup(ns_js *js, const char *url, char **out_type)
 {
     if (out_type) *out_type = NULL;
@@ -19999,303 +18848,6 @@ ns_net_install_text_codecs(JSContext *ctx, JSValueConst global)
 }
 
 static void
-ns_attach_body_consumers(JSContext *ctx, JSValueConst obj)
-{
-    ns_js *jsx = js_from_ctx(ctx);
-    if (jsx && !jsx->body_consumer_helper_set) {
-        static const char *helper_src =
-            "(function(){"
-            " function encodeStr(s){"
-            "  return (typeof TextEncoder === 'function')"
-            "   ? new TextEncoder().encode(s)"
-            "   : (function(){ var a = new Uint8Array(s.length);"
-            "      for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff;"
-            "      return a; })();"
-            " }"
-            " function isStream(v){ return v && typeof v.getReader === 'function'; }"
-            " function dropRaw(r){try{if(Object.prototype.hasOwnProperty.call(r,'body'))delete r.body;}catch(e){}}"
-            " function normalize(r){"
-            "  if (r._bodyBuffer instanceof ArrayBuffer || r._bodyStream) {"
-            "   if (!('_bodyNull' in r))"
-            "    try { Object.defineProperty(r,'_bodyNull',{value:false,configurable:true}); } catch(e){}"
-            "   dropRaw(r);"
-            "   return;"
-            "  }"
-            "  var raw=r.body;"
-            "  if (isStream(raw)) {"
-            "   try { Object.defineProperty(r,'_bodyStream',{value:raw,configurable:true}); } catch(e){ r._bodyStream = raw; }"
-            "   try { Object.defineProperty(r,'_bodyNull',{value:false,configurable:true}); } catch(e){}"
-            "   dropRaw(r);"
-            "   return;"
-            "  }"
-            "  var isNull = (raw === null || raw === undefined);"
-            "  var s = (typeof raw === 'string') ? raw : (raw == null ? '' : String(raw));"
-            "  var u8 = encodeStr(s);"
-            "  var ab = new ArrayBuffer(u8.length); new Uint8Array(ab).set(u8);"
-            "  try { Object.defineProperty(r,'_bodyBuffer',{value:ab,configurable:true}); } catch(e){ r._bodyBuffer = ab; }"
-            "  try { Object.defineProperty(r,'_bodyNull',{value:isNull,configurable:true}); } catch(e){}"
-            "  dropRaw(r);"
-            " }"
-            " function bytes(r){"
-            "  return (r._bodyBuffer instanceof ArrayBuffer)"
-            "   ? new Uint8Array(r._bodyBuffer) : new Uint8Array(0);"
-            " }"
-            " function readAll(r){"
-            "  if (r._bodyBuffer instanceof ArrayBuffer) return Promise.resolve(new Uint8Array(r._bodyBuffer));"
-            "  if (!r._bodyStream) return Promise.resolve(new Uint8Array(0));"
-            "  var rd = r._bodyStream.getReader(), chunks = [], total = 0;"
-            "  return (function pump(){ return rd.read().then(function(x){"
-            "   if (x.done) { var out = new Uint8Array(total), o = 0;"
-            "    chunks.forEach(function(c){ out.set(c, o); o += c.length; }); return out; }"
-            "   var c = (x.value instanceof Uint8Array) ? x.value : new Uint8Array(x.value);"
-            "   chunks.push(c); total += c.length; return pump(); }); })();"
-            " }"
-            " function decode(u8){"
-            "  return (typeof TextDecoder === 'function')"
-            "   ? new TextDecoder('utf-8').decode(u8)"
-            "   : String.fromCharCode.apply(null, Array.from(u8));"
-            " }"
-            " function consume(r){"
-            "  if (r.bodyUsed) return Promise.reject(new TypeError('Already read'));"
-            "  r.bodyUsed = true; return readAll(r);"
-            " }"
-            " var streamCache = new WeakMap();"
-            " function bodyGetter(){"
-            "  var r=this;if(r._bodyNull)return null;if(r._bodyStream)return r._bodyStream;"
-            "  if(streamCache.has(r))return streamCache.get(r);"
-            "  if(typeof ReadableStream!=='function'){streamCache.set(r,null);return null;}"
-            "  var u=bytes(r);var stream=new ReadableStream({start:function(c){"
-            "   if(u&&u.length)c.enqueue(u);c.close();}});streamCache.set(r,stream);return stream;"
-            " }"
-            " function text(){var r=this;return consume(r).then(function(u){return decode(u);});}"
-            " function json(){var r=this;return consume(r).then(function(u){return JSON.parse(decode(u));});}"
-            " function arrayBuffer(){var r=this;return consume(r).then(function(u){"
-            "  var ab=new ArrayBuffer(u.length);new Uint8Array(ab).set(u);return ab;});}"
-            " function bodyBytes(){return consume(this);}"
-            " function blob(){var r=this;var ct=r.headers&&r.headers.get&&"
-            "  r.headers.get('content-type')||'';return consume(r).then(function(u){"
-            "   return new Blob([u],{type:ct});});}"
-            " function formData(){var r=this;return consume(r).then(function(u){"
-            "  var fd=new FormData();var s=decode(u);if(s)new URLSearchParams(s).forEach("
-            "   function(v,k){fd.append(k,v);});return fd;});}"
-            " function clone(){var r=this;var c=Object.create(Object.getPrototypeOf(r));"
-            "  Object.getOwnPropertyNames(r).forEach(function(k){if(k!=='body'&&k!=='bodyUsed')"
-            "   try{Object.defineProperty(c,k,Object.getOwnPropertyDescriptor(r,k));}catch(e){}});"
-            "  if(r._bodyBuffer instanceof ArrayBuffer)"
-            "   try{Object.defineProperty(c,'_bodyBuffer',{value:r._bodyBuffer,configurable:true});}catch(e){}"
-            "  if(r._bodyStream)"
-            "   try{Object.defineProperty(c,'_bodyStream',{value:r._bodyStream,configurable:true});}catch(e){}"
-            "  c.bodyUsed=false;return attach(c);"
-            " }"
-            " function attach(r){"
-            "  normalize(r);"
-            "  var p=Object.getPrototypeOf(r);"
-            "  if(!p||!Object.getOwnPropertyDescriptor(p,'body'))"
-            "   try{Object.defineProperty(r,'body',{configurable:true,enumerable:true,"
-            "    get:bodyGetter});}catch(e){}"
-            "  if(!p||typeof p.text!=='function'){r.text=text;r.json=json;"
-            "   r.arrayBuffer=arrayBuffer;r.bytes=bodyBytes;r.blob=blob;"
-            "   r.formData=formData;r.clone=clone;}"
-            "  return r;"
-            " }"
-            " return attach;"
-            "})()";
-        JSValue h = JS_Eval(ctx, helper_src, strlen(helper_src),
-                            "<body-consumer>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-        if (!JS_IsException(h)) {
-            jsx->body_consumer_helper = h;
-            jsx->body_consumer_helper_set = 1;
-        } else {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            JS_FreeValue(ctx, h);
-        }
-    }
-    if (jsx && jsx->body_consumer_helper_set) {
-        JSValueConst args[1] = { obj };
-        JSValue r = JS_Call(ctx, jsx->body_consumer_helper, JS_UNDEFINED, 1, args);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-    }
-}
-
-static JSValue
-ns_body_extract_buffer(JSContext *ctx, JSValueConst body)
-{
-    size_t off = 0, len = 0;
-    JSValue view_buf = JS_GetArrayBufferViewBuffer(ctx, body, &off, &len);
-    if (!JS_IsException(view_buf)) {
-        size_t total = 0;
-        uint8_t *base = JS_GetArrayBuffer(ctx, &total, view_buf);
-        JSValue out = (base && off + len <= total)
-            ? JS_NewArrayBufferCopy(ctx, base + off, len) : JS_UNDEFINED;
-        JS_FreeValue(ctx, view_buf);
-        return out;
-    }
-    JS_FreeValue(ctx, JS_GetException(ctx));
-    size_t total = 0;
-    uint8_t *base = JS_GetArrayBuffer(ctx, &total, body);
-    if (base)
-        return JS_NewArrayBufferCopy(ctx, base, total);
-    JS_FreeValue(ctx, JS_GetException(ctx));
-    return JS_UNDEFINED;
-}
-
-static void
-ns_body_set_raw(JSContext *ctx, JSValueConst obj, JSValue value)
-{
-    JS_DefinePropertyValueStr(ctx, obj, "body", value,
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-}
-
-static void
-ns_body_install(JSContext *ctx, JSValueConst obj, JSValueConst body,
-                gboolean null_when_empty)
-{
-    if (JS_IsUndefined(body) || JS_IsNull(body)) {
-        ns_body_set_raw(ctx, obj,
-                        null_when_empty ? JS_NULL : JS_NewString(ctx, ""));
-        return;
-    }
-    if (JS_IsString(body)) {
-        size_t text_len = 0;
-        const char *text = JS_ToCStringLen(ctx, &text_len, body);
-        if (text) {
-            JSValue bytes = JS_NewArrayBufferCopy(ctx, (const uint8_t *)text,
-                                                  text_len);
-            JS_FreeCString(ctx, text);
-            if (JS_IsException(bytes))
-                JS_FreeValue(ctx, JS_GetException(ctx));
-            else
-                JS_SetPropertyStr(ctx, obj, "_bodyBuffer", bytes);
-        }
-        ns_body_set_raw(ctx, obj, JS_DupValue(ctx, body));
-        JS_SetPropertyStr(ctx, obj, "_bodyCT",
-                          JS_NewString(ctx, "text/plain;charset=UTF-8"));
-        return;
-    }
-    if (JS_IsObject(body)) {
-        gsize blen = 0;
-        char *ct = NULL;
-        char *serialized = NULL;
-        if (ns_js_value_is_form_data(ctx, body))
-            serialized = ns_js_form_data_serialize(ctx, body, &blen, &ct);
-        else if (ns_js_value_is_url_search_params(ctx, body))
-            serialized = ns_js_usp_serialize(ctx, body, &blen, &ct);
-        if (serialized) {
-            JS_SetPropertyStr(ctx, obj, "_bodyBuffer",
-                JS_NewArrayBufferCopy(ctx, (const uint8_t *)serialized, blen));
-            if (ct) JS_SetPropertyStr(ctx, obj, "_bodyCT", JS_NewString(ctx, ct));
-            ns_body_set_raw(ctx, obj, JS_NewString(ctx, ""));
-            g_free(serialized);
-            g_free(ct);
-            return;
-        }
-        g_free(ct);
-
-        JSValue buf = ns_body_extract_buffer(ctx, body);
-        if (!JS_IsUndefined(buf)) {
-            JS_SetPropertyStr(ctx, obj, "_bodyBuffer", buf);
-            ns_body_set_raw(ctx, obj,
-                null_when_empty ? JS_DupValue(ctx, body) : JS_NewString(ctx, ""));
-            return;
-        }
-
-        JSValue b_priv = JS_GetPropertyStr(ctx, body, "__ndBlobBytes");
-        gboolean is_blob = !JS_IsUndefined(b_priv) && !JS_IsNull(b_priv);
-        JS_FreeValue(ctx, b_priv);
-        if (is_blob) {
-            gsize bl = 0;
-            char *bb = ns_blob_bytes_as_string(ctx, body, &bl);
-            if (bb) {
-                JS_SetPropertyStr(ctx, obj, "_bodyBuffer",
-                    JS_NewArrayBufferCopy(ctx, (const uint8_t *)bb, bl));
-                g_free(bb);
-                JSValue tv = JS_GetPropertyStr(ctx, body, "type");
-                const char *ts = JS_IsString(tv) ? JS_ToCString(ctx, tv) : NULL;
-                if (ts && *ts)
-                    JS_SetPropertyStr(ctx, obj, "_bodyCT", JS_NewString(ctx, ts));
-                if (ts) JS_FreeCString(ctx, ts);
-                JS_FreeValue(ctx, tv);
-                ns_body_set_raw(ctx, obj, JS_NewString(ctx, ""));
-                return;
-            }
-        }
-
-        JSValue get_reader = JS_GetPropertyStr(ctx, body, "getReader");
-        gboolean is_stream = JS_IsFunction(ctx, get_reader);
-        JS_FreeValue(ctx, get_reader);
-        if (is_stream) {
-            ns_body_set_raw(ctx, obj, JS_DupValue(ctx, body));
-            return;
-        }
-    }
-    JSValue s = JS_ToString(ctx, body);
-    if (JS_IsException(s)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        s = JS_NewString(ctx, "");
-    }
-    ns_body_set_raw(ctx, obj, s);
-}
-
-static void
-ns_body_apply_inferred_ct(JSContext *ctx, JSValueConst obj)
-{
-    JSValue ctv = JS_GetPropertyStr(ctx, obj, "_bodyCT");
-    if (!JS_IsString(ctv)) { JS_FreeValue(ctx, ctv); return; }
-    JS_SetPropertyStr(ctx, obj, "_bodyCT", JS_UNDEFINED);
-    JSValue headers = JS_GetPropertyStr(ctx, obj, "headers");
-    if (JS_IsObject(headers)) {
-        gboolean already = FALSE;
-        JSValue has_fn = JS_GetPropertyStr(ctx, headers, "has");
-        if (JS_IsFunction(ctx, has_fn)) {
-            JSValue key = JS_NewString(ctx, "content-type");
-            JSValueConst a[1] = { key };
-            JSValue r = JS_Call(ctx, has_fn, headers, 1, a);
-            already = JS_ToBool(ctx, r) > 0;
-            JS_FreeValue(ctx, r);
-            JS_FreeValue(ctx, key);
-        }
-        JS_FreeValue(ctx, has_fn);
-        if (!already) {
-            JSValue set_fn = JS_GetPropertyStr(ctx, headers, "set");
-            if (JS_IsFunction(ctx, set_fn)) {
-                JSValueConst a[2] = { JS_NewString(ctx, "content-type"),
-                                      JS_DupValue(ctx, ctv) };
-                JSValue r = JS_Call(ctx, set_fn, headers, 2, a);
-                if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-                JS_FreeValue(ctx, r);
-                JS_FreeValue(ctx, a[0]);
-                JS_FreeValue(ctx, a[1]);
-            }
-            JS_FreeValue(ctx, set_fn);
-        }
-    }
-    JS_FreeValue(ctx, headers);
-    JS_FreeValue(ctx, ctv);
-}
-
-static JSValue
-ns_make_headers_from_init(JSContext *ctx, JSValueConst init)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, "Headers");
-    JS_FreeValue(ctx, global);
-    JSValue out;
-    if (JS_IsConstructor(ctx, ctor)) {
-        JSValueConst args[1] = { init };
-        out = JS_CallConstructor(ctx, ctor, 1, args);
-        if (JS_IsException(out)) {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            out = JS_NewObject(ctx);
-        }
-    } else {
-        out = JS_NewObject(ctx);
-    }
-    JS_FreeValue(ctx, ctor);
-    return out;
-}
-
-static void
 ns_set_instance_proto(JSContext *ctx, JSValueConst object,
                       const char *constructor_name)
 {
@@ -20309,295 +18861,11 @@ ns_set_instance_proto(JSContext *ctx, JSValueConst object,
     JS_FreeValue(ctx, global);
 }
 
-static JSValue
-ns_window_response_ctor(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue obj = JS_NewObject(ctx);
-    ns_set_instance_proto(ctx, obj, "Response");
-    JSValue body_v = (argc >= 1) ? JS_DupValue(ctx, argv[0]) : JS_NULL;
-    int32_t status = 200;
-    const char *status_text = NULL;
-    JSValue headers_init = JS_UNDEFINED;
-    JSValue status_text_v = JS_UNDEFINED;
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        JSValue s = JS_GetPropertyStr(ctx, argv[1], "status");
-        gboolean has_status = !JS_IsUndefined(s);
-        if (has_status) JS_ToInt32(ctx, &status, s);
-        JS_FreeValue(ctx, s);
-        if (has_status && (status < 200 || status > 599)) {
-            JS_FreeValue(ctx, obj);
-            JS_FreeValue(ctx, body_v);
-            return JS_ThrowRangeError(ctx,
-                "Response: status %d is outside the range [200, 599]", status);
-        }
-        if ((status == 204 || status == 205 || status == 304) && argc >= 1 &&
-            !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0])) {
-            JS_FreeValue(ctx, obj);
-            JS_FreeValue(ctx, body_v);
-            return JS_ThrowTypeError(ctx,
-                "Response: a null body status cannot have a body");
-        }
-        status_text_v = JS_GetPropertyStr(ctx, argv[1], "statusText");
-        if (!JS_IsUndefined(status_text_v) && !JS_IsNull(status_text_v))
-            status_text = JS_ToCString(ctx, status_text_v);
-        if (status_text) {
-            for (const char *p = status_text; *p; p++) {
-                guchar c = (guchar)*p;
-                if (c >= 0xC4 || (c != 0x09 && c < 0x20) || c == 0x7F) {
-                    JS_FreeCString(ctx, status_text);
-                    JS_FreeValue(ctx, status_text_v);
-                    JS_FreeValue(ctx, obj);
-                    JS_FreeValue(ctx, body_v);
-                    return JS_ThrowTypeError(ctx,
-                        "Response: invalid statusText");
-                }
-            }
-        }
-        headers_init = JS_GetPropertyStr(ctx, argv[1], "headers");
-    }
-    ns_body_install(ctx, obj, body_v, TRUE);
-    JS_SetPropertyStr(ctx, obj, "bodyUsed",   JS_FALSE);
-    JS_SetPropertyStr(ctx, obj, "status",     JS_NewInt32(ctx, status));
-    JS_SetPropertyStr(ctx, obj, "statusText",
-        JS_NewString(ctx, status_text ? status_text : ""));
-    JS_SetPropertyStr(ctx, obj, "ok",
-        JS_NewBool(ctx, status >= 200 && status < 300));
-    JS_SetPropertyStr(ctx, obj, "type",       JS_NewString(ctx, "default"));
-    JS_SetPropertyStr(ctx, obj, "url",        JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, obj, "redirected", JS_FALSE);
-    JS_SetPropertyStr(ctx, obj, "headers",
-        ns_make_headers_from_init(ctx, headers_init));
-    ns_body_apply_inferred_ct(ctx, obj);
-    ns_attach_body_consumers(ctx, obj);
-    if (status_text) JS_FreeCString(ctx, status_text);
-    JS_FreeValue(ctx, status_text_v);
-    JS_FreeValue(ctx, headers_init);
-    JS_FreeValue(ctx, body_v);
-    return obj;
-}
-
-static char *
-ns_fetch_normalize_method(const char *method)
-{
-    if (!method || !*method) return NULL;
-    static const char *const normalized[] = {
-        "DELETE", "GET", "HEAD", "OPTIONS", "POST", "PUT"
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(normalized); i++)
-        if (g_ascii_strcasecmp(method, normalized[i]) == 0)
-            return g_ascii_strup(method, -1);
-    return g_strdup(method);
-}
-
 static void
 ns_def_ro(JSContext *ctx, JSValueConst obj, const char *name, JSValue val)
 {
     JS_DefinePropertyValueStr(ctx, obj, name, val,
                               JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-}
-
-static JSValue
-ns_request_get_url(JSContext *ctx, JSValueConst this_val)
-{
-    return JS_GetPropertyStr(ctx, this_val, "__ns_url");
-}
-
-static const JSCFunctionListEntry ns_request_proto_accessors[] = {
-    JS_CGETSET_DEF("url", ns_request_get_url, NULL),
-};
-
-static JSValue
-ns_window_request_ctor(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    JSValue obj = JS_NewObject(ctx);
-    ns_set_instance_proto(ctx, obj, "Request");
-    const char *url_raw = NULL;
-    const char *method  = NULL;
-    JSValue url_v = JS_UNDEFINED, method_v = JS_UNDEFINED, headers_init = JS_UNDEFINED;
-    JSValue body_v = JS_UNDEFINED;
-    if (argc >= 1) {
-        if (JS_IsObject(argv[0]) && !JS_IsString(argv[0])) {
-            url_v = JS_GetPropertyStr(ctx, argv[0], "url");
-            if (JS_IsString(url_v)) {
-                url_raw = JS_ToCString(ctx, url_v);
-                method_v = JS_GetPropertyStr(ctx, argv[0], "method");
-                if (!JS_IsUndefined(method_v)) method = JS_ToCString(ctx, method_v);
-                headers_init = JS_GetPropertyStr(ctx, argv[0], "headers");
-                body_v = JS_GetPropertyStr(ctx, argv[0], "body");
-            } else {
-                url_raw = JS_ToCString(ctx, argv[0]);
-            }
-        } else {
-            url_raw = JS_ToCString(ctx, argv[0]);
-        }
-    }
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        JSValue init_method = JS_GetPropertyStr(ctx, argv[1], "method");
-        if (!JS_IsUndefined(init_method)) {
-            if (method) JS_FreeCString(ctx, method);
-            JS_FreeValue(ctx, method_v);
-            method_v = init_method;
-            method = JS_ToCString(ctx, method_v);
-        } else {
-            JS_FreeValue(ctx, init_method);
-        }
-        JSValue init_headers = JS_GetPropertyStr(ctx, argv[1], "headers");
-        if (!JS_IsUndefined(init_headers)) {
-            JS_FreeValue(ctx, headers_init);
-            headers_init = init_headers;
-        } else {
-            JS_FreeValue(ctx, init_headers);
-        }
-        JSValue init_body = JS_GetPropertyStr(ctx, argv[1], "body");
-        if (!JS_IsUndefined(init_body)) {
-            JS_FreeValue(ctx, body_v);
-            body_v = init_body;
-        } else {
-            JS_FreeValue(ctx, init_body);
-        }
-    }
-    ns_js *js = js_from_ctx(ctx);
-    g_autofree char *resolved = NULL;
-    const char *final_url = url_raw ? url_raw : "";
-    if (url_raw && js && js->current_url && *js->current_url) {
-        resolved = ns_url_resolve(js->current_url, url_raw);
-        if (resolved) final_url = resolved;
-    }
-    ns_def_ro(ctx, obj, "url", JS_NewString(ctx, final_url));
-    JS_DefinePropertyValueStr(ctx, obj, "__ns_url",
-                              JS_NewString(ctx, final_url), 0);
-    g_autofree char *norm_method = ns_fetch_normalize_method(method);
-    if (norm_method && (!strcmp(norm_method, "GET") || !strcmp(norm_method, "HEAD")) &&
-        !JS_IsNull(body_v) && !JS_IsUndefined(body_v)) {
-        if (url_raw) JS_FreeCString(ctx, url_raw);
-        if (method)  JS_FreeCString(ctx, method);
-        JS_FreeValue(ctx, url_v);
-        JS_FreeValue(ctx, method_v);
-        JS_FreeValue(ctx, headers_init);
-        JS_FreeValue(ctx, body_v);
-        JS_FreeValue(ctx, obj);
-        return JS_ThrowTypeError(ctx,
-            "Request with GET/HEAD method cannot have a body");
-    }
-    ns_def_ro(ctx, obj, "method",
-        JS_NewString(ctx, norm_method ? norm_method : "GET"));
-    JS_DefinePropertyValueStr(ctx, obj, "__ns_method",
-                              JS_NewString(ctx, norm_method ? norm_method : "GET"), 0);
-    ns_def_ro(ctx, obj, "headers",
-        ns_make_headers_from_init(ctx, headers_init));
-    ns_body_install(ctx, obj, body_v, TRUE);
-    ns_body_apply_inferred_ct(ctx, obj);
-    ns_def_ro(ctx, obj, "bodyUsed",       JS_FALSE);
-    ns_def_ro(ctx, obj, "mode",           JS_NewString(ctx, "cors"));
-    ns_def_ro(ctx, obj, "credentials",    JS_NewString(ctx, "same-origin"));
-    ns_def_ro(ctx, obj, "cache",          JS_NewString(ctx, "default"));
-    ns_def_ro(ctx, obj, "redirect",       JS_NewString(ctx, "follow"));
-    ns_def_ro(ctx, obj, "referrer",       JS_NewString(ctx, "about:client"));
-    ns_def_ro(ctx, obj, "referrerPolicy", JS_NewString(ctx, ""));
-    ns_def_ro(ctx, obj, "integrity",      JS_NewString(ctx, ""));
-    ns_def_ro(ctx, obj, "keepalive",      JS_FALSE);
-    ns_def_ro(ctx, obj, "destination",    JS_NewString(ctx, ""));
-    ns_def_ro(ctx, obj, "isReloadNavigation",  JS_FALSE);
-    ns_def_ro(ctx, obj, "isHistoryNavigation", JS_FALSE);
-    ns_def_ro(ctx, obj, "duplex",         JS_NewString(ctx, "half"));
-    ns_attach_body_consumers(ctx, obj);
-    if (url_raw) JS_FreeCString(ctx, url_raw);
-    if (method)  JS_FreeCString(ctx, method);
-    JS_FreeValue(ctx, url_v);
-    JS_FreeValue(ctx, method_v);
-    JS_FreeValue(ctx, headers_init);
-    JS_FreeValue(ctx, body_v);
-    return obj;
-}
-
-static void
-ns_fetch_install_interface(JSContext *ctx, JSValueConst global,
-                           const char *name)
-{
-    JSValue ctor = JS_GetPropertyStr(ctx, global, name);
-    JSValue proto = JS_IsObject(ctor)
-        ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
-    if (!JS_IsConstructor(ctx, ctor) || !JS_IsObject(proto)) {
-        JS_FreeValue(ctx, proto);
-        JS_FreeValue(ctx, ctor);
-        return;
-    }
-    if (strcmp(name, "Request") == 0)
-        JS_SetPropertyFunctionList(ctx, proto, ns_request_proto_accessors,
-                                   G_N_ELEMENTS(ns_request_proto_accessors));
-    JSValue sample;
-    if (strcmp(name, "Request") == 0) {
-        JSValue url = JS_NewString(ctx, "about:blank");
-        JSValueConst args[1] = { url };
-        sample = JS_CallConstructor(ctx, ctor, 1, args);
-        JS_FreeValue(ctx, url);
-    } else {
-        sample = JS_CallConstructor(ctx, ctor, 0, NULL);
-    }
-    if (!JS_IsException(sample)) {
-        static const char *const methods[] = {
-            "arrayBuffer", "blob", "clone", "formData", "json", "text",
-            "bytes",
-        };
-        for (gsize i = 0; i < G_N_ELEMENTS(methods); i++) {
-            JSAtom atom = JS_NewAtom(ctx, methods[i]);
-            JSPropertyDescriptor desc;
-            if (JS_GetOwnProperty(ctx, &desc, sample, atom) > 0) {
-                JS_DefinePropertyValue(ctx, proto, atom, desc.value,
-                    JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-                JS_FreeValue(ctx, desc.getter);
-                JS_FreeValue(ctx, desc.setter);
-            }
-            JS_FreeAtom(ctx, atom);
-        }
-        JSAtom body_atom = JS_NewAtom(ctx, "body");
-        JSPropertyDescriptor body_desc;
-        if (JS_GetOwnProperty(ctx, &body_desc, sample, body_atom) > 0) {
-            JS_DefinePropertyGetSet(ctx, proto, body_atom,
-                                    body_desc.getter, body_desc.setter,
-                                    JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-            JS_FreeValue(ctx, body_desc.value);
-        }
-        JS_FreeAtom(ctx, body_atom);
-        JS_FreeValue(ctx, sample);
-    } else {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, sample);
-    }
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-}
-
-static void
-ns_fetch_install_static_response(JSContext *ctx)
-{
-    static const char *const source =
-        "(function(){if(typeof Response!=='function')return;"
-        " function error(){var r=new Response(null);"
-        "  Object.defineProperties(r,{type:{value:'error',configurable:true},"
-        "   status:{value:0,configurable:true},ok:{value:false,configurable:true},"
-        "   statusText:{value:'',configurable:true}});return r;}"
-        " function json(data,init){var body=JSON.stringify(data);init=init||{};"
-        "  var headers=new Headers(init.headers);if(!headers.has('content-type'))"
-        "   headers.set('content-type','application/json');"
-        "  var next={status:init.status,statusText:init.statusText,headers:headers};"
-        "  return new Response(body,next);}"
-        " function redirect(url,status){status=status===undefined?302:Number(status);"
-        "  if([301,302,303,307,308].indexOf(status)<0)throw new RangeError('Invalid redirect status');"
-        "  return new Response(null,{status:status,headers:{location:String(url)}});}"
-        " Object.defineProperties(Response,{"
-        "  error:{value:error,writable:true,configurable:true},"
-        "  json:{value:json,writable:true,configurable:true},"
-        "  redirect:{value:redirect,writable:true,configurable:true}});"
-        "})()";
-    JSValue result = JS_Eval(ctx, source, strlen(source),
-                             "<response-static>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(result)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, result);
 }
 
 static void
@@ -22854,7 +21122,7 @@ ns_sw_returns_resolved_true(JSContext *ctx, JSValueConst this_val,
     return ns_promise_resolve_take(ctx, JS_TRUE);
 }
 
-static ns_worker_host *
+ns_worker_host *
 ns_sw_controller_for(ns_js *js, const char *abs_url)
 {
     if (!js || !js->workers || !abs_url) return NULL;
@@ -22887,49 +21155,16 @@ ns_sw_fetch_result_on_owner(gpointer data)
     ns_sw_fres *res = data;
     ns_worker_host *host = res->host;
     ns_js *js = host ? host->owner : NULL;
-    if (!host || !g_atomic_int_get(&host->owner_alive) || !js ||
-        !js->fetch_states_by_id) {
+    if (!host || !g_atomic_int_get(&host->owner_alive) || !js) {
         g_free(res->raw_headers); g_free(res->content_type);
         g_free(res->body); g_free(res->error);
         if (host) ns_worker_host_unref(host);
         g_free(res);
         return G_SOURCE_REMOVE;
     }
-    ns_js_fetch_state *st = g_hash_table_lookup(js->fetch_states_by_id,
-                                                GUINT_TO_POINTER(res->id));
-    char *send_url = st ? g_steal_pointer(&st->fb_send_url) : NULL;
-    if (send_url) {
-        if (res->outcome == 1) {
-            ns_response *resp = g_new0(ns_response, 1);
-            resp->status = res->status > 0 ? res->status : 200;
-            resp->final_url = g_strdup(send_url);
-            resp->content_type = res->content_type
-                ? g_strdup(res->content_type) : g_strdup("text/plain;charset=UTF-8");
-            resp->cors_allow_origin = g_strdup("*");
-            resp->raw_headers = res->raw_headers ? g_strdup(res->raw_headers) : NULL;
-            resp->body = g_byte_array_sized_new(res->body_len);
-            if (res->body && res->body_len)
-                g_byte_array_append(resp->body, res->body, res->body_len);
-            ns_js_fetch_delivery *d = g_new0(ns_js_fetch_delivery, 1);
-            d->st = st;
-            d->resp = resp;
-            ns_js_attach_idle(js, ns_on_js_fetch_deliver_idle, d);
-        } else if (res->outcome == 2) {
-            ns_response *resp = g_new0(ns_response, 1);
-            resp->error = g_strdup(res->error ? res->error
-                                   : "ServiceWorker fetch handler failed");
-            ns_js_fetch_delivery *d = g_new0(ns_js_fetch_delivery, 1);
-            d->st = st;
-            d->resp = resp;
-            ns_js_attach_idle(js, ns_on_js_fetch_deliver_idle, d);
-        } else {
-            ns_net_request_async(send_url, st->fb_top, st->fb_method,
-                                 st->fb_body, st->fb_body_len, st->fb_content_type,
-                                 (const char *const *)st->fb_headers,
-                                 st->cancellable, ns_on_js_fetch_done, st);
-        }
-    }
-    g_free(send_url);
+    ns_js_net_sw_fetch_result(js, res->id, res->outcome, res->status,
+                              res->content_type, res->raw_headers, res->body,
+                              res->body_len, res->error);
     g_free(res->raw_headers); g_free(res->content_type);
     g_free(res->body); g_free(res->error);
     ns_worker_host_unref(host);
@@ -23085,7 +21320,7 @@ ns_sw_dispatch_fetch_on_worker(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-static void
+void
 ns_sw_post_fetch_request(ns_worker_host *host, guint id,
                          const char *url, const char *method,
                          const char *const *headers,
@@ -23107,8 +21342,6 @@ ns_sw_post_fetch_request(ns_worker_host *host, guint id,
                                ns_sw_dispatch_fetch_on_worker, r, NULL);
 }
 
-static JSValue ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv);
 
 static void
 ns_sw_install_scope(JSContext *ctx, JSValueConst global, ns_worker_host *host)
@@ -23163,9 +21396,7 @@ ns_sw_install_scope(JSContext *ctx, JSValueConst global, ns_worker_host *host)
     ns_bind_ctor(ctx, global, "ExtendableMessageEvent", ns_window_event_ctor, 2);
     ns_bind_ctor(ctx, global, "Response", ns_window_response_ctor, 0);
     ns_bind_ctor(ctx, global, "Request",  ns_window_request_ctor,  1);
-    ns_fetch_install_interface(ctx, global, "Response");
-    ns_fetch_install_interface(ctx, global, "Request");
-    ns_fetch_install_static_response(ctx);
+    ns_fetch_install_interfaces(ctx, global);
 
     ns_bind_fn(ctx, global, "__nd_sw_fetch_result", ns_sw_fetch_result, 6);
     static const char *fetch_dispatch_src =
@@ -23234,26 +21465,6 @@ ns_sw_fire_lifecycle(ns_js *js)
         ns_sw_post_owner_state(host, "activated");
     }
     JS_FreeValue(ctx, global);
-}
-
-static void
-ns_install_abort_signal_interface(JSContext *ctx, JSValueConst global)
-{
-    ns_bind_ctor(ctx, global, "AbortSignal", ns_illegal_constructor, 0);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, "AbortSignal");
-    ns_bind_fn(ctx, ctor, "abort",   ns_abort_signal_static_abort,   0);
-    ns_bind_fn(ctx, ctor, "timeout", ns_abort_signal_static_timeout, 1);
-    ns_bind_fn(ctx, ctor, "any",     ns_abort_signal_static_any,     1);
-    JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-    ns_bind_fn(ctx, proto, "throwIfAborted",
-               ns_abort_signal_throw_if_aborted, 0);
-    ns_set_tostring_tag(ctx, proto, "AbortSignal");
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-    JSValue controller_proto = ns_proto_of(ctx, global, "AbortController");
-    if (JS_IsObject(controller_proto))
-        ns_bind_fn(ctx, controller_proto, "abort", ns_abort_controller_abort, 0);
-    JS_FreeValue(ctx, controller_proto);
 }
 
 static void
@@ -23675,11 +21886,8 @@ ns_worker_js_new(ns_worker_host *host)
     js->log_user_data = host;
     js->timers = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                        NULL, ns_timer_free);
-    js->pending_fetches = g_ptr_array_new();
-    js->fetch_states_by_id = g_hash_table_new(g_direct_hash, g_direct_equal);
     js->pending_xhrs = g_ptr_array_new();
     js->pending_ws = g_ptr_array_new();
-    js->pending_aborts = g_ptr_array_new();
     js->listeners = g_ptr_array_new();
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
     ns_perf_init(js);
@@ -23688,11 +21896,8 @@ ns_worker_js_new(ns_worker_host *host)
     if (!js->rt) {
         ns_perf_teardown(js);
         if (js->timers) g_hash_table_destroy(js->timers);
-        if (js->pending_fetches) g_ptr_array_free(js->pending_fetches, TRUE);
-        if (js->fetch_states_by_id) g_hash_table_destroy(js->fetch_states_by_id);
         if (js->pending_xhrs) g_ptr_array_free(js->pending_xhrs, TRUE);
         if (js->pending_ws) g_ptr_array_free(js->pending_ws, TRUE);
-        if (js->pending_aborts) g_ptr_array_free(js->pending_aborts, TRUE);
         if (js->listeners) g_ptr_array_free(js->listeners, TRUE);
         if (js->pinned_wrappers_set) g_hash_table_destroy(js->pinned_wrappers_set);
         g_free(js);
@@ -23713,11 +21918,8 @@ ns_worker_js_new(ns_worker_host *host)
         JS_FreeRuntime(js->rt);
         ns_perf_teardown(js);
         if (js->timers) g_hash_table_destroy(js->timers);
-        if (js->pending_fetches) g_ptr_array_free(js->pending_fetches, TRUE);
-        if (js->fetch_states_by_id) g_hash_table_destroy(js->fetch_states_by_id);
         if (js->pending_xhrs) g_ptr_array_free(js->pending_xhrs, TRUE);
         if (js->pending_ws) g_ptr_array_free(js->pending_ws, TRUE);
-        if (js->pending_aborts) g_ptr_array_free(js->pending_aborts, TRUE);
         if (js->listeners) g_ptr_array_free(js->listeners, TRUE);
         if (js->pinned_wrappers_set) g_hash_table_destroy(js->pinned_wrappers_set);
         g_free(js);
@@ -23814,9 +22016,7 @@ ns_worker_js_new(ns_worker_host *host)
     ns_bind_fn(ctx, global, "fetch",    ns_js_fetch,             1);
     ns_bind_ctor(ctx, global, "Response", ns_window_response_ctor, 0);
     ns_bind_ctor(ctx, global, "Request",  ns_window_request_ctor,  1);
-    ns_fetch_install_interface(ctx, global, "Response");
-    ns_fetch_install_interface(ctx, global, "Request");
-    ns_fetch_install_static_response(ctx);
+    ns_fetch_install_interfaces(ctx, global);
     JS_SetPropertyStr(ctx, global, "__ndWorkerHeadersOnly", JS_TRUE);
     ns_bind_ctor(ctx, global, "AbortController",
                  ns_window_abort_controller_ctor, 0);
@@ -27430,7 +25630,7 @@ ns_js_has_pending_work(const ns_js *js)
         }
     }
     if (js->raf_pending && js->raf_pending->len > 0) return TRUE;
-    if (js->pending_fetches && js->pending_fetches->len > 0) return TRUE;
+    if (ns_js_net_pending_fetches(js) > 0) return TRUE;
     if (js->pending_xhrs && js->pending_xhrs->len > 0) return TRUE;
     if (js->pending_ws && js->pending_ws->len > 0) return TRUE;
     if (js->filereader_idles && js->filereader_idles->len > 0) return TRUE;
@@ -27506,7 +25706,7 @@ ns_js_dump_stats(ns_js *js, GString *out)
     g_string_append_printf(out, "  anim frames     %u\n",
                            js->raf_pending ? js->raf_pending->len : 0);
     g_string_append_printf(out, "  pending fetch   %u\n",
-                           js->pending_fetches ? js->pending_fetches->len : 0);
+                           ns_js_net_pending_fetches(js));
     g_string_append_printf(out, "  pending xhr     %u\n",
                            js->pending_xhrs ? js->pending_xhrs->len : 0);
     g_string_append_printf(out, "  websockets      %u\n",
@@ -40670,7 +38870,7 @@ ns_js_resource_origin_clean(ns_js *js, JSContext *ctx, const char *url,
         return TRUE;
     const char *doc_url = ns_js_caller_document_url(js, ctx);
     if (ns_js_urls_same_origin(url, doc_url)) return TRUE;
-    return cors_allow_origin && cors_allows(doc_url, url, cors_allow_origin);
+    return cors_allow_origin && ns_cors_allows(doc_url, url, cors_allow_origin);
 }
 
 
@@ -48175,7 +46375,7 @@ ns_navigator_sendBeacon(JSContext *ctx, JSValueConst this_val,
     return JS_TRUE;
 }
 
-static JSValue
+JSValue
 ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
 {
@@ -50321,12 +48521,8 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
     js->attr_wrappers = g_ptr_array_new();
     js->attribute_maps = g_hash_table_new(g_direct_hash, g_direct_equal);
-    js->pending_fetches = g_ptr_array_new();
-    js->fetch_states_by_id = g_hash_table_new(g_direct_hash, g_direct_equal);
-    js->next_fetch_id = 0;
     js->pending_xhrs    = g_ptr_array_new();
     js->pending_ws      = g_ptr_array_new();
-    js->pending_aborts  = g_ptr_array_new();
     js->local_storage   = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
     js->session_storage = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
     js->session_storage_buckets = g_hash_table_new_full(
@@ -50769,9 +48965,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_net_install_text_codecs(ctx, global);
     ns_bind_ctor(ctx, global, "Response",    ns_window_response_ctor,     0);
     ns_bind_ctor(ctx, global, "Request",     ns_window_request_ctor,      1);
-    ns_fetch_install_interface(ctx, global, "Response");
-    ns_fetch_install_interface(ctx, global, "Request");
-    ns_fetch_install_static_response(ctx);
+    ns_fetch_install_interfaces(ctx, global);
     ns_bind_ctor(ctx, global, "FileReader",  ns_window_filereader_ctor,   0);
 
     ns_bind_ctor(ctx, global, "KeyboardEvent", ns_keyboard_event_ctor, 2);
@@ -54224,18 +52418,7 @@ ns_js_reset_runtime_state(ns_js *js)
         ns_listener_index_clear(js);
     }
 
-    if (js->pending_fetches) {
-        for (guint i = 0; i < js->pending_fetches->len; i++) {
-            ns_js_fetch_state *st = g_ptr_array_index(js->pending_fetches, i);
-            JS_FreeValue(js->ctx, st->resolve);
-            JS_FreeValue(js->ctx, st->reject);
-            st->resolve = JS_UNDEFINED;
-            st->reject  = JS_UNDEFINED;
-            st->ctx = NULL;
-            st->js  = NULL;
-        }
-        g_ptr_array_set_size(js->pending_fetches, 0);
-    }
+    ns_js_net_reset(js);
 
     if (js->pending_xhrs) {
         for (guint i = 0; i < js->pending_xhrs->len; i++) {
@@ -54962,21 +53145,7 @@ ns_js_free(ns_js *js)
         js->listeners = NULL;
         g_clear_pointer(&js->listener_index, g_hash_table_destroy);
     }
-    if (js->pending_fetches) {
-        for (guint i = 0; i < js->pending_fetches->len; i++) {
-            ns_js_fetch_state *st = g_ptr_array_index(js->pending_fetches, i);
-            JS_FreeValue(js->ctx, st->resolve);
-            JS_FreeValue(js->ctx, st->reject);
-            st->ctx = NULL;
-            st->js  = NULL;
-        }
-        g_ptr_array_free(js->pending_fetches, TRUE);
-        js->pending_fetches = NULL;
-    }
-    if (js->fetch_states_by_id) {
-        g_hash_table_destroy(js->fetch_states_by_id);
-        js->fetch_states_by_id = NULL;
-    }
+    ns_js_net_teardown(js);
     if (js->pending_xhrs) {
         for (guint i = 0; i < js->pending_xhrs->len; i++) {
             ns_xhr_state *st = g_ptr_array_index(js->pending_xhrs, i);
@@ -54986,15 +53155,6 @@ ns_js_free(ns_js *js)
         }
         g_ptr_array_free(js->pending_xhrs, TRUE);
         js->pending_xhrs = NULL;
-    }
-    if (js->pending_aborts) {
-        for (guint i = 0; i < js->pending_aborts->len; i++) {
-            ns_abort_timeout *t = g_ptr_array_index(js->pending_aborts, i);
-            JS_FreeValue(js->ctx, t->sig);
-            t->ctx = NULL;
-        }
-        g_ptr_array_free(js->pending_aborts, TRUE);
-        js->pending_aborts = NULL;
     }
     if (js->pending_ws) {
         for (guint i = 0; i < js->pending_ws->len; i++) {
@@ -55190,10 +53350,6 @@ ns_js_free(ns_js *js)
     if (js->form_data_helper_set) {
         JS_FreeValue(js->ctx, js->form_data_helper);
         js->form_data_helper_set = 0;
-    }
-    if (js->body_consumer_helper_set) {
-        JS_FreeValue(js->ctx, js->body_consumer_helper);
-        js->body_consumer_helper_set = 0;
     }
     if (js->listener_atoms_set) {
         JS_FreeAtom(js->ctx, js->atom_capture);
@@ -59555,6 +57711,25 @@ void
 ns_js_log_line(ns_js *js, const char *line)
 {
     if (js->log_cb) js->log_cb(line, js->log_user_data);
+}
+
+const char *
+ns_js_net_page_url(const ns_js *js)
+{
+    return js ? js->current_url : NULL;
+}
+
+gboolean
+ns_js_net_csp_allows_connect(const ns_js *js, const char *url, const char *page)
+{
+    return !js || !js->csp || ns_csp_allows(js->csp, NS_CSP_CONNECT, url, page);
+}
+
+gboolean
+ns_js_net_host_is(JSValueConst v, int kind)
+{
+    ns_hostobj *d = ns_ho_data(v);
+    return d && (int)d->kind == kind;
 }
 
 JSContext *

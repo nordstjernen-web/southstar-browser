@@ -40,6 +40,7 @@ pub use southstar_js_brand;
 pub use southstar_js_clone;
 pub use southstar_js_forms;
 pub use southstar_js_intl;
+pub use southstar_js_net;
 pub use southstar_js_observers;
 pub use southstar_js_perf;
 pub use southstar_js_realm;

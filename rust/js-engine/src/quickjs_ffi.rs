@@ -276,6 +276,12 @@ unsafe extern "C" {
         pbyte_length: *mut usize,
         pbytes_per_element: *mut usize,
     ) -> JSValue;
+    fn JS_GetArrayBufferViewBuffer(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        pbyte_offset: *mut usize,
+        pbyte_length: *mut usize,
+    ) -> JSValue;
     fn JS_ExecutePendingJob(rt: *mut JSRuntime, pctx: *mut *mut JSContext) -> c_int;
     fn JS_PromiseState(ctx: *mut JSContext, promise: JSValue) -> c_int;
     fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
@@ -1946,6 +1952,30 @@ impl Scope<'_> {
         let mut args = [buffer.raw, UNDEFINED, UNDEFINED];
         let raw = unsafe { JS_NewTypedArray(self.ctx, 3, args.as_mut_ptr(), index) };
         self.take(raw)
+    }
+
+    pub fn view_data(&mut self, value: &Value) -> Option<Vec<u8>> {
+        if value.raw.tag != TAG_OBJECT {
+            return None;
+        }
+        let (mut byte_offset, mut length) = (0usize, 0usize);
+        let buffer = unsafe {
+            JS_GetArrayBufferViewBuffer(self.ctx, value.raw, &mut byte_offset, &mut length)
+        };
+        let buffer = self.take(buffer).ok()?;
+        let mut total = 0usize;
+        let base = unsafe { JS_GetArrayBuffer(self.ctx, &mut total, buffer.raw) };
+        if base.is_null() {
+            drop(self.exception());
+            return None;
+        }
+        if byte_offset
+            .checked_add(length)
+            .is_none_or(|end| end > total)
+        {
+            return None;
+        }
+        Some(unsafe { core::slice::from_raw_parts(base.add(byte_offset), length) }.to_vec())
     }
 
     pub fn gc(&mut self) {
