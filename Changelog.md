@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* localStorage and sessionStorage moved from js.c to Rust (rust/js-storage).
+  Keys now enumerate in the same order as key(n); the on-disk format is
+  unchanged.
 * Custom elements (customElements.define, get, whenDefined, upgrade and
   getName, element upgrades and the lifecycle callbacks) moved from js.c to
   Rust (rust/js-custom-elements), with unchanged results.

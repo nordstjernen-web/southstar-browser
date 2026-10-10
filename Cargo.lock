@@ -1630,6 +1630,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-realm",
  "southstar-js-services",
+ "southstar-js-storage",
  "southstar-js-temporal",
  "southstar-js-wasm",
  "southstar-js-window",
@@ -1905,6 +1906,16 @@ name = "southstar-js-services"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-config",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-storage"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
 ]

@@ -53,6 +53,7 @@ southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-services = { path = "../js-services" }
+southstar-js-storage = { path = "../js-storage" }
 southstar-js-temporal = { path = "../js-temporal" }
 southstar-js-wasm = { path = "../js-wasm", optional = true }
 southstar-js-window = { path = "../js-window" }

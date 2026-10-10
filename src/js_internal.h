@@ -187,15 +187,7 @@ struct ns_js {
     GPtrArray    *attr_wrappers;
     GHashTable   *attribute_maps;
     GPtrArray    *filereader_idles;
-    GHashTable   *local_storage;
-    GHashTable   *session_storage;
-    char         *local_storage_origin;
-    char         *local_storage_path;
-    gboolean      local_storage_dirty;
-    guint         local_storage_flush_source;
-    gboolean      local_storage_disabled;
     char         *cookie_value;
-    GHashTable   *session_storage_buckets;
     GHashTable   *cookie_buckets;
     char         *partition_key;
     guint64       opaque_counter;
@@ -237,8 +229,6 @@ struct ns_js {
     GHashTable   *reported_rejections;
     GHashTable   *iframe_globals;
     int           iframe_load_depth;
-    GArray       *pending_storage_events;
-    gboolean      storage_events_draining;
     gint64        last_pump_us;
     gint64        last_orphan_sweep_us;
     int           dispatch_depth;
@@ -1057,5 +1047,30 @@ JSValue  ns_js_node_wrapper(JSContext *ctx, const ns_node *node);
 gboolean ns_js_wrapper_pinned(const ns_js *js, const ns_node *node);
 void     ns_js_popover_removing(ns_js *js, ns_node *el);
 JSValue  ns_js_new_orphan_element(JSContext *ctx, const char *name);
+
+void    ns_storage_init(ns_js *js);
+void    ns_storage_teardown(ns_js *js);
+void    ns_storage_flush(ns_js *js);
+void    ns_storage_schedule_flush(ns_js *js);
+void    ns_storage_drain_deferred_events(ns_js *js);
+void    ns_storage_free_deferred_events(ns_js *js);
+void    ns_storage_switch_session(ns_js *js, const char *old_partition,
+                                  const char *new_partition);
+void    ns_storage_load_local(ns_js *js, const char *url);
+void    ns_storage_install_proto(JSContext *ctx, JSValueConst proto);
+void    ns_storage_install_window(JSContext *ctx, JSValueConst global);
+char   *ns_storage_named_value(JSContext *ctx, JSValueConst obj, const char *name);
+int     ns_storage_named_set(JSContext *ctx, JSValueConst obj, const char *name,
+                             JSValueConst value);
+void    ns_storage_named_delete(JSContext *ctx, JSValueConst obj, const char *name);
+char  **ns_storage_names(JSContext *ctx, JSValueConst obj);
+int     ns_storage_area_of(JSValueConst obj);
+JSValue ns_storage_new(JSContext *ctx, int area);
+gboolean ns_js_halted(const ns_js *js);
+void    ns_js_in_main_realm(ns_js *js, void (*fn)(void *data), void *data);
+JSValue ns_js_frame_realm_window(ns_js *js, const ns_node *frame);
+gboolean ns_js_inline_handlers_allowed(const ns_js *js);
+void    ns_js_fire_element_handlers(ns_js *js, const ns_node *element,
+                                    const char *type, JSValueConst event);
 
 #endif

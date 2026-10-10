@@ -50,6 +50,7 @@ pub use southstar_js_observers;
 pub use southstar_js_perf;
 pub use southstar_js_realm;
 pub use southstar_js_services;
+pub use southstar_js_storage;
 pub use southstar_js_temporal;
 #[cfg(feature = "wasm")]
 pub use southstar_js_wasm;

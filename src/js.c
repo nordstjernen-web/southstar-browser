@@ -914,7 +914,6 @@ ns_js_attach_idle(ns_js *js, GSourceFunc func, gpointer data)
     return id;
 }
 
-static void ns_storage_drain_deferred_events(ns_js *js);
 static void ns_js_report_pending_rejections(ns_js *js);
 static void ns_js_drop_pending_rejections(ns_js *js);
 
@@ -1235,9 +1234,6 @@ ns_drain_microtasks(ns_js *js)
     if (js->callback_depth == 0)
         ns_js_report_pending_rejections(js);
 }
-
-static void ns_storage_flush(ns_js *js);
-static void ns_storage_schedule_flush(ns_js *js);
 
 gboolean
 ns_js_due_timers_allowed(const ns_js *js)
@@ -2269,81 +2265,6 @@ ns_tlist_toggle(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *a
     return result ? JS_TRUE : JS_FALSE;
 }
 
-static char *
-ns_storage_path_for_origin(const char *origin)
-{
-    if (!origin || !*origin) return NULL;
-    const ns_config *cfg = ns_config_get();
-    if (cfg && cfg->private_mode) return NULL;
-    g_autofree char *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256,
-                                                          origin, -1);
-    g_autofree char *dir = g_build_filename(g_get_user_data_dir(),
-                                            NS_APP_DIR_NAME,
-                                            "localstorage", NULL);
-    g_mkdir_with_parents(dir, 0700);
-    g_chmod(dir, 0700);
-    g_autofree char *file = g_strdup_printf("%s.ini", hash);
-    return g_build_filename(dir, file, NULL);
-}
-
-static void
-ns_storage_flush(ns_js *js)
-{
-    if (!js) return;
-    if (js->local_storage_flush_source) {
-        g_source_remove(js->local_storage_flush_source);
-        js->local_storage_flush_source = 0;
-    }
-    if (!js->local_storage_dirty || !js->local_storage_path) return;
-    if (js->local_storage_disabled) { js->local_storage_dirty = FALSE; return; }
-    GKeyFile *kf = g_key_file_new();
-    if (js->local_storage_origin)
-        g_key_file_set_string(kf, "meta", "origin", js->local_storage_origin);
-    GHashTableIter it; gpointer k, v;
-    g_hash_table_iter_init(&it, js->local_storage);
-    while (g_hash_table_iter_next(&it, &k, &v))
-        g_key_file_set_string(kf, "storage", (const char *)k, (const char *)v);
-    gsize len = 0;
-    char *data = g_key_file_to_data(kf, &len, NULL);
-    if (data) {
-        GError *err = NULL;
-        if (!g_file_set_contents(js->local_storage_path, data, (gssize)len, &err)) {
-            g_warning("local storage: failed to write %s: %s",
-                      js->local_storage_path, err->message);
-            g_clear_error(&err);
-        }
-        g_chmod(js->local_storage_path, 0600);
-        g_free(data);
-    }
-    g_key_file_free(kf);
-    js->local_storage_dirty = FALSE;
-}
-
-static gboolean
-ns_storage_flush_timer(gpointer data)
-{
-    ns_js *js = data;
-    js->local_storage_flush_source = 0;
-    ns_storage_flush(js);
-    return G_SOURCE_REMOVE;
-}
-
-static void
-ns_storage_schedule_flush(ns_js *js)
-{
-    if (!js || !js->local_storage_dirty || js->local_storage_disabled) return;
-    if (js->local_storage_flush_source) return;
-    js->local_storage_flush_source =
-        g_timeout_add(1000, ns_storage_flush_timer, js);
-}
-
-static GHashTable *
-ns_session_bucket_lookup(ns_js *js, const char *key)
-{
-    if (!js->session_storage_buckets) return NULL;
-    return g_hash_table_lookup(js->session_storage_buckets, key);
-}
-
 static void
 ns_partition_apply(ns_js *js, const char *new_url)
 {
@@ -2363,35 +2284,12 @@ ns_partition_apply(ns_js *js, const char *new_url)
         return;
     }
 
-    if (js->partition_key && js->session_storage_buckets) {
-        GHashTable *bucket = ns_session_bucket_lookup(js, js->partition_key);
-        if (!bucket) {
-            bucket = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                           g_free, g_free);
-            g_hash_table_replace(js->session_storage_buckets,
-                                 g_strdup(js->partition_key), bucket);
-        }
-        g_hash_table_remove_all(bucket);
-        GHashTableIter it; gpointer k, v;
-        g_hash_table_iter_init(&it, js->session_storage);
-        while (g_hash_table_iter_next(&it, &k, &v))
-            g_hash_table_replace(bucket, g_strdup(k), g_strdup(v));
-        if (js->cookie_buckets) {
-            g_hash_table_replace(js->cookie_buckets,
-                                 g_strdup(js->partition_key),
-                                 g_strdup(js->cookie_value ? js->cookie_value : ""));
-        }
+    if (js->partition_key && js->cookie_buckets) {
+        g_hash_table_replace(js->cookie_buckets,
+                             g_strdup(js->partition_key),
+                             g_strdup(js->cookie_value ? js->cookie_value : ""));
     }
-
-    g_hash_table_remove_all(js->session_storage);
-    GHashTable *next = ns_session_bucket_lookup(js, new_key);
-    if (next) {
-        GHashTableIter it; gpointer k, v;
-        g_hash_table_iter_init(&it, next);
-        while (g_hash_table_iter_next(&it, &k, &v))
-            g_hash_table_replace(js->session_storage,
-                                 g_strdup(k), g_strdup(v));
-    }
+    ns_storage_switch_session(js, js->partition_key, new_key);
 
     g_free(js->cookie_value);
     js->cookie_value = NULL;
@@ -2409,123 +2307,7 @@ ns_storage_load_for(ns_js *js, const char *new_url)
 {
     if (!js) return;
     ns_partition_apply(js, new_url);
-    if (js->local_storage_disabled) {
-        g_hash_table_remove_all(js->local_storage);
-        return;
-    }
-    char *new_origin = ns_url_origin_from(new_url);
-    if (js->local_storage_origin && new_origin &&
-        strcmp(js->local_storage_origin, new_origin) == 0) {
-        g_free(new_origin);
-        return;
-    }
-    ns_storage_flush(js);
-    g_hash_table_remove_all(js->local_storage);
-    g_free(js->local_storage_origin);
-    g_free(js->local_storage_path);
-    js->local_storage_origin = new_origin;
-    js->local_storage_path = ns_storage_path_for_origin(new_origin);
-    if (!js->local_storage_path) return;
-    GKeyFile *kf = g_key_file_new();
-    if (g_key_file_load_from_file(kf, js->local_storage_path, G_KEY_FILE_NONE, NULL)) {
-        gsize n = 0;
-        char **keys = g_key_file_get_keys(kf, "storage", &n, NULL);
-        if (keys) {
-            for (gsize i = 0; i < n; i++) {
-                char *v = g_key_file_get_string(kf, "storage", keys[i], NULL);
-                if (v) g_hash_table_replace(js->local_storage,
-                                            g_strdup(keys[i]), v);
-            }
-            g_strfreev(keys);
-        }
-    }
-    g_key_file_free(kf);
-}
-
-static void
-ns_storage_finalizer(JSRuntime *rt, JSValue val) { (void)rt; (void)val; }
-
-static void ns_storage_maybe_dirty(JSContext *ctx, GHashTable *store);
-
-static gboolean
-ns_storage_name_is_builtin(const char *name)
-{
-    static const char *const builtins[] = {
-        "length", "constructor", "getItem", "setItem",
-        "removeItem", "clear", "key"
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(builtins); i++)
-        if (strcmp(name, builtins[i]) == 0) return TRUE;
-    return FALSE;
-}
-
-#define NS_STORAGE_QUOTA_BYTES (5u * 1024u * 1024u)
-
-static gsize
-ns_storage_bytes_used(GHashTable *store)
-{
-    if (!store) return 0;
-    gsize total = 0;
-    GHashTableIter it;
-    g_hash_table_iter_init(&it, store);
-    gpointer k, v;
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        if (k) total += strlen((const char *)k);
-        if (v) total += strlen((const char *)v);
-    }
-    return total;
-}
-
-static gboolean
-ns_storage_fits(GHashTable *store, const char *key, const char *value)
-{
-    if (!store || !key) return FALSE;
-    const char *existing = g_hash_table_lookup(store, key);
-    gsize old_kv = existing ? strlen(key) + strlen(existing) : 0;
-    gsize new_kv = strlen(key) + (value ? strlen(value) : 0);
-    if (new_kv <= old_kv) return TRUE;
-    gsize delta = new_kv - old_kv;
-    return ns_storage_bytes_used(store) + delta <= NS_STORAGE_QUOTA_BYTES;
-}
-
-static JSValue
-ns_throw_quota_exceeded_msg(JSContext *ctx, const char *message)
-{
-    JSValue g = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, g, "QuotaExceededError");
-    JS_FreeValue(ctx, g);
-    if (JS_IsFunction(ctx, ctor)) {
-        JSValue msg = JS_NewString(ctx, message);
-        JSValueConst args[1] = { msg };
-        JSValue err = JS_CallConstructor(ctx, ctor, 1, args);
-        JS_FreeValue(ctx, msg);
-        JS_FreeValue(ctx, ctor);
-        if (!JS_IsException(err)) return JS_Throw(ctx, err);
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    } else {
-        JS_FreeValue(ctx, ctor);
-    }
-    JSValue err = JS_NewError(ctx);
-    JS_DefinePropertyValueStr(ctx, err, "name",
-        JS_NewString(ctx, "QuotaExceededError"),
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyValueStr(ctx, err, "message",
-        JS_NewString(ctx, message),
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyValueStr(ctx, err, "code",
-        JS_NewInt32(ctx, 22),
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyValueStr(ctx, err, "requested", JS_NULL,
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyValueStr(ctx, err, "quota", JS_NULL,
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    return JS_Throw(ctx, err);
-}
-
-static JSValue
-ns_throw_quota_exceeded(JSContext *ctx)
-{
-    return ns_throw_quota_exceeded_msg(ctx, "Storage quota exceeded");
+    ns_storage_load_local(js, new_url);
 }
 
 static JSValue
@@ -2537,94 +2319,63 @@ ns_throw_selector_syntax_error(JSContext *ctx, const char *sel)
     return ret;
 }
 
-static gboolean
-ns_storage_prop_shadowed_by_proto(JSContext *ctx, JSValueConst obj,
-                                  JSAtom prop)
+static void
+ns_storage_finalizer(JSRuntime *rt, JSValue val) { (void)rt; (void)val; }
+
+int
+ns_storage_area_of(JSValueConst obj)
 {
-    JSValue proto = JS_GetPrototype(ctx, obj);
-    gboolean shadowed = JS_IsObject(proto) &&
-        JS_HasProperty(ctx, proto, prop) > 0;
-    JS_FreeValue(ctx, proto);
-    return shadowed;
+    return (int)(gintptr)JS_GetOpaque(obj, ns_storage_class_id);
+}
+
+JSValue
+ns_storage_new(JSContext *ctx, int area)
+{
+    JSValue obj = JS_NewObjectClass(ctx, ns_storage_class_id);
+    if (!JS_IsException(obj)) JS_SetOpaque(obj, (void *)(gintptr)area);
+    return obj;
 }
 
 static int
 ns_storage_get_own(JSContext *ctx, JSPropertyDescriptor *desc,
                    JSValueConst obj, JSAtom prop)
 {
-    GHashTable *store = JS_GetOpaque(obj, ns_storage_class_id);
-    if (!store) return 0;
+    if (!ns_storage_area_of(obj)) return 0;
     const char *name = JS_AtomToCString(ctx, prop);
     if (!name) return 0;
-    if (ns_storage_name_is_builtin(name)) {
-        JS_FreeCString(ctx, name);
-        return 0;
-    }
-    const char *val = g_hash_table_lookup(store, name);
+    char *val = ns_storage_named_value(ctx, obj, name);
     JS_FreeCString(ctx, name);
     if (!val) return 0;
-    if (ns_storage_prop_shadowed_by_proto(ctx, obj, prop)) return 0;
     if (desc) {
         desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE | JS_PROP_WRITABLE;
         desc->value  = JS_NewString(ctx, val);
         desc->getter = JS_UNDEFINED;
         desc->setter = JS_UNDEFINED;
     }
+    g_free(val);
     return 1;
 }
-
-static void ns_storage_fire_event(JSContext *ctx, JSValueConst storage_obj,
-                                  const char *key, const char *oldv,
-                                  const char *newv);
 
 static int
 ns_storage_set_prop(JSContext *ctx, JSValueConst obj, JSAtom prop,
                     JSValueConst val, JSValueConst receiver, int flags)
 {
     (void)receiver; (void)flags;
-    GHashTable *store = JS_GetOpaque(obj, ns_storage_class_id);
-    if (!store) return FALSE;
+    if (!ns_storage_area_of(obj)) return FALSE;
     const char *name = JS_AtomToCString(ctx, prop);
     if (!name) return FALSE;
-    const char *vstr = JS_ToCString(ctx, val);
-    if (!vstr) { JS_FreeCString(ctx, name); return -1; }
-    if (!ns_storage_fits(store, name, vstr)) {
-        JS_FreeCString(ctx, vstr);
-        JS_FreeCString(ctx, name);
-        ns_throw_quota_exceeded(ctx);
-        return -1;
-    }
-    char *existing = g_hash_table_lookup(store, name);
-    if (existing && strcmp(existing, vstr) == 0) {
-        JS_FreeCString(ctx, vstr);
-        JS_FreeCString(ctx, name);
-        return TRUE;
-    }
-    char *oldv = g_strdup(existing);
-    gboolean changed = !oldv || strcmp(oldv, vstr) != 0;
-    g_hash_table_replace(store, g_strdup(name), g_strdup(vstr));
-    ns_storage_maybe_dirty(ctx, store);
-    if (changed) ns_storage_fire_event(ctx, obj, name, oldv, vstr);
-    g_free(oldv);
-    JS_FreeCString(ctx, vstr);
+    int ret = ns_storage_named_set(ctx, obj, name, val);
     JS_FreeCString(ctx, name);
-    return TRUE;
+    return ret;
 }
 
 static int
 ns_storage_delete(JSContext *ctx, JSValueConst obj, JSAtom prop)
 {
-    GHashTable *store = JS_GetOpaque(obj, ns_storage_class_id);
-    if (!store) return FALSE;
+    if (!ns_storage_area_of(obj)) return FALSE;
     const char *name = JS_AtomToCString(ctx, prop);
     if (!name) return FALSE;
-    char *oldv = g_strdup(g_hash_table_lookup(store, name));
-    gboolean removed = g_hash_table_remove(store, name);
-    if (removed) {
-        ns_storage_maybe_dirty(ctx, store);
-        ns_storage_fire_event(ctx, obj, name, oldv, NULL);
-    }
-    g_free(oldv);
+    ns_storage_named_delete(ctx, obj, name);
     JS_FreeCString(ctx, name);
     return TRUE;
 }
@@ -2634,56 +2385,43 @@ ns_storage_define_own(JSContext *ctx, JSValueConst this_obj, JSAtom prop,
                       JSValueConst val, JSValueConst getter,
                       JSValueConst setter, int flags)
 {
-    GHashTable *store = JS_GetOpaque(this_obj, ns_storage_class_id);
     JSValue key = JS_AtomToValue(ctx, prop);
     gboolean is_symbol = JS_IsSymbol(key);
     JS_FreeValue(ctx, key);
-    if (!store || is_symbol || JS_IsObject(getter) || JS_IsObject(setter) ||
-        JS_IsUndefined(val))
+    if (!ns_storage_area_of(this_obj) || is_symbol || JS_IsObject(getter) ||
+        JS_IsObject(setter) || JS_IsUndefined(val))
         return JS_DefineProperty(ctx, this_obj, prop, val, getter, setter,
                                  flags | JS_PROP_NO_EXOTIC);
     const char *name = JS_AtomToCString(ctx, prop);
     if (!name) return -1;
-    const char *vstr = JS_ToCString(ctx, val);
-    if (!vstr) { JS_FreeCString(ctx, name); return -1; }
-    if (!ns_storage_fits(store, name, vstr)) {
-        JS_FreeCString(ctx, vstr);
-        JS_FreeCString(ctx, name);
-        ns_throw_quota_exceeded(ctx);
-        return -1;
-    }
-    char *oldv = g_strdup(g_hash_table_lookup(store, name));
-    gboolean changed = !oldv || strcmp(oldv, vstr) != 0;
-    g_hash_table_replace(store, g_strdup(name), g_strdup(vstr));
-    ns_storage_maybe_dirty(ctx, store);
-    if (changed) ns_storage_fire_event(ctx, this_obj, name, oldv, vstr);
-    g_free(oldv);
-    JS_FreeCString(ctx, vstr);
+    int ret = ns_storage_named_set(ctx, this_obj, name, val);
     JS_FreeCString(ctx, name);
-    return TRUE;
+    return ret;
 }
 
 static int
 ns_storage_get_own_names(JSContext *ctx, JSPropertyEnum **ptab, uint32_t *plen,
                          JSValueConst obj)
 {
-    GHashTable *store = JS_GetOpaque(obj, ns_storage_class_id);
-    if (!store) { *ptab = NULL; *plen = 0; return 0; }
-    guint count = g_hash_table_size(store);
-    JSPropertyEnum *tab = NULL;
-    if (count > 0) {
-        tab = js_malloc(ctx, sizeof(JSPropertyEnum) * count);
-        if (!tab) return -1;
+    *ptab = NULL;
+    *plen = 0;
+    if (!ns_storage_area_of(obj)) return 0;
+    char **names = ns_storage_names(ctx, obj);
+    guint count = names ? g_strv_length(names) : 0;
+    if (count == 0) {
+        g_strfreev(names);
+        return 0;
     }
-    GHashTableIter it;
-    g_hash_table_iter_init(&it, store);
-    uint32_t i = 0;
-    gpointer k, v;
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        tab[i].atom = JS_NewAtom(ctx, (const char *)k);
+    JSPropertyEnum *tab = js_malloc(ctx, sizeof(JSPropertyEnum) * count);
+    if (!tab) {
+        g_strfreev(names);
+        return -1;
+    }
+    for (guint i = 0; i < count; i++) {
+        tab[i].atom = JS_NewAtom(ctx, names[i]);
         tab[i].is_enumerable = 1;
-        i++;
     }
+    g_strfreev(names);
     *ptab = tab;
     *plen = count;
     return 0;
@@ -2703,321 +2441,7 @@ static JSClassDef ns_storage_class = {
     .exotic     = &ns_storage_exotic,
 };
 
-static JSValue
-ns_storage_getItem(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'getItem' on 'Storage': 1 argument required, "
-            "but only 0 present.");
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    if (!store) return JS_NULL;
-    const char *k = JS_ToCString(ctx, argv[0]);
-    if (!k) return JS_NULL;
-    const char *v = g_hash_table_lookup(store, k);
-    JS_FreeCString(ctx, k);
-    return v ? JS_NewString(ctx, v) : JS_NULL;
-}
-
-static void
-ns_storage_maybe_dirty(JSContext *ctx, GHashTable *store)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (js && store == js->local_storage)
-        js->local_storage_dirty = TRUE;
-}
-
-static void ns_js_dispatch_window_only_event(ns_js *js,
-                                             const ns_node *target_doc,
-                                             const char *type, JSValue event,
-                                             gboolean *default_prevented);
-static gboolean ns_fire_inline_on_handler(ns_js *js, const ns_node *target,
-                                          const char *type, JSValue event);
-static gboolean ns_fire_property_on_handler(ns_js *js, const ns_node *target,
-                                            const char *type, JSValue event);
 static JSValue ns_iframe_lookup_realm_window(ns_js *js, ns_node *iframe);
-
-static void
-ns_storage_call_frame_handler(ns_js *js, JSValue fn, JSValueConst fwin,
-                              JSValueConst ev)
-{
-    if (!JS_IsFunction(js->ctx, fn)) return;
-    JSValueConst args[1] = { ev };
-    JSValue r = JS_Call(js->ctx, fn, fwin, 1, args);
-    if (JS_IsException(r)) {
-        JSValue ex = JS_GetException(js->ctx);
-        const char *m = JS_ToCString(js->ctx, ex);
-        if (m && js->log_cb) {
-            char *line = g_strdup_printf("JS error in onstorage: %s", m);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        if (m) JS_FreeCString(js->ctx, m);
-        JS_FreeValue(js->ctx, ex);
-    }
-    JS_FreeValue(js->ctx, r);
-}
-
-static void
-ns_storage_fire_frame_on_prop(ns_js *js, JSValueConst fwin, JSValueConst ev)
-{
-    JSAtom atom = JS_NewAtom(js->ctx, "onstorage");
-    JSPropertyDescriptor desc;
-    int has = JS_GetOwnProperty(js->ctx, &desc, fwin, atom);
-    JS_FreeAtom(js->ctx, atom);
-    if (has <= 0) return;
-    if (!(desc.flags & JS_PROP_GETSET))
-        ns_storage_call_frame_handler(js, desc.value, fwin, ev);
-    JS_FreeValue(js->ctx, desc.value);
-    JS_FreeValue(js->ctx, desc.getter);
-    JS_FreeValue(js->ctx, desc.setter);
-}
-
-static void
-ns_storage_fire_frame_body_handler(ns_js *js, JSValueConst fwin,
-                                   const ns_node *body, JSValueConst ev)
-{
-    const char *src = ns_element_get_attr(body, "onstorage");
-    if (!src || !*src) return;
-    if (!ns_csp_inline_event_handler_allowed(js->csp)) return;
-    GString *code = g_string_new(
-        "(function(__nsStorageEvt){with(this){(function(event){\n");
-    g_string_append(code, src);
-    g_string_append(code, "\n}).call(this,__nsStorageEvt);}})");
-    JSValue fn = JS_Eval(js->ctx, code->str, code->len, "<inline>",
-                         JS_EVAL_TYPE_GLOBAL);
-    g_string_free(code, TRUE);
-    if (JS_IsException(fn)) {
-        JS_FreeValue(js->ctx, JS_GetException(js->ctx));
-        return;
-    }
-    ns_storage_call_frame_handler(js, fn, fwin, ev);
-    JS_FreeValue(js->ctx, fn);
-}
-
-static void
-ns_storage_deliver_frames(ns_js *js, ns_node *n, JSValueConst ev,
-                          JSValueConst source_win, int depth)
-{
-    if (!n || depth > 512) return;
-    if (n->kind == NS_NODE_DOCUMENT && n->parent) {
-        JSValue fwin = ns_iframe_lookup_realm_window(js, n->parent);
-        gboolean is_source = JS_IsObject(fwin) &&
-            JS_VALUE_GET_PTR(fwin) == JS_VALUE_GET_PTR(source_win);
-        if (!is_source) {
-            ns_node *body = ns_node_find_first_element(n, "body");
-            if (JS_IsObject(fwin)) {
-                JS_SetPropertyStr(js->ctx, (JSValue)ev, "target",
-                                  JS_DupValue(js->ctx, fwin));
-                ns_storage_fire_frame_on_prop(js, fwin, ev);
-                if (body)
-                    ns_storage_fire_frame_body_handler(js, fwin, body, ev);
-            } else if (body) {
-                ns_fire_inline_on_handler(js, body, "storage", (JSValue)ev);
-                ns_fire_property_on_handler(js, body, "storage", (JSValue)ev);
-            }
-        }
-        JS_FreeValue(js->ctx, fwin);
-    }
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_storage_deliver_frames(js, c, ev, source_win, depth + 1);
-}
-
-typedef struct {
-    JSValue ev;
-    JSValue src;
-} ns_pending_storage_event;
-
-static void
-ns_storage_drain_deferred_events(ns_js *js)
-{
-    if (!js || js->halted || js->iframe_load_depth > 0) return;
-    if (js->storage_events_draining) return;
-    if (!js->pending_storage_events || js->pending_storage_events->len == 0)
-        return;
-    js->storage_events_draining = TRUE;
-    ns_realm_scope scope;
-    ns_js_realm_scope_enter(js, js->main_realm_ctx, &scope);
-    int guard = 0;
-    while (js->pending_storage_events &&
-           js->pending_storage_events->len > 0 && guard++ < 1000) {
-        ns_pending_storage_event p = g_array_index(
-            js->pending_storage_events, ns_pending_storage_event, 0);
-        g_array_remove_index(js->pending_storage_events, 0);
-        if (js->current_doc)
-            ns_storage_deliver_frames(js, js->current_doc, p.ev, p.src, 0);
-        JSValue g = JS_GetGlobalObject(js->ctx);
-        JS_SetPropertyStr(js->ctx, p.ev, "target", JS_DupValue(js->ctx, g));
-        JS_FreeValue(js->ctx, g);
-        ns_js_dispatch_window_only_event(js, js->current_doc, "storage",
-                                         JS_DupValue(js->ctx, p.ev), NULL);
-        JS_FreeValue(js->ctx, p.ev);
-        JS_FreeValue(js->ctx, p.src);
-        ns_drain_microtasks(js);
-    }
-    ns_js_realm_scope_leave(js, &scope);
-    js->storage_events_draining = FALSE;
-}
-
-static void
-ns_storage_free_deferred_events(ns_js *js)
-{
-    if (!js || !js->pending_storage_events) return;
-    GArray *q = js->pending_storage_events;
-    js->pending_storage_events = NULL;
-    for (guint i = 0; i < q->len; i++) {
-        ns_pending_storage_event *p =
-            &g_array_index(q, ns_pending_storage_event, i);
-        JS_FreeValue(js->ctx, p->ev);
-        JS_FreeValue(js->ctx, p->src);
-    }
-    g_array_free(q, TRUE);
-}
-
-static void
-ns_storage_fire_event(JSContext *ctx, JSValueConst storage_obj,
-                      const char *key, const char *oldv, const char *newv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || js->halted) return;
-    JSValue src_global = JS_GetGlobalObject(ctx);
-    g_autofree char *url = NULL;
-    JSValue loc = JS_GetPropertyStr(ctx, src_global, "location");
-    if (JS_IsObject(loc)) {
-        JSValue hrefv = JS_GetPropertyStr(ctx, loc, "href");
-        if (JS_IsString(hrefv)) {
-            const char *s = JS_ToCString(ctx, hrefv);
-            if (s) {
-                url = g_strdup(s);
-                JS_FreeCString(ctx, s);
-            }
-        }
-        JS_FreeValue(ctx, hrefv);
-    }
-    JS_FreeValue(ctx, loc);
-    JSValue ev = ns_make_event(js->ctx, "storage", NULL);
-    JS_SetPropertyStr(js->ctx, ev, "bubbles", JS_FALSE);
-    JS_SetPropertyStr(js->ctx, ev, "cancelable", JS_FALSE);
-    JS_SetPropertyStr(js->ctx, ev, "key",
-                      key ? JS_NewString(js->ctx, key) : JS_NULL);
-    JS_SetPropertyStr(js->ctx, ev, "oldValue",
-                      oldv ? JS_NewString(js->ctx, oldv) : JS_NULL);
-    JS_SetPropertyStr(js->ctx, ev, "newValue",
-                      newv ? JS_NewString(js->ctx, newv) : JS_NULL);
-    JS_SetPropertyStr(js->ctx, ev, "url",
-                      JS_NewString(js->ctx,
-                                   url ? url
-                                       : (js->current_url ? js->current_url
-                                                          : "")));
-    JS_SetPropertyStr(js->ctx, ev, "storageArea",
-                      JS_DupValue(js->ctx, storage_obj));
-    ns_pending_storage_event p = { ev, src_global };
-    if (!js->pending_storage_events)
-        js->pending_storage_events =
-            g_array_new(FALSE, FALSE, sizeof(ns_pending_storage_event));
-    g_array_append_val(js->pending_storage_events, p);
-}
-
-static JSValue
-ns_storage_setItem(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'setItem' on 'Storage': 2 arguments required, "
-            "but only %d present.", argc);
-    if (!store) return JS_UNDEFINED;
-    const char *k = JS_ToCString(ctx, argv[0]);
-    const char *v = JS_ToCString(ctx, argv[1]);
-    if (!k || !v) {
-        if (k) JS_FreeCString(ctx, k);
-        if (v) JS_FreeCString(ctx, v);
-        return JS_EXCEPTION;
-    }
-    if (!ns_storage_fits(store, k, v)) {
-        JS_FreeCString(ctx, k);
-        JS_FreeCString(ctx, v);
-        return ns_throw_quota_exceeded(ctx);
-    }
-    char *oldv = g_strdup(g_hash_table_lookup(store, k));
-    gboolean changed = !oldv || strcmp(oldv, v) != 0;
-    g_hash_table_replace(store, g_strdup(k), g_strdup(v));
-    ns_storage_maybe_dirty(ctx, store);
-    if (changed) ns_storage_fire_event(ctx, this_val, k, oldv, v);
-    g_free(oldv);
-    JS_FreeCString(ctx, k);
-    JS_FreeCString(ctx, v);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_storage_removeItem(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'removeItem' on 'Storage': 1 argument "
-            "required, but only 0 present.");
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    if (!store) return JS_UNDEFINED;
-    const char *k = JS_ToCString(ctx, argv[0]);
-    char *oldv = k ? g_strdup(g_hash_table_lookup(store, k)) : NULL;
-    if (k && g_hash_table_remove(store, k)) {
-        ns_storage_maybe_dirty(ctx, store);
-        ns_storage_fire_event(ctx, this_val, k, oldv, NULL);
-    }
-    g_free(oldv);
-    if (k) JS_FreeCString(ctx, k);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_storage_clear(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)argc; (void)argv;
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    if (store && g_hash_table_size(store) > 0) {
-        g_hash_table_remove_all(store);
-        ns_storage_maybe_dirty(ctx, store);
-        ns_storage_fire_event(ctx, this_val, NULL, NULL, NULL);
-    }
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_storage_key(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'key' on 'Storage': 1 argument required, "
-            "but only 0 present.");
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    if (!store) return JS_NULL;
-    int32_t idx = 0;
-    JS_ToInt32(ctx, &idx, argv[0]);
-    if (idx < 0) return JS_NULL;
-    GList *keys = g_hash_table_get_keys(store);
-    keys = g_list_sort(keys, (GCompareFunc)strcmp);
-    GList *node = g_list_nth(keys, (guint)idx);
-    JSValue ret = node ? JS_NewString(ctx, node->data) : JS_NULL;
-    g_list_free(keys);
-    return ret;
-}
-
-static JSValue
-ns_storage_get_length(JSContext *ctx, JSValueConst this_val)
-{
-    GHashTable *store = JS_GetOpaque(this_val, ns_storage_class_id);
-    return JS_NewInt32(ctx, store ? (int)g_hash_table_size(store) : 0);
-}
-
-static const JSCFunctionListEntry ns_storage_proto_funcs[] = {
-    JS_CFUNC_DEF("getItem",    1, ns_storage_getItem),
-    JS_CFUNC_DEF("setItem",    2, ns_storage_setItem),
-    JS_CFUNC_DEF("removeItem", 1, ns_storage_removeItem),
-    JS_CFUNC_DEF("clear",      0, ns_storage_clear),
-    JS_CFUNC_DEF("key",        1, ns_storage_key),
-    JS_CGETSET_DEF("length", ns_storage_get_length, NULL),
-};
 
 static const JSCFunctionListEntry ns_tlist_proto_funcs[] = {
     JS_CFUNC_DEF("contains", 1, ns_tlist_contains),
@@ -35940,16 +35364,9 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
     js->attr_wrappers = g_ptr_array_new();
     js->attribute_maps = g_hash_table_new(g_direct_hash, g_direct_equal);
-    js->local_storage   = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-    js->session_storage = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-    js->session_storage_buckets = g_hash_table_new_full(
-        g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_hash_table_destroy);
     js->cookie_buckets = g_hash_table_new_full(
         g_str_hash, g_str_equal, g_free, g_free);
-    {
-        const ns_config *c = ns_config_get();
-        js->local_storage_disabled = c ? !c->local_storage_enabled : FALSE;
-    }
+    ns_storage_init(js);
 
     ns_new_class_id(&ns_element_class_id);
     JS_NewClass(js->rt, ns_element_class_id, &ns_element_class);
@@ -36074,8 +35491,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_new_class_id(&ns_storage_class_id);
     JS_NewClass(js->rt, ns_storage_class_id, &ns_storage_class);
     JSValue storage_proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, storage_proto, ns_storage_proto_funcs,
-                               G_N_ELEMENTS(ns_storage_proto_funcs));
+    ns_storage_install_proto(ctx, storage_proto);
     JS_SetClassProto(ctx, ns_storage_class_id, storage_proto);
 
     JSValue global = JS_GetGlobalObject(ctx);
@@ -36755,13 +36171,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_wasm_install(ctx, global);
 #endif
 
-    JSValue local_obj = JS_NewObjectClass(ctx, ns_storage_class_id);
-    JS_SetOpaque(local_obj, js->local_storage);
-    JS_SetPropertyStr(ctx, global, "localStorage", local_obj);
-
-    JSValue session_obj = JS_NewObjectClass(ctx, ns_storage_class_id);
-    JS_SetOpaque(session_obj, js->session_storage);
-    JS_SetPropertyStr(ctx, global, "sessionStorage", session_obj);
+    ns_storage_install_window(ctx, global);
 
     ns_install_window_compat(ctx, global);
 
@@ -40053,8 +39463,6 @@ ns_js_free(ns_js *js)
     if (js->import_map) g_ptr_array_free(js->import_map, TRUE);
     if (js->csp) { ns_csp_free(js->csp); js->csp = NULL; }
     g_free(js->early_inject_src);
-    g_free(js->local_storage_origin);
-    g_free(js->local_storage_path);
     g_free(js->cookie_value);
     g_free(js->referrer);
     g_free(js->current_url);
@@ -40232,10 +39640,7 @@ ns_js_free(ns_js *js)
     ns_observers_teardown(js);
     ns_ce_teardown(js);
     g_clear_pointer(&js->platform_globals, g_hash_table_destroy);
-    if (js->local_storage)   g_hash_table_destroy(js->local_storage);
-    if (js->session_storage) g_hash_table_destroy(js->session_storage);
-    if (js->session_storage_buckets)
-        g_hash_table_destroy(js->session_storage_buckets);
+    ns_storage_teardown(js);
     if (js->cookie_buckets)
         g_hash_table_destroy(js->cookie_buckets);
     g_free(js->partition_key);
@@ -44640,6 +44045,41 @@ const char *
 ns_js_storage_partition(const ns_js *js)
 {
     return js ? js->partition_key : NULL;
+}
+
+gboolean
+ns_js_halted(const ns_js *js)
+{
+    return js && js->halted;
+}
+
+void
+ns_js_in_main_realm(ns_js *js, void (*fn)(void *data), void *data)
+{
+    ns_realm_scope scope;
+    ns_js_realm_scope_enter(js, js->main_realm_ctx, &scope);
+    fn(data);
+    ns_js_realm_scope_leave(js, &scope);
+}
+
+JSValue
+ns_js_frame_realm_window(ns_js *js, const ns_node *frame)
+{
+    return ns_iframe_lookup_realm_window(js, (ns_node *)frame);
+}
+
+gboolean
+ns_js_inline_handlers_allowed(const ns_js *js)
+{
+    return ns_csp_inline_event_handler_allowed(js->csp);
+}
+
+void
+ns_js_fire_element_handlers(ns_js *js, const ns_node *element,
+                            const char *type, JSValueConst event)
+{
+    ns_fire_inline_on_handler(js, element, type, (JSValue)event);
+    ns_fire_property_on_handler(js, element, type, (JSValue)event);
 }
 
 gint64
