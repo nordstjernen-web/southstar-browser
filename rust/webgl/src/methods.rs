@@ -402,10 +402,10 @@ pub(crate) fn shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
     if a.len() < 2 {
         return undefined();
     }
-    if let Some(source) = bytes(s, &a[1]) {
-        if source.len() <= MAX_SHADER {
-            gl::shader_source(name(a, 0), &with_version_prefix(source));
-        }
+    if let Some(source) = bytes(s, &a[1])
+        && source.len() <= MAX_SHADER
+    {
+        gl::shader_source(name(a, 0), &with_version_prefix(source));
     }
     undefined()
 }

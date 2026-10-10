@@ -288,12 +288,11 @@ impl State {
     }
 
     pub(crate) fn elem_patch(&mut self, name: u32, offset: usize, data: &[u8]) {
-        if let Some(shadow) = self.elem_data.get_mut(&name) {
-            if let Some(end) = offset.checked_add(data.len()) {
-                if end <= shadow.len() {
-                    shadow[offset..end].copy_from_slice(data);
-                }
-            }
+        if let Some(shadow) = self.elem_data.get_mut(&name)
+            && let Some(end) = offset.checked_add(data.len())
+            && end <= shadow.len()
+        {
+            shadow[offset..end].copy_from_slice(data);
         }
     }
 
@@ -546,10 +545,10 @@ impl WebGl {
         if w <= 0 || h <= 0 {
             return ptr::null_mut();
         }
-        if !st.dirty {
-            if let Some(surf) = &st.surf {
-                return surf.as_ptr();
-            }
+        if !st.dirty
+            && let Some(surf) = &st.surf
+        {
+            return surf.as_ptr();
         }
         if st.samples > 1 {
             let (draw_fbo, fbo) = (st.draw_fbo, st.fbo);

@@ -48,10 +48,10 @@ fn arity(scope: &mut Scope<'_>, method: &str, need: usize, args: &[Value]) -> Js
 }
 
 fn entries(scope: &mut Scope<'_>, this: &Value) -> Value {
-    if let Ok(entries) = scope.get(this, "_entries") {
-        if entries.is_array() {
-            return entries;
-        }
+    if let Ok(entries) = scope.get(this, "_entries")
+        && entries.is_array()
+    {
+        return entries;
     }
     let entries = scope.new_array();
     let _ = scope.set(this, "_entries", entries.clone());

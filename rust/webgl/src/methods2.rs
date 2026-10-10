@@ -490,10 +490,12 @@ pub(crate) fn tex_sub_image_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> 
     }
     with_view(s, &a[10], |px| {
         let need = limits::transfer_bytes(g.version, size, format, kind, false);
-        if let Some(px) = px {
-            if need > 0 && need <= MAX_ALLOC && px.len() >= need {
-                gl::tex_sub_image_3d(target, level, offset, size, (format, kind), px);
-            }
+        if let Some(px) = px
+            && need > 0
+            && need <= MAX_ALLOC
+            && px.len() >= need
+        {
+            gl::tex_sub_image_3d(target, level, offset, size, (format, kind), px);
         }
     });
     undefined()

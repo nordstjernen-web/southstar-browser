@@ -126,10 +126,10 @@ fn reset_owned_outputs(page: Option<Page>, form: Element, scan: Element, depth: 
 pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Option<Element>) {
     let Some(form) = form else { return };
     let page = Page::of(scope);
-    if let Some(page) = page {
-        if page.dispatch_event(form, c"reset") {
-            return;
-        }
+    if let Some(page) = page
+        && page.dispatch_event(form, c"reset")
+    {
+        return;
     }
     let doc = page
         .and_then(Page::current_document)
