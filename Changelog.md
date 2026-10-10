@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Canvas text — fillText(), strokeText() and measureText() — and the image
+  sources drawImage() and createPattern() read from (<img>, <canvas>, <video>
+  posters, OffscreenCanvas, ImageBitmap) are Rust, which finishes the canvas
+  port: js_canvas.c is gone. Output is unchanged.
 * DNS over HTTPS works again. With doh_url (or NS_DOH_URL) set to an https://
   resolver, host names are looked up with RFC 8484 A and AAAA queries sent
   through the Rust HTTP client and cached for their TTL; when the resolver

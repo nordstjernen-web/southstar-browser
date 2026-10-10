@@ -19,4 +19,5 @@ mod path2d;
 mod raster;
 mod state;
 mod style;
+mod text;
 mod validate;

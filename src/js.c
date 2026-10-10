@@ -38529,6 +38529,12 @@ ns_element_get_offsetParent(JSContext *ctx, JSValueConst this_val)
     return fallback ? ns_make_element(ctx, fallback) : JS_NULL;
 }
 
+const ns_box *
+ns_js_box_for_node(ns_js *js, const ns_node *n)
+{
+    return js && js->layout_root ? ns_box_find_by_dom(js->layout_root, n) : NULL;
+}
+
 void
 ns_js_set_layout_root(ns_js *js, const struct ns_box *root)
 {

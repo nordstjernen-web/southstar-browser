@@ -12,32 +12,11 @@ use southstar_js_engine::{Scope, Value};
 
 use super::cairo::Surface;
 use super::cairo::{Cairo, Context};
+use super::drawimage_source;
 use super::text;
-use crate::bitmap::{ImageBitmap, Source};
+use crate::bitmap::ImageBitmap;
 use crate::hidden::{self, Hidden};
 use crate::path2d::Path2D;
-
-macro_rules! jscfunctions {
-    ($($name:ident),* $(,)?) => {
-        unsafe extern "C" {
-            $(
-                pub(crate) fn $name(
-                    ctx: *mut JSContext,
-                    this_val: JSValue,
-                    argc: c_int,
-                    argv: *mut JSValue,
-                ) -> JSValue;
-            )*
-        }
-    };
-}
-
-#[allow(non_snake_case)]
-pub(crate) mod c {
-    use super::{JSContext, JSValue, c_int};
-
-    jscfunctions!(ns_ctx_fillText, ns_ctx_measureText, ns_ctx_strokeText,);
-}
 
 #[repr(C)]
 pub struct NsJs {
@@ -50,13 +29,6 @@ pub struct NsNode {
 }
 
 unsafe extern "C" {
-    fn ns_ctx_drawimage_source(
-        ctx: *mut JSContext,
-        src: JSValue,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-        origin_clean: *mut c_int,
-    ) -> *mut c_void;
     fn ns_image_decode_bytes_to_pixels(
         data: *const u8,
         len: usize,
@@ -186,19 +158,6 @@ pub(crate) fn decode_image(bytes: &[u8]) -> Option<Decoded> {
     })
 }
 
-pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Source> {
-    let (mut w, mut h, mut clean) = (0, 0, 1);
-    let ctx = quickjs::raw_context(scope);
-    let surface =
-        unsafe { ns_ctx_drawimage_source(ctx, quickjs::raw(src), &mut w, &mut h, &mut clean) };
-    let surface = unsafe { Surface::from_raw(surface) }?;
-    Some(Source {
-        surface,
-        size: (w, h),
-        origin_clean: clean != 0,
-    })
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_image_bitmap_is(v: JSValue) -> c_int {
     let found = unsafe { quickjs::with_host::<ImageBitmap, ()>(v, |_| ()) };
@@ -222,28 +181,6 @@ pub unsafe extern "C" fn ns_image_bitmap_make(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_bitmap_surface(
-    v: JSValue,
-    out_w: *mut c_int,
-    out_h: *mut c_int,
-    origin_clean: *mut c_int,
-) -> *mut c_void {
-    let Some(source) = (unsafe { bitmap_source(v) }) else {
-        return ptr::null_mut();
-    };
-    unsafe {
-        *out_w = source.size.0;
-        *out_h = source.size.1;
-        *origin_clean = c_int::from(source.origin_clean);
-    }
-    source.surface.into_raw()
-}
-
-unsafe fn bitmap_source(v: JSValue) -> Option<Source> {
-    unsafe { quickjs::with_host::<ImageBitmap, Option<Source>>(v, ImageBitmap::source) }.flatten()
-}
-
 fn js_of(scope: &Scope<'_>) -> *mut NsJs {
     quickjs::context_opaque(scope).cast()
 }
@@ -260,6 +197,13 @@ pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::ca
 
 fn this_realm(scope: &Scope<'_>, this: &Value) -> *mut JSContext {
     canvas_realm(quickjs::raw_context(scope), hidden::ptr(this))
+}
+
+pub(crate) fn new_textmetrics(scope: &mut Scope<'_>, this: &Value, values: &[f64; 10]) -> Value {
+    let realm = this_realm(scope, this);
+    let obj = unsafe { new_in_realm(realm, hidden::KIND_TEXTMETRICS, "TextMetrics") };
+    crate::api::textmetrics_finish(scope, &obj, values);
+    obj
 }
 
 pub(crate) fn new_gradient(scope: &mut Scope<'_>, this: &Value, kind: &[u8]) -> Value {
@@ -756,8 +700,8 @@ pub unsafe extern "C" fn ns_offscreen_construct(
     unsafe { quickjs::call_native(ctx, new_target, argc, argv, crate::api::offscreen_construct) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_offscreen_node(obj: JSValue) -> *const NsNode {
+pub(crate) fn offscreen_node(obj: &Value) -> *const NsNode {
+    let obj = quickjs::raw(obj);
     if raw_kind(obj) == Some(hidden::KIND_OFFSCREEN) {
         unsafe { ns_hidden_ptr(obj) }.cast_const().cast()
     } else {

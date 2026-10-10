@@ -84,6 +84,7 @@ pangoft2 = ["southstar-font/pangofc"]
 poppler = ["southstar-pdf/poppler", "southstar-net/poppler"]
 egl = ["southstar-glctx/egl"]
 ns-pango = [
+    "southstar-canvas/ns-pango",
     "southstar-font/ns-pango",
     "southstar-js-intl/ns-pango",
     "southstar-mathml/ns-pango",

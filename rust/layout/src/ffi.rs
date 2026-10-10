@@ -117,7 +117,7 @@ const _: () =
 #[repr(C)]
 pub struct NsBoxMedia {
     image_src: *mut c_char,
-    _image: *mut c_void,
+    image: *mut c_void,
     bg_image_src: *mut c_char,
     _bg_image: *mut c_void,
     marker_image_src: *mut c_char,
@@ -190,6 +190,10 @@ impl<'a> MediaRef<'a> {
 
     pub fn video_poster(self) -> Option<&'a CStr> {
         c_str(self.raw().video_poster)
+    }
+
+    pub fn image(self) -> *mut c_void {
+        self.raw().image
     }
 
     pub fn video(self) -> *mut c_void {

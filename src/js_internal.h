@@ -371,8 +371,6 @@ ns_image_bitmap_make(JSContext *ctx, cairo_surface_t *surf, int w, int h,
                      gboolean origin_clean);
 gboolean
 ns_image_bitmap_is(JSValueConst v);
-cairo_surface_t *
-ns_image_bitmap_surface(JSValueConst v, int *out_w, int *out_h, int *origin_clean);
 JSValue
 ns_canvas_clone_object(JSContext *ctx, JSValueConst v);
 JSValue
@@ -420,25 +418,6 @@ ns_ctx_prepare_path_and_rule(JSContext *ctx, cairo_t *cr,
                              int argc, JSValueConst *argv);
 void
 ns_ctx_restore_path(cairo_t *cr, cairo_path_t *saved);
-NsPangoFontDescription *
-ns_canvas_font_desc(const char *css_font);
-gboolean
-ns_ctx_direction_is_rtl(JSContext *ctx, JSValueConst this_val);
-void
-ns_ctx_paint_text(JSContext *ctx, JSValueConst this_val,
-                  ns_canvas_state *st, const char *text,
-                  double x, double y, double max_width,
-                  gboolean stroke);
-JSValue
-ns_ctx_fillText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-JSValue
-ns_ctx_measureText(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
-cairo_surface_t *
-ns_ctx_drawimage_source(JSContext *ctx, JSValueConst src, int *out_w, int *out_h,
-                        gboolean *origin_clean);
-JSValue
-ns_ctx_strokeText(JSContext *ctx, JSValueConst this_val,
-                  int argc, JSValueConst *argv);
 void
 ns_round_rect_subpath(cairo_t *cr, double x, double y, double w, double h,
                       double rtl, double rtr, double rbr, double rbl);
@@ -506,7 +485,6 @@ JSValue ns_imagedata_new(JSContext *ctx, JSContext *realm, int w, int h,
                          const uint8_t *rgba);
 JSValue ns_imagedata_construct(JSContext *ctx, JSValueConst new_target, int argc,
                                JSValueConst *argv);
-const ns_node *ns_offscreen_node(JSValueConst obj);
 void ns_offscreen_sync_size(JSContext *ctx, JSValueConst obj);
 JSValue ns_offscreen_construct(JSContext *ctx, JSValueConst new_target, int argc,
                                JSValueConst *argv);

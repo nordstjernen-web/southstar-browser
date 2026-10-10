@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::ImageRef;
+
 use core::ffi::c_long;
 
 const BUILTIN_TYPES: [&[u8]; 8] = [

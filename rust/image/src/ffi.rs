@@ -61,6 +61,51 @@ pub struct NsImage {
     anim_total_ms: c_int,
 }
 
+#[derive(Clone, Copy)]
+pub struct ImageRef<'a>(
+    ptr::NonNull<NsImage>,
+    core::marker::PhantomData<&'a NsImage>,
+);
+
+impl<'a> ImageRef<'a> {
+    pub unsafe fn from_ptr(image: *const c_void) -> Option<ImageRef<'a>> {
+        ptr::NonNull::new(image.cast_mut().cast()).map(|p| ImageRef(p, core::marker::PhantomData))
+    }
+
+    fn raw(self) -> &'a NsImage {
+        unsafe { &*self.0.as_ptr() }
+    }
+
+    pub fn texture(self) -> *mut c_void {
+        self.raw().texture.cast()
+    }
+
+    pub fn source_url(self) -> *const c_char {
+        let image = self.raw();
+        if image.final_url.is_null() {
+            image.url
+        } else {
+            image.final_url
+        }
+    }
+
+    pub fn cors_allow_origin(self) -> *const c_char {
+        self.raw().cors_allow_origin
+    }
+
+    pub fn is_animated(self) -> bool {
+        !self.raw().anim_frames.is_null()
+    }
+
+    pub fn render_surface(self) -> *mut c_void {
+        self.raw().render_surface
+    }
+
+    pub fn set_render_surface(self, surface: *mut c_void) {
+        unsafe { (*self.0.as_ptr()).render_surface = surface };
+    }
+}
+
 #[repr(C)]
 struct AnimFrame {
     texture: *mut Texture,

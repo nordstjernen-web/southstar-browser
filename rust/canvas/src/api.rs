@@ -5,10 +5,10 @@
 use southstar_js_engine::quickjs::{self, JSCFunction};
 use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
 
-use crate::ffi::{self, c};
+use crate::ffi;
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
-use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, images, path2d};
+use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, images, path2d, text};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
 
@@ -164,7 +164,7 @@ macro_rules! ctx2d_methods {
             native("ellipse", ctxpath::ellipse, 7),
             native("fill", draw::fill, 0),
             native("fillRect", draw::fill_rect, 4),
-            method("fillText", c::ns_ctx_fillText, 3),
+            native("fillText", text::fill_text, 3),
             native("getContextAttributes", context::get_attributes, 0),
             native("getImageData", images::get_image_data, 4),
             native("getLineDash", ctxmisc::get_line_dash, 0),
@@ -173,7 +173,7 @@ macro_rules! ctx2d_methods {
             native("isPointInPath", ctxmisc::is_point_in_path, 2),
             native("isPointInStroke", ctxmisc::is_point_in_stroke, 2),
             native("lineTo", ctxpath::line_to, 2),
-            method("measureText", c::ns_ctx_measureText, 1),
+            native("measureText", text::measure_text, 1),
             native("moveTo", ctxpath::move_to, 2),
             native("putImageData", images::put_image_data, 3),
             native("quadraticCurveTo", ctxpath::quadratic_curve_to, 4),
@@ -189,7 +189,7 @@ macro_rules! ctx2d_methods {
             native("setTransform", ctxpath::set_transform, 0),
             native("stroke", draw::stroke, 0),
             native("strokeRect", draw::stroke_rect, 4),
-            method("strokeText", c::ns_ctx_strokeText, 3),
+            native("strokeText", text::stroke_text, 3),
             native("transform", ctxpath::transform, 6),
             native("translate", ctxpath::translate, 2),
         ]

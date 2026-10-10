@@ -12,16 +12,19 @@ pub(crate) mod cairo;
 pub(crate) mod context;
 mod draw;
 mod objects;
+pub(crate) mod pango;
+mod source;
 pub(crate) mod state;
 mod style;
 
 pub(crate) use draw::{ctx_state, mark_mutated};
+pub(crate) use source::drawimage_source;
 
 pub(crate) use objects::{
-    c, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, drawimage_source,
-    element_attr, is_path2d, new_gradient, new_imagedata, new_imagedata_from,
-    new_offscreen_canvas_node, new_pattern, ns_pattern_set_transform, path2d_context,
-    set_element_attr, with_bitmap, with_hidden,
+    canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, element_attr,
+    is_path2d, new_gradient, new_imagedata, new_imagedata_from, new_offscreen_canvas_node,
+    new_pattern, new_textmetrics, ns_pattern_set_transform, path2d_context, set_element_attr,
+    with_bitmap, with_hidden,
 };
 
 unsafe extern "C" {
@@ -125,6 +128,10 @@ pub(crate) fn font_string(css: &[u8]) -> Option<Vec<u8>> {
     let css = CString::new(css).ok()?;
     let canon = unsafe { glib::GStr::take(ns_css_font_shorthand_canonical(css.as_ptr())) }?;
     Some(crate::font::canonical(canon.to_bytes()))
+}
+
+pub(crate) fn state_font(st: &state::CanvasState) -> &[u8] {
+    unsafe { text(st.font) }.unwrap_or_default()
 }
 
 unsafe fn text<'a>(s: *const c_char) -> Option<&'a [u8]> {

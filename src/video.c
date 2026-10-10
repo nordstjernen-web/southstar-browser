@@ -259,6 +259,13 @@ static void on_msaudio_fetched(GObject *src, GAsyncResult *result,
                                gpointer user_data);
 static void ns_video_build_player(ns_pending *pending, ns_response *resp);
 
+ns_texture *
+ns_video_poster_texture(const ns_video *v, const char **url)
+{
+    *url = v ? v->poster_url : NULL;
+    return v ? v->poster_texture : NULL;
+}
+
 static void
 ns_video_free(gpointer p)
 {

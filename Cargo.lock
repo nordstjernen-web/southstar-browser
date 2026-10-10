@@ -1464,8 +1464,11 @@ dependencies = [
 name = "southstar-canvas"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-glib",
+ "southstar-image",
  "southstar-js-engine",
+ "southstar-layout",
 ]
 
 [[package]]
