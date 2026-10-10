@@ -25024,9 +25024,9 @@ ns_js_node_frame(const ns_node *node)
 static JSContext *
 ns_js_node_realm_context(ns_js *js, const ns_node *node)
 {
+    if (!js || !js->frame_contexts) return NULL;
     ns_node *frame = ns_js_node_frame(node);
-    return js && js->frame_contexts && frame
-        ? g_hash_table_lookup(js->frame_contexts, frame) : NULL;
+    return frame ? g_hash_table_lookup(js->frame_contexts, frame) : NULL;
 }
 
 JSContext *
