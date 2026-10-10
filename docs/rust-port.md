@@ -706,8 +706,21 @@ any browser vendor, and published on crates.io under MIT/Unlicense. It
 already has a working `js-engine` backend and runs `southstar-jsshell`. Its
 weaknesses are speed (about 3–4× slower on Octane, no JIT, like QuickJS), a
 newer minimum Rust (1.91), a few crashes and timeouts in test262, and missing
-embedder hooks. Nova (`nova_vm`) is a data-oriented engine that may be faster,
-but it is much less complete, so it stays an experiment.
+embedder hooks. Two other pure-Rust engines may get experimental backends
+behind the same neutral API:
+
+- Nova (`nova_vm`), a data-oriented engine that may turn out faster but is much
+  less complete.
+- [quickjs-rust](https://github.com/Lewin671/quickjs-rust) (`qjs_runtime`), a
+  Rust-native ECMAScript engine in QuickJS's style: its own parser, bytecode
+  compiler and VM, MIT-licensed, differentially tested against QuickJS-NG. It
+  is young (no published test262 or speed numbers, not on crates.io), so it
+  would come in as a git dependency and a `js_engine` option once its
+  numbers can go into the comparison table.
+
+Bellard's original QuickJS (`-Dquickjs=quickjs`) is dropped first, since the
+goal is to retire QuickJS altogether. Keeping its adapter (`src/ns_quickjs.c`)
+in step with every new neutral-API helper costs more than it gives.
 
 1. **Neutral API first.** Each binding ported out of js.c uses only the
    neutral `js-engine` API, apart from the transitional C glue. Capabilities
@@ -861,7 +874,7 @@ the existing ones, not a test suite.
 | D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Either targets `js-engine`, not an engine; decide after the phase 2 pilot, with a lean toward WebIDL generation now that several backends must be served |
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
-| D11 | Which JavaScript engines get backends? | QuickJS-ng (default) and Bellard's QuickJS, Boa (optional), Nova (optional, experimental). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (lacks the fork's hooks) |
+| D11 | Which JavaScript engines get backends? | QuickJS-ng (default until the switch), Boa (the target default), and optionally Nova and quickjs-rust as experiments. Bellard's QuickJS is dropped (October 2026). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (C QuickJS underneath) |
 | D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired |
 | D13 | Pure-Rust end state: replace all vendored C (lexbor, WAMR, Wuffs, pl_mpeg/minimp3, QuickJS)? | Decided (October 2026): yes. System libraries behind FFI are decided separately |
 
