@@ -4,12 +4,11 @@
 
 use std::collections::HashMap;
 
-use southstar_js_engine::quickjs;
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ElementType, ObjectKey, ObjectKind, Scope, Value};
 
 use crate::{
-    HIDDEN_PROPERTY, MAX_DEPTH, Result, call_method, error_constructor, fail, ffi, get, global_get,
-    instance_of, length,
+    HIDDEN_PROPERTY, MAX_DEPTH, Result, call_method, element_index, error_constructor, fail, ffi,
+    fill_buffer, get, global_get, instance_of, kind, length, new_view,
 };
 
 struct Node {
@@ -36,7 +35,7 @@ impl Node {
 }
 
 struct Encoder<'a> {
-    memo: HashMap<usize, (Value, Value)>,
+    memo: HashMap<ObjectKey, Value>,
     ports: &'a Value,
     blob: Value,
     file: Value,
@@ -46,21 +45,19 @@ struct Encoder<'a> {
 
 impl Encoder<'_> {
     fn remember(&mut self, original: &Value, node: &Value) {
-        self.memo.insert(
-            quickjs::identity(original),
-            (original.clone(), node.clone()),
-        );
+        if let Some(key) = original.object_key() {
+            self.memo.insert(key, node.clone());
+        }
     }
 
     fn encode(&mut self, scope: &mut Scope<'_>, value: &Value) -> Result {
-        if quickjs::is_symbol(value) {
+        if value.is_symbol() {
             return fail(scope);
         }
-        if !value.is_object() {
+        let Some(id) = value.object_key() else {
             return Ok(value.clone());
-        }
-        let id = quickjs::identity(value);
-        if let Some((_, node)) = self.memo.get(&id) {
+        };
+        if let Some(node) = self.memo.get(&id) {
             return Ok(node.clone());
         }
         if self.depth >= MAX_DEPTH {
@@ -70,9 +67,7 @@ impl Encoder<'_> {
         let node = self.encode_object(scope, value);
         self.depth -= 1;
         if let Ok(node) = &node {
-            self.memo
-                .entry(id)
-                .or_insert_with(|| (value.clone(), node.clone()));
+            self.memo.entry(id).or_insert_with(|| node.clone());
         }
         node
     }
@@ -83,8 +78,8 @@ impl Encoder<'_> {
         value: &Value,
         node: &mut Node,
     ) -> Result<()> {
-        for key in quickjs::own_enumerable_string_keys(scope, value)? {
-            let property = quickjs::get_by_key(scope, value, &key)?;
+        for key in scope.own_enumerable_keys(value)? {
+            let property = scope.get_key(value, &key)?;
             let encoded = self.encode(scope, &property)?;
             node.push(scope, key);
             node.push(scope, encoded);
@@ -174,13 +169,14 @@ impl Encoder<'_> {
         if ffi::is_port(scope, value) {
             return self.encode_port(scope, value);
         }
-        if quickjs::is_array_buffer(value) {
+        let object_kind = kind(scope, value);
+        if object_kind == ObjectKind::ArrayBuffer {
             if crate::buffer_detached(scope, value) {
                 return fail(scope);
             }
             let mut node = Node::new(scope, "AB");
-            let bytes = quickjs::array_buffer_bytes(scope, value).unwrap_or_default();
-            let copy = quickjs::array_buffer_copy(scope, &bytes)?;
+            let bytes = scope.array_buffer_bytes(value).unwrap_or_default();
+            let copy = scope.new_array_buffer(&bytes)?;
             node.push(scope, copy);
             let resizable = get(scope, value, "resizable");
             if scope.to_bool(&resizable) {
@@ -189,24 +185,19 @@ impl Encoder<'_> {
             }
             return node.done();
         }
-        let typed = quickjs::typed_array_type(value);
-        if typed >= 0 {
-            let Ok(parts) = quickjs::typed_array_parts(scope, value) else {
+        if let ObjectKind::TypedArray(_) = object_kind {
+            let Ok(Some(view)) = scope.typed_array_view(value) else {
                 return fail(scope);
             };
-            let buffer = self.encode(scope, &parts.buffer)?;
-            let elements = parts
-                .byte_length
-                .checked_div(parts.bytes_per_element)
-                .unwrap_or(0);
+            let buffer = self.encode(scope, &view.buffer)?;
             let mut node = Node::new(scope, "TA");
-            node.push(scope, Value::int(typed));
+            node.push(scope, Value::int(element_index(view.element)));
             node.push(scope, buffer);
-            node.push(scope, Value::int64(parts.byte_offset as i64));
-            node.push(scope, Value::int64(elements as i64));
+            node.push(scope, Value::int64(view.byte_offset as i64));
+            node.push(scope, Value::int64(view.length as i64));
             return node.done();
         }
-        if quickjs::is_data_view(value) {
+        if object_kind == ObjectKind::DataView {
             let buffer = scope.get(value, "buffer")?;
             let buffer = self.encode(scope, &buffer)?;
             let mut node = Node::new(scope, "DV");
@@ -217,13 +208,13 @@ impl Encoder<'_> {
             node.push(scope, length);
             return node.done();
         }
-        if quickjs::is_date(value) {
+        if object_kind == ObjectKind::Date {
             let time = call_method(scope, value, "getTime")?;
             let mut node = Node::new(scope, "D");
             node.push(scope, time);
             return node.done();
         }
-        if quickjs::is_regexp(value) {
+        if object_kind == ObjectKind::RegExp {
             let mut node = Node::new(scope, "RE");
             let source = get(scope, value, "source");
             node.push(scope, source);
@@ -231,8 +222,8 @@ impl Encoder<'_> {
             node.push(scope, flags);
             return node.done();
         }
-        let is_map = quickjs::is_map(value);
-        if is_map || quickjs::is_set(value) {
+        let is_map = object_kind == ObjectKind::Map;
+        if is_map || object_kind == ObjectKind::Set {
             let mut node = Node::new(scope, if is_map { "M" } else { "S" });
             self.remember(value, &node.array);
             self.encode_entries(scope, value, is_map, &mut node)?;
@@ -284,15 +275,12 @@ impl Encoder<'_> {
             node.push(scope, name);
             return node.done();
         }
-        if quickjs::is_error(value) {
+        if object_kind == ObjectKind::Error {
             return self.encode_error(scope, value);
         }
         if matches!(
-            quickjs::boxed_kind(value),
-            quickjs::BOXED_NUMBER
-                | quickjs::BOXED_STRING
-                | quickjs::BOXED_BOOLEAN
-                | quickjs::BOXED_BIGINT
+            object_kind,
+            ObjectKind::Number | ObjectKind::String | ObjectKind::Boolean | ObjectKind::BigInt
         ) {
             let primitive = call_method(scope, value, "valueOf")?;
             let mut node = Node::new(scope, "BX");
@@ -324,14 +312,14 @@ pub(crate) fn encode_value(scope: &mut Scope<'_>, value: &Value, ports: &Value) 
 }
 
 struct Decoder<'a> {
-    memo: HashMap<usize, Value>,
+    memo: HashMap<ObjectKey, Value>,
     ports: &'a Value,
     depth: u32,
 }
 
 fn construct(scope: &mut Scope<'_>, name: &str, args: &[Value]) -> Result {
     let ctor = global_get(scope, name);
-    if quickjs::is_constructor(scope, &ctor) {
+    if scope.is_constructor(&ctor) {
         scope.construct(&ctor, args)
     } else {
         Ok(scope.new_object())
@@ -348,14 +336,15 @@ fn options(scope: &mut Scope<'_>, fields: &[(&str, &Value)]) -> Result {
 
 impl Decoder<'_> {
     fn remember(&mut self, node: &Value, value: &Value) {
-        self.memo.insert(quickjs::identity(node), value.clone());
+        if let Some(key) = node.object_key() {
+            self.memo.insert(key, value.clone());
+        }
     }
 
     fn decode(&mut self, scope: &mut Scope<'_>, node: &Value) -> Result {
-        if !node.is_object() {
+        let Some(id) = node.object_key() else {
             return Ok(node.clone());
-        }
-        let id = quickjs::identity(node);
+        };
         if let Some(value) = self.memo.get(&id) {
             return Ok(value.clone());
         }
@@ -422,7 +411,7 @@ impl Decoder<'_> {
                 .get_index(node, i + 1)
                 .unwrap_or_else(|_| Value::undefined());
             let value = self.decode(scope, &raw)?;
-            quickjs::define_by_key(scope, target, &key, value)?;
+            scope.define_entry(target, &key, value)?;
             i += 2;
         }
         Ok(())
@@ -449,20 +438,26 @@ impl Decoder<'_> {
                 if a2.is_undefined() {
                     return Ok(a1);
                 }
-                let bytes = quickjs::array_buffer_bytes(scope, &a1).unwrap_or_default();
+                let bytes = scope.array_buffer_bytes(&a1).unwrap_or_default();
                 let opts = options(scope, &[("maxByteLength", &a2)])?;
                 let out = construct(
                     scope,
                     "ArrayBuffer",
                     &[Value::int64(bytes.len() as i64), opts],
                 )?;
-                quickjs::fill_array_buffer(scope, &out, &bytes);
+                fill_buffer(scope, &out, &bytes);
                 Ok(out)
             }
             "TA" => {
                 let buffer = self.decode(scope, &a2)?;
-                let typed = scope.to_int32(&a1).unwrap_or(0);
-                quickjs::new_typed_array(scope, &[buffer, a3, a4], typed)
+                let typed = scope.to_int32(&a1).unwrap_or(-1);
+                match usize::try_from(typed)
+                    .ok()
+                    .and_then(|i| ElementType::ALL.get(i))
+                {
+                    Some(element) => new_view(scope, *element, &[buffer, a3, a4]),
+                    None => Ok(Value::null()),
+                }
             }
             "DV" => {
                 let buffer = self.decode(scope, &a1)?;
@@ -521,7 +516,7 @@ impl Decoder<'_> {
                 }
                 Ok(out)
             }
-            "BX" => quickjs::to_object(scope, &a1),
+            "BX" => scope.to_object(&a1),
             "A" | "O" => {
                 let is_array = kind == "A";
                 let out = if is_array {

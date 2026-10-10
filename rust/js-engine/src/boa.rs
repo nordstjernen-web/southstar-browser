@@ -25,9 +25,13 @@ use boa_engine::{
 };
 use boa_gc::custom_trace;
 
+use boa_engine::builtins::error::Error as BoaError;
+use boa_engine::native_function::NativeFunctionObject;
+use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
+
 use crate::{
-    Attributes, BoundFn, ElementType, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit,
-    Trace, TypedArrayBytes, int64_modulo,
+    Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
+    RealmInit, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
 };
 
 pub const ENGINE_NAME: &str = "boa";
@@ -38,6 +42,15 @@ pub fn engine_version() -> String {
 
 #[derive(Clone)]
 pub struct Value(JsValue);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct ObjectKey(JsObject);
+
+impl ObjectKey {
+    pub fn value(&self) -> Value {
+        Value(self.0.clone().into())
+    }
+}
 
 type HostTrace = fn(&dyn Any, &mut dyn FnMut(&Value));
 
@@ -117,6 +130,14 @@ impl Value {
 
     pub fn is_bool(&self) -> bool {
         self.0.is_boolean()
+    }
+
+    pub fn is_symbol(&self) -> bool {
+        self.0.is_symbol()
+    }
+
+    pub fn object_key(&self) -> Option<ObjectKey> {
+        self.0.as_object().map(|o| ObjectKey(o.clone()))
     }
 
     pub fn same_object(&self, other: &Value) -> bool {
@@ -713,7 +734,118 @@ impl Scope<'_> {
             value: self.get(&descriptor, "value")?,
             getter: self.get(&descriptor, "get")?,
             setter: self.get(&descriptor, "set")?,
+            accessor: self.has_property(&descriptor, "get")?,
         }))
+    }
+
+    pub fn object_kind(&mut self, value: &Value) -> Option<ObjectKind> {
+        let object = value.0.as_object()?.clone();
+        if JsArrayBuffer::from_object(object.clone()).is_ok() {
+            return Some(ObjectKind::ArrayBuffer);
+        }
+        if let Some(element) = self.typed_array_element(value) {
+            return Some(ObjectKind::TypedArray(element));
+        }
+        Some(if JsDataView::from_object(object.clone()).is_ok() {
+            ObjectKind::DataView
+        } else if JsDate::from_object(object.clone()).is_ok() {
+            ObjectKind::Date
+        } else if JsRegExp::from_object(object.clone()).is_ok() {
+            ObjectKind::RegExp
+        } else if JsMap::from_object(object.clone()).is_ok() {
+            ObjectKind::Map
+        } else if JsSet::from_object(object.clone()).is_ok() {
+            ObjectKind::Set
+        } else if object.is::<BoaError>() {
+            ObjectKind::Error
+        } else if object.is::<f64>() {
+            ObjectKind::Number
+        } else if object.is::<JsString>() {
+            ObjectKind::String
+        } else if object.is::<bool>() {
+            ObjectKind::Boolean
+        } else if object.is::<JsBigInt>() {
+            ObjectKind::BigInt
+        } else {
+            ObjectKind::Other
+        })
+    }
+
+    pub fn typed_array_view(&mut self, value: &Value) -> Result<Option<TypedArrayView>, Value> {
+        let Some(element) = self.typed_array_element(value) else {
+            return Ok(None);
+        };
+        let object = self.object(value)?;
+        let array = JsTypedArray::from_object(object).map_err(|e| self.error(e))?;
+        let buffer = array.buffer(self.ctx).map_err(|e| self.error(e))?;
+        let byte_offset = array.byte_offset(self.ctx).map_err(|e| self.error(e))?;
+        let length = array.length(self.ctx).map_err(|e| self.error(e))?;
+        Ok(Some(TypedArrayView {
+            buffer: Value(buffer),
+            byte_offset,
+            length,
+            element,
+        }))
+    }
+
+    pub fn new_array_buffer(&mut self, bytes: &[u8]) -> Result<Value, Value> {
+        let block = AlignedVec::from_iter(0, bytes.iter().copied());
+        JsArrayBuffer::from_byte_block(block, self.ctx)
+            .map(|buffer| Value(buffer.into()))
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn array_buffer_bytes(&mut self, value: &Value) -> Option<Vec<u8>> {
+        let buffer = JsArrayBuffer::from_object(value.0.as_object()?.clone()).ok()?;
+        let data = buffer.data()?;
+        Some(data.to_vec())
+    }
+
+    pub fn own_enumerable_keys(&mut self, object: &Value) -> Result<Vec<Value>, Value> {
+        let keys = OrdinaryObject::keys(&JsValue::undefined(), &[object.0.clone()], self.ctx)
+            .map_err(|e| self.error(e))?;
+        let keys = Value(keys);
+        let count = self.get(&keys, "length")?;
+        let count = self.to_number(&count)? as u32;
+        (0..count).map(|i| self.get_index(&keys, i)).collect()
+    }
+
+    pub fn set_key(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
+        let target = self.object(object)?;
+        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        target
+            .set(key, value.0, true, self.ctx)
+            .map(|_| ())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn define_entry(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
+        let target = self.object(object)?;
+        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let descriptor = BoaPropertyDescriptor::builder()
+            .value(value.0)
+            .writable(true)
+            .enumerable(true)
+            .configurable(true);
+        target
+            .define_property_or_throw(key, descriptor, self.ctx)
+            .map(|_| ())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn is_native_function(&mut self, value: &Value) -> bool {
+        value
+            .0
+            .as_object()
+            .is_some_and(|o| o.is::<NativeFunctionObject>())
+    }
+
+    pub fn to_object(&mut self, value: &Value) -> Result<Value, Value> {
+        value
+            .0
+            .to_object(self.ctx)
+            .map(|o| Value(o.into()))
+            .map_err(|e| self.error(e))
     }
 
     pub fn set_prototype(&mut self, object: &Value, prototype: &Value) -> Result<(), Value> {

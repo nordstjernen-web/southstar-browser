@@ -7,8 +7,7 @@ mod wire;
 
 use std::collections::HashMap;
 
-use southstar_js_engine::quickjs::{self, OwnSlot};
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, ElementType, ObjectKey, ObjectKind, Scope, Value};
 
 type Result<T = Value> = core::result::Result<T, Value>;
 
@@ -61,7 +60,7 @@ pub(crate) fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
 }
 
 pub(crate) fn instance_of(scope: &mut Scope<'_>, value: &Value, constructor: &Value) -> bool {
-    quickjs::instance_of(scope, value, constructor)
+    scope.instance_of(value, constructor)
 }
 
 pub(crate) fn call_method(scope: &mut Scope<'_>, object: &Value, name: &str) -> Result {
@@ -82,11 +81,43 @@ pub(crate) fn error_constructor(scope: &mut Scope<'_>, name: &Value) -> &'static
         .unwrap_or("Error")
 }
 
+fn own_data(scope: &mut Scope<'_>, object: &Value, name: &str) -> Result<Option<Value>> {
+    let key = scope.string(name);
+    Ok(scope
+        .own_property(object, &key)?
+        .filter(|d| !d.accessor)
+        .map(|d| d.value))
+}
+
 pub(crate) fn own_message(scope: &mut Scope<'_>, error: &Value) -> Result {
-    match quickjs::own_slot(scope, error, "message")? {
-        OwnSlot::Data(message) => quickjs::to_js_string(scope, &message),
-        OwnSlot::Accessor | OwnSlot::Missing => Ok(Value::undefined()),
+    match own_data(scope, error, "message")? {
+        Some(message) => scope.to_string_value(&message),
+        None => Ok(Value::undefined()),
     }
+}
+
+pub(crate) fn kind(scope: &mut Scope<'_>, value: &Value) -> ObjectKind {
+    scope.object_kind(value).unwrap_or(ObjectKind::Other)
+}
+
+pub(crate) fn element_index(element: ElementType) -> i32 {
+    ElementType::ALL
+        .iter()
+        .position(|e| *e == element)
+        .map_or(-1, |i| i as i32)
+}
+
+pub(crate) fn new_view(scope: &mut Scope<'_>, element: ElementType, args: &[Value]) -> Result {
+    let ctor = global_get(scope, element.constructor_name());
+    scope.construct(&ctor, args)
+}
+
+pub(crate) fn fill_buffer(scope: &mut Scope<'_>, buffer: &Value, bytes: &[u8]) {
+    scope.with_buffer_bytes_mut(buffer, |data| {
+        if data.len() >= bytes.len() {
+            data[..bytes.len()].copy_from_slice(bytes);
+        }
+    });
 }
 
 pub(crate) fn buffer_detached(scope: &mut Scope<'_>, buffer: &Value) -> bool {
@@ -154,8 +185,8 @@ pub(crate) fn geometry_count() -> usize {
 }
 
 fn own_constructor(scope: &mut Scope<'_>, proto: &Value) -> Value {
-    match quickjs::own_slot(scope, proto, "constructor") {
-        Ok(OwnSlot::Data(ctor)) => ctor,
+    match own_data(scope, proto, "constructor") {
+        Ok(Some(ctor)) => ctor,
         _ => Value::undefined(),
     }
 }
@@ -168,7 +199,7 @@ fn is_platform_instance(scope: &mut Scope<'_>, value: &Value) -> bool {
         return false;
     }
     let ctor = own_constructor(scope, &proto);
-    if !scope.is_function(&ctor) || !quickjs::is_engine_function(&ctor) {
+    if !scope.is_native_function(&ctor) {
         return false;
     }
     let name = get(scope, &ctor, "name");
@@ -220,17 +251,17 @@ impl Constructors {
 }
 
 struct Cloner {
-    memo: HashMap<usize, (Value, Value)>,
-    in_place: Vec<usize>,
+    memo: HashMap<ObjectKey, Value>,
+    in_place: Vec<ObjectKey>,
     depth: u32,
     ctors: Constructors,
 }
 
 impl Cloner {
     fn remember(&mut self, original: &Value, clone: &Value) {
-        self.memo
-            .entry(quickjs::identity(original))
-            .or_insert_with(|| (original.clone(), clone.clone()));
+        if let Some(key) = original.object_key() {
+            self.memo.entry(key).or_insert_with(|| clone.clone());
+        }
     }
 
     fn kept(&mut self, original: &Value, clone: Result) -> Result {
@@ -256,16 +287,16 @@ impl Cloner {
         }
         let resizable = get(scope, source, "resizable");
         let resizable = scope.to_bool(&resizable);
-        let bytes = quickjs::array_buffer_bytes(scope, source).unwrap_or_default();
+        let bytes = scope.array_buffer_bytes(source).unwrap_or_default();
         if !resizable {
-            return quickjs::array_buffer_copy(scope, &bytes);
+            return scope.new_array_buffer(&bytes);
         }
         let opts = scope.new_object();
         let max = get(scope, source, "maxByteLength");
         scope.set(&opts, "maxByteLength", max)?;
         let ctor = self.ctors.array_buffer.clone();
         let clone = scope.construct(&ctor, &[Value::int64(bytes.len() as i64), opts])?;
-        quickjs::fill_array_buffer(scope, &clone, &bytes);
+        fill_buffer(scope, &clone, &bytes);
         Ok(clone)
     }
 
@@ -308,29 +339,25 @@ impl Cloner {
         }
     }
 
-    fn clone_typed_array(&mut self, scope: &mut Scope<'_>, value: &Value, kind: i32) -> Result {
-        let parts = match quickjs::typed_array_parts(scope, value) {
-            Ok(parts) => parts,
-            Err(_) => return fail(scope),
+    fn clone_typed_array(&mut self, scope: &mut Scope<'_>, value: &Value) -> Result {
+        let view = match scope.typed_array_view(value) {
+            Ok(Some(view)) => view,
+            _ => return fail(scope),
         };
-        let buffer = if quickjs::is_array_buffer(&parts.buffer) {
-            self.clone(scope, &parts.buffer)?
+        let buffer = if kind(scope, &view.buffer) == ObjectKind::ArrayBuffer {
+            self.clone(scope, &view.buffer)?
         } else {
-            match quickjs::array_buffer_bytes(scope, &parts.buffer) {
-                Some(bytes) => quickjs::array_buffer_copy(scope, &bytes)?,
+            match scope.array_buffer_bytes(&view.buffer) {
+                Some(bytes) => scope.new_array_buffer(&bytes)?,
                 None => return fail(scope),
             }
         };
-        let elements = parts
-            .byte_length
-            .checked_div(parts.bytes_per_element)
-            .unwrap_or(0);
         let args = [
             buffer,
-            Value::int64(parts.byte_offset as i64),
-            Value::int64(elements as i64),
+            Value::int64(view.byte_offset as i64),
+            Value::int64(view.length as i64),
         ];
-        let clone = quickjs::new_typed_array(scope, &args, kind);
+        let clone = new_view(scope, view.element, &args);
         self.kept(value, clone)
     }
 
@@ -374,7 +401,7 @@ impl Cloner {
         let ctor_name = error_constructor(scope, &name);
         let message = own_message(scope, value)?;
         let ctor = global_get(scope, ctor_name);
-        let clone = if !quickjs::is_constructor(scope, &ctor) {
+        let clone = if !scope.is_constructor(&ctor) {
             let clone = scope.new_error();
             if !message.is_undefined() {
                 scope.define(&clone, "message", message, HIDDEN_PROPERTY)?;
@@ -399,21 +426,21 @@ impl Cloner {
         Ok(clone)
     }
 
-    fn clone_boxed(&mut self, scope: &mut Scope<'_>, value: &Value, kind: i32) -> Result {
+    fn clone_boxed(&mut self, scope: &mut Scope<'_>, value: &Value, kind: ObjectKind) -> Result {
         let clone = match kind {
-            quickjs::BOXED_NUMBER => {
+            ObjectKind::Number => {
                 let n = scope.to_number(value).unwrap_or(0.0);
                 let ctor = self.ctors.number.clone();
                 scope.construct(&ctor, &[Value::number(n)])
             }
-            quickjs::BOXED_STRING => {
-                let primitive = quickjs::to_js_string(scope, value)?;
+            ObjectKind::String => {
+                let primitive = scope.to_string_value(value)?;
                 let ctor = self.ctors.string.clone();
                 scope.construct(&ctor, &[primitive])
             }
-            quickjs::BOXED_BIGINT => {
+            ObjectKind::BigInt => {
                 let primitive = call_method(scope, value, "valueOf")?;
-                quickjs::to_object(scope, &primitive)
+                scope.to_object(&primitive)
             }
             _ => {
                 let primitive =
@@ -437,26 +464,25 @@ impl Cloner {
             scope.new_object()
         };
         self.remember(value, &clone);
-        for key in quickjs::own_enumerable_string_keys(scope, value)? {
-            let property = quickjs::get_by_key(scope, value, &key)?;
+        for key in scope.own_enumerable_keys(value)? {
+            let property = scope.get_key(value, &key)?;
             let property = self.clone(scope, &property)?;
-            quickjs::set_by_key(scope, &clone, &key, property)?;
+            scope.set_key(&clone, &key, property)?;
         }
         Ok(clone)
     }
 
     fn clone_value(&mut self, scope: &mut Scope<'_>, value: &Value) -> Result {
-        if quickjs::is_symbol(value) {
+        if value.is_symbol() {
             return fail(scope);
         }
-        if !value.is_object() {
+        let Some(id) = value.object_key() else {
             return Ok(value.clone());
-        }
+        };
         if scope.is_function(value) {
             return fail(scope);
         }
-        let id = quickjs::identity(value);
-        if let Some((_, clone)) = self.memo.get(&id) {
+        if let Some(clone) = self.memo.get(&id) {
             return Ok(clone.clone());
         }
         if self.in_place.contains(&id) {
@@ -466,29 +492,29 @@ impl Cloner {
         if ffi::is_host_object(value) || ffi::is_element(value) {
             return fail(scope);
         }
-        if quickjs::is_array_buffer(value) {
+        let object_kind = kind(scope, value);
+        if object_kind == ObjectKind::ArrayBuffer {
             let clone = self.copy_array_buffer(scope, value);
             return self.kept(value, clone);
         }
-        let typed = quickjs::typed_array_type(value);
-        if typed >= 0 {
-            return self.clone_typed_array(scope, value, typed);
+        if let ObjectKind::TypedArray(_) = object_kind {
+            return self.clone_typed_array(scope, value);
         }
-        if quickjs::is_date(value) {
+        if object_kind == ObjectKind::Date {
             let time = call_method(scope, value, "getTime")?;
             let ctor = self.ctors.date.clone();
             let clone = scope.construct(&ctor, &[time]);
             return self.kept(value, clone);
         }
-        if quickjs::is_regexp(value) {
+        if object_kind == ObjectKind::RegExp {
             let source = get(scope, value, "source");
             let flags = get(scope, value, "flags");
             let ctor = self.ctors.regexp.clone();
             let clone = scope.construct(&ctor, &[source, flags]);
             return self.kept(value, clone);
         }
-        let is_map = quickjs::is_map(value);
-        if is_map || quickjs::is_set(value) {
+        let is_map = object_kind == ObjectKind::Map;
+        if is_map || object_kind == ObjectKind::Set {
             let ctor = if is_map {
                 self.ctors.map.clone()
             } else {
@@ -507,7 +533,7 @@ impl Cloner {
         if instance_of(scope, value, &blob) {
             return self.clone_blob(scope, value, false);
         }
-        if quickjs::is_data_view(value) {
+        if object_kind == ObjectKind::DataView {
             return self.clone_data_view(scope, value);
         }
         let dom_exception = self.ctors.dom_exception.clone();
@@ -517,18 +543,14 @@ impl Cloner {
             let clone = scope.construct(&dom_exception, &[message, name]);
             return self.kept(value, clone);
         }
-        if quickjs::is_error(value) {
+        if object_kind == ObjectKind::Error {
             return self.clone_error(scope, value);
         }
-        let boxed = quickjs::boxed_kind(value);
         if matches!(
-            boxed,
-            quickjs::BOXED_NUMBER
-                | quickjs::BOXED_STRING
-                | quickjs::BOXED_BOOLEAN
-                | quickjs::BOXED_BIGINT
+            object_kind,
+            ObjectKind::Number | ObjectKind::String | ObjectKind::Boolean | ObjectKind::BigInt
         ) {
-            return self.clone_boxed(scope, value, boxed);
+            return self.clone_boxed(scope, value, object_kind);
         }
         if let Some(kind) = geometry_kind(scope, value) {
             let clone = geometry_plain(scope, kind, value)
@@ -548,7 +570,7 @@ impl Cloner {
 fn run(
     scope: &mut Scope<'_>,
     value: &Value,
-    in_place: Vec<usize>,
+    in_place: Vec<ObjectKey>,
     seeds: (&Value, &Value),
 ) -> Result {
     let mut cloner = Cloner {
@@ -599,10 +621,12 @@ pub(crate) fn clone_transfer(
         if !item.is_object() {
             return Err(scope.type_error("structuredClone: transfer list entry is not an object"));
         }
-        let id = quickjs::identity(&item);
+        let Some(id) = item.object_key() else {
+            return fail(scope);
+        };
         let fresh = !seen.contains(&id);
-        seen.push(id);
-        let is_buffer = quickjs::is_array_buffer(&item);
+        seen.push(id.clone());
+        let is_buffer = kind(scope, &item) == ObjectKind::ArrayBuffer;
         if fresh && is_buffer && !buffer_detached(scope, &item) {
             buffers.push(item);
             continue;

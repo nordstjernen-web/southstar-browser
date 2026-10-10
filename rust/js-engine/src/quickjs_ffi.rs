@@ -14,8 +14,8 @@ use std::ffi::CString;
 use std::path::Path;
 
 use crate::{
-    Attributes, BoundFn, ElementType, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit,
-    Trace, TypedArrayBytes,
+    Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
+    RealmInit, Trace, TypedArrayBytes, TypedArrayView,
 };
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
@@ -101,6 +101,7 @@ const PROMISE_REJECTED: c_int = 2;
 const PROP_CONFIGURABLE: c_int = 1 << 0;
 const PROP_WRITABLE: c_int = 1 << 1;
 const PROP_ENUMERABLE: c_int = 1 << 2;
+const PROP_GETSET: c_int = 1 << 4;
 const ATOM_NULL: JSAtom = 0;
 const HOST_CLASS_ID: u32 = 512;
 
@@ -444,6 +445,29 @@ pub struct Value {
     raw: JSValue,
 }
 
+#[derive(Clone)]
+pub struct ObjectKey(usize, Value);
+
+impl PartialEq for ObjectKey {
+    fn eq(&self, other: &ObjectKey) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for ObjectKey {}
+
+impl ObjectKey {
+    pub fn value(&self) -> Value {
+        self.1.clone()
+    }
+}
+
+impl core::hash::Hash for ObjectKey {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl Value {
     fn own(ctx: *mut JSContext, raw: JSValue) -> Value {
         let rt = if raw.tag < 0 && !ctx.is_null() {
@@ -517,6 +541,15 @@ impl Value {
 
     pub fn is_bool(&self) -> bool {
         self.raw.tag == TAG_BOOL
+    }
+
+    pub fn is_symbol(&self) -> bool {
+        quickjs::is_symbol(self)
+    }
+
+    pub fn object_key(&self) -> Option<ObjectKey> {
+        self.is_object()
+            .then(|| ObjectKey(quickjs::identity(self), self.clone()))
     }
 
     pub fn same_object(&self, other: &Value) -> bool {
@@ -868,7 +901,6 @@ pub mod quickjs {
 
     const TAG_SYMBOL: i64 = -8;
     const GPN_ENUM_ONLY: c_int = 1 << 4;
-    const PROP_GETSET: c_int = 1 << 4;
     const PROP_C_W_E: c_int = 7;
 
     unsafe extern "C" {
@@ -1147,7 +1179,7 @@ pub mod quickjs {
             let value = Value::own(scope.ctx, desc.value);
             drop(Value::own(scope.ctx, desc.getter));
             drop(Value::own(scope.ctx, desc.setter));
-            Ok(if desc.flags & PROP_GETSET != 0 {
+            Ok(if desc.flags & super::PROP_GETSET != 0 {
                 OwnSlot::Accessor
             } else {
                 OwnSlot::Data(value)
@@ -1959,7 +1991,85 @@ impl Scope<'_> {
             value: Value::own(self.ctx, desc.value),
             getter: Value::own(self.ctx, desc.getter),
             setter: Value::own(self.ctx, desc.setter),
+            accessor: desc.flags & PROP_GETSET != 0,
         }))
+    }
+
+    pub fn object_kind(&mut self, value: &Value) -> Option<ObjectKind> {
+        if !value.is_object() {
+            return None;
+        }
+        if quickjs::is_array_buffer(value) {
+            return Some(ObjectKind::ArrayBuffer);
+        }
+        if let Some(element) = self.typed_array_element(value) {
+            return Some(ObjectKind::TypedArray(element));
+        }
+        Some(if quickjs::is_data_view(value) {
+            ObjectKind::DataView
+        } else if quickjs::is_date(value) {
+            ObjectKind::Date
+        } else if quickjs::is_regexp(value) {
+            ObjectKind::RegExp
+        } else if quickjs::is_map(value) {
+            ObjectKind::Map
+        } else if quickjs::is_set(value) {
+            ObjectKind::Set
+        } else if quickjs::is_error(value) {
+            ObjectKind::Error
+        } else {
+            match quickjs::boxed_kind(value) {
+                quickjs::BOXED_NUMBER => ObjectKind::Number,
+                quickjs::BOXED_STRING => ObjectKind::String,
+                quickjs::BOXED_BOOLEAN => ObjectKind::Boolean,
+                quickjs::BOXED_BIGINT => ObjectKind::BigInt,
+                _ => ObjectKind::Other,
+            }
+        })
+    }
+
+    pub fn typed_array_view(&mut self, value: &Value) -> Result<Option<TypedArrayView>, Value> {
+        let Some(element) = self.typed_array_element(value) else {
+            return Ok(None);
+        };
+        let parts = quickjs::typed_array_parts(self, value)?;
+        Ok(Some(TypedArrayView {
+            buffer: parts.buffer,
+            byte_offset: parts.byte_offset,
+            length: parts
+                .byte_length
+                .checked_div(parts.bytes_per_element)
+                .unwrap_or(0),
+            element,
+        }))
+    }
+
+    pub fn new_array_buffer(&mut self, bytes: &[u8]) -> Result<Value, Value> {
+        quickjs::array_buffer_copy(self, bytes)
+    }
+
+    pub fn array_buffer_bytes(&mut self, value: &Value) -> Option<Vec<u8>> {
+        quickjs::array_buffer_bytes(self, value)
+    }
+
+    pub fn own_enumerable_keys(&mut self, object: &Value) -> Result<Vec<Value>, Value> {
+        quickjs::own_enumerable_string_keys(self, object)
+    }
+
+    pub fn set_key(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
+        quickjs::set_by_key(self, object, key, value)
+    }
+
+    pub fn define_entry(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
+        quickjs::define_by_key(self, object, key, value)
+    }
+
+    pub fn is_native_function(&mut self, value: &Value) -> bool {
+        self.is_function(value) && quickjs::is_engine_function(value)
+    }
+
+    pub fn to_object(&mut self, value: &Value) -> Result<Value, Value> {
+        quickjs::to_object(self, value)
     }
 
     pub fn get_prototype(&mut self, object: &Value) -> Result<Value, Value> {

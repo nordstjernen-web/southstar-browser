@@ -19,7 +19,7 @@ use quickjs_ffi as backend;
 
 #[cfg(feature = "quickjs")]
 pub use backend::quickjs;
-pub use backend::{ENGINE_NAME, Engine, Realm, Scope, Value, engine_version};
+pub use backend::{ENGINE_NAME, Engine, ObjectKey, Realm, Scope, Value, engine_version};
 
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
 
@@ -55,10 +55,78 @@ pub enum ElementType {
     Float64,
 }
 
+impl ElementType {
+    pub fn constructor_name(self) -> &'static str {
+        match self {
+            ElementType::Int8 => "Int8Array",
+            ElementType::Uint8 => "Uint8Array",
+            ElementType::Uint8Clamped => "Uint8ClampedArray",
+            ElementType::Int16 => "Int16Array",
+            ElementType::Uint16 => "Uint16Array",
+            ElementType::Int32 => "Int32Array",
+            ElementType::Uint32 => "Uint32Array",
+            ElementType::BigInt64 => "BigInt64Array",
+            ElementType::BigUint64 => "BigUint64Array",
+            ElementType::Float16 => "Float16Array",
+            ElementType::Float32 => "Float32Array",
+            ElementType::Float64 => "Float64Array",
+        }
+    }
+
+    pub fn size(self) -> usize {
+        match self {
+            ElementType::Int8 | ElementType::Uint8 | ElementType::Uint8Clamped => 1,
+            ElementType::Int16 | ElementType::Uint16 | ElementType::Float16 => 2,
+            ElementType::Int32 | ElementType::Uint32 | ElementType::Float32 => 4,
+            ElementType::BigInt64 | ElementType::BigUint64 | ElementType::Float64 => 8,
+        }
+    }
+
+    pub const ALL: [ElementType; 12] = [
+        ElementType::Int8,
+        ElementType::Uint8,
+        ElementType::Uint8Clamped,
+        ElementType::Int16,
+        ElementType::Uint16,
+        ElementType::Int32,
+        ElementType::Uint32,
+        ElementType::BigInt64,
+        ElementType::BigUint64,
+        ElementType::Float16,
+        ElementType::Float32,
+        ElementType::Float64,
+    ];
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ObjectKind {
+    ArrayBuffer,
+    TypedArray(ElementType),
+    DataView,
+    Date,
+    RegExp,
+    Map,
+    Set,
+    Error,
+    Number,
+    String,
+    Boolean,
+    BigInt,
+    Other,
+}
+
+pub struct TypedArrayView {
+    pub buffer: Value,
+    pub byte_offset: usize,
+    pub length: usize,
+    pub element: ElementType,
+}
+
 pub struct PropertyDescriptor {
     pub value: Value,
     pub getter: Value,
     pub setter: Value,
+    pub accessor: bool,
 }
 
 pub enum PromiseState {
