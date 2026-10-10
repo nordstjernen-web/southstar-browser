@@ -329,12 +329,11 @@ fn marker_resolve_content_text(
             while p < raw.len() && raw[p] != b')' && raw[p] != b',' && !is_space(raw[p]) {
                 p += 1;
             }
-            if let Some(li) = li.filter(|_| p != start) {
-                if let Ok(name) = CString::new(&raw[start..p]) {
-                    if let Some(val) = li.attr(&name) {
-                        out.extend_from_slice(val.to_bytes());
-                    }
-                }
+            if let Some(li) = li.filter(|_| p != start)
+                && let Ok(name) = CString::new(&raw[start..p])
+                && let Some(val) = li.attr(&name)
+            {
+                out.extend_from_slice(val.to_bytes());
             }
             while p < raw.len() && raw[p] != b')' {
                 p += 1;

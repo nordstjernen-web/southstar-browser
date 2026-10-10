@@ -129,14 +129,13 @@ fn normal_line_height_fallback(family: Option<&CStr>, font_size: f64) -> f64 {
     let resolved = family.map(|f| engine::font_family_for_pango(Some(f)));
     let mut factor = 1.2;
     let mut rounded = false;
-    if let Some(resolved) = &resolved {
-        if let Some(&(_, f, r)) = KNOWN
+    if let Some(resolved) = &resolved
+        && let Some(&(_, f, r)) = KNOWN
             .iter()
             .find(|(name, _, _)| resolved.to_bytes().eq_ignore_ascii_case(name))
-        {
-            factor = f;
-            rounded = r;
-        }
+    {
+        factor = f;
+        rounded = r;
     }
     if rounded {
         (font_size * factor).round()
@@ -218,10 +217,10 @@ pub fn apply_css_line_spacing(layout: Option<&Layout>, s: Option<StyleRef<'_>>) 
 fn nearest_node_attr<'a>(n: Node<'a>, attr: &CStr) -> Option<&'a CStr> {
     let mut p = Some(n);
     while let Some(node) = p {
-        if node.is_element() {
-            if let Some(v) = node.attr(attr).filter(|v| !v.is_empty()) {
-                return Some(v);
-            }
+        if node.is_element()
+            && let Some(v) = node.attr(attr).filter(|v| !v.is_empty())
+        {
+            return Some(v);
         }
         p = node.parent();
     }
@@ -277,11 +276,11 @@ pub fn apply_i18n(layout: Option<&Layout>, attrs: Option<&AttrList>, b: Option<B
     if bd == pango::DIRECTION_NEUTRAL && keyword_is(get(st, P::Direction), c"rtl") {
         bd = pango::DIRECTION_RTL;
     }
-    if bd != pango::DIRECTION_NEUTRAL {
-        if let Some(layout) = layout {
-            layout.set_auto_dir(false);
-            layout.context().set_base_dir(bd);
-        }
+    if bd != pango::DIRECTION_NEUTRAL
+        && let Some(layout) = layout
+    {
+        layout.set_auto_dir(false);
+        layout.context().set_base_dir(bd);
     }
 }
 
