@@ -28,7 +28,7 @@ pub(crate) const SIZE_EXPLICIT: u32 = 4;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Stop {
+pub struct Stop {
     pub r: u8,
     pub g: u8,
     pub b: u8,
@@ -43,7 +43,7 @@ pub(crate) struct Stop {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct Gradient {
+pub struct Gradient {
     pub angle_deg: f64,
     pub to_side: i32,
     pub has_angle: i32,

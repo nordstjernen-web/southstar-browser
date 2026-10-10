@@ -1,0 +1,21 @@
+[package]
+name = "southstar-paint"
+description = "Painting the layout box tree with cairo and ns-pango, ported from paint.c section by section: so far page text setup, fonts, line heights and list markers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-image = { path = "../image" }
+southstar-layout = { path = "../layout" }
+southstar-style = { path = "../style" }
+
+[features]
+ns-pango = []
+
+[lints]
+workspace = true

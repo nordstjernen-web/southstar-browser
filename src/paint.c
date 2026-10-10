@@ -4,6 +4,7 @@
  */
 
 #include "paint.h"
+#include "paint_internal.h"
 
 static int g_dbg_paint_x = -2, g_dbg_paint_y = -2;
 
@@ -123,86 +124,6 @@ paint_group_video_holes(cairo_t *cr, cairo_pattern_t *source,
     else
         cairo_paint(cr);
     cairo_restore(cr);
-}
-
-static cairo_surface_t *texture_surface_cached(ns_texture *tex,
-                                               const char *filter_kw);
-
-static void ns_paint_font_metrics(const char *family, double size_px,
-                                  int weight, gboolean italic,
-                                  ns_css_font_metrics *out);
-
-NsPangoContext *
-ns_paint_text_context(void)
-{
-    static NsPangoContext *cached_ctx;
-    if (!cached_ctx) {
-        NsPangoFontMap *fm = ns_pango_cairo_font_map_get_default();
-        cached_ctx = ns_pango_font_map_create_context(fm);
-        cairo_font_options_t *fo = cairo_font_options_create();
-        const cairo_font_options_t *base =
-            ns_pango_cairo_context_get_font_options(cached_ctx);
-        if (base) cairo_font_options_merge(fo, base);
-        cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_GRAY);
-        cairo_font_options_set_subpixel_order(fo, CAIRO_SUBPIXEL_ORDER_DEFAULT);
-        cairo_font_options_set_hint_metrics(fo, CAIRO_HINT_METRICS_OFF);
-#ifdef __APPLE__
-        cairo_font_options_set_hint_style(fo, CAIRO_HINT_STYLE_NONE);
-#endif
-        ns_pango_cairo_context_set_font_options(cached_ctx, fo);
-        cairo_font_options_destroy(fo);
-        ns_pango_context_set_round_glyph_positions(cached_ctx, FALSE);
-        ns_pango_cairo_context_set_resolution(cached_ctx, 72.0);
-    }
-    return cached_ctx;
-}
-
-static NsPangoLayout *
-paint_create_layout(void)
-{
-    return ns_pango_layout_new(ns_paint_text_context());
-}
-
-static NsPangoWeight
-ns_pango_weight_from_css(int weight)
-{
-    if (weight <= 100) return NS_PANGO_WEIGHT_THIN;
-    if (weight <= 200) return NS_PANGO_WEIGHT_ULTRALIGHT;
-    if (weight <= 300) return NS_PANGO_WEIGHT_LIGHT;
-    if (weight <= 400) return NS_PANGO_WEIGHT_NORMAL;
-    if (weight <= 500) return NS_PANGO_WEIGHT_MEDIUM;
-    if (weight <= 600) return NS_PANGO_WEIGHT_SEMIBOLD;
-    if (weight <= 700) return NS_PANGO_WEIGHT_BOLD;
-    if (weight <= 800) return NS_PANGO_WEIGHT_ULTRABOLD;
-    if (weight <= 900) return NS_PANGO_WEIGHT_HEAVY;
-    return (NsPangoWeight)weight;
-}
-
-int
-ns_paint_pango_font_size(double size_px)
-{
-    if (!(size_px > 0)) return 0;
-    if (size_px > 65535) size_px = 65535;
-    return (int)(size_px * NS_PANGO_SCALE);
-}
-
-static NsPangoStretch
-ns_pango_stretch_from_css(int rank)
-{
-    static const NsPangoStretch map[] = {
-        NS_PANGO_STRETCH_ULTRA_CONDENSED,
-        NS_PANGO_STRETCH_EXTRA_CONDENSED,
-        NS_PANGO_STRETCH_CONDENSED,
-        NS_PANGO_STRETCH_SEMI_CONDENSED,
-        NS_PANGO_STRETCH_NORMAL,
-        NS_PANGO_STRETCH_SEMI_EXPANDED,
-        NS_PANGO_STRETCH_EXPANDED,
-        NS_PANGO_STRETCH_EXTRA_EXPANDED,
-        NS_PANGO_STRETCH_ULTRA_EXPANDED,
-    };
-    if (rank < 0) rank = 0;
-    if (rank > 8) rank = 8;
-    return map[rank];
 }
 
 void
@@ -1143,7 +1064,7 @@ paint_bg_image_core(cairo_t *cr, ns_image *img,
     } else if (py && py->kind == NS_CSS_V_CALC) {
         off_y = (h - draw_h) * (py->u.calc.pct / 100.0) + py->u.calc.px;
     }
-    cairo_surface_t *surf = texture_surface_cached(img->texture, NULL);
+    cairo_surface_t *surf = ns_paint_texture_surface_cached(img->texture, NULL);
     if (!surf) return;
     cairo_save(cr);
     rounded_rect_path(cr, clip_x, clip_y, clip_w, clip_h, radii);
@@ -1508,7 +1429,7 @@ paint_border_image(cairo_t *cr, const ns_box *b, const ns_style *s,
         iw = ns_texture_get_width(img->texture);
         ih = ns_texture_get_height(img->texture);
         if (iw <= 0 || ih <= 0) return FALSE;
-        surf = texture_surface_cached(img->texture, NULL);
+        surf = ns_paint_texture_surface_cached(img->texture, NULL);
         if (!surf) return FALSE;
     } else {
         iw = ceil(area_w);
@@ -1754,7 +1675,7 @@ paint_block(cairo_t *cr, const ns_box *b)
             double draw_w = iw * sc, draw_h = ih * sc;
             double off_x = (clip_w - draw_w) / 2.0;
             double off_y = (clip_h - draw_h) / 2.0;
-            cairo_surface_t *surf = texture_surface_cached(mimg->texture, NULL);
+            cairo_surface_t *surf = ns_paint_texture_surface_cached(mimg->texture, NULL);
             if (surf) {
                 cairo_save(cr);
                 rounded_rect_path(cr, clip_x, clip_y, clip_w, clip_h, radii);
@@ -1993,14 +1914,6 @@ paint_block(cairo_t *cr, const ns_box *b)
     if (legend_gap) cairo_restore(cr);
 }
 
-static const ns_style *
-inherited_style(const ns_box *b)
-{
-    for (const ns_box *p = b->parent; p; p = p->parent)
-        if (p->style) return p->style;
-    return NULL;
-}
-
 static void
 attr_insert_range(NsPangoAttrList *attrs, NsPangoAttribute *a,
                   gsize start, gsize len)
@@ -2055,794 +1968,7 @@ find_ci_substring(const char *hay, gsize hay_len,
     return (gsize)-1;
 }
 
-static const char *
-nearest_node_attr(const ns_node *n, const char *attr)
-{
-    for (const ns_node *p = n; p; p = p->parent) {
-        if (p->kind != NS_NODE_ELEMENT) continue;
-        const char *v = ns_element_get_attr(p, attr);
-        if (v && *v) return v;
-    }
-    return NULL;
-}
-
-NsPangoWrapMode
-ns_paint_wrap_mode_for(const ns_style *style)
-{
-    if (style) {
-        const ns_css_value *wb = style->values[NS_CSS_WORD_BREAK];
-        if (wb && wb->kind == NS_CSS_V_KEYWORD && wb->u.keyword) {
-            if (strcmp(wb->u.keyword, "break-all") == 0)
-                return NS_PANGO_WRAP_CHAR;
-            if (strcmp(wb->u.keyword, "keep-all") == 0)
-                return NS_PANGO_WRAP_WORD;
-        }
-        const ns_css_value *ow = style->values[NS_CSS_OVERFLOW_WRAP];
-        if (ow && ow->kind == NS_CSS_V_KEYWORD && ow->u.keyword) {
-            if (strcmp(ow->u.keyword, "normal") == 0)
-                return NS_PANGO_WRAP_WORD;
-            if (strcmp(ow->u.keyword, "break-word") == 0 ||
-                strcmp(ow->u.keyword, "anywhere") == 0)
-                return NS_PANGO_WRAP_WORD_CHAR;
-        }
-    }
-    return NS_PANGO_WRAP_WORD;
-}
-
-static gboolean
-ns_style_is_nowrap(const ns_style *style)
-{
-    if (!style) return FALSE;
-    const ns_css_value *ws = style->values[NS_CSS_WHITE_SPACE];
-    return ws && ws->kind == NS_CSS_V_KEYWORD && ws->u.keyword &&
-           (strcmp(ws->u.keyword, "nowrap") == 0 ||
-            strcmp(ws->u.keyword, "pre") == 0);
-}
-
-static double
-normal_line_height_from_metrics(const ns_style *s, const char *family,
-                                double font_size)
-{
-    ns_css_font_metrics m = { 0 };
-    gboolean italic = s &&
-        (keyword_is(s->values[NS_CSS_FONT_STYLE], "italic") ||
-         keyword_is(s->values[NS_CSS_FONT_STYLE], "oblique"));
-    int weight = ns_css_font_weight_number(
-        s ? s->values[NS_CSS_FONT_WEIGHT] : NULL, 400);
-    ns_paint_font_metrics(family, font_size, weight, italic, &m);
-    return m.line_px;
-}
-
-static double
-normal_line_height_fallback(const char *family, double font_size)
-{
-    static const struct {
-        const char *name;
-        double factor;
-        gboolean rounded;
-    } known[] = {
-        { "Arial", 1.1, FALSE },
-        { "Helvetica", 1.1, FALSE },
-        { "Times New Roman", 1.125, FALSE },
-        { "Times", 1.125, FALSE },
-        { "serif", 1.125, FALSE },
-        { "Menlo", 1.164, TRUE },
-        { "System Font", 1.19, TRUE },
-    };
-    char *resolved = family ? ns_css_font_family_for_pango(family) : NULL;
-    double factor = 1.2;
-    gboolean rounded = FALSE;
-    for (gsize i = 0; resolved && i < G_N_ELEMENTS(known); i++) {
-        if (g_ascii_strcasecmp(resolved, known[i].name) != 0) continue;
-        factor = known[i].factor;
-        rounded = known[i].rounded;
-        break;
-    }
-    g_free(resolved);
-    return rounded ? round(font_size * factor) : ceil(font_size * factor);
-}
-
-double
-ns_paint_normal_line_height_px(const ns_style *s)
-{
-    double font_size = length_or(s ? s->values[NS_CSS_FONT_SIZE] : NULL, 16);
-    const ns_css_value *fv = s ? s->values[NS_CSS_FONT_FAMILY] : NULL;
-    const char *family = fv && fv->kind == NS_CSS_V_KEYWORD ? fv->u.keyword
-                                                            : NULL;
-    if (font_size > 0) {
-        double line = normal_line_height_from_metrics(
-            s, family ? family : "sans-serif", font_size);
-        if (line > 0) return line;
-    }
-    return normal_line_height_fallback(family, font_size);
-}
-
-double
-ns_paint_css_line_height_px(const ns_style *s)
-{
-    if (!s) return -1;
-    const ns_css_value *lh = s->values[NS_CSS_LINE_HEIGHT];
-    double font_size = length_or(s->values[NS_CSS_FONT_SIZE], 16);
-    if (!lh || keyword_is(lh, "normal"))
-        return ns_paint_normal_line_height_px(s);
-    if (lh->kind != NS_CSS_V_LENGTH) return -1;
-    switch (lh->u.length.unit) {
-    case NS_CSS_UNIT_PX:      return lh->u.length.v;
-    case NS_CSS_UNIT_NUMBER:
-    case NS_CSS_UNIT_EM:      return lh->u.length.v * font_size;
-    case NS_CSS_UNIT_PERCENT: return lh->u.length.v / 100.0 * font_size;
-    case NS_CSS_UNIT_REM:     return lh->u.length.v * 16.0;
-    case NS_CSS_UNIT_LH:      return lh->u.length.v * font_size * 1.5;
-    case NS_CSS_UNIT_RLH:     return lh->u.length.v * 24.0;
-    case NS_CSS_UNIT_EX:      return lh->u.length.v * font_size * 0.5;
-    case NS_CSS_UNIT_REX:     return lh->u.length.v * 8.0;
-    case NS_CSS_UNIT_CH:      return lh->u.length.v * font_size * 0.5;
-    case NS_CSS_UNIT_RCH:     return lh->u.length.v * 8.0;
-    case NS_CSS_UNIT_CAP:     return lh->u.length.v * font_size * 0.7;
-    case NS_CSS_UNIT_RCAP:    return lh->u.length.v * 11.2;
-    case NS_CSS_UNIT_IC:      return lh->u.length.v * font_size;
-    case NS_CSS_UNIT_RIC:     return lh->u.length.v * 16.0;
-    case NS_CSS_UNIT_VH:
-    case NS_CSS_UNIT_CQH:     return lh->u.length.v * ns_css_viewport_h() / 100.0;
-    case NS_CSS_UNIT_VW:
-    case NS_CSS_UNIT_CQW:     return lh->u.length.v * ns_css_viewport_w() / 100.0;
-    case NS_CSS_UNIT_VMIN:
-    case NS_CSS_UNIT_CQMIN: {
-        double m = MIN(ns_css_viewport_w(), ns_css_viewport_h());
-        return lh->u.length.v * m / 100.0;
-    }
-    case NS_CSS_UNIT_VMAX:
-    case NS_CSS_UNIT_CQMAX: {
-        double m = MAX(ns_css_viewport_w(), ns_css_viewport_h());
-        return lh->u.length.v * m / 100.0;
-    }
-    default:                  return -1;
-    }
-}
-
-void
-ns_paint_apply_css_line_spacing(NsPangoLayout *layout, const ns_style *s)
-{
-    double lh_px = ns_paint_css_line_height_px(s);
-    if (!layout || lh_px <= 0) return;
-    double *stored = g_new(double, 1);
-    *stored = lh_px;
-    g_object_set_data_full(G_OBJECT(layout), NS_CSS_LINE_HEIGHT_KEY, stored,
-                           g_free);
-}
-
-void
-ns_paint_apply_i18n(NsPangoLayout *layout, NsPangoAttrList *attrs,
-                    const ns_box *b)
-{
-    if (!b) return;
-    const ns_node  *dn = b->dom;
-    const ns_style *st = b->style;
-    for (const ns_box *p = b->parent; (!dn || !st) && p; p = p->parent) {
-        if (!dn && p->dom)   dn = p->dom;
-        if (!st && p->style) st = p->style;
-    }
-    if (!dn && !st) return;
-    if (attrs) {
-        gboolean auto_hyphens =
-            st && keyword_is(st->values[NS_CSS_HYPHENS], "auto");
-        NsPangoAttribute *ih = ns_pango_attr_insert_hyphens_new(auto_hyphens);
-        ih->start_index = 0;
-        ih->end_index   = G_MAXUINT;
-        ns_pango_attr_list_insert(attrs, ih);
-    }
-    const char *lang = dn ? nearest_node_attr(dn, "lang") : NULL;
-    if (!lang && dn) lang = nearest_node_attr(dn, "xml:lang");
-    if (lang && attrs) {
-        NsPangoAttribute *a = ns_pango_attr_language_new(
-            ns_pango_language_from_string(lang));
-        a->start_index = 0;
-        a->end_index   = G_MAXUINT;
-        ns_pango_attr_list_insert(attrs, a);
-    }
-    const char *dir = dn ? nearest_node_attr(dn, "dir") : NULL;
-    NsPangoDirection bd = NS_PANGO_DIRECTION_NEUTRAL;
-    if (dir) {
-        if (g_ascii_strcasecmp(dir, "rtl") == 0) bd = NS_PANGO_DIRECTION_RTL;
-        else if (g_ascii_strcasecmp(dir, "ltr") == 0) bd = NS_PANGO_DIRECTION_LTR;
-    }
-    if (bd == NS_PANGO_DIRECTION_NEUTRAL && st &&
-        keyword_is(st->values[NS_CSS_DIRECTION], "rtl"))
-        bd = NS_PANGO_DIRECTION_RTL;
-    if (bd != NS_PANGO_DIRECTION_NEUTRAL && layout) {
-        ns_pango_layout_set_auto_dir(layout, FALSE);
-        ns_pango_context_set_base_dir(ns_pango_layout_get_context(layout), bd);
-    }
-}
-
-static void
-append_font_feature(GString *out, const char *feature)
-{
-    if (!feature || !*feature) return;
-    if (out->len > 0) g_string_append(out, ", ");
-    g_string_append(out, feature);
-}
-
-static void
-append_font_kerning_features(GString *out, const ns_css_value *v)
-{
-    if (!v || v->kind != NS_CSS_V_KEYWORD || !v->u.keyword) return;
-    if (strcmp(v->u.keyword, "none") == 0)
-        append_font_feature(out, "kern=0");
-    else if (strcmp(v->u.keyword, "normal") == 0 ||
-             strcmp(v->u.keyword, "auto") == 0)
-        append_font_feature(out, "kern=1");
-}
-
-static void
-append_font_ligature_token(GString *out, const char *token)
-{
-    if (strcmp(token, "none") == 0) {
-        append_font_feature(out, "liga=0");
-        append_font_feature(out, "clig=0");
-        append_font_feature(out, "dlig=0");
-        append_font_feature(out, "hlig=0");
-        append_font_feature(out, "calt=0");
-    } else if (strcmp(token, "normal") == 0) {
-        append_font_feature(out, "liga=1");
-        append_font_feature(out, "clig=1");
-        append_font_feature(out, "dlig=0");
-        append_font_feature(out, "hlig=0");
-        append_font_feature(out, "calt=1");
-    } else if (strcmp(token, "common-ligatures") == 0) {
-        append_font_feature(out, "liga=1");
-        append_font_feature(out, "clig=1");
-    } else if (strcmp(token, "no-common-ligatures") == 0) {
-        append_font_feature(out, "liga=0");
-        append_font_feature(out, "clig=0");
-    } else if (strcmp(token, "discretionary-ligatures") == 0) {
-        append_font_feature(out, "dlig=1");
-    } else if (strcmp(token, "no-discretionary-ligatures") == 0) {
-        append_font_feature(out, "dlig=0");
-    } else if (strcmp(token, "historical-ligatures") == 0) {
-        append_font_feature(out, "hlig=1");
-    } else if (strcmp(token, "no-historical-ligatures") == 0) {
-        append_font_feature(out, "hlig=0");
-    } else if (strcmp(token, "contextual") == 0) {
-        append_font_feature(out, "calt=1");
-    } else if (strcmp(token, "no-contextual") == 0) {
-        append_font_feature(out, "calt=0");
-    }
-}
-
-static void
-append_font_ligature_features(GString *out, const char *ligatures)
-{
-    if (!ligatures || !*ligatures) return;
-    char **tokens = g_strsplit_set(ligatures, " \t\r\n\f", -1);
-    for (int i = 0; tokens[i]; i++) {
-        if (*tokens[i])
-            append_font_ligature_token(out, tokens[i]);
-    }
-    g_strfreev(tokens);
-}
-
-static const char *
-paint_font_feature_skip_ws(const char *p)
-{
-    while (*p && g_ascii_isspace((unsigned char)*p)) p++;
-    return p;
-}
-
-static gboolean
-paint_font_feature_read_tag(const char **pp, char tag[5])
-{
-    const char *p = paint_font_feature_skip_ws(*pp);
-    if (*p != '"' && *p != '\'') return FALSE;
-    char quote = *p++;
-    const char *s = p;
-    while (*p && *p != quote) p++;
-    if (*p != quote || p - s != 4) return FALSE;
-    memcpy(tag, s, 4);
-    tag[4] = '\0';
-    *pp = p + 1;
-    return TRUE;
-}
-
-static gboolean
-paint_font_feature_read_value(const char **pp, int *out)
-{
-    const char *p = paint_font_feature_skip_ws(*pp);
-    *out = 1;
-    if (!*p || *p == ',') {
-        *pp = p;
-        return TRUE;
-    }
-    if (g_ascii_isalpha((unsigned char)*p)) {
-        const char *s = p;
-        while (g_ascii_isalpha((unsigned char)*p) || *p == '-') p++;
-        char *kw = g_ascii_strdown(s, (gssize)(p - s));
-        if (strcmp(kw, "on") == 0) *out = 1;
-        else if (strcmp(kw, "off") == 0) *out = 0;
-        else {
-            g_free(kw);
-            return FALSE;
-        }
-        g_free(kw);
-        *pp = paint_font_feature_skip_ws(p);
-        return TRUE;
-    }
-    if (!g_ascii_isdigit((unsigned char)*p)) return FALSE;
-    char *endp = NULL;
-    gint64 v = g_ascii_strtoll(p, &endp, 10);
-    if (!endp || endp == p) return FALSE;
-    if (v < 0) v = 0;
-    if (v > G_MAXINT) v = G_MAXINT;
-    *out = (int)v;
-    *pp = paint_font_feature_skip_ws(endp);
-    return TRUE;
-}
-
-static void
-append_font_feature_settings_features(GString *out, const char *settings)
-{
-    if (!settings || !*settings || strcmp(settings, "normal") == 0) return;
-    const char *p = paint_font_feature_skip_ws(settings);
-    while (*p) {
-        char tag[5];
-        int value = 1;
-        if (!paint_font_feature_read_tag(&p, tag)) return;
-        if (!paint_font_feature_read_value(&p, &value)) return;
-        char feature[32];
-        g_snprintf(feature, sizeof(feature), "%s=%d", tag, value);
-        append_font_feature(out, feature);
-        if (*p != ',') break;
-        p = paint_font_feature_skip_ws(p + 1);
-    }
-}
-
-static gboolean
-paint_font_variation_read_value(const char **pp, char value[32])
-{
-    const char *p = paint_font_feature_skip_ws(*pp);
-    if (!*p || *p == ',') return FALSE;
-    char *endp = NULL;
-    double v = g_ascii_strtod(p, &endp);
-    if (!endp || endp == p || !isfinite(v)) return FALSE;
-    g_ascii_formatd(value, 32, "%.8g", v);
-    *pp = paint_font_feature_skip_ws(endp);
-    return TRUE;
-}
-
-static char *
-paint_font_variations_from_css(const char *settings)
-{
-    if (!settings || !*settings) return NULL;
-    if (strcmp(settings, "normal") == 0) return g_strdup("");
-    GString *out = g_string_new(NULL);
-    const char *p = paint_font_feature_skip_ws(settings);
-    while (*p) {
-        char tag[5];
-        char value[32];
-        if (!paint_font_feature_read_tag(&p, tag) ||
-            !paint_font_variation_read_value(&p, value)) {
-            g_string_free(out, TRUE);
-            return NULL;
-        }
-        if (out->len > 0) g_string_append_c(out, ',');
-        g_string_append_printf(out, "%s=%s", tag, value);
-        if (*p != ',') break;
-        p = paint_font_feature_skip_ws(p + 1);
-    }
-    if (out->len == 0) {
-        g_string_free(out, TRUE);
-        return NULL;
-    }
-    return g_string_free(out, FALSE);
-}
-
-NsPangoAttribute *
-ns_paint_font_features_attr_from_values(int kerning, const char *ligatures,
-                                        const char *settings)
-{
-    GString *s = g_string_new(NULL);
-    if (kerning == 0)
-        append_font_feature(s, "kern=0");
-    else if (kerning > 0)
-        append_font_feature(s, "kern=1");
-    append_font_ligature_features(s, ligatures);
-    append_font_feature_settings_features(s, settings);
-    if (s->len == 0) {
-        g_string_free(s, TRUE);
-        return NULL;
-    }
-    char *features = g_string_free(s, FALSE);
-    NsPangoAttribute *a = ns_pango_attr_font_features_new(features);
-    g_free(features);
-    return a;
-}
-
-NsPangoAttribute *
-ns_paint_font_variations_attr_from_values(const char *settings)
-{
-    char *variations = paint_font_variations_from_css(settings);
-    if (!variations) return NULL;
-    NsPangoFontDescription *desc = ns_pango_font_description_new();
-    ns_pango_font_description_set_variations(desc, variations);
-    NsPangoAttribute *a = ns_pango_attr_font_desc_new(desc);
-    ns_pango_font_description_free(desc);
-    g_free(variations);
-    return a;
-}
-
-void
-ns_paint_apply_font_features(NsPangoAttrList *attrs, const ns_style *s,
-                             guint start, guint end)
-{
-    if (!attrs || !s) return;
-    GString *features = g_string_new(NULL);
-    append_font_kerning_features(features, s->values[NS_CSS_FONT_KERNING]);
-    const ns_css_value *lig = s->values[NS_CSS_FONT_VARIANT_LIGATURES];
-    if (lig && lig->kind == NS_CSS_V_KEYWORD)
-        append_font_ligature_features(features, lig->u.keyword);
-    const ns_css_value *settings = s->values[NS_CSS_FONT_FEATURE_SETTINGS];
-    if (settings && settings->kind == NS_CSS_V_KEYWORD)
-        append_font_feature_settings_features(features, settings->u.keyword);
-    if (features->len == 0) {
-        g_string_free(features, TRUE);
-        return;
-    }
-    char *str = g_string_free(features, FALSE);
-    NsPangoAttribute *a = ns_pango_attr_font_features_new(str);
-    g_free(str);
-    a->start_index = start;
-    a->end_index = end;
-    ns_pango_attr_list_insert(attrs, a);
-}
-
-static gboolean
-ns_paint_font_available(const char *family)
-{
-    static GHashTable *avail;
-    static guint cached_serial;
-    if (!family || !*family) return TRUE;
-    NsPangoFontMap *fm = ns_pango_cairo_font_map_get_default();
-    guint serial = fm ? ns_pango_font_map_get_serial(fm) : 0;
-    if (!avail || serial != cached_serial) {
-        if (avail) g_hash_table_remove_all(avail);
-        else avail = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-        cached_serial = serial;
-        if (fm) {
-            NsPangoFontFamily **fams = NULL;
-            int n = 0;
-            ns_pango_font_map_list_families(fm, &fams, &n);
-            for (int i = 0; i < n; i++) {
-                const char *nm = ns_pango_font_family_get_name(fams[i]);
-                if (nm) g_hash_table_add(avail, g_ascii_strdown(nm, -1));
-            }
-            g_free(fams);
-        }
-    }
-    char *lo = g_ascii_strdown(family, -1);
-    gboolean has = g_hash_table_contains(avail, lo);
-    g_free(lo);
-    if (!has) has = ns_font_family_loaded(family);
-    return has;
-}
-
-typedef struct {
-    char    *family;
-    double   size_px;
-    int      weight;
-    gboolean italic;
-} ns_font_metrics_key;
-
-static guint
-font_metrics_key_hash(gconstpointer v)
-{
-    const ns_font_metrics_key *k = v;
-    return (k->family ? g_str_hash(k->family) : 0) ^
-           g_double_hash(&k->size_px) ^
-           (guint)(k->weight * 31 + (k->italic ? 1 : 0));
-}
-
-static gboolean
-font_metrics_key_equal(gconstpointer a, gconstpointer b)
-{
-    const ns_font_metrics_key *ka = a, *kb = b;
-    return ka->size_px == kb->size_px && ka->weight == kb->weight &&
-           ka->italic == kb->italic && g_strcmp0(ka->family, kb->family) == 0;
-}
-
-static void
-font_metrics_key_free(gpointer v)
-{
-    ns_font_metrics_key *k = v;
-    g_free(k->family);
-    g_free(k);
-}
-
-static gboolean
-font_has_legacy_mac_ascent(const char *family)
-{
-#ifdef __APPLE__
-    return family && (g_ascii_strcasecmp(family, "Times") == 0 ||
-                      g_ascii_strcasecmp(family, "Helvetica") == 0 ||
-                      g_ascii_strcasecmp(family, "Courier") == 0);
-#else
-    (void)family;
-    return FALSE;
-#endif
-}
-
-static void
-font_vertical_metrics(NsPangoContext *ctx, const NsPangoFontDescription *fd,
-                      const char *family, ns_css_font_metrics *out)
-{
-    NsPangoFontMetrics *fm = ns_pango_context_get_metrics(ctx, fd, NULL);
-    if (!fm) return;
-    double raw_ascent = ns_pango_font_metrics_get_ascent(fm) / (double)NS_PANGO_SCALE;
-    double raw_descent = ns_pango_font_metrics_get_descent(fm) / (double)NS_PANGO_SCALE;
-    double height = ns_pango_font_metrics_get_height(fm) / (double)NS_PANGO_SCALE;
-    ns_pango_font_metrics_unref(fm);
-    double ascent = round(raw_ascent);
-    double descent = round(raw_descent);
-    double gap = height > raw_ascent + raw_descent
-        ? round(height - raw_ascent - raw_descent) : 0;
-    if (font_has_legacy_mac_ascent(family))
-        ascent += floor((ascent + descent) * 0.15 + 0.5);
-    double line = ascent + descent + gap;
-    if (!(line > 0)) return;
-    out->line_px = line;
-    out->ascent_px = ascent;
-    out->descent_px = descent;
-}
-
-static void
-font_metrics_measure(const char *family, double size_px, int weight,
-                     gboolean italic, ns_css_font_metrics *out)
-{
-    NsPangoLayout *l = paint_create_layout();
-    if (!l) return;
-    NsPangoFontDescription *fd = ns_pango_font_description_new();
-    char *ns_pango_family = family ? ns_css_font_family_for_pango(family) : NULL;
-    if (ns_pango_family && *ns_pango_family)
-        ns_pango_font_description_set_family(fd, ns_pango_family);
-    if (weight > 0) ns_pango_font_description_set_weight(fd, (NsPangoWeight)weight);
-    if (italic) ns_pango_font_description_set_style(fd, NS_PANGO_STYLE_ITALIC);
-    ns_pango_font_description_set_absolute_size(
-        fd, ns_paint_pango_font_size(size_px));
-    ns_pango_layout_set_font_description(l, fd);
-    font_vertical_metrics(ns_pango_layout_get_context(l), fd, ns_pango_family,
-                          out);
-    g_free(ns_pango_family);
-
-    NsPangoRectangle ink;
-    ns_pango_layout_set_text(l, "x", -1);
-    ns_pango_layout_get_pixel_extents(l, &ink, NULL);
-    if (ink.height > 0) out->ex_px = ink.height;
-
-    ns_pango_layout_set_text(l, "H", -1);
-    ns_pango_layout_get_pixel_extents(l, &ink, NULL);
-    if (ink.height > 0) out->cap_px = ink.height;
-
-    int w = 0;
-    ns_pango_layout_set_text(l, "0", -1);
-    ns_pango_layout_get_pixel_size(l, &w, NULL);
-    if (w > 0) out->ch_px = w;
-
-    w = 0;
-    ns_pango_layout_set_text(l, "\xe6\xb0\xb4", -1);
-    ns_pango_layout_get_pixel_size(l, &w, NULL);
-    if (w > 0) out->ic_px = w;
-
-    ns_pango_font_description_free(fd);
-    g_object_unref(l);
-}
-
-static void
-ns_paint_font_metrics(const char *family, double size_px, int weight,
-                      gboolean italic, ns_css_font_metrics *out)
-{
-    static GHashTable *cache;
-    static guint cached_serial;
-
-    if (size_px <= 0) return;
-
-    NsPangoFontMap *fm = ns_pango_cairo_font_map_get_default();
-    guint serial = fm ? ns_pango_font_map_get_serial(fm) : 0;
-    if (!cache) {
-        cache = g_hash_table_new_full(font_metrics_key_hash,
-                                      font_metrics_key_equal,
-                                      font_metrics_key_free, g_free);
-        cached_serial = serial;
-    } else if (serial != cached_serial) {
-        g_hash_table_remove_all(cache);
-        cached_serial = serial;
-    }
-
-    ns_font_metrics_key probe = {
-        .family = (char *)family, .size_px = size_px,
-        .weight = weight, .italic = italic,
-    };
-    const ns_css_font_metrics *hit = g_hash_table_lookup(cache, &probe);
-    if (hit) {
-        *out = *hit;
-        return;
-    }
-
-    ns_css_font_metrics m = {
-        .ex_px  = size_px * 0.5,
-        .ch_px  = size_px * 0.5,
-        .cap_px = size_px * 0.7,
-        .ic_px  = size_px,
-    };
-    font_metrics_measure(family, size_px, weight, italic, &m);
-
-    ns_font_metrics_key *key = g_new(ns_font_metrics_key, 1);
-    key->family = g_strdup(family);
-    key->size_px = size_px;
-    key->weight = weight;
-    key->italic = italic;
-    g_hash_table_insert(cache, key, g_memdup2(&m, sizeof m));
-
-    *out = m;
-}
-
-static guint64
-ns_paint_font_generation(void)
-{
-    NsPangoFontMap *fm = ns_pango_cairo_font_map_get_default();
-    guint serial = fm ? ns_pango_font_map_get_serial(fm) : 0;
-    return ((guint64)serial << 32) | ns_font_generation();
-}
-
-void
-ns_paint_register_font_oracle(void)
-{
-    ns_css_set_font_available_cb(ns_paint_font_available);
-    ns_css_set_font_generation_cb(ns_paint_font_generation);
-    ns_css_set_font_metrics_cb(ns_paint_font_metrics);
-}
-
-void
-ns_paint_apply_inline_font(NsPangoLayout *layout, const ns_style *s)
-{
-    NsPangoFontDescription *desc = ns_pango_font_description_new();
-    double font_size = length_or(s ? s->values[NS_CSS_FONT_SIZE] : NULL, 16);
-    const char *family = "sans-serif";
-    const ns_css_value *fam = s ? s->values[NS_CSS_FONT_FAMILY] : NULL;
-    if (fam && fam->kind == NS_CSS_V_KEYWORD) family = fam->u.keyword;
-    char *ns_pango_family = ns_css_font_family_for_pango(family);
-    ns_pango_font_description_set_family(desc, ns_pango_family);
-    g_free(ns_pango_family);
-    ns_pango_font_description_set_absolute_size(
-        desc, ns_paint_pango_font_size(font_size));
-    const ns_css_value *fw = s ? s->values[NS_CSS_FONT_WEIGHT] : NULL;
-    int font_weight = ns_css_font_weight_number(fw, -1);
-    if (font_weight > 0)
-        ns_pango_font_description_set_weight(desc, ns_pango_weight_from_css(font_weight));
-    ns_pango_font_description_set_stretch(desc,
-        ns_pango_stretch_from_css(ns_css_font_stretch_rank(
-            s ? s->values[NS_CSS_FONT_STRETCH] : NULL)));
-    if (keyword_is(s ? s->values[NS_CSS_FONT_STYLE] : NULL, "italic"))
-        ns_pango_font_description_set_style(desc, NS_PANGO_STYLE_ITALIC);
-    else if (keyword_is(s ? s->values[NS_CSS_FONT_STYLE] : NULL, "oblique"))
-        ns_pango_font_description_set_style(desc, NS_PANGO_STYLE_OBLIQUE);
-    char *variations = paint_font_variations_from_css(
-        ns_style_keyword(s, NS_CSS_FONT_VARIATION_SETTINGS));
-    if (variations) {
-        ns_pango_font_description_set_variations(desc, variations);
-        g_free(variations);
-    }
-    ns_pango_layout_set_font_description(layout, desc);
-    ns_pango_font_description_free(desc);
-
-    const ns_css_value *tsv = s ? s->values[NS_CSS_TAB_SIZE] : NULL;
-    if (tsv && tsv->kind == NS_CSS_V_LENGTH && tsv->u.length.v > 0) {
-        double tab_w;
-        if (tsv->u.length.unit == NS_CSS_UNIT_NUMBER) {
-            NsPangoContext *ctx = ns_pango_layout_get_context(layout);
-            NsPangoLayout *probe = ns_pango_layout_new(ctx);
-            ns_pango_layout_set_font_description(probe,
-                ns_pango_layout_get_font_description(layout));
-            ns_pango_layout_set_text(probe, " ", 1);
-            int sw = 0, sh = 0;
-            ns_pango_layout_get_size(probe, &sw, &sh);
-            g_object_unref(probe);
-            tab_w = tsv->u.length.v * (sw / (double)NS_PANGO_SCALE);
-        } else {
-            tab_w = tsv->u.length.v;
-        }
-        if (tab_w > 0) {
-            int n = 32;
-            NsPangoTabArray *tabs = ns_pango_tab_array_new(n, TRUE);
-            for (int i = 0; i < n; i++)
-                ns_pango_tab_array_set_tab(tabs, i, NS_PANGO_TAB_LEFT,
-                                        (int)((i + 1) * tab_w + 0.5));
-            ns_pango_layout_set_tabs(layout, tabs);
-            ns_pango_tab_array_free(tabs);
-        }
-    }
-}
-
-static void
-apply_text_align(NsPangoLayout *layout, const ns_style *s)
-{
-    const ns_css_value *ta = s ? s->values[NS_CSS_TEXT_ALIGN] : NULL;
-    gboolean rtl = ns_pango_context_get_base_dir(
-        ns_pango_layout_get_context(layout)) == NS_PANGO_DIRECTION_RTL;
-    if (keyword_is(ta, "center"))
-        ns_pango_layout_set_alignment(layout, NS_PANGO_ALIGN_CENTER);
-    else if (keyword_is(ta, "right") ||
-             (keyword_is(ta, "end") && !rtl) ||
-             (keyword_is(ta, "start") && rtl) ||
-             (!ta && rtl))
-        ns_pango_layout_set_alignment(layout, NS_PANGO_ALIGN_RIGHT);
-    else if (keyword_is(ta, "justify"))
-        ns_pango_layout_set_justify(layout, TRUE);
-    else
-        ns_pango_layout_set_alignment(layout, NS_PANGO_ALIGN_LEFT);
-}
-
-void
-ns_paint_start_align_overflow(NsPangoLayout *layout)
-{
-    int width = ns_pango_layout_get_width(layout);
-    if (width < 0) return;
-    gboolean rtl = ns_pango_context_get_base_dir(
-        ns_pango_layout_get_context(layout)) == NS_PANGO_DIRECTION_RTL;
-    NsPangoAlignment start = rtl ? NS_PANGO_ALIGN_RIGHT : NS_PANGO_ALIGN_LEFT;
-    if (ns_pango_layout_get_alignment(layout) == start) return;
-    gboolean all_overflow = TRUE;
-    NsPangoLayoutIter *iter = ns_pango_layout_get_iter(layout);
-    do {
-        NsPangoRectangle logical;
-        ns_pango_layout_iter_get_line_extents(iter, NULL, &logical);
-        if (logical.width <= width) all_overflow = FALSE;
-    } while (all_overflow && ns_pango_layout_iter_next_line(iter));
-    ns_pango_layout_iter_free(iter);
-    if (all_overflow)
-        ns_pango_layout_set_alignment(layout, start);
-}
-
-static void
-apply_nowrap_align_width(NsPangoLayout *layout, const ns_box *b)
-{
-    if (ns_pango_layout_get_width(layout) >= 0) return;
-    NsPangoAlignment al = ns_pango_layout_get_alignment(layout);
-    if (al == NS_PANGO_ALIGN_LEFT) return;
-    int pw, ph;
-    ns_pango_layout_get_pixel_size(layout, &pw, &ph);
-    if (pw <= b->content_width)
-        ns_pango_layout_set_width(layout, (int)(b->content_width * NS_PANGO_SCALE));
-}
-
 static void paint_walk(cairo_t *cr, const ns_box *b, const char *highlight);
-
-static gboolean
-inline_has_form_controls(const ns_box *b)
-{
-    if (!b || !b->attrs) return FALSE;
-    for (guint i = 0; i < b->attrs->len; i++) {
-        const ns_inline_attr *r =
-            &g_array_index(b->attrs, ns_inline_attr, i);
-        if (r->kind == NS_INLINE_INPUT_FIELD ||
-            r->kind == NS_INLINE_INPUT_FIELD_FOCUSED ||
-            r->kind == NS_INLINE_BUTTON)
-            return TRUE;
-    }
-    return FALSE;
-}
-
-double
-ns_paint_inline_y_offset_for_layout(const ns_box *b, NsPangoLayout *layout)
-{
-    if (!b || !layout) return 0;
-    int ph;
-    ns_pango_layout_get_size(layout, NULL, &ph);
-    double y_offset = (b->content_height - (double)ph / NS_PANGO_SCALE) * 0.5;
-    if (inline_has_form_controls(b)) y_offset = 0;
-    if (y_offset < 0 &&
-        ns_paint_css_line_height_px(inherited_style(b)) <= 0)
-        y_offset = 0;
-    return y_offset;
-}
 
 static void
 apply_first_line_attrs(NsPangoAttrList *attrs, const ns_style *fl,
@@ -2884,11 +2010,11 @@ apply_first_line_attrs(NsPangoAttrList *attrs, const ns_style *fl,
     }
     int fw = ns_css_font_weight_number(fl->values[NS_CSS_FONT_WEIGHT], -1);
     if (fw > 0)
-        attr_insert_range(attrs, ns_pango_attr_weight_new(ns_pango_weight_from_css(fw)),
+        attr_insert_range(attrs, ns_pango_attr_weight_new(ns_paint_pango_weight_from_css(fw)),
                           start, len);
     if (fl->values[NS_CSS_FONT_STRETCH])
         attr_insert_range(attrs,
-            ns_pango_attr_stretch_new(ns_pango_stretch_from_css(
+            ns_pango_attr_stretch_new(ns_paint_pango_stretch_from_css(
                 ns_css_font_stretch_rank(fl->values[NS_CSS_FONT_STRETCH]))),
             start, len);
     if (keyword_is(fl->values[NS_CSS_FONT_STYLE], "italic") ||
@@ -3230,10 +2356,10 @@ static NsPangoLayout *
 paint_inline_make_layout(const ns_box *b, const ns_style *s,
                          const char *highlight)
 {
-    NsPangoLayout *layout = paint_create_layout();
+    NsPangoLayout *layout = ns_paint_create_layout();
     ns_paint_apply_inline_font(layout, s);
 
-    if (ns_style_is_nowrap(s) &&
+    if (ns_paint_style_is_nowrap(s) &&
         !keyword_is(s ? s->values[NS_CSS_TEXT_OVERFLOW] : NULL, "ellipsis"))
         ns_pango_layout_set_width(layout, -1);
     else
@@ -3297,10 +2423,10 @@ paint_inline_make_layout(const ns_box *b, const ns_style *s,
             case NS_INLINE_BOLD:
                 a = ns_pango_attr_weight_new(NS_PANGO_WEIGHT_BOLD); break;
             case NS_INLINE_FONT_WEIGHT:
-                a = ns_pango_attr_weight_new(ns_pango_weight_from_css(r->font_weight)); break;
+                a = ns_pango_attr_weight_new(ns_paint_pango_weight_from_css(r->font_weight)); break;
             case NS_INLINE_FONT_STRETCH:
                 a = ns_pango_attr_stretch_new(
-                    ns_pango_stretch_from_css(r->font_stretch)); break;
+                    ns_paint_pango_stretch_from_css(r->font_stretch)); break;
             case NS_INLINE_FONT_FEATURES:
                 a = ns_paint_font_features_attr_from_values(
                     r->font_kerning, r->font_ligatures, r->font_features); break;
@@ -3484,8 +2610,8 @@ paint_inline_make_layout(const ns_box *b, const ns_style *s,
     ns_inline_layout_set_attrs(layout, attrs, b);
     ns_pango_attr_list_unref(attrs);
 
-    apply_text_align(layout, s);
-    apply_nowrap_align_width(layout, b);
+    ns_paint_apply_text_align(layout, s);
+    ns_paint_apply_nowrap_align_width(layout, b);
     ns_paint_start_align_overflow(layout);
     const ns_css_value *ta = s ? s->values[NS_CSS_TEXT_ALIGN] : NULL;
     if (keyword_is(ta, "justify"))
@@ -3885,7 +3011,7 @@ static void
 paint_inline(cairo_t *cr, const ns_box *b, const char *highlight)
 {
     if (!b->text || !*b->text) return;
-    const ns_style *s = inherited_style(b);
+    const ns_style *s = ns_paint_inherited_style(b);
     rgba color = rgba_anim(b, NS_CSS_ANIM_TARGET_COLOR,
                            s ? s->values[NS_CSS_COLOR] : NULL,
                            0.07, 0.07, 0.07, 1);
@@ -4359,11 +3485,11 @@ ns_paint_build_inline_layout(cairo_t *cr, const ns_box *b)
 {
     (void)cr;
     if (!b || !b->text) return NULL;
-    const ns_style *s = inherited_style(b);
+    const ns_style *s = ns_paint_inherited_style(b);
 
-    NsPangoLayout *layout = paint_create_layout();
+    NsPangoLayout *layout = ns_paint_create_layout();
     ns_paint_apply_inline_font(layout, s);
-    if (ns_style_is_nowrap(s) &&
+    if (ns_paint_style_is_nowrap(s) &&
         !keyword_is(s ? s->values[NS_CSS_TEXT_OVERFLOW] : NULL, "ellipsis"))
         ns_pango_layout_set_width(layout, -1);
     else
@@ -4397,10 +3523,10 @@ ns_paint_build_inline_layout(cairo_t *cr, const ns_box *b)
             switch (r->kind) {
             case NS_INLINE_BOLD:      a = ns_pango_attr_weight_new(NS_PANGO_WEIGHT_BOLD); break;
             case NS_INLINE_FONT_WEIGHT:
-                a = ns_pango_attr_weight_new(ns_pango_weight_from_css(r->font_weight)); break;
+                a = ns_pango_attr_weight_new(ns_paint_pango_weight_from_css(r->font_weight)); break;
             case NS_INLINE_FONT_STRETCH:
                 a = ns_pango_attr_stretch_new(
-                    ns_pango_stretch_from_css(r->font_stretch)); break;
+                    ns_paint_pango_stretch_from_css(r->font_stretch)); break;
             case NS_INLINE_FONT_FEATURES:
                 a = ns_paint_font_features_attr_from_values(
                     r->font_kerning, r->font_ligatures, r->font_features); break;
@@ -4440,8 +3566,8 @@ ns_paint_build_inline_layout(cairo_t *cr, const ns_box *b)
     ns_inline_layout_set_attrs(layout, attrs, b);
     ns_pango_attr_list_unref(attrs);
 
-    apply_text_align(layout, s);
-    apply_nowrap_align_width(layout, b);
+    ns_paint_apply_text_align(layout, s);
+    ns_paint_apply_nowrap_align_width(layout, b);
     ns_paint_start_align_overflow(layout);
     return layout;
 }
@@ -4451,7 +3577,7 @@ ns_paint_sync_inline_atomic_offsets(ns_box *root)
 {
     if (!root) return;
     if (root->inline_atomics && root->text && *root->text) {
-        const ns_style *s = inherited_style(root);
+        const ns_style *s = ns_paint_inherited_style(root);
         NsPangoLayout *layout = paint_inline_make_layout(root, s, NULL);
         double text_x = 0;
         double ti = ns_inline_text_indent_px(root, s, root->content_width);
@@ -4590,7 +3716,7 @@ ns_paint_inline_range_extents(const ns_box *b, gsize start, gsize len,
     const ns_style *box_style =
         element && !b->vertical_wm ? element->style : NULL;
     NsPangoLayout *layout = box_style
-        ? paint_inline_make_layout(b, inherited_style(b), NULL)
+        ? paint_inline_make_layout(b, ns_paint_inherited_style(b), NULL)
         : ns_paint_build_inline_layout(NULL, b);
     if (!layout) return FALSE;
     double y_origin = b->y + ns_paint_inline_y_offset_for_layout(b, layout);
@@ -5211,8 +4337,8 @@ texture_surface_create(ns_texture *tex, int iw, int ih, const char *filter_kw)
     return surf;
 }
 
-static cairo_surface_t *
-texture_surface_cached(ns_texture *tex, const char *filter_kw)
+cairo_surface_t *
+ns_paint_texture_surface_cached(ns_texture *tex, const char *filter_kw)
 {
     int iw = ns_texture_get_width(tex);
     int ih = ns_texture_get_height(tex);
@@ -5267,7 +4393,7 @@ paint_texture(cairo_t *cr, const ns_box *b, ns_texture *tex)
     }
     const char *surface_filter =
         filter_has_bitmap_effect(filter_kw) ? filter_kw : NULL;
-    cairo_surface_t *surf = texture_surface_cached(tex, surface_filter);
+    cairo_surface_t *surf = ns_paint_texture_surface_cached(tex, surface_filter);
     if (!surf) return FALSE;
     double cw = b->content_width, ch = b->content_height;
     double sx = cw / iw, sy = ch / ih;
@@ -5410,7 +4536,7 @@ paint_image(cairo_t *cr, const ns_box *b)
         }
         const char *alt = b->dom ? ns_element_get_attr(b->dom, "alt") : NULL;
         if (alt && *alt && b->content_width > 24 && b->content_height > 16) {
-            NsPangoLayout *layout = paint_create_layout();
+            NsPangoLayout *layout = ns_paint_create_layout();
             ns_pango_layout_set_text(layout, alt, -1);
             ns_pango_layout_set_width(layout,
                 (int)((b->content_width - 8) * NS_PANGO_SCALE));
@@ -5445,7 +4571,7 @@ paint_video_caption(cairo_t *cr, const ns_box *b, const char *text)
     int *lh = g_new0(int, nl);
     double pad = 3.0, gap = 1.0, total = 0;
     for (guint i = 0; i < nl; i++) {
-        NsPangoLayout *layout = paint_create_layout();
+        NsPangoLayout *layout = ns_paint_create_layout();
         ns_pango_layout_set_font_description(layout, fd);
         ns_pango_layout_set_text(layout, lines[i][0] ? lines[i] : " ", -1);
         ns_pango_layout_get_pixel_size(layout, &lw[i], &lh[i]);
@@ -5536,7 +4662,7 @@ paint_video(cairo_t *cr, const ns_box *b)
         }
         double text_w = 0;
         if (dtext[0]) {
-            NsPangoLayout *layout = paint_create_layout();
+            NsPangoLayout *layout = ns_paint_create_layout();
             NsPangoFontDescription *fd = ns_pango_font_description_from_string("sans");
             ns_pango_font_description_set_absolute_size(fd, ns_paint_pango_font_size(12));
             ns_pango_layout_set_font_description(layout, fd);
@@ -5633,554 +4759,6 @@ paint_video(cairo_t *cr, const ns_box *b)
     const char *cue = ns_video_active_cue_text(v);
     if (cue && *cue && b->content_width > 24 && b->content_height > 24)
         paint_video_caption(cr, b, cue);
-}
-
-static void
-roman_numeral(int n, gboolean upper, char *out, gsize sz)
-{
-    static const int vals[]  = {1000,900,500,400,100,90,50,40,10,9,5,4,1};
-    static const char *upr[] = {"M","CM","D","CD","C","XC","L","XL","X","IX","V","IV","I"};
-    static const char *lwr[] = {"m","cm","d","cd","c","xc","l","xl","x","ix","v","iv","i"};
-    GString *s = g_string_new(NULL);
-    if (n < 1 || n > 3999) {
-        g_snprintf(out, sz, "%d", n);
-        g_string_free(s, TRUE);
-        return;
-    }
-    for (int i = 0; i < (int)(sizeof vals / sizeof vals[0]); i++) {
-        while (n >= vals[i]) {
-            g_string_append(s, upper ? upr[i] : lwr[i]);
-            n -= vals[i];
-        }
-    }
-    g_strlcpy(out, s->str, sz);
-    g_string_free(s, TRUE);
-}
-
-static void
-alpha_label(int n, gboolean upper, char *out, gsize sz)
-{
-    if (sz == 0) return;
-    if (n < 1) { g_strlcpy(out, "?", sz); return; }
-    char buf[16];
-    int p = 0;
-    while (n > 0 && p < (int)sizeof buf - 1) {
-        n--;
-        buf[p++] = (char)((upper ? 'A' : 'a') + (n % 26));
-        n /= 26;
-    }
-    buf[p] = '\0';
-    int len = p < (int)sz - 1 ? p : (int)sz - 1;
-    for (int i = 0; i < len; i++) out[i] = buf[p - 1 - i];
-    out[len] = '\0';
-}
-
-static const char *
-ordered_marker_kind(const char *style_kw)
-{
-    static const char *const kinds[] = {
-        "decimal",
-        "decimal-leading-zero",
-        "upper-alpha", "lower-alpha",
-        "upper-latin", "lower-latin",
-        "upper-roman", "lower-roman",
-        "lower-greek",
-    };
-    if (!style_kw) return NULL;
-    for (size_t i = 0; i < G_N_ELEMENTS(kinds); i++)
-        if (strcmp(style_kw, kinds[i]) == 0) return kinds[i];
-    return NULL;
-}
-
-static gboolean
-marker_is_ordered(const ns_node *li, const char *style_kw)
-{
-    if (!style_kw)
-        return li->parent && li->parent->name &&
-               strcmp(li->parent->name, "ol") == 0;
-    return strcmp(style_kw, "disc") != 0 && strcmp(style_kw, "circle") != 0 &&
-           strcmp(style_kw, "square") != 0 && strcmp(style_kw, "none") != 0 &&
-           strncmp(style_kw, "disclosure-", 11) != 0;
-}
-
-static const char *
-ordered_kind_from_type_attr(const char *type_attr)
-{
-    if (!type_attr || !*type_attr) return NULL;
-    switch (type_attr[0]) {
-    case 'A': return "upper-alpha";
-    case 'a': return "lower-alpha";
-    case 'I': return "upper-roman";
-    case 'i': return "lower-roman";
-    default:  return "decimal";
-    }
-}
-
-static void format_ordered_label(const char *kind, int n,
-                                 char *out, gsize out_sz);
-
-static int
-list_item_count(const ns_node *parent)
-{
-    int total = 0;
-    for (const ns_node *p = parent ? parent->first_child : NULL;
-         p; p = p->next_sibling) {
-        if (ns_node_is_element_named(p, "li")) total++;
-    }
-    return total;
-}
-
-static GHashTable *g_list_ordinals;
-static GHashTable *g_list_next_ordinal;
-static int         g_list_ordinal_scope;
-
-void
-ns_paint_list_ordinals_begin(void)
-{
-    if (g_list_ordinal_scope++ > 0) return;
-    g_list_ordinals = g_hash_table_new(g_direct_hash, g_direct_equal);
-    g_list_next_ordinal = g_hash_table_new(g_direct_hash, g_direct_equal);
-}
-
-void
-ns_paint_list_ordinals_end(void)
-{
-    if (g_list_ordinal_scope == 0 || --g_list_ordinal_scope > 0) return;
-    g_clear_pointer(&g_list_ordinals, g_hash_table_destroy);
-    g_clear_pointer(&g_list_next_ordinal, g_hash_table_destroy);
-}
-
-static int
-list_item_number_children(const ns_node *parent)
-{
-    const char *start_attr = ns_element_get_attr(parent, "start");
-    int start = start_attr
-        ? ns_parse_int(start_attr, 1, -1000000, 1000000)
-        : 1;
-    gboolean reversed = ns_element_get_attr(parent, "reversed") != NULL;
-    int current = reversed && !start_attr ? list_item_count(parent) : start;
-    for (const ns_node *p = parent->first_child; p; p = p->next_sibling) {
-        if (!ns_node_is_element_named(p, "li")) continue;
-        const char *val = ns_element_get_attr(p, "value");
-        int ordinal = val ? ns_parse_int(val, current, -1000000, 1000000)
-                          : current;
-        g_hash_table_insert(g_list_ordinals, (gpointer)p,
-                            GINT_TO_POINTER(ordinal));
-        current = ordinal + (reversed ? -1 : 1);
-    }
-    return current;
-}
-
-static int
-list_item_ordinal_cached(const ns_node *li, const ns_node *parent)
-{
-    gpointer next;
-    if (!g_hash_table_lookup_extended(g_list_next_ordinal, parent, NULL,
-                                      &next)) {
-        next = GINT_TO_POINTER(list_item_number_children(parent));
-        g_hash_table_insert(g_list_next_ordinal, (gpointer)parent, next);
-    }
-    gpointer ordinal;
-    if (g_hash_table_lookup_extended(g_list_ordinals, li, NULL, &ordinal))
-        return GPOINTER_TO_INT(ordinal);
-    return GPOINTER_TO_INT(next);
-}
-
-static int
-list_item_ordinal(const ns_node *li)
-{
-    const ns_node *parent = li ? li->parent : NULL;
-    if (!parent || !parent->name) return 1;
-    if (g_list_ordinals) return list_item_ordinal_cached(li, parent);
-    const char *start_attr = ns_element_get_attr(parent, "start");
-    int start = start_attr
-        ? ns_parse_int(start_attr, 1, -1000000, 1000000)
-        : 1;
-    gboolean reversed = ns_element_get_attr(parent, "reversed") != NULL;
-    int current = reversed && !start_attr ? list_item_count(parent) : start;
-    for (const ns_node *p = parent->first_child; p; p = p->next_sibling) {
-        if (!ns_node_is_element_named(p, "li")) continue;
-        const char *val = ns_element_get_attr(p, "value");
-        int ordinal = val ? ns_parse_int(val, current, -1000000, 1000000)
-                          : current;
-        if (p == li) return ordinal;
-        current = ordinal + (reversed ? -1 : 1);
-    }
-    return current;
-}
-
-static const char *
-marker_default_kind(const ns_node *li, const char *style_kw)
-{
-    if (style_kw && ordered_marker_kind(style_kw)) return style_kw;
-    const ns_node *parent = li ? li->parent : NULL;
-    if (parent && parent->name && strcmp(parent->name, "ol") == 0)
-        return ordered_kind_from_type_attr(ns_element_get_attr(parent, "type"));
-    return style_kw;
-}
-
-static void
-marker_append_escaped_string(GString *out, const char *start, gsize len)
-{
-    char *raw = g_strndup(start, len);
-    for (const char *r = raw; *r; )
-        ns_css_append_unescaped(out, &r);
-    g_free(raw);
-}
-
-static char *
-marker_counter_text(const char *body, const ns_node *li, const char *style_kw)
-{
-    const char *p = body;
-    while (*p && g_ascii_isspace(*p)) p++;
-    const char *name_s = p;
-    while (*p && *p != ',' && *p != ')' && !g_ascii_isspace(*p)) p++;
-    if ((gsize)(p - name_s) != 9 ||
-        g_ascii_strncasecmp(name_s, "list-item", 9) != 0)
-        return g_strdup("");
-    while (*p && g_ascii_isspace(*p)) p++;
-    char *style = NULL;
-    if (*p == ',') {
-        p++;
-        while (*p && g_ascii_isspace(*p)) p++;
-        const char *style_s = p;
-        while (*p && *p != ')' && !g_ascii_isspace(*p)) p++;
-        if (p != style_s) style = g_ascii_strdown(style_s, p - style_s);
-    }
-    char buf[32];
-    format_ordered_label(style ? style : marker_default_kind(li, style_kw),
-                         list_item_ordinal(li), buf, sizeof buf);
-    g_free(style);
-    return g_strdup(buf);
-}
-
-static char *
-marker_resolve_content_text(const char *raw, const ns_node *li,
-                            const char *style_kw)
-{
-    gboolean has_func = strchr(raw, '(') != NULL;
-    gboolean has_string = strchr(raw, '"') || strchr(raw, '\'');
-    if (!has_func && !has_string) return g_strdup(raw);
-    GString *out = g_string_new(NULL);
-    const char *p = raw;
-    while (*p) {
-        while (*p && g_ascii_isspace(*p)) p++;
-        if (!*p) break;
-        if (*p == '"' || *p == '\'') {
-            char q = *p++;
-            const char *start = p;
-            while (*p && *p != q) {
-                if (*p == '\\' && p[1]) { p += 2; continue; }
-                p++;
-            }
-            marker_append_escaped_string(out, start, p - start);
-            if (*p == q) p++;
-        } else if (g_str_has_prefix(p, "attr(")) {
-            p += 5;
-            while (*p && g_ascii_isspace(*p)) p++;
-            const char *start = p;
-            while (*p && *p != ')' && *p != ',' && !g_ascii_isspace(*p)) p++;
-            if (li && p != start) {
-                char *attr_name = g_strndup(start, p - start);
-                const char *val = ns_element_get_attr(li, attr_name);
-                if (val) g_string_append(out, val);
-                g_free(attr_name);
-            }
-            while (*p && *p != ')') p++;
-            if (*p == ')') p++;
-        } else if (g_str_has_prefix(p, "counter(")) {
-            p += 8;
-            const char *body_s = p;
-            int depth = 1;
-            while (*p && depth > 0) {
-                if (*p == '(') depth++;
-                else if (*p == ')') { depth--; if (depth == 0) break; }
-                p++;
-            }
-            char *body = g_strndup(body_s, p - body_s);
-            if (*p == ')') p++;
-            char *sub = marker_counter_text(body, li, style_kw);
-            if (sub) g_string_append(out, sub);
-            g_free(sub);
-            g_free(body);
-        } else {
-            const char *start = p;
-            while (*p && !g_ascii_isspace(*p) && *p != '"' && *p != '\'') p++;
-            g_string_append_len(out, start, p - start);
-        }
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-marker_custom_text(const ns_node *li, const ns_style *li_style,
-                   const char *style_kw, gboolean *suppress_default)
-{
-    if (suppress_default) *suppress_default = FALSE;
-    const ns_style *ms = li_style ? li_style->marker : NULL;
-    if (!ms) return NULL;
-    if (ns_display_is_none(ns_css_display_of(ms))) {
-        if (suppress_default) *suppress_default = TRUE;
-        return NULL;
-    }
-    const ns_css_value *cv = ms->values[NS_CSS_CONTENT];
-    if (!cv || cv->kind != NS_CSS_V_KEYWORD || !cv->u.keyword) return NULL;
-    const char *raw = cv->u.keyword;
-    if (strcmp(raw, "normal") == 0) return NULL;
-    if (strcmp(raw, "none") == 0) {
-        if (suppress_default) *suppress_default = TRUE;
-        return NULL;
-    }
-    if (strcmp(raw, "open-quote") == 0) return g_strdup("\xe2\x80\x9c");
-    if (strcmp(raw, "close-quote") == 0) return g_strdup("\xe2\x80\x9d");
-    if (strcmp(raw, "no-open-quote") == 0 ||
-        strcmp(raw, "no-close-quote") == 0) {
-        if (suppress_default) *suppress_default = TRUE;
-        return NULL;
-    }
-    return marker_resolve_content_text(raw, li, style_kw);
-}
-
-static void
-paint_marker_label(cairo_t *cr, const char *label, double edge_x,
-                   gboolean rtl, double baseline_y, double font_size)
-{
-    if (!label || !*label) return;
-    cairo_set_font_size(cr, font_size);
-    cairo_text_extents_t ext;
-    cairo_text_extents(cr, label, &ext);
-    double x = rtl ? edge_x + font_size * 0.35 - ext.x_bearing
-                   : edge_x - font_size * 0.35 - ext.width - ext.x_bearing;
-    cairo_move_to(cr, x, baseline_y);
-    cairo_show_text(cr, label);
-}
-
-static void
-greek_label(int n, char *out, gsize out_sz)
-{
-    static const gunichar greek[24] = {
-        0x3B1, 0x3B2, 0x3B3, 0x3B4, 0x3B5, 0x3B6, 0x3B7, 0x3B8,
-        0x3B9, 0x3BA, 0x3BB, 0x3BC, 0x3BD, 0x3BE, 0x3BF, 0x3C0,
-        0x3C1, 0x3C3, 0x3C4, 0x3C5, 0x3C6, 0x3C7, 0x3C8, 0x3C9,
-    };
-    if (n < 1) { g_snprintf(out, out_sz, "%d", n); return; }
-    gunichar buf[16];
-    int len = 0, v = n;
-    while (v > 0 && len < 16) { v--; buf[len++] = greek[v % 24]; v /= 24; }
-    GString *s = g_string_new(NULL);
-    for (int i = len - 1; i >= 0; i--)
-        g_string_append_unichar(s, buf[i]);
-    g_strlcpy(out, s->str, out_sz);
-    g_string_free(s, TRUE);
-}
-
-static void
-format_ordered_label(const char *kind, int n, char *out, gsize out_sz)
-{
-    if (kind) {
-        if (strcmp(kind, "lower-greek") == 0) {
-            greek_label(n, out, out_sz); return;
-        }
-        if (strcmp(kind, "upper-alpha") == 0 || strcmp(kind, "upper-latin") == 0) {
-            alpha_label(n, TRUE, out, out_sz); return;
-        }
-        if (strcmp(kind, "lower-alpha") == 0 || strcmp(kind, "lower-latin") == 0) {
-            alpha_label(n, FALSE, out, out_sz); return;
-        }
-        if (strcmp(kind, "upper-roman") == 0) {
-            roman_numeral(n, TRUE, out, out_sz); return;
-        }
-        if (strcmp(kind, "lower-roman") == 0) {
-            roman_numeral(n, FALSE, out, out_sz); return;
-        }
-        if (strcmp(kind, "decimal-leading-zero") == 0) {
-            g_snprintf(out, out_sz, "%02d", n); return;
-        }
-    }
-    g_snprintf(out, out_sz, "%d", n);
-}
-
-static gboolean
-li_generates_marker(const ns_node *li, const ns_style *li_style)
-{
-    if (!li || li->kind != NS_NODE_ELEMENT || !li->name) return FALSE;
-    if (!li->parent || !li->parent->name) return FALSE;
-    const ns_css_value *d = li_style ? li_style->values[NS_CSS_DISPLAY] : NULL;
-    if (!d || d->kind != NS_CSS_V_KEYWORD || !d->u.keyword)
-        return strcmp(li->name, "li") == 0;
-    return strstr(d->u.keyword, "list-item") != NULL;
-}
-
-static const char *
-disclosure_glyph(const char *style_kw, gboolean rtl)
-{
-    if (!style_kw || strncmp(style_kw, "disclosure-", 11) != 0) return NULL;
-    if (strcmp(style_kw + 11, "open") == 0) return "\xe2\x96\xbe";
-    return rtl ? "\xe2\x97\x82" : "\xe2\x96\xb8";
-}
-
-gboolean
-ns_paint_li_is_inside(const ns_style *li_style)
-{
-    if (!li_style) return FALSE;
-    const ns_css_value *v = li_style->values[NS_CSS_LIST_STYLE_POSITION];
-    return v && v->kind == NS_CSS_V_KEYWORD && v->u.keyword &&
-           strcmp(v->u.keyword, "inside") == 0;
-}
-
-gboolean
-ns_paint_li_marker_text(const ns_node *li, const ns_style *li_style,
-                        char *out, gsize out_sz)
-{
-    if (!li_generates_marker(li, li_style)) return FALSE;
-    if (out_sz < 8) return FALSE;
-    const ns_css_value *lst = li_style
-        ? li_style->values[NS_CSS_LIST_STYLE_TYPE] : NULL;
-    const char *style_kw = NULL;
-    if (lst && lst->kind == NS_CSS_V_KEYWORD) style_kw = lst->u.keyword;
-    gboolean suppress_default = FALSE;
-    char *custom = marker_custom_text(li, li_style, style_kw,
-                                      &suppress_default);
-    if (custom || suppress_default) {
-        g_strlcpy(out, custom ? custom : "", out_sz);
-        g_free(custom);
-        return TRUE;
-    }
-    if (style_kw && strcmp(style_kw, "none") == 0) {
-        out[0] = '\0';
-        return TRUE;
-    }
-    if (marker_is_ordered(li, style_kw)) {
-        int n = list_item_ordinal(li);
-        const char *kind = marker_default_kind(li, style_kw);
-        char buf[32];
-        format_ordered_label(kind, n, buf, sizeof buf);
-        g_snprintf(out, out_sz, "%s. ", buf);
-        return TRUE;
-    }
-    const char *glyph = disclosure_glyph(style_kw,
-        li_style && keyword_is(li_style->values[NS_CSS_DIRECTION], "rtl"));
-    if (!glyph && style_kw && strcmp(style_kw, "square") == 0)
-        glyph = "\xe2\x96\xaa";
-    else if (!glyph && style_kw && strcmp(style_kw, "circle") == 0)
-        glyph = "\xe2\x97\x8b";
-    else if (!glyph)
-        glyph = "\xe2\x80\xa2";
-    g_snprintf(out, out_sz, "%s ", glyph);
-    return TRUE;
-}
-
-static void
-paint_marker(cairo_t *cr, const ns_box *b)
-{
-    const ns_style *s = b->style;
-    if (!li_generates_marker(b->dom, s)) return;
-    if (ns_paint_li_is_inside(s)) return;
-    const ns_css_value *lst = s ? s->values[NS_CSS_LIST_STYLE_TYPE] : NULL;
-    const char *style_kw = NULL;
-    if (lst && lst->kind == NS_CSS_V_KEYWORD) style_kw = lst->u.keyword;
-
-    gboolean suppress_default = FALSE;
-    char *custom = marker_custom_text(b->dom, s, style_kw,
-                                      &suppress_default);
-    if (suppress_default) {
-        g_free(custom);
-        return;
-    }
-    ns_image *marker_img = NULL;
-    if (!custom && b->media && b->media->marker_image &&
-        s && s->values[NS_CSS_LIST_STYLE_IMAGE] &&
-        s->values[NS_CSS_LIST_STYLE_IMAGE]->kind == NS_CSS_V_URL) {
-        ns_image *mi = b->media->marker_image;
-        if (mi->loaded && mi->texture &&
-            ns_texture_get_width(mi->texture) > 0 &&
-            ns_texture_get_height(mi->texture) > 0)
-            marker_img = mi;
-    }
-    if (style_kw && strcmp(style_kw, "none") == 0 && !custom && !marker_img)
-        return;
-
-    const ns_style *ms = s ? s->marker : NULL;
-
-    double font_size = length_or(s ? s->values[NS_CSS_FONT_SIZE] : NULL, 16);
-    if (ms && ms->values[NS_CSS_FONT_SIZE])
-        font_size = length_or(ms->values[NS_CSS_FONT_SIZE], font_size);
-    double cy = b->y + b->margin.top + b->padding.top + font_size * 0.7;
-    gboolean rtl = strcmp(ns_css_node_dir(b->dom), "rtl") == 0;
-    double content_x = b->x + b->margin.left + b->padding.left;
-    double edge_x = rtl ? content_x + b->content_width : content_x;
-    double cx = rtl ? edge_x + font_size * 0.8 : edge_x - font_size * 0.8;
-
-    if (marker_img) {
-        int iw = ns_texture_get_width(marker_img->texture);
-        int ih = ns_texture_get_height(marker_img->texture);
-        double dw = iw, dh = ih;
-        double cap = font_size;
-        if (dh > cap) { dw *= cap / dh; dh = cap; }
-        cairo_surface_t *surf = texture_surface_cached(marker_img->texture,
-                                                       NULL);
-        if (surf) {
-            double dx = rtl ? edge_x + font_size * 0.35
-                            : edge_x - font_size * 0.35 - dw;
-            double dy = cy - dh + font_size * 0.15;
-            cairo_save(cr);
-            cairo_translate(cr, dx, dy);
-            cairo_scale(cr, dw / iw, dh / ih);
-            cairo_set_source_surface(cr, surf, 0, 0);
-            cairo_paint(cr);
-            cairo_restore(cr);
-            return;
-        }
-    }
-    const ns_css_value *cval = (ms && ms->values[NS_CSS_COLOR])
-        ? ms->values[NS_CSS_COLOR]
-        : (s ? s->values[NS_CSS_COLOR] : NULL);
-    rgba color = rgba_of(cval, 0.1, 0.1, 0.1, 1);
-    set_source_rgba(cr, color);
-
-    if (custom) {
-        paint_marker_label(cr, custom, edge_x, rtl, cy, font_size);
-        g_free(custom);
-    } else if (marker_is_ordered(b->dom, style_kw)) {
-        int n = list_item_ordinal(b->dom);
-        const char *kind = marker_default_kind(b->dom, style_kw);
-        char buf[32];
-        format_ordered_label(kind, n, buf, sizeof buf);
-        char with_dot[40];
-        g_snprintf(with_dot, sizeof with_dot, "%s.", buf);
-        paint_marker_label(cr, with_dot, edge_x, rtl, cy, font_size);
-    } else if (disclosure_glyph(style_kw, rtl)) {
-        gboolean open = strcmp(style_kw, "disclosure-open") == 0;
-        double sz = font_size * 0.3;
-        double ty = cy - font_size * 0.32;
-        double dir = rtl ? -1 : 1;
-        cairo_new_path(cr);
-        if (open) {
-            cairo_move_to(cr, cx - sz, ty - sz * 0.5);
-            cairo_line_to(cr, cx + sz, ty - sz * 0.5);
-            cairo_line_to(cr, cx, ty + sz * 0.7);
-        } else {
-            cairo_move_to(cr, cx - dir * sz * 0.5, ty - sz);
-            cairo_line_to(cr, cx - dir * sz * 0.5, ty + sz);
-            cairo_line_to(cr, cx + dir * sz * 0.7, ty);
-        }
-        cairo_close_path(cr);
-        cairo_fill(cr);
-    } else if (style_kw && strcmp(style_kw, "square") == 0) {
-        double sz = font_size * 0.32;
-        cairo_new_path(cr);
-        cairo_rectangle(cr, cx - sz/2, cy - font_size * 0.32 - sz/2, sz, sz);
-        cairo_fill(cr);
-    } else if (style_kw && strcmp(style_kw, "circle") == 0) {
-        cairo_new_sub_path(cr);
-        cairo_arc(cr, cx, cy - font_size * 0.32, font_size * 0.18, 0, 2 * G_PI);
-        cairo_set_line_width(cr, 1.0);
-        cairo_stroke(cr);
-    } else {
-        cairo_new_sub_path(cr);
-        cairo_arc(cr, cx, cy - font_size * 0.32, font_size * 0.18, 0, 2 * G_PI);
-        cairo_fill(cr);
-    }
 }
 
 static void
@@ -7660,7 +6238,7 @@ paint_walk(cairo_t *cr, const ns_box *b, const char *highlight)
             }
         }
         if (b->kind == NS_BOX_BLOCK) {
-            paint_marker(cr, b);
+            ns_paint_marker(cr, b);
             paint_hr(cr, b);
         }
         if (b->kind == NS_BOX_INLINE && !skip_contents) {

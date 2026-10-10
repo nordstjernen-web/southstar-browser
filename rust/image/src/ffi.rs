@@ -80,6 +80,14 @@ impl<'a> ImageRef<'a> {
         self.raw().texture.cast()
     }
 
+    pub fn loaded(self) -> bool {
+        self.raw().loaded != 0
+    }
+
+    pub fn failed(self) -> bool {
+        self.raw().failed != 0
+    }
+
     pub fn source_url(self) -> *const c_char {
         let image = self.raw();
         if image.final_url.is_null() {

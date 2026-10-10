@@ -1615,6 +1615,7 @@ dependencies = [
  "southstar-mic",
  "southstar-net",
  "southstar-netutil",
+ "southstar-paint",
  "southstar-pdf",
  "southstar-print",
  "southstar-render",
@@ -1881,6 +1882,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-paint"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-image",
+ "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
 name = "southstar-pdf"
 version = "1.0.30-dev"
 dependencies = [
@@ -1962,6 +1974,7 @@ dependencies = [
 name = "southstar-style"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",

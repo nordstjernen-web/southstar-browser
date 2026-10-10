@@ -55,6 +55,7 @@ southstar-mathml = { path = "../mathml" }
 southstar-mic = { path = "../mic" }
 southstar-net = { path = "../net" }
 southstar-netutil = { path = "../netutil" }
+southstar-paint = { path = "../paint" }
 southstar-pdf = { path = "../pdf" }
 southstar-print = { path = "../print" }
 southstar-render = { path = "../render" }
@@ -94,6 +95,7 @@ ns-pango = [
     "southstar-mathml/ns-pango",
     "southstar-svg/ns-pango",
     "southstar-net/ns-pango",
+    "southstar-paint/ns-pango",
 ]
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]
 http-brotli = ["southstar-net/http-brotli"]

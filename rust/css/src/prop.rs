@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum Prop {
+pub enum Prop {
     Display,
     Color,
     BackgroundColor,

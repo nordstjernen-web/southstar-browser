@@ -96,6 +96,13 @@ typedef struct ns_inline_attr {
     void *bg_image;
 } ns_inline_attr;
 
+#if GLIB_SIZEOF_VOID_P == 8
+G_STATIC_ASSERT(sizeof(ns_inline_attr) == 136 &&
+                offsetof(ns_inline_attr, box_w) == 72 &&
+                offsetof(ns_inline_attr, family) == 96 &&
+                offsetof(ns_inline_attr, bg_image) == 128);
+#endif
+
 typedef struct ns_inline_atomic {
     gsize byte_off;
     struct ns_box *box;

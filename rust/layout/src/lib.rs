@@ -7,7 +7,10 @@ mod image_map;
 mod image_source;
 mod srcset;
 
-pub use ffi::{BoxKind, BoxRef, Edges, MediaRef, NsBox, NsBoxMedia, Style};
+pub use ffi::{
+    BoxKind, BoxRef, Edges, InlineAtomic, InlineAttr, MediaRef, NsBox, NsBoxMedia, Style,
+    inline_kind,
+};
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {
     core::iter::successors(b.first_child(), |child| child.next_sibling())

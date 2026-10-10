@@ -13,6 +13,11 @@ Southstar Browser (unreleased):
   QuickJS and Boa.
 * structuredClone() and the serialization behind worker and MessagePort
   messages are Rust (rust/js-clone), with unchanged results.
+* Page text setup and list markers are Rust (`rust/paint`), the first section
+  of the paint.c port: the shared text context, fonts and line heights from
+  computed styles, OpenType features and variations, language and direction,
+  the font metrics the style engine measures with, and list item markers.
+  Rendering is unchanged.
 * Canvas text — fillText(), strokeText() and measureText() — and the image
   sources drawImage() and createPattern() read from (<img>, <canvas>, <video>
   posters, OffscreenCanvas, ImageBitmap) are Rust, which finishes the canvas

@@ -7,6 +7,7 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::sync::OnceLock;
 
+use southstar_css::{Gradient, Prop as PropId, ShadowList, Transform};
 use southstar_dom::Node;
 use southstar_glib::{
     GBoolean, GHashTable, GPtrArray, GStr, g_hash_table_lookup, g_ptr_array_unref,
@@ -57,6 +58,9 @@ union ValueUnion {
     calc: CalcHead,
     url: *const c_char,
     rect: Rect,
+    gradient: Gradient,
+    shadow: ShadowList,
+    transform: Transform,
     _storage: [u64; 381],
 }
 
@@ -69,6 +73,8 @@ pub struct NsCssValue {
     _specified: *mut c_char,
     next_layer: *const NsCssValue,
 }
+
+const _: () = assert!(core::mem::size_of::<ValueUnion>() == 381 * 8);
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
@@ -141,8 +147,42 @@ const KIND_LENGTH: c_uint = 1;
 const KIND_SIZE: c_uint = 2;
 const KIND_COLOR: c_uint = 3;
 const KIND_CALC: c_uint = 4;
+const KIND_SHADOW: c_uint = 5;
+const KIND_GRADIENT: c_uint = 6;
 const KIND_URL: c_uint = 8;
+const KIND_TRANSFORM: c_uint = 9;
 const KIND_RECT: c_uint = 12;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    Keyword,
+    Length,
+    Size,
+    Color,
+    Calc,
+    Shadow,
+    Gradient,
+    Url,
+    Transform,
+    Rect,
+    Other,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SizeValue {
+    pub w: f64,
+    pub h: f64,
+    pub w_unit: u32,
+    pub h_unit: u32,
+    pub w_auto: bool,
+    pub h_auto: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RectValue {
+    pub v: [f64; 4],
+    pub is_auto: [bool; 4],
+}
 
 unsafe extern "C" {
     fn ns_css_prop_id(name: *const c_char) -> c_int;
@@ -259,8 +299,125 @@ impl<'a> ValueRef<'a> {
         }
     }
 
-    fn next_layer(self) -> Option<ValueRef<'a>> {
+    pub fn next_layer(self) -> Option<ValueRef<'a>> {
         NonNull::new(self.raw().next_layer.cast_mut()).map(|p| ValueRef(p, PhantomData))
+    }
+
+    pub unsafe fn from_ptr(p: *const NsCssValue) -> Option<ValueRef<'a>> {
+        NonNull::new(p.cast_mut()).map(|p| ValueRef(p, PhantomData))
+    }
+
+    pub fn kind(self) -> Kind {
+        match self.raw().kind {
+            KIND_KEYWORD => Kind::Keyword,
+            KIND_LENGTH => Kind::Length,
+            KIND_SIZE => Kind::Size,
+            KIND_COLOR => Kind::Color,
+            KIND_CALC => Kind::Calc,
+            KIND_SHADOW => Kind::Shadow,
+            KIND_GRADIENT => Kind::Gradient,
+            KIND_URL => Kind::Url,
+            KIND_TRANSFORM => Kind::Transform,
+            KIND_RECT => Kind::Rect,
+            _ => Kind::Other,
+        }
+    }
+
+    pub fn is_keyword(self, kw: &CStr) -> bool {
+        self.keyword_text() == Some(kw)
+    }
+
+    pub fn length(self) -> Option<(f64, u32)> {
+        let v = self.raw();
+        if v.kind == KIND_LENGTH {
+            Some(unsafe { (v.u.length.v, v.u.length.unit) })
+        } else {
+            None
+        }
+    }
+
+    pub fn color(self) -> Option<[u8; 4]> {
+        let v = self.raw();
+        if v.kind == KIND_COLOR {
+            Some(unsafe { v.u.color })
+        } else {
+            None
+        }
+    }
+
+    pub fn size(self) -> Option<SizeValue> {
+        let v = self.raw();
+        (v.kind == KIND_SIZE).then(|| {
+            let s = unsafe { v.u.size };
+            SizeValue {
+                w: s.w,
+                h: s.h,
+                w_unit: s.w_unit,
+                h_unit: s.h_unit,
+                w_auto: s.w_auto != 0,
+                h_auto: s.h_auto != 0,
+            }
+        })
+    }
+
+    pub fn calc(self) -> Option<(f64, f64)> {
+        let v = self.raw();
+        if v.kind == KIND_CALC {
+            Some(unsafe { (v.u.calc.pct, v.u.calc.px) })
+        } else {
+            None
+        }
+    }
+
+    pub fn url(self) -> Option<&'a CStr> {
+        let v = self.raw();
+        if v.kind != KIND_URL {
+            return None;
+        }
+        let url = unsafe { v.u.url };
+        (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) })
+    }
+
+    pub fn rect(self) -> Option<RectValue> {
+        let v = self.raw();
+        (v.kind == KIND_RECT).then(|| {
+            let r = unsafe { v.u.rect };
+            RectValue {
+                v: r.v,
+                is_auto: r.is_auto.map(|a| a != 0),
+            }
+        })
+    }
+
+    pub fn gradient(self) -> Option<&'a Gradient> {
+        let v = self.raw();
+        if v.kind == KIND_GRADIENT {
+            Some(unsafe { &v.u.gradient })
+        } else {
+            None
+        }
+    }
+
+    pub fn shadows(self) -> Option<&'a ShadowList> {
+        let v = self.raw();
+        if v.kind == KIND_SHADOW {
+            Some(unsafe { &v.u.shadow })
+        } else {
+            None
+        }
+    }
+
+    pub fn transform(self) -> Option<&'a Transform> {
+        let v = self.raw();
+        if v.kind == KIND_TRANSFORM {
+            Some(unsafe { &v.u.transform })
+        } else {
+            None
+        }
+    }
+
+    pub fn layers(self) -> impl Iterator<Item = ValueRef<'a>> {
+        core::iter::successors(Some(self), |v| v.next_layer())
     }
 
     pub fn length_or(self, fallback: f64) -> f64 {
@@ -270,6 +427,24 @@ impl<'a> ValueRef<'a> {
     pub fn font_weight_or(self, fallback: i32) -> i32 {
         unsafe { ns_css_font_weight_number(self.0.as_ptr(), fallback) }
     }
+}
+
+pub fn layer_count(head: Option<ValueRef<'_>>) -> i32 {
+    head.map_or(0, |h| h.layers().count() as i32)
+}
+
+pub fn layer(head: Option<ValueRef<'_>>, index: i32) -> Option<ValueRef<'_>> {
+    let n = layer_count(head);
+    if n == 0 {
+        return None;
+    }
+    let mut index = index % n;
+    let mut at = head;
+    while index > 0 {
+        at = at.and_then(ValueRef::next_layer);
+        index -= 1;
+    }
+    at
 }
 
 #[derive(Clone, Copy)]
@@ -311,6 +486,31 @@ impl<'a> StyleRef<'a> {
 
     pub fn vars_ptr(self) -> *const c_void {
         self.fields().vars.cast()
+    }
+
+    pub fn get(self, prop: PropId) -> Option<ValueRef<'a>> {
+        self.value_at(prop as usize)
+    }
+
+    pub fn keyword_of(self, prop: PropId) -> Option<&'a CStr> {
+        let kw = unsafe { ns_style_keyword(self.0.as_ptr(), prop as c_int) };
+        (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+    }
+
+    pub fn first_line(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().first_line) }
+    }
+
+    pub fn selection(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().selection) }
+    }
+
+    pub fn marker(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().marker) }
+    }
+
+    pub fn backdrop(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().backdrop) }
     }
 
     pub fn before(self) -> Option<StyleRef<'a>> {

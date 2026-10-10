@@ -48,8 +48,8 @@ pub struct NsBox {
     style: *const Style,
     x: f64,
     y: f64,
-    _rel_dx: f64,
-    _rel_dy: f64,
+    rel_dx: f64,
+    rel_dy: f64,
     content_width: f64,
     content_height: f64,
     _first_baseline: f64,
@@ -66,8 +66,8 @@ pub struct NsBox {
     _is_rendered_legend: GBoolean,
     _inline_split_tail: GBoolean,
     _margin_top_through: f64,
-    _paint_top: f64,
-    _paint_bottom: f64,
+    paint_top: f64,
+    paint_bottom: f64,
     margin: Edges,
     padding: Edges,
     border: Edges,
@@ -81,29 +81,29 @@ pub struct NsBox {
     _inline_layout_cache_width: f64,
     _inline_layout_cache_height: f64,
     _inline_layout_cache_valid: GBoolean,
-    _vertical_wm: c_int,
-    _text_orient: c_int,
+    vertical_wm: c_int,
+    text_orient: c_int,
     _inline_natural_cache_style: *const Style,
     _inline_natural_cache_width: f64,
     _inline_natural_cache_valid: GBoolean,
     _inline_min_cache_style: *const Style,
     _inline_min_cache_width: f64,
     _inline_min_cache_valid: GBoolean,
-    _paint_layout: *mut c_void,
+    paint_layout: *mut c_void,
     _links: *mut GArray,
-    _attrs: *mut GArray,
+    attrs: *mut GArray,
     inline_atomics: *mut GArray,
-    _atomic_line_heights: *mut GArray,
+    atomic_line_heights: *mut GArray,
     _table_col_hints: *mut GArray,
     _grid_col_tracks: *mut GArray,
     _grid_row_tracks: *mut GArray,
     _grid_explicit_cols: c_int,
     _grid_explicit_rows: c_int,
     media: *mut NsBoxMedia,
-    _svg_styles: *mut GHashTable,
+    svg_styles: *mut GHashTable,
     _colspan: c_int,
     _rowspan: c_int,
-    _columns: c_int,
+    columns: c_int,
     parent: *const NsBox,
     first_child: *const NsBox,
     _last_child: *const NsBox,
@@ -119,13 +119,13 @@ pub struct NsBoxMedia {
     image_src: *mut c_char,
     image: *mut c_void,
     bg_image_src: *mut c_char,
-    _bg_image: *mut c_void,
+    bg_image: *mut c_void,
     marker_image_src: *mut c_char,
-    _marker_image: *mut c_void,
+    marker_image: *mut c_void,
     border_image_src: *mut c_char,
-    _border_image: *mut c_void,
+    border_image: *mut c_void,
     bg_layer_srcs: *mut GPtrArray,
-    _bg_layer_images: *mut GPtrArray,
+    bg_layer_images: *mut GPtrArray,
     video_src: *mut c_char,
     video_poster: *mut c_char,
     video_audio_src: *mut c_char,
@@ -136,11 +136,121 @@ pub struct NsBoxMedia {
 const _: () = assert!(core::mem::offset_of!(NsBoxMedia, video) == 104);
 
 #[repr(C)]
-struct InlineAtomic {
-    _byte_off: usize,
+pub struct InlineAtomic {
+    byte_off: usize,
     b: *const NsBox,
-    _owner_offset_x: f64,
-    _owner_offset_y: f64,
+    owner_offset_x: f64,
+    owner_offset_y: f64,
+}
+
+impl InlineAtomic {
+    pub fn byte_off(&self) -> usize {
+        self.byte_off
+    }
+
+    pub fn box_ref(&self) -> Option<BoxRef<'_>> {
+        unsafe { BoxRef::from_ptr(self.b) }
+    }
+}
+
+pub mod inline_kind {
+    use core::ffi::c_uint;
+
+    pub const BOLD: c_uint = 0;
+    pub const ITALIC: c_uint = 1;
+    pub const MONOSPACE: c_uint = 2;
+    pub const UNDERLINE: c_uint = 3;
+    pub const OVERLINE: c_uint = 4;
+    pub const STRIKETHROUGH: c_uint = 5;
+    pub const INPUT_FIELD: c_uint = 6;
+    pub const INPUT_FIELD_FOCUSED: c_uint = 7;
+    pub const BUTTON: c_uint = 8;
+    pub const CHECKBOX: c_uint = 9;
+    pub const CHECKBOX_CHECKED: c_uint = 10;
+    pub const RADIO: c_uint = 11;
+    pub const RADIO_CHECKED: c_uint = 12;
+    pub const PROGRESS: c_uint = 13;
+    pub const METER: c_uint = 14;
+    pub const FONT_SIZE: c_uint = 15;
+    pub const FONT_WEIGHT: c_uint = 16;
+    pub const FONT_STRETCH: c_uint = 17;
+    pub const FONT_FEATURES: c_uint = 18;
+    pub const FONT_VARIATIONS: c_uint = 19;
+    pub const COLOR: c_uint = 20;
+    pub const FONT_FAMILY: c_uint = 21;
+    pub const BG_COLOR: c_uint = 22;
+    pub const SUPERSCRIPT: c_uint = 23;
+    pub const SUBSCRIPT: c_uint = 24;
+    pub const SMALL_CAPS: c_uint = 25;
+    pub const CARET: c_uint = 26;
+    pub const SELECTION: c_uint = 27;
+    pub const ELEMENT: c_uint = 28;
+    pub const SPACER: c_uint = 29;
+    pub const SPELLCHECK: c_uint = 30;
+}
+
+#[repr(C)]
+pub struct InlineAttr {
+    pub kind: c_uint,
+    pub start: usize,
+    pub len: usize,
+    pub font_size_px: f64,
+    pub font_weight: c_int,
+    pub font_stretch: c_int,
+    pub font_kerning: c_int,
+    font_ligatures: *const c_char,
+    font_features: *const c_char,
+    font_variations: *const c_char,
+    pub box_w: f64,
+    pub box_h: f64,
+    pub native_chrome: GBoolean,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+    family: *const c_char,
+    dom: *const c_void,
+    style: *const Style,
+    _bg_image_src: *const c_char,
+    bg_image: *mut c_void,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(
+    size_of::<InlineAttr>() == 136
+        && core::mem::offset_of!(InlineAttr, box_w) == 72
+        && core::mem::offset_of!(InlineAttr, family) == 96
+        && core::mem::offset_of!(InlineAttr, bg_image) == 128
+);
+
+impl InlineAttr {
+    pub fn font_ligatures(&self) -> Option<&CStr> {
+        c_str(self.font_ligatures)
+    }
+
+    pub fn font_features(&self) -> Option<&CStr> {
+        c_str(self.font_features)
+    }
+
+    pub fn font_variations(&self) -> Option<&CStr> {
+        c_str(self.font_variations)
+    }
+
+    pub fn family(&self) -> Option<&CStr> {
+        c_str(self.family)
+    }
+
+    pub fn dom_ptr(&self) -> *const c_void {
+        self.dom
+    }
+
+    pub fn style(&self) -> *const Style {
+        self.style
+    }
+
+    pub fn bg_image(&self) -> *mut c_void {
+        self.bg_image
+    }
 }
 
 fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
@@ -194,6 +304,27 @@ impl<'a> MediaRef<'a> {
 
     pub fn image(self) -> *mut c_void {
         self.raw().image
+    }
+
+    pub fn bg_image(self) -> *mut c_void {
+        self.raw().bg_image
+    }
+
+    pub fn marker_image(self) -> *mut c_void {
+        self.raw().marker_image
+    }
+
+    pub fn border_image(self) -> *mut c_void {
+        self.raw().border_image
+    }
+
+    pub fn bg_layer_images(self) -> Option<Vec<*mut c_void>> {
+        let layers = unsafe { self.raw().bg_layer_images.as_ref() }?;
+        Some(
+            (0..layers.len as usize)
+                .map(|i| unsafe { *layers.pdata.add(i) })
+                .collect(),
+        )
     }
 
     pub fn video(self) -> *mut c_void {
@@ -352,5 +483,97 @@ impl<'a> BoxRef<'a> {
 
     pub fn same(self, other: BoxRef<'_>) -> bool {
         core::ptr::eq(self.as_ptr(), other.as_ptr())
+    }
+
+    pub fn rel_dx(self) -> f64 {
+        self.raw().rel_dx
+    }
+
+    pub fn rel_dy(self) -> f64 {
+        self.raw().rel_dy
+    }
+
+    pub fn paint_top(self) -> f64 {
+        self.raw().paint_top
+    }
+
+    pub fn paint_bottom(self) -> f64 {
+        self.raw().paint_bottom
+    }
+
+    pub fn vertical_wm(self) -> c_int {
+        self.raw().vertical_wm
+    }
+
+    pub fn text_orient(self) -> c_int {
+        self.raw().text_orient
+    }
+
+    pub fn columns(self) -> c_int {
+        self.raw().columns
+    }
+
+    pub fn svg_styles(self) -> *mut GHashTable {
+        self.raw().svg_styles
+    }
+
+    pub fn text_ptr(self) -> *const c_char {
+        self.raw().text
+    }
+
+    pub fn paint_layout(self) -> *mut c_void {
+        self.raw().paint_layout
+    }
+
+    pub fn set_paint_layout(self, layout: *mut c_void) {
+        unsafe { (*self.0.as_ptr()).paint_layout = layout };
+    }
+
+    pub fn attrs(self) -> &'a [InlineAttr] {
+        let Some(attrs) = (unsafe { self.raw().attrs.as_ref() }) else {
+            return &[];
+        };
+        if attrs.len == 0 {
+            return &[];
+        }
+        unsafe { core::slice::from_raw_parts(attrs.data.cast::<InlineAttr>(), attrs.len as usize) }
+    }
+
+    pub fn has_attrs(self) -> bool {
+        !self.raw().attrs.is_null()
+    }
+
+    pub fn inline_atomics(self) -> Option<&'a [InlineAtomic]> {
+        let atomics = unsafe { self.raw().inline_atomics.as_ref() }?;
+        if atomics.len == 0 {
+            return Some(&[]);
+        }
+        Some(unsafe {
+            core::slice::from_raw_parts(atomics.data.cast::<InlineAtomic>(), atomics.len as usize)
+        })
+    }
+
+    pub fn set_atomic_owner_offset(self, index: usize, x: f64, y: f64) {
+        let Some(atomics) = (unsafe { self.raw().inline_atomics.as_ref() }) else {
+            return;
+        };
+        if index >= atomics.len as usize {
+            return;
+        }
+        let atomic = unsafe { atomics.data.cast::<InlineAtomic>().add(index) };
+        unsafe {
+            (*atomic).owner_offset_x = x;
+            (*atomic).owner_offset_y = y;
+        }
+    }
+
+    pub fn atomic_line_heights(self) -> Option<&'a [f64]> {
+        let heights = unsafe { self.raw().atomic_line_heights.as_ref() }?;
+        if heights.len == 0 {
+            return Some(&[]);
+        }
+        Some(unsafe {
+            core::slice::from_raw_parts(heights.data.cast::<f64>(), heights.len as usize)
+        })
     }
 }

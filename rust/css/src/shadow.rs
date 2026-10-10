@@ -16,7 +16,7 @@ pub(crate) const SHADOWS_MAX: usize = 8;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Shadow {
+pub struct Shadow {
     pub x: f64,
     pub y: f64,
     pub blur: f64,
@@ -33,7 +33,7 @@ pub(crate) struct Shadow {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct ShadowList {
+pub struct ShadowList {
     pub n: i32,
     pub is_text: i32,
     pub s: [Shadow; SHADOWS_MAX],

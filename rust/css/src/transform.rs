@@ -35,7 +35,7 @@ pub(crate) enum Individual {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Op {
+pub struct Op {
     pub kind: u32,
     pub a: f64,
     pub b: f64,
@@ -56,7 +56,7 @@ pub(crate) struct Op {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Transform {
+pub struct Transform {
     pub n_ops: i32,
     pub ops: [Op; OPS_MAX],
 }
