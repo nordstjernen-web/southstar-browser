@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Shadow DOM and slots (attachShadow, the ShadowRoot wrapper, assignedNodes,
+  assignedElements, assignedSlot, getRootNode) moved from js.c to Rust
+  (rust/js-shadow), with unchanged results.
 * CSSOM View geometry and scrolling (client rects, offset, client and scroll
   metrics, element and window scrolling, scrollIntoView) and SVG geometry
   (getBBox, getCTM, getScreenCTM, path length and point-at-length) moved

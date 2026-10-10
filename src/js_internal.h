@@ -1385,4 +1385,21 @@ JSValue  ns_window_scroll_by_lines(JSContext *ctx, JSValueConst this_val, int ar
 JSValue  ns_window_scroll_by_pages(JSContext *ctx, JSValueConst this_val, int argc,
                                    JSValueConst *argv);
 
+gboolean ns_node_is_shadow_root(const ns_node *n);
+ns_node *ns_element_find_shadow_child(const ns_node *host);
+JSValue  ns_element_attachShadow(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_get_shadowRoot(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_assignedSlot(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_assignedNodes(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_assignedElements(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_element_getRootNode(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_document_element_from_point(JSContext *ctx, JSValueConst this_val, int argc,
+                                        JSValueConst *argv);
+JSValue  ns_document_elements_from_point(JSContext *ctx, JSValueConst this_val, int argc,
+                                         JSValueConst *argv);
+
 #endif
