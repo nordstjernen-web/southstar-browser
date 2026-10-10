@@ -9,7 +9,7 @@ mod srcset;
 
 pub use ffi::{
     BoxKind, BoxRef, Edges, InlineAtomic, InlineAttr, MediaRef, NsBox, NsBoxMedia, Style,
-    inline_kind,
+    TableColHint, inline_kind,
 };
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {

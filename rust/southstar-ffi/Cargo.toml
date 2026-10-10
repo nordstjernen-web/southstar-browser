@@ -75,6 +75,7 @@ southstar-js-wasm = { path = "../js-wasm", optional = true }
 southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-layout = { path = "../layout" }
+southstar-layout-table = { path = "../layout-table" }
 southstar-i18n = { path = "../i18n" }
 southstar-image = { path = "../image" }
 southstar-mat4 = { path = "../mat4" }

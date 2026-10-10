@@ -33,7 +33,7 @@ pub enum BoxKind {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Edges {
     pub top: f64,
     pub right: f64,
@@ -94,15 +94,15 @@ pub struct NsBox {
     attrs: *mut GArray,
     inline_atomics: *mut GArray,
     atomic_line_heights: *mut GArray,
-    _table_col_hints: *mut GArray,
+    table_col_hints: *mut GArray,
     _grid_col_tracks: *mut GArray,
     _grid_row_tracks: *mut GArray,
     _grid_explicit_cols: c_int,
     _grid_explicit_rows: c_int,
     media: *mut NsBoxMedia,
     svg_styles: *mut GHashTable,
-    _colspan: c_int,
-    _rowspan: c_int,
+    colspan: c_int,
+    rowspan: c_int,
     columns: c_int,
     parent: *const NsBox,
     first_child: *const NsBox,
@@ -134,6 +134,25 @@ pub struct NsBoxMedia {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::offset_of!(NsBoxMedia, video) == 104);
+
+#[repr(C)]
+pub struct TableColHint {
+    style: *const Style,
+    span: c_int,
+}
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(size_of::<TableColHint>() == 16);
+
+impl TableColHint {
+    pub fn style(&self) -> *const Style {
+        self.style
+    }
+
+    pub fn span(&self) -> c_int {
+        self.span
+    }
+}
 
 #[repr(C)]
 pub struct InlineAtomic {
@@ -564,6 +583,65 @@ impl<'a> BoxRef<'a> {
         unsafe {
             (*atomic).owner_offset_x = x;
             (*atomic).owner_offset_y = y;
+        }
+    }
+
+    pub fn as_mut_ptr(self) -> *mut NsBox {
+        self.0.as_ptr()
+    }
+
+    pub fn colspan(self) -> c_int {
+        self.raw().colspan
+    }
+
+    pub fn rowspan(self) -> c_int {
+        self.raw().rowspan
+    }
+
+    pub fn table_col_hints(self) -> &'a [TableColHint] {
+        let Some(hints) = (unsafe { self.raw().table_col_hints.as_ref() }) else {
+            return &[];
+        };
+        if hints.len == 0 {
+            return &[];
+        }
+        unsafe {
+            core::slice::from_raw_parts(hints.data.cast::<TableColHint>(), hints.len as usize)
+        }
+    }
+
+    pub fn set_x(self, x: f64) {
+        unsafe { (*self.0.as_ptr()).x = x };
+    }
+
+    pub fn set_y(self, y: f64) {
+        unsafe { (*self.0.as_ptr()).y = y };
+    }
+
+    pub fn set_content_width(self, w: f64) {
+        unsafe { (*self.0.as_ptr()).content_width = w };
+    }
+
+    pub fn set_content_height(self, h: f64) {
+        unsafe { (*self.0.as_ptr()).content_height = h };
+    }
+
+    pub fn set_margin(self, e: Edges) {
+        unsafe { (*self.0.as_ptr()).margin = e };
+    }
+
+    pub fn set_border(self, e: Edges) {
+        unsafe { (*self.0.as_ptr()).border = e };
+    }
+
+    pub fn edges_mut(self) -> (*mut Edges, *mut Edges, *mut Edges) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (
+                &raw mut (*b).margin,
+                &raw mut (*b).padding,
+                &raw mut (*b).border,
+            )
         }
     }
 

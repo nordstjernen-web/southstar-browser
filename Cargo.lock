@@ -1652,6 +1652,7 @@ dependencies = [
  "southstar-js-window",
  "southstar-js-workers",
  "southstar-layout",
+ "southstar-layout-table",
  "southstar-mat4",
  "southstar-mathml",
  "southstar-mic",
@@ -2138,6 +2139,15 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-layout-table"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]

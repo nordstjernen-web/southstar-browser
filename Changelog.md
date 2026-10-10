@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Table layout (column widths for auto and fixed table-layout, spans, col
+  and colgroup, border-spacing and collapsed borders, row heights, vertical-
+  align, captions and intrinsic widths) moved from layout.c to Rust
+  (rust/layout-table), with identical layout.
 * Script, module and stylesheet loading (scheduling, the parser hold, import
   maps, module fetching, the script and link load and error events) moved
   from js.c to Rust (rust/js-loader). Module source now always reaches the

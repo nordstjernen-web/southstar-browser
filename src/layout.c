@@ -984,7 +984,6 @@ node_has_media_metadata(const ns_node *n)
 }
 
 #define NS_LAYOUT_MAX_DEPTH 512
-#define NS_TABLE_MAX_COLS 4096
 
 static gboolean tag_is_non_rendering(const char *name);
 static gboolean node_is_non_rendering(const ns_node *n);
@@ -7267,8 +7266,6 @@ static double
 min_width_of(ns_box *box, const ns_style *parent_style);
 static double
 min_content_width_of(ns_box *box, const ns_style *parent_style);
-static void
-table_border_spacing(const ns_style *s, double *hsp, double *vsp);
 
 static int
 float_side_of(const ns_style *s)
@@ -7896,119 +7893,6 @@ grid_natural_width(ns_box *box, const ns_style *child_style)
     return sum;
 }
 
-static guint
-table_column_count(const ns_box *box)
-{
-    guint max_cols = 0;
-    for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-        if (row->kind != NS_BOX_TABLE_ROW) continue;
-        guint c = 0;
-        for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-            c += cell->colspan > 0 ? (guint)cell->colspan : 1;
-            if (c > NS_TABLE_MAX_COLS) { c = NS_TABLE_MAX_COLS; break; }
-        }
-        if (c > max_cols) max_cols = c;
-    }
-    return max_cols;
-}
-
-static void
-table_widen_columns(double *cols, guint max_cols, guint col, int span,
-                    double outer)
-{
-    if (span < 1) span = 1;
-    double per = outer / (double)span;
-    for (int i = 0; i < span && col + (guint)i < max_cols; i++)
-        if (per > cols[col + (guint)i]) cols[col + (guint)i] = per;
-}
-
-static double
-table_cell_definite_width(const ns_style *s, ns_css_prop prop, double h_extra)
-{
-    const ns_css_value *v = s ? s->values[prop] : NULL;
-    if (!v || !(v->kind == NS_CSS_V_LENGTH || v->kind == NS_CSS_V_CALC) ||
-        value_is_percent(v))
-        return -1;
-    double w = length_resolve(v, 0, -1);
-    return w >= 0 ? w + h_extra : -1;
-}
-
-static double
-table_cell_clamp(const ns_box *cell, double h_extra, double w)
-{
-    const ns_style *s = cell ? cell->style : NULL;
-    double max_w = table_cell_definite_width(s, NS_CSS_MAX_WIDTH, h_extra);
-    double min_w = table_cell_definite_width(s, NS_CSS_MIN_WIDTH, h_extra);
-    if (max_w >= 0 && w > max_w) w = max_w;
-    if (min_w >= 0 && w < min_w) w = min_w;
-    return w;
-}
-
-static double
-table_intrinsic_width(ns_box *box, const ns_style *inherited, gboolean min)
-{
-    double captions = 0;
-    for (ns_box *c = box->first_child; c; c = c->next_sibling) {
-        if (c->kind != NS_BOX_TABLE_CAPTION) continue;
-        const ns_style *cs = c->style ? c->style : inherited;
-        double w = min ? min_width_of(c, cs) : measure_natural_width(c, cs);
-        ns_edges m = {0}, pd = {0}, bd = {0};
-        edges_from_style(c->style, 0, &m, &pd, &bd);
-        w += m.left + m.right + pd.left + pd.right + bd.left + bd.right;
-        if (w > captions) captions = w;
-    }
-    guint max_cols = table_column_count(box);
-    if (max_cols == 0) return captions;
-    double *cols = g_new0(double, max_cols);
-    for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-        if (row->kind != NS_BOX_TABLE_ROW) continue;
-        guint col = 0;
-        for (ns_box *cell = row->first_child; cell && col < max_cols;
-             cell = cell->next_sibling) {
-            int span = cell->colspan > 0 ? cell->colspan : 1;
-            const ns_style *cs = cell->style ? cell->style : inherited;
-            ns_edges m = {0}, pd = {0}, bd = {0};
-            edges_from_style(cell->style, 0, &m, &pd, &bd);
-            double extra = m.left + m.right + pd.left + pd.right +
-                           bd.left + bd.right;
-            double content_min = min_content_width_of(cell, cs);
-            double w = min ? content_min : measure_natural_width(cell, cs);
-            const ns_css_value *wv = cell->style
-                ? cell->style->values[NS_CSS_WIDTH] : NULL;
-            if (wv && (wv->kind == NS_CSS_V_LENGTH || wv->kind == NS_CSS_V_CALC) &&
-                !value_is_percent(wv)) {
-                double e = length_resolve(wv, 0, -1);
-                if (e >= 0) w = e > content_min ? e : content_min;
-            }
-            table_widen_columns(cols, max_cols, col, span,
-                                table_cell_clamp(cell, extra, w + extra));
-            col += (guint)span;
-        }
-    }
-    if (box->table_col_hints) {
-        guint col = 0;
-        for (guint i = 0; i < box->table_col_hints->len && col < max_cols; i++) {
-            ns_table_col_hint *hint =
-                &g_array_index(box->table_col_hints, ns_table_col_hint, i);
-            int hspan = hint->span > 0 ? hint->span : 1;
-            const ns_css_value *wv = hint->style
-                ? hint->style->values[NS_CSS_WIDTH] : NULL;
-            if (wv && wv->kind == NS_CSS_V_LENGTH &&
-                wv->u.length.unit != NS_CSS_UNIT_PERCENT) {
-                double w = length_resolve(wv, 0, -1);
-                if (w >= 0) table_widen_columns(cols, max_cols, col, hspan, w);
-            }
-            col += (guint)hspan;
-        }
-    }
-    double hsp = 0, vsp = 0;
-    table_border_spacing(box->style, &hsp, &vsp);
-    double sum = (double)(max_cols + 1) * hsp;
-    for (guint i = 0; i < max_cols; i++) sum += cols[i];
-    g_free(cols);
-    return sum > captions ? sum : captions;
-}
-
 static gboolean
 box_inline_size_is_definite(const ns_box *box)
 {
@@ -8399,7 +8283,7 @@ measure_max_content_width(ns_box *box, const ns_style *parent_style)
     if (style_contains_inline_size(box->style)) return 0;
     const ns_style *child_style = box->style ? box->style : parent_style;
     if (box->kind == NS_BOX_TABLE)
-        return table_intrinsic_width(box, child_style, FALSE);
+        return ns_layout_table_intrinsic_width(box, child_style, FALSE);
     if (box->style && style_is_grid_container(box->style)) {
         double gw = grid_natural_width(box, child_style);
         if (gw > 0) return gw;
@@ -8618,7 +8502,7 @@ measure_min_content_width(ns_box *box, const ns_style *parent_style)
         return min_width_of(box, parent_style);
     if (style_contains_inline_size(box->style)) return 0;
     if (box->kind == NS_BOX_TABLE)
-        return table_intrinsic_width(
+        return ns_layout_table_intrinsic_width(
             box, box->style ? box->style : parent_style, TRUE);
     if (box->style && style_is_grid_container(box->style) &&
         grid_flows_by_column(box->style)) {
@@ -8687,679 +8571,6 @@ measure_min_content_width(ns_box *box, const ns_style *parent_style)
     return row_sum;
 }
 
-static gboolean
-table_width_from_style(const ns_style *s, double basis, double *out)
-{
-    const ns_css_value *wv = s ? s->values[NS_CSS_WIDTH] : NULL;
-    if (!wv || !(wv->kind == NS_CSS_V_LENGTH || wv->kind == NS_CSS_V_CALC))
-        return FALSE;
-    double w = length_resolve(wv, basis, -1);
-    if (w < 0) return FALSE;
-    *out = w;
-    return TRUE;
-}
-
-static void
-apply_fixed_table_width(double *col_widths, gboolean *col_fixed,
-                        guint max_cols, guint col, int span, double w)
-{
-    if (span < 1) span = 1;
-    if (col >= max_cols) return;
-    double per = w / (double)span;
-    if (per < 0) per = 0;
-    for (int i = 0; i < span && col + (guint)i < max_cols; i++) {
-        guint idx = col + (guint)i;
-        if (per > col_widths[idx]) col_widths[idx] = per;
-        col_fixed[idx] = TRUE;
-    }
-}
-
-static ns_box *
-table_first_row(ns_box *box)
-{
-    for (ns_box *row = box ? box->first_child : NULL; row; row = row->next_sibling)
-        if (row->kind == NS_BOX_TABLE_ROW) return row;
-    return NULL;
-}
-
-static double
-layout_fixed_table_columns(ns_box *box, double cw, guint max_cols,
-                           double *col_widths, gboolean *col_fixed)
-{
-    if (box->table_col_hints) {
-        guint col = 0;
-        for (guint i = 0; i < box->table_col_hints->len && col < max_cols; i++) {
-            ns_table_col_hint *hint =
-                &g_array_index(box->table_col_hints, ns_table_col_hint, i);
-            double w = 0;
-            if (table_width_from_style(hint->style, cw, &w))
-                apply_fixed_table_width(col_widths, col_fixed, max_cols,
-                                        col, hint->span, w);
-            col += hint->span > 0 ? (guint)hint->span : 1;
-        }
-    }
-
-    ns_box *first_row = table_first_row(box);
-    if (first_row) {
-        guint col = 0;
-        for (ns_box *cell = first_row->first_child; cell; cell = cell->next_sibling) {
-            int span = cell->colspan > 0 ? cell->colspan : 1;
-            double w = 0;
-            if (table_width_from_style(cell->style, cw, &w)) {
-                ns_edges m = {0}, pd = {0}, bd = {0};
-                edges_from_style(cell->style, cw, &m, &pd, &bd);
-                w += m.left + m.right + pd.left + pd.right + bd.left + bd.right;
-                apply_fixed_table_width(col_widths, col_fixed, max_cols,
-                                        col, span, w);
-            }
-            col += (guint)span;
-        }
-    }
-
-    double used = 0;
-    guint unset = 0;
-    for (guint i = 0; i < max_cols; i++) {
-        used += col_widths[i];
-        if (!col_fixed[i]) unset++;
-    }
-
-    double remaining = cw - used;
-    if (remaining < 0) remaining = 0;
-    if (unset > 0) {
-        double per = remaining / (double)unset;
-        for (guint i = 0; i < max_cols; i++)
-            if (!col_fixed[i]) col_widths[i] = per;
-    } else if (remaining > 0 && max_cols > 0) {
-        double per = remaining / (double)max_cols;
-        for (guint i = 0; i < max_cols; i++)
-            col_widths[i] += per;
-    }
-
-    double sum = 0;
-    for (guint i = 0; i < max_cols; i++) sum += col_widths[i];
-    return sum;
-}
-
-static gboolean
-table_caption_bottom(const ns_box *caption)
-{
-    const char *side = caption && caption->style
-        ? ns_style_keyword(caption->style, NS_CSS_CAPTION_SIDE) : NULL;
-    return side && (strcmp(side, "bottom") == 0 ||
-                    strcmp(side, "block-end") == 0);
-}
-
-static double
-table_child_outer_height(const ns_box *box)
-{
-    return box->content_height
-         + box->margin.top + box->margin.bottom
-         + box->padding.top + box->padding.bottom
-         + box->border.top + box->border.bottom;
-}
-
-static void
-layout_table_captions(ns_box *box, gboolean bottom, double inner_x,
-                      double cw, const ns_style *child_inherited,
-                      double *cursor_y)
-{
-    for (ns_box *caption = box->first_child; caption; caption = caption->next_sibling) {
-        if (caption->kind != NS_BOX_TABLE_CAPTION) continue;
-        if (table_caption_bottom(caption) != bottom) continue;
-        caption->x = inner_x;
-        caption->y = *cursor_y;
-        layout_box(caption, cw, child_inherited);
-        *cursor_y += table_child_outer_height(caption);
-    }
-}
-
-static void
-table_border_spacing(const ns_style *s, double *hsp, double *vsp)
-{
-    *hsp = 0;
-    *vsp = 0;
-    if (!s) return;
-    const ns_css_value *bc = s->values[NS_CSS_BORDER_COLLAPSE];
-    if (bc && bc->kind == NS_CSS_V_KEYWORD && bc->u.keyword &&
-        g_ascii_strcasecmp(bc->u.keyword, "collapse") == 0)
-        return;
-    const ns_css_value *bs = s->values[NS_CSS_BORDER_SPACING];
-    if (bs && bs->kind == NS_CSS_V_SIZE) {
-        *hsp = bs->u.size.w;
-        *vsp = bs->u.size.h;
-    }
-}
-
-static gboolean
-table_is_collapse(const ns_style *s)
-{
-    const ns_css_value *bc = s ? s->values[NS_CSS_BORDER_COLLAPSE] : NULL;
-    return bc && bc->kind == NS_CSS_V_KEYWORD && bc->u.keyword &&
-           g_ascii_strcasecmp(bc->u.keyword, "collapse") == 0;
-}
-
-typedef struct ns_cell_pos {
-    ns_box *cell;
-    guint   r0, c0, cov, rsp;
-} ns_cell_pos;
-
-static void
-table_collapse_borders(ns_box *box, guint max_cols)
-{
-    if (max_cols == 0) return;
-    guint R = 0;
-    for (ns_box *row = box->first_child; row; row = row->next_sibling)
-        if (row->kind == NS_BOX_TABLE_ROW) R++;
-    if (R == 0) return;
-    if ((gsize)R > G_MAXSIZE / sizeof(ns_box *) / max_cols) return;
-
-    ns_box **grid = g_new0(ns_box *, (gsize)R * max_cols);
-    GArray *cells = g_array_new(FALSE, FALSE, sizeof(ns_cell_pos));
-    guint r = 0;
-    for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-        if (row->kind != NS_BOX_TABLE_ROW) continue;
-        guint col = 0;
-        for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-            while (col < max_cols && grid[r * max_cols + col]) col++;
-            if (col >= max_cols) break;
-            guint cov = cell->colspan > 0 ? (guint)cell->colspan : 1;
-            guint rsp = cell->rowspan > 0 ? (guint)cell->rowspan : 1;
-            for (guint dr = 0; dr < rsp && r + dr < R; dr++)
-                for (guint dc = 0; dc < cov && col + dc < max_cols; dc++)
-                    grid[(r + dr) * max_cols + (col + dc)] = cell;
-            ns_cell_pos cp = { cell, r, col, cov, rsp };
-            g_array_append_val(cells, cp);
-            col += cov;
-        }
-        r++;
-    }
-
-    for (guint i = 0; i < cells->len; i++) {
-        ns_cell_pos *cp = &g_array_index(cells, ns_cell_pos, i);
-        gboolean right_nb = FALSE, below_nb = FALSE;
-        guint cr = cp->c0 + cp->cov;
-        if (cr < max_cols)
-            for (guint rr = cp->r0; rr < cp->r0 + cp->rsp && rr < R; rr++)
-                if (grid[rr * max_cols + cr]) { right_nb = TRUE; break; }
-        guint br = cp->r0 + cp->rsp;
-        if (br < R)
-            for (guint cc = cp->c0; cc < cp->c0 + cp->cov && cc < max_cols; cc++)
-                if (grid[br * max_cols + cc]) { below_nb = TRUE; break; }
-        if (right_nb) cp->cell->border.right = 0;
-        if (below_nb) cp->cell->border.bottom = 0;
-    }
-
-    g_array_free(cells, TRUE);
-    g_free(grid);
-}
-
-static void
-layout_table(ns_box *box, double parent_content_width, const ns_style *inherited_style)
-{
-    edges_from_style(box->style, parent_content_width,
-                     &box->margin, &box->padding, &box->border);
-    double horiz_total = box->margin.left + box->margin.right +
-                         box->padding.left + box->padding.right +
-                         box->border.left + box->border.right;
-    const ns_css_value *wv = box->style ? box->style->values[NS_CSS_WIDTH] : NULL;
-    gboolean explicit_width = wv &&
-        (wv->kind == NS_CSS_V_LENGTH || wv->kind == NS_CSS_V_CALC);
-    double sizing_extras = flex_box_is_border_box(box)
-        ? box->padding.left + box->padding.right +
-          box->border.left + box->border.right
-        : 0;
-    double cw;
-    if (explicit_width) {
-        cw = length_resolve(wv, parent_content_width, 0) - sizing_extras;
-    } else {
-        cw = parent_content_width - horiz_total;
-    }
-    const ns_css_value *mxw = box->style ? box->style->values[NS_CSS_MAX_WIDTH] : NULL;
-    if (mxw && (mxw->kind == NS_CSS_V_LENGTH || mxw->kind == NS_CSS_V_CALC)) {
-        double m = length_resolve(mxw, parent_content_width, -1);
-        if (m >= 0 && cw > m - sizing_extras) cw = m - sizing_extras;
-    }
-    const ns_css_value *mnw = box->style ? box->style->values[NS_CSS_MIN_WIDTH] : NULL;
-    if (mnw && (mnw->kind == NS_CSS_V_LENGTH || mnw->kind == NS_CSS_V_CALC)) {
-        double m = length_resolve(mnw, parent_content_width, -1);
-        if (m >= 0 && cw < m - sizing_extras) cw = m - sizing_extras;
-    }
-    if (cw < 0) cw = 0;
-    box->content_width = cw;
-
-    guint max_cols = table_column_count(box);
-    if (max_cols == 0) {
-        double inner_x = box->x + box->margin.left + box->border.left + box->padding.left;
-        double inner_y = box->y + box->margin.top  + box->border.top  + box->padding.top;
-        double cursor_y = inner_y;
-        const ns_style *child_inherited = box->style ? box->style : inherited_style;
-        layout_table_captions(box, FALSE, inner_x, cw, child_inherited, &cursor_y);
-        layout_table_captions(box, TRUE, inner_x, cw, child_inherited, &cursor_y);
-        box->content_height = cursor_y - inner_y;
-        return;
-    }
-
-    double hsp = 0, vsp = 0;
-    table_border_spacing(box->style, &hsp, &vsp);
-    double total_hsp = (double)(max_cols + 1) * hsp;
-    double col_avail = cw - total_hsp;
-    if (col_avail < 0) col_avail = 0;
-
-    const ns_style *measure_inherited = box->style ? box->style : inherited_style;
-    double *col_widths = g_new0(double, max_cols);
-    double *col_min = g_new0(double, max_cols);
-    gboolean *col_fixed = g_new0(gboolean, max_cols);
-    double *col_explicit = g_new(double, max_cols);
-    for (guint i = 0; i < max_cols; i++) col_explicit[i] = -1;
-    gboolean has_explicit_cols = FALSE;
-    gboolean fixed_layout = explicit_width &&
-        keyword_is(box->style ? box->style->values[NS_CSS_TABLE_LAYOUT] : NULL, "fixed");
-    if (fixed_layout) {
-        double fixed_sum = layout_fixed_table_columns(box, col_avail, max_cols,
-                                                      col_widths, col_fixed);
-        if (fixed_sum > col_avail) {
-            col_avail = fixed_sum;
-            cw = col_avail + total_hsp;
-            box->content_width = cw;
-        }
-    } else {
-        for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-            if (row->kind != NS_BOX_TABLE_ROW) continue;
-            guint col = 0;
-            for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-                int span = cell->colspan > 0 ? cell->colspan : 1;
-                const ns_style *cs = cell->style ? cell->style : measure_inherited;
-                double natural = measure_natural_width(cell, cs);
-                edges_from_style(cell->style, cw > 0 ? cw : 1000.0,
-                                 &cell->margin, &cell->padding, &cell->border);
-                double h_extra = cell->padding.left + cell->padding.right
-                    + cell->border.left + cell->border.right
-                    + cell->margin.left + cell->margin.right;
-                double cell_outer =
-                    table_cell_clamp(cell, h_extra, natural + h_extra);
-                gboolean cell_fixed = FALSE;
-                double cell_explicit = -1;
-                if (cell->style && cell->style->values[NS_CSS_WIDTH]) {
-                    const ns_css_value *cwv = cell->style->values[NS_CSS_WIDTH];
-                    if (cwv->kind == NS_CSS_V_LENGTH || cwv->kind == NS_CSS_V_CALC) {
-                        cell_fixed = TRUE;
-                        double w = length_resolve(cwv, col_avail > 0 ? col_avail : 0, -1);
-                        if (w >= 0)
-                            cell_explicit =
-                                table_cell_clamp(cell, h_extra, w + h_extra);
-                    }
-                }
-                double per_col = cell_outer / (double)span;
-                for (int i = 0; i < span && col + (guint)i < max_cols; i++) {
-                    if (per_col > col_widths[col + i])
-                        col_widths[col + i] = per_col;
-                    if (cell_fixed && span == 1) {
-                        col_fixed[col + i] = TRUE;
-                        has_explicit_cols = TRUE;
-                    }
-                    if (cell_explicit >= 0 && span == 1 &&
-                        cell_explicit > col_explicit[col + i]) {
-                        col_explicit[col + i] = cell_explicit;
-                        has_explicit_cols = TRUE;
-                    }
-                }
-                col += (guint)span;
-            }
-        }
-        if (box->table_col_hints) {
-            guint col = 0;
-            for (guint i = 0; i < box->table_col_hints->len && col < max_cols; i++) {
-                ns_table_col_hint *hint =
-                    &g_array_index(box->table_col_hints, ns_table_col_hint, i);
-                int hspan = hint->span > 0 ? hint->span : 1;
-                double w = 0;
-                if (table_width_from_style(hint->style, col_avail, &w)) {
-                    has_explicit_cols = TRUE;
-                    double per = w / (double)hspan;
-                    for (int k = 0; k < hspan && col + (guint)k < max_cols; k++)
-                        if (per > col_explicit[col + k]) col_explicit[col + k] = per;
-                }
-                col += (guint)hspan;
-            }
-        }
-        double natural_sum_pre = 0;
-        for (guint i = 0; i < max_cols; i++) natural_sum_pre += col_widths[i];
-        if (has_explicit_cols || (natural_sum_pre > col_avail && col_avail > 0)) {
-            for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-                if (row->kind != NS_BOX_TABLE_ROW) continue;
-                guint col = 0;
-                for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-                    int span = cell->colspan > 0 ? cell->colspan : 1;
-                    const ns_style *cs = cell->style ? cell->style : measure_inherited;
-                    ns_edges m = {0}, pd = {0}, bd = {0};
-                    edges_from_style(cell->style, cw > 0 ? cw : 1000.0,
-                                     &m, &pd, &bd);
-                    double h_extra = pd.left + pd.right + bd.left + bd.right +
-                                     m.left + m.right;
-                    double per_col_min =
-                        table_cell_clamp(cell, h_extra,
-                                         min_content_width_of(cell, cs)
-                                         + h_extra) / (double)span;
-                    for (int i = 0; i < span && col + (guint)i < max_cols; i++)
-                        if (per_col_min > col_min[col + i])
-                            col_min[col + i] = per_col_min;
-                    col += (guint)span;
-                }
-            }
-        }
-        for (guint i = 0; i < max_cols; i++) {
-            if (col_explicit[i] >= 0) {
-                double e = col_explicit[i];
-                if (e < col_min[i]) e = col_min[i];
-                col_widths[i] = e;
-                col_fixed[i] = TRUE;
-            }
-        }
-        double natural_sum = 0;
-        for (guint i = 0; i < max_cols; i++) natural_sum += col_widths[i];
-        if (natural_sum > col_avail && col_avail > 0) {
-            double min_sum = 0;
-            for (guint i = 0; i < max_cols; i++) min_sum += col_min[i];
-            if (min_sum >= col_avail) {
-                if (min_sum > 0) {
-                    for (guint i = 0; i < max_cols; i++)
-                        col_widths[i] = col_min[i];
-                    col_avail = min_sum;
-                    cw = col_avail + total_hsp;
-                    box->content_width = cw;
-                } else {
-                    double evenly = col_avail / (double)max_cols;
-                    for (guint i = 0; i < max_cols; i++) col_widths[i] = evenly;
-                }
-            } else {
-                double slack_sum = natural_sum - min_sum;
-                double avail_extra = col_avail - min_sum;
-                for (guint i = 0; i < max_cols; i++) {
-                    double slack = col_widths[i] - col_min[i];
-                    col_widths[i] = col_min[i] +
-                        (slack_sum > 0 ? slack * (avail_extra / slack_sum) : 0);
-                }
-            }
-        } else if (natural_sum == 0) {
-            double evenly = col_avail / (double)max_cols;
-            for (guint i = 0; i < max_cols; i++) col_widths[i] = evenly;
-        } else if (explicit_width) {
-            double extra = col_avail - natural_sum;
-            if (extra > 0 && max_cols > 0) {
-                double elastic_natural = 0;
-                guint elastic_count = 0;
-                for (guint i = 0; i < max_cols; i++) {
-                    if (!col_fixed[i]) {
-                        elastic_natural += col_widths[i];
-                        elastic_count++;
-                    }
-                }
-                if (elastic_natural > 0) {
-                    for (guint i = 0; i < max_cols; i++) {
-                        if (!col_fixed[i])
-                            col_widths[i] += extra * col_widths[i] / elastic_natural;
-                    }
-                } else if (elastic_count > 0) {
-                    double per = extra / (double)elastic_count;
-                    for (guint i = 0; i < max_cols; i++) {
-                        if (!col_fixed[i]) col_widths[i] += per;
-                    }
-                } else if (natural_sum > 0) {
-                    for (guint i = 0; i < max_cols; i++)
-                        col_widths[i] += extra * col_widths[i] / natural_sum;
-                } else {
-                    double per = extra / (double)max_cols;
-                    for (guint i = 0; i < max_cols; i++) col_widths[i] += per;
-                }
-            }
-        } else {
-            cw = natural_sum + total_hsp;
-            box->content_width = cw;
-        }
-    }
-    g_free(col_explicit);
-    g_free(col_fixed);
-    g_free(col_min);
-    double *col_x = g_new0(double, max_cols);
-    {
-        double cx = hsp;
-        for (guint i = 0; i < max_cols; i++) {
-            col_x[i] = cx;
-            cx += col_widths[i] + hsp;
-        }
-    }
-
-    {
-        gboolean ml_auto = length_is_auto(box->style ? box->style->values[NS_CSS_MARGIN_LEFT]  : NULL);
-        gboolean mr_auto = length_is_auto(box->style ? box->style->values[NS_CSS_MARGIN_RIGHT] : NULL);
-        if (ml_auto || mr_auto) {
-            double outer = cw + box->padding.left + box->padding.right +
-                           box->border.left + box->border.right;
-            double available = parent_content_width - outer;
-            if (available < 0) available = 0;
-            if (ml_auto && mr_auto) {
-                box->margin.left  = available / 2.0;
-                box->margin.right = available / 2.0;
-            } else if (ml_auto) {
-                box->margin.left  = available - box->margin.right;
-                if (box->margin.left < 0) box->margin.left = 0;
-            } else if (mr_auto) {
-                box->margin.right = available - box->margin.left;
-                if (box->margin.right < 0) box->margin.right = 0;
-            }
-        }
-    }
-
-    double inner_x = box->x + box->margin.left + box->border.left + box->padding.left;
-    double inner_y = box->y + box->margin.top  + box->border.top  + box->padding.top;
-    double cursor_y = inner_y;
-    const ns_style *child_inherited = box->style ? box->style : inherited_style;
-
-    layout_table_captions(box, FALSE, inner_x, cw, child_inherited, &cursor_y);
-    cursor_y += vsp;
-
-    int *rs_remain = g_new0(int, max_cols);
-    ns_box **rs_cell = g_new0(ns_box *, max_cols);
-    for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-        if (row->kind != NS_BOX_TABLE_ROW) continue;
-        row->x = inner_x;
-        row->y = cursor_y;
-        row->content_width = cw;
-        double row_height = 0;
-        guint col = 0;
-        for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-            while (col < max_cols && rs_remain[col] > 0) col++;
-            int span = cell->colspan > 0 ? cell->colspan : 1;
-            int rspan = cell->rowspan > 0 ? cell->rowspan : 1;
-            double cell_outer_w = 0;
-            int covered = 0;
-            for (int i = 0; i < span && col + (guint)i < max_cols; i++) {
-                cell_outer_w += col_widths[col + i];
-                covered++;
-            }
-            if (covered > 1) cell_outer_w += hsp * (double)(covered - 1);
-            if (rspan > 1) {
-                for (int i = 0; i < span && col + (guint)i < max_cols; i++) {
-                    rs_remain[col + i] = rspan;
-                    rs_cell[col + i] = cell;
-                }
-            }
-            cell->x = inner_x + (col < max_cols ? col_x[col] : 0);
-            cell->y = cursor_y;
-            const ns_style *cs = cell->style ? cell->style : child_inherited;
-            edges_from_style(cell->style, cell_outer_w,
-                             &cell->margin, &cell->padding, &cell->border);
-            double cell_inner_w = cell_outer_w
-                - cell->padding.left - cell->padding.right
-                - cell->border.left - cell->border.right
-                - cell->margin.left - cell->margin.right;
-            if (cell_inner_w < 0) cell_inner_w = 0;
-            cell->content_width = cell_inner_w;
-            double ix = cell->x + cell->margin.left + cell->border.left + cell->padding.left;
-            double iy = cell->y + cell->margin.top  + cell->border.top  + cell->padding.top;
-            double cell_h;
-            if (!cell->style) {
-                layout_block(cell, cell_outer_w, cs);
-                cell_inner_w = cell->content_width;
-                cell_h = cell->content_height;
-            } else {
-                double sub_y = iy;
-                for (ns_box *child = cell->first_child; child; child = child->next_sibling) {
-                    child->x = ix;
-                    child->y = sub_y;
-                    layout_box(child, cell_inner_w, cs);
-                    legacy_align_block_child(child, ix, cell_inner_w, cs);
-                    double dh = child->content_height;
-                    if (child->kind == NS_BOX_BLOCK || child->kind == NS_BOX_TABLE)
-                        dh += child->margin.top + child->margin.bottom +
-                              child->padding.top + child->padding.bottom +
-                              child->border.top + child->border.bottom;
-                    sub_y += dh;
-                }
-                cell_h = sub_y - iy;
-            }
-            const ns_css_value *cell_hv = cell->style
-                ? cell->style->values[NS_CSS_HEIGHT] : NULL;
-            const ns_css_value *cell_mnh = cell->style
-                ? cell->style->values[NS_CSS_MIN_HEIGHT] : NULL;
-            if (cell_hv &&
-                (cell_hv->kind == NS_CSS_V_LENGTH || cell_hv->kind == NS_CSS_V_CALC)) {
-                double eh = resolve_used_height(cell, cell_hv, cell_inner_w, -1);
-                if (eh > cell_h) cell_h = eh;
-            }
-            if (cell_mnh &&
-                (cell_mnh->kind == NS_CSS_V_LENGTH || cell_mnh->kind == NS_CSS_V_CALC)) {
-                double mh = resolve_used_height(cell, cell_mnh, cell_inner_w, -1);
-                if (mh > cell_h) cell_h = mh;
-            }
-            cell->content_height = cell_h;
-            double cell_outer_h = cell_h
-                + cell->margin.top + cell->margin.bottom
-                + cell->padding.top + cell->padding.bottom
-                + cell->border.top + cell->border.bottom;
-            if (rspan <= 1 && cell_outer_h > row_height) row_height = cell_outer_h;
-            col += (guint)span;
-        }
-        const ns_css_value *rhv = row->style ? row->style->values[NS_CSS_HEIGHT] : NULL;
-        if (rhv && (rhv->kind == NS_CSS_V_LENGTH || rhv->kind == NS_CSS_V_CALC)) {
-            double rh = length_resolve(rhv, 0, -1);
-            if (rh > row_height) row_height = rh;
-        }
-        GHashTable *ending_rowspans = NULL;
-        for (guint i = 0; i < max_cols; i++) {
-            if (rs_remain[i] != 1 || !rs_cell[i]) continue;
-            if (!ending_rowspans)
-                ending_rowspans = g_hash_table_new(g_direct_hash,
-                                                   g_direct_equal);
-            ns_box *rc = rs_cell[i];
-            if (g_hash_table_contains(ending_rowspans, rc)) continue;
-            g_hash_table_add(ending_rowspans, rc);
-            double span_bottom = cursor_y + row_height;
-            double avail = span_bottom - rc->y
-                         - rc->margin.top - rc->margin.bottom
-                         - rc->padding.top - rc->padding.bottom
-                         - rc->border.top - rc->border.bottom;
-            if (rc->content_height > avail)
-                row_height += rc->content_height - avail;
-        }
-        if (ending_rowspans) g_hash_table_destroy(ending_rowspans);
-        for (ns_box *cell = row->first_child; cell; cell = cell->next_sibling) {
-            if ((cell->rowspan > 0 ? cell->rowspan : 1) > 1) continue;
-            double avail = row_height
-                         - cell->margin.top - cell->margin.bottom
-                         - cell->padding.top - cell->padding.bottom
-                         - cell->border.top - cell->border.bottom;
-            double natural = 0;
-            for (ns_box *ch = cell->first_child; ch; ch = ch->next_sibling) {
-                double dh = ch->content_height;
-                if (ch->kind == NS_BOX_BLOCK || ch->kind == NS_BOX_TABLE)
-                    dh += ch->margin.top + ch->margin.bottom +
-                          ch->padding.top + ch->padding.bottom +
-                          ch->border.top + ch->border.bottom;
-                natural += dh;
-            }
-            double extra = avail - natural;
-            if (extra > 0) {
-                double factor = 0;
-                const ns_css_value *va = cell->style
-                    ? cell->style->values[NS_CSS_VERTICAL_ALIGN] : NULL;
-                if (va && va->kind == NS_CSS_V_KEYWORD && va->u.keyword) {
-                    if (g_ascii_strcasecmp(va->u.keyword, "middle") == 0)
-                        factor = 0.5;
-                    else if (g_ascii_strcasecmp(va->u.keyword, "bottom") == 0)
-                        factor = 1.0;
-                }
-                if (factor > 0)
-                    for (ns_box *ch = cell->first_child; ch; ch = ch->next_sibling)
-                        shift_box_tree(ch, 0, extra * factor);
-            }
-            if (avail > cell->content_height) cell->content_height = avail;
-        }
-        row->content_height = row_height;
-        cursor_y += row_height + vsp;
-        for (guint i = 0; i < max_cols; i++) {
-            if (rs_remain[i] > 0 && --rs_remain[i] == 0 && rs_cell[i]) {
-                ns_box *rc = rs_cell[i];
-                double h = cursor_y - vsp - rc->y
-                    - rc->margin.top - rc->margin.bottom
-                    - rc->padding.top - rc->padding.bottom
-                    - rc->border.top - rc->border.bottom;
-                if (h > rc->content_height) rc->content_height = h;
-                rs_cell[i] = NULL;
-            }
-        }
-    }
-    layout_table_captions(box, TRUE, inner_x, cw, child_inherited, &cursor_y);
-    if (table_is_collapse(box->style))
-        table_collapse_borders(box, max_cols);
-    g_free(rs_remain);
-    g_free(rs_cell);
-    g_free(col_widths);
-    g_free(col_x);
-    box->content_height = cursor_y - inner_y;
-
-    const ns_css_value *thv = box->style ? box->style->values[NS_CSS_HEIGHT] : NULL;
-    if (thv && (thv->kind == NS_CSS_V_LENGTH || thv->kind == NS_CSS_V_CALC)) {
-        double target = resolve_used_height(box, thv, cw, -1);
-        if (box->style && box->style->values[NS_CSS_BOX_SIZING] &&
-            ns_css_keyword_is(box->style->values[NS_CSS_BOX_SIZING], "border-box"))
-            target -= box->padding.top + box->padding.bottom +
-                      box->border.top + box->border.bottom;
-        int nrows = 0;
-        for (ns_box *row = box->first_child; row; row = row->next_sibling)
-            if (row->kind == NS_BOX_TABLE_ROW) nrows++;
-        if (nrows > 0 && target > box->content_height + 0.5) {
-            double per = (target - box->content_height) / nrows;
-            double shift = 0;
-            for (ns_box *row = box->first_child; row; row = row->next_sibling) {
-                if (row->kind != NS_BOX_TABLE_ROW) continue;
-                if (shift > 0) translate_subtree(row, 0, shift);
-                row->content_height += per;
-                for (ns_box *cell = row->first_child; cell;
-                     cell = cell->next_sibling) {
-                    if (cell->kind != NS_BOX_TABLE_CELL) continue;
-                    double factor = 0;
-                    const ns_css_value *va = cell->style
-                        ? cell->style->values[NS_CSS_VERTICAL_ALIGN] : NULL;
-                    if (va && va->kind == NS_CSS_V_KEYWORD && va->u.keyword) {
-                        if (g_ascii_strcasecmp(va->u.keyword, "middle") == 0)
-                            factor = 0.5;
-                        else if (g_ascii_strcasecmp(va->u.keyword, "bottom") == 0)
-                            factor = 1.0;
-                    }
-                    if (factor > 0)
-                        for (ns_box *ch = cell->first_child; ch;
-                             ch = ch->next_sibling)
-                            shift_box_tree(ch, 0, per * factor);
-                    cell->content_height += per;
-                }
-                shift += per;
-            }
-            box->content_height = target;
-        }
-    }
-}
-
 static __thread gboolean g_cq_seen_container;
 
 static gboolean
@@ -9413,7 +8624,7 @@ layout_box(ns_box *box, double parent_content_width, const ns_style *inherited_s
     } else if (box->kind == NS_BOX_SVG) {
         layout_image(box, parent_content_width);
     } else if (box->kind == NS_BOX_TABLE) {
-        layout_table(box, parent_content_width, inherited_style);
+        ns_layout_table(box, parent_content_width, inherited_style);
     } else if (box->kind == NS_BOX_TABLE_CAPTION) {
         layout_block(box, parent_content_width, inherited_style);
     } else if (box->kind == NS_BOX_MATH) {
@@ -16914,4 +16125,81 @@ ns_box_inline_rect_for_dom(const ns_box *root, const ns_node *target,
     if (w) *w = x1 - x0;
     if (h) *h = y1 - y0;
     return TRUE;
+}
+
+double
+ns_layout_length_resolve(const ns_css_value *v, double basis, double fallback)
+{
+    return length_resolve(v, basis, fallback);
+}
+
+gboolean
+ns_layout_value_is_percent(const ns_css_value *v)
+{
+    return value_is_percent(v);
+}
+
+void
+ns_layout_edges_from_style(const ns_style *s, double basis, ns_edges *margin,
+                           ns_edges *padding, ns_edges *border)
+{
+    edges_from_style(s, basis, margin, padding, border);
+}
+
+double
+ns_layout_resolve_used_height(const ns_box *box, const ns_css_value *hv,
+                              double width_basis, double fallback)
+{
+    return resolve_used_height(box, hv, width_basis, fallback);
+}
+
+double
+ns_layout_min_width_of(ns_box *box, const ns_style *parent_style)
+{
+    return min_width_of(box, parent_style);
+}
+
+double
+ns_layout_measure_natural_width(ns_box *box, const ns_style *parent_style)
+{
+    return measure_natural_width(box, parent_style);
+}
+
+double
+ns_layout_min_content_width_of(ns_box *box, const ns_style *parent_style)
+{
+    return min_content_width_of(box, parent_style);
+}
+
+void
+ns_layout_box(ns_box *box, double parent_content_width,
+              const ns_style *inherited_style)
+{
+    layout_box(box, parent_content_width, inherited_style);
+}
+
+void
+ns_layout_block(ns_box *box, double parent_content_width,
+                const ns_style *inherited_style)
+{
+    layout_block(box, parent_content_width, inherited_style);
+}
+
+void
+ns_layout_legacy_align_block_child(ns_box *c, double avail_x, double avail_w,
+                                   const ns_style *inherited)
+{
+    legacy_align_block_child(c, avail_x, avail_w, inherited);
+}
+
+void
+ns_layout_shift_box_tree(ns_box *b, double dx, double dy)
+{
+    shift_box_tree(b, dx, dy);
+}
+
+void
+ns_layout_translate_subtree(ns_box *box, double dx, double dy)
+{
+    translate_subtree(box, dx, dy);
 }
