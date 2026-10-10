@@ -185,6 +185,10 @@ impl<'a> Node<'a> {
         unsafe { (*self.node.as_ptr()).flags |= flags };
     }
 
+    pub fn remove_flags(self, flags: u32) {
+        unsafe { (*self.node.as_ptr()).flags &= !flags };
+    }
+
     pub fn set_source_position(self, line: c_int, col: c_int) {
         unsafe {
             (*self.node.as_ptr()).src_line = line;

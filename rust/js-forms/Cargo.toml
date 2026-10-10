@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-forms"
-description = "The forms bindings: FormData, constraint validation, form submission and reset, and SubmitEvent"
+description = "The forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation and submission"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,10 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-datetime = { path = "../datetime" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-html-util = { path = "../html-util" }
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
 
 [lints]

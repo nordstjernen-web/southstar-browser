@@ -362,6 +362,81 @@ JSValue ns_event_ctor(JSContext *ctx, JSValueConst this_val, int argc,
 gboolean ns_js_dispatch_built_event(ns_js *js, const ns_node *target,
                                     const char *type, JSValue event,
                                     gboolean *default_prevented);
+typedef struct {
+    gboolean checked;
+    gboolean indeterminate;
+    ns_node *checked_radio;
+} ns_checkable_click_state;
+typedef enum {
+    NS_RANGE_MIN,
+    NS_RANGE_MAX,
+    NS_RANGE_LOW,
+    NS_RANGE_HIGH,
+    NS_RANGE_OPTIMUM,
+} ns_range_number_prop;
+JSValue ns_element_get_label_control(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selection_dir(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_default_value(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_default_checked(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_default_selected(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selected(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_value_as_number(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_value_as_date(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_checked(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_indeterminate(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_progress_position(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_value_prop(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_label_prop(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selectedIndex(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_options(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selectedOptions(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selection_start(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_selection_end(JSContext *ctx, JSValueConst this_val);
+JSValue ns_text_control_get_text_length(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_set_default_value(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_default_checked(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_default_selected(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_selected(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_value_as_number(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_value_as_date(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_checked(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_indeterminate(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_value_prop(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_label_prop(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_selectedIndex(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_selection_start(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_selection_end(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_set_selection_dir(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue ns_element_range_number_getter(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue ns_element_range_number_setter(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst val, int magic);
+JSValue ns_input_select(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue ns_input_setSelectionRange(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_input_setRangeText(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv);
+JSValue ns_input_stepUp(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue ns_input_stepDown(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue ns_options_item(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue ns_options_namedItem(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+JSValue ns_select_add(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+void     ns_input_resanitize_value(ns_node *el);
+gboolean ns_js_node_is_labelable(const ns_node *n);
+const ns_node *ns_js_first_labelable_descendant(const ns_node *n, int depth);
+const ns_node *ns_label_associated_control(const ns_node *label);
+int      ns_checkable_input_kind(const ns_node *el);
+void     ns_checkable_pre_click(ns_js *js, ns_node *el, int kind,
+                                ns_checkable_click_state *state);
+void     ns_checkable_post_click(ns_js *js, ns_node *el, int kind,
+                                 const ns_checkable_click_state *state,
+                                 gboolean prevented);
+void     ns_js_set_checkedness(ns_js *js, ns_node *n, gboolean checked);
+JSValue  ns_array_item(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_array_namedItem(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv);
+void     ns_element_insert_before_single(ns_js *js, ns_node *parent, ns_node *newc,
+                                         ns_node *ref);
 JSValue
 ns_canvas_throw_dom(JSContext *ctx, const char *name, const char *msg);
 int

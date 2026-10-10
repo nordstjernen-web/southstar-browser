@@ -1,11 +1,16 @@
-//! Southstar — the forms bindings: FormData, constraint validation, form submission and reset, and SubmitEvent.
+//! Southstar — the forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation and submission.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod checkable;
 mod ffi;
 mod form_data;
+mod labels;
+mod select;
+mod selection;
 mod submit;
 mod validity;
+mod value;
 
 use core::ffi::CStr;
 
@@ -119,4 +124,28 @@ pub(crate) fn index(scope: &mut Scope<'_>, object: &Value, i: u32) -> Value {
 
 pub(crate) fn c_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
     scope.to_bytes(value).ok().map(until_nul)
+}
+
+pub(crate) fn to_uint32(scope: &mut Scope<'_>, value: &Value) -> JsResult<u32> {
+    let number = scope.to_number(value)?;
+    if !number.is_finite() {
+        return Ok(0);
+    }
+    Ok(number.trunc().rem_euclid(4_294_967_296.0) as u32)
+}
+
+pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
+    node.attr(name).map(CStr::to_bytes)
+}
+
+pub(crate) fn type_is(node: Element, wanted: &str) -> bool {
+    text_is(type_of(node), wanted)
+}
+
+pub(crate) fn parent_select(option: Element) -> Option<Element> {
+    let mut parent = option.parent()?;
+    if named(parent, "optgroup") {
+        parent = parent.parent()?;
+    }
+    named(parent, "select").then_some(parent)
 }

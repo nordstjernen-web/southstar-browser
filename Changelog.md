@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The form-control bindings (value and defaultValue with sanitization,
+  valueAsNumber, valueAsDate, stepUp, stepDown, the text selection APIs,
+  checked, indeterminate and radio groups, select options and selectedIndex,
+  label.control, progress and meter) moved from js.c to Rust (rust/js-
+  forms), with unchanged results.
 * Shadow DOM and slots (attachShadow, the ShadowRoot wrapper, assignedNodes,
   assignedElements, assignedSlot, getRootNode) moved from js.c to Rust
   (rust/js-shadow), with unchanged results.
