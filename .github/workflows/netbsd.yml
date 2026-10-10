@@ -102,10 +102,8 @@ jobs:
               echo "glib-mkenums missing: building against the system Pango"
               pango_arg=-Dns-pango=disabled
             fi
-            # WAMR's posix platform layer uses MAP_32BIT, which NetBSD does
-            # not provide, so the WebAssembly engine is disabled here.
             meson setup builddir --buildtype=release -Db_ndebug=true \
-              -Dwasm=disabled $pango_arg
+              $pango_arg
             meson compile -C builddir
             if ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
                && grep -q Southstar about.txt; then

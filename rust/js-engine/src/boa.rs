@@ -308,6 +308,33 @@ impl Scope<'_> {
         Value(function.into())
     }
 
+    pub fn bound_constructor(
+        &mut self,
+        name: &str,
+        arity: u32,
+        f: BoundFn,
+        data: &[Value],
+    ) -> Value {
+        let captures: Vec<JsValue> = data.iter().map(|value| value.0.clone()).collect();
+        let native = NativeFunction::from_copy_closure_with_captures(
+            move |this, args, captures: &Vec<JsValue>, ctx| {
+                let this = Value(this.clone());
+                let args: Vec<Value> = args.iter().cloned().map(Value).collect();
+                let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
+                f(&mut Scope { ctx }, &this, &args, &data)
+                    .map(|value| value.0)
+                    .map_err(|error| JsError::from_opaque(error.0))
+            },
+            captures,
+        );
+        let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
+            .name(JsString::from(name))
+            .length(arity as usize)
+            .constructor(true)
+            .build();
+        Value(function.into())
+    }
+
     fn native_function(&mut self, name: &str, arity: u32, f: NativeFn, constructor: bool) -> Value {
         let native = NativeFunction::from_copy_closure(move |this, args, ctx| {
             let this = Value(this.clone());
@@ -600,6 +627,18 @@ impl Scope<'_> {
                 .map_err(|e| self.error(e)),
             None => Err(self.type_error("not an ArrayBuffer")),
         }
+    }
+
+    pub unsafe fn external_array_buffer(
+        &mut self,
+        _data: *mut u8,
+        _len: usize,
+    ) -> Result<Value, Value> {
+        Err(self.type_error("ArrayBuffers over external memory are not available on this engine"))
+    }
+
+    pub fn buffer_source_bytes(&mut self, value: &Value) -> Option<Vec<u8>> {
+        self.with_buffer_bytes_mut(value, |bytes| bytes.to_vec())
     }
 
     pub fn with_typed_array<R>(

@@ -49,6 +49,7 @@ southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-services = { path = "../js-services" }
 southstar-js-temporal = { path = "../js-temporal" }
+southstar-js-wasm = { path = "../js-wasm", optional = true }
 southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-layout = { path = "../layout" }
@@ -106,6 +107,7 @@ http-brotli = ["southstar-net/http-brotli"]
 http-zstd = ["southstar-net/http-zstd"]
 libav = ["southstar-headless/libav", "southstar-net/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
+wasm = ["dep:southstar-js-wasm"]
 webgpu = ["southstar-canvas/webgpu", "southstar-net/webgpu"]
 woff2 = ["dep:southstar-woff2", "southstar-font/woff2"]
 

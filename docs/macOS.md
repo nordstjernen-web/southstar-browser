@@ -125,7 +125,7 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-QuickJS, lexbor, WAMR, Wuffs, pl_mpeg and minimp3 are vendored in-tree,
+QuickJS, lexbor, Wuffs, pl_mpeg and minimp3 are vendored in-tree,
 so `meson setup` requires no submodules or setup-time downloads.
 
 To match CI exactly:
@@ -259,10 +259,10 @@ them large:
    (`Contents/XPCServices/*.xpc`), or the app would ship
    `--single-process` and forfeit the per-tab security boundary. This is
    real engineering, not configuration.
-2. **Hardened Runtime + JIT.** WAMR (WebAssembly) maps executable memory,
-   so `com.apple.security.cs.allow-jit` is required (already in
-   `packaging/macos/entitlements.plist`); QuickJS is interpreter-only and
-   needs nothing extra. A browser also needs
+2. **Hardened Runtime.** WebAssembly runs in the wasmi interpreter and
+   QuickJS is interpreter-only, so neither maps executable memory; the
+   entitlements the build signs with are in
+   `packaging/macos/entitlements.plist`. A browser also needs
    `com.apple.security.network.client`.
 3. **Licensing.** The bundle ships **LGPL** GTK 4 / GLib, and Apple's
    App Store terms are widely read as incompatible with the GPL family

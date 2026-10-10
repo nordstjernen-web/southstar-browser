@@ -268,6 +268,15 @@ unsafe extern "C" {
     fn JS_GetOpaque(obj: JSValue, class_id: u32) -> *mut c_void;
     fn JS_SetOpaque(obj: JSValue, opaque: *mut c_void) -> c_int;
     fn JS_DetachArrayBuffer(ctx: *mut JSContext, obj: JSValue);
+    fn JS_NewArrayBuffer(
+        ctx: *mut JSContext,
+        buf: *mut u8,
+        len: usize,
+        max_len: usize,
+        realloc_func: *const c_void,
+        opaque: *mut c_void,
+        is_shared: bool,
+    ) -> JSValue;
     fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut usize, obj: JSValue) -> *mut u8;
     fn JS_GetTypedArrayBuffer(
         ctx: *mut JSContext,
@@ -1590,6 +1599,18 @@ impl Scope<'_> {
         function
     }
 
+    pub fn bound_constructor(
+        &mut self,
+        name: &str,
+        arity: u32,
+        f: BoundFn,
+        data: &[Value],
+    ) -> Value {
+        let function = self.bound_function(name, arity, f, data);
+        unsafe { JS_SetConstructorBit(self.ctx, function.raw, 1) };
+        function
+    }
+
     pub fn set_constructor(&mut self, function: &Value, prototype: &Value) -> Result<(), Value> {
         let status = unsafe { JS_SetConstructor(self.ctx, function.raw, prototype.raw) };
         self.status(status)
@@ -1863,6 +1884,30 @@ impl Scope<'_> {
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
         unsafe { JS_DetachArrayBuffer(self.ctx, value.raw) };
         Ok(())
+    }
+
+    pub unsafe fn external_array_buffer(
+        &mut self,
+        data: *mut u8,
+        len: usize,
+    ) -> Result<Value, Value> {
+        let raw = unsafe {
+            JS_NewArrayBuffer(self.ctx, data, len, 0, ptr::null(), ptr::null_mut(), false)
+        };
+        self.take(raw)
+    }
+
+    pub fn buffer_source_bytes(&mut self, value: &Value) -> Option<Vec<u8>> {
+        if !unsafe { JS_IsArrayBuffer(value.raw) } {
+            return self.view_data(value);
+        }
+        let mut total = 0usize;
+        let base = unsafe { JS_GetArrayBuffer(self.ctx, &mut total, value.raw) };
+        if base.is_null() {
+            drop(self.exception());
+            return None;
+        }
+        Some(unsafe { core::slice::from_raw_parts(base, total) }.to_vec())
     }
 
     pub fn with_typed_array<R>(

@@ -757,8 +757,8 @@ Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),
 - WebGPU can use the `wgpu` crate directly — wgpu-native is itself a C
   wrapper around it — behind an off-by-default Cargo feature, keeping the
   runtime gate.
-- Wasm: WAMR (73k vendored lines) can be replaced by `wasmi`, a pure-Rust
-  interpreter with no JIT (decision D9).
+- Wasm: WAMR (73k vendored lines) is replaced by `wasmi`, a pure-Rust
+  interpreter with no JIT (decision D9, done in `rust/js-wasm`).
 
 Some of these can move earlier; they sit at the edge of the engine and only
 depend on the JS binding style.
@@ -770,7 +770,7 @@ What is left is third-party C. Each library gets its own decision:
 | Library | Lines | Recommendation |
 |---|---:|---|
 | Wuffs | ~97k | Replaced in phase 2 by Rust image crates |
-| WAMR | ~73k | Replace with `wasmi` (D9) |
+| WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
 | QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
 | lexbor | ~289k | Replace with Southstar's own Rust HTML5 tokenizer, tree builder and WHATWG URL parser, written from the specs (D1 still keeps Servo's `html5ever` and `url` out); the largest remaining piece of vendored C |
 | pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
@@ -831,7 +831,7 @@ the existing ones, not a test suite.
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
 | Wuffs, libwebp | `png`, `gif`, `zune-jpeg`, `image-webp` | — |
 | libavif | FFI | — |
-| WAMR | `wasmi` (D9) | — |
+| WAMR | `wasmi` (D9, done) | — |
 | SQLite | `rusqlite` | — |
 | uchardet | FFI | Own detector (D1 excludes `chardetng`) |
 | libpsl | FFI | `psl` crate |
@@ -872,7 +872,7 @@ the existing ones, not a test suite.
 | D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |
 | D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Decided (October 2026): neither. libcurl and libnghttp2 are replaced by an in-tree Rust client, `rust/http`, on threads (no async runtime), with TLS through OpenSSL |
 | D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Either targets `js-engine`, not an engine; decide after the phase 2 pilot, with a lean toward WebIDL generation now that several backends must be served |
-| D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 |
+| D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 (done, October 2026) |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
 | D11 | Which JavaScript engines get backends? | QuickJS-ng (default until the switch), Boa (the target default), and optionally Nova and quickjs-rust as experiments. Bellard's QuickJS is dropped (October 2026). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (C QuickJS underneath) |
 | D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired |
@@ -992,6 +992,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `js_perf.c` | 1,331 | `rust/js-perf` (the timelines, observers and frame clocks moved out of `ns_js` into per-page Rust state; js.c keeps the page's time origin, navigation timing and log behind small accessors; the Performance object is a GC-traced host object, so the timing, navigation and eventCounts objects it holds are still marked) | 7 (JavaScript bindings) |
 | `js_canvas.c`, `js_canvas_api.c` | 4,952 | `rust/canvas` (the canvas objects' WebIDL surface as GC-traced host objects, Path2D, ImageBitmap, the Rust-owned drawing state, the 2D context's paths, fills, strokes, shadows, gradients, patterns, clip, image data and text through ns-pango, CSS colour and font serialization; `drawImage` sources read layout boxes through `ns_js_box_for_node`, images through `rust/image`'s `ImageRef` and video posters through `ns_video_poster_texture`) | 7 (JavaScript bindings) |
 | `webgl.c` | 4,931 | `rust/webgl` (the GL entry points read from libepoxy's dispatch pointers; the bindings sit on the engine-neutral layer, which gained typed-array element types, mutable views of ArrayBuffer and typed-array bytes, typed-array construction and borrowed host data for it, on QuickJS and Boa; the hidden-state info objects, prototypes and `drawImage` sources still come through the canvas crate's C ABI) | 8 |
+| `wasm.c` and the vendored WAMR (`src/wamr/`) | 2,523 (+ ~73k vendored) | `rust/js-wasm` (rewritten over the pure-Rust `wasmi` interpreter, D9: one wasmi store per realm, memory buffers are ArrayBuffers over the wasm memory that are detached when it grows, standalone `Memory`, `Table` and `Global` objects are real wasmi objects that imports link directly; the bindings sit on the engine-neutral layer, which gained bound constructors, ArrayBuffers over external memory and BufferSource copies) | 8 |
 
 ### Being ported
 

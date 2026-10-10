@@ -1,0 +1,15 @@
+[package]
+name = "southstar-js-wasm"
+description = "The WebAssembly JavaScript API over the wasmi interpreter: modules, instances, memories, tables and globals"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+wasmi = { version = "2.0", default-features = false, features = ["std", "validate"] }
+
+[lints]
+workspace = true

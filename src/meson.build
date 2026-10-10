@@ -45,7 +45,6 @@ southstar_engine_sources = files(
 
 southstar_engine_sources += files(
   'js.c',
-  'wasm.c',
 )
 
 if have_avif
@@ -84,7 +83,6 @@ southstar_deps = [
   libplmpeg,
   libuchardet,
   liblexbor,
-  libwamr,
   sqlite3,
   zlib,
 ]

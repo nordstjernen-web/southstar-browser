@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* WebAssembly runs on wasmi, a pure-Rust interpreter (rust/js-wasm), in
+  place of the vendored WAMR C runtime, which is gone along with src/wasm.c.
+  Funcref tables can now be read from JavaScript (WAMR crashed on
+  Table.get), a memory passed in as an import keeps its size, and the -Dwasm
+  option now builds on every platform, NetBSD and 32-bit x86 included.
 * MessagePort, MessageChannel and BroadcastChannel are Rust
   (rust/js-workers), with unchanged results.
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS

@@ -99,7 +99,8 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   default; experimental `navigator.gpu` over
   external wgpu-native, built only when that library is installed and gated
   behind `--enable-webgpu`; the full
-  WebAssembly JS API over a vendored WAMR interpreter.
+  WebAssembly JS API over the pure-Rust [wasmi](https://github.com/wasmi-labs/wasmi)
+  interpreter (`rust/js-wasm`).
 - **MathML** — a minimalist presentation-MathML renderer (`rust/mathml`)
   laid out over Pango/Cairo and embedded inline on the text baseline.
 - **Spell checking** — optional, via Enchant: misspelled words in editable
@@ -150,8 +151,7 @@ Southstar is an independent engine — no upstream browser code.
 **Vendored in-tree**, built from the main tree with no submodules:
 [lexbor](https://github.com/lexbor/lexbor) (HTML5 → DOM parser, CSS, and the
 WHATWG URL module), [QuickJS](https://github.com/quickjs-ng/quickjs)
-(quickjs-ng fork, no JIT), [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
-(WebAssembly interpreter), [Wuffs](https://github.com/google/wuffs)
+(quickjs-ng fork, no JIT), [Wuffs](https://github.com/google/wuffs)
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio) and [minimp3](https://github.com/lieff/minimp3)
 (MP3). The only setup-time download is

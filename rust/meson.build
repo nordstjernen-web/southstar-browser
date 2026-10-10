@@ -74,6 +74,9 @@ southstar_rust_link_deps += http_backend_deps
 if have_webgpu
   southstar_rust_features += ['webgpu']
 endif
+if have_wasm
+  southstar_rust_features += ['wasm']
+endif
 if have_woff2
   southstar_rust_features += ['woff2']
   southstar_rust_link_deps += [libbrotlidec_fonts]

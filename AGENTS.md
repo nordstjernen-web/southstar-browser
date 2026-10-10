@@ -239,13 +239,13 @@ transitively through libcurl's TLS backend on Linux and
 Windows/MSYS2; `meson` depends on `libcrypto` explicitly so the
 headers resolve.
 
-### WebAssembly: WAMR
+### WebAssembly: wasmi
 
 The `WebAssembly` JS API (`compile`, `instantiate`, `Memory`,
-`Table`, `Global`, externref) is implemented in `src/wasm.c` over a
-vendored subset of the [WebAssembly Micro Runtime
-(WAMR)](https://github.com/bytecodealliance/wasm-micro-runtime)
-interpreter at `src/wamr/`. It runs wasm-bindgen bundles.
+`Table`, `Global`, externref) is implemented in `rust/js-wasm` over
+[wasmi](https://github.com/wasmi-labs/wasmi), a pure-Rust interpreter
+from crates.io with no JIT. It runs wasm-bindgen bundles. `-Dwasm=disabled`
+drops the crate and the `WebAssembly` global.
 
 System packages required on Debian/Ubuntu:
 

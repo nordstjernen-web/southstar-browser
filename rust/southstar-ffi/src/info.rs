@@ -70,6 +70,8 @@ const PORTED: &[&str] = &[
     "svg.c",
     "texture.c",
     "threaddump.c",
+    #[cfg(feature = "wasm")]
+    "wasm.c",
     "watchdog.c",
     "webaudio.c",
     "ws.c",

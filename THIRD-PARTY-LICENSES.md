@@ -99,18 +99,6 @@ copyright and related and neighboring rights to this software to the
 public domain worldwide. This software is distributed without any
 warranty. See <http://creativecommons.org/publicdomain/zero/1.0/>.
 
-### WebAssembly Micro Runtime (WAMR) — Apache License 2.0 with LLVM exceptions
-
-> WebAssembly runtime. Vendored in `src/wamr/`.
-> <https://github.com/bytecodealliance/wasm-micro-runtime>
->
-> Copyright (c) The WebAssembly Micro Runtime contributors.
-
-Licensed under the Apache License, Version 2.0, with LLVM exceptions.
-See the lexbor section above for the base Apache 2.0 text; the full
-license including the LLVM exceptions is reproduced in
-`src/wamr/LICENSE`.
-
 ---
 
 ### ns-pango — GNU LGPL 2.1 or later (modified Pango, statically linked)
@@ -375,7 +363,6 @@ shipped with the upstream sources. As of this release:
 >     limitations under the License.
 
 - Wuffs ships no `NOTICE` file.
-- WAMR ships no `NOTICE` file.
 
 If a future upstream release adds one, it will be included verbatim
 in this section.

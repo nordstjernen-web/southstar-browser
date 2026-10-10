@@ -14,8 +14,8 @@ See `README.md` for the product vision and `CLAUDE.md` for working rules.
   scope, not corners. A working subset beats an unfinished superset.
 - **Vertical slices that ship** — every task ends in something runnable.
 - **Few small auditable deps**, vendored in-tree: lexbor (HTML + WHATWG
-  URL), QuickJS (JS interpreter), Wuffs (image decode), WAMR
-  (WebAssembly interpreter).
+  URL), QuickJS (JS interpreter), Wuffs (image decode); WebAssembly runs on
+  the pure-Rust wasmi interpreter.
 - **No automated test suite** — verify by running the browser.
 - No JIT, therefore more secure. However, this means the rest of the browser
   engine needs to be super-fast. 
@@ -57,8 +57,8 @@ IndexedDB over SQLite), `WebSocket`/`EventSource`, the
 Resize/Intersection/Mutation observers, and `crypto.subtle`
 (WebCrypto over OpenSSL, `src/webcrypto.c`); forms support submission
 and constraint validation; `overflow` boxes scroll. The full
-`WebAssembly` JS API runs on a vendored WAMR interpreter
-(`src/wasm.c`), and WebGL 1 / 2 maps onto
+`WebAssembly` JS API runs on the pure-Rust wasmi interpreter
+(`rust/js-wasm`), and WebGL 1 / 2 maps onto
 OpenGL ES (`src/webgl.c`). Painting skips off-screen boxes (viewport
 culling). Runs on Linux, Windows (MSYS2) and macOS; CI builds the
 desktop three plus musl on every push (the BSDs run nightly / on dispatch).
@@ -78,7 +78,7 @@ The codebase is layered so the GUI stays thin and the engine stays
 toolkit-agnostic:
 
 - **`src/` — common C core.** The engine (lexbor parse, CSS cascade,
-  layout, Cairo/Pango paint, QuickJS, WAMR, image decode, networking)
+  layout, Cairo/Pango paint, QuickJS, image decode, networking)
   plus frontend-agnostic `ns_` helpers shared by alternative GUIs
   (the `ns_net_fetch_*` networking calls, the `ns_url_*` URL helpers,
   the `src/headless.c` driver, and the `ns_browser` embedding API in

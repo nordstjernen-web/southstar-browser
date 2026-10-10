@@ -20521,7 +20521,9 @@ ns_worker_js_new(ns_worker_host *host)
     JS_SetPropertyStr(ctx, global, "URL", url_ctor);
     ns_url_install_interface(ctx);
 
+#ifdef NS_HAVE_WASM
     ns_wasm_install(ctx, global);
+#endif
     ns_js_intl_install(ctx, global);
     ns_js_temporal_install(ctx, global);
     JS_SetPropertyStr(ctx, global, "crossOriginIsolated", JS_FALSE);
@@ -47793,7 +47795,9 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
         JS_FreeValue(ctx, subtle);
     JS_FreeValue(ctx, crypto_obj);
 
+#ifdef NS_HAVE_WASM
     ns_wasm_install(ctx, global);
+#endif
 
     JSValue local_obj = JS_NewObjectClass(ctx, ns_storage_class_id);
     JS_SetOpaque(local_obj, js->local_storage);

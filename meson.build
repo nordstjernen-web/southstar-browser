@@ -429,23 +429,15 @@ endif
 add_project_arguments('-DNS_BUILD_DATE="' + build_date + '"', language: 'c')
 add_project_arguments('-DNS_VERSION="' + meson.project_version() + '"', language: 'c')
 
+have_wasm = get_option('wasm').allowed()
+if have_wasm
+  add_project_arguments('-DNS_HAVE_WASM=1', language: 'c')
+endif
+
 subdir('src/lexbor')
 
 subdir('src/quickjs')
 message('JS engine: quickjs (in-tree quickjs-ng fork, full DOM bindings)')
-
-wasm_unsupported_cpu = host_machine.cpu_family() == 'x86'
-if get_option('wasm').enabled() and wasm_unsupported_cpu
-  error('wasm (WAMR) is not supported on 32-bit x86; build with -Dwasm=disabled')
-endif
-wasm_feature = get_option('wasm').disable_auto_if(wasm_unsupported_cpu)
-have_wasm = false
-if wasm_feature.allowed()
-  subdir('src/wamr')
-  have_wasm = true
-else
-  libwamr = declare_dependency()
-endif
 
 install_data(
   'data/icons/hicolor/scalable/apps/southstar.svg',
@@ -547,7 +539,7 @@ install_data(
   install_dir: get_option('datadir') / 'metainfo',
 )
 
-summary({'WebAssembly (WAMR)': have_wasm}, section: 'Features')
+summary({'WebAssembly (wasmi)': have_wasm}, section: 'Features')
 summary({'AVIF images (libavif)': have_avif}, section: 'Features')
 summary({'GTK 4 shell': have_gtk}, section: 'Shells')
 
