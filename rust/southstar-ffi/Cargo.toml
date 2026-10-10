@@ -81,6 +81,7 @@ southstar-layout = { path = "../layout" }
 southstar-layout-flex = { path = "../layout-flex" }
 southstar-layout-grid = { path = "../layout-grid" }
 southstar-layout-hit = { path = "../layout-hit" }
+southstar-layout-inline = { path = "../layout-inline" }
 southstar-layout-position = { path = "../layout-position" }
 southstar-layout-table = { path = "../layout-table" }
 southstar-i18n = { path = "../i18n" }

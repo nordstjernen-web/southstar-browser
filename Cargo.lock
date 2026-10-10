@@ -1658,6 +1658,7 @@ dependencies = [
  "southstar-layout-flex",
  "southstar-layout-grid",
  "southstar-layout-hit",
+ "southstar-layout-inline",
  "southstar-layout-position",
  "southstar-layout-table",
  "southstar-mat4",
@@ -2202,6 +2203,17 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-mat4",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-inline"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-paint",
  "southstar-style",
 ]
 

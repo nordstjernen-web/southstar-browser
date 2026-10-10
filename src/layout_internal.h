@@ -118,5 +118,26 @@ void ns_layout_apply_position_offsets(ns_box *box, double parent_w,
                                       double parent_h);
 void ns_layout_process_absolute_boxes(ns_box *root, GHashTable *styles,
                                       double viewport_width);
+void ns_layout_inline(ns_box *box, double content_width,
+                      const ns_style *parent_style);
+double ns_layout_inline_line_height(const ns_style *parent_style);
+double ns_layout_inline_natural_width(ns_box *box, const ns_style *parent_style);
+double ns_layout_inline_min_width(ns_box *box, const ns_style *parent_style);
+void ns_layout_apply_inline_spacing(struct _PangoAttrList *list,
+                                    const ns_style *style,
+                                    const char *text);
+void ns_layout_apply_inline_layout_attrs(struct _PangoAttrList *list,
+                                         const ns_box *box);
+gboolean ns_layout_box_first_baseline(const ns_box *b, double *out);
+double ns_layout_inline_attr_control_width(const ns_inline_attr *r,
+                                           const ns_box *box);
+gboolean ns_layout_box_is_abs_placeholder(const ns_box *b);
+const ns_node *ns_layout_abs_static_target(const ns_box *b);
+void ns_layout_record_abs_static(const ns_node *dom, ns_box *run, double rel_x,
+                                 double rel_y);
+GArray *ns_layout_measure_inline_atomics_begin(ns_box *box,
+                                               const ns_style *parent_style,
+                                               gboolean max_content);
+void ns_layout_measure_inline_atomics_end(GArray *saved);
 
 #endif

@@ -242,6 +242,29 @@ pango! {
     fn pango_attr_allow_breaks_new(allow: GBoolean) -> *mut RawAttribute;
     fn pango_attr_shape_new(ink: *const Rectangle, logical: *const Rectangle) -> *mut RawAttribute;
     fn pango_cairo_show_layout(cr: *mut c_void, layout: *mut c_void);
+    fn pango_context_get_serial(context: *mut c_void) -> c_uint;
+    fn pango_font_description_copy(desc: *const c_void) -> *mut c_void;
+    fn pango_font_description_equal(a: *const c_void, b: *const c_void) -> GBoolean;
+    fn pango_font_description_hash(desc: *const c_void) -> c_uint;
+    fn pango_layout_get_attributes(layout: *mut c_void) -> *mut c_void;
+    fn pango_layout_get_tabs(layout: *mut c_void) -> *mut c_void;
+    fn pango_layout_get_height(layout: *mut c_void) -> c_int;
+    fn pango_layout_get_indent(layout: *mut c_void) -> c_int;
+    fn pango_layout_get_spacing(layout: *mut c_void) -> c_int;
+    fn pango_layout_get_line_spacing(layout: *mut c_void) -> f32;
+    fn pango_layout_get_justify(layout: *mut c_void) -> GBoolean;
+    fn pango_layout_get_single_paragraph_mode(layout: *mut c_void) -> GBoolean;
+    fn pango_layout_get_auto_dir(layout: *mut c_void) -> GBoolean;
+    fn pango_layout_get_wrap(layout: *mut c_void) -> c_int;
+    fn pango_layout_get_ellipsize(layout: *mut c_void) -> c_int;
+    fn pango_layout_get_extents(layout: *mut c_void, ink: *mut Rectangle, logical: *mut Rectangle);
+    fn pango_layout_get_baseline(layout: *mut c_void) -> c_int;
+    fn pango_layout_index_to_line_x(layout: *mut c_void, index: c_int, trailing: GBoolean, line: *mut c_int, x_pos: *mut c_int);
+    fn pango_layout_context_changed(layout: *mut c_void);
+    fn pango_extents_to_pixels(inclusive: *mut Rectangle, nearest: *mut Rectangle);
+    fn pango_attr_list_copy(list: *mut c_void) -> *mut c_void;
+    fn pango_attr_list_to_string(list: *mut c_void) -> *mut c_char;
+    fn pango_attr_line_height_new_absolute(height: c_int) -> *mut RawAttribute;
     fn pango_cairo_show_layout_line(cr: *mut c_void, line: *mut RawLine);
 }
 
@@ -254,6 +277,7 @@ unsafe extern "C" {
         data: *mut c_void,
         destroy: southstar_glib::GDestroyNotify,
     );
+    fn g_object_get_data(object: *mut c_void, key: *const c_char) -> *mut c_void;
     fn g_free(mem: *mut c_void);
     fn cairo_font_options_create() -> *mut c_void;
     fn cairo_font_options_destroy(options: *mut c_void);
@@ -327,8 +351,16 @@ impl Context {
         Context(ctx)
     }
 
+    pub unsafe fn from_raw(ctx: *mut c_void) -> Context {
+        Context(ctx)
+    }
+
     pub fn raw(self) -> *mut c_void {
         self.0
+    }
+
+    pub fn serial(self) -> u32 {
+        unsafe { pango_context_get_serial(self.0) }
     }
 
     pub fn base_dir(self) -> c_int {
@@ -418,6 +450,24 @@ impl FontDescription {
 
     pub fn set_variations(&self, variations: &CStr) {
         unsafe { pango_font_description_set_variations(self.0, variations.as_ptr()) };
+    }
+}
+
+impl FontDescRef {
+    pub fn raw(self) -> *const c_void {
+        self.0
+    }
+
+    pub fn hash_value(self) -> u32 {
+        unsafe { pango_font_description_hash(self.0) }
+    }
+
+    pub fn equal(self, other: FontDescRef) -> bool {
+        unsafe { pango_font_description_equal(self.0, other.0) != 0 }
+    }
+
+    pub fn copy_owned(self) -> FontDescription {
+        FontDescription(unsafe { pango_font_description_copy(self.0) })
     }
 }
 
@@ -589,6 +639,88 @@ impl Layout {
         )
     }
 
+    pub fn set_attributes(&self, attrs: &AttrList) {
+        unsafe { pango_layout_set_attributes(self.0, attrs.0) };
+    }
+
+    pub fn attributes_string(&self) -> Option<southstar_glib::GStr> {
+        let attrs = unsafe { pango_layout_get_attributes(self.0) };
+        if attrs.is_null() {
+            return None;
+        }
+        unsafe { southstar_glib::GStr::take(pango_attr_list_to_string(attrs)) }
+    }
+
+    pub fn has_tabs(&self) -> bool {
+        let tabs = unsafe { pango_layout_get_tabs(self.0) };
+        if tabs.is_null() {
+            return false;
+        }
+        unsafe { pango_tab_array_free(tabs) };
+        true
+    }
+
+    pub fn height(&self) -> c_int {
+        unsafe { pango_layout_get_height(self.0) }
+    }
+
+    pub fn indent(&self) -> c_int {
+        unsafe { pango_layout_get_indent(self.0) }
+    }
+
+    pub fn spacing(&self) -> c_int {
+        unsafe { pango_layout_get_spacing(self.0) }
+    }
+
+    pub fn line_spacing(&self) -> f32 {
+        unsafe { pango_layout_get_line_spacing(self.0) }
+    }
+
+    pub fn justify(&self) -> bool {
+        unsafe { pango_layout_get_justify(self.0) != 0 }
+    }
+
+    pub fn single_paragraph_mode(&self) -> bool {
+        unsafe { pango_layout_get_single_paragraph_mode(self.0) != 0 }
+    }
+
+    pub fn auto_dir(&self) -> bool {
+        unsafe { pango_layout_get_auto_dir(self.0) != 0 }
+    }
+
+    pub fn wrap(&self) -> c_int {
+        unsafe { pango_layout_get_wrap(self.0) }
+    }
+
+    pub fn ellipsize(&self) -> c_int {
+        unsafe { pango_layout_get_ellipsize(self.0) }
+    }
+
+    pub fn logical_extents(&self) -> Rectangle {
+        let mut logical = Rectangle::default();
+        unsafe { pango_layout_get_extents(self.0, ptr::null_mut(), &mut logical) };
+        logical
+    }
+
+    pub fn baseline(&self) -> c_int {
+        unsafe { pango_layout_get_baseline(self.0) }
+    }
+
+    pub fn index_to_line(&self, index: c_int) -> c_int {
+        let mut line = 0;
+        unsafe { pango_layout_index_to_line_x(self.0, index, 0, &mut line, ptr::null_mut()) };
+        line
+    }
+
+    pub fn context_changed(&self) {
+        unsafe { pango_layout_context_changed(self.0) };
+    }
+
+    pub fn css_line_height(&self, key: &CStr) -> Option<f64> {
+        let data = unsafe { g_object_get_data(self.0, key.as_ptr()) }.cast::<f64>();
+        (!data.is_null()).then(|| unsafe { *data })
+    }
+
     pub fn set_css_line_height(&self, key: &CStr, line_height: f64) {
         let data = unsafe { southstar_glib::g_malloc(core::mem::size_of::<f64>()) }.cast::<f64>();
         unsafe {
@@ -600,6 +732,10 @@ impl Layout {
     pub fn show(&self, cr: Cr) {
         unsafe { pango_cairo_show_layout(cr.raw(), self.0) };
     }
+}
+
+pub fn extents_to_pixels(rect: &mut Rectangle) {
+    unsafe { pango_extents_to_pixels(rect, ptr::null_mut()) };
 }
 
 impl Clone for Layout {
@@ -765,6 +901,10 @@ impl AttrList {
         }
     }
 
+    pub fn copy(&self) -> AttrList {
+        AttrList(unsafe { pango_attr_list_copy(self.0) })
+    }
+
     pub fn insert_range(&self, attr: Option<Attribute>, start: usize, len: usize) {
         if let Some(attr) = attr {
             self.insert(attr, start as u32, (start + len) as u32);
@@ -783,6 +923,10 @@ pub struct Attribute(*mut RawAttribute);
 impl Attribute {
     fn wrap(raw: *mut RawAttribute) -> Attribute {
         Attribute(raw)
+    }
+
+    pub unsafe fn from_raw(raw: *mut RawAttribute) -> Option<Attribute> {
+        (!raw.is_null()).then_some(Attribute(raw))
     }
 
     pub fn into_raw(self) -> *mut RawAttribute {
@@ -889,6 +1033,14 @@ impl Attribute {
 
     pub fn allow_breaks(allow: bool) -> Attribute {
         Self::wrap(unsafe { pango_attr_allow_breaks_new(GBoolean::from(allow)) })
+    }
+
+    pub fn line_height_absolute(height: c_int) -> Attribute {
+        Self::wrap(unsafe { pango_attr_line_height_new_absolute(height) })
+    }
+
+    pub fn shape_rect(rect: Rectangle) -> Attribute {
+        Self::wrap(unsafe { pango_attr_shape_new(&rect, &rect) })
     }
 
     pub fn shape(width: c_int) -> Attribute {

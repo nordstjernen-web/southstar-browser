@@ -52,7 +52,7 @@ pub struct NsBox {
     rel_dy: f64,
     content_width: f64,
     content_height: f64,
-    _first_baseline: f64,
+    first_baseline: f64,
     definite_height: f64,
     definite_height_before_flex: f64,
     flex_pass_x: f64,
@@ -77,18 +77,18 @@ pub struct NsBox {
     scroll_max_y: f64,
     scrolls: GBoolean,
     text: *const c_char,
-    _inline_layout_cache_style: *const Style,
-    _inline_layout_cache_width: f64,
-    _inline_layout_cache_height: f64,
-    _inline_layout_cache_valid: GBoolean,
+    inline_layout_cache_style: *const Style,
+    inline_layout_cache_width: f64,
+    inline_layout_cache_height: f64,
+    inline_layout_cache_valid: GBoolean,
     vertical_wm: c_int,
     text_orient: c_int,
-    _inline_natural_cache_style: *const Style,
-    _inline_natural_cache_width: f64,
-    _inline_natural_cache_valid: GBoolean,
-    _inline_min_cache_style: *const Style,
-    _inline_min_cache_width: f64,
-    _inline_min_cache_valid: GBoolean,
+    inline_natural_cache_style: *const Style,
+    inline_natural_cache_width: f64,
+    inline_natural_cache_valid: GBoolean,
+    inline_min_cache_style: *const Style,
+    inline_min_cache_width: f64,
+    inline_min_cache_valid: GBoolean,
     paint_layout: *mut c_void,
     links: *mut GArray,
     attrs: *mut GArray,
@@ -784,6 +784,93 @@ impl<'a> BoxRef<'a> {
                 &raw mut (*b).padding,
                 &raw mut (*b).border,
             )
+        }
+    }
+
+    pub fn first_baseline(self) -> f64 {
+        self.raw().first_baseline
+    }
+
+    pub fn set_first_baseline(self, v: f64) {
+        unsafe { (*self.0.as_ptr()).first_baseline = v };
+    }
+
+    pub fn set_writing_mode(self, vertical_wm: c_int, text_orient: c_int) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).vertical_wm = vertical_wm;
+            (*b).text_orient = text_orient;
+        }
+    }
+
+    pub fn inline_layout_cache(self) -> Option<(*const Style, f64, f64)> {
+        let b = self.raw();
+        (b.inline_layout_cache_valid != 0).then_some((
+            b.inline_layout_cache_style,
+            b.inline_layout_cache_width,
+            b.inline_layout_cache_height,
+        ))
+    }
+
+    pub fn set_inline_layout_cache(self, cache: Option<(*const Style, f64, f64)>) {
+        let b = self.0.as_ptr();
+        unsafe {
+            match cache {
+                Some((style, width, height)) => {
+                    (*b).inline_layout_cache_style = style;
+                    (*b).inline_layout_cache_width = width;
+                    (*b).inline_layout_cache_height = height;
+                    (*b).inline_layout_cache_valid = 1;
+                }
+                None => (*b).inline_layout_cache_valid = 0,
+            }
+        }
+    }
+
+    pub fn inline_natural_cache(self) -> Option<(*const Style, f64)> {
+        let b = self.raw();
+        (b.inline_natural_cache_valid != 0)
+            .then_some((b.inline_natural_cache_style, b.inline_natural_cache_width))
+    }
+
+    pub fn set_inline_natural_cache(self, style: *const Style, width: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).inline_natural_cache_style = style;
+            (*b).inline_natural_cache_width = width;
+            (*b).inline_natural_cache_valid = 1;
+        }
+    }
+
+    pub fn inline_min_cache(self) -> Option<(*const Style, f64)> {
+        let b = self.raw();
+        (b.inline_min_cache_valid != 0)
+            .then_some((b.inline_min_cache_style, b.inline_min_cache_width))
+    }
+
+    pub fn set_inline_min_cache(self, style: *const Style, width: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).inline_min_cache_style = style;
+            (*b).inline_min_cache_width = width;
+            (*b).inline_min_cache_valid = 1;
+        }
+    }
+
+    pub fn set_atomic_line_heights(self, heights: &[f64]) {
+        let b = self.0.as_ptr();
+        unsafe {
+            if (*b).atomic_line_heights.is_null() {
+                (*b).atomic_line_heights =
+                    southstar_glib::g_array_new(0, 0, size_of::<f64>() as c_uint);
+            }
+            let a = (*b).atomic_line_heights;
+            (*a).len = 0;
+            southstar_glib::g_array_append_vals(
+                a,
+                heights.as_ptr().cast(),
+                heights.len() as c_uint,
+            );
         }
     }
 
