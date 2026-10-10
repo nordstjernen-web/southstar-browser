@@ -42,6 +42,7 @@ pub use southstar_js_cssom;
 pub use southstar_js_events;
 pub use southstar_js_forms;
 pub use southstar_js_intl;
+pub use southstar_js_media;
 pub use southstar_js_net;
 pub use southstar_js_observers;
 pub use southstar_js_perf;

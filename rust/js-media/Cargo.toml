@@ -1,0 +1,15 @@
+[package]
+name = "southstar-js-media"
+description = "The media bindings: AudioContext, OfflineAudioContext, their AudioNodes, AudioParams and AudioBuffers, and the EME entry points"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-webaudio = { path = "../webaudio" }
+
+[lints]
+workspace = true

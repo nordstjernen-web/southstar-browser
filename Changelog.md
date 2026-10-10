@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The Web Audio bindings (AudioContext, OfflineAudioContext, the audio
+  nodes, AudioParam, AudioBuffer and offline rendering) and EME's
+  requestMediaKeySystemAccess and setMediaKeys moved from js.c to Rust
+  (rust/js-media), with unchanged results.
 * Rust 1.99 is now required, and rust-toolchain.toml pins 1.99.0 so local
   and CI builds use that version. The Rust code is updated for it: fixed-size
   pixel and hash loops use as_chunks, and nested conditions use let chains.
