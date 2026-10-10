@@ -43,6 +43,7 @@ southstar-js-brand = { path = "../js-brand" }
 southstar-js-clone = { path = "../js-clone" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-intl = { path = "../js-intl" }
+southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-temporal = { path = "../js-temporal" }
@@ -108,6 +109,7 @@ quickjs-original = [
     "southstar-js-clone/quickjs-original",
     "southstar-js-forms/quickjs-original",
     "southstar-js-intl/quickjs-original",
+    "southstar-js-observers/quickjs-original",
     "southstar-js-perf/quickjs-original",
     "southstar-js-realm/quickjs-original",
     "southstar-js-temporal/quickjs-original",

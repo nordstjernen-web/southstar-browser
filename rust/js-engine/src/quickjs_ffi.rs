@@ -160,6 +160,8 @@ unsafe extern "C" {
     fn JS_Throw(ctx: *mut JSContext, obj: JSValue) -> JSValue;
     fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
+    fn JS_ThrowSyntaxError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
+    fn JS_FreezeObject(ctx: *mut JSContext, obj: JSValue) -> c_int;
     fn JS_ThrowDOMException(
         ctx: *mut JSContext,
         name: *const c_char,
@@ -1828,6 +1830,21 @@ impl Scope<'_> {
         let message = c_text(message);
         unsafe { JS_ThrowRangeError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
         self.exception()
+    }
+
+    pub fn syntax_error(&mut self, message: &str) -> Value {
+        let message = c_text(message);
+        unsafe { JS_ThrowSyntaxError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
+        self.exception()
+    }
+
+    pub fn freeze(&mut self, object: &Value) -> Result<(), Value> {
+        let status = unsafe { JS_FreezeObject(self.ctx, object.raw) };
+        self.status(status)
+    }
+
+    pub fn get_key(&mut self, object: &Value, key: &Value) -> Result<Value, Value> {
+        quickjs::get_by_key(self, object, key)
     }
 
     pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {

@@ -250,13 +250,8 @@ struct ns_js {
     guint         listener_tombstones;
     int           callback_depth;
     int           synthetic_click_depth;
-    GPtrArray    *mutation_observers;
-    gboolean      mutation_drain_scheduled;
-    GPtrArray    *intersection_observers;
     GPtrArray    *media_query_lists;
-    GPtrArray    *resize_observers;
     guint         observer_tick_source;
-    gboolean      observer_ticking;
     guint         raf_tick_source;
     gint64        raf_host_us;
     gboolean      raf_host_driven;
@@ -643,5 +638,63 @@ JSValue ns_window_performance_getEntriesByType(JSContext *ctx, JSValueConst this
                                                int argc, JSValueConst *argv);
 JSValue ns_window_performance_memory_get(JSContext *ctx, JSValueConst this_val,
                                          int argc, JSValueConst *argv);
+
+/* MutationObserver, IntersectionObserver and ResizeObserver
+ * (rust/js-observers) and the js.c and layout helpers they call. */
+JSValue ns_mutation_observer_ctor(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+JSValue ns_mutation_observer_observe(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue ns_mutation_observer_disconnect(JSContext *ctx, JSValueConst this_val,
+                                        int argc, JSValueConst *argv);
+JSValue ns_mutation_observer_takeRecords(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv);
+JSValue ns_intersection_observer_ctor(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_intersection_observer_observe(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv);
+JSValue ns_intersection_observer_unobserve(JSContext *ctx, JSValueConst this_val,
+                                           int argc, JSValueConst *argv);
+JSValue ns_intersection_observer_disconnect(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv);
+JSValue ns_intersection_observer_takeRecords(JSContext *ctx, JSValueConst this_val,
+                                             int argc, JSValueConst *argv);
+JSValue ns_resize_observer_ctor(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_resize_observer_observe(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_resize_observer_unobserve(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue ns_resize_observer_disconnect(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+void ns_mut_record_emit(ns_js *js, const char *type, ns_node *target,
+                        ns_node *added, ns_node *removed,
+                        ns_node *previous_sibling, ns_node *next_sibling,
+                        const char *attr_name, const char *attr_namespace,
+                        const char *old_value);
+void ns_mut_record_emit_child_list_arrays(ns_js *js, ns_node *target,
+                                          GPtrArray *added_nodes,
+                                          GPtrArray *removed_nodes,
+                                          ns_node *previous_sibling,
+                                          ns_node *next_sibling);
+void ns_mut_scrub_node(ns_js *js, ns_node *n);
+gboolean ns_mutation_drain_pending(const ns_js *js);
+void ns_intersection_observers_tick(ns_js *js);
+void ns_resize_observers_tick(ns_js *js);
+void ns_observers_reset(ns_js *js);
+void ns_observers_teardown(ns_js *js);
+void ns_observer_schedule_tick(ns_js *js);
+JSValue ns_js_call_observer(ns_js *js, JSContext *ctx, JSValueConst cb,
+                            JSValueConst this_val, int argc, JSValueConst *argv,
+                            const char *report_type, gboolean fresh_budget);
+void ns_node_arm_js_invalidate(ns_node *n);
+const ns_box *ns_js_layout_root(const ns_js *js);
+const ns_box *ns_box_for_this(JSContext *ctx, JSValueConst this_val);
+void ns_box_border_box(const ns_box *b, double *x, double *y, double *w, double *h);
+void ns_box_visual_border_box(const ns_box *box,
+                              double *x, double *y, double *w, double *h);
+void ns_box_visual_padding_box(const ns_box *box,
+                               double *x, double *y, double *w, double *h);
+JSValue ns_make_dom_rect(JSContext *ctx, double x, double y, double w, double h);
 
 #endif

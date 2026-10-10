@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* MutationObserver, IntersectionObserver and ResizeObserver are Rust
+  (rust/js-observers), with unchanged results.
 * FormData, constraint validation (checkValidity(), validity,
   validationMessage, setCustomValidity()) and form submission and reset are
   Rust (rust/js-forms), with unchanged results.

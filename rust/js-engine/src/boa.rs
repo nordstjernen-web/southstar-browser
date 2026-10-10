@@ -11,12 +11,12 @@ use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::job::PromiseJob;
 use boa_engine::module::SimpleModuleLoader;
-use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::object::builtins::{
     AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat32Array,
     JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise, JsTypedArray, JsUint8Array,
     JsUint8ClampedArray, JsUint16Array, JsUint32Array,
 };
+use boa_engine::object::{FunctionObjectBuilder, IntegrityLevel};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
 use boa_engine::{
@@ -514,6 +514,28 @@ impl Scope<'_> {
             .0
             .to_string(self.ctx)
             .map(|text| text.to_std_string_escaped())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn syntax_error(&mut self, message: &str) -> Value {
+        let error = JsNativeError::syntax().with_message(message.to_owned());
+        Value(error.into_opaque(self.ctx).into())
+    }
+
+    pub fn freeze(&mut self, object: &Value) -> Result<(), Value> {
+        let object = self.object(object)?;
+        object
+            .set_integrity_level(IntegrityLevel::Frozen, self.ctx)
+            .map(|_| ())
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn get_key(&mut self, object: &Value, key: &Value) -> Result<Value, Value> {
+        let object = self.object(object)?;
+        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        object
+            .get(key, self.ctx)
+            .map(Value)
             .map_err(|e| self.error(e))
     }
 
