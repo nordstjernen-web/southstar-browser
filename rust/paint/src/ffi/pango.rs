@@ -438,6 +438,10 @@ impl Layout {
         (!layout.is_null()).then(|| Layout(unsafe { g_object_ref(layout) }))
     }
 
+    pub unsafe fn from_owned(layout: *mut c_void) -> Layout {
+        Layout(layout)
+    }
+
     pub unsafe fn borrowed(layout: *mut c_void) -> Option<core::mem::ManuallyDrop<Layout>> {
         (!layout.is_null()).then(|| core::mem::ManuallyDrop::new(Layout(layout)))
     }

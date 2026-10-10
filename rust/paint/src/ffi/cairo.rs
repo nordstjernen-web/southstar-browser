@@ -604,6 +604,12 @@ impl Pattern {
         self.0
     }
 
+    pub fn into_raw(self) -> *mut c_void {
+        let raw = self.0;
+        core::mem::forget(self);
+        raw
+    }
+
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }

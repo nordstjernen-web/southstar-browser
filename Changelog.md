@@ -26,6 +26,11 @@ Southstar Browser (unreleased):
   QuickJS and Boa.
 * structuredClone() and the serialization behind worker and MessagePort
   messages are Rust (rust/js-clone), with unchanged results.
+* Painting box decorations, replaced content and inline text is Rust
+  (`rust/paint`): backgrounds, gradients, shadows, borders, border images,
+  outlines, images with their filters and clip paths, video and audio chrome,
+  CSS masks, and text with its decorations, selection, carets and form
+  controls. Rendering is unchanged; paint.c keeps only the box tree walk.
 * Page text setup and list markers are Rust (`rust/paint`), the first section
   of the paint.c port: the shared text context, fonts and line heights from
   computed styles, OpenType features and variations, language and direction,

@@ -573,7 +573,7 @@ pub fn paint_marker(cr: Cr, b: BoxRef<'_>) {
             dw *= cap / dh;
             dh = cap;
         }
-        if let Some(surf) = texture.surface(None) {
+        if let Some(surf) = crate::media::texture_surface_cached(texture, None) {
             let dx = if rtl {
                 edge_x + font_size * 0.35
             } else {

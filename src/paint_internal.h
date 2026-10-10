@@ -11,20 +11,35 @@
 
 G_BEGIN_DECLS
 
-NsPangoLayout *ns_paint_create_layout(void);
-int ns_paint_pango_weight_from_css(int weight);
-int ns_paint_pango_stretch_from_css(int rank);
-gboolean ns_paint_style_is_nowrap(const ns_style *style);
-void ns_paint_font_metrics(const char *family, double size_px, int weight,
-                           gboolean italic, ns_css_font_metrics *out);
-void ns_paint_apply_text_align(NsPangoLayout *layout, const ns_style *s);
-void ns_paint_apply_nowrap_align_width(NsPangoLayout *layout,
-                                       const ns_box *b);
-const ns_style *ns_paint_inherited_style(const ns_box *b);
+ns_js *ns_paint_js(void);
+struct ns_anim *ns_paint_anim(void);
+
+void ns_paint_block(cairo_t *cr, const ns_box *b);
+void ns_paint_inline(cairo_t *cr, const ns_box *b, const char *highlight);
+void ns_paint_image(cairo_t *cr, const ns_box *b);
+void ns_paint_video(cairo_t *cr, const ns_box *b);
+void ns_paint_math(cairo_t *cr, const ns_box *b);
+void ns_paint_svg(cairo_t *cr, const ns_box *b);
+void ns_paint_hr(cairo_t *cr, const ns_box *b);
 void ns_paint_marker(cairo_t *cr, const ns_box *b);
 
-cairo_surface_t *ns_paint_texture_surface_cached(ns_texture *tex,
-                                                 const char *filter_kw);
+gboolean ns_paint_box_content_clip(cairo_t *cr, const ns_box *b);
+void ns_paint_box_radii_path(cairo_t *cr, const ns_box *b, double x, double y,
+                             double w, double h);
+void ns_paint_apply_image_filter(guchar *data, int stride, int w, int h,
+                                 const char *filter);
+gboolean ns_paint_filter_has_bitmap_effect(const char *filter);
+gboolean ns_paint_mask_layers_paintable(const ns_style *s);
+cairo_pattern_t *ns_paint_mask_layers_pattern(cairo_t *cr, const ns_box *b);
+
+gboolean ns_paint_viewport_origin(double *x, double *y);
+GHashTable *ns_paint_selection_runs(void);
+int ns_paint_layers_mode(void);
+void ns_paint_layers_note_video(cairo_t *cr);
+void ns_paint_video_hole_record(cairo_t *cr, double x, double y, double w,
+                                double h);
+void ns_paint_walk_atomic(cairo_t *cr, const ns_box *box,
+                          const char *highlight);
 
 G_END_DECLS
 

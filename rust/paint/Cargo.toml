@@ -1,6 +1,6 @@
 [package]
 name = "southstar-paint"
-description = "Painting the layout box tree with cairo and ns-pango, ported from paint.c section by section: so far page text setup, fonts, line heights and list markers"
+description = "Painting the layout box tree with cairo and ns-pango, ported from paint.c section by section: so far page text setup, fonts, line heights, list markers, box decorations, replaced content, masks and inline text"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
