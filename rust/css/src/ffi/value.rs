@@ -63,7 +63,7 @@ pub(crate) struct RawCalc {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct RawAreaRect {
+pub struct RawAreaRect {
     pub name: *mut c_char,
     pub r0: c_int,
     pub r1: c_int,
@@ -73,7 +73,7 @@ pub(crate) struct RawAreaRect {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct RawAreas {
+pub struct RawAreas {
     pub n_rows: c_int,
     pub n_cols: c_int,
     pub n_rects: c_int,

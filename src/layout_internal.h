@@ -75,5 +75,25 @@ const char *ns_layout_flex_item_align(const ns_box *c,
                                       const char *container_align);
 gboolean ns_layout_flex_align_is_baseline(const char *align);
 double ns_layout_flex_item_baseline(const ns_box *c, double fallback);
+double ns_layout_specified_height_to_content(const ns_box *b, double h);
+double ns_layout_clamp_height_minmax_px(const ns_style *s, double h);
+gboolean ns_layout_overflow_establishes_bfc(const ns_style *s);
+gboolean ns_layout_self_start_is_far_side(const ns_style *s,
+                                          gboolean horizontal_axis);
+void ns_layout_grid(ns_box *box, double cw, double inner_x, double inner_y,
+                    const ns_style *child_inherited, double *cursor_y_out);
+gboolean ns_layout_grid_flows_by_column(const ns_style *s);
+double ns_layout_grid_column_flow_width(ns_box *box, const ns_style *child_style,
+                                        gboolean min_content);
+double ns_layout_grid_natural_width(ns_box *box, const ns_style *child_style);
+gboolean ns_layout_grid_abs_containing_block(const ns_box *cb, const ns_style *st,
+                                             double *x, double *y,
+                                             double *w, double *h);
+void ns_layout_grid_static_position(ns_box *abox, const ns_box *cb,
+                                    double area_x, double area_y,
+                                    double area_w, double area_h,
+                                    gboolean static_x, gboolean static_y);
+double ns_layout_grid_static_align_offset(const char *align, double free_space,
+                                          gboolean flip);
 
 #endif

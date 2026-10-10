@@ -16,26 +16,26 @@ use crate::units::{
     self, CAP, CH, CQH, CQMAX, CQMIN, CQW, EM, EX, IC, LH, NUMBER, PERCENT, PX, REM, RLH,
 };
 
-pub(crate) const TRACKS_MAX: usize = 24;
-pub(crate) const LINE_NAME_MAX: usize = 24;
-pub(crate) const LINE_NAMES_MAX: usize = 32;
-pub(crate) const AREAS_MAX: usize = 32;
+pub const TRACKS_MAX: usize = 24;
+pub const LINE_NAME_MAX: usize = 24;
+pub const LINE_NAMES_MAX: usize = 32;
+pub const AREAS_MAX: usize = 32;
 const TRACK_MAX_DEPTH: i32 = 32;
 
-pub(crate) const TRACK_PX: u32 = 0;
-pub(crate) const TRACK_PERCENT: u32 = 1;
-pub(crate) const TRACK_FR: u32 = 2;
-pub(crate) const TRACK_AUTO: u32 = 3;
-pub(crate) const TRACK_MIN_CONTENT: u32 = 4;
-pub(crate) const TRACK_MAX_CONTENT: u32 = 5;
+pub const TRACK_PX: u32 = 0;
+pub const TRACK_PERCENT: u32 = 1;
+pub const TRACK_FR: u32 = 2;
+pub const TRACK_AUTO: u32 = 3;
+pub const TRACK_MIN_CONTENT: u32 = 4;
+pub const TRACK_MAX_CONTENT: u32 = 5;
 
-pub(crate) const AUTO_REPEAT_NONE: u32 = 0;
-pub(crate) const AUTO_REPEAT_FIT: u32 = 1;
-pub(crate) const AUTO_REPEAT_FILL: u32 = 2;
+pub const AUTO_REPEAT_NONE: u32 = 0;
+pub const AUTO_REPEAT_FIT: u32 = 1;
+pub const AUTO_REPEAT_FILL: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Track {
+pub struct Track {
     pub kind: u32,
     pub v: f64,
     pub em: f64,
@@ -52,14 +52,14 @@ pub(crate) struct Track {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct LineName {
+pub struct LineName {
     pub name: [u8; LINE_NAME_MAX],
     pub line: i32,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct Tracks {
+pub struct Tracks {
     pub n: i32,
     pub tracks: [Track; TRACKS_MAX],
     pub auto_repeat: u32,

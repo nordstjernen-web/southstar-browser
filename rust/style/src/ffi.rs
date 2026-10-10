@@ -7,7 +7,7 @@ use core::marker::PhantomData;
 use core::ptr::NonNull;
 use std::sync::OnceLock;
 
-use southstar_css::{Gradient, Prop as PropId, ShadowList, Transform};
+use southstar_css::{Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList, Transform};
 use southstar_dom::Node;
 use southstar_glib::{
     GBoolean, GHashTable, GPtrArray, GStr, g_hash_table_lookup, g_ptr_array_unref,
@@ -61,6 +61,8 @@ union ValueUnion {
     gradient: Gradient,
     shadow: ShadowList,
     transform: Transform,
+    tracks: GridTracks,
+    areas: GridAreas,
     _storage: [u64; 381],
 }
 
@@ -99,10 +101,15 @@ pub struct Display {
 }
 
 pub const DISPLAY_BOX_NONE: u8 = 1;
+const DISPLAY_INNER_GRID: u8 = 4;
 
 impl Display {
     pub fn is_none(self) -> bool {
         self.box_ == DISPLAY_BOX_NONE
+    }
+
+    pub fn is_grid_container(self) -> bool {
+        self.box_ == 0 && self.internal == 0 && self.inner == DISPLAY_INNER_GRID
     }
 }
 
@@ -149,8 +156,10 @@ const KIND_COLOR: c_uint = 3;
 const KIND_CALC: c_uint = 4;
 const KIND_SHADOW: c_uint = 5;
 const KIND_GRADIENT: c_uint = 6;
+const KIND_TRACKS: c_uint = 7;
 const KIND_URL: c_uint = 8;
 const KIND_TRANSFORM: c_uint = 9;
+const KIND_AREAS: c_uint = 10;
 const KIND_RECT: c_uint = 12;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -410,6 +419,24 @@ impl<'a> ValueRef<'a> {
         let v = self.raw();
         if v.kind == KIND_SHADOW {
             Some(unsafe { &v.u.shadow })
+        } else {
+            None
+        }
+    }
+
+    pub fn tracks(self) -> Option<&'a GridTracks> {
+        let v = self.raw();
+        if v.kind == KIND_TRACKS {
+            Some(unsafe { &v.u.tracks })
+        } else {
+            None
+        }
+    }
+
+    pub fn areas(self) -> Option<&'a GridAreas> {
+        let v = self.raw();
+        if v.kind == KIND_AREAS {
+            Some(unsafe { &v.u.areas })
         } else {
             None
         }

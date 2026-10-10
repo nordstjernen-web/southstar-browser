@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Grid layout (track sizing, placement, alignment, subgrid and grid-
+  positioned absolute boxes) moved from layout.c to Rust (rust/layout-grid),
+  with identical layout.
 * EventTarget and event dispatch (addEventListener, removeEventListener,
   dispatchEvent, the dispatch path, inline and IDL event handlers, error
   reporting and unhandled rejections) moved from js.c to Rust (rust/js-

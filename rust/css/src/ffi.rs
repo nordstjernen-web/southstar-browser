@@ -77,8 +77,8 @@ pub(crate) use selector_view::{
 };
 pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
 pub(crate) use shorthand::prop_named;
-pub use value::NsCssValue;
 pub(crate) use value::RawCalc;
+pub use value::{NsCssValue, RawAreaRect, RawAreas};
 
 unsafe extern "C" {
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;

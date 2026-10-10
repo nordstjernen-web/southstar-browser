@@ -59,8 +59,16 @@ mod values;
 mod vars;
 
 pub use color::parse_color;
-pub use ffi::{MatchContext, NsCssValue, QueryKey, Selector, SelectorList};
+pub use ffi::{
+    MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
+    Selector, SelectorList,
+};
 pub use gradient::{Gradient, Stop as GradientStop};
+pub use grid::{
+    AUTO_REPEAT_FIT, AUTO_REPEAT_NONE, LINE_NAMES_MAX, LineName as GridLineName, TRACK_AUTO,
+    TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT, TRACK_PX, TRACKS_MAX,
+    Track as GridTrack, Tracks as GridTracks,
+};
 pub use prop::Prop;
 pub use shadow::{Shadow, ShadowList};
 pub use transform::{Op as TransformOp, Transform};

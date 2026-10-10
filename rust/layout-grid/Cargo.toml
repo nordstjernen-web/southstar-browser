@@ -1,0 +1,17 @@
+[package]
+name = "southstar-layout-grid"
+description = "CSS grid layout from src/layout.c: track sizing, line resolution and auto-placement, alignment, subgrids, grid container intrinsic widths and grid-positioned absolute boxes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css = { path = "../css" }
+southstar-glib = { path = "../glib" }
+southstar-layout = { path = "../layout" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

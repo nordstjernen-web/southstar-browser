@@ -10,7 +10,8 @@ pub use ffi::{
     styles_equal, value_slot, values_equal,
 };
 pub use southstar_css::{
-    Gradient, GradientStop, Prop as PropId, Shadow, ShadowList, Transform, TransformOp,
+    Gradient, GradientStop, GridAreaRect, GridAreas, GridLineName, GridTrack, GridTracks,
+    Prop as PropId, Shadow, ShadowList, Transform, TransformOp,
 };
 
 pub const UNIT_PERCENT: u32 = 3;

@@ -60,7 +60,7 @@ pub struct NsBox {
     last_layout_width: f64,
     definite_height_read: GBoolean,
     measured_content_height: f64,
-    _cb_height_override: f64,
+    cb_height_override: f64,
     flex_main_size: f64,
     has_flex_main: GBoolean,
     _is_rendered_legend: GBoolean,
@@ -95,10 +95,10 @@ pub struct NsBox {
     inline_atomics: *mut GArray,
     atomic_line_heights: *mut GArray,
     table_col_hints: *mut GArray,
-    _grid_col_tracks: *mut GArray,
-    _grid_row_tracks: *mut GArray,
-    _grid_explicit_cols: c_int,
-    _grid_explicit_rows: c_int,
+    grid_col_tracks: *mut GArray,
+    grid_row_tracks: *mut GArray,
+    grid_explicit_cols: c_int,
+    grid_explicit_rows: c_int,
     media: *mut NsBoxMedia,
     svg_styles: *mut GHashTable,
     colspan: c_int,
@@ -692,6 +692,39 @@ impl<'a> BoxRef<'a> {
         unsafe {
             (*b).scrolls = 1;
             (*b).scroll_max_y = max_y;
+        }
+    }
+
+    pub fn set_cb_height_override(self, h: f64) {
+        unsafe { (*self.0.as_ptr()).cb_height_override = h };
+    }
+
+    pub fn grid_tracks(self, columns: bool) -> *mut GArray {
+        if columns {
+            self.raw().grid_col_tracks
+        } else {
+            self.raw().grid_row_tracks
+        }
+    }
+
+    pub fn set_grid_tracks(self, cols: *mut GArray, rows: *mut GArray) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).grid_col_tracks = cols;
+            (*b).grid_row_tracks = rows;
+        }
+    }
+
+    pub fn grid_explicit(self) -> (c_int, c_int) {
+        let b = self.raw();
+        (b.grid_explicit_cols, b.grid_explicit_rows)
+    }
+
+    pub fn set_grid_explicit(self, cols: c_int, rows: c_int) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).grid_explicit_cols = cols;
+            (*b).grid_explicit_rows = rows;
         }
     }
 
