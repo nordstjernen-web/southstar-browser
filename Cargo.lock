@@ -1603,6 +1603,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-js-brand",
  "southstar-js-clone",
+ "southstar-js-forms",
  "southstar-js-intl",
  "southstar-js-perf",
  "southstar-js-realm",
@@ -1772,6 +1773,15 @@ version = "1.0.30-dev"
 dependencies = [
  "boa_engine",
  "boa_gc",
+]
+
+[[package]]
+name = "southstar-js-forms"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]

@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* FormData, constraint validation (checkValidity(), validity,
+  validationMessage, setCustomValidity()) and form submission and reset are
+  Rust (rust/js-forms), with unchanged results.
 * WebGL 1 and 2 are Rust (rust/webgl), with unchanged results: webgl.c is
   gone. The JavaScript engine layer gained typed-array access for it on both
   QuickJS and Boa.

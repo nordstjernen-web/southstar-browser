@@ -94,6 +94,10 @@ const TAG_FLOAT64: i64 = 8;
 const EVAL_TYPE_GLOBAL: c_int = 0;
 const EVAL_TYPE_MODULE: c_int = 1;
 const EVAL_FLAG_COMPILE_ONLY: c_int = 1 << 5;
+#[cfg(not(feature = "quickjs-original"))]
+const EVAL_FLAG_HIDE_SOURCE: c_int = 1 << 8;
+#[cfg(feature = "quickjs-original")]
+const EVAL_FLAG_HIDE_SOURCE: c_int = 0;
 const PROMISE_PENDING: c_int = 0;
 const PROMISE_FULFILLED: c_int = 1;
 const PROMISE_REJECTED: c_int = 2;
@@ -1477,6 +1481,21 @@ impl Scope<'_> {
         self.take(raw)
     }
 
+    pub fn eval_native_script(&mut self, source: &str, name: &str) -> Result<Value, Value> {
+        let input = nul_terminated(source);
+        let name = c_text(name);
+        let raw = unsafe {
+            JS_Eval(
+                self.ctx,
+                input.as_ptr().cast(),
+                source.len(),
+                name.as_ptr(),
+                EVAL_TYPE_GLOBAL | EVAL_FLAG_HIDE_SOURCE,
+            )
+        };
+        self.take(raw)
+    }
+
     pub fn eval_module(&mut self, source: &str, path: &Path) -> Result<Value, Value> {
         let input = nul_terminated(source);
         let name = c_text(&path.to_string_lossy().replace('\\', "/"));
@@ -2048,6 +2067,18 @@ impl Scope<'_> {
 
     pub fn is_function(&mut self, value: &Value) -> bool {
         unsafe { JS_IsFunction(self.ctx, value.raw) }
+    }
+
+    pub fn to_string_value(&mut self, value: &Value) -> Result<Value, Value> {
+        quickjs::to_js_string(self, value)
+    }
+
+    pub fn is_constructor(&mut self, value: &Value) -> bool {
+        quickjs::is_constructor(self, value)
+    }
+
+    pub fn instance_of(&mut self, value: &Value, constructor: &Value) -> bool {
+        quickjs::instance_of(self, value, constructor)
     }
 
     pub fn new_error(&mut self) -> Value {

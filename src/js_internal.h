@@ -386,6 +386,52 @@ JSValue ns_throw_dom_exception(JSContext *ctx, const char *name, int code,
                                const char *message);
 gboolean ns_js_is_host_object(JSValueConst v);
 gboolean ns_worker_transfer_is_port(JSContext *ctx, JSValueConst v);
+
+/* FormData, constraint validation, form submission and reset (rust/js-forms). */
+JSValue ns_window_form_data_ctor(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+void    ns_net_install_form_data(JSContext *ctx, JSValueConst global);
+char   *ns_js_form_data_serialize(JSContext *ctx, JSValueConst fd,
+                                  gsize *out_len, char **out_content_type);
+void    ns_form_listed_controls(const ns_node *form, gboolean include_image,
+                                GPtrArray *out);
+JSValue ns_validity_get_valid(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_validity(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_validation_message(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_will_validate(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_check_validity(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+JSValue ns_element_setCustomValidity(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+gboolean ns_node_is_submit_trigger(const ns_node *el);
+gboolean ns_node_is_reset_trigger(const ns_node *el);
+JSValue ns_js_request_submit_form(JSContext *ctx, const ns_node *form,
+                                  const ns_node *submitter);
+JSValue ns_js_reset_form(JSContext *ctx, ns_node *form);
+JSValue ns_element_form_requestSubmit(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv);
+JSValue ns_element_form_submit(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv);
+JSValue ns_element_form_reset(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv);
+JSValue ns_submit_event_ctor(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+gboolean ns_js_value_is_form_data(JSContext *ctx, JSValueConst v);
+JSValue ns_form_data_construct(JSContext *ctx, JSValueConst new_target);
+char   *ns_blob_bytes_as_string(JSContext *ctx, JSValueConst blob, gsize *out_len);
+JSContext *ns_js_pattern_context(void);
+const ns_node *ns_js_current_document(const ns_js *js);
+gboolean ns_js_events_suspended(const ns_js *js);
+gboolean ns_js_node_in_page(ns_js *js, const ns_node *node);
+gboolean ns_node_sandbox_blocks_forms(const ns_node *node);
+void    ns_js_submit_form(ns_js *js, const ns_node *form, const ns_node *submitter);
+void    ns_js_clear_children(ns_js *js, ns_node *n);
+JSValue ns_make_event(JSContext *ctx, const char *type, const ns_node *target);
+JSValue ns_event_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                      JSValueConst *argv);
+gboolean ns_js_dispatch_built_event(ns_js *js, const ns_node *target,
+                                    const char *type, JSValue event,
+                                    gboolean *default_prevented);
 JSValue
 ns_canvas_throw_dom(JSContext *ctx, const char *name, const char *msg);
 int

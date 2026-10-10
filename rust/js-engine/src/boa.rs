@@ -183,6 +183,10 @@ impl Scope<'_> {
         self.ctx.eval(source).map(Value).map_err(|e| self.error(e))
     }
 
+    pub fn eval_native_script(&mut self, source: &str, name: &str) -> Result<Value, Value> {
+        self.eval_script(source, name)
+    }
+
     pub fn eval_module(&mut self, source: &str, path: &Path) -> Result<Value, Value> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let source = Source::from_bytes(source).with_path(&path);
@@ -715,6 +719,26 @@ impl Scope<'_> {
 
     pub fn is_function(&mut self, value: &Value) -> bool {
         value.0.is_callable()
+    }
+
+    pub fn to_string_value(&mut self, value: &Value) -> Result<Value, Value> {
+        value
+            .0
+            .to_string(self.ctx)
+            .map(|text| Value(text.into()))
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn is_constructor(&mut self, value: &Value) -> bool {
+        value.0.is_constructor()
+    }
+
+    pub fn instance_of(&mut self, value: &Value, constructor: &Value) -> bool {
+        constructor.0.is_object()
+            && value
+                .0
+                .instance_of(&constructor.0, self.ctx)
+                .unwrap_or(false)
     }
 
     pub fn new_error(&mut self) -> Value {
