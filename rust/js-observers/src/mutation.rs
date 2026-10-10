@@ -90,10 +90,10 @@ impl Drop for Observer {
             return;
         };
         let gone: *const Observer = self;
-        if let Ok(mut list) = page.mutation.try_borrow_mut() {
-            if let Some(list) = list.as_mut() {
-                crate::forget(list, gone);
-            }
+        if let Ok(mut list) = page.mutation.try_borrow_mut()
+            && let Some(list) = list.as_mut()
+        {
+            crate::forget(list, gone);
         }
     }
 }
@@ -251,10 +251,10 @@ pub(crate) fn scrub_node(js: Js, node: usize) {
         }
     };
     let remove = |list: &mut Option<Vec<usize>>| {
-        if let Some(list) = list {
-            if let Some(index) = list.iter().position(|&n| n == node) {
-                list.swap_remove(index);
-            }
+        if let Some(list) = list
+            && let Some(index) = list.iter().position(|&n| n == node)
+        {
+            list.swap_remove(index);
         }
     };
     for observer in &observers {

@@ -418,16 +418,15 @@ fn scroll_prop(scope: &mut Scope<'_>, key: &str) -> f64 {
 fn root_rect(scope: &mut Scope<'_>, observer: &Observer, layout_root: Option<BoxRef<'_>>) -> Rect {
     if !observer.root.is_null() && !observer.root.is_undefined() {
         let root_node = ffi::unwrap_element(&observer.root);
-        if let (Some(node), Some(layout_root)) = (root_node, layout_root) {
-            if node.kind() == Kind::Element {
-                if let Some(b) = ffi::find_by_dom(layout_root, node.as_ptr() as usize) {
-                    return if overflow_clips(b) {
-                        ffi::visual_padding_box(b)
-                    } else {
-                        ffi::visual_border_box(b)
-                    };
-                }
-            }
+        if let (Some(node), Some(layout_root)) = (root_node, layout_root)
+            && node.kind() == Kind::Element
+            && let Some(b) = ffi::find_by_dom(layout_root, node.as_ptr() as usize)
+        {
+            return if overflow_clips(b) {
+                ffi::visual_padding_box(b)
+            } else {
+                ffi::visual_border_box(b)
+            };
         }
     }
     let mut width = 1000.0;
@@ -628,12 +627,12 @@ fn deliver(scope: &mut Scope<'_>, observer: &Observer) {
         let changed = evaluate(scope, observer, &mut target);
         {
             let mut state = observer.state.borrow_mut();
-            if let Some(slot) = state.targets.get_mut(i) {
-                if slot.wrapper.same_object(&target.wrapper) {
-                    slot.last_intersecting = target.last_intersecting;
-                    slot.last_ratio = target.last_ratio;
-                    slot.has_fired = target.has_fired;
-                }
+            if let Some(slot) = state.targets.get_mut(i)
+                && slot.wrapper.same_object(&target.wrapper)
+            {
+                slot.last_intersecting = target.last_intersecting;
+                slot.last_ratio = target.last_ratio;
+                slot.has_fired = target.has_fired;
             }
         }
         drop(target);
