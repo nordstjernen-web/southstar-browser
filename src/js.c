@@ -631,26 +631,6 @@ typedef struct ns_listener {
     gboolean       window_level;
 } ns_listener;
 
-typedef struct ns_timer {
-    ns_js   *js;
-    JSContext *ctx;
-    JSValue  cb;
-    char    *code;
-    int      id;
-    guint    glib_source;
-    gboolean is_interval;
-    gboolean is_idle;
-    gboolean immediate;
-    gboolean firing;
-    gint64   due_us;
-    gint64   idle_deadline_us;
-    int      nesting_level;
-    int      interval_ms;
-    int      extra_args_count;
-    JSValue *extra_args;
-    ns_node *frame;
-} ns_timer;
-
 typedef struct ns_raf_entry {
     int      id;
     JSContext *ctx;
@@ -660,7 +640,7 @@ typedef struct ns_raf_entry {
     ns_node *media;
 } ns_raf_entry;
 
-static ns_node *
+ns_node *
 ns_js_context_frame(ns_js *js, JSContext *ctx)
 {
     if (!js || !ctx || ctx == js->main_realm_ctx) return NULL;
@@ -943,7 +923,7 @@ ns_node_name_is_any_of(const ns_node *n, const char *const *tags)
     return FALSE;
 }
 
-static void
+void
 ns_js_source_remove(ns_js *js, guint id)
 {
     if (!id) return;
@@ -951,23 +931,6 @@ ns_js_source_remove(ns_js *js, guint id)
                                                    : g_main_context_default();
     GSource *source = g_main_context_find_source_by_id(context, id);
     if (source) g_source_destroy(source);
-}
-
-static void
-ns_timer_free(gpointer data)
-{
-    ns_timer *t = data;
-    if (!t) return;
-    if (t->immediate && t->js && t->js->n_immediate_timers > 0)
-        t->js->n_immediate_timers--;
-    if (t->glib_source) ns_js_source_remove(t->js, t->glib_source);
-    JSContext *ctx = t->ctx ? t->ctx : t->js->ctx;
-    JS_FreeValue(ctx, t->cb);
-    g_free(t->code);
-    for (int i = 0; i < t->extra_args_count; i++)
-        JS_FreeValue(ctx, t->extra_args[i]);
-    g_free(t->extra_args);
-    g_free(t);
 }
 
 guint
@@ -1314,60 +1277,15 @@ ns_drain_microtasks(ns_js *js)
 
 static void ns_storage_flush(ns_js *js);
 static void ns_storage_schedule_flush(ns_js *js);
-static gboolean ns_timer_fire(gpointer data);
 
-static void
-ns_js_run_due_timers(ns_js *js)
+gboolean
+ns_js_due_timers_allowed(const ns_js *js)
 {
-    /* A timer is a task of its own: never run one inside another task's
-       work, such as a frame being loaded, a script or a callback. */
     if (!js || !js->ctx || js->halted || js->in_pump ||
-        js->dispatch_depth > 0 || js->running_due_timers ||
-        js->iframe_load_depth > 0 || js->callback_depth > 0 ||
-        js->eval_depth > 0 || js->n_immediate_timers <= 0)
-        return;
-    if (ns_engine_in_blocking_fetch()) return;
-    gint64 now = g_get_monotonic_time();
-    int due_ids[8];
-    int n_due = 0;
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, js->timers);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        ns_timer *t = v;
-        if (!t->immediate || t->firing || !t->glib_source || t->due_us > now)
-            continue;
-        if (n_due < 8) {
-            due_ids[n_due++] = t->id;
-        } else {
-            int max_i = 0;
-            for (int i = 1; i < n_due; i++)
-                if (due_ids[i] > due_ids[max_i]) max_i = i;
-            if (t->id < due_ids[max_i]) due_ids[max_i] = t->id;
-        }
-    }
-    if (n_due == 0) return;
-    for (int i = 1; i < n_due; i++)
-        for (int j = i; j > 0 && due_ids[j] < due_ids[j - 1]; j--) {
-            int tmp = due_ids[j];
-            due_ids[j] = due_ids[j - 1];
-            due_ids[j - 1] = tmp;
-        }
-    js->running_due_timers = TRUE;
-    for (int i = 0; i < n_due; i++) {
-        ns_timer *t = g_hash_table_lookup(js->timers,
-                                          GINT_TO_POINTER(due_ids[i]));
-        if (!t || !t->glib_source) continue;
-        ns_js_source_remove(js, t->glib_source);
-        t->glib_source = 0;
-        if (ns_timer_fire(t) == G_SOURCE_CONTINUE) {
-            t = g_hash_table_lookup(js->timers,
-                                    GINT_TO_POINTER(due_ids[i]));
-            if (t && !t->glib_source)
-                t->glib_source = ns_js_attach_timeout(js, 0, ns_timer_fire, t);
-        }
-    }
-    js->running_due_timers = FALSE;
+        js->dispatch_depth > 0 || js->iframe_load_depth > 0 ||
+        js->callback_depth > 0 || js->eval_depth > 0)
+        return FALSE;
+    return !ns_engine_in_blocking_fetch();
 }
 
 void
@@ -1378,98 +1296,11 @@ ns_drain_mutations(ns_js *js)
         js->mut_cb(js->mut_user_data);
     js->mutated = FALSE;
     ns_storage_schedule_flush(js);
-    ns_js_run_due_timers(js);
+    ns_services_run_due_timers(js);
 }
 
-/* IdleDeadline: the end of the idle period an idle callback runs in.  A
- * period lasts at most 50 ms and ends early when a timer or an animation
- * frame is due; a callback run because its timeout passed gets none. */
-static JSClassID ns_idle_deadline_class_id;
-
-typedef struct ns_idle_deadline {
-    gint64   deadline_us;
-    gboolean did_timeout;
-} ns_idle_deadline;
-
-static void
-ns_idle_deadline_finalizer(JSRuntime *rt, JSValue val)
-{
-    (void)rt;
-    g_free(JS_GetOpaque(val, ns_idle_deadline_class_id));
-}
-
-static JSClassDef ns_idle_deadline_class = {
-    .class_name = "IdleDeadline",
-    .finalizer = ns_idle_deadline_finalizer,
-};
-
-static JSValue
-ns_idle_deadline_time_remaining(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_idle_deadline *d = ns_idle_deadline_class_id
-        ? JS_GetOpaque(this_val, ns_idle_deadline_class_id) : NULL;
-    if (!d) return JS_ThrowTypeError(ctx, "Illegal invocation");
-    gint64 left = d->deadline_us - g_get_monotonic_time();
-    if (left < 0) left = 0;
-    return JS_NewFloat64(ctx, (double)((left / 100) * 100) / 1000.0);
-}
-
-static JSValue
-ns_idle_deadline_did_timeout(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_idle_deadline *d = ns_idle_deadline_class_id
-        ? JS_GetOpaque(this_val, ns_idle_deadline_class_id) : NULL;
-    if (!d) return JS_ThrowTypeError(ctx, "Illegal invocation");
-    return JS_NewBool(ctx, d->did_timeout);
-}
-
-static JSValue
-ns_idle_deadline_object(JSContext *ctx)
-{
-    ns_new_class_id(&ns_idle_deadline_class_id);
-    JSRuntime *rt = JS_GetRuntime(ctx);
-    if (!JS_IsRegisteredClass(rt, ns_idle_deadline_class_id))
-        JS_NewClass(rt, ns_idle_deadline_class_id, &ns_idle_deadline_class);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, "IdleDeadline");
-    JSValue proto = JS_IsObject(ctor)
-        ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
-    JSValue o = JS_IsObject(proto)
-        ? JS_NewObjectProtoClass(ctx, proto, ns_idle_deadline_class_id)
-        : JS_NewObjectClass(ctx, ns_idle_deadline_class_id);
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-    JS_FreeValue(ctx, global);
-    return o;
-}
-
-static gboolean
-ns_idle_timer_due_before(const ns_timer *t, gint64 now, gint64 end)
-{
-    return t && !t->is_idle && !t->firing && t->glib_source &&
-           t->due_us > now && t->due_us < end;
-}
-
-static gint64
-ns_idle_timers_end(ns_js *js, gint64 now, gint64 end)
-{
-    if (!js || !js->timers) return end;
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, js->timers);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        const ns_timer *t = v;
-        if (ns_idle_timer_due_before(t, now, end)) end = t->due_us;
-    }
-    return end;
-}
-
-static gint64
-ns_idle_frame_end(ns_js *js, gint64 now, gint64 end)
+gint64
+ns_js_idle_frame_end(const ns_js *js, gint64 now, gint64 end)
 {
     if (!js || !js->raf_pending || js->raf_pending->len == 0) return end;
     gint64 frame = (js->raf_last_us > 0 ? js->raf_last_us : now) + 16667;
@@ -1477,150 +1308,85 @@ ns_idle_frame_end(ns_js *js, gint64 now, gint64 end)
     return end;
 }
 
-static JSValue
-ns_idle_deadline_new(ns_js *js, JSContext *ctx, gboolean did_timeout)
+struct ns_timer_scope {
+    ns_js         *js;
+    JSContext     *ctx;
+    JSContext     *previous_ctx;
+    ns_realm_scope frame_scope;
+    ns_budget_guard budget;
+};
+
+int
+ns_js_timer_gate(ns_js *js, ns_node *frame, gboolean idle_expired)
 {
-    JSValue o = ns_idle_deadline_object(ctx);
-    if (JS_IsException(o)) return o;
-    ns_idle_deadline *d = g_new0(ns_idle_deadline, 1);
-    gint64 now = g_get_monotonic_time();
-    d->did_timeout = did_timeout;
-    d->deadline_us = now;
-    if (!did_timeout) {
-        gint64 end = ns_idle_timers_end(js, now, now + 50 * 1000);
-        d->deadline_us = ns_idle_frame_end(js, now, end);
-    }
-    JS_SetOpaque(o, d);
-    return o;
+    if (js->halted) return NS_TIMER_DROP;
+    if (js->in_pump) return NS_TIMER_WAIT;
+    if (ns_engine_in_blocking_fetch() && !idle_expired) return NS_TIMER_WAIT;
+    if (frame && ns_node_root(frame) != ns_node_root(js->current_doc))
+        return NS_TIMER_DROP;
+    return NS_TIMER_RUN;
 }
 
-static gboolean
-ns_timer_fire(gpointer data)
+ns_timer_scope *
+ns_js_timer_scope_enter(ns_js *js, JSContext *ctx, ns_node *frame)
 {
-    ns_timer *t = data;
-    ns_js *js = t->js;
-    if (js->halted) {
-        t->glib_source = 0;
-        g_hash_table_remove(js->timers, GINT_TO_POINTER(t->id));
-        return G_SOURCE_REMOVE;
+    ns_timer_scope *scope = g_new0(ns_timer_scope, 1);
+    scope->js = js;
+    scope->previous_ctx = js->ctx;
+    scope->ctx = ctx ? ctx : scope->previous_ctx;
+    if (frame) {
+        JSContext *current_realm = ns_js_node_realm_context(js, frame);
+        if (current_realm) scope->ctx = current_realm;
     }
-    gboolean idle_expired = t->is_idle && t->idle_deadline_us > 0 &&
-                            g_get_monotonic_time() >= t->idle_deadline_us;
-    if (js->in_pump)
-        return G_SOURCE_CONTINUE;
-    if (ns_engine_in_blocking_fetch() && !idle_expired)
-        return G_SOURCE_CONTINUE;
-    ns_node *timer_frame = t->frame;
-    if (timer_frame &&
-        ns_node_root(timer_frame) != ns_node_root(js->current_doc)) {
-        t->glib_source = 0;
-        g_hash_table_remove(js->timers, GINT_TO_POINTER(t->id));
-        return G_SOURCE_REMOVE;
-    }
-    JSContext *callback_ctx = t->ctx ? t->ctx : js->ctx;
-    if (timer_frame) {
-        JSContext *current_realm = ns_js_node_realm_context(js, timer_frame);
-        if (current_realm) callback_ctx = current_realm;
-    }
-    JSContext *previous_ctx = js->ctx;
-    ns_realm_scope frame_scope;
-    frame_scope.active = FALSE;
-    if (timer_frame)
-        ns_js_frame_scope_enter(js, callback_ctx, timer_frame, &frame_scope);
+    scope->frame_scope.active = FALSE;
+    if (frame)
+        ns_js_frame_scope_enter(js, scope->ctx, frame, &scope->frame_scope);
     else
-        js->ctx = callback_ctx;
-    t->firing = TRUE;
-    int timer_id = t->id;
-    gboolean is_interval = t->is_interval;
-    int prev_nesting = js->timer_nesting_level;
-    js->timer_nesting_level = t->nesting_level;
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(js, &bg);
-
-    /* The callback can clear its own timer (clearInterval(myId)) — or, via a
-       re-entrant relayout/fetch, another timer that shares state — which would
-       drop the last reference and free the function while it is still running.
-       Hold owned copies of the callback, its code and its extra args for the
-       duration of the call so the engine never executes freed memory. */
-    JSValue cb = JS_IsUndefined(t->cb) ? JS_UNDEFINED
-                                       : JS_DupValue(callback_ctx, t->cb);
-    char *code = t->code ? g_strdup(t->code) : NULL;
-    int n_extra = t->extra_args_count;
-    JSValue *extra = NULL;
-    if (n_extra > 0) {
-        extra = g_new(JSValue, n_extra);
-        for (int i = 0; i < n_extra; i++)
-            extra[i] = JS_DupValue(callback_ctx, t->extra_args[i]);
-    }
-
-    JSValue ret;
+        js->ctx = scope->ctx;
+    ns_js_budget_push(js, &scope->budget);
     js->callback_depth++;
-    if (code) {
-        ret = JS_Eval(callback_ctx, code, strlen(code), "<timer>",
-                      JS_EVAL_TYPE_GLOBAL);
-    } else if (t->is_idle) {
-        JSValue deadline = ns_idle_deadline_new(js, callback_ctx,
-                                                idle_expired);
-        JSValueConst args[1] = { deadline };
-        ret = JS_Call(callback_ctx, cb, JS_UNDEFINED, 1, args);
-        JS_FreeValue(callback_ctx, deadline);
-    } else if (n_extra > 0) {
-        ret = JS_Call(callback_ctx, cb, JS_UNDEFINED, n_extra, extra);
-    } else {
-        ret = JS_Call(callback_ctx, cb, JS_UNDEFINED, 0, NULL);
-    }
+    return scope;
+}
 
+JSContext *
+ns_js_timer_scope_context(const ns_timer_scope *scope)
+{
+    return scope->ctx;
+}
+
+void
+ns_js_timer_scope_leave(ns_timer_scope *scope, gboolean threw,
+                        JSValueConst exception)
+{
+    ns_js *js = scope->js;
+    JSContext *ctx = scope->ctx;
     js->callback_depth--;
-    JS_FreeValue(callback_ctx, cb);
-    g_free(code);
-    if (extra) {
-        for (int i = 0; i < n_extra; i++)
-            JS_FreeValue(callback_ctx, extra[i]);
-        g_free(extra);
-    }
-    ns_js_budget_pop(js, &bg);
-    js->timer_nesting_level = prev_nesting;
-    if (JS_IsException(ret)) {
-        JSValue ex = JS_GetException(callback_ctx);
-        const char *msg = JS_ToCString(callback_ctx, ex);
-        JSValue stack = JS_GetPropertyStr(callback_ctx, ex, "stack");
+    ns_js_budget_pop(js, &scope->budget);
+    if (threw) {
+        const char *msg = JS_ToCString(ctx, exception);
+        JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
         const char *stk = JS_IsUndefined(stack)
-            ? NULL : JS_ToCString(callback_ctx, stack);
+            ? NULL : JS_ToCString(ctx, stack);
         if (msg && js->log_cb) {
             char *line = g_strdup_printf("JS error in timer: %s%s%s",
                 msg, stk ? "\n" : "", stk ? stk : "");
             js->log_cb(line, js->log_user_data);
             g_free(line);
         }
-        if (stk) JS_FreeCString(callback_ctx, stk);
-        JS_FreeValue(callback_ctx, stack);
-        if (msg) JS_FreeCString(callback_ctx, msg);
-        ns_js_report_uncaught(js, ex, js->current_url);
-        JS_FreeValue(callback_ctx, ex);
+        if (stk) JS_FreeCString(ctx, stk);
+        JS_FreeValue(ctx, stack);
+        if (msg) JS_FreeCString(ctx, msg);
+        ns_js_report_uncaught(js, exception, js->current_url);
     }
-    JS_FreeValue(callback_ctx, ret);
     ns_drain_mutations(js);
-    if (frame_scope.active)
-        ns_js_realm_scope_leave(js, &frame_scope);
+    if (scope->frame_scope.active)
+        ns_js_realm_scope_leave(js, &scope->frame_scope);
     else
-        js->ctx = previous_ctx;
-    t = g_hash_table_lookup(js->timers, GINT_TO_POINTER(timer_id));
-    if (!t) return G_SOURCE_REMOVE;
-    t->firing = FALSE;
-    if (!is_interval) {
-        t->glib_source = 0;
-        g_hash_table_remove(js->timers, GINT_TO_POINTER(timer_id));
-        return G_SOURCE_REMOVE;
-    }
-    if (t->interval_ms < 4) {
-        t->interval_ms = 4;
-        t->glib_source = ns_js_attach_timeout(js, 4, ns_timer_fire, t);
-        return G_SOURCE_REMOVE;
-    }
-    return G_SOURCE_CONTINUE;
+        js->ctx = scope->previous_ctx;
+    g_free(scope);
 }
 
-static gboolean
+gboolean
 ns_timer_this_is_detached_window(ns_js *js, JSContext *ctx,
                                  JSValueConst this_val)
 {
@@ -1636,85 +1402,6 @@ ns_timer_this_is_detached_window(ns_js *js, JSContext *ctx,
        frame's document is current). */
     ns_node *top = ns_js_top_document(js->current_doc);
     return top && ns_js_top_document((ns_node *)doc) != top;
-}
-
-static JSValue
-ns_js_setTimeout(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv,
-                 int is_interval)
-{
-    if (!js_from_ctx(ctx) || argc < 1) return JS_NewInt32(ctx, 0);
-    if (ns_timer_this_is_detached_window(js_from_ctx(ctx), ctx, this_val))
-        return JS_NewInt32(ctx, ++js_from_ctx(ctx)->next_timer_id);
-    gboolean is_function = JS_IsFunction(ctx, argv[0]);
-    char *code = NULL;
-    if (!is_function) {
-        const char *s = JS_ToCString(ctx, argv[0]);
-        if (!s) return JS_NewInt32(ctx, 0);
-        code = g_strdup(s);
-        JS_FreeCString(ctx, s);
-    }
-    int32_t ms = 0;
-    if (argc >= 2) JS_ToInt32(ctx, &ms, argv[1]);
-    if (ms < 0) ms = 0;
-
-    ns_js *js = js_from_ctx(ctx);
-    int nesting = js->timer_nesting_level + 1;
-    if (nesting > 5 && ms < 4) ms = 4;
-
-    ns_timer *t = g_new0(ns_timer, 1);
-    t->js = js;
-    t->ctx = ctx;
-    t->frame = ns_js_context_frame(js, ctx);
-    t->cb = is_function ? JS_DupValue(ctx, argv[0]) : JS_UNDEFINED;
-    t->code = code;
-    t->is_interval = is_interval;
-    t->nesting_level = nesting;
-    t->interval_ms = ms;
-    if (is_function && argc > 2) {
-        int n_extra = argc - 2;
-        if (n_extra > 64) n_extra = 64;
-        t->extra_args_count = n_extra;
-        t->extra_args = g_new(JSValue, t->extra_args_count);
-        for (int i = 0; i < t->extra_args_count; i++)
-            t->extra_args[i] = JS_DupValue(ctx, argv[2 + i]);
-    }
-    t->id = ++js->next_timer_id;
-    t->due_us = g_get_monotonic_time() + (gint64)ms * 1000;
-    if (!is_interval && ms <= 1) {
-        t->immediate = TRUE;
-        js->n_immediate_timers++;
-    }
-    t->glib_source = ns_js_attach_timeout(js, (guint)ms, ns_timer_fire, t);
-    g_hash_table_insert(js->timers, GINT_TO_POINTER(t->id), t);
-    return JS_NewInt32(ctx, t->id);
-}
-
-static JSValue
-ns_js_setTimeout_wrap(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    return ns_js_setTimeout(ctx, this_val, argc, argv, 0);
-}
-
-static JSValue
-ns_js_setInterval_wrap(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    return ns_js_setTimeout(ctx, this_val, argc, argv, 1);
-}
-
-static JSValue
-ns_js_clearTimer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx) || argc < 1) return JS_UNDEFINED;
-    int32_t id = 0;
-    JS_ToInt32(ctx, &id, argv[0]);
-    ns_timer *t = g_hash_table_lookup(js_from_ctx(ctx)->timers, GINT_TO_POINTER(id));
-    if (t) {
-        ns_js_source_remove(js_from_ctx(ctx), t->glib_source);
-        t->glib_source = 0;
-        g_hash_table_remove(js_from_ctx(ctx)->timers, GINT_TO_POINTER(id));
-    }
-    return JS_UNDEFINED;
 }
 
 static JSClassID ns_element_class_id;
@@ -6291,7 +5978,7 @@ ns_element_async_method(JSContext *ctx, JSValueConst this_val, int argc, JSValue
     }
     JSValue delay = argc > 1 ? JS_DupValue(ctx, argv[1]) : JS_NewInt32(ctx, 0);
     JSValueConst args[2] = { cb, delay };
-    JSValue ret = ns_js_setTimeout(ctx, JS_UNDEFINED, 2, args, 0);
+    JSValue ret = ns_services_set_timeout(ctx, JS_UNDEFINED, 2, args);
     JS_FreeValue(ctx, delay);
     JS_FreeValue(ctx, cb);
     return ret;
@@ -6300,7 +5987,7 @@ ns_element_async_method(JSContext *ctx, JSValueConst this_val, int argc, JSValue
 static JSValue
 ns_element_cancelAsync(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    return ns_js_clearTimer(ctx, this_val, argc, argv);
+    return ns_services_clear_timer(ctx, this_val, argc, argv);
 }
 
 static JSValue
@@ -17931,8 +17618,6 @@ ns_worker_js_new(const ns_worker_realm *p)
         ? g_strdup(p->origin) : NULL;
     js->log_cb = ns_worker_log_cb;
     js->log_user_data = p->host;
-    js->timers = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-                                       NULL, ns_timer_free);
     js->pending_ws = g_ptr_array_new();
     js->listeners = g_ptr_array_new();
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
@@ -17941,7 +17626,6 @@ ns_worker_js_new(const ns_worker_realm *p)
     js->rt = JS_NewRuntime();
     if (!js->rt) {
         ns_perf_teardown(js);
-        if (js->timers) g_hash_table_destroy(js->timers);
         if (js->pending_ws) g_ptr_array_free(js->pending_ws, TRUE);
         if (js->listeners) g_ptr_array_free(js->listeners, TRUE);
         if (js->pinned_wrappers_set) g_hash_table_destroy(js->pinned_wrappers_set);
@@ -17962,7 +17646,6 @@ ns_worker_js_new(const ns_worker_realm *p)
     if (!js->ctx) {
         JS_FreeRuntime(js->rt);
         ns_perf_teardown(js);
-        if (js->timers) g_hash_table_destroy(js->timers);
         if (js->pending_ws) g_ptr_array_free(js->pending_ws, TRUE);
         if (js->listeners) g_ptr_array_free(js->listeners, TRUE);
         if (js->pinned_wrappers_set) g_hash_table_destroy(js->pinned_wrappers_set);
@@ -17978,10 +17661,10 @@ ns_worker_js_new(const ns_worker_realm *p)
     JSValue global = JS_GetGlobalObject(ctx);
 
     ns_worker_install_console(ctx, global);
-    ns_bind_fn(ctx, global, "setTimeout",    ns_js_setTimeout_wrap, 2);
-    ns_bind_fn(ctx, global, "setInterval",   ns_js_setInterval_wrap, 2);
-    ns_bind_fn(ctx, global, "clearTimeout",  ns_js_clearTimer, 1);
-    ns_bind_fn(ctx, global, "clearInterval", ns_js_clearTimer, 1);
+    ns_bind_fn(ctx, global, "setTimeout",    ns_services_set_timeout, 2);
+    ns_bind_fn(ctx, global, "setInterval",   ns_services_set_interval, 2);
+    ns_bind_fn(ctx, global, "clearTimeout",  ns_services_clear_timer, 1);
+    ns_bind_fn(ctx, global, "clearInterval", ns_services_clear_timer, 1);
     ns_bind_fn(ctx, global, "postMessage",   ns_worker_global_post_message, 1);
     ns_bind_fn(ctx, global, "close",         ns_worker_global_close, 0);
     ns_bind_fn(ctx, global, "importScripts", ns_worker_import_scripts, 1);
@@ -18674,38 +18357,6 @@ ns_observer_schedule_tick(ns_js *js)
 {
     if (!js || !js->ctx || js->worker_host || js->observer_tick_source) return;
     js->observer_tick_source = g_timeout_add(4, ns_observer_tick_timer, js);
-}
-
-static JSValue
-ns_window_request_idle_callback(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx) || argc < 1 || !JS_IsFunction(ctx, argv[0]))
-        return JS_NewInt32(ctx, 0);
-    ns_js *js = js_from_ctx(ctx);
-    ns_timer *t = g_new0(ns_timer, 1);
-    t->js = js;
-    t->ctx = ctx;
-    t->frame = ns_js_context_frame(js, ctx);
-    t->cb = JS_DupValue(ctx, argv[0]);
-    t->is_idle = TRUE;
-    t->id = ++js->next_timer_id;
-    guint delay_ms = 1;
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        JSValue to = JS_GetPropertyStr(ctx, argv[1], "timeout");
-        int32_t timeout_ms = 0;
-        if (JS_IsNumber(to) && JS_ToInt32(ctx, &timeout_ms, to) == 0 &&
-            timeout_ms > 0) {
-            t->idle_deadline_us = g_get_monotonic_time() +
-                                  (gint64)timeout_ms * 1000;
-            if ((guint)timeout_ms < delay_ms) delay_ms = (guint)timeout_ms;
-        }
-        JS_FreeValue(ctx, to);
-    }
-    t->glib_source = g_timeout_add(delay_ms, ns_timer_fire, t);
-    g_hash_table_insert(js->timers, GINT_TO_POINTER(t->id), t);
-    return JS_NewInt32(ctx, t->id);
 }
 
 static gboolean ns_js_run_animation_frame_internal(ns_js *js);
@@ -21280,15 +20931,7 @@ gboolean
 ns_js_has_pending_work(const ns_js *js)
 {
     if (!js) return FALSE;
-    if (js->timers && g_hash_table_size(js->timers) > 0) {
-        GHashTableIter it;
-        gpointer k, v;
-        g_hash_table_iter_init(&it, js->timers);
-        while (g_hash_table_iter_next(&it, &k, &v)) {
-            const ns_timer *t = v;
-            if (!t->is_idle) return TRUE;
-        }
-    }
+    if (ns_services_timers_pending(js, FALSE)) return TRUE;
     if (js->raf_pending && js->raf_pending->len > 0) return TRUE;
     if (ns_js_net_pending_fetches(js) > 0) return TRUE;
     if (ns_js_net_pending_xhrs(js) > 0) return TRUE;
@@ -21312,7 +20955,7 @@ ns_js_needs_tick(const ns_js *js)
 {
     if (!js) return FALSE;
     if (ns_js_has_pending_work(js)) return TRUE;
-    if (js->timers && g_hash_table_size(js->timers) > 0) return TRUE;
+    if (ns_services_timers_pending(js, TRUE)) return TRUE;
     if (js->message_tasks && !g_queue_is_empty(js->message_tasks))
         return TRUE;
     if (ns_js_image_loads_pending(js))
@@ -21356,7 +20999,7 @@ ns_js_dump_stats(ns_js *js, GString *out)
     }
     g_string_append(out, "\nEvent loop\n");
     g_string_append_printf(out, "  timers          %u\n",
-                           js->timers ? g_hash_table_size(js->timers) : 0);
+                           ns_services_timer_count(js));
     g_string_append_printf(out, "  anim frames     %u\n",
                            js->raf_pending ? js->raf_pending->len : 0);
     g_string_append_printf(out, "  pending fetch   %u\n",
@@ -21382,19 +21025,6 @@ ns_js_purge_frame_rafs(ns_js *js, const ns_node *frame)
         g_array_remove_index(js->raf_pending, i - 1);
     }
     if (js->raf_frame_ctx == frame) js->raf_frame_ctx = NULL;
-}
-
-static void
-ns_js_purge_frame_timers(ns_js *js, const ns_node *frame)
-{
-    if (!js || !js->timers || !frame) return;
-    GHashTableIter iter;
-    gpointer key, value;
-    g_hash_table_iter_init(&iter, js->timers);
-    while (g_hash_table_iter_next(&iter, &key, &value)) {
-        ns_timer *timer = value;
-        if (timer->frame == frame) g_hash_table_iter_remove(&iter);
-    }
 }
 
 static GHashTable *
@@ -21484,7 +21114,7 @@ ns_js_purge_subtree_rafs(ns_js *js, ns_node *root)
     for (ns_node *n = root; n; n = ns_node_next_in_subtree(n, root, TRUE)) {
         if (!ns_node_is_element_named(n, "iframe")) continue;
         ns_js_purge_frame_rafs(js, n);
-        ns_js_purge_frame_timers(js, n);
+        ns_services_purge_frame_timers(js, n);
         ns_js_scrub_iframe_globals(js, n);
     }
 }
@@ -31939,8 +31569,8 @@ ns_popover_info_free(gpointer data)
     ns_js *js = pi->js;
     int timers[2] = { pi->popover_toggle.timer, pi->dialog_toggle.timer };
     for (int i = 0; i < 2; i++)
-        if (timers[i] && js && js->timers)
-            g_hash_table_remove(js->timers, GINT_TO_POINTER(timers[i]));
+        if (timers[i] && js)
+            ns_services_timer_remove(js, timers[i]);
     g_free(pi->dialog_request_rv);
     g_free(pi);
 }
@@ -32216,8 +31846,7 @@ ns_queue_toggle_task(ns_js *js, ns_node *el, gboolean dialog,
     ns_toggle_tracker *tt = dialog ? &pi->dialog_toggle : &pi->popover_toggle;
     if (tt->timer) {
         old_open = tt->old_open;
-        if (js->timers)
-            g_hash_table_remove(js->timers, GINT_TO_POINTER(tt->timer));
+        ns_services_timer_remove(js, tt->timer);
         tt->timer = 0;
     }
     JSValue wrapper = ns_make_element(ctx, el);
@@ -32225,7 +31854,7 @@ ns_queue_toggle_task(ns_js *js, ns_node *el, gboolean dialog,
                                      dialog ? 1 : 0, 1, &wrapper);
     JS_FreeValue(ctx, wrapper);
     JSValueConst args[2] = { fn, JS_NewInt32(ctx, 0) };
-    JSValue id = ns_js_setTimeout(ctx, JS_UNDEFINED, 2, args, 0);
+    JSValue id = ns_services_set_timeout(ctx, JS_UNDEFINED, 2, args);
     JS_FreeValue(ctx, fn);
     int32_t timer = 0;
     JS_ToInt32(ctx, &timer, id);
@@ -33002,7 +32631,7 @@ ns_queue_event_task(ns_js *js, ns_node *el, const char *type)
     JS_FreeValue(ctx, data[0]);
     JS_FreeValue(ctx, data[1]);
     JSValueConst args[2] = { fn, JS_NewInt32(ctx, 0) };
-    JSValue id = ns_js_setTimeout(ctx, JS_UNDEFINED, 2, args, 0);
+    JSValue id = ns_services_set_timeout(ctx, JS_UNDEFINED, 2, args);
     JS_FreeValue(ctx, fn);
     JS_FreeValue(ctx, id);
 }
@@ -43804,17 +43433,8 @@ ns_install_idle_deadline(JSContext *ctx, JSValueConst global)
     JSValue ctor = JS_GetPropertyStr(ctx, global, "IdleDeadline");
     JSValue proto = JS_IsObject(ctor)
         ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
-    if (JS_IsObject(proto)) {
-        ns_bind_fn(ctx, proto, "timeRemaining",
-                   ns_idle_deadline_time_remaining, 0);
-        JSAtom atom = JS_NewAtom(ctx, "didTimeout");
-        JS_DefinePropertyGetSet(ctx, proto, atom,
-            JS_NewCFunction2(ctx, ns_idle_deadline_did_timeout,
-                             "get didTimeout", 0, JS_CFUNC_generic, 0),
-            JS_UNDEFINED, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, atom);
-        ns_set_tostring_tag(ctx, proto, "IdleDeadline");
-    }
+    if (JS_IsObject(proto))
+        ns_services_install_idle_deadline(ctx, proto);
     JS_FreeValue(ctx, proto);
     JS_FreeValue(ctx, ctor);
 }
@@ -43878,8 +43498,6 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     js->soft_nav_user_data = NULL;
     js->iframe_doc = JS_UNDEFINED;
     js->pending_fullscreen_resolve = JS_UNDEFINED;
-    js->timers = g_hash_table_new_full(g_direct_hash, g_direct_equal,
-                                       NULL, ns_timer_free);
     js->main_context = g_main_context_default();
     js->frame_ctxs = g_ptr_array_new();
     js->frame_contexts = g_hash_table_new(g_direct_hash, g_direct_equal);
@@ -44046,10 +43664,10 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
 
     ns_bind_fn(ctx, global, "alert",         ns_services_alert,       1);
     ns_bind_fn(ctx, global, "__jsEngine",    ns_js_engine_name_js,    0);
-    ns_bind_fn(ctx, global, "setTimeout",    ns_js_setTimeout_wrap,   2);
-    ns_bind_fn(ctx, global, "setInterval",   ns_js_setInterval_wrap,  2);
-    ns_bind_fn(ctx, global, "clearTimeout",  ns_js_clearTimer,        1);
-    ns_bind_fn(ctx, global, "clearInterval", ns_js_clearTimer,        1);
+    ns_bind_fn(ctx, global, "setTimeout",    ns_services_set_timeout,   2);
+    ns_bind_fn(ctx, global, "setInterval",   ns_services_set_interval,  2);
+    ns_bind_fn(ctx, global, "clearTimeout",  ns_services_clear_timer,        1);
+    ns_bind_fn(ctx, global, "clearInterval", ns_services_clear_timer,        1);
     ns_bind_fn(ctx, global, "fetch",         ns_js_fetch,             1);
     ns_window_bind_post_message(ctx, global);
 
@@ -44814,8 +44432,8 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
         JS_SetPropertyStr(ctx, global, window_event_handlers[i], JS_NULL);
 
     ns_bind_fn(ctx, global, "getSelection",        ns_window_get_selection, 0);
-    ns_bind_fn(ctx, global, "requestIdleCallback", ns_window_request_idle_callback, 2);
-    ns_bind_fn(ctx, global, "cancelIdleCallback",  ns_js_clearTimer,                1);
+    ns_bind_fn(ctx, global, "requestIdleCallback", ns_services_request_idle_callback, 2);
+    ns_bind_fn(ctx, global, "cancelIdleCallback",  ns_services_clear_timer,                1);
     ns_install_idle_deadline(ctx, global);
 
     JS_SetPropertyStr(ctx, global, "screenX",     JS_NewInt32(ctx, 0));
@@ -47706,9 +47324,6 @@ ns_js_reset_runtime_state(ns_js *js)
     }
     js->pending_scrollend_doc = FALSE;
 
-    if (js->timers)
-        g_hash_table_remove_all(js->timers);
-
     ns_services_reset(js);
 
     if (js->raf_pending) {
@@ -48393,7 +48008,6 @@ ns_js_free(ns_js *js)
     }
     ns_services_teardown(js);
     if (js->blob_urls) g_hash_table_destroy(js->blob_urls);
-    if (js->timers) g_hash_table_destroy(js->timers);
     if (js->raf_pending) {
         for (guint i = 0; i < js->raf_pending->len; i++) {
             ns_raf_entry *e = &g_array_index(js->raf_pending, ns_raf_entry, i);
@@ -50827,7 +50441,7 @@ static void
 ns_js_iframe_clear_content(ns_js *js, ns_node *iframe)
 {
     ns_js_purge_frame_rafs(js, iframe);
-    ns_js_purge_frame_timers(js, iframe);
+    ns_services_purge_frame_timers(js, iframe);
     ns_js_scrub_iframe_globals(js, iframe);
     ns_node *c = iframe->first_child;
     while (c) {
@@ -51226,10 +50840,10 @@ ns_js_iframe_restore_scheduling(JSContext *ctx)
     if (js && JS_IsObject(js->pristine_promise))
         JS_SetPropertyStr(ctx, g, "Promise",
                           JS_DupValue(ctx, js->pristine_promise));
-    ns_bind_fn(ctx, g, "setTimeout",    ns_js_setTimeout_wrap,          2);
-    ns_bind_fn(ctx, g, "setInterval",   ns_js_setInterval_wrap,         2);
-    ns_bind_fn(ctx, g, "clearTimeout",  ns_js_clearTimer,               1);
-    ns_bind_fn(ctx, g, "clearInterval", ns_js_clearTimer,               1);
+    ns_bind_fn(ctx, g, "setTimeout",    ns_services_set_timeout,          2);
+    ns_bind_fn(ctx, g, "setInterval",   ns_services_set_interval,         2);
+    ns_bind_fn(ctx, g, "clearTimeout",  ns_services_clear_timer,               1);
+    ns_bind_fn(ctx, g, "clearInterval", ns_services_clear_timer,               1);
     ns_bind_fn(ctx, g, "requestAnimationFrame", ns_window_requestAnimationFrame, 1);
     ns_bind_fn(ctx, g, "cancelAnimationFrame",  ns_window_cancelAnimationFrame,  1);
     ns_bind_fn(ctx, g, "queueMicrotask", ns_services_queue_microtask,      1);
@@ -53016,6 +52630,12 @@ JSContext *
 ns_js_main_context(const ns_js *js)
 {
     return js->ctx;
+}
+
+GMainContext *
+ns_js_glib_context(const ns_js *js)
+{
+    return js ? js->main_context : NULL;
 }
 
 const ns_box *

@@ -132,13 +132,8 @@ struct ns_js {
     ns_node       *current_script;
     char         *early_inject_src;
     gboolean      mutated;
-    GHashTable   *timers;
     GMainContext *main_context;
     ns_worker_host *worker_host;
-    int           next_timer_id;
-    int           timer_nesting_level;
-    int           n_immediate_timers;
-    gboolean      running_due_timers;
     GArray       *raf_pending;
     int           next_raf_id;
     gint64        raf_last_us;
@@ -826,6 +821,35 @@ void ns_services_reeval_media_queries(ns_js *js);
 void ns_services_reset(ns_js *js);
 void ns_services_teardown(ns_js *js);
 gboolean ns_js_log_enabled(const ns_js *js);
+JSValue ns_services_set_timeout(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_services_set_interval(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+JSValue ns_services_clear_timer(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_services_request_idle_callback(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv);
+void ns_services_install_idle_deadline(JSContext *ctx, JSValueConst proto);
+void ns_services_run_due_timers(ns_js *js);
+gboolean ns_services_timers_pending(const ns_js *js, gboolean include_idle);
+guint ns_services_timer_count(const ns_js *js);
+void ns_services_purge_frame_timers(ns_js *js, const ns_node *frame);
+void ns_services_timer_remove(ns_js *js, int id);
+
+enum { NS_TIMER_RUN, NS_TIMER_WAIT, NS_TIMER_DROP };
+typedef struct ns_timer_scope ns_timer_scope;
+gboolean ns_js_due_timers_allowed(const ns_js *js);
+int ns_js_timer_gate(ns_js *js, ns_node *frame, gboolean idle_expired);
+ns_timer_scope *ns_js_timer_scope_enter(ns_js *js, JSContext *ctx, ns_node *frame);
+JSContext *ns_js_timer_scope_context(const ns_timer_scope *scope);
+void ns_js_timer_scope_leave(ns_timer_scope *scope, gboolean threw,
+                             JSValueConst exception);
+gboolean ns_timer_this_is_detached_window(ns_js *js, JSContext *ctx,
+                                          JSValueConst this_val);
+ns_node *ns_js_context_frame(ns_js *js, JSContext *ctx);
+gint64 ns_js_idle_frame_end(const ns_js *js, gint64 now, gint64 end);
+void ns_js_source_remove(ns_js *js, guint id);
+GMainContext *ns_js_glib_context(const ns_js *js);
 void ns_event_adopt_interface(JSContext *ctx, JSValueConst ev, const char *iface);
 
 /* fetch, Request, Response, AbortController and XMLHttpRequest

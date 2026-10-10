@@ -1,4 +1,4 @@
-//! Southstar — the window-level services: navigator and its sub-objects, the window console, screen, matchMedia, Notification and queueMicrotask.
+//! Southstar — the window-level services: timers, navigator and its sub-objects, the window console, screen, matchMedia, Notification and queueMicrotask.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,6 +7,7 @@ mod ffi;
 mod media;
 mod navigator;
 mod screen;
+mod timers;
 mod window;
 
 use std::cell::RefCell;
@@ -21,7 +22,8 @@ use crate::ffi::Js;
 #[derive(Default)]
 pub(crate) struct Page {
     counts: RefCell<HashMap<String, u32>>,
-    timers: RefCell<Option<HashMap<String, Instant>>>,
+    timers: RefCell<timers::Timers>,
+    console_timers: RefCell<Option<HashMap<String, Instant>>>,
     media_lists: RefCell<Vec<Value>>,
 }
 
@@ -30,6 +32,9 @@ thread_local! {
 }
 
 pub(crate) fn page(js: Js) -> Option<Rc<Page>> {
+    if js.is_null() {
+        return None;
+    }
     PAGES
         .try_with(|pages| pages.try_borrow().ok()?.get(&js.key()).cloned())
         .ok()
@@ -46,6 +51,7 @@ pub(crate) fn with_page<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
 
 pub(crate) fn reset(js: Js) {
     if let Some(page) = page(js) {
+        timers::clear_all(js, &page);
         let lists = core::mem::take(&mut *page.media_lists.borrow_mut());
         drop(lists);
     }
@@ -57,6 +63,7 @@ pub(crate) fn teardown(js: Js) {
         .ok()
         .flatten();
     if let Some(page) = page {
+        timers::clear_all(js, &page);
         let lists = core::mem::take(&mut *page.media_lists.borrow_mut());
         drop(lists);
     }

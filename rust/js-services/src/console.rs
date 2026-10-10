@@ -254,7 +254,7 @@ fn time(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value
         return Ok(Value::undefined());
     }
     page_or_new(js)
-        .timers
+        .console_timers
         .borrow_mut()
         .get_or_insert_default()
         .insert(label, Instant::now());
@@ -266,7 +266,7 @@ fn time_emit(scope: &mut Scope<'_>, js: Js, label: &str, extra: &[Value]) {
         return;
     }
     let Some(started) = with_page(js, |page| {
-        page.timers
+        page.console_timers
             .borrow()
             .as_ref()
             .map(|timers| timers.get(label).copied())
@@ -292,7 +292,7 @@ fn time_end(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, V
     let js = ffi::js_of(scope);
     time_emit(scope, js, &label, &[]);
     with_page(js, |page| {
-        if let Some(timers) = page.timers.borrow_mut().as_mut() {
+        if let Some(timers) = page.console_timers.borrow_mut().as_mut() {
             timers.remove(&label);
         }
     });

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -10,11 +10,186 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::screen::{self, Metrics};
-use crate::{console, media, navigator, window};
+use crate::{console, media, navigator, timers, window};
 
 #[repr(C)]
 pub(crate) struct NsJs {
     _private: [u8; 0],
+}
+
+#[repr(C)]
+struct TimerScope {
+    _private: [u8; 0],
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Realm(*mut JSContext);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Frame(*const c_void);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Source(c_uint);
+
+impl Source {
+    pub const NONE: Source = Source(0);
+
+    pub fn is_none(self) -> bool {
+        self.0 == 0
+    }
+}
+
+pub(crate) enum Gate {
+    Run,
+    Wait,
+    Drop,
+}
+
+struct TimerTag {
+    js: *const NsJs,
+    id: i32,
+}
+
+const TIMER_WAIT: c_int = 1;
+const TIMER_DROP: c_int = 2;
+const G_PRIORITY_DEFAULT: c_int = 0;
+
+type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+
+unsafe extern "C" {
+    fn ns_js_due_timers_allowed(js: *const NsJs) -> GBoolean;
+    fn ns_js_timer_gate(js: *const NsJs, frame: *const c_void, idle_expired: GBoolean) -> c_int;
+    fn ns_js_timer_scope_enter(
+        js: *const NsJs,
+        ctx: *mut JSContext,
+        frame: *const c_void,
+    ) -> *mut TimerScope;
+    fn ns_js_timer_scope_context(scope: *const TimerScope) -> *mut JSContext;
+    fn ns_js_timer_scope_leave(scope: *mut TimerScope, threw: GBoolean, exception: JSValue);
+    fn ns_timer_this_is_detached_window(
+        js: *const NsJs,
+        ctx: *mut JSContext,
+        this_val: JSValue,
+    ) -> GBoolean;
+    fn ns_js_context_frame(js: *const NsJs, ctx: *mut JSContext) -> *const c_void;
+    fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64;
+    fn ns_js_source_remove(js: *const NsJs, id: c_uint);
+    fn ns_js_glib_context(js: *const NsJs) -> *mut c_void;
+    fn g_get_monotonic_time() -> i64;
+    fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
+    fn g_source_set_callback(
+        source: *mut c_void,
+        func: SourceFunc,
+        data: *mut c_void,
+        notify: glib::GDestroyNotify,
+    );
+    fn g_source_attach(source: *mut c_void, context: *mut c_void) -> c_uint;
+    fn g_source_unref(source: *mut c_void);
+    fn g_timeout_add_full(
+        priority: c_int,
+        interval: c_uint,
+        func: SourceFunc,
+        data: *mut c_void,
+        notify: glib::GDestroyNotify,
+    ) -> c_uint;
+}
+
+pub(crate) fn monotonic_us() -> i64 {
+    unsafe { g_get_monotonic_time() }
+}
+
+pub(crate) fn realm_of(scope: &Scope<'_>) -> Realm {
+    Realm(quickjs::raw_context(scope))
+}
+
+pub(crate) fn context_frame(scope: &Scope<'_>, js: Js) -> Frame {
+    Frame(unsafe { ns_js_context_frame(js.0, quickjs::raw_context(scope)) })
+}
+
+pub(crate) fn this_is_detached_window(scope: &Scope<'_>, js: Js, this: &Value) -> bool {
+    unsafe {
+        ns_timer_this_is_detached_window(js.0, quickjs::raw_context(scope), quickjs::raw(this)) != 0
+    }
+}
+
+pub(crate) fn idle_frame_end(js: Js, now: i64, end: i64) -> i64 {
+    unsafe { ns_js_idle_frame_end(js.0, now, end) }
+}
+
+pub(crate) fn due_timers_allowed(js: Js) -> bool {
+    unsafe { ns_js_due_timers_allowed(js.0) != 0 }
+}
+
+pub(crate) fn timer_gate(js: Js, frame: Frame, idle_expired: bool) -> Gate {
+    match unsafe { ns_js_timer_gate(js.0, frame.0, glib::boolean(idle_expired)) } {
+        TIMER_WAIT => Gate::Wait,
+        TIMER_DROP => Gate::Drop,
+        _ => Gate::Run,
+    }
+}
+
+pub(crate) fn in_timer_scope(
+    js: Js,
+    realm: Realm,
+    frame: Frame,
+    f: impl FnOnce(&mut Scope<'_>) -> Result<Value, Value>,
+) {
+    let timer_scope = unsafe { ns_js_timer_scope_enter(js.0, realm.0, frame.0) };
+    let ctx = unsafe { ns_js_timer_scope_context(timer_scope) };
+    let result = unsafe { quickjs::with_context(ctx, f) };
+    let (threw, exception) = match &result {
+        Ok(_) => (glib::FALSE, quickjs::UNDEFINED),
+        Err(error) => (glib::TRUE, quickjs::raw(error)),
+    };
+    unsafe { ns_js_timer_scope_leave(timer_scope, threw, exception) };
+    drop(result);
+}
+
+unsafe extern "C" fn timer_source_fired(data: *mut c_void) -> GBoolean {
+    let tag = unsafe { &*data.cast::<TimerTag>() };
+    let (js, id) = (Js(tag.js), tag.id);
+    glib::boolean(timers::fire(js, id))
+}
+
+unsafe extern "C" fn timer_tag_free(data: *mut c_void) {
+    drop(unsafe { Box::from_raw(data.cast::<TimerTag>()) });
+}
+
+fn timer_tag(js: Js, id: i32) -> *mut c_void {
+    Box::into_raw(Box::new(TimerTag { js: js.0, id })).cast()
+}
+
+pub(crate) fn attach_timeout(js: Js, ms: u32, id: i32) -> Source {
+    unsafe {
+        let source = g_timeout_source_new(ms);
+        g_source_set_callback(
+            source,
+            timer_source_fired,
+            timer_tag(js, id),
+            Some(timer_tag_free),
+        );
+        let attached = g_source_attach(source, ns_js_glib_context(js.0));
+        g_source_unref(source);
+        Source(attached)
+    }
+}
+
+pub(crate) fn attach_default_timeout(ms: u32, js: Js, id: i32) -> Source {
+    Source(unsafe {
+        g_timeout_add_full(
+            G_PRIORITY_DEFAULT,
+            ms,
+            timer_source_fired,
+            timer_tag(js, id),
+            Some(timer_tag_free),
+        )
+    })
+}
+
+pub(crate) fn source_remove(js: Js, source: Source) {
+    if !source.is_none() {
+        unsafe { ns_js_source_remove(js.0, source.0) };
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -439,6 +614,50 @@ export_native! {
     ns_services_queue_microtask => window::queue_microtask,
     ns_services_notification_ctor => window::notification,
     ns_services_match_media => media::match_media,
+    ns_services_set_timeout => timers::set_timeout,
+    ns_services_set_interval => timers::set_interval,
+    ns_services_clear_timer => timers::clear,
+    ns_services_request_idle_callback => timers::request_idle_callback,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_install_idle_deadline(ctx: *mut JSContext, proto: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::borrow_value(scope, proto);
+            timers::install_idle_deadline(scope, &proto);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_run_due_timers(js: *const NsJs) {
+    timers::run_due(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_timers_pending(
+    js: *const NsJs,
+    include_idle: GBoolean,
+) -> GBoolean {
+    glib::boolean(timers::pending(Js(js), include_idle != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_timer_count(js: *const NsJs) -> c_uint {
+    timers::count(Js(js)) as c_uint
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_purge_frame_timers(js: *const NsJs, frame: *const c_void) {
+    if !frame.is_null() {
+        timers::purge_frame(Js(js), Frame(frame));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_services_timer_remove(js: *const NsJs, id: c_int) {
+    timers::remove(Js(js), id);
 }
 
 #[unsafe(no_mangle)]

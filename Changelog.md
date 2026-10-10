@@ -24,8 +24,9 @@ Southstar Browser (unreleased):
   unchanged results.
 * navigator and its sub-objects (permissions, clipboard, geolocation,
   mediaDevices, getBattery(), userAgentData, plugins, storage), the window
-  console, alert(), screen, matchMedia(), Notification and queueMicrotask()
-  are Rust (rust/js-services), with unchanged results.
+  console, alert(), screen, matchMedia(), Notification, queueMicrotask(),
+  setTimeout()/setInterval() and requestIdleCallback() are Rust
+  (rust/js-services), with unchanged results.
 * fetch(), Request, Response, AbortController, AbortSignal and
   XMLHttpRequest are Rust (rust/js-net), with unchanged results.
 * MutationObserver, IntersectionObserver and ResizeObserver are Rust
