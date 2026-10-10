@@ -726,6 +726,23 @@ gboolean ns_js_anchor_fragment_navigate(ns_js *js, const char *abs_url);
 gboolean ns_js_in_frame_load(const ns_js *js);
 gboolean ns_js_can_navigate(const ns_js *js);
 void ns_js_fragment_navigated(ns_js *js, const char *url);
+void ns_window_bind_post_message(JSContext *ctx, JSValueConst global);
+JSValue ns_window_make_post_message(JSContext *ctx, JSValueConst window);
+void ns_window_links_clear(ns_js *js, gboolean destroy);
+void ns_window_link_outward(ns_js *js, JSValueConst outward,
+                            JSValueConst realm_window);
+JSValue ns_window_forward_of(ns_js *js, JSValueConst outward);
+ns_node *ns_window_frame_node(ns_js *js, JSValueConst win);
+JSValue ns_iframe_cross_origin_window(JSContext *ctx, JSValue target);
+JSContext *ns_js_main_realm_context(const ns_js *js);
+gboolean ns_iframe_origin_is_opaque(ns_node *frame);
+const char *ns_js_document_origin(const ns_js *js);
+const char *ns_js_frame_url(const ns_js *js, const ns_node *frame);
+JSContext *ns_js_frame_context(const ns_js *js, const ns_node *frame);
+void *ns_js_realm_url_enter(ns_js *js, JSContext *realm);
+void ns_js_realm_url_leave(ns_js *js, void *token);
+void ns_js_dispatch_main_window_event(ns_js *js, const char *type,
+                                      JSValue event);
 
 /* MessagePort, MessageChannel and BroadcastChannel (rust/js-workers) and the
  * js.c helpers they call. */

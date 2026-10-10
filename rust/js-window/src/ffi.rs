@@ -2,14 +2,316 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
 use southstar_glib::GBoolean;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{history, location, navigation, set};
+use crate::{history, location, message, navigation, set};
+
+#[repr(C)]
+struct NsNode {
+    _private: [u8; 0],
+}
+
+type JobFunc =
+    unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Realm(usize);
+
+impl Realm {
+    pub fn of(scope: &Scope<'_>) -> Realm {
+        Realm(quickjs::raw_context(scope) as usize)
+    }
+
+    fn from_ptr(ctx: *mut JSContext) -> Option<Realm> {
+        (!ctx.is_null()).then_some(Realm(ctx as usize))
+    }
+
+    fn ptr(self) -> *mut JSContext {
+        self.0 as *mut JSContext
+    }
+
+    pub fn enter<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        unsafe { quickjs::with_context(self.ptr(), f) }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Frame(usize);
+
+pub(crate) struct UrlToken(*mut c_void);
+
+unsafe extern "C" {
+    fn ns_js_main_realm_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_window_frame_node(js: *mut NsJs, window: JSValue) -> *mut NsNode;
+    fn ns_iframe_origin_is_opaque(frame: *mut NsNode) -> GBoolean;
+    fn ns_js_document_origin(js: *const NsJs) -> *const c_char;
+    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
+    fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> *mut JSContext;
+    fn ns_structured_clone_transfer(
+        ctx: *mut JSContext,
+        value: JSValue,
+        transfer: JSValue,
+        seed_from: JSValue,
+        seed_to: JSValue,
+    ) -> JSValue;
+    fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
+    fn JS_GetCallerRealm(ctx: *mut JSContext) -> *mut JSContext;
+    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
+    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
+    fn ns_js_realm_url_enter(js: *mut NsJs, realm: *mut JSContext) -> *mut c_void;
+    fn ns_js_realm_url_leave(js: *mut NsJs, token: *mut c_void);
+    fn ns_js_dispatch_main_window_event(js: *mut NsJs, kind: *const c_char, event: JSValue);
+    fn ns_port_transfer_prepare(
+        ctx: *mut JSContext,
+        transfer: JSValue,
+        source_port: JSValue,
+        realm: *mut JSContext,
+        old_ports: *mut JSValue,
+        new_ports: *mut JSValue,
+    ) -> c_int;
+    fn ns_port_transfer_commit(ctx: *mut JSContext, old_ports: JSValue, new_ports: JSValue);
+    fn ns_iframe_cross_origin_window(ctx: *mut JSContext, target: JSValue) -> JSValue;
+    fn ns_js_queue_message_task(
+        ctx: *mut JSContext,
+        func: JobFunc,
+        argc: c_int,
+        argv: *mut JSValue,
+    );
+}
+
+pub(crate) fn main_realm(js: Js) -> Option<Realm> {
+    if js.is_null() {
+        return None;
+    }
+    Realm::from_ptr(unsafe { ns_js_main_realm_context(js.ptr()) })
+}
+
+pub(crate) fn current_realm(js: Js) -> Option<Realm> {
+    if js.is_null() {
+        return None;
+    }
+    Realm::from_ptr(unsafe { ns_js_main_context(js.ptr()) })
+}
+
+pub(crate) fn frame_node(js: Js, window: &Value) -> Option<Frame> {
+    if js.is_null() || !window.is_object() {
+        return None;
+    }
+    let node = unsafe { ns_window_frame_node(js.ptr(), quickjs::raw(window)) };
+    (!node.is_null()).then_some(Frame(node as usize))
+}
+
+pub(crate) fn frame_origin_is_opaque(frame: Frame) -> bool {
+    unsafe { ns_iframe_origin_is_opaque(frame.0 as *mut NsNode) != 0 }
+}
+
+pub(crate) fn document_origin(js: Js) -> Option<Vec<u8>> {
+    let origin = unsafe { ns_js_document_origin(js.ptr()) };
+    (!origin.is_null()).then(|| unsafe { borrowed(origin) })
+}
+
+pub(crate) fn frame_url(js: Js, frame: Frame) -> Option<Vec<u8>> {
+    let url = unsafe { ns_js_frame_url(js.ptr(), frame.0 as *const NsNode) };
+    (!url.is_null()).then(|| unsafe { borrowed(url) })
+}
+
+pub(crate) fn frame_realm(js: Js, frame: Frame) -> Option<Realm> {
+    Realm::from_ptr(unsafe { ns_js_frame_context(js.ptr(), frame.0 as *const NsNode) })
+}
+
+pub(crate) fn structured_clone_transfer(
+    scope: &mut Scope<'_>,
+    value: &Value,
+    transfer: &Value,
+    seed_from: &Value,
+    seed_to: &Value,
+) -> Result<Value, Value> {
+    let raw = unsafe {
+        ns_structured_clone_transfer(
+            quickjs::raw_context(scope),
+            quickjs::raw(value),
+            quickjs::into_raw(transfer.clone()),
+            quickjs::raw(seed_from),
+            quickjs::raw(seed_to),
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
+}
+
+pub(crate) fn realm_now_ms(realm: Realm) -> f64 {
+    unsafe { ns_perf_realm_now_ms(realm.ptr()) }
+}
+
+pub(crate) fn caller_realm(scope: &Scope<'_>) -> Realm {
+    let ctx = quickjs::raw_context(scope);
+    Realm::from_ptr(unsafe { JS_GetCallerRealm(ctx) }).unwrap_or(Realm(ctx as usize))
+}
+
+pub(crate) fn function_realm(scope: &mut Scope<'_>, function: &Value) -> Realm {
+    quickjs::function_realm(scope, function)
+        .ok()
+        .and_then(Realm::from_ptr)
+        .unwrap_or_else(|| Realm::of(scope))
+}
+
+pub(crate) fn budget_enter(js: Js) -> i64 {
+    unsafe { ns_js_budget_enter(js.ptr()) }
+}
+
+pub(crate) fn budget_leave(js: Js, saved: i64) {
+    unsafe { ns_js_budget_leave(js.ptr(), saved) };
+}
+
+pub(crate) fn realm_url_enter(js: Js, realm: Realm) -> UrlToken {
+    UrlToken(unsafe { ns_js_realm_url_enter(js.ptr(), realm.ptr()) })
+}
+
+pub(crate) fn realm_url_leave(js: Js, token: UrlToken) {
+    unsafe { ns_js_realm_url_leave(js.ptr(), token.0) };
+}
+
+pub(crate) fn dispatch_main_window_event(js: Js, kind: &str, event: Value) {
+    let kind = c_string(kind.as_bytes());
+    unsafe { ns_js_dispatch_main_window_event(js.ptr(), kind.as_ptr(), quickjs::into_raw(event)) };
+}
+
+pub(crate) fn port_transfer_prepare(
+    scope: &mut Scope<'_>,
+    transfer: &Value,
+    realm: Realm,
+) -> Result<(Value, Value), Value> {
+    let mut old_ports = quickjs::UNDEFINED;
+    let mut new_ports = quickjs::UNDEFINED;
+    let status = unsafe {
+        ns_port_transfer_prepare(
+            quickjs::raw_context(scope),
+            quickjs::raw(transfer),
+            quickjs::UNDEFINED,
+            realm.ptr(),
+            &mut old_ports,
+            &mut new_ports,
+        )
+    };
+    if status < 0 {
+        return Err(quickjs::take_exception(scope));
+    }
+    unsafe {
+        Ok((
+            quickjs::take_value(scope, old_ports),
+            quickjs::take_value(scope, new_ports),
+        ))
+    }
+}
+
+pub(crate) fn port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_ports: &Value) {
+    unsafe {
+        ns_port_transfer_commit(
+            quickjs::raw_context(scope),
+            quickjs::raw(old_ports),
+            quickjs::raw(new_ports),
+        )
+    };
+}
+
+pub(crate) fn cross_origin_window(scope: &mut Scope<'_>, window: &Value) -> Value {
+    let raw = unsafe {
+        ns_iframe_cross_origin_window(
+            quickjs::raw_context(scope),
+            quickjs::into_raw(window.clone()),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+unsafe extern "C" fn deliver_job(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue {
+    if argc < 2 || argv.is_null() {
+        return quickjs::UNDEFINED;
+    }
+    let raw = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let target = quickjs::borrow_value(scope, raw[0]);
+            let event = quickjs::borrow_value(scope, raw[1]);
+            message::deliver(scope, &target, &event);
+        })
+    };
+    quickjs::UNDEFINED
+}
+
+pub(crate) fn queue_delivery(scope: &mut Scope<'_>, target: &Value, event: &Value) {
+    let mut raw = [quickjs::raw(target), quickjs::raw(event)];
+    unsafe {
+        ns_js_queue_message_task(
+            quickjs::raw_context(scope),
+            deliver_job,
+            raw.len() as c_int,
+            raw.as_mut_ptr(),
+        )
+    };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_bind_post_message(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            message::bind_post_message(scope, &global);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_make_post_message(
+    ctx: *mut JSContext,
+    window: JSValue,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let window = quickjs::borrow_value(scope, window);
+            quickjs::into_raw(message::make_post_message(scope, &window))
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_links_clear(js: *const NsJs, _destroy: GBoolean) {
+    message::links_clear(Js::of(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_link_outward(
+    js: *const NsJs,
+    outward: JSValue,
+    realm_window: JSValue,
+) {
+    let js = Js::of(js);
+    let Some(realm) = current_realm(js) else {
+        return;
+    };
+    realm.enter(|scope| {
+        let outward = unsafe { quickjs::borrow_value(scope, outward) };
+        let realm_window = unsafe { quickjs::borrow_value(scope, realm_window) };
+        message::link_outward(js, &outward, &realm_window);
+    });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_forward_of(js: *const NsJs, outward: JSValue) -> JSValue {
+    let js = Js::of(js);
+    let Some(realm) = current_realm(js) else {
+        return quickjs::UNDEFINED;
+    };
+    realm.enter(|scope| {
+        let outward = unsafe { quickjs::borrow_value(scope, outward) };
+        quickjs::into_raw(message::forward_of(js, &outward))
+    })
+}
 
 #[repr(C)]
 pub(crate) struct NsJs {

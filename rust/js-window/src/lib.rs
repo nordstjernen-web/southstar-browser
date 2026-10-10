@@ -1,10 +1,11 @@
-//! Southstar — the window's navigation bindings: History, the Navigation API, Location, window.open and each page's session history.
+//! Southstar — the window's navigation bindings: History, the Navigation API, Location, window.open, postMessage between windows and frames, and each page's session history.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
 mod history;
 mod location;
+mod message;
 mod navigation;
 
 use std::cell::RefCell;
@@ -47,8 +48,15 @@ impl Default for Session {
 }
 
 #[derive(Default)]
+pub(crate) struct Links {
+    pub forwards: Vec<(Value, Value)>,
+    pub outwards: Vec<(Value, Value)>,
+}
+
+#[derive(Default)]
 pub(crate) struct Page {
     pub session: RefCell<Session>,
+    pub links: RefCell<Links>,
 }
 
 thread_local! {
@@ -57,6 +65,13 @@ thread_local! {
 
 pub(crate) fn page(js: Js) -> Rc<Page> {
     PAGES.with(|pages| pages.borrow_mut().entry(js).or_default().clone())
+}
+
+pub(crate) fn existing_page(js: Js) -> Option<Rc<Page>> {
+    PAGES
+        .try_with(|pages| pages.try_borrow().ok()?.get(&js).cloned())
+        .ok()
+        .flatten()
 }
 
 pub(crate) fn teardown(js: Js) {

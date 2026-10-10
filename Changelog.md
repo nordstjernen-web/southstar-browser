@@ -19,7 +19,8 @@ Southstar Browser (unreleased):
   through an adapter) is gone, the first step toward replacing QuickJS with
   the Rust engine Boa.
 * History (pushState, replaceState, back, forward, go, popstate), the
-  Navigation API, Location and window.open() are Rust (rust/js-window), with
+  Navigation API, Location, window.open() and window.postMessage() between
+  windows and frames are Rust (rust/js-window), with
   unchanged results.
 * navigator and its sub-objects (permissions, clipboard, geolocation,
   mediaDevices, getBattery(), userAgentData, plugins, storage), the window

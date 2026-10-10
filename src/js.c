@@ -375,8 +375,6 @@ static JSValue ns_realm_proto_for(ns_js *js, JSContext *realm, JSValueConst prot
 static gboolean ns_iframe_is_cross_origin(ns_js *js, const ns_node *iframe);
 static void ns_js_name_engine_members(JSContext *ctx);
 static void ns_js_link_interfaces(JSContext *ctx);
-static JSValue ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer);
-static JSValue ns_iframe_cross_origin_window(JSContext *ctx, JSValue target);
 static void ns_hide_shared_array_buffer(JSContext *ctx, JSValueConst global);
 static void ns_target_report_exception(ns_js *js, JSContext *ctx, const char *type);
 static gboolean ns_js_image_loads_pending(const ns_js *js);
@@ -12155,14 +12153,6 @@ ns_target_handler_realm(JSContext *ctx, JSValueConst obj, const char *type,
 }
 
 
-static JSValue
-ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer)
-{
-    return ns_structured_clone_transfer(ctx, v,
-        JS_IsArray(transfer) ? JS_DupValue(ctx, transfer) : JS_UNDEFINED,
-        JS_UNDEFINED, JS_UNDEFINED);
-}
-
 static gboolean
 ns_target_entry_signal_aborted(JSContext *ctx, JSValueConst entry)
 {
@@ -12178,79 +12168,7 @@ ns_target_entry_signal_aborted(JSContext *ctx, JSValueConst entry)
     return aborted;
 }
 
-static void
-ns_window_link_table_put(ns_js *js, GHashTable **table, JSValueConst key,
-                         JSValueConst value)
-{
-    if (!*table) *table = g_hash_table_new(g_direct_hash, g_direct_equal);
-    gpointer old_key, old_value;
-    if (g_hash_table_lookup_extended(*table, JS_VALUE_GET_PTR(key),
-                                     &old_key, &old_value)) {
-        g_hash_table_remove(*table, old_key);
-        JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, old_key));
-        JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, old_value));
-    }
-    JSValue held_key = JS_DupValue(js->ctx, key);
-    JSValue held_value = JS_DupValue(js->ctx, value);
-    g_hash_table_insert(*table, JS_VALUE_GET_PTR(held_key),
-                        JS_VALUE_GET_PTR(held_value));
-}
-
-static void
-ns_window_link_table_clear(ns_js *js, GHashTable **table, gboolean destroy)
-{
-    if (!*table) return;
-    GHashTableIter it;
-    gpointer k, v;
-    g_hash_table_iter_init(&it, *table);
-    while (g_hash_table_iter_next(&it, &k, &v)) {
-        JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, k));
-        JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, v));
-    }
-    if (destroy) {
-        g_hash_table_destroy(*table);
-        *table = NULL;
-    } else {
-        g_hash_table_remove_all(*table);
-    }
-}
-
-static void
-ns_window_links_clear(ns_js *js, gboolean destroy)
-{
-    ns_window_link_table_clear(js, &js->window_forwards, destroy);
-    ns_window_link_table_clear(js, &js->window_outwards, destroy);
-}
-
-static void
-ns_window_link_outward(ns_js *js, JSValueConst outward, JSValueConst realm_window)
-{
-    if (!js || !JS_IsObject(outward) || !JS_IsObject(realm_window)) return;
-    ns_window_link_table_put(js, &js->window_forwards, outward, realm_window);
-    ns_window_link_table_put(js, &js->window_outwards, realm_window, outward);
-}
-
-static JSValue
-ns_window_link_lookup(ns_js *js, GHashTable *table, JSValueConst key)
-{
-    if (!js || !table || !JS_IsObject(key)) return JS_UNDEFINED;
-    gpointer v = g_hash_table_lookup(table, JS_VALUE_GET_PTR(key));
-    return v ? JS_DupValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, v)) : JS_UNDEFINED;
-}
-
-static JSValue
-ns_window_forward_of(ns_js *js, JSValueConst outward)
-{
-    return ns_window_link_lookup(js, js ? js->window_forwards : NULL, outward);
-}
-
-static JSValue
-ns_window_outward_of(ns_js *js, JSValueConst realm_window)
-{
-    return ns_window_link_lookup(js, js ? js->window_outwards : NULL, realm_window);
-}
-
-static ns_node *
+ns_node *
 ns_window_frame_node(ns_js *js, JSValueConst win)
 {
     if (!js || !js->frame_contexts || !JS_IsObject(win)) return NULL;
@@ -12264,84 +12182,6 @@ ns_window_frame_node(ns_js *js, JSValueConst win)
         if (hit) return key;
     }
     return NULL;
-}
-
-static char *
-ns_window_origin_of(JSContext *ctx, JSValueConst win)
-{
-    ns_js *js = js_from_ctx(ctx);
-    JSValue forwarded = ns_window_forward_of(js, win);
-    if (JS_IsObject(forwarded)) win = forwarded;
-    ns_node *frame = ns_window_frame_node(js, win);
-    if (frame) {
-        unsigned sandbox = ns_iframe_effective_sandbox(frame);
-        if ((sandbox & NS_SANDBOX_ACTIVE) &&
-            !(sandbox & NS_SANDBOX_ALLOW_SAME_ORIGIN)) {
-            JS_FreeValue(ctx, forwarded);
-            return g_strdup("null");
-        }
-    }
-    if (js && js->document_origin && JS_IsObject(win)) {
-        JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-        JSValue main_global = JS_GetGlobalObject(main_ctx);
-        gboolean is_main =
-            JS_VALUE_GET_PTR(main_global) == JS_VALUE_GET_PTR(win);
-        JS_FreeValue(main_ctx, main_global);
-        if (is_main) {
-            JS_FreeValue(ctx, forwarded);
-            return g_strdup(js->document_origin);
-        }
-    }
-    const char *frame_url = frame && js->frame_urls
-        ? g_hash_table_lookup(js->frame_urls, frame) : NULL;
-    if (frame_url) {
-        char *origin = ns_url_origin_from(frame_url);
-        JS_FreeValue(ctx, forwarded);
-        return origin ? origin : g_strdup("null");
-    }
-    JSValue loc = JS_GetPropertyStr(ctx, win, "location");
-    if (JS_IsException(loc)) JS_FreeValue(ctx, JS_GetException(ctx));
-    char *out = NULL;
-    if (JS_IsObject(loc)) {
-        JSValue ov = JS_GetPropertyStr(ctx, loc, "origin");
-        if (JS_IsException(ov)) JS_FreeValue(ctx, JS_GetException(ctx));
-        if (JS_IsString(ov)) {
-            const char *s = JS_ToCString(ctx, ov);
-            if (s) {
-                out = g_strdup(s);
-                JS_FreeCString(ctx, s);
-            }
-        }
-        JS_FreeValue(ctx, ov);
-    }
-    JS_FreeValue(ctx, loc);
-    JS_FreeValue(ctx, forwarded);
-    return out;
-}
-
-static void
-ns_message_event_adopt_data(JSContext *ctx, JSContext *realm, JSValueConst ev)
-{
-    if (!realm) return;
-    JSValue ports = JS_GetPropertyStr(ctx, ev, "ports");
-    JSValue data = JS_GetPropertyStr(ctx, ev, "data");
-    if (realm != ctx && JS_IsObject(data)) {
-        JSValue adopted = ns_structured_clone_value(realm, data,
-            JS_IsArray(ports) ? (JSValueConst)ports : JS_UNDEFINED);
-        if (JS_IsException(adopted))
-            JS_FreeValue(realm, JS_GetException(realm));
-        else
-            JS_SetPropertyStr(ctx, ev, "data", adopted);
-    }
-    JS_FreeValue(ctx, data);
-    JSValue realm_ports = JS_NewArray(realm);
-    uint32_t n = JS_IsArray(ports) ? ns_js_array_length(ctx, ports) : 0;
-    for (uint32_t i = 0; i < n; i++)
-        JS_SetPropertyUint32(realm, realm_ports, i,
-                             JS_GetPropertyUint32(ctx, ports, i));
-    JS_SetPropertyStr(ctx, ev, "ports", ns_freeze_array(realm, realm_ports));
-    JS_FreeValue(realm, realm_ports);
-    JS_FreeValue(ctx, ports);
 }
 
 static gboolean
@@ -12375,342 +12215,6 @@ ns_window_current_document_for(JSContext *ctx, JSValueConst window)
         doc = ns_window_frame_document(ctx, win, doc);
     JS_FreeValue(ctx, forwarded);
     return doc;
-}
-
-static JSContext *ns_window_message_realm(JSContext *ctx, JSValueConst target);
-
-static JSValue
-ns_window_post_message_deliver_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    if (argc < 2) return JS_UNDEFINED;
-    JSValueConst target = argv[0];
-    JSValueConst ev = argv[1];
-    ns_js *js = js_from_ctx(ctx);
-    /* The message event is created when the posted task runs, in the
-     * receiving window's realm: it is that window's MessageEvent and its
-     * time stamp is the delivery time on that window's clock. */
-    JSContext *realm = ns_window_message_realm(ctx, target);
-    JSValue realm_global = JS_GetGlobalObject(realm);
-    JSValue realm_proto = ns_proto_of(realm, realm_global, "MessageEvent");
-    if (JS_IsObject(realm_proto)) JS_SetPrototype(ctx, ev, realm_proto);
-    JS_FreeValue(realm, realm_proto);
-    JS_FreeValue(realm, realm_global);
-    JS_SetPropertyStr(ctx, ev, "timeStamp",
-                      JS_NewFloat64(ctx, ns_perf_realm_now_ms(realm)));
-    JSValue forwarded = ns_window_forward_of(js, target);
-    JSValue actual_target = JS_IsObject(forwarded)
-        ? JS_DupValue(ctx, forwarded) : JS_DupValue(ctx, target);
-    JS_SetPropertyStr(ctx, ev, "target", JS_DupValue(ctx, actual_target));
-    JS_SetPropertyStr(ctx, ev, "currentTarget", JS_DupValue(ctx, actual_target));
-    if (JS_IsObject(forwarded) && js && js->ctx) {
-        JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-        JSValue source = JS_GetPropertyStr(ctx, ev, "source");
-        JSValue parent_global = JS_GetGlobalObject(main_ctx);
-        if (JS_IsObject(source) &&
-            JS_VALUE_GET_PTR(source) == JS_VALUE_GET_PTR(target)) {
-            JS_SetPropertyStr(ctx, ev, "source",
-                              JS_DupValue(ctx, actual_target));
-        } else if (JS_IsObject(source) &&
-                   JS_VALUE_GET_PTR(source) == JS_VALUE_GET_PTR(parent_global)) {
-            JSValue parent_proxy = JS_GetPropertyStr(
-                ctx, actual_target, "__ndParentWindowProxy");
-            if (JS_IsObject(parent_proxy))
-                JS_SetPropertyStr(ctx, ev, "source", parent_proxy);
-            else
-                JS_FreeValue(ctx, parent_proxy);
-        }
-        JS_FreeValue(main_ctx, parent_global);
-        JS_FreeValue(ctx, source);
-    }
-    JSValue deliver = JS_GetPropertyStr(ctx, actual_target, "__nsDeliverMessage");
-    if (JS_IsFunction(ctx, deliver)) {
-        ns_budget_guard bg = {0};
-        ns_js_budget_push(js, &bg);
-        g_autofree char *realm_url =
-            g_strdup(ns_js_realm_url(js, JS_GetFunctionRealm(ctx, deliver)));
-        ns_frame_url fu;
-        gboolean swap_url = js && realm_url && *realm_url;
-        if (swap_url) ns_frame_url_enter(js, &fu, realm_url);
-        ns_message_event_adopt_data(ctx, JS_GetFunctionRealm(ctx, deliver), ev);
-        JSValueConst args[1] = { ev };
-        JSValue r = JS_Call(ctx, deliver, actual_target, 1, args);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-        if (swap_url) ns_frame_url_leave(js, &fu);
-        ns_js_budget_pop(js, &bg);
-    } else if (js && js->ctx) {
-        JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-        JSValue main_global = JS_GetGlobalObject(main_ctx);
-        gboolean is_main =
-            JS_VALUE_GET_PTR(main_global) == JS_VALUE_GET_PTR(actual_target);
-        JS_FreeValue(main_ctx, main_global);
-        if (is_main) {
-            ns_node *main_doc = js->current_doc;
-            while (main_doc && main_doc->parent) {
-                main_doc = main_doc->parent;
-                while (main_doc && main_doc->kind != NS_NODE_DOCUMENT)
-                    main_doc = main_doc->parent;
-            }
-            JSContext *saved_ctx = js->ctx;
-            ns_node *saved_doc = js->current_doc;
-            ns_message_event_adopt_data(ctx, main_ctx, ev);
-            js->ctx = main_ctx;
-            js->current_doc = main_doc;
-            ns_js_dispatch_window_only_event(js, main_doc, "message",
-                                             JS_DupValue(ctx, ev), NULL);
-            js->ctx = saved_ctx;
-            js->current_doc = saved_doc;
-        } else {
-            ns_budget_guard bg = {0};
-            ns_js_budget_push(js, &bg);
-            ns_target_dispatch_with_event(ctx, actual_target, "message", ev);
-            ns_js_budget_pop(js, &bg);
-        }
-    }
-    JS_FreeValue(ctx, deliver);
-    JS_FreeValue(ctx, actual_target);
-    JS_FreeValue(ctx, forwarded);
-    return JS_UNDEFINED;
-}
-
-/* The realm that ns_window_post_message_deliver_job will deliver into. */
-static JSContext *
-ns_window_message_realm(JSContext *ctx, JSValueConst target)
-{
-    ns_js *js = js_from_ctx(ctx);
-    JSValue forwarded = ns_window_forward_of(js, target);
-    JSValueConst actual = JS_IsObject(forwarded) ? (JSValueConst)forwarded
-                                                 : target;
-    JSValue deliver = JS_GetPropertyStr(ctx, actual, "__nsDeliverMessage");
-    JSContext *realm = ctx;
-    if (JS_IsException(deliver)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    } else if (JS_IsFunction(ctx, deliver)) {
-        realm = ns_function_realm(ctx, deliver);
-    } else if (js && js->ctx) {
-        JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-        JSValue main_global = JS_GetGlobalObject(main_ctx);
-        if (JS_VALUE_GET_PTR(main_global) == JS_VALUE_GET_PTR(actual))
-            realm = main_ctx;
-        JS_FreeValue(main_ctx, main_global);
-    }
-    JS_FreeValue(ctx, deliver);
-    JS_FreeValue(ctx, forwarded);
-    return realm;
-}
-
-/* Posts a message to target in the realm ctx, which throws the exceptions;
- * caller is the realm of the code that called postMessage, the one the
- * message's source window comes from. */
-static JSValue
-ns_post_message_to_target_in(JSContext *ctx, JSContext *caller, JSValue target,
-                             JSValueConst source_override,
-                             int argc, JSValueConst *argv)
-{
-    if (argc < 1) {
-        JS_FreeValue(ctx, target);
-        return JS_ThrowTypeError(ctx,
-            "Failed to execute 'postMessage' on 'Window': 1 argument required, "
-            "but only 0 present.");
-    }
-
-    g_autofree char *want_origin = NULL;
-    JSValue transfer = JS_UNDEFINED;
-    gboolean options_form = argc < 3 &&
-        (argc < 2 || JS_IsObject(argv[1]) || JS_IsUndefined(argv[1]) ||
-         JS_IsNull(argv[1]));
-    if (!options_form) {
-        const char *s = JS_ToCString(ctx, argv[1]);
-        if (!s) {
-            JS_FreeValue(ctx, target);
-            return JS_EXCEPTION;
-        }
-        want_origin = g_strdup(s);
-        JS_FreeCString(ctx, s);
-        if (argc >= 3) transfer = JS_DupValue(ctx, argv[2]);
-    } else if (argc >= 2 && JS_IsObject(argv[1])) {
-        transfer = JS_GetPropertyStr(ctx, argv[1], "transfer");
-        JSValue tov = JS_GetPropertyStr(ctx, argv[1], "targetOrigin");
-        if (JS_IsException(transfer) || JS_IsException(tov)) {
-            JS_FreeValue(ctx, tov);
-            JS_FreeValue(ctx, transfer);
-            JS_FreeValue(ctx, target);
-            return JS_EXCEPTION;
-        }
-        if (!JS_IsUndefined(tov)) {
-            const char *s = JS_ToCString(ctx, tov);
-            if (!s) {
-                JS_FreeValue(ctx, tov);
-                JS_FreeValue(ctx, transfer);
-                JS_FreeValue(ctx, target);
-                return JS_EXCEPTION;
-            }
-            want_origin = g_strdup(s);
-            JS_FreeCString(ctx, s);
-        }
-        JS_FreeValue(ctx, tov);
-    }
-    if (!want_origin) want_origin = g_strdup("/");
-
-    g_autofree char *wanted = NULL;
-    if (strcmp(want_origin, "/") == 0) {
-        JSValue src_win = JS_IsObject(source_override)
-            ? JS_DupValue(ctx, source_override) : JS_GetGlobalObject(caller);
-        wanted = ns_window_origin_of(ctx, src_win);
-        JS_FreeValue(ctx, src_win);
-    } else if (strcmp(want_origin, "*") != 0) {
-        wanted = ns_url_origin_from(want_origin);
-        if (!wanted) {
-            JS_FreeValue(ctx, transfer);
-            JS_FreeValue(ctx, target);
-            return ns_throw_dom_exception(ctx, "SyntaxError", 12,
-                "Failed to execute 'postMessage' on 'Window': Invalid target origin.");
-        }
-    }
-
-    /* Serializing and transferring happen before the origin check, so a
-     * message to the wrong origin still detaches its transferred ports. */
-    JSValue old_ports, ports;
-    if (ns_port_transfer_prepare(ctx, transfer, JS_UNDEFINED,
-                                 ns_window_message_realm(ctx, target),
-                                 &old_ports, &ports) < 0) {
-        JS_FreeValue(ctx, transfer);
-        JS_FreeValue(ctx, target);
-        return JS_EXCEPTION;
-    }
-    JSValue data = ns_structured_clone_transfer(ctx, argv[0], transfer,
-                                                old_ports, ports);
-    if (JS_IsException(data)) {
-        JS_FreeValue(ctx, old_ports);
-        JS_FreeValue(ctx, ports);
-        JS_FreeValue(ctx, target);
-        return JS_EXCEPTION;
-    }
-    ns_port_transfer_commit(ctx, old_ports, ports);
-    JS_FreeValue(ctx, old_ports);
-
-    if (strcmp(want_origin, "*") != 0) {
-        g_autofree char *actual = ns_window_origin_of(ctx, target);
-        gboolean match = actual && wanted && strcmp(wanted, "null") != 0 &&
-                         g_ascii_strcasecmp(wanted, actual) == 0;
-        if (!match) {
-            JS_FreeValue(ctx, data);
-            JS_FreeValue(ctx, ports);
-            JS_FreeValue(ctx, target);
-            return JS_UNDEFINED;
-        }
-    }
-
-    JSValue source_global = JS_IsObject(source_override)
-        ? JS_DupValue(ctx, source_override) : JS_GetGlobalObject(caller);
-    g_autofree char *src_origin = ns_window_origin_of(ctx, source_global);
-    JSValue source_outward = ns_window_outward_of(js_from_ctx(ctx), source_global);
-    JSValue source = JS_IsObject(source_outward)
-        ? ns_iframe_cross_origin_window(ctx, JS_DupValue(ctx, source_outward))
-        : JS_DupValue(ctx, source_global);
-    if (!JS_IsObject(source)) {
-        JS_FreeValue(ctx, source);
-        source = JS_IsObject(source_outward) ? JS_DupValue(ctx, source_outward)
-                                             : JS_DupValue(ctx, source_global);
-    }
-    JS_FreeValue(ctx, source_outward);
-    JS_FreeValue(ctx, source_global);
-
-    JSValue ev = ns_target_make_event(ctx, target, "message");
-    JS_SetPropertyStr(ctx, ev, "data", data);
-    JS_SetPropertyStr(ctx, ev, "origin",
-                      JS_NewString(ctx, src_origin ? src_origin : ""));
-    JS_SetPropertyStr(ctx, ev, "lastEventId", JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, ev, "source", source);
-    JS_SetPropertyStr(ctx, ev, "ports", ports);
-
-    JSValueConst job_args[2] = { target, ev };
-    ns_js_queue_message_task(ctx, ns_window_post_message_deliver_job, 2, job_args);
-    JS_FreeValue(ctx, ev);
-    JS_FreeValue(ctx, target);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_post_message_to_target(JSContext *ctx, JSValue target,
-                          JSValueConst source_override,
-                          int argc, JSValueConst *argv)
-{
-    return ns_post_message_to_target_in(ctx, JS_GetCallerRealm(ctx), target,
-                                        source_override, argc, argv);
-}
-
-/* The realm of a window: the one of its frame, or the main one. */
-static JSContext *
-ns_window_realm_context(JSContext *ctx, JSValueConst window)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return ctx;
-    ns_node *frame = ns_window_frame_node(js, window);
-    JSContext *realm = frame ? g_hash_table_lookup(js->frame_contexts, frame)
-                             : NULL;
-    if (realm) return realm;
-    return js->main_realm_ctx ? js->main_realm_ctx : ctx;
-}
-
-/* A C function with data runs in the realm of its caller, but postMessage
- * throws the exceptions of the realm of the window it belongs to. */
-static JSValue
-ns_window_post_message_data(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv,
-                            int magic, JSValue *data)
-{
-    (void)magic;
-    JSContext *realm = ns_window_realm_context(ctx, data[0]);
-    JSValue target = JS_IsObject(this_val) ? JS_DupValue(ctx, this_val)
-                                           : JS_DupValue(ctx, data[0]);
-    return ns_post_message_to_target_in(realm, JS_GetCallerRealm(ctx), target,
-                                        JS_UNDEFINED, argc, argv);
-}
-
-static JSValue
-ns_window_post_message_explicit(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2 || !JS_IsObject(argv[0])) return JS_UNDEFINED;
-    return ns_post_message_to_target(ctx, JS_DupValue(ctx, argv[0]),
-                                     JS_UNDEFINED, argc - 1, argv + 1);
-}
-
-static JSValue
-ns_window_post_message_this(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    if (!JS_IsObject(this_val)) return JS_UNDEFINED;
-    return ns_post_message_to_target(ctx, JS_DupValue(ctx, this_val),
-                                     JS_UNDEFINED, argc, argv);
-}
-
-static JSValue
-ns_window_post_message_from(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 3 || !JS_IsObject(argv[0]) || !JS_IsObject(argv[1]))
-        return JS_UNDEFINED;
-    return ns_post_message_to_target(ctx, JS_DupValue(ctx, argv[0]), argv[1],
-                                     argc - 2, argv + 2);
-}
-
-static void
-ns_window_bind_post_message(JSContext *ctx, JSValueConst global)
-{
-    JSValueConst data[1] = { global };
-    JS_SetPropertyStr(ctx, global, "postMessage",
-                      JS_NewCFunctionData(ctx, ns_window_post_message_data,
-                                          2, 0, 1, data));
-    ns_bind_fn(ctx, global, "__nsPostMessageTo",
-               ns_window_post_message_explicit, 4);
-    ns_bind_fn(ctx, global, "__nsPostMessageThis",
-               ns_window_post_message_this, 3);
-    ns_bind_fn(ctx, global, "__nsPostMessageFrom",
-               ns_window_post_message_from, 5);
 }
 
 static JSValue
@@ -40687,9 +40191,7 @@ ns_iframe_make_realm_context(ns_js *js, ns_node *iframe,
         JSValue frame_name_v = JS_NewString(fctx, frame_name ? frame_name : "");
         JSValue child_frame_of = JS_NewCFunction(fctx, ns_iframe_child_frame_of,
                                                  "childFrameOf", 2);
-        JSValueConst post_data[1] = { fg };
-        JSValue post_message = JS_NewCFunctionData(fctx,
-            ns_window_post_message_data, 2, 0, 1, post_data);
+        JSValue post_message = ns_window_make_post_message(fctx, fg);
         JSValue docv = doc_url && *doc_url ? JS_NewString(fctx, doc_url)
                                            : JS_UNDEFINED;
         JSValue realm_clone = JS_NewCFunction(fctx, ns_realm_clone_fn,
@@ -41009,7 +40511,7 @@ static const char ns_cross_window_bootstrap[] =
     "  return proxy;"
     "})";
 
-static JSValue
+JSValue
 ns_iframe_cross_origin_window(JSContext *ctx, JSValue target)
 {
     JSValue global = JS_GetGlobalObject(ctx);
@@ -55779,6 +55281,78 @@ ns_js_navigate(ns_js *js, const char *url, gboolean reload)
     if (!js->nav_cb) return FALSE;
     js->nav_cb(url, reload, js->nav_user_data);
     return TRUE;
+}
+
+JSContext *
+ns_js_main_realm_context(const ns_js *js)
+{
+    return js->main_realm_ctx;
+}
+
+gboolean
+ns_iframe_origin_is_opaque(ns_node *frame)
+{
+    unsigned sandbox = ns_iframe_effective_sandbox(frame);
+    return (sandbox & NS_SANDBOX_ACTIVE) &&
+           !(sandbox & NS_SANDBOX_ALLOW_SAME_ORIGIN);
+}
+
+const char *
+ns_js_document_origin(const ns_js *js)
+{
+    return js->document_origin;
+}
+
+const char *
+ns_js_frame_url(const ns_js *js, const ns_node *frame)
+{
+    return js->frame_urls ? g_hash_table_lookup(js->frame_urls, frame) : NULL;
+}
+
+JSContext *
+ns_js_frame_context(const ns_js *js, const ns_node *frame)
+{
+    return js->frame_contexts ? g_hash_table_lookup(js->frame_contexts, frame)
+                              : NULL;
+}
+
+void *
+ns_js_realm_url_enter(ns_js *js, JSContext *realm)
+{
+    const char *url = ns_js_realm_url(js, realm);
+    if (!js || !url || !*url) return NULL;
+    g_autofree char *copy = g_strdup(url);
+    ns_frame_url *fu = g_new0(ns_frame_url, 1);
+    ns_frame_url_enter(js, fu, copy);
+    return fu;
+}
+
+void
+ns_js_realm_url_leave(ns_js *js, void *token)
+{
+    ns_frame_url *fu = token;
+    if (!fu) return;
+    ns_frame_url_leave(js, fu);
+    g_free(fu);
+}
+
+void
+ns_js_dispatch_main_window_event(ns_js *js, const char *type, JSValue event)
+{
+    JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
+    ns_node *main_doc = js->current_doc;
+    while (main_doc && main_doc->parent) {
+        main_doc = main_doc->parent;
+        while (main_doc && main_doc->kind != NS_NODE_DOCUMENT)
+            main_doc = main_doc->parent;
+    }
+    JSContext *saved_ctx = js->ctx;
+    ns_node *saved_doc = js->current_doc;
+    js->ctx = main_ctx;
+    js->current_doc = main_doc;
+    ns_js_dispatch_window_only_event(js, main_doc, type, event, NULL);
+    js->ctx = saved_ctx;
+    js->current_doc = saved_doc;
 }
 
 gboolean
