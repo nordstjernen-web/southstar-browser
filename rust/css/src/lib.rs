@@ -59,7 +59,7 @@ mod values;
 mod vars;
 
 pub use color::parse_color;
-pub use ffi::NsCssValue;
+pub use ffi::{MatchContext, NsCssValue, QueryKey, Selector, SelectorList};
 pub use gradient::{Gradient, Stop as GradientStop};
 pub use prop::Prop;
 pub use shadow::{Shadow, ShadowList};

@@ -103,6 +103,20 @@ impl<'a> CompoundRef<'a> {
         unsafe { text(self.0.id) }.map(CStr::to_bytes)
     }
 
+    pub(crate) fn id_text(self) -> Option<&'a CStr> {
+        unsafe { text(self.0.id) }
+    }
+
+    pub(crate) fn type_text(self) -> Option<&'a CStr> {
+        unsafe { text(self.0.type_) }
+    }
+
+    pub(crate) fn first_class_text(self) -> Option<&'a CStr> {
+        unsafe { pointers::<c_char>(self.0.classes) }
+            .first()
+            .and_then(|&name| unsafe { text(name) })
+    }
+
     pub(crate) fn classes(self) -> impl Iterator<Item = &'a [u8]> {
         let names = unsafe { pointers::<c_char>(self.0.classes) };
         let lens = unsafe { elements::<usize>(self.0.class_lens) };

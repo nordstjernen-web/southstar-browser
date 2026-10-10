@@ -12,7 +12,7 @@ pub mod select;
 pub mod serialize;
 pub mod tree;
 
-pub use ffi::{Attr, Kind, Node, NsAttr, NsNode};
+pub use ffi::{Attr, Kind, Node, NodeArray, NsAttr, NsNode};
 
 pub const MAX_DEPTH: i32 = 512;
 pub const FLAG_SVG_NS: u32 = 1 << 7;

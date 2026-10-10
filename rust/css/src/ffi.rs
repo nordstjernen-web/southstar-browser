@@ -29,6 +29,7 @@ mod nesting;
 mod pending;
 mod preferences;
 mod property;
+mod query;
 mod registry;
 mod restyle;
 mod rule_index;
@@ -70,6 +71,7 @@ pub(crate) use matcher::{
     active_node, focus_node, focus_visible_node, fullscreen_node, hover_node, match_scope,
     set_match_scope,
 };
+pub use query::{MatchContext, QueryKey, Selector, SelectorList};
 pub(crate) use selector_view::{
     AttrRef, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef, SheetRef,
 };

@@ -173,6 +173,10 @@ impl NodeArray {
         self.raw().len as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn get(&self, index: usize) -> Node<'static> {
         let node = unsafe { *self.raw().pdata.add(index) };
         unsafe { Node::from_ptr(node.cast()) }.unwrap_or_else(|| std::process::abort())

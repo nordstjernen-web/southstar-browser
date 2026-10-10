@@ -230,12 +230,6 @@ struct ns_js {
     int           throw_on_dynamic_markup;
     int           ignore_destructive_writes;
     int           in_error_report;
-    JSValue       nodelist_decorator;
-    int           nodelist_decorator_set;
-    JSValue       live_html_proto;
-    JSValue       live_node_proto;
-    JSValue       live_radionode_proto;
-    int           live_protos_set;
     JSValue       form_data_helper;
     int           form_data_helper_set;
     JSAtom        atom_capture;
@@ -246,7 +240,6 @@ struct ns_js {
     JSAtom        atom_immediate_stopped;
     JSAtom        atom_propagation_stopped;
     int           listener_atoms_set;
-    guint64       dom_gen;
     JSValue       proto_node;
     JSValue       proto_element;
     JSValue       proto_htmlelement;
@@ -264,15 +257,6 @@ struct ns_js {
     JSValue       proto_document;
     GHashTable   *per_tag_protos;
     int           dom_protos_set;
-    struct {
-        const void *root;
-        char        kind;
-        char       *key;
-        guint64     gen;
-        JSValue     value;
-        int         set;
-    } qcache[16];
-    int           qcache_next;
     GPtrArray    *current_dispatch_path;
     gboolean      current_dispatch_window;
     gboolean      in_hashchange;
@@ -1502,5 +1486,88 @@ JSValue  ns_document_element_from_point(JSContext *ctx, JSValueConst this_val, i
                                         JSValueConst *argv);
 JSValue  ns_document_elements_from_point(JSContext *ctx, JSValueConst this_val, int argc,
                                          JSValueConst *argv);
+
+typedef enum {
+    NS_LIVE_CHILDREN,
+    NS_LIVE_CHILDNODES,
+    NS_LIVE_BY_TAG,
+    NS_LIVE_DOC_TAG,
+    NS_LIVE_BY_TAG_NS,
+    NS_LIVE_DOC_TAG_NS,
+    NS_LIVE_BY_CLASS,
+    NS_LIVE_DOC_CLASS,
+    NS_LIVE_BY_NAME,
+    NS_LIVE_FORM_ELEMENTS,
+    NS_LIVE_LINKS,
+    NS_LIVE_RADIO_NODE_LIST,
+    NS_LIVE_ATTRIBUTES,
+    NS_LIVE_LABELS,
+} ns_live_kind;
+
+JSValue  ns_element_querySelector(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_querySelectorAll(JSContext *ctx, JSValueConst this_val, int argc,
+                                     JSValueConst *argv);
+JSValue  ns_document_querySelector(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_document_querySelectorAll(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_element_matches(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_element_closest(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_element_getElementById(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_document_getElementById(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_element_getElementsByTagName(JSContext *ctx, JSValueConst this_val, int argc,
+                                         JSValueConst *argv);
+JSValue  ns_document_getElementsByTagName(JSContext *ctx, JSValueConst this_val, int argc,
+                                          JSValueConst *argv);
+JSValue  ns_element_getElementsByTagNameNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                           JSValueConst *argv);
+JSValue  ns_document_getElementsByTagNameNS(JSContext *ctx, JSValueConst this_val, int argc,
+                                            JSValueConst *argv);
+JSValue  ns_element_getElementsByClassName(JSContext *ctx, JSValueConst this_val, int argc,
+                                           JSValueConst *argv);
+JSValue  ns_document_getElementsByClassName(JSContext *ctx, JSValueConst this_val, int argc,
+                                            JSValueConst *argv);
+JSValue  ns_document_getElementsByName(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_live_length_get(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+void     ns_qcache_invalidate(ns_js *js);
+JSValue  ns_qcache_get(JSContext *ctx, const void *root, char kind, const char *key);
+void     ns_qcache_put(JSContext *ctx, const void *root, char kind, const char *key,
+                       JSValueConst value);
+void     ns_collections_teardown(ns_js *js);
+JSValue  ns_nodelist_from_array(JSContext *ctx, JSValue arr);
+JSValue  ns_make_live(JSContext *ctx, JSValueConst owner, int kind, const char *param);
+JSValue  ns_make_live2(JSContext *ctx, JSValueConst owner, int kind, const char *param,
+                       const char *param2);
+JSValue  ns_live_snapshot(JSContext *ctx, JSValueConst obj);
+int      ns_live_collection_kind(JSValueConst obj);
+ns_node *ns_live_owner_node(JSValueConst obj);
+void     ns_live_install_protos(JSContext *ctx);
+JSValue  ns_live_proto(JSContext *ctx, int which);
+void     ns_live_wire_constructors(JSContext *ctx, JSValueConst global);
+void     ns_live_back_free(void *back);
+JSValue  ns_live_back_owner(const void *back);
+JSValue  ns_live_back_cache(const void *back);
+int      ns_live_get_own(JSContext *ctx, const void *back, gboolean is_index, uint32_t index,
+                         const char *name, JSValue *out);
+gboolean ns_live_named_access(const void *back);
+int      ns_live_delete(JSContext *ctx, const void *back, gboolean is_index, uint32_t index,
+                        const char *name);
+int      ns_live_define_rejects(JSContext *ctx, const void *back, const char *name);
+uint32_t ns_live_own_names(JSContext *ctx, const void *back, JSValueConst obj,
+                           GPtrArray *named);
+JSValue  ns_live_object_new(JSContext *ctx, void *back);
+void    *ns_live_back_of(JSValueConst obj);
+JSValue  ns_live_build_attributes(JSContext *ctx, JSValueConst owner);
+JSValue  ns_live_build_labels(JSContext *ctx, const ns_node *n);
+JSValue  ns_form_elements_named_lookup(JSContext *ctx, JSValueConst this_val,
+                                       const char *name);
+ns_node *ns_document_root_for(JSContext *ctx, JSValueConst this_val);
 
 #endif

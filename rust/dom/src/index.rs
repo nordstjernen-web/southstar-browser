@@ -524,7 +524,7 @@ fn first_element_walk<'a>(root: Node<'a>, tag: &[u8], depth: i32) -> Option<Node
 
 pub fn find_first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
     if !tag.is_empty() && root.tag_table().is_some() {
-        return tag_lookup(root, tag, |list| (list.len() > 0).then(|| list.get(0))).flatten();
+        return tag_lookup(root, tag, |list| (!list.is_empty()).then(|| list.get(0))).flatten();
     }
     first_element_walk(root, tag.to_bytes(), 0)
 }

@@ -1,0 +1,17 @@
+[package]
+name = "southstar-js-collections"
+description = "Selector queries and live collections: querySelector, querySelectorAll, matches and closest with their fast paths and per-page query cache, the getElementsBy* and getElementById lookups, static NodeLists, and the live HTMLCollection, NodeList and RadioNodeList objects with indexed and named access"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css = { path = "../css" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

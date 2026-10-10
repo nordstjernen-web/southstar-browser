@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Selector queries (querySelector, querySelectorAll, matches, closest,
+  getElementById, getElementsBy*), the per-page query cache and live
+  HTMLCollection, NodeList and RadioNodeList moved from js.c to Rust
+  (rust/js-collections). Live-collection rebuilds and getElementsByClassName
+  are 15-30% faster; static NodeLists now share their item, namedItem and
+  forEach functions.
 * appendChild, insertBefore, removeChild, replaceChild, moveBefore, the
   ChildNode and ParentNode methods (before, after, replaceWith, remove,
   append, prepend, replaceChildren) and the pre-insertion validity checks
