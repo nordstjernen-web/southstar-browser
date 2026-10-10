@@ -1,10 +1,14 @@
-//! Southstar — the media bindings: the Web Audio API surface over rust/webaudio and the EME entry points.
+//! Southstar — the media bindings: HTMLMediaElement, media type support, the MSE natives, the Web Audio API surface over rust/webaudio and the EME entry points.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod audio;
+mod element;
 mod eme;
 mod ffi;
+mod hooks;
+mod mse;
+mod support;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
@@ -84,7 +88,16 @@ pub(crate) fn assigned_error(scope: &mut Scope<'_>, name: &str, message: &str) -
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, message: &str) -> Value {
-    let error = defined_error(scope, name, message, Some(9));
+    dom_exception_code(scope, name, message, 9)
+}
+
+pub(crate) fn dom_exception_code(
+    scope: &mut Scope<'_>,
+    name: &str,
+    message: &str,
+    code: i32,
+) -> Value {
+    let error = defined_error(scope, name, message, Some(code));
     let global = scope.global();
     let constructor = get(scope, &global, "DOMException");
     if constructor.is_object() {

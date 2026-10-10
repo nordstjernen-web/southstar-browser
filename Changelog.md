@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* HTMLMediaElement's playback state and methods, the MSE natives,
+  canPlayType, MediaSource.isTypeSupported and navigator.mediaCapabilities
+  moved from js.c to Rust (rust/js-media), with unchanged results.
 * innerText, outerText and the CharacterData and Text methods
   (substringData, appendData, insertData, deleteData, replaceData,
   splitText, wholeText, normalize) moved from js.c to Rust (rust/js-text),

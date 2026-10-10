@@ -1867,6 +1867,8 @@ dependencies = [
 name = "southstar-js-media"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-dom",
+ "southstar-glib",
  "southstar-js-engine",
  "southstar-webaudio",
 ]

@@ -75,25 +75,6 @@ struct ns_js {
     gpointer      nav_user_data;
     ns_js_download_cb download_cb;
     gpointer      download_user_data;
-    ns_js_audio_cb audio_cb;
-    gpointer      audio_user_data;
-    ns_js_media_seek_cb media_seek_cb;
-    gpointer      media_seek_user_data;
-    ns_js_media_play_cb media_play_cb;
-    gpointer      media_play_user_data;
-    ns_js_media_muted_cb media_muted_cb;
-    gpointer      media_muted_user_data;
-    ns_js_mse_cb  mse_cb;
-    gpointer      mse_user_data;
-    ns_js_mse_buffered_cb mse_buffered_cb;
-    gpointer      mse_buffered_user_data;
-    ns_js_mse_remove_cb mse_remove_cb;
-    gpointer      mse_remove_user_data;
-    ns_js_mse_bytes_cb mse_bytes_cb;
-    gpointer      mse_bytes_user_data;
-    ns_js_media_volume_cb media_volume_cb;
-    gpointer      media_volume_user_data;
-    guint         next_audio_token;
     ns_js_scroll_to_cb scroll_to_cb;
     gpointer      scroll_to_user_data;
     ns_js_fragment_nav_cb fragment_nav_cb;
@@ -776,6 +757,63 @@ JSValue ns_media_set_media_keys(JSContext *ctx, JSValueConst this_val,
 void ns_media_install_audio(JSContext *ctx, JSValueConst global);
 JSValue ns_media_capabilities_info(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv);
+void ns_media_init(ns_js *js);
+void ns_media_teardown(ns_js *js);
+guint ns_media_native_formats(void);
+JSValue ns_media_canPlayType(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+JSValue ns_media_source_is_type_supported(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv);
+JSValue ns_media_play(JSContext *ctx, JSValueConst this_val,
+                      int argc, JSValueConst *argv);
+JSValue ns_media_pause(JSContext *ctx, JSValueConst this_val,
+                       int argc, JSValueConst *argv);
+JSValue ns_media_load(JSContext *ctx, JSValueConst this_val,
+                      int argc, JSValueConst *argv);
+JSValue ns_media_fast_seek(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv);
+JSValue ns_media_get_video_playback_quality(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv);
+JSValue ns_window_mse_append(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+JSValue ns_window_mse_eos(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv);
+JSValue ns_window_mse_buffered(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv);
+JSValue ns_window_mse_buffered_start(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue ns_window_mse_remove(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
+JSValue ns_window_mse_bytes(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv);
+JSValue ns_media_get_paused(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_ended(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_seeking(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_readyState(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_networkState(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_current_time(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_duration(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_error(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_seekable_ranges(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_buffered_ranges(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_played_ranges(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_playbackRate(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_defaultPlaybackRate(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_volume(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_muted(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_get_srcObject(JSContext *ctx, JSValueConst this_val);
+JSValue ns_media_set_current_time(JSContext *ctx, JSValueConst this_val,
+                                  JSValueConst val);
+JSValue ns_media_set_playbackRate(JSContext *ctx, JSValueConst this_val,
+                                  JSValueConst val);
+JSValue ns_media_set_defaultPlaybackRate(JSContext *ctx, JSValueConst this_val,
+                                         JSValueConst val);
+JSValue ns_media_set_volume(JSContext *ctx, JSValueConst this_val,
+                            JSValueConst val);
+JSValue ns_media_set_muted(JSContext *ctx, JSValueConst this_val,
+                           JSValueConst val);
+JSValue ns_media_set_srcObject(JSContext *ctx, JSValueConst this_val,
+                               JSValueConst val);
 gboolean ns_js_user_activation_state(ns_js *js, gboolean *ever_activated);
 int ns_js_clipboard_write(ns_js *js, const char *text);
 JSValue ns_services_alert(JSContext *ctx, JSValueConst this_val,
