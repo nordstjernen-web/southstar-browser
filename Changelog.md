@@ -11,6 +11,9 @@ Southstar Browser (unreleased):
 * getComputedStyle and its resolved values, element.style, the CSS
   namespace and the Web Animations hooks moved from js.c to Rust
   (rust/js-cssom).
+* Event, CustomEvent, UIEvent and the other event constructors, their
+  attributes and legacy init*Event() methods, cancelBubble, returnValue and
+  composedPath() are Rust (rust/js-events), with unchanged results.
 * WebAssembly runs on wasmi, a pure-Rust interpreter (rust/js-wasm), in
   place of the vendored WAMR C runtime, which is gone along with src/wasm.c.
   Funcref tables can now be read from JavaScript (WAMR crashed on

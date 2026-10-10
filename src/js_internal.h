@@ -1024,4 +1024,16 @@ void     ns_js_flush_layout(ns_js *js);
 void     ns_js_flush_style(ns_js *js);
 void     ns_js_set_attr_recorded(ns_js *js, ns_node *n, const char *name,
                                  const char *value);
+
+/* The event core (rust/js-events) and the js.c helpers it calls. */
+JSValue ns_event_new_proto(JSContext *ctx, JSValueConst proto);
+JSValue ns_event_state(JSValueConst v);
+const ns_node *const *ns_js_dispatch_path(ns_js *js, guint *len, gboolean *window);
+void    ns_event_mark_default_prevented(JSContext *ctx, JSValueConst event);
+void    ns_event_define_source(JSContext *ctx, JSValueConst ev, JSValue source);
+void    ns_install_event_attribute_getters(JSContext *ctx, JSValueConst global);
+void    ns_events_install_window_base(JSContext *ctx, JSValueConst global);
+void    ns_events_install_window(JSContext *ctx, JSValueConst global);
+void    ns_events_install_worker(JSContext *ctx, JSValueConst global);
+
 #endif

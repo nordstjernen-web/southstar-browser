@@ -1619,6 +1619,7 @@ dependencies = [
  "southstar-js-brand",
  "southstar-js-clone",
  "southstar-js-cssom",
+ "southstar-js-events",
  "southstar-js-forms",
  "southstar-js-intl",
  "southstar-js-net",
@@ -1808,6 +1809,15 @@ version = "1.0.30-dev"
 dependencies = [
  "boa_engine",
  "boa_gc",
+]
+
+[[package]]
+name = "southstar-js-events"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]
