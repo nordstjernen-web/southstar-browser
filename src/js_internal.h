@@ -1274,6 +1274,34 @@ JSValue  ns_element_replace_data(JSContext *ctx, JSValueConst this_val, int argc
                                  JSValueConst *argv);
 JSValue  ns_element_split_text(JSContext *ctx, JSValueConst this_val, int argc,
                                JSValueConst *argv);
+gboolean ns_node_in_template_content(const ns_node *n);
+void     ns_js_index_child_change(ns_js *js, ns_node *parent, ns_node *added,
+                                  ns_node *removed);
+void     ns_js_run_inserted_scripts(ns_js *js, ns_node *root);
+JSValue  ns_element_appendChild(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_removeChild(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_insertBefore(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_replaceChild(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_moveBefore(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue  ns_element_before(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_element_after(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_element_replaceWith(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_remove_self(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_append(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_element_prepend(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_element_replaceChildren(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
 
 const char    *ns_js_cookie_value(const ns_js *js);
 void           ns_js_set_cookie_value(ns_js *js, const char *value);

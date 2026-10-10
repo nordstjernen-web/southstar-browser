@@ -1629,6 +1629,7 @@ dependencies = [
  "southstar-js-intl",
  "southstar-js-media",
  "southstar-js-net",
+ "southstar-js-node",
  "southstar-js-observers",
  "southstar-js-perf",
  "southstar-js-realm",
@@ -1915,6 +1916,15 @@ dependencies = [
 name = "southstar-js-net"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-node"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
 ]

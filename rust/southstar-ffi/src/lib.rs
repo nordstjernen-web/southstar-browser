@@ -49,6 +49,7 @@ pub use southstar_js_geometry;
 pub use southstar_js_intl;
 pub use southstar_js_media;
 pub use southstar_js_net;
+pub use southstar_js_node;
 pub use southstar_js_observers;
 pub use southstar_js_perf;
 pub use southstar_js_realm;

@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* appendChild, insertBefore, removeChild, replaceChild, moveBefore, the
+  ChildNode and ParentNode methods (before, after, replaceWith, remove,
+  append, prepend, replaceChildren) and the pre-insertion validity checks
+  moved from js.c to Rust (rust/js-node), with unchanged results.
 * The form-control bindings (value and defaultValue with sanitization,
   valueAsNumber, valueAsDate, stepUp, stepDown, the text selection APIs,
   checked, indeterminate and radio groups, select options and selectedIndex,

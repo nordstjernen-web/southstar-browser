@@ -52,6 +52,7 @@ southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-media = { path = "../js-media" }
 southstar-js-net = { path = "../js-net" }
+southstar-js-node = { path = "../js-node" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
