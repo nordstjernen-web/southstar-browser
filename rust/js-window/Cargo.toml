@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-window"
-description = "The window's navigation bindings: History, the Navigation API and each page's session history"
+description = "The window's navigation bindings: History, the Navigation API, Location, window.open and each page's session history"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

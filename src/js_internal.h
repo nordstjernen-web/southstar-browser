@@ -709,6 +709,18 @@ void ns_target_dispatch_with_event(JSContext *ctx, JSValueConst obj,
                                    const char *type, JSValueConst ev);
 void ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj);
 JSValue ns_make_window_event(JSContext *ctx, const char *type);
+JSValue ns_window_make_location(JSContext *ctx);
+JSValue ns_window_open_method(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv);
+gboolean ns_js_has_transient_activation(ns_js *js);
+void ns_js_consume_user_activation(ns_js *js);
+const char *ns_js_top_url(ns_js *js);
+void ns_js_set_top_url(ns_js *js, const char *url);
+gboolean ns_js_url_parses(ns_js *js, const char *url);
+gboolean ns_js_anchor_fragment_navigate(ns_js *js, const char *abs_url);
+gboolean ns_js_in_frame_load(const ns_js *js);
+gboolean ns_js_can_navigate(const ns_js *js);
+void ns_js_fragment_navigated(ns_js *js, const char *url);
 
 /* MessagePort, MessageChannel and BroadcastChannel (rust/js-workers) and the
  * js.c helpers they call. */

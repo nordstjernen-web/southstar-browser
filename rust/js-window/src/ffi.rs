@@ -9,7 +9,7 @@ use southstar_glib::GBoolean;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{history, navigation, set};
+use crate::{history, location, navigation, set};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -81,6 +81,23 @@ unsafe extern "C" {
     fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
     fn ns_url_parts_free(parts: *mut NsUrlParts);
+    fn ns_url_set_component_len(
+        href: *const c_char,
+        component: *const c_char,
+        value: *const c_char,
+        value_len: usize,
+    ) -> *mut c_char;
+    fn ns_js_top_url(js: *mut NsJs) -> *const c_char;
+    fn ns_js_set_top_url(js: *mut NsJs, url: *const c_char);
+    fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
+    fn ns_js_anchor_fragment_navigate(js: *mut NsJs, url: *const c_char) -> GBoolean;
+    fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
+    fn ns_js_can_navigate(js: *const NsJs) -> GBoolean;
+    fn ns_js_fragment_navigated(js: *mut NsJs, url: *const c_char);
+    fn ns_js_dispatch_hashchange(js: *mut NsJs, old_url: *const c_char, new_url: *const c_char);
+    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
+    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
+    fn ns_js_consume_user_activation(js: *mut NsJs);
 }
 
 fn c_string(bytes: &[u8]) -> CString {
@@ -209,6 +226,101 @@ pub(crate) fn url_origin(url: &[u8]) -> Option<Vec<u8>> {
     unsafe { taken(ns_url_origin_from(url.as_ptr())) }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum UrlField {
+    Protocol,
+    Origin,
+    Host,
+    Hostname,
+    Port,
+    Pathname,
+    Search,
+    Hash,
+}
+
+pub(crate) fn url_field(url: &[u8], field: UrlField) -> Option<Vec<u8>> {
+    let url = c_string(url);
+    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
+    let p = unsafe { parts.as_ref() }?;
+    let value = match field {
+        UrlField::Protocol => p.protocol,
+        UrlField::Origin => p.origin,
+        UrlField::Host => p.host,
+        UrlField::Hostname => p.hostname,
+        UrlField::Port => p.port,
+        UrlField::Pathname => p.pathname,
+        UrlField::Search => p.search,
+        UrlField::Hash => p.hash,
+    };
+    let value = (!value.is_null()).then(|| unsafe { borrowed(value) });
+    unsafe { ns_url_parts_free(parts) };
+    value
+}
+
+pub(crate) fn url_set_component(href: &[u8], component: &str, value: &[u8]) -> Option<Vec<u8>> {
+    let href = c_string(href);
+    let component = c_string(component.as_bytes());
+    unsafe {
+        taken(ns_url_set_component_len(
+            href.as_ptr(),
+            component.as_ptr(),
+            value.as_ptr().cast(),
+            value.len(),
+        ))
+    }
+}
+
+pub(crate) fn top_url(js: Js) -> Vec<u8> {
+    unsafe { borrowed(ns_js_top_url(js.ptr())) }
+}
+
+pub(crate) fn set_top_url(js: Js, url: &[u8]) {
+    let url = c_string(url);
+    unsafe { ns_js_set_top_url(js.ptr(), url.as_ptr()) };
+}
+
+pub(crate) fn url_parses(js: Js, url: &[u8]) -> bool {
+    let url = c_string(url);
+    unsafe { ns_js_url_parses(js.ptr(), url.as_ptr()) != 0 }
+}
+
+pub(crate) fn anchor_fragment_navigate(js: Js, url: &[u8]) -> bool {
+    let url = c_string(url);
+    unsafe { ns_js_anchor_fragment_navigate(js.ptr(), url.as_ptr()) != 0 }
+}
+
+pub(crate) fn in_frame_load(js: Js) -> bool {
+    unsafe { ns_js_in_frame_load(js.ptr()) != 0 }
+}
+
+pub(crate) fn can_navigate(js: Js) -> bool {
+    unsafe { ns_js_can_navigate(js.ptr()) != 0 }
+}
+
+pub(crate) fn fragment_navigated(js: Js, url: &[u8]) {
+    let url = c_string(url);
+    unsafe { ns_js_fragment_navigated(js.ptr(), url.as_ptr()) };
+}
+
+pub(crate) fn dispatch_hashchange(js: Js, old_url: &[u8], new_url: &[u8]) {
+    let old_url = c_string(old_url);
+    let new_url = c_string(new_url);
+    unsafe { ns_js_dispatch_hashchange(js.ptr(), old_url.as_ptr(), new_url.as_ptr()) };
+}
+
+pub(crate) fn log_line(js: Js, line: &[u8]) {
+    let line = c_string(line);
+    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+}
+
+pub(crate) fn has_transient_activation(js: Js) -> bool {
+    unsafe { ns_js_has_transient_activation(js.ptr()) != 0 }
+}
+
+pub(crate) fn consume_user_activation(js: Js) {
+    unsafe { ns_js_consume_user_activation(js.ptr()) };
+}
+
 pub(crate) fn url_parts(url: &[u8]) -> Option<UrlOrigin> {
     let url = c_string(url);
     let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
@@ -235,6 +347,25 @@ pub unsafe extern "C" fn ns_window_install_history(ctx: *mut JSContext, global: 
             set(scope, &global, "navigation", navigation);
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_make_location(ctx: *mut JSContext) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            quickjs::into_raw(location::make_location(scope))
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_open_method(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, location::open) }
 }
 
 #[unsafe(no_mangle)]

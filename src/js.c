@@ -156,7 +156,7 @@ ns_js_note_user_activation(ns_js *js)
     js->user_ever_activated = TRUE;
 }
 
-static gboolean
+gboolean
 ns_js_has_transient_activation(ns_js *js)
 {
     return js && js->user_activation_us != 0 &&
@@ -178,7 +178,7 @@ ns_js_clipboard_write(ns_js *js, const char *text)
     return js->clipboard_write_cb(text, js->clipboard_write_user_data) ? 1 : 0;
 }
 
-static void
+void
 ns_js_consume_user_activation(ns_js *js)
 {
     if (js) js->user_activation_us = 0;
@@ -1184,14 +1184,14 @@ typedef struct {
 
 /* The top-level document's URL, even while a frame's code has replaced
  * current_url with the frame's own URL. */
-static const char *
+const char *
 ns_js_top_url(ns_js *js)
 {
     const char *url = js->top_url_slot ? *js->top_url_slot : js->current_url;
     return url ? url : "";
 }
 
-static void
+void
 ns_js_set_top_url(ns_js *js, const char *url)
 {
     char **slot = js->top_url_slot ? js->top_url_slot : &js->current_url;
@@ -16295,7 +16295,7 @@ ns_window_randomUUID(JSContext *ctx, JSValueConst this_val,
     return JS_NewString(ctx, buf);
 }
 
-static gboolean
+gboolean
 ns_js_url_parses(ns_js *js, const char *url)
 {
     if (!url) return FALSE;
@@ -16304,38 +16304,6 @@ ns_js_url_parses(ns_js *js, const char *url)
         ? ns_url_resolve(base, url)
         : ns_url_resolve(NULL, url);
     return resolved != NULL;
-}
-
-static JSValue
-ns_window_open_method(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (argc < 1 || !js || !js->nav_cb) return JS_NULL;
-    const char *url = JS_ToCString(ctx, argv[0]);
-    if (url) {
-        if (*url && !ns_js_url_parses(js, url)) {
-            JS_FreeCString(ctx, url);
-            return ns_throw_dom_exception(ctx, "SyntaxError", 12,
-                                          "window.open: invalid URL");
-        }
-        if (!ns_js_has_transient_activation(js)) {
-            if (js->log_cb) {
-                char *line = g_strdup_printf(
-                    "Blocked a popup: window.open(%.256s) was called "
-                    "without user interaction", *url ? url : "about:blank");
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            JS_FreeCString(ctx, url);
-            return JS_NULL;
-        }
-        ns_js_consume_user_activation(js);
-        js->nav_cb(url, FALSE, js->nav_user_data);
-        JS_FreeCString(ctx, url);
-    }
-    return JS_DupValue(ctx, this_val);
 }
 
 static JSValue
@@ -39919,7 +39887,7 @@ ns_js_activate_label(ns_js *js, const ns_node *label, const ns_node *target)
     ns_js_activate_element(js, control);
 }
 
-static gboolean
+gboolean
 ns_js_anchor_fragment_navigate(ns_js *js, const char *abs_url)
 {
     if (!abs_url || !js->current_url || !*js->current_url) return FALSE;
@@ -54207,302 +54175,6 @@ static const JSCFunctionListEntry ns_document_proto_methods[] = {
     JS_CFUNC_DEF("createTreeWalker",       3, ns_document_create_tree_walker),
 };
 
-static JSValue
-ns_location_get_href(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx)) return JS_NewString(ctx, "");
-    return JS_NewString(ctx, ns_js_top_url(js_from_ctx(ctx)));
-}
-
-/* The window's own location: the top-level document's URL, also when a
- * frame's code reads parent.location or top.location. */
-static const char *
-ns_loc_url(JSContext *ctx)
-{
-    ns_js *js = js_from_ctx(ctx);
-    return js ? ns_js_top_url(js) : "";
-}
-
-static JSValue
-ns_location_part(JSContext *ctx, gsize offset, const char *fallback)
-{
-    ns_url_parts *p = ns_url_parts_new(ns_loc_url(ctx));
-    if (!p) return JS_NewString(ctx, fallback);
-    const char *v = *(char *const *)(void *)((char *)p + offset);
-    JSValue out = JS_NewString(ctx, v ? v : fallback);
-    ns_url_parts_free(p);
-    return out;
-}
-
-static JSValue
-ns_location_get_protocol(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, protocol), "");
-}
-
-static JSValue
-ns_location_get_host(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, host), "");
-}
-
-static JSValue
-ns_location_get_hostname(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, hostname), "");
-}
-
-static JSValue
-ns_location_get_port(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, port), "");
-}
-
-static JSValue
-ns_location_get_pathname(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    ns_url_parts *p = ns_url_parts_new(ns_loc_url(ctx));
-    if (!p) return JS_NewString(ctx, "/");
-    JSValue v = JS_NewString(ctx, *p->pathname ? p->pathname : "/");
-    ns_url_parts_free(p);
-    return v;
-}
-
-static JSValue
-ns_location_get_search(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, search), "");
-}
-
-static JSValue
-ns_location_get_hash(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, hash), "");
-}
-
-static JSValue
-ns_location_get_origin(JSContext *ctx, JSValueConst this_val)
-{
-    (void)this_val;
-    return ns_location_part(ctx, G_STRUCT_OFFSET(ns_url_parts, origin), "");
-}
-
-static JSValue
-ns_location_toString(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    return ns_location_get_href(ctx, this_val);
-}
-
-static gboolean
-ns_location_target_allowed(const char *s)
-{
-    if (!s || !*s) return FALSE;
-    if (s[0] == '/' || s[0] == '?' || s[0] == '#') return TRUE;
-    const char *colon = strchr(s, ':');
-    const char *slash = strchr(s, '/');
-    if (!colon || (slash && slash < colon)) return TRUE;
-    static const char *const allowed[] = {
-        "http:", "https:", "about:", "data:", "mailto:", NULL,
-    };
-    for (int i = 0; allowed[i]; i++)
-        if (g_ascii_strncasecmp(s, allowed[i], strlen(allowed[i])) == 0)
-            return TRUE;
-    return FALSE;
-}
-
-static void
-ns_location_log_blocked(ns_js *js, const char *s)
-{
-    if (!js || !js->log_cb) return;
-    char *line = g_strdup_printf(
-        "blocked navigation: scheme not allowed (%.64s)", s ? s : "");
-    js->log_cb(line, js->log_user_data);
-    g_free(line);
-}
-
-static gboolean
-ns_location_nav_in_iframe(ns_js *js)
-{
-    return js && js->iframe_load_depth > 0;
-}
-
-static JSValue
-ns_location_set_href(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->nav_cb) return JS_UNDEFINED;
-    const char *s = JS_ToCString(ctx, val);
-    if (!s) return JS_UNDEFINED;
-    if (!ns_js_url_parses(js, s)) {
-        JS_FreeCString(ctx, s);
-        return ns_throw_dom_exception(ctx, "SyntaxError", 12,
-                                      "location.href: invalid URL");
-    }
-    if (!ns_location_target_allowed(s)) {
-        ns_location_log_blocked(js, s);
-        JS_FreeCString(ctx, s);
-        return JS_UNDEFINED;
-    }
-    if (!ns_location_nav_in_iframe(js)) {
-        g_autofree char *abs_url = ns_url_resolve(ns_js_top_url(js), s);
-        if (!abs_url || !ns_js_anchor_fragment_navigate(js, abs_url))
-            js->nav_cb(s, FALSE, js->nav_user_data);
-    }
-    JS_FreeCString(ctx, s);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_location_assign(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->nav_cb || argc < 1) return JS_UNDEFINED;
-    const char *s = JS_ToCString(ctx, argv[0]);
-    if (!s) return JS_UNDEFINED;
-    if (!ns_location_target_allowed(s)) {
-        ns_location_log_blocked(js, s);
-        JS_FreeCString(ctx, s);
-        return JS_UNDEFINED;
-    }
-    if (!ns_location_nav_in_iframe(js)) {
-        g_autofree char *abs_url = ns_url_resolve(ns_js_top_url(js), s);
-        if (!abs_url || !ns_js_anchor_fragment_navigate(js, abs_url))
-            js->nav_cb(s, FALSE, js->nav_user_data);
-    }
-    JS_FreeCString(ctx, s);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_location_reload(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (js && js->nav_cb && !ns_location_nav_in_iframe(js))
-        js->nav_cb(ns_js_top_url(js), TRUE, js->nav_user_data);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_location_set_hash(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_UNDEFINED;
-    const char *s = JS_ToCString(ctx, val);
-    if (!s) return JS_UNDEFINED;
-    const char *frag = s[0] == '#' ? s + 1 : s;
-    char *old_url = g_strdup(ns_js_top_url(js));
-    char *base = g_strdup(old_url);
-    char *cut = strchr(base, '#');
-    if (cut) *cut = '\0';
-    char *new_url = *frag ? g_strconcat(base, "#", frag, NULL) : g_strdup(base);
-    g_free(base);
-    JS_FreeCString(ctx, s);
-    if (strcmp(old_url, new_url) == 0) {
-        g_free(old_url);
-        g_free(new_url);
-        return JS_UNDEFINED;
-    }
-    ns_js_set_top_url(js, new_url);
-    if (js->soft_nav_cb)
-        js->soft_nav_cb(new_url, FALSE, js->soft_nav_user_data);
-    if (js->fragment_nav_cb)
-        js->fragment_nav_cb(new_url, js->fragment_nav_user_data);
-    ns_js_dispatch_hashchange(js, old_url, new_url);
-    g_free(old_url);
-    g_free(new_url);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_location_set_component(JSContext *ctx, JSValueConst val, const char *comp)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !*ns_js_top_url(js)) return JS_UNDEFINED;
-    size_t vlen = 0;
-    const char *v = JS_ToCStringLen(ctx, &vlen, val);
-    if (!v) return JS_EXCEPTION;
-    char *next = ns_url_set_component_len(ns_js_top_url(js), comp, v, vlen);
-    JS_FreeCString(ctx, v);
-    if (!next) return JS_UNDEFINED;
-    if (js->nav_cb && !ns_location_nav_in_iframe(js) &&
-        strcmp(next, ns_js_top_url(js)) != 0)
-        js->nav_cb(next, FALSE, js->nav_user_data);
-    g_free(next);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_location_set_protocol(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "protocol");
-}
-
-static JSValue
-ns_location_set_host(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "host");
-}
-
-static JSValue
-ns_location_set_hostname(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "hostname");
-}
-
-static JSValue
-ns_location_set_port(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "port");
-}
-
-static JSValue
-ns_location_set_pathname(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "pathname");
-}
-
-static JSValue
-ns_location_set_search(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    (void)this_val;
-    return ns_location_set_component(ctx, val, "search");
-}
-
-static const JSCFunctionListEntry ns_location_funcs[] = {
-    JS_CGETSET_DEF("href",     ns_location_get_href, ns_location_set_href),
-    JS_CGETSET_DEF("protocol", ns_location_get_protocol, ns_location_set_protocol),
-    JS_CGETSET_DEF("host",     ns_location_get_host, ns_location_set_host),
-    JS_CGETSET_DEF("hostname", ns_location_get_hostname, ns_location_set_hostname),
-    JS_CGETSET_DEF("port",     ns_location_get_port, ns_location_set_port),
-    JS_CGETSET_DEF("pathname", ns_location_get_pathname, ns_location_set_pathname),
-    JS_CGETSET_DEF("search",   ns_location_get_search, ns_location_set_search),
-    JS_CGETSET_DEF("hash",     ns_location_get_hash, ns_location_set_hash),
-    JS_CGETSET_DEF("origin",   ns_location_get_origin, NULL),
-    JS_CFUNC_DEF("assign",   1, ns_location_assign),
-    JS_CFUNC_DEF("reload",   0, ns_location_reload),
-    JS_CFUNC_DEF("replace",  1, ns_location_assign),
-    JS_CFUNC_DEF("toString", 0, ns_location_toString),
-};
-
 static void
 ns_js_reset_runtime_state(ns_js *js)
 {
@@ -54839,10 +54511,7 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
     ns_document_expose_legacy_named(js, js->current_doc, document);
     JS_SetPropertyStr(ctx, global, "document", document);
 
-    JSValue location = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, location, ns_location_funcs,
-                               G_N_ELEMENTS(ns_location_funcs));
-    ns_set_tostring_tag(ctx, location, "Location");
+    JSValue location = ns_window_make_location(ctx);
     JS_SetPropertyStr(ctx, global, "location", location);
     JS_SetPropertyStr(ctx, document, "location", JS_DupValue(ctx, location));
     {
@@ -59795,6 +59464,25 @@ ns_js_navigate(ns_js *js, const char *url, gboolean reload)
     if (!js->nav_cb) return FALSE;
     js->nav_cb(url, reload, js->nav_user_data);
     return TRUE;
+}
+
+gboolean
+ns_js_in_frame_load(const ns_js *js)
+{
+    return js->iframe_load_depth > 0;
+}
+
+gboolean
+ns_js_can_navigate(const ns_js *js)
+{
+    return js->nav_cb != NULL;
+}
+
+void
+ns_js_fragment_navigated(ns_js *js, const char *url)
+{
+    if (js->fragment_nav_cb)
+        js->fragment_nav_cb(url, js->fragment_nav_user_data);
 }
 
 gboolean

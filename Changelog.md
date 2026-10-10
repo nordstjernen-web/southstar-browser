@@ -8,8 +8,9 @@ Southstar Browser (unreleased):
 * The -Dquickjs=quickjs build option (Fabrice Bellard's original QuickJS
   through an adapter) is gone, the first step toward replacing QuickJS with
   the Rust engine Boa. Rust 1.91 is now required.
-* History (pushState, replaceState, back, forward, go, popstate) and the
-  Navigation API are Rust (rust/js-window), with unchanged results.
+* History (pushState, replaceState, back, forward, go, popstate), the
+  Navigation API, Location and window.open() are Rust (rust/js-window), with
+  unchanged results.
 * navigator and its sub-objects (permissions, clipboard, geolocation,
   mediaDevices, getBattery(), userAgentData, plugins, storage) are Rust
   (rust/js-services), with unchanged results.

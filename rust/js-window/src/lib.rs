@@ -1,9 +1,10 @@
-//! Southstar — the window's navigation bindings: History, the Navigation API and each page's session history.
+//! Southstar — the window's navigation bindings: History, the Navigation API, Location, window.open and each page's session history.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
 mod history;
+mod location;
 mod navigation;
 
 use std::cell::RefCell;
