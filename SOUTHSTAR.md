@@ -3,7 +3,8 @@
 Living plan for a web browser written from scratch in **C**,
 small enough for one person to audit end-to-end. The engine and all
 non-toolkit logic live as portable C in `src/`; the GUI is a thin
-**GTK 4** frontend over that shared C and **libcurl**.
+**GTK 4** frontend over that shared C and the in-tree Rust HTTP client
+(`rust/http`).
 No upstream engine (Gecko / WebKit / Blink) is read, ported, or imported.
 See `README.md` for the product vision and `CLAUDE.md` for working rules.
 

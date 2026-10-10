@@ -21,8 +21,11 @@ BuildRequires:  rust >= 1.85
 BuildRequires:  cmake
 BuildRequires:  pkgconfig(gtk4) >= 4.6
 BuildRequires:  pkgconfig(epoxy)
-BuildRequires:  pkgconfig(libcurl) >= 7.85
+BuildRequires:  pkgconfig(libssl)
 BuildRequires:  pkgconfig(libcrypto)
+BuildRequires:  pkgconfig(zlib)
+BuildRequires:  pkgconfig(libbrotlidec)
+BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(uchardet)
 BuildRequires:  pkgconfig(libpsl)
 BuildRequires:  pkgconfig(libseccomp)
@@ -45,7 +48,7 @@ ExclusiveOS:    linux
 
 %description
 Southstar is an independent, lightweight web browser built entirely
-from scratch in C, using GTK 4 for the UI and libcurl for networking.
+from scratch in C, using GTK 4 for the UI and its own HTTP client for networking.
 It is a clean-room implementation with no upstream browser engine: the
 HTML parser (lexbor), the JavaScript interpreter (QuickJS), and the
 image decoder (Wuffs) are all integrated in-tree. The engine is a

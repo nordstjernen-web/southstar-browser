@@ -74,12 +74,11 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   `EventSource`. The QuickJS engine is selectable at build time: the in-tree
   quickjs-ng fork by default, or Fabrice Bellard's original QuickJS with
   `-Dquickjs=quickjs`.
-- **Networking** over HTTP/2 with libcurl — HSTS, CSP, subresource-integrity
+- **Networking** over an in-tree Rust HTTP client (`rust/http`) — HTTP/1.1
+  and multiplexed HTTP/2 with its own framing and HPACK over OpenSSL, FTP,
+  HTTP CONNECT and SOCKS proxies, plus HSTS, CSP, subresource-integrity
   checks, partitioned cookies, speculative subresource loading, request
-  coalescing and a `Vary`-aware HTTP cache. An in-tree **libnghttp2** transport backend is selectable at build
-  time (`-Dhttp_backend=nghttp2`), with **HTTP/3 over QUIC** via ngtcp2 +
-  nghttp3 + gnutls when present. Both backends fetch byte-identically, so the
-  independent transports cross-check each other.
+  coalescing and a `Vary`-aware HTTP cache.
 - **Images and graphics** — Wuffs decodes PNG/APNG, GIF, BMP, JPEG and lossy
   WebP; libwebp handles lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
@@ -122,8 +121,8 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
 
 ```sh
 sudo apt install build-essential git pkg-config meson ninja-build cargo rustc \
-    libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
-    libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
+    libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 meson setup builddir && meson compile -C builddir
 ./builddir/src/gtk/southstar
@@ -158,8 +157,8 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 | GTK 4 | **≥ 4.22.1 on Windows** (MSYS2 stock), ≥ 4.14 elsewhere (≥ 4.22 preferred) | UI toolkit, GSK renderer |
 | GLib / GModule, Pango | (ship with GTK) | core types, dynamic module loading, text shaping |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
-| libcurl | ≥ 8.5 (≥ 8.11 for WebSocket) | HTTP/2 networking, HSTS, cookies, native WebSocket |
-| OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
+| OpenSSL (libssl, libcrypto) | — | TLS for the HTTP client, WebCrypto (`crypto.subtle`) |
+| zlib | — | gzip/deflate content decoding |
 | uchardet | — | charset detection |
 | libpsl | — | public-suffix list for cookie scoping |
 | SQLite | — | IndexedDB persistent storage |
@@ -171,10 +170,8 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
 PDF), libavif (AVIF images), Enchant (spell checking), fontconfig / pangoft2
-(extra font backends), [libnghttp2](https://github.com/nghttp2/nghttp2) (the
-in-tree HTTP/2 backend), [ngtcp2](https://github.com/ngtcp2/ngtcp2) +
-[nghttp3](https://github.com/ngtcp2/nghttp3) + GnuTLS (HTTP/3 over QUIC inside
-it), [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
+(extra font backends), libbrotlidec and libzstd (`br` and `zstd` content
+decoding), [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
 WebGPU) and Fabrice Bellard's original
 [QuickJS](https://github.com/bellard/quickjs) (`-Dquickjs=quickjs`, fetched
 through a meson wrap).

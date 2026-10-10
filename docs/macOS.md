@@ -2,7 +2,7 @@
 
 Southstar runs natively on macOS through GTK 4's Quartz backend — no
 X11, no XQuartz, no WebKit. The same C engine shipped to Linux
-and Windows links the same GTK 4 / libcurl / Cairo / Pango / lexbor
+and Windows links the same GTK 4 / OpenSSL / Cairo / Pango / lexbor
 libraries here; there is no Xcode project and no CocoaPods. This page
 covers both **installing the prebuilt app** and **building from source**.
 
@@ -97,8 +97,8 @@ bundle and `.dmg`.
 Install [Homebrew](https://brew.sh) if you do not already have it, then:
 
 ```sh
-brew install meson ninja pkg-config cmake gtk4 libepoxy curl \
-    uchardet libpsl sqlite webp sdl2 rust
+brew install meson ninja pkg-config cmake gtk4 libepoxy openssl@3 \
+    brotli zstd uchardet libpsl sqlite webp sdl2 rust
 brew install ccache    # optional, speeds up rebuilds
 ```
 
@@ -287,13 +287,13 @@ Updates ship only through the store — no self-update.
 
 ## Platform notes
 
-- **CA bundle.** Homebrew's `libcurl` links against OpenSSL, which
+- **CA bundle.** The in-tree HTTP client verifies TLS through OpenSSL, which
   has no built-in trust store and — unlike the deprecated SecureTransport
   backend — no bridge to the macOS Keychain. For a *developer* build
   Southstar probes the standard Homebrew and system paths at startup
   (`/opt/homebrew/etc/ca-certificates/cert.pem`,
   `/usr/local/etc/ca-certificates/cert.pem`, `/etc/ssl/cert.pem`,
-  and a handful of `openssl@3` variants) and points libcurl at
+  and a handful of `openssl@3` variants) and points the HTTP client at
   whichever exists. A clean Mac has none of these (no Homebrew, and
   Apple ships no `/etc/ssl/cert.pem`), so `scripts/pack-macos.sh`
   **vendors a CA bundle** into the `.app` at
@@ -377,33 +377,30 @@ when CI runs or someone builds the `.dmg`. The platform differs in ways that a
 Linux/Windows change can silently break, so this section collects the failure
 modes that have actually bitten the macOS build and how to stay ahead of them.
 
-### macOS links a *different* curl / TLS stack than you expect
+### TLS goes through Homebrew's OpenSSL
 
-Homebrew's `curl` is **keg-only**, so a plain `meson setup` does **not** pick it
-up — `pkg-config` resolves the macOS SDK's **system** `libcurl`
-(`/usr/lib/libcurl.4.dylib`), which is **LibreSSL / SecureTransport**, not the
-OpenSSL build the app is designed around (vendored CA bundle, HTTP/3, modern TLS
-options). Put the keg on the path before configuring:
+The HTTP client (`rust/http`) links OpenSSL's `libssl`/`libcrypto`. The macOS
+SDK ships no OpenSSL headers or `.pc` files, so `pkg-config` has to find
+Homebrew's `openssl@3`. `scripts/pack-macos.sh` and
+`.github/workflows/macos.yml` put its `pkgconfig` directory first on
+`PKG_CONFIG_PATH`; do the same if `meson setup` cannot find `libssl`:
 
 ```sh
-PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig:$PKG_CONFIG_PATH" \
+PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" \
     meson setup builddir
-otool -L builddir/src/gtk/southstar | grep curl   # expect .../opt/curl/...
+otool -L builddir/src/gtk/southstar | grep -E 'ssl|crypto'   # expect .../opt/openssl@3/...
 ```
 
-`scripts/pack-macos.sh` and `.github/workflows/macos.yml` already do this; a
-manual `meson setup builddir` per the build instructions above does not, so a
-local dev binary links system curl unless you add the keg yourself.
-
-**The wider lesson — any curl/TLS option must degrade on the oldest backend
-macOS might link.** `CURLOPT_SSL_EC_CURVES`, cipher lists, and similar options
-are rejected **wholesale** if the linked backend doesn't recognise *one* entry.
-A post-quantum curve (`X25519MLKEM768`) hard-pinned in `src/net.c` once broke
-**every HTTPS connection** on a Mac whose curl was LibreSSL — it failed the
-whole curve list, not just that curve. The code now probes the backend
-(`curl_version_info`) and only requests features the active backend supports.
-When you touch `src/net.c` TLS setup, assume the runtime curl may be older or a
-different backend than your Linux box, and gate accordingly.
+**The wider lesson — any TLS option must degrade on the oldest OpenSSL a Mac
+might link.** Group (curve) lists and cipher lists are rejected **wholesale**
+if the library doesn't recognise *one* entry. A post-quantum group
+(`X25519MLKEM768`) hard-pinned in the TLS setup once broke **every HTTPS
+connection** on a Mac with an older TLS library — it failed the whole list, not
+just that group. `rust/net` now reads the OpenSSL version at startup and only
+requests the post-quantum group when the library supports it
+(`ns_net_ec_curves`). When you touch TLS setup in `rust/http` or `rust/net`,
+assume the runtime OpenSSL may be older than your Linux box, and gate
+accordingly.
 
 ### Test the *bundled* binary, not just the build-tree one
 
@@ -421,8 +418,7 @@ So after any change to networking, the bundle layout, dylib dependencies, or
 rpaths, **build the `.dmg` and launch the bundled binary against a real URL**:
 
 ```sh
-PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig:$PKG_CONFIG_PATH" \
-    BUILDDIR="$PWD/builddir" NS_PACK_AI=disabled ./scripts/pack-macos.sh
+BUILDDIR="$PWD/builddir" NS_PACK_AI=disabled ./scripts/pack-macos.sh
 dist/Southstar.app/Contents/MacOS/Southstar \
     --headless --dump=text https://example.com    # must print page text
 ```

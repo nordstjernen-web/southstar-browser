@@ -86,7 +86,7 @@ fi
 
 if [ "$LIBC" = musl ]; then
     LIBC_REQ='- musl libc (Alpine 3.19+ era and later)'
-    RUNTIME_INSTALL='    sudo apk add gtk4.0 libcurl uchardet poppler-glib libavif libwebp \
+    RUNTIME_INSTALL='    sudo apk add gtk4.0 libssl3 zlib brotli-libs zstd-libs uchardet poppler-glib libavif libwebp \
         libseccomp libpsl sqlite-libs ca-certificates font-dejavu sdl2 # Alpine (musl)'
 else
     # Don't guess the glibc floor — read it from the binary we just built.
@@ -94,11 +94,11 @@ else
         | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -t. -k1,1V -k2,2n -u \
         | tail -1 | cut -d_ -f2)
     LIBC_REQ="- glibc ${GLIBC_MIN:-2.38}+ (the build container's generation; check with: ldd --version)"
-    RUNTIME_INSTALL='    sudo apt   install libgtk-4-1 libcurl4 libuchardet0 libwebp7 \
+    RUNTIME_INSTALL='    sudo apt   install libgtk-4-1 libbrotli1 libzstd1 libuchardet0 libwebp7 \
         libpoppler-glib8 libavif16 libpsl5 libseccomp2 libsqlite3-0 libsdl2-2.0-0   # Debian/Ubuntu
-    sudo dnf   install gtk4 libcurl libuchardet poppler-glib libwebp \
+    sudo dnf   install gtk4 openssl-libs brotli libzstd libuchardet poppler-glib libwebp \
         libavif libpsl libseccomp sqlite-libs SDL2                     # Fedora/RHEL
-    sudo zypper install libgtk-4-1 libcurl4 libuchardet0 libwebp7 \
+    sudo zypper install libgtk-4-1 libbrotlidec1 libzstd1 libuchardet0 libwebp7 \
         libpoppler-glib8 libavif16 libpsl5 libseccomp2 libsqlite3-0 libSDL2-2_0-0   # openSUSE'
 fi
 
@@ -196,7 +196,7 @@ against the other C library — pick the matching download.
 ${LIBC_REQ}
 - GTK 4.6+, with gio, gobject, pango, cairo, gdk-pixbuf
 - libepoxy (usually pulled in by GTK 4; WebGL dispatch)
-- libcurl with a TLS backend; OpenSSL 3 (libcrypto)
+- OpenSSL 3 (libssl, libcrypto) and zlib; libbrotlidec and libzstd when the build found them
 - libuchardet
 - libpoppler-glib (PDF rendering)
 - libavif 16 (AVIF images — only in recent distro releases)

@@ -1,9 +1,10 @@
 # Proxies and VPNs in Southstar
 
-Southstar routes all HTTP/HTTPS traffic through libcurl, so any
-proxy libcurl understands works: plain HTTP proxies, HTTPS-to-the-proxy
-("HTTPS proxy"), SOCKS4, SOCKS5, and SOCKS5 with remote DNS
-(`socks5h://`, recommended whenever you don't want DNS leaks).
+Southstar routes all HTTP/HTTPS, FTP and WebSocket traffic through its
+in-tree HTTP client (`rust/http`), whose proxy support
+(`rust/http/src/proxy.rs`) covers plain HTTP proxies (with `CONNECT`
+tunnels for HTTPS targets), SOCKS4, SOCKS4a, SOCKS5, and SOCKS5 with remote
+DNS (`socks5h://`, recommended whenever you don't want DNS leaks).
 
 There is no separate VPN client built into the browser. A real VPN
 (WireGuard, OpenVPN, Tailscale, your employer's IPSec client, the
@@ -49,10 +50,9 @@ Three ways, in priority order (highest wins):
    no_proxy    = localhost,127.0.0.1,*.corp.internal
    ```
 
-If none of the three are set, libcurl falls back to its own
-auto-detection of the standard `http_proxy` / `HTTPS_PROXY` /
-`NO_PROXY` lowercase env vars, so an existing shell-wide proxy
-setup keeps working.
+If none of the three are set, connections go direct. The standard
+`http_proxy` / `HTTPS_PROXY` / `NO_PROXY` environment variables are
+not consulted; use the `NS_`-prefixed names above.
 
 Run `southstar --print-config` to confirm the effective values;
 passwords in the printed proxy URLs are masked.
@@ -62,14 +62,16 @@ passwords in the printed proxy URLs are masked.
 - `http://[user:pass@]host:port` — classic HTTP proxy. `CONNECT` is
   used for HTTPS targets, so the proxy sees only the host name, not
   the path or body.
-- `https://[user:pass@]host:port` — TLS tunnel to the proxy itself.
 - `socks4://host:port`, `socks4a://host:port` — SOCKS4, SOCKS4 with
   remote DNS.
 - `socks5://host:port` — SOCKS5 with local DNS. **Leaks DNS** to
   your normal resolver; usually not what you want.
-- `socks5h://host:port` — SOCKS5 with remote DNS. The proxy resolves
-  the hostname. Use this for Tor (`socks5h://127.0.0.1:9050` is the
-  standard Tor SOCKS port) and for any SSH dynamic forward.
+- `socks5h://host:port` (or `socks://`) — SOCKS5 with remote DNS. The
+  proxy resolves the hostname. Use this for Tor (`socks5h://127.0.0.1:9050`
+  is the standard Tor SOCKS port) and for any SSH dynamic forward.
+
+A proxy URL without a scheme is treated as an HTTP proxy. `https://` proxy
+URLs (TLS to the proxy itself) are rejected.
 
 ## Recipes
 
@@ -113,7 +115,7 @@ launch with no flags.
 
 By default Southstar resolves host names with the system resolver,
 which usually means plaintext DNS the local network can see. Setting
-`doh_url` to a DNS-over-HTTPS endpoint makes libcurl resolve names over an
+`doh_url` to a DNS-over-HTTPS endpoint makes Southstar resolve names over an
 encrypted HTTPS connection to that resolver instead, hiding lookups from
 the network. It is **opt-in and off by default**, adds no new dependency,
 and the URL must be `https://`.
@@ -141,10 +143,12 @@ for proxied requests.
 
 ## Limitations
 
-- WebSocket connections (`ws://`, `wss://`) use the same libcurl
-  config and are tunneled through the same proxy.
+- WebSocket connections (`ws://`, `wss://`) go through the same
+  HTTP client and are tunneled through the same proxy.
+- HTTPS proxies (TLS between the browser and the proxy) are not
+  supported; use an HTTP proxy with `CONNECT` or a SOCKS proxy.
 - PAC (proxy auto-config) scripts are not interpreted. Resolve to a
   concrete proxy URL manually.
-- The `no_proxy` list is matched by libcurl exactly the way curl's
-  `--noproxy` does: comma-separated host suffixes, with `*` as a
-  bypass-everything wildcard.
+- The `no_proxy` list is matched the way curl's `--noproxy` does:
+  comma-separated host names that also match their subdomains, IP
+  ranges in CIDR notation, and `*` as a bypass-everything wildcard.

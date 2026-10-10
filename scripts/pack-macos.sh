@@ -42,13 +42,8 @@ run_dylibbundler() {
     wait "$pid"
 }
 
-# Homebrew's curl is keg-only, so a plain pkg-config resolves the macOS SDK's
-# system libcurl (LibreSSL/SecureTransport) rather than the OpenSSL build this
-# bundle is designed around — the vendored CA bundle (CURL_CA_BUNDLE) and the
-# modern TLS curve list both assume OpenSSL. Put the curl keg on PKG_CONFIG_PATH
-# so meson links it.
-CURL_PC="$(brew --prefix curl 2>/dev/null)/lib/pkgconfig"
-[ -d "$CURL_PC" ] && export PKG_CONFIG_PATH="$CURL_PC:${PKG_CONFIG_PATH:-}"
+OPENSSL_PC="$(brew --prefix openssl@3 2>/dev/null)/lib/pkgconfig"
+[ -d "$OPENSSL_PC" ] && export PKG_CONFIG_PATH="$OPENSSL_PC:${PKG_CONFIG_PATH:-}"
 
 if [ ! -d "$BUILDDIR" ]; then
     meson setup "$BUILDDIR" \
@@ -298,8 +293,8 @@ if [ -n "$PIXBUF_MODDIR" ] && [ -d "$PIXBUF_MODDIR" ]; then
     fi
 fi
 
-# Homebrew's libcurl links OpenSSL, which has no built-in trust store and (on
-# macOS) no Keychain bridge. ns_net_resolve_ca_bundle() only finds a CA bundle
+# The Rust HTTP client verifies TLS through OpenSSL, which has no built-in
+# trust store and (on macOS) no Keychain bridge. rust/net only finds a CA bundle
 # on a machine that has Homebrew or a Unix-style /etc/ssl/cert.pem — neither
 # exists on a clean Mac — so vendor one and point the app at it (the macOS
 # anchor sets CURL_CA_BUNDLE from Contents/Resources/etc/ssl/certs), or every

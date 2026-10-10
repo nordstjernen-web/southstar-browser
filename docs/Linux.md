@@ -11,26 +11,29 @@ locally before pushing.
 System packages required on Debian / Ubuntu:
 
     sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
-        libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
-        libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
+        libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
+        libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
 
 On Fedora / RHEL:
 
-    sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel libcurl-devel \
-        openssl-devel uchardet-devel libpsl-devel sqlite-devel libseccomp-devel \
+    sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel \
+        openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel libseccomp-devel \
         libwebp-devel SDL2-devel
 
 On openSUSE:
 
-    sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel libcurl-devel \
-        libopenssl-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
+    sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel \
+        libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
         libwebp-devel libSDL2-devel
 
 On Alpine (musl libc):
 
     sudo apk add build-base linux-headers pkgconf meson ninja cargo rust gtk4.0-dev \
-        libepoxy-dev curl-dev openssl-dev uchardet-dev libpsl-dev sqlite-dev \
+        libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev \
         libseccomp-dev libwebp-dev sdl2-dev
+
+The brotli and zstd packages are optional: without them the HTTP client
+simply does not advertise `br` / `zstd` content encodings.
 
 Rust 1.85 or newer is required. On Ubuntu 24.04, whose default is 1.75,
 install `rustc-1.85 cargo-1.85` instead and put `/usr/lib/rust-1.85/bin`
@@ -87,7 +90,8 @@ practical. Runtime requirements:
 - glibc 2.31+ (Ubuntu 20.04 / Fedora 34 / Debian 11 era and later)
 - GTK 4.6+ with gio, gobject, pango, cairo
 - libepoxy (usually pulled in by GTK 4; WebGL dispatch)
-- libcurl with a TLS backend
+- OpenSSL 3 (libssl, libcrypto) and zlib; libbrotlidec and libzstd when
+  the build found them
 - libuchardet
 - fontconfig + a font set, harfbuzz, freetype, libstdc++
 - An X11 or Wayland session
@@ -114,7 +118,7 @@ Output:
     dist/southstar-<version>-1.x86_64.rpm           # ~1.3 MB
 
 The spec uses `AutoReqProv: yes` so `rpmbuild` extracts the actual
-SONAME dependencies (`libgtk-4.so.1`, `libcurl.so.4`,
+SONAME dependencies (`libgtk-4.so.1`, `libssl.so.3`,
 `libuchardet.so.0`, the GLib stack, etc.) directly
 from the binary's ELF dynamic section. The same RPM file therefore
 installs on Fedora, RHEL, and openSUSE without per-distro tweaks —

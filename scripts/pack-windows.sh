@@ -145,39 +145,6 @@ while [ ${#queue[@]} -gt 0 ]; do
     done
 done
 
-dll_exports_symbol() {
-    objdump -p "$1" 2>/dev/null | awk -v want="$2" '
-        /^[[:space:]]*\[[[:space:]]*[0-9]+\][[:space:]]/ && $NF == want {
-            found = 1
-        }
-        END { exit found ? 0 : 1 }
-    '
-}
-
-validate_ngtcp2_ossl() {
-    local ngtcp2 ssl_dep ssl
-    ngtcp2=$(find "$APP" -maxdepth 1 -iname 'libngtcp2_crypto_ossl-0.dll' -print -quit 2>/dev/null || true)
-    [ -n "$ngtcp2" ] || return 0
-    ssl_dep=$(objdump -p "$ngtcp2" 2>/dev/null | awk '
-        /DLL Name:/ { dep = $3; next }
-        dep != "" && $NF == "SSL_set_quic_tls_cbs" { print dep; exit }
-    ')
-    [ -n "$ssl_dep" ] || return 0
-    ssl=$(find "$APP" -maxdepth 1 -iname "$ssl_dep" -print -quit 2>/dev/null || true)
-    if [ -z "$ssl" ]; then
-        printf 'pack-windows: %s imports SSL_set_quic_tls_cbs from missing %s\n' \
-            "$(basename "$ngtcp2")" "$ssl_dep" >&2
-        exit 1
-    fi
-    if ! dll_exports_symbol "$ssl" SSL_set_quic_tls_cbs; then
-        printf 'pack-windows: %s imports SSL_set_quic_tls_cbs, but bundled %s does not export it\n' \
-            "$(basename "$ngtcp2")" "$(basename "$ssl")" >&2
-        exit 1
-    fi
-}
-
-validate_ngtcp2_ossl
-
 # Adwaita + hicolor icons for default GTK widget glyphs (back/forward arrows, etc.).
 mkdir -p "$APP/share/icons"
 for theme in Adwaita hicolor; do
@@ -211,7 +178,7 @@ cp "$ROOT/COPYING" "$APP/share/southstar/"
 # Third-party copyright + license notices required by the libraries we ship.
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$OUT/"
 
-# CA certificate bundle for libcurl HTTPS verification.
+# CA certificate bundle for HTTPS verification by the Rust HTTP client.
 mkdir -p "$APP/etc/ssl/certs"
 for ca in \
     "$MINGW_PREFIX/etc/ssl/certs/ca-bundle.crt" \

@@ -38,14 +38,9 @@ jobs:
 
       - name: Install build dependencies (Homebrew)
         run: |
-          brew install meson ninja pkg-config cmake gtk4 libepoxy curl ccache \
-              uchardet libpsl sqlite webp libavif sdl2 dylibbundler nasm
-          # Homebrew curl is keg-only, so a plain pkg-config resolves the macOS
-          # SDK's system libcurl (LibreSSL) instead of this OpenSSL build. Put
-          # the keg on PKG_CONFIG_PATH for every later step (build + packaging),
-          # so the bundle links OpenSSL curl with HTTP/3 and the vendored CA
-          # bundle and modern TLS curves work as designed.
-          echo "PKG_CONFIG_PATH=$(brew --prefix curl)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          brew install meson ninja pkg-config cmake gtk4 libepoxy openssl@3 ccache \
+              brotli zstd uchardet libpsl sqlite webp libavif sdl2 dylibbundler nasm
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: Install Rust
         shell: bash
@@ -102,7 +97,7 @@ jobs:
           meson --version
           ninja --version
           pkg-config --modversion gtk4
-          pkg-config --modversion libcurl
+          pkg-config --modversion libssl
 
       - name: Build
         id: build

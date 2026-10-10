@@ -46,7 +46,10 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-libepoxy
-            mingw-w64-x86_64-curl
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-brotli
+            mingw-w64-x86_64-zstd
             mingw-w64-x86_64-ca-certificates
             mingw-w64-x86_64-uchardet
             mingw-w64-x86_64-libpsl
@@ -84,7 +87,7 @@ jobs:
           meson --version
           ninja --version
           pkg-config --modversion gtk4
-          pkg-config --modversion libcurl
+          pkg-config --modversion libssl
 
       - name: Cache LGPL FFmpeg
         id: ffcache

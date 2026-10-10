@@ -62,8 +62,11 @@ BuildRequires:  cargo >= 1.85
 BuildRequires:  rust >= 1.85
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(epoxy)
-BuildRequires:  pkgconfig(libcurl)
+BuildRequires:  pkgconfig(libssl)
 BuildRequires:  pkgconfig(libcrypto)
+BuildRequires:  pkgconfig(zlib)
+BuildRequires:  pkgconfig(libbrotlidec)
+BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(uchardet)
 BuildRequires:  pkgconfig(libpsl)
 BuildRequires:  pkgconfig(libseccomp)
@@ -81,12 +84,11 @@ BuildRequires:  pkgconfig(pangocairo)
 BuildRequires:  pkgconfig(pangoft2)
 
 Requires:       gtk4
-Requires:       libcurl
 Requires:       uchardet
 
 %description
 Southstar is a small, free software web browser written in C with
-GTK 4 and libcurl. The HTML parser, CSS engine, layout, paint and
+GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
 

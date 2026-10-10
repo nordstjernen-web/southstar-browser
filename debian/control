@@ -11,8 +11,10 @@ Build-Depends:
  rustc (>= 1.85),
  libgtk-4-dev,
  libepoxy-dev,
- libcurl4-openssl-dev,
  libssl-dev,
+ zlib1g-dev,
+ libbrotli-dev,
+ libzstd-dev,
  libuchardet-dev,
  libpsl-dev,
  libsqlite3-dev,
@@ -44,7 +46,7 @@ Recommends:
  hunspell-en-us,
 Description: small, hand-written web browser
  Southstar is a clean-room web browser written from scratch in C, with a
- GTK 4 user interface and a libcurl network stack. It is built to be small,
+ GTK 4 user interface and its own HTTP client. It is built to be small,
  secure, and readable by a single person end to end.
  .
   * A from-scratch HTML5, CSS, and JavaScript engine — no forked browser engine.

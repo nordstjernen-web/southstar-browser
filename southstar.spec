@@ -30,7 +30,10 @@ BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(enchant-2)
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(libcrypto)
-BuildRequires:  pkgconfig(libcurl) >= 7.85
+BuildRequires:  pkgconfig(libssl)
+BuildRequires:  pkgconfig(zlib)
+BuildRequires:  pkgconfig(libbrotlidec)
+BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(libpsl)
 BuildRequires:  pkgconfig(libseccomp)
 BuildRequires:  pkgconfig(libavif)
@@ -53,7 +56,7 @@ Recommends:     myspell-en_US
 
 %description
 Southstar is a clean-room web browser written from scratch in C, with a
-GTK 4 user interface and a libcurl network stack. It is built to be small,
+GTK 4 user interface and its own HTTP client. It is built to be small,
 secure, and readable by a single person end to end.
 
   * A from-scratch HTML5, CSS, and JavaScript engine — no forked browser engine.

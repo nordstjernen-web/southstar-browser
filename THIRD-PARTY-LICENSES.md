@@ -144,29 +144,10 @@ ns-pango; they link the system Pango dynamically instead.
 
 ## Dynamically linked
 
-### libcurl — curl license (MIT-like)
+### OpenSSL (libssl, libcrypto) — Apache License 2.0
 
-> HTTP/TLS client.
-> <https://curl.se>
->
-> Copyright (c) 1996-2026 Daniel Stenberg, and many contributors.
-
-Permission to use, copy, modify, and distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
-WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
-OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
-FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
-DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
-IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
-OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-### OpenSSL (libcrypto) — Apache License 2.0
-
-> Web Cryptography (`crypto.subtle`) primitives and the TLS backend used
-> transitively by libcurl.
+> TLS for the in-tree HTTP client and Web Cryptography (`crypto.subtle`)
+> primitives.
 > <https://www.openssl.org>
 >
 > Copyright (c) 1998-2026 The OpenSSL Project Authors. All Rights Reserved.
@@ -345,6 +326,11 @@ later. See the LGPL section above for terms and obligations.
 These are linked only when present on the build host (meson
 `required: false`). When a build bundles them, their notices apply:
 
+- **Brotli** (`libbrotlidec`) — MIT, © the Brotli authors. `br`
+  HTTP content decoding.
+- **Zstandard** (`libzstd`) — BSD 3-Clause or GNU GPL 2.0, at your
+  option, © Meta Platforms, Inc. and affiliates. `zstd` HTTP content
+  decoding.
 - **libavif** — BSD 2-Clause, © the AOMedia / libavif authors. AVIF
   image decoding.
 - **Poppler** (`poppler-glib`) — GNU GPL 2.0 or later, © the Poppler

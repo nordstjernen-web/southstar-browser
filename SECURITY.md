@@ -33,7 +33,7 @@ trusted.
 
 **Out of scope**
 
-- Bugs in third-party libraries (libcurl, GTK 4, GLib, lexbor, QuickJS,
+- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, lexbor, QuickJS,
   Wuffs, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
@@ -257,13 +257,15 @@ The whole mitigation suite can be disabled for debugging with
 
 ### Network
 
-libcurl drives every fetch with TLS verification enabled
-(`CURLOPT_SSL_VERIFYPEER=1`, `CURLOPT_SSL_VERIFYHOST=2`), `http,https`
-as the only allowed protocols, redirects clamped to HTTPS once the
-initial scheme is HTTPS, max ten redirects, an explicit response-size
-cap, and `CURLOPT_NOSIGNAL`. HSTS state is loaded and persisted via
-`CURLOPT_HSTS`; Alt-Svc is honoured. Mixed-content sub-resources
-(http inside an https document) are blocked.
+The in-tree Rust HTTP client (`rust/http`) drives every fetch with TLS
+verification enabled: OpenSSL checks the peer chain against the CA bundle
+(or, on Windows without one, the system root store) and the host name with
+`SSL_set1_host`, partial wildcards refused. Redirects may only go to
+`http`/`https` URLs, subresource redirects are clamped to HTTPS once the
+initial scheme is HTTPS, there are at most ten redirects, and responses
+have an explicit size cap. HSTS state is recorded and persisted by
+`rust/net/src/hsts.rs`. Mixed-content sub-resources (http inside an https
+document) are blocked.
 
 ### Origin isolation
 
@@ -375,15 +377,16 @@ document `postMessage` between a frame and its parent is currently limited
 
 ### Cookies and the `document.cookie` surface
 
-Network cookies live in libcurl's per-site cookie jar on disk. They
-are parsed, scoped, and re-sent by libcurl, honouring `HttpOnly`,
+Network cookies live in a per-site, Netscape-format cookie jar on disk
+(`rust/net/src/cookies.rs`). They are parsed, scoped, and re-sent by the
+network stack, honouring `HttpOnly`,
 `Secure`, `SameSite`, `Path`, `Domain`, and expiry. At navigation the
 non-`HttpOnly` cookies for the document's origin are read back out of
 the jar (`ns_net_cookies_for_js`) and seeded into `document.cookie`,
 and the `document.cookie` setter writes back into that same per-site
 jar (`ns_net_cookie_store_from_js`) — so a cookie set from JS is sent
 on the next request, and a cookie set over the network is visible to a
-later `document.cookie` read. `HttpOnly` cookies are written by libcurl
+later `document.cookie` read. `HttpOnly` cookies are written to the jar
 with a `#HttpOnly_` line prefix that the JS read path skips, so they
 stay invisible to script.
 
@@ -394,7 +397,7 @@ The `document.cookie` setter:
 - Maintains a per-tab in-memory mirror for synchronous read-back, then
   persists to the network jar.
 - Parses attributes after the first `;`. `Max-Age` (seconds) and
-  `Expires` (HTTP-date, via `curl_getdate`) set the jar expiry;
+  `Expires` (HTTP-date, parsed by `rust/net/src/http_date.rs`) set the jar expiry;
   `Max-Age<=0` or a past `Expires` deletes the named cookie. `Secure`
   is rejected outright from non-HTTPS origins. `Domain` is range-checked
   against the document host before it widens scope; absent, the cookie
@@ -419,9 +422,9 @@ The `document.cookie` setter:
   capability declarations / re-routed config paths) and are
   tracked as future work.
 - **`document.cookie` writes to the jar without file locking.** A
-  JS cookie write and a concurrent libcurl jar flush from an
+  JS cookie write and a concurrent `Set-Cookie` write from an
   in-flight transfer are not serialised against each other, so a
-  write can occasionally be lost to a racing flush. A shared,
+  write can occasionally be lost to the racing one. A shared,
   locked cookie store is the long-term fix; in practice script
   cookie writes happen between transfers, so the window is small.
 - **`HttpOnly` name collisions from JS are not rejected.** Setting

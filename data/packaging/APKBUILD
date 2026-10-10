@@ -3,7 +3,7 @@
 pkgname=southstar
 pkgver=1.0.29
 pkgrel=0
-pkgdesc="Small, hand-written web browser written in C with GTK 4 and libcurl"
+pkgdesc="Small, hand-written web browser written in C with GTK 4"
 url="https://github.com/nordstjernen-web/southstar-browser"
 # quickjs and lexbor are vendored C and build in-tree; the engine also links
 # a little C++ (poppler, libavif). Restrict to arches the deps + WAMR asm cover.
@@ -16,8 +16,10 @@ makedepends="
 	rust
 	gtk4.0-dev
 	libepoxy-dev
-	curl-dev
 	openssl-dev
+	zlib-dev
+	brotli-dev
+	zstd-dev
 	uchardet-dev
 	libpsl-dev
 	sqlite-dev

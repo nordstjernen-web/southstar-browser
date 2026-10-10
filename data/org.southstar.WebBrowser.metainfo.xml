@@ -13,7 +13,7 @@
   <description>
     <p>
       Southstar is a clean-room web browser written from scratch in C,
-      with a GTK 4 user interface and a libcurl network stack. It is built
+      with a GTK 4 user interface and its own HTTP client. It is built
       to be small, secure, and readable by a single person end to end.
     </p>
     <p>Features:</p>

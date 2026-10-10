@@ -78,7 +78,7 @@ pkgdesc="Southstar Browser — a small, hand-written web browser"
 url="https://github.com/nordstjernen-web/southstar-browser"
 arch="${ARCH}"
 license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
-depends="gtk4.0 libepoxy libcurl uchardet sqlite-libs ca-certificates fontconfig font-dejavu poppler-glib libavif libwebp libseccomp libpsl libcrypto3${AUDIO_DEP}${WEBM_DEP}"
+depends="gtk4.0 libepoxy libssl3 zlib brotli-libs zstd-libs uchardet sqlite-libs ca-certificates fontconfig font-dejavu poppler-glib libavif libwebp libseccomp libpsl libcrypto3${AUDIO_DEP}${WEBM_DEP}"
 options="!check !tracedeps !strip"
 source=""
 

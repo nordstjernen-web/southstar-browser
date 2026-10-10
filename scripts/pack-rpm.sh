@@ -2,7 +2,7 @@
 # Build a portable Southstar RPM by repackaging the bundle that
 # pack-linux.sh produces. The binary is already statically linked
 # against the in-tree engine (lexbor, quickjs, wuffs); the RPM only
-# needs to declare the dynamic GTK / curl / rsvg system deps, and rpm's
+# needs to declare the dynamic GTK / OpenSSL / rsvg system deps, and rpm's
 # auto-Requires picks those up from the binary's SONAMEs.
 set -euo pipefail
 
@@ -108,7 +108,7 @@ ${WGPU_EXCLUDE}
 
 %description
 Southstar is a small, free software web browser written in C with
-GTK 4 and libcurl. The HTML parser, CSS engine, layout, paint and
+GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
 
