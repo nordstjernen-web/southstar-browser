@@ -1103,6 +1103,30 @@ void     ns_js_blob_urls_put(ns_js *js, const char *url, const guint8 *bytes, gs
 void     ns_js_blob_urls_remove(ns_js *js, const char *url);
 gboolean ns_js_bytes_view(JSContext *ctx, JSValueConst value, const uint8_t **out_data,
                           size_t *out_len, JSValue *out_holder);
+void     ns_js_orphan_node(ns_js *js, ns_node *n);
+void     ns_js_record_character_data(ns_js *js, ns_node *target, const char *old_value);
+void     ns_js_record_child_change(ns_js *js, ns_node *parent,
+                                   ns_node *added, ns_node *removed,
+                                   ns_node *previous_sibling, ns_node *next_sibling);
+void     ns_insert_sibling_before(ns_node *ref, ns_node *newc);
+JSValue  ns_element_get_innerText(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_innerText(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_set_outerText(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_wholeText(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_normalize(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_element_substring_data(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_element_append_data(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_delete_data(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_insert_data(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_element_replace_data(JSContext *ctx, JSValueConst this_val, int argc,
+                                 JSValueConst *argv);
+JSValue  ns_element_split_text(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
 
 JSValue  ns_window_get_selection(JSContext *ctx, JSValueConst this_val, int argc,
                                  JSValueConst *argv);

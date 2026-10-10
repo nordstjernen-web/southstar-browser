@@ -55,6 +55,7 @@ southstar-js-realm = { path = "../js-realm" }
 southstar-js-services = { path = "../js-services" }
 southstar-js-storage = { path = "../js-storage" }
 southstar-js-temporal = { path = "../js-temporal" }
+southstar-js-text = { path = "../js-text" }
 southstar-js-traversal = { path = "../js-traversal" }
 southstar-js-url = { path = "../js-url" }
 southstar-js-wasm = { path = "../js-wasm", optional = true }

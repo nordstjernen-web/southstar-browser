@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* innerText, outerText and the CharacterData and Text methods
+  (substringData, appendData, insertData, deleteData, replaceData,
+  splitText, wholeText, normalize) moved from js.c to Rust (rust/js-text),
+  with unchanged results.
 * Range, Selection, TreeWalker and NodeIterator moved from js.c to Rust
   (rust/js-traversal). A NodeIterator is now traced by the garbage
   collector, so cycles through it no longer leak.
