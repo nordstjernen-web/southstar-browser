@@ -285,8 +285,6 @@ struct ns_js {
     JSValue       live_node_proto;
     JSValue       live_radionode_proto;
     int           live_protos_set;
-    JSValue       computed_style_proxy;
-    int           computed_style_proxy_set;
     JSValue       url_helper;
     int           url_helper_set;
     JSValue       search_params_helper;
@@ -1007,4 +1005,23 @@ void    ns_worker_install_location(JSContext *ctx, JSValueConst global,
 void    ns_sw_install_scope(JSContext *ctx, JSValueConst global);
 void    ns_worker_shape_global(JSContext *ctx, gboolean service_worker);
 
+/* getComputedStyle, element.style, the CSS namespace and the Web Animations
+ * hooks (rust/js-cssom) and the js.c helpers they call. */
+void     ns_cssom_install_window(JSContext *ctx, JSValueConst global);
+void     ns_cssom_install_css(JSContext *ctx, JSValueConst global);
+void     ns_cssom_install_style_proto(JSContext *ctx, JSValueConst proto);
+char    *ns_cssom_style_own_value(const ns_node *node, const char *name,
+                                  gboolean *writable);
+void     ns_cssom_style_set(JSContext *ctx, ns_node *node, const char *name,
+                            JSValueConst value);
+void     ns_cssom_teardown(ns_js *js);
+ns_node *ns_style_decl_node(JSValueConst this_val);
+JSValue  ns_style_decl_proto(JSContext *ctx);
+gboolean ns_js_element_is_rendered(JSContext *ctx, JSValueConst v);
+GHashTable *ns_js_style_table(const ns_js *js);
+struct ns_anim *ns_js_anim(const ns_js *js);
+void     ns_js_flush_layout(ns_js *js);
+void     ns_js_flush_style(ns_js *js);
+void     ns_js_set_attr_recorded(ns_js *js, ns_node *n, const char *name,
+                                 const char *value);
 #endif

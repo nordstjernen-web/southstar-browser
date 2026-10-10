@@ -8,6 +8,9 @@ Southstar Browser (unreleased):
   pixel and hash loops use as_chunks, and nested conditions use let chains.
   Ubuntu 24.04 (whose newest packaged compiler is rustc-1.91) and Debian 13
   build with rustup.
+* getComputedStyle and its resolved values, element.style, the CSS
+  namespace and the Web Animations hooks moved from js.c to Rust
+  (rust/js-cssom).
 * WebAssembly runs on wasmi, a pure-Rust interpreter (rust/js-wasm), in
   place of the vendored WAMR C runtime, which is gone along with src/wasm.c.
   Funcref tables can now be read from JavaScript (WAMR crashed on

@@ -120,8 +120,8 @@ struct NsStyle {
     marker: *const Style,
     backdrop: *const Style,
     file_selector_button: *const Style,
-    _hidden_before: *const Style,
-    _hidden_after: *const Style,
+    hidden_before: *const Style,
+    hidden_after: *const Style,
     _share_id: u64,
     _ref: c_int,
     _currentcolor_bits: u32,
@@ -360,6 +360,14 @@ impl<'a> ValueRef<'a> {
         })
     }
 
+    pub fn calc_terms(self) -> Option<[f64; 4]> {
+        let v = self.raw();
+        (v.kind == KIND_CALC).then(|| {
+            let c = unsafe { v.u.calc };
+            [c.pct, c.px, c.em, c.rem]
+        })
+    }
+
     pub fn calc(self) -> Option<(f64, f64)> {
         let v = self.raw();
         if v.kind == KIND_CALC {
@@ -519,6 +527,50 @@ impl<'a> StyleRef<'a> {
 
     pub fn after(self) -> Option<StyleRef<'a>> {
         unsafe { StyleRef::from_ptr(self.fields().after) }
+    }
+
+    pub fn first_letter(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().first_letter) }
+    }
+
+    pub fn placeholder(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().placeholder) }
+    }
+
+    pub fn file_selector_button(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().file_selector_button) }
+    }
+
+    pub fn hidden_before(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().hidden_before) }
+    }
+
+    pub fn hidden_after(self) -> Option<StyleRef<'a>> {
+        unsafe { StyleRef::from_ptr(self.fields().hidden_after) }
+    }
+
+    pub fn has_vars(self) -> bool {
+        !self.fields().vars.is_null()
+    }
+
+    pub fn var(self, name: &CStr) -> Option<&'a CStr> {
+        let map = self.fields().vars;
+        if map.is_null() {
+            return None;
+        }
+        var_value(map, name)
+    }
+
+    pub fn var_names(self) -> Vec<Vec<u8>> {
+        let map = self.fields().vars;
+        if map.is_null() {
+            return Vec::new();
+        }
+        Names::of(map)
+            .get()
+            .iter()
+            .map(|name| name.to_bytes().to_vec())
+            .collect()
     }
 
     pub fn resolve_vars(self, text: &CStr) -> Option<GStr> {

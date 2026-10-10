@@ -1618,6 +1618,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-js-brand",
  "southstar-js-clone",
+ "southstar-js-cssom",
  "southstar-js-forms",
  "southstar-js-intl",
  "southstar-js-net",
@@ -1787,6 +1788,18 @@ name = "southstar-js-clone"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-cssom"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
+ "southstar-layout",
+ "southstar-mat4",
+ "southstar-style",
 ]
 
 [[package]]

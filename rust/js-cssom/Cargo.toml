@@ -1,0 +1,19 @@
+[package]
+name = "southstar-js-cssom"
+description = "The CSSOM bindings: getComputedStyle and its computed values, element.style, the CSS namespace and the Web Animations hooks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-layout = { path = "../layout" }
+southstar-mat4 = { path = "../mat4" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

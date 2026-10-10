@@ -41,6 +41,7 @@ southstar-image-decoders = { path = "../image-decoders" }
 southstar-ipc = { path = "../ipc" }
 southstar-js-brand = { path = "../js-brand" }
 southstar-js-clone = { path = "../js-clone" }
+southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-intl = { path = "../js-intl" }
