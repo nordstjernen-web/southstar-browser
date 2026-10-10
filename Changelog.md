@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* WebGL 1 and 2 are Rust (rust/webgl), with unchanged results: webgl.c is
+  gone. The JavaScript engine layer gained typed-array access for it on both
+  QuickJS and Boa.
 * structuredClone() and the serialization behind worker and MessagePort
   messages are Rust (rust/js-clone), with unchanged results.
 * Canvas text — fillText(), strokeText() and measureText() — and the image

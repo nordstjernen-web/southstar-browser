@@ -12,7 +12,11 @@ use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::job::PromiseJob;
 use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::FunctionObjectBuilder;
-use boa_engine::object::builtins::{JsArray, JsArrayBuffer, JsPromise, JsTypedArray};
+use boa_engine::object::builtins::{
+    AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat32Array,
+    JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise, JsTypedArray, JsUint8Array,
+    JsUint8ClampedArray, JsUint16Array, JsUint32Array,
+};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
 use boa_engine::{
@@ -22,8 +26,8 @@ use boa_engine::{
 use boa_gc::custom_trace;
 
 use crate::{
-    Attributes, BoundFn, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit, Trace,
-    TypedArrayBytes, int64_modulo,
+    Attributes, BoundFn, ElementType, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit,
+    Trace, TypedArrayBytes, int64_modulo,
 };
 
 pub const ENGINE_NAME: &str = "boa";
@@ -120,6 +124,12 @@ impl Value {
             (Some(a), Some(b)) => JsObject::equals(&a, &b),
             _ => false,
         }
+    }
+
+    pub fn with_host<T: Any, R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
+        let object = self.0.as_object()?;
+        let data = object.downcast_ref::<HostData>()?;
+        data.data.downcast_ref::<T>().map(f)
     }
 }
 
@@ -568,6 +578,74 @@ impl Scope<'_> {
             byte_offset,
             element_size,
         }))
+    }
+
+    pub fn typed_array_element(&mut self, value: &Value) -> Option<ElementType> {
+        let array = JsTypedArray::from_object(value.0.as_object()?.clone()).ok()?;
+        Some(match array.kind()? {
+            TypedArrayKind::Int8 => ElementType::Int8,
+            TypedArrayKind::Uint8 => ElementType::Uint8,
+            TypedArrayKind::Uint8Clamped => ElementType::Uint8Clamped,
+            TypedArrayKind::Int16 => ElementType::Int16,
+            TypedArrayKind::Uint16 => ElementType::Uint16,
+            TypedArrayKind::Int32 => ElementType::Int32,
+            TypedArrayKind::Uint32 => ElementType::Uint32,
+            TypedArrayKind::BigInt64 => ElementType::BigInt64,
+            TypedArrayKind::BigUint64 => ElementType::BigUint64,
+            TypedArrayKind::Float32 => ElementType::Float32,
+            TypedArrayKind::Float64 => ElementType::Float64,
+            #[allow(unreachable_patterns)]
+            _ => ElementType::Float16,
+        })
+    }
+
+    pub fn with_buffer_bytes_mut<R>(
+        &mut self,
+        value: &Value,
+        f: impl FnOnce(&mut [u8]) -> R,
+    ) -> Option<R> {
+        let object = value.0.as_object()?.clone();
+        if let Ok(buffer) = JsArrayBuffer::from_object(object.clone()) {
+            let mut data = buffer.data_mut()?;
+            return Some(f(&mut data));
+        }
+        let array = JsTypedArray::from_object(object).ok()?;
+        let byte_offset = array.byte_offset(self.ctx).ok()?;
+        let length = array.byte_length(self.ctx).ok()?;
+        let buffer =
+            JsArrayBuffer::from_object(array.buffer(self.ctx).ok()?.as_object()?.clone()).ok()?;
+        let mut data = buffer.data_mut()?;
+        let bytes = data.get_mut(byte_offset..byte_offset.checked_add(length)?)?;
+        Some(f(bytes))
+    }
+
+    pub fn new_typed_array(&mut self, kind: ElementType, bytes: &[u8]) -> Result<Value, Value> {
+        let block = AlignedVec::from_iter(0, bytes.iter().copied());
+        let buffer = JsArrayBuffer::from_byte_block(block, self.ctx).map_err(|e| self.error(e))?;
+        let ctx = &mut *self.ctx;
+        let array: Result<JsValue, JsError> = match kind {
+            ElementType::Int8 => JsInt8Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Uint8 => JsUint8Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Uint8Clamped => {
+                JsUint8ClampedArray::from_array_buffer(buffer, ctx).map(Into::into)
+            }
+            ElementType::Int16 => JsInt16Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Uint16 => JsUint16Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Int32 => JsInt32Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Uint32 => JsUint32Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::BigInt64 => {
+                JsBigInt64Array::from_array_buffer(buffer, ctx).map(Into::into)
+            }
+            ElementType::BigUint64 => {
+                JsBigUint64Array::from_array_buffer(buffer, ctx).map(Into::into)
+            }
+            ElementType::Float32 => JsFloat32Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Float64 => JsFloat64Array::from_array_buffer(buffer, ctx).map(Into::into),
+            ElementType::Float16 => {
+                return Err(self.type_error("Float16Array is not available on this engine"));
+            }
+        };
+        array.map(Value).map_err(|e| self.error(e))
     }
 
     pub fn gc(&mut self) {

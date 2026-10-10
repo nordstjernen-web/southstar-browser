@@ -14,8 +14,8 @@ use std::ffi::CString;
 use std::path::Path;
 
 use crate::{
-    Attributes, BoundFn, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit, Trace,
-    TypedArrayBytes,
+    Attributes, BoundFn, ElementType, Job, NativeFn, PromiseState, PropertyDescriptor, RealmInit,
+    Trace, TypedArrayBytes,
 };
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
@@ -128,6 +128,16 @@ type JSModuleNormalizeFunc = unsafe extern "C" fn(
 const OBJ_REFERENCE: c_int = 1 << 3;
 
 unsafe extern "C" {
+    fn JS_IsArrayBuffer(obj: JSValue) -> bool;
+    fn JS_GetTypedArrayType(obj: JSValue) -> c_int;
+    fn JS_NewArrayBufferCopy(ctx: *mut JSContext, buf: *const u8, len: usize) -> JSValue;
+    #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_new_typed_array")]
+    fn JS_NewTypedArray(
+        ctx: *mut JSContext,
+        argc: c_int,
+        argv: *mut JSValue,
+        kind: c_int,
+    ) -> JSValue;
     fn JS_NewRuntime() -> *mut JSRuntime;
     fn JS_FreeRuntime(rt: *mut JSRuntime);
     fn JS_SetMaxStackSize(rt: *mut JSRuntime, stack_size: usize);
@@ -574,7 +584,30 @@ impl Value {
     pub fn same_object(&self, other: &Value) -> bool {
         self.is_object() && other.is_object() && unsafe { self.raw.u.ptr == other.raw.u.ptr }
     }
+
+    pub fn with_host<T: Any, R>(&self, f: impl FnOnce(&T) -> R) -> Option<R> {
+        if self.raw.tag != TAG_OBJECT {
+            return None;
+        }
+        let data = unsafe { JS_GetOpaque(self.raw, HOST_CLASS_ID) }.cast::<HostData>();
+        unsafe { data.as_ref() }.and_then(|host| host.data.downcast_ref::<T>().map(f))
+    }
 }
+
+const ELEMENT_TYPES: [ElementType; 12] = [
+    ElementType::Uint8Clamped,
+    ElementType::Int8,
+    ElementType::Uint8,
+    ElementType::Int16,
+    ElementType::Uint16,
+    ElementType::Int32,
+    ElementType::Uint32,
+    ElementType::BigInt64,
+    ElementType::BigUint64,
+    ElementType::Float16,
+    ElementType::Float32,
+    ElementType::Float64,
+];
 
 impl Clone for Value {
     fn clone(&self) -> Value {
@@ -1884,6 +1917,64 @@ impl Scope<'_> {
             byte_offset,
             element_size,
         }))
+    }
+
+    pub fn typed_array_element(&mut self, value: &Value) -> Option<ElementType> {
+        let kind = unsafe { JS_GetTypedArrayType(value.raw) };
+        usize::try_from(kind)
+            .ok()
+            .and_then(|kind| ELEMENT_TYPES.get(kind).copied())
+    }
+
+    pub fn with_buffer_bytes_mut<R>(
+        &mut self,
+        value: &Value,
+        f: impl FnOnce(&mut [u8]) -> R,
+    ) -> Option<R> {
+        if unsafe { JS_IsArrayBuffer(value.raw) } {
+            let mut len = 0usize;
+            let base = unsafe { JS_GetArrayBuffer(self.ctx, &mut len, value.raw) };
+            if base.is_null() {
+                return None;
+            }
+            return Some(f(unsafe { core::slice::from_raw_parts_mut(base, len) }));
+        }
+        let (mut byte_offset, mut length, mut element_size) = (0usize, 0usize, 0usize);
+        let buffer = unsafe {
+            JS_GetTypedArrayBuffer(
+                self.ctx,
+                value.raw,
+                &mut byte_offset,
+                &mut length,
+                &mut element_size,
+            )
+        };
+        let buffer = self.take(buffer).ok()?;
+        let mut total = 0usize;
+        let base = unsafe { JS_GetArrayBuffer(self.ctx, &mut total, buffer.raw) };
+        if base.is_null()
+            || byte_offset
+                .checked_add(length)
+                .is_none_or(|end| end > total)
+        {
+            return None;
+        }
+        let bytes = unsafe { core::slice::from_raw_parts_mut(base.add(byte_offset), length) };
+        let result = f(bytes);
+        drop(buffer);
+        Some(result)
+    }
+
+    pub fn new_typed_array(&mut self, kind: ElementType, bytes: &[u8]) -> Result<Value, Value> {
+        let index = ELEMENT_TYPES
+            .iter()
+            .position(|&known| known == kind)
+            .unwrap_or(0) as c_int;
+        let buffer = unsafe { JS_NewArrayBufferCopy(self.ctx, bytes.as_ptr(), bytes.len()) };
+        let buffer = self.take(buffer)?;
+        let mut args = [buffer.raw, UNDEFINED, UNDEFINED];
+        let raw = unsafe { JS_NewTypedArray(self.ctx, 3, args.as_mut_ptr(), index) };
+        self.take(raw)
     }
 
     pub fn gc(&mut self) {

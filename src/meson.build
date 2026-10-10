@@ -46,7 +46,6 @@ southstar_engine_sources = files(
 southstar_engine_sources += files(
   'js.c',
   'wasm.c',
-  'webgl.c',
 )
 if quickjs_original
   southstar_engine_sources += files('ns_quickjs.c')

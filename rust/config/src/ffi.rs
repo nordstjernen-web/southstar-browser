@@ -106,6 +106,14 @@ pub(crate) fn enable_camera() {
     }
 }
 
+pub(crate) fn enable_webgl() {
+    let config = global_config();
+    if config.webgl_enabled == FALSE {
+        config.webgl_enabled = TRUE;
+        unsafe { ns_config_save(ptr::null_mut()) };
+    }
+}
+
 pub(crate) fn text(p: *const c_char) -> Option<Vec<u8>> {
     unsafe { glib::bytes(p) }.map(<[u8]>::to_vec)
 }

@@ -1,0 +1,20 @@
+[package]
+name = "southstar-webgl"
+description = "WebGL 1 and 2: canvas.getContext('webgl'/'webgl2') mapped onto OpenGL ES through libepoxy, ported from webgl.c"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[features]
+quickjs-original = ["southstar-js-engine/quickjs-original"]
+
+[lints]
+workspace = true

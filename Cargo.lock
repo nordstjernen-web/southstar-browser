@@ -1628,6 +1628,7 @@ dependencies = [
  "southstar-watchdog",
  "southstar-webaudio",
  "southstar-webcrypto",
+ "southstar-webgl",
  "southstar-websocket",
  "southstar-woff2",
  "southstar-xml",
@@ -1985,6 +1986,16 @@ name = "southstar-webcrypto"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+]
+
+[[package]]
+name = "southstar-webgl"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-config",
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]

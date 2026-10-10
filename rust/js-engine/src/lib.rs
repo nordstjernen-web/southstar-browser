@@ -39,6 +39,22 @@ pub struct TypedArrayBytes<'a> {
     pub element_size: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ElementType {
+    Int8,
+    Uint8,
+    Uint8Clamped,
+    Int16,
+    Uint16,
+    Int32,
+    Uint32,
+    BigInt64,
+    BigUint64,
+    Float16,
+    Float32,
+    Float64,
+}
+
 pub struct PropertyDescriptor {
     pub value: Value,
     pub getter: Value,

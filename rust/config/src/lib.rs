@@ -324,6 +324,14 @@ pub fn enable_camera() {
     ffi::enable_camera();
 }
 
+pub fn webgl_enabled() -> bool {
+    get().is_none_or(|config| config.webgl_enabled != FALSE)
+}
+
+pub fn enable_webgl() {
+    ffi::enable_webgl();
+}
+
 fn strip(bytes: &[u8]) -> &[u8] {
     let start = bytes
         .iter()

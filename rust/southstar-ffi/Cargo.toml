@@ -65,6 +65,7 @@ southstar-spellcheck = { path = "../spellcheck" }
 southstar-svg = { path = "../svg" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
+southstar-webgl = { path = "../webgl" }
 southstar-texture = { path = "../texture" }
 southstar-watchdog = { path = "../watchdog" }
 southstar-engine = { path = "../engine" }
@@ -110,6 +111,7 @@ quickjs-original = [
     "southstar-js-temporal/quickjs-original",
     "southstar-idb/quickjs-original",
     "southstar-webaudio/quickjs-original",
+    "southstar-webgl/quickjs-original",
 ]
 woff2 = ["dep:southstar-woff2", "southstar-font/woff2"]
 

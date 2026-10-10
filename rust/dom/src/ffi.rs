@@ -173,6 +173,10 @@ impl<'a> Node<'a> {
         self.get().flags
     }
 
+    pub fn attr_gen(self) -> u32 {
+        self.get().attr_gen
+    }
+
     pub fn tpl_content(self) -> Option<Self> {
         Self::link(self.get().tpl_content)
     }

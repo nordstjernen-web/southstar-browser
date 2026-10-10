@@ -63,6 +63,7 @@ pub use southstar_threaddump;
 pub use southstar_watchdog;
 pub use southstar_webaudio;
 pub use southstar_webcrypto;
+pub use southstar_webgl;
 pub use southstar_websocket;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;

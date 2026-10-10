@@ -74,6 +74,7 @@ const PORTED: &[&str] = &[
     "webaudio.c",
     "ws.c",
     "webcrypto.c",
+    "webgl.c",
     "xml.c",
     #[cfg(feature = "woff2")]
     "woff2.c",
