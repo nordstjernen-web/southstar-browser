@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* innerHTML, outerHTML, getHTML, setHTMLUnsafe, insertAdjacentHTML,
+  insertAdjacentElement, insertAdjacentText, textContent, XMLSerializer and
+  the microdata API moved from js.c to Rust (rust/js-html). Markup
+  containing an embedded NUL is no longer cut short.
 * The document factories (createElement, createElementNS, createTextNode,
   createComment and the rest), cloneNode, importNode, adoptNode,
   DOMImplementation, the namespace lookups and the a/area URL-part accessors

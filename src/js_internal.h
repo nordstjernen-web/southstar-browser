@@ -1395,6 +1395,45 @@ const ns_node *ns_js_focused_doc(const ns_js *js);
 void           ns_js_clear_focused_node(ns_js *js);
 void           ns_js_unorphan_node(ns_js *js, ns_node *n);
 void     ns_element_replace_all_recorded(ns_js *js, ns_node *n, ns_node *added);
+void     ns_js_record_child_change_arrays(ns_js *js, ns_node *parent,
+                                          GPtrArray *added, GPtrArray *removed,
+                                          ns_node *previous_sibling,
+                                          ns_node *next_sibling);
+void     ns_js_script_needs_prepare(ns_js *js, ns_node *script);
+void     ns_mark_scripts_already_started(ns_node *root);
+JSValue  ns_element_set_nodeValue(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_textContent(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_textContent(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_text(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_text(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_innerHTML(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_innerHTML(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_outerHTML(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_outerHTML(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_getHTML(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_element_setHTMLUnsafe(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_insertAdjacentHTML(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_element_insertAdjacentElement(JSContext *ctx, JSValueConst this_val, int argc,
+                                          JSValueConst *argv);
+JSValue  ns_element_insertAdjacentText(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_element_get_itemScope(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_itemScope(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_itemId(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_itemId(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_itemType(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_itemProp(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_itemRef(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_itemValue(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_itemValue(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_properties(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_getItems(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_xml_serializer_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
 gboolean ns_document_is_realm_document(JSContext *ctx, JSValueConst doc);
 void     ns_js_seed_cookies_from_jar(ns_js *js);
 JSValue  ns_document_get_documentElement(JSContext *ctx, JSValueConst this_val);

@@ -1629,6 +1629,7 @@ dependencies = [
  "southstar-js-focus",
  "southstar-js-forms",
  "southstar-js-geometry",
+ "southstar-js-html",
  "southstar-js-intl",
  "southstar-js-media",
  "southstar-js-net",
@@ -1923,6 +1924,15 @@ dependencies = [
  "southstar-mat4",
  "southstar-style",
  "southstar-svg",
+]
+
+[[package]]
+name = "southstar-js-html"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]

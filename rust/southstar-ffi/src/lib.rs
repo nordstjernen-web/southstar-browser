@@ -49,6 +49,7 @@ pub use southstar_js_events;
 pub use southstar_js_focus;
 pub use southstar_js_forms;
 pub use southstar_js_geometry;
+pub use southstar_js_html;
 pub use southstar_js_intl;
 pub use southstar_js_media;
 pub use southstar_js_net;
