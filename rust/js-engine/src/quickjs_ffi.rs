@@ -891,6 +891,309 @@ pub mod quickjs {
         scope.take(raw)
     }
 
+    pub const BOXED_NUMBER: c_int = 1;
+    pub const BOXED_STRING: c_int = 2;
+    pub const BOXED_BOOLEAN: c_int = 3;
+    pub const BOXED_BIGINT: c_int = 4;
+
+    const TAG_SYMBOL: i64 = -8;
+    const GPN_ENUM_ONLY: c_int = 1 << 4;
+    const PROP_GETSET: c_int = 1 << 4;
+    const PROP_C_W_E: c_int = 7;
+
+    unsafe extern "C" {
+        fn JS_IsArrayBuffer(obj: JSValue) -> bool;
+        fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut usize, obj: JSValue) -> *mut u8;
+        fn JS_GetTypedArrayBuffer(
+            ctx: *mut JSContext,
+            obj: JSValue,
+            pbyte_offset: *mut usize,
+            pbyte_length: *mut usize,
+            pbytes_per_element: *mut usize,
+        ) -> JSValue;
+        #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_new_typed_array")]
+        fn JS_NewTypedArray(
+            ctx: *mut JSContext,
+            argc: c_int,
+            argv: *mut JSValue,
+            kind: c_int,
+        ) -> JSValue;
+        fn JS_IsDate(v: JSValue) -> bool;
+        fn JS_IsRegExp(v: JSValue) -> bool;
+        fn JS_IsMap(v: JSValue) -> bool;
+        fn JS_IsSet(v: JSValue) -> bool;
+        fn JS_IsDataView(v: JSValue) -> bool;
+        #[cfg_attr(feature = "quickjs-original", link_name = "ns_quickjs_is_error")]
+        fn JS_IsError(v: JSValue) -> bool;
+        fn JS_GetBoxedPrimitiveKind(v: JSValue) -> c_int;
+        fn JS_IsInstanceOf(ctx: *mut JSContext, val: JSValue, obj: JSValue) -> c_int;
+        fn JS_IsConstructor(ctx: *mut JSContext, val: JSValue) -> bool;
+        fn JS_ToObject(ctx: *mut JSContext, val: JSValue) -> JSValue;
+        fn JS_ToString(ctx: *mut JSContext, val: JSValue) -> JSValue;
+        fn JS_AtomToString(ctx: *mut JSContext, atom: super::JSAtom) -> JSValue;
+        fn JS_GetProperty(ctx: *mut JSContext, obj: JSValue, atom: super::JSAtom) -> JSValue;
+        fn JS_SetProperty(
+            ctx: *mut JSContext,
+            obj: JSValue,
+            atom: super::JSAtom,
+            val: JSValue,
+        ) -> c_int;
+        fn JS_DefinePropertyValue(
+            ctx: *mut JSContext,
+            obj: JSValue,
+            atom: super::JSAtom,
+            val: JSValue,
+            flags: c_int,
+        ) -> c_int;
+    }
+
+    #[cfg(not(feature = "quickjs-original"))]
+    unsafe extern "C" {
+        fn JS_IsEngineFunction(v: JSValue) -> bool;
+    }
+
+    #[cfg(feature = "quickjs-original")]
+    #[allow(non_snake_case)]
+    unsafe fn JS_IsEngineFunction(_v: JSValue) -> bool {
+        true
+    }
+
+    pub fn identity(value: &Value) -> usize {
+        if value.is_object() {
+            unsafe { value.raw.u.ptr as usize }
+        } else {
+            0
+        }
+    }
+
+    pub fn take_exception(scope: &mut Scope<'_>) -> Value {
+        scope.exception()
+    }
+
+    pub fn to_js_string(scope: &mut Scope<'_>, value: &Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_ToString(scope.ctx, value.raw) };
+        scope.take(raw)
+    }
+
+    pub fn is_symbol(value: &Value) -> bool {
+        value.raw.tag == TAG_SYMBOL
+    }
+
+    pub fn is_array_buffer(value: &Value) -> bool {
+        unsafe { JS_IsArrayBuffer(value.raw) }
+    }
+
+    pub fn is_date(value: &Value) -> bool {
+        unsafe { JS_IsDate(value.raw) }
+    }
+
+    pub fn is_regexp(value: &Value) -> bool {
+        unsafe { JS_IsRegExp(value.raw) }
+    }
+
+    pub fn is_map(value: &Value) -> bool {
+        unsafe { JS_IsMap(value.raw) }
+    }
+
+    pub fn is_set(value: &Value) -> bool {
+        unsafe { JS_IsSet(value.raw) }
+    }
+
+    pub fn is_data_view(value: &Value) -> bool {
+        unsafe { JS_IsDataView(value.raw) }
+    }
+
+    pub fn is_error(value: &Value) -> bool {
+        unsafe { JS_IsError(value.raw) }
+    }
+
+    pub fn boxed_kind(value: &Value) -> c_int {
+        unsafe { JS_GetBoxedPrimitiveKind(value.raw) }
+    }
+
+    pub fn is_engine_function(value: &Value) -> bool {
+        unsafe { JS_IsEngineFunction(value.raw) }
+    }
+
+    pub fn is_constructor(scope: &mut Scope<'_>, value: &Value) -> bool {
+        unsafe { JS_IsConstructor(scope.ctx, value.raw) }
+    }
+
+    pub fn instance_of(scope: &mut Scope<'_>, value: &Value, constructor: &Value) -> bool {
+        if !constructor.is_object() {
+            return false;
+        }
+        let status = unsafe { JS_IsInstanceOf(scope.ctx, value.raw, constructor.raw) };
+        if status < 0 {
+            drop(scope.exception());
+        }
+        status > 0
+    }
+
+    pub fn to_object(scope: &mut Scope<'_>, value: &Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_ToObject(scope.ctx, value.raw) };
+        scope.take(raw)
+    }
+
+    pub fn array_buffer_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
+        let mut size = 0usize;
+        let data = unsafe { JS_GetArrayBuffer(scope.ctx, &mut size, value.raw) };
+        if data.is_null() {
+            drop(scope.exception());
+            return None;
+        }
+        Some(unsafe { core::slice::from_raw_parts(data, size) }.to_vec())
+    }
+
+    pub fn fill_array_buffer(scope: &mut Scope<'_>, value: &Value, bytes: &[u8]) {
+        let mut size = 0usize;
+        let data = unsafe { JS_GetArrayBuffer(scope.ctx, &mut size, value.raw) };
+        if data.is_null() {
+            drop(scope.exception());
+            return;
+        }
+        if size >= bytes.len() {
+            unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len()) };
+        }
+    }
+
+    pub struct TypedArrayParts {
+        pub buffer: Value,
+        pub byte_offset: usize,
+        pub byte_length: usize,
+        pub bytes_per_element: usize,
+    }
+
+    pub fn typed_array_parts(
+        scope: &mut Scope<'_>,
+        value: &Value,
+    ) -> Result<TypedArrayParts, Value> {
+        let (mut offset, mut length, mut per) = (0usize, 0usize, 0usize);
+        let raw = unsafe {
+            JS_GetTypedArrayBuffer(scope.ctx, value.raw, &mut offset, &mut length, &mut per)
+        };
+        Ok(TypedArrayParts {
+            buffer: scope.take(raw)?,
+            byte_offset: offset,
+            byte_length: length,
+            bytes_per_element: per,
+        })
+    }
+
+    pub fn new_typed_array(
+        scope: &mut Scope<'_>,
+        args: &[Value],
+        kind: c_int,
+    ) -> Result<Value, Value> {
+        let mut raw: Vec<JSValue> = args.iter().map(|a| a.raw).collect();
+        let out =
+            unsafe { JS_NewTypedArray(scope.ctx, raw.len() as c_int, raw.as_mut_ptr(), kind) };
+        scope.take(out)
+    }
+
+    pub fn own_enumerable_string_keys(
+        scope: &mut Scope<'_>,
+        object: &Value,
+    ) -> Result<Vec<Value>, Value> {
+        let mut tab: *mut super::JSPropertyEnum = core::ptr::null_mut();
+        let mut len = 0u32;
+        let flags = super::GPN_STRING_MASK | GPN_ENUM_ONLY;
+        let status = unsafe {
+            super::JS_GetOwnPropertyNames(scope.ctx, &mut tab, &mut len, object.raw, flags)
+        };
+        scope.status(status)?;
+        let entries = if tab.is_null() {
+            &[][..]
+        } else {
+            unsafe { core::slice::from_raw_parts(tab, len as usize) }
+        };
+        let keys = entries
+            .iter()
+            .map(|entry| Value::own(scope.ctx, unsafe { JS_AtomToString(scope.ctx, entry.atom) }))
+            .collect();
+        unsafe { super::JS_FreePropertyEnum(scope.ctx, tab, len) };
+        Ok(keys)
+    }
+
+    fn with_atom<R>(
+        scope: &mut Scope<'_>,
+        key: &Value,
+        f: impl FnOnce(&mut Scope<'_>, super::JSAtom) -> Result<R, Value>,
+    ) -> Result<R, Value> {
+        let atom = unsafe { super::JS_ValueToAtom(scope.ctx, key.raw) };
+        if atom == super::ATOM_NULL {
+            return Err(scope.exception());
+        }
+        let result = f(scope, atom);
+        unsafe { super::JS_FreeAtom(scope.ctx, atom) };
+        result
+    }
+
+    pub fn get_by_key(scope: &mut Scope<'_>, object: &Value, key: &Value) -> Result<Value, Value> {
+        with_atom(scope, key, |scope, atom| {
+            let raw = unsafe { JS_GetProperty(scope.ctx, object.raw, atom) };
+            scope.take(raw)
+        })
+    }
+
+    pub fn set_by_key(
+        scope: &mut Scope<'_>,
+        object: &Value,
+        key: &Value,
+        value: Value,
+    ) -> Result<(), Value> {
+        with_atom(scope, key, |scope, atom| {
+            let status = unsafe { JS_SetProperty(scope.ctx, object.raw, atom, value.into_raw()) };
+            scope.status(status)
+        })
+    }
+
+    pub fn define_by_key(
+        scope: &mut Scope<'_>,
+        object: &Value,
+        key: &Value,
+        value: Value,
+    ) -> Result<(), Value> {
+        with_atom(scope, key, |scope, atom| {
+            let status = unsafe {
+                JS_DefinePropertyValue(scope.ctx, object.raw, atom, value.into_raw(), PROP_C_W_E)
+            };
+            scope.status(status)
+        })
+    }
+
+    pub enum OwnSlot {
+        Missing,
+        Accessor,
+        Data(Value),
+    }
+
+    pub fn own_slot(scope: &mut Scope<'_>, object: &Value, key: &str) -> Result<OwnSlot, Value> {
+        let key = scope.string(key);
+        with_atom(scope, &key, |scope, atom| {
+            let mut desc = super::JSPropertyDescriptor {
+                flags: 0,
+                value: super::UNDEFINED,
+                getter: super::UNDEFINED,
+                setter: super::UNDEFINED,
+            };
+            let status =
+                unsafe { super::JS_GetOwnProperty(scope.ctx, &mut desc, object.raw, atom) };
+            scope.status(status)?;
+            if status == 0 {
+                return Ok(OwnSlot::Missing);
+            }
+            let value = Value::own(scope.ctx, desc.value);
+            drop(Value::own(scope.ctx, desc.getter));
+            drop(Value::own(scope.ctx, desc.setter));
+            Ok(if desc.flags & PROP_GETSET != 0 {
+                OwnSlot::Accessor
+            } else {
+                OwnSlot::Data(value)
+            })
+        })
+    }
+
     pub unsafe fn with_host<T: core::any::Any, R>(
         raw: JSValue,
         f: impl FnOnce(&T) -> R,

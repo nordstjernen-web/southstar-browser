@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* structuredClone() and the serialization behind worker and MessagePort
+  messages are Rust (rust/js-clone), with unchanged results.
 * Canvas text — fillText(), strokeText() and measureText() — and the image
   sources drawImage() and createPattern() read from (<img>, <canvas>, <video>
   posters, OffscreenCanvas, ImageBitmap) are Rust, which finishes the canvas

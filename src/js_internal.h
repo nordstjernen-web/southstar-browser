@@ -373,6 +373,19 @@ gboolean
 ns_image_bitmap_is(JSValueConst v);
 JSValue
 ns_canvas_clone_object(JSContext *ctx, JSValueConst v);
+
+/* Structured cloning and the worker wire graph (rust/js-clone). */
+JSValue ns_structured_clone_transfer(JSContext *ctx, JSValueConst value,
+                                     JSValue transfer, JSValueConst seed_from,
+                                     JSValueConst seed_to);
+JSValue ns_sc_fail(JSContext *ctx);
+gboolean ns_sc_buffer_detached(JSContext *ctx, JSValueConst buffer);
+JSValue ns_wire_encode_value(JSContext *ctx, JSValueConst value, JSValueConst ports);
+JSValue ns_wire_decode_value(JSContext *ctx, JSValueConst wire, JSValueConst ports);
+JSValue ns_throw_dom_exception(JSContext *ctx, const char *name, int code,
+                               const char *message);
+gboolean ns_js_is_host_object(JSValueConst v);
+gboolean ns_worker_transfer_is_port(JSContext *ctx, JSValueConst v);
 JSValue
 ns_canvas_throw_dom(JSContext *ctx, const char *name, const char *msg);
 int
