@@ -1201,6 +1201,51 @@ JSValue  ns_element_replace_data(JSContext *ctx, JSValueConst this_val, int argc
 JSValue  ns_element_split_text(JSContext *ctx, JSValueConst this_val, int argc,
                                JSValueConst *argv);
 
+const char    *ns_js_cookie_value(const ns_js *js);
+void           ns_js_set_cookie_value(ns_js *js, const char *value);
+const char    *ns_js_partition_key(const ns_js *js);
+const char    *ns_js_referrer(const ns_js *js);
+const char    *ns_js_frame_referrer_for(const ns_js *js, const ns_node *frame);
+int            ns_js_doc_ready_state(const ns_js *js, const ns_node *doc);
+const ns_node *ns_js_current_script(const ns_js *js);
+const ns_node *ns_js_focused_doc(const ns_js *js);
+void           ns_js_clear_focused_node(ns_js *js);
+void           ns_js_unorphan_node(ns_js *js, ns_node *n);
+void     ns_element_replace_all_recorded(ns_js *js, ns_node *n, ns_node *added);
+void     ns_element_insert_before_single(ns_js *js, ns_node *parent, ns_node *newc,
+                                         ns_node *ref);
+gboolean ns_document_is_realm_document(JSContext *ctx, JSValueConst doc);
+void     ns_js_seed_cookies_from_jar(ns_js *js);
+JSValue  ns_document_get_documentElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_body(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_set_body(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_document_get_head(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_scrollingElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_activeElement(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_currentScript(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_scripts(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_anchors(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_embeds(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_plugins(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_applets(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_title(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_set_title(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_document_get_dir(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_set_dir(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_document_get_color(JSContext *ctx, JSValueConst this_val, int magic);
+JSValue  ns_document_set_color(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                               int magic);
+JSValue  ns_document_get_cookie(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_set_cookie(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_document_get_referrer(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_readyState(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_designMode(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_lastModified(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_xmlVersion(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_hidden(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_visibilityState(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_document_get_compatMode(JSContext *ctx, JSValueConst this_val);
+
 JSValue  ns_window_get_selection(JSContext *ctx, JSValueConst this_val, int argc,
                                  JSValueConst *argv);
 JSValue  ns_document_create_range(JSContext *ctx, JSValueConst this_val, int argc,

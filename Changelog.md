@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The Document property bindings (cookie, title, dir, body and head, the
+  legacy colours, readyState, referrer, compatMode, activeElement,
+  scrollingElement, scripts and anchors) moved from js.c to Rust (rust/js-
+  document), with unchanged results.
 * Popovers, <dialog>, invoker commands (popovertarget, commandfor), the top
   layer, the focusing steps and exclusive <details name> groups moved from
   js.c to Rust (rust/js-top-layer), with unchanged results.

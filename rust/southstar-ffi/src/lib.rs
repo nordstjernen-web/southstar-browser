@@ -41,6 +41,7 @@ pub use southstar_js_clone;
 pub use southstar_js_crypto;
 pub use southstar_js_cssom;
 pub use southstar_js_custom_elements;
+pub use southstar_js_document;
 pub use southstar_js_events;
 pub use southstar_js_forms;
 pub use southstar_js_intl;
