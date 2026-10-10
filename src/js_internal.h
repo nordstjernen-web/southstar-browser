@@ -105,12 +105,6 @@ struct ns_js {
     gpointer      window_action_user_data;
     const ns_node *pending_fullscreen_event_target;
     JSValue       pending_fullscreen_resolve;
-    JSValue       history_state;
-    int           history_length;
-    GPtrArray    *history_entries;
-    int           history_pos;
-    guint64       nav_key_seq;
-    JSValue       navigation;
     char         *current_url;
     char         *document_origin;
     ns_node       *current_doc;
@@ -696,5 +690,24 @@ void ns_box_visual_border_box(const ns_box *box,
 void ns_box_visual_padding_box(const ns_box *box,
                                double *x, double *y, double *w, double *h);
 JSValue ns_make_dom_rect(JSContext *ctx, double x, double y, double w, double h);
+
+/* History, the Navigation API and navigation between windows and frames
+ * (rust/js-window) and the js.c helpers they call. */
+void ns_window_install_history(JSContext *ctx, JSValueConst global);
+void ns_window_history_teardown(ns_js *js);
+void ns_js_set_current_url(ns_js *js, const char *url);
+void ns_js_soft_navigate(ns_js *js, const char *url, gboolean replace);
+gboolean ns_js_navigate(ns_js *js, const char *url, gboolean reload);
+gboolean ns_js_window_events_blocked(const ns_js *js);
+void ns_js_dispatch_document_window_event(ns_js *js, const char *type,
+                                          JSValue event);
+JSValue ns_window_structured_clone(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_target_make_event(JSContext *ctx, JSValueConst target,
+                             const char *type);
+void ns_target_dispatch_with_event(JSContext *ctx, JSValueConst obj,
+                                   const char *type, JSValueConst ev);
+void ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj);
+JSValue ns_make_window_event(JSContext *ctx, const char *type);
 
 #endif

@@ -379,8 +379,6 @@ static JSValue ns_event_stop_immediate(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv);
 static void    ns_target_fire_event(JSContext *ctx, JSValueConst obj,
                                     const char *type);
-static JSValue ns_target_make_event(JSContext *ctx, JSValueConst target,
-                                    const char *type);
 static void    ns_event_adopt_interface(JSContext *ctx, JSValueConst ev,
                                         const char *iface);
 static JSValue ns_call_on_handler(ns_js *js, JSValue handler,
@@ -401,9 +399,6 @@ static gboolean ns_js_image_loads_pending(const ns_js *js);
 static JSValue ns_iframe_child_frame_of(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv);
 static ns_node *ns_iframe_document_node(const ns_node *iframe);
-static void    ns_target_dispatch_with_event(JSContext *ctx, JSValueConst obj,
-                                             const char *type,
-                                             JSValueConst ev);
 static JSValue ns_event_call_listener(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv);
 static JSValue ns_event_report_listener_exception(JSContext *ctx,
@@ -10522,7 +10517,7 @@ ns_bind_fn(JSContext *ctx, JSValueConst obj, const char *name,
     }
 }
 
-static void
+void
 ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj)
 {
     ns_bind_fn(ctx, obj, "addEventListener",    ns_target_addEventListener,    2);
@@ -13780,8 +13775,6 @@ ns_port_deliver_job(JSContext *ctx, int argc, JSValueConst *argv)
     return JS_UNDEFINED;
 }
 
-static JSValue ns_window_structured_clone(JSContext *ctx, JSValueConst this_val,
-                                          int argc, JSValueConst *argv);
 
 static JSValue
 ns_structured_clone_value(JSContext *ctx, JSValueConst v, JSValueConst transfer)
@@ -14991,7 +14984,7 @@ ns_window_report_error(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static JSValue
+JSValue
 ns_window_structured_clone(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -15381,14 +15374,6 @@ static JSValue ns_document_removeEventListener(JSContext *ctx, JSValueConst this
                                                int argc, JSValueConst *argv);
 static JSValue ns_document_dispatchEvent(JSContext *ctx, JSValueConst this_val,
                                           int argc, JSValueConst *argv);
-static JSValue ns_history_get_state(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv);
-static JSValue ns_history_get_length(JSContext *ctx, JSValueConst this_val,
-                                     int argc, JSValueConst *argv);
-static JSValue ns_history_pushState(JSContext *ctx, JSValueConst this_val,
-                                    int argc, JSValueConst *argv);
-static JSValue ns_history_replaceState(JSContext *ctx, JSValueConst this_val,
-                                       int argc, JSValueConst *argv);
 
 static JSValue
 ns_window_matchMedia(JSContext *ctx, JSValueConst this_val,
@@ -15483,164 +15468,9 @@ ns_js_media_queries_reeval(ns_js *js)
     }
 }
 
-static JSValue
-ns_history_get_state(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NULL;
-    return JS_DupValue(ctx, js->history_state);
-}
-
-typedef struct {
-    char    *url;
-    JSValue  state;
-    char    *key;
-    char    *id;
-} ns_history_entry;
-
-static void ns_nav_fire_currententrychange(ns_js *js, const char *nav_type);
-
-static void
-ns_history_ensure_stack(ns_js *js)
-{
-    if (!js || js->history_entries) return;
-    js->history_entries = g_ptr_array_new();
-    ns_history_entry *e = g_new0(ns_history_entry, 1);
-    e->url = g_strdup(js->current_url ? js->current_url : "");
-    e->state = JS_NULL;
-    g_ptr_array_add(js->history_entries, e);
-    js->history_pos = 0;
-}
-
-static void
-ns_history_entry_pop_free(ns_js *js, ns_history_entry *e)
-{
-    if (!e) return;
-    g_free(e->url);
-    g_free(e->key);
-    g_free(e->id);
-    if (js->ctx) JS_FreeValue(js->ctx, e->state);
-    g_free(e);
-}
-
-static JSValue
-ns_history_get_length(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NewInt32(ctx, 1);
-    if (js->history_entries && js->history_entries->len > 0)
-        return JS_NewInt32(ctx, (int)js->history_entries->len);
-    return JS_NewInt32(ctx, js->history_length);
-}
-
-static JSValue
-ns_history_set_state_impl(JSContext *ctx, int argc, JSValueConst *argv,
-                          gboolean replace)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_UNDEFINED;
-
-    ns_history_ensure_stack(js);
-
-    JSValue state = JS_NULL;
-    if (argc >= 1 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0])) {
-        state = ns_window_structured_clone(ctx, JS_UNDEFINED, 1, &argv[0]);
-        if (JS_IsException(state)) return JS_EXCEPTION;
-    }
-
-    char *new_url = NULL;
-    if (argc >= 3 && !JS_IsNull(argv[2]) && !JS_IsUndefined(argv[2])) {
-        const char *url_raw = JS_ToCString(ctx, argv[2]);
-        if (url_raw && *url_raw) {
-            if (js->current_url && *js->current_url)
-                new_url = ns_url_resolve(js->current_url, url_raw);
-            else
-                new_url = g_strdup(url_raw);
-            if (!new_url) {
-                JS_FreeCString(ctx, url_raw);
-                JS_FreeValue(ctx, state);
-                return ns_throw_dom_exception(ctx, "SecurityError", 18,
-                    "history: the URL could not be parsed");
-            }
-        }
-        if (url_raw) JS_FreeCString(ctx, url_raw);
-    }
-
-    if (new_url) {
-        g_autofree char *new_origin  = ns_url_origin_from(new_url);
-        g_autofree char *curr_origin = ns_url_origin_from(js->current_url);
-        gboolean same_origin = new_origin && *new_origin &&
-                               curr_origin && *curr_origin &&
-                               strcmp(new_origin, curr_origin) == 0;
-        if (!same_origin) {
-            g_free(new_url);
-            JS_FreeValue(ctx, state);
-            return ns_throw_dom_exception(ctx, "SecurityError", 18,
-                "history: URL must be same-origin as the document");
-        }
-    }
-
-    JS_FreeValue(ctx, js->history_state);
-    js->history_state = state;
-
-    if (new_url) {
-        g_free(js->current_url);
-        js->current_url = new_url;
-    }
-
-    if (!replace) js->history_length++;
-
-    if (replace) {
-        ns_history_entry *e =
-            g_ptr_array_index(js->history_entries, js->history_pos);
-        g_free(e->url);
-        e->url = g_strdup(js->current_url ? js->current_url : "");
-        JS_FreeValue(ctx, e->state);
-        e->state = JS_DupValue(ctx, js->history_state);
-    } else {
-        while ((int)js->history_entries->len > js->history_pos + 1) {
-            guint last = js->history_entries->len - 1;
-            ns_history_entry_pop_free(js,
-                g_ptr_array_index(js->history_entries, last));
-            g_ptr_array_remove_index(js->history_entries, last);
-        }
-        ns_history_entry *e = g_new0(ns_history_entry, 1);
-        e->url = g_strdup(js->current_url ? js->current_url : "");
-        e->state = JS_DupValue(ctx, js->history_state);
-        g_ptr_array_add(js->history_entries, e);
-        js->history_pos = js->history_entries->len - 1;
-    }
-
-    if (js->soft_nav_cb)
-        js->soft_nav_cb(js->current_url, replace, js->soft_nav_user_data);
-
-    ns_nav_fire_currententrychange(js, replace ? "replace" : "push");
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_history_pushState(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    return ns_history_set_state_impl(ctx, argc, argv, FALSE);
-}
-
-static JSValue
-ns_history_replaceState(JSContext *ctx, JSValueConst this_val,
-                        int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    return ns_history_set_state_impl(ctx, argc, argv, TRUE);
-}
-
 /* hashchange, popstate and similar events are fired at the window: the
  * window is their target, and they neither bubble nor can be cancelled. */
-static JSValue
+JSValue
 ns_make_window_event(JSContext *ctx, const char *type)
 {
     JSValue event = ns_make_event(ctx, type, NULL);
@@ -15648,634 +15478,6 @@ ns_make_window_event(JSContext *ctx, const char *type)
     JS_SetPropertyStr(ctx, event, "bubbles", JS_FALSE);
     JS_SetPropertyStr(ctx, event, "cancelable", JS_FALSE);
     return event;
-}
-
-static JSValue
-ns_history_popstate_job(JSContext *ctx, int argc, JSValueConst *argv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || !js->current_doc || js->halted || js->in_pump)
-        return JS_UNDEFINED;
-    JSValue state = argc >= 1 ? argv[0] : JS_NULL;
-    JSValue event = ns_make_window_event(ctx, "popstate");
-    JS_SetPropertyStr(ctx, event, "state", JS_DupValue(ctx, state));
-    ns_js_dispatch_window_only_event(js, js->current_doc, "popstate", event,
-                                     NULL);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_history_navigate(JSContext *ctx, int delta)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_UNDEFINED;
-    ns_history_ensure_stack(js);
-    gint64 n = js->history_entries->len;
-    gint64 target = (gint64)js->history_pos + delta;
-    if (target < 0 || target > n - 1 || target == js->history_pos)
-        return JS_UNDEFINED;
-
-    js->history_pos = (int)target;
-    ns_history_entry *e = g_ptr_array_index(js->history_entries, (guint)target);
-    if (e->url) {
-        g_free(js->current_url);
-        js->current_url = g_strdup(e->url);
-    }
-    JS_FreeValue(ctx, js->history_state);
-    js->history_state = JS_DupValue(ctx, e->state);
-
-    if (js->soft_nav_cb)
-        js->soft_nav_cb(js->current_url, TRUE, js->soft_nav_user_data);
-
-    JSValueConst arg = js->history_state;
-    JS_EnqueueJob(ctx, ns_history_popstate_job, 1, &arg);
-    ns_nav_fire_currententrychange(js, "traverse");
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_history_back(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_history_navigate(ctx, -1);
-}
-
-static JSValue
-ns_history_forward(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_history_navigate(ctx, 1);
-}
-
-static JSValue
-ns_history_go(JSContext *ctx, JSValueConst this_val,
-              int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    int32_t delta = 0;
-    if (argc >= 1) JS_ToInt32(ctx, &delta, argv[0]);
-    return ns_history_navigate(ctx, delta);
-}
-
-static char *
-ns_nav_key_new(ns_js *js)
-{
-    return g_strdup_printf("%016" G_GINT64_FORMAT "x",
-                           (gint64)(js ? ++js->nav_key_seq : 0));
-}
-
-static JSValue
-ns_nav_entry_getState(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue st = JS_GetPropertyStr(ctx, this_val, "_state");
-    if (JS_IsUndefined(st) || JS_IsNull(st)) return st;
-    JSValueConst a = st;
-    JSValue clone = ns_window_structured_clone(ctx, JS_UNDEFINED, 1, &a);
-    JS_FreeValue(ctx, st);
-    return JS_IsException(clone) ? JS_NULL : clone;
-}
-
-static JSValue
-ns_nav_make_entry(JSContext *ctx, ns_js *js, ns_history_entry *e, int index)
-{
-    if (!e) return JS_NULL;
-    if (!e->key) e->key = ns_nav_key_new(js);
-    if (!e->id)  e->id  = ns_nav_key_new(js);
-    JSValue w = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, w, "url",  JS_NewString(ctx, e->url ? e->url : ""));
-    JS_SetPropertyStr(ctx, w, "key",  JS_NewString(ctx, e->key));
-    JS_SetPropertyStr(ctx, w, "id",   JS_NewString(ctx, e->id));
-    JS_SetPropertyStr(ctx, w, "index", JS_NewInt32(ctx, index));
-    JS_SetPropertyStr(ctx, w, "sameDocument", JS_TRUE);
-    JS_SetPropertyStr(ctx, w, "_state",
-                      JS_IsUndefined(e->state) ? JS_NULL
-                                               : JS_DupValue(ctx, e->state));
-    ns_bind_fn(ctx, w, "getState", ns_nav_entry_getState, 0);
-    JS_SetPropertyStr(ctx, w, "_listeners", JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, w);
-    return w;
-}
-
-static JSValue
-ns_nav_current_entry_value(JSContext *ctx, ns_js *js)
-{
-    if (!js) return JS_NULL;
-    ns_history_ensure_stack(js);
-    if (js->history_pos < 0 ||
-        js->history_pos >= (int)js->history_entries->len)
-        return JS_NULL;
-    return ns_nav_make_entry(ctx, js,
-        g_ptr_array_index(js->history_entries, js->history_pos),
-        js->history_pos);
-}
-
-static void
-ns_nav_fire_currententrychange(ns_js *js, const char *nav_type)
-{
-    if (!js || !js->ctx || !JS_IsObject(js->navigation)) return;
-    JSContext *ctx = js->ctx;
-    JSValue ev = ns_target_make_event(ctx, js->navigation,
-                                      "currententrychange");
-    JS_SetPropertyStr(ctx, ev, "navigationType",
-                      nav_type ? JS_NewString(ctx, nav_type) : JS_NULL);
-    ns_target_dispatch_with_event(ctx, js->navigation,
-                                  "currententrychange", ev);
-    JS_FreeValue(ctx, ev);
-}
-
-static JSValue
-ns_nav_settled_promise(JSContext *ctx, JSValue value, gboolean reject)
-{
-    JSValue resolvers[2];
-    JSValue p = JS_NewPromiseCapability(ctx, resolvers);
-    if (!JS_IsException(p)) {
-        JSValueConst a = value;
-        JSValue r = JS_Call(ctx, resolvers[reject ? 1 : 0], JS_UNDEFINED, 1, &a);
-        JS_FreeValue(ctx, r);
-    }
-    JS_FreeValue(ctx, value);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
-    return p;
-}
-
-static JSValue
-ns_nav_dom_error(JSContext *ctx, const char *name, const char *msg)
-{
-    JSValue err = JS_NewError(ctx);
-    JS_SetPropertyStr(ctx, err, "name", JS_NewString(ctx, name));
-    JS_SetPropertyStr(ctx, err, "message", JS_NewString(ctx, msg));
-    return err;
-}
-
-static JSValue
-ns_nav_result(JSContext *ctx, JSValue committed, JSValue finished)
-{
-    JSValue o = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, o, "committed", committed);
-    JS_SetPropertyStr(ctx, o, "finished", finished);
-    return o;
-}
-
-static JSValue
-ns_nav_get_current(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_nav_current_entry_value(ctx, js_from_ctx(ctx));
-}
-
-static JSValue
-ns_nav_entries(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    JSValue arr = JS_NewArray(ctx);
-    if (!js) return arr;
-    ns_history_ensure_stack(js);
-    for (guint i = 0; i < js->history_entries->len; i++)
-        JS_SetPropertyUint32(ctx, arr, i,
-            ns_nav_make_entry(ctx, js,
-                g_ptr_array_index(js->history_entries, i), (int)i));
-    return arr;
-}
-
-static JSValue
-ns_nav_can_go_back(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_FALSE;
-    ns_history_ensure_stack(js);
-    return js->history_pos > 0 ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_nav_can_go_forward(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_FALSE;
-    ns_history_ensure_stack(js);
-    return js->history_pos < (int)js->history_entries->len - 1
-        ? JS_TRUE : JS_FALSE;
-}
-
-static JSValue
-ns_nav_event_intercept(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv)
-{
-    JSValue can = JS_GetPropertyStr(ctx, this_val, "canIntercept");
-    gboolean ok = JS_ToBool(ctx, can) > 0;
-    JS_FreeValue(ctx, can);
-    if (!ok)
-        return ns_throw_dom_exception(ctx, "SecurityError", 18,
-            "intercept: this navigation cannot be intercepted");
-    JS_SetPropertyStr(ctx, this_val, "_intercepted", JS_TRUE);
-    JSValue handlers = JS_GetPropertyStr(ctx, this_val, "_handlers");
-    if (!JS_IsArray(handlers)) {
-        JS_FreeValue(ctx, handlers);
-        handlers = JS_NewArray(ctx);
-        JS_SetPropertyStr(ctx, this_val, "_handlers",
-                          JS_DupValue(ctx, handlers));
-    }
-    if (argc >= 1 && JS_IsObject(argv[0])) {
-        JSValue h = JS_GetPropertyStr(ctx, argv[0], "handler");
-        if (JS_IsFunction(ctx, h)) {
-            JSValue lenv = JS_GetPropertyStr(ctx, handlers, "length");
-            uint32_t n = 0; JS_ToUint32(ctx, &n, lenv); JS_FreeValue(ctx, lenv);
-            JS_SetPropertyUint32(ctx, handlers, n, JS_DupValue(ctx, h));
-        }
-        JS_FreeValue(ctx, h);
-    }
-    JS_FreeValue(ctx, handlers);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_nav_event_noop(JSContext *ctx, JSValueConst this_val,
-                  int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_nav_finish_cb(JSContext *ctx, JSValueConst this_val,
-                 int argc, JSValueConst *argv, int magic, JSValue *func_data)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    JSValueConst nav = func_data[0];
-    if (js && JS_IsObject(nav)) {
-        const char *type = magic ? "navigateerror" : "navigatesuccess";
-        JSValue ev = ns_target_make_event(ctx, nav, type);
-        ns_target_dispatch_with_event(ctx, nav, type, ev);
-        JS_FreeValue(ctx, ev);
-    }
-    if (magic) {
-        JSValueConst a = argc > 0 ? argv[0] : JS_UNDEFINED;
-        JSValue r = JS_Call(ctx, func_data[2], JS_UNDEFINED, 1, &a);
-        JS_FreeValue(ctx, r);
-        return JS_UNDEFINED;
-    }
-    JSValueConst e = func_data[3];
-    JSValue r = JS_Call(ctx, func_data[1], JS_UNDEFINED, 1, &e);
-    JS_FreeValue(ctx, r);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_nav_run_intercept(JSContext *ctx, ns_js *js, JSValueConst ev,
-                     JSValue committed, JSValue finished, JSValue *finresolv)
-{
-    JSValue handlers = JS_GetPropertyStr(ctx, ev, "_handlers");
-    JSValue results = JS_NewArray(ctx);
-    uint32_t rn = 0;
-    if (JS_IsArray(handlers)) {
-        JSValue lenv = JS_GetPropertyStr(ctx, handlers, "length");
-        uint32_t n = 0; JS_ToUint32(ctx, &n, lenv); JS_FreeValue(ctx, lenv);
-        for (uint32_t i = 0; i < n; i++) {
-            JSValue h = JS_GetPropertyUint32(ctx, handlers, i);
-            JSValue r = JS_Call(ctx, h, JS_UNDEFINED, 0, NULL);
-            JS_FreeValue(ctx, h);
-            if (JS_IsException(r)) r = JS_GetException(ctx);
-            JS_SetPropertyUint32(ctx, results, rn++, r);
-        }
-    }
-    JS_FreeValue(ctx, handlers);
-
-    JSValue cur = ns_nav_current_entry_value(ctx, js);
-    JSValue cres = JS_Call(ctx, committed, JS_UNDEFINED, 1, (JSValueConst[]){ cur });
-    JS_FreeValue(ctx, cres);
-
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue promise_ctor = JS_GetPropertyStr(ctx, global, "Promise");
-    JS_FreeValue(ctx, global);
-    JSValue all_fn = JS_GetPropertyStr(ctx, promise_ctor, "all");
-    JSValue all = JS_Call(ctx, all_fn, promise_ctor, 1, (JSValueConst[]){ results });
-    JS_FreeValue(ctx, all_fn);
-    JS_FreeValue(ctx, promise_ctor);
-    JS_FreeValue(ctx, results);
-
-    JSValueConst data[4] = { js->navigation, finresolv[0], finresolv[1], cur };
-    JSValue on_ok  = JS_NewCFunctionData(ctx, ns_nav_finish_cb, 0, 0, 4, data);
-    JSValue on_err = JS_NewCFunctionData(ctx, ns_nav_finish_cb, 0, 1, 4, data);
-    JS_FreeValue(ctx, cur);
-    JSValue then_fn = JS_GetPropertyStr(ctx, all, "then");
-    JSValue chained = JS_Call(ctx, then_fn, all, 2, (JSValueConst[]){ on_ok, on_err });
-    JS_FreeValue(ctx, chained);
-    JS_FreeValue(ctx, then_fn);
-    JS_FreeValue(ctx, on_ok);
-    JS_FreeValue(ctx, on_err);
-    JS_FreeValue(ctx, all);
-    (void)finished;
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_nav_navigate(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || argc < 1)
-        return ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "SyntaxError",
-                "navigate: a URL is required"), TRUE),
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "SyntaxError",
-                "navigate: a URL is required"), TRUE));
-    ns_history_ensure_stack(js);
-    const char *raw = JS_ToCString(ctx, argv[0]);
-    char *url = NULL;
-    if (raw && *raw) {
-        if (js->current_url && *js->current_url)
-            url = ns_url_resolve(js->current_url, raw);
-        else
-            url = ns_url_resolve(NULL, raw);
-    }
-    if (raw) JS_FreeCString(ctx, raw);
-    if (!url)
-        return ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "SyntaxError",
-                "navigate: the URL could not be parsed"), TRUE),
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "SyntaxError",
-                "navigate: the URL could not be parsed"), TRUE));
-
-    JSValue state = JS_UNDEFINED;
-    gboolean replace = FALSE;
-    JSValue info = JS_UNDEFINED;
-    if (argc >= 2 && JS_IsObject(argv[1])) {
-        state = JS_GetPropertyStr(ctx, argv[1], "state");
-        info = JS_GetPropertyStr(ctx, argv[1], "info");
-        JSValue hv = JS_GetPropertyStr(ctx, argv[1], "history");
-        const char *hs = JS_ToCString(ctx, hv);
-        if (hs && strcmp(hs, "replace") == 0) replace = TRUE;
-        if (hs) JS_FreeCString(ctx, hs);
-        JS_FreeValue(ctx, hv);
-    }
-
-    gboolean same_origin = FALSE;
-    {
-        ns_url_parts *ap = ns_url_parts_new(url);
-        ns_url_parts *bp = js->current_url ? ns_url_parts_new(js->current_url)
-                                           : NULL;
-        if (ap && bp)
-            same_origin =
-                strcmp(ap->protocol ? ap->protocol : "",
-                       bp->protocol ? bp->protocol : "") == 0 &&
-                g_ascii_strcasecmp(ap->hostname ? ap->hostname : "",
-                                   bp->hostname ? bp->hostname : "") == 0 &&
-                strcmp(ap->port ? ap->port : "",
-                       bp->port ? bp->port : "") == 0;
-        if (ap) ns_url_parts_free(ap);
-        if (bp) ns_url_parts_free(bp);
-    }
-
-    JSValue ev = ns_target_make_event(ctx, this_val, "navigate");
-    JS_SetPropertyStr(ctx, ev, "cancelable", JS_TRUE);
-    JS_SetPropertyStr(ctx, ev, "navigationType",
-                      JS_NewString(ctx, replace ? "replace" : "push"));
-    JS_SetPropertyStr(ctx, ev, "canIntercept",
-                      same_origin ? JS_TRUE : JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "userInitiated", JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "hashChange", JS_FALSE);
-    JS_SetPropertyStr(ctx, ev, "info", JS_DupValue(ctx, info));
-    JSValue dest = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, dest, "url", JS_NewString(ctx, url));
-    JS_SetPropertyStr(ctx, dest, "key", JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, dest, "id", JS_NewString(ctx, ""));
-    JS_SetPropertyStr(ctx, dest, "index", JS_NewInt32(ctx, -1));
-    JS_SetPropertyStr(ctx, dest, "sameDocument",
-                      same_origin ? JS_TRUE : JS_FALSE);
-    JS_SetPropertyStr(ctx, dest, "_state", JS_DupValue(ctx, state));
-    ns_bind_fn(ctx, dest, "getState", ns_nav_entry_getState, 0);
-    JS_SetPropertyStr(ctx, ev, "destination", dest);
-    ns_bind_fn(ctx, ev, "intercept", ns_nav_event_intercept, 1);
-    ns_bind_fn(ctx, ev, "scroll", ns_nav_event_noop, 0);
-    ns_bind_fn(ctx, ev, "commit", ns_nav_event_noop, 0);
-
-    ns_target_dispatch_with_event(ctx, this_val, "navigate", ev);
-
-    JSValue dpv = JS_GetPropertyStr(ctx, ev, "defaultPrevented");
-    gboolean prevented = JS_ToBool(ctx, dpv) > 0;
-    JS_FreeValue(ctx, dpv);
-    JSValue intv = JS_GetPropertyStr(ctx, ev, "_intercepted");
-    gboolean intercepted = JS_ToBool(ctx, intv) > 0;
-    JS_FreeValue(ctx, intv);
-
-    JSValue ret;
-    if (prevented) {
-        JS_FreeValue(ctx, ev);
-        ret = ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "AbortError",
-                "navigate: canceled by a navigate handler"), TRUE),
-            ns_nav_settled_promise(ctx, ns_nav_dom_error(ctx, "AbortError",
-                "navigate: canceled by a navigate handler"), TRUE));
-    } else if (intercepted && same_origin) {
-        JSValue cres[2], fres[2];
-        JSValue committed = JS_NewPromiseCapability(ctx, cres);
-        JSValue finished = JS_NewPromiseCapability(ctx, fres);
-        JSValue cloned = JS_IsUndefined(state) || JS_IsNull(state)
-            ? JS_NULL
-            : ns_window_structured_clone(ctx, JS_UNDEFINED, 1,
-                                         (JSValueConst[]){ state });
-        if (JS_IsException(cloned)) { JS_FreeValue(ctx, JS_GetException(ctx)); cloned = JS_NULL; }
-        JS_FreeValue(ctx, js->history_state);
-        js->history_state = cloned;
-        g_free(js->current_url);
-        js->current_url = g_strdup(url);
-        if (replace) {
-            ns_history_entry *e =
-                g_ptr_array_index(js->history_entries, js->history_pos);
-            g_free(e->url); e->url = g_strdup(url);
-            JS_FreeValue(ctx, e->state);
-            e->state = JS_DupValue(ctx, js->history_state);
-            g_free(e->id); e->id = ns_nav_key_new(js);
-        } else {
-            while ((int)js->history_entries->len > js->history_pos + 1) {
-                guint last = js->history_entries->len - 1;
-                ns_history_entry_pop_free(js,
-                    g_ptr_array_index(js->history_entries, last));
-                g_ptr_array_remove_index(js->history_entries, last);
-            }
-            ns_history_entry *ne = g_new0(ns_history_entry, 1);
-            ne->url = g_strdup(url);
-            ne->state = JS_DupValue(ctx, js->history_state);
-            ne->key = ns_nav_key_new(js);
-            ne->id = ns_nav_key_new(js);
-            g_ptr_array_add(js->history_entries, ne);
-            js->history_pos = js->history_entries->len - 1;
-            js->history_length++;
-        }
-        if (js->soft_nav_cb)
-            js->soft_nav_cb(js->current_url, replace, js->soft_nav_user_data);
-        ns_nav_fire_currententrychange(js, replace ? "replace" : "push");
-        JSValue finresolv[2] = { fres[0], fres[1] };
-        ns_nav_run_intercept(ctx, js, ev, cres[0], finished, finresolv);
-        JS_FreeValue(ctx, cres[0]); JS_FreeValue(ctx, cres[1]);
-        JS_FreeValue(ctx, fres[0]); JS_FreeValue(ctx, fres[1]);
-        JS_FreeValue(ctx, ev);
-        ret = ns_nav_result(ctx, committed, finished);
-    } else {
-        JS_FreeValue(ctx, ev);
-        if (js->nav_cb)
-            js->nav_cb(url, FALSE, js->nav_user_data);
-        JSValue cur1 = ns_nav_current_entry_value(ctx, js);
-        JSValue cur2 = ns_nav_current_entry_value(ctx, js);
-        ret = ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx, cur1, FALSE),
-            ns_nav_settled_promise(ctx, cur2, FALSE));
-    }
-    JS_FreeValue(ctx, state);
-    JS_FreeValue(ctx, info);
-    g_free(url);
-    return ret;
-}
-
-static JSValue
-ns_nav_reload(JSContext *ctx, JSValueConst this_val,
-              int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    if (js && js->nav_cb && js->current_url)
-        js->nav_cb(js->current_url, TRUE, js->nav_user_data);
-    JSValue cur1 = ns_nav_current_entry_value(ctx, js);
-    JSValue cur2 = ns_nav_current_entry_value(ctx, js);
-    return ns_nav_result(ctx, ns_nav_settled_promise(ctx, cur1, FALSE),
-                         ns_nav_settled_promise(ctx, cur2, FALSE));
-}
-
-static JSValue
-ns_nav_traverse_delta(JSContext *ctx, ns_js *js, int delta)
-{
-    ns_history_navigate(ctx, delta);
-    JSValue cur1 = ns_nav_current_entry_value(ctx, js);
-    JSValue cur2 = ns_nav_current_entry_value(ctx, js);
-    return ns_nav_result(ctx, ns_nav_settled_promise(ctx, cur1, FALSE),
-                         ns_nav_settled_promise(ctx, cur2, FALSE));
-}
-
-static JSValue
-ns_nav_back(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_nav_traverse_delta(ctx, js_from_ctx(ctx), -1);
-}
-
-static JSValue
-ns_nav_forward(JSContext *ctx, JSValueConst this_val,
-               int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_nav_traverse_delta(ctx, js_from_ctx(ctx), 1);
-}
-
-static JSValue
-ns_nav_traverse_to(JSContext *ctx, JSValueConst this_val,
-                   int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || argc < 1)
-        return ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx,
-                ns_nav_dom_error(ctx, "InvalidStateError",
-                    "traverseTo: a key is required"), TRUE),
-            ns_nav_settled_promise(ctx,
-                ns_nav_dom_error(ctx, "InvalidStateError",
-                    "traverseTo: a key is required"), TRUE));
-    ns_history_ensure_stack(js);
-    const char *key = JS_ToCString(ctx, argv[0]);
-    int target = -1;
-    if (key)
-        for (guint i = 0; i < js->history_entries->len; i++) {
-            ns_history_entry *e = g_ptr_array_index(js->history_entries, i);
-            if (e->key && strcmp(e->key, key) == 0) { target = (int)i; break; }
-        }
-    if (key) JS_FreeCString(ctx, key);
-    if (target < 0)
-        return ns_nav_result(ctx,
-            ns_nav_settled_promise(ctx,
-                ns_nav_dom_error(ctx, "InvalidStateError",
-                    "traverseTo: no entry has that key"), TRUE),
-            ns_nav_settled_promise(ctx,
-                ns_nav_dom_error(ctx, "InvalidStateError",
-                    "traverseTo: no entry has that key"), TRUE));
-    return ns_nav_traverse_delta(ctx, js, target - js->history_pos);
-}
-
-static JSValue
-ns_nav_update_current(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_UNDEFINED;
-    ns_history_ensure_stack(js);
-    if (argc < 1 || !JS_IsObject(argv[0]))
-        return JS_ThrowTypeError(ctx,
-            "updateCurrentEntry: an options object is required");
-    JSValue sv = JS_GetPropertyStr(ctx, argv[0], "state");
-    JSValue cloned = JS_IsUndefined(sv) || JS_IsNull(sv)
-        ? JS_NULL
-        : ns_window_structured_clone(ctx, JS_UNDEFINED, 1, (JSValueConst[]){ sv });
-    JS_FreeValue(ctx, sv);
-    if (JS_IsException(cloned)) return cloned;
-    JS_FreeValue(ctx, js->history_state);
-    js->history_state = cloned;
-    if (js->history_pos >= 0 &&
-        js->history_pos < (int)js->history_entries->len) {
-        ns_history_entry *e =
-            g_ptr_array_index(js->history_entries, js->history_pos);
-        JS_FreeValue(ctx, e->state);
-        e->state = JS_DupValue(ctx, js->history_state);
-    }
-    ns_nav_fire_currententrychange(js, NULL);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_make_navigation(JSContext *ctx, ns_js *js)
-{
-    JSValue nav = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, nav, "_listeners", JS_NewArray(ctx));
-    ns_bind_event_target_listeners(ctx, nav);
-    ns_bind_fn(ctx, nav, "entries",            ns_nav_entries,        0);
-    ns_bind_fn(ctx, nav, "navigate",           ns_nav_navigate,       2);
-    ns_bind_fn(ctx, nav, "reload",             ns_nav_reload,         1);
-    ns_bind_fn(ctx, nav, "back",               ns_nav_back,           0);
-    ns_bind_fn(ctx, nav, "forward",            ns_nav_forward,        0);
-    ns_bind_fn(ctx, nav, "traverseTo",         ns_nav_traverse_to,    1);
-    ns_bind_fn(ctx, nav, "updateCurrentEntry", ns_nav_update_current, 1);
-    struct { const char *name; JSCFunction *fn; } getters[] = {
-        { "currentEntry", ns_nav_get_current },
-        { "canGoBack",    ns_nav_can_go_back },
-        { "canGoForward", ns_nav_can_go_forward },
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(getters); i++) {
-        JSAtom a = JS_NewAtom(ctx, getters[i].name);
-        JS_DefinePropertyGetSet(ctx, nav, a,
-            JS_NewCFunction(ctx, getters[i].fn, getters[i].name, 0),
-            JS_UNDEFINED, JS_PROP_CONFIGURABLE);
-        JS_FreeAtom(ctx, a);
-    }
-    JS_SetPropertyStr(ctx, nav, "onnavigate", JS_NULL);
-    JS_SetPropertyStr(ctx, nav, "onnavigatesuccess", JS_NULL);
-    JS_SetPropertyStr(ctx, nav, "onnavigateerror", JS_NULL);
-    JS_SetPropertyStr(ctx, nav, "oncurrententrychange", JS_NULL);
-    if (js) {
-        JS_FreeValue(ctx, js->navigation);
-        js->navigation = JS_DupValue(ctx, nav);
-    }
-    return nav;
 }
 
 
@@ -19231,7 +18433,7 @@ ns_xhr_state_free(ns_xhr_state *st)
     g_free(st);
 }
 
-static JSValue
+JSValue
 ns_target_make_event(JSContext *ctx, JSValueConst target, const char *type)
 {
     JSValue ev = ns_event_new(ctx);
@@ -19284,7 +18486,7 @@ ns_target_report_exception(ns_js *js, JSContext *ctx, const char *type)
     JS_FreeValue(ctx, ex);
 }
 
-static void
+void
 ns_target_dispatch_with_event(JSContext *ctx, JSValueConst obj,
                               const char *type, JSValueConst ev)
 {
@@ -25607,7 +24809,6 @@ ns_worker_js_new(ns_worker_host *host)
     ns_js *js = g_new0(ns_js, 1);
     js->time_origin_us = (g_get_monotonic_time() / 100) * 100;
     js->time_origin_real_ms = floor((double)g_get_real_time() / 100.0) / 10.0;
-    js->history_state = JS_NULL;
     js->iframe_doc = JS_UNDEFINED;
     js->pristine_promise = JS_UNDEFINED;
     js->main_context = host->context;
@@ -52300,11 +51501,8 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     js->form_submit_user_data = NULL;
     js->soft_nav_cb = NULL;
     js->soft_nav_user_data = NULL;
-    js->history_state = JS_NULL;
-    js->navigation = JS_UNDEFINED;
     js->iframe_doc = JS_UNDEFINED;
     js->pending_fullscreen_resolve = JS_UNDEFINED;
-    js->history_length = 1;
     js->timers = g_hash_table_new_full(g_direct_hash, g_direct_equal,
                                        NULL, ns_timer_free);
     js->main_context = g_main_context_default();
@@ -52853,28 +52051,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_bind_ctor(ctx, global, "UIEvent",      ns_ui_event_ctor,     2);
 
     ns_bind_ctor(ctx, global, "History", ns_illegal_constructor, 0);
-    JSValue history = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, history, "scrollRestoration", JS_NewString(ctx, "auto"));
-    ns_bind_fn(ctx, history, "pushState",    ns_history_pushState,    3);
-    ns_bind_fn(ctx, history, "replaceState", ns_history_replaceState, 3);
-    ns_bind_fn(ctx, history, "back",         ns_history_back,         0);
-    ns_bind_fn(ctx, history, "forward",      ns_history_forward,      0);
-    ns_bind_fn(ctx, history, "go",           ns_history_go,           1);
-    JSAtom hatom_state  = JS_NewAtom(ctx, "state");
-    JSAtom hatom_length = JS_NewAtom(ctx, "length");
-    JS_DefinePropertyGetSet(ctx, history, hatom_state,
-        JS_NewCFunction(ctx, ns_history_get_state, "get state", 0),
-        JS_UNDEFINED, JS_PROP_CONFIGURABLE);
-    JS_DefinePropertyGetSet(ctx, history, hatom_length,
-        JS_NewCFunction(ctx, ns_history_get_length, "get length", 0),
-        JS_UNDEFINED, JS_PROP_CONFIGURABLE);
-    JS_FreeAtom(ctx, hatom_state);
-    JS_FreeAtom(ctx, hatom_length);
-    ns_set_tostring_tag(ctx, history, "History");
-    JS_SetPropertyStr(ctx, global, "history", history);
-
-    JS_SetPropertyStr(ctx, global, "navigation",
-                      ns_make_navigation(ctx, js_from_ctx(ctx)));
+    ns_window_install_history(ctx, global);
 
     JSValue crypto = JS_NewObject(ctx);
     ns_bind_fn(ctx, crypto, "getRandomValues", ns_window_getRandomValues, 1);
@@ -57422,15 +56599,7 @@ ns_js_free(ns_js *js)
         g_ptr_array_free(js->workers, TRUE);
         js->workers = NULL;
     }
-    if (js->ctx) JS_FreeValue(js->ctx, js->history_state);
-    if (js->ctx) JS_FreeValue(js->ctx, js->navigation);
-    if (js->history_entries) {
-        for (guint i = 0; i < js->history_entries->len; i++)
-            ns_history_entry_pop_free(js,
-                g_ptr_array_index(js->history_entries, i));
-        g_ptr_array_free(js->history_entries, TRUE);
-        js->history_entries = NULL;
-    }
+    ns_window_history_teardown(js);
     ns_perf_teardown(js);
     if (js->node_iters) {
         g_ptr_array_free(js->node_iters, TRUE);
@@ -61943,6 +61112,41 @@ const char *
 ns_js_current_url(const ns_js *js)
 {
     return js && js->current_url ? js->current_url : "";
+}
+
+void
+ns_js_set_current_url(ns_js *js, const char *url)
+{
+    char *copy = g_strdup(url);
+    g_free(js->current_url);
+    js->current_url = copy;
+}
+
+void
+ns_js_soft_navigate(ns_js *js, const char *url, gboolean replace)
+{
+    if (js->soft_nav_cb)
+        js->soft_nav_cb(url, replace, js->soft_nav_user_data);
+}
+
+gboolean
+ns_js_navigate(ns_js *js, const char *url, gboolean reload)
+{
+    if (!js->nav_cb) return FALSE;
+    js->nav_cb(url, reload, js->nav_user_data);
+    return TRUE;
+}
+
+gboolean
+ns_js_window_events_blocked(const ns_js *js)
+{
+    return !js->current_doc || js->halted || js->in_pump;
+}
+
+void
+ns_js_dispatch_document_window_event(ns_js *js, const char *type, JSValue event)
+{
+    ns_js_dispatch_window_only_event(js, js->current_doc, type, event, NULL);
 }
 
 const char *

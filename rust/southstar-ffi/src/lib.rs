@@ -44,6 +44,7 @@ pub use southstar_js_observers;
 pub use southstar_js_perf;
 pub use southstar_js_realm;
 pub use southstar_js_temporal;
+pub use southstar_js_window;
 pub use southstar_layout;
 pub use southstar_mat4;
 pub use southstar_mathml;

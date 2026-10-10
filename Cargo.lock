@@ -1609,6 +1609,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-realm",
  "southstar-js-temporal",
+ "southstar-js-window",
  "southstar-layout",
  "southstar-mat4",
  "southstar-mathml",
@@ -1825,6 +1826,14 @@ name = "southstar-js-temporal"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-datetime",
+ "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-window"
+version = "1.0.30-dev"
+dependencies = [
  "southstar-glib",
  "southstar-js-engine",
 ]
