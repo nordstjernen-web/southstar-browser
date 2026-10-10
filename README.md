@@ -13,6 +13,16 @@ Java/JVM versions have been removed.
 
 ![Southstar Browser showing its start page](docs/screenshot.png)
 
+**JavaScript engine:** Southstar runs page JavaScript on
+[QuickJS-ng](https://github.com/quickjs-ng/quickjs), an interpreter (no JIT)
+that is forked into the tree at `src/quickjs/` and extended there with the
+browser's hooks. A build option, `-Dquickjs=quickjs`, swaps in Fabrice
+Bellard's original [QuickJS](https://github.com/bellard/quickjs) instead.
+The Rust bindings go through an engine-neutral layer (`rust/js-engine`), which
+can also drive the Rust engine [Boa](https://github.com/boa-dev/boa). For now
+that is only used by the standalone test shell (`southstar-jsshell`); the
+browser itself always uses QuickJS.
+
 Supported platforms:
 * Linux
 * Windows
