@@ -67,9 +67,12 @@ impl ClassHooks {
     };
 }
 
+pub type RawFinalize = fn(*mut core::ffi::c_void);
+
 pub struct HostClass {
     pub name: &'static core::ffi::CStr,
     pub hooks: ClassHooks,
+    pub raw_finalize: Option<RawFinalize>,
     id: core::sync::atomic::AtomicU32,
 }
 
@@ -78,6 +81,20 @@ impl HostClass {
         HostClass {
             name,
             hooks,
+            raw_finalize: None,
+            id: core::sync::atomic::AtomicU32::new(0),
+        }
+    }
+
+    pub const fn new_raw(
+        name: &'static core::ffi::CStr,
+        hooks: ClassHooks,
+        finalize: RawFinalize,
+    ) -> HostClass {
+        HostClass {
+            name,
+            hooks,
+            raw_finalize: Some(finalize),
             id: core::sync::atomic::AtomicU32::new(0),
         }
     }

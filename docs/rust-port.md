@@ -776,6 +776,14 @@ engine its hidden state). On Boa `is_host_access` is always false,
 `set_with_receiver` ignores the receiver and `PropertyDefinition` carries
 no throw flag.
 
+A class built with `HostClass::new_raw` keeps a bare pointer as its
+instance data instead of boxed Rust data (`new_raw_instance`,
+`raw_instance`, `set_raw_instance`) and runs a `RawFinalize` when the
+object is collected; the Element class uses it so a node wrapper points
+straight at its `ns_node` and the node's `js_wrapper` points back at the
+object's identity (`object_identity`, `object_from_identity`). On Boa the
+pointer is kept but the finalizer does not run.
+
 ### Phase 8 — Remaining web platform features
 
 Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),

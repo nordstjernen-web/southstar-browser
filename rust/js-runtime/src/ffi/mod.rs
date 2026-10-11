@@ -7,6 +7,7 @@ pub(crate) mod glue;
 pub(crate) mod natives;
 pub(crate) mod scopes;
 pub(crate) mod state;
+pub(crate) mod wrapper;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;

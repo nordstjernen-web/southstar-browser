@@ -30,6 +30,8 @@ impl<T: Trace> Trace for ClassInstance<T> {
 
 struct NoData;
 
+struct RawData(core::cell::Cell<*mut core::ffi::c_void>);
+
 fn class_key(class: &HostClass) -> usize {
     core::ptr::from_ref(class) as usize
 }
@@ -124,6 +126,15 @@ impl Scope<'_> {
             Some(prototype) => Some(prototype.clone()),
             None => Some(self.class_prototype(class)).filter(Value::is_object),
         }
+    }
+
+    pub unsafe fn new_raw_instance(
+        &mut self,
+        class: &HostClass,
+        prototype: Option<&Value>,
+        data: *mut core::ffi::c_void,
+    ) -> Result<Value, Value> {
+        self.new_instance_with(class, prototype, RawData(core::cell::Cell::new(data)))
     }
 
     pub fn new_instance(
@@ -305,6 +316,21 @@ impl Value {
             (instance.class == key).then(|| f(&instance.data))
         })
         .flatten()
+    }
+
+    pub fn raw_instance(&self, class: &HostClass) -> *mut core::ffi::c_void {
+        self.with_instance(class, |raw: &RawData| raw.0.get())
+            .unwrap_or(core::ptr::null_mut())
+    }
+
+    pub unsafe fn set_raw_instance(&self, data: *mut core::ffi::c_void) {
+        self.with_host::<ClassInstance<RawData>, _>(|instance| instance.data.0.set(data));
+    }
+
+    pub fn object_identity(&self) -> *mut core::ffi::c_void {
+        self.0.as_object().map_or(core::ptr::null_mut(), |object| {
+            core::ptr::from_ref(object.as_ref()).cast_mut().cast()
+        })
     }
 
     pub fn is_instance_of_class(&self, class: &HostClass) -> bool {

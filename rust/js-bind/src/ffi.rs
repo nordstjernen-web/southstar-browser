@@ -10,14 +10,9 @@ use core::ffi::{c_char, c_int};
 use southstar_js_engine::quickjs::{self, JSCFunction, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
+use crate::class;
 use crate::host::HostKind;
 use crate::natives;
-
-unsafe extern "C" {
-    fn ns_ho_new(ctx: *mut JSContext, kind: c_int, proto: JSValue) -> JSValue;
-    fn ns_ho_kind_of(v: JSValue) -> c_int;
-    fn ns_js_net_host_state(ctx: *mut JSContext, v: JSValue, kind: c_int) -> JSValue;
-}
 
 #[repr(C)]
 pub struct FnDef {
@@ -32,14 +27,11 @@ pub struct IntConstant {
 }
 
 pub(crate) fn host_kind(value: &Value) -> Option<HostKind> {
-    HostKind::from_raw(unsafe { ns_ho_kind_of(quickjs::raw(value)) })
+    HostKind::from_raw(class::kind_of(value).unwrap_or(0))
 }
 
-pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_js_net_host_state(ctx, quickjs::raw(value), kind.raw()) };
-    let state = unsafe { quickjs::take_value(scope, raw) };
-    state.is_object().then_some(state)
+pub(crate) fn host_state(_scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
+    class::kind_state(value, kind.raw()).filter(Value::is_object)
 }
 
 pub(crate) fn new_host(
@@ -47,10 +39,44 @@ pub(crate) fn new_host(
     kind: HostKind,
     prototype: &Value,
 ) -> Result<Value, Value> {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_ho_new(ctx, kind.raw(), quickjs::raw(prototype)) };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    class::new_host_object(scope, kind.raw(), prototype)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_ho_new(ctx: *mut JSContext, kind: c_int, proto: JSValue) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::borrow_value(scope, proto);
+            let object = class::new_host_object(scope, kind, &proto);
+            quickjs::result_raw(scope, object)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_ho_kind_of(value: JSValue) -> c_int {
+    unsafe { quickjs::with_raw(value, class::kind_of) }.unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_is_host_object(value: JSValue) -> c_int {
+    c_int::from(unsafe { quickjs::with_raw(value, class::kind_of) }.is_some())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_value_is_form_data(_ctx: *mut JSContext, value: JSValue) -> c_int {
+    let kind = unsafe { quickjs::with_raw(value, class::kind_of) };
+    c_int::from(kind == Some(HostKind::FormData.raw()))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_net_host_state(
+    _ctx: *mut JSContext,
+    value: JSValue,
+    kind: c_int,
+) -> JSValue {
+    let state = unsafe { quickjs::with_raw(value, |value| class::kind_state(value, kind)) };
+    state.map_or(quickjs::UNDEFINED, quickjs::into_raw)
 }
 
 unsafe fn text<'a>(raw: *const c_char) -> Cow<'a, str> {

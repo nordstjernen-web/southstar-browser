@@ -921,7 +921,9 @@ impl Drop for Engine {
 }
 
 pub mod quickjs {
-    pub use super::class::class_id;
+    pub use super::class::{
+        class_id, identity_raw, object_from_identity, raw_instance, set_identity_opaque,
+    };
     use core::ffi::{c_char, c_int, c_void};
 
     pub use super::{JSContext, JSValue};

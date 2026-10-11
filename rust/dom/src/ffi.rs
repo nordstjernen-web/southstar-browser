@@ -36,7 +36,7 @@ pub struct NsAttr {
     flags: u8,
 }
 
-type Invalidator = Option<unsafe extern "C" fn(node: *mut NsNode)>;
+pub type Invalidator = Option<unsafe extern "C" fn(node: *mut NsNode)>;
 type BackingFree = Option<unsafe extern "C" fn(backing: *mut c_void)>;
 
 #[repr(C)]
@@ -175,6 +175,22 @@ impl<'a> Node<'a> {
 
     pub fn has_js_wrapper(self) -> bool {
         !self.get()._js_wrapper.is_null()
+    }
+
+    pub fn js_wrapper(self) -> *mut c_void {
+        self.get()._js_wrapper
+    }
+
+    pub fn set_js_wrapper(self, wrapper: *mut c_void) {
+        unsafe { (*self.node.as_ptr())._js_wrapper = wrapper };
+    }
+
+    pub fn js_invalidate(self) -> Invalidator {
+        self.get().js_invalidate
+    }
+
+    pub fn set_js_invalidate(self, invalidate: Invalidator) {
+        unsafe { (*self.node.as_ptr()).js_invalidate = invalidate };
     }
 
     pub fn attr_gen(self) -> u32 {

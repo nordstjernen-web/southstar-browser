@@ -141,6 +141,10 @@ const ns_box *ns_box_find_by_dom(const ns_box *root, const ns_node *target);
 uint32_t ns_js_array_length(JSContext *ctx, JSValueConst arr);
 void ns_js_promise_reject(JSContext *ctx, JSValue resolvers[2], const char *message);
 JSValue ns_make_element(JSContext *ctx, const ns_node *cnode);
+void    ns_element_register_class(JSContext *ctx, JSValue proto);
+JSClassID ns_element_class_id(void);
+JSValue ns_js_kind_proto(const ns_js *js, const ns_node *node);
+void    ns_invalidate_wrapper(ns_node *n);
 const ns_node *ns_unwrap_element(JSValueConst val);
 
 /* Canvas API implemented in js_canvas.c */

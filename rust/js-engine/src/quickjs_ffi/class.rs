@@ -459,12 +459,19 @@ unsafe extern "C" fn set_property(
 unsafe extern "C" fn finalize(_rt: *mut JSRuntime, val: JSValue) {
     let id = unsafe { JS_GetClassID(val) };
     let data = unsafe { JS_GetOpaque(val, id) };
-    if !data.is_null() {
-        drop(unsafe { Box::from_raw(data.cast::<HostData>()) });
+    if data.is_null() {
+        return;
+    }
+    match class_of(val).and_then(|class| class.raw_finalize) {
+        Some(raw_finalize) => raw_finalize(data),
+        None => drop(unsafe { Box::from_raw(data.cast::<HostData>()) }),
     }
 }
 
 unsafe extern "C" fn mark(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void) {
+    if class_of(val).is_some_and(|class| class.raw_finalize.is_some()) {
+        return;
+    }
     let id = unsafe { JS_GetClassID(val) };
     let data = unsafe { JS_GetOpaque(val, id) }.cast::<HostData>();
     let Some(host) = (unsafe { data.as_ref() }) else {
@@ -560,6 +567,17 @@ impl Scope<'_> {
         if let Some(data) = data {
             unsafe { JS_SetOpaque(object.raw, Box::into_raw(Box::new(data)).cast()) };
         }
+        Ok(object)
+    }
+
+    pub unsafe fn new_raw_instance(
+        &mut self,
+        class: &HostClass,
+        prototype: Option<&Value>,
+        data: *mut c_void,
+    ) -> Result<Value, Value> {
+        let object = self.instance(class, prototype, None)?;
+        unsafe { JS_SetOpaque(object.raw, data) };
         Ok(object)
     }
 
@@ -798,8 +816,51 @@ impl Value {
         unsafe { data.as_ref() }.and_then(|host| host.data.downcast_ref::<T>().map(f))
     }
 
+    pub fn raw_instance(&self, class: &HostClass) -> *mut c_void {
+        raw_instance(self.raw, class)
+    }
+
+    pub unsafe fn set_raw_instance(&self, data: *mut c_void) {
+        if self.raw.tag == TAG_OBJECT {
+            unsafe { JS_SetOpaque(self.raw, data) };
+        }
+    }
+
+    pub fn object_identity(&self) -> *mut c_void {
+        if self.raw.tag == TAG_OBJECT {
+            unsafe { self.raw.u.ptr }
+        } else {
+            ptr::null_mut()
+        }
+    }
+
     pub fn is_instance_of_class(&self, class: &HostClass) -> bool {
         let id = class.assigned_id();
         id != 0 && self.raw.tag == TAG_OBJECT && unsafe { JS_GetClassID(self.raw) } == id
     }
+}
+
+pub fn raw_instance(raw: JSValue, class: &HostClass) -> *mut c_void {
+    let id = class.assigned_id();
+    if id == 0 || raw.tag != TAG_OBJECT {
+        return ptr::null_mut();
+    }
+    unsafe { JS_GetOpaque(raw, id) }
+}
+
+pub fn object_from_identity(scope: &Scope<'_>, identity: *mut c_void) -> Value {
+    Value::own(scope.ctx, unsafe {
+        JS_DupValue(scope.ctx, identity_raw(identity))
+    })
+}
+
+pub fn identity_raw(identity: *mut c_void) -> JSValue {
+    JSValue {
+        u: super::JSValueUnion { ptr: identity },
+        tag: TAG_OBJECT,
+    }
+}
+
+pub unsafe fn set_identity_opaque(identity: *mut c_void, data: *mut c_void) {
+    unsafe { JS_SetOpaque(identity_raw(identity), data) };
 }

@@ -90,13 +90,6 @@ ns_set_active_js(ns_js *js)
     g_private_set(&g_active_js_key, js);
 }
 
-typedef struct ns_hostobj {
-    ns_ho_kind kind;
-    JSValue    state;
-    gpointer   native;
-    void     (*free_native)(JSRuntime *rt, gpointer native);
-} ns_hostobj;
-static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
 
 #define NS_SANDBOX_ACTIVE              (1u << 0)
 #define NS_SANDBOX_ALLOW_SCRIPTS       (1u << 1)
@@ -151,13 +144,6 @@ ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
     return truthy;
 }
 
-gboolean
-ns_js_value_is_form_data(JSContext *ctx, JSValueConst v)
-{
-    (void)ctx;
-    return ns_ho_of(v, NS_HO_FORM_DATA) != NULL;
-}
-
 static gboolean
 ns_node_name_is_any_of(const ns_node *n, const char *const *tags)
 {
@@ -169,9 +155,11 @@ ns_node_name_is_any_of(const ns_node *n, const char *const *tags)
 
 
 
-static JSClassID ns_element_class_id;
-
-static ns_node *ns_unwrap_element_mut(JSValueConst val);
+static ns_node *
+ns_unwrap_element_mut(JSValueConst val)
+{
+    return (ns_node *)ns_unwrap_element(val);
+}
 
 static void
 ns_partition_apply(ns_js *js, const char *new_url)
@@ -231,73 +219,6 @@ static const JSCFunctionListEntry ns_tlist_proto_funcs[] = {
     JS_CGETSET_DEF("value",  ns_tlist_get_value, ns_tlist_set_value),
 };
 
-static void
-ns_element_finalizer(JSRuntime *rt, JSValue val)
-{
-    (void)rt;
-    ns_node *n = JS_GetOpaque(val, ns_element_class_id);
-    if (n) {
-        n->js_wrapper = NULL;
-        n->js_invalidate = NULL;
-    }
-}
-
-static int ns_element_named_get_own(JSContext *ctx, JSPropertyDescriptor *desc,
-                                    JSValueConst obj, JSAtom prop);
-static int ns_element_delete_property(JSContext *ctx, JSValueConst obj, JSAtom prop);
-static int ns_element_define_own_property(JSContext *ctx, JSValueConst this_obj, JSAtom prop,
-                                          JSValueConst val, JSValueConst getter,
-                                          JSValueConst setter, int flags);
-
-static JSClassExoticMethods ns_element_exotic = {
-    .get_own_property    = ns_element_named_get_own,
-    .delete_property     = ns_element_delete_property,
-    .define_own_property = ns_element_define_own_property,
-};
-
-static JSClassDef ns_element_class = {
-    .class_name = "Element",
-    .finalizer  = ns_element_finalizer,
-    .exotic     = &ns_element_exotic,
-};
-
-static void
-ns_invalidate_wrapper(ns_node *n)
-{
-    if (!n) return;
-    ns_js *js = ns_active_js();
-    ns_mut_scrub_node(js, n);
-    ns_attr_detach_owner(js, n);
-    ns_attribute_map_release_owner(js, n);
-    if (n->js_wrapper) {
-        JSValue obj = JS_MKPTR(JS_TAG_OBJECT, n->js_wrapper);
-        JS_SetOpaque(obj, NULL);
-        void *ptr = n->js_wrapper;
-        n->js_wrapper = NULL;
-        if (js && js->ctx && js->pinned_wrappers_set &&
-            g_hash_table_remove(js->pinned_wrappers_set, n)) {
-            JSValue pinned = JS_MKPTR(JS_TAG_OBJECT, ptr);
-            JS_FreeValue(js->ctx, pinned);
-        }
-    }
-    if (js) ns_js_unorphan_node(js, n);
-    if (js) ns_js_images_forget_node(js, n);
-    if (js) ns_focus_forget_node(js, n);
-    if (js) ns_js_forget_pending_change_for(js, n);
-    if (js) ns_parser_hold_forget(js, n);
-    if (js) ns_js_frames_forget_node(js, n);
-    if (js) ns_top_layer_forget_node(js, n);
-    n->js_invalidate = NULL;
-
-    if (js) ns_dispatch_forget_node(js, n);
-}
-
-void
-ns_node_arm_js_invalidate(ns_node *n)
-{
-    if (n && !n->js_invalidate) n->js_invalidate = ns_invalidate_wrapper;
-}
-
 static int
 ns_cmp_tag_name(const void *a, const void *b)
 {
@@ -323,7 +244,7 @@ ns_html_tag_has_plain_interface(const char *lower_name)
 /* The prototype of an element of a namespace other than HTML and SVG:
  * MathMLElement's for MathML, Element's for the rest. */
 static JSValue
-ns_foreign_kind_proto(ns_js *js, const ns_node *node)
+ns_foreign_kind_proto(const ns_js *js, const ns_node *node)
 {
     const char *ns = ns_element_get_attr(node, "data-nd-ns-uri");
     gboolean mathml = ns && strcmp(ns, "http://www.w3.org/1998/Math/MathML") == 0;
@@ -332,7 +253,7 @@ ns_foreign_kind_proto(ns_js *js, const ns_node *node)
 }
 
 static JSValue
-ns_html_kind_proto(ns_js *js, const ns_node *node)
+ns_html_kind_proto(const ns_js *js, const ns_node *node)
 {
     if (!node->name || !js->per_tag_protos) return js->proto_htmlelement;
     gsize n = strlen(node->name);
@@ -351,8 +272,8 @@ ns_html_kind_proto(ns_js *js, const ns_node *node)
     return js->proto_htmlelement;
 }
 
-static JSValue
-ns_node_kind_proto(ns_js *js, const ns_node *node)
+JSValue
+ns_js_kind_proto(const ns_js *js, const ns_node *node)
 {
     if (!js || !js->dom_protos_set || !node) return JS_UNDEFINED;
     switch (node->kind) {
@@ -379,91 +300,6 @@ ns_node_kind_proto(ns_js *js, const ns_node *node)
     default:
         return JS_UNDEFINED;
     }
-}
-
-/* The page's own document object, the main realm's document: every realm
- * sees that one object for the page's document node. */
-static JSValue
-ns_page_document_object(ns_js *js)
-{
-    JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-    JSValue global = JS_GetGlobalObject(main_ctx);
-    JSValue doc = JS_GetPropertyStr(main_ctx, global, "document");
-    JS_FreeValue(main_ctx, global);
-    return doc;
-}
-
-JSValue
-ns_make_element(JSContext *ctx, const ns_node *cnode)
-{
-    if (!cnode) return JS_NULL;
-    ns_js *js = js_from_ctx(ctx);
-    if (js && cnode == js->ce_main_doc && !cnode->parent) {
-        JSValue doc = ns_page_document_object(js);
-        if (!JS_IsUndefined(doc) && !JS_IsNull(doc))
-            return doc;
-        JS_FreeValue(ctx, doc);
-    }
-    ns_node *node = (ns_node *)cnode;
-    if (node->js_wrapper) {
-        JSValue cached = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
-        return JS_DupValue(ctx, cached);
-    }
-    JSValue obj = JS_NewObjectClass(ctx, ns_element_class_id);
-    if (JS_IsException(obj)) return obj;
-    JS_SetOpaque(obj, node);
-    node->js_wrapper = JS_VALUE_GET_PTR(obj);
-    node->js_invalidate = ns_invalidate_wrapper;
-    JSValue kind_proto = ns_node_kind_proto(js, node);
-    JSContext *node_realm = NULL;
-    if (js && ns_realm_cloners_made(js)) {
-        node_realm = ns_js_node_realm_context(js, node);
-        if (!node_realm) {
-            const ns_node *root = node;
-            while (root->parent) root = root->parent;
-            if (root->kind != NS_NODE_DOCUMENT || (root->flags & NS_NODE_FRAGMENT))
-                node_realm = ctx;
-        }
-    }
-    if (node_realm && JS_IsObject(kind_proto))
-        kind_proto = ns_realm_proto_for(js, node_realm, kind_proto);
-    if (JS_IsObject(kind_proto)) JS_SetPrototype(ctx, obj, kind_proto);
-    if (node->kind == NS_NODE_DOCTYPE) {
-        const char *pub = "", *sys = "";
-        for (const ns_attr *a = node->attrs; a; a = a->next) {
-            if (!a->name) continue;
-            if (strcmp(a->name, "publicId") == 0) pub = a->value ? a->value : "";
-            else if (strcmp(a->name, "systemId") == 0) sys = a->value ? a->value : "";
-        }
-        JS_DefinePropertyValueStr(ctx, obj, "name",
-            JS_NewString(ctx, node->name ? node->name : ""), JS_PROP_ENUMERABLE);
-        JS_DefinePropertyValueStr(ctx, obj, "publicId",
-            JS_NewString(ctx, pub), JS_PROP_ENUMERABLE);
-        JS_DefinePropertyValueStr(ctx, obj, "systemId",
-            JS_NewString(ctx, sys), JS_PROP_ENUMERABLE);
-    }
-    if (node->kind == NS_NODE_ELEMENT && node->name &&
-        (strcmp(node->name, "body") == 0 ||
-         strcmp(node->name, "frameset") == 0))
-        ns_install_body_reflected_handlers(ctx, obj);
-    if (js && js->pinned_wrappers_set) {
-        JS_DupValue(ctx, obj);
-        g_hash_table_add(js->pinned_wrappers_set, node);
-    }
-    return obj;
-}
-
-const ns_node *
-ns_unwrap_element(JSValueConst val)
-{
-    return JS_GetOpaque(val, ns_element_class_id);
-}
-
-
-static ns_node *
-ns_unwrap_element_mut(JSValueConst val)
-{
-    return JS_GetOpaque(val, ns_element_class_id);
 }
 
 static JSValue
@@ -550,190 +386,6 @@ ns_node_in_template_content(const ns_node *n)
 
 #define NS_SCRIPT_ALREADY_STARTED "data-nd-script-already-started"
 #define NS_SCRIPT_EMPTY_SOURCE "data-nd-script-empty-source"
-
-/* Platform objects whose state the page must not see.  What the engine
- * stores on one (its C functions and hidden-source scripts, see
- * JS_IsHostAccess) lives in a state object of its own, as if it were the
- * object's own properties, so the code that builds and drives these
- * objects keeps using plain property access.  The page sees the interface's
- * prototype accessors and nothing else; what the page defines on the object
- * is the object's own. */
-static JSClassID ns_hostobj_class_id;
-
-static ns_hostobj *
-ns_ho_data(JSValueConst v)
-{
-    return ns_hostobj_class_id && JS_VALUE_GET_TAG(v) == JS_TAG_OBJECT
-        ? JS_GetOpaque(v, ns_hostobj_class_id) : NULL;
-}
-
-gboolean
-ns_js_is_host_object(JSValueConst v)
-{
-    return ns_ho_data(v) != NULL;
-}
-
-int
-ns_ho_kind_of(JSValueConst v)
-{
-    ns_hostobj *d = ns_ho_data(v);
-    return d ? (int)d->kind : NS_HO_NONE;
-}
-
-static ns_hostobj *
-ns_ho_of(JSValueConst v, ns_ho_kind kind)
-{
-    ns_hostobj *d = ns_ho_data(v);
-    return d && d->kind == kind ? d : NULL;
-}
-
-static void
-ns_hostobj_finalizer(JSRuntime *rt, JSValue val)
-{
-    ns_hostobj *d = JS_GetOpaque(val, ns_hostobj_class_id);
-    if (!d) return;
-    if (d->native && d->free_native) d->free_native(rt, d->native);
-    JS_FreeValueRT(rt, d->state);
-    g_free(d);
-}
-
-static void
-ns_hostobj_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
-{
-    ns_hostobj *d = JS_GetOpaque(val, ns_hostobj_class_id);
-    if (d) JS_MarkValue(rt, d->state, mark_func);
-}
-
-static int
-ns_hostobj_get_own_property(JSContext *ctx, JSPropertyDescriptor *desc,
-                            JSValueConst obj, JSAtom prop)
-{
-    ns_hostobj *d = ns_ho_data(obj);
-    if (!d || !JS_IsHostAccess(ctx)) return 0;
-    return JS_GetOwnProperty(ctx, desc, d->state, prop);
-}
-
-static int
-ns_hostobj_get_own_property_names(JSContext *ctx, JSPropertyEnum **ptab,
-                                  uint32_t *plen, JSValueConst obj)
-{
-    ns_hostobj *d = ns_ho_data(obj);
-    *ptab = NULL;
-    *plen = 0;
-    if (!d || !JS_IsHostAccess(ctx)) return 0;
-    return JS_GetOwnPropertyNames(ctx, ptab, plen, d->state,
-                                  JS_GPN_STRING_MASK | JS_GPN_SYMBOL_MASK);
-}
-
-static int
-ns_hostobj_delete_property(JSContext *ctx, JSValueConst obj, JSAtom prop)
-{
-    ns_hostobj *d = ns_ho_data(obj);
-    if (!d || !JS_IsHostAccess(ctx)) return TRUE;
-    return JS_DeleteProperty(ctx, d->state, prop, 0);
-}
-
-static int
-ns_hostobj_define_own_property(JSContext *ctx, JSValueConst obj, JSAtom prop,
-                               JSValueConst val, JSValueConst getter,
-                               JSValueConst setter, int flags)
-{
-    ns_hostobj *d = ns_ho_data(obj);
-    if (d && JS_IsHostAccess(ctx))
-        return JS_DefineProperty(ctx, d->state, prop, val, getter, setter,
-                                 flags);
-    return JS_DefineProperty(ctx, obj, prop, val, getter, setter,
-                             flags | JS_PROP_NO_EXOTIC);
-}
-
-static int
-ns_hostobj_set_state_property(JSContext *ctx, ns_hostobj *d, JSValueConst obj,
-                              JSAtom prop, JSValueConst value, int flags)
-{
-    JSPropertyDescriptor desc;
-    int has = JS_GetOwnProperty(ctx, &desc, d->state, prop);
-    if (has < 0) return -1;
-    if (has) {
-        JS_FreeValue(ctx, desc.value);
-        if (desc.flags & JS_PROP_GETSET) {
-            int ret = TRUE;
-            if (JS_IsFunction(ctx, desc.setter)) {
-                JSValue r = JS_Call(ctx, desc.setter, obj, 1, &value);
-                ret = JS_IsException(r) ? -1 : TRUE;
-                JS_FreeValue(ctx, r);
-            }
-            JS_FreeValue(ctx, desc.getter);
-            JS_FreeValue(ctx, desc.setter);
-            return ret;
-        }
-        JS_FreeValue(ctx, desc.getter);
-        JS_FreeValue(ctx, desc.setter);
-    }
-    return JS_SetPropertyReceiver(ctx, d->state, prop,
-                                  JS_DupValue(ctx, value), d->state, flags);
-}
-
-static int
-ns_hostobj_set_property(JSContext *ctx, JSValueConst obj, JSAtom prop,
-                        JSValueConst value, JSValueConst receiver, int flags)
-{
-    ns_hostobj *d = ns_ho_data(obj);
-    if (d && JS_IsHostAccess(ctx) &&
-        JS_VALUE_GET_PTR(receiver) == JS_VALUE_GET_PTR(obj))
-        return ns_hostobj_set_state_property(ctx, d, obj, prop, value, flags);
-    JSValue proto = JS_GetPrototype(ctx, obj);
-    int ret;
-    if (JS_IsObject(proto))
-        ret = JS_SetPropertyReceiver(ctx, proto, prop, JS_DupValue(ctx, value),
-                                     receiver, flags);
-    else
-        ret = JS_DefineProperty(ctx, receiver, prop, value, JS_UNDEFINED,
-                                JS_UNDEFINED, JS_PROP_C_W_E |
-                                JS_PROP_HAS_VALUE | JS_PROP_HAS_WRITABLE |
-                                JS_PROP_HAS_ENUMERABLE |
-                                JS_PROP_HAS_CONFIGURABLE);
-    JS_FreeValue(ctx, proto);
-    return ret;
-}
-
-static JSClassExoticMethods ns_hostobj_exotic = {
-    .get_own_property = ns_hostobj_get_own_property,
-    .get_own_property_names = ns_hostobj_get_own_property_names,
-    .delete_property = ns_hostobj_delete_property,
-    .define_own_property = ns_hostobj_define_own_property,
-    .set_property = ns_hostobj_set_property,
-};
-
-static JSClassDef ns_hostobj_class = {
-    .class_name = "Object",
-    .finalizer = ns_hostobj_finalizer,
-    .gc_mark = ns_hostobj_gc_mark,
-    .exotic = &ns_hostobj_exotic,
-};
-
-JSValue
-ns_ho_new(JSContext *ctx, int kind, JSValueConst proto)
-{
-    ns_new_class_id(&ns_hostobj_class_id);
-    JSRuntime *rt = JS_GetRuntime(ctx);
-    if (!JS_IsRegisteredClass(rt, ns_hostobj_class_id))
-        JS_NewClass(rt, ns_hostobj_class_id, &ns_hostobj_class);
-    JSValue object_proto = JS_UNDEFINED;
-    if (!JS_IsObject(proto)) {
-        JSValue plain = JS_NewObject(ctx);
-        object_proto = JS_GetPrototype(ctx, plain);
-        JS_FreeValue(ctx, plain);
-    }
-    JSValue obj = JS_NewObjectProtoClass(ctx,
-        JS_IsObject(proto) ? proto : object_proto, ns_hostobj_class_id);
-    JS_FreeValue(ctx, object_proto);
-    if (JS_IsException(obj)) return obj;
-    ns_hostobj *d = g_new0(ns_hostobj, 1);
-    d->kind = kind;
-    d->state = JS_NewObjectProto(ctx, JS_NULL);
-    JS_SetOpaque(obj, d);
-    return obj;
-}
 
 void
 ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj)
@@ -1011,120 +663,6 @@ enum {
     NS_ANCHOR_PASSWORD,
 };
 
-static gboolean
-ns_live_is_array_index(const char *name)
-{
-    if (!name || !*name) return FALSE;
-    for (const char *p = name; *p; p++) {
-        if (*p < '0' || *p > '9') return FALSE;
-    }
-    if (name[0] == '0' && name[1] != '\0') return FALSE;
-    char *end = NULL;
-    long long idx = strtoll(name, &end, 10);
-    return end && *end == '\0' && idx >= 0 && idx <= 4294967294LL;
-}
-
-static int
-ns_element_named_get_own(JSContext *ctx, JSPropertyDescriptor *desc,
-                         JSValueConst obj, JSAtom prop)
-{
-    const ns_node *n = ns_unwrap_element(obj);
-    if (!n || n->kind != NS_NODE_ELEMENT || !n->name ||
-        strcmp(n->name, "form") != 0)
-        return 0;
-    JSValue keyv = JS_AtomToValue(ctx, prop);
-    gboolean is_str = JS_IsString(keyv);
-    JS_FreeValue(ctx, keyv);
-    if (!is_str) return 0;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return 0;
-    if (!*name || strncmp(name, "_ns_", 4) == 0 || strncmp(name, "__", 2) == 0) {
-        JS_FreeCString(ctx, name);
-        return 0;
-    }
-    if (ns_live_is_array_index(name)) {
-        char *end = NULL;
-        unsigned long idx = strtoul(name, &end, 10);
-        JS_FreeCString(ctx, name);
-        JSValue el = ns_form_indexed_control(ctx, obj, (uint32_t)idx);
-        if (JS_IsException(el)) return -1;
-        if (JS_IsUndefined(el)) return 0;
-        if (desc) {
-            desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE;
-            desc->value  = el;
-            desc->getter = JS_UNDEFINED;
-            desc->setter = JS_UNDEFINED;
-        } else {
-            JS_FreeValue(ctx, el);
-        }
-        return 1;
-    }
-    JSValue result = ns_form_named_control(ctx, obj, name);
-    JS_FreeCString(ctx, name);
-    if (JS_IsException(result)) return -1;
-    if (JS_IsNull(result) || JS_IsUndefined(result)) {
-        JS_FreeValue(ctx, result);
-        return 0;
-    }
-    if (desc) {
-        desc->flags  = JS_PROP_CONFIGURABLE;
-        desc->value  = result;
-        desc->getter = JS_UNDEFINED;
-        desc->setter = JS_UNDEFINED;
-    } else {
-        JS_FreeValue(ctx, result);
-    }
-    return 1;
-}
-
-static int
-ns_element_delete_property(JSContext *ctx, JSValueConst obj, JSAtom prop)
-{
-    const ns_node *n = ns_unwrap_element(obj);
-    if (!n || n->kind != NS_NODE_ELEMENT || !n->name || strcmp(n->name, "form") != 0)
-        return 1;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return 1;
-    if (!*name || strncmp(name, "_ns_", 4) == 0 || strncmp(name, "__", 2) == 0) {
-        JS_FreeCString(ctx, name);
-        return 1;
-    }
-    JS_FreeCString(ctx, name);
-    JSPropertyDescriptor desc;
-    int has = ns_element_named_get_own(ctx, &desc, obj, prop);
-    if (has > 0) {
-        JS_FreeValue(ctx, desc.value);
-        return 0;
-    }
-    return 1;
-}
-
-static int
-ns_element_define_own_property(JSContext *ctx, JSValueConst this_obj, JSAtom prop,
-                               JSValueConst val, JSValueConst getter,
-                               JSValueConst setter, int flags)
-{
-    const ns_node *n = ns_unwrap_element(this_obj);
-    if (n && n->kind == NS_NODE_ELEMENT && n->name && strcmp(n->name, "form") == 0) {
-        const char *name = JS_AtomToCString(ctx, prop);
-        if (name) {
-            if (*name && strncmp(name, "_ns_", 4) != 0 && strncmp(name, "__", 2) != 0) {
-                JSPropertyDescriptor desc;
-                int has = ns_element_named_get_own(ctx, &desc, this_obj, prop);
-                if (has > 0) {
-                    JS_FreeValue(ctx, desc.value);
-                    JS_FreeCString(ctx, name);
-                    JS_ThrowTypeError(ctx, "Cannot define property on form");
-                    return -1;
-                }
-            }
-            JS_FreeCString(ctx, name);
-        }
-    }
-    return JS_DefineProperty(ctx, this_obj, prop, val, getter, setter,
-                             flags | JS_PROP_NO_EXOTIC);
-}
-
 gboolean
 ns_node_is_disabled_form_control(const ns_node *el)
 {
@@ -1306,7 +844,7 @@ ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
     ns_js_adopt_frame_window_events(js, fctx, fg);
     ns_js_link_interface_ctors(fctx);
     ns_js_lock_global_prototypes(fctx);
-    ns_js_brand_node_interfaces(fctx, ns_element_class_id, ns_attr_class_id());
+    ns_js_brand_node_interfaces(fctx, ns_element_class_id(), ns_attr_class_id());
     JSValue parent_performance =
         JS_GetPropertyStr(fctx, parent_global, "performance");
     gboolean include_memory = JS_IsObject(parent_performance) &&
@@ -2093,7 +1631,7 @@ ns_js_install_dom_members(JSContext *ctx, JSValueConst proto, int which)
                                    G_N_ELEMENTS(ns_element_proto_funcs));
         break;
     case NS_DOM_MEMBERS_ELEMENT_CLASS:
-        JS_SetClassProto(ctx, ns_element_class_id, JS_DupValue(ctx, proto));
+        ns_element_register_class(ctx, JS_DupValue(ctx, proto));
         ns_bind_fn(ctx, proto, "matches",               ns_element_matches, 1);
         ns_bind_fn(ctx, proto, "webkitMatchesSelector", ns_element_matches, 1);
         ns_bind_fn(ctx, proto, "closest",               ns_element_closest, 1);
@@ -2213,7 +1751,7 @@ ns_js_adopt_dom_protos(JSContext *ctx, const ns_js_dom_protos *protos)
         while (g_hash_table_iter_next(&it, &k, NULL)) {
             ns_node *n = k;
             if (!n->js_wrapper) continue;
-            JSValue kind_proto = ns_node_kind_proto(js, n);
+            JSValue kind_proto = ns_js_kind_proto(js, n);
             if (JS_IsObject(kind_proto))
                 JS_SetPrototype(ctx, JS_MKPTR(JS_TAG_OBJECT, n->js_wrapper),
                                 kind_proto);
@@ -2315,17 +1853,14 @@ ns_js_release_wrapper(ns_js *js, ns_node *node)
 JSValue
 ns_js_register_class(JSContext *ctx, int which)
 {
-    JSRuntime *rt = JS_GetRuntime(ctx);
     JSValue proto;
     switch (which) {
     case NS_JS_CLASS_ELEMENT:
-        ns_new_class_id(&ns_element_class_id);
-        JS_NewClass(rt, ns_element_class_id, &ns_element_class);
         proto = JS_NewObject(ctx);
         JS_SetPropertyFunctionList(ctx, proto, ns_element_proto_funcs,
                                    G_N_ELEMENTS(ns_element_proto_funcs));
         ns_define_element_unscopables(ctx, proto);
-        JS_SetClassProto(ctx, ns_element_class_id, JS_DupValue(ctx, proto));
+        ns_element_register_class(ctx, JS_DupValue(ctx, proto));
         return proto;
     case NS_JS_CLASS_ATTR:
         ns_attr_register_class(ctx, JS_NewObject(ctx));
@@ -2576,15 +2111,7 @@ ns_js_host_class_proto(JSContext *ctx, int which)
 void
 ns_js_brand_node_classes(JSContext *ctx)
 {
-    ns_js_brand_node_interfaces(ctx, ns_element_class_id, ns_attr_class_id());
-}
-
-JSValue
-ns_js_new_document_object(ns_js *js)
-{
-    JSValue document = JS_NewObjectClass(js->ctx, ns_element_class_id);
-    if (js->current_doc) JS_SetOpaque(document, js->current_doc);
-    return document;
+    ns_js_brand_node_interfaces(ctx, ns_element_class_id(), ns_attr_class_id());
 }
 
 GHashTable *
@@ -3013,11 +2540,4 @@ gboolean
 ns_js_net_csp_allows_connect(const ns_js *js, const char *url, const char *page)
 {
     return !js || !js->csp || ns_csp_allows(js->csp, NS_CSP_CONNECT, url, page);
-}
-
-JSValue
-ns_js_net_host_state(JSContext *ctx, JSValueConst v, int kind)
-{
-    ns_hostobj *d = ns_ho_data(v);
-    return d && (int)d->kind == kind ? JS_DupValue(ctx, d->state) : JS_UNDEFINED;
 }
