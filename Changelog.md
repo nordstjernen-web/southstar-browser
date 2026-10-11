@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The box pool and box freeing, inline-run merging and splitting, order
+  reordering and table box construction moved from layout.c to Rust
+  (rust/layout-tree), with single-inline multicol fragmenting in
+  rust/layout-inline, with identical layout.
 * The remaining small DOM and window bindings (nodeValue, data and length,
   token lists and attributes, element.style, SVG lengths, DOMRect,
   checkVisibility and the box lookup, the DOMException helpers, window.find,
