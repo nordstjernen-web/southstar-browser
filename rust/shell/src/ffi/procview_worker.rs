@@ -12,6 +12,7 @@ use super::pagelayers::ns_layer_update_parse;
 use super::procview_draw::ns_pv_stage_fill;
 use super::procview_result::on_result;
 use super::procview_state::{NsProcView, PrintSetup, Req, Res, TilesReq, Wheel};
+use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
 use crate::procview::nav;
 
 const REQ_LOAD: c_int = 0;
@@ -149,8 +150,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn free(p: *mut c_void);
 
-    fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView;
-    fn ns_proc_view_unref(v: *mut NsProcView);
     fn ns_app_self_exe() -> *const c_char;
 
     fn ns_rproc_http_spawn_shm_ex(
@@ -347,7 +346,7 @@ fn settle_ms() -> c_int {
     nav::settle_ms(unsafe { glib::bytes(glib::g_getenv(c"NS_SETTLE_MS".as_ptr())) })
 }
 
-fn free_req(req: *mut Req) {
+pub(super) fn free_req(req: *mut Req) {
     unsafe {
         let r = &*req;
         for s in [
@@ -958,8 +957,7 @@ unsafe extern "C" fn worker_main(data: *mut c_void) -> *mut c_void {
     ptr::null_mut()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_worker(v: *mut NsProcView) -> *mut c_void {
+pub(super) fn start_worker(v: *mut NsProcView) -> *mut c_void {
     unsafe {
         gtk::g_thread_new(
             c"ns-proc-view".as_ptr(),

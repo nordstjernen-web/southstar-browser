@@ -7,9 +7,12 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_gtk_ffi::{self as gtk, GtkWidget};
+use southstar_gtk_ffi as gtk;
 
 use super::pagelayers::ns_page_layers_reset;
+use super::procview_chrome::{
+    ns_pv_console_append, ns_pv_console_set_open, ns_pv_print_run, ns_pv_show_context_menu,
+};
 use super::procview_draw::{
     clear_busy_cursor, configure_adjustments, ns_pv_arm_anim, ns_pv_disarm_anim,
     ns_pv_scroll_view_to, ns_pv_set_named_cursor, ns_pv_stop_wheel_animation, ns_pv_tiles_apply,
@@ -23,7 +26,8 @@ use super::procview_media::{
     Media, ns_pv_media_append_stats, ns_pv_media_audio_pid, ns_pv_media_audio_shutdown,
     ns_pv_media_pump, ns_pv_media_video_pid, ns_pv_media_video_playing, ns_pv_media_video_shutdown,
 };
-use super::procview_state::{NsProcView, PrintSetup, Req, Res};
+use super::procview_state::{NsProcView, Req, Res};
+use super::procview_view::ns_proc_view_unref;
 use super::procview_worker::{
     RES_CLICK, RES_CONSOLE, RES_COPY, RES_DROPFILES, RES_DUMP, RES_EVAL, RES_EXPORT, RES_FAVICON,
     RES_FIND, RES_FRAME, RES_HOVER, RES_KEY, RES_LINK, RES_PAGE, RES_PRINT, RES_RELEASE,
@@ -75,24 +79,10 @@ unsafe extern "C" {
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn g_bytes_unref(bytes: *mut gtk::GBytes);
-    fn gdk_clipboard_set_text(clipboard: *mut gtk::GdkClipboard, text: *const c_char);
-    fn gtk_revealer_set_reveal_child(revealer: *mut GtkWidget, reveal_child: GBoolean);
     fn free(p: *mut c_void);
 
     fn ns_i18n(text: *const c_char) -> *const c_char;
     fn ns_layer_update_free(u: *mut c_void);
-    fn ns_proc_view_unref(v: *mut NsProcView);
-
-    fn ns_pv_show_context_menu(v: *mut NsProcView, href: *const c_char, edit: c_int);
-    fn ns_pv_console_append(v: *mut NsProcView, text: *const c_char);
-    fn ns_pv_console_set_open(v: *mut NsProcView, open: GBoolean);
-    fn ns_pv_print_run(
-        v: *mut NsProcView,
-        pages: *mut c_void,
-        setup: *const PrintSetup,
-        raster_scale: f64,
-    );
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -257,7 +247,7 @@ fn do_load(
     state.find_seq += 1;
     unsafe {
         if !state.search_revealer.is_null() {
-            gtk_revealer_set_reveal_child(state.search_revealer, 0);
+            gtk::gtk_revealer_set_reveal_child(state.search_revealer, 0);
         }
         if !state.search_label.is_null() {
             gtk::gtk_label_set_text(state.search_label, c"".as_ptr());
@@ -356,7 +346,7 @@ fn perm_resolve(v: *mut NsProcView, allow: bool) {
     let origin = state.perm_origin;
     state.perm_origin = ptr::null_mut();
     if !state.perm_revealer.is_null() {
-        unsafe { gtk_revealer_set_reveal_child(state.perm_revealer, 0) };
+        unsafe { gtk::gtk_revealer_set_reveal_child(state.perm_revealer, 0) };
     }
     if state.closed == 0 {
         let req = new_req(kind);
@@ -395,7 +385,7 @@ fn perm_bar_show(v: *mut NsProcView, kind: c_int, origin: *const c_char) {
     let text = CString::new(text).unwrap_or_default();
     unsafe {
         gtk::gtk_label_set_text(state.perm_label, text.as_ptr());
-        gtk_revealer_set_reveal_child(state.perm_revealer, 1);
+        gtk::gtk_revealer_set_reveal_child(state.perm_revealer, 1);
     }
 }
 
@@ -432,7 +422,7 @@ fn set_anim(v: *mut NsProcView) {
 }
 
 fn copy_to_clipboard(v: *mut NsProcView, text: *const c_char, status: &CStr) {
-    unsafe { gdk_clipboard_set_text(gtk::gtk_widget_get_clipboard(view(v).area), text) };
+    unsafe { gtk::gdk_clipboard_set_text(gtk::gtk_widget_get_clipboard(view(v).area), text) };
     post_emit(v, EVT_STATUS, tr(status));
 }
 
@@ -849,7 +839,7 @@ fn on_favicon(v: *mut NsProcView, res: &Res) {
                 bytes,
                 res.favicon_stride as usize,
             );
-            g_bytes_unref(bytes);
+            gtk::g_bytes_unref(bytes);
             state.favicon = tex.cast();
         }
     }

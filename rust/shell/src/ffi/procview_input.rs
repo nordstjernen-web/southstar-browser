@@ -886,19 +886,3 @@ pub unsafe extern "C" fn ns_pv_css_viewport_w(v: *mut NsProcView) -> c_int {
 pub unsafe extern "C" fn ns_pv_css_viewport_h(v: *mut NsProcView) -> c_int {
     css_viewport(viewport_h(v), cur_scale(v))
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_check_layout() {
-    unsafe extern "C" {
-        fn ns_proc_view_layout(out: *mut usize, count: usize);
-    }
-    let expected = super::procview_state::layout();
-    let mut actual = [0usize; super::procview_state::LAYOUT_LEN];
-    unsafe { ns_proc_view_layout(actual.as_mut_ptr(), actual.len()) };
-    if expected != actual {
-        glib::stderr_write(
-            b"southstar: procview_state.h and rust/shell disagree on the view layout\n",
-        );
-        std::process::abort();
-    }
-}

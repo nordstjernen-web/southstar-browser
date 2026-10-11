@@ -1,4 +1,4 @@
-//! Southstar — a tab's renderer view as procview.c exposes it, and the notebook pages that carry one.
+//! Southstar — a tab's renderer view as the procview module exposes it, and the notebook pages that carry one.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

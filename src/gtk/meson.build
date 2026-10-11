@@ -1,6 +1,4 @@
-southstar_gtk_sources = files(
-  'procview.c',
-)
+southstar_gtk_sources = []
 
 southstar_gtk_deps = [southstar_shell_rust_dep] + southstar_c_deps + [gtk4_dep]
 if host_machine.system() != 'windows'

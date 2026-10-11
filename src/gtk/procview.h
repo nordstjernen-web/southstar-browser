@@ -95,29 +95,6 @@ void   ns_proc_view_set_color_scheme(NsProcView *view, gboolean dark);
 
 gboolean ns_proc_video_helper_available(void);
 
-typedef struct NsPvMedia NsPvMedia;
-
-NsPvMedia  *ns_pv_media_new(void);
-void        ns_pv_media_free(NsPvMedia *media);
-void        ns_pv_media_pump(NsProcView *view, const char *commands);
-void        ns_pv_media_audio_shutdown(NsPvMedia *media);
-void        ns_pv_media_video_shutdown(NsPvMedia *media);
-int         ns_pv_media_audio_pid(const NsPvMedia *media);
-int         ns_pv_media_video_pid(const NsPvMedia *media);
-gboolean    ns_pv_media_video_playing(const NsPvMedia *media);
-void        ns_pv_media_forget_rect(NsPvMedia *media);
-gboolean    ns_pv_media_on_page(const NsPvMedia *media);
-void        ns_pv_media_snapshot(NsPvMedia *media, double scale,
-                                 GtkSnapshot *snapshot);
-void        ns_pv_media_append_stats(const NsPvMedia *media, GString *out);
-
-NsProcView *ns_proc_view_ref(NsProcView *view);
-void        ns_proc_view_unref(NsProcView *view);
-GtkWidget  *ns_proc_view_area(NsProcView *view);
-NsPvMedia  *ns_proc_view_media(NsProcView *view);
-void        ns_proc_view_push_video_event(NsProcView *view, const char *token,
-                                          const char *kind);
-
 G_END_DECLS
 
 #endif

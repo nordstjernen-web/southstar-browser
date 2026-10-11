@@ -627,3 +627,152 @@ unsafe extern "C" {
     );
     pub fn cairo_surface_flush(surface: *mut CairoSurface);
 }
+
+opaque!(
+    GtkPrintOperation,
+    GtkPrintContext,
+    GtkPageSetup,
+    GtkPaperSize,
+    GtkFileDialog,
+    GtkTextMark,
+);
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GdkRectangle {
+    pub x: c_int,
+    pub y: c_int,
+    pub width: c_int,
+    pub height: c_int,
+}
+
+#[repr(C)]
+pub struct GtkTextIter {
+    pub dummy1: *mut c_void,
+    pub dummy2: *mut c_void,
+    pub dummy3: c_int,
+    pub dummy4: c_int,
+    pub dummy5: c_int,
+    pub dummy6: c_int,
+    pub dummy7: c_int,
+    pub dummy8: c_int,
+    pub dummy9: *mut c_void,
+    pub dummy10: *mut c_void,
+    pub dummy11: c_int,
+    pub dummy12: c_int,
+    pub dummy13: c_int,
+    pub dummy14: *mut c_void,
+}
+
+pub const UNIT_POINTS: c_int = 2;
+pub const PAGE_ORIENTATION_PORTRAIT: c_int = 0;
+pub const PAGE_ORIENTATION_LANDSCAPE: c_int = 1;
+pub const PRINT_OPERATION_ACTION_PRINT_DIALOG: c_int = 0;
+pub const REVEALER_TRANSITION_TYPE_SLIDE_DOWN: c_int = 4;
+pub const WRAP_WORD_CHAR: c_int = 3;
+
+unsafe extern "C" {
+    pub fn gtk_adjustment_new(
+        value: c_double,
+        lower: c_double,
+        upper: c_double,
+        step_increment: c_double,
+        page_increment: c_double,
+        page_size: c_double,
+    ) -> *mut GtkAdjustment;
+    pub fn gtk_scrollbar_new(
+        orientation: GtkOrientation,
+        adjustment: *mut GtkAdjustment,
+    ) -> *mut GtkWidget;
+    pub fn gtk_grid_new() -> *mut GtkWidget;
+    pub fn gtk_grid_attach(
+        grid: *mut GtkWidget,
+        child: *mut GtkWidget,
+        column: c_int,
+        row: c_int,
+        width: c_int,
+        height: c_int,
+    );
+    pub fn gtk_widget_set_focusable(widget: *mut GtkWidget, focusable: GBoolean);
+    pub fn gtk_widget_get_root(widget: *mut GtkWidget) -> *mut GtkWidget;
+    pub fn gtk_widget_get_mapped(widget: *mut GtkWidget) -> GBoolean;
+    pub fn gtk_widget_insert_action_group(
+        widget: *mut GtkWidget,
+        name: *const c_char,
+        group: *mut c_void,
+    );
+    pub fn gtk_window_get_type() -> GType;
+    pub fn gtk_window_set_destroy_with_parent(window: *mut GtkWidget, setting: GBoolean);
+    pub fn gtk_revealer_new() -> *mut GtkWidget;
+    pub fn gtk_revealer_set_child(revealer: *mut GtkWidget, child: *mut GtkWidget);
+    pub fn gtk_revealer_set_transition_type(revealer: *mut GtkWidget, transition: c_int);
+    pub fn gtk_revealer_set_reveal_child(revealer: *mut GtkWidget, reveal_child: GBoolean);
+    pub fn gtk_revealer_get_reveal_child(revealer: *mut GtkWidget) -> GBoolean;
+    pub fn gtk_frame_new(label: *const c_char) -> *mut GtkWidget;
+    pub fn gtk_frame_set_child(frame: *mut GtkWidget, child: *mut GtkWidget);
+    pub fn gtk_search_entry_new() -> *mut GtkWidget;
+    pub fn gtk_popover_menu_new_from_model(model: *mut c_void) -> *mut GtkWidget;
+    pub fn gtk_popover_set_has_arrow(popover: *mut GtkWidget, has_arrow: GBoolean);
+    pub fn gtk_popover_set_pointing_to(popover: *mut GtkWidget, rect: *const GdkRectangle);
+    pub fn gtk_popover_present(popover: *mut GtkWidget);
+    pub fn gdk_clipboard_set_text(clipboard: *mut GdkClipboard, text: *const c_char);
+    pub fn gtk_text_buffer_get_end_iter(buffer: *mut c_void, iter: *mut GtkTextIter);
+    pub fn gtk_text_buffer_insert(
+        buffer: *mut c_void,
+        iter: *mut GtkTextIter,
+        text: *const c_char,
+        len: c_int,
+    );
+    pub fn gtk_text_buffer_create_mark(
+        buffer: *mut c_void,
+        mark_name: *const c_char,
+        r#where: *const GtkTextIter,
+        left_gravity: GBoolean,
+    ) -> *mut GtkTextMark;
+    pub fn gtk_text_buffer_delete_mark(buffer: *mut c_void, mark: *mut GtkTextMark);
+    pub fn gtk_text_view_scroll_mark_onscreen(view: *mut GtkWidget, mark: *mut GtkTextMark);
+    pub fn gtk_page_setup_new() -> *mut GtkPageSetup;
+    pub fn gtk_page_setup_set_paper_size(setup: *mut GtkPageSetup, size: *mut GtkPaperSize);
+    pub fn gtk_page_setup_set_orientation(setup: *mut GtkPageSetup, orientation: c_int);
+    pub fn gtk_paper_size_new_custom(
+        name: *const c_char,
+        display_name: *const c_char,
+        width: c_double,
+        height: c_double,
+        unit: c_int,
+    ) -> *mut GtkPaperSize;
+    pub fn gtk_paper_size_free(size: *mut GtkPaperSize);
+    pub fn gtk_print_operation_new() -> *mut GtkPrintOperation;
+    pub fn gtk_print_operation_set_default_page_setup(
+        op: *mut GtkPrintOperation,
+        setup: *mut GtkPageSetup,
+    );
+    pub fn gtk_print_operation_set_use_full_page(op: *mut GtkPrintOperation, full_page: GBoolean);
+    pub fn gtk_print_operation_set_unit(op: *mut GtkPrintOperation, unit: c_int);
+    pub fn gtk_print_operation_set_job_name(op: *mut GtkPrintOperation, job_name: *const c_char);
+    pub fn gtk_print_operation_set_embed_page_setup(op: *mut GtkPrintOperation, embed: GBoolean);
+    pub fn gtk_print_operation_set_n_pages(op: *mut GtkPrintOperation, n_pages: c_int);
+    pub fn gtk_print_operation_run(
+        op: *mut GtkPrintOperation,
+        action: c_int,
+        parent: *mut GtkWidget,
+        error: *mut *mut c_void,
+    ) -> c_int;
+    pub fn gtk_print_context_get_cairo_context(context: *mut GtkPrintContext) -> *mut Cairo;
+    pub fn gtk_print_context_get_width(context: *mut GtkPrintContext) -> c_double;
+    pub fn gtk_file_dialog_new() -> *mut GtkFileDialog;
+    pub fn gtk_file_dialog_set_title(dialog: *mut GtkFileDialog, title: *const c_char);
+    pub fn gtk_file_dialog_set_initial_name(dialog: *mut GtkFileDialog, name: *const c_char);
+    pub fn gtk_file_dialog_save(
+        dialog: *mut GtkFileDialog,
+        parent: *mut GtkWidget,
+        cancellable: *mut c_void,
+        callback: GAsyncReadyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn gtk_file_dialog_save_finish(
+        dialog: *mut GtkFileDialog,
+        result: *mut c_void,
+        error: *mut *mut c_void,
+    ) -> *mut c_void;
+}
