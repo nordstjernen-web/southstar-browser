@@ -128,7 +128,25 @@ if have_gtk
   )
 endif
 
-southstar_helper_rust_features =have_seccomp ? ['seccomp'] : []
+if host_machine.system() == 'windows'
+  southstar_launcher_rust_lib = custom_target(
+    'southstar-launcher-rust',
+    output: 'libsouthstar_launcher.a',
+    depfile: 'libsouthstar_launcher.a.d',
+    command: [
+      cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
+      meson.current_build_dir() / 'cargo-target',
+      ns_is_release ? 'release' : 'dev',
+      'southstar-launcher', '@OUTPUT@', '@DEPFILE@',
+    ],
+    env: southstar_rust_env,
+    console: true,
+    build_by_default: true,
+    depends: southstar_rust_lib,
+  )
+endif
+
+southstar_helper_rust_features = have_seccomp ? ['seccomp'] : []
 southstar_helper_rust_lib = custom_target(
   'southstar-helper-rust',
   output: 'libsouthstar_helper_ffi.a',

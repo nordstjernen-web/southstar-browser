@@ -167,15 +167,14 @@ southstar_exe_link_args = southstar_link_args + \
 if host_machine.system() == 'windows'
   executable(
     'southstar-launcher',
-    files('win_launcher.c') + southstar_win_resources,
+    southstar_win_resources,
+    link_with: southstar_launcher_rust_lib,
     win_subsystem: 'windows',
-    link_args: ['-luser32', '-lshell32'],
+    link_args: rust_native_libs + ['-luser32', '-lshell32'],
   )
 endif
 
-southstar_embed_sources = southstar_engine_sources + files(
-  'embed_shim.c',
-) + [polyfills_h, streaming_h]
+southstar_embed_sources = southstar_engine_sources + [polyfills_h, streaming_h]
 
 libsouthstar_lib = library(
   'southstar',

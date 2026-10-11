@@ -2366,6 +2366,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-launcher"
+version = "0.9.9"
+
+[[package]]
 name = "southstar-layout"
 version = "0.9.9"
 dependencies = [
