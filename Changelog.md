@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The host-object interfaces (MessageChannel, BroadcastChannel, XHR,
+  AbortController, FileReader, TextEncoder and TextDecoder, FormData
+  construction and accessors) and js.c's generic binding helpers moved to
+  Rust (rust/js-bind).
 * The window global's shape (the immutable global prototypes, the
   WindowProperties chain, the navigator and web API singleton shapes and
   namespace objects) moved from js.c to Rust (rust/js-interfaces).
