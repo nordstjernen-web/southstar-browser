@@ -2,6 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod installers;
+mod natives;
+mod tables;
+
 use core::ffi::{CStr, c_char, c_int};
 
 use southstar_dom::{Node, NsNode};

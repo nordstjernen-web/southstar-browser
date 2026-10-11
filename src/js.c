@@ -14,7 +14,6 @@
 #include <string.h>
 #include <time.h>
 
-
 #include <cairo.h>
 #include <gio/gio.h>
 #include <glib/gstdio.h>
@@ -59,23 +58,6 @@
 #include "js_internal.h"
 #include "font.h"
 
-#undef JS_CFUNC_DEF
-#define JS_CFUNC_DEF(name, length, func1) \
-    { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE, \
-      JS_DEF_CFUNC, 0, \
-      { .func = { length, JS_CFUNC_generic, { .generic = func1 } } } }
-#undef JS_CGETSET_DEF
-#define JS_CGETSET_DEF(name, fgetter, fsetter) \
-    { name, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE, JS_DEF_CGETSET, 0, \
-      { .getset = { .get = { .getter = fgetter }, \
-                    .set = { .setter = fsetter } } } }
-#undef JS_CGETSET_MAGIC_DEF
-#define JS_CGETSET_MAGIC_DEF(name, fgetter, fsetter, magic) \
-    { name, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE, \
-      JS_DEF_CGETSET_MAGIC, magic, \
-      { .getset = { .get = { .getter_magic = fgetter }, \
-                    .set = { .setter_magic = fsetter } } } }
-
 static GPrivate g_active_js_key = G_PRIVATE_INIT(NULL);
 
 ns_js *
@@ -89,7 +71,6 @@ ns_set_active_js(ns_js *js)
 {
     g_private_set(&g_active_js_key, js);
 }
-
 
 #define NS_SANDBOX_ACTIVE              (1u << 0)
 #define NS_SANDBOX_ALLOW_SCRIPTS       (1u << 1)
@@ -110,17 +91,6 @@ ns_set_active_js(ns_js *js)
    localStorage/sessionStorage/cookies (the runtime's storage is keyed to the
    top origin). Must match the (sandbox & 8192) checks in the realm bootstraps. */
 #define NS_FRAME_CROSS_ORIGIN          (1u << 13)
-
-
-
-
-
-
-
-
-
-
-
 
 uint32_t
 ns_js_array_length(JSContext *ctx, JSValueConst arr)
@@ -152,8 +122,6 @@ ns_node_name_is_any_of(const ns_node *n, const char *const *tags)
         if (g_ascii_strcasecmp(n->name, *tags) == 0) return TRUE;
     return FALSE;
 }
-
-
 
 static ns_node *
 ns_unwrap_element_mut(JSValueConst val)
@@ -205,19 +173,6 @@ ns_storage_load_for(ns_js *js, const char *new_url)
     ns_partition_apply(js, new_url);
     ns_storage_load_local(js, new_url);
 }
-
-static const JSCFunctionListEntry ns_tlist_proto_funcs[] = {
-    JS_CFUNC_DEF("contains", 1, ns_tlist_contains),
-    JS_CFUNC_DEF("add",      1, ns_tlist_add),
-    JS_CFUNC_DEF("remove",   1, ns_tlist_remove),
-    JS_CFUNC_DEF("toggle",   1, ns_tlist_toggle),
-    JS_CFUNC_DEF("replace",  2, ns_tlist_replace),
-    JS_CFUNC_DEF("item",     1, ns_tlist_item),
-    JS_CFUNC_DEF("supports", 1, ns_tlist_supports),
-    JS_CFUNC_DEF("toString", 0, ns_tlist_toString),
-    JS_CGETSET_DEF("length", ns_tlist_get_length, NULL),
-    JS_CGETSET_DEF("value",  ns_tlist_get_value, ns_tlist_set_value),
-};
 
 static int
 ns_cmp_tag_name(const void *a, const void *b)
@@ -302,16 +257,6 @@ ns_js_kind_proto(const ns_js *js, const ns_node *node)
     }
 }
 
-static JSValue
-ns_element_get_accessKeyLabel(JSContext *ctx, JSValueConst this_val)
-{
-    const ns_node *n = ns_unwrap_element(this_val);
-    const char *key = n ? ns_element_get_attr(n, "accesskey") : NULL;
-    if (!key || !g_utf8_validate(key, -1, NULL) || g_utf8_strlen(key, -1) != 1)
-        return JS_NewString(ctx, "");
-    return JS_NewString(ctx, key);
-}
-
 gboolean
 ns_js_img_src_layout_neutral(const ns_node *n)
 {
@@ -349,30 +294,6 @@ ns_js_image_natural_size(ns_js *js, const ns_node *n, int *width, int *height)
     return TRUE;
 }
 
-#define NS_HTML_MAXINT G_GINT64_CONSTANT(2147483647)
-#define NS_HTML_MININT G_GINT64_CONSTANT(-2147483648)
-
-enum {
-    NS_ENUM_LOADING, NS_ENUM_DECODING, NS_ENUM_METHOD,
-    NS_ENUM_CROSSORIGIN, NS_ENUM_REFERRERPOLICY, NS_ENUM_ENTERKEYHINT,
-    NS_ENUM_ARIA_ATOMIC, NS_ENUM_ARIA_AUTOCOMPLETE, NS_ENUM_ARIA_BUSY,
-    NS_ENUM_ARIA_CHECKED, NS_ENUM_ARIA_CURRENT, NS_ENUM_ARIA_DISABLED,
-    NS_ENUM_ARIA_EXPANDED, NS_ENUM_ARIA_HASPOPUP, NS_ENUM_ARIA_HIDDEN,
-    NS_ENUM_ARIA_INVALID, NS_ENUM_ARIA_LIVE, NS_ENUM_ARIA_MODAL,
-    NS_ENUM_ARIA_MULTILINE, NS_ENUM_ARIA_MULTISELECTABLE,
-    NS_ENUM_ARIA_ORIENTATION, NS_ENUM_ARIA_PRESSED, NS_ENUM_ARIA_READONLY,
-    NS_ENUM_ARIA_REQUIRED, NS_ENUM_ARIA_SELECTED, NS_ENUM_ARIA_SORT,
-};
-
-static JSValue
-ns_element_set_type(JSContext *ctx, JSValueConst this_val, JSValueConst val)
-{
-    JSValue r = ns_element_reflect_str_set(ctx, this_val, val, "type");
-    ns_node *el = ns_unwrap_element_mut(this_val);
-    if (el) ns_input_resanitize_value(el);
-    return r;
-}
-
 gboolean
 ns_node_in_template_content(const ns_node *n)
 {
@@ -383,7 +304,6 @@ ns_node_in_template_content(const ns_node *n)
     return FALSE;
 }
 
-
 #define NS_SCRIPT_ALREADY_STARTED "data-nd-script-already-started"
 #define NS_SCRIPT_EMPTY_SOURCE "data-nd-script-empty-source"
 
@@ -393,7 +313,6 @@ ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj)
     ns_bind_fn(ctx, obj, "addEventListener",    ns_target_addEventListener,    2);
     ns_bind_fn(ctx, obj, "removeEventListener", ns_target_removeEventListener, 2);
 }
-
 
 guint
 ns_media_native_formats(void)
@@ -411,23 +330,6 @@ ns_media_native_formats(void)
     return formats;
 }
 
-
-static JSValue
-ns_event_true(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_TRUE;
-}
-
-static JSValue
-ns_event_false(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_FALSE;
-}
-
-
-
 gboolean
 ns_js_url_parses(ns_js *js, const char *url)
 {
@@ -438,11 +340,6 @@ ns_js_url_parses(ns_js *js, const char *url)
         : ns_url_resolve(NULL, url);
     return resolved != NULL;
 }
-
-
-
-
-
 
 /* A frame window's listener operations join the page's registry (see
  * et_src), and its tag is its Window.prototype's. */
@@ -627,10 +524,6 @@ ns_js_set_layout_root(ns_js *js, const struct ns_box *root)
     }
 }
 
-static const JSCFunctionListEntry ns_validity_proto_funcs[] = {
-    JS_CGETSET_DEF("valid", ns_validity_get_valid, NULL),
-};
-
 JSValue
 ns_live_build_attributes(JSContext *ctx, JSValueConst owner)
 {
@@ -648,20 +541,6 @@ ns_live_build_attributes(JSContext *ctx, JSValueConst owner)
     g_array_free(attrs, TRUE);
     return arr;
 }
-
-enum {
-    NS_ANCHOR_HREF = 0,
-    NS_ANCHOR_PROTOCOL,
-    NS_ANCHOR_HOST,
-    NS_ANCHOR_HOSTNAME,
-    NS_ANCHOR_PORT,
-    NS_ANCHOR_PATHNAME,
-    NS_ANCHOR_SEARCH,
-    NS_ANCHOR_HASH,
-    NS_ANCHOR_ORIGIN,
-    NS_ANCHOR_USERNAME,
-    NS_ANCHOR_PASSWORD,
-};
 
 gboolean
 ns_node_is_disabled_form_control(const ns_node *el)
@@ -703,110 +582,11 @@ ns_js_node_doc_base(ns_js *js, const ns_node *el)
     return js ? js->current_url : NULL;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 double
 ns_arg_d(JSContext *ctx, JSValueConst v)
 {
     double d = 0; JS_ToFloat64(ctx, &d, v); return d;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 GHashTable *
 ns_js_platform_globals(ns_js *js)
@@ -821,7 +601,6 @@ ns_js_platform_globals(ns_js *js)
     }
     return js->platform_globals;
 }
-
 
 JSContext *
 ns_js_new_frame_context(ns_js *js)
@@ -854,613 +633,6 @@ ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
                       ns_make_performance_object(fctx, js, include_memory));
 }
 
-static JSValue
-ns_element_getNumberOfChars(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    const ns_node *n = ns_unwrap_element(this_val);
-    if (!n) return JS_NewInt32(ctx, 0);
-    char *t = ns_node_collect_text(n);
-    glong len = t ? g_utf8_strlen(t, -1) : 0;
-    g_free(t);
-    return JS_NewInt32(ctx, (int)len);
-}
-
-static const JSCFunctionListEntry ns_element_proto_funcs[] = {
-    JS_CFUNC_DEF("getNumberOfChars",         0, ns_element_getNumberOfChars),
-    JS_CFUNC_DEF("getSVGDocument",           0, ns_element_getSVGDocument),
-    JS_CGETSET_DEF("contentDocument",        ns_element_get_contentDocument,        ns_element_noop_set),
-    JS_CGETSET_DEF("contentWindow",          ns_element_get_contentWindow,          ns_element_noop_set),
-    JS_CGETSET_DEF("tagName",                ns_element_get_tagName,                ns_element_noop_set),
-    JS_CGETSET_DEF("accessKeyLabel",         ns_element_get_accessKeyLabel,         ns_element_noop_set),
-    JS_CGETSET_DEF("localName",              ns_element_get_localName,              ns_element_noop_set),
-    JS_CGETSET_DEF("prefix",                 ns_element_get_prefix,                 ns_element_noop_set),
-    JS_CGETSET_DEF("textContent",            ns_element_get_textContent,            ns_element_set_textContent),
-    JS_CGETSET_DEF("innerText",              ns_element_get_innerText,              ns_element_set_innerText),
-    JS_CGETSET_DEF("outerText",              ns_element_get_innerText,              ns_element_set_outerText),
-    JS_CGETSET_DEF("id",                     ns_element_get_id,                     ns_element_set_id),
-    JS_CGETSET_DEF("className",              ns_element_get_className,              ns_element_set_className),
-    JS_CGETSET_DEF("innerHTML",              ns_element_get_innerHTML,              ns_element_set_innerHTML),
-    JS_CGETSET_DEF("outerHTML",              ns_element_get_outerHTML,              ns_element_set_outerHTML),
-    JS_CGETSET_DEF("style",                  ns_element_get_style,                  ns_element_set_style),
-    JS_CGETSET_DEF("classList",              ns_element_get_classList,              ns_element_set_classList),
-    JS_CGETSET_DEF("relList",                ns_element_get_relList,                ns_element_set_relList),
-    JS_CGETSET_DEF("itemScope",              ns_element_get_itemScope,              ns_element_set_itemScope),
-    JS_CGETSET_DEF("itemId",                 ns_element_get_itemId,                 ns_element_set_itemId),
-    JS_CGETSET_DEF("itemType",               ns_element_get_itemType,               ns_element_noop_set),
-    JS_CGETSET_DEF("itemProp",               ns_element_get_itemProp,               ns_element_noop_set),
-    JS_CGETSET_DEF("itemRef",                ns_element_get_itemRef,                ns_element_noop_set),
-    JS_CGETSET_DEF("itemValue",              ns_element_get_itemValue,              ns_element_set_itemValue),
-    JS_CGETSET_DEF("properties",             ns_element_get_properties,             ns_element_noop_set),
-    JS_CGETSET_DEF("parentElement",          ns_element_get_parentElement,          ns_element_noop_set),
-    JS_CGETSET_DEF("parentNode",             ns_element_get_parentNode,             ns_element_noop_set),
-    JS_CGETSET_DEF("firstElementChild",      ns_element_get_firstElementChild,      ns_element_noop_set),
-    JS_CGETSET_DEF("lastElementChild",       ns_element_get_lastElementChild,       ns_element_noop_set),
-    JS_CGETSET_DEF("nextElementSibling",     ns_element_get_nextElementSibling,     ns_element_noop_set),
-    JS_CGETSET_DEF("previousElementSibling", ns_element_get_previousElementSibling, ns_element_noop_set),
-    JS_CGETSET_DEF("firstChild",             ns_element_get_firstChild,             ns_element_noop_set),
-    JS_CGETSET_DEF("lastChild",              ns_element_get_lastChild,              ns_element_noop_set),
-    JS_CGETSET_DEF("nextSibling",            ns_element_get_nextSibling,            ns_element_noop_set),
-    JS_CGETSET_DEF("previousSibling",        ns_element_get_previousSibling,        ns_element_noop_set),
-    JS_CGETSET_DEF("childNodes",             ns_element_get_childNodes,             ns_element_noop_set),
-    JS_CGETSET_DEF("childElementCount",      ns_element_get_childElementCount,      ns_element_noop_set),
-    JS_CGETSET_DEF("children",               ns_element_get_children,               ns_element_noop_set),
-    JS_CFUNC_DEF("getAttribute",            1, ns_element_getAttribute),
-    JS_CFUNC_DEF("hasAttribute",            1, ns_element_hasAttribute),
-    JS_CFUNC_DEF("setAttribute",            2, ns_element_setAttribute),
-    JS_CFUNC_DEF("removeAttribute",         1, ns_element_removeAttribute),
-    JS_CFUNC_DEF("showPopover",             0, ns_element_showPopover),
-    JS_CFUNC_DEF("hidePopover",             0, ns_element_hidePopover),
-    JS_CFUNC_DEF("togglePopover",           0, ns_element_togglePopover),
-    JS_CFUNC_DEF("toggleAttribute",         1, ns_element_toggleAttribute),
-    JS_CFUNC_DEF("getAttributeNS",          2, ns_element_getAttributeNS),
-    JS_CFUNC_DEF("hasAttributeNS",          2, ns_element_hasAttributeNS),
-    JS_CFUNC_DEF("setAttributeNS",          3, ns_element_setAttributeNS),
-    JS_CFUNC_DEF("removeAttributeNS",       2, ns_element_removeAttributeNS),
-    JS_CFUNC_DEF("requestFullscreen",       0, ns_element_request_fullscreen),
-    JS_CFUNC_DEF("webkitRequestFullscreen", 0, ns_element_request_fullscreen),
-    JS_CFUNC_DEF("webkitRequestFullScreen", 0, ns_element_request_fullscreen),
-    JS_CFUNC_DEF("mozRequestFullScreen",    0, ns_element_request_fullscreen),
-    JS_CFUNC_DEF("msRequestFullscreen",     0, ns_element_request_fullscreen),
-    JS_CFUNC_DEF("getAnimations",           0, ns_event_empty_array),
-    JS_CFUNC_DEF("animate",                 2, ns_element_animate),
-    JS_CFUNC_DEF("getRootNode",             1, ns_element_getRootNode),
-    JS_CFUNC_DEF("isEqualNode",             1, ns_element_isEqualNode),
-    JS_CFUNC_DEF("isSameNode",              1, ns_element_isSameNode),
-    JS_CFUNC_DEF("compareDocumentPosition", 1, ns_element_compareDocumentPosition),
-    JS_CFUNC_DEF("lookupPrefix",            1, ns_element_lookupPrefix),
-    JS_CFUNC_DEF("lookupNamespaceURI",      1, ns_element_lookupNamespaceURI),
-    JS_CFUNC_DEF("isDefaultNamespace",      1, ns_element_isDefaultNamespace),
-    JS_CFUNC_DEF("getClientRects",          0, ns_element_getClientRects),
-    JS_CFUNC_DEF("scrollBy",                2, ns_element_scroll_by),
-    JS_CFUNC_DEF("scrollTo",                2, ns_element_scroll_to),
-    JS_CFUNC_DEF("scroll",                  2, ns_element_scroll_to),
-    JS_CFUNC_DEF("scrollIntoViewIfNeeded",  1, ns_element_scrollIntoView),
-    JS_CFUNC_DEF("requestPointerLock",      0, ns_element_requestPointerLock),
-    JS_CFUNC_DEF("releasePointerLock",      0, ns_event_noop),
-    JS_CFUNC_DEF("releaseCapture",          0, ns_event_noop),
-    JS_CFUNC_DEF("setCapture",              0, ns_event_noop),
-    JS_CFUNC_DEF("associateForm",           1, ns_event_noop),
-    JS_CFUNC_DEF("setMessage",              2, ns_event_noop),
-    JS_CFUNC_DEF("syncInputValidity",       1, ns_event_noop),
-    JS_CFUNC_DEF("_connect",                0, ns_event_noop),
-    JS_CFUNC_DEF("_disconnect",             0, ns_event_noop),
-    JS_CGETSET_DEF("length",            ns_element_get_text_length, ns_element_noop_set),
-    JS_CFUNC_DEF("substringData", 2, ns_element_substring_data),
-    JS_CFUNC_DEF("appendData",    1, ns_element_append_data),
-    JS_CFUNC_DEF("deleteData",    2, ns_element_delete_data),
-    JS_CFUNC_DEF("insertData",    2, ns_element_insert_data),
-    JS_CFUNC_DEF("replaceData",   3, ns_element_replace_data),
-    JS_CFUNC_DEF("splitText",     1, ns_element_split_text),
-    JS_CFUNC_DEF("select",              0, ns_input_select),
-    JS_CFUNC_DEF("setSelectionRange",   3, ns_input_setSelectionRange),
-    JS_CFUNC_DEF("setRangeText",        1, ns_input_setRangeText),
-    JS_CFUNC_DEF("stepUp",              0, ns_input_stepUp),
-    JS_CFUNC_DEF("stepDown",            0, ns_input_stepDown),
-    JS_CFUNC_DEF("showPicker",          0, ns_element_show_picker),
-    JS_CFUNC_DEF("play",                0, ns_media_play),
-    JS_CFUNC_DEF("pause",               0, ns_media_pause),
-    JS_CFUNC_DEF("load",                0, ns_media_load),
-    JS_CFUNC_DEF("canPlayType",         1, ns_media_canPlayType),
-    JS_CFUNC_DEF("fastSeek",            1, ns_media_fast_seek),
-    JS_CFUNC_DEF("addTextTrack",        3, ns_media_addTextTrack),
-    JS_CFUNC_DEF("setMediaKeys",        1, ns_media_set_media_keys),
-    JS_CFUNC_DEF("getVideoPlaybackQuality", 0, ns_media_get_video_playback_quality),
-    JS_CFUNC_DEF("requestVideoFrameCallback", 1, ns_media_request_video_frame_callback),
-    JS_CFUNC_DEF("cancelVideoFrameCallback",  1, ns_window_cancelAnimationFrame),
-    JS_CGETSET_DEF("validity",          ns_element_get_validity,          ns_element_noop_set),
-    JS_CGETSET_DEF("validationMessage", ns_element_get_validation_message, ns_element_noop_set),
-    JS_CGETSET_DEF("willValidate",      ns_element_get_will_validate,     ns_element_noop_set),
-    JS_CGETSET_DEF("labels",            ns_element_get_labels,            ns_element_noop_set),
-    JS_CGETSET_DEF("files",             ns_input_get_files,               ns_element_noop_set),
-    JS_CGETSET_DEF("indeterminate",     ns_element_get_indeterminate,     ns_element_set_indeterminate),
-    JS_CGETSET_DEF("selectionStart",    ns_element_get_selection_start,   ns_element_set_selection_start),
-    JS_CGETSET_DEF("selectionEnd",      ns_element_get_selection_end,     ns_element_set_selection_end),
-    JS_CGETSET_DEF("selectionDirection", ns_element_get_selection_dir,    ns_element_set_selection_dir),
-    JS_CGETSET_DEF("textLength",        ns_text_control_get_text_length,  ns_element_noop_set),
-    JS_CGETSET_DEF("defaultValue",      ns_element_get_default_value,     ns_element_set_default_value),
-    JS_CGETSET_DEF("defaultChecked",    ns_element_get_default_checked,   ns_element_set_default_checked),
-    JS_CGETSET_DEF("defaultSelected",   ns_element_get_default_selected,  ns_element_set_default_selected),
-    JS_CGETSET_DEF("currentTime",       ns_media_get_current_time,        ns_media_set_current_time),
-    JS_CGETSET_DEF("duration",          ns_media_get_duration,            ns_element_noop_set),
-    JS_CGETSET_DEF("paused",            ns_media_get_paused,              ns_element_noop_set),
-    JS_CGETSET_DEF("ended",             ns_media_get_ended,               ns_element_noop_set),
-    JS_CGETSET_DEF("seeking",           ns_element_get_zero_int,          ns_element_noop_set),
-    JS_CGETSET_DEF("volume",            ns_media_get_volume,              ns_media_set_volume),
-    JS_CGETSET_DEF("playbackRate",      ns_media_get_playbackRate,        ns_media_set_playbackRate),
-    JS_CGETSET_DEF("defaultPlaybackRate", ns_media_get_defaultPlaybackRate, ns_media_set_defaultPlaybackRate),
-    JS_CGETSET_DEF("error",             ns_media_get_error,               ns_element_noop_set),
-    JS_CGETSET_DEF("muted",             ns_media_get_muted,               ns_media_set_muted),
-    JS_CGETSET_DEF("readyState",        ns_media_get_readyState,          ns_element_noop_set),
-    JS_CGETSET_DEF("networkState",      ns_media_get_networkState,        ns_element_noop_set),
-    JS_CGETSET_DEF("seekable",          ns_media_get_seekable_ranges,     ns_element_noop_set),
-    JS_CGETSET_DEF("buffered",          ns_media_get_buffered_ranges,     ns_element_noop_set),
-    JS_CGETSET_DEF("played",            ns_media_get_played_ranges,       ns_element_noop_set),
-    JS_CGETSET_DEF("textTracks",        ns_media_get_textTracks,          ns_element_noop_set),
-    JS_CGETSET_DEF("videoTracks",       ns_element_get_empty_array_prop,  ns_element_noop_set),
-    JS_CGETSET_DEF("audioTracks",       ns_element_get_empty_array_prop,  ns_element_noop_set),
-    JS_CGETSET_DEF("valueAsNumber",     ns_element_get_value_as_number,   ns_element_set_value_as_number),
-    JS_CGETSET_DEF("valueAsDate",       ns_element_get_value_as_date,     ns_element_set_value_as_date),
-    JS_CGETSET_DEF("position",          ns_element_get_progress_position, ns_element_noop_set),
-    JS_CGETSET_DEF("encoding",          ns_element_get_form_enctype,      ns_element_set_form_enctype),
-    JS_CGETSET_DEF("isContentEditable", ns_element_get_isContentEditable,  ns_element_noop_set),
-    JS_CGETSET_DEF("translate",         ns_element_get_translate,         ns_element_set_translate),
-    JS_CGETSET_DEF("offsetParent",      ns_element_get_offsetParent,      ns_element_noop_set),
-    JS_CGETSET_DEF("videoWidth",        ns_element_get_zero_int,          ns_element_noop_set),
-    JS_CGETSET_DEF("videoHeight",       ns_element_get_zero_int,          ns_element_noop_set),
-    JS_CGETSET_DEF("srcObject",         ns_media_get_srcObject,           ns_media_set_srcObject),
-    JS_CGETSET_DEF("clientInformation", ns_element_get_null,              ns_element_noop_set),
-    JS_CFUNC_DEF("decode",            0, ns_returns_resolved_undefined),
-    JS_CFUNC_DEF("toBlob",            1, ns_element_toBlob),
-    JS_CFUNC_DEF("attachInternals",   0, ns_element_attachInternals),
-    JS_CGETSET_DEF("_internals",      ns_element_get_internals, ns_element_noop_set),
-    JS_CGETSET_DEF("index",           ns_element_get_option_index,   ns_element_noop_set),
-    JS_CGETSET_DEF("rows",            ns_element_table_rows,         ns_element_set_rows),
-    JS_CGETSET_DEF("caption",         ns_element_table_caption,      ns_element_noop_set),
-    JS_CGETSET_DEF("tHead",           ns_element_table_thead,        ns_element_noop_set),
-    JS_CGETSET_DEF("tFoot",           ns_element_table_tfoot,        ns_element_noop_set),
-    JS_CGETSET_DEF("tBodies",         ns_element_table_tbodies,      ns_element_noop_set),
-    JS_CGETSET_DEF("cells",           ns_element_tr_cells,           ns_element_noop_set),
-    JS_CGETSET_DEF("rowIndex",        ns_element_get_zero_int,       ns_element_noop_set),
-    JS_CGETSET_DEF("sectionRowIndex", ns_element_get_zero_int,       ns_element_noop_set),
-    JS_CGETSET_DEF("cellIndex",       ns_element_get_zero_int,       ns_element_noop_set),
-    JS_CGETSET_MAGIC_DEF("colSpan",   ns_element_int_attr_getter,    ns_element_int_attr_setter, 6),
-    JS_CGETSET_MAGIC_DEF("rowSpan",   ns_element_int_attr_getter,    ns_element_int_attr_setter, 7),
-    JS_CGETSET_DEF("returnValue",     ns_dialog_get_returnValue,     ns_dialog_set_returnValue),
-    JS_CFUNC_DEF("createCaption",  0, ns_table_createCaption),
-    JS_CFUNC_DEF("createTHead",    0, ns_table_createTHead),
-    JS_CFUNC_DEF("createTFoot",    0, ns_table_createTFoot),
-    JS_CFUNC_DEF("createTBody",    0, ns_table_createTBody),
-    JS_CFUNC_DEF("deleteCaption",  0, ns_table_deleteCaption),
-    JS_CFUNC_DEF("deleteTHead",    0, ns_table_deleteTHead),
-    JS_CFUNC_DEF("deleteTFoot",    0, ns_table_deleteTFoot),
-    JS_CFUNC_DEF("insertRow",      1, ns_table_insertRow),
-    JS_CFUNC_DEF("deleteRow",      1, ns_table_deleteRow),
-    JS_CFUNC_DEF("insertCell",     1, ns_tr_insertCell),
-    JS_CFUNC_DEF("deleteCell",     1, ns_tr_deleteCell),
-    JS_CFUNC_DEF("add",            2, ns_select_add),
-    JS_CFUNC_DEF("appendChild",             1, ns_element_appendChild),
-    JS_CFUNC_DEF("removeChild",             1, ns_element_removeChild),
-    JS_CFUNC_DEF("insertBefore",            2, ns_element_insertBefore),
-    JS_CFUNC_DEF("moveBefore",              2, ns_element_moveBefore),
-    JS_CFUNC_DEF("replaceChild",            2, ns_element_replaceChild),
-    JS_CFUNC_DEF("insertAdjacentHTML",      2, ns_element_insertAdjacentHTML),
-    JS_CFUNC_DEF("getHTML",                 0, ns_element_getHTML),
-    JS_CFUNC_DEF("setHTMLUnsafe",           1, ns_element_setHTMLUnsafe),
-    JS_CFUNC_DEF("insertAdjacentElement",   2, ns_element_insertAdjacentElement),
-    JS_CFUNC_DEF("insertAdjacentText",      2, ns_element_insertAdjacentText),
-    JS_CFUNC_DEF("replaceChildren",         0, ns_element_replaceChildren),
-    JS_CFUNC_DEF("getAttributeNames",       0, ns_element_getAttributeNames),
-    JS_CFUNC_DEF("getAttributeNode",        1, ns_element_getAttributeNode),
-    JS_CFUNC_DEF("getAttributeNodeNS",      2, ns_element_getAttributeNodeNS),
-    JS_CFUNC_DEF("removeAttributeNode",     1, ns_element_removeAttributeNode),
-    JS_CFUNC_DEF("setAttributeNode",        1, ns_element_setAttributeNode),
-    JS_CFUNC_DEF("setAttributeNodeNS",      1, ns_element_setAttributeNode),
-    JS_CFUNC_DEF("hasAttributes",           0, ns_element_hasAttributes),
-    JS_CFUNC_DEF("remove",                  0, ns_element_remove_self),
-    JS_CFUNC_DEF("cloneNode",               1, ns_element_cloneNode),
-    JS_CFUNC_DEF("normalize",               0, ns_element_normalize),
-    JS_CFUNC_DEF("append",                  0, ns_element_append),
-    JS_CFUNC_DEF("prepend",                 0, ns_element_prepend),
-    JS_CFUNC_DEF("before",                  0, ns_element_before),
-    JS_CFUNC_DEF("after",                   0, ns_element_after),
-    JS_CFUNC_DEF("replaceWith",             0, ns_element_replaceWith),
-    JS_CFUNC_DEF("addEventListener",        2, ns_element_addEventListener),
-    JS_CFUNC_DEF("removeEventListener",     2, ns_element_removeEventListener),
-    JS_CFUNC_DEF("getElementsByTagName",    1, ns_element_getElementsByTagName),
-    JS_CFUNC_DEF("getElementsByTagNameNS",  2, ns_element_getElementsByTagNameNS),
-    JS_CFUNC_DEF("getElementById",          1, ns_element_getElementById),
-    JS_CFUNC_DEF("getElementsByClassName",  1, ns_element_getElementsByClassName),
-    JS_CFUNC_DEF("querySelector",           1, ns_element_querySelector),
-    JS_CFUNC_DEF("querySelectorAll",        1, ns_element_querySelectorAll),
-    JS_CFUNC_DEF("matches",                 1, ns_element_matches),
-    JS_CFUNC_DEF("webkitMatchesSelector",   1, ns_element_matches),
-    JS_CFUNC_DEF("closest",                 1, ns_element_closest),
-    JS_CFUNC_DEF("contains",                1, ns_element_contains),
-    JS_CFUNC_DEF("hasChildNodes",           0, ns_element_hasChildNodes),
-    JS_CFUNC_DEF("getBoundingClientRect",   0, ns_element_getBoundingClientRect),
-    JS_CFUNC_DEF("getBBox",                 0, ns_element_getBBox),
-    JS_CFUNC_DEF("getCTM",                  0, ns_element_getCTM),
-    JS_CFUNC_DEF("getScreenCTM",            0, ns_element_getScreenCTM),
-    JS_CFUNC_DEF("getTotalLength",          0, ns_element_getTotalLength),
-    JS_CFUNC_DEF("getPointAtLength",        1, ns_element_getPointAtLength),
-    JS_CFUNC_DEF("createSVGPoint",          0, ns_element_createSVGPoint),
-    JS_CFUNC_DEF("createSVGRect",           0, ns_element_createSVGRect),
-    JS_CFUNC_DEF("createSVGMatrix",         0, ns_element_createSVGMatrix),
-    JS_CFUNC_DEF("createSVGTransform",      0, ns_element_createSVGTransform),
-    JS_CGETSET_DEF("ownerSVGElement",       ns_element_get_ownerSVGElement, ns_element_noop_set),
-    JS_CFUNC_DEF("focus",                   0, ns_element_focus),
-    JS_CFUNC_DEF("blur",                    0, ns_element_blur),
-    JS_CFUNC_DEF("click",                   0, ns_element_click),
-    JS_CFUNC_DEF("submit",                  0, ns_element_form_submit),
-    JS_CFUNC_DEF("requestSubmit",           0, ns_element_form_requestSubmit),
-    JS_CFUNC_DEF("reset",                   0, ns_element_form_reset),
-    JS_CFUNC_DEF("checkValidity",           0, ns_element_check_validity),
-    JS_CFUNC_DEF("reportValidity",          0, ns_element_check_validity),
-    JS_CFUNC_DEF("setCustomValidity",       1, ns_element_setCustomValidity),
-    JS_CFUNC_DEF("cancelAsync",             1, ns_services_clear_timer),
-    JS_CFUNC_DEF("announce",                1, ns_event_noop),
-    JS_CFUNC_DEF("scrollIntoView",          0, ns_element_scrollIntoView),
-    JS_CFUNC_DEF("checkVisibility",         0, ns_element_checkVisibility),
-    JS_CFUNC_DEF("setPointerCapture",       1, ns_element_setPointerCapture),
-    JS_CFUNC_DEF("releasePointerCapture",   1, ns_element_releasePointerCapture),
-    JS_CFUNC_DEF("hasPointerCapture",       1, ns_element_hasPointerCapture),
-    JS_CFUNC_DEF("show",                    0, ns_element_show),
-    JS_CFUNC_DEF("showModal",               0, ns_element_showModal),
-    JS_CFUNC_DEF("close",                   0, ns_element_close),
-    JS_CFUNC_DEF("requestClose",            0, ns_element_requestClose),
-    JS_CFUNC_DEF("dispatchEvent",           1, ns_element_dispatchEvent),
-    JS_CFUNC_DEF("assignedNodes",           0, ns_element_assignedNodes),
-    JS_CFUNC_DEF("assignedElements",        0, ns_element_assignedElements),
-    JS_CFUNC_DEF("getContext",              1, ns_element_getContext),
-    JS_CFUNC_DEF("toDataURL",               0, ns_element_toDataURL),
-    JS_CGETSET_DEF("nodeType",      ns_element_get_nodeType, ns_element_noop_set),
-    JS_CGETSET_DEF("nodeValue",     ns_element_get_nodeValue, ns_element_set_nodeValue),
-    JS_CGETSET_DEF("wholeText",     ns_element_get_wholeText, ns_element_noop_set),
-    JS_CFUNC_DEF("replaceWholeText", 1, ns_text_replaceWholeText),
-    JS_CGETSET_DEF("nodeName",      ns_element_get_nodeName, ns_element_noop_set),
-    JS_CGETSET_DEF("dataset",       ns_element_get_dataset,  ns_element_noop_set),
-    JS_CGETSET_DEF("offsetTop",     ns_element_get_offsetTop,    ns_element_noop_set),
-    JS_CGETSET_DEF("offsetLeft",    ns_element_get_offsetLeft,   ns_element_noop_set),
-    JS_CGETSET_DEF("offsetWidth",   ns_element_get_offsetWidth,  ns_element_noop_set),
-    JS_CGETSET_DEF("offsetHeight",  ns_element_get_offsetHeight, ns_element_noop_set),
-    JS_CGETSET_DEF("clientTop",     ns_element_get_clientTop,   ns_element_noop_set),
-    JS_CGETSET_DEF("clientLeft",    ns_element_get_clientLeft,  ns_element_noop_set),
-    JS_CGETSET_DEF("clientWidth",   ns_element_get_clientWidth,  ns_element_noop_set),
-    JS_CGETSET_DEF("clientHeight",  ns_element_get_clientHeight, ns_element_noop_set),
-    JS_CGETSET_DEF("scrollTop",     ns_element_get_scrollTop,    ns_element_set_scrollTop),
-    JS_CGETSET_DEF("scrollLeft",    ns_element_get_scrollLeft,   ns_element_set_scrollLeft),
-    JS_CGETSET_DEF("scrollWidth",   ns_element_get_scrollWidth,  ns_element_noop_set),
-    JS_CGETSET_DEF("scrollHeight",  ns_element_get_scrollHeight, ns_element_noop_set),
-    JS_CGETSET_DEF("attributes",    ns_element_get_attributes, ns_element_noop_set),
-    JS_CGETSET_DEF("naturalWidth",  ns_element_img_natural_width, ns_element_noop_set),
-    JS_CGETSET_DEF("naturalHeight", ns_element_img_natural_height, ns_element_noop_set),
-    JS_CGETSET_DEF("complete",      ns_element_img_complete, ns_element_noop_set),
-    JS_CGETSET_DEF("currentSrc",    ns_element_img_current_src, ns_element_noop_set),
-    JS_CGETSET_DEF("content",       ns_element_template_content, ns_element_set_content),
-    JS_CGETSET_DEF("hidden",        ns_element_get_hidden,     ns_element_set_hidden),
-    JS_CGETSET_MAGIC_DEF("title",       ns_element_attr_getter, ns_element_attr_setter, 0),
-    JS_CGETSET_MAGIC_DEF("name",        ns_element_attr_getter, ns_element_attr_setter, 1),
-    JS_CGETSET_MAGIC_DEF("alt",         ns_element_attr_getter, ns_element_attr_setter, 2),
-    JS_CGETSET_MAGIC_DEF("src",         ns_element_attr_getter, ns_element_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("href",        ns_element_anchor_part_get, ns_element_anchor_href_set, NS_ANCHOR_HREF),
-    JS_CGETSET_MAGIC_DEF("protocol",    ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_PROTOCOL),
-    JS_CGETSET_MAGIC_DEF("host",        ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_HOST),
-    JS_CGETSET_MAGIC_DEF("hostname",    ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_HOSTNAME),
-    JS_CGETSET_MAGIC_DEF("port",        ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_PORT),
-    JS_CGETSET_MAGIC_DEF("pathname",    ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_PATHNAME),
-    JS_CGETSET_MAGIC_DEF("search",      ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_SEARCH),
-    JS_CGETSET_MAGIC_DEF("hash",        ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_HASH),
-    JS_CGETSET_MAGIC_DEF("origin",      ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_ORIGIN),
-    JS_CGETSET_MAGIC_DEF("username",    ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_USERNAME),
-    JS_CGETSET_MAGIC_DEF("password",    ns_element_anchor_part_get, ns_element_url_part_set, NS_ANCHOR_PASSWORD),
-    JS_CGETSET_DEF("type",              ns_element_get_type,    ns_element_set_type),
-    JS_CGETSET_MAGIC_DEF("placeholder", ns_element_attr_getter, ns_element_attr_setter, 6),
-    JS_CGETSET_MAGIC_DEF("lang",        ns_element_attr_getter, ns_element_attr_setter, 7),
-    JS_CGETSET_DEF("dir",               ns_element_get_dir,     ns_element_set_dir),
-    JS_CGETSET_MAGIC_DEF("action",      ns_element_attr_getter, ns_element_attr_setter,  9),
-    JS_CGETSET_MAGIC_DEF("method",      ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_METHOD),
-    JS_CGETSET_MAGIC_DEF("enctype",     ns_element_attr_getter, ns_element_attr_setter, 11),
-    JS_CGETSET_MAGIC_DEF("target",      ns_element_attr_getter, ns_element_attr_setter, 12),
-    JS_CGETSET_MAGIC_DEF("rel",         ns_element_attr_getter, ns_element_attr_setter, 13),
-    JS_CGETSET_MAGIC_DEF("accept",      ns_element_attr_getter, ns_element_attr_setter, 14),
-    JS_CGETSET_MAGIC_DEF("acceptCharset", ns_element_attr_getter, ns_element_attr_setter, 15),
-    JS_CGETSET_DEF("autocomplete", ns_element_get_autocomplete, ns_element_set_autocomplete),
-    JS_CGETSET_DEF("list",        ns_element_get_list_ref, ns_element_list_set),
-    JS_CGETSET_MAGIC_DEF("min",         ns_element_range_number_getter, ns_element_range_number_setter, NS_RANGE_MIN),
-    JS_CGETSET_MAGIC_DEF("max",         ns_element_range_number_getter, ns_element_range_number_setter, NS_RANGE_MAX),
-    JS_CGETSET_MAGIC_DEF("low",         ns_element_range_number_getter, ns_element_range_number_setter, NS_RANGE_LOW),
-    JS_CGETSET_MAGIC_DEF("high",        ns_element_range_number_getter, ns_element_range_number_setter, NS_RANGE_HIGH),
-    JS_CGETSET_MAGIC_DEF("optimum",     ns_element_range_number_getter, ns_element_range_number_setter, NS_RANGE_OPTIMUM),
-    JS_CGETSET_MAGIC_DEF("step",        ns_element_attr_getter, ns_element_attr_setter, 20),
-    JS_CGETSET_MAGIC_DEF("pattern",     ns_element_attr_getter, ns_element_attr_setter, 21),
-    JS_CGETSET_DEF("spellcheck",    ns_element_get_spellcheck, ns_element_set_spellcheck),
-    JS_CGETSET_MAGIC_DEF("crossOrigin",    ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_CROSSORIGIN),
-    JS_CGETSET_MAGIC_DEF("referrerPolicy", ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_REFERRERPOLICY),
-    JS_CGETSET_MAGIC_DEF("decoding",       ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_DECODING),
-    JS_CGETSET_MAGIC_DEF("loading",        ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_LOADING),
-    JS_CGETSET_MAGIC_DEF("fetchPriority",  ns_element_attr_getter, ns_element_attr_setter, 27),
-    JS_CGETSET_DEF("sizes",                ns_element_get_sizes_list, ns_element_attr_setter_sizes),
-    JS_CGETSET_DEF("sandbox",              ns_element_get_sandbox_list, ns_element_attr_setter_sandbox),
-    JS_CGETSET_MAGIC_DEF("srcset",         ns_element_attr_getter, ns_element_attr_setter, 29),
-    JS_CGETSET_MAGIC_DEF("useMap",         ns_element_attr_getter, ns_element_attr_setter, 30),
-    JS_CGETSET_MAGIC_DEF("inputMode",      ns_element_attr_getter, ns_element_attr_setter, 31),
-    JS_CGETSET_MAGIC_DEF("size",           ns_element_int_attr_getter, ns_element_int_attr_setter, 2),
-    JS_CGETSET_MAGIC_DEF("cols",           ns_element_int_attr_getter, ns_element_int_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("allowFullscreen", ns_element_bool_attr_getter, ns_element_bool_attr_setter, 0),
-    JS_CGETSET_MAGIC_DEF("declare",        ns_element_bool_attr_getter, ns_element_bool_attr_setter, 1),
-    JS_CGETSET_MAGIC_DEF("defaultMuted",   ns_element_bool_attr_getter, ns_element_bool_attr_setter, 2),
-    JS_CGETSET_MAGIC_DEF("default",        ns_element_bool_attr_getter, ns_element_bool_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("noHref",         ns_element_bool_attr_getter, ns_element_bool_attr_setter, 4),
-    JS_CGETSET_MAGIC_DEF("noShade",        ns_element_bool_attr_getter, ns_element_bool_attr_setter, 5),
-    JS_CGETSET_MAGIC_DEF("compact",        ns_element_bool_attr_getter, ns_element_bool_attr_setter, 6),
-    JS_CGETSET_MAGIC_DEF("noWrap",         ns_element_bool_attr_getter, ns_element_bool_attr_setter, 7),
-    JS_CGETSET_MAGIC_DEF("trueSpeed",      ns_element_bool_attr_getter, ns_element_bool_attr_setter, 8),
-    JS_CGETSET_MAGIC_DEF("noResize",       ns_element_bool_attr_getter, ns_element_bool_attr_setter, 9),
-    JS_CGETSET_MAGIC_DEF("face",           ns_element_attr_getter, ns_element_attr_setter, 130),
-    JS_CGETSET_MAGIC_DEF("text",           ns_element_attr_getter, ns_element_attr_setter, 131),
-    JS_CGETSET_MAGIC_DEF("hspace",         ns_element_int_attr_getter, ns_element_int_attr_setter, 11),
-    JS_CGETSET_MAGIC_DEF("vspace",         ns_element_int_attr_getter, ns_element_int_attr_setter, 12),
-    JS_CGETSET_MAGIC_DEF("scrollAmount",   ns_element_int_attr_getter, ns_element_int_attr_setter, 13),
-    JS_CGETSET_MAGIC_DEF("scrollDelay",    ns_element_int_attr_getter, ns_element_int_attr_setter, 14),
-    JS_CGETSET_MAGIC_DEF("maxLength",      ns_element_int_attr_getter, ns_element_int_attr_setter, 0),
-    JS_CGETSET_MAGIC_DEF("minLength",      ns_element_int_attr_getter, ns_element_int_attr_setter, 1),
-    JS_CGETSET_MAGIC_DEF("span",           ns_element_int_attr_getter, ns_element_int_attr_setter, 5),
-    JS_CGETSET_MAGIC_DEF("width",          ns_element_dimension_getter, ns_element_dimension_setter, 8),
-    JS_CGETSET_MAGIC_DEF("height",         ns_element_dimension_getter, ns_element_dimension_setter, 9),
-    JS_CFUNC_DEF("beginElement",   0, ns_svg_beginElement),
-    JS_CFUNC_DEF("setCurrentTime", 1, ns_svg_setCurrentTime),
-    JS_CGETSET_MAGIC_DEF("start",          ns_element_int_attr_getter, ns_element_int_attr_setter, 10),
-    JS_CGETSET_MAGIC_DEF("coords",         ns_element_attr_getter, ns_element_attr_setter, 37),
-    JS_CGETSET_MAGIC_DEF("shape",          ns_element_attr_getter, ns_element_attr_setter, 38),
-    JS_CGETSET_MAGIC_DEF("formAction",     ns_element_attr_getter, ns_element_attr_setter, 39),
-    JS_CGETSET_MAGIC_DEF("formMethod",     ns_element_attr_getter, ns_element_attr_setter, 40),
-    JS_CGETSET_MAGIC_DEF("formEnctype",    ns_element_attr_getter, ns_element_attr_setter, 41),
-    JS_CGETSET_MAGIC_DEF("formTarget",     ns_element_attr_getter, ns_element_attr_setter, 42),
-    JS_CGETSET_MAGIC_DEF("integrity",      ns_element_attr_getter, ns_element_attr_setter, 43),
-    JS_CGETSET_MAGIC_DEF("kind",           ns_element_attr_getter, ns_element_attr_setter, 44),
-    JS_CGETSET_MAGIC_DEF("hreflang",       ns_element_attr_getter, ns_element_attr_setter, 46),
-    JS_CGETSET_MAGIC_DEF("charset",        ns_element_attr_getter, ns_element_attr_setter, 47),
-    JS_CGETSET_MAGIC_DEF("ping",           ns_element_attr_getter, ns_element_attr_setter, 90),
-    JS_CGETSET_MAGIC_DEF("rev",            ns_element_attr_getter, ns_element_attr_setter, 91),
-    JS_CGETSET_MAGIC_DEF("as",             ns_element_attr_getter, ns_element_attr_setter, 92),
-    JS_CGETSET_MAGIC_DEF("align",          ns_element_attr_getter, ns_element_attr_setter, 93),
-    JS_CGETSET_MAGIC_DEF("vAlign",         ns_element_attr_getter, ns_element_attr_setter, 94),
-    JS_CGETSET_MAGIC_DEF("ch",             ns_element_attr_getter, ns_element_attr_setter, 95),
-    JS_CGETSET_MAGIC_DEF("chOff",          ns_element_attr_getter, ns_element_attr_setter, 96),
-    JS_CGETSET_MAGIC_DEF("bgColor",        ns_element_attr_getter, ns_element_attr_setter, 97),
-    JS_CGETSET_MAGIC_DEF("background",     ns_element_attr_getter, ns_element_attr_setter, 98),
-    JS_CGETSET_MAGIC_DEF("link",           ns_element_attr_getter, ns_element_attr_setter, 99),
-    JS_CGETSET_MAGIC_DEF("vLink",          ns_element_attr_getter, ns_element_attr_setter, 100),
-    JS_CGETSET_MAGIC_DEF("aLink",          ns_element_attr_getter, ns_element_attr_setter, 101),
-    JS_CGETSET_MAGIC_DEF("color",          ns_element_attr_getter, ns_element_attr_setter, 102),
-    JS_CGETSET_MAGIC_DEF("clear",          ns_element_attr_getter, ns_element_attr_setter, 103),
-    JS_CGETSET_MAGIC_DEF("summary",        ns_element_attr_getter, ns_element_attr_setter, 104),
-    JS_CGETSET_MAGIC_DEF("frame",          ns_element_attr_getter, ns_element_attr_setter, 105),
-    JS_CGETSET_MAGIC_DEF("rules",          ns_element_attr_getter, ns_element_attr_setter, 106),
-    JS_CGETSET_MAGIC_DEF("border",         ns_element_attr_getter, ns_element_attr_setter, 107),
-    JS_CGETSET_MAGIC_DEF("cellPadding",    ns_element_attr_getter, ns_element_attr_setter, 108),
-    JS_CGETSET_MAGIC_DEF("cellSpacing",    ns_element_attr_getter, ns_element_attr_setter, 109),
-    JS_CGETSET_MAGIC_DEF("axis",           ns_element_attr_getter, ns_element_attr_setter, 110),
-    JS_CGETSET_MAGIC_DEF("abbr",           ns_element_attr_getter, ns_element_attr_setter, 111),
-    JS_CGETSET_MAGIC_DEF("headers",        ns_element_attr_getter, ns_element_attr_setter, 112),
-    JS_CGETSET_MAGIC_DEF("scheme",         ns_element_attr_getter, ns_element_attr_setter, 113),
-    JS_CGETSET_MAGIC_DEF("standby",        ns_element_attr_getter, ns_element_attr_setter, 114),
-    JS_CGETSET_MAGIC_DEF("codeType",       ns_element_attr_getter, ns_element_attr_setter, 115),
-    JS_CGETSET_MAGIC_DEF("codeBase",       ns_element_attr_getter, ns_element_attr_setter, 116),
-    JS_CGETSET_MAGIC_DEF("code",           ns_element_attr_getter, ns_element_attr_setter, 117),
-    JS_CGETSET_MAGIC_DEF("archive",        ns_element_attr_getter, ns_element_attr_setter, 118),
-    JS_CGETSET_MAGIC_DEF("scrolling",      ns_element_attr_getter, ns_element_attr_setter, 119),
-    JS_CGETSET_MAGIC_DEF("frameBorder",    ns_element_attr_getter, ns_element_attr_setter, 120),
-    JS_CGETSET_MAGIC_DEF("marginWidth",    ns_element_attr_getter, ns_element_attr_setter, 121),
-    JS_CGETSET_MAGIC_DEF("marginHeight",   ns_element_attr_getter, ns_element_attr_setter, 122),
-    JS_CGETSET_MAGIC_DEF("longDesc",       ns_element_attr_getter, ns_element_attr_setter, 123),
-    JS_CGETSET_MAGIC_DEF("lowsrc",         ns_element_attr_getter, ns_element_attr_setter, 124),
-    JS_CGETSET_MAGIC_DEF("version",        ns_element_attr_getter, ns_element_attr_setter, 125),
-    JS_CGETSET_MAGIC_DEF("event",          ns_element_attr_getter, ns_element_attr_setter, 126),
-    JS_CGETSET_MAGIC_DEF("valueType",      ns_element_attr_getter, ns_element_attr_setter, 127),
-    JS_CGETSET_MAGIC_DEF("srclang",        ns_element_attr_getter, ns_element_attr_setter, 128),
-    JS_CGETSET_MAGIC_DEF("dirName",        ns_element_attr_getter, ns_element_attr_setter, 129),
-    JS_CGETSET_MAGIC_DEF("httpEquiv",      ns_element_attr_getter, ns_element_attr_setter, 49),
-    JS_CGETSET_DEF("contentEditable", ns_element_get_contentEditable, ns_element_set_contentEditable),
-    JS_CGETSET_MAGIC_DEF("slot",           ns_element_attr_getter, ns_element_attr_setter, 51),
-    JS_CGETSET_MAGIC_DEF("role", ns_element_aria_string_getter, ns_element_aria_string_setter, 0),
-    JS_CGETSET_MAGIC_DEF("ariaLabel", ns_element_aria_string_getter, ns_element_aria_string_setter, 1),
-    JS_CGETSET_MAGIC_DEF("ariaBrailleLabel", ns_element_aria_string_getter, ns_element_aria_string_setter, 2),
-    JS_CGETSET_MAGIC_DEF("ariaBrailleRoleDescription", ns_element_aria_string_getter, ns_element_aria_string_setter, 3),
-    JS_CGETSET_MAGIC_DEF("ariaColCount", ns_element_aria_string_getter, ns_element_aria_string_setter, 4),
-    JS_CGETSET_MAGIC_DEF("ariaColIndex", ns_element_aria_string_getter, ns_element_aria_string_setter, 5),
-    JS_CGETSET_MAGIC_DEF("ariaColIndexText", ns_element_aria_string_getter, ns_element_aria_string_setter, 6),
-    JS_CGETSET_MAGIC_DEF("ariaColSpan", ns_element_aria_string_getter, ns_element_aria_string_setter, 7),
-    JS_CGETSET_MAGIC_DEF("ariaDescription", ns_element_aria_string_getter, ns_element_aria_string_setter, 8),
-    JS_CGETSET_MAGIC_DEF("ariaKeyShortcuts", ns_element_aria_string_getter, ns_element_aria_string_setter, 9),
-    JS_CGETSET_MAGIC_DEF("ariaLevel", ns_element_aria_string_getter, ns_element_aria_string_setter, 10),
-    JS_CGETSET_MAGIC_DEF("ariaPlaceholder", ns_element_aria_string_getter, ns_element_aria_string_setter, 11),
-    JS_CGETSET_MAGIC_DEF("ariaPosInSet", ns_element_aria_string_getter, ns_element_aria_string_setter, 12),
-    JS_CGETSET_MAGIC_DEF("ariaRelevant", ns_element_aria_string_getter, ns_element_aria_string_setter, 13),
-    JS_CGETSET_MAGIC_DEF("ariaRoleDescription", ns_element_aria_string_getter, ns_element_aria_string_setter, 14),
-    JS_CGETSET_MAGIC_DEF("ariaRowCount", ns_element_aria_string_getter, ns_element_aria_string_setter, 15),
-    JS_CGETSET_MAGIC_DEF("ariaRowIndex", ns_element_aria_string_getter, ns_element_aria_string_setter, 16),
-    JS_CGETSET_MAGIC_DEF("ariaRowIndexText", ns_element_aria_string_getter, ns_element_aria_string_setter, 17),
-    JS_CGETSET_MAGIC_DEF("ariaRowSpan", ns_element_aria_string_getter, ns_element_aria_string_setter, 18),
-    JS_CGETSET_MAGIC_DEF("ariaSetSize", ns_element_aria_string_getter, ns_element_aria_string_setter, 19),
-    JS_CGETSET_MAGIC_DEF("ariaValueMax", ns_element_aria_string_getter, ns_element_aria_string_setter, 20),
-    JS_CGETSET_MAGIC_DEF("ariaValueMin", ns_element_aria_string_getter, ns_element_aria_string_setter, 21),
-    JS_CGETSET_MAGIC_DEF("ariaValueNow", ns_element_aria_string_getter, ns_element_aria_string_setter, 22),
-    JS_CGETSET_MAGIC_DEF("ariaValueText", ns_element_aria_string_getter, ns_element_aria_string_setter, 23),
-    JS_CGETSET_MAGIC_DEF("ariaHidden",     ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_HIDDEN),
-    JS_CGETSET_MAGIC_DEF("ariaDisabled",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_DISABLED),
-    JS_CGETSET_MAGIC_DEF("ariaPressed",    ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_PRESSED),
-    JS_CGETSET_MAGIC_DEF("ariaExpanded",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_EXPANDED),
-    JS_CGETSET_MAGIC_DEF("ariaControls",   ns_element_attr_getter, ns_element_attr_setter, 59),
-    JS_CGETSET_MAGIC_DEF("ariaDescribedBy", ns_element_attr_getter, ns_element_attr_setter, 60),
-    JS_CGETSET_MAGIC_DEF("ariaLabelledBy", ns_element_attr_getter, ns_element_attr_setter, 61),
-    JS_CGETSET_MAGIC_DEF("ariaLive",       ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_LIVE),
-    JS_CGETSET_MAGIC_DEF("ariaBusy",       ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_BUSY),
-    JS_CGETSET_MAGIC_DEF("ariaChecked",    ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_CHECKED),
-    JS_CGETSET_MAGIC_DEF("ariaCurrent",    ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_CURRENT),
-    JS_CGETSET_MAGIC_DEF("ariaSelected",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_SELECTED),
-    JS_CGETSET_MAGIC_DEF("ariaAtomic",     ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_ATOMIC),
-    JS_CGETSET_MAGIC_DEF("ariaAutoComplete", ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_AUTOCOMPLETE),
-    JS_CGETSET_MAGIC_DEF("ariaHasPopup",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_HASPOPUP),
-    JS_CGETSET_MAGIC_DEF("ariaInvalid",    ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_INVALID),
-    JS_CGETSET_MAGIC_DEF("ariaModal",      ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_MODAL),
-    JS_CGETSET_MAGIC_DEF("ariaMultiLine",  ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_MULTILINE),
-    JS_CGETSET_MAGIC_DEF("ariaMultiSelectable", ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_MULTISELECTABLE),
-    JS_CGETSET_MAGIC_DEF("ariaOrientation", ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_ORIENTATION),
-    JS_CGETSET_MAGIC_DEF("ariaReadOnly",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_READONLY),
-    JS_CGETSET_MAGIC_DEF("ariaRequired",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_REQUIRED),
-    JS_CGETSET_MAGIC_DEF("ariaSort",       ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ARIA_SORT),
-    JS_CGETSET_MAGIC_DEF("nonce",          ns_element_attr_getter, ns_element_attr_setter, 72),
-    JS_CGETSET_MAGIC_DEF("accessKey",      ns_element_attr_getter, ns_element_attr_setter, 73),
-    JS_CGETSET_MAGIC_DEF("dateTime",       ns_element_attr_getter, ns_element_attr_setter, 74),
-    JS_CGETSET_MAGIC_DEF("srcdoc",         ns_element_attr_getter, ns_element_attr_setter, 75),
-    JS_CGETSET_MAGIC_DEF("popoverTargetAction", ns_element_attr_getter, ns_element_attr_setter, 77),
-    JS_CGETSET_DEF("autocapitalize", ns_element_get_autocapitalize, ns_element_set_autocapitalize),
-    JS_CGETSET_MAGIC_DEF("enterKeyHint",   ns_element_enum_getter, ns_element_enum_setter, NS_ENUM_ENTERKEYHINT),
-    JS_CGETSET_MAGIC_DEF("charSet",        ns_element_attr_getter, ns_element_attr_setter, 47),
-    JS_CGETSET_MAGIC_DEF("poster",         ns_element_attr_getter, ns_element_attr_setter, 83),
-    JS_CGETSET_MAGIC_DEF("preload",        ns_element_attr_getter, ns_element_attr_setter, 84),
-    JS_CGETSET_MAGIC_DEF("wrap",           ns_element_attr_getter, ns_element_attr_setter, 85),
-    JS_CGETSET_MAGIC_DEF("scope",          ns_element_attr_getter, ns_element_attr_setter, 86),
-    JS_CGETSET_MAGIC_DEF("cite",           ns_element_attr_getter, ns_element_attr_setter, 87),
-    JS_CGETSET_MAGIC_DEF("media",          ns_element_attr_getter, ns_element_attr_setter, 88),
-    JS_CGETSET_MAGIC_DEF("download",       ns_element_attr_getter, ns_element_attr_setter, 89),
-    JS_CGETSET_MAGIC_DEF("open",        ns_element_boolattr_getter, ns_element_boolattr_setter,  0),
-    JS_CGETSET_DEF("selected",          ns_element_get_selected,    ns_element_set_selected),
-    JS_CGETSET_MAGIC_DEF("multiple",    ns_element_boolattr_getter, ns_element_boolattr_setter,  2),
-    JS_CGETSET_MAGIC_DEF("readOnly",    ns_element_boolattr_getter, ns_element_boolattr_setter,  3),
-    JS_CGETSET_MAGIC_DEF("autofocus",   ns_element_boolattr_getter, ns_element_boolattr_setter,  4),
-    JS_CGETSET_MAGIC_DEF("controls",    ns_element_boolattr_getter, ns_element_boolattr_setter,  5),
-    JS_CGETSET_MAGIC_DEF("loop",        ns_element_boolattr_getter, ns_element_boolattr_setter,  6),
-    JS_CGETSET_MAGIC_DEF("autoplay",    ns_element_boolattr_getter, ns_element_boolattr_setter,  8),
-    JS_CGETSET_MAGIC_DEF("defer",       ns_element_boolattr_getter, ns_element_boolattr_setter,  9),
-    JS_CGETSET_MAGIC_DEF("async",       ns_element_boolattr_getter, ns_element_boolattr_setter, 10),
-    JS_CGETSET_MAGIC_DEF("noValidate",  ns_element_boolattr_getter, ns_element_boolattr_setter, 11),
-    JS_CGETSET_MAGIC_DEF("isMap",       ns_element_boolattr_getter, ns_element_boolattr_setter, 12),
-    JS_CGETSET_DEF("draggable",   ns_element_get_draggable, ns_element_set_draggable),
-    JS_CGETSET_MAGIC_DEF("reversed",    ns_element_boolattr_getter, ns_element_boolattr_setter, 14),
-    JS_CGETSET_MAGIC_DEF("playsInline", ns_element_boolattr_getter, ns_element_boolattr_setter, 15),
-    JS_CGETSET_MAGIC_DEF("inert",       ns_element_boolattr_getter, ns_element_boolattr_setter, 17),
-    JS_CGETSET_MAGIC_DEF("noModule",    ns_element_boolattr_getter, ns_element_boolattr_setter, 18),
-    JS_CGETSET_MAGIC_DEF("formNoValidate", ns_element_boolattr_getter, ns_element_boolattr_setter, 19),
-    JS_CGETSET_MAGIC_DEF("required",    ns_element_boolattr_getter, ns_element_boolattr_setter, 20),
-    JS_CGETSET_DEF("htmlFor",                ns_element_get_htmlFor, ns_element_set_htmlFor),
-    JS_CGETSET_DEF("control",                ns_element_get_label_control, ns_element_noop_set),
-    JS_CGETSET_DEF("popoverTargetElement",   ns_element_get_popoverTargetElement, ns_element_set_popoverTargetElement),
-    JS_CGETSET_DEF("tabIndex",               ns_element_get_tabIndex, ns_element_set_tabIndex),
-    JS_CGETSET_DEF("isConnected",            ns_element_get_isConnected,    ns_element_noop_set),
-    JS_CGETSET_DEF("baseURI",                ns_element_get_baseURI,        ns_element_noop_set),
-    JS_CGETSET_DEF("ownerDocument",          ns_element_get_ownerDocument,  ns_element_noop_set),
-    JS_CGETSET_DEF("namespaceURI",           ns_element_get_namespaceURI,   ns_element_noop_set),
-    JS_CGETSET_DEF("shadowRoot",             ns_element_get_shadowRoot,     ns_element_noop_set),
-    JS_CGETSET_DEF("assignedSlot",           ns_element_get_assignedSlot,   ns_element_noop_set),
-    JS_CFUNC_DEF("attachShadow",             1, ns_element_attachShadow),
-    JS_CGETSET_DEF("disabled",      ns_element_get_disabled,   ns_element_set_disabled),
-    JS_CGETSET_DEF("checked",       ns_element_get_checked,    ns_element_set_checked),
-    JS_CGETSET_DEF("label",         ns_element_get_label_prop, ns_element_set_label_prop),
-    JS_CGETSET_DEF("selectedIndex", ns_element_get_selectedIndex, ns_element_set_selectedIndex),
-    JS_CGETSET_DEF("options",       ns_element_get_options,       ns_element_noop_set),
-    JS_CGETSET_DEF("selectedOptions", ns_element_get_selectedOptions, ns_element_noop_set),
-    JS_CGETSET_DEF("elements",      ns_element_get_form_elements, ns_element_noop_set),
-    JS_CGETSET_DEF("form",          ns_element_get_form,          ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_src_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("src", ns_element_attr_getter,
-                         ns_element_attr_setter, 3),
-};
-
-static const JSCFunctionListEntry ns_image_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("src", ns_element_attr_getter,
-                         ns_element_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("srcset", ns_element_attr_getter,
-                         ns_element_attr_setter, 29),
-    JS_CGETSET_DEF("currentSrc", ns_element_img_current_src,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("naturalWidth", ns_element_img_natural_width,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("naturalHeight", ns_element_img_natural_height,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("complete", ns_element_img_complete,
-                   ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_source_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("src", ns_element_attr_getter,
-                         ns_element_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("srcset", ns_element_attr_getter,
-                         ns_element_attr_setter, 29),
-};
-
-static const JSCFunctionListEntry ns_media_proto_funcs[] = {
-    JS_CFUNC_DEF("play", 0, ns_media_play),
-    JS_CFUNC_DEF("pause", 0, ns_media_pause),
-    JS_CFUNC_DEF("load", 0, ns_media_load),
-    JS_CFUNC_DEF("canPlayType", 1, ns_media_canPlayType),
-    JS_CFUNC_DEF("fastSeek", 1, ns_media_fast_seek),
-    JS_CGETSET_MAGIC_DEF("src", ns_element_attr_getter,
-                         ns_element_attr_setter, 3),
-    JS_CGETSET_DEF("currentSrc", ns_element_img_current_src,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("currentTime", ns_media_get_current_time,
-                   ns_media_set_current_time),
-    JS_CGETSET_DEF("duration", ns_media_get_duration, ns_element_noop_set),
-    JS_CGETSET_DEF("paused", ns_media_get_paused, ns_element_noop_set),
-    JS_CGETSET_DEF("ended", ns_media_get_ended, ns_element_noop_set),
-    JS_CGETSET_DEF("seeking", ns_media_get_seeking, ns_element_noop_set),
-    JS_CGETSET_DEF("volume", ns_media_get_volume, ns_media_set_volume),
-    JS_CGETSET_DEF("muted", ns_media_get_muted, ns_media_set_muted),
-    JS_CGETSET_DEF("playbackRate", ns_media_get_playbackRate,
-                   ns_media_set_playbackRate),
-    JS_CGETSET_DEF("defaultPlaybackRate", ns_media_get_defaultPlaybackRate,
-                   ns_media_set_defaultPlaybackRate),
-    JS_CGETSET_DEF("readyState", ns_media_get_readyState, ns_element_noop_set),
-    JS_CGETSET_DEF("networkState", ns_media_get_networkState,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("buffered", ns_media_get_buffered_ranges,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("played", ns_media_get_played_ranges,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("seekable", ns_media_get_seekable_ranges,
-                   ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_video_proto_funcs[] = {
-    JS_CFUNC_DEF("getVideoPlaybackQuality", 0,
-                 ns_media_get_video_playback_quality),
-    JS_CFUNC_DEF("requestVideoFrameCallback", 1,
-                 ns_media_request_video_frame_callback),
-    JS_CFUNC_DEF("cancelVideoFrameCallback", 1,
-                 ns_window_cancelAnimationFrame),
-    JS_CGETSET_DEF("videoWidth", ns_element_get_zero_int,
-                   ns_element_noop_set),
-    JS_CGETSET_DEF("videoHeight", ns_element_get_zero_int,
-                   ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_iframe_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("src", ns_element_attr_getter,
-                         ns_element_attr_setter, 3),
-    JS_CGETSET_MAGIC_DEF("srcdoc", ns_element_attr_getter,
-                         ns_element_attr_setter, 75),
-};
-
-static const JSCFunctionListEntry ns_anchor_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("href", ns_element_anchor_part_get,
-                         ns_element_anchor_href_set, NS_ANCHOR_HREF),
-    JS_CGETSET_MAGIC_DEF("ping", ns_element_attr_getter,
-                         ns_element_attr_setter, 90),
-    JS_CGETSET_MAGIC_DEF("download", ns_element_attr_getter,
-                         ns_element_attr_setter, 89),
-};
-
-static const JSCFunctionListEntry ns_href_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("href", ns_element_anchor_part_get,
-                         ns_element_anchor_href_set, NS_ANCHOR_HREF),
-};
-
 ns_node *
 ns_document_root_for(JSContext *ctx, JSValueConst this_val)
 {
@@ -1468,67 +640,6 @@ ns_document_root_for(JSContext *ctx, JSValueConst this_val)
     if (root && root->kind == NS_NODE_DOCUMENT) return root;
     ns_js *js = js_from_ctx(ctx);
     return js ? js->current_doc : NULL;
-}
-
-static JSValue
-ns_document_get_forms(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_make_live(ctx, this_val, NS_LIVE_DOC_TAG, "form");
-}
-
-static JSValue
-ns_document_get_images(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_make_live(ctx, this_val, NS_LIVE_DOC_TAG, "img");
-}
-
-static JSValue
-ns_document_get_all(JSContext *ctx, JSValueConst this_val)
-{
-    JSValue all = ns_make_live(ctx, this_val, NS_LIVE_DOC_TAG, "*");
-    JS_SetIsHTMLDDA(ctx, all);
-    return all;
-}
-
-static void
-ns_set_tostring_tag(JSContext *ctx, JSValueConst obj, const char *tag)
-{
-    JSValue g = JS_GetGlobalObject(ctx);
-    JSValue sym = JS_GetPropertyStr(ctx, g, "Symbol");
-    JSValue tag_sym = JS_GetPropertyStr(ctx, sym, "toStringTag");
-    JSAtom tag_atom = JS_ValueToAtom(ctx, tag_sym);
-    if (tag_atom != JS_ATOM_NULL) {
-        JS_DefinePropertyValue(ctx, obj, tag_atom, JS_NewString(ctx, tag),
-            JS_PROP_CONFIGURABLE);
-        JS_FreeAtom(ctx, tag_atom);
-    }
-    JS_FreeValue(ctx, tag_sym);
-    JS_FreeValue(ctx, sym);
-    JS_FreeValue(ctx, g);
-}
-
-static const JSCFunctionListEntry ns_namedmap_proto_funcs[] = {
-    JS_CFUNC_DEF("getNamedItem",      1, ns_namedmap_getNamedItem),
-    JS_CFUNC_DEF("getNamedItemNS",    2, ns_namedmap_getNamedItemNS),
-    JS_CFUNC_DEF("setNamedItem",      1, ns_namedmap_setNamedItem),
-    JS_CFUNC_DEF("setNamedItemNS",    1, ns_namedmap_setNamedItem),
-    JS_CFUNC_DEF("removeNamedItem",   1, ns_namedmap_removeNamedItem),
-    JS_CFUNC_DEF("removeNamedItemNS", 2, ns_namedmap_removeNamedItemNS),
-    JS_CFUNC_DEF("item",              1, ns_namedmap_item),
-    JS_CGETSET_DEF("length", ns_namedmap_get_length, ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_dom_implementation_proto_funcs[] = {
-    JS_CFUNC_DEF("hasFeature",         2, ns_event_true),
-    JS_CFUNC_DEF("createHTMLDocument", 1, ns_impl_create_html_document),
-    JS_CFUNC_DEF("createDocument",     3, ns_impl_create_document),
-    JS_CFUNC_DEF("createDocumentType", 3, ns_impl_create_document_type),
-};
-
-static JSValue
-ns_document_get_links(JSContext *ctx, JSValueConst this_val)
-{
-    return ns_make_live(ctx, this_val, NS_LIVE_LINKS, NULL);
 }
 
 const ns_node *
@@ -1598,106 +709,6 @@ ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
 {
     (void)this_val; (void)argc; (void)argv;
     return JS_ThrowTypeError(ctx, "Illegal constructor");
-}
-
-static void
-ns_proto_define_getset(JSContext *ctx, JSValueConst proto, const char *name,
-                       JSValue (*getter)(JSContext *, JSValueConst),
-                       JSValue (*setter)(JSContext *, JSValueConst,
-                                         JSValueConst))
-{
-    JSAtom atom = JS_NewAtom(ctx, name);
-    JSValue g = JS_NewCFunction2(ctx, (JSCFunction *)(void *)getter, name, 0,
-                                 JS_CFUNC_getter, 0);
-    JSValue s = setter
-        ? JS_NewCFunction2(ctx, (JSCFunction *)(void *)setter, name, 1,
-                           JS_CFUNC_setter, 0)
-        : JS_UNDEFINED;
-    JS_DefinePropertyGetSet(ctx, proto, atom, g, s,
-                            JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-    JS_FreeAtom(ctx, atom);
-}
-
-void
-ns_js_install_dom_members(JSContext *ctx, JSValueConst proto, int which)
-{
-    static const JSCFunctionListEntry track_accessors[] = {
-        JS_CGETSET_MAGIC_DEF("default", ns_element_bool_attr_getter,
-                             ns_element_bool_attr_setter, 3),
-    };
-    switch (which) {
-    case NS_DOM_MEMBERS_ELEMENT_FUNCTIONS:
-        JS_SetPropertyFunctionList(ctx, proto, ns_element_proto_funcs,
-                                   G_N_ELEMENTS(ns_element_proto_funcs));
-        break;
-    case NS_DOM_MEMBERS_ELEMENT_CLASS:
-        ns_element_register_class(ctx, JS_DupValue(ctx, proto));
-        ns_bind_fn(ctx, proto, "matches",               ns_element_matches, 1);
-        ns_bind_fn(ctx, proto, "webkitMatchesSelector", ns_element_matches, 1);
-        ns_bind_fn(ctx, proto, "closest",               ns_element_closest, 1);
-        break;
-    case NS_DOM_MEMBERS_HTML_ELEMENT:
-        ns_proto_define_getset(ctx, proto, "dataset",
-                               ns_element_get_dataset, NULL);
-        ns_proto_define_getset(ctx, proto, "popover",
-                               ns_element_get_popover, ns_element_set_popover);
-        break;
-    case NS_DOM_MEMBERS_DATASET:
-        ns_proto_define_getset(ctx, proto, "dataset",
-                               ns_element_get_dataset, NULL);
-        break;
-    case NS_DOM_MEMBERS_TEXT:
-        ns_proto_define_getset(ctx, proto, "assignedSlot",
-                               ns_element_get_assignedSlot,
-                               ns_element_noop_set);
-        break;
-    case NS_DOM_MEMBERS_DOCUMENT_FRAGMENT:
-        ns_bind_fn(ctx, proto, "querySelector",
-                   ns_element_querySelector, 1);
-        ns_bind_fn(ctx, proto, "querySelectorAll",
-                   ns_element_querySelectorAll, 1);
-        break;
-    case NS_DOM_MEMBERS_TRACK:
-        JS_SetPropertyFunctionList(ctx, proto, track_accessors,
-                                   G_N_ELEMENTS(track_accessors));
-        break;
-    case NS_DOM_MEMBERS_DIALOG:
-        ns_proto_define_getset(ctx, proto, "closedBy",
-                               ns_dialog_get_closedBy,
-                               ns_dialog_set_closedBy);
-        break;
-    case NS_DOM_MEMBERS_BUTTON:
-        ns_proto_define_getset(ctx, proto, "command",
-                               ns_button_get_command,
-                               ns_button_set_command);
-        ns_proto_define_getset(ctx, proto, "commandForElement",
-                               ns_button_get_commandForElement,
-                               ns_button_set_commandForElement);
-        break;
-    case NS_DOM_MEMBERS_TEXT_PROPERTY:
-        ns_proto_define_getset(ctx, proto, "text",
-                               ns_element_get_text, ns_element_set_text);
-        break;
-    case NS_DOM_MEMBERS_DATA_PROPERTY:
-        ns_proto_define_getset(ctx, proto, "data",
-                               ns_element_get_data, ns_element_set_data);
-        break;
-    case NS_DOM_MEMBERS_VALUE_PROPERTY:
-        ns_proto_define_getset(ctx, proto, "value",
-                               ns_element_get_value_prop,
-                               ns_element_set_value_prop);
-        break;
-    case NS_DOM_MEMBERS_OPTIONS_METHODS:
-        JS_DefinePropertyValueStr(ctx, proto, "item",
-            JS_NewCFunction(ctx, ns_options_item, "item", 1),
-            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-        JS_DefinePropertyValueStr(ctx, proto, "namedItem",
-            JS_NewCFunction(ctx, ns_options_namedItem, "namedItem", 1),
-            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-        break;
-    default:
-        break;
-    }
 }
 
 static void
@@ -1850,52 +861,6 @@ ns_js_release_wrapper(ns_js *js, ns_node *node)
     JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper));
 }
 
-JSValue
-ns_js_register_class(JSContext *ctx, int which)
-{
-    JSValue proto;
-    switch (which) {
-    case NS_JS_CLASS_ELEMENT:
-        proto = JS_NewObject(ctx);
-        JS_SetPropertyFunctionList(ctx, proto, ns_element_proto_funcs,
-                                   G_N_ELEMENTS(ns_element_proto_funcs));
-        ns_define_element_unscopables(ctx, proto);
-        ns_element_register_class(ctx, JS_DupValue(ctx, proto));
-        return proto;
-    case NS_JS_CLASS_ATTR:
-        ns_attr_register_class(ctx, JS_NewObject(ctx));
-        return JS_UNDEFINED;
-    case NS_JS_CLASS_STYLE:
-        proto = JS_NewObject(ctx);
-        ns_cssom_install_style_proto(ctx, proto);
-        ns_set_tostring_tag(ctx, proto, "CSSStyleDeclaration");
-        ns_cssom_register_style_class(ctx, proto);
-        return JS_UNDEFINED;
-    case NS_JS_CLASS_TOKEN_LIST:
-        proto = JS_NewObject(ctx);
-        JS_SetPropertyFunctionList(ctx, proto, ns_tlist_proto_funcs,
-                                   G_N_ELEMENTS(ns_tlist_proto_funcs));
-        ns_token_list_register_class(ctx, JS_DupValue(ctx, proto));
-        return proto;
-    case NS_JS_CLASS_LIVE:
-        ns_live_register_class(ctx);
-        return JS_UNDEFINED;
-    case NS_JS_CLASS_DATASET:
-        ns_dataset_register_class(ctx, JS_NewObject(ctx));
-        return JS_UNDEFINED;
-    case NS_JS_CLASS_STORAGE:
-        proto = JS_NewObject(ctx);
-        ns_storage_install_proto(ctx, proto);
-        ns_storage_register_class(ctx, JS_DupValue(ctx, proto));
-        return proto;
-    case NS_JS_CLASS_WINDOW_NAMED:
-        ns_window_named_register_class(ctx);
-        return JS_UNDEFINED;
-    default:
-        return JS_UNDEFINED;
-    }
-}
-
 void
 ns_js_set_proto_document(ns_js *js, JSValue proto)
 {
@@ -1933,185 +898,6 @@ ns_tag_caller_document(JSContext *ctx, JSValueConst node_val)
         ns_tag_owner_document(ctx, doc, node_val);
     JS_FreeValue(rctx, doc);
     JS_FreeValue(rctx, global);
-}
-
-static const JSCFunctionListEntry ns_document_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("fgColor",    ns_document_get_color, ns_document_set_color, 0),
-    JS_CGETSET_MAGIC_DEF("bgColor",    ns_document_get_color, ns_document_set_color, 1),
-    JS_CGETSET_MAGIC_DEF("linkColor",  ns_document_get_color, ns_document_set_color, 2),
-    JS_CGETSET_MAGIC_DEF("vlinkColor", ns_document_get_color, ns_document_set_color, 3),
-    JS_CGETSET_MAGIC_DEF("alinkColor", ns_document_get_color, ns_document_set_color, 4),
-    JS_CFUNC_DEF("getElementById",          1, ns_document_getElementById),
-    JS_CFUNC_DEF("createElement",            1, ns_document_createElement),
-    JS_CFUNC_DEF("createElementNS",          2, ns_document_createElementNS),
-    JS_CFUNC_DEF("createTextNode",           1, ns_document_createTextNode),
-    JS_CFUNC_DEF("createComment",            1, ns_document_createComment),
-    JS_CFUNC_DEF("createCDATASection",       1, ns_document_createCDATASection),
-    JS_CFUNC_DEF("createProcessingInstruction", 2,
-                 ns_document_createProcessingInstruction),
-    JS_CFUNC_DEF("createAttribute",          1, ns_document_createAttribute),
-    JS_CFUNC_DEF("createAttributeNS",        2, ns_document_createAttributeNS),
-    JS_CFUNC_DEF("createEvent",              1, ns_document_createEvent),
-    JS_CFUNC_DEF("createDocumentFragment",   0, ns_document_createDocumentFragment),
-    JS_CFUNC_DEF("getElementsByTagName",    1, ns_document_getElementsByTagName),
-    JS_CFUNC_DEF("getElementsByTagNameNS",  2, ns_document_getElementsByTagNameNS),
-    JS_CFUNC_DEF("getElementsByClassName",  1, ns_document_getElementsByClassName),
-    JS_CFUNC_DEF("querySelector",           1, ns_document_querySelector),
-    JS_CFUNC_DEF("querySelectorAll",        1, ns_document_querySelectorAll),
-    JS_CGETSET_DEF("documentElement", ns_document_get_documentElement, ns_element_noop_set),
-    JS_CGETSET_DEF("body",            ns_document_get_body,            ns_document_set_body),
-    JS_CGETSET_DEF("head",            ns_document_get_head,            ns_element_noop_set),
-    JS_CGETSET_DEF("activeElement",   ns_document_get_activeElement,   ns_element_noop_set),
-    JS_CGETSET_DEF("forms",           ns_document_get_forms,           ns_element_noop_set),
-    JS_CGETSET_DEF("images",          ns_document_get_images,          ns_element_noop_set),
-    JS_CGETSET_DEF("links",           ns_document_get_links,           ns_element_noop_set),
-    JS_CGETSET_DEF("scripts",         ns_document_get_scripts,         ns_element_noop_set),
-    JS_CGETSET_DEF("embeds",          ns_document_get_embeds,          ns_element_noop_set),
-    JS_CGETSET_DEF("plugins",         ns_document_get_plugins,         ns_element_noop_set),
-    JS_CGETSET_DEF("designMode",      ns_document_get_designMode,      ns_element_noop_set),
-    JS_CGETSET_DEF("lastModified",    ns_document_get_lastModified,    ns_element_noop_set),
-    JS_CGETSET_DEF("all",             ns_document_get_all,             ns_element_noop_set),
-    JS_CGETSET_DEF("anchors",         ns_document_get_anchors,         ns_element_noop_set),
-    JS_CGETSET_DEF("applets",         ns_document_get_applets,         ns_element_noop_set),
-    JS_CGETSET_DEF("fonts",           ns_document_get_fonts,           ns_element_noop_set),
-    JS_CGETSET_DEF("implementation",  ns_document_implementation,      NULL),
-    JS_CFUNC_DEF("write",      1, ns_document_write),
-    JS_CFUNC_DEF("writeln",    1, ns_document_writeln),
-    JS_CFUNC_DEF("open",       0, ns_document_open),
-    JS_CFUNC_DEF("close",      0, ns_document_close),
-    JS_CFUNC_DEF("execCommand", 3, ns_services_exec_command),
-    JS_CFUNC_DEF("hasFocus",          0, ns_document_has_focus),
-    JS_CFUNC_DEF("elementFromPoint",  2, ns_document_element_from_point),
-    JS_CFUNC_DEF("elementsFromPoint", 2, ns_document_elements_from_point),
-    JS_CFUNC_DEF("createRange",       0, ns_document_create_range),
-    JS_CFUNC_DEF("createTreeWalker",  3, ns_document_create_tree_walker),
-    JS_CFUNC_DEF("createNodeIterator",3, ns_document_create_node_iterator),
-    JS_CFUNC_DEF("getSelection",      0, ns_window_get_selection),
-    JS_CFUNC_DEF("adoptNode",         1, ns_document_adopt_node),
-    JS_CFUNC_DEF("importNode",        2, ns_document_import_node),
-    JS_CFUNC_DEF("exitFullscreen", 0, ns_document_exit_fullscreen),
-    JS_CFUNC_DEF("webkitExitFullscreen", 0, ns_document_exit_fullscreen),
-    JS_CFUNC_DEF("webkitCancelFullScreen", 0, ns_document_exit_fullscreen),
-    JS_CFUNC_DEF("mozCancelFullScreen", 0, ns_document_exit_fullscreen),
-    JS_CFUNC_DEF("msExitFullscreen", 0, ns_document_exit_fullscreen),
-    JS_CFUNC_DEF("exitPointerLock", 0, ns_document_exitPointerLock),
-    JS_CFUNC_DEF("queryCommandSupported", 1, ns_services_query_command_supported),
-    JS_CFUNC_DEF("queryCommandEnabled",   1, ns_services_query_command_enabled),
-    JS_CFUNC_DEF("queryCommandState",     1, ns_event_false),
-    JS_CFUNC_DEF("queryCommandValue",     1, ns_event_noop),
-    JS_CGETSET_DEF("currentScript",      ns_document_get_currentScript, ns_element_noop_set),
-    JS_CGETSET_DEF("rootElement",        ns_document_get_documentElement, ns_element_noop_set),
-    JS_CGETSET_DEF("fullscreenElement",  ns_document_get_fullscreen_element, ns_element_noop_set),
-    JS_CGETSET_DEF("webkitFullscreenElement", ns_document_get_fullscreen_element, ns_element_noop_set),
-    JS_CGETSET_DEF("mozFullScreenElement", ns_document_get_fullscreen_element, ns_element_noop_set),
-    JS_CGETSET_DEF("msFullscreenElement", ns_document_get_fullscreen_element, ns_element_noop_set),
-    JS_CGETSET_DEF("webkitIsFullScreen", ns_document_get_is_fullscreen, ns_element_noop_set),
-    JS_CGETSET_DEF("mozFullScreen", ns_document_get_is_fullscreen, ns_element_noop_set),
-    JS_CGETSET_DEF("pointerLockElement", ns_document_get_pointerLockElement, ns_element_noop_set),
-    JS_CGETSET_DEF("fullscreenEnabled",  ns_document_get_fullscreen_enabled, ns_element_noop_set),
-    JS_CGETSET_DEF("webkitFullscreenEnabled", ns_document_get_fullscreen_enabled, ns_element_noop_set),
-    JS_CGETSET_DEF("scrollingElement",   ns_document_get_scrollingElement, ns_element_noop_set),
-    JS_CFUNC_DEF("addEventListener",    2, ns_document_addEventListener),
-    JS_CFUNC_DEF("removeEventListener", 2, ns_document_removeEventListener),
-    JS_CFUNC_DEF("dispatchEvent",       1, ns_document_dispatchEvent),
-    JS_CFUNC_DEF("getElementsByName",   1, ns_document_getElementsByName),
-    JS_CFUNC_DEF("getItems",            1, ns_document_getItems),
-    JS_CGETSET_DEF("title",           ns_document_get_title,  ns_document_set_title),
-    JS_CGETSET_DEF("cookie",          ns_document_get_cookie, ns_document_set_cookie),
-    JS_CGETSET_DEF("referrer",        ns_document_get_referrer,        ns_element_noop_set),
-    JS_CGETSET_DEF("readyState",      ns_document_get_readyState,      ns_element_noop_set),
-    JS_CGETSET_DEF("hidden",          ns_document_get_hidden,          ns_element_noop_set),
-    JS_CGETSET_DEF("visibilityState", ns_document_get_visibilityState, ns_element_noop_set),
-    JS_CGETSET_DEF("compatMode",      ns_document_get_compatMode,      ns_element_noop_set),
-    JS_CGETSET_DEF("dir",             ns_document_get_dir,             ns_document_set_dir),
-};
-
-void
-ns_document_install_funcs(JSContext *ctx, JSValueConst doc)
-{
-    JS_SetPropertyFunctionList(ctx, doc, ns_document_funcs,
-                               G_N_ELEMENTS(ns_document_funcs));
-    ns_install_event_handler_props(ctx, doc);
-}
-
-static const JSCFunctionListEntry ns_document_proto_accessors[] = {
-    JS_CGETSET_DEF("documentElement", ns_document_get_documentElement, ns_element_noop_set),
-    JS_CGETSET_DEF("body",            ns_document_get_body,            ns_document_set_body),
-    JS_CGETSET_DEF("head",            ns_document_get_head,            ns_element_noop_set),
-    JS_CGETSET_DEF("currentScript",   ns_document_get_currentScript,   ns_element_noop_set),
-    JS_CGETSET_DEF("defaultView",     ns_document_get_defaultView,     ns_element_noop_set),
-    JS_CGETSET_DEF("implementation",  ns_document_implementation,      NULL),
-    JS_CGETSET_DEF("cookie",          ns_document_get_cookie,          ns_document_set_cookie),
-    JS_CGETSET_DEF("readyState",      ns_document_get_readyState,      ns_element_noop_set),
-    JS_CGETSET_DEF("xmlVersion",      ns_document_get_xmlVersion,      ns_element_noop_set),
-};
-
-static const JSCFunctionListEntry ns_document_proto_methods[] = {
-    JS_CFUNC_DEF("adoptNode",              1, ns_document_adopt_node),
-    JS_CFUNC_DEF("createDocumentFragment", 0, ns_document_createDocumentFragment),
-    JS_CFUNC_DEF("createElement",          1, ns_document_createElement),
-    JS_CFUNC_DEF("createElementNS",        2, ns_document_createElementNS),
-    JS_CFUNC_DEF("createTreeWalker",       3, ns_document_create_tree_walker),
-};
-
-static const struct {
-    const JSCFunctionListEntry *funcs;
-    int count;
-} ns_proto_tables[] = {
-    [NS_PROTO_TABLE_DOCUMENT_METHODS] = {
-        ns_document_proto_methods, G_N_ELEMENTS(ns_document_proto_methods) },
-    [NS_PROTO_TABLE_DOCUMENT_ACCESSORS] = {
-        ns_document_proto_accessors, G_N_ELEMENTS(ns_document_proto_accessors) },
-    [NS_PROTO_TABLE_NAMED_NODE_MAP] = {
-        ns_namedmap_proto_funcs, G_N_ELEMENTS(ns_namedmap_proto_funcs) },
-    [NS_PROTO_TABLE_SRC] = {
-        ns_src_proto_funcs, G_N_ELEMENTS(ns_src_proto_funcs) },
-    [NS_PROTO_TABLE_IMAGE] = {
-        ns_image_proto_funcs, G_N_ELEMENTS(ns_image_proto_funcs) },
-    [NS_PROTO_TABLE_SOURCE] = {
-        ns_source_proto_funcs, G_N_ELEMENTS(ns_source_proto_funcs) },
-    [NS_PROTO_TABLE_MEDIA] = {
-        ns_media_proto_funcs, G_N_ELEMENTS(ns_media_proto_funcs) },
-    [NS_PROTO_TABLE_VIDEO] = {
-        ns_video_proto_funcs, G_N_ELEMENTS(ns_video_proto_funcs) },
-    [NS_PROTO_TABLE_IFRAME] = {
-        ns_iframe_proto_funcs, G_N_ELEMENTS(ns_iframe_proto_funcs) },
-    [NS_PROTO_TABLE_ANCHOR] = {
-        ns_anchor_proto_funcs, G_N_ELEMENTS(ns_anchor_proto_funcs) },
-    [NS_PROTO_TABLE_HREF] = {
-        ns_href_proto_funcs, G_N_ELEMENTS(ns_href_proto_funcs) },
-    [NS_PROTO_TABLE_DOM_IMPLEMENTATION] = {
-        ns_dom_implementation_proto_funcs,
-        G_N_ELEMENTS(ns_dom_implementation_proto_funcs) },
-    [NS_PROTO_TABLE_VALIDITY] = {
-        ns_validity_proto_funcs, G_N_ELEMENTS(ns_validity_proto_funcs) },
-    [NS_PROTO_TABLE_ELEMENT] = {
-        ns_element_proto_funcs, G_N_ELEMENTS(ns_element_proto_funcs) },
-};
-
-void
-ns_js_install_proto_table(JSContext *ctx, JSValueConst proto, int table)
-{
-    if (table < 0 || table >= (int)G_N_ELEMENTS(ns_proto_tables)) return;
-    JS_SetPropertyFunctionList(ctx, proto, ns_proto_tables[table].funcs,
-                               ns_proto_tables[table].count);
-}
-
-JSValue
-ns_js_host_class_proto(JSContext *ctx, int which)
-{
-    switch (which) {
-    case NS_HOST_PROTO_STYLE:      return ns_style_class_proto(ctx);
-    case NS_HOST_PROTO_DATASET:    return ns_dataset_class_proto(ctx);
-    case NS_HOST_PROTO_TOKEN_LIST: return ns_token_list_class_proto(ctx);
-    default:                       return JS_UNDEFINED;
-    }
-}
-
-void
-ns_js_brand_node_classes(JSContext *ctx)
-{
-    ns_js_brand_node_interfaces(ctx, ns_element_class_id(), ns_attr_class_id());
 }
 
 GHashTable *
@@ -2323,123 +1109,6 @@ ns_js_exception_message(JSContext *ctx, JSValueConst ex)
     return out;
 }
 
-static const char ns_interface_links_src[] =
-    "(function(G){"
-    "  var OP = Object.prototype;"
-    "  function tag(proto, n){"
-    "    if (!proto || proto === OP || Object.prototype.hasOwnProperty.call(proto, Symbol.toStringTag)) return;"
-    "    try { Object.defineProperty(proto, Symbol.toStringTag, { value: n, configurable: true }); } catch (e) {}"
-    "  }"
-    "  function iface(n){"
-    "    var C = G[n];"
-    "    if (typeof C !== 'function') {"
-    "      C = ({ [n]: function(){ throw new TypeError('Illegal constructor'); } })[n];"
-    "      try { Object.defineProperty(G, n, { value: C, writable: true, configurable: true, enumerable: false }); } catch (e) { return null; }"
-    "    }"
-    "    if (C.prototype && typeof C.prototype === 'object') tag(C.prototype, n);"
-    "    return C;"
-    "  }"
-    "  Object.getOwnPropertyNames(G).forEach(function(n){"
-    "    if (!/^[A-Z][A-Za-z0-9]*$/.test(n)) return;"
-    "    var C; try { C = G[n]; } catch (e) { return; }"
-    "    if (typeof C === 'function' && C.prototype && typeof C.prototype === 'object' &&"
-    "        C.prototype.constructor === C && !/Error$/.test(n)) tag(C.prototype, n);"
-    "  });"
-    "  function link(get, n){"
-    "    var o; try { o = get(); } catch (e) { return; }"
-    "    if (!o || typeof o !== 'object') return;"
-    "    var C = iface(n); if (!C || !C.prototype) return;"
-    "    var p = Object.getPrototypeOf(o);"
-    "    if (p === OP || p === null) { try { Object.setPrototypeOf(o, C.prototype); } catch (e) {} }"
-    "    else tag(p, n);"
-    "  }"
-    "  var N = G.navigator || {};"
-    "  link(function(){ return G.location; }, 'Location');"
-    "  link(function(){ return G.screen; }, 'Screen');"
-    "  ['locationbar','menubar','personalbar','scrollbars','statusbar','toolbar'].forEach(function(k){ link(function(){ return G[k]; }, 'BarProp'); });"
-    "  link(function(){ return G.visualViewport; }, 'VisualViewport');"
-    "  link(function(){ return G.customElements; }, 'CustomElementRegistry');"
-    "  link(function(){ return G.external; }, 'External');"
-    "  link(function(){ return G.caches; }, 'CacheStorage');"
-    "  link(function(){ return G.scheduler; }, 'Scheduler');"
-    "  link(function(){ return G.localStorage; }, 'Storage');"
-    "  link(function(){ return G.sessionStorage; }, 'Storage');"
-    "  link(function(){ return G.indexedDB; }, 'IDBFactory');"
-    "  link(function(){ return G.navigation; }, 'Navigation');"
-    "  link(function(){ return G.document && G.document.fonts; }, 'FontFaceSet');"
-    "  link(function(){ return G.performance && G.performance.memory; }, 'MemoryInfo');"
-    "  link(function(){ return N.clipboard; }, 'Clipboard');"
-    "  link(function(){ return N.locks; }, 'LockManager');"
-    "  link(function(){ return N.serviceWorker; }, 'ServiceWorkerContainer');"
-    "  link(function(){ return N.geolocation; }, 'Geolocation');"
-    "  link(function(){ return N.permissions; }, 'Permissions');"
-    "  link(function(){ return N.connection; }, 'NetworkInformation');"
-    "  link(function(){ return N.storage; }, 'StorageManager');"
-    "  link(function(){ return N.userAgentData; }, 'NavigatorUAData');"
-    "  link(function(){ return N.mediaDevices; }, 'MediaDevices');"
-    "  function adopt(r, n){"
-    "    if (!r || typeof r !== 'object') return r;"
-    "    var p = Object.getPrototypeOf(r);"
-    "    if (p === OP || p === null) { var C = iface(n);"
-    "      if (C && C.prototype) { try { Object.setPrototypeOf(r, C.prototype); } catch (e) {} } }"
-    "    return r;"
-    "  }"
-    "  function owner(o, k){ while (o) { if (Object.prototype.hasOwnProperty.call(o, k)) return o; o = Object.getPrototypeOf(o); } return null; }"
-    "  function wrap(o, k, after){"
-    "    var d = o && Object.getOwnPropertyDescriptor(o, k);"
-    "    if (!d || typeof d.value !== 'function') return;"
-    "    var orig = d.value;"
-    "    var w = ({ [k]: function(){ return after(orig.apply(this, arguments), arguments); } })[k];"
-    "    try { Object.defineProperty(w, 'length', { value: orig.length, configurable: true }); } catch (e) {}"
-    "    try { Object.defineProperty(o, k, { value: w, writable: d.writable, enumerable: d.enumerable, configurable: d.configurable }); } catch (e) {}"
-    "  }"
-    "  function wrapGetter(o, k, n){"
-    "    var d = o && Object.getOwnPropertyDescriptor(o, k);"
-    "    if (!d || typeof d.get !== 'function') { if (o) adopt(o[k], n); return; }"
-    "    var orig = d.get;"
-    "    var g = ({ ['get ' + k]: function(){ return adopt(orig.call(this), n); } })['get ' + k];"
-    "    try { Object.defineProperty(o, k, { get: g, set: d.set, enumerable: d.enumerable, configurable: d.configurable }); } catch (e) {}"
-    "  }"
-    "  var seenCtx = new WeakSet();"
-    "  function instrument2d(c){"
-    "    if (!c || seenCtx.has(c)) return c; seenCtx.add(c);"
-    "    wrap(owner(c, 'measureText'), 'measureText', function(r){ return adopt(r, 'TextMetrics'); });"
-    "    wrap(owner(c, 'getImageData'), 'getImageData', function(r){ return adopt(r, 'ImageData'); });"
-    "    wrap(owner(c, 'createImageData'), 'createImageData', function(r){ return adopt(r, 'ImageData'); });"
-    "    return c;"
-    "  }"
-    "  var ctxIface = { '2d': 'CanvasRenderingContext2D', 'webgl': 'WebGLRenderingContext',"
-    "    'experimental-webgl': 'WebGLRenderingContext', 'webgl2': 'WebGL2RenderingContext',"
-    "    'bitmaprenderer': 'ImageBitmapRenderingContext' };"
-    "  try {"
-    "    var cv = G.document && G.document.createElement('canvas');"
-    "    var cvOwner = cv && owner(cv, 'getContext');"
-    "    if (cvOwner && cvOwner !== cv) wrap(cvOwner, 'getContext', function(r, a){"
-    "      var n = ctxIface[String(a[0]).toLowerCase()];"
-    "      if (n) adopt(r, n);"
-    "      return n === 'CanvasRenderingContext2D' ? instrument2d(r) : r;"
-    "    });"
-    "  } catch (e) {}"
-    "  if (G.OffscreenCanvas && G.OffscreenCanvas.prototype) wrap(owner(G.OffscreenCanvas.prototype, 'getContext'), 'getContext', function(r, a){"
-    "    if (String(a[0]).toLowerCase() === '2d') { adopt(r, 'OffscreenCanvasRenderingContext2D'); return instrument2d(r); }"
-    "    return r;"
-    "  });"
-    "  wrap(owner(G, 'matchMedia'), 'matchMedia', function(r){ return adopt(r, 'MediaQueryList'); });"
-    "  if (G.document) wrapGetter(owner(G.document, 'fonts'), 'fonts', 'FontFaceSet');"
-    "  if (G.performance) wrapGetter(owner(G.performance, 'memory'), 'memory', 'MemoryInfo');"
-    "  wrapGetter(owner(N, 'scheduling'), 'scheduling', 'Scheduling');"
-    "})(globalThis)";
-
-void
-ns_js_link_interfaces(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_interface_links_src,
-                        sizeof(ns_interface_links_src) - 1, "<interface-links>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
-}
-
 void
 ns_js_add_csp_header(ns_js *js, const char *header_value)
 {
@@ -2461,7 +1130,6 @@ ns_js_csp_form_action_allowed(const ns_js *js, const char *action_url)
     return ns_csp_allows(js->csp, NS_CSP_FORM_ACTION, action_url,
                          js->current_url);
 }
-
 
 const char *
 ns_js_storage_partition(const ns_js *js)

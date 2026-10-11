@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod class;
+mod function_list;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 
@@ -924,6 +925,10 @@ pub mod quickjs {
     pub use super::class::{
         class_id, identity_raw, object_from_identity, raw_instance, set_identity_opaque,
     };
+    pub use super::function_list::{
+        FunctionListEntry, Getter, GetterMagic, Setter, SetterMagic, cfunc, getset, getset_magic,
+        set_function_list,
+    };
     use core::ffi::{c_char, c_int, c_void};
 
     pub use super::{JSContext, JSValue};
@@ -1014,6 +1019,10 @@ pub mod quickjs {
         } else {
             Ok(value)
         }
+    }
+
+    pub fn raw_tag(raw: JSValue) -> i64 {
+        raw.tag
     }
 
     pub fn raw_is_object(raw: JSValue) -> bool {
