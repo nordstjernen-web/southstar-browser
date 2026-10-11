@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The frame owner element bindings (contentDocument, contentWindow,
+  getSVGDocument, child frame windows) and iframe source marking and load
+  scheduling (lazy frames, static frame scheduling, download detection)
+  moved from js.c to Rust (rust/js-frames).
+* The window constructors (Text, Comment, DocumentFragment, Image, Audio,
+  Option, DOMParser, CloseWatcher), the getUserMedia camera helpers and the
+  blob: URL registry with FileReader completion moved from js.c to Rust
+  (rust/js-dom-factory, rust/js-services, rust/js-url).
 * The script bytecode cache glue, module specifier normalization, import
   attributes, import.meta and the NS_PROFILE script profiler moved from js.c
   to Rust (rust/js-loader), and native member naming to rust/js-brand.
