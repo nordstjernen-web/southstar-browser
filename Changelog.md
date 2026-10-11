@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The element-specific HTML bindings (the table API, <img> complete, natural
+  size and currentSrc, labels, form, list, option index, select length,
+  hidden, disabled, isContentEditable and enctype) moved from js.c to Rust
+  (rust/js-elements), and canvas.toDataURL() to rust/canvas.
 * document.elementFromPoint and elementsFromPoint, image readiness with
   <img> load and error events, execCommand and the queryCommand methods,
   confirm and prompt moved from js.c to Rust (rust/js-geometry, the new
