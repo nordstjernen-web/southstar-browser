@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_double, c_int};
 
 use southstar_glib as glib;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
@@ -11,15 +11,15 @@ use southstar_js_engine::{Scope, Value};
 use super::cairo::Surface;
 use super::state::{CanvasState, Node, NsJs, NsNode, js_of};
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
 unsafe extern "C" {
     fn ns_unwrap_element(val: JSValue) -> *const NsNode;
     fn ns_js_is_worker(js: *const NsJs) -> c_int;
+    fn ns_throw_dom_exception(
+        ctx: *mut JSContext,
+        name: *const c_char,
+        code: c_int,
+        message: *const c_char,
+    ) -> JSValue;
     fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
     fn ns_webgl_get_context(
         ctx: *mut JSContext,
@@ -29,8 +29,6 @@ unsafe extern "C" {
         version: c_int,
         options: JSValue,
     ) -> JSValue;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
 }
 
 #[cfg(feature = "webgpu")]
@@ -74,6 +72,23 @@ pub(crate) fn base64(data: &[u8]) -> Vec<u8> {
         .to_vec();
     unsafe { glib::g_free(encoded.cast()) };
     text
+}
+
+pub(crate) fn dom_exception(
+    scope: &mut Scope<'_>,
+    name: &CStr,
+    code: i32,
+    message: &CStr,
+) -> Value {
+    unsafe {
+        ns_throw_dom_exception(
+            quickjs::raw_context(scope),
+            name.as_ptr(),
+            code,
+            message.as_ptr(),
+        )
+    };
+    quickjs::take_exception(scope)
 }
 
 pub(crate) fn surface_of(st: *mut CanvasState) -> Option<Surface> {
@@ -185,13 +200,13 @@ pub unsafe extern "C" fn ns_element_toDataURL(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_png_write(
-    closure: *mut c_void,
-    data: *const u8,
-    length: c_uint,
-) -> c_int {
-    unsafe { g_byte_array_append(closure.cast(), data, length) };
-    0
+pub unsafe extern "C" fn ns_element_toBlob(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::context::element_to_blob) }
 }
 
 #[unsafe(no_mangle)]

@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -65,12 +66,29 @@ unsafe extern "C" {
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
     fn ns_css_set_focus_visible_node(node: *const NsNode);
     fn ns_css_set_fullscreen_node(node: *const NsNode) -> *const NsNode;
-    fn ns_click_activation_target(el: *const NsNode) -> *const NsNode;
-    fn ns_element_activation_behavior(
+    fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
+    fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
+    fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
+    fn ns_node_is_reset_trigger(el: *const NsNode) -> GBoolean;
+    fn ns_js_request_submit_form(
         ctx: *mut JSContext,
-        act: *const NsNode,
-        target: *const NsNode,
+        form: *const NsNode,
+        submitter: *const NsNode,
     ) -> JSValue;
+    fn ns_js_reset_form(ctx: *mut JSContext, form: *mut NsNode) -> JSValue;
+    fn ns_js_activate_summary(js: *const NsJs, el: *const NsNode) -> GBoolean;
+    fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
+    fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
+    fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
+    fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
+    fn ns_js_request_download(
+        js: *mut NsJs,
+        url: *const c_char,
+        filename: *const c_char,
+    ) -> GBoolean;
+    fn ns_js_anchor_fragment_navigate(js: *mut NsJs, abs_url: *const c_char) -> GBoolean;
+    fn ns_js_navigate(js: *mut NsJs, url: *const c_char, reload: GBoolean) -> GBoolean;
+    fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn ns_node_is_disabled_form_control(el: *const NsNode) -> GBoolean;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -196,6 +214,43 @@ impl Js {
         state
     }
 
+    pub fn activate_summary(self, el: Element) {
+        unsafe { ns_js_activate_summary(self.ptr(), el.as_ptr()) };
+    }
+
+    pub fn button_activation(self, button: Element, target: Element) {
+        unsafe { ns_button_activation(self.ptr(), button.as_mut_ptr(), target.as_ptr()) };
+    }
+
+    pub fn popover_target_activation(self, el: Element, target: Element) {
+        unsafe { ns_popover_target_activation(self.ptr(), el.as_mut_ptr(), target.as_ptr()) };
+    }
+
+    pub fn form_owner_for(self, el: Element) -> Option<Element> {
+        southstar_dom::controls::form_owner(el)
+    }
+
+    pub fn eval_source(self, code: &[u8], origin: &CStr) {
+        let code = c_string(code);
+        let result = unsafe { ns_js_eval_source(self.ptr(), code.as_ptr(), origin.as_ptr()) };
+        unsafe { glib::g_free(result.cast()) };
+    }
+
+    pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {
+        let url = c_string(url);
+        unsafe { ns_js_request_download(self.ptr(), url.as_ptr(), filename.as_ptr()) != 0 }
+    }
+
+    pub fn anchor_fragment_navigate(self, url: &[u8]) -> bool {
+        let url = c_string(url);
+        unsafe { ns_js_anchor_fragment_navigate(self.ptr(), url.as_ptr()) != 0 }
+    }
+
+    pub fn navigate(self, url: &[u8]) {
+        let url = c_string(url);
+        unsafe { ns_js_navigate(self.ptr(), url.as_ptr(), glib::FALSE) };
+    }
+
     pub fn checkable_post_click(
         self,
         el: Element,
@@ -246,11 +301,75 @@ pub(crate) fn event_flags(kind: &CStr) -> (bool, bool) {
     (bubbles != 0, cancelable != 0)
 }
 
+fn c_string(bytes: &[u8]) -> CString {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    CString::new(&bytes[..end]).unwrap_or_default()
+}
+
+fn owned_text(text: *mut c_char) -> Option<Vec<u8>> {
+    if text.is_null() {
+        return None;
+    }
+    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
+    unsafe { glib::g_free(text.cast()) };
+    Some(bytes)
+}
+
 pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: Element) {
+    if let Err(error) = crate::activation::activation_behavior(scope, act, target) {
+        let raw = quickjs::result_raw(scope, Err(error));
+        unsafe { quickjs::free_raw(quickjs::runtime(scope), raw) };
+    }
+}
+
+fn pending_on_exception(scope: &mut Scope<'_>, raw: JSValue) -> JsResult<()> {
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value).map(drop)
+}
+
+pub(crate) fn request_submit_form(
+    scope: &mut Scope<'_>,
+    form: Element,
+    submitter: Element,
+) -> JsResult<()> {
     let raw = unsafe {
-        ns_element_activation_behavior(quickjs::raw_context(scope), act.as_ptr(), target.as_ptr())
+        ns_js_request_submit_form(
+            quickjs::raw_context(scope),
+            form.as_ptr(),
+            submitter.as_ptr(),
+        )
     };
-    unsafe { quickjs::free_raw(quickjs::runtime(scope), raw) };
+    pending_on_exception(scope, raw)
+}
+
+pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Element) -> JsResult<()> {
+    let raw = unsafe { ns_js_reset_form(quickjs::raw_context(scope), form.as_mut_ptr()) };
+    pending_on_exception(scope, raw)
+}
+
+pub(crate) fn is_labelable(el: Element) -> bool {
+    unsafe { ns_js_node_is_labelable(el.as_ptr()) != 0 }
+}
+
+pub(crate) fn first_labelable_descendant(el: Element) -> Option<Element> {
+    node(unsafe { ns_js_first_labelable_descendant(el.as_ptr(), 0) })
+}
+
+pub(crate) fn is_submit_trigger(el: Element) -> bool {
+    unsafe { ns_node_is_submit_trigger(el.as_ptr()) != 0 }
+}
+
+pub(crate) fn is_reset_trigger(el: Element) -> bool {
+    unsafe { ns_node_is_reset_trigger(el.as_ptr()) != 0 }
+}
+
+pub(crate) fn anchor_resolved_href(js: Js, el: Element) -> Option<Vec<u8>> {
+    owned_text(unsafe { ns_element_anchor_resolved_href(el.as_ptr(), js.ptr()) })
+}
+
+pub(crate) fn uri_unescape(text: &[u8]) -> Option<Vec<u8>> {
+    let text = c_string(text);
+    owned_text(unsafe { g_uri_unescape_string(text.as_ptr(), ptr::null()) })
 }
 
 pub(crate) fn note(el: Element) {
@@ -266,7 +385,7 @@ pub(crate) fn set_fullscreen_node(el: Option<Element>) {
 }
 
 pub(crate) fn click_activation_target(el: Element) -> Option<Element> {
-    node(unsafe { ns_click_activation_target(el.as_ptr()) })
+    crate::activation::click_activation_target(el)
 }
 
 pub(crate) fn is_disabled_form_control(el: Element) -> bool {
@@ -513,4 +632,14 @@ pub unsafe extern "C" fn ns_js_window_action_applied(js: *const NsJs) {
     if !js.is_null() {
         crate::fullscreen::window_action_applied(js);
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_node_has_activation_behavior(el: *const NsNode) -> GBoolean {
+    glib::boolean(node(el).is_some_and(crate::activation::has_activation_behavior))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_click_activation_target(el: *const NsNode) -> *const NsNode {
+    Node::ptr_or_null(node(el).and_then(crate::activation::click_activation_target))
 }

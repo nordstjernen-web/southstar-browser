@@ -1,8 +1,9 @@
-//! Southstar — the DOM and window interface objects: prototype hierarchy, instanceof, toStringTag, unscopables, member shapes, the global's shape, PDF plugins and window.chrome.
+//! Southstar — the DOM and window interface objects: prototype hierarchy, instanceof, toStringTag, unscopables, member shapes, the global's shape, PDF plugins, window.chrome and the window's compatibility members.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod chrome;
+mod compat;
 mod ffi;
 mod global;
 mod hierarchy;

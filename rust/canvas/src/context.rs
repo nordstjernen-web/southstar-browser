@@ -1,4 +1,4 @@
-//! Southstar — getContext() on canvas and OffscreenCanvas, the 2D context attributes, PNG export and convertToBlob(), and DOMMatrix results.
+//! Southstar — getContext() on canvas and OffscreenCanvas, the 2D context attributes, PNG export through toDataURL(), toBlob() and convertToBlob(), and DOMMatrix results.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -278,6 +278,54 @@ pub(crate) fn convert_to_blob(
     };
     let _ = scope.call(&settle, &Value::undefined(), &[value]);
     Ok(promise)
+}
+
+fn png_bytes_object(scope: &mut Scope<'_>, png: &[u8]) -> Result<Value, Value> {
+    let global = scope.global();
+    let u8_ctor = scope.get(&global, "Uint8Array")?;
+    let buffer = southstar_js_engine::quickjs::array_buffer_copy(scope, png)?;
+    let bytes = scope.construct(&u8_ctor, &[buffer])?;
+    let blob = scope.new_object();
+    scope.set(&blob, "__ndBlobBytes", bytes)?;
+    scope.set(&blob, "size", Value::int64(png.len() as i64))?;
+    let kind = scope.string("image/png");
+    scope.set(&blob, "type", kind)?;
+    Ok(blob)
+}
+
+pub(crate) fn element_to_blob(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let Some(callback) = args.first().filter(|cb| scope.is_function(cb)).cloned() else {
+        return Ok(Value::undefined());
+    };
+    let el = host::unwrap_element(this);
+    let js = crate::ffi::state::js_of(scope);
+    let state = if el.is_null() || js.is_null() {
+        None
+    } else {
+        crate::state::state_for(js, el)
+    };
+    if let Some(st) = state
+        && !host::origin_clean(st)
+    {
+        return Err(host::dom_exception(
+            scope,
+            c"SecurityError",
+            18,
+            c"Tainted canvases may not be exported.",
+        ));
+    }
+    let mut blob = Value::null();
+    if let Some(surface) = state.and_then(host::surface_of)
+        && let Some(png) = surface.png()
+    {
+        blob = png_bytes_object(scope, &png).unwrap_or_else(|_| Value::null());
+    }
+    let _ = scope.call(&callback, &Value::undefined(), &[blob]);
+    Ok(Value::undefined())
 }
 
 pub(crate) fn element_to_data_url(

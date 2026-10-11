@@ -178,7 +178,11 @@ fn peer_connection(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<V
     Ok(connection)
 }
 
-fn illegal_constructor(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
+pub(crate) fn illegal_constructor(
+    scope: &mut Scope<'_>,
+    _: &Value,
+    _: &[Value],
+) -> Result<Value, Value> {
     Err(scope.type_error("Illegal constructor"))
 }
 

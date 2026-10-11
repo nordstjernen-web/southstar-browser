@@ -1295,3 +1295,27 @@ pub unsafe extern "C" fn ns_js_dispatch_resource_event(
     }
     glib::boolean(crate::ui_events::resource_event(js, target, &kind))
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_install_body_reflected_handlers(ctx: *mut JSContext, wrapper: JSValue) {
+    in_context(ctx, |scope| {
+        let wrapper = borrowed(scope, wrapper);
+        crate::body_handlers::install(scope, &wrapper);
+    });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_body_forward_content_handler(
+    ctx: *mut JSContext,
+    n: *const NsNode,
+    name: *const c_char,
+    code: *const c_char,
+) {
+    let (Some(element), Some(name)) = (node(n), opt_text(name)) else {
+        return;
+    };
+    let code = opt_text(code);
+    in_context(ctx, |scope| {
+        crate::body_handlers::forward_content_handler(scope, element, &name, code.as_deref());
+    });
+}

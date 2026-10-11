@@ -1,7 +1,8 @@
-//! Southstar — the CSSOM bindings: getComputedStyle and its resolved values, element.style, the CSS namespace and the Web Animations hooks.
+//! Southstar — the CSSOM bindings: getComputedStyle and its resolved values, element.style, the CSS namespace the Web Animations hooks and Element.animate().
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod animate;
 mod animations;
 mod computed;
 mod css;

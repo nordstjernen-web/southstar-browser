@@ -113,18 +113,47 @@ unsafe extern "C" {
         newc: *mut NsNode,
         reference: *mut NsNode,
     );
-    fn ns_array_item(
+    fn ns_namedmap_item(
         ctx: *mut JSContext,
         this_val: JSValue,
         argc: c_int,
         argv: *mut JSValue,
     ) -> JSValue;
-    fn ns_array_namedItem(
+    fn ns_make_live(
         ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
+        owner: JSValue,
+        kind: c_int,
+        param: *const c_char,
     ) -> JSValue;
+    fn ns_live_snapshot(ctx: *mut JSContext, obj: JSValue) -> JSValue;
+    fn ns_live_back_of(obj: JSValue) -> *mut c_void;
+    fn ns_live_back_owner(back: *const c_void) -> JSValue;
+    fn ns_qcache_get(
+        ctx: *mut JSContext,
+        root: *const c_void,
+        kind: c_char,
+        key: *const c_char,
+    ) -> JSValue;
+    fn ns_qcache_put(
+        ctx: *mut JSContext,
+        root: *const c_void,
+        kind: c_char,
+        key: *const c_char,
+        value: JSValue,
+    );
+    fn g_file_get_contents(
+        filename: *const c_char,
+        contents: *mut *mut c_char,
+        length: *mut usize,
+        error: *mut *mut GError,
+    ) -> GBoolean;
+    fn g_content_type_guess(
+        filename: *const c_char,
+        data: *const u8,
+        data_size: usize,
+        result_uncertain: *mut GBoolean,
+    ) -> *mut c_char;
+    fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
     fn g_ascii_formatd(
         buffer: *mut c_char,
         buf_len: c_int,
@@ -242,11 +271,118 @@ pub(crate) fn insert_before_single(
 }
 
 pub(crate) fn array_item_function(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "item", 1, ns_array_item)
+    scope.function("item", 1, crate::collection::array_item)
 }
 
 pub(crate) fn array_named_item_function(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "namedItem", 1, ns_array_namedItem)
+    scope.function("namedItem", 1, crate::collection::array_named_item)
+}
+
+pub(crate) fn named_map_item_function(scope: &mut Scope<'_>) -> Value {
+    quickjs::c_function(scope, "item", 1, ns_namedmap_item)
+}
+
+pub(crate) fn make_live(
+    scope: &mut Scope<'_>,
+    owner: &Value,
+    kind: c_int,
+    param: Option<&[u8]>,
+) -> JsResult {
+    let param = param.map(cstring);
+    let raw = unsafe {
+        ns_make_live(
+            quickjs::raw_context(scope),
+            quickjs::raw(owner),
+            kind,
+            param.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
+        )
+    };
+    let live = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, live)
+}
+
+pub(crate) fn live_snapshot(scope: &mut Scope<'_>, live: &Value) -> Value {
+    let raw = unsafe { ns_live_snapshot(quickjs::raw_context(scope), quickjs::raw(live)) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn live_owner(scope: &mut Scope<'_>, live: &Value) -> Value {
+    let back = unsafe { ns_live_back_of(quickjs::raw(live)) };
+    if back.is_null() {
+        return Value::undefined();
+    }
+    let raw = unsafe { ns_live_back_owner(back) };
+    unsafe { quickjs::borrow_value(scope, raw) }
+}
+
+pub(crate) fn qcache_get(scope: &mut Scope<'_>, root: Option<Element>, kind: u8) -> Value {
+    let root = Node::ptr_or_null(root).cast();
+    let raw = unsafe {
+        ns_qcache_get(
+            quickjs::raw_context(scope),
+            root,
+            kind as c_char,
+            c"".as_ptr(),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn qcache_put(scope: &mut Scope<'_>, root: Option<Element>, kind: u8, value: &Value) {
+    let root = Node::ptr_or_null(root).cast();
+    unsafe {
+        ns_qcache_put(
+            quickjs::raw_context(scope),
+            root,
+            kind as c_char,
+            c"".as_ptr(),
+            quickjs::raw(value),
+        )
+    };
+}
+
+pub(crate) struct FileBytes {
+    pub contents: Vec<u8>,
+    pub mime: Option<String>,
+}
+
+pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
+    let mut contents: *mut c_char = ptr::null_mut();
+    let mut len: usize = 0;
+    let ok =
+        unsafe { g_file_get_contents(path.as_ptr(), &mut contents, &mut len, ptr::null_mut()) };
+    if ok == 0 || contents.is_null() {
+        return None;
+    }
+    let bytes = unsafe { core::slice::from_raw_parts(contents.cast::<u8>(), len) }.to_vec();
+    unsafe { glib::g_free(contents.cast()) };
+    let content_type = unsafe {
+        g_content_type_guess(
+            path.as_ptr(),
+            bytes.as_ptr(),
+            bytes.len().min(4096),
+            ptr::null_mut(),
+        )
+    };
+    let mime = if content_type.is_null() {
+        None
+    } else {
+        let mime = unsafe { g_content_type_get_mime_type(content_type) };
+        let text = (!mime.is_null()).then(|| {
+            unsafe { CStr::from_ptr(mime) }
+                .to_string_lossy()
+                .into_owned()
+        });
+        unsafe {
+            glib::g_free(mime.cast());
+            glib::g_free(content_type.cast());
+        }
+        text
+    };
+    Some(FileBytes {
+        contents: bytes,
+        mime,
+    })
 }
 
 pub(crate) fn is_form_data(scope: &mut Scope<'_>, value: &Value) -> bool {
@@ -1295,4 +1431,145 @@ pub unsafe extern "C" fn ns_js_select_typeahead(
         return glib::FALSE;
     };
     glib::boolean(crate::select::typeahead(page, select, key))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_input_get_files(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
+    unsafe { getter(ctx, this_val, crate::files::get_files) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_get_form_elements(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+) -> JSValue {
+    unsafe { getter(ctx, this_val, crate::collection::form_elements) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_array_item(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::collection::array_item) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_array_namedItem(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::collection::array_named_item,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_radio_node_list_get_value(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::collection::radio_list_value,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_radio_node_list_set_value(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::collection::set_radio_list_value,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_elements_named_lookup(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    name: *const c_char,
+) -> JSValue {
+    if name.is_null() {
+        return quickjs::into_raw(Value::null());
+    }
+    let name = unsafe { CStr::from_ptr(name) }.to_bytes();
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let elements = quickjs::borrow_value(scope, this_val);
+            let result = crate::collection::named_lookup(scope, &elements, name);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_indexed_control(
+    ctx: *mut JSContext,
+    form: JSValue,
+    index: u32,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let form = quickjs::borrow_value(scope, form);
+            let result = crate::collection::indexed_control(scope, &form, index);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_named_control(
+    ctx: *mut JSContext,
+    form: JSValue,
+    name: *const c_char,
+) -> JSValue {
+    if name.is_null() {
+        return quickjs::UNDEFINED;
+    }
+    let name = unsafe { CStr::from_ptr(name) }.to_bytes();
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let form = quickjs::borrow_value(scope, form);
+            let result = crate::collection::named_control(scope, &form, name);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_form_controls_snapshot(ctx: *mut JSContext, form: JSValue) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let form = quickjs::borrow_value(scope, form);
+            let result = crate::collection::controls_snapshot(scope, &form);
+            quickjs::result_raw(scope, result)
+        })
+    }
 }

@@ -29,6 +29,7 @@ unsafe extern "C" {
         argc: c_int,
         argv: *mut JSValue,
     ) -> JSValue;
+    fn ns_ce_html_element_construct(ctx: *mut JSContext, new_target: JSValue) -> JSValue;
     fn ns_js_dispatch_path(
         js: *mut NsJs,
         len: *mut c_uint,
@@ -77,6 +78,16 @@ pub(crate) fn new_event_with_proto(scope: &mut Scope<'_>, proto: &Value) -> JsRe
     let raw = unsafe { ns_event_new_proto(ctx_of(scope), quickjs::raw(proto)) };
     let event = unsafe { quickjs::take_value(scope, raw) };
     quickjs::checked(scope, event)
+}
+
+pub(crate) fn has_page(scope: &Scope<'_>) -> bool {
+    !js_of(scope).is_null()
+}
+
+pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
+    let raw = unsafe { ns_ce_html_element_construct(ctx_of(scope), quickjs::raw(new_target)) };
+    let element = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, element)
 }
 
 pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {
@@ -133,6 +144,16 @@ pub unsafe extern "C" fn ns_event_ctor(
     argv: *mut JSValue,
 ) -> JSValue {
     unsafe { native(ctx, this_val, argc, argv, crate::ctors::event_ctor) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_event_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::ctors::window_event_ctor) }
 }
 
 #[unsafe(no_mangle)]

@@ -739,11 +739,11 @@ export_native! {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_install_idle_deadline(ctx: *mut JSContext, proto: JSValue) {
+pub unsafe extern "C" fn ns_install_idle_deadline(ctx: *mut JSContext, global: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            let proto = quickjs::borrow_value(scope, proto);
-            timers::install_idle_deadline(scope, &proto);
+            let global = quickjs::borrow_value(scope, global);
+            timers::install_idle_deadline_interface(scope, &global);
         })
     }
 }

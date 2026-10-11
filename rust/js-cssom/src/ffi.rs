@@ -178,6 +178,19 @@ unsafe extern "C" {
     fn ns_js_flush_layout(js: *mut NsJs);
     fn ns_js_flush_style(js: *mut NsJs);
     fn ns_js_mark_mutated(js: *mut NsJs);
+    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
+    fn ns_port_add_event_listener(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_port_remove_event_listener(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
@@ -350,6 +363,24 @@ pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(quickjs::context_opaque(scope) as usize)
+}
+
+pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
+    let raw = unsafe { ns_event_new(quickjs::raw_context(scope)) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn port_add_event_listener(scope: &mut Scope<'_>) -> Value {
+    quickjs::c_function(scope, "addEventListener", 2, ns_port_add_event_listener)
+}
+
+pub(crate) fn port_remove_event_listener(scope: &mut Scope<'_>) -> Value {
+    quickjs::c_function(
+        scope,
+        "removeEventListener",
+        2,
+        ns_port_remove_event_listener,
+    )
 }
 
 pub(crate) fn host_access(scope: &Scope<'_>) -> bool {
@@ -1071,4 +1102,14 @@ pub unsafe extern "C" fn ns_cssom_style_set(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_cssom_teardown(js: *const NsJs) {
     crate::teardown(Js(js as usize));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_animate(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::animate::element_animate) }
 }

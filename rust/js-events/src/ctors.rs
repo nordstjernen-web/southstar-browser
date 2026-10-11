@@ -116,6 +116,84 @@ pub(crate) fn event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     Ok(ev)
 }
 
+fn proto_is_event(scope: &mut Scope<'_>, proto: &Value) -> bool {
+    let global = scope.global();
+    let ctor = get(scope, &global, "Event");
+    let event_proto = if ctor.is_object() {
+        get(scope, &ctor, "prototype")
+    } else {
+        Value::undefined()
+    };
+    let mut current = proto.clone();
+    for _ in 0..32 {
+        if !current.is_object() {
+            return false;
+        }
+        if current.same_object(&event_proto) {
+            return true;
+        }
+        current = scope
+            .get_prototype(&current)
+            .unwrap_or_else(|_| Value::undefined());
+    }
+    false
+}
+
+pub(crate) fn window_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    if ffi::has_page(scope) {
+        let element = ffi::html_element_construct(scope, this)?;
+        if !element.is_undefined() {
+            return Ok(element);
+        }
+    }
+    let proto = if this.is_object() {
+        get(scope, this, "prototype")
+    } else {
+        Value::null()
+    };
+    let ev = if proto.is_object() && proto_is_event(scope, &proto) {
+        ffi::new_event_with_proto(scope, &proto)?
+    } else if proto.is_object() {
+        scope.new_object_with_proto(&proto)
+    } else {
+        scope.new_object()
+    };
+    if let Some(kind) = args.first() {
+        set(scope, &ev, "type", kind.clone());
+    }
+    let name = if this.is_object() {
+        get(scope, this, "name")
+    } else {
+        Value::undefined()
+    };
+    if name.is_string() && scope.to_string(&name).is_ok_and(|n| n == "ErrorEvent") {
+        define_error_members(scope, &ev, args);
+    }
+    if let Some(init) = init_of(args) {
+        for key in ["bubbles", "cancelable", "composed"] {
+            let flag = truthy(scope, init, key);
+            set(scope, &ev, key, Value::boolean(flag));
+        }
+        let detail = get(scope, init, "detail");
+        set(scope, &ev, "detail", detail);
+    } else {
+        for key in ["bubbles", "cancelable", "composed"] {
+            set(scope, &ev, key, Value::boolean(false));
+        }
+    }
+    set(scope, &ev, "defaultPrevented", Value::boolean(false));
+    event::bind_methods(scope, &ev);
+    bind(
+        scope,
+        &ev,
+        "stopImmediatePropagation",
+        0,
+        event::stop_immediate,
+    );
+    bind(scope, &ev, "composedPath", 0, event::composed_path);
+    Ok(ev)
+}
+
 pub(crate) fn ui_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let ev = event_ctor(scope, this, args)?;
     let mut view = Value::null();

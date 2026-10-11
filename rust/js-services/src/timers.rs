@@ -265,6 +265,24 @@ fn did_timeout(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Value
     }
 }
 
+pub(crate) fn install_idle_deadline_interface(scope: &mut Scope<'_>, global: &Value) {
+    let ctor = crate::make_ctor(scope, "IdleDeadline", 0, crate::rtc::illegal_constructor);
+    let _ = scope.set(global, "IdleDeadline", ctor);
+    let ctor = scope
+        .get(global, "IdleDeadline")
+        .unwrap_or_else(|_| Value::undefined());
+    let prototype = if ctor.is_object() {
+        scope
+            .get(&ctor, "prototype")
+            .unwrap_or_else(|_| Value::undefined())
+    } else {
+        Value::undefined()
+    };
+    if prototype.is_object() {
+        install_idle_deadline(scope, &prototype);
+    }
+}
+
 pub(crate) fn install_idle_deadline(scope: &mut Scope<'_>, prototype: &Value) {
     let method = scope.function("timeRemaining", 0, time_remaining);
     let _ = scope.set(prototype, "timeRemaining", method);

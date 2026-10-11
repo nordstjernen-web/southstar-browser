@@ -1,9 +1,11 @@
-//! Southstar — the forms bindings: form-control values, selection, checkedness, select options, labels, FormData, constraint validation, submission and ElementInternals.
+//! Southstar — the forms bindings: form-control values, form.elements and RadioNodeList, input.files, selection, checkedness, select options, labels, FormData, constraint validation, submission and ElementInternals.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod checkable;
+mod collection;
 mod ffi;
+mod files;
 mod form_data;
 mod internals;
 mod labels;

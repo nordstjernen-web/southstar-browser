@@ -643,3 +643,23 @@ pub fn clone_transfer(
     }
     Ok(clone)
 }
+
+pub(crate) fn structured_clone(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result {
+    let Some(value) = args.first() else {
+        return Err(scope.type_error("structuredClone requires at least 1 argument"));
+    };
+    let mut transfer = Value::undefined();
+    if let Some(options) = args.get(1).filter(|o| !o.is_undefined() && !o.is_null()) {
+        if !options.is_object() {
+            return Err(scope.type_error("structuredClone: options is not an object"));
+        }
+        transfer = scope.get(options, "transfer")?;
+        if !transfer.is_undefined() && !transfer.is_array() {
+            return Err(scope.type_error("structuredClone: transfer is not a sequence"));
+        }
+    }
+    let (old_ports, ports) = ffi::port_transfer_prepare(scope, &transfer)?;
+    let clone = clone_transfer(scope, value, &transfer, (&old_ports, &ports))?;
+    ffi::port_transfer_commit(scope, &old_ports, &ports);
+    Ok(clone)
+}

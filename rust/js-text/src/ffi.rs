@@ -52,6 +52,8 @@ unsafe extern "C" {
         next_sibling: *mut NsNode,
     );
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
+    fn ns_qcache_invalidate(js: *const NsJs);
+    fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
     fn g_utf8_strup(text: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_strdown(text: *const c_char, len: isize) -> *mut c_char;
     fn g_unichar_totitle(c: u32) -> u32;
@@ -108,6 +110,14 @@ pub(crate) fn mark_mutated(js: Js) {
 
 pub(crate) fn clear_children(js: Js, node: Element) {
     unsafe { ns_js_clear_children(js.0, node.as_mut_ptr()) };
+}
+
+pub(crate) fn qcache_invalidate(js: Js) {
+    unsafe { ns_qcache_invalidate(js.0) };
+}
+
+pub(crate) fn mark_restyle_dirty(node: Element) {
+    unsafe { ns_css_mark_restyle_dirty(node.as_mut_ptr()) };
 }
 
 pub(crate) fn orphan_node(js: Js, node: Element) {
@@ -311,4 +321,14 @@ pub unsafe extern "C" fn ns_element_split_text(
     argv: *mut JSValue,
 ) -> JSValue {
     unsafe { native(ctx, this_val, argc, argv, crate::cdata::split_text) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_text_replaceWholeText(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::cdata::replace_whole_text) }
 }

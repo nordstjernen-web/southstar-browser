@@ -364,6 +364,23 @@ void     ns_checkable_post_click(ns_js *js, ns_node *el, int kind,
                                  gboolean prevented);
 void     ns_js_set_checkedness(ns_js *js, ns_node *n, gboolean checked);
 JSValue  ns_array_item(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_element_get_form_elements(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_form_controls_snapshot(JSContext *ctx, JSValueConst form);
+JSValue  ns_form_indexed_control(JSContext *ctx, JSValueConst form, uint32_t index);
+JSValue  ns_form_named_control(JSContext *ctx, JSValueConst form, const char *name);
+JSValue  ns_radio_node_list_get_value(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_radio_node_list_set_value(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_input_get_files(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_text_replaceWholeText(JSContext *ctx, JSValueConst this_val, int argc,
+                                  JSValueConst *argv);
+JSValue  ns_element_toBlob(JSContext *ctx, JSValueConst this_val, int argc,
+                           JSValueConst *argv);
+JSValue  ns_element_animate(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+void     ns_install_window_compat(JSContext *ctx, JSValueConst global);
+void     ns_install_body_reflected_handlers(JSContext *ctx, JSValueConst wrapper);
 JSValue  ns_array_namedItem(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv);
 void     ns_element_insert_before_single(ns_js *js, ns_node *parent, ns_node *newc,
@@ -427,8 +444,6 @@ ns_dommatrix_make(JSContext *ctx, double a, double b, double c, double d,
 JSValue
 ns_element_getContext(JSContext *ctx, JSValueConst this_val,
                       int argc, JSValueConst *argv);
-cairo_status_t
-ns_canvas_png_write(void *closure, const unsigned char *data, unsigned int length);
 
 
 /* The canvas objects' WebIDL surface (js_canvas_api.c). */
@@ -618,6 +633,7 @@ void ns_window_history_teardown(ns_js *js);
 void ns_js_set_current_url(ns_js *js, const char *url);
 void ns_js_soft_navigate(ns_js *js, const char *url, gboolean replace);
 gboolean ns_js_navigate(ns_js *js, const char *url, gboolean reload);
+gboolean ns_js_request_download(ns_js *js, const char *url, const char *filename);
 gboolean ns_js_window_events_blocked(const ns_js *js);
 void ns_js_dispatch_document_window_event(ns_js *js, const char *type,
                                           JSValue event);
@@ -925,7 +941,7 @@ JSValue ns_services_camera_label(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv);
 JSValue ns_services_camera_enumerate(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
-void ns_services_install_idle_deadline(JSContext *ctx, JSValueConst proto);
+void ns_install_idle_deadline(JSContext *ctx, JSValueConst global);
 void ns_services_run_due_timers(ns_js *js);
 gboolean ns_services_timers_pending(const ns_js *js, gboolean include_idle);
 guint ns_services_timer_count(const ns_js *js);
@@ -1258,8 +1274,6 @@ void     ns_event_type_init_flags(const char *type, gboolean at_document,
 void     ns_js_fire_window_focus_event(ns_js *js, ns_node *doc, const char *type);
 gboolean ns_node_is_disabled_form_control(const ns_node *el);
 const ns_node *ns_click_activation_target(const ns_node *el);
-JSValue  ns_element_activation_behavior(JSContext *ctx, const ns_node *act,
-                                        const ns_node *target);
 void     ns_js_synthetic_activation(ns_js *js, const ns_node *act,
                                     const ns_node *target);
 void     ns_js_update_focus_visible(ns_js *js);

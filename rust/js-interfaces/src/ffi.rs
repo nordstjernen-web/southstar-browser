@@ -79,6 +79,11 @@ unsafe extern "C" {
     fn ns_perf_now_ms(js: *const NsJs) -> f64;
     fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
     fn ns_js_navigator_brand(js: *const NsJs) -> JSValue;
+    fn ns_install_event_handler_props(ctx: *mut JSContext, target: JSValue);
+    fn ns_hide_shared_array_buffer(ctx: *mut JSContext, global: JSValue);
+    fn ns_js_intl_install(ctx: *mut JSContext, global: JSValue);
+    fn ns_js_temporal_install(ctx: *mut JSContext, global: JSValue);
+    fn ns_js_realm_install(ctx: *mut JSContext, global: JSValue);
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
@@ -153,6 +158,32 @@ pub(crate) fn page_clock(scope: &Scope<'_>) -> (f64, f64) {
         unsafe { ns_js_page_time_origin_real_ms(js) }
     };
     (origin, unsafe { ns_perf_now_ms(js) })
+}
+
+type GlobalInstaller = unsafe extern "C" fn(*mut JSContext, JSValue);
+
+fn run_installer(scope: &mut Scope<'_>, global: &Value, f: GlobalInstaller) {
+    unsafe { f(quickjs::raw_context(scope), quickjs::raw(global)) };
+}
+
+pub(crate) fn install_event_handler_props(scope: &mut Scope<'_>, global: &Value) {
+    run_installer(scope, global, ns_install_event_handler_props);
+}
+
+pub(crate) fn hide_shared_array_buffer(scope: &mut Scope<'_>, global: &Value) {
+    run_installer(scope, global, ns_hide_shared_array_buffer);
+}
+
+pub(crate) fn install_intl(scope: &mut Scope<'_>, global: &Value) {
+    run_installer(scope, global, ns_js_intl_install);
+}
+
+pub(crate) fn install_temporal(scope: &mut Scope<'_>, global: &Value) {
+    run_installer(scope, global, ns_js_temporal_install);
+}
+
+pub(crate) fn install_realm(scope: &mut Scope<'_>, global: &Value) {
+    run_installer(scope, global, ns_js_realm_install);
 }
 
 unsafe fn with_scope(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>)) {
@@ -255,4 +286,9 @@ pub unsafe extern "C" fn ns_install_namespace_object(
             crate::install_namespace_object(scope, &global, text(name), object, text(tag));
         })
     };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_install_window_compat(ctx: *mut JSContext, global: JSValue) {
+    unsafe { with_object(ctx, global, crate::compat::install_window_compat) };
 }

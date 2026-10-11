@@ -24,6 +24,48 @@ unsafe extern "C" {
     fn ns_canvas_clone_object(ctx: *mut JSContext, v: JSValue) -> JSValue;
     fn ns_hidden_is(v: JSValue, kind: c_int) -> c_int;
     fn ns_hget(ctx: *mut JSContext, obj: JSValue, key: *const c_char) -> JSValue;
+    fn ns_port_transfer_prepare(
+        ctx: *mut JSContext,
+        transfer: JSValue,
+        exclude_port: JSValue,
+        target_ctx: *mut JSContext,
+        old_ports: *mut JSValue,
+        new_ports: *mut JSValue,
+    ) -> c_int;
+    fn ns_port_transfer_commit(ctx: *mut JSContext, old_ports: JSValue, new_ports: JSValue);
+}
+
+pub(crate) fn port_transfer_prepare(
+    scope: &mut Scope<'_>,
+    transfer: &Value,
+) -> Result<(Value, Value), Value> {
+    let ctx = quickjs::raw_context(scope);
+    let mut old_ports = quickjs::UNDEFINED;
+    let mut new_ports = quickjs::UNDEFINED;
+    let status = unsafe {
+        ns_port_transfer_prepare(
+            ctx,
+            quickjs::raw(transfer),
+            quickjs::UNDEFINED,
+            ctx,
+            &mut old_ports,
+            &mut new_ports,
+        )
+    };
+    if status < 0 {
+        return Err(quickjs::take_exception(scope));
+    }
+    unsafe {
+        Ok((
+            quickjs::take_value(scope, old_ports),
+            quickjs::take_value(scope, new_ports),
+        ))
+    }
+}
+
+pub(crate) fn port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_ports: &Value) {
+    let ctx = quickjs::raw_context(scope);
+    unsafe { ns_port_transfer_commit(ctx, quickjs::raw(old_ports), quickjs::raw(new_ports)) };
 }
 
 pub(crate) fn data_clone_error(scope: &mut Scope<'_>) -> Value {
@@ -150,4 +192,14 @@ pub unsafe extern "C" fn ns_wire_decode_value(
             quickjs::result_raw(scope, result)
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_structured_clone(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::structured_clone) }
 }

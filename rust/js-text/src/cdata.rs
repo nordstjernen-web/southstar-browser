@@ -225,3 +225,44 @@ pub(crate) fn split_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     ffi::mark_mutated(js);
     Ok(ffi::wrap_node(scope, tail))
 }
+
+pub(crate) fn replace_whole_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    let Some(node) = ffi::unwrap_node(this).filter(|n| n.is_text()) else {
+        return Ok(Value::null());
+    };
+    let content = match args.first() {
+        Some(value) if !value.is_null() && !value.is_undefined() => scope.to_bytes(value)?,
+        _ => Vec::new(),
+    };
+    let parent = node.parent();
+    let mut start = node;
+    while let Some(previous) = start.prev_sibling().filter(|p| p.is_text()) {
+        start = previous;
+    }
+    let js = ffi::js_of(scope);
+    let mut result = None;
+    let mut cursor = Some(start);
+    while let Some(current_node) = cursor.filter(|c| c.is_text()) {
+        cursor = current_node.next_sibling();
+        if !content.is_empty() && current_node == node {
+            let old = current(current_node).to_vec();
+            ffi::replace_text(current_node, &content);
+            ffi::record_character_data(js, current_node, &old);
+            result = Some(current_node);
+        } else {
+            current_node.detach();
+            ffi::orphan_node(js, current_node);
+        }
+    }
+    if !js.is_null() {
+        ffi::mark_mutated(js);
+        ffi::qcache_invalidate(js);
+        if let Some(parent) = parent {
+            ffi::mark_restyle_dirty(parent);
+        }
+    }
+    Ok(match result {
+        Some(text) => ffi::wrap_node(scope, text),
+        None => Value::null(),
+    })
+}
