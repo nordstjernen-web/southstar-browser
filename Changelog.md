@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Generated content and form-control text (CSS counters, ::before and
+  ::after content and quotes, text-transform, control sizing and inline
+  attributes, select and datalist rows and text input columns) moved from
+  layout.c to Rust (rust/layout-content), with identical layout.
 * Block layout (the per-box dispatch, block widths and auto margins, margin
   collapsing, float placement and clearance, multicol columns, heights,
   fieldset legends and legacy alignment) moved from layout.c to Rust
