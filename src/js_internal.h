@@ -489,8 +489,6 @@ void ns_canvas_install(JSContext *ctx, JSValueConst global, gboolean window);
 /* Performance API (js_perf.c) and the js.c helpers it shares. */
 void ns_bind_fn_if_not_callable(JSContext *ctx, JSValueConst obj, const char *name,
                                 JSCFunction *fn, int argc);
-JSValue ns_own_data_props_toJSON(JSContext *ctx, JSValueConst this_val,
-                                 int argc, JSValueConst *argv);
 gboolean ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
                              gboolean *was_set);
 
@@ -539,16 +537,10 @@ void ns_perf_add_resource_timed(ns_js *js, const ns_perf_resource_info *info,
 gboolean ns_perf_has_resource(ns_js *js, gconstpointer timeline,
                               const char *url, const char *initiator);
 void ns_perf_move_timeline(ns_js *js, gconstpointer from, gconstpointer to);
-JSValue ns_perf_new_performance_object(JSContext *ctx);
-void    ns_perf_set_performance_objects(JSContext *ctx, JSValueConst perf,
-                                        JSValue timing, JSValue navigation,
-                                        JSValue event_counts);
-JSValue ns_window_performance_time_origin_get(JSContext *ctx,
-                                              JSValueConst this_val,
-                                              int argc, JSValueConst *argv);
-JSValue ns_window_performance_object_get(JSContext *ctx,
-                                         JSValueConst this_val, int argc,
-                                         JSValueConst *argv, int magic);
+JSValue ns_make_performance_object(JSContext *ctx, ns_js *js,
+                                   gboolean include_memory);
+void ns_performance_extend_event_target(JSContext *ctx, JSValueConst global,
+                                        JSValueConst performance);
 JSValue ns_perf_supported_entry_types(JSContext *ctx);
 void ns_perf_install_entry_list(JSContext *ctx, JSValueConst global);
 JSValue ns_perf_observer_ctor(JSContext *ctx, JSValueConst this_val,
@@ -559,27 +551,8 @@ JSValue ns_perf_observer_disconnect(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv);
 JSValue ns_perf_observer_takeRecords(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
-JSValue ns_window_performance_now(JSContext *ctx, JSValueConst this_val,
-                                  int argc, JSValueConst *argv);
-JSValue ns_window_performance_mark(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv);
-JSValue ns_window_performance_measure(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv);
-JSValue ns_window_performance_clearMarks(JSContext *ctx, JSValueConst this_val,
-                                         int argc, JSValueConst *argv);
-JSValue ns_window_performance_clearMeasures(JSContext *ctx, JSValueConst this_val,
-                                            int argc, JSValueConst *argv);
-JSValue ns_window_performance_clearResourceTimings(JSContext *ctx,
-                                                   JSValueConst this_val,
-                                                   int argc, JSValueConst *argv);
-JSValue ns_window_performance_getEntries(JSContext *ctx, JSValueConst this_val,
-                                         int argc, JSValueConst *argv);
-JSValue ns_window_performance_getEntriesByName(JSContext *ctx, JSValueConst this_val,
-                                               int argc, JSValueConst *argv);
-JSValue ns_window_performance_getEntriesByType(JSContext *ctx, JSValueConst this_val,
-                                               int argc, JSValueConst *argv);
-JSValue ns_window_performance_memory_get(JSContext *ctx, JSValueConst this_val,
-                                         int argc, JSValueConst *argv);
+
+void ns_compression_install(JSContext *ctx, JSValueConst global);
 
 /* MutationObserver, IntersectionObserver and ResizeObserver
  * (rust/js-observers) and the js.c and layout helpers they call. */
@@ -1656,6 +1629,8 @@ JSValue  ns_window_get_selection(JSContext *ctx, JSValueConst this_val, int argc
 JSValue  ns_document_create_range(JSContext *ctx, JSValueConst this_val, int argc,
                                   JSValueConst *argv);
 JSValue  ns_native_range(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+JSValue  ns_static_range_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
 JSValue  ns_document_create_tree_walker(JSContext *ctx, JSValueConst this_val, int argc,
                                         JSValueConst *argv);
 JSValue  ns_document_create_node_iterator(JSContext *ctx, JSValueConst this_val, int argc,

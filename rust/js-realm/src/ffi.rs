@@ -15,3 +15,14 @@ pub unsafe extern "C" fn ns_js_realm_install(ctx: *mut JSContext, global: JSValu
         });
     }
 }
+
+#[cfg(feature = "quickjs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_hide_shared_array_buffer(ctx: *mut JSContext, global: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            crate::hide_shared_array_buffer(scope, &global);
+        });
+    }
+}

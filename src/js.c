@@ -27,7 +27,6 @@ JSClassID ns_new_class_id(JSClassID *pclass_id)
 #include <string.h>
 #include <time.h>
 
-#include <zlib.h>
 
 #include <cairo.h>
 #include <gio/gio.h>
@@ -162,8 +161,6 @@ static int ns_js_module_set_import_meta(JSContext *ctx,
 static void ns_attribute_map_release_owner(ns_js *js, ns_node *owner);
 static void ns_attribute_maps_release_all(ns_js *js);
 static const ns_node *ns_node_owner_iframe(const ns_node *n);
-static JSValue ns_make_performance_object(JSContext *ctx, ns_js *js,
-                                          gboolean include_memory);
 static void ns_js_process_pending_iframes(ns_js *js);
 static JSValue ns_element_get_list_ref(JSContext *ctx, JSValueConst this_val);
 static JSValue ns_proto_of(JSContext *ctx, JSValueConst global,
@@ -177,7 +174,6 @@ typedef struct ns_hostobj {
 static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
 static void ns_js_name_engine_members(JSContext *ctx);
 static void ns_js_link_interfaces(JSContext *ctx);
-static void ns_hide_shared_array_buffer(JSContext *ctx, JSValueConst global);
 static gboolean ns_js_image_loads_pending(const ns_js *js);
 static ns_node *ns_iframe_document_node(const ns_node *iframe);
 static void ns_js_purge_subtree_rafs(ns_js *js, ns_node *root);
@@ -8716,20 +8712,6 @@ ns_tr_deleteCell(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-static void
-ns_obj_adopt_global_proto(JSContext *ctx, JSValueConst obj, const char *iface)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue ctor = JS_GetPropertyStr(ctx, global, iface);
-    if (JS_IsObject(ctor)) {
-        JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-        if (JS_IsObject(proto)) JS_SetPrototype(ctx, obj, proto);
-        JS_FreeValue(ctx, proto);
-    }
-    JS_FreeValue(ctx, ctor);
-    JS_FreeValue(ctx, global);
-}
-
 static JSValue
 ns_media_request_video_frame_callback(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv)
@@ -10032,56 +10014,6 @@ ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
 }
 
 static gboolean
-ns_value_nodetype_in(JSContext *ctx, JSValueConst v, int32_t a, int32_t b)
-{
-    JSValue nt = JS_GetPropertyStr(ctx, v, "nodeType");
-    int32_t t = 0;
-    JS_ToInt32(ctx, &t, nt);
-    JS_FreeValue(ctx, nt);
-    return t == a || t == b;
-}
-
-static JSValue
-ns_static_range_ctor(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1 || !JS_IsObject(argv[0]))
-        return JS_ThrowTypeError(ctx,
-            "Failed to construct 'StaticRange': 1 argument required");
-    JSValue sc = JS_GetPropertyStr(ctx, argv[0], "startContainer");
-    JSValue ec = JS_GetPropertyStr(ctx, argv[0], "endContainer");
-    JSValue sov = JS_GetPropertyStr(ctx, argv[0], "startOffset");
-    JSValue eov = JS_GetPropertyStr(ctx, argv[0], "endOffset");
-    if (!JS_IsObject(sc) || !JS_IsObject(ec) ||
-        JS_IsUndefined(sov) || JS_IsUndefined(eov)) {
-        JS_FreeValue(ctx, sc); JS_FreeValue(ctx, ec);
-        JS_FreeValue(ctx, sov); JS_FreeValue(ctx, eov);
-        return JS_ThrowTypeError(ctx,
-            "Failed to construct 'StaticRange': a required member is undefined");
-    }
-    if (ns_value_nodetype_in(ctx, sc, 10, 2) ||
-        ns_value_nodetype_in(ctx, ec, 10, 2)) {
-        JS_FreeValue(ctx, sc); JS_FreeValue(ctx, ec);
-        JS_FreeValue(ctx, sov); JS_FreeValue(ctx, eov);
-        return ns_throw_dom_exception(ctx, "InvalidNodeTypeError", 24,
-            "StaticRange boundary must not be a DocumentType or Attr node");
-    }
-    int32_t so = 0, eo = 0;
-    JS_ToInt32(ctx, &so, sov); JS_FreeValue(ctx, sov);
-    JS_ToInt32(ctx, &eo, eov); JS_FreeValue(ctx, eov);
-    gboolean collapsed = (so == eo) &&
-        JS_VALUE_GET_PTR(sc) == JS_VALUE_GET_PTR(ec) && JS_IsObject(sc);
-    JSValue r = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, r, "startContainer", sc);
-    JS_SetPropertyStr(ctx, r, "startOffset",    JS_NewInt32(ctx, so));
-    JS_SetPropertyStr(ctx, r, "endContainer",   ec);
-    JS_SetPropertyStr(ctx, r, "endOffset",      JS_NewInt32(ctx, eo));
-    JS_SetPropertyStr(ctx, r, "collapsed",      JS_NewBool(ctx, collapsed));
-    return r;
-}
-
-static gboolean
 ns_global_has(JSContext *ctx, JSValueConst global, const char *name)
 {
     JSAtom atom = JS_NewAtom(ctx, name);
@@ -10098,19 +10030,6 @@ ns_set_if_missing(JSContext *ctx, JSValueConst global,
         JS_FreeValue(ctx, value);
     else
         JS_SetPropertyStr(ctx, global, name, value);
-}
-
-/* No document or worker here is cross-origin isolated (crossOriginIsolated
- * is always false), and the HTML standard removes SharedArrayBuffer from
- * the global object of every realm that is not. Shared memory a
- * WebAssembly.Memory creates still works. */
-static void
-ns_hide_shared_array_buffer(JSContext *ctx, JSValueConst global)
-{
-    JSAtom atom = JS_NewAtom(ctx, "SharedArrayBuffer");
-    if (JS_DeleteProperty(ctx, global, atom, 0) < 0)
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeAtom(ctx, atom);
 }
 
 static void
@@ -10204,169 +10123,6 @@ ns_install_window_compat(JSContext *ctx, JSValueConst global)
 
 }
 
-typedef struct {
-    z_stream  zs;
-    gboolean  decompress;
-    gboolean  inited;
-    gboolean  ended;
-} ns_zlib_codec;
-
-static JSClassID ns_zlib_class_id;
-
-#define NS_ZLIB_MAX_OUTPUT ((gsize)256u * 1024u * 1024u)
-
-static void
-ns_zlib_finalizer(JSRuntime *rt, JSValue val)
-{
-    (void)rt;
-    ns_zlib_codec *c = JS_GetOpaque(val, ns_zlib_class_id);
-    if (!c) return;
-    if (c->inited) {
-        if (c->decompress) inflateEnd(&c->zs);
-        else               deflateEnd(&c->zs);
-    }
-    g_free(c);
-}
-
-static JSClassDef ns_zlib_class = {
-    "NSZlibCodec",
-    .finalizer = ns_zlib_finalizer,
-};
-
-static int
-ns_zlib_window_bits(const char *format)
-{
-    if (!format) return 0;
-    if (strcmp(format, "gzip") == 0)        return 15 + 16;
-    if (strcmp(format, "deflate") == 0)     return 15;
-    if (strcmp(format, "deflate-raw") == 0) return -15;
-    return 0;
-}
-
-static JSValue
-ns_zlib_create(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx, "zlib codec: format and mode required");
-    const char *format = JS_ToCString(ctx, argv[0]);
-    if (!format) return JS_EXCEPTION;
-    int window_bits = ns_zlib_window_bits(format);
-    JS_FreeCString(ctx, format);
-    if (window_bits == 0)
-        return JS_ThrowTypeError(ctx, "Unsupported compression format");
-
-    gboolean decompress = JS_ToBool(ctx, argv[1]) > 0;
-    ns_zlib_codec *c = g_new0(ns_zlib_codec, 1);
-    c->decompress = decompress;
-    int rc = decompress
-        ? inflateInit2(&c->zs, window_bits)
-        : deflateInit2(&c->zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-                       window_bits, 8, Z_DEFAULT_STRATEGY);
-    if (rc != Z_OK) {
-        g_free(c);
-        return JS_ThrowInternalError(ctx, "zlib initialization failed");
-    }
-    c->inited = TRUE;
-
-    JSValue obj = JS_NewObjectClass(ctx, ns_zlib_class_id);
-    if (JS_IsException(obj)) {
-        if (decompress) inflateEnd(&c->zs);
-        else            deflateEnd(&c->zs);
-        g_free(c);
-        return obj;
-    }
-    JS_SetOpaque(obj, c);
-    return obj;
-}
-
-static JSValue
-ns_zlib_run(JSContext *ctx, ns_zlib_codec *c, const uint8_t *in,
-            size_t in_len, gboolean finish)
-{
-    if (!c || !c->inited)
-        return JS_ThrowTypeError(ctx, "zlib codec: invalid state");
-    if (c->ended)
-        return JS_NewArrayBufferCopy(ctx, (const uint8_t *)"", 0);
-
-    GByteArray *out = g_byte_array_new();
-    uint8_t buf[16384];
-    c->zs.next_in  = (Bytef *)in;
-    c->zs.avail_in = (uInt)in_len;
-    int flush = finish ? Z_FINISH : Z_NO_FLUSH;
-    int rc;
-    do {
-        c->zs.next_out  = buf;
-        c->zs.avail_out = sizeof(buf);
-        rc = c->decompress ? inflate(&c->zs, flush) : deflate(&c->zs, flush);
-        if (rc == Z_STREAM_ERROR || rc == Z_DATA_ERROR ||
-            rc == Z_NEED_DICT || rc == Z_MEM_ERROR) {
-            g_byte_array_free(out, TRUE);
-            return JS_ThrowTypeError(ctx, "zlib %s error",
-                                     c->decompress ? "decompression"
-                                                   : "compression");
-        }
-        size_t produced = sizeof(buf) - c->zs.avail_out;
-        if (produced > NS_ZLIB_MAX_OUTPUT - out->len) {
-            g_byte_array_free(out, TRUE);
-            return JS_ThrowRangeError(ctx, "zlib %s output too large",
-                                      c->decompress ? "decompression"
-                                                    : "compression");
-        }
-        if (produced) g_byte_array_append(out, buf, (guint)produced);
-        if (rc == Z_STREAM_END) { c->ended = TRUE; break; }
-        if (rc == Z_BUF_ERROR) break;
-    } while (c->zs.avail_out == 0);
-
-    JSValue ab = JS_NewArrayBufferCopy(ctx, out->data, out->len);
-    g_byte_array_free(out, TRUE);
-    return ab;
-}
-
-static ns_zlib_codec *
-ns_zlib_unwrap(JSContext *ctx, JSValueConst v)
-{
-    (void)ctx;
-    return ns_zlib_class_id ? JS_GetOpaque(v, ns_zlib_class_id) : NULL;
-}
-
-static JSValue
-ns_zlib_push(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx, "zlib push: codec and data required");
-    ns_zlib_codec *c = ns_zlib_unwrap(ctx, argv[0]);
-    if (!c) return JS_ThrowTypeError(ctx, "zlib push: invalid codec");
-
-    size_t off = 0, len = 0;
-    JSValue buf = JS_GetArrayBufferViewBuffer(ctx, argv[1], &off, &len);
-    if (JS_IsException(buf)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        size_t total = 0;
-        uint8_t *base = JS_GetArrayBuffer(ctx, &total, argv[1]);
-        if (!base) return JS_ThrowTypeError(ctx, "zlib push: ArrayBufferView expected");
-        return ns_zlib_run(ctx, c, base, total, FALSE);
-    }
-    size_t total = 0;
-    uint8_t *base = JS_GetArrayBuffer(ctx, &total, buf);
-    JS_FreeValue(ctx, buf);
-    if (!base || off + len > total)
-        return JS_ThrowInternalError(ctx, "zlib push: backing buffer unavailable");
-    return ns_zlib_run(ctx, c, base + off, len, FALSE);
-}
-
-static JSValue
-ns_zlib_finish(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx, "zlib finish: codec required");
-    ns_zlib_codec *c = ns_zlib_unwrap(ctx, argv[0]);
-    if (!c) return JS_ThrowTypeError(ctx, "zlib finish: invalid codec");
-    return ns_zlib_run(ctx, c, (const uint8_t *)"", 0, TRUE);
-}
-
 static void
 ns_define_element_unscopables(JSContext *ctx, JSValue proto)
 {
@@ -10391,60 +10147,6 @@ ns_define_element_unscopables(JSContext *ctx, JSValue proto)
     JS_FreeValue(ctx, gobj);
 }
 
-JSValue
-ns_own_data_props_toJSON(JSContext *ctx, JSValueConst this_val,
-                         int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue out = JS_NewObject(ctx);
-    if (JS_IsException(out)) return out;
-    JSPropertyEnum *tab = NULL;
-    uint32_t n = 0;
-    if (JS_GetOwnPropertyNames(ctx, &tab, &n, this_val,
-                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
-        return out;
-    for (uint32_t i = 0; i < n; i++) {
-        JSValue pv = JS_GetProperty(ctx, this_val, tab[i].atom);
-        if (JS_IsException(pv) || JS_IsFunction(ctx, pv)) {
-            JS_FreeValue(ctx, pv);
-            continue;
-        }
-        JS_DefinePropertyValue(ctx, out, tab[i].atom, pv, JS_PROP_C_W_E);
-    }
-    JS_FreePropertyEnum(ctx, tab, n);
-    return out;
-}
-
-static JSValue
-ns_window_performance_toJSON(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue out = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, out, "timeOrigin",
-                      JS_GetPropertyStr(ctx, this_val, "timeOrigin"));
-    JSValue timing = JS_GetPropertyStr(ctx, this_val, "timing");
-    if (JS_IsObject(timing)) JS_SetPropertyStr(ctx, out, "timing", timing);
-    else JS_FreeValue(ctx, timing);
-    JSValue nav = JS_GetPropertyStr(ctx, this_val, "navigation");
-    if (JS_IsObject(nav)) JS_SetPropertyStr(ctx, out, "navigation", nav);
-    else JS_FreeValue(ctx, nav);
-    return out;
-}
-
-static void
-ns_performance_extend_event_target(JSContext *ctx, JSValueConst global,
-                                   JSValueConst performance)
-{
-    JSValue et = JS_GetPropertyStr(ctx, global, "EventTarget");
-    if (JS_IsObject(et)) {
-        JSValue etp = JS_GetPropertyStr(ctx, et, "prototype");
-        if (JS_IsObject(etp)) JS_SetPrototype(ctx, performance, etp);
-        JS_FreeValue(ctx, etp);
-    }
-    JS_FreeValue(ctx, et);
-}
-
 static JSValue
 ns_proto_of(JSContext *ctx, JSValueConst global, const char *ctor_name)
 {
@@ -10453,115 +10155,6 @@ ns_proto_of(JSContext *ctx, JSValueConst global, const char *ctor_name)
         ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
     JS_FreeValue(ctx, ctor);
     return proto;
-}
-
-static void
-ns_install_performance_prototype(JSContext *ctx, JSValueConst global)
-{
-    JSValue proto = ns_proto_of(ctx, global, "Performance");
-    if (!JS_IsObject(proto)) {
-        JS_FreeValue(ctx, proto);
-        return;
-    }
-    ns_performance_extend_event_target(ctx, global, proto);
-    ns_bind_fn(ctx, proto, "now", ns_window_performance_now, 0);
-    ns_bind_fn(ctx, proto, "mark", ns_window_performance_mark, 1);
-    ns_bind_fn(ctx, proto, "measure", ns_window_performance_measure, 3);
-    ns_bind_fn(ctx, proto, "clearMarks", ns_window_performance_clearMarks, 1);
-    ns_bind_fn(ctx, proto, "clearMeasures", ns_window_performance_clearMeasures, 1);
-    ns_bind_fn(ctx, proto, "getEntries", ns_window_performance_getEntries, 0);
-    ns_bind_fn(ctx, proto, "getEntriesByName",
-               ns_window_performance_getEntriesByName, 2);
-    ns_bind_fn(ctx, proto, "getEntriesByType",
-               ns_window_performance_getEntriesByType, 1);
-    ns_bind_fn(ctx, proto, "clearResourceTimings",
-               ns_window_performance_clearResourceTimings, 0);
-    ns_bind_fn(ctx, proto, "setResourceTimingBufferSize", ns_event_noop, 1);
-    ns_bind_fn(ctx, proto, "toJSON", ns_window_performance_toJSON, 0);
-    /* Each window's performance object answers with its own document's
-     * time origin and timing objects. */
-    JSAtom atom = JS_NewAtom(ctx, "timeOrigin");
-    JS_DefinePropertyGetSet(ctx, proto, atom,
-        JS_NewCFunction2(ctx, ns_window_performance_time_origin_get,
-                         "get timeOrigin", 0, JS_CFUNC_generic, 0),
-        JS_UNDEFINED, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-    JS_FreeAtom(ctx, atom);
-    static const char *const objects[] = { "timing", "navigation",
-                                           "eventCounts" };
-    for (int i = 0; i < 3; i++) {
-        char *getter_name = g_strconcat("get ", objects[i], NULL);
-        atom = JS_NewAtom(ctx, objects[i]);
-        JS_DefinePropertyGetSet(ctx, proto, atom,
-            JS_NewCFunctionMagic(ctx, ns_window_performance_object_get,
-                                 getter_name, 0, JS_CFUNC_generic_magic, i),
-            JS_UNDEFINED, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, atom);
-        g_free(getter_name);
-    }
-    ns_set_tostring_tag(ctx, proto, "Performance");
-    JS_FreeValue(ctx, proto);
-}
-
-static JSValue
-ns_make_performance_object(JSContext *ctx, ns_js *js,
-                           gboolean include_memory)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-    ns_install_performance_prototype(ctx, global);
-    JSValue performance = ns_perf_new_performance_object(ctx);
-    ns_obj_adopt_global_proto(ctx, performance, "Performance");
-    double origin_real_ms = ns_js_time_origin_real_ms(js, ctx);
-
-    JSValue perf_timing = JS_NewObject(ctx);
-    const struct { const char *k; double relative_ms; gboolean present; }
-        timing_fields[] = {
-            {"navigationStart",0,TRUE},
-            {"unloadEventStart",0,FALSE},{"unloadEventEnd",0,FALSE},
-            {"redirectStart",0,FALSE},{"redirectEnd",0,FALSE},
-            {"fetchStart",0,TRUE},{"domainLookupStart",0,TRUE},
-            {"domainLookupEnd",js ? js->navigation_timing.domain_lookup_end_ms : 0,TRUE},
-            {"connectStart",js ? js->navigation_timing.connect_start_ms : 0,TRUE},
-            {"connectEnd",js ? js->navigation_timing.connect_end_ms : 0,TRUE},
-            {"secureConnectionStart",
-             js ? js->navigation_timing.secure_connection_start_ms : 0,
-             js && js->navigation_timing.secure_connection_start_ms > 0},
-            {"requestStart",js ? js->navigation_timing.request_start_ms : 0,TRUE},
-            {"responseStart",js ? js->navigation_timing.response_start_ms : 0,TRUE},
-            {"responseEnd",js ? js->navigation_timing.response_end_ms : 0,TRUE},
-            {"domLoading",0,FALSE},{"domInteractive",0,FALSE},
-            {"domContentLoadedEventStart",0,FALSE},
-            {"domContentLoadedEventEnd",0,FALSE},{"domComplete",0,FALSE},
-            {"loadEventStart",0,FALSE},{"loadEventEnd",0,FALSE},
-        };
-    for (gsize i = 0; i < G_N_ELEMENTS(timing_fields); i++) {
-        gint64 value = timing_fields[i].present && js
-            ? (gint64)floor(origin_real_ms + timing_fields[i].relative_ms)
-            : 0;
-        JS_SetPropertyStr(ctx, perf_timing, timing_fields[i].k,
-                          JS_NewInt64(ctx, value));
-    }
-    ns_bind_fn(ctx, perf_timing, "toJSON", ns_own_data_props_toJSON, 0);
-    ns_obj_adopt_global_proto(ctx, perf_timing, "PerformanceTiming");
-
-    JSValue perf_nav = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, perf_nav, "type", JS_NewInt32(ctx, 0));
-    JS_SetPropertyStr(ctx, perf_nav, "redirectCount", JS_NewInt32(ctx, 0));
-    ns_bind_fn(ctx, perf_nav, "toJSON", ns_own_data_props_toJSON, 0);
-    ns_obj_adopt_global_proto(ctx, perf_nav, "PerformanceNavigation");
-    ns_perf_set_performance_objects(ctx, performance, perf_timing, perf_nav,
-                                    JS_NewObject(ctx));
-
-    if (include_memory) {
-        JSAtom atom = JS_NewAtom(ctx, "memory");
-        JSValue getter = JS_NewCFunction2(ctx,
-            ns_window_performance_memory_get,
-            "get memory", 0, JS_CFUNC_generic, 0);
-        JS_DefinePropertyGetSet(ctx, performance, atom, getter, JS_UNDEFINED,
-                                JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, atom);
-    }
-    JS_FreeValue(ctx, global);
-    return performance;
 }
 
 static void
@@ -12433,8 +12026,6 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_services_install_rtc(ctx, global);
     ns_bind_ctor(ctx, global, "Notification",   ns_services_notification_ctor, 2);
     ns_worker_install_constructor(ctx, global);
-    ns_new_class_id(&ns_zlib_class_id);
-    JS_NewClass(js->rt, ns_zlib_class_id, &ns_zlib_class);
     ns_js_net_install_sockets(ctx, global);
 
 
@@ -13148,9 +12739,7 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
     }
     ns_bind_ctor(ctx, global, "XMLSerializer", ns_xml_serializer_ctor, 0);
 
-    ns_bind_fn(ctx, global, "__ns_zlib_create", ns_zlib_create, 2);
-    ns_bind_fn(ctx, global, "__ns_zlib_push",   ns_zlib_push,   2);
-    ns_bind_fn(ctx, global, "__ns_zlib_finish", ns_zlib_finish, 1);
+    ns_compression_install(ctx, global);
     ns_bind_fn(ctx, global, "__ndNativeRange",  ns_native_range, 0);
 
     ns_install_hasinstance(ctx, global);

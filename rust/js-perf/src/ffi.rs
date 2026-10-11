@@ -126,12 +126,6 @@ unsafe extern "C" {
     fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_log_line(js: *const NsJs, line: *const c_char);
-    fn ns_own_data_props_toJSON(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -195,10 +189,6 @@ pub(crate) fn log_line(js: Js, line: &[u8]) {
     if let Ok(line) = CString::new(line) {
         unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
     }
-}
-
-pub(crate) fn own_data_props_to_json(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "toJSON", 0, ns_own_data_props_toJSON)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -407,62 +397,34 @@ pub unsafe extern "C" fn ns_perf_move_timeline(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_new_performance_object(ctx: *mut JSContext) -> JSValue {
+pub unsafe extern "C" fn ns_make_performance_object(
+    ctx: *mut JSContext,
+    js: *const NsJs,
+    include_memory: c_int,
+) -> JSValue {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            quickjs::into_raw(crate::new_performance_object(scope))
+            quickjs::into_raw(crate::object::make_performance_object(
+                scope,
+                Js::of(js),
+                include_memory != 0,
+            ))
         })
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_set_performance_objects(
+pub unsafe extern "C" fn ns_performance_extend_event_target(
     ctx: *mut JSContext,
-    perf: JSValue,
-    timing: JSValue,
-    navigation: JSValue,
-    event_counts: JSValue,
+    global: JSValue,
+    performance: JSValue,
 ) {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            let objects = [
-                quickjs::take_value(scope, timing),
-                quickjs::take_value(scope, navigation),
-                quickjs::take_value(scope, event_counts),
-            ];
-            let perf = quickjs::borrow_value(scope, perf);
-            crate::set_performance_objects(scope, &perf, objects);
+            let global = quickjs::borrow_value(scope, global);
+            let performance = quickjs::borrow_value(scope, performance);
+            crate::object::extend_event_target(scope, &global, &performance);
         });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_performance_time_origin_get(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::time_origin_get) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_performance_object_get(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    magic: c_int,
-) -> JSValue {
-    let which = match magic {
-        0 => 0,
-        1 => 1,
-        _ => 2,
-    };
-    unsafe {
-        quickjs::call_native(ctx, this_val, argc, argv, |scope, this, _| {
-            crate::object_get(scope, this, which)
-        })
     }
 }
 
@@ -506,14 +468,4 @@ export_native! {
     ns_perf_observer_observe => crate::observe,
     ns_perf_observer_disconnect => crate::disconnect,
     ns_perf_observer_takeRecords => crate::take_records,
-    ns_window_performance_now => crate::performance_now,
-    ns_window_performance_mark => crate::mark,
-    ns_window_performance_measure => crate::measure,
-    ns_window_performance_clearMarks => crate::clear_marks,
-    ns_window_performance_clearMeasures => crate::clear_measures,
-    ns_window_performance_clearResourceTimings => crate::clear_resource_timings,
-    ns_window_performance_getEntries => crate::get_entries,
-    ns_window_performance_getEntriesByName => crate::get_entries_by_name,
-    ns_window_performance_getEntriesByType => crate::get_entries_by_type,
-    ns_window_performance_memory_get => crate::memory_get,
 }

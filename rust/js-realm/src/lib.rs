@@ -25,6 +25,10 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
     let _ = scope.set(global, "ShadowRealm", ctor);
 }
 
+pub fn hide_shared_array_buffer(scope: &mut Scope<'_>, global: &Value) {
+    let _ = scope.delete(global, "SharedArrayBuffer");
+}
+
 fn construct(scope: &mut Scope<'_>, new_target: &Value, _args: &[Value]) -> Result<Value, Value> {
     let Some(realm) = scope.new_detached_realm() else {
         return Err(scope.range_error("out of memory"));

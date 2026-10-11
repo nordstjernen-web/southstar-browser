@@ -45,6 +45,12 @@ unsafe extern "C" {
     -> GBoolean;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
+    fn ns_throw_dom_exception(
+        ctx: *mut JSContext,
+        name: *const c_char,
+        code: c_int,
+        message: *const c_char,
+    ) -> JSValue;
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -113,6 +119,20 @@ pub(crate) fn parse_html(source: &[u8]) -> Option<Element> {
     unsafe { Node::from_ptr(ns_html_parse(source.as_ptr(), -1)) }
 }
 
+pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
+    let name = CString::new(name).unwrap_or_default();
+    let message = CString::new(message).unwrap_or_default();
+    unsafe {
+        ns_throw_dom_exception(
+            quickjs::raw_context(scope),
+            name.as_ptr(),
+            code,
+            message.as_ptr(),
+        )
+    };
+    quickjs::take_exception(scope)
+}
+
 unsafe fn native(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -151,6 +171,16 @@ pub unsafe extern "C" fn ns_native_range(
     argv: *mut JSValue,
 ) -> JSValue {
     unsafe { native(ctx, this_val, argc, argv, crate::range::native_range) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_static_range_ctor(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { native(ctx, this_val, argc, argv, crate::static_range::construct) }
 }
 
 #[unsafe(no_mangle)]

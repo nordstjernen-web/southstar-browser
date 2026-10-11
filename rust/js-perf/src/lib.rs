@@ -4,6 +4,7 @@
 
 mod entry;
 mod ffi;
+mod object;
 mod timeline;
 
 use std::cell::{Cell, RefCell};
@@ -111,8 +112,7 @@ fn bind_if_not_callable(
 }
 
 fn bind_to_json(scope: &mut Scope<'_>, object: &Value) {
-    let function = ffi::own_data_props_to_json(scope);
-    set(scope, object, "toJSON", function);
+    bind(scope, object, "toJSON", 0, object::own_data_props_to_json);
 }
 
 fn adopt_global_prototype(scope: &mut Scope<'_>, object: &Value, interface: &str) {

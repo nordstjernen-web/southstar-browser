@@ -6,6 +6,7 @@ mod ffi;
 mod iterator;
 mod range;
 mod selection;
+mod static_range;
 mod walker;
 
 use southstar_dom::Node;
