@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The Windows launcher (southstar-launcher.exe: the console handoff,
+  starting app\southstar-ui.exe, and the extract-the-ZIP and missing-runtime
+  messages) moved to Rust (rust/launcher), and the embedding shim's
+  ns_app_self_exe stub moved into rust/static.
 * The Element wrapper class and the generic host-object class moved onto the
   engine-neutral host classes, and js.c's DOM function tables and class
   installers moved to rust/js-interfaces; js.c is down to about 1,200 lines.
