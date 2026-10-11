@@ -62,104 +62,25 @@ struct ns_js {
     JSRuntime    *rt;
     JSContext    *ctx;
     JSContext    *main_realm_ctx;
-    JSContext    *module_ctx;
     GPtrArray    *frame_ctxs;
-    ns_js_log_cb  log_cb;
-    gpointer      log_user_data;
-    ns_js_mutated_cb mut_cb;
-    gpointer      mut_user_data;
-    ns_js_navigate_cb nav_cb;
-    gpointer      nav_user_data;
-    ns_js_download_cb download_cb;
-    gpointer      download_user_data;
-    ns_js_scroll_to_cb scroll_to_cb;
-    gpointer      scroll_to_user_data;
-    ns_js_fragment_nav_cb fragment_nav_cb;
-    gpointer      fragment_nav_user_data;
-    ns_js_form_submit_cb form_submit_cb;
-    gpointer      form_submit_user_data;
-    ns_js_soft_nav_cb soft_nav_cb;
-    gpointer      soft_nav_user_data;
-    ns_js_repaint_cb repaint_cb;
-    gpointer      repaint_user_data;
-    ns_js_layout_flush_cb layout_flush_cb;
-    gpointer      layout_flush_user_data;
-    ns_js_viewport_scroll_cb viewport_scroll_cb;
-    gpointer      viewport_scroll_user_data;
-    gboolean    (*load_delay_cb)(gpointer user_data);
-    gpointer      load_delay_user_data;
-    gboolean      in_layout_flush;
-    guint64       task_epoch;
-    ns_js_clipboard_write_cb clipboard_write_cb;
-    ns_js_selection_cmd_cb selection_cmd_cb;
-    gpointer      selection_cmd_user_data;
-    gpointer      clipboard_write_user_data;
-    ns_js_window_action_cb window_action_cb;
-    gpointer      window_action_user_data;
     char         *current_url;
-    char         *document_origin;
     ns_node       *current_doc;
-    gpointer       realm_scope_base;
-    /* While a frame's code runs, current_url is the frame's URL and the
-     * top-level document's URL is held in the slot this points at. */
-    char         **top_url_slot;
-    ns_node       *current_script;
-    char         *early_inject_src;
-    gboolean      mutated;
-    GMainContext *main_context;
-    ns_worker_host *worker_host;
     ns_node      *raf_frame_ctx;
     JSValue       pristine_promise;
-    GHashTable   *style_table;
     const struct ns_box *layout_root;
-    GHashTable   *box_lookup_cache;
-    const void   *box_lookup_cache_root;
-    const void   *box_lookup_pending_root;
-    int           box_lookup_pending_count;
-    gboolean      autofocus_processed;
-    const ns_node *active_modal;
-    gint64         user_activation_us;
-    gboolean       user_ever_activated;
-    ns_image_cache *image_cache;
-    struct ns_anim *anim;
     GHashTable   *pinned_wrappers_set;
     char         *cookie_value;
     GHashTable   *cookie_buckets;
     char         *partition_key;
     guint64       opaque_counter;
-    char         *referrer;
-    int           ready_state;
-    GHashTable   *doc_ready_states;
-    GHashTable   *window_forwards;
-    GHashTable   *window_outwards;
-    GQueue       *message_tasks;
-    JSValue       navigator_brand;   /* WeakSet of the frame realms'
-                                        navigators the Navigator getters
-                                        accept */
-    guint         message_task_source;
-    gint64        eval_deadline_us;
-    gint64        js_monitor_deadline_us;
+    JSValue       navigator_brand;
     gboolean      halted;
-    gboolean      in_pump;
-    int           eval_depth;
-    int           iframe_load_depth;
-    gint64        last_pump_us;
-    gint64        last_orphan_sweep_us;
-    int           dispatch_depth;
-    int           callback_depth;
-    guint         observer_tick_source;
-    JSValue       iframe_doc;
-    int           iframe_doc_set;
     ns_csp *csp;
-    char         *selection_text;
-    gboolean      selection_has_range;
-    double        selection_x, selection_y, selection_w, selection_h;
     gint64        time_origin_us;
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
     const ns_node *ce_main_doc;
     GHashTable   *platform_globals;
-    int           ignore_destructive_writes;
     JSValue       form_data_helper;
     int           form_data_helper_set;
     JSValue       proto_node;
@@ -179,6 +100,7 @@ struct ns_js {
     JSValue       proto_document;
     GHashTable   *per_tag_protos;
     int           dom_protos_set;
+    void         *runtime;
 };
 
 static inline ns_js *
@@ -1861,20 +1783,32 @@ typedef enum {
 
 ns_js   *ns_active_js(void);
 void     ns_set_active_js(ns_js *js);
-void     ns_js_deadlines(const ns_js *js, gint64 *eval_deadline_us,
-                         gint64 *monitor_deadline_us);
 ns_js   *ns_js_alloc(void);
 void     ns_js_set_time_origin(ns_js *js, gint64 origin_us, double origin_real_ms);
 gboolean ns_js_create_runtime(ns_js *js, size_t memory_limit, size_t stack_size,
                               JSInterruptHandler *interrupt,
                               JSHostPromiseRejectionTracker *rejection_tracker);
 gboolean ns_js_create_context(ns_js *js);
-void     ns_js_set_callbacks(ns_js *js, ns_js_log_cb log_cb, gpointer log_user_data,
-                             ns_js_mutated_cb mut_cb, gpointer mut_user_data,
-                             ns_js_navigate_cb nav_cb, gpointer nav_user_data);
-void     ns_js_init_tables(ns_js *js, GMainContext *main_context, gboolean page);
-void     ns_js_set_worker_host(ns_js *js, ns_worker_host *host,
-                               const char *partition_key);
+void     ns_js_init_tables(ns_js *js, gboolean page);
+void     ns_js_set_partition_key(ns_js *js, const char *partition_key);
+
+typedef struct {
+    JSRuntime     **rt;
+    JSContext     **ctx;
+    JSContext     **main_realm_ctx;
+    char          **current_url;
+    ns_node       **current_doc;
+    ns_node       **raf_frame_ctx;
+    const ns_node **ce_main_doc;
+    gboolean       *halted;
+    GHashTable    **pinned_wrappers_set;
+} ns_js_slots;
+
+void    *ns_js_runtime_state(const ns_js *js);
+void     ns_js_set_runtime_state(ns_js *js, void *state);
+void     ns_js_slots_of(ns_js *js, ns_js_slots *out);
+void     ns_js_release_wrapper(ns_js *js, ns_node *node);
+GHashTable *ns_js_snapshot_globals(ns_js *js);
 JSValue  ns_js_register_class(JSContext *ctx, int which);
 JSValue  ns_js_new_window_named(JSContext *ctx);
 void     ns_js_set_proto_document(ns_js *js, JSValue proto);
@@ -1886,9 +1820,7 @@ JSValue  ns_worker_compile(JSContext *ctx, const char *src, gsize len,
                            gboolean *parse_error);
 GHashTable *ns_js_pinned_wrappers(const ns_js *js);
 void     ns_js_detach_wrapper(ns_js *js, ns_node *node, gboolean release);
-void     ns_js_free_doc_ready_states(ns_js *js);
 void     ns_js_free_page_strings(ns_js *js);
-void     ns_js_stop_observer_tick(ns_js *js);
 void     ns_js_free_pinned_set(ns_js *js);
 void     ns_js_free_realm_values(ns_js *js);
 void     ns_js_free_platform_globals(ns_js *js);

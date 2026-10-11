@@ -2,7 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) mod exports;
+pub(crate) mod glue;
 pub(crate) mod natives;
+pub(crate) mod scopes;
+pub(crate) mod state;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -14,6 +18,7 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::worker::{self, EvalStatus};
 use crate::{Element, interrupt, page, teardown};
+use state::{DataFn, LogFn, NavigateFn, PageState, Slots};
 
 pub(crate) type Native = JSCFunction;
 pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
@@ -86,11 +91,11 @@ pub(crate) struct WorkerSetup<'a> {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Callbacks {
-    log: *const c_void,
+    log: Option<LogFn>,
     log_data: *mut c_void,
-    mutated: *const c_void,
+    mutated: Option<DataFn>,
     mutated_data: *mut c_void,
-    navigate: *const c_void,
+    navigate: Option<NavigateFn>,
     navigate_data: *mut c_void,
 }
 
@@ -130,19 +135,13 @@ unsafe extern "C" {
         rejection_tracker: RejectionTrackerFn,
     ) -> GBoolean;
     fn ns_js_create_context(js: *mut NsJs) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_set_callbacks(
-        js: *mut NsJs,
-        log_cb: *const c_void,
-        log_user_data: *mut c_void,
-        mut_cb: *const c_void,
-        mut_user_data: *mut c_void,
-        nav_cb: *const c_void,
-        nav_user_data: *mut c_void,
-    );
-    fn ns_js_init_tables(js: *mut NsJs, main_context: *mut GMainContext, page: GBoolean);
-    fn ns_js_set_worker_host(js: *mut NsJs, host: *mut WorkerHost, partition_key: *const c_char);
     fn g_main_context_default() -> *mut GMainContext;
+    fn ns_js_init_tables(js: *mut NsJs, page: GBoolean);
+    fn ns_js_set_partition_key(js: *mut NsJs, partition_key: *const c_char);
+    fn ns_js_runtime_state(js: *const NsJs) -> *mut c_void;
+    fn ns_js_set_runtime_state(js: *mut NsJs, state: *mut c_void);
+    fn ns_js_slots_of(js: *mut NsJs, out: *mut Slots);
+    fn g_source_remove(id: c_uint) -> GBoolean;
     fn ns_js_mutation_init(js: *mut NsJs);
     fn ns_storage_init(js: *mut NsJs);
     fn ns_media_init(js: *mut NsJs);
@@ -170,11 +169,8 @@ unsafe extern "C" {
         opaque: *mut c_void,
     );
     fn ns_worker_log_cb(line: *const c_char, user_data: *mut c_void);
+    fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
 
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_halt(js: *mut NsJs);
-    fn ns_js_deadlines(js: *const NsJs, eval_deadline_us: *mut i64, monitor_deadline_us: *mut i64);
-    fn ns_js_worker_host(js: *const NsJs) -> *mut WorkerHost;
     fn ns_worker_host_closing(host: *const WorkerHost) -> GBoolean;
 
     fn ns_services_window_navigator(ctx: *mut JSContext) -> JSValue;
@@ -212,15 +208,12 @@ unsafe extern "C" {
 
     fn ns_js_pinned_wrappers(js: *const NsJs) -> *mut GHashTable;
     fn ns_js_detach_wrapper(js: *mut NsJs, node: *mut NsNode, release: GBoolean);
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_mutation_teardown(js: *mut NsJs);
     fn ns_node_free(node: *mut NsNode);
 
-    fn ns_js_free_doc_ready_states(js: *mut NsJs);
     fn ns_js_free_page_strings(js: *mut NsJs);
-    fn ns_js_stop_observer_tick(js: *mut NsJs);
     fn ns_js_free_pinned_set(js: *mut NsJs);
     fn ns_js_free_realm_values(js: *mut NsJs);
     fn ns_js_free_platform_globals(js: *mut NsJs);
@@ -263,7 +256,6 @@ unsafe extern "C" {
     fn ns_css_set_fullscreen_node(node: *const NsNode);
     fn ns_js_frames_teardown(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
-    fn ns_js_drop_message_tasks(js: *mut NsJs);
     fn ns_js_clear_frame_clocks(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
     fn ns_dispatch_teardown(js: *mut NsJs);
@@ -284,11 +276,83 @@ pub(crate) struct Js(*mut NsJs);
 
 impl Js {
     fn alloc() -> Js {
-        Js(unsafe { ns_js_alloc() })
+        let js = Js(unsafe { ns_js_alloc() });
+        let mut slots = Slots::empty();
+        unsafe { ns_js_slots_of(js.0, &mut slots) };
+        let state = Box::into_raw(Box::new(PageState::new(slots)));
+        unsafe { ns_js_set_runtime_state(js.0, state.cast()) };
+        js
+    }
+
+    pub(crate) fn of(js: *const NsJs) -> Option<Js> {
+        (!js.is_null()).then_some(Js(js.cast_mut()))
+    }
+
+    pub(crate) fn of_context(ctx: *mut JSContext) -> Option<Js> {
+        if ctx.is_null() {
+            return None;
+        }
+        Js::of(unsafe { JS_GetContextOpaque(ctx) }.cast())
+    }
+
+    pub(crate) fn ptr(self) -> *mut NsJs {
+        self.0
+    }
+
+    pub(crate) fn st(self) -> &'static PageState {
+        unsafe { &*ns_js_runtime_state(self.0).cast::<PageState>() }
+    }
+
+    pub fn ctx(self) -> *mut JSContext {
+        unsafe { *self.st().slots.ctx }
+    }
+
+    pub fn set_ctx(self, ctx: *mut JSContext) {
+        unsafe { *self.st().slots.ctx = ctx };
+    }
+
+    pub fn main_realm(self) -> *mut JSContext {
+        unsafe { *self.st().slots.main_realm_ctx }
+    }
+
+    pub fn rt(self) -> *mut c_void {
+        unsafe { *self.st().slots.rt }
+    }
+
+    pub fn current_url_raw(self) -> *mut c_char {
+        unsafe { *self.st().slots.current_url }
+    }
+
+    pub fn set_current_url_raw(self, url: *mut c_char) {
+        unsafe { *self.st().slots.current_url = url };
+    }
+
+    pub fn current_doc(self) -> *mut NsNode {
+        unsafe { *self.st().slots.current_doc }
+    }
+
+    pub fn set_current_doc(self, doc: *mut NsNode) {
+        unsafe { *self.st().slots.current_doc = doc };
+    }
+
+    pub fn frame(self) -> *mut NsNode {
+        unsafe { *self.st().slots.raf_frame_ctx }
+    }
+
+    pub fn set_frame(self, frame: *mut NsNode) {
+        unsafe { *self.st().slots.raf_frame_ctx = frame };
+    }
+
+    pub fn set_ce_main_doc(self, doc: *const NsNode) {
+        unsafe { *self.st().slots.ce_main_doc = doc };
+    }
+
+    pub fn pinned_set(self) -> *mut GHashTable {
+        unsafe { *self.st().slots.pinned_wrappers_set }
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let ctx = unsafe { ns_js_main_context(self.0) };
+        let ctx = self.ctx();
         if ctx.is_null() {
             return None;
         }
@@ -333,21 +397,19 @@ impl Js {
     }
 
     pub fn set_callbacks(self, callbacks: Callbacks) {
-        unsafe {
-            ns_js_set_callbacks(
-                self.0,
-                callbacks.log,
-                callbacks.log_data,
-                callbacks.mutated,
-                callbacks.mutated_data,
-                callbacks.navigate,
-                callbacks.navigate_data,
-            )
-        };
+        let state = self.st();
+        state.log.set(callbacks.log, callbacks.log_data);
+        state
+            .mutated_hook
+            .set(callbacks.mutated, callbacks.mutated_data);
+        state
+            .navigate
+            .set(callbacks.navigate, callbacks.navigate_data);
     }
 
     pub fn init_tables(self, main_context: *mut GMainContext, page: bool) {
-        unsafe { ns_js_init_tables(self.0, main_context, glib::GBoolean::from(page)) };
+        self.st().main_context.set(main_context);
+        unsafe { ns_js_init_tables(self.0, glib::GBoolean::from(page)) };
     }
 
     pub fn init_page_states(self) {
@@ -363,37 +425,30 @@ impl Js {
             .origin
             .filter(|origin| !origin.is_empty())
             .map_or(ptr::null(), CStr::as_ptr);
-        unsafe { ns_js_set_worker_host(self.0, setup.host, partition) };
-        let log: unsafe extern "C" fn(*const c_char, *mut c_void) = ns_worker_log_cb;
+        self.st().worker_host.set(setup.host);
+        unsafe { ns_js_set_partition_key(self.0, partition) };
         self.set_callbacks(Callbacks {
-            log: log as *const c_void,
+            log: Some(ns_worker_log_cb),
             log_data: setup.host.cast(),
-            mutated: ptr::null(),
+            mutated: None,
             mutated_data: ptr::null_mut(),
-            navigate: ptr::null(),
+            navigate: None,
             navigate_data: ptr::null_mut(),
         });
         self.init_tables(setup.context, false);
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.0) != 0 }
+        unsafe { *self.st().slots.halted != 0 }
     }
 
     pub fn halt(self) {
-        unsafe { ns_js_halt(self.0) };
+        unsafe { *self.st().slots.halted = glib::TRUE };
     }
 
     pub fn worker_closing(self) -> bool {
-        let host = unsafe { ns_js_worker_host(self.0) };
+        let host = self.st().worker_host.get();
         !host.is_null() && unsafe { ns_worker_host_closing(host) != 0 }
-    }
-
-    pub fn deadlines(self) -> (i64, i64) {
-        let mut eval_deadline = 0;
-        let mut monitor_deadline = 0;
-        unsafe { ns_js_deadlines(self.0, &mut eval_deadline, &mut monitor_deadline) };
-        (eval_deadline, monitor_deadline)
     }
 
     pub fn set_proto_document(self, proto: Value) {
@@ -462,8 +517,8 @@ impl Js {
     }
 
     pub fn current_document(self) -> Option<*const NsNode> {
-        let doc = unsafe { ns_js_current_document(self.0) };
-        (!doc.is_null()).then_some(doc)
+        let doc = self.current_doc();
+        (!doc.is_null()).then_some(doc.cast_const())
     }
 
     pub fn orphans_snapshot(self) -> Option<Vec<Option<Element>>> {
@@ -492,7 +547,7 @@ impl Js {
     }
 
     pub fn free_doc_ready_states(self) {
-        unsafe { ns_js_free_doc_ready_states(self.0) };
+        self.st().doc_ready_states.borrow_mut().clear();
     }
 
     pub fn teardown_document_states(self) {
@@ -528,7 +583,10 @@ impl Js {
     }
 
     pub fn stop_observer_tick(self) {
-        unsafe { ns_js_stop_observer_tick(self.0) };
+        let source = self.st().observer_tick_source.replace(0);
+        if source != 0 {
+            unsafe { g_source_remove(source) };
+        }
     }
 
     pub fn teardown_loaders_and_attributes(self) {
@@ -587,7 +645,9 @@ impl Js {
             ns_css_set_fullscreen_node(ptr::null());
             ns_js_frames_teardown(self.0);
             ns_window_links_clear(self.0, glib::TRUE);
-            ns_js_drop_message_tasks(self.0);
+        }
+        crate::scheduling::drop_message_tasks(self);
+        unsafe {
             ns_js_clear_frame_clocks(self.0, glib::TRUE);
         }
     }
@@ -604,7 +664,11 @@ impl Js {
     }
 
     pub fn free_engine(self) {
+        let state = unsafe { ns_js_runtime_state(self.0) }.cast::<PageState>();
         unsafe { ns_js_free_engine(self.0) };
+        if !state.is_null() {
+            drop(unsafe { Box::from_raw(state) });
+        }
     }
 }
 
@@ -846,11 +910,11 @@ unsafe fn c_text<'a>(p: *const c_char) -> Option<&'a CStr> {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_new(
-    log_cb: *const c_void,
+    log_cb: Option<LogFn>,
     log_user_data: *mut c_void,
-    mut_cb: *const c_void,
+    mut_cb: Option<DataFn>,
     mut_user_data: *mut c_void,
-    nav_cb: *const c_void,
+    nav_cb: Option<NavigateFn>,
     nav_user_data: *mut c_void,
     navigation_timing: *const NavigationTiming,
 ) -> *mut NsJs {

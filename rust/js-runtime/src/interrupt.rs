@@ -2,9 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use crate::budget::MONITOR_LIMIT_US;
 use crate::ffi::{self, Js};
 
-const MONITOR_LIMIT_S: i64 = 60;
 const STACK_LIMIT: usize = 5 * 1024 * 1024;
 
 pub(crate) fn should_interrupt(js: Js) -> bool {
@@ -16,14 +16,17 @@ pub(crate) fn should_interrupt(js: Js) -> bool {
         return true;
     }
     let now = ffi::monotonic_us();
-    let (eval_deadline, monitor_deadline) = js.deadlines();
+    let state = js.st();
+    let monitor_deadline = state.monitor_deadline_us.get();
     if monitor_deadline != 0 && now > monitor_deadline {
         js.halt();
         ffi::warn(&format!(
-            "[js] monitor: page JavaScript ran longer than {MONITOR_LIMIT_S} s — halting it"
+            "[js] monitor: page JavaScript ran longer than {} s — halting it",
+            MONITOR_LIMIT_US / 1_000_000
         ));
         return true;
     }
+    let eval_deadline = state.eval_deadline_us.get();
     eval_deadline != 0 && now > eval_deadline
 }
 

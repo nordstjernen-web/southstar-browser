@@ -1018,6 +1018,10 @@ pub mod quickjs {
         raw.tag == super::TAG_OBJECT
     }
 
+    pub fn raw_is_exception(raw: JSValue) -> bool {
+        raw.tag == super::TAG_EXCEPTION
+    }
+
     pub const UNDEFINED: JSValue = super::UNDEFINED;
 
     pub const EXCEPTION: JSValue = super::mkval(super::TAG_EXCEPTION, 0);
@@ -1218,6 +1222,23 @@ pub mod quickjs {
         if size >= bytes.len() {
             unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len()) };
         }
+    }
+
+    pub fn array_buffer_data(scope: &mut Scope<'_>, value: &Value) -> Option<(*mut u8, usize)> {
+        let mut size = 0usize;
+        let data = unsafe { JS_GetArrayBuffer(scope.ctx, &mut size, value.raw) };
+        (!data.is_null()).then_some((data, size))
+    }
+
+    pub fn to_index(scope: &mut Scope<'_>, value: &Value) -> Result<u64, Value> {
+        unsafe extern "C" {
+            fn JS_ToIndex(ctx: *mut JSContext, plen: *mut u64, val: JSValue) -> c_int;
+        }
+        let mut index = 0u64;
+        if unsafe { JS_ToIndex(scope.ctx, &mut index, value.raw) } < 0 {
+            return Err(scope.exception());
+        }
+        Ok(index)
     }
 
     pub struct TypedArrayParts {

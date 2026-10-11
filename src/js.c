@@ -76,8 +76,6 @@
       { .getset = { .get = { .getter_magic = fgetter }, \
                     .set = { .setter_magic = fsetter } } } }
 
-#define NS_JS_BODY_BYTES_MAX (32u * 1024u * 1024u)
-
 static GPrivate g_active_js_key = G_PRIVATE_INIT(NULL);
 
 ns_js *
@@ -92,71 +90,6 @@ ns_set_active_js(ns_js *js)
     g_private_set(&g_active_js_key, js);
 }
 
-#define NS_TRANSIENT_ACTIVATION_US (5 * G_USEC_PER_SEC)
-
-void
-ns_js_note_user_activation(ns_js *js)
-{
-    if (!js) return;
-    js->user_activation_us = g_get_monotonic_time();
-    js->user_ever_activated = TRUE;
-}
-
-gboolean
-ns_js_has_transient_activation(ns_js *js)
-{
-    return js && js->user_activation_us != 0 &&
-           g_get_monotonic_time() - js->user_activation_us <=
-               NS_TRANSIENT_ACTIVATION_US;
-}
-
-gboolean
-ns_js_user_activation_state(ns_js *js, gboolean *ever_activated)
-{
-    *ever_activated = js && js->user_ever_activated;
-    return ns_js_has_transient_activation(js);
-}
-
-int
-ns_js_clipboard_write(ns_js *js, const char *text)
-{
-    if (!js || !js->clipboard_write_cb) return -1;
-    return js->clipboard_write_cb(text, js->clipboard_write_user_data) ? 1 : 0;
-}
-
-gboolean
-ns_js_selection_copyable(const ns_js *js)
-{
-    return js && js->selection_has_range && js->clipboard_write_cb != NULL;
-}
-
-gboolean
-ns_js_copy_selection(ns_js *js)
-{
-    if (!ns_js_selection_copyable(js)) return FALSE;
-    return js->clipboard_write_cb(js->selection_text ? js->selection_text : "",
-                                  js->clipboard_write_user_data);
-}
-
-gboolean
-ns_js_has_selection_commands(const ns_js *js)
-{
-    return js && js->selection_cmd_cb != NULL;
-}
-
-gboolean
-ns_js_selection_command(ns_js *js, const char *cmd)
-{
-    return js && js->selection_cmd_cb &&
-           js->selection_cmd_cb(cmd, js->selection_cmd_user_data);
-}
-
-void
-ns_js_consume_user_activation(ns_js *js)
-{
-    if (js) js->user_activation_us = 0;
-}
-
 typedef struct ns_hostobj {
     ns_ho_kind kind;
     JSValue    state;
@@ -164,12 +97,6 @@ typedef struct ns_hostobj {
     void     (*free_native)(JSRuntime *rt, gpointer native);
 } ns_hostobj;
 static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
-typedef struct {
-    char *saved;
-    gboolean owns_slot;
-} ns_frame_url;
-static void ns_frame_url_enter(ns_js *js, ns_frame_url *fu, const char *url);
-static void ns_frame_url_leave(ns_js *js, ns_frame_url *fu);
 
 #define NS_SANDBOX_ACTIVE              (1u << 0)
 #define NS_SANDBOX_ALLOW_SCRIPTS       (1u << 1)
@@ -190,169 +117,6 @@ static void ns_frame_url_leave(ns_js *js, ns_frame_url *fu);
    localStorage/sessionStorage/cookies (the runtime's storage is keyed to the
    top origin). Must match the (sandbox & 8192) checks in the realm bootstraps. */
 #define NS_FRAME_CROSS_ORIGIN          (1u << 13)
-
-gint64
-ns_js_eval_budget_us(void)
-{
-    const ns_config *c = ns_config_get();
-    int ms = c ? c->js_eval_budget_ms : 60000;
-    if (ms <= 0) ms = 60000;
-    if (ms > NS_JS_EVAL_BUDGET_MAX_MS) ms = NS_JS_EVAL_BUDGET_MAX_MS;
-    return (gint64)ms * 1000LL;
-}
-
-#define NS_JS_MONITOR_LIMIT_US (60LL * 1000000LL)
-
-void
-ns_js_deadlines(const ns_js *js, gint64 *eval_deadline_us,
-                gint64 *monitor_deadline_us)
-{
-    *eval_deadline_us = js->eval_deadline_us;
-    *monitor_deadline_us = js->js_monitor_deadline_us;
-}
-
-gboolean
-ns_js_in_pump(const ns_js *js)
-{
-    return js && js->in_pump;
-}
-
-void
-ns_js_credit_pumped_time(ns_js *js, gint64 pump_start_us)
-{
-    if (!js) return;
-    gint64 pumped_us = g_get_monotonic_time() - pump_start_us;
-    if (pumped_us <= 0) return;
-    if (js->eval_deadline_us != 0)
-        js->eval_deadline_us += pumped_us;
-    if (js->js_monitor_deadline_us != 0)
-        js->js_monitor_deadline_us += pumped_us;
-}
-
-typedef struct {
-    GMainLoop   *loop;
-    ns_response *resp;
-    GError      *err;
-    gboolean     done;
-} ns_js_pumped_fetch;
-
-static void
-ns_js_pumped_fetch_done(GObject *src, GAsyncResult *result, gpointer user_data)
-{
-    (void)src;
-    ns_js_pumped_fetch *pf = user_data;
-    pf->resp = ns_net_fetch_finish(result, &pf->err);
-    pf->done = TRUE;
-    if (pf->loop) g_main_loop_quit(pf->loop);
-}
-
-ns_response *
-ns_js_fetch_resource(ns_js *js, const char *url, const char *top_url,
-                     const char *const *headers, GError **error)
-{
-    if (!js || js->worker_host)
-        return ns_net_request_blocking(url, top_url, "GET", NULL, 0, NULL,
-                                       headers, NULL, error);
-
-    ns_js_pumped_fetch pf = {0};
-    pf.loop = g_main_loop_new(NULL, FALSE);
-    ns_net_request_async(url, top_url, "GET", NULL, 0, NULL, headers, NULL,
-                         ns_js_pumped_fetch_done, &pf);
-    gboolean saved = js->in_pump;
-    js->in_pump = TRUE;
-    gint64 pump_start_us = g_get_monotonic_time();
-    if (!pf.done)
-        g_main_loop_run(pf.loop);
-    ns_js_credit_pumped_time(js, pump_start_us);
-    js->in_pump = saved;
-    g_main_loop_unref(pf.loop);
-    if (pf.err) {
-        if (error) *error = pf.err;
-        else g_error_free(pf.err);
-    }
-    return pf.resp;
-}
-
-/* ns_js_fetch_resource for one of a document's own subresources, recorded
- * as a PerformanceResourceTiming entry with the given initiator type in the
- * timeline info names. */
-ns_response *
-ns_js_fetch_subresource(ns_js *js, const char *url, const char *top_url,
-                        const char *const *headers, GError **error,
-                        const char *initiator, const ns_perf_resource_info *info)
-{
-    gint64 start_us = g_get_monotonic_time();
-    ns_response *resp = ns_js_fetch_resource(js, url, top_url, headers, error);
-    if (js && !js->worker_host && initiator)
-        ns_perf_add_resource_timed(js, info, url, initiator, start_us,
-                                   g_get_monotonic_time(), resp);
-    return resp;
-}
-
-/* The URL of the document whose global is realm: a frame's own URL for a
- * frame realm, the page's otherwise. */
-const char *
-ns_js_realm_document_url(ns_js *js, JSContext *realm)
-{
-    if (!js) return NULL;
-    if (realm && realm != js->main_realm_ctx) {
-        const char *url = ns_js_frame_url(js, ns_js_frame_of_realm(js, realm));
-        if (url) return url;
-    }
-    return js->current_url;
-}
-
-typedef struct ns_budget_guard {
-    gint64 saved;
-} ns_budget_guard;
-
-static void
-ns_js_budget_push(ns_js *js, ns_budget_guard *g)
-{
-    if (!js || !g) return;
-    g->saved = js->eval_deadline_us;
-    gint64 now = g_get_monotonic_time();
-    if (g->saved == 0) {
-        js->task_epoch++;
-        if (js->task_epoch == 0) js->task_epoch++;
-        js->js_monitor_deadline_us = now + NS_JS_MONITOR_LIMIT_US;
-    }
-    gint64 fresh = now + ns_js_eval_budget_us();
-    if (g->saved == 0 || fresh < g->saved)
-        js->eval_deadline_us = fresh;
-}
-
-static void
-ns_js_budget_pop(ns_js *js, ns_budget_guard *g)
-{
-    if (!js || !g) return;
-    js->eval_deadline_us = g->saved;
-    if (g->saved == 0)
-        js->js_monitor_deadline_us = 0;
-}
-
-gint64
-ns_js_budget_enter(ns_js *js)
-{
-    ns_budget_guard g = {0};
-    ns_js_budget_push(js, &g);
-    return g.saved;
-}
-
-void
-ns_js_budget_leave(ns_js *js, gint64 saved)
-{
-    ns_budget_guard g = { saved };
-    ns_js_budget_pop(js, &g);
-}
-
-ns_node *
-ns_js_context_frame(ns_js *js, JSContext *ctx)
-{
-    if (!js || !ctx || ctx == js->main_realm_ctx) return NULL;
-    ns_node *frame = ns_js_frame_of_realm(js, ctx);
-    return frame ? frame : js->raf_frame_ctx;
-}
 
 
 
@@ -388,195 +152,10 @@ ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
 }
 
 gboolean
-ns_js_bytes_view(JSContext *ctx, JSValueConst value, const uint8_t **out_data,
-                 size_t *out_len, JSValue *out_holder)
-{
-    if (out_data) *out_data = NULL;
-    if (out_len) *out_len = 0;
-    if (out_holder) *out_holder = JS_UNDEFINED;
-
-    if (JS_IsArrayBuffer(value)) {
-        size_t total = 0;
-        uint8_t *base = JS_GetArrayBuffer(ctx, &total, value);
-        if (base) {
-            if (out_data) *out_data = base;
-            if (out_len) *out_len = total;
-            if (out_holder) *out_holder = JS_DupValue(ctx, value);
-            return TRUE;
-        }
-        return FALSE;
-    }
-
-    if (!JS_IsObject(value)) return FALSE;
-
-    JSValue buf = JS_GetPropertyStr(ctx, value, "buffer");
-    if (JS_IsException(buf)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return FALSE;
-    }
-    if (!JS_IsArrayBuffer(buf)) {
-        JS_FreeValue(ctx, buf);
-        return FALSE;
-    }
-
-    JSValue off_v = JS_GetPropertyStr(ctx, value, "byteOffset");
-    JSValue len_v = JS_GetPropertyStr(ctx, value, "byteLength");
-    if (JS_IsException(off_v) || JS_IsException(len_v)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, off_v);
-        JS_FreeValue(ctx, len_v);
-        JS_FreeValue(ctx, buf);
-        return FALSE;
-    }
-    gboolean ok = JS_IsNumber(off_v) && JS_IsNumber(len_v);
-    uint64_t byte_off = 0, byte_len = 0;
-    if (ok && (JS_ToIndex(ctx, &byte_off, off_v) < 0 ||
-               JS_ToIndex(ctx, &byte_len, len_v) < 0)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        ok = FALSE;
-    }
-    JS_FreeValue(ctx, off_v);
-    JS_FreeValue(ctx, len_v);
-    if (!ok) {
-        JS_FreeValue(ctx, buf);
-        return FALSE;
-    }
-
-    size_t total = 0;
-    uint8_t *base = JS_GetArrayBuffer(ctx, &total, buf);
-    if (!base || byte_off > total || byte_len > total - byte_off) {
-        JS_FreeValue(ctx, buf);
-        return FALSE;
-    }
-    if (out_data) *out_data = base + byte_off;
-    if (out_len) *out_len = (size_t)byte_len;
-    if (out_holder) *out_holder = buf;
-    else JS_FreeValue(ctx, buf);
-    return TRUE;
-}
-
-static char *
-ns_js_copy_bytes(const uint8_t *data, gsize len)
-{
-    if (len > NS_JS_BODY_BYTES_MAX) return NULL;
-    char *out = g_malloc(len + 1);
-    if (len > 0 && data) memcpy(out, data, len);
-    out[len] = '\0';
-    return out;
-}
-
-char *
-ns_js_body_bytes(JSContext *ctx, JSValueConst value, gsize *out_len)
-{
-    if (out_len) *out_len = 0;
-    if (JS_IsUndefined(value) || JS_IsNull(value)) return NULL;
-
-    if (JS_IsString(value)) {
-        size_t slen = 0;
-        const char *s = JS_ToCStringLen(ctx, &slen, value);
-        if (!s) return NULL;
-        char *copy = ns_js_copy_bytes((const uint8_t *)s, (gsize)slen);
-        JS_FreeCString(ctx, s);
-        if (copy && out_len) *out_len = (gsize)slen;
-        return copy;
-    }
-
-    const uint8_t *data = NULL;
-    size_t len = 0;
-    JSValue holder = JS_UNDEFINED;
-    if (ns_js_bytes_view(ctx, value, &data, &len, &holder)) {
-        char *copy = ns_js_copy_bytes(data, (gsize)len);
-        JS_FreeValue(ctx, holder);
-        if (copy && out_len) *out_len = (gsize)len;
-        return copy;
-    }
-
-    if (JS_IsObject(value)) {
-        JSValue b = JS_GetPropertyStr(ctx, value, "__ndBlobBytes");
-        if (JS_IsException(b)) {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            return NULL;
-        }
-        gboolean has_blob_bytes = !JS_IsUndefined(b) && !JS_IsNull(b);
-        JS_FreeValue(ctx, b);
-        if (has_blob_bytes) return ns_blob_bytes_as_string(ctx, value, out_len);
-    }
-
-    return NULL;
-}
-
-gboolean
 ns_js_value_is_form_data(JSContext *ctx, JSValueConst v)
 {
     (void)ctx;
     return ns_ho_of(v, NS_HO_FORM_DATA) != NULL;
-}
-
-gboolean
-ns_js_value_is_url_search_params(JSContext *ctx, JSValueConst v)
-{
-    if (!JS_IsObject(v) || JS_IsFunction(ctx, v)) return FALSE;
-    JSValue p = JS_GetPropertyStr(ctx, v, "__ndPairs");
-    gboolean is_arr = JS_IsArray(p);
-    JS_FreeValue(ctx, p);
-    if (!is_arr) return FALSE;
-    JSValue a = JS_GetPropertyStr(ctx, v, "append");
-    JSValue s = JS_GetPropertyStr(ctx, v, "getAll");
-    gboolean ok = JS_IsFunction(ctx, a) && JS_IsFunction(ctx, s);
-    JS_FreeValue(ctx, a);
-    JS_FreeValue(ctx, s);
-    return ok;
-}
-
-char *
-ns_js_usp_serialize(JSContext *ctx, JSValueConst usp,
-                    gsize *out_len, char **out_content_type)
-{
-    if (out_content_type)
-        *out_content_type =
-            g_strdup("application/x-www-form-urlencoded;charset=UTF-8");
-    JSValue ts_fn = JS_GetPropertyStr(ctx, usp, "toString");
-    JSValue str = JS_IsFunction(ctx, ts_fn)
-        ? JS_Call(ctx, ts_fn, usp, 0, NULL) : JS_NewString(ctx, "");
-    JS_FreeValue(ctx, ts_fn);
-    if (JS_IsException(str)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        if (out_len) *out_len = 0;
-        return g_strdup("");
-    }
-    size_t l = 0;
-    const char *s = JS_ToCStringLen(ctx, &l, str);
-    char *out = s ? g_strndup(s, l) : g_strdup("");
-    if (s) JS_FreeCString(ctx, s);
-    JS_FreeValue(ctx, str);
-    if (out_len) *out_len = out ? strlen(out) : 0;
-    return out;
-}
-
-void
-ns_js_promise_reject(JSContext *ctx, JSValue resolvers[2], const char *message)
-{
-    JSValue err = JS_NewError(ctx);
-    const char *colon = strchr(message, ':');
-    gsize name_len = colon ? (gsize)(colon - message) : strlen(message);
-    gboolean is_dom_name = name_len > 5 && name_len < 64 &&
-        memcmp(message + name_len - 5, "Error", 5) == 0;
-    for (gsize i = 0; is_dom_name && i < name_len; i++)
-        if (!g_ascii_isalnum((guchar)message[i])) is_dom_name = FALSE;
-    if (is_dom_name) {
-        char *nm = g_strndup(message, name_len);
-        JS_SetPropertyStr(ctx, err, "name", JS_NewString(ctx, nm));
-        g_free(nm);
-        const char *rest = colon ? colon + 1 : message;
-        while (*rest == ' ') rest++;
-        JS_SetPropertyStr(ctx, err, "message", JS_NewString(ctx, rest));
-    } else {
-        JS_SetPropertyStr(ctx, err, "message", JS_NewString(ctx, message));
-    }
-    JS_Call(ctx, resolvers[1], JS_UNDEFINED, 1, &err);
-    JS_FreeValue(ctx, err);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
 }
 
 static gboolean
@@ -588,454 +167,7 @@ ns_node_name_is_any_of(const ns_node *n, const char *const *tags)
     return FALSE;
 }
 
-void
-ns_js_source_remove(ns_js *js, guint id)
-{
-    if (!id) return;
-    GMainContext *context = js && js->main_context ? js->main_context
-                                                   : g_main_context_default();
-    GSource *source = g_main_context_find_source_by_id(context, id);
-    if (source) g_source_destroy(source);
-}
 
-guint
-ns_js_attach_timeout(ns_js *js, guint ms, GSourceFunc func, gpointer data)
-{
-    GSource *source = g_timeout_source_new(ms);
-    g_source_set_callback(source, func, data, NULL);
-    guint id = g_source_attach(source, js && js->main_context ? js->main_context : NULL);
-    g_source_unref(source);
-    return id;
-}
-
-guint
-ns_js_attach_idle(ns_js *js, GSourceFunc func, gpointer data)
-{
-    GSource *source = g_idle_source_new();
-    g_source_set_callback(source, func, data, NULL);
-    guint id = g_source_attach(source, js && js->main_context ? js->main_context : NULL);
-    g_source_unref(source);
-    return id;
-}
-
-
-typedef struct {
-    JSContext *ctx;
-    JSJobFunc *func;
-    int argc;
-    JSValue argv[3];
-} ns_message_task;
-
-
-static void
-ns_message_task_free(ns_message_task *task)
-{
-    for (int i = 0; i < task->argc; i++)
-        JS_FreeValue(task->ctx, task->argv[i]);
-    g_free(task);
-}
-
-void
-ns_js_drop_message_tasks(ns_js *js)
-{
-    if (js->message_task_source) {
-        ns_js_source_remove(js, js->message_task_source);
-        js->message_task_source = 0;
-    }
-    if (!js->message_tasks) return;
-    ns_message_task *task;
-    while ((task = g_queue_pop_head(js->message_tasks)))
-        ns_message_task_free(task);
-}
-
-static gboolean
-ns_js_run_message_task(gpointer data)
-{
-    ns_js *js = data;
-    if (js->halted) {
-        js->message_task_source = 0;
-        ns_js_drop_message_tasks(js);
-        return G_SOURCE_REMOVE;
-    }
-    if (js->in_pump || ns_engine_in_blocking_fetch()) {
-        js->message_task_source =
-            ns_js_attach_timeout(js, 4, ns_js_run_message_task, js);
-        return G_SOURCE_REMOVE;
-    }
-    guint pending = js->message_tasks ? g_queue_get_length(js->message_tasks) : 0;
-    for (guint i = 0; i < pending && !js->halted; i++) {
-        ns_message_task *task = g_queue_pop_head(js->message_tasks);
-        if (!task) break;
-        JSValue r = task->func(task->ctx, task->argc, task->argv);
-        if (JS_IsException(r))
-            JS_FreeValue(task->ctx, JS_GetException(task->ctx));
-        JS_FreeValue(task->ctx, r);
-        ns_message_task_free(task);
-        ns_drain_microtasks(js);
-    }
-    if (pending) ns_drain_mutations(js);
-    if (js->message_tasks && !g_queue_is_empty(js->message_tasks))
-        return G_SOURCE_CONTINUE;
-    js->message_task_source = 0;
-    return G_SOURCE_REMOVE;
-}
-
-void
-ns_js_queue_message_task(JSContext *ctx, JSJobFunc *func, int argc,
-                         JSValueConst *argv)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js || argc > 3) {
-        JS_EnqueueJob(ctx, func, argc, argv);
-        return;
-    }
-    ns_message_task *task = g_new0(ns_message_task, 1);
-    task->ctx = ctx;
-    task->func = func;
-    task->argc = argc;
-    for (int i = 0; i < argc; i++)
-        task->argv[i] = JS_DupValue(ctx, argv[i]);
-    if (!js->message_tasks) js->message_tasks = g_queue_new();
-    g_queue_push_tail(js->message_tasks, task);
-    if (!js->message_task_source)
-        js->message_task_source =
-            ns_js_attach_timeout(js, 0, ns_js_run_message_task, js);
-}
-
-typedef struct {
-    JSContext *ctx;
-    ns_node   *doc;
-    ns_node   *frame;
-    char      *url;
-    char      *entered_url;
-    char     **prev_slot;
-    gboolean   active;
-    gboolean   is_base;
-} ns_realm_scope;
-
-/* The top-level document's URL, even while a frame's code has replaced
- * current_url with the frame's own URL. */
-const char *
-ns_js_top_url(ns_js *js)
-{
-    const char *url = js->top_url_slot ? *js->top_url_slot : js->current_url;
-    return url ? url : "";
-}
-
-void
-ns_js_set_top_url(ns_js *js, const char *url)
-{
-    char **slot = js->top_url_slot ? js->top_url_slot : &js->current_url;
-    char *copy = g_strdup(url ? url : "");
-    g_free(*slot);
-    *slot = copy;
-}
-
-/* Makes url the current URL for a frame's script or event.  The outermost
- * entry keeps the top-level URL where ns_js_top_url can find it. */
-static void
-ns_frame_url_enter(ns_js *js, ns_frame_url *fu, const char *url)
-{
-    fu->saved = js->current_url;
-    fu->owns_slot = js->top_url_slot == NULL;
-    if (fu->owns_slot) js->top_url_slot = &fu->saved;
-    js->current_url = g_strdup(url ? url : "");
-}
-
-static void
-ns_frame_url_leave(ns_js *js, ns_frame_url *fu)
-{
-    if (fu->owns_slot) js->top_url_slot = NULL;
-    g_free(js->current_url);
-    js->current_url = fu->saved;
-}
-
-static ns_node *
-ns_js_top_document(ns_node *doc)
-{
-    while (doc && doc->parent) {
-        doc = doc->parent;
-        while (doc && doc->kind != NS_NODE_DOCUMENT)
-            doc = doc->parent;
-    }
-    return doc;
-}
-
-/* Whether node is in the page: in its document or in one of its frames'.
-   The engine's current document says which of them code is running for,
-   and parent code can run while a frame's document is current. */
-gboolean
-ns_js_node_in_page(ns_js *js, const ns_node *node)
-{
-    ns_node *top = js ? ns_js_top_document(js->current_doc) : NULL;
-    return top && node && ns_js_top_document((ns_node *)node) == top;
-}
-
-static void
-ns_js_realm_scope_save(ns_js *js, ns_realm_scope *scope)
-{
-    scope->ctx = js->ctx;
-    scope->doc = js->current_doc;
-    scope->frame = js->raf_frame_ctx;
-    scope->url = js->current_url;
-    scope->entered_url = NULL;
-    scope->prev_slot = js->top_url_slot;
-    scope->is_base = FALSE;
-    scope->active = TRUE;
-}
-
-static void
-ns_js_frame_scope_enter(ns_js *js, JSContext *realm, ns_node *frame,
-                        ns_realm_scope *scope)
-{
-    ns_js_realm_scope_save(js, scope);
-    if (!js->realm_scope_base && js->ctx == js->main_realm_ctx) {
-        js->realm_scope_base = scope;
-        scope->is_base = TRUE;
-    }
-    if (!js->top_url_slot) js->top_url_slot = &scope->url;
-    js->ctx = realm;
-    ns_node *frame_doc = ns_iframe_document_node(frame);
-    if (frame_doc) js->current_doc = frame_doc;
-    js->raf_frame_ctx = frame;
-    const char *frame_url = ns_element_get_attr(frame, "data-nd-frame-url");
-    js->current_url = g_strdup(frame_url ? frame_url : "");
-}
-
-const char *
-ns_js_realm_url(ns_js *js, JSContext *realm)
-{
-    if (!js || !realm) return NULL;
-    JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx : js->ctx;
-    if (realm == main_ctx) return ns_js_top_url(js);
-    ns_node *frame = ns_js_frame_of_realm(js, realm);
-    const char *url = frame ? ns_element_get_attr(frame, "data-nd-frame-url")
-                            : NULL;
-    return url && *url ? url : NULL;
-}
-
-static void
-ns_js_realm_scope_enter(ns_js *js, JSContext *realm, ns_realm_scope *scope)
-{
-    scope->active = FALSE;
-    if (!js || !realm || realm == js->ctx) return;
-    if (realm == js->main_realm_ctx) {
-        ns_realm_scope *base = js->realm_scope_base;
-        ns_js_realm_scope_save(js, scope);
-        js->ctx = realm;
-        js->raf_frame_ctx = base ? base->frame : NULL;
-        js->current_doc = base ? base->doc : ns_js_top_document(js->current_doc);
-        js->current_url = g_strdup(ns_js_top_url(js));
-        scope->entered_url = g_strdup(js->current_url);
-        js->top_url_slot = NULL;
-        return;
-    }
-    ns_node *frame = ns_js_frame_of_realm(js, realm);
-    if (!frame) return;
-    ns_js_frame_scope_enter(js, realm, frame, scope);
-}
-
-static void
-ns_js_realm_scope_leave(ns_js *js, ns_realm_scope *scope)
-{
-    if (!scope->active) return;
-    if (scope->entered_url && scope->prev_slot &&
-        g_strcmp0(js->current_url, scope->entered_url) != 0) {
-        g_free(*scope->prev_slot);
-        *scope->prev_slot = g_strdup(js->current_url ? js->current_url : "");
-    }
-    g_free(scope->entered_url);
-    if (scope->is_base) js->realm_scope_base = NULL;
-    js->top_url_slot = scope->prev_slot;
-    g_free(js->current_url);
-    js->current_url = scope->url;
-    js->raf_frame_ctx = scope->frame;
-    js->current_doc = scope->doc;
-    js->ctx = scope->ctx;
-}
-
-void
-ns_js_microtask_checkpoint(ns_js *js)
-{
-    if (js && js->ctx && js->callback_depth == 0 && !JS_IsRunningScript(js->ctx))
-        ns_drain_microtasks(js);
-}
-
-static JSContext *
-ns_function_realm(JSContext *ctx, JSValueConst fn)
-{
-    JSContext *realm = JS_IsFunction(ctx, fn) ? JS_GetFunctionRealm(ctx, fn) : ctx;
-    if (!realm) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        realm = ctx;
-    }
-    return realm;
-}
-
-void
-ns_drain_microtasks(ns_js *js)
-{
-    if (!js) return;
-    ns_budget_guard g = {0};
-    ns_js_budget_push(js, &g);
-    JSContext *ctx_out = NULL;
-    int r = 0;
-    js->callback_depth++;
-    for (;;) {
-        if (js->eval_deadline_us != 0 &&
-            g_get_monotonic_time() > js->eval_deadline_us)
-            break;
-        ns_realm_scope scope;
-        ns_js_realm_scope_enter(js, JS_GetPendingJobRealm(js->rt), &scope);
-        r = JS_ExecutePendingJob(js->rt, &ctx_out);
-        ns_js_realm_scope_leave(js, &scope);
-        if (r <= 0)
-            break;
-    }
-    js->callback_depth--;
-    if (r < 0 && js->log_cb) {
-        char *msg = NULL;
-        if (ctx_out) {
-            JSValue ex = JS_GetException(ctx_out);
-            const char *raw = JS_ToCString(ctx_out, ex);
-            JSValue stack = JS_GetPropertyStr(ctx_out, ex, "stack");
-            const char *stack_s = JS_IsUndefined(stack) ? NULL :
-                                  JS_ToCString(ctx_out, stack);
-            msg = g_strdup_printf("[error] microtask threw: %s%s%s",
-                raw ? raw : "(no message)",
-                stack_s ? "\n" : "", stack_s ? stack_s : "");
-            if (raw) JS_FreeCString(ctx_out, raw);
-            if (stack_s) JS_FreeCString(ctx_out, stack_s);
-            JS_FreeValue(ctx_out, stack);
-            JS_FreeValue(ctx_out, ex);
-        } else {
-            msg = g_strdup("[error] microtask threw");
-        }
-        js->log_cb(msg, js->log_user_data);
-        g_free(msg);
-    }
-    ns_js_budget_pop(js, &g);
-    ns_storage_drain_deferred_events(js);
-    if (js->callback_depth == 0)
-        ns_js_report_pending_rejections(js);
-}
-
-gboolean
-ns_js_due_timers_allowed(const ns_js *js)
-{
-    if (!js || !js->ctx || js->halted || js->in_pump ||
-        js->dispatch_depth > 0 || js->iframe_load_depth > 0 ||
-        js->callback_depth > 0 || js->eval_depth > 0)
-        return FALSE;
-    return !ns_engine_in_blocking_fetch();
-}
-
-void
-ns_drain_mutations(ns_js *js)
-{
-    ns_drain_microtasks(js);
-    if (js->mutated && js->mut_cb)
-        js->mut_cb(js->mut_user_data);
-    js->mutated = FALSE;
-    ns_storage_schedule_flush(js);
-    ns_services_run_due_timers(js);
-}
-
-struct ns_timer_scope {
-    ns_js         *js;
-    JSContext     *ctx;
-    JSContext     *previous_ctx;
-    ns_realm_scope frame_scope;
-    ns_budget_guard budget;
-};
-
-int
-ns_js_timer_gate(ns_js *js, ns_node *frame, gboolean idle_expired)
-{
-    if (js->halted) return NS_TIMER_DROP;
-    if (js->in_pump) return NS_TIMER_WAIT;
-    if (ns_engine_in_blocking_fetch() && !idle_expired) return NS_TIMER_WAIT;
-    if (frame && ns_node_root(frame) != ns_node_root(js->current_doc))
-        return NS_TIMER_DROP;
-    return NS_TIMER_RUN;
-}
-
-ns_timer_scope *
-ns_js_timer_scope_enter(ns_js *js, JSContext *ctx, ns_node *frame)
-{
-    ns_timer_scope *scope = g_new0(ns_timer_scope, 1);
-    scope->js = js;
-    scope->previous_ctx = js->ctx;
-    scope->ctx = ctx ? ctx : scope->previous_ctx;
-    if (frame) {
-        JSContext *current_realm = ns_js_node_realm_context(js, frame);
-        if (current_realm) scope->ctx = current_realm;
-    }
-    scope->frame_scope.active = FALSE;
-    if (frame)
-        ns_js_frame_scope_enter(js, scope->ctx, frame, &scope->frame_scope);
-    else
-        js->ctx = scope->ctx;
-    ns_js_budget_push(js, &scope->budget);
-    js->callback_depth++;
-    return scope;
-}
-
-JSContext *
-ns_js_timer_scope_context(const ns_timer_scope *scope)
-{
-    return scope->ctx;
-}
-
-void
-ns_js_timer_scope_leave(ns_timer_scope *scope, gboolean threw,
-                        JSValueConst exception)
-{
-    ns_js *js = scope->js;
-    JSContext *ctx = scope->ctx;
-    js->callback_depth--;
-    ns_js_budget_pop(js, &scope->budget);
-    if (threw) {
-        const char *msg = JS_ToCString(ctx, exception);
-        JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
-        const char *stk = JS_IsUndefined(stack)
-            ? NULL : JS_ToCString(ctx, stack);
-        if (msg && js->log_cb) {
-            char *line = g_strdup_printf("JS error in timer: %s%s%s",
-                msg, stk ? "\n" : "", stk ? stk : "");
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        if (stk) JS_FreeCString(ctx, stk);
-        JS_FreeValue(ctx, stack);
-        if (msg) JS_FreeCString(ctx, msg);
-        ns_js_report_uncaught(js, exception, js->current_url);
-    }
-    ns_drain_mutations(js);
-    if (scope->frame_scope.active)
-        ns_js_realm_scope_leave(js, &scope->frame_scope);
-    else
-        js->ctx = scope->previous_ctx;
-    g_free(scope);
-}
-
-gboolean
-ns_timer_this_is_detached_window(ns_js *js, JSContext *ctx,
-                                 JSValueConst this_val)
-{
-    if (!js || !JS_IsObject(this_val)) return FALSE;
-    JSValue docv = JS_GetPropertyStr(ctx, this_val, "document");
-    const ns_node *doc = ns_unwrap_element(docv);
-    JS_FreeValue(ctx, docv);
-    if (!doc || doc == js->current_doc) return FALSE;
-    if (doc->kind != NS_NODE_DOCUMENT || (doc->flags & NS_NODE_FRAGMENT))
-        return FALSE;
-    /* Attached means in the page's frame tree, whichever of its documents
-       the engine is running code for (a parent's listener can run while a
-       frame's document is current). */
-    ns_node *top = ns_js_top_document(js->current_doc);
-    return top && ns_js_top_document((ns_node *)doc) != top;
-}
 
 static JSClassID ns_element_class_id;
 static JSClassID ns_attr_class_id;
@@ -1937,18 +1069,6 @@ ns_js_adopt_frame_window_events(ns_js *js, JSContext *fctx, JSValueConst fg)
     JS_FreeValue(fctx, sym_ctor);
 }
 
-ns_worker_host *
-ns_js_worker_host(const ns_js *js)
-{
-    return js ? js->worker_host : NULL;
-}
-
-void
-ns_js_halt(ns_js *js)
-{
-    if (js) js->halted = TRUE;
-}
-
 gboolean
 ns_js_csp_allows_worker(ns_js *js, const char *url)
 {
@@ -1978,146 +1098,6 @@ ns_worker_compile(JSContext *ctx, const char *src, gsize len, const char *url,
     return fn;
 }
 
-JSValue
-ns_js_call_observer(ns_js *js, JSContext *ctx, JSValueConst cb,
-                    JSValueConst this_val, int argc, JSValueConst *argv,
-                    const char *report_type, gboolean fresh_budget)
-{
-    gint64 saved_deadline = js ? js->eval_deadline_us : 0;
-    if (js && fresh_budget)
-        js->eval_deadline_us = g_get_monotonic_time() + ns_js_eval_budget_us();
-    ns_realm_scope scope;
-    ns_js_realm_scope_enter(js, ns_function_realm(ctx, cb), &scope);
-    JSValue ret = JS_Call(ctx, cb, this_val, argc, argv);
-    if (report_type && JS_IsException(ret)) {
-        ns_target_report_exception(js, ctx, report_type);
-        ret = JS_UNDEFINED;
-    }
-    ns_js_realm_scope_leave(js, &scope);
-    if (js && fresh_budget) js->eval_deadline_us = saved_deadline;
-    return ret;
-}
-
-static gboolean
-ns_observer_tick_timer(gpointer data)
-{
-    ns_js *js = data;
-    if (!js) return G_SOURCE_REMOVE;
-    if (!js->ctx) { js->observer_tick_source = 0; return G_SOURCE_REMOVE; }
-    if (js->in_pump || js->dispatch_depth > 0)
-        return G_SOURCE_CONTINUE;
-    js->observer_tick_source = 0;
-    ns_intersection_observers_tick(js);
-    ns_resize_observers_tick(js);
-    ns_drain_microtasks(js);
-    return G_SOURCE_REMOVE;
-}
-
-void
-ns_observer_schedule_tick(ns_js *js)
-{
-    if (!js || !js->ctx || js->worker_host || js->observer_tick_source) return;
-    js->observer_tick_source = g_timeout_add(4, ns_observer_tick_timer, js);
-}
-
-/* Only the outermost dispatch drains mutations and microtasks; a dispatch
- * from inside a script or a microtask leaves that to its caller. */
-void
-ns_js_dispatch_finish(ns_js *js)
-{
-    if (js->eval_depth == 0 && js->callback_depth == 0 && !js->in_pump) {
-        ns_drain_mutations(js);
-    } else {
-        if (js->mutated && js->mut_cb)
-            js->mut_cb(js->mut_user_data);
-        js->mutated = FALSE;
-        ns_storage_schedule_flush(js);
-    }
-}
-
-void
-ns_js_set_style_table(ns_js *js, GHashTable *styles)
-{
-    if (!js) return;
-    js->style_table = styles;
-}
-
-struct ns_raf_scope {
-    ns_js     *js;
-    JSContext *previous_ctx;
-    ns_node   *previous_doc;
-    ns_node   *previous_frame;
-    ns_node   *frame;
-    ns_frame_url fu;
-};
-
-ns_raf_scope *
-ns_js_raf_scope_enter(ns_js *js, JSContext *ctx, ns_node *frame)
-{
-    if (frame && ns_node_root(frame) != ns_node_root(js->current_doc))
-        return NULL;
-    JSContext *current_realm = frame ? ns_js_node_realm_context(js, frame)
-                                     : NULL;
-    ns_raf_scope *scope = g_new0(ns_raf_scope, 1);
-    scope->js = js;
-    scope->previous_ctx = js->ctx;
-    scope->previous_doc = js->current_doc;
-    scope->previous_frame = js->raf_frame_ctx;
-    scope->frame = frame;
-    js->ctx = current_realm ? current_realm : (ctx ? ctx : js->ctx);
-    js->raf_frame_ctx = frame;
-    if (frame) {
-        ns_node *frame_doc = ns_iframe_document_node(frame);
-        if (frame_doc) js->current_doc = frame_doc;
-        ns_frame_url_enter(js, &scope->fu,
-                           ns_element_get_attr(frame, "data-nd-frame-url"));
-    }
-    js->eval_deadline_us = g_get_monotonic_time() + ns_js_eval_budget_us();
-    return scope;
-}
-
-JSContext *
-ns_js_raf_scope_context(const ns_raf_scope *scope)
-{
-    return scope->js->ctx;
-}
-
-void
-ns_js_raf_scope_leave(ns_raf_scope *scope)
-{
-    ns_js *js = scope->js;
-    ns_drain_microtasks(js);
-    if (scope->frame) ns_frame_url_leave(js, &scope->fu);
-    js->raf_frame_ctx = scope->previous_frame;
-    js->current_doc = scope->previous_doc;
-    js->ctx = scope->previous_ctx;
-    g_free(scope);
-}
-
-void
-ns_js_callback_depth_add(ns_js *js, int delta)
-{
-    js->callback_depth += delta;
-}
-
-gboolean
-ns_js_mutated(const ns_js *js)
-{
-    return js->mutated;
-}
-
-gboolean
-ns_js_observer_tick_pending(const ns_js *js)
-{
-    return js->observer_tick_source != 0;
-}
-
-gboolean
-ns_js_message_tasks_pending(const ns_js *js)
-{
-    return js->message_tasks && !g_queue_is_empty(js->message_tasks);
-}
-
 const char *
 ns_js_engine_version(void)
 {
@@ -2125,34 +1105,6 @@ ns_js_engine_version(void)
     if (!version)
         version = g_strdup_printf("QuickJS %s", JS_GetVersion());
     return version;
-}
-
-void
-ns_js_forget_frame_context(ns_js *js, const ns_node *frame)
-{
-    if (js->raf_frame_ctx == frame) js->raf_frame_ctx = NULL;
-}
-
-static GHashTable *
-ns_js_snapshot_globals(ns_js *js)
-{
-    GHashTable *names = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                              g_free, NULL);
-    JSValue global = JS_GetGlobalObject(js->ctx);
-    JSPropertyEnum *tab = NULL;
-    uint32_t n = 0;
-    if (JS_GetOwnPropertyNames(js->ctx, &tab, &n, global,
-                               JS_GPN_STRING_MASK) == 0) {
-        for (uint32_t i = 0; i < n; i++) {
-            const char *s = JS_AtomToCString(js->ctx, tab[i].atom);
-            if (s) g_hash_table_add(names, g_strdup(s));
-            if (s) JS_FreeCString(js->ctx, s);
-            JS_FreeAtom(js->ctx, tab[i].atom);
-        }
-        js_free(js->ctx, tab);
-    }
-    JS_FreeValue(js->ctx, global);
-    return names;
 }
 
 void
@@ -2278,23 +1230,6 @@ ns_js_set_layout_root(ns_js *js, const struct ns_box *root)
         ns_intersection_observers_tick(js);
         ns_resize_observers_tick(js);
     }
-}
-
-void
-ns_js_set_anim(ns_js *js, struct ns_anim *anim)
-{
-    if (!js) return;
-    js->anim = anim;
-    ns_js_raf_set_host_driven(js);
-}
-
-void
-ns_js_set_image_cache(ns_js *js, struct ns_image_cache *cache)
-{
-    if (!js) return;
-    js->image_cache = (ns_image_cache *)cache;
-    if (cache) ns_js_blob_registry_add(js);
-    else ns_js_blob_registry_remove(js);
 }
 
 static const JSCFunctionListEntry ns_validity_proto_funcs[] = {
@@ -2747,24 +1682,6 @@ ns_js_form_reset(ns_js *js, ns_node *form)
     ns_js_reset_form(js->ctx, form);
 }
 
-void
-ns_js_request_repaint(ns_js *js)
-{
-    if (js && js->repaint_cb) js->repaint_cb(js->repaint_user_data);
-}
-
-void
-ns_js_notify_scroll_to(ns_js *js, const ns_node *target)
-{
-    if (js && js->scroll_to_cb) js->scroll_to_cb(target, js->scroll_to_user_data);
-}
-
-ns_image_cache *
-ns_js_image_cache(const ns_js *js)
-{
-    return js->image_cache;
-}
-
 JSContext *
 ns_js_image_load_realm(ns_js *js)
 {
@@ -2891,24 +1808,6 @@ ns_arg_d(JSContext *ctx, JSValueConst v)
 
 
 
-
-void
-ns_js_window_action(ns_js *js, const char *action)
-{
-    if (js && js->window_action_cb)
-        js->window_action_cb(action, js->window_action_user_data);
-}
-
-void
-ns_js_scroll_viewport(ns_js *js, double x, double y)
-{
-    if (!js) return;
-    if (!isfinite(x) || x < 0) x = 0;
-    if (!isfinite(y) || y < 0) y = 0;
-    if (js->viewport_scroll_cb)
-        js->viewport_scroll_cb(&x, &y, js->viewport_scroll_user_data);
-    ns_js_note_viewport_scroll(js, x, y);
-}
 
 GHashTable *
 ns_js_platform_globals(ns_js *js)
@@ -3634,12 +2533,6 @@ ns_document_get_links(JSContext *ctx, JSValueConst this_val)
 }
 
 const ns_node *
-ns_js_iframe_document_node(const ns_js *js)
-{
-    return js->iframe_doc_set ? ns_unwrap_element(js->iframe_doc) : NULL;
-}
-
-const ns_node *
 ns_js_ce_main_doc(const ns_js *js)
 {
     return js ? js->ce_main_doc : NULL;
@@ -3871,7 +2764,6 @@ ns_js *
 ns_js_alloc(void)
 {
     ns_js *js = g_new0(ns_js, 1);
-    js->iframe_doc = JS_UNDEFINED;
     js->pristine_promise = JS_UNDEFINED;
     js->navigator_brand = JS_UNDEFINED;
     return js;
@@ -3912,22 +2804,8 @@ ns_js_create_context(ns_js *js)
 }
 
 void
-ns_js_set_callbacks(ns_js *js, ns_js_log_cb log_cb, gpointer log_user_data,
-                    ns_js_mutated_cb mut_cb, gpointer mut_user_data,
-                    ns_js_navigate_cb nav_cb, gpointer nav_user_data)
+ns_js_init_tables(ns_js *js, gboolean page)
 {
-    js->log_cb = log_cb;
-    js->log_user_data = log_user_data;
-    js->mut_cb = mut_cb;
-    js->mut_user_data = mut_user_data;
-    js->nav_cb = nav_cb;
-    js->nav_user_data = nav_user_data;
-}
-
-void
-ns_js_init_tables(ns_js *js, GMainContext *main_context, gboolean page)
-{
-    js->main_context = main_context;
     js->pinned_wrappers_set = g_hash_table_new(g_direct_hash, g_direct_equal);
     if (!page) return;
     js->frame_ctxs = g_ptr_array_new();
@@ -3936,10 +2814,41 @@ ns_js_init_tables(ns_js *js, GMainContext *main_context, gboolean page)
 }
 
 void
-ns_js_set_worker_host(ns_js *js, ns_worker_host *host, const char *partition_key)
+ns_js_set_partition_key(ns_js *js, const char *partition_key)
 {
-    js->worker_host = host;
     js->partition_key = g_strdup(partition_key);
+}
+
+void *
+ns_js_runtime_state(const ns_js *js)
+{
+    return js ? js->runtime : NULL;
+}
+
+void
+ns_js_set_runtime_state(ns_js *js, void *state)
+{
+    js->runtime = state;
+}
+
+void
+ns_js_slots_of(ns_js *js, ns_js_slots *out)
+{
+    out->rt = &js->rt;
+    out->ctx = &js->ctx;
+    out->main_realm_ctx = &js->main_realm_ctx;
+    out->current_url = &js->current_url;
+    out->current_doc = &js->current_doc;
+    out->raf_frame_ctx = &js->raf_frame_ctx;
+    out->ce_main_doc = &js->ce_main_doc;
+    out->halted = &js->halted;
+    out->pinned_wrappers_set = &js->pinned_wrappers_set;
+}
+
+void
+ns_js_release_wrapper(ns_js *js, ns_node *node)
+{
+    JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper));
 }
 
 JSValue
@@ -4035,16 +2944,6 @@ ns_tag_caller_document(JSContext *ctx, JSValueConst node_val)
         ns_tag_owner_document(ctx, doc, node_val);
     JS_FreeValue(rctx, doc);
     JS_FreeValue(rctx, global);
-}
-
-void
-ns_js_set_doc_ready_state(ns_js *js, const ns_node *doc, int state)
-{
-    if (!js || !doc) return;
-    if (!js->doc_ready_states)
-        js->doc_ready_states = g_hash_table_new(g_direct_hash, g_direct_equal);
-    g_hash_table_insert(js->doc_ready_states, (gpointer)doc,
-                        GINT_TO_POINTER(state));
 }
 
 static const JSCFunctionListEntry ns_document_funcs[] = {
@@ -4234,17 +3133,6 @@ ns_js_new_document_object(ns_js *js)
     return document;
 }
 
-void
-ns_js_set_document(ns_js *js, ns_node *doc, char *origin)
-{
-    js->current_doc = doc;
-    js->ce_main_doc = doc;
-    js->autofocus_processed = FALSE;
-    js->active_modal = NULL;
-    g_free(js->document_origin);
-    js->document_origin = origin;
-}
-
 GHashTable *
 ns_js_pinned_wrappers(const ns_js *js)
 {
@@ -4301,42 +3189,11 @@ ns_js_snapshot_platform_globals(ns_js *js)
 }
 
 void
-ns_js_clear_doc_ready_states(ns_js *js)
-{
-    if (js->doc_ready_states) g_hash_table_remove_all(js->doc_ready_states);
-}
-
-const char *
-ns_js_early_inject_src(const ns_js *js)
-{
-    return js->early_inject_src;
-}
-
-void
-ns_js_free_doc_ready_states(ns_js *js)
-{
-    g_clear_pointer(&js->doc_ready_states, g_hash_table_destroy);
-}
-
-void
 ns_js_free_page_strings(ns_js *js)
 {
     if (js->csp) { ns_csp_free(js->csp); js->csp = NULL; }
-    g_clear_pointer(&js->early_inject_src, g_free);
     g_clear_pointer(&js->cookie_value, g_free);
-    g_clear_pointer(&js->referrer, g_free);
     g_clear_pointer(&js->current_url, g_free);
-    g_clear_pointer(&js->document_origin, g_free);
-    g_clear_pointer(&js->selection_text, g_free);
-}
-
-void
-ns_js_stop_observer_tick(ns_js *js)
-{
-    if (js->observer_tick_source) {
-        g_source_remove(js->observer_tick_source);
-        js->observer_tick_source = 0;
-    }
 }
 
 void
@@ -4398,7 +3255,6 @@ ns_js_free_lookup_caches(ns_js *js)
         JS_FreeValue(js->ctx, js->form_data_helper);
         js->form_data_helper_set = 0;
     }
-    g_clear_pointer(&js->box_lookup_cache, g_hash_table_destroy);
 }
 
 void
@@ -4406,10 +3262,6 @@ ns_js_free_window_values(ns_js *js)
 {
     JS_FreeValue(js->ctx, js->navigator_brand);
     js->navigator_brand = JS_UNDEFINED;
-    if (js->message_tasks) {
-        g_queue_free(js->message_tasks);
-        js->message_tasks = NULL;
-    }
 }
 
 void
@@ -4608,191 +3460,6 @@ ns_js_link_interfaces(JSContext *ctx)
 }
 
 void
-ns_js_sweep_orphans(ns_js *js)
-{
-    if (!js || ns_js_orphan_count(js) == 0) return;
-    if (js->eval_depth > 0 || js->callback_depth > 0 || js->dispatch_depth > 0)
-        return;
-    gint64 now = g_get_monotonic_time();
-    if (js->last_orphan_sweep_us != 0 && now - js->last_orphan_sweep_us < 250000)
-        return;
-    js->last_orphan_sweep_us = now;
-
-    JS_RunGC(js->rt);
-
-    GPtrArray *to_free = ns_js_orphans_collect(js);
-    if (!to_free) return;
-    for (guint i = 0; i < to_free->len; i++) {
-        ns_node *r = g_ptr_array_index(to_free, i);
-        ns_js_purge_subtree_rafs(js, r);
-        ns_js_purge_subtree_pending_iframes(js, r);
-        ns_js_purge_subtree_script_refs(js, r);
-        ns_js_purge_subtree_node_refs(js, r);
-        ns_node_free(r);
-    }
-    g_ptr_array_free(to_free, TRUE);
-}
-
-void
-ns_js_unpin_subtree(ns_js *js, ns_node *root)
-{
-    if (!js || !js->pinned_wrappers_set || !root) return;
-    GPtrArray *stack = g_ptr_array_new();
-    g_ptr_array_add(stack, root);
-    while (stack->len > 0) {
-        ns_node *n = g_ptr_array_index(stack, stack->len - 1);
-        g_ptr_array_set_size(stack, stack->len - 1);
-        for (ns_node *c = n->first_child; c; c = c->next_sibling)
-            g_ptr_array_add(stack, c);
-        void *wrap = n->js_wrapper;
-        if (wrap && g_hash_table_remove(js->pinned_wrappers_set, n)) {
-            JS_FreeValue(js->ctx, JS_MKPTR(JS_TAG_OBJECT, wrap));
-        }
-    }
-    g_ptr_array_free(stack, TRUE);
-}
-
-void
-ns_js_process_pending_iframes(ns_js *js)
-{
-    if (!js || js->halted || ns_js_pending_iframe_count(js) == 0) return;
-    if (js->iframe_load_depth > 0 || js->eval_depth > 0) return;
-    GHashTable *loaded = g_hash_table_new(g_direct_hash, g_direct_equal);
-    while (!js->halted && ns_js_pending_iframe_count(js) > 0) {
-        ns_node *iframe = ns_js_pending_iframe_first(js);
-        if (!g_hash_table_add(loaded, iframe)) break;
-        ns_js_pending_iframe_remove_first(js);
-        ns_js_load_iframe_now(js, iframe);
-    }
-    g_hash_table_destroy(loaded);
-}
-
-int
-ns_js_iframe_load_depth(const ns_js *js)
-{
-    return js->iframe_load_depth;
-}
-
-gboolean
-ns_js_load_delayed(ns_js *js)
-{
-    return js->load_delay_cb && js->load_delay_cb(js->load_delay_user_data);
-}
-
-void
-ns_js_set_ready_state(ns_js *js, int state)
-{
-    js->ready_state = state;
-}
-
-void
-ns_js_set_form_submit_cb(ns_js *js, ns_js_form_submit_cb cb, gpointer user_data)
-{
-    if (!js) return;
-    js->form_submit_cb = cb;
-    js->form_submit_user_data = user_data;
-}
-
-void
-ns_js_set_download_cb(ns_js *js, ns_js_download_cb cb, gpointer user_data)
-{
-    if (!js) return;
-    js->download_cb = cb;
-    js->download_user_data = user_data;
-}
-
-void
-ns_js_set_clipboard_write_cb(ns_js *js, ns_js_clipboard_write_cb cb,
-                             gpointer user_data)
-{
-    if (!js) return;
-    js->clipboard_write_cb = cb;
-    js->clipboard_write_user_data = user_data;
-}
-
-void
-ns_js_set_selection_cmd_cb(ns_js *js, ns_js_selection_cmd_cb cb,
-                           gpointer user_data)
-{
-    if (!js) return;
-    js->selection_cmd_cb = cb;
-    js->selection_cmd_user_data = user_data;
-}
-
-void
-ns_js_set_selection(ns_js *js, const char *text, gboolean has_range,
-                    double x, double y, double w, double h)
-{
-    if (!js) return;
-    g_free(js->selection_text);
-    js->selection_text = g_strdup(text ? text : "");
-    js->selection_has_range = has_range;
-    js->selection_x = x;
-    js->selection_y = y;
-    js->selection_w = w;
-    js->selection_h = h;
-}
-
-gboolean
-ns_js_selection_state(const ns_js *js, const char **text, double rect[4])
-{
-    *text = js->selection_text;
-    rect[0] = js->selection_x;
-    rect[1] = js->selection_y;
-    rect[2] = js->selection_w;
-    rect[3] = js->selection_h;
-    return js->selection_has_range;
-}
-
-void
-ns_js_set_scroll_to_cb(ns_js *js, ns_js_scroll_to_cb cb, gpointer user_data)
-{
-    if (!js) return;
-    js->scroll_to_cb = cb;
-    js->scroll_to_user_data = user_data;
-}
-
-void
-ns_js_set_fragment_nav_cb(ns_js *js, ns_js_fragment_nav_cb cb,
-                          gpointer user_data)
-{
-    if (!js) return;
-    js->fragment_nav_cb = cb;
-    js->fragment_nav_user_data = user_data;
-}
-
-void
-ns_js_set_soft_nav_cb(ns_js *js, ns_js_soft_nav_cb cb, gpointer user_data)
-{
-    if (!js) return;
-    js->soft_nav_cb = cb;
-    js->soft_nav_user_data = user_data;
-}
-
-void
-ns_js_set_window_action_cb(ns_js *js, ns_js_window_action_cb cb,
-                           gpointer user_data)
-{
-    if (!js) return;
-    js->window_action_cb = cb;
-    js->window_action_user_data = user_data;
-}
-
-void
-ns_js_set_early_inject_src(ns_js *js, const char *src)
-{
-    if (!js) return;
-    g_free(js->early_inject_src);
-    js->early_inject_src = g_strdup(src);
-}
-
-gboolean
-ns_js_wpt_hooks_enabled(const ns_js *js)
-{
-    return js && js->early_inject_src;
-}
-
-void
 ns_js_add_csp_header(ns_js *js, const char *header_value)
 {
     if (!js || !header_value || !*header_value) return;
@@ -4814,172 +3481,11 @@ ns_js_csp_form_action_allowed(const ns_js *js, const char *action_url)
                          js->current_url);
 }
 
-void
-ns_js_set_viewport_scroll_cb(ns_js *js, ns_js_viewport_scroll_cb cb,
-                             gpointer user_data)
-{
-    if (!js) return;
-    js->viewport_scroll_cb = cb;
-    js->viewport_scroll_user_data = user_data;
-}
-
-void
-ns_js_set_layout_flush_cb(ns_js *js, ns_js_layout_flush_cb cb, gpointer user_data)
-{
-    if (!js) return;
-    js->layout_flush_cb = cb;
-    js->layout_flush_user_data = user_data;
-}
-
-void
-ns_js_set_load_delay_cb(ns_js *js, gboolean (*cb)(gpointer), gpointer user_data)
-{
-    if (!js) return;
-    js->load_delay_cb = cb;
-    js->load_delay_user_data = user_data;
-}
-
-void
-ns_js_flush_layout(ns_js *js)
-{
-    if (!js || !js->layout_flush_cb || js->in_layout_flush) return;
-    js->in_layout_flush = TRUE;
-    js->layout_flush_cb(js->layout_flush_user_data);
-    js->in_layout_flush = FALSE;
-}
-
-void
-ns_js_flush_style(ns_js *js)
-{
-    ns_js_flush_layout(js);
-}
-
-
-const char *
-ns_js_page_url(const ns_js *js)
-{
-    return js->current_url;
-}
-
-const char *
-ns_js_current_url(const ns_js *js)
-{
-    return js && js->current_url ? js->current_url : "";
-}
-
-void
-ns_js_set_current_url(ns_js *js, const char *url)
-{
-    char *copy = g_strdup(url);
-    g_free(js->current_url);
-    js->current_url = copy;
-}
-
-void
-ns_js_soft_navigate(ns_js *js, const char *url, gboolean replace)
-{
-    if (js->soft_nav_cb)
-        js->soft_nav_cb(url, replace, js->soft_nav_user_data);
-}
-
-gboolean
-ns_js_request_download(ns_js *js, const char *url, const char *filename)
-{
-    if (!js->download_cb) return FALSE;
-    js->download_cb(url, filename, js->download_user_data);
-    return TRUE;
-}
-
-gboolean
-ns_js_navigate(ns_js *js, const char *url, gboolean reload)
-{
-    if (!js->nav_cb) return FALSE;
-    js->nav_cb(url, reload, js->nav_user_data);
-    return TRUE;
-}
-
-JSContext *
-ns_js_main_realm_context(const ns_js *js)
-{
-    return js->main_realm_ctx;
-}
-
-const char *
-ns_js_document_origin(const ns_js *js)
-{
-    return js->document_origin;
-}
-
-void *
-ns_js_realm_url_enter(ns_js *js, JSContext *realm)
-{
-    const char *url = ns_js_realm_url(js, realm);
-    if (!js || !url || !*url) return NULL;
-    g_autofree char *copy = g_strdup(url);
-    ns_frame_url *fu = g_new0(ns_frame_url, 1);
-    ns_frame_url_enter(js, fu, copy);
-    return fu;
-}
-
-void
-ns_js_realm_url_leave(ns_js *js, void *token)
-{
-    ns_frame_url *fu = token;
-    if (!fu) return;
-    ns_frame_url_leave(js, fu);
-    g_free(fu);
-}
-
-gboolean
-ns_js_in_frame_load(const ns_js *js)
-{
-    return js->iframe_load_depth > 0;
-}
-
-gboolean
-ns_js_can_navigate(const ns_js *js)
-{
-    return js->nav_cb != NULL;
-}
-
-void
-ns_js_fragment_navigated(ns_js *js, const char *url)
-{
-    if (js->fragment_nav_cb)
-        js->fragment_nav_cb(url, js->fragment_nav_user_data);
-}
-
-gboolean
-ns_js_window_events_blocked(const ns_js *js)
-{
-    return !js->current_doc || js->halted || js->in_pump;
-}
-
-void
-ns_js_dispatch_document_window_event(ns_js *js, const char *type, JSValue event)
-{
-    ns_js_dispatch_window_only_event(js, js->current_doc, type, event, NULL);
-}
 
 const char *
 ns_js_storage_partition(const ns_js *js)
 {
     return js ? js->partition_key : NULL;
-}
-
-gboolean
-ns_js_halted(const ns_js *js)
-{
-    return js && js->halted;
-}
-
-void
-ns_js_in_main_realm(ns_js *js, void (*fn)(void *data), void *data)
-{
-    ns_realm_scope scope;
-    ns_js_realm_scope_enter(js, js->main_realm_ctx, &scope);
-    fn(data);
-    ns_js_realm_scope_leave(js, &scope);
 }
 
 gboolean
@@ -5000,18 +3506,6 @@ ns_js_page_time_origin_real_ms(const ns_js *js)
     return js->time_origin_real_ms;
 }
 
-JSContext *
-ns_js_main_realm(const ns_js *js)
-{
-    return js->main_realm_ctx;
-}
-
-JSContext *
-ns_js_main_context(const ns_js *js)
-{
-    return js->ctx;
-}
-
 JSValue
 ns_js_navigator_brand(const ns_js *js)
 {
@@ -5024,40 +3518,10 @@ ns_js_pristine_promise(const ns_js *js)
     return js->pristine_promise;
 }
 
-GMainContext *
-ns_js_glib_context(const ns_js *js)
-{
-    return js ? js->main_context : NULL;
-}
-
 const ns_box *
 ns_js_layout_root(const ns_js *js)
 {
     return js->layout_root;
-}
-
-gboolean
-ns_js_is_worker(const ns_js *js)
-{
-    return js->worker_host != NULL;
-}
-
-void
-ns_js_mark_mutated(ns_js *js)
-{
-    if (js) js->mutated = TRUE;
-}
-
-gboolean
-ns_js_autofocus_processed(const ns_js *js)
-{
-    return js && js->autofocus_processed;
-}
-
-void
-ns_js_set_autofocus_processed(ns_js *js)
-{
-    if (js) js->autofocus_processed = TRUE;
 }
 
 const char *
@@ -5079,100 +3543,10 @@ ns_js_partition_key(const ns_js *js)
     return js->partition_key;
 }
 
-const char *
-ns_js_referrer(const ns_js *js)
-{
-    return js->referrer;
-}
-
-int
-ns_js_ready_state(const ns_js *js)
-{
-    return js ? js->ready_state : 0;
-}
-
-int
-ns_js_ignore_destructive_writes(const ns_js *js)
-{
-    return js ? js->ignore_destructive_writes : 0;
-}
-
-const ns_node *
-ns_js_active_modal(const ns_js *js)
-{
-    return js ? js->active_modal : NULL;
-}
-
-gboolean
-ns_js_has_window_action(const ns_js *js)
-{
-    return js && js->window_action_cb;
-}
-
-void
-ns_js_set_active_modal(ns_js *js, const ns_node *modal)
-{
-    if (!js) return;
-    js->active_modal = modal;
-    ns_dom_set_active_modal(modal);
-}
-
-int
-ns_js_doc_ready_state(const ns_js *js, const ns_node *doc)
-{
-    gpointer state = NULL;
-    if (js->doc_ready_states &&
-        g_hash_table_lookup_extended(js->doc_ready_states, doc, NULL, &state))
-        return GPOINTER_TO_INT(state);
-    return -1;
-}
-
-const ns_node *
-ns_js_current_script(const ns_js *js)
-{
-    return js->current_script;
-}
-
-GHashTable *
-ns_js_style_table(const ns_js *js)
-{
-    return js ? js->style_table : NULL;
-}
-
-struct ns_anim *
-ns_js_anim(const ns_js *js)
-{
-    return js ? js->anim : NULL;
-}
-
 const ns_js_navigation_timing *
 ns_js_page_navigation_timing(const ns_js *js)
 {
     return &js->navigation_timing;
-}
-
-gboolean
-ns_js_log_enabled(const ns_js *js)
-{
-    return js->log_cb != NULL;
-}
-
-int
-ns_js_eval_depth(const ns_js *js)
-{
-    return js ? js->eval_depth : 0;
-}
-
-int
-ns_js_callback_depth(const ns_js *js)
-{
-    return js ? js->callback_depth : 0;
-}
-
-int
-ns_js_dispatch_depth(const ns_js *js)
-{
-    return js ? js->dispatch_depth : 0;
 }
 
 const ns_csp *
@@ -5181,247 +3555,10 @@ ns_js_page_csp(const ns_js *js)
     return js ? js->csp : NULL;
 }
 
-void
-ns_js_log_line(ns_js *js, const char *line)
-{
-    if (js->log_cb) js->log_cb(line, js->log_user_data);
-}
-
-const char *
-ns_js_net_page_url(const ns_js *js)
-{
-    return js ? js->current_url : NULL;
-}
-
 gboolean
 ns_js_net_csp_allows_connect(const ns_js *js, const char *url, const char *page)
 {
     return !js || !js->csp || ns_csp_allows(js->csp, NS_CSP_CONNECT, url, page);
-}
-
-gpointer
-ns_js_net_enter_handler_realm(JSContext *ctx, JSValueConst obj, const char *type)
-{
-    ns_realm_scope *scope = g_new0(ns_realm_scope, 1);
-    ns_js_realm_scope_enter(js_from_ctx(ctx),
-                            ns_target_handler_realm(ctx, obj, type, "fn"), scope);
-    return scope;
-}
-
-void
-ns_js_net_leave_handler_realm(JSContext *ctx, gpointer scope)
-{
-    ns_js_realm_scope_leave(js_from_ctx(ctx), scope);
-    g_free(scope);
-}
-
-void
-ns_js_realm_scope_push(ns_js *js, JSContext *realm, void *buf)
-{
-    G_STATIC_ASSERT(sizeof(ns_realm_scope) <= NS_JS_SCOPE_BYTES);
-    ns_js_realm_scope_enter(js, realm, buf);
-}
-
-void
-ns_js_realm_scope_pop(ns_js *js, void *buf)
-{
-    ns_js_realm_scope_leave(js, buf);
-}
-
-void
-ns_js_frame_scope_push(ns_js *js, JSContext *realm, ns_node *frame, void *buf)
-{
-    G_STATIC_ASSERT(sizeof(ns_realm_scope) <= NS_JS_SCOPE_BYTES);
-    ns_js_frame_scope_enter(js, realm, frame, buf);
-}
-
-typedef struct {
-    ns_frame_url url;
-    ns_node     *doc;
-    ns_node     *script;
-    JSValue      iframe_doc;
-    int          iframe_doc_set;
-    ns_node     *frame;
-} ns_frame_load_scope;
-
-void *
-ns_js_frame_load_enter(ns_js *js, ns_node *frame, ns_node *doc,
-                       const char *url, JSValueConst realm_doc)
-{
-    ns_frame_load_scope *s = g_new0(ns_frame_load_scope, 1);
-    ns_frame_url_enter(js, &s->url, url);
-    s->doc = js->current_doc;
-    js->current_doc = doc;
-    if (doc) ns_doc_id_index_build(doc);
-    s->script = js->current_script;
-    s->iframe_doc = js->iframe_doc;
-    s->iframe_doc_set = js->iframe_doc_set;
-    if (JS_IsObject(realm_doc)) {
-        js->iframe_doc = realm_doc;
-        js->iframe_doc_set = 1;
-    }
-    s->frame = js->raf_frame_ctx;
-    js->raf_frame_ctx = frame;
-    js->iframe_load_depth++;
-    return s;
-}
-
-void
-ns_js_frame_load_leave(ns_js *js, void *token)
-{
-    ns_frame_load_scope *s = token;
-    js->iframe_load_depth--;
-    js->raf_frame_ctx = s->frame;
-    js->iframe_doc = s->iframe_doc;
-    js->iframe_doc_set = s->iframe_doc_set;
-    js->current_script = s->script;
-    js->current_doc = s->doc;
-    ns_frame_url_leave(js, &s->url);
-    g_free(s);
-}
-
-ns_node *
-ns_js_frame_eval_begin(ns_js *js, ns_node *script, gint64 deadline_us)
-{
-    ns_node *previous = js->current_script;
-    js->current_script = script;
-    js->eval_deadline_us = deadline_us;
-    js->eval_depth++;
-    return previous;
-}
-
-void
-ns_js_frame_eval_end(ns_js *js, ns_node *previous_script)
-{
-    js->eval_depth--;
-    js->eval_deadline_us = 0;
-    js->current_script = previous_script;
-    if (js->eval_depth == 0) {
-        ns_js_flush_document_write(js);
-        ns_js_schedule_pending_script_drain(js);
-    }
-}
-
-gboolean
-ns_js_has_log(const ns_js *js)
-{
-    return js->log_cb != NULL;
-}
-
-int
-ns_js_eval_depth_add(ns_js *js, int delta)
-{
-    js->eval_depth += delta;
-    return js->eval_depth;
-}
-
-void
-ns_js_ignore_destructive_writes_add(ns_js *js, int delta)
-{
-    js->ignore_destructive_writes += delta;
-}
-
-ns_node *
-ns_js_swap_current_script(ns_js *js, ns_node *script)
-{
-    ns_node *previous = js->current_script;
-    js->current_script = script;
-    return previous;
-}
-
-ns_node *
-ns_js_swap_current_document(ns_js *js, ns_node *doc)
-{
-    ns_node *previous = js->current_doc;
-    js->current_doc = doc;
-    return previous;
-}
-
-JSContext *
-ns_js_module_context(const ns_js *js)
-{
-    return js->module_ctx ? js->module_ctx : js->ctx;
-}
-
-JSContext *
-ns_js_swap_module_context(ns_js *js, JSContext *ctx)
-{
-    JSContext *previous = js->module_ctx;
-    js->module_ctx = ctx;
-    return previous;
-}
-
-gboolean
-ns_js_iframe_document(const ns_js *js, JSValue *out)
-{
-    if (!js->iframe_doc_set) return FALSE;
-    *out = js->iframe_doc;
-    return TRUE;
-}
-
-void *
-ns_js_frame_url_push(ns_js *js, const char *url)
-{
-    ns_frame_url *fu = g_new0(ns_frame_url, 1);
-    ns_frame_url_enter(js, fu, url);
-    return fu;
-}
-
-void
-ns_js_frame_url_pop(ns_js *js, void *fu)
-{
-    ns_frame_url_leave(js, fu);
-    g_free(fu);
-}
-
-typedef struct {
-    JSContext   *ctx;
-    ns_node     *doc;
-    ns_node     *frame;
-    gboolean     entered;
-    ns_frame_url url;
-} ns_dispatch_scope;
-
-void
-ns_js_dispatch_scope_enter(ns_js *js, JSContext *ctx, ns_node *doc,
-                           ns_node *frame, void *buf)
-{
-    G_STATIC_ASSERT(sizeof(ns_dispatch_scope) <= NS_JS_SCOPE_BYTES);
-    ns_dispatch_scope *s = buf;
-    s->ctx = js->ctx;
-    s->doc = js->current_doc;
-    s->frame = js->raf_frame_ctx;
-    s->entered = frame != NULL;
-    js->ctx = ctx;
-    if (frame) {
-        js->current_doc = doc;
-        js->raf_frame_ctx = frame;
-        ns_frame_url_enter(js, &s->url,
-                           ns_element_get_attr(frame, "data-nd-frame-url"));
-    }
-}
-
-void
-ns_js_dispatch_scope_leave(ns_js *js, void *buf)
-{
-    ns_dispatch_scope *s = buf;
-    if (s->entered) ns_frame_url_leave(js, &s->url);
-    js->raf_frame_ctx = s->frame;
-    js->current_doc = s->doc;
-    js->ctx = s->ctx;
-}
-
-void
-ns_js_set_realm(ns_js *js, JSContext *ctx, ns_node *doc)
-{
-    js->ctx = ctx;
-    js->current_doc = doc;
-}
-
-void
-ns_js_dispatch_depth_add(ns_js *js, int delta)
-{
-    js->dispatch_depth += delta;
 }
 
 JSValue
@@ -5429,48 +3566,4 @@ ns_js_net_host_state(JSContext *ctx, JSValueConst v, int kind)
 {
     ns_hostobj *d = ns_ho_data(v);
     return d && (int)d->kind == kind ? JS_DupValue(ctx, d->state) : JS_UNDEFINED;
-}
-
-gboolean
-ns_js_net_pump_iteration(ns_js *js)
-{
-    if (js && js->halted) return FALSE;
-    g_main_context_iteration(js && js->main_context ? js->main_context : NULL,
-                             TRUE);
-    return TRUE;
-}
-
-JSContext *
-ns_js_pattern_context(void)
-{
-    ns_js *js = ns_active_js();
-    return js ? (js->main_realm_ctx ? js->main_realm_ctx : js->ctx) : NULL;
-}
-
-const ns_node *
-ns_js_current_document(const ns_js *js)
-{
-    return js->current_doc;
-}
-
-gboolean
-ns_js_events_suspended(const ns_js *js)
-{
-    return js->halted || js->in_pump;
-}
-
-void
-ns_js_submit_form(ns_js *js, const ns_node *form, const ns_node *submitter)
-{
-    if (js->form_submit_cb)
-        js->form_submit_cb(form, submitter, js->form_submit_user_data);
-}
-
-gboolean
-ns_js_consume_mutated(ns_js *js)
-{
-    if (!js) return FALSE;
-    gboolean m = js->mutated;
-    js->mutated = FALSE;
-    return m;
 }
