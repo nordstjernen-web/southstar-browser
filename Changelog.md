@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The DOM interface installers (the prototype hierarchy, instanceof and
+  Symbol.hasInstance, toStringTag, unscopables, node and element member
+  shapes, the PDF viewer plugins, interface object links and window.chrome)
+  moved from js.c to Rust (rust/js-interfaces).
 * The frame owner element bindings (contentDocument, contentWindow,
   getSVGDocument, child frame windows) and iframe source marking and load
   scheduling (lazy frames, static frame scheduling, download detection)
