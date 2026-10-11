@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Iframe document loading and the frame script runner (the fetch with CSP
+  and framing checks, document building, frame realm scripts, frame globals,
+  the referrer and the cross-origin check) moved from js.c to Rust (rust/js-
+  frames).
 * Installing a parsed document into the page's realm and starting its
   scripts (the runtime reset, the document object, the window's interfaces
   and globals, early and content scripts, import maps and the lifecycle
