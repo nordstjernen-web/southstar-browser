@@ -3,7 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod floats;
+pub mod floats;
 mod overflow;
 
-pub use overflow::{float_side_of, overflow_establishes_bfc, style_is_grid_container};
+pub use ffi::{FloatRef, overflow_axis_keyword};
+pub use overflow::{
+    box_establishes_bfc, clear_kind_of, float_side_of, kw_scrolls, multicol_column_host,
+    multicol_distributable_children, overflow_establishes_bfc, style_is_grid_container,
+};

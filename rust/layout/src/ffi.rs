@@ -65,7 +65,7 @@ pub struct NsBox {
     has_flex_main: GBoolean,
     is_rendered_legend: GBoolean,
     _inline_split_tail: GBoolean,
-    _margin_top_through: f64,
+    margin_top_through: f64,
     paint_top: f64,
     paint_bottom: f64,
     margin: Edges,
@@ -106,7 +106,7 @@ pub struct NsBox {
     columns: c_int,
     parent: *const NsBox,
     first_child: *const NsBox,
-    _last_child: *const NsBox,
+    last_child: *const NsBox,
     next_sibling: *const NsBox,
 }
 
@@ -713,6 +713,105 @@ impl<'a> BoxRef<'a> {
 
     pub fn set_margin(self, e: Edges) {
         unsafe { (*self.0.as_ptr()).margin = e };
+    }
+
+    pub fn take_flex_main(self) -> Option<f64> {
+        let b = self.0.as_ptr();
+        unsafe {
+            if (*b).has_flex_main == 0 {
+                return None;
+            }
+            (*b).has_flex_main = 0;
+            Some((*b).flex_main_size)
+        }
+    }
+
+    pub fn margin_top_through(self) -> f64 {
+        self.raw().margin_top_through
+    }
+
+    pub fn set_margin_top_through(self, v: f64) {
+        unsafe { (*self.0.as_ptr()).margin_top_through = v };
+    }
+
+    pub fn set_columns(self, n: c_int) {
+        unsafe { (*self.0.as_ptr()).columns = n };
+    }
+
+    pub fn set_scrolls(self, scrolls: bool) {
+        unsafe { (*self.0.as_ptr()).scrolls = GBoolean::from(scrolls) };
+    }
+
+    pub fn set_scroll_max(self, x: Option<f64>, y: Option<f64>) {
+        let b = self.0.as_ptr();
+        unsafe {
+            if let Some(x) = x {
+                (*b).scroll_max_x = x;
+            }
+            if let Some(y) = y {
+                (*b).scroll_max_y = y;
+            }
+        }
+    }
+
+    pub fn begin_layout(self, parent_content_width: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).definite_height_read = 0;
+            (*b).last_layout_width = parent_content_width;
+        }
+    }
+
+    pub fn translate_grid_tracks(self, dx: f64, dy: f64) {
+        for (tracks, d) in [
+            (self.raw().grid_col_tracks, dx),
+            (self.raw().grid_row_tracks, dy),
+        ] {
+            let Some(tracks) = (unsafe { tracks.as_ref() }) else {
+                continue;
+            };
+            let edges = tracks.data.cast::<[f64; 2]>();
+            for i in 0..tracks.len as usize {
+                unsafe {
+                    (*edges.add(i))[0] += d;
+                    (*edges.add(i))[1] += d;
+                }
+            }
+        }
+    }
+
+    pub fn detach_child(self, child: BoxRef<'_>) {
+        let parent = self.0.as_ptr();
+        let child = child.0.as_ptr();
+        unsafe {
+            let mut prev: *mut NsBox = core::ptr::null_mut();
+            let mut c = (*parent).first_child.cast_mut();
+            while !c.is_null() && c != child {
+                prev = c;
+                c = (*c).next_sibling.cast_mut();
+            }
+            if prev.is_null() {
+                (*parent).first_child = (*child).next_sibling;
+            } else {
+                (*prev).next_sibling = (*child).next_sibling;
+            }
+            if (*parent).last_child == child.cast_const() {
+                (*parent).last_child = prev;
+            }
+            (*child).next_sibling = core::ptr::null();
+        }
+    }
+
+    pub fn prepend_child(self, child: BoxRef<'_>) {
+        let parent = self.0.as_ptr();
+        let child = child.0.as_ptr();
+        unsafe {
+            (*child).next_sibling = (*parent).first_child;
+            (*parent).first_child = child;
+            if (*parent).last_child.is_null() {
+                (*parent).last_child = child;
+            }
+        }
     }
 
     pub fn set_padding(self, e: Edges) {

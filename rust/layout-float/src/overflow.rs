@@ -69,16 +69,16 @@ pub fn box_clips_children(b: BoxRef<'_>) -> bool {
     ) {
         return false;
     }
-    kw_clips(overflow_axis_keyword(b.style(), PropId::OverflowX))
-        || kw_clips(overflow_axis_keyword(b.style(), PropId::OverflowY))
+    kw_clips(overflow_axis_keyword(style_of(b), PropId::OverflowX))
+        || kw_clips(overflow_axis_keyword(style_of(b), PropId::OverflowY))
 }
 
 pub fn box_is_scroll_container(b: BoxRef<'_>) -> bool {
     if !box_clips_children(b) {
         return false;
     }
-    kw_scroll_container(overflow_axis_keyword(b.style(), PropId::OverflowX))
-        || kw_scroll_container(overflow_axis_keyword(b.style(), PropId::OverflowY))
+    kw_scroll_container(overflow_axis_keyword(style_of(b), PropId::OverflowX))
+        || kw_scroll_container(overflow_axis_keyword(style_of(b), PropId::OverflowY))
 }
 
 fn box_padding_contains(b: BoxRef<'_>, x: f64, y: f64) -> bool {

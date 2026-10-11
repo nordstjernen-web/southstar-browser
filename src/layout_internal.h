@@ -144,27 +144,20 @@ void ns_layout_record_frame_viewports(const ns_box *root);
 double ns_layout_image_dimension_attr(const ns_node *n, const char *name);
 int ns_layout_float_side_of(const ns_style *s);
 int ns_layout_clear_kind_of(const ns_style *s);
-gboolean ns_layout_box_establishes_bfc(const ns_box *box);
-int ns_layout_multicol_distributable_children(const ns_box *box);
-ns_box *ns_layout_multicol_column_host(ns_box *box);
-void ns_layout_collect_escaping_floats(ns_box *box, GArray *floats, int depth);
-void ns_layout_floats_offsets_at(const GArray *floats, double y,
-                                 double *left_out, double *right_out);
-void ns_layout_floats_offsets_over(const GArray *floats, double top,
-                                   double bottom, double *left_out,
-                                   double *right_out);
-double ns_layout_floats_clear_y(const GArray *floats, double y, int clear);
-double ns_layout_floats_max_bottom(const GArray *floats);
-gboolean ns_layout_floats_advance_to_readable_width(const GArray *floats,
-                                                    double cw, double *y,
-                                                    double *left_out,
-                                                    double *right_out);
-void ns_layout_floats_inherit(GArray *floats, const GArray *src,
-                              double from_inner_x, double from_cw,
-                              double inner_x, double cw, double from_y);
-void ns_layout_floats_shift_placed(GArray *floats, double dy);
-double ns_layout_floats_band_bottom(const GArray *floats, double y);
 void ns_layout_image(ns_box *box, double parent_content_width);
 double ns_layout_text_input_intrinsic_width(const ns_box *box);
+void ns_layout_reset_container_queries(void);
+void ns_layout_inline_runs_join_splits(ns_box *box);
+void ns_layout_reorder_children_by_order(ns_box *box);
+gboolean ns_layout_inline_box_can_fragment_multicol(const ns_box *box,
+                                                    const ns_style *style,
+                                                    double basis);
+gboolean ns_layout_multicol_single_inline(ns_box *box, double inner_x,
+                                          double inner_y, double col_w,
+                                          double col_gap, int n_cols,
+                                          const ns_style *child_inherited,
+                                          double *cursor_y);
+gsize ns_layout_inline_run_break_before(const ns_box *run, double band_height);
+ns_box *ns_layout_inline_run_split(ns_box *run, gsize split);
 
 #endif
