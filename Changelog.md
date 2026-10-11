@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Realm creation and teardown (ns_js_new, the worker realm and its script
+  evaluation, ns_js_free and the interrupt handler) moved from js.c to Rust
+  (rust/js-runtime).
 * Script and module evaluation (classic scripts, modules and their loader,
   JSON modules, frame-realm scripts, content scripts and the console eval)
   moved from js.c to Rust (rust/js-loader), over new engine-neutral compile
