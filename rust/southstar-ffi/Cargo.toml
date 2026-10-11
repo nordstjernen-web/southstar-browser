@@ -86,11 +86,13 @@ southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-layout = { path = "../layout" }
 southstar-layout-flex = { path = "../layout-flex" }
+southstar-layout-float = { path = "../layout-float" }
 southstar-layout-grid = { path = "../layout-grid" }
 southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-inline = { path = "../layout-inline" }
 southstar-layout-position = { path = "../layout-position" }
 southstar-layout-query = { path = "../layout-query" }
+southstar-layout-sizing = { path = "../layout-sizing" }
 southstar-layout-table = { path = "../layout-table" }
 southstar-i18n = { path = "../i18n" }
 southstar-image = { path = "../image" }

@@ -1,0 +1,20 @@
+[package]
+name = "southstar-layout-sizing"
+description = "Replaced-element and intrinsic sizing from src/layout.c: images, video and svg boxes, their auto and cyclic percentage widths, min-content and max-content contributions, fit-content and the other sizing keywords, the natural-width estimate and text input widths"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css = { path = "../css" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-image = { path = "../image" }
+southstar-layout = { path = "../layout" }
+southstar-layout-float = { path = "../layout-float" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

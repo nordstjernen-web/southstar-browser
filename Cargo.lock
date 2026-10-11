@@ -1663,11 +1663,13 @@ dependencies = [
  "southstar-js-workers",
  "southstar-layout",
  "southstar-layout-flex",
+ "southstar-layout-float",
  "southstar-layout-grid",
  "southstar-layout-hit",
  "southstar-layout-inline",
  "southstar-layout-position",
  "southstar-layout-query",
+ "southstar-layout-sizing",
  "southstar-layout-table",
  "southstar-mat4",
  "southstar-mathml",
@@ -2262,6 +2264,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-layout-float"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
 name = "southstar-layout-grid"
 version = "1.0.30-dev"
 dependencies = [
@@ -2310,6 +2322,19 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-sizing"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-css",
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-image",
+ "southstar-layout",
+ "southstar-layout-float",
  "southstar-style",
 ]
 

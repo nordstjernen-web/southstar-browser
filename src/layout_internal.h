@@ -135,11 +135,36 @@ gboolean ns_layout_box_is_abs_placeholder(const ns_box *b);
 const ns_node *ns_layout_abs_static_target(const ns_box *b);
 void ns_layout_record_abs_static(const ns_node *dom, ns_box *run, double rel_x,
                                  double rel_y);
-GArray *ns_layout_measure_inline_atomics_begin(ns_box *box,
-                                               const ns_style *parent_style,
-                                               gboolean max_content);
-void ns_layout_measure_inline_atomics_end(GArray *saved);
+void *ns_layout_measure_inline_atomics_begin(ns_box *box,
+                                             const ns_style *parent_style,
+                                             gboolean max_content);
+void ns_layout_measure_inline_atomics_end(void *saved);
 void ns_layout_compute_paint_bounds(ns_box *root);
 void ns_layout_record_frame_viewports(const ns_box *root);
+double ns_layout_image_dimension_attr(const ns_node *n, const char *name);
+int ns_layout_float_side_of(const ns_style *s);
+int ns_layout_clear_kind_of(const ns_style *s);
+gboolean ns_layout_box_establishes_bfc(const ns_box *box);
+int ns_layout_multicol_distributable_children(const ns_box *box);
+ns_box *ns_layout_multicol_column_host(ns_box *box);
+void ns_layout_collect_escaping_floats(ns_box *box, GArray *floats, int depth);
+void ns_layout_floats_offsets_at(const GArray *floats, double y,
+                                 double *left_out, double *right_out);
+void ns_layout_floats_offsets_over(const GArray *floats, double top,
+                                   double bottom, double *left_out,
+                                   double *right_out);
+double ns_layout_floats_clear_y(const GArray *floats, double y, int clear);
+double ns_layout_floats_max_bottom(const GArray *floats);
+gboolean ns_layout_floats_advance_to_readable_width(const GArray *floats,
+                                                    double cw, double *y,
+                                                    double *left_out,
+                                                    double *right_out);
+void ns_layout_floats_inherit(GArray *floats, const GArray *src,
+                              double from_inner_x, double from_cw,
+                              double inner_x, double cw, double from_y);
+void ns_layout_floats_shift_placed(GArray *floats, double dy);
+double ns_layout_floats_band_bottom(const GArray *floats, double y);
+void ns_layout_image(ns_box *box, double parent_content_width);
+double ns_layout_text_input_intrinsic_width(const ns_box *box);
 
 #endif

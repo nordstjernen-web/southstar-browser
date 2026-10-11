@@ -63,7 +63,7 @@ pub struct NsBox {
     cb_height_override: f64,
     flex_main_size: f64,
     has_flex_main: GBoolean,
-    _is_rendered_legend: GBoolean,
+    is_rendered_legend: GBoolean,
     _inline_split_tail: GBoolean,
     _margin_top_through: f64,
     paint_top: f64,
@@ -130,10 +130,19 @@ pub struct NsBoxMedia {
     video_poster: *mut c_char,
     video_audio_src: *mut c_char,
     video: *mut c_void,
+    declared_image_size: GBoolean,
+    placeholder_image_size: GBoolean,
+    size_independent_of_image: GBoolean,
+    intrinsic_ratio_only: GBoolean,
+    image_density: f64,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::offset_of!(NsBoxMedia, video) == 104);
+const _: () = assert!(
+    core::mem::offset_of!(NsBoxMedia, video) == 104
+        && core::mem::offset_of!(NsBoxMedia, image_density) == 128
+        && size_of::<NsBoxMedia>() == 136
+);
 
 #[repr(C)]
 pub struct TableColHint {
@@ -382,6 +391,26 @@ impl<'a> MediaRef<'a> {
 
     pub fn set_video(self, video: *mut c_void) {
         unsafe { (*self.0.as_ptr()).video = video };
+    }
+
+    pub fn declared_image_size(self) -> bool {
+        self.raw().declared_image_size != 0
+    }
+
+    pub fn placeholder_image_size(self) -> bool {
+        self.raw().placeholder_image_size != 0
+    }
+
+    pub fn intrinsic_ratio_only(self) -> bool {
+        self.raw().intrinsic_ratio_only != 0
+    }
+
+    pub fn image_density(self) -> f64 {
+        self.raw().image_density
+    }
+
+    pub fn set_size_independent_of_image(self, independent: bool) {
+        unsafe { (*self.0.as_ptr()).size_independent_of_image = GBoolean::from(independent) };
     }
 }
 
@@ -684,6 +713,14 @@ impl<'a> BoxRef<'a> {
 
     pub fn set_margin(self, e: Edges) {
         unsafe { (*self.0.as_ptr()).margin = e };
+    }
+
+    pub fn set_padding(self, e: Edges) {
+        unsafe { (*self.0.as_ptr()).padding = e };
+    }
+
+    pub fn is_rendered_legend(self) -> bool {
+        self.raw().is_rendered_legend != 0
     }
 
     pub fn set_border(self, e: Edges) {
