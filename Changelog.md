@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Installing a parsed document into the page's realm and starting its
+  scripts (the runtime reset, the document object, the window's interfaces
+  and globals, early and content scripts, import maps and the lifecycle
+  start) and the JavaScript stats dump moved from js.c to Rust (rust/js-
+  page).
 * Floats and block-formatting-context helpers (rust/layout-float) and
   replaced-element and intrinsic sizing (rust/layout-sizing) moved from
   layout.c to Rust, with identical layout.
