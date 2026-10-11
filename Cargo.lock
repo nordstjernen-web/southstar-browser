@@ -1660,6 +1660,7 @@ dependencies = [
  "southstar-layout-hit",
  "southstar-layout-inline",
  "southstar-layout-position",
+ "southstar-layout-query",
  "southstar-layout-table",
  "southstar-mat4",
  "southstar-mathml",
@@ -2219,6 +2220,16 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-position"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-query"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-dom",

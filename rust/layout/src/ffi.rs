@@ -558,6 +558,14 @@ impl<'a> BoxRef<'a> {
         self.raw().paint_bottom
     }
 
+    pub fn set_paint_bounds(self, top: f64, bottom: f64) {
+        let b = self.0.as_ptr();
+        unsafe {
+            (*b).paint_top = top;
+            (*b).paint_bottom = bottom;
+        }
+    }
+
     pub fn vertical_wm(self) -> c_int {
         self.raw().vertical_wm
     }

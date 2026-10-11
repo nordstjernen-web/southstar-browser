@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The box-tree queries (find-in-page match counting and navigation, CSS
+  scroll snapping for scrollers and the viewport, paint bounds and subtree
+  extents, inline element rectangles, image, video and frame viewport
+  collection) moved from layout.c to Rust (rust/layout-query), with
+  identical results.
 * The FreeBSD, NetBSD and musl (Alpine) CI builds install the pinned Rust
   1.99.0 with rustup, since their packaged Rust (FreeBSD 1.98, Alpine 1.96)
   is older than the toolchain the build requires.

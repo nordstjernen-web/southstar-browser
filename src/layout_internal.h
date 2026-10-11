@@ -139,5 +139,7 @@ GArray *ns_layout_measure_inline_atomics_begin(ns_box *box,
                                                const ns_style *parent_style,
                                                gboolean max_content);
 void ns_layout_measure_inline_atomics_end(GArray *saved);
+void ns_layout_compute_paint_bounds(ns_box *root);
+void ns_layout_record_frame_viewports(const ns_box *root);
 
 #endif
