@@ -519,3 +519,111 @@ unsafe extern "C" {
     pub fn gtk_im_multicontext_new() -> *mut GtkIMContext;
     pub fn gtk_im_context_set_client_widget(context: *mut GtkIMContext, widget: *mut GtkWidget);
 }
+
+opaque!(GdkCursor, GdkEvent);
+
+#[repr(C)]
+pub struct GtkWidgetClass {
+    pub parent_class: GObjectClass,
+    pub vfuncs: [*mut c_void; 23],
+    pub snapshot: Option<unsafe extern "C" fn(widget: *mut GtkWidget, snapshot: *mut GtkSnapshot)>,
+    pub contains: *mut c_void,
+    pub priv_: *mut c_void,
+    pub padding: [*mut c_void; 8],
+}
+
+#[repr(C)]
+pub struct GTypeQuery {
+    pub type_: GType,
+    pub type_name: *const c_char,
+    pub class_size: c_uint,
+    pub instance_size: c_uint,
+}
+
+pub const CAIRO_FORMAT_ARGB32: CairoFormat = 0;
+pub const CAIRO_ANTIALIAS_BEST: c_int = 6;
+pub const CAIRO_LINE_CAP_ROUND: c_int = 1;
+pub const CAIRO_LINE_JOIN_ROUND: c_int = 1;
+pub const SCROLL_UNIT_SURFACE: c_int = 1;
+pub const EVENT_CONTROLLER_SCROLL_BOTH_AXES: c_uint = 1 | 2;
+pub const EVENT_CONTROLLER_SCROLL_KINETIC: c_uint = 1 << 3;
+
+unsafe extern "C" {
+    pub fn g_type_query(type_: GType, query: *mut GTypeQuery);
+    pub fn g_bytes_new_take(data: *mut c_void, size: usize) -> *mut GBytes;
+
+    pub fn gdk_cursor_new_from_name(
+        name: *const c_char,
+        fallback: *mut GdkCursor,
+    ) -> *mut GdkCursor;
+    pub fn gdk_cursor_new_from_texture(
+        texture: *mut GdkTexture,
+        hotspot_x: c_int,
+        hotspot_y: c_int,
+        fallback: *mut GdkCursor,
+    ) -> *mut GdkCursor;
+    pub fn gdk_frame_clock_get_frame_time(frame_clock: *mut GdkFrameClock) -> i64;
+    pub fn gdk_event_get_modifier_state(event: *mut GdkEvent) -> GdkModifierType;
+
+    pub fn gtk_drawing_area_get_type() -> GType;
+    pub fn gtk_widget_set_cursor(widget: *mut GtkWidget, cursor: *mut GdkCursor);
+    pub fn gtk_widget_set_cursor_from_name(widget: *mut GtkWidget, name: *const c_char);
+    pub fn gtk_widget_has_focus(widget: *mut GtkWidget) -> GBoolean;
+    pub fn gtk_widget_contains(widget: *mut GtkWidget, x: c_double, y: c_double) -> GBoolean;
+    pub fn gtk_widget_remove_tick_callback(widget: *mut GtkWidget, id: c_uint);
+    pub fn gtk_adjustment_configure(
+        adjustment: *mut GtkAdjustment,
+        value: c_double,
+        lower: c_double,
+        upper: c_double,
+        step_increment: c_double,
+        page_increment: c_double,
+        page_size: c_double,
+    );
+    pub fn gtk_adjustment_get_value(adjustment: *mut GtkAdjustment) -> c_double;
+    pub fn gtk_adjustment_set_value(adjustment: *mut GtkAdjustment, value: c_double);
+    pub fn gtk_adjustment_get_page_size(adjustment: *mut GtkAdjustment) -> c_double;
+    pub fn gtk_event_controller_scroll_new(flags: c_uint) -> *mut GtkEventController;
+    pub fn gtk_event_controller_scroll_get_unit(controller: *mut GtkEventController) -> c_int;
+    pub fn gtk_event_controller_get_current_event(
+        controller: *mut GtkEventController,
+    ) -> *mut GdkEvent;
+    pub fn gtk_snapshot_save(snapshot: *mut GtkSnapshot);
+    pub fn gtk_snapshot_restore(snapshot: *mut GtkSnapshot);
+    pub fn gtk_snapshot_translate(snapshot: *mut GtkSnapshot, point: *const GraphenePoint);
+
+    pub fn cairo_create(target: *mut CairoSurface) -> *mut Cairo;
+    pub fn cairo_set_antialias(cr: *mut Cairo, antialias: c_int);
+    pub fn cairo_set_line_cap(cr: *mut Cairo, line_cap: c_int);
+    pub fn cairo_set_line_join(cr: *mut Cairo, line_join: c_int);
+    pub fn cairo_set_line_width(cr: *mut Cairo, width: c_double);
+    pub fn cairo_move_to(cr: *mut Cairo, x: c_double, y: c_double);
+    pub fn cairo_line_to(cr: *mut Cairo, x: c_double, y: c_double);
+    pub fn cairo_curve_to(
+        cr: *mut Cairo,
+        x1: c_double,
+        y1: c_double,
+        x2: c_double,
+        y2: c_double,
+        x3: c_double,
+        y3: c_double,
+    );
+    pub fn cairo_close_path(cr: *mut Cairo);
+    pub fn cairo_stroke(cr: *mut Cairo);
+    pub fn cairo_set_source(cr: *mut Cairo, source: *mut CairoPattern);
+    pub fn cairo_pattern_create_linear(
+        x0: c_double,
+        y0: c_double,
+        x1: c_double,
+        y1: c_double,
+    ) -> *mut CairoPattern;
+    pub fn cairo_pattern_add_color_stop_rgba(
+        pattern: *mut CairoPattern,
+        offset: c_double,
+        red: c_double,
+        green: c_double,
+        blue: c_double,
+        alpha: c_double,
+    );
+    pub fn cairo_surface_flush(surface: *mut CairoSurface);
+}

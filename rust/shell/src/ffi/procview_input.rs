@@ -93,7 +93,7 @@ fn page_point(v: *mut NsProcView, x: f64, y: f64) -> (c_int, c_int) {
     )
 }
 
-fn viewport_w(v: *mut NsProcView) -> c_int {
+pub(super) fn viewport_w(v: *mut NsProcView) -> c_int {
     let area = view(v).area;
     let w = if area.is_null() {
         0
@@ -103,7 +103,7 @@ fn viewport_w(v: *mut NsProcView) -> c_int {
     if w > 0 { w } else { 1 }
 }
 
-fn viewport_h(v: *mut NsProcView) -> c_int {
+pub(super) fn viewport_h(v: *mut NsProcView) -> c_int {
     let area = view(v).area;
     let h = if area.is_null() {
         0
@@ -113,7 +113,7 @@ fn viewport_h(v: *mut NsProcView) -> c_int {
     if h > 0 { h } else { 1 }
 }
 
-fn cur_scale(v: *mut NsProcView) -> f64 {
+pub(super) fn cur_scale(v: *mut NsProcView) -> f64 {
     let scale = view(v).scale;
     if scale > 0.0 { scale } else { 1.0 }
 }
@@ -138,7 +138,7 @@ fn device_scale(v: *mut NsProcView) -> f64 {
     if (1.0..=8.0).contains(&s) { s } else { 1.0 }
 }
 
-fn raster_scale(v: *mut NsProcView) -> f64 {
+pub(super) fn raster_scale(v: *mut NsProcView) -> f64 {
     let mut s = device_scale(v);
     let fit_w = MAX_WIDTH / f64::from(viewport_w(v));
     let fit_h = MAX_HEIGHT / f64::from(viewport_h(v));
@@ -151,7 +151,7 @@ fn raster_scale(v: *mut NsProcView) -> f64 {
     if s > 0.0 { s } else { 1.0 }
 }
 
-fn page_dpr(v: *mut NsProcView) -> f64 {
+pub(super) fn page_dpr(v: *mut NsProcView) -> f64 {
     cur_scale(v) * device_scale(v)
 }
 

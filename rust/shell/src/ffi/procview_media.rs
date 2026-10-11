@@ -105,8 +105,6 @@ unsafe extern "C" {
     fn ns_proc_view_area(v: *mut NsProcView) -> *mut GtkWidget;
     fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void;
     fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char;
-    fn ns_proc_view_request_tick(v: *mut NsProcView);
-    fn ns_proc_view_request_render(v: *mut NsProcView);
     fn ns_proc_view_push_video_event(v: *mut NsProcView, token: *const c_char, kind: *const c_char);
 
     fn ns_app_self_exe() -> *const c_char;
@@ -1126,9 +1124,9 @@ unsafe extern "C" fn video_tick(
     m.tick_count = m.tick_count.wrapping_add(1);
     let count = m.tick_count;
     let audio_in = m.audio_in;
-    unsafe { ns_proc_view_request_tick(v) };
+    super::procview_draw::request_tick(v);
     if count % 300 == 0 {
-        unsafe { ns_proc_view_request_render(v) };
+        super::procview_draw::request_render(v);
     }
     if count % 60 == 0 && !audio_in.is_null() {
         write_line(audio_in, b"poll\n");

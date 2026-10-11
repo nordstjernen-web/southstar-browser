@@ -115,8 +115,6 @@ NsProcView *ns_proc_view_ref(NsProcView *view);
 void        ns_proc_view_unref(NsProcView *view);
 GtkWidget  *ns_proc_view_area(NsProcView *view);
 NsPvMedia  *ns_proc_view_media(NsProcView *view);
-void        ns_proc_view_request_tick(NsProcView *view);
-void        ns_proc_view_request_render(NsProcView *view);
 void        ns_proc_view_push_video_event(NsProcView *view, const char *token,
                                           const char *kind);
 

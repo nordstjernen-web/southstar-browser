@@ -69,221 +69,6 @@ set_accessible_label(GtkWidget *w, const char *label)
                                    GTK_ACCESSIBLE_PROPERTY_LABEL, label, -1);
 }
 
-/* Closed silhouette of both glass bulbs, drawn around centre (16,16) so the
-   whole glyph fits a compact 32px cursor with rounded bulbs. */
-static void
-hourglass_bulbs_path(cairo_t *cr, double ox, double oy)
-{
-    cairo_move_to(cr, 14.6 + ox, 16.0 + oy);
-    cairo_curve_to(cr, 12.0 + ox, 13.2 + oy, 9.9 + ox, 10.6 + oy, 10.1 + ox, 8.0 + oy);
-    cairo_curve_to(cr, 10.0 + ox, 6.8 + oy, 10.8 + ox, 6.1 + oy, 12.2 + ox, 6.1 + oy);
-    cairo_curve_to(cr, 14.2 + ox, 5.6 + oy, 17.8 + ox, 5.6 + oy, 19.8 + ox, 6.1 + oy);
-    cairo_curve_to(cr, 21.2 + ox, 6.1 + oy, 22.0 + ox, 6.8 + oy, 21.9 + ox, 8.0 + oy);
-    cairo_curve_to(cr, 22.1 + ox, 10.6 + oy, 20.0 + ox, 13.2 + oy, 17.4 + ox, 16.0 + oy);
-    cairo_close_path(cr);
-    cairo_move_to(cr, 14.6 + ox, 16.0 + oy);
-    cairo_curve_to(cr, 12.0 + ox, 18.8 + oy, 9.9 + ox, 21.4 + oy, 10.1 + ox, 24.0 + oy);
-    cairo_curve_to(cr, 10.0 + ox, 25.2 + oy, 10.8 + ox, 25.9 + oy, 12.2 + ox, 25.9 + oy);
-    cairo_curve_to(cr, 14.2 + ox, 26.4 + oy, 17.8 + ox, 26.4 + oy, 19.8 + ox, 25.9 + oy);
-    cairo_curve_to(cr, 21.2 + ox, 25.9 + oy, 22.0 + ox, 25.2 + oy, 21.9 + ox, 24.0 + oy);
-    cairo_curve_to(cr, 22.1 + ox, 21.4 + oy, 20.0 + ox, 18.8 + oy, 17.4 + ox, 16.0 + oy);
-    cairo_close_path(cr);
-}
-
-static void
-hourglass_caps_path(cairo_t *cr, double ox, double oy)
-{
-    cairo_move_to(cr, 9.7 + ox, 6.2 + oy);
-    cairo_line_to(cr, 22.3 + ox, 6.2 + oy);
-    cairo_move_to(cr, 9.7 + ox, 25.8 + oy);
-    cairo_line_to(cr, 22.3 + ox, 25.8 + oy);
-}
-
-static GdkTexture *
-hourglass_texture(void)
-{
-    const int size = 32;
-    cairo_surface_t *surface =
-        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
-    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(surface);
-        return NULL;
-    }
-
-    cairo_t *cr = cairo_create(surface);
-    cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
-    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-
-    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.22);
-    cairo_set_line_width(cr, 3.0);
-    hourglass_caps_path(cr, 0.7, 0.9);
-    cairo_stroke(cr);
-    cairo_set_line_width(cr, 2.6);
-    hourglass_bulbs_path(cr, 0.7, 0.9);
-    cairo_stroke(cr);
-
-    cairo_pattern_t *glass = cairo_pattern_create_linear(16.0, 7.0, 16.0, 26.0);
-    cairo_pattern_add_color_stop_rgba(glass, 0.0, 0.97, 1.0, 1.0, 0.55);
-    cairo_pattern_add_color_stop_rgba(glass, 0.5, 0.62, 0.80, 0.95, 0.30);
-    cairo_pattern_add_color_stop_rgba(glass, 1.0, 0.93, 0.98, 1.0, 0.52);
-    cairo_set_source(cr, glass);
-    hourglass_bulbs_path(cr, 0.0, 0.0);
-    cairo_fill(cr);
-    cairo_pattern_destroy(glass);
-
-    cairo_pattern_t *sand = cairo_pattern_create_linear(16.0, 7.0, 16.0, 25.0);
-    cairo_pattern_add_color_stop_rgba(sand, 0.0, 1.0, 0.85, 0.40, 0.98);
-    cairo_pattern_add_color_stop_rgba(sand, 1.0, 0.90, 0.52, 0.14, 0.98);
-    cairo_set_source(cr, sand);
-    cairo_move_to(cr, 11.7, 8.0);
-    cairo_curve_to(cr, 14.0, 7.6, 18.0, 7.6, 20.3, 8.0);
-    cairo_curve_to(cr, 18.9, 10.9, 17.4, 13.3, 16.0, 15.3);
-    cairo_curve_to(cr, 14.6, 13.3, 13.1, 10.9, 11.7, 8.0);
-    cairo_close_path(cr);
-    cairo_fill(cr);
-    cairo_move_to(cr, 11.7, 24.0);
-    cairo_curve_to(cr, 13.5, 21.6, 14.8, 20.9, 16.0, 20.9);
-    cairo_curve_to(cr, 17.2, 20.9, 18.5, 21.6, 20.3, 24.0);
-    cairo_curve_to(cr, 17.6, 24.7, 14.4, 24.7, 11.7, 24.0);
-    cairo_close_path(cr);
-    cairo_fill(cr);
-    cairo_set_line_width(cr, 1.1);
-    cairo_move_to(cr, 16.0, 15.3);
-    cairo_line_to(cr, 16.0, 20.9);
-    cairo_stroke(cr);
-    cairo_pattern_destroy(sand);
-
-    cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.80);
-    cairo_set_line_width(cr, 0.9);
-    cairo_move_to(cr, 12.6, 8.2);
-    cairo_curve_to(cr, 13.7, 10.4, 14.6, 12.2, 15.3, 13.8);
-    cairo_stroke(cr);
-    cairo_move_to(cr, 16.7, 18.4);
-    cairo_curve_to(cr, 17.6, 20.2, 18.7, 22.2, 19.6, 24.0);
-    cairo_stroke(cr);
-
-    cairo_set_source_rgba(cr, 0.10, 0.12, 0.14, 0.98);
-    cairo_set_line_width(cr, 2.0);
-    hourglass_caps_path(cr, 0.0, 0.0);
-    cairo_stroke(cr);
-    cairo_set_line_width(cr, 1.5);
-    hourglass_bulbs_path(cr, 0.0, 0.0);
-    cairo_stroke(cr);
-
-    cairo_set_source_rgba(cr, 0.74, 0.82, 0.90, 0.85);
-    cairo_set_line_width(cr, 0.6);
-    hourglass_bulbs_path(cr, 0.0, 0.0);
-    cairo_stroke(cr);
-
-    cairo_destroy(cr);
-    cairo_surface_flush(surface);
-
-    int stride = cairo_image_surface_get_stride(surface);
-    unsigned char *data = cairo_image_surface_get_data(surface);
-    GBytes *bytes = g_bytes_new(data, (gsize)stride * (gsize)size);
-    GdkTexture *texture =
-        gdk_memory_texture_new(size, size, GDK_MEMORY_DEFAULT, bytes,
-                               (gsize)stride);
-    g_bytes_unref(bytes);
-    cairo_surface_destroy(surface);
-    return texture;
-}
-
-static GdkCursor *
-busy_hourglass_cursor(NsProcView *v)
-{
-    if (v->hourglass_cursor)
-        return v->hourglass_cursor;
-
-    GdkTexture *texture = hourglass_texture();
-    if (texture) {
-        GdkCursor *fallback = gdk_cursor_new_from_name("wait", NULL);
-        v->hourglass_cursor =
-            gdk_cursor_new_from_texture(texture, 16, 16, fallback);
-        if (fallback)
-            g_object_unref(fallback);
-        g_object_unref(texture);
-    }
-    if (!v->hourglass_cursor)
-        v->hourglass_cursor = gdk_cursor_new_from_name("wait", NULL);
-    return v->hourglass_cursor;
-}
-
-static void
-pv_set_named_cursor(GtkWidget *w, const char *name)
-{
-    if (!name || !*name) {
-        gtk_widget_set_cursor(w, NULL);
-        return;
-    }
-    static const struct { const char *name; const char *fallback; } fb[] = {
-        { "context-menu",  "default" },
-        { "help",          "default" },
-        { "progress",      "wait" },
-        { "cell",          "crosshair" },
-        { "vertical-text", "text" },
-        { "alias",         "copy" },
-        { "copy",          "default" },
-        { "move",          "all-scroll" },
-        { "no-drop",       "not-allowed" },
-        { "not-allowed",   "default" },
-        { "grab",          "all-scroll" },
-        { "grabbing",      "all-scroll" },
-        { "all-scroll",    "move" },
-        { "col-resize",    "ew-resize" },
-        { "row-resize",    "ns-resize" },
-        { "ne-resize",     "nesw-resize" },
-        { "sw-resize",     "nesw-resize" },
-        { "nw-resize",     "nwse-resize" },
-        { "se-resize",     "nwse-resize" },
-        { "nesw-resize",   "crosshair" },
-        { "nwse-resize",   "crosshair" },
-        { "zoom-in",       "crosshair" },
-        { "zoom-out",      "crosshair" },
-    };
-    static const char *const plain[] = {
-        "default", "none", "pointer", "wait", "crosshair", "text",
-        "n-resize", "e-resize", "s-resize", "w-resize", "ew-resize",
-        "ns-resize",
-    };
-    const char *fallback = NULL;
-    gboolean known = FALSE;
-    for (gsize i = 0; i < G_N_ELEMENTS(fb); i++)
-        if (strcmp(name, fb[i].name) == 0) {
-            fallback = fb[i].fallback;
-            known = TRUE;
-            break;
-        }
-    for (gsize i = 0; i < G_N_ELEMENTS(plain) && !known; i++)
-        known = strcmp(name, plain[i]) == 0;
-    if (!known) {
-        gtk_widget_set_cursor(w, NULL);
-        return;
-    }
-    GdkCursor *fb_cur = fallback ? gdk_cursor_new_from_name(fallback, NULL) : NULL;
-    GdkCursor *cur = gdk_cursor_new_from_name(name, fb_cur);
-    gtk_widget_set_cursor(w, cur ? cur : fb_cur);
-    if (cur)
-        g_object_unref(cur);
-    if (fb_cur)
-        g_object_unref(fb_cur);
-}
-
-static void
-set_busy_cursor(NsProcView *v)
-{
-    v->busy_cursor = TRUE;
-    if (!v->area)
-        return;
-
-    GdkCursor *cursor = busy_hourglass_cursor(v);
-    if (cursor)
-        gtk_widget_set_cursor(v->area, cursor);
-    else
-        gtk_widget_set_cursor_from_name(v->area, "wait");
-}
-
 static void
 pv_free(NsProcView *v)
 {
@@ -375,48 +160,14 @@ ns_proc_renderer_path(void)
     return g_strdup(name);
 }
 
-static void request_render(NsProcView *v);
 static void print_run(NsProcView *v, GPtrArray *pages,
                       const ns_print_setup *setup, double raster_scale);
-static void request_tick(NsProcView *v);
-
-static GdkTexture *
-stage_fill(NsProcView *v, const unsigned char *px, int w, int h, int stride)
-{
-    (void)v;
-    size_t row = (size_t)w * 4u;
-    if (w <= 0 || h <= 0 || (size_t)stride < row)
-        return NULL;
-    GBytes *bytes;
-    if ((size_t)stride == row) {
-        bytes = g_bytes_new(px, row * (size_t)h);
-    } else {
-        unsigned char *dst = g_malloc(row * (size_t)h);
-        for (int y = 0; y < h; y++)
-            memcpy(dst + (size_t)y * row, px + (size_t)y * stride, row);
-        bytes = g_bytes_new_take(dst, row * (size_t)h);
-    }
-    GdkTexture *tex = gdk_memory_texture_new(w, h, GDK_MEMORY_DEFAULT, bytes,
-                                             row);
-    g_bytes_unref(bytes);
-    return tex;
-}
 
 static void
 post_emit(NsProcView *v, NsProcEvent evt, const char *text)
 {
     if (v->notify)
         v->notify(v, evt, text, v->notify_ud);
-}
-
-static void
-clear_busy_cursor(NsProcView *v)
-{
-    if (!v->busy_cursor)
-        return;
-    v->busy_cursor = FALSE;
-    if (v->area)
-        gtk_widget_set_cursor_from_name(v->area, NULL);
 }
 
 static void
@@ -437,7 +188,7 @@ ns_proc_view_stop(NsProcView *v)
     v->render_inflight = FALSE;
     v->render_pending = FALSE;
     finish_loading(v);
-    clear_busy_cursor(v);
+    ns_pv_clear_busy_cursor(v);
 }
 
 static gboolean on_result(gpointer data);
@@ -473,18 +224,6 @@ ns_proc_view_media(NsProcView *v)
 }
 
 void
-ns_proc_view_request_tick(NsProcView *v)
-{
-    request_tick(v);
-}
-
-void
-ns_proc_view_request_render(NsProcView *v)
-{
-    request_render(v);
-}
-
-void
 ns_proc_view_push_video_event(NsProcView *v, const char *token,
                               const char *kind)
 {
@@ -500,7 +239,7 @@ static gboolean
 pv_video_event_render(gpointer data)
 {
     NsProcView *v = data;
-    request_tick(v);
+    ns_pv_request_tick(v);
     pv_unref(v);
     return G_SOURCE_REMOVE;
 }
@@ -597,7 +336,7 @@ worker_main(gpointer data)
                     free(fr.tiles);
                     res->frame_unchanged = res->layers == NULL;
                 } else if (!fr.unchanged) {
-                    res->texture = stage_fill(v, fr.pixels, fr.width,
+                    res->texture = ns_pv_stage_fill(fr.pixels, fr.width,
                                               fr.height, fr.stride);
                     res->texture_scale = req->raster > 0 ? req->raster : 1.0;
                 }
@@ -895,455 +634,6 @@ request_favicon(NsProcView *v)
 }
 
 
-static void
-configure_adjustments(NsProcView *v)
-{
-    double s = ns_pv_cur_scale(v);
-    double cw = ns_pv_viewport_w(v) / s;
-    double ch = ns_pv_viewport_h(v) / s;
-    gboolean can_scroll_x = v->page_w > cw + 0.5;
-    gboolean can_scroll_y = v->page_h > ch + 0.5;
-    if (!can_scroll_x) v->scroll_x = 0;
-    if (!can_scroll_y) v->scroll_y = 0;
-    if (v->hscroll) gtk_widget_set_visible(v->hscroll, can_scroll_x);
-    if (v->vscroll) gtk_widget_set_visible(v->vscroll, can_scroll_y);
-    double upper_w = v->page_w > cw ? v->page_w : cw;
-    double upper_h = v->page_h > ch ? v->page_h : ch;
-    gtk_adjustment_configure(v->hadj, v->scroll_x, 0, upper_w, 60, cw, cw);
-    gtk_adjustment_configure(v->vadj, v->scroll_y, 0, upper_h, 60, ch, ch);
-    v->scroll_x = (int)gtk_adjustment_get_value(v->hadj);
-    v->scroll_y = (int)gtk_adjustment_get_value(v->vadj);
-}
-
-static void
-on_adj_changed(GtkAdjustment *adj, gpointer data)
-{
-    (void)adj;
-    NsProcView *v = data;
-    if (v->closed)
-        return;
-    v->scroll_x = (int)gtk_adjustment_get_value(v->hadj);
-    v->scroll_y = (int)gtk_adjustment_get_value(v->vadj);
-    if (v->tiles_mode)
-        gtk_widget_queue_draw(v->area);
-    if (v->opened && !v->adopting_scroll)
-        request_render(v);
-}
-
-static void start_render(NsProcView *v);
-
-static gboolean
-pv_tiles_enabled(void)
-{
-    static int enabled = -1;
-    if (enabled < 0) {
-        const char *e = g_getenv("NS_TILES");
-        enabled = !(e && strcmp(e, "0") == 0);
-    }
-    return enabled;
-}
-
-static void
-pv_tiles_range(NsProcView *v, double *y0, double *y1)
-{
-    double vh = ns_pv_viewport_h(v) / ns_pv_cur_scale(v);
-    double ahead = vh * 1.5, behind = vh * 0.5;
-    *y0 = MAX(v->scroll_y - (v->scroll_dir < 0 ? ahead : behind), 0);
-    *y1 = v->scroll_y + vh + (v->scroll_dir < 0 ? behind : ahead);
-}
-
-static void
-pv_tiles_request(NsProcView *v, Req *req)
-{
-    if (!pv_tiles_enabled())
-        return;
-    double y0, y1;
-    pv_tiles_range(v, &y0, &y1);
-    req->tiles.tile_h = NS_PV_TILE_H;
-    req->tiles.want_y0 = (int)floor(y0);
-    req->tiles.want_y1 = (int)ceil(y1);
-    req->tiles.gen = ns_page_layers_gen(v->layers);
-    req->tiles.vp_held = ns_page_layers_vp_held(v->layers);
-    req->tiles.fill = v->tiles_fill;
-    v->tiles_fill = FALSE;
-    req->have = ns_page_layers_have(v->layers, y0, y1, FALSE);
-    req->hold = ns_page_layers_have(v->layers, y0, y1, TRUE);
-}
-
-static gboolean
-pv_adjustments_stale(NsProcView *v)
-{
-    double s = ns_pv_cur_scale(v);
-    double cw = ns_pv_viewport_w(v) / s, ch = ns_pv_viewport_h(v) / s;
-    return fabs(gtk_adjustment_get_upper(v->hadj) - MAX(v->page_w, cw)) > 0.5 ||
-           fabs(gtk_adjustment_get_upper(v->vadj) - MAX(v->page_h, ch)) > 0.5;
-}
-
-static void
-pv_tiles_apply(NsProcView *v, Res *res)
-{
-    gboolean changed = ns_page_layers_apply(v->layers, res->layers);
-    if (!ns_page_layers_active(v->layers))
-        return;
-    if (!v->tiles_mode) {
-        v->tiles_mode = TRUE;
-        g_clear_object(&v->frame);
-    }
-    v->render_restarts = 0;
-    clear_busy_cursor(v);
-    double vh = ns_pv_viewport_h(v) / ns_pv_cur_scale(v);
-    ns_page_layers_evict(v->layers, v->scroll_y - vh * 1.5,
-                         v->scroll_y + vh * 2.5);
-    if (res->ph > 0) {
-        v->page_h = res->ph;
-        if (res->pw > 0) v->page_w = res->pw;
-    }
-    if (pv_adjustments_stale(v)) {
-        v->adopting_scroll = TRUE;
-        configure_adjustments(v);
-        v->adopting_scroll = FALSE;
-    }
-    double y0, y1;
-    pv_tiles_range(v, &y0, &y1);
-    if (changed) {
-        gtk_widget_queue_draw(v->area);
-        if (ns_page_layers_missing(v->layers, y0, y1, v->scroll_y,
-                                   v->scroll_y + vh, v->page_h) &&
-            !v->render_pending) {
-            v->render_pending = TRUE;
-            v->tiles_fill = TRUE;
-        }
-    }
-}
-
-static void
-pv_tiles_leave(NsProcView *v)
-{
-    if (!v->tiles_mode)
-        return;
-    v->tiles_mode = FALSE;
-    ns_page_layers_reset(v->layers);
-}
-
-static void
-request_tick(NsProcView *v)
-{
-    if (!v->opened) return;
-    if (v->tick_inflight) {
-        v->tick_pending = TRUE;
-        return;
-    }
-    v->tick_inflight = TRUE;
-    Req *req = g_new0(Req, 1);
-    req->type = REQ_TICK;
-    req->seq = v->load_seq;
-    g_async_queue_push_front(v->queue, req);
-}
-
-static void
-request_render(NsProcView *v)
-{
-    if (!v->opened)
-        return;
-    v->tiles_fill = FALSE;
-    if (v->render_inflight) {
-        v->render_pending = TRUE;
-        return;
-    }
-    start_render(v);
-}
-
-static void
-start_render(NsProcView *v)
-{
-    if (!v->opened)
-        return;
-    v->render_inflight = TRUE;
-    Req *req = g_new0(Req, 1);
-    req->type = REQ_RENDER;
-    req->seq = ++v->render_seq;
-    req->raster = ns_pv_raster_scale(v);
-    req->w = (int)ceil(ns_pv_viewport_w(v) * req->raster);
-    req->h = (int)ceil(ns_pv_viewport_h(v) * req->raster);
-    req->sx = v->scroll_x;
-    req->sy = v->scroll_y;
-    req->scale = ns_pv_cur_scale(v) * req->raster;
-    req->dpr = ns_pv_page_dpr(v);
-    req->caret_active = gtk_widget_has_focus(v->area);
-    pv_tiles_request(v, req);
-    req->wheel.dx = (int)v->wheel_pend_x;
-    req->wheel.dy = (int)v->wheel_pend_y;
-    if (req->wheel.dx || req->wheel.dy) {
-        double s = ns_pv_cur_scale(v);
-        v->wheel_pend_x -= req->wheel.dx;
-        v->wheel_pend_y -= req->wheel.dy;
-        req->wheel.x = v->scroll_x + (int)(v->pointer_x / s);
-        req->wheel.y = v->scroll_y + (int)(v->pointer_y / s);
-        req->wheel.viewport = v->wheel_viewport;
-    }
-    ns_pv_push_req(v, req);
-}
-
-static gboolean
-hover_after_scroll(gpointer data)
-{
-    NsProcView *v = data;
-    v->hover_after_scroll_id = 0;
-    if (v->closed || !v->opened)
-        return G_SOURCE_REMOVE;
-    if (gtk_widget_contains(v->area, v->pointer_x, v->pointer_y)) {
-        double s = ns_pv_cur_scale(v);
-        ns_pv_request_hover(v, v->scroll_x + (int)(v->pointer_x / s),
-                      v->scroll_y + (int)(v->pointer_y / s));
-    }
-    return G_SOURCE_REMOVE;
-}
-
-static void
-pv_route_wheel(NsProcView *v, double dx, double dy)
-{
-    double s = ns_pv_cur_scale(v);
-    v->wheel_remote = !v->wheel_viewport &&
-        ns_page_layers_scroller_at(v->layers, v->pointer_x / s,
-                                   v->pointer_y / s, v->scroll_x,
-                                   v->scroll_y, fabs(dy) >= fabs(dx));
-}
-
-static int
-pv_take_whole(double *pend)
-{
-    double r = round(*pend);
-    int whole = fabs(*pend - r) < 1e-6 ? (int)r : (int)*pend;
-    *pend -= whole;
-    return whole;
-}
-
-static void
-pv_scroll_local(NsProcView *v)
-{
-    int dx = pv_take_whole(&v->wheel_pend_x);
-    int dy = pv_take_whole(&v->wheel_pend_y);
-    if (!dx && !dy)
-        return;
-    if (dy)
-        v->scroll_dir = dy > 0 ? 1 : -1;
-    int want_x = v->scroll_x + dx, want_y = v->scroll_y + dy;
-    gtk_adjustment_set_value(v->hadj, want_x);
-    gtk_adjustment_set_value(v->vadj, want_y);
-    if (v->scroll_x != want_x)
-        v->wheel_left_x = v->fling_vx = v->wheel_pend_x = 0;
-    if (v->scroll_y != want_y)
-        v->wheel_left_y = v->fling_vy = v->wheel_pend_y = 0;
-}
-
-static void
-queue_wheel_scroll(NsProcView *v, double dx, double dy)
-{
-    if (!v->opened)
-        return;
-    if (v->hover_after_scroll_id)
-        g_source_remove(v->hover_after_scroll_id);
-    else
-        pv_route_wheel(v, dx, dy);
-    v->hover_after_scroll_id =
-        g_timeout_add(NS_PV_HOVER_AFTER_SCROLL_MS, hover_after_scroll, v);
-    v->wheel_pend_x += dx;
-    v->wheel_pend_y += dy;
-    if (v->tiles_mode && !v->wheel_remote)
-        pv_scroll_local(v);
-    else if (fabs(v->wheel_pend_x) >= 1.0 || fabs(v->wheel_pend_y) >= 1.0)
-        request_render(v);
-}
-
-static gboolean
-wheel_animation_idle(const NsProcView *v)
-{
-    return v->wheel_left_x == 0 && v->wheel_left_y == 0 &&
-           v->fling_vx == 0 && v->fling_vy == 0;
-}
-
-static gboolean
-pv_wheel_scrolling(const NsProcView *v)
-{
-    return v->hover_after_scroll_id != 0 || !wheel_animation_idle(v) ||
-           v->wheel_pend_x != 0 || v->wheel_pend_y != 0;
-}
-
-static gboolean
-wheel_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data)
-{
-    (void)widget;
-    NsProcView *v = data;
-    if (v->closed || !v->opened || wheel_animation_idle(v)) {
-        v->wheel_tick_id = 0;
-        v->wheel_last_us = 0;
-        return G_SOURCE_REMOVE;
-    }
-    gint64 now = gdk_frame_clock_get_frame_time(clock);
-    double dt_ms = v->wheel_last_us > 0
-        ? (double)(now - v->wheel_last_us) / 1000.0 : 1000.0 / 60.0;
-    dt_ms = CLAMP(dt_ms, 1.0, 100.0);
-    v->wheel_last_us = now;
-
-    double share = 1.0 - exp(-dt_ms / NS_PV_WHEEL_TAU_MS);
-    double mx = v->wheel_left_x * share;
-    double my = v->wheel_left_y * share;
-    if (fabs(v->wheel_left_x - mx) < 0.5) mx = v->wheel_left_x;
-    if (fabs(v->wheel_left_y - my) < 0.5) my = v->wheel_left_y;
-    v->wheel_left_x -= mx;
-    v->wheel_left_y -= my;
-
-    mx += v->fling_vx * dt_ms / 1000.0;
-    my += v->fling_vy * dt_ms / 1000.0;
-    double decay = exp(-dt_ms / NS_PV_FLING_TAU_MS);
-    v->fling_vx *= decay;
-    v->fling_vy *= decay;
-    if (hypot(v->fling_vx, v->fling_vy) < NS_PV_FLING_STOP_PX_S)
-        v->fling_vx = v->fling_vy = 0;
-
-    queue_wheel_scroll(v, mx, my);
-    return G_SOURCE_CONTINUE;
-}
-
-static void
-arm_wheel_animation(NsProcView *v)
-{
-    if (v->wheel_tick_id || !v->area || wheel_animation_idle(v))
-        return;
-    v->wheel_last_us = 0;
-    v->wheel_tick_id = gtk_widget_add_tick_callback(v->area, wheel_tick, v,
-                                                    NULL);
-}
-
-static void
-stop_wheel_animation(NsProcView *v)
-{
-    v->wheel_left_x = v->wheel_left_y = 0;
-    v->wheel_pend_x = v->wheel_pend_y = 0;
-    v->fling_vx = v->fling_vy = 0;
-}
-
-double
-ns_pv_scroll_target_x(const NsProcView *v)
-{
-    return v->scroll_x + v->wheel_pend_x + v->wheel_left_x;
-}
-
-double
-ns_pv_scroll_target_y(const NsProcView *v)
-{
-    return v->scroll_y + v->wheel_pend_y + v->wheel_left_y;
-}
-
-static void
-scroll_view_to(NsProcView *v, double x, double y)
-{
-    double max_x = gtk_adjustment_get_upper(v->hadj) -
-                   gtk_adjustment_get_page_size(v->hadj);
-    double max_y = gtk_adjustment_get_upper(v->vadj) -
-                   gtk_adjustment_get_page_size(v->vadj);
-    x = CLAMP(x, 0, MAX(max_x, 0));
-    y = CLAMP(y, 0, MAX(max_y, 0));
-    v->fling_vx = v->fling_vy = 0;
-    v->wheel_viewport = TRUE;
-    v->wheel_left_x += x - ns_pv_scroll_target_x(v);
-    v->wheel_left_y += y - ns_pv_scroll_target_y(v);
-    arm_wheel_animation(v);
-}
-
-static void
-on_device_scale_changed(GObject *object, GParamSpec *pspec, gpointer data)
-{
-    (void)object;
-    (void)pspec;
-    NsProcView *v = data;
-    if (v->closed || !v->opened)
-        return;
-    if (!ns_pv_maybe_update_viewport(v))
-        request_render(v);
-}
-
-static void
-on_area_realize(GtkWidget *area, gpointer data)
-{
-    NsProcView *v = data;
-    GtkNative *native = gtk_widget_get_native(area);
-    GdkSurface *surface = native ? gtk_native_get_surface(native) : NULL;
-    if (!surface || surface == v->scale_surface)
-        return;
-    if (v->scale_surface && v->surface_scale_handler)
-        g_signal_handler_disconnect(v->scale_surface, v->surface_scale_handler);
-    v->scale_surface = surface;
-    v->surface_scale_handler =
-        g_signal_connect(surface, "notify::scale",
-                         G_CALLBACK(on_device_scale_changed), v);
-}
-
-static void
-on_area_unrealize(GtkWidget *area, gpointer data)
-{
-    (void)area;
-    NsProcView *v = data;
-    if (v->scale_surface && v->surface_scale_handler)
-        g_signal_handler_disconnect(v->scale_surface, v->surface_scale_handler);
-    v->scale_surface = NULL;
-    v->surface_scale_handler = 0;
-}
-
-static void
-on_area_focus_notify(GObject *object, GParamSpec *pspec, gpointer data)
-{
-    (void)object;
-    (void)pspec;
-    NsProcView *v = data;
-    v->last_anim_frame_us = 0;
-    request_render(v);
-}
-
-static gboolean
-anim_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data)
-{
-    (void)widget;
-    (void)clock;
-    NsProcView *v = data;
-    if (v->closed || !v->opened) {
-        v->anim_tick_id = 0;
-        v->last_anim_frame_us = 0;
-        return G_SOURCE_REMOVE;
-    }
-    if (ns_pv_media_video_playing(v->media))
-        return G_SOURCE_CONTINUE;
-    gint64 now = clock ? gdk_frame_clock_get_frame_time(clock) : 0;
-    if (now <= 0) now = g_get_monotonic_time();
-    gint64 interval = v->page_animating ? G_USEC_PER_SEC / 60
-                                        : NS_PROC_CARET_BLINK_US;
-    if (v->last_anim_frame_us > 0 && now - v->last_anim_frame_us < interval)
-        return G_SOURCE_CONTINUE;
-    v->last_anim_frame_us = now;
-    if (v->page_animating && !pv_wheel_scrolling(v))
-        request_tick(v);
-    else
-        request_render(v);
-    return G_SOURCE_CONTINUE;
-}
-
-static void
-arm_anim(NsProcView *v)
-{
-    if (v->anim_tick_id || v->closed || !v->area)
-        return;
-    v->last_anim_frame_us = 0;
-    v->anim_tick_id = gtk_widget_add_tick_callback(v->area, anim_tick, v, NULL);
-}
-
-static void
-disarm_anim(NsProcView *v)
-{
-    if (v->anim_tick_id && v->area)
-        gtk_widget_remove_tick_callback(v->area, v->anim_tick_id);
-    v->anim_tick_id = 0;
-    v->last_anim_frame_us = 0;
-}
 
 static void show_context_menu(NsProcView *v, const char *href, int edit);
 static void build_search_bar(NsProcView *v);
@@ -1388,9 +678,9 @@ pv_follow_same_document_state(NsProcView *v, const char *url, gboolean pushed,
 
 static void pv_perm_resolve(NsProcView *v, gboolean allow);
 
-static void
-do_load(NsProcView *v, const char *url, gboolean record, gboolean history,
-        gboolean user_activated)
+void
+ns_pv_do_load(NsProcView *v, const char *url, gboolean record,
+              gboolean history, gboolean user_activated)
 {
     if (!url || !*url)
         return;
@@ -1424,8 +714,8 @@ do_load(NsProcView *v, const char *url, gboolean record, gboolean history,
     v->opened = FALSE;
     v->page_animating = FALSE;
     v->caret_blinking = FALSE;
-    stop_wheel_animation(v);
-    disarm_anim(v);
+    ns_pv_stop_wheel_animation(v);
+    ns_pv_disarm_anim(v);
     g_clear_object(&v->frame);
     ns_page_layers_reset(v->layers);
     v->tiles_mode = FALSE;
@@ -1434,7 +724,7 @@ do_load(NsProcView *v, const char *url, gboolean record, gboolean history,
         v->loading = TRUE;
         post_emit(v, NS_PROC_EVT_LOADING, "1");
     }
-    set_busy_cursor(v);
+    ns_pv_set_busy_cursor(v);
     post_emit(v, NS_PROC_EVT_STATUS, ns_i18n("Loading…"));
 
     int vw = gtk_widget_get_width(v->area);
@@ -1467,7 +757,7 @@ void
 ns_proc_view_load(NsProcView *v, const char *url)
 {
     v->render_restarts = 0;
-    do_load(v, url, TRUE, FALSE, TRUE);
+    ns_pv_do_load(v, url, TRUE, FALSE, TRUE);
 }
 
 gboolean ns_proc_view_can_back(NsProcView *v) { return v->hist_index > 0; }
@@ -1486,7 +776,7 @@ ns_proc_view_back(NsProcView *v)
     v->hist_index--;
     v->render_restarts = 0;
     post_emit(v, NS_PROC_EVT_HISTORY, NULL);
-    do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, TRUE, TRUE);
+    ns_pv_do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, TRUE, TRUE);
 }
 
 void
@@ -1497,7 +787,7 @@ ns_proc_view_forward(NsProcView *v)
     v->hist_index++;
     v->render_restarts = 0;
     post_emit(v, NS_PROC_EVT_HISTORY, NULL);
-    do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, TRUE, TRUE);
+    ns_pv_do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, TRUE, TRUE);
 }
 
 void
@@ -1505,10 +795,10 @@ ns_proc_view_reload(NsProcView *v)
 {
     v->render_restarts = 0;
     if (v->hist_index >= 0 && v->hist_index < (int)v->history->len)
-        do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, FALSE,
+        ns_pv_do_load(v, g_ptr_array_index(v->history, v->hist_index), FALSE, FALSE,
                 TRUE);
     else if (v->current_url)
-        do_load(v, v->current_url, FALSE, FALSE, TRUE);
+        ns_pv_do_load(v, v->current_url, FALSE, FALSE, TRUE);
 }
 
 void
@@ -1603,8 +893,8 @@ set_zoom(NsProcView *v, double scale)
     g_snprintf(percent, sizeof percent, "%d", permille / 10);
     post_emit(v, NS_PROC_EVT_ZOOM, percent);
     if (v->opened && !ns_pv_maybe_update_viewport(v)) {
-        configure_adjustments(v);
-        request_render(v);
+        ns_pv_configure_adjustments(v);
+        ns_pv_request_render(v);
     }
 }
 
@@ -1663,7 +953,7 @@ pv_perm_resolve(NsProcView *v, gboolean allow)
         req->mods = allow ? 1 : 0;
         ns_pv_push_req(v, req);
         if (kind == REQ_WEBGL && allow && v->current_url)
-            do_load(v, v->current_url, FALSE, FALSE, TRUE);
+            ns_pv_do_load(v, v->current_url, FALSE, FALSE, TRUE);
     }
     g_free(origin);
 }
@@ -1727,13 +1017,13 @@ on_result(gpointer data)
         if (!res->ok) {
             post_emit(v, NS_PROC_EVT_STATUS, ns_i18n("Failed to load page"));
             finish_loading(v);
-            clear_busy_cursor(v);
+            ns_pv_clear_busy_cursor(v);
             goto done;
         }
         if (res->nav && *res->nav) {
             if (v->js_redirects < NS_PROC_MAX_JS_REDIRECTS) {
                 v->js_redirects++;
-                do_load(v, res->nav, v->pending_record, FALSE, FALSE);
+                ns_pv_do_load(v, res->nav, v->pending_record, FALSE, FALSE);
                 goto done;
             }
             post_emit(v, NS_PROC_EVT_STATUS,
@@ -1752,14 +1042,14 @@ on_result(gpointer data)
         v->scroll_x = 0;
         v->scroll_y = 0;
         v->opened = TRUE;
-        configure_adjustments(v);
+        ns_pv_configure_adjustments(v);
         if (v->pending_record)
             push_history(v, v->current_url);
         post_emit(v, NS_PROC_EVT_URL, v->current_url);
         post_emit(v, NS_PROC_EVT_TITLE, v->current_title);
         post_emit(v, NS_PROC_EVT_STATUS, "");
         finish_loading(v);
-        request_render(v);
+        ns_pv_request_render(v);
         request_favicon(v);
     } else if (res->type == RES_TICK) {
         gboolean current = res->seq == v->load_seq;
@@ -1767,7 +1057,7 @@ on_result(gpointer data)
         if (current && res->ok && res->nav && *res->nav &&
             v->js_redirects < NS_PROC_MAX_JS_REDIRECTS) {
             v->js_redirects++;
-            do_load(v, res->nav, FALSE, FALSE, FALSE);
+            ns_pv_do_load(v, res->nav, FALSE, FALSE, FALSE);
             navigated = TRUE;
         }
         if (current && res->ok && res->webgl && *res->webgl)
@@ -1786,33 +1076,33 @@ on_result(gpointer data)
         if (current && res->ok) {
             v->page_animating = res->animating;
             if (v->page_animating || v->caret_blinking)
-                arm_anim(v);
+                ns_pv_arm_anim(v);
             else
-                disarm_anim(v);
+                ns_pv_disarm_anim(v);
             if (res->ph > 0 && res->ph != v->page_h) {
                 v->page_h = res->ph;
                 if (res->pw > 0) v->page_w = res->pw;
-                configure_adjustments(v);
+                ns_pv_configure_adjustments(v);
             }
             if (res->kind && !ns_pv_media_video_playing(v->media))
-                request_render(v);
+                ns_pv_request_render(v);
         }
         v->tick_inflight = FALSE;
         if (!navigated && v->tick_pending && v->opened) {
             v->tick_pending = FALSE;
-            request_tick(v);
+            ns_pv_request_tick(v);
         }
     } else if (res->type == RES_FRAME) {
         gboolean current = res->seq == v->render_seq;
         if (res->ok && res->wheel_snapped)
-            stop_wheel_animation(v);
+            ns_pv_stop_wheel_animation(v);
         if (current && res->ok) {
             v->page_animating = res->animating;
             v->caret_blinking = res->caret_blinking;
             if (v->page_animating || v->caret_blinking)
-                arm_anim(v);
+                ns_pv_arm_anim(v);
             else
-                disarm_anim(v);
+                ns_pv_disarm_anim(v);
             if (res->ph > 0 && res->ph != v->page_h) {
                 v->page_h = res->ph;
                 if (res->pw > 0) v->page_w = res->pw;
@@ -1820,7 +1110,7 @@ on_result(gpointer data)
             }
             if (res->requested_scroll_y >= 0 || res->requested_scroll_x >= 0) {
                 v->adopting_scroll = TRUE;
-                configure_adjustments(v);
+                ns_pv_configure_adjustments(v);
                 if (res->requested_scroll_y >= 0)
                     gtk_adjustment_set_value(v->vadj,
                                              res->requested_scroll_y);
@@ -1833,22 +1123,22 @@ on_result(gpointer data)
             }
         }
         if (current && res->ok && res->layers) {
-            pv_tiles_apply(v, res);
+            ns_pv_tiles_apply(v, res);
         } else if (current && res->ok && res->texture) {
-            pv_tiles_leave(v);
+            ns_pv_tiles_leave(v);
             g_clear_object(&v->frame);
             v->frame = g_steal_pointer(&res->texture);
             v->frame_scale = res->texture_scale;
             v->render_restarts = 0;
             gtk_widget_queue_draw(v->area);
-            clear_busy_cursor(v);
+            ns_pv_clear_busy_cursor(v);
         } else if (current && res->ok && res->frame_unchanged) {
             v->render_restarts = 0;
         }
         if (current && res->ok && res->nav && *res->nav &&
             v->js_redirects < NS_PROC_MAX_JS_REDIRECTS) {
             v->js_redirects++;
-            do_load(v, res->nav, FALSE, FALSE, FALSE);
+            ns_pv_do_load(v, res->nav, FALSE, FALSE, FALSE);
         }
         if (res->ok && res->webgl && *res->webgl)
             post_emit(v, NS_PROC_EVT_WEBGL, "1");
@@ -1868,18 +1158,18 @@ on_result(gpointer data)
         v->render_inflight = FALSE;
         if (v->render_pending) {
             v->render_pending = FALSE;
-            start_render(v);
+            ns_pv_start_render(v);
         } else if (current && !res->ok && v->current_url) {
             if (v->render_restarts < NS_PROC_MAX_RESTARTS) {
                 v->render_restarts++;
                 post_emit(v, NS_PROC_EVT_STATUS, ns_i18n("Renderer restarted"));
-                do_load(v, v->current_url, FALSE, FALSE, FALSE);
+                ns_pv_do_load(v, v->current_url, FALSE, FALSE, FALSE);
             } else {
                 post_emit(v, NS_PROC_EVT_STATUS,
                           ns_i18n("This tab's renderer keeps failing — "
                                   "reload to retry"));
                 finish_loading(v);
-                clear_busy_cursor(v);
+                ns_pv_clear_busy_cursor(v);
             }
         }
     } else if (res->type == RES_VIEWPORT) {
@@ -1888,12 +1178,12 @@ on_result(gpointer data)
         if (res->ok) {
             v->page_w = res->pw;
             v->page_h = res->ph;
-            configure_adjustments(v);
-            request_render(v);
+            ns_pv_configure_adjustments(v);
+            ns_pv_request_render(v);
         }
     } else if (res->type == RES_SELECT) {
         if (res->seq == v->select_seq)
-            request_render(v);
+            ns_pv_request_render(v);
     } else if (res->type == RES_COPY) {
         if (res->href && *res->href && v->area) {
             gdk_clipboard_set_text(gtk_widget_get_clipboard(v->area),
@@ -1901,7 +1191,7 @@ on_result(gpointer data)
             post_emit(v, NS_PROC_EVT_STATUS, ns_i18n("Copied selection"));
         }
         if (res->kind == 7)
-            request_render(v);
+            ns_pv_request_render(v);
     } else if (res->type == RES_KEY) {
         if (res->seq != v->key_seq)
             goto done;
@@ -1910,8 +1200,8 @@ on_result(gpointer data)
             ns_proc_view_load(v, res->href);
         } else {
             if (res->fallback_scroll && !res->prevented)
-                scroll_view_to(v, res->fallback_x, res->fallback_y);
-            request_render(v);
+                ns_pv_scroll_view_to(v, res->fallback_x, res->fallback_y);
+            ns_pv_request_render(v);
         }
     } else if (res->type == RES_CLICK) {
         if (res->seq != v->click_seq)
@@ -1920,7 +1210,7 @@ on_result(gpointer data)
             post_emit(v, NS_PROC_EVT_STATUS, res->href);
             ns_proc_view_load(v, res->href);
         } else {
-            request_render(v);
+            ns_pv_request_render(v);
         }
     } else if (res->type == RES_LINK) {
         if (res->seq != v->link_seq)
@@ -1930,7 +1220,7 @@ on_result(gpointer data)
         GtkWidget *area = v->area;
         if (res->action == ACT_CONTEXT) {
             if (res->prevented || res->edit)
-                request_render(v);
+                ns_pv_request_render(v);
             if (!res->prevented)
                 show_context_menu(v, res->href, res->edit);
             if (v->link_pending) {
@@ -1944,7 +1234,7 @@ on_result(gpointer data)
         if (res->href && *res->href) {
             post_emit(v, NS_PROC_EVT_STATUS, res->href);
             if (!v->busy_cursor)
-                pv_set_named_cursor(area, res->cursor ? res->cursor : "pointer");
+                ns_pv_set_named_cursor(area, res->cursor ? res->cursor : "pointer");
             if (res->action == ACT_NAVIGATE) {
                 navigated = TRUE;
                 ns_proc_view_load(v, res->href);
@@ -1954,7 +1244,7 @@ on_result(gpointer data)
         } else {
             post_emit(v, NS_PROC_EVT_STATUS, "");
             if (!v->busy_cursor)
-                pv_set_named_cursor(area, res->cursor);
+                ns_pv_set_named_cursor(area, res->cursor);
         }
         if (!navigated && v->link_pending) {
             v->link_pending = FALSE;
@@ -1969,27 +1259,27 @@ on_result(gpointer data)
         if (res->href && *res->href) {
             post_emit(v, NS_PROC_EVT_STATUS, res->href);
             if (!v->busy_cursor)
-                pv_set_named_cursor(v->area, res->cursor ? res->cursor : "pointer");
+                ns_pv_set_named_cursor(v->area, res->cursor ? res->cursor : "pointer");
         } else {
             post_emit(v, NS_PROC_EVT_STATUS, "");
             if (!v->busy_cursor)
-                pv_set_named_cursor(v->area, res->cursor);
+                ns_pv_set_named_cursor(v->area, res->cursor);
         }
         if (res->ok)
-            request_render(v);
+            ns_pv_request_render(v);
         if (v->hover_pending) {
             v->hover_pending = FALSE;
             ns_pv_start_hover(v, v->hover_pending_x, v->hover_pending_y);
         }
     } else if (res->type == RES_DROPFILES) {
         if (res->ok)
-            request_render(v);
+            ns_pv_request_render(v);
     } else if (res->type == RES_SCROLLBAR) {
         if (res->kind == 0) {
             gboolean still = v->sb_probe;
             v->sb_probe = FALSE;
             if (res->ok) {
-                request_render(v);
+                ns_pv_request_render(v);
                 if (still) {
                     v->sb_dragging = TRUE;
                     if (v->sb_have_last) {
@@ -2016,14 +1306,14 @@ on_result(gpointer data)
             }
         } else if (res->kind == 1) {
             if (res->ok)
-                request_render(v);
+                ns_pv_request_render(v);
         }
     } else if (res->type == RES_RELEASE) {
         if (res->href && *res->href) {
             post_emit(v, NS_PROC_EVT_STATUS, res->href);
             ns_proc_view_load(v, res->href);
         } else if (res->ok) {
-            request_render(v);
+            ns_pv_request_render(v);
         }
     } else if (res->type == RES_FIND) {
         if (res->seq != v->find_seq)
@@ -2046,7 +1336,7 @@ on_result(gpointer data)
                                                     : 0;
             gtk_adjustment_set_value(v->vadj, target);
         }
-        request_render(v);
+        ns_pv_request_render(v);
     } else if (res->type == RES_EXPORT) {
         if (res->ok && res->url)
             post_emit(v, NS_PROC_EVT_STATUS, res->url);
@@ -2060,7 +1350,7 @@ on_result(gpointer data)
         } else {
             post_emit(v, NS_PROC_EVT_STATUS, ns_i18n("Nothing to print"));
         }
-        request_render(v);
+        ns_pv_request_render(v);
     } else if (res->type == RES_CONSOLE) {
         if (res->href && *res->href)
             console_append(v, res->href);
@@ -2078,7 +1368,7 @@ on_result(gpointer data)
         } else {
             console_append(v, "undefined\n");
         }
-        request_render(v);
+        ns_pv_request_render(v);
     } else if (res->type == RES_DUMP) {
         GtkTextBuffer *buf = NULL;
         switch (res->dump_tab) {
@@ -2135,158 +1425,6 @@ done:
     pv_unref(res->view);
     g_free(res);
     return G_SOURCE_REMOVE;
-}
-
-G_DECLARE_FINAL_TYPE(NsProcViewArea, ns_proc_view_area, NS, PROC_VIEW_AREA,
-                     GtkDrawingArea)
-
-struct _NsProcViewArea {
-    GtkDrawingArea parent_instance;
-    NsProcView    *view;
-};
-
-G_DEFINE_TYPE(NsProcViewArea, ns_proc_view_area, GTK_TYPE_DRAWING_AREA)
-
-static gboolean
-pv_frame_covers(NsProcView *v, double fs, const graphene_rect_t *area)
-{
-    return v->frame &&
-        gdk_texture_get_width(v->frame) / fs >= area->size.width - 0.5 &&
-        gdk_texture_get_height(v->frame) / fs >= area->size.height - 0.5;
-}
-
-static void
-pv_snapshot_page_video(GtkSnapshot *snapshot, double offset_x,
-                       double offset_y, gpointer data)
-{
-    NsProcView *v = data;
-    if (!ns_pv_media_on_page(v->media))
-        return;
-    double fs = ns_pv_raster_scale(v);
-    gtk_snapshot_save(snapshot);
-    gtk_snapshot_translate(snapshot,
-                           &GRAPHENE_POINT_INIT((float)(-offset_x / fs),
-                                                (float)(-offset_y / fs)));
-    ns_pv_media_snapshot(v->media, fs, snapshot);
-    gtk_snapshot_restore(snapshot);
-}
-
-static void
-ns_proc_view_area_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
-{
-    NsProcView *v = NS_PROC_VIEW_AREA(widget)->view;
-    if (!v)
-        return;
-    if (v->tiles_mode) {
-        ns_page_layers_snapshot(v->layers, snapshot,
-                                gtk_widget_get_width(widget),
-                                gtk_widget_get_height(widget),
-                                ns_pv_raster_scale(v), v->scroll_x, v->scroll_y,
-                                pv_snapshot_page_video, v);
-        return;
-    }
-    double fs = v->frame_scale > 0 ? v->frame_scale : 1.0;
-    graphene_rect_t area = GRAPHENE_RECT_INIT(
-        0, 0, gtk_widget_get_width(widget), gtk_widget_get_height(widget));
-    if (!pv_frame_covers(v, fs, &area)) {
-        GdkRGBA white = { 1.0f, 1.0f, 1.0f, 1.0f };
-        gtk_snapshot_append_color(snapshot, &white, &area);
-    }
-    if (!ns_pv_media_on_page(v->media))
-        ns_pv_media_snapshot(v->media, fs, snapshot);
-    if (!v->frame)
-        return;
-    graphene_rect_t bounds = GRAPHENE_RECT_INIT(
-        0, 0, gdk_texture_get_width(v->frame) / fs,
-        gdk_texture_get_height(v->frame) / fs);
-    gtk_snapshot_push_clip(snapshot, &area);
-    gtk_snapshot_append_texture(snapshot, v->frame, &bounds);
-    gtk_snapshot_pop(snapshot);
-}
-
-static void
-ns_proc_view_area_class_init(NsProcViewAreaClass *klass)
-{
-    GTK_WIDGET_CLASS(klass)->snapshot = ns_proc_view_area_snapshot;
-}
-
-static void
-ns_proc_view_area_init(NsProcViewArea *self)
-{
-    self->view = NULL;
-}
-
-static void
-on_resize(GtkDrawingArea *area, int width, int height, gpointer data)
-{
-    (void)area;
-    NsProcView *v = data;
-    if (v->deferred_url && width > 1 && height > 1) {
-        char *u = v->deferred_url;
-        gboolean rec = v->deferred_record;
-        gboolean hist = v->deferred_history;
-        gboolean activated = v->deferred_user_activated;
-        v->deferred_url = NULL;
-        do_load(v, u, rec, hist, activated);
-        g_free(u);
-        return;
-    }
-    if (v->opened) {
-        if (ns_pv_maybe_update_viewport(v))
-            return;
-        configure_adjustments(v);
-        request_render(v);
-    }
-}
-
-static gboolean
-on_scroll(GtkEventControllerScroll *ctrl, double dx, double dy, gpointer data)
-{
-    NsProcView *v = data;
-    if (!v->opened)
-        return FALSE;
-    GdkModifierType mods =
-        gtk_event_controller_get_current_event_state(
-            GTK_EVENT_CONTROLLER(ctrl));
-    GdkEvent *ev =
-        gtk_event_controller_get_current_event(GTK_EVENT_CONTROLLER(ctrl));
-    if (ev)
-        mods |= gdk_event_get_modifier_state(ev);
-    if (mods & GDK_CONTROL_MASK) {
-        double delta = dy != 0.0 ? dy : dx;
-        if (delta < 0)
-            ns_proc_view_zoom_in(v);
-        else if (delta > 0)
-            ns_proc_view_zoom_out(v);
-        return TRUE;
-    }
-    double s = ns_pv_cur_scale(v);
-    v->fling_vx = v->fling_vy = 0;
-    v->wheel_viewport = FALSE;
-    if (gtk_event_controller_scroll_get_unit(ctrl) == GDK_SCROLL_UNIT_SURFACE) {
-        queue_wheel_scroll(v, dx / s, dy / s);
-        return TRUE;
-    }
-    v->wheel_left_x += dx * NS_PV_WHEEL_STEP_PX / s;
-    v->wheel_left_y += dy * NS_PV_WHEEL_STEP_PX / s;
-    arm_wheel_animation(v);
-    return TRUE;
-}
-
-static void
-on_scroll_decelerate(GtkEventControllerScroll *ctrl, double vel_x,
-                     double vel_y, gpointer data)
-{
-    NsProcView *v = data;
-    if (!v->opened ||
-        (gtk_event_controller_get_current_event_state(
-             GTK_EVENT_CONTROLLER(ctrl)) & GDK_CONTROL_MASK))
-        return;
-    double s = ns_pv_cur_scale(v);
-    v->fling_vx = vel_x / s;
-    v->fling_vy = vel_y / s;
-    v->wheel_viewport = FALSE;
-    arm_wheel_animation(v);
 }
 
 typedef struct {
@@ -2777,10 +1915,10 @@ static void
 on_area_destroy(GtkWidget *widget, gpointer data)
 {
     NsProcView *v = data;
-    NS_PROC_VIEW_AREA(widget)->view = NULL;
+    ns_pv_area_set_view(widget, NULL);
     v->closed = TRUE;
     g_clear_object(&v->im);
-    disarm_anim(v);
+    ns_pv_disarm_anim(v);
     if (v->hover_after_scroll_id) {
         g_source_remove(v->hover_after_scroll_id);
         v->hover_after_scroll_id = 0;
@@ -3217,22 +2355,14 @@ ns_proc_view_new(void)
 
     v->hadj = gtk_adjustment_new(0, 0, 1, 60, 60, 1);
     v->vadj = gtk_adjustment_new(0, 0, 1, 60, 60, 1);
-    g_signal_connect(v->hadj, "value-changed", G_CALLBACK(on_adj_changed), v);
-    g_signal_connect(v->vadj, "value-changed", G_CALLBACK(on_adj_changed), v);
+    ns_pv_install_view_signals(v);
 
     v->layers = ns_page_layers_new();
-    v->area = g_object_new(ns_proc_view_area_get_type(), NULL);
-    NS_PROC_VIEW_AREA(v->area)->view = v;
+    v->area = ns_pv_area_new(v);
     gtk_widget_set_hexpand(v->area, TRUE);
     gtk_widget_set_vexpand(v->area, TRUE);
     gtk_widget_set_focusable(v->area, TRUE);
-    g_signal_connect(v->area, "resize", G_CALLBACK(on_resize), v);
-    g_signal_connect(v->area, "notify::has-focus",
-                     G_CALLBACK(on_area_focus_notify), v);
-    g_signal_connect(v->area, "notify::scale-factor",
-                     G_CALLBACK(on_device_scale_changed), v);
-    g_signal_connect(v->area, "realize", G_CALLBACK(on_area_realize), v);
-    g_signal_connect(v->area, "unrealize", G_CALLBACK(on_area_unrealize), v);
+    ns_pv_install_area_signals(v);
 
     GtkWidget *grid = gtk_grid_new();
     v->vscroll =
@@ -3260,12 +2390,7 @@ ns_proc_view_new(void)
     ctx_install_actions(v);
     ns_pv_input_install_secondary(v);
 
-    GtkEventController *scroll = gtk_event_controller_scroll_new(
-        GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES |
-        GTK_EVENT_CONTROLLER_SCROLL_KINETIC);
-    g_signal_connect(scroll, "scroll", G_CALLBACK(on_scroll), v);
-    g_signal_connect(scroll, "decelerate", G_CALLBACK(on_scroll_decelerate), v);
-    gtk_widget_add_controller(v->area, scroll);
+    ns_pv_install_scroll(v);
 
     ns_pv_input_install_keys(v);
 

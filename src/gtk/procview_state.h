@@ -282,6 +282,29 @@ int      ns_pv_css_viewport_h(NsProcView *v);
 
 double   ns_pv_scroll_target_x(const NsProcView *v);
 double   ns_pv_scroll_target_y(const NsProcView *v);
+
+GtkWidget  *ns_pv_area_new(NsProcView *v);
+void        ns_pv_area_set_view(GtkWidget *area, NsProcView *v);
+void        ns_pv_install_view_signals(NsProcView *v);
+void        ns_pv_install_area_signals(NsProcView *v);
+void        ns_pv_install_scroll(NsProcView *v);
+GdkTexture *ns_pv_stage_fill(const unsigned char *px, int w, int h, int stride);
+void        ns_pv_set_busy_cursor(NsProcView *v);
+void        ns_pv_clear_busy_cursor(NsProcView *v);
+void        ns_pv_set_named_cursor(GtkWidget *widget, const char *name);
+void        ns_pv_configure_adjustments(NsProcView *v);
+void        ns_pv_tiles_apply(NsProcView *v, const Res *res);
+void        ns_pv_tiles_leave(NsProcView *v);
+void        ns_pv_request_tick(NsProcView *v);
+void        ns_pv_request_render(NsProcView *v);
+void        ns_pv_start_render(NsProcView *v);
+void        ns_pv_stop_wheel_animation(NsProcView *v);
+gboolean    ns_pv_wheel_scrolling(NsProcView *v);
+void        ns_pv_scroll_view_to(NsProcView *v, double x, double y);
+void        ns_pv_arm_anim(NsProcView *v);
+void        ns_pv_disarm_anim(NsProcView *v);
+void        ns_pv_do_load(NsProcView *v, const char *url, gboolean record,
+                          gboolean history, gboolean user_activated);
 void     ns_pv_search_open(NsProcView *v);
 void     ns_pv_request_find(NsProcView *v, int direction);
 void     ns_pv_view_save(NsProcView *v, gboolean pdf);

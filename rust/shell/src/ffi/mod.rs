@@ -9,6 +9,7 @@ pub mod gdk;
 mod gtk;
 mod icons;
 mod pagelayers;
+mod procview_draw;
 mod procview_input;
 mod procview_media;
 mod procview_state;
