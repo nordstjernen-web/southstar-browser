@@ -773,8 +773,7 @@ void ns_js_dispatch_main_window_event(ns_js *js, const char *type,
 void ns_window_install_browsing_context(JSContext *ctx, JSValueConst global);
 void ns_window_install_state(ns_js *js, JSContext *ctx, JSValueConst global);
 void ns_window_install_actions(JSContext *ctx, JSValueConst global);
-JSValue ns_window_named_property(JSContext *ctx, JSValueConst window,
-                                 JSValueConst key);
+void    ns_window_named_register_class(JSContext *ctx);
 void ns_window_named_suspend(void);
 void ns_window_named_resume(void);
 const ns_node *ns_window_child_frame(const ns_node *doc, uint32_t index,
@@ -1205,12 +1204,8 @@ char    *ns_cssom_style_own_value(const ns_node *node, const char *name,
 void     ns_cssom_style_set(JSContext *ctx, ns_node *node, const char *name,
                             JSValueConst value);
 void     ns_cssom_teardown(ns_js *js);
-ns_node *ns_style_decl_node(JSValueConst this_val);
-JSValue  ns_style_decl_proto(JSContext *ctx);
-JSValue  ns_style_decl_new(JSContext *ctx, JSValueConst element);
-gboolean ns_is_style_decl(JSValueConst v);
-JSValue  ns_token_list_new(JSContext *ctx, JSValueConst element, const char *attr);
-gboolean ns_is_token_list(JSValueConst v);
+void     ns_cssom_register_style_class(JSContext *ctx, JSValue proto);
+JSValue  ns_style_class_proto(JSContext *ctx);
 gboolean ns_js_element_is_rendered(JSContext *ctx, JSValueConst v);
 GHashTable *ns_js_style_table(const ns_js *js);
 struct ns_anim *ns_js_anim(const ns_js *js);
@@ -1250,6 +1245,7 @@ void     ns_ce_reset(ns_js *js);
 void     ns_ce_teardown(ns_js *js);
 const ns_node *ns_js_ce_main_doc(const ns_js *js);
 JSValue  ns_js_node_wrapper(JSContext *ctx, const ns_node *node);
+gboolean ns_js_node_unpinned(const ns_js *js, const ns_node *node);
 gboolean ns_js_wrapper_pinned(const ns_js *js, const ns_node *node);
 void     ns_js_popover_removing(ns_js *js, ns_node *el);
 JSValue  ns_js_new_orphan_element(JSContext *ctx, const char *name);
@@ -1344,11 +1340,7 @@ void    ns_storage_switch_session(ns_js *js, const char *old_partition,
 void    ns_storage_load_local(ns_js *js, const char *url);
 void    ns_storage_install_proto(JSContext *ctx, JSValueConst proto);
 void    ns_storage_install_window(JSContext *ctx, JSValueConst global);
-char   *ns_storage_named_value(JSContext *ctx, JSValueConst obj, const char *name);
-int     ns_storage_named_set(JSContext *ctx, JSValueConst obj, const char *name,
-                             JSValueConst value);
-void    ns_storage_named_delete(JSContext *ctx, JSValueConst obj, const char *name);
-char  **ns_storage_names(JSContext *ctx, JSValueConst obj);
+void    ns_storage_register_class(JSContext *ctx, JSValue proto);
 int     ns_storage_area_of(JSValueConst obj);
 JSValue ns_storage_new(JSContext *ctx, int area);
 gboolean ns_js_halted(const ns_js *js);
@@ -1911,7 +1903,8 @@ void     ns_js_set_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace
 void     ns_js_remove_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
                                        const char *local_name);
 gboolean ns_valid_element_local_name(const char *s);
-ns_node *ns_token_list_node(JSValueConst this_val, const char **out_attr);
+void     ns_token_list_register_class(JSContext *ctx, JSValue proto);
+JSValue  ns_token_list_class_proto(JSContext *ctx);
 ns_node *ns_dataset_node(JSValueConst obj);
 ns_node *ns_namedmap_owner(JSValueConst this_val);
 void    *ns_attr_opaque(JSValueConst value);
@@ -1928,7 +1921,6 @@ JSValue  ns_tlist_toString(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 JSValue  ns_tlist_get_length(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_tlist_get_value(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_tlist_set_value(JSContext *ctx, JSValueConst this_val, JSValueConst val);
-char    *ns_tlist_named_token(JSValueConst obj, const char *name);
 char    *ns_dataset_named_value(JSValueConst obj, const char *name);
 char   **ns_dataset_names(JSValueConst obj);
 int      ns_dataset_named_set(JSContext *ctx, JSValueConst obj, const char *name,

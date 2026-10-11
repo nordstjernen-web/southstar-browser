@@ -199,10 +199,7 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_js_element_is_rendered(ctx: *mut JSContext, value: JSValue) -> GBoolean;
-    fn ns_style_decl_node(value: JSValue) -> *mut NsNode;
-    fn ns_style_decl_proto(ctx: *mut JSContext) -> JSValue;
-    fn ns_style_decl_new(ctx: *mut JSContext, element: JSValue) -> JSValue;
-    fn ns_is_style_decl(value: JSValue) -> GBoolean;
+    fn ns_js_node_unpinned(js: *const c_void, node: *const NsNode) -> GBoolean;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_unwrap_element(value: JSValue) -> *const NsNode;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
@@ -466,22 +463,39 @@ pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value 
 }
 
 pub(crate) fn style_decl_node(value: &Value) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_style_decl_node(quickjs::raw(value))) }
+    crate::class::node_of(value)
 }
 
 pub(crate) fn is_style_decl(value: &Value) -> bool {
-    unsafe { ns_is_style_decl(quickjs::raw(value)) != 0 }
+    crate::class::is_style_decl(value)
 }
 
 pub(crate) fn new_style_decl(scope: &mut Scope<'_>, element: &Value) -> Result<Value, Value> {
-    let raw = unsafe { ns_style_decl_new(quickjs::raw_context(scope), quickjs::raw(element)) };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    crate::class::new_style_decl(scope, element)
 }
 
 pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_style_decl_proto(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    crate::class::prototype(scope)
+}
+
+pub(crate) fn write_ignored(scope: &Scope<'_>, node: Node<'_>) -> bool {
+    let js = quickjs::context_opaque(scope);
+    unsafe { ns_js_node_unpinned(js, node.as_ptr()) != 0 }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_cssom_register_style_class(ctx: *mut JSContext, proto: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::take_value(scope, proto);
+            crate::class::register(scope, proto);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_style_class_proto(ctx: *mut JSContext) -> JSValue {
+    unsafe { quickjs::with_context(ctx, |scope| quickjs::into_raw(style_decl_proto(scope))) }
 }
 
 pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {

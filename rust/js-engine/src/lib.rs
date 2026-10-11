@@ -19,7 +19,97 @@ use quickjs_ffi as backend;
 
 #[cfg(feature = "quickjs")]
 pub use backend::quickjs;
-pub use backend::{ENGINE_NAME, Engine, ObjectKey, Realm, Scope, Value, engine_version};
+pub use backend::{
+    ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Realm, Scope, Value,
+    engine_version,
+};
+
+pub type GetOwnHook =
+    for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey) -> Result<Option<OwnProperty>, Value>;
+
+pub type GetOwnReceiverHook =
+    for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey, &Value) -> Result<Option<OwnProperty>, Value>;
+
+pub type OwnKeysHook = for<'a> fn(&mut Scope<'a>, &Value) -> Result<Vec<PropertyKey>, Value>;
+
+pub type DefineHook =
+    for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey, &PropertyDefinition) -> Result<bool, Value>;
+
+pub type DeleteHook = for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey) -> Result<bool, Value>;
+
+pub type SetHook =
+    for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey, &Value, &Value) -> Result<bool, Value>;
+
+#[derive(Clone, Copy)]
+pub struct ClassHooks {
+    pub get_own_property: Option<GetOwnHook>,
+    pub get_own_property_receiver: Option<GetOwnReceiverHook>,
+    pub own_keys: Option<OwnKeysHook>,
+    pub define_own_property: Option<DefineHook>,
+    pub delete: Option<DeleteHook>,
+    pub set: Option<SetHook>,
+}
+
+impl ClassHooks {
+    pub const NONE: ClassHooks = ClassHooks {
+        get_own_property: None,
+        get_own_property_receiver: None,
+        own_keys: None,
+        define_own_property: None,
+        delete: None,
+        set: None,
+    };
+}
+
+pub struct HostClass {
+    pub name: &'static core::ffi::CStr,
+    pub hooks: ClassHooks,
+    id: core::sync::atomic::AtomicU32,
+}
+
+impl HostClass {
+    pub const fn new(name: &'static core::ffi::CStr, hooks: ClassHooks) -> HostClass {
+        HostClass {
+            name,
+            hooks,
+            id: core::sync::atomic::AtomicU32::new(0),
+        }
+    }
+
+    #[cfg_attr(not(feature = "quickjs"), allow(dead_code))]
+    pub(crate) fn assigned_id(&self) -> u32 {
+        self.id.load(core::sync::atomic::Ordering::Acquire)
+    }
+
+    #[cfg_attr(not(feature = "quickjs"), allow(dead_code))]
+    pub(crate) fn id_slot(&self) -> &core::sync::atomic::AtomicU32 {
+        &self.id
+    }
+}
+
+pub struct OwnProperty {
+    pub value: Value,
+    pub getter: Value,
+    pub setter: Value,
+    pub accessor: bool,
+    pub writable: bool,
+    pub enumerable: bool,
+    pub configurable: bool,
+}
+
+impl OwnProperty {
+    pub fn data(value: Value, writable: bool, enumerable: bool, configurable: bool) -> OwnProperty {
+        OwnProperty {
+            value,
+            getter: Value::undefined(),
+            setter: Value::undefined(),
+            accessor: false,
+            writable,
+            enumerable,
+            configurable,
+        }
+    }
+}
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
 
 pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Result<Value, Value>;

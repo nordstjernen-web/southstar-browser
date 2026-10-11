@@ -933,18 +933,23 @@ pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_named_property(
-    ctx: *mut JSContext,
-    window: JSValue,
-    key: JSValue,
-) -> JSValue {
+pub unsafe extern "C" fn ns_window_named_register_class(ctx: *mut JSContext) {
+    unsafe { quickjs::with_context(ctx, crate::class::register) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_new_window_named(ctx: *mut JSContext) -> JSValue {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            let window = quickjs::borrow_value(scope, window);
-            let key = quickjs::borrow_value(scope, key);
-            quickjs::into_raw(named::named_property(scope, &window, &key))
+            let named = crate::class::new_window_named(scope);
+            quickjs::result_raw(scope, named)
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_js_window_named_class_id() -> u32 {
+    quickjs::class_id(&crate::class::WINDOW_NAMED_CLASS)
 }
 
 #[unsafe(no_mangle)]

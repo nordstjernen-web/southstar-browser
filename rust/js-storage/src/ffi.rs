@@ -13,7 +13,7 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 use crate::store::{Area, Items, Snapshot};
-use crate::{Page, binding, events};
+use crate::{Page, binding, class, events};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -49,8 +49,6 @@ const LOG_LEVEL_WARNING: c_int = 1 << 4;
 const KEY_FILE_NONE: c_int = 0;
 
 unsafe extern "C" {
-    fn ns_storage_area_of(obj: JSValue) -> c_int;
-    fn ns_storage_new(ctx: *mut JSContext, area: c_int) -> JSValue;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
     fn ns_js_in_main_realm(js: *mut NsJs, f: MainRealmFn, data: *mut c_void);
@@ -143,15 +141,11 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn area_of(value: &Value) -> Option<Area> {
-    if !value.is_object() {
-        return None;
-    }
-    Area::from_tag(unsafe { ns_storage_area_of(quickjs::raw(value)) })
+    class::area_of(value)
 }
 
 pub(crate) fn new_storage(scope: &mut Scope<'_>, area: i32) -> Value {
-    let raw = unsafe { ns_storage_new(quickjs::raw_context(scope), area) };
-    unsafe { quickjs::take_value(scope, raw) }
+    class::new_storage(scope, area).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -503,71 +497,31 @@ pub unsafe extern "C" fn ns_storage_install_window(ctx: *mut JSContext, global: 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_named_value(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    name: *const c_char,
-) -> *mut c_char {
-    let Some(name) = owned(name) else {
-        return ptr::null_mut();
-    };
-    let value = unsafe {
-        with_value(ctx, obj, |scope, obj| {
-            binding::named_value(scope, obj, &name)
-        })
-    };
-    value.map_or(ptr::null_mut(), |value| {
-        glib::strdup(c_text(&value).as_bytes())
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_named_set(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    name: *const c_char,
-    value: JSValue,
-) -> c_int {
-    let Some(name) = owned(name) else {
-        return 0;
-    };
+pub unsafe extern "C" fn ns_storage_register_class(ctx: *mut JSContext, proto: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            let obj = quickjs::borrow_value(scope, obj);
-            let value = quickjs::borrow_value(scope, value);
-            match binding::named_set(scope, &obj, &name, &value) {
-                Ok(()) => 1,
-                Err(error) => {
-                    quickjs::result_raw(scope, Err(error));
-                    -1
-                }
-            }
+            let proto = quickjs::take_value(scope, proto);
+            class::register(scope, proto);
         })
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_named_delete(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    name: *const c_char,
-) {
-    if let Some(name) = owned(name) {
-        unsafe {
-            with_value(ctx, obj, |scope, obj| {
-                binding::named_delete(scope, obj, &name)
-            })
-        }
-    }
+pub extern "C" fn ns_js_storage_class_id() -> u32 {
+    quickjs::class_id(&class::STORAGE_CLASS)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_names(ctx: *mut JSContext, obj: JSValue) -> *mut *mut c_char {
-    let names = unsafe { with_value(ctx, obj, |scope, obj| binding::names(scope, obj)) };
-    let strv = unsafe { glib::g_malloc0((names.len() + 1) * size_of::<*mut c_char>()) }
-        .cast::<*mut c_char>();
-    for (i, name) in names.iter().enumerate() {
-        unsafe { *strv.add(i) = glib::strdup(c_text(name).as_bytes()) };
+pub unsafe extern "C" fn ns_storage_area_of(obj: JSValue) -> c_int {
+    unsafe { quickjs::with_raw(obj, class::area_tag) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_storage_new(ctx: *mut JSContext, area: c_int) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let storage = class::new_storage(scope, area);
+            quickjs::result_raw(scope, storage)
+        })
     }
-    strv
 }

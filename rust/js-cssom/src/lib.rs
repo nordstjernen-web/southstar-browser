@@ -4,6 +4,7 @@
 
 mod animate;
 mod animations;
+mod class;
 mod computed;
 mod css;
 mod declaration;

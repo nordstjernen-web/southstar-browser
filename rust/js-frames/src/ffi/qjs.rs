@@ -104,8 +104,8 @@ unsafe extern "C" {
     fn JS_SetClassProto(ctx: *mut JSContext, class_id: u32, obj: JSValue);
     fn JS_NewObjectClass(ctx: *mut JSContext, class_id: c_int) -> JSValue;
     fn JS_NewObjectProto(ctx: *mut JSContext, proto: JSValue) -> JSValue;
-    fn JS_GetOpaque(obj: JSValue, class_id: u32) -> *mut c_void;
-    fn JS_SetOpaque(obj: JSValue, opaque: *mut c_void) -> c_int;
+    fn ns_storage_area_of(obj: JSValue) -> c_int;
+    fn ns_storage_new(ctx: *mut JSContext, area: c_int) -> JSValue;
     fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
     fn JS_Eval(
         ctx: *mut JSContext,
@@ -178,12 +178,8 @@ pub(crate) fn class_id(value: &Value) -> u32 {
     unsafe { JS_GetClassID(quickjs::raw(value)) }
 }
 
-pub(crate) fn opaque(value: &Value, class: u32) -> *mut c_void {
-    unsafe { JS_GetOpaque(quickjs::raw(value), class) }
-}
-
-pub(crate) fn set_opaque(value: &Value, data: *mut c_void) {
-    unsafe { JS_SetOpaque(quickjs::raw(value), data) };
+pub(crate) fn storage_area(value: &Value) -> c_int {
+    unsafe { ns_storage_area_of(quickjs::raw(value)) }
 }
 
 fn trimmed_c_text(text: &str) -> CString {
@@ -436,6 +432,11 @@ impl Ctx {
 
     pub fn set_class_proto(self, class: u32, prototype: Value) {
         unsafe { JS_SetClassProto(self.ptr(), class, quickjs::into_raw(prototype)) };
+    }
+
+    pub fn new_storage(self, area: c_int) -> Option<Value> {
+        let raw = unsafe { ns_storage_new(self.ptr(), area) };
+        self.take(raw)
     }
 
     pub fn new_object_class(self, class: u32) -> Option<Value> {

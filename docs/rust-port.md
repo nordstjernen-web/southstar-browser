@@ -748,6 +748,20 @@ in step with every new neutral-API helper cost more than it gave.
    `quickjs` wrap and the `quickjs` module in `js-engine`. That takes out
    about 101,000 lines of vendored C.
 
+Host classes with exotic behaviour (October 2026). The bindings declare a
+class as a static `HostClass` with optional hooks (`get_own_property`,
+`get_own_property_receiver`, `own_keys`, `define_own_property`, `delete`,
+`set`); instances carry typed Rust data, traced through `Trace`, and each
+realm holds the class prototype (`register_class`, `set_class_prototype`,
+`new_instance_with`, `Value::with_instance`). On QuickJS a class is a real
+engine class: one set of exotic-method trampolines dispatches on the class
+id, and `ns_new_class_id` now lives in `js-engine` so C and Rust share one
+class-id allocator. Boa 0.22 keeps custom internal methods crate-private, so
+on Boa a host class is an ordinary object with the instance data and the
+per-class prototype, and its hooks do not run: named and indexed access on
+Storage, DOMTokenList, CSSStyleDeclaration and WindowProperties is missing
+there until Boa exposes exotic objects or the classes move to a Proxy.
+
 ### Phase 8 — Remaining web platform features
 
 Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),

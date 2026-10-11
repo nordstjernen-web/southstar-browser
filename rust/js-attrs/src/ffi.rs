@@ -60,7 +60,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_token_list_node(obj: JSValue, attr: *mut *const c_char) -> *mut NsNode;
     fn ns_dataset_node(obj: JSValue) -> *mut NsNode;
     fn ns_namedmap_owner(obj: JSValue) -> *mut NsNode;
     fn ns_attr_new_object(ctx: *mut JSContext, state: *mut c_void) -> JSValue;
@@ -69,8 +68,6 @@ unsafe extern "C" {
     fn ns_valid_element_local_name(name: *const c_char) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_token_list_new(ctx: *mut JSContext, element: JSValue, attr: *const c_char) -> JSValue;
-    fn ns_is_token_list(obj: JSValue) -> GBoolean;
     fn ns_element_reflect_str_get(
         ctx: *mut JSContext,
         this_val: JSValue,
@@ -170,20 +167,11 @@ pub(crate) fn remove_attr_ns(js: Js, node: Element, namespace_uri: Option<&CStr>
 }
 
 pub(crate) fn token_list_node(value: &Value) -> (Option<Element>, &'static CStr) {
-    token_list_node_raw(quickjs::raw(value))
-}
-
-fn token_list_node_raw(obj: JSValue) -> (Option<Element>, &'static CStr) {
-    let mut attr: *const c_char = ptr::null();
-    let node = unsafe { ns_token_list_node(obj, &mut attr) };
-    (
-        unsafe { Node::from_ptr(node) },
-        c_str(attr).unwrap_or(c"class"),
-    )
+    crate::class::node_of(value)
 }
 
 pub(crate) fn is_token_list(value: &Value) -> bool {
-    unsafe { ns_is_token_list(quickjs::raw(value)) != 0 }
+    crate::class::is_token_list(value)
 }
 
 pub(crate) fn new_token_list(
@@ -191,15 +179,7 @@ pub(crate) fn new_token_list(
     element: &Value,
     attr: &'static CStr,
 ) -> Result<Value, Value> {
-    let raw = unsafe {
-        ns_token_list_new(
-            quickjs::raw_context(scope),
-            quickjs::raw(element),
-            attr.as_ptr(),
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    crate::class::new_token_list(scope, element, attr)
 }
 
 pub(crate) fn reflect_str_get(
@@ -472,13 +452,22 @@ pub unsafe extern "C" fn ns_tlist_set_value(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_tlist_named_token(obj: JSValue, name: *const c_char) -> *mut c_char {
-    let Some(name) = c_str(name) else {
-        return ptr::null_mut();
-    };
-    let (node, attr) = token_list_node_raw(obj);
-    node.and_then(|node| crate::token_list::indexed_token(node, attr, name.to_bytes()))
-        .map_or(ptr::null_mut(), |token| glib::strdup(&token))
+pub unsafe extern "C" fn ns_token_list_register_class(ctx: *mut JSContext, proto: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::take_value(scope, proto);
+            crate::class::register(scope, proto);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_token_list_class_proto(ctx: *mut JSContext) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            quickjs::into_raw(crate::class::prototype(scope))
+        })
+    }
 }
 
 #[unsafe(no_mangle)]

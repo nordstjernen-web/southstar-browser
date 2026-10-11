@@ -12,7 +12,7 @@ use southstar_js_engine::quickjs;
 use crate::ffi::qjs::{
     Atom, Ctx, Descriptor, GPN_ENUM_ONLY, GPN_PRIVATE, GPN_STRING, GPN_SYMBOL, PROP_C_W_E,
     PROP_CONFIGURABLE, PROP_ENUMERABLE, PROP_HAS_CONFIGURABLE, PROP_HAS_ENUMERABLE, PROP_HAS_GET,
-    PROP_HAS_SET, PROP_HAS_VALUE, PROP_HAS_WRITABLE, PROP_WRITABLE, class_id, opaque, set_opaque,
+    PROP_HAS_SET, PROP_HAS_VALUE, PROP_HAS_WRITABLE, PROP_WRITABLE, class_id, storage_area,
 };
 use crate::ffi::{self, Js};
 use crate::page;
@@ -454,11 +454,10 @@ impl Cloner {
         }
     }
 
-    fn clone_storage(&mut self, value: &Value, storage_class: u32) -> Value {
-        let Some(out) = self.dst.new_object_class(storage_class) else {
+    fn clone_storage(&mut self, value: &Value) -> Value {
+        let Some(out) = self.dst.new_storage(storage_area(value)) else {
             return value.clone();
         };
-        set_opaque(&out, opaque(value, storage_class));
         self.put(value, &out);
         out
     }
@@ -514,7 +513,7 @@ impl Cloner {
         let class = class_id(value);
         let storage = ffi::storage_class_id();
         if storage != 0 && class == storage {
-            return self.clone_storage(value, storage);
+            return self.clone_storage(value);
         }
         if !self.instance_is_plain(value, class, depth) {
             return value.clone();

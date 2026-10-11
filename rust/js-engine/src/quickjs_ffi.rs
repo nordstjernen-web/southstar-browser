@@ -18,6 +18,10 @@ use crate::{
     RealmInit, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView,
 };
 
+mod class;
+
+pub use class::{PropertyDefinition, PropertyKey};
+
 pub const ENGINE_NAME: &str = "quickjs-ng";
 
 #[repr(C)]
@@ -116,6 +120,9 @@ const PROP_CONFIGURABLE: c_int = 1 << 0;
 const PROP_WRITABLE: c_int = 1 << 1;
 const PROP_ENUMERABLE: c_int = 1 << 2;
 const PROP_GETSET: c_int = 1 << 4;
+const PROP_HAS_GET: c_int = 1 << 11;
+const PROP_HAS_SET: c_int = 1 << 12;
+const PROP_HAS_VALUE: c_int = 1 << 13;
 const ATOM_NULL: JSAtom = 0;
 const HOST_CLASS_ID: u32 = 512;
 
@@ -914,6 +921,7 @@ impl Drop for Engine {
 }
 
 pub mod quickjs {
+    pub use super::class::class_id;
     use core::ffi::{c_char, c_int, c_void};
 
     pub use super::{JSContext, JSValue};
@@ -925,6 +933,14 @@ pub mod quickjs {
 
     pub unsafe fn borrow_value(scope: &Scope<'_>, raw: JSValue) -> Value {
         Value::own(scope.ctx, unsafe { super::JS_DupValue(scope.ctx, raw) })
+    }
+
+    pub unsafe fn with_raw<R>(raw: JSValue, f: impl FnOnce(&Value) -> R) -> R {
+        let value = core::mem::ManuallyDrop::new(Value {
+            rt: core::ptr::null_mut(),
+            raw,
+        });
+        f(&value)
     }
 
     pub fn raw_context(scope: &Scope<'_>) -> *mut JSContext {

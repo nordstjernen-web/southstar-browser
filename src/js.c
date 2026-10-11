@@ -6,19 +6,6 @@
 #include "js.h"
 #include "js_classid.h"
 
-JSClassID ns_new_class_id(JSClassID *pclass_id)
-{
-    static gint next_id = 192;
-    gint id = g_atomic_int_get((gint *)pclass_id);
-    if (id == 0) {
-        gint fresh = g_atomic_int_add(&next_id, 1);
-        if (!g_atomic_int_compare_and_exchange((gint *)pclass_id, 0, fresh))
-            id = g_atomic_int_get((gint *)pclass_id);
-        else
-            id = fresh;
-    }
-    return (JSClassID)id;
-}
 #include "polyfills.h"
 #include "streaming.h"
 #include "version.h"
@@ -1052,12 +1039,8 @@ ns_timer_this_is_detached_window(ns_js *js, JSContext *ctx,
 
 static JSClassID ns_element_class_id;
 static JSClassID ns_attr_class_id;
-static JSClassID ns_style_class_id;
-static JSClassID ns_token_list_class_id;
-static JSClassID ns_storage_class_id;
 static JSClassID ns_live_class_id;
 static JSClassID ns_dataset_class_id;
-static JSClassID ns_window_named_class_id;
 
 /* Events.  What the engine sets on an event lives in a state object of its
  * own that page scripts do not see: the attributes are getters on the event
@@ -1289,190 +1272,6 @@ ns_event_state(JSValueConst v)
 
 static ns_node *ns_unwrap_element_mut(JSValueConst val);
 
-typedef struct {
-    JSValue element;
-} ns_style_back;
-
-static void
-ns_style_finalizer(JSRuntime *rt, JSValue val)
-{
-    ns_style_back *b = JS_GetOpaque(val, ns_style_class_id);
-    if (!b) return;
-    JS_FreeValueRT(rt, b->element);
-    g_free(b);
-}
-
-static void
-ns_style_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
-{
-    ns_style_back *b = JS_GetOpaque(val, ns_style_class_id);
-    if (b) JS_MarkValue(rt, b->element, mark_func);
-}
-
-ns_node *
-ns_style_decl_node(JSValueConst this_val)
-{
-    ns_style_back *b = JS_GetOpaque(this_val, ns_style_class_id);
-    return b ? ns_unwrap_element_mut(b->element) : NULL;
-}
-
-JSValue
-ns_style_decl_proto(JSContext *ctx)
-{
-    return JS_GetClassProto(ctx, ns_style_class_id);
-}
-
-JSValue
-ns_style_decl_new(JSContext *ctx, JSValueConst element)
-{
-    JSValue obj = JS_NewObjectClass(ctx, ns_style_class_id);
-    if (JS_IsException(obj)) return obj;
-    ns_style_back *b = g_new0(ns_style_back, 1);
-    b->element = JS_DupValue(ctx, element);
-    JS_SetOpaque(obj, b);
-    return obj;
-}
-
-gboolean
-ns_is_style_decl(JSValueConst v)
-{
-    return JS_GetOpaque(v, ns_style_class_id) != NULL;
-}
-
-static int
-ns_style_get_own_property(JSContext *ctx, JSPropertyDescriptor *desc,
-                          JSValueConst obj, JSAtom prop)
-{
-    ns_node *n = ns_style_decl_node(obj);
-    if (!n) return 0;
-    JSValue key = JS_AtomToValue(ctx, prop);
-    gboolean is_sym = JS_IsSymbol(key);
-    JS_FreeValue(ctx, key);
-    if (is_sym) return 0;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return 0;
-    gboolean writable = FALSE;
-    char *value = ns_cssom_style_own_value(n, name, &writable);
-    JS_FreeCString(ctx, name);
-    if (!value) return 0;
-    if (desc) {
-        desc->flags = JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE |
-                      (writable ? JS_PROP_WRITABLE : 0);
-        desc->value = JS_NewString(ctx, value);
-        desc->getter = JS_UNDEFINED;
-        desc->setter = JS_UNDEFINED;
-    }
-    g_free(value);
-    return 1;
-}
-
-static int
-ns_style_set_property(JSContext *ctx, JSValueConst obj, JSAtom prop,
-                      JSValueConst val, JSValueConst receiver, int flags)
-{
-    (void)receiver; (void)flags;
-    ns_node *n = ns_style_decl_node(obj);
-    if (!n) return FALSE;
-    ns_js *js = js_from_ctx(ctx);
-    if (js && js->pinned_wrappers_set &&
-        !g_hash_table_contains(js->pinned_wrappers_set, n))
-        return TRUE;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return FALSE;
-    ns_cssom_style_set(ctx, n, name, val);
-    JS_FreeCString(ctx, name);
-    return TRUE;
-}
-
-static JSClassExoticMethods ns_style_exotic = {
-    .get_own_property = ns_style_get_own_property,
-    .set_property     = ns_style_set_property,
-};
-
-static JSClassDef ns_style_class = {
-    .class_name = "CSSStyleDeclaration",
-    .finalizer  = ns_style_finalizer,
-    .gc_mark    = ns_style_gc_mark,
-    .exotic     = &ns_style_exotic,
-};
-
-typedef struct {
-    JSValue     element;
-    const char *attr;
-} ns_token_list_back;
-
-static void
-ns_token_list_finalizer(JSRuntime *rt, JSValue val)
-{
-    ns_token_list_back *b = JS_GetOpaque(val, ns_token_list_class_id);
-    if (!b) return;
-    JS_FreeValueRT(rt, b->element);
-    g_free(b);
-}
-
-static void
-ns_token_list_gc_mark(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func)
-{
-    ns_token_list_back *b = JS_GetOpaque(val, ns_token_list_class_id);
-    if (b) JS_MarkValue(rt, b->element, mark_func);
-}
-
-JSValue
-ns_token_list_new(JSContext *ctx, JSValueConst element, const char *attr)
-{
-    JSValue obj = JS_NewObjectClass(ctx, ns_token_list_class_id);
-    if (JS_IsException(obj)) return obj;
-    ns_token_list_back *b = g_new0(ns_token_list_back, 1);
-    b->element = JS_DupValue(ctx, element);
-    b->attr = attr;
-    JS_SetOpaque(obj, b);
-    return obj;
-}
-
-gboolean
-ns_is_token_list(JSValueConst v)
-{
-    return JS_GetOpaque(v, ns_token_list_class_id) != NULL;
-}
-
-static int
-ns_tlist_get_own(JSContext *ctx, JSPropertyDescriptor *desc,
-                 JSValueConst obj, JSAtom prop)
-{
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return 0;
-    char *token = ns_tlist_named_token(obj, name);
-    JS_FreeCString(ctx, name);
-    if (!token) return 0;
-    if (desc) {
-        desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE;
-        desc->value  = JS_NewString(ctx, token);
-        desc->getter = JS_UNDEFINED;
-        desc->setter = JS_UNDEFINED;
-    }
-    g_free(token);
-    return 1;
-}
-
-static JSClassExoticMethods ns_token_list_exotic = {
-    .get_own_property = ns_tlist_get_own,
-};
-
-static JSClassDef ns_token_list_class = {
-    .class_name = "DOMTokenList",
-    .finalizer  = ns_token_list_finalizer,
-    .gc_mark    = ns_token_list_gc_mark,
-    .exotic     = &ns_token_list_exotic,
-};
-
-ns_node *
-ns_token_list_node(JSValueConst this_val, const char **out_attr)
-{
-    ns_token_list_back *b = JS_GetOpaque(this_val, ns_token_list_class_id);
-    if (out_attr) *out_attr = b ? b->attr : "class";
-    return b ? ns_unwrap_element_mut(b->element) : NULL;
-}
-
 static void
 ns_partition_apply(ns_js *js, const char *new_url)
 {
@@ -1517,128 +1316,6 @@ ns_storage_load_for(ns_js *js, const char *new_url)
     ns_partition_apply(js, new_url);
     ns_storage_load_local(js, new_url);
 }
-
-static void
-ns_storage_finalizer(JSRuntime *rt, JSValue val) { (void)rt; (void)val; }
-
-int
-ns_storage_area_of(JSValueConst obj)
-{
-    return (int)(gintptr)JS_GetOpaque(obj, ns_storage_class_id);
-}
-
-JSValue
-ns_storage_new(JSContext *ctx, int area)
-{
-    JSValue obj = JS_NewObjectClass(ctx, ns_storage_class_id);
-    if (!JS_IsException(obj)) JS_SetOpaque(obj, (void *)(gintptr)area);
-    return obj;
-}
-
-static int
-ns_storage_get_own(JSContext *ctx, JSPropertyDescriptor *desc,
-                   JSValueConst obj, JSAtom prop)
-{
-    if (!ns_storage_area_of(obj)) return 0;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return 0;
-    char *val = ns_storage_named_value(ctx, obj, name);
-    JS_FreeCString(ctx, name);
-    if (!val) return 0;
-    if (desc) {
-        desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE | JS_PROP_WRITABLE;
-        desc->value  = JS_NewString(ctx, val);
-        desc->getter = JS_UNDEFINED;
-        desc->setter = JS_UNDEFINED;
-    }
-    g_free(val);
-    return 1;
-}
-
-static int
-ns_storage_set_prop(JSContext *ctx, JSValueConst obj, JSAtom prop,
-                    JSValueConst val, JSValueConst receiver, int flags)
-{
-    (void)receiver; (void)flags;
-    if (!ns_storage_area_of(obj)) return FALSE;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return FALSE;
-    int ret = ns_storage_named_set(ctx, obj, name, val);
-    JS_FreeCString(ctx, name);
-    return ret;
-}
-
-static int
-ns_storage_delete(JSContext *ctx, JSValueConst obj, JSAtom prop)
-{
-    if (!ns_storage_area_of(obj)) return FALSE;
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return FALSE;
-    ns_storage_named_delete(ctx, obj, name);
-    JS_FreeCString(ctx, name);
-    return TRUE;
-}
-
-static int
-ns_storage_define_own(JSContext *ctx, JSValueConst this_obj, JSAtom prop,
-                      JSValueConst val, JSValueConst getter,
-                      JSValueConst setter, int flags)
-{
-    JSValue key = JS_AtomToValue(ctx, prop);
-    gboolean is_symbol = JS_IsSymbol(key);
-    JS_FreeValue(ctx, key);
-    if (!ns_storage_area_of(this_obj) || is_symbol || JS_IsObject(getter) ||
-        JS_IsObject(setter) || JS_IsUndefined(val))
-        return JS_DefineProperty(ctx, this_obj, prop, val, getter, setter,
-                                 flags | JS_PROP_NO_EXOTIC);
-    const char *name = JS_AtomToCString(ctx, prop);
-    if (!name) return -1;
-    int ret = ns_storage_named_set(ctx, this_obj, name, val);
-    JS_FreeCString(ctx, name);
-    return ret;
-}
-
-static int
-ns_storage_get_own_names(JSContext *ctx, JSPropertyEnum **ptab, uint32_t *plen,
-                         JSValueConst obj)
-{
-    *ptab = NULL;
-    *plen = 0;
-    if (!ns_storage_area_of(obj)) return 0;
-    char **names = ns_storage_names(ctx, obj);
-    guint count = names ? g_strv_length(names) : 0;
-    if (count == 0) {
-        g_strfreev(names);
-        return 0;
-    }
-    JSPropertyEnum *tab = js_malloc(ctx, sizeof(JSPropertyEnum) * count);
-    if (!tab) {
-        g_strfreev(names);
-        return -1;
-    }
-    for (guint i = 0; i < count; i++) {
-        tab[i].atom = JS_NewAtom(ctx, names[i]);
-        tab[i].is_enumerable = 1;
-    }
-    g_strfreev(names);
-    *ptab = tab;
-    *plen = count;
-    return 0;
-}
-
-static JSClassExoticMethods ns_storage_exotic = {
-    .get_own_property       = ns_storage_get_own,
-    .get_own_property_names = ns_storage_get_own_names,
-    .set_property           = ns_storage_set_prop,
-    .delete_property        = ns_storage_delete,
-    .define_own_property    = ns_storage_define_own,
-};
-
-static JSClassDef ns_storage_class = {
-    .class_name = "Storage",
-    .finalizer  = ns_storage_finalizer,
-    .exotic     = &ns_storage_exotic,
-};
 
 static const JSCFunctionListEntry ns_tlist_proto_funcs[] = {
     JS_CFUNC_DEF("contains", 1, ns_tlist_contains),
@@ -1880,59 +1557,6 @@ ns_unwrap_element(JSValueConst val)
 {
     return JS_GetOpaque(val, ns_element_class_id);
 }
-
-
-static int
-ns_window_named_fill(JSContext *ctx, JSPropertyDescriptor *desc,
-                     JSValueConst window, JSAtom prop)
-{
-    JSValue key = JS_AtomToValue(ctx, prop);
-    JSValue value = ns_window_named_property(ctx, window, key);
-    JS_FreeValue(ctx, key);
-    if (!JS_IsObject(value)) {
-        JS_FreeValue(ctx, value);
-        return 0;
-    }
-    if (!desc) {
-        JS_FreeValue(ctx, value);
-        return 1;
-    }
-    desc->flags  = JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE;
-    desc->value  = value;
-    desc->getter = JS_UNDEFINED;
-    desc->setter = JS_UNDEFINED;
-    return 1;
-}
-
-static int
-ns_window_named_get(JSContext *ctx, JSPropertyDescriptor *desc,
-                    JSValueConst obj, JSAtom prop)
-{
-    (void)obj;
-    JSValue global = JS_GetGlobalObject(ctx);
-    int found = ns_window_named_fill(ctx, desc, global, prop);
-    JS_FreeValue(ctx, global);
-    return found;
-}
-
-static int
-ns_window_named_get_receiver(JSContext *ctx, JSPropertyDescriptor *desc,
-                             JSValueConst obj, JSAtom prop,
-                             JSValueConst receiver)
-{
-    (void)obj;
-    return ns_window_named_fill(ctx, desc, receiver, prop);
-}
-
-static JSClassExoticMethods ns_window_named_exotic = {
-    .get_own_property          = ns_window_named_get,
-    .get_own_property_receiver = ns_window_named_get_receiver,
-};
-
-static JSClassDef ns_window_named_class = {
-    .class_name = "WindowProperties",
-    .exotic     = &ns_window_named_exotic,
-};
 
 
 static ns_node *
@@ -4029,6 +3653,13 @@ ns_js_node_wrapper(JSContext *ctx, const ns_node *node)
 }
 
 gboolean
+ns_js_node_unpinned(const ns_js *js, const ns_node *node)
+{
+    return js && js->pinned_wrappers_set &&
+           !g_hash_table_contains(js->pinned_wrappers_set, node);
+}
+
+gboolean
 ns_js_wrapper_pinned(const ns_js *js, const ns_node *node)
 {
     return js && node && node->js_wrapper && js->pinned_wrappers_set &&
@@ -4332,20 +3963,16 @@ ns_js_register_class(JSContext *ctx, int which)
         JS_SetClassProto(ctx, ns_attr_class_id, JS_NewObject(ctx));
         return JS_UNDEFINED;
     case NS_JS_CLASS_STYLE:
-        ns_new_class_id(&ns_style_class_id);
-        JS_NewClass(rt, ns_style_class_id, &ns_style_class);
         proto = JS_NewObject(ctx);
         ns_cssom_install_style_proto(ctx, proto);
         ns_set_tostring_tag(ctx, proto, "CSSStyleDeclaration");
-        JS_SetClassProto(ctx, ns_style_class_id, proto);
+        ns_cssom_register_style_class(ctx, proto);
         return JS_UNDEFINED;
     case NS_JS_CLASS_TOKEN_LIST:
-        ns_new_class_id(&ns_token_list_class_id);
-        JS_NewClass(rt, ns_token_list_class_id, &ns_token_list_class);
         proto = JS_NewObject(ctx);
         JS_SetPropertyFunctionList(ctx, proto, ns_tlist_proto_funcs,
                                    G_N_ELEMENTS(ns_tlist_proto_funcs));
-        JS_SetClassProto(ctx, ns_token_list_class_id, JS_DupValue(ctx, proto));
+        ns_token_list_register_class(ctx, JS_DupValue(ctx, proto));
         return proto;
     case NS_JS_CLASS_LIVE:
         ns_new_class_id(&ns_live_class_id);
@@ -4359,25 +3986,16 @@ ns_js_register_class(JSContext *ctx, int which)
         JS_SetClassProto(ctx, ns_dataset_class_id, JS_NewObject(ctx));
         return JS_UNDEFINED;
     case NS_JS_CLASS_STORAGE:
-        ns_new_class_id(&ns_storage_class_id);
-        JS_NewClass(rt, ns_storage_class_id, &ns_storage_class);
         proto = JS_NewObject(ctx);
         ns_storage_install_proto(ctx, proto);
-        JS_SetClassProto(ctx, ns_storage_class_id, JS_DupValue(ctx, proto));
+        ns_storage_register_class(ctx, JS_DupValue(ctx, proto));
         return proto;
     case NS_JS_CLASS_WINDOW_NAMED:
-        ns_new_class_id(&ns_window_named_class_id);
-        JS_NewClass(rt, ns_window_named_class_id, &ns_window_named_class);
+        ns_window_named_register_class(ctx);
         return JS_UNDEFINED;
     default:
         return JS_UNDEFINED;
     }
-}
-
-JSValue
-ns_js_new_window_named(JSContext *ctx)
-{
-    return JS_NewObjectClass(ctx, ns_window_named_class_id);
 }
 
 void
@@ -4595,9 +4213,9 @@ JSValue
 ns_js_host_class_proto(JSContext *ctx, int which)
 {
     switch (which) {
-    case NS_HOST_PROTO_STYLE:      return JS_GetClassProto(ctx, ns_style_class_id);
+    case NS_HOST_PROTO_STYLE:      return ns_style_class_proto(ctx);
     case NS_HOST_PROTO_DATASET:    return JS_GetClassProto(ctx, ns_dataset_class_id);
-    case NS_HOST_PROTO_TOKEN_LIST: return JS_GetClassProto(ctx, ns_token_list_class_id);
+    case NS_HOST_PROTO_TOKEN_LIST: return ns_token_list_class_proto(ctx);
     default:                       return JS_UNDEFINED;
     }
 }
@@ -5404,18 +5022,6 @@ JSValue
 ns_js_pristine_promise(const ns_js *js)
 {
     return js->pristine_promise;
-}
-
-JSClassID
-ns_js_storage_class_id(void)
-{
-    return ns_storage_class_id;
-}
-
-JSClassID
-ns_js_window_named_class_id(void)
-{
-    return ns_window_named_class_id;
 }
 
 GMainContext *

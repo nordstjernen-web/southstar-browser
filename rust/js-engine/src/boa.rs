@@ -18,7 +18,9 @@ use boa_engine::object::builtins::{
 };
 use boa_engine::object::{FunctionObjectBuilder, IntegrityLevel};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
-use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
+use boa_engine::property::{
+    PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaPropertyKey,
+};
 use boa_engine::{
     Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
     NativeFunction, Script, Source,
@@ -33,6 +35,10 @@ use crate::{
     Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
     RealmInit, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
 };
+
+mod class;
+
+pub use class::{PropertyDefinition, PropertyKey};
 
 pub const ENGINE_NAME: &str = "boa";
 
@@ -453,7 +459,7 @@ impl Scope<'_> {
     fn define_key(
         &mut self,
         object: &Value,
-        key: impl Into<boa_engine::property::PropertyKey>,
+        key: impl Into<BoaPropertyKey>,
         value: Value,
         attributes: Attributes,
     ) -> Result<(), Value> {
@@ -856,7 +862,7 @@ impl Scope<'_> {
             .map_err(|e| self.error(e))?;
         Ok(keys
             .into_iter()
-            .filter(|key| symbols || !matches!(key, PropertyKey::Symbol(_)))
+            .filter(|key| symbols || !matches!(key, BoaPropertyKey::Symbol(_)))
             .map(|key| Value(key.into()))
             .collect())
     }
