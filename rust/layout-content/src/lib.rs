@@ -2,10 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod controls;
+pub mod controls;
 mod counters;
 mod ffi;
-mod pseudo;
-mod select;
-mod tags;
-mod text_input;
+pub mod pseudo;
+pub mod select;
+pub mod tags;
+pub mod text_input;
+
+pub use ffi::{box_dom, box_style, utf8_casefold};

@@ -178,56 +178,11 @@ void ns_layout_append_generated_after(ns_box *block, ns_box *gen);
 gboolean ns_layout_is_inline_dom(const ns_node *n, GHashTable *styles);
 gboolean ns_layout_continues_inline_run(const ns_node *n, GHashTable *styles);
 void *ns_layout_peek_image(const char *src);
-void ns_layout_append_inline_spacer(GString *out, GArray *attrs, double width);
-int ns_layout_control_pad_spaces(const ns_style *s, gboolean right);
-int ns_layout_text_input_leading_spaces(const ns_style *s);
-int ns_layout_text_input_columns(const ns_node *n);
-glong ns_layout_text_input_align_offset(const ns_style *s, const ns_node *n,
-                                        glong span);
-glong ns_layout_text_input_align_skip_cps(const ns_style *s, const ns_node *n,
-                                          glong cps, glong size);
-glong ns_layout_text_input_focused_skip_cps(const char *value, gsize caret_byte,
-                                            glong cps, glong size);
-const char *ns_layout_text_input_advance_cps(const char *p, glong cps);
 gboolean ns_layout_input_columns_active(void);
 gboolean ns_layout_input_columns_fit(const ns_box *root);
 void ns_layout_input_columns_clear(void);
-gboolean ns_layout_tag_is_bold(const char *name);
-gboolean ns_layout_tag_is_italic(const char *name);
-gboolean ns_layout_tag_is_monospace(const char *name);
-gboolean ns_layout_tag_is_underline(const char *name);
-gboolean ns_layout_tag_is_strike(const char *name);
 gboolean ns_layout_tag_is_non_rendering(const char *name);
 gboolean ns_layout_node_is_non_rendering(const ns_node *n);
-void ns_layout_emit_attr(GArray *attrs, ns_inline_attr_kind k, gsize start,
-                         gsize end);
-void ns_layout_emit_attr_styled(GArray *attrs, ns_inline_attr_kind k,
-                                gsize start, gsize end, const ns_style *style);
-gboolean ns_layout_inline_run_at_line_start(const GString *out);
-void ns_layout_emit_form_attr_sized(GArray *attrs, ns_inline_attr_kind k,
-                                    gsize start, gsize end, const ns_node *dom,
-                                    GHashTable *styles);
-void ns_layout_emit_control_text_style(GArray *attrs, const ns_style *s,
-                                       gsize field_start, gsize field_end,
-                                       gsize val_start, gsize val_end,
-                                       gboolean is_placeholder,
-                                       gboolean disabled);
-void ns_layout_emit_font_size_attr(GArray *attrs, gsize start, gsize end,
-                                   double font_size_px);
-void ns_layout_emit_font_weight_attr(GArray *attrs, gsize start, gsize end,
-                                     int font_weight);
-void ns_layout_emit_font_stretch_attr(GArray *attrs, gsize start, gsize end,
-                                      int font_stretch);
-void ns_layout_emit_font_features_attr(GArray *attrs, gsize start, gsize end,
-                                       int font_kerning,
-                                       const char *font_ligatures,
-                                       const char *font_features);
-void ns_layout_emit_font_variations_attr(GArray *attrs, gsize start, gsize end,
-                                         const char *font_variations);
-void ns_layout_emit_color_attr(GArray *attrs, gsize start, gsize end,
-                               guint8 r, guint8 g, guint8 b, guint8 a);
-void ns_layout_emit_font_family_attr(GArray *attrs, gsize start, gsize end,
-                                     const char *family);
 int ns_layout_font_kerning_from_style(const ns_style *s);
 const char *ns_layout_font_ligatures_from_style(const ns_style *s);
 const char *ns_layout_font_feature_settings_from_style(const ns_style *s);
@@ -235,23 +190,38 @@ const char *ns_layout_font_variation_settings_from_style(const ns_style *s);
 void ns_layout_counters_build(const ns_node *root, GHashTable *styles);
 void ns_layout_counters_clear(void);
 char *ns_layout_resolve_pseudo_content(const char *raw, const ns_node *host);
-void ns_layout_append_pseudo_content(GString *out, const ns_css_value *cv,
-                                     const ns_node *host,
-                                     const ns_style *host_style);
-gboolean ns_layout_pseudo_generates_box(const ns_style *ps);
 char *ns_layout_quotes_string_for(const ns_style *s, int depth,
                                   gboolean closing);
-char *ns_layout_apply_text_transform(const char *src, const char *tt);
-double ns_layout_progress_fraction(const ns_node *n);
-double ns_layout_meter_fraction(const ns_node *n, int *quality);
-void ns_layout_emit_open_select_option(GString *out, GArray *attrs,
-                                       GHashTable *styles,
-                                       const ns_node *option);
-void ns_layout_emit_listbox_option(GString *out, GArray *attrs,
-                                   GHashTable *styles, const ns_node *option,
-                                   gboolean first);
-void ns_layout_emit_datalist_suggestions(GString *out, GArray *attrs,
-                                         GHashTable *styles,
-                                         const ns_node *input);
+
+typedef struct ns_layout_collect_state {
+    const ns_node *focused_input;
+    const ns_node *open_select;
+    const ns_node *inline_skip;
+    const ns_node *pseudo_blocks_host;
+    const ns_node *form_control_inline;
+    gsize focused_caret_byte;
+    gsize focused_sel_anchor_byte;
+    int inline_collect_depth;
+    gboolean focused_is_contenteditable;
+    gboolean datalist_open;
+    gboolean pseudo_block_before;
+    gboolean pseudo_block_after;
+} ns_layout_collect_state;
+
+void ns_layout_collect_state_get(ns_layout_collect_state *out);
+ns_box *ns_layout_collect_absolute(const ns_node *n, gboolean fixed,
+                                   gboolean placeholder);
+ns_box *ns_layout_collect_atomic_block(const ns_node *n, GHashTable *styles,
+                                       int depth);
+ns_box *ns_layout_pseudo_block_with_text(const ns_style *ps, const char *txt);
+ns_box *ns_layout_collect_inline_run(const ns_node *first,
+                                     const ns_node *last_excl,
+                                     GHashTable *styles,
+                                     gboolean abs_placeholders);
+gboolean ns_layout_is_atomic_inline(const ns_node *n, GHashTable *styles);
+gboolean ns_layout_is_inline_level_replaced(const ns_node *n,
+                                            GHashTable *styles);
+gboolean ns_layout_style_has_atomic_inline_box(const ns_style *s);
+gboolean ns_layout_node_is_frame_fallback(const ns_node *n);
 
 #endif

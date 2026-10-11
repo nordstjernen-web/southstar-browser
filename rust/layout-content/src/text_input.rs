@@ -28,7 +28,7 @@ pub fn utf8_skip(lead: u8) -> usize {
     }
 }
 
-fn utf8_len(s: &[u8]) -> c_long {
+pub fn utf8_len(s: &[u8]) -> c_long {
     let mut i = 0;
     let mut n: c_long = 0;
     while i < s.len() {
@@ -122,15 +122,19 @@ pub fn focused_skip_cps(
         return 0;
     }
     let max_skip = cps - size;
-    let bytes = value.to_bytes();
-    let mut i = 0;
-    let mut caret_cp: c_long = 0;
-    while i < caret_byte {
-        i += utf8_skip(bytes.get(i).copied().unwrap_or(0));
-        caret_cp += 1;
-    }
+    let caret_cp = pointer_to_offset(value.to_bytes(), caret_byte);
     let skip = if caret_cp > size { caret_cp - size } else { 0 };
     skip.min(max_skip).max(0)
+}
+
+pub fn pointer_to_offset(bytes: &[u8], pos: usize) -> c_long {
+    let mut i = 0;
+    let mut offset: c_long = 0;
+    while i < pos {
+        i += utf8_skip(bytes.get(i).copied().unwrap_or(0));
+        offset += 1;
+    }
+    offset
 }
 
 pub fn advance_cps(s: &[u8], cps: c_long) -> usize {

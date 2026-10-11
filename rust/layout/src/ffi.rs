@@ -176,6 +176,15 @@ pub struct InlineAtomic {
 }
 
 impl InlineAtomic {
+    pub fn new(byte_off: usize, b: *const NsBox) -> InlineAtomic {
+        InlineAtomic {
+            byte_off,
+            b,
+            owner_offset_x: 0.0,
+            owner_offset_y: 0.0,
+        }
+    }
+
     pub fn byte_off(&self) -> usize {
         self.byte_off
     }
@@ -207,6 +216,22 @@ pub struct LinkRange {
 const _: () = assert!(size_of::<LinkRange>() == 40);
 
 impl LinkRange {
+    pub fn new(
+        start: usize,
+        len: usize,
+        href: *const c_char,
+        target: *const c_char,
+        dom: *const c_void,
+    ) -> LinkRange {
+        LinkRange {
+            start,
+            len,
+            href,
+            target,
+            dom,
+        }
+    }
+
     pub fn href_ptr(&self) -> *const c_char {
         self.href
     }

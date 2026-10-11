@@ -2,27 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GArray, GBoolean, GHashTable, boolean, g_array_append_vals, g_free, strdup};
+use southstar_glib::{GBoolean, GHashTable, boolean, g_free, strdup};
 use southstar_layout::{BoxRef, Edges, InlineAttr, NsBox, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{Context, Layout};
 use southstar_style::{NsCssValue, StyleRef, StyleTable, ValueRef};
 
-use crate::{controls, counters, pseudo, select, tags, text_input};
-
-#[repr(C)]
-pub struct GString {
-    str_: *mut c_char,
-    len: usize,
-    _allocated_len: usize,
-}
+use crate::{controls, counters, pseudo, tags, text_input};
 
 unsafe extern "C" {
-    fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_utf8_strup(s: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_strdown(s: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_casefold(s: *const c_char, len: isize) -> *mut c_char;
@@ -43,40 +35,6 @@ unsafe extern "C" {
     fn ns_css_viewport_h() -> f64;
     fn ns_css_container_w() -> f64;
     fn ns_css_container_h() -> f64;
-}
-
-pub struct Out(NonNull<GString>);
-
-impl Out {
-    pub fn len(&self) -> usize {
-        unsafe { self.0.as_ref() }.len
-    }
-
-    pub fn bytes(&self) -> &[u8] {
-        let s = unsafe { self.0.as_ref() };
-        if s.str_.is_null() || s.len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(s.str_.cast::<u8>(), s.len) }
-    }
-
-    pub fn push(&mut self, bytes: &[u8]) {
-        unsafe {
-            g_string_append_len(self.0.as_ptr(), bytes.as_ptr().cast(), bytes.len() as isize)
-        };
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Attrs(*mut GArray);
-
-impl Attrs {
-    pub fn push(self, attr: InlineAttr) {
-        if self.0.is_null() {
-            return;
-        }
-        unsafe { g_array_append_vals(self.0, ptr::from_ref(&attr).cast(), 1) };
-    }
 }
 
 pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
@@ -179,10 +137,6 @@ fn value<'a>(v: *const NsCssValue) -> Option<ValueRef<'a>> {
     unsafe { ValueRef::from_ptr(v) }
 }
 
-fn out(s: *mut GString) -> Option<Out> {
-    NonNull::new(s).map(Out)
-}
-
 fn styles(t: *mut GHashTable) -> StyleTable {
     unsafe { StyleTable::from_ptr(t) }
 }
@@ -193,72 +147,6 @@ fn dup_or_null(bytes: Option<Vec<u8>>) -> *mut c_char {
 
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_append_inline_spacer(
-    s: *mut GString,
-    attrs: *mut GArray,
-    width: f64,
-) {
-    if let Some(mut o) = out(s) {
-        controls::append_inline_spacer(&mut o, Attrs(attrs), width);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_control_pad_spaces(s: *const Style, right: GBoolean) -> c_int {
-    controls::pad_spaces(style(s), right != 0)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_leading_spaces(s: *const Style) -> c_int {
-    controls::pad_spaces(style(s), false)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_columns(n: *const NsNode) -> c_int {
-    text_input::columns(node(n))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_align_offset(
-    s: *const Style,
-    n: *const NsNode,
-    span: c_long,
-) -> c_long {
-    text_input::align_offset(style(s), node(n), span)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_align_skip_cps(
-    s: *const Style,
-    n: *const NsNode,
-    cps: c_long,
-    size: c_long,
-) -> c_long {
-    text_input::align_skip_cps(style(s), node(n), cps, size)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_focused_skip_cps(
-    value: *const c_char,
-    caret_byte: usize,
-    cps: c_long,
-    size: c_long,
-) -> c_long {
-    text_input::focused_skip_cps(c_str(value), caret_byte, cps, size)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_text_input_advance_cps(
-    p: *const c_char,
-    cps: c_long,
-) -> *const c_char {
-    match c_str(p) {
-        Some(s) => unsafe { p.add(text_input::advance_cps(s.to_bytes(), cps)) },
-        None => c"".as_ptr(),
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -277,31 +165,6 @@ pub extern "C" fn ns_layout_input_columns_clear() {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_bold(name: *const c_char) -> GBoolean {
-    boolean(tags::is_bold(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_italic(name: *const c_char) -> GBoolean {
-    boolean(tags::is_italic(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_monospace(name: *const c_char) -> GBoolean {
-    boolean(tags::is_monospace(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_underline(name: *const c_char) -> GBoolean {
-    boolean(tags::is_underline(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_strike(name: *const c_char) -> GBoolean {
-    boolean(tags::is_strike(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_tag_is_non_rendering(name: *const c_char) -> GBoolean {
     boolean(tags::is_non_rendering(c_str(name)))
 }
@@ -309,32 +172,6 @@ pub unsafe extern "C" fn ns_layout_tag_is_non_rendering(name: *const c_char) -> 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_node_is_non_rendering(n: *const NsNode) -> GBoolean {
     boolean(tags::node_is_non_rendering(node(n)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_attr(
-    attrs: *mut GArray,
-    kind: c_uint,
-    start: usize,
-    end: usize,
-) {
-    controls::emit_attr(Attrs(attrs), kind, start, end);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_attr_styled(
-    attrs: *mut GArray,
-    kind: c_uint,
-    start: usize,
-    end: usize,
-    s: *const Style,
-) {
-    controls::emit_attr_styled(Attrs(attrs), kind, start, end, s);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_run_at_line_start(s: *const GString) -> GBoolean {
-    boolean(out(s.cast_mut()).is_none_or(|o| controls::run_at_line_start(o.bytes())))
 }
 
 #[unsafe(no_mangle)]
@@ -358,123 +195,6 @@ pub unsafe extern "C" fn ns_layout_inline_attr_control_width(
     controls::inline_attr_control_width(r, style(r.style()), node(r.dom_ptr().cast()), unsafe {
         BoxRef::from_ptr(b)
     })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_form_attr_sized(
-    attrs: *mut GArray,
-    kind: c_uint,
-    start: usize,
-    end: usize,
-    dom: *const NsNode,
-    table: *mut GHashTable,
-) {
-    controls::emit_form_attr_sized(Attrs(attrs), kind, start, end, node(dom), styles(table));
-}
-
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_layout_emit_control_text_style(
-    attrs: *mut GArray,
-    s: *const Style,
-    field_start: usize,
-    field_end: usize,
-    val_start: usize,
-    val_end: usize,
-    is_placeholder: GBoolean,
-    disabled: GBoolean,
-) {
-    controls::emit_control_text_style(
-        Attrs(attrs),
-        style(s),
-        (field_start, field_end),
-        (val_start, val_end),
-        is_placeholder != 0,
-        disabled != 0,
-    );
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_size_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    font_size_px: f64,
-) {
-    controls::emit_font_size(Attrs(attrs), start, end, font_size_px);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_weight_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    font_weight: c_int,
-) {
-    controls::emit_font_weight(Attrs(attrs), start, end, font_weight);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_stretch_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    font_stretch: c_int,
-) {
-    controls::emit_font_stretch(Attrs(attrs), start, end, font_stretch);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_features_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    font_kerning: c_int,
-    font_ligatures: *const c_char,
-    font_features: *const c_char,
-) {
-    controls::emit_font_features(
-        Attrs(attrs),
-        start,
-        end,
-        font_kerning,
-        font_ligatures,
-        font_features,
-    );
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_variations_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    font_variations: *const c_char,
-) {
-    controls::emit_font_variations(Attrs(attrs), start, end, font_variations);
-}
-
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_layout_emit_color_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-) {
-    controls::emit_color(Attrs(attrs), start, end, [r, g, b, a]);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_font_family_attr(
-    attrs: *mut GArray,
-    start: usize,
-    end: usize,
-    family: *const c_char,
-) {
-    controls::emit_font_family(Attrs(attrs), start, end, family);
 }
 
 #[unsafe(no_mangle)]
@@ -541,89 +261,10 @@ pub unsafe extern "C" fn ns_layout_pseudo_content_text(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_append_pseudo_content(
-    s: *mut GString,
-    content: *const NsCssValue,
-    host: *const NsNode,
-    host_style: *const Style,
-) {
-    if let Some(mut o) = out(s) {
-        pseudo::append_content(&mut o, value(content), node(host), style(host_style));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_pseudo_generates_box(ps: *const Style) -> GBoolean {
-    boolean(pseudo::generates_box(style(ps)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_quotes_string_for(
     s: *const Style,
     depth: c_int,
     closing: GBoolean,
 ) -> *mut c_char {
     strdup(&pseudo::quotes_string(style(s), depth, closing != 0))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_apply_text_transform(
-    src: *const c_char,
-    tt: *const c_char,
-) -> *mut c_char {
-    match (c_str(src), c_str(tt)) {
-        (Some(src), Some(tt)) => dup_or_null(pseudo::text_transform(src, tt.to_bytes())),
-        _ => ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_progress_fraction(n: *const NsNode) -> f64 {
-    controls::progress_fraction(node(n))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_meter_fraction(n: *const NsNode, quality: *mut c_int) -> f64 {
-    let (frac, q) = controls::meter_state(node(n));
-    if let Some(quality) = unsafe { quality.as_mut() } {
-        *quality = q;
-    }
-    frac
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_open_select_option(
-    s: *mut GString,
-    attrs: *mut GArray,
-    table: *mut GHashTable,
-    option: *const NsNode,
-) {
-    if let (Some(mut o), Some(option)) = (out(s), node(option)) {
-        select::emit_option(&mut o, Attrs(attrs), styles(table), option, true);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_listbox_option(
-    s: *mut GString,
-    attrs: *mut GArray,
-    table: *mut GHashTable,
-    option: *const NsNode,
-    first: GBoolean,
-) {
-    if let (Some(mut o), Some(option)) = (out(s), node(option)) {
-        select::emit_option(&mut o, Attrs(attrs), styles(table), option, first == 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_emit_datalist_suggestions(
-    s: *mut GString,
-    attrs: *mut GArray,
-    table: *mut GHashTable,
-    input: *const NsNode,
-) {
-    if let (Some(mut o), Some(input)) = (out(s), node(input)) {
-        select::emit_datalist_suggestions(&mut o, Attrs(attrs), styles(table), input);
-    }
 }

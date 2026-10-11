@@ -1,0 +1,18 @@
+[package]
+name = "southstar-layout-build"
+description = "Box-tree construction from src/layout.c: inline runs collected from the DOM with white-space collapsing, links, inline attributes, form-control text, pseudo-element content and atomic inline boxes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-layout = { path = "../layout" }
+southstar-layout-content = { path = "../layout-content" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

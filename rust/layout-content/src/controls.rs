@@ -9,7 +9,7 @@ use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
 
-use crate::ffi::{self, Attrs, Out};
+use crate::ffi;
 
 const UNIT_PX: u32 = 0;
 const UNIT_EM: u32 = 1;
@@ -76,7 +76,7 @@ pub fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
     v.is_some_and(|v| v.is_keyword(kw))
 }
 
-fn get(s: Option<StyleRef<'_>>, prop: PropId) -> Option<ValueRef<'_>> {
+pub fn get(s: Option<StyleRef<'_>>, prop: PropId) -> Option<ValueRef<'_>> {
     s.and_then(|s| s.get(prop))
 }
 
@@ -84,12 +84,12 @@ fn font_size_or_16(s: StyleRef<'_>) -> f64 {
     length_or(s.get(PropId::FontSize), 16.0)
 }
 
-pub fn append_inline_spacer(out: &mut Out, attrs: Attrs, width: f64) {
+pub fn append_inline_spacer(out: &mut Vec<u8>, attrs: &mut Vec<InlineAttr>, width: f64) {
     if width.is_nan() || width <= 0.0 {
         return;
     }
     let start = out.len();
-    out.push(OBJECT_REPLACEMENT);
+    out.extend_from_slice(OBJECT_REPLACEMENT);
     let mut spacer = InlineAttr::new(inline_kind::SPACER, start, 3);
     spacer.box_w = width;
     attrs.push(spacer);
@@ -116,13 +116,19 @@ pub fn pad_spaces(s: Option<StyleRef<'_>>, right: bool) -> c_int {
     (((pad - space) / space + 0.5) as c_int).clamp(0, 12)
 }
 
-pub fn emit_attr(attrs: Attrs, kind: c_uint, start: usize, end: usize) {
+pub fn emit_attr(attrs: &mut Vec<InlineAttr>, kind: c_uint, start: usize, end: usize) {
     if end > start {
         attrs.push(InlineAttr::new(kind, start, end - start));
     }
 }
 
-pub fn emit_attr_styled(attrs: Attrs, kind: c_uint, start: usize, end: usize, s: *const Style) {
+pub fn emit_attr_styled(
+    attrs: &mut Vec<InlineAttr>,
+    kind: c_uint,
+    start: usize,
+    end: usize,
+    s: *const Style,
+) {
     if end > start {
         attrs.push(InlineAttr::new(kind, start, end - start).with_style(s));
     }
@@ -354,14 +360,14 @@ fn strips_chrome(s: StyleRef<'_>) -> bool {
         .all(|&p| style_none_or_hidden(s.get(p)))
 }
 
-fn is_block_level(d: Display) -> bool {
+pub fn is_block_level(d: Display) -> bool {
     d.box_ == BOX_NORMAL
         && d.outer == OUTER_BLOCK
         && d.inner != INNER_RUBY
         && (d.internal == INTERNAL_NONE || d.internal == INTERNAL_TABLE_CAPTION)
 }
 
-fn is_atomic_inline_container(d: Display) -> bool {
+pub fn is_atomic_inline_container(d: Display) -> bool {
     d.box_ == BOX_NORMAL
         && d.internal == INTERNAL_NONE
         && d.outer == OUTER_INLINE
@@ -393,7 +399,7 @@ fn prefers_css_chrome(kind: c_uint, dom: Option<Node<'_>>, s: Option<StyleRef<'_
     false
 }
 
-fn atoi(s: Option<&CStr>, fallback: c_int) -> c_int {
+pub fn atoi(s: Option<&CStr>, fallback: c_int) -> c_int {
     let Some(s) = s.map(CStr::to_bytes) else {
         return fallback;
     };
@@ -414,7 +420,7 @@ fn atoi(s: Option<&CStr>, fallback: c_int) -> c_int {
 }
 
 pub fn emit_form_attr_sized(
-    attrs: Attrs,
+    attrs: &mut Vec<InlineAttr>,
     kind: c_uint,
     start: usize,
     end: usize,
@@ -475,7 +481,7 @@ pub fn emit_form_attr_sized(
 }
 
 pub fn emit_control_text_style(
-    attrs: Attrs,
+    attrs: &mut Vec<InlineAttr>,
     s: Option<StyleRef<'_>>,
     field: (usize, usize),
     value: (usize, usize),
@@ -554,7 +560,7 @@ pub fn emit_control_text_style(
     }
 }
 
-pub fn emit_font_size(attrs: Attrs, start: usize, end: usize, font_size_px: f64) {
+pub fn emit_font_size(attrs: &mut Vec<InlineAttr>, start: usize, end: usize, font_size_px: f64) {
     if end > start {
         let mut a = InlineAttr::new(inline_kind::FONT_SIZE, start, end - start);
         a.font_size_px = font_size_px;
@@ -562,7 +568,7 @@ pub fn emit_font_size(attrs: Attrs, start: usize, end: usize, font_size_px: f64)
     }
 }
 
-pub fn emit_font_weight(attrs: Attrs, start: usize, end: usize, font_weight: c_int) {
+pub fn emit_font_weight(attrs: &mut Vec<InlineAttr>, start: usize, end: usize, font_weight: c_int) {
     if end > start && font_weight > 0 {
         let mut a = InlineAttr::new(inline_kind::FONT_WEIGHT, start, end - start);
         a.font_weight = font_weight;
@@ -570,7 +576,12 @@ pub fn emit_font_weight(attrs: Attrs, start: usize, end: usize, font_weight: c_i
     }
 }
 
-pub fn emit_font_stretch(attrs: Attrs, start: usize, end: usize, font_stretch: c_int) {
+pub fn emit_font_stretch(
+    attrs: &mut Vec<InlineAttr>,
+    start: usize,
+    end: usize,
+    font_stretch: c_int,
+) {
     if end > start {
         let mut a = InlineAttr::new(inline_kind::FONT_STRETCH, start, end - start);
         a.font_stretch = font_stretch;
@@ -579,7 +590,7 @@ pub fn emit_font_stretch(attrs: Attrs, start: usize, end: usize, font_stretch: c
 }
 
 pub fn emit_font_features(
-    attrs: Attrs,
+    attrs: &mut Vec<InlineAttr>,
     start: usize,
     end: usize,
     kerning: c_int,
@@ -598,7 +609,12 @@ pub fn emit_font_features(
     attrs.push(a);
 }
 
-pub fn emit_font_variations(attrs: Attrs, start: usize, end: usize, variations: *const c_char) {
+pub fn emit_font_variations(
+    attrs: &mut Vec<InlineAttr>,
+    start: usize,
+    end: usize,
+    variations: *const c_char,
+) {
     if end > start && !variations.is_null() {
         attrs.push(
             InlineAttr::new(inline_kind::FONT_VARIATIONS, start, end - start).with_font_settings(
@@ -610,7 +626,7 @@ pub fn emit_font_variations(attrs: Attrs, start: usize, end: usize, variations: 
     }
 }
 
-pub fn emit_color(attrs: Attrs, start: usize, end: usize, rgba: [u8; 4]) {
+pub fn emit_color(attrs: &mut Vec<InlineAttr>, start: usize, end: usize, rgba: [u8; 4]) {
     if end > start {
         let mut a = InlineAttr::new(inline_kind::COLOR, start, end - start);
         [a.r, a.g, a.b, a.a] = rgba;
@@ -618,7 +634,12 @@ pub fn emit_color(attrs: Attrs, start: usize, end: usize, rgba: [u8; 4]) {
     }
 }
 
-pub fn emit_font_family(attrs: Attrs, start: usize, end: usize, family: *const c_char) {
+pub fn emit_font_family(
+    attrs: &mut Vec<InlineAttr>,
+    start: usize,
+    end: usize,
+    family: *const c_char,
+) {
     if end > start && !family.is_null() {
         attrs.push(
             InlineAttr::new(inline_kind::FONT_FAMILY, start, end - start).with_family(family),

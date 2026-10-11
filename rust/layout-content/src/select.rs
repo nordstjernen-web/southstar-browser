@@ -5,20 +5,26 @@
 use core::ffi::CStr;
 
 use southstar_dom::{MAX_DEPTH, Node, children, controls::used_value, select::option_label};
-use southstar_layout::inline_kind;
+use southstar_layout::{InlineAttr, inline_kind};
 use southstar_style::StyleTable;
 
 use crate::controls::emit_form_attr_sized;
-use crate::ffi::{self, Attrs, Out};
+use crate::ffi;
 
 const LINE_SEPARATOR: &[u8] = "\u{2028}".as_bytes();
 const TWO_NBSP: &[u8] = "\u{a0}\u{a0}".as_bytes();
 
-fn emit_row(out: &mut Out, attrs: Attrs, styles: StyleTable, dom: Node<'_>, label: &[u8]) {
+fn emit_row(
+    out: &mut Vec<u8>,
+    attrs: &mut Vec<InlineAttr>,
+    styles: StyleTable,
+    dom: Node<'_>,
+    label: &[u8],
+) {
     let start = out.len();
-    out.push(TWO_NBSP);
-    out.push(label);
-    out.push(TWO_NBSP);
+    out.extend_from_slice(TWO_NBSP);
+    out.extend_from_slice(label);
+    out.extend_from_slice(TWO_NBSP);
     emit_form_attr_sized(
         attrs,
         inline_kind::INPUT_FIELD,
@@ -30,14 +36,14 @@ fn emit_row(out: &mut Out, attrs: Attrs, styles: StyleTable, dom: Node<'_>, labe
 }
 
 pub fn emit_option(
-    out: &mut Out,
-    attrs: Attrs,
+    out: &mut Vec<u8>,
+    attrs: &mut Vec<InlineAttr>,
     styles: StyleTable,
     option: Node<'_>,
     separate: bool,
 ) {
     if separate {
-        out.push(LINE_SEPARATOR);
+        out.extend_from_slice(LINE_SEPARATOR);
     }
     emit_row(out, attrs, styles, option, &option_label(option));
 }
@@ -63,7 +69,12 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     needle.is_empty() || haystack.windows(needle.len()).any(|w| w == needle)
 }
 
-pub fn emit_datalist_suggestions(out: &mut Out, attrs: Attrs, styles: StyleTable, input: Node<'_>) {
+pub fn emit_datalist_suggestions(
+    out: &mut Vec<u8>,
+    attrs: &mut Vec<InlineAttr>,
+    styles: StyleTable,
+    input: Node<'_>,
+) {
     let Some(list_id) = input.attr(c"list").filter(|id| !id.is_empty()) else {
         return;
     };
@@ -94,7 +105,7 @@ pub fn emit_datalist_suggestions(out: &mut Out, attrs: Attrs, styles: StyleTable
             contains(&vl, needle) && !vl.eq_ignore_ascii_case(needle)
         });
         if matched {
-            out.push(LINE_SEPARATOR);
+            out.extend_from_slice(LINE_SEPARATOR);
             emit_row(out, attrs, styles, o, &val);
             shown += 1;
         }

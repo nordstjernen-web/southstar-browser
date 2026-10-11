@@ -10,7 +10,7 @@ use southstar_dom::Node;
 use southstar_style::{PropId, StyleRef, ValueRef};
 
 use crate::counters::{is_space, substitute};
-use crate::ffi::{self, Out};
+use crate::ffi;
 use crate::text_input::utf8_skip;
 
 fn unescape_all(raw: &[u8], out: &mut Vec<u8>) {
@@ -178,7 +178,7 @@ pub fn quotes_string(s: Option<StyleRef<'_>>, depth: c_int, closing: bool) -> Ve
 }
 
 pub fn append_content(
-    out: &mut Out,
+    out: &mut Vec<u8>,
     cv: Option<ValueRef<'_>>,
     host: Option<Node<'_>>,
     host_style: Option<StyleRef<'_>>,
@@ -190,10 +190,10 @@ pub fn append_content(
         return;
     };
     match resolved.as_slice() {
-        b"open-quote" => out.push(&quotes_string(host_style, 0, false)),
-        b"close-quote" => out.push(&quotes_string(host_style, 0, true)),
+        b"open-quote" => out.extend_from_slice(&quotes_string(host_style, 0, false)),
+        b"close-quote" => out.extend_from_slice(&quotes_string(host_style, 0, true)),
         b"no-open-quote" | b"no-close-quote" => {}
-        text => out.push(text),
+        text => out.extend_from_slice(text),
     }
 }
 
