@@ -10,7 +10,6 @@
 #include "rproc_http.h"
 #include "rproc_inproc.h"
 #include "net.h"
-#include "../media_shm.h"
 
 #include <cairo.h>
 #include <glib/gstdio.h>
@@ -28,7 +27,6 @@
 #define NS_PV_FLING_STOP_PX_S  20.0
 #define NS_PV_HOVER_AFTER_SCROLL_MS 150
 #define NS_PV_TILE_H           256
-#define NS_PROC_HELPER_LINE_MAX 4096
 
 #ifdef __APPLE__
 #define NS_PROC_PRIMARY_MASK (GDK_CONTROL_MASK | GDK_META_MASK)
@@ -183,37 +181,7 @@ struct NsProcView {
     char       *renderer_path;
     gboolean    private_mode;
 
-    GSubprocess  *audio_proc;
-    GOutputStream *audio_in;
-    void          *audio_clock;
-    void          *audio_clock_map;
-    gsize          audio_clock_bytes;
-    char           audio_clock_name[64];
-
-    GSubprocess      *video_proc;
-    GOutputStream    *video_in;
-    GDataInputStream *video_out;
-    void             *vring;
-    void             *vring_map;
-    gsize             vring_bytes;
-    cairo_surface_t  *vid_fallback;
-    char              vid_token[64];
-    char              vid_shm[64];
-    double            vid_x, vid_y, vid_w, vid_h;
-    double            vid_clip_x, vid_clip_y, vid_clip_w, vid_clip_h;
-    int               vid_fit;
-    gboolean          vid_rect_valid;
-    gboolean          vid_page;
-    gboolean          vid_playing;
-    guint             vid_tick_id;
-    guint             vid_tick_count;
-    gint64            vid_resync_us;
-    guint32           vid_sequence;
-    guint32           vid_generation;
-    guint32           vid_slot;
-    double            vid_pts;
-    guint64           vid_presented;
-    guint64           vid_dropped;
+    NsPvMedia    *media;
 
     NsProcNotify notify;
     gpointer     notify_ud;
@@ -561,14 +529,11 @@ set_busy_cursor(NsProcView *v)
         gtk_widget_set_cursor_from_name(v->area, "wait");
 }
 
-static void pv_audio_shutdown(NsProcView *v);
-static void pv_video_shutdown(NsProcView *v);
-
 static void
 pv_free(NsProcView *v)
 {
-    pv_audio_shutdown(v);
-    pv_video_shutdown(v);
+    ns_pv_media_free(v->media);
+    v->media = NULL;
     if (v->queue) {
         Req *r;
         while ((r = g_async_queue_try_pop(v->queue))) {
@@ -655,454 +620,6 @@ ns_proc_renderer_path(void)
     return g_strdup(name);
 }
 
-static char *
-ns_proc_audio_helper_path(void)
-{
-#ifdef G_OS_WIN32
-    const char *name = "southstar-audio.exe";
-#else
-    const char *name = "southstar-audio";
-#endif
-    const char *exe = ns_app_self_exe();
-    if (exe) {
-        char *dir = g_path_get_dirname(exe);
-        char *parent = g_build_filename("..", name, NULL);
-        const char *rel[] = { name, parent, NULL };
-        for (int i = 0; rel[i]; i++) {
-            char *cand = g_build_filename(dir, rel[i], NULL);
-            if (g_file_test(cand, G_FILE_TEST_IS_EXECUTABLE)) {
-                g_free(parent);
-                g_free(dir);
-                return cand;
-            }
-            g_free(cand);
-        }
-        g_free(parent);
-        g_free(dir);
-    }
-    return g_strdup(name);
-}
-
-static void
-ns_proc_audio_apply_proxy_env(GSubprocessLauncher *launcher)
-{
-    const char *override = ns_net_proxy_override();
-    if (override && *override) {
-        g_subprocess_launcher_setenv(launcher, "all_proxy", override, TRUE);
-        g_subprocess_launcher_setenv(launcher, "http_proxy", override, TRUE);
-        g_subprocess_launcher_setenv(launcher, "https_proxy", override, TRUE);
-    } else {
-        const char *http_proxy = ns_net_http_proxy();
-        const char *https_proxy = ns_net_https_proxy();
-        if (http_proxy && *http_proxy)
-            g_subprocess_launcher_setenv(launcher, "http_proxy", http_proxy, TRUE);
-        if (https_proxy && *https_proxy)
-            g_subprocess_launcher_setenv(launcher, "https_proxy", https_proxy, TRUE);
-    }
-    const char *no_proxy = ns_net_no_proxy();
-    if (no_proxy && *no_proxy)
-        g_subprocess_launcher_setenv(launcher, "no_proxy", no_proxy, TRUE);
-    const char *ca = ns_net_ca_bundle_path();
-    if (ca && *ca)
-        g_subprocess_launcher_setenv(launcher, "CURL_CA_BUNDLE", ca, TRUE);
-}
-
-static void pv_video_send(NsProcView *v, const char *cmd);
-
-static void
-pv_audio_clock_unmap(NsProcView *v)
-{
-#ifdef G_OS_WIN32
-    if (v->audio_clock) UnmapViewOfFile(v->audio_clock);
-    if (v->audio_clock_map) CloseHandle(v->audio_clock_map);
-    v->audio_clock_map = NULL;
-#else
-    if (v->audio_clock)
-        munmap(v->audio_clock, v->audio_clock_bytes);
-#endif
-    v->audio_clock = NULL;
-    v->audio_clock_bytes = 0;
-    v->audio_clock_name[0] = '\0';
-}
-
-static void
-pv_audio_clock_adopt(NsProcView *v, const char *name)
-{
-    pv_audio_clock_unmap(v);
-#ifdef G_OS_WIN32
-    HANDLE hm = OpenFileMappingA(FILE_MAP_READ, FALSE, name);
-    if (!hm) return;
-    void *map = MapViewOfFile(hm, FILE_MAP_READ, 0, 0, 0);
-    MEMORY_BASIC_INFORMATION mbi;
-    gsize bytes = map && VirtualQuery(map, &mbi, sizeof mbi)
-                  ? (gsize)mbi.RegionSize : 0;
-    if (!map || bytes < sizeof(ns_audio_clock_hdr)) {
-        if (map) UnmapViewOfFile(map);
-        CloseHandle(hm);
-        return;
-    }
-    v->audio_clock = map;
-    v->audio_clock_map = hm;
-    v->audio_clock_bytes = bytes;
-#else
-    int fd = shm_open(name, O_RDONLY, 0);
-    if (fd < 0) return;
-    struct stat st;
-    if (fstat(fd, &st) != 0 || st.st_size < (off_t)sizeof(ns_audio_clock_hdr)) {
-        close(fd);
-        return;
-    }
-    void *map = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-    close(fd);
-    if (map == MAP_FAILED) return;
-    v->audio_clock = map;
-    v->audio_clock_bytes = (gsize)st.st_size;
-#endif
-    ns_audio_clock_hdr *clock = v->audio_clock;
-    if (clock->magic != NS_AUDIO_CLOCK_MAGIC ||
-        clock->version != NS_AUDIO_CLOCK_VERSION ||
-        clock->nslots != NS_AUDIO_CLOCK_SLOTS) {
-        pv_audio_clock_unmap(v);
-        return;
-    }
-    g_strlcpy(v->audio_clock_name, name, sizeof v->audio_clock_name);
-}
-
-static gboolean
-pv_audio_clock_position(NsProcView *v, const char *token, double *position)
-{
-    if (!v->audio_clock || !token || !*token) return FALSE;
-    ns_audio_clock_hdr *clock = v->audio_clock;
-    for (guint i = 0; i < NS_AUDIO_CLOCK_SLOTS; i++) {
-        ns_audio_clock_slot *slot = &clock->slots[i];
-        guint32 seq1 = __atomic_load_n(&slot->sequence, __ATOMIC_ACQUIRE);
-        if (!seq1 || (seq1 & 1u)) continue;
-        guint32 flags = slot->flags;
-        gint64 sample_us = slot->monotonic_us;
-        double sample_position = slot->position;
-        char sample_token[64];
-        memcpy(sample_token, slot->token, sizeof sample_token);
-        sample_token[sizeof sample_token - 1] = '\0';
-        guint32 seq2 = __atomic_load_n(&slot->sequence, __ATOMIC_ACQUIRE);
-        if (seq1 != seq2 || !(flags & NS_MEDIA_CLOCK_USED) ||
-            strcmp(sample_token, token) != 0)
-            continue;
-        if (flags & NS_MEDIA_CLOCK_PLAYING) {
-            gint64 elapsed = g_get_monotonic_time() - sample_us;
-            if (elapsed > 0 && elapsed < 100000)
-                sample_position += (double)elapsed / 1e6;
-        }
-        *position = sample_position;
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static void
-pv_audio_feedback_line(GObject *src, GAsyncResult *res, gpointer user_data)
-{
-    NsProcView *v = user_data;
-    GDataInputStream *in = G_DATA_INPUT_STREAM(src);
-    char *line = g_data_input_stream_read_line_finish(in, res, NULL, NULL);
-    if (!line) {
-        if (v) pv_audio_clock_unmap(v);
-        g_object_unref(in);
-        if (v) pv_unref(v);
-        return;
-    }
-    if (g_str_has_prefix(line, "error ") || g_getenv("NS_DBG_AUDIO"))
-        g_printerr("[audio-helper] %s\n", line);
-    if (v && g_str_has_prefix(line, "clock ")) {
-        char name[64];
-        if (sscanf(line + 6, "%63s", name) == 1)
-            pv_audio_clock_adopt(v, name);
-    }
-    if (v && v->video_proc && v->vid_playing && v->vid_token[0] &&
-        g_str_has_prefix(line, "pos ")) {
-        char tok[64], valstr[64];
-        if (sscanf(line + 4, "%63s %63s", tok, valstr) == 2 &&
-            strcmp(tok, v->vid_token) == 0) {
-            double sec = g_ascii_strtod(valstr, NULL);
-            gint64 nowu = g_get_monotonic_time();
-            if (sec >= 0.0 && nowu - v->vid_resync_us > 950000) {
-                v->vid_resync_us = nowu;
-                char valbuf[G_ASCII_DTOSTR_BUF_SIZE];
-                g_ascii_formatd(valbuf, sizeof valbuf, "%.3f", sec);
-                char cmd[96];
-                g_snprintf(cmd, sizeof cmd, "resync %s %s", tok, valbuf);
-                pv_video_send(v, cmd);
-            }
-        }
-    }
-    g_free(line);
-    g_data_input_stream_read_line_async(in, G_PRIORITY_DEFAULT, NULL,
-                                        pv_audio_feedback_line, v);
-}
-
-static char *
-pv_audio_url_path(const char *url)
-{
-    char *path = g_filename_from_uri(url, NULL, NULL);
-    if (path) return path;
-    const char *p = url + strlen("file://");
-    if (g_str_has_prefix(p, "localhost")) p += strlen("localhost");
-    return g_strdup(p);
-}
-
-static gboolean
-pv_stream_url_allowed(const char *url, const char *subdir)
-{
-    if (!g_str_has_prefix(url, "file://")) return FALSE;
-    char *path = pv_audio_url_path(url);
-    char *canon = g_canonicalize_filename(path, NULL);
-    char *streams = g_build_filename(g_get_user_cache_dir(), "southstar",
-                                     subdir, "", NULL);
-    g_strdelimit(canon, "\\", '/');
-    g_strdelimit(streams, "\\", '/');
-    gboolean inside = g_str_has_prefix(canon, streams);
-    g_free(streams);
-    g_free(canon);
-    g_free(path);
-    return inside;
-}
-
-static gboolean
-pv_audio_url_allowed(NsProcView *v, const char *url)
-{
-    if (g_str_has_prefix(url, "http://") || g_str_has_prefix(url, "https://") ||
-        g_str_has_prefix(url, "data:"))
-        return TRUE;
-    if (!g_str_has_prefix(url, "file://")) return FALSE;
-    if (v->current_url && g_str_has_prefix(v->current_url, "file:"))
-        return TRUE;
-    return pv_stream_url_allowed(url, "msaudio");
-}
-
-static gboolean
-pv_helper_is_blank(char c)
-{
-    return c == ' ' || c == '\t';
-}
-
-static const char *
-pv_helper_open_url(const char *cmd)
-{
-    const char *s = cmd;
-    while (pv_helper_is_blank(*s)) s++;
-    const char *op = s;
-    while (*s && !pv_helper_is_blank(*s)) s++;
-    gsize op_len = (gsize)(s - op);
-    if (!(op_len == 4 && strncmp(op, "open", 4) == 0) &&
-        !(op_len == 6 && strncmp(op, "reload", 6) == 0))
-        return NULL;
-    while (pv_helper_is_blank(*s)) s++;
-    while (*s && !pv_helper_is_blank(*s)) s++;
-    if (*s) s++;
-    while (*s == ' ') s++;
-    return s;
-}
-
-static gboolean
-pv_helper_line_ok(const char *cmd)
-{
-    return strlen(cmd) < NS_PROC_HELPER_LINE_MAX - 1 && !strpbrk(cmd, "\r\n");
-}
-
-static gboolean
-pv_audio_command_allowed(NsProcView *v, const char *cmd)
-{
-    if (!pv_helper_line_ok(cmd)) return FALSE;
-    const char *url = pv_helper_open_url(cmd);
-    return !url || pv_audio_url_allowed(v, url);
-}
-
-static gboolean
-pv_video_command_allowed(const char *cmd)
-{
-    if (!pv_helper_line_ok(cmd)) return FALSE;
-    const char *url = pv_helper_open_url(cmd);
-    return !url || pv_stream_url_allowed(url, "msvideo");
-}
-
-static void
-pv_audio_pump(NsProcView *v, const char *commands)
-{
-    if (!commands || !*commands) return;
-    if (!v->audio_proc) {
-        char *path = ns_proc_audio_helper_path();
-        GError *err = NULL;
-        GSubprocessLauncher *launcher = g_subprocess_launcher_new(
-            G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-            G_SUBPROCESS_FLAGS_STDERR_SILENCE);
-        ns_proc_audio_apply_proxy_env(launcher);
-        v->audio_proc = g_subprocess_launcher_spawn(launcher, &err, path, NULL);
-        g_object_unref(launcher);
-        if (!v->audio_proc) {
-            g_printerr("southstar: audio helper %s failed to start: %s\n",
-                       path, err ? err->message : "unknown error");
-            g_free(path);
-            g_clear_error(&err);
-            return;
-        }
-        if (g_getenv("NS_DBG_AUDIO"))
-            g_printerr("[audio-pump] spawn %s -> ok\n", path);
-        g_free(path);
-        v->audio_in = g_subprocess_get_stdin_pipe(v->audio_proc);
-        GInputStream *feedback = g_subprocess_get_stdout_pipe(v->audio_proc);
-        if (feedback)
-            g_data_input_stream_read_line_async(
-                g_data_input_stream_new(feedback), G_PRIORITY_DEFAULT, NULL,
-                pv_audio_feedback_line, pv_ref(v));
-    }
-    if (!v->audio_in) return;
-
-    char **lines = g_strsplit(commands, "\x1f", -1);
-    for (int i = 0; lines[i]; i++) {
-        if (!*lines[i]) continue;
-        if (!pv_audio_command_allowed(v, lines[i])) {
-            if (g_getenv("NS_DBG_AUDIO"))
-                g_printerr("[audio-pump] refused: %s\n", lines[i]);
-            continue;
-        }
-        char *line = g_strconcat(lines[i], "\n", NULL);
-        if (g_getenv("NS_DBG_AUDIO"))
-            g_printerr("[audio-pump] cmd: %s", line);
-        g_output_stream_write_all(v->audio_in, line, strlen(line),
-                                  NULL, NULL, NULL);
-        g_free(line);
-    }
-    g_output_stream_flush(v->audio_in, NULL, NULL);
-    g_strfreev(lines);
-}
-
-static void
-pv_audio_shutdown(NsProcView *v)
-{
-    if (!v->audio_proc) {
-        pv_audio_clock_unmap(v);
-        return;
-    }
-    if (v->audio_in) {
-        g_output_stream_write_all(v->audio_in, "quit\n", 5, NULL, NULL, NULL);
-        g_output_stream_flush(v->audio_in, NULL, NULL);
-    }
-    g_subprocess_force_exit(v->audio_proc);
-    g_clear_object(&v->audio_proc);
-    v->audio_in = NULL;
-    pv_audio_clock_unmap(v);
-}
-
-static char *
-ns_proc_video_helper_path(void)
-{
-#ifdef G_OS_WIN32
-    const char *name = "southstar-video.exe";
-#else
-    const char *name = "southstar-video";
-#endif
-    const char *exe = ns_app_self_exe();
-    if (exe) {
-        char *dir = g_path_get_dirname(exe);
-        char *parent = g_build_filename("..", name, NULL);
-        const char *rel[] = { name, parent, NULL };
-        for (int i = 0; rel[i]; i++) {
-            char *cand = g_build_filename(dir, rel[i], NULL);
-            if (g_file_test(cand, G_FILE_TEST_IS_EXECUTABLE)) {
-                g_free(parent);
-                g_free(dir);
-                return cand;
-            }
-            g_free(cand);
-        }
-        g_free(parent);
-        g_free(dir);
-    }
-    return g_strdup(name);
-}
-
-gboolean
-ns_proc_video_helper_available(void)
-{
-    char *path = ns_proc_video_helper_path();
-    gboolean ok = g_path_is_absolute(path)
-        ? g_file_test(path, G_FILE_TEST_IS_EXECUTABLE)
-        : FALSE;
-    if (!ok && !g_path_is_absolute(path)) {
-        char *found = g_find_program_in_path(path);
-        ok = found != NULL;
-        g_free(found);
-    }
-    g_free(path);
-    return ok;
-}
-
-static void
-pv_video_fallback_clear(NsProcView *v)
-{
-    if (!v || !v->vid_fallback) return;
-    cairo_surface_destroy(v->vid_fallback);
-    v->vid_fallback = NULL;
-}
-
-static void
-pv_video_snapshot_current(NsProcView *v)
-{
-    if (!v || !v->vring || !v->vid_sequence) return;
-    ns_video_ring_hdr *r = v->vring;
-    guint32 slot = v->vid_slot;
-    guint32 width = __atomic_load_n(&r->width, __ATOMIC_RELAXED);
-    guint32 height = __atomic_load_n(&r->height, __ATOMIC_RELAXED);
-    guint32 stride = __atomic_load_n(&r->stride, __ATOMIC_RELAXED);
-    guint32 frame_bytes = __atomic_load_n(&r->frame_bytes, __ATOMIC_RELAXED);
-    if (r->magic != NS_VIDEO_RING_MAGIC ||
-        r->version != NS_VIDEO_RING_VERSION || slot >= NS_VIDEO_RING_SLOTS ||
-        !width || !height || (guint64)stride < (guint64)width * 4 ||
-        (guint64)stride * height > frame_bytes ||
-        sizeof *r + (gsize)(slot + 1) * frame_bytes > v->vring_bytes)
-        return;
-    ns_video_ring_slot *meta = &r->slots[slot];
-    guint32 sequence = __atomic_load_n(&meta->sequence, __ATOMIC_ACQUIRE);
-    if (sequence != v->vid_sequence || meta->generation != v->vid_generation)
-        return;
-    cairo_surface_t *copy = cairo_image_surface_create(
-        CAIRO_FORMAT_RGB24, (int)width, (int)height);
-    if (cairo_surface_status(copy) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(copy);
-        return;
-    }
-    unsigned char *src = (unsigned char *)r + sizeof *r +
-                         (gsize)slot * frame_bytes;
-    unsigned char *dst = cairo_image_surface_get_data(copy);
-    int dst_stride = cairo_image_surface_get_stride(copy);
-    for (guint32 y = 0; y < height; y++)
-        memcpy(dst + (gsize)y * dst_stride,
-               src + (gsize)y * stride, (gsize)width * 4);
-    cairo_surface_mark_dirty(copy);
-    pv_video_fallback_clear(v);
-    v->vid_fallback = copy;
-}
-
-static void
-pv_vring_unmap(NsProcView *v)
-{
-#ifdef G_OS_WIN32
-    if (v->vring) UnmapViewOfFile(v->vring);
-    if (v->vring_map) CloseHandle(v->vring_map);
-    v->vring_map = NULL;
-#else
-    if (v->vring) munmap(v->vring, v->vring_bytes);
-#endif
-    v->vring = NULL;
-    v->vring_bytes = 0;
-    v->vid_shm[0] = '\0';
-    v->vid_rect_valid = FALSE;
-    v->vid_playing = FALSE;
-    v->vid_sequence = 0;
-    v->vid_generation = 0;
-    v->vid_slot = 0;
-    v->vid_pts = 0.0;
-}
-
 static void request_render(NsProcView *v);
 static gboolean maybe_update_viewport(NsProcView *v);
 static void request_hover(NsProcView *v, int x, int y);
@@ -1110,379 +627,6 @@ static void print_run(NsProcView *v, GPtrArray *pages,
                       const ns_print_setup *setup, double raster_scale);
 static void request_tick(NsProcView *v);
 static void push_req(NsProcView *v, Req *req);
-
-static gboolean
-pv_video_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data)
-{
-    (void)clock;
-    NsProcView *v = data;
-    if (!v->vring || !v->vid_playing) {
-        v->vid_tick_id = 0;
-        return G_SOURCE_REMOVE;
-    }
-    gtk_widget_queue_draw(widget);
-    v->vid_tick_count++;
-    request_tick(v);
-    if (v->vid_tick_count % 300 == 0) {
-        request_render(v);
-    }
-    if (v->vid_tick_count % 60 == 0) {
-        if (v->audio_in) {
-            g_output_stream_write_all(v->audio_in, "poll\n", 5, NULL, NULL,
-                                      NULL);
-            g_output_stream_flush(v->audio_in, NULL, NULL);
-        }
-    }
-    return G_SOURCE_CONTINUE;
-}
-
-static void
-pv_video_ensure_tick(NsProcView *v)
-{
-    if (!v->vid_tick_id && v->vring && v->vid_playing)
-        v->vid_tick_id = gtk_widget_add_tick_callback(v->area, pv_video_tick,
-                                                      v, NULL);
-}
-
-static void
-pv_video_handle_line(NsProcView *v, const char *line)
-{
-    char *clean = g_strdup(line);
-    g_strchomp(clean);
-    if (g_getenv("NS_DBG_AUDIO"))
-        g_printerr("[video-helper] %s\n", clean);
-    char **tok = g_strsplit(clean, " ", 8);
-    guint n = g_strv_length(tok);
-    if (n >= 6 && strcmp(tok[0], "shm") == 0 &&
-        strcmp(tok[1], v->vid_token) != 0) {
-        if (g_getenv("NS_DBG_AUDIO"))
-            g_printerr("[shm-reject] line-tok=%s cur-tok=%s\n",
-                       tok[1], v->vid_token);
-    } else if (n >= 6 && strcmp(tok[0], "shm") == 0) {
-        gboolean was_playing = v->vid_playing;
-        gboolean had_rect = v->vid_rect_valid;
-        pv_video_snapshot_current(v);
-#ifdef G_OS_WIN32
-        pv_vring_unmap(v);
-        v->vid_playing = was_playing;
-        v->vid_rect_valid = had_rect;
-        HANDLE hm = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, tok[2]);
-        if (hm) {
-            void *map = MapViewOfFile(hm, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-            MEMORY_BASIC_INFORMATION mbi;
-            gsize view_bytes = (map && VirtualQuery(map, &mbi, sizeof mbi))
-                                   ? (gsize)mbi.RegionSize : 0;
-            ns_video_ring_hdr *hdr = map;
-            if (map && view_bytes > sizeof(ns_video_ring_hdr) &&
-                hdr->magic == NS_VIDEO_RING_MAGIC &&
-                hdr->version == NS_VIDEO_RING_VERSION &&
-                hdr->nslots == NS_VIDEO_RING_SLOTS &&
-                sizeof *hdr + (gsize)hdr->nslots * hdr->frame_bytes <= view_bytes) {
-                v->vring = map;
-                v->vring_map = hm;
-                v->vring_bytes = view_bytes;
-                g_strlcpy(v->vid_shm, tok[2], sizeof v->vid_shm);
-                g_strlcpy(v->vid_token, tok[1], sizeof v->vid_token);
-            } else {
-                if (map) UnmapViewOfFile(map);
-                CloseHandle(hm);
-            }
-        }
-        pv_video_ensure_tick(v);
-#else
-        if (g_getenv("NS_DBG_AUDIO"))
-            g_printerr("[shm-adopt] %s %s\n", tok[1], tok[2]);
-        pv_vring_unmap(v);
-        v->vid_playing = was_playing;
-        v->vid_rect_valid = had_rect;
-        int fd = shm_open(tok[2], O_RDWR, 0);
-        if (fd >= 0) {
-            struct stat st;
-            if (fstat(fd, &st) == 0 &&
-                st.st_size > (off_t)sizeof(ns_video_ring_hdr)) {
-                void *map = mmap(NULL, (size_t)st.st_size, PROT_READ | PROT_WRITE,
-                                  MAP_SHARED, fd, 0);
-                if (map != MAP_FAILED) {
-                    ns_video_ring_hdr *hdr = map;
-                    if (hdr->magic == NS_VIDEO_RING_MAGIC &&
-                        hdr->version == NS_VIDEO_RING_VERSION &&
-                        hdr->nslots == NS_VIDEO_RING_SLOTS &&
-                        sizeof *hdr + (gsize)hdr->nslots * hdr->frame_bytes
-                            <= (gsize)st.st_size) {
-                        v->vring = map;
-                        v->vring_bytes = (gsize)st.st_size;
-                        g_strlcpy(v->vid_shm, tok[2], sizeof v->vid_shm);
-                        g_strlcpy(v->vid_token, tok[1], sizeof v->vid_token);
-                    } else {
-                        munmap(map, (size_t)st.st_size);
-                    }
-                }
-            }
-            close(fd);
-        }
-        pv_video_ensure_tick(v);
-#endif
-    } else if (n >= 2 && strcmp(tok[0], "closed") == 0) {
-        if (strcmp(tok[1], v->vid_token) == 0) {
-            pv_vring_unmap(v);
-            pv_video_fallback_clear(v);
-        }
-    } else if (n >= 2 && strcmp(tok[0], "playing") == 0) {
-        if (strcmp(tok[1], v->vid_token) == 0) {
-            v->vid_playing = TRUE;
-            pv_video_ensure_tick(v);
-        }
-    } else if (n >= 2 && (strcmp(tok[0], "paused") == 0 ||
-                          strcmp(tok[0], "ended") == 0 ||
-                          strcmp(tok[0], "stalled") == 0)) {
-        if (strcmp(tok[1], v->vid_token) == 0) {
-            gboolean waiting = strcmp(tok[0], "paused") != 0;
-            v->vid_playing = waiting;
-            if (waiting) pv_video_ensure_tick(v);
-            gtk_widget_queue_draw(v->area);
-            if (strcmp(tok[0], "ended") == 0 ||
-                strcmp(tok[0], "stalled") == 0) {
-                Req *req = g_new0(Req, 1);
-                req->type = REQ_VIDEO_EVENT;
-                req->seq = v->load_seq;
-                req->key = g_strdup(tok[1]);
-                req->query = g_strdup(tok[0]);
-                g_async_queue_push_front(v->queue, req);
-            }
-        }
-    }
-    g_strfreev(tok);
-    g_free(clean);
-}
-
-static void
-pv_video_read_line(GObject *src, GAsyncResult *res, gpointer data);
-
-static void
-pv_video_read_next(NsProcView *v)
-{
-    if (!v->video_out) return;
-    g_data_input_stream_read_line_async(v->video_out, G_PRIORITY_DEFAULT,
-                                        NULL, pv_video_read_line, pv_ref(v));
-}
-
-static void
-pv_video_read_line(GObject *src, GAsyncResult *res, gpointer data)
-{
-    NsProcView *v = data;
-    char *line = g_data_input_stream_read_line_finish(
-        G_DATA_INPUT_STREAM(src), res, NULL, NULL);
-    if (line && v->video_out) {
-        pv_video_handle_line(v, line);
-        g_free(line);
-        pv_video_read_next(v);
-    } else {
-        g_free(line);
-    }
-    pv_unref(v);
-}
-
-static void
-pv_video_send(NsProcView *v, const char *cmd)
-{
-    if (!v->video_proc) {
-        char *path = ns_proc_video_helper_path();
-        GError *err = NULL;
-        GSubprocessLauncher *launcher = g_subprocess_launcher_new(
-            G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-            G_SUBPROCESS_FLAGS_STDERR_SILENCE);
-        v->video_proc = g_subprocess_launcher_spawn(launcher, &err, path, NULL);
-        g_object_unref(launcher);
-        if (g_getenv("NS_DBG_AUDIO"))
-            g_printerr("[video-pump] spawn %s -> %s (%s)\n", path,
-                       v->video_proc ? "ok" : "FAIL",
-                       err ? err->message : "-");
-        g_free(path);
-        if (!v->video_proc) {
-            g_clear_error(&err);
-            return;
-        }
-        v->video_in = g_subprocess_get_stdin_pipe(v->video_proc);
-        GInputStream *out = g_subprocess_get_stdout_pipe(v->video_proc);
-        v->video_out = g_data_input_stream_new(out);
-        pv_video_read_next(v);
-    }
-    if (!v->video_in) return;
-    if (g_getenv("NS_DBG_AUDIO"))
-        g_printerr("[video-pump] cmd: %s\n", cmd);
-    char *line = g_strconcat(cmd, "\n", NULL);
-    g_output_stream_write_all(v->video_in, line, strlen(line),
-                              NULL, NULL, NULL);
-    g_output_stream_flush(v->video_in, NULL, NULL);
-    g_free(line);
-}
-
-static void
-pv_video_dispatch(NsProcView *v, const char *cmd)
-{
-    if (g_str_has_prefix(cmd, "rect ")) {
-        char token[64];
-        int x, y, w, h, fit = 1;
-        int cx = 0, cy = 0, cw = 0, ch = 0, page = 0;
-        int fields = sscanf(cmd + 5, "%63s %d %d %d %d %d %d %d %d %d %d",
-                            token, &x, &y, &w, &h, &fit,
-                            &cx, &cy, &cw, &ch, &page);
-        if (fields >= 5 &&
-            (strcmp(token, v->vid_token) == 0 || !v->vid_token[0])) {
-            v->vid_x = x;
-            v->vid_y = y;
-            v->vid_w = w;
-            v->vid_h = h;
-            v->vid_fit = fit;
-            v->vid_clip_x = fields >= 10 ? cx : x;
-            v->vid_clip_y = fields >= 10 ? cy : y;
-            v->vid_clip_w = fields >= 10 ? cw : w;
-            v->vid_clip_h = fields >= 10 ? ch : h;
-            v->vid_rect_valid = w > 0 && h > 0;
-            v->vid_page = fields >= 11 && page;
-            if (g_getenv("NS_DBG_AUDIO"))
-                g_printerr("[video-rect] %d,%d %dx%d clip=%d,%d %dx%d "
-                           "valid=%d\n", x, y, w, h, cx, cy, cw, ch,
-                           v->vid_rect_valid);
-            gtk_widget_queue_draw(v->area);
-        }
-        return;
-    }
-    char cmd_tok[64] = "";
-    if (g_str_has_prefix(cmd, "open ")) {
-        sscanf(cmd + 5, "%63s", v->vid_token);
-        v->vid_rect_valid = FALSE;
-    } else if (g_str_has_prefix(cmd, "play ")) {
-        sscanf(cmd + 5, "%63s", cmd_tok);
-        if (strcmp(cmd_tok, v->vid_token) == 0)
-            v->vid_playing = TRUE;
-    } else if (g_str_has_prefix(cmd, "pause ") ||
-               g_str_has_prefix(cmd, "stop ")) {
-        sscanf(cmd + (cmd[0] == 'p' ? 6 : 5), "%63s", cmd_tok);
-        if (strcmp(cmd_tok, v->vid_token) == 0)
-            v->vid_playing = FALSE;
-    }
-    pv_video_send(v, cmd);
-    pv_video_ensure_tick(v);
-}
-
-static void
-pv_video_shutdown(NsProcView *v)
-{
-    pv_vring_unmap(v);
-    pv_video_fallback_clear(v);
-    if (!v->video_proc) return;
-    if (v->video_in) {
-        g_output_stream_write_all(v->video_in, "quit\n", 5, NULL, NULL, NULL);
-        g_output_stream_flush(v->video_in, NULL, NULL);
-    }
-    g_clear_object(&v->video_out);
-    g_subprocess_force_exit(v->video_proc);
-    g_clear_object(&v->video_proc);
-    v->video_in = NULL;
-}
-
-static void
-pv_append_proc_threads(GString *out, int pid)
-{
-#ifdef __linux__
-    char *taskdir = g_strdup_printf("/proc/%d/task", pid);
-    GDir *dir = g_dir_open(taskdir, 0, NULL);
-    if (dir) {
-        long hz = sysconf(_SC_CLK_TCK);
-        if (hz <= 0) hz = 100;
-        const char *tid;
-        while ((tid = g_dir_read_name(dir))) {
-            char *stat_path = g_strdup_printf("%s/%s/stat", taskdir, tid);
-            char *stat = NULL;
-            if (g_file_get_contents(stat_path, &stat, NULL, NULL)) {
-                char *close = strrchr(stat, ')');
-                char *open = strchr(stat, '(');
-                if (open && close && close > open) {
-                    char name[32] = {0};
-                    g_strlcpy(name, open + 1,
-                              MIN((gsize)(close - open), sizeof name));
-                    char state = 0;
-                    unsigned long utime = 0, stime = 0;
-                    if (sscanf(close + 1,
-                               " %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u "
-                               "%lu %lu", &state, &utime, &stime) >= 1)
-                        g_string_append_printf(
-                            out, "    tid %-7s %-16s %c  cpu %.2fs\n",
-                            tid, name, state,
-                            (double)(utime + stime) / (double)hz);
-                }
-                g_free(stat);
-            }
-            g_free(stat_path);
-        }
-        g_dir_close(dir);
-    }
-    g_free(taskdir);
-#else
-    (void)out; (void)pid;
-#endif
-}
-
-static void
-pv_append_media_process_stats(NsProcView *v, GString *out)
-{
-    struct { const char *label; int pid; } procs[] = {
-        { "audio helper (southstar-audio)", ns_proc_view_audio_pid(v) },
-        { "video helper (southstar-video)", ns_proc_view_video_pid(v) },
-    };
-    gboolean any = FALSE;
-    for (gsize i = 0; i < G_N_ELEMENTS(procs); i++) {
-        if (procs[i].pid <= 0) continue;
-        if (!any) {
-            g_string_append(out, "\n\n== Media helper processes ==\n");
-            any = TRUE;
-        }
-        char state[32] = "";
-        long rss = -1;
-        ns_rproc_http_proc_info(procs[i].pid, state, sizeof state, &rss);
-        g_string_append_printf(out, "%s  pid %d  %s  rss %.1f MB\n",
-                               procs[i].label, procs[i].pid, state,
-                               rss >= 0 ? rss / 1024.0 : 0.0);
-        pv_append_proc_threads(out, procs[i].pid);
-    }
-    if (any && v->vring) {
-        ns_video_ring_hdr *r = v->vring;
-        guint32 published = __atomic_load_n(&r->published, __ATOMIC_ACQUIRE);
-        guint32 released = __atomic_load_n(&r->released, __ATOMIC_ACQUIRE);
-        g_string_append_printf(out,
-                               "video queue %ux%u stride %u queued %u frame %u "
-                               "pts %.2fs shown %" G_GUINT64_FORMAT " dropped %"
-                               G_GUINT64_FORMAT "\n",
-                               r->width, r->height, r->stride,
-                               published - released, v->vid_sequence, v->vid_pts,
-                               v->vid_presented, v->vid_dropped);
-    }
-}
-
-static void
-pv_media_pump(NsProcView *v, const char *commands)
-{
-    if (!commands || !*commands) return;
-    char **lines = g_strsplit(commands, "\x1f", -1);
-    GString *audio = g_string_new(NULL);
-    for (int i = 0; lines[i]; i++) {
-        if (!*lines[i]) continue;
-        if (g_str_has_prefix(lines[i], "video ")) {
-            if (pv_video_command_allowed(lines[i] + 6))
-                pv_video_dispatch(v, lines[i] + 6);
-            else if (g_getenv("NS_DBG_AUDIO"))
-                g_printerr("[video-pump] refused: %s\n", lines[i] + 6);
-        } else {
-            g_string_append(audio, lines[i]);
-            g_string_append_c(audio, '\x1f');
-        }
-    }
-    g_strfreev(lines);
-    if (audio->len)
-        pv_audio_pump(v, audio->str);
-    g_string_free(audio, TRUE);
-}
 
 static GdkTexture *
 stage_fill(NsProcView *v, const unsigned char *px, int w, int h, int stride)
@@ -1550,6 +694,54 @@ static void
 post(Res *res)
 {
     g_idle_add(on_result, res);
+}
+
+NsProcView *
+ns_proc_view_ref(NsProcView *v)
+{
+    return pv_ref(v);
+}
+
+void
+ns_proc_view_unref(NsProcView *v)
+{
+    pv_unref(v);
+}
+
+GtkWidget *
+ns_proc_view_area(NsProcView *v)
+{
+    return v->area;
+}
+
+NsPvMedia *
+ns_proc_view_media(NsProcView *v)
+{
+    return v ? v->media : NULL;
+}
+
+void
+ns_proc_view_request_tick(NsProcView *v)
+{
+    request_tick(v);
+}
+
+void
+ns_proc_view_request_render(NsProcView *v)
+{
+    request_render(v);
+}
+
+void
+ns_proc_view_push_video_event(NsProcView *v, const char *token,
+                              const char *kind)
+{
+    Req *req = g_new0(Req, 1);
+    req->type = REQ_VIDEO_EVENT;
+    req->seq = v->load_seq;
+    req->key = g_strdup(token);
+    req->query = g_strdup(kind);
+    g_async_queue_push_front(v->queue, req);
 }
 
 static gboolean
@@ -2435,7 +1627,7 @@ anim_tick(GtkWidget *widget, GdkFrameClock *clock, gpointer data)
         v->last_anim_frame_us = 0;
         return G_SOURCE_REMOVE;
     }
-    if (v->vring && v->vid_playing)
+    if (ns_pv_media_video_playing(v->media))
         return G_SOURCE_CONTINUE;
     gint64 now = clock ? gdk_frame_clock_get_frame_time(clock) : 0;
     if (now <= 0) now = g_get_monotonic_time();
@@ -2775,7 +1967,7 @@ maybe_update_viewport(NsProcView *v)
     double dpr = page_dpr(v);
     if (w == v->last_vp_w && h == v->last_vp_h && dpr == v->last_vp_dpr)
         return FALSE;
-    v->vid_rect_valid = FALSE;
+    ns_pv_media_forget_rect(v->media);
     gtk_widget_queue_draw(v->area);
     v->last_vp_w = w;
     v->last_vp_h = h;
@@ -2830,8 +2022,8 @@ do_load(NsProcView *v, const char *url, gboolean record, gboolean history,
     if (!url || !*url)
         return;
     pv_perm_resolve(v, FALSE);
-    pv_audio_shutdown(v);
-    pv_video_shutdown(v);
+    ns_pv_media_audio_shutdown(v->media);
+    ns_pv_media_video_shutdown(v->media);
     v->pending_record = record;
     int seq = ++v->load_seq;
     ++v->render_seq;
@@ -2980,24 +2172,16 @@ ns_proc_view_renderer_pid(NsProcView *v)
     return pid;
 }
 
-static int
-pv_subprocess_pid(GSubprocess *proc)
-{
-    if (!proc) return -1;
-    const char *id = g_subprocess_get_identifier(proc);
-    return id ? atoi(id) : -1;
-}
-
 int
 ns_proc_view_audio_pid(NsProcView *v)
 {
-    return v ? pv_subprocess_pid(v->audio_proc) : -1;
+    return v ? ns_pv_media_audio_pid(v->media) : -1;
 }
 
 int
 ns_proc_view_video_pid(NsProcView *v)
 {
-    return v ? pv_subprocess_pid(v->video_proc) : -1;
+    return v ? ns_pv_media_video_pid(v->media) : -1;
 }
 
 void
@@ -3015,13 +2199,13 @@ ns_proc_view_end_task(NsProcView *v)
 void
 ns_proc_view_stop_video(NsProcView *v)
 {
-    if (v) pv_video_shutdown(v);
+    if (v) ns_pv_media_video_shutdown(v->media);
 }
 
 void
 ns_proc_view_stop_audio(NsProcView *v)
 {
-    if (v) pv_audio_shutdown(v);
+    if (v) ns_pv_media_audio_shutdown(v->media);
 }
 
 void ns_proc_view_focus(NsProcView *v)
@@ -3220,7 +2404,7 @@ on_result(gpointer data)
         if (current && res->ok && res->download && *res->download)
             post_emit(v, NS_PROC_EVT_DOWNLOAD, res->download);
         if (current && res->ok && res->audio && *res->audio)
-            pv_media_pump(v, res->audio);
+            ns_pv_media_pump(v, res->audio);
         if (current && res->ok && res->window_action && *res->window_action)
             pv_apply_window_action(v, res->window_action);
         if (current && res->ok && !navigated)
@@ -3237,7 +2421,7 @@ on_result(gpointer data)
                 if (res->pw > 0) v->page_w = res->pw;
                 configure_adjustments(v);
             }
-            if (res->kind && !(v->vring && v->vid_playing))
+            if (res->kind && !ns_pv_media_video_playing(v->media))
                 request_render(v);
         }
         v->tick_inflight = FALSE;
@@ -3300,7 +2484,7 @@ on_result(gpointer data)
         if (res->ok && res->download && *res->download)
             post_emit(v, NS_PROC_EVT_DOWNLOAD, res->download);
         if (res->ok && res->audio && *res->audio)
-            pv_media_pump(v, res->audio);
+            ns_pv_media_pump(v, res->audio);
         if (res->ok && res->window_action && *res->window_action)
             pv_apply_window_action(v, res->window_action);
         if (res->ok && res->clipboard && v->area) {
@@ -3534,7 +2718,7 @@ on_result(gpointer data)
         if (buf == v->perf_buffer) {
             GString *text = g_string_new(
                 (res->href && *res->href) ? res->href : ns_i18n("(empty)"));
-            pv_append_media_process_stats(v, text);
+            ns_pv_media_append_stats(v->media, text);
             gtk_text_buffer_set_text(buf, text->str, -1);
             g_string_free(text, TRUE);
         } else if (buf) {
@@ -3580,214 +2764,6 @@ done:
     return G_SOURCE_REMOVE;
 }
 
-static void
-pv_video_ring_position(NsProcView *v, ns_video_ring_hdr *r, double *position)
-{
-    if (pv_audio_clock_position(v, v->vid_token, position)) return;
-    guint32 seq1 = __atomic_load_n(&r->clock_sequence, __ATOMIC_ACQUIRE);
-    if (!seq1 || (seq1 & 1u)) {
-        *position = v->vid_pts;
-        return;
-    }
-    guint32 flags = r->clock_flags;
-    gint64 sample_us = r->clock_monotonic_us;
-    double sample_position = r->clock_position;
-    guint32 seq2 = __atomic_load_n(&r->clock_sequence, __ATOMIC_ACQUIRE);
-    if (seq1 != seq2 || !(flags & NS_MEDIA_CLOCK_USED)) {
-        *position = v->vid_pts;
-        return;
-    }
-    if (flags & NS_MEDIA_CLOCK_PLAYING) {
-        gint64 elapsed = g_get_monotonic_time() - sample_us;
-        if (elapsed > 0 && elapsed < 500000)
-            sample_position += (double)elapsed / 1e6;
-    }
-    *position = sample_position;
-}
-
-static gboolean
-pv_video_pick_frame(NsProcView *v, ns_video_ring_hdr *r,
-                    guint32 *out_slot, guint32 *out_sequence,
-                    double *out_pts)
-{
-    guint32 generation = __atomic_load_n(&r->generation, __ATOMIC_ACQUIRE);
-    if (generation != v->vid_generation) {
-        v->vid_generation = generation;
-        v->vid_sequence = 0;
-        v->vid_pts = 0.0;
-    }
-
-    double position = 0.0;
-    pv_video_ring_position(v, r, &position);
-    guint32 published = __atomic_load_n(&r->published, __ATOMIC_ACQUIRE);
-    guint32 selected_sequence = 0;
-    guint32 selected_slot = 0;
-    double selected_pts = 0.0;
-
-    if (v->vid_sequence) {
-        ns_video_ring_slot *meta = &r->slots[v->vid_slot];
-        guint32 sequence = __atomic_load_n(&meta->sequence, __ATOMIC_ACQUIRE);
-        if (sequence == v->vid_sequence && meta->generation == generation) {
-            selected_sequence = sequence;
-            selected_slot = v->vid_slot;
-            selected_pts = meta->pts;
-        }
-    }
-
-    for (guint32 age = 0; age < NS_VIDEO_RING_SLOTS && age < published;
-         age++) {
-        guint32 sequence = published - age;
-        guint32 slot = (sequence - 1u) % NS_VIDEO_RING_SLOTS;
-        ns_video_ring_slot *meta = &r->slots[slot];
-        guint32 committed = __atomic_load_n(&meta->sequence, __ATOMIC_ACQUIRE);
-        if (committed != sequence || meta->generation != generation) continue;
-        double pts = meta->pts;
-        if (pts <= position + 0.010 && sequence >= selected_sequence) {
-            selected_sequence = sequence;
-            selected_slot = slot;
-            selected_pts = pts;
-            break;
-        }
-    }
-
-    if (!selected_sequence && !v->vid_playing) {
-        for (guint32 age = NS_VIDEO_RING_SLOTS; age > 0; age--) {
-            if (age > published) continue;
-            guint32 sequence = published - age + 1u;
-            guint32 slot = (sequence - 1u) % NS_VIDEO_RING_SLOTS;
-            ns_video_ring_slot *meta = &r->slots[slot];
-            guint32 committed = __atomic_load_n(&meta->sequence,
-                                                 __ATOMIC_ACQUIRE);
-            if (committed == sequence && meta->generation == generation) {
-                selected_sequence = sequence;
-                selected_slot = slot;
-                selected_pts = meta->pts;
-                break;
-            }
-        }
-    }
-
-    if (!selected_sequence) return FALSE;
-    *out_slot = selected_slot;
-    *out_sequence = selected_sequence;
-    *out_pts = selected_pts;
-    return TRUE;
-}
-
-static void
-pv_video_draw_surface(NsProcView *v, cairo_t *cr, cairo_surface_t *surface)
-{
-    int fw = cairo_image_surface_get_width(surface);
-    int fh = cairo_image_surface_get_height(surface);
-    if (fw <= 0 || fh <= 0) return;
-    double draw_x = v->vid_x;
-    double draw_y = v->vid_y;
-    double draw_w = v->vid_w;
-    double draw_h = v->vid_h;
-    if (v->vid_fit != 0) {
-        double scale_x = v->vid_w / (double)fw;
-        double scale_y = v->vid_h / (double)fh;
-        double scale = MIN(scale_x, scale_y);
-        if (v->vid_fit == 2) scale = MAX(scale_x, scale_y);
-        else if (v->vid_fit == 3) scale = 1.0;
-        else if (v->vid_fit == 4) scale = MIN(1.0, scale);
-        draw_w = fw * scale;
-        draw_h = fh * scale;
-        draw_x += (v->vid_w - draw_w) * 0.5;
-        draw_y += (v->vid_h - draw_h) * 0.5;
-    }
-    cairo_save(cr);
-    cairo_rectangle(cr, v->vid_x, v->vid_y, v->vid_w, v->vid_h);
-    cairo_clip(cr);
-    cairo_rectangle(cr, v->vid_clip_x, v->vid_clip_y,
-                    v->vid_clip_w, v->vid_clip_h);
-    cairo_clip(cr);
-    cairo_translate(cr, draw_x, draw_y);
-    cairo_scale(cr, draw_w / (double)fw, draw_h / (double)fh);
-    cairo_set_source_surface(cr, surface, 0, 0);
-    cairo_paint(cr);
-    cairo_restore(cr);
-}
-
-static void
-pv_video_draw(NsProcView *v, cairo_t *cr, double fs)
-{
-    if (v->vring && v->vid_rect_valid) {
-        gboolean frame_drawn = FALSE;
-        cairo_save(cr);
-        cairo_scale(cr, 1.0 / fs, 1.0 / fs);
-        cairo_rectangle(cr, v->vid_clip_x, v->vid_clip_y,
-                        v->vid_clip_w, v->vid_clip_h);
-        cairo_clip(cr);
-        cairo_set_source_rgb(cr, 0.10, 0.10, 0.10);
-        cairo_rectangle(cr, v->vid_x, v->vid_y, v->vid_w, v->vid_h);
-        cairo_fill(cr);
-        ns_video_ring_hdr *r = v->vring;
-        guint32 slot = 0;
-        guint32 sequence = 0;
-        double pts = 0.0;
-        guint32 nslots  = r->nslots;
-        guint32 fw      = r->width;
-        guint32 fh      = r->height;
-        guint32 fstride = r->stride;
-        guint32 fbytes  = r->frame_bytes;
-        if (r->magic == NS_VIDEO_RING_MAGIC &&
-            r->version == NS_VIDEO_RING_VERSION &&
-            pv_video_pick_frame(v, r, &slot, &sequence, &pts) &&
-            slot < nslots &&
-            fw > 0 && fh > 0 &&
-            (guint64)fstride >= (guint64)fw * 4 &&
-            (guint64)fstride * fh <= fbytes &&
-            sizeof(ns_video_ring_hdr) + (gsize)(slot + 1) * fbytes
-                <= v->vring_bytes) {
-            unsigned char *px = (unsigned char *)r + sizeof(ns_video_ring_hdr) +
-                                (gsize)slot * fbytes;
-            cairo_surface_t *s = cairo_image_surface_create_for_data(
-                px, CAIRO_FORMAT_RGB24, (int)fw, (int)fh, (int)fstride);
-            if (cairo_surface_status(s) == CAIRO_STATUS_SUCCESS) {
-                pv_video_draw_surface(v, cr, s);
-                frame_drawn = TRUE;
-                pv_video_fallback_clear(v);
-                if (sequence != v->vid_sequence) {
-                    if (v->vid_sequence && sequence > v->vid_sequence + 1u)
-                        v->vid_dropped += sequence - v->vid_sequence - 1u;
-                    v->vid_sequence = sequence;
-                    v->vid_slot = slot;
-                    v->vid_pts = pts;
-                    v->vid_presented++;
-                }
-                guint32 released = __atomic_load_n(&r->released,
-                                                    __ATOMIC_ACQUIRE);
-                guint32 target = sequence - 1u;
-                if (target > released)
-                    __atomic_store_n(&r->released, target, __ATOMIC_RELEASE);
-            }
-            cairo_surface_destroy(s);
-        }
-        if (!frame_drawn && v->vid_fallback) {
-            pv_video_draw_surface(v, cr, v->vid_fallback);
-            frame_drawn = TRUE;
-        }
-        cairo_restore(cr);
-        if (g_getenv("NS_DBG_COMPOSITE")) {
-            static gint64 last_us;
-            static int cdrawn, cblack;
-            if (frame_drawn) cdrawn++; else cblack++;
-            gint64 nowu = g_get_monotonic_time();
-            if (nowu - last_us > 1000000) {
-                last_us = nowu;
-                g_printerr("[composite] drawn=%d/s black=%d/s slot=%u magic=%s "
-                           "%ux%u seq=%u pts=%.3f rect=%.0f,%.0f %.0fx%.0f\n",
-                           cdrawn, cblack, slot,
-                           r->magic == NS_VIDEO_RING_MAGIC ? "ok" : "BAD",
-                           fw, fh, sequence, pts, v->vid_x, v->vid_y,
-                           v->vid_w, v->vid_h);
-                cdrawn = 0; cblack = 0;
-            }
-        }
-    }
-}
-
 G_DECLARE_FINAL_TYPE(NsProcViewArea, ns_proc_view_area, NS, PROC_VIEW_AREA,
                      GtkDrawingArea)
 
@@ -3807,31 +2783,18 @@ pv_frame_covers(NsProcView *v, double fs, const graphene_rect_t *area)
 }
 
 static void
-pv_snapshot_video(NsProcView *v, double fs, GtkSnapshot *snapshot)
-{
-    if (!v->vring || !v->vid_rect_valid)
-        return;
-    graphene_rect_t clip = GRAPHENE_RECT_INIT(
-        v->vid_clip_x / fs, v->vid_clip_y / fs,
-        MAX(v->vid_clip_w, 0.0) / fs, MAX(v->vid_clip_h, 0.0) / fs);
-    cairo_t *cr = gtk_snapshot_append_cairo(snapshot, &clip);
-    pv_video_draw(v, cr, fs);
-    cairo_destroy(cr);
-}
-
-static void
 pv_snapshot_page_video(GtkSnapshot *snapshot, double offset_x,
                        double offset_y, gpointer data)
 {
     NsProcView *v = data;
-    if (!v->vid_page)
+    if (!ns_pv_media_on_page(v->media))
         return;
     double fs = raster_scale(v);
     gtk_snapshot_save(snapshot);
     gtk_snapshot_translate(snapshot,
                            &GRAPHENE_POINT_INIT((float)(-offset_x / fs),
                                                 (float)(-offset_y / fs)));
-    pv_snapshot_video(v, fs, snapshot);
+    ns_pv_media_snapshot(v->media, fs, snapshot);
     gtk_snapshot_restore(snapshot);
 }
 
@@ -3856,8 +2819,8 @@ ns_proc_view_area_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
         GdkRGBA white = { 1.0f, 1.0f, 1.0f, 1.0f };
         gtk_snapshot_append_color(snapshot, &white, &area);
     }
-    if (!v->vid_page)
-        pv_snapshot_video(v, fs, snapshot);
+    if (!ns_pv_media_on_page(v->media))
+        ns_pv_media_snapshot(v->media, fs, snapshot);
     if (!v->frame)
         return;
     graphene_rect_t bounds = GRAPHENE_RECT_INIT(
@@ -5220,6 +4183,7 @@ ns_proc_view_new(void)
     NsProcView *v = g_new0(NsProcView, 1);
     g_ref_count_init(&v->rc);
     g_mutex_init(&v->proc_lock);
+    v->media = ns_pv_media_new();
     v->renderer_path = ns_proc_renderer_path();
     v->queue = g_async_queue_new();
     v->history = g_ptr_array_new_with_free_func(g_free);

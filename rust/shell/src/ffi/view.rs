@@ -8,10 +8,7 @@ use std::ffi::CString;
 
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkPaintable, GtkWidget};
 
-#[repr(C)]
-pub struct NsProcView {
-    _private: [u8; 0],
-}
+pub use super::procview_media::NsProcView;
 
 pub type Notify =
     unsafe extern "C" fn(view: *mut NsProcView, evt: c_int, text: *const c_char, data: *mut c_void);

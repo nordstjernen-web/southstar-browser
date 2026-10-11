@@ -384,3 +384,68 @@ unsafe extern "C" {
     pub fn cairo_pattern_destroy(pattern: *mut CairoPattern);
     pub fn cairo_destroy(cr: *mut Cairo);
 }
+
+opaque!(GdkFrameClock, CairoSurface);
+
+pub type GtkTickCallback = Option<
+    unsafe extern "C" fn(
+        widget: *mut GtkWidget,
+        frame_clock: *mut GdkFrameClock,
+        user_data: *mut c_void,
+    ) -> GBoolean,
+>;
+
+pub type CairoFormat = c_int;
+pub const CAIRO_FORMAT_RGB24: CairoFormat = 1;
+pub const CAIRO_STATUS_SUCCESS: c_int = 0;
+
+unsafe extern "C" {
+    pub fn gtk_widget_queue_draw(widget: *mut GtkWidget);
+    pub fn gtk_widget_add_tick_callback(
+        widget: *mut GtkWidget,
+        callback: GtkTickCallback,
+        user_data: *mut c_void,
+        notify: GDestroyNotify,
+    ) -> c_uint;
+
+    pub fn cairo_save(cr: *mut Cairo);
+    pub fn cairo_restore(cr: *mut Cairo);
+    pub fn cairo_scale(cr: *mut Cairo, sx: c_double, sy: c_double);
+    pub fn cairo_translate(cr: *mut Cairo, tx: c_double, ty: c_double);
+    pub fn cairo_rectangle(
+        cr: *mut Cairo,
+        x: c_double,
+        y: c_double,
+        width: c_double,
+        height: c_double,
+    );
+    pub fn cairo_clip(cr: *mut Cairo);
+    pub fn cairo_fill(cr: *mut Cairo);
+    pub fn cairo_paint(cr: *mut Cairo);
+    pub fn cairo_set_source_rgb(cr: *mut Cairo, red: c_double, green: c_double, blue: c_double);
+    pub fn cairo_set_source_surface(
+        cr: *mut Cairo,
+        surface: *mut CairoSurface,
+        x: c_double,
+        y: c_double,
+    );
+    pub fn cairo_image_surface_create(
+        format: CairoFormat,
+        width: c_int,
+        height: c_int,
+    ) -> *mut CairoSurface;
+    pub fn cairo_image_surface_create_for_data(
+        data: *mut u8,
+        format: CairoFormat,
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+    ) -> *mut CairoSurface;
+    pub fn cairo_image_surface_get_data(surface: *mut CairoSurface) -> *mut u8;
+    pub fn cairo_image_surface_get_stride(surface: *mut CairoSurface) -> c_int;
+    pub fn cairo_image_surface_get_width(surface: *mut CairoSurface) -> c_int;
+    pub fn cairo_image_surface_get_height(surface: *mut CairoSurface) -> c_int;
+    pub fn cairo_surface_status(surface: *mut CairoSurface) -> c_int;
+    pub fn cairo_surface_mark_dirty(surface: *mut CairoSurface);
+    pub fn cairo_surface_destroy(surface: *mut CairoSurface);
+}

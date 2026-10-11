@@ -8,6 +8,7 @@ mod downloads;
 mod ffi;
 mod icons;
 mod pagelayers;
+mod procview;
 mod taskmgr;
 mod titlerow;
 mod window;

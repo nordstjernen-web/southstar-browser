@@ -9,6 +9,7 @@ pub mod gdk;
 mod gtk;
 mod icons;
 mod pagelayers;
+mod procview_media;
 mod taskmgr;
 mod titlerow;
 mod view;
