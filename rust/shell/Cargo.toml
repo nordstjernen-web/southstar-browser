@@ -12,6 +12,7 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+southstar-config = { path = "../config" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }

@@ -1,5 +1,4 @@
 southstar_gtk_sources = files(
-  'appmain.c',
   'procview.c',
   'procwindow.c',
 )

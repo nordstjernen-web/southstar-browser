@@ -2530,6 +2530,7 @@ dependencies = [
 name = "southstar-shell"
 version = "0.9.9"
 dependencies = [
+ "southstar-config",
  "southstar-ffi",
  "southstar-glib",
  "southstar-gtk-ffi",
