@@ -200,6 +200,10 @@ impl<'a> Node<'a> {
         }
     }
 
+    pub fn source_position(self) -> (c_int, c_int) {
+        (self.get().src_line, self.get().src_col)
+    }
+
     pub fn take_tpl_content(self) -> Option<Self> {
         let content = self.tpl_content();
         unsafe { (*self.node.as_ptr()).tpl_content = core::ptr::null_mut() };

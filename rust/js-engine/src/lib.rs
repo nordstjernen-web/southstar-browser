@@ -20,7 +20,6 @@ use quickjs_ffi as backend;
 #[cfg(feature = "quickjs")]
 pub use backend::quickjs;
 pub use backend::{ENGINE_NAME, Engine, ObjectKey, Realm, Scope, Value, engine_version};
-
 pub type NativeFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value]) -> Result<Value, Value>;
 
 pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Result<Value, Value>;
@@ -134,6 +133,14 @@ pub enum PromiseState {
     Pending,
     Fulfilled(Value),
     Rejected(Value),
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct ScriptOptions<'a> {
+    pub name: Option<&'a [u8]>,
+    pub line: i32,
+    pub column: i32,
+    pub hide_source: bool,
 }
 
 #[derive(Clone, Copy)]

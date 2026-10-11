@@ -11,7 +11,9 @@ use southstar_glib::{self as glib, GArray, GBoolean, GError};
 use southstar_js_engine::quickjs::{self, JSContext};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Schedule, Task, blocking, compile, fetch, hold, import_map, page, scan, schedule};
+use crate::{
+    Schedule, Task, blocking, compile, eval, fetch, hold, import_map, page, scan, schedule,
+};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -141,20 +143,45 @@ unsafe extern "C" {
         initiator: *const c_char,
         info: *const PerfInfo,
     ) -> *mut NsResponse;
-    fn ns_js_eval_script_source(
-        js: *mut NsJs,
-        script: *mut NsNode,
-        source: *const c_char,
-        length: usize,
-        origin: *const c_char,
-        is_module: GBoolean,
-    );
     fn ns_js_blob_url_lookup(
         js: *mut NsJs,
         url: *const c_char,
         out_type: *mut *mut c_char,
     ) -> *mut GBytes;
-    fn ns_js_decode_data_url(url: *const c_char, out_len: *mut usize) -> *mut c_char;
+    fn ns_data_url_decode(
+        url: *const c_char,
+        out: *mut GByteArray,
+        budget: u64,
+        out_content_type: *mut *mut c_char,
+        too_large: *mut GBoolean,
+    ) -> GBoolean;
+    fn g_byte_array_new() -> *mut GByteArray;
+    fn g_byte_array_free(array: *mut GByteArray, free_segment: GBoolean) -> *mut u8;
+    fn g_array_remove_index(array: *mut GArray, index: c_uint) -> *mut GArray;
+    fn ns_js_has_log(js: *const NsJs) -> GBoolean;
+    fn ns_js_eval_depth_add(js: *mut NsJs, delta: c_int) -> c_int;
+    fn ns_js_ignore_destructive_writes_add(js: *mut NsJs, delta: c_int);
+    fn ns_js_current_script(js: *const NsJs) -> *const NsNode;
+    fn ns_js_swap_current_script(js: *mut NsJs, script: *mut NsNode) -> *mut NsNode;
+    fn ns_js_swap_current_document(js: *mut NsJs, doc: *mut NsNode) -> *mut NsNode;
+    fn ns_js_module_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_swap_module_context(js: *mut NsJs, ctx: *mut JSContext) -> *mut JSContext;
+    fn ns_js_iframe_document(js: *const NsJs, out: *mut quickjs::JSValue) -> GBoolean;
+    fn ns_js_frame_url_push(js: *mut NsJs, url: *const c_char) -> *mut c_void;
+    fn ns_js_frame_url_pop(js: *mut NsJs, fu: *mut c_void);
+    fn ns_js_apply_site_quirks(js: *mut NsJs);
+    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
+    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
+    fn ns_js_flush_document_write(js: *mut NsJs);
+    fn ns_js_report_uncaught(js: *mut NsJs, ex: quickjs::JSValue, origin: *const c_char);
+    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> *mut JSContext;
+    fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray;
+    fn ns_ext_content_scripts_for_url(
+        ctx: *mut JSContext,
+        global: quickjs::JSValue,
+        url: *const c_char,
+        document_start: GBoolean,
+    ) -> *mut c_char;
     fn ns_js_index_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -274,14 +301,19 @@ pub(crate) fn url_is_http_or_https(url: &CStr) -> bool {
 }
 
 pub(crate) fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {
-    let mut len = 0usize;
-    let body = unsafe { ns_js_decode_data_url(url.as_ptr(), &mut len) };
-    if body.is_null() {
-        return None;
+    unsafe {
+        let body = g_byte_array_new();
+        let decoded = ns_data_url_decode(
+            url.as_ptr(),
+            body,
+            crate::MAX_SCRIPT_BYTES as u64,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        ) != 0;
+        let out = decoded.then(|| glib::slice((*body).data, (*body).len as usize).to_vec());
+        g_byte_array_free(body, glib::TRUE);
+        out
     }
-    let out = unsafe { glib::slice(body.cast(), len) }.to_vec();
-    unsafe { glib::g_free(body.cast()) };
-    Some(out)
 }
 
 pub(crate) fn sri_check(integrity: Option<&CStr>, body: &[u8]) -> bool {
@@ -457,15 +489,123 @@ impl Js {
         origin: Option<&CStr>,
         is_module: bool,
     ) {
-        unsafe {
-            ns_js_eval_script_source(
-                self.0,
-                script.as_mut_ptr(),
-                source.as_ptr().cast(),
-                source.len(),
-                opt_ptr(origin),
-                glib::boolean(is_module),
-            )
+        crate::eval::eval_script_source(self, script, source, origin, is_module);
+    }
+
+    pub(crate) fn forget_script_roots_in(self, root: Node) {
+        page::forget_roots_in(self, root.as_ptr() as usize);
+    }
+
+    pub(crate) fn has_log(self) -> bool {
+        unsafe { ns_js_has_log(self.0) != 0 }
+    }
+
+    pub(crate) fn eval_depth_add(self, delta: i32) -> i32 {
+        unsafe { ns_js_eval_depth_add(self.0, delta) }
+    }
+
+    pub(crate) fn ignore_destructive_writes_add(self, delta: i32) {
+        unsafe { ns_js_ignore_destructive_writes_add(self.0, delta) }
+    }
+
+    pub(crate) fn current_script(self) -> Option<Node<'static>> {
+        node(unsafe { ns_js_current_script(self.0) })
+    }
+
+    pub(crate) fn swap_current_script(self, script: Option<Node>) -> Option<Node<'static>> {
+        node(unsafe { ns_js_swap_current_script(self.0, Node::ptr_or_null(script).cast_mut()) })
+    }
+
+    pub(crate) fn swap_current_doc(self, doc: Option<Node>) -> Option<Node<'static>> {
+        node(unsafe { ns_js_swap_current_document(self.0, Node::ptr_or_null(doc).cast_mut()) })
+    }
+
+    pub(crate) fn main_realm(self) -> Realm {
+        Realm(unsafe { ns_js_main_context(self.0) })
+    }
+
+    pub(crate) fn module_realm(self) -> Realm {
+        Realm(unsafe { ns_js_module_context(self.0) })
+    }
+
+    pub(crate) fn swap_module_realm(self, realm: Option<Realm>) -> Option<Realm> {
+        let ctx = realm.map_or(ptr::null_mut(), |realm| realm.0);
+        let previous = unsafe { ns_js_swap_module_context(self.0, ctx) };
+        (!previous.is_null()).then_some(Realm(previous))
+    }
+
+    pub(crate) fn node_realm(self, n: Node) -> Option<Realm> {
+        let ctx = unsafe { ns_js_node_realm_context(self.0, n.as_ptr()) };
+        (!ctx.is_null()).then_some(Realm(ctx))
+    }
+
+    pub(crate) fn iframe_document(self, scope: &Scope<'_>) -> Option<Value> {
+        let mut raw = quickjs::UNDEFINED;
+        let set = unsafe { ns_js_iframe_document(self.0, &mut raw) } != 0;
+        set.then(|| unsafe { quickjs::borrow_value(scope, raw) })
+    }
+
+    pub(crate) fn frame_url_push(self, url: Option<&CStr>) -> FrameUrl {
+        FrameUrl(unsafe { ns_js_frame_url_push(self.0, opt_ptr(url)) })
+    }
+
+    pub(crate) fn frame_url_pop(self, saved: FrameUrl) {
+        unsafe { ns_js_frame_url_pop(self.0, saved.0) }
+    }
+
+    pub(crate) fn apply_site_quirks(self) {
+        unsafe { ns_js_apply_site_quirks(self.0) }
+    }
+
+    pub(crate) fn budget_enter(self) -> i64 {
+        unsafe { ns_js_budget_enter(self.0) }
+    }
+
+    pub(crate) fn budget_leave(self, saved: i64) {
+        unsafe { ns_js_budget_leave(self.0, saved) }
+    }
+
+    pub(crate) fn flush_document_write(self) {
+        unsafe { ns_js_flush_document_write(self.0) }
+    }
+
+    pub(crate) fn report_uncaught(self, exception: &Value, origin: Option<&CStr>) {
+        unsafe { ns_js_report_uncaught(self.0, quickjs::raw(exception), opt_ptr(origin)) }
+    }
+
+    pub(crate) fn content_scripts_for_url(
+        self,
+        url: Option<&CStr>,
+        document_start: bool,
+    ) -> Option<CString> {
+        let ctx = unsafe { ns_js_main_context(self.0) };
+        let script = unsafe {
+            quickjs::with_context(ctx, |scope| {
+                let global = scope.global();
+                ns_ext_content_scripts_for_url(
+                    ctx,
+                    quickjs::raw(&global),
+                    opt_ptr(url),
+                    glib::boolean(document_start),
+                )
+            })
+        };
+        owned(script)
+    }
+
+    pub(crate) fn remove_lifecycle_tasks(self, mut doomed: impl FnMut(Option<Node>) -> bool) {
+        let tasks = unsafe { ns_js_lifecycle_tasks(self.0) };
+        if tasks.is_null() {
+            return;
+        }
+        let mut i = 0u32;
+        while i < unsafe { (*tasks).len } {
+            let task = unsafe { &*(*tasks).data.cast::<RawTask>().add(i as usize) };
+            if doomed(node(task.node)) {
+                unsafe { g_array_remove_index(tasks, i) };
+            } else {
+                i += 1;
+            }
         }
     }
 
@@ -587,10 +727,16 @@ impl Js {
     }
 }
 
-#[derive(Clone, Copy)]
+pub(crate) struct FrameUrl(*mut c_void);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Realm(*mut JSContext);
 
 impl Realm {
+    pub(crate) fn enter<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        unsafe { quickjs::with_context(self.0, f) }
+    }
+
     pub(crate) fn throw_range_error(self, message: &[u8]) {
         let message = c_string(message);
         unsafe { JS_ThrowRangeError(self.0, c"%s".as_ptr(), message.as_ptr()) };
@@ -870,13 +1016,13 @@ pub extern "C" fn ns_js_profile_enabled() -> GBoolean {
     GBoolean::from(compile::profile_enabled())
 }
 
+pub(crate) fn monotonic_us() -> i64 {
+    unsafe { g_get_monotonic_time() }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_js_profile_begin() -> i64 {
-    if compile::profile_enabled() {
-        unsafe { g_get_monotonic_time() }
-    } else {
-        0
-    }
+    compile::profile_begin()
 }
 
 #[unsafe(no_mangle)]
@@ -886,20 +1032,132 @@ pub unsafe extern "C" fn ns_js_profile_eval(
     cached: GBoolean,
     origin: *const c_char,
 ) {
-    if compile::profile_enabled() {
-        let origin = unsafe { cstr(origin) }.unwrap_or(c"<inline>");
-        let elapsed = unsafe { g_get_monotonic_time() } - start_us;
-        compile::report_eval(elapsed, len, cached != 0, origin.to_bytes());
-    }
+    compile::profile_eval(start_us, len, cached != 0, unsafe { cstr(origin) });
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_profile_module(start_us: i64, len: usize, origin: *const c_char) {
-    if compile::profile_enabled() {
-        let origin = unsafe { cstr(origin) }.unwrap_or(c"module");
-        let elapsed = unsafe { g_get_monotonic_time() } - start_us;
-        compile::report_module(elapsed, len, origin.to_bytes());
+    compile::profile_module(start_us, len, unsafe { cstr(origin) });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_eval(
+    js: *mut NsJs,
+    src: *const c_char,
+    len: usize,
+    origin: *const c_char,
+) {
+    let src = unsafe { bytes(src, len) };
+    eval::eval(Js(js), src, unsafe { cstr(origin) });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_eval_script_source(
+    js: *mut NsJs,
+    script: *mut NsNode,
+    source: *const c_char,
+    length: usize,
+    origin: *const c_char,
+    is_module: GBoolean,
+) {
+    let source = unsafe { bytes(source, length) };
+    let origin = unsafe { cstr(origin) };
+    match node(script) {
+        Some(script) => eval::eval_script_source(Js(js), script, source, origin, is_module != 0),
+        None if is_module != 0 => eval::eval_module(Js(js), source, origin),
+        None => {
+            let previous = Js(js).swap_current_script(None);
+            eval::eval(Js(js), source, origin);
+            Js(js).swap_current_script(previous);
+        }
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_compile_module_cached(
+    ctx: *mut JSContext,
+    src: *const c_char,
+    len: usize,
+    name: *const c_char,
+) -> quickjs::JSValue {
+    let src = unsafe { bytes(src, len) };
+    let name = unsafe { name_bytes(name) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let module = eval::compile_module_cached(scope, src, name);
+            quickjs::result_raw(scope, module)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_module_loader(
+    ctx: *mut JSContext,
+    name: *const c_char,
+    opaque: *mut c_void,
+    attributes: quickjs::JSValue,
+) -> *mut c_void {
+    let js = Js(opaque.cast());
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let attributes = quickjs::borrow_value(scope, attributes);
+            let json = compile::attributes_type_is(scope, &attributes, b"json");
+            let Some(name) = cstr(name) else {
+                return ptr::null_mut();
+            };
+            match eval::load_module(js, Realm(ctx), scope, name, json) {
+                None => ptr::null_mut(),
+                Some(Ok(module)) => quickjs::module_def(module),
+                Some(Err(exception)) => {
+                    quickjs::result_raw(scope, Err(exception));
+                    ptr::null_mut()
+                }
+            }
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_decode_data_url(
+    url: *const c_char,
+    out_len: *mut usize,
+) -> *mut c_char {
+    let Some(body) = (unsafe { cstr(url) }).and_then(decode_data_url) else {
+        return ptr::null_mut();
+    };
+    if !out_len.is_null() {
+        unsafe { *out_len = body.len() };
+    }
+    glib::strdup(&body)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode) {
+    if let (false, Some(root)) = (js.is_null(), node(root)) {
+        eval::purge_subtree_script_refs(Js(js), root);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_run_content_scripts(
+    js: *mut NsJs,
+    url: *const c_char,
+    document_start: GBoolean,
+) {
+    eval::run_content_scripts(Js(js), unsafe { cstr(url) }, document_start != 0);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_eval_source(
+    js: *mut NsJs,
+    src: *const c_char,
+    origin: *const c_char,
+) -> *mut c_char {
+    let Some(src) = (unsafe { cstr(src) }).filter(|_| !js.is_null()) else {
+        return ptr::null_mut();
+    };
+    eval::eval_source(Js(js), src, unsafe { cstr(origin) })
+        .map_or(ptr::null_mut(), |out| glib::strdup(&out))
 }
 
 #[unsafe(no_mangle)]

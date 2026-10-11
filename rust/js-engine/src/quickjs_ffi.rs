@@ -15,7 +15,7 @@ use std::path::Path;
 
 use crate::{
     Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
-    RealmInit, Trace, TypedArrayBytes, TypedArrayView,
+    RealmInit, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView,
 };
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
@@ -34,6 +34,20 @@ pub struct JSContext {
 struct JSModuleDef {
     _private: [u8; 0],
 }
+
+#[repr(C)]
+struct JSEvalOptions {
+    version: c_int,
+    eval_flags: c_int,
+    filename: *const c_char,
+    line_num: c_int,
+    col_num: c_int,
+}
+
+const EVAL_OPTIONS_VERSION: c_int = 1;
+const TAG_MODULE: i64 = -3;
+
+type JSModuleInitFunc = unsafe extern "C" fn(ctx: *mut JSContext, m: *mut JSModuleDef) -> c_int;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -153,6 +167,32 @@ unsafe extern "C" {
         filename: *const c_char,
         eval_flags: c_int,
     ) -> JSValue;
+    fn JS_EvalThis2(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        input: *const c_char,
+        input_len: usize,
+        options: *mut JSEvalOptions,
+    ) -> JSValue;
+    fn JS_EvalFunction(ctx: *mut JSContext, fun_obj: JSValue) -> JSValue;
+    fn JS_NewCModule(
+        ctx: *mut JSContext,
+        name_str: *const c_char,
+        func: JSModuleInitFunc,
+    ) -> *mut JSModuleDef;
+    fn JS_AddModuleExport(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        name_str: *const c_char,
+    ) -> c_int;
+    fn JS_SetModuleExport(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        export_name: *const c_char,
+        val: JSValue,
+    ) -> c_int;
+    fn JS_SetModulePrivateValue(ctx: *mut JSContext, m: *mut JSModuleDef, val: JSValue) -> c_int;
+    fn JS_GetModulePrivateValue(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSValue;
     fn JS_GetException(ctx: *mut JSContext) -> JSValue;
     fn JS_Throw(ctx: *mut JSContext, obj: JSValue) -> JSValue;
     fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
@@ -799,6 +839,28 @@ unsafe extern "C" fn load_module(
     let module = unsafe { compiled.u.ptr }.cast::<JSModuleDef>();
     unsafe { JS_FreeValue(ctx, compiled) };
     module
+}
+
+unsafe extern "C" fn init_value_module(ctx: *mut JSContext, m: *mut JSModuleDef) -> c_int {
+    unsafe {
+        JS_SetModuleExport(
+            ctx,
+            m,
+            c"default".as_ptr(),
+            JS_GetModulePrivateValue(ctx, m),
+        )
+    }
+}
+
+fn c_bytes(bytes: &[u8]) -> CString {
+    CString::new(
+        bytes
+            .iter()
+            .copied()
+            .filter(|&b| b != 0)
+            .collect::<Vec<u8>>(),
+    )
+    .unwrap_or_default()
 }
 
 pub fn engine_version() -> String {
@@ -1472,7 +1534,7 @@ pub mod quickjs {
         unsafe { JS_SetCFunctionBrand(scope.ctx, function.raw, brand, mode) };
     }
 
-    const TAG_MODULE: i64 = -3;
+    use super::TAG_MODULE;
     const WRITE_OBJ_BYTECODE: c_int = 1 << 0;
     const READ_OBJ_BYTECODE: c_int = 1 << 0;
 
@@ -1502,6 +1564,13 @@ pub mod quickjs {
             super::JS_ReadObject(scope.ctx, bytes.as_ptr(), bytes.len(), READ_OBJ_BYTECODE)
         };
         scope.take(raw)
+    }
+
+    pub fn module_def(module: Value) -> *mut c_void {
+        if !is_module(&module) {
+            return core::ptr::null_mut();
+        }
+        unsafe { module.raw.u.ptr }
     }
 
     pub fn module_name(scope: &mut Scope<'_>, module: &Value) -> Result<Value, Value> {
@@ -1607,6 +1676,89 @@ impl Scope<'_> {
             )
         };
         self.take(raw)
+    }
+
+    fn eval_bytes(
+        &mut self,
+        source: &[u8],
+        options: &ScriptOptions<'_>,
+        flags: c_int,
+    ) -> Result<Value, Value> {
+        let mut input = Vec::with_capacity(source.len() + 1);
+        input.extend_from_slice(source);
+        input.push(0);
+        let name = options.name.map(c_bytes);
+        let mut raw_options = JSEvalOptions {
+            version: EVAL_OPTIONS_VERSION,
+            eval_flags: flags
+                | if options.hide_source {
+                    EVAL_FLAG_HIDE_SOURCE
+                } else {
+                    0
+                },
+            filename: name.as_ref().map_or(ptr::null(), |name| name.as_ptr()),
+            line_num: options.line,
+            col_num: options.column,
+        };
+        let global = unsafe { JS_GetGlobalObject(self.ctx) };
+        let raw = unsafe {
+            JS_EvalThis2(
+                self.ctx,
+                global,
+                input.as_ptr().cast(),
+                source.len(),
+                &mut raw_options,
+            )
+        };
+        unsafe { JS_FreeValue(self.ctx, global) };
+        self.take(raw)
+    }
+
+    pub fn eval_script_bytes(
+        &mut self,
+        source: &[u8],
+        options: &ScriptOptions<'_>,
+    ) -> Result<Value, Value> {
+        self.eval_bytes(source, options, EVAL_TYPE_GLOBAL)
+    }
+
+    pub fn compile_script(
+        &mut self,
+        source: &[u8],
+        options: &ScriptOptions<'_>,
+    ) -> Result<Value, Value> {
+        self.eval_bytes(source, options, EVAL_TYPE_GLOBAL | EVAL_FLAG_COMPILE_ONLY)
+    }
+
+    pub fn compile_module(&mut self, source: &[u8], name: &[u8]) -> Result<Value, Value> {
+        let options = ScriptOptions {
+            name: Some(name),
+            line: 1,
+            ..ScriptOptions::default()
+        };
+        self.eval_bytes(source, &options, EVAL_TYPE_MODULE | EVAL_FLAG_COMPILE_ONLY)
+    }
+
+    pub fn evaluate(&mut self, compiled: Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_EvalFunction(self.ctx, compiled.into_raw()) };
+        self.take(raw)
+    }
+
+    pub fn value_module(&mut self, name: &[u8], value: Value) -> Result<Value, Value> {
+        let name = c_bytes(name);
+        let module = unsafe { JS_NewCModule(self.ctx, name.as_ptr(), init_value_module) };
+        if module.is_null() {
+            return Err(self.exception());
+        }
+        unsafe {
+            JS_AddModuleExport(self.ctx, module, c"default".as_ptr());
+            JS_SetModulePrivateValue(self.ctx, module, value.into_raw());
+        }
+        let raw = JSValue {
+            u: JSValueUnion { ptr: module.cast() },
+            tag: TAG_MODULE,
+        };
+        Ok(Value::own(self.ctx, unsafe { JS_DupValue(self.ctx, raw) }))
     }
 
     pub fn run_jobs(&mut self) -> Result<(), Value> {

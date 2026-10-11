@@ -1438,6 +1438,23 @@ char    *ns_js_module_fetch(ns_js *js, JSContext *ctx, const char *name,
 void     ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
                                   gsize length, const char *origin,
                                   gboolean is_module);
+void     ns_js_eval(ns_js *js, const char *src, gsize len, const char *origin);
+JSModuleDef *ns_js_module_loader(JSContext *ctx, const char *module_name,
+                                 void *opaque, JSValueConst attributes);
+JSValue  ns_js_compile_module_cached(JSContext *ctx, const char *src, gsize len,
+                                     const char *module_name);
+void     ns_js_purge_subtree_script_refs(ns_js *js, ns_node *root);
+void     ns_js_apply_site_quirks(ns_js *js);
+gboolean ns_js_has_log(const ns_js *js);
+int      ns_js_eval_depth_add(ns_js *js, int delta);
+void     ns_js_ignore_destructive_writes_add(ns_js *js, int delta);
+ns_node *ns_js_swap_current_script(ns_js *js, ns_node *script);
+ns_node *ns_js_swap_current_document(ns_js *js, ns_node *doc);
+JSContext *ns_js_module_context(const ns_js *js);
+JSContext *ns_js_swap_module_context(ns_js *js, JSContext *ctx);
+gboolean ns_js_iframe_document(const ns_js *js, JSValue *out);
+void    *ns_js_frame_url_push(ns_js *js, const char *url);
+void     ns_js_frame_url_pop(ns_js *js, void *fu);
 gboolean ns_js_dispatch_resource_event(ns_js *js, const ns_node *target,
                                        const char *type);
 void     ns_js_element_perf_info(ns_js *js, const ns_node *el,

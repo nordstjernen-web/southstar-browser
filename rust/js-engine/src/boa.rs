@@ -21,7 +21,7 @@ use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey};
 use boa_engine::{
     Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
-    NativeFunction, Source,
+    NativeFunction, Script, Source,
 };
 use boa_gc::custom_trace;
 
@@ -31,7 +31,7 @@ use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
 
 use crate::{
     Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
-    RealmInit, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
+    RealmInit, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
 };
 
 pub const ENGINE_NAME: &str = "boa";
@@ -68,6 +68,16 @@ unsafe impl BoaTrace for HostData {
             trace(&*this.data, &mut |value: &Value| mark(&value.0));
         }
     });
+}
+
+#[derive(Clone, JsData, BoaTrace, Finalize)]
+enum Compiled {
+    Script(Script),
+    Module(Module),
+}
+
+fn source_path(name: Option<&[u8]>) -> Option<std::path::PathBuf> {
+    name.map(|name| std::path::PathBuf::from(String::from_utf8_lossy(name).into_owned()))
 }
 
 fn trace_as<T: Any + Trace>(data: &dyn Any, visit: &mut dyn FnMut(&Value)) {
@@ -214,6 +224,71 @@ impl Scope<'_> {
         let module = Module::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
         let promise = module.load_link_evaluate(self.ctx);
         Ok(Value(promise.into()))
+    }
+
+    pub fn eval_script_bytes(
+        &mut self,
+        source: &[u8],
+        options: &ScriptOptions<'_>,
+    ) -> Result<Value, Value> {
+        let path = source_path(options.name);
+        let mut source = Source::from_bytes(source);
+        if let Some(path) = &path {
+            source = source.with_path(path);
+        }
+        self.ctx.eval(source).map(Value).map_err(|e| self.error(e))
+    }
+
+    pub fn compile_script(
+        &mut self,
+        source: &[u8],
+        options: &ScriptOptions<'_>,
+    ) -> Result<Value, Value> {
+        let path = source_path(options.name);
+        let mut source = Source::from_bytes(source);
+        if let Some(path) = &path {
+            source = source.with_path(path);
+        }
+        let script = Script::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
+        Ok(self.compiled(Compiled::Script(script)))
+    }
+
+    pub fn compile_module(&mut self, source: &[u8], name: &[u8]) -> Result<Value, Value> {
+        let path = source_path(Some(name));
+        let mut source = Source::from_bytes(source);
+        if let Some(path) = &path {
+            source = source.with_path(path);
+        }
+        let module = Module::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
+        Ok(self.compiled(Compiled::Module(module)))
+    }
+
+    pub fn value_module(&mut self, _name: &[u8], value: Value) -> Result<Value, Value> {
+        let module = Module::from_value_as_default(value.0, self.ctx);
+        Ok(self.compiled(Compiled::Module(module)))
+    }
+
+    fn compiled(&mut self, compiled: Compiled) -> Value {
+        Value(
+            JsObject::from_proto_and_data(None, compiled)
+                .upcast()
+                .into(),
+        )
+    }
+
+    pub fn evaluate(&mut self, compiled: Value) -> Result<Value, Value> {
+        let record = compiled
+            .0
+            .as_object()
+            .and_then(|object| object.downcast_ref::<Compiled>().map(|c| c.clone()));
+        match &record {
+            Some(Compiled::Script(script)) => script
+                .evaluate(self.ctx)
+                .map(Value)
+                .map_err(|e| self.error(e)),
+            Some(Compiled::Module(module)) => Ok(Value(module.load_link_evaluate(self.ctx).into())),
+            None => Err(self.type_error("not a compiled script or module")),
+        }
     }
 
     pub fn run_jobs(&mut self) -> Result<(), Value> {

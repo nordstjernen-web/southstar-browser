@@ -4,6 +4,7 @@
 
 mod blocking;
 mod compile;
+mod eval;
 mod fetch;
 mod ffi;
 mod hold;

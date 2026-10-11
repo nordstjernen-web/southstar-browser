@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::ffi::CStr;
 use std::sync::OnceLock;
 
 use southstar_glib as glib;
@@ -95,6 +96,30 @@ pub(crate) fn attributes_type_is(scope: &mut Scope<'_>, attributes: &Value, want
 pub(crate) fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
+}
+
+pub(crate) fn profile_begin() -> i64 {
+    if profile_enabled() {
+        crate::ffi::monotonic_us()
+    } else {
+        0
+    }
+}
+
+pub(crate) fn profile_eval(started_us: i64, len: usize, cached: bool, origin: Option<&CStr>) {
+    if profile_enabled() {
+        let origin = origin.unwrap_or(c"<inline>");
+        let elapsed = crate::ffi::monotonic_us() - started_us;
+        report_eval(elapsed, len, cached, origin.to_bytes());
+    }
+}
+
+pub(crate) fn profile_module(started_us: i64, len: usize, origin: Option<&CStr>) {
+    if profile_enabled() {
+        let origin = origin.unwrap_or(c"module");
+        let elapsed = crate::ffi::monotonic_us() - started_us;
+        report_module(elapsed, len, origin.to_bytes());
+    }
 }
 
 pub(crate) fn report_eval(elapsed_us: i64, len: usize, cached: bool, origin: &[u8]) {

@@ -47,7 +47,6 @@ JSClassID ns_new_class_id(JSClassID *pclass_id)
 #include "datetime.h"
 #include "debuglog.h"
 #include "engine.h"
-#include "ext.h"
 #include "html.h"
 #include "idb.h"
 #include "image.h"
@@ -171,12 +170,6 @@ ns_js_consume_user_activation(ns_js *js)
     if (js) js->user_activation_us = 0;
 }
 
-static void ns_js_eval(ns_js *js, const char *src, gsize len, const char *origin);
-static JSModuleDef *ns_js_module_loader(JSContext *ctx,
-                                        const char *module_name, void *opaque,
-                                        JSValueConst attributes);
-static JSValue ns_js_compile_module_cached(JSContext *ctx, const char *src,
-                                           gsize len, const char *module_name);
 static JSValue ns_proto_of(JSContext *ctx, JSValueConst global,
                            const char *ctor_name);
 typedef struct ns_hostobj {
@@ -192,7 +185,6 @@ typedef struct {
 } ns_frame_url;
 static void ns_frame_url_enter(ns_js *js, ns_frame_url *fu, const char *url);
 static void ns_frame_url_leave(ns_js *js, ns_frame_url *fu);
-static void ns_js_run_content_script(ns_js *js, const char *src);
 
 #define NS_SANDBOX_ACTIVE              (1u << 0)
 #define NS_SANDBOX_ALLOW_SCRIPTS       (1u << 1)
@@ -6413,7 +6405,7 @@ ns_js_free(ns_js *js)
     g_free(js);
 }
 
-static void
+void
 ns_js_apply_site_quirks(ns_js *js)
 {
     static const char src[] =
@@ -6594,396 +6586,6 @@ ns_js_link_interfaces(JSContext *ctx)
     JS_FreeValue(ctx, r);
 }
 
-static int
-ns_js_origin_is_engine_code(const char *origin)
-{
-    return origin && origin[0] == '<' &&
-           strcmp(origin, "<inline>") != 0 && strcmp(origin, "<timer>") != 0;
-}
-
-static void
-ns_js_eval(ns_js *js, const char *src, gsize len, const char *origin)
-{
-    int source_flags = ns_js_origin_is_engine_code(origin)
-        ? JS_EVAL_FLAG_HIDE_SOURCE : 0;
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(js, &bg);
-    if (js->iframe_doc_set) {
-        GString *w = g_string_new("(function(document){\n");
-        g_string_append_len(w, src ? src : "", (gssize)len);
-        g_string_append(w, "\n})");
-        JSValue fn = JS_Eval(js->ctx, w->str, w->len, origin ? origin : "inline",
-                             JS_EVAL_TYPE_GLOBAL | source_flags);
-        g_string_free(w, TRUE);
-        if (!JS_IsException(fn) && JS_IsFunction(js->ctx, fn)) {
-            JSValue global = JS_GetGlobalObject(js->ctx);
-            JSValueConst args[1] = { js->iframe_doc };
-            js->eval_depth++;
-            JSValue v = JS_Call(js->ctx, fn, global, 1, args);
-            js->eval_depth--;
-            if (js->eval_depth == 0) {
-                ns_js_flush_document_write(js);
-                ns_js_schedule_pending_script_drain(js);
-            }
-            if (JS_IsException(v)) {
-                JSValue ex = JS_GetException(js->ctx);
-                const char *msg = JS_ToCString(js->ctx, ex);
-                if (msg && js->log_cb) {
-                    JSValue stk = JS_GetPropertyStr(js->ctx, ex, "stack");
-                    const char *stack = JS_ToCString(js->ctx, stk);
-                    char *line = g_strdup_printf("JS error in %s: %s%s%s",
-                                                 origin ? origin : "inline", msg,
-                                                 stack ? "\n" : "", stack ? stack : "");
-                    js->log_cb(line, js->log_user_data);
-                    g_free(line);
-                    if (stack) JS_FreeCString(js->ctx, stack);
-                    JS_FreeValue(js->ctx, stk);
-                }
-                if (msg) JS_FreeCString(js->ctx, msg);
-                JS_FreeValue(js->ctx, ex);
-            }
-            JS_FreeValue(js->ctx, v);
-            JS_FreeValue(js->ctx, global);
-            JS_FreeValue(js->ctx, fn);
-            ns_js_budget_pop(js, &bg);
-            return;
-        }
-        if (JS_IsException(fn)) JS_FreeValue(js->ctx, JS_GetException(js->ctx));
-        JS_FreeValue(js->ctx, fn);
-        /* fall through: run unwrapped so a script that can't be wrapped still runs */
-    }
-    char *copy = g_strndup(src ? src : "", len);
-    gint64 t0 = ns_js_profile_begin();
-    js->eval_depth++;
-
-    JSValue v = JS_UNDEFINED;
-    /* An inline script's positions count from where its text starts in the
-     * document; an external script's from the start of its own file. */
-    const ns_node *inline_script = js->current_script &&
-        !ns_element_get_attr(js->current_script, "src") ? js->current_script
-                                                         : NULL;
-    int src_line = (inline_script && inline_script->src_line > 0)
-                       ? inline_script->src_line : 1;
-    int src_col = (inline_script && inline_script->src_col > 0)
-                      ? inline_script->src_col : 1;
-    JSValue cached_fn = ns_js_bytecode_cache_lookup(js->ctx, copy, len);
-    gboolean cache_hit = !JS_IsUndefined(cached_fn);
-    if (cache_hit) {
-        v = JS_EvalFunction(js->ctx, cached_fn);
-    } else {
-        JSValue geval = JS_GetGlobalObject(js->ctx);
-        JSEvalOptions opts = {
-            .version = JS_EVAL_OPTIONS_VERSION,
-            .eval_flags = JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY |
-                          source_flags,
-            .filename = origin,
-            .line_num = src_line,
-            .col_num = src_col,
-        };
-        JSValue fn = JS_EvalThis2(js->ctx, geval, copy, len, &opts);
-        JS_FreeValue(js->ctx, geval);
-        if (!JS_IsException(fn)) {
-            ns_js_bytecode_cache_store(js->ctx, fn, copy, len);
-            v = JS_EvalFunction(js->ctx, fn);
-        } else {
-            v = fn;
-        }
-    }
-
-    g_free(copy);
-    js->eval_depth--;
-    if (js->eval_depth == 0) {
-        ns_js_flush_document_write(js);
-        ns_js_schedule_pending_script_drain(js);
-    }
-    ns_js_profile_eval(t0, len, cache_hit, origin);
-    if (JS_IsException(v)) {
-        JSValue ex = JS_GetException(js->ctx);
-        const char *msg = JS_ToCString(js->ctx, ex);
-        if (msg && js->log_cb) {
-            JSValue stk = JS_GetPropertyStr(js->ctx, ex, "stack");
-            const char *stack = JS_ToCString(js->ctx, stk);
-            char *line = g_strdup_printf("JS error in %s: %s%s%s",
-                                         origin ? origin : "inline",
-                                         msg,
-                                         stack && *stack ? "\n" : "",
-                                         stack ? stack : "");
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-            if (stack) JS_FreeCString(js->ctx, stack);
-            JS_FreeValue(js->ctx, stk);
-        }
-        if (msg) JS_FreeCString(js->ctx, msg);
-        ns_js_report_uncaught(js, ex, origin);
-        JS_FreeValue(js->ctx, ex);
-    }
-    ns_js_apply_site_quirks(js);
-    JS_FreeValue(js->ctx, v);
-    ns_drain_microtasks(js);
-    ns_js_budget_pop(js, &bg);
-}
-
-#define NS_MAX_SCRIPT_BYTES (32u * 1024u * 1024u)
-
-char *
-ns_js_decode_data_url(const char *url, gsize *out_len)
-{
-    GByteArray *body = g_byte_array_new();
-    if (!ns_data_url_decode(url, body, NS_MAX_SCRIPT_BYTES, NULL, NULL)) {
-        g_byte_array_free(body, TRUE);
-        return NULL;
-    }
-    gsize len = body->len;
-    guint8 nul = 0;
-    g_byte_array_append(body, &nul, 1);
-    if (out_len) *out_len = len;
-    return (char *)g_byte_array_free(body, FALSE);
-}
-
-static void
-ns_js_log_module_compile_error(ns_js *js, JSContext *ctx, const char *module_name)
-{
-    if (!js || !js->log_cb) return;
-    JSValue exc = JS_GetException(ctx);
-    const char *msg = JS_ToCString(ctx, exc);
-    char *line = g_strdup_printf("module compile failed %s: %s",
-                                 module_name, msg ? msg : "(no message)");
-    js->log_cb(line, js->log_user_data);
-    g_free(line);
-    if (msg) JS_FreeCString(ctx, msg);
-    JS_Throw(ctx, exc);
-}
-
-static int
-ns_js_json_module_init(JSContext *ctx, JSModuleDef *m)
-{
-    return JS_SetModuleExport(ctx, m, "default",
-                              JS_GetModulePrivateValue(ctx, m));
-}
-
-static JSModuleDef *
-ns_js_make_json_module(JSContext *ctx, const char *module_name,
-                       const char *body, gsize body_len)
-{
-    char *json_text = g_strndup(body, body_len);
-    JSValue json = JS_ParseJSON(ctx, json_text, body_len, module_name);
-    g_free(json_text);
-    if (JS_IsException(json)) return NULL;
-    JSModuleDef *m = JS_NewCModule(ctx, module_name, ns_js_json_module_init);
-    if (!m) {
-        JS_FreeValue(ctx, json);
-        return NULL;
-    }
-    JS_AddModuleExport(ctx, m, "default");
-    JS_SetModulePrivateValue(ctx, m, json);
-    return m;
-}
-
-static JSValue
-ns_js_compile_module_cached(JSContext *ctx, const char *src, gsize len,
-                            const char *module_name)
-{
-    JSValue cached = ns_js_module_bytecode_lookup(ctx, module_name, src, len);
-    if (!JS_IsUndefined(cached)) return cached;
-    JSValue func_val = JS_Eval(ctx, src, len, module_name,
-                               JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-    if (JS_IsException(func_val)) return func_val;
-    ns_js_module_bytecode_store(ctx, func_val, module_name, src, len);
-    if (ns_js_module_set_import_meta(ctx, func_val, FALSE) < 0) {
-        JS_FreeValue(ctx, func_val);
-        return JS_EXCEPTION;
-    }
-    return func_val;
-}
-
-static JSModuleDef *
-ns_js_module_loader(JSContext *ctx, const char *module_name, void *opaque,
-                    JSValueConst attributes)
-{
-    ns_js *js = opaque;
-    gboolean json_module = ns_js_attrs_type_is(ctx, attributes, "json");
-    if (!module_name) return NULL;
-    gsize body_len = 0;
-    char *body = ns_js_module_fetch(js, ctx, module_name, json_module, &body_len);
-    if (!body) return NULL;
-    JSModuleDef *m = NULL;
-    if (json_module) {
-        m = ns_js_make_json_module(ctx, module_name, body, body_len);
-    } else {
-        JSValue func_val =
-            ns_js_compile_module_cached(ctx, body, body_len, module_name);
-        if (!JS_IsException(func_val)) {
-            m = JS_VALUE_GET_PTR(func_val);
-            JS_FreeValue(ctx, func_val);
-        }
-    }
-    g_free(body);
-    if (!m) ns_js_log_module_compile_error(js, ctx, module_name);
-    return m;
-}
-
-static void
-ns_js_eval_module(ns_js *js, const char *src, gsize len, const char *origin)
-{
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(js, &bg);
-    JSContext *ctx = js->module_ctx ? js->module_ctx : js->ctx;
-    char *copy = g_strndup(src ? src : "", len);
-    gint64 t0 = ns_js_profile_begin();
-    js->eval_depth++;
-    JSValue fn = ns_js_compile_module_cached(ctx, copy, len,
-                                             origin ? origin : "module");
-    if (!JS_IsException(fn) &&
-        ns_js_module_set_import_meta(ctx, fn, TRUE) < 0) {
-        JS_FreeValue(ctx, fn);
-        fn = JS_EXCEPTION;
-    }
-    js->ignore_destructive_writes++;
-    JSValue v = JS_IsException(fn) ? fn : JS_EvalFunction(ctx, fn);
-    js->ignore_destructive_writes--;
-    g_free(copy);
-    js->eval_depth--;
-    if (js->eval_depth == 0) {
-        ns_js_flush_document_write(js);
-        ns_js_schedule_pending_script_drain(js);
-    }
-    ns_js_profile_module(t0, len, origin);
-    if (JS_IsException(v)) {
-        JSValue ex = JS_GetException(ctx);
-        const char *msg = JS_ToCString(ctx, ex);
-        if (msg && js->log_cb) {
-            char *line = g_strdup_printf("JS module error in %s: %s",
-                                         origin ? origin : "module", msg);
-            js->log_cb(line, js->log_user_data);
-            g_free(line);
-        }
-        if (msg) JS_FreeCString(ctx, msg);
-        JS_FreeValue(ctx, ex);
-    } else {
-        JSPromiseStateEnum st = JS_PromiseState(ctx, v);
-        if (st == JS_PROMISE_REJECTED) {
-            JSValue reason = JS_PromiseResult(ctx, v);
-            const char *msg = JS_ToCString(ctx, reason);
-            if (msg && js->log_cb) {
-                char *line = g_strdup_printf(
-                    "JS module rejected in %s: %s",
-                    origin ? origin : "module", msg);
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-            }
-            if (msg) JS_FreeCString(ctx, msg);
-            JS_FreeValue(ctx, reason);
-        }
-    }
-    JS_FreeValue(ctx, v);
-    ns_drain_microtasks(js);
-    ns_js_budget_pop(js, &bg);
-}
-
-void
-ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
-                         gsize length, const char *origin,
-                         gboolean is_module)
-{
-    JSContext *realm = ns_js_node_realm_context(js, script);
-    if (!realm || realm == js->ctx) {
-        if (is_module) {
-            ns_js_eval_module(js, source, length, origin);
-        } else {
-            ns_node *previous_script = js->current_script;
-            js->current_script = script;
-            ns_js_eval(js, source, length, origin);
-            js->current_script = previous_script;
-        }
-        return;
-    }
-
-    ns_node *document = NULL;
-    for (ns_node *p = script; p; p = p->parent) {
-        if (p->kind == NS_NODE_DOCUMENT) {
-            document = p;
-            break;
-        }
-    }
-    ns_node *previous_doc = js->current_doc;
-    ns_node *previous_script = js->current_script;
-    ns_frame_url fu;
-    js->current_doc = document ? document : previous_doc;
-    js->current_script = script;
-    ns_frame_url_enter(js, &fu, origin);
-
-    if (is_module) {
-        JSContext *previous_module_ctx = js->module_ctx;
-        js->module_ctx = realm;
-        ns_js_eval_module(js, source, length, origin);
-        js->module_ctx = previous_module_ctx;
-    } else {
-        ns_budget_guard budget = {0};
-        ns_js_budget_push(js, &budget);
-        g_autofree char *copy = g_strndup(source ? source : "", length);
-        js->eval_depth++;
-        JSValue value = JS_Eval(realm, copy, length,
-                                origin ? origin : "inline",
-                                JS_EVAL_TYPE_GLOBAL);
-        js->eval_depth--;
-        if (js->eval_depth == 0) {
-            ns_js_flush_document_write(js);
-            ns_js_schedule_pending_script_drain(js);
-        }
-        if (JS_IsException(value)) {
-            JSValue exception = JS_GetException(realm);
-            const char *message = JS_ToCString(realm, exception);
-            if (message && js->log_cb) {
-                JSValue stack_value = JS_GetPropertyStr(realm, exception,
-                                                        "stack");
-                const char *stack = JS_ToCString(realm, stack_value);
-                char *line = g_strdup_printf("JS error in %s: %s%s%s",
-                    origin ? origin : "inline", message,
-                    stack && *stack ? "\n" : "", stack ? stack : "");
-                js->log_cb(line, js->log_user_data);
-                g_free(line);
-                if (stack) JS_FreeCString(realm, stack);
-                JS_FreeValue(realm, stack_value);
-            }
-            if (message) JS_FreeCString(realm, message);
-            JS_FreeValue(realm, exception);
-        }
-        JS_FreeValue(realm, value);
-        ns_drain_microtasks(js);
-        ns_js_budget_pop(js, &budget);
-    }
-
-    ns_frame_url_leave(js, &fu);
-    js->current_script = previous_script;
-    js->current_doc = previous_doc;
-}
-
-static gboolean
-ns_js_node_in_tree(const ns_node *n, const ns_node *root)
-{
-    for (const ns_node *p = n; p; p = p->parent)
-        if (p == root) return TRUE;
-    return FALSE;
-}
-
-static void
-ns_js_purge_subtree_script_refs(ns_js *js, ns_node *root)
-{
-    if (!js || !root) return;
-    ns_js_forget_script_roots_in(js, root);
-    GArray *tasks = ns_js_lifecycle_tasks(js);
-    if (tasks) {
-        guint i = 0;
-        while (i < tasks->len) {
-            ns_script_task *task = &g_array_index(tasks, ns_script_task, i);
-            if (ns_js_node_in_tree(task->node, root))
-                g_array_remove_index(tasks, i);
-            else
-                i++;
-        }
-    }
-}
-
 void
 ns_js_sweep_orphans(ns_js *js)
 {
@@ -7060,37 +6662,6 @@ void
 ns_js_set_ready_state(ns_js *js, int state)
 {
     js->ready_state = state;
-}
-
-void
-ns_js_run_content_scripts(ns_js *js, const char *url, gboolean document_start)
-{
-    JSValue global = JS_GetGlobalObject(js->ctx);
-    g_autofree char *content_script =
-        ns_ext_content_scripts_for_url(js->ctx, global, url, document_start);
-    JS_FreeValue(js->ctx, global);
-    if (content_script)
-        ns_js_run_content_script(js, content_script);
-}
-
-static void
-ns_js_run_content_script(ns_js *js, const char *src)
-{
-    static const char *const natives[] = {
-        "__nd_ext_manifest", "__nd_ext_base", "__nd_ext_sread",
-        "__nd_ext_swrite", "__nd_ext_platform", "__nd_ext_uilang",
-    };
-    char *result = ns_js_eval_source(js, src, "content-script");
-    g_free(result);
-    if (!js || !js->ctx) return;
-    JSValue global = JS_GetGlobalObject(js->ctx);
-    for (gsize i = 0; i < G_N_ELEMENTS(natives); i++) {
-        JSAtom atom = JS_NewAtom(js->ctx, natives[i]);
-        if (JS_DeleteProperty(js->ctx, global, atom, 0) < 0)
-            JS_FreeValue(js->ctx, JS_GetException(js->ctx));
-        JS_FreeAtom(js->ctx, atom);
-    }
-    JS_FreeValue(js->ctx, global);
 }
 
 void
@@ -7741,6 +7312,78 @@ ns_js_frame_eval_end(ns_js *js, ns_node *previous_script)
     }
 }
 
+gboolean
+ns_js_has_log(const ns_js *js)
+{
+    return js->log_cb != NULL;
+}
+
+int
+ns_js_eval_depth_add(ns_js *js, int delta)
+{
+    js->eval_depth += delta;
+    return js->eval_depth;
+}
+
+void
+ns_js_ignore_destructive_writes_add(ns_js *js, int delta)
+{
+    js->ignore_destructive_writes += delta;
+}
+
+ns_node *
+ns_js_swap_current_script(ns_js *js, ns_node *script)
+{
+    ns_node *previous = js->current_script;
+    js->current_script = script;
+    return previous;
+}
+
+ns_node *
+ns_js_swap_current_document(ns_js *js, ns_node *doc)
+{
+    ns_node *previous = js->current_doc;
+    js->current_doc = doc;
+    return previous;
+}
+
+JSContext *
+ns_js_module_context(const ns_js *js)
+{
+    return js->module_ctx ? js->module_ctx : js->ctx;
+}
+
+JSContext *
+ns_js_swap_module_context(ns_js *js, JSContext *ctx)
+{
+    JSContext *previous = js->module_ctx;
+    js->module_ctx = ctx;
+    return previous;
+}
+
+gboolean
+ns_js_iframe_document(const ns_js *js, JSValue *out)
+{
+    if (!js->iframe_doc_set) return FALSE;
+    *out = js->iframe_doc;
+    return TRUE;
+}
+
+void *
+ns_js_frame_url_push(ns_js *js, const char *url)
+{
+    ns_frame_url *fu = g_new0(ns_frame_url, 1);
+    ns_frame_url_enter(js, fu, url);
+    return fu;
+}
+
+void
+ns_js_frame_url_pop(ns_js *js, void *fu)
+{
+    ns_frame_url_leave(js, fu);
+    g_free(fu);
+}
+
 typedef struct {
     JSContext   *ctx;
     ns_node     *doc;
@@ -7876,30 +7519,4 @@ ns_js_consume_mutated(ns_js *js)
     gboolean m = js->mutated;
     js->mutated = FALSE;
     return m;
-}
-
-char *
-ns_js_eval_source(ns_js *js, const char *src, const char *origin)
-{
-    if (!js || !src) return NULL;
-    if (js->halted || js->in_pump) return NULL;
-    ns_budget_guard bg = {0};
-    ns_js_budget_push(js, &bg);
-    JSValue v = JS_Eval(js->ctx, src, strlen(src), origin ? origin : "console", JS_EVAL_TYPE_GLOBAL);
-    char *out = NULL;
-    if (JS_IsException(v)) {
-        JSValue ex = JS_GetException(js->ctx);
-        const char *msg = JS_ToCString(js->ctx, ex);
-        out = g_strdup_printf("error: %s", msg ? msg : "(no message)");
-        if (msg) JS_FreeCString(js->ctx, msg);
-        JS_FreeValue(js->ctx, ex);
-    } else {
-        const char *s = JS_ToCString(js->ctx, v);
-        out = g_strdup(s ? s : "undefined");
-        if (s) JS_FreeCString(js->ctx, s);
-    }
-    JS_FreeValue(js->ctx, v);
-    ns_drain_microtasks(js);
-    ns_js_budget_pop(js, &bg);
-    return out;
 }
