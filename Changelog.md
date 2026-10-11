@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The JavaScript engine layer gained engine-neutral host classes with exotic
+  property hooks; the Storage, DOMTokenList, CSSStyleDeclaration and
+  WindowProperties classes moved off js.c onto them (rust/js-storage,
+  rust/js-attrs, rust/js-cssom, rust/js-window).
 * The box pool and box freeing, inline-run merging and splitting, order
   reordering and table box construction moved from layout.c to Rust
   (rust/layout-tree), with single-inline multicol fragmenting in
