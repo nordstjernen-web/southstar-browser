@@ -61,6 +61,7 @@ const PORTED: &[&str] = &[
     "paint.c",
     "pdf.c",
     "print.c",
+    "procwindow.c",
     "render.c",
     "renderer_http.c",
     "renderer_serve.c",

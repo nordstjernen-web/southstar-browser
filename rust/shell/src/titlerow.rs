@@ -5,7 +5,7 @@
 pub const CONTROLS_GAP: i32 = 6;
 pub const NAME_GAP: i32 = 24;
 pub const TRAILING_GAP: i32 = 10;
-const VERSION: &str = match option_env!("NS_VERSION") {
+pub const VERSION: &str = match option_env!("NS_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),
 };

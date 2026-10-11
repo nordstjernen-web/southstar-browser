@@ -2,13 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod app;
 mod appmain;
 mod downloads;
 pub mod gdk;
 mod gtk;
 mod icons;
 mod pagelayers;
-mod shellwin;
 mod taskmgr;
 mod titlerow;
 mod view;
+mod window;
