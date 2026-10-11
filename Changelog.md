@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* DOM change recording (child list, attribute and character data records
+  with the id, class and tag index and the form past-names upkeep, the
+  recorded attribute setters, the orphan set, the pending change event and
+  the per-element NamedNodeMap cache) moved from js.c to Rust (rust/js-
+  mutation).
 * The host-object interfaces (MessageChannel, BroadcastChannel, XHR,
   AbortController, FileReader, TextEncoder and TextDecoder, FormData
   construction and accessors) and js.c's generic binding helpers moved to
