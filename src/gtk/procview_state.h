@@ -310,6 +310,14 @@ void     ns_pv_request_find(NsProcView *v, int direction);
 void     ns_pv_view_save(NsProcView *v, gboolean pdf);
 void     ns_pv_console_set_open(NsProcView *v, gboolean open);
 
+GThread *ns_pv_start_worker(NsProcView *v);
+void     ns_pv_perm_resolve(NsProcView *v, gboolean allow);
+void     ns_pv_post_emit(NsProcView *v, NsProcEvent evt, const char *text);
+void     ns_pv_show_context_menu(NsProcView *v, const char *href, int edit);
+void     ns_pv_console_append(NsProcView *v, const char *text);
+void     ns_pv_print_run(NsProcView *v, GPtrArray *pages,
+                         const ns_print_setup *setup, double raster_scale);
+
 G_END_DECLS
 
 #endif
