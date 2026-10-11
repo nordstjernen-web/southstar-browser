@@ -9,12 +9,13 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::Value;
 use southstar_js_engine::quickjs::{self, JSCFunction, JSContext, JSValue};
+use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_layout::{BoxRef, NsBox};
 
 use crate::exposed::ExposedNames;
 use crate::page::{self, Frame};
-use crate::{cloner, queue, realm, restore, sandbox};
+use crate::{cloner, owner, queue, realm, restore, sandbox, schedule};
 use qjs::{Ctx, PropertyKey};
 
 #[repr(C)]
@@ -53,33 +54,53 @@ unsafe extern "C" {
     fn ns_js_new_frame_context(js: *mut NsJs) -> *mut JSContext;
     fn ns_perf_move_timeline(js: *mut NsJs, from: *const c_void, to: *const c_void);
     fn ns_js_adopt_frame_clock(js: *mut NsJs, frame: *const c_void, ctx: *mut JSContext);
-    fn ns_iframe_platform_names(ctx: *mut JSContext, js: *mut NsJs) -> JSValue;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_window_make_post_message(ctx: *mut JSContext, window: JSValue) -> JSValue;
-    fn ns_js_frame_window_events(ctx: *mut JSContext) -> JSValue;
     fn ns_js_frame_realm_finish(
         js: *mut NsJs,
         ctx: *mut JSContext,
         window: JSValue,
         parent_global: JSValue,
     );
-    fn ns_iframe_content_document(
-        ctx: *mut JSContext,
-        element: JSValue,
-        node: *mut NsNode,
-    ) -> JSValue;
     fn ns_js_node_doc_base(js: *mut NsJs, node: *const NsNode) -> *const c_char;
     fn ns_window_current_document_for(ctx: *mut JSContext, window: JSValue) -> *mut NsNode;
-    fn ns_window_child_frame_window(
+    fn ns_js_run_script_element(js: *mut NsJs, node: *mut NsNode, origin: *const c_char);
+    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
+    fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode;
+    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
+    fn ns_iframe_is_cross_origin(js: *mut NsJs, iframe: *const NsNode) -> GBoolean;
+    fn ns_js_set_doc_ready_state(js: *mut NsJs, doc: *const NsNode, state: c_int);
+    fn ns_make_realm_document(
         ctx: *mut JSContext,
         doc: *mut NsNode,
-        index: u32,
-        name: *const c_char,
-        raw: GBoolean,
+        url: *const c_char,
+        charset: *const c_char,
+        content_type: *const c_char,
+        is_xml: GBoolean,
+        inert: GBoolean,
     ) -> JSValue;
-    fn ns_js_run_script_element(js: *mut NsJs, node: *mut NsNode, origin: *const c_char);
-    fn ns_js_iframe_beyond_load_range(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
-    fn ns_js_schedule_iframe_load(js: *mut NsJs, frame: *mut NsNode);
+    fn ns_js_platform_globals(js: *mut NsJs) -> *mut glib::GHashTable;
+    fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
+    fn ns_node_new_document() -> *mut NsNode;
+    fn ns_node_new_element(name: *mut c_char) -> *mut NsNode;
+    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
+    fn ns_js_frame_referrer(
+        js: *mut NsJs,
+        iframe: *mut NsNode,
+        frame_url: *const c_char,
+    ) -> *mut c_char;
+    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
+    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
+    fn ns_css_mark_visited(abs_url: *const c_char);
+    fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
+    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
+    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
+    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
+    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
+    fn ns_css_viewport_h() -> f64;
+    fn ns_js_halted(js: *const NsJs) -> GBoolean;
+    fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
+    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_bind_fn(
         ctx: *mut JSContext,
         obj: JSValue,
@@ -299,20 +320,12 @@ pub(crate) fn adopt_frame_clock(js: Js, frame: Option<Node<'_>>, ctx: Ctx) {
     unsafe { ns_js_adopt_frame_clock(js.ptr(), frame.cast(), ctx.ptr()) };
 }
 
-pub(crate) fn platform_names(js: Js, ctx: Ctx) -> Value {
-    ctx.wrap(unsafe { ns_iframe_platform_names(ctx.ptr(), js.ptr()) })
-}
-
 pub(crate) fn make_element(ctx: Ctx, node: Node<'_>) -> Value {
     ctx.wrap(unsafe { ns_make_element(ctx.ptr(), node.as_ptr()) })
 }
 
 pub(crate) fn make_post_message(ctx: Ctx, window: &Value) -> Value {
     ctx.wrap(unsafe { ns_window_make_post_message(ctx.ptr(), quickjs::raw(window)) })
-}
-
-pub(crate) fn frame_window_events(ctx: Ctx) -> Value {
-    ctx.wrap(unsafe { ns_js_frame_window_events(ctx.ptr()) })
 }
 
 pub(crate) fn finish_frame_realm(js: Js, ctx: Ctx, window: &Value, parent_global: &Value) {
@@ -326,12 +339,6 @@ pub(crate) fn finish_frame_realm(js: Js, ctx: Ctx, window: &Value, parent_global
     };
 }
 
-pub(crate) fn content_document(ctx: Ctx, element: &Value, node: Node<'_>) -> Value {
-    ctx.wrap(unsafe {
-        ns_iframe_content_document(ctx.ptr(), quickjs::raw(element), node.as_mut_ptr())
-    })
-}
-
 pub(crate) fn node_doc_base(js: Js, node: Node<'_>) -> Option<Vec<u8>> {
     let base = unsafe { ns_js_node_doc_base(js.ptr(), node.as_ptr()) };
     (!base.is_null()).then(|| unsafe { CStr::from_ptr(base) }.to_bytes().to_vec())
@@ -343,12 +350,199 @@ pub(crate) fn run_script_element(js: Js, node: Node<'_>, origin: Option<&[u8]>) 
     unsafe { ns_js_run_script_element(js.ptr(), node.as_mut_ptr(), origin_ptr) };
 }
 
-pub(crate) fn beyond_load_range(js: Js, frame: Frame) -> bool {
-    unsafe { ns_js_iframe_beyond_load_range(js.ptr(), frame.0 as *mut NsNode) != 0 }
+pub(crate) fn frame_node(frame: Frame) -> Option<Node<'static>> {
+    unsafe { Node::from_ptr(frame.0 as *const NsNode) }
 }
 
-pub(crate) fn schedule_iframe_load(js: Js, frame: Frame) {
-    unsafe { ns_js_schedule_iframe_load(js.ptr(), frame.0 as *mut NsNode) };
+pub(crate) fn scope_ctx(scope: &Scope<'_>) -> Ctx {
+    Ctx::from_ptr(quickjs::raw_context(scope)).unwrap_or(Ctx::NULL)
+}
+
+pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
+    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+}
+
+pub(crate) fn ce_main_doc(js: Js) -> Option<Node<'static>> {
+    unsafe { Node::from_ptr(ns_js_ce_main_doc(js.ptr())) }
+}
+
+pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
+    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+}
+
+pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
+    unsafe { ns_iframe_is_cross_origin(js.ptr(), iframe.as_ptr()) != 0 }
+}
+
+pub(crate) fn set_doc_ready_state(js: Js, doc: Node<'_>, state: c_int) {
+    unsafe { ns_js_set_doc_ready_state(js.ptr(), doc.as_ptr(), state) };
+}
+
+fn opt_ptr(text: Option<&CStr>) -> *const c_char {
+    text.map_or(core::ptr::null(), CStr::as_ptr)
+}
+
+pub(crate) fn make_realm_document(
+    scope: &mut Scope<'_>,
+    doc: Node<'_>,
+    url: Option<&CStr>,
+    charset: Option<&CStr>,
+    content_type: &CStr,
+    is_xml: bool,
+) -> Result<Value, Value> {
+    let raw = unsafe {
+        ns_make_realm_document(
+            quickjs::raw_context(scope),
+            doc.as_mut_ptr(),
+            opt_ptr(url),
+            opt_ptr(charset),
+            content_type.as_ptr(),
+            glib::boolean(is_xml),
+            glib::FALSE,
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
+}
+
+pub(crate) fn platform_global_names(js: Js) -> Vec<String> {
+    let table = unsafe { ns_js_platform_globals(js.ptr()) };
+    let mut names = Vec::new();
+    if table.is_null() {
+        return names;
+    }
+    let mut iter = glib::GHashTableIter::new();
+    let mut key: *mut c_void = core::ptr::null_mut();
+    unsafe { glib::g_hash_table_iter_init(&mut iter, table) };
+    while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, core::ptr::null_mut()) } != 0 {
+        if let Some(name) = unsafe { c_bytes(key.cast()) } {
+            names.push(String::from_utf8_lossy(name).into_owned());
+        }
+    }
+    names
+}
+
+pub(crate) fn window_event_functions(scope: &mut Scope<'_>) -> [(&'static str, Value); 3] {
+    [
+        (
+            "add",
+            quickjs::c_function(scope, "addEventListener", 2, ns_window_addEventListener),
+        ),
+        (
+            "remove",
+            quickjs::c_function(
+                scope,
+                "removeEventListener",
+                2,
+                ns_window_removeEventListener,
+            ),
+        ),
+        (
+            "dispatch",
+            quickjs::c_function(scope, "dispatchEvent", 1, ns_window_dispatchEvent),
+        ),
+    ]
+}
+
+pub(crate) fn window_child_frame(
+    doc: Option<Node<'_>>,
+    index: u32,
+    name: Option<&CStr>,
+) -> Option<Node<'static>> {
+    unsafe {
+        Node::from_ptr(ns_window_child_frame(
+            Node::ptr_or_null(doc),
+            index,
+            opt_ptr(name),
+        ))
+    }
+}
+
+pub(crate) fn new_document() -> Node<'static> {
+    unsafe { Node::from_ptr(ns_node_new_document()) }.expect("document allocation")
+}
+
+pub(crate) fn new_element(name: &CStr) -> Node<'static> {
+    let name = unsafe { glib::g_strdup(name.as_ptr()) };
+    unsafe { Node::from_ptr(ns_node_new_element(name)) }.expect("element allocation")
+}
+
+pub(crate) fn append_child(parent: Node<'_>, child: Node<'_>) {
+    unsafe { ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) };
+}
+
+pub(crate) fn frame_referrer(
+    js: Js,
+    iframe: Node<'_>,
+    frame_url: Option<&CStr>,
+) -> Option<CString> {
+    owned_text(unsafe { ns_js_frame_referrer(js.ptr(), iframe.as_mut_ptr(), opt_ptr(frame_url)) })
+}
+
+fn owned_text(text: *mut c_char) -> Option<CString> {
+    if text.is_null() {
+        return None;
+    }
+    let owned = unsafe { CStr::from_ptr(text) }.to_owned();
+    unsafe { glib::g_free(text.cast()) };
+    Some(owned)
+}
+
+pub(crate) fn set_attr(node: Node<'_>, name: &CStr, value: Option<&CStr>) {
+    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), opt_ptr(value)) };
+}
+
+pub(crate) fn remove_attr(node: Node<'_>, name: &CStr) {
+    unsafe { ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+}
+
+pub(crate) fn mark_visited(url: &CStr) {
+    unsafe { ns_css_mark_visited(url.as_ptr()) };
+}
+
+pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr, old_value: &CStr) {
+    unsafe { ns_css_mark_attr_dirty(node.as_mut_ptr(), name.as_ptr(), old_value.as_ptr()) };
+}
+
+pub(crate) fn current_url(js: Js) -> Option<CString> {
+    let url = unsafe { ns_js_current_url(js.ptr()) };
+    (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }.to_owned())
+}
+
+pub(crate) fn resolve_url(base: &CStr, href: &CStr) -> Option<CString> {
+    owned_text(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) })
+}
+
+pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
+    unsafe { BoxRef::from_ptr(ns_js_layout_root(js.ptr())) }
+}
+
+pub(crate) fn find_box(root: BoxRef<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
+    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+}
+
+pub(crate) fn viewport_height() -> f64 {
+    unsafe { ns_css_viewport_h() }
+}
+
+pub(crate) fn halted(js: Js) -> bool {
+    unsafe { ns_js_halted(js.ptr()) != 0 }
+}
+
+pub(crate) fn in_frame_load(js: Js) -> bool {
+    unsafe { ns_js_in_frame_load(js.ptr()) != 0 }
+}
+
+pub(crate) fn mark_mutated(js: Js) {
+    unsafe { ns_js_mark_mutated(js.ptr()) };
+}
+
+fn child_frame_window(cx: Ctx, doc: *mut NsNode, index: u32, name: Option<&CStr>) -> JSValue {
+    cx.enter(|scope| {
+        let doc = unsafe { Node::from_ptr(doc) };
+        let result = owner::child_frame_window(scope, doc, index, name, true);
+        quickjs::result_raw(scope, result)
+    })
 }
 
 pub(crate) fn child_frame_of_function(ctx: Ctx) -> Value {
@@ -399,12 +593,8 @@ unsafe extern "C" fn ns_iframe_child_frame_of(
             let error = quickjs::take_exception(scope);
             quickjs::result_raw(scope, Err(error))
         }),
-        Some(PropertyKey::Index(index)) => unsafe {
-            ns_window_child_frame_window(ctx, doc, index, core::ptr::null(), glib::TRUE)
-        },
-        Some(PropertyKey::Name(name)) => unsafe {
-            ns_window_child_frame_window(ctx, doc, 0, name.as_ptr(), glib::TRUE)
-        },
+        Some(PropertyKey::Index(index)) => child_frame_window(cx, doc, index, None),
+        Some(PropertyKey::Name(name)) => child_frame_window(cx, doc, 0, Some(name.as_c_str())),
     }
 }
 
@@ -908,4 +1098,169 @@ pub unsafe extern "C" fn ns_js_purge_subtree_pending_iframes(js: *mut NsJs, root
     if let (false, Some(root)) = (js.is_null(), unsafe { Node::from_ptr(root) }) {
         queue::purge_subtree(js, root);
     }
+}
+
+#[repr(C)]
+pub struct NsResponse {
+    _status: core::ffi::c_long,
+    _final_url: *mut c_char,
+    content_type: *mut c_char,
+    content_disposition: *mut c_char,
+    _csp_header: *mut c_char,
+    _xframe_options: *mut c_char,
+    _x_content_type_options: *mut c_char,
+    _cors_allow_origin: *mut c_char,
+    _refresh: *mut c_char,
+    _content_language: *mut c_char,
+    _raw_headers: *mut c_char,
+    _body: *mut c_void,
+    error: *mut c_char,
+}
+
+unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
+    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode {
+    unsafe { Node::from_ptr(iframe) }
+        .and_then(owner::document_node)
+        .map_or(core::ptr::null_mut(), Node::as_mut_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_iframe_ensure_content_root(iframe: *mut NsNode) -> *mut NsNode {
+    unsafe { Node::from_ptr(iframe) }
+        .map(owner::ensure_content_root)
+        .map_or(core::ptr::null_mut(), Node::as_mut_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_frame_document_show_url(
+    ctx: *mut JSContext,
+    doc: JSValue,
+    url: *const c_char,
+) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let doc = quickjs::borrow_value(scope, doc);
+            owner::show_url(scope, &doc, c_str(url));
+        })
+    }
+}
+
+unsafe fn getter(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    f: fn(&mut Scope<'_>, &Value) -> Result<Value, Value>,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let this = quickjs::borrow_value(scope, this_val);
+            let result = f(scope, &this);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_get_contentDocument(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+) -> JSValue {
+    unsafe { getter(ctx, this_val, owner::content_document) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_get_contentWindow(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+) -> JSValue {
+    unsafe { getter(ctx, this_val, owner::content_window) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_getSVGDocument(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    let f: NativeFn = owner::svg_document;
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_child_frame_window(
+    ctx: *mut JSContext,
+    doc: *mut NsNode,
+    index: u32,
+    name: *const c_char,
+    raw: GBoolean,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let doc = Node::from_ptr(doc);
+            let result = owner::child_frame_window(scope, doc, index, c_str(name), raw != 0);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_frame_src_attr(node: *const NsNode) -> *const c_char {
+    unsafe { Node::from_ptr(node) }
+        .and_then(schedule::src_attr)
+        .map_or(core::ptr::null(), CStr::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_mark_iframe_source(
+    js: *mut NsJs,
+    iframe: *mut NsNode,
+    origin: *const c_char,
+    abs_url: *const c_char,
+) {
+    if let Some(iframe) = unsafe { Node::from_ptr(iframe) } {
+        schedule::mark_source(Js::of(js), iframe, unsafe { c_str(origin) }, unsafe {
+            c_str(abs_url)
+        });
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_schedule_iframe_load_full(
+    js: *mut NsJs,
+    iframe: *mut NsNode,
+    force: GBoolean,
+) {
+    if let Some(iframe) = unsafe { Node::from_ptr(iframe) } {
+        schedule::schedule(Js::of(js), iframe, force != 0);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode) {
+    unsafe { ns_js_schedule_iframe_load_full(js, iframe, glib::FALSE) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode) {
+    if let Some(root) = unsafe { Node::from_ptr(root) } {
+        schedule::schedule_static(Js::of(js), root, 0);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_frame_response_is_download(resp: *const NsResponse) -> GBoolean {
+    let Some(resp) = (unsafe { resp.as_ref() }) else {
+        return glib::FALSE;
+    };
+    glib::boolean(unsafe {
+        schedule::response_is_download(
+            c_str(resp.error),
+            c_str(resp.content_disposition),
+            c_str(resp.content_type),
+        )
+    })
 }

@@ -10,6 +10,7 @@ use southstar_dom::index::next_in_subtree;
 use crate::ffi::{self, Js};
 use crate::page::{self, Frame};
 use crate::realm::frame_of;
+use crate::schedule;
 
 pub(crate) fn pending_count(js: Js) -> usize {
     page::peek(js, |page| page.pending_loads.len()).unwrap_or(0)
@@ -60,16 +61,18 @@ pub(crate) fn promote_deferred(js: Js) {
         else {
             return;
         };
-        if ffi::beyond_load_range(js, frame) {
+        let Some(node) =
+            ffi::frame_node(frame).filter(|&node| !schedule::beyond_load_range(js, node))
+        else {
             index += 1;
             continue;
-        }
+        };
         page::peek_mut(js, |page| {
             if page.deferred_loads.get(index) == Some(&frame) {
                 page.deferred_loads.remove(index);
             }
         });
-        ffi::schedule_iframe_load(js, frame);
+        schedule::schedule(js, node, false);
     }
 }
 

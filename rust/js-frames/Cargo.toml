@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-frames"
-description = "Iframe browsing contexts: the frame realm cloner, frame realm and scope bootstraps, the frame table, sandbox flags and the frame script helpers"
+description = "Iframe browsing contexts: the frame realm cloner, frame realm and scope bootstraps, the frame table, sandbox flags, the frame owner element bindings, frame load scheduling and the frame script helpers"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-layout = { path = "../layout" }
 
 [lints]
 workspace = true

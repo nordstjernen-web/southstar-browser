@@ -9,6 +9,7 @@ use crate::bootstrap;
 use crate::cloner;
 use crate::ffi::qjs::{Ctx, PROP_CONFIGURABLE, PROP_WRITABLE};
 use crate::ffi::{self, Js};
+use crate::owner;
 use crate::page::{self, Frame};
 use crate::sandbox;
 
@@ -117,7 +118,7 @@ fn run_global_bootstrap(
         return None;
     }
     let url = initial_url_value(fctx, initial_url);
-    let platform = ffi::platform_names(js, fctx);
+    let platform = owner::platform_names(js, fctx);
     let frame_element = match iframe {
         Some(iframe) => ffi::make_element(ffi::current_realm(js), iframe),
         None => Value::null(),
@@ -130,7 +131,7 @@ fn run_global_bootstrap(
     let post_message = ffi::make_post_message(fctx, window);
     let doc = text_or_undefined(fctx, doc_url);
     let realm_clone = ffi::realm_clone_function(fctx);
-    let window_events = ffi::frame_window_events(fctx);
+    let window_events = owner::frame_window_events(fctx);
     let args = [
         window.clone(),
         parent_global.clone(),
@@ -231,7 +232,9 @@ fn build_lite_window(ctx: Ctx, element: &Value, iframe: Node<'_>) -> Value {
     if js.is_null() {
         return ctx.global();
     }
-    let document = ffi::content_document(ctx, element, iframe);
+    let document = ctx
+        .enter(|scope| owner::content_document_of(scope, element, iframe))
+        .unwrap_or_else(|_| Value::null());
     if !document.is_object() {
         return ctx.global();
     }

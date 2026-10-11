@@ -190,7 +190,6 @@ typedef struct ns_hostobj {
 } ns_hostobj;
 static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
 static void ns_js_link_interfaces(JSContext *ctx);
-static ns_node *ns_iframe_document_node(const ns_node *iframe);
 typedef struct {
     char *saved;
     gboolean owns_slot;
@@ -6859,52 +6858,10 @@ ns_js_scroll_viewport(ns_js *js, double x, double y)
     ns_js_note_viewport_scroll(js, x, y);
 }
 
-static ns_node *
-ns_iframe_document_node(const ns_node *iframe)
-{
-    if (!iframe) return NULL;
-    for (ns_node *c = iframe->first_child; c; c = c->next_sibling)
-        if (c->kind == NS_NODE_DOCUMENT) return c;
-    return NULL;
-}
-
-static ns_node *
-ns_iframe_content_root(const ns_node *iframe)
-{
-    if (!iframe) return NULL;
-    for (ns_node *c = iframe->first_child; c; c = c->next_sibling) {
-        if (c->kind == NS_NODE_DOCUMENT) {
-            for (ns_node *e = c->first_child; e; e = e->next_sibling)
-                if (e->kind == NS_NODE_ELEMENT) return e;
-            return NULL;
-        }
-        if (c->kind == NS_NODE_ELEMENT) return c;
-    }
-    return NULL;
-}
-
-static ns_node *
-ns_iframe_ensure_content_root(ns_node *iframe)
-{
-    ns_node *root = ns_iframe_content_root(iframe);
-    if (root) return root;
-    if (!iframe) return NULL;
-    root = ns_node_new_element(g_strdup("html"));
-    ns_node_append_child(root, ns_node_new_element(g_strdup("head")));
-    ns_node_append_child(root, ns_node_new_element(g_strdup("body")));
-    ns_node *doc = ns_node_new_document();
-    ns_node_append_child(doc, root);
-    ns_node_append_child(iframe, doc);
-    return root;
-}
-
-JSValue
-ns_iframe_platform_names(JSContext *fctx, ns_js *js)
+GHashTable *
+ns_js_platform_globals(ns_js *js)
 {
     if (!js->platform_globals) {
-        /* A frame made while the document is still being installed, before
-         * any of the page's scripts ran: every name the window has is the
-         * platform's. */
         JSContext *main_ctx = js->main_realm_ctx ? js->main_realm_ctx
                                                  : js->ctx;
         JSContext *saved = js->ctx;
@@ -6912,13 +6869,7 @@ ns_iframe_platform_names(JSContext *fctx, ns_js *js)
         js->platform_globals = ns_js_snapshot_globals(js);
         js->ctx = saved;
     }
-    JSValue names = JS_NewObjectProto(fctx, JS_NULL);
-    GHashTableIter it;
-    gpointer k;
-    g_hash_table_iter_init(&it, js->platform_globals);
-    while (g_hash_table_iter_next(&it, &k, NULL))
-        JS_SetPropertyStr(fctx, names, (const char *)k, JS_TRUE);
-    return names;
+    return js->platform_globals;
 }
 
 static void ns_install_pdf_plugins(JSContext *ctx);
@@ -6956,22 +6907,6 @@ ns_js_new_frame_context(ns_js *js)
     return fctx;
 }
 
-JSValue
-ns_js_frame_window_events(JSContext *fctx)
-{
-    JSValue window_events = JS_NewObjectProto(fctx, JS_NULL);
-    JS_SetPropertyStr(fctx, window_events, "add",
-        JS_NewCFunction(fctx, ns_window_addEventListener,
-                        "addEventListener", 2));
-    JS_SetPropertyStr(fctx, window_events, "remove",
-        JS_NewCFunction(fctx, ns_window_removeEventListener,
-                        "removeEventListener", 2));
-    JS_SetPropertyStr(fctx, window_events, "dispatch",
-        JS_NewCFunction(fctx, ns_window_dispatchEvent,
-                        "dispatchEvent", 1));
-    return window_events;
-}
-
 void
 ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
                          JSValueConst parent_global)
@@ -6990,60 +6925,12 @@ ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
                       ns_make_performance_object(fctx, js, include_memory));
 }
 
-/* The URL a frame's document shows when it differs from the URL it was
- * loaded under: "about:blank" for a frame without a source and
- * "about:srcdoc" for a srcdoc frame, whose base URL and origin come from
- * the document that holds the frame (data-nd-frame-url). */
-static void ns_js_set_doc_ready_state(ns_js *js, const ns_node *doc, int state);
-
 static const char *
 ns_iframe_doc_url(const ns_node *iframe)
 {
     const char *u = iframe
         ? ns_element_get_attr(iframe, "data-nd-frame-doc-url") : NULL;
     return u && *u ? u : NULL;
-}
-
-static void
-ns_frame_document_show_url(JSContext *ctx, JSValueConst doc, const char *url)
-{
-    if (!JS_IsObject(doc) || !url || !*url) return;
-    JS_DefinePropertyValueStr(ctx, doc, "URL", JS_NewString(ctx, url),
-                              JS_PROP_C_W_E);
-    JS_DefinePropertyValueStr(ctx, doc, "documentURI", JS_NewString(ctx, url),
-                              JS_PROP_C_W_E);
-}
-
-static JSValue
-ns_iframe_build_content_document(JSContext *ctx, ns_node *iframe)
-{
-    if (!ns_iframe_ensure_content_root(iframe)) return JS_NULL;
-    ns_node *doc = ns_iframe_document_node(iframe);
-    if (!doc) return JS_NULL;
-    if (doc->js_wrapper) return ns_make_element(ctx, doc);
-    const char *cs = iframe
-        ? ns_element_get_attr(iframe, "data-nd-frame-charset") : NULL;
-    const char *url = iframe
-        ? ns_element_get_attr(iframe, "data-nd-frame-url") : NULL;
-    const char *shown = ns_iframe_doc_url(iframe);
-    if (!url || !*url) {
-        /* The frame's initial about:blank document: its base URL and origin
-         * are its creator's, and it is complete from the start. */
-        url = ns_js_node_doc_base(js_from_ctx(ctx), iframe);
-        shown = "about:blank";
-        ns_js_set_doc_ready_state(js_from_ctx(ctx), doc, 2);
-    }
-    gboolean is_xml = (doc->flags & NS_NODE_XML_DOC) != 0;
-    const char *mime = is_xml ? "application/xml" : "text/html";
-    g_autofree char *url_copy = g_strdup(url);
-    g_autofree char *cs_copy = g_strdup(cs);
-    g_autofree char *shown_copy = g_strdup(shown);
-    JSValue cd = ns_make_realm_document(ctx, doc, url_copy, cs_copy, mime,
-                                        is_xml, FALSE);
-    ns_frame_document_show_url(ctx, cd, shown_copy);
-    if (JS_IsObject(cd))
-        JS_SetPropertyStr(ctx, cd, "defaultView", JS_GetGlobalObject(ctx));
-    return cd;
 }
 
 gboolean
@@ -7059,119 +6946,6 @@ ns_iframe_is_cross_origin(ns_js *js, const ns_node *iframe)
     if (js && embedder == js->current_url && js->document_origin)
         embedder = js->document_origin;
     return !embedder || !ns_url_same_origin(frame_url, embedder);
-}
-
-JSValue
-ns_iframe_content_document(JSContext *ctx, JSValueConst this_val, ns_node *n)
-{
-    JSValue realm = JS_GetPropertyStr(ctx, this_val, "__ndRealmDoc");
-    if (JS_IsObject(realm)) return realm;
-    JS_FreeValue(ctx, realm);
-    ns_node *doc = ns_iframe_document_node(n);
-    if (doc && doc->js_wrapper) return ns_make_element(ctx, doc);
-    if (!ns_node_is_element_named(n, "iframe")) return JS_NULL;
-    return ns_iframe_build_content_document(ctx, n);
-}
-
-/* A frame element has a content navigable only while it is connected to a
- * document that has a browsing context: the page's document or, through
- * frames, a document nested in it. A frame created by createElement() and
- * not inserted yet, or one in a document from createHTMLDocument(), has
- * none, so its contentWindow and contentDocument are null. */
-static gboolean
-ns_frame_owner_has_browsing_context(ns_js *js, const ns_node *frame)
-{
-    if (!js || !frame) return FALSE;
-    /* The page's document, whichever document is current while a frame's
-     * script runs; a frame's document hangs below its frame element. */
-    const ns_node *page = js->ce_main_doc ? js->ce_main_doc : js->current_doc;
-    const ns_node *root = frame;
-    while (root->parent) root = root->parent;
-    return root == page;
-}
-
-static JSValue
-ns_element_get_contentDocument(JSContext *ctx, JSValueConst this_val)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (!n || (!ns_node_is_element_named(n, "iframe") &&
-               !ns_node_is_element_named(n, "object") &&
-               !ns_node_is_element_named(n, "frame") &&
-               !ns_node_is_element_named(n, "embed")))
-        return JS_ThrowTypeError(ctx, "Illegal invocation");
-    if (!ns_node_is_element_named(n, "iframe") &&
-        !ns_node_is_element_named(n, "object")) return JS_NULL;
-    if (!ns_frame_owner_has_browsing_context(js_from_ctx(ctx), n))
-        return JS_NULL;
-    if (ns_iframe_is_cross_origin(js_from_ctx(ctx), n)) return JS_NULL;
-    return ns_iframe_content_document(ctx, this_val, n);
-}
-
-static gboolean
-ns_node_is_frame_owner(const ns_node *n)
-{
-    return n && (ns_node_is_element_named(n, "iframe") ||
-                 ns_node_is_element_named(n, "object") ||
-                 ns_node_is_element_named(n, "frame") ||
-                 ns_node_is_element_named(n, "embed"));
-}
-
-static JSValue
-ns_element_get_contentWindow(JSContext *ctx, JSValueConst this_val)
-{
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (!ns_node_is_frame_owner(n))
-        return JS_ThrowTypeError(ctx, "Illegal invocation");
-    if (!ns_node_is_element_named(n, "iframe")) return JS_NULL;
-    if (!ns_frame_owner_has_browsing_context(js_from_ctx(ctx), n))
-        return JS_NULL;
-    if (!ns_iframe_ensure_content_root(n)) return JS_NULL;
-    JSValue win = ns_iframe_realm_window(ctx, this_val, n);
-    if (!JS_IsObject(win) || !ns_iframe_is_cross_origin(js_from_ctx(ctx), n))
-        return win;
-    return ns_iframe_cross_origin_window(ctx, win);
-}
-
-JSValue
-ns_window_child_frame_window(JSContext *ctx, ns_node *doc, uint32_t index,
-                             const char *name, gboolean raw)
-{
-    const ns_node *frame = ns_window_child_frame(doc, index, name);
-    if (!frame) return JS_UNDEFINED;
-    JSValue el = ns_make_element(ctx, frame);
-    JSValue win = JS_UNDEFINED;
-    if (!raw)
-        win = ns_element_get_contentWindow(ctx, el);
-    else if (ns_node_is_element_named(frame, "iframe") &&
-             ns_iframe_ensure_content_root((ns_node *)frame))
-        win = ns_iframe_realm_window(ctx, el, (ns_node *)frame);
-    JS_FreeValue(ctx, el);
-    return win;
-}
-
-static JSValue
-ns_element_getSVGDocument(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    ns_node *n = ns_unwrap_element_mut(this_val);
-    if (!n || (!ns_node_is_element_named(n, "iframe") &&
-               !ns_node_is_element_named(n, "object") &&
-               !ns_node_is_element_named(n, "embed")))
-        return JS_NULL;
-    JSValue doc = ns_element_get_contentDocument(ctx, this_val);
-    if (!JS_IsObject(doc)) return doc;
-    JSValue root = JS_GetPropertyStr(ctx, doc, "documentElement");
-    JSValue name = JS_IsObject(root) ? JS_GetPropertyStr(ctx, root, "localName")
-                                     : JS_NULL;
-    const char *nm = JS_ToCString(ctx, name);
-    gboolean is_svg = nm && g_ascii_strcasecmp(nm, "svg") == 0;
-    if (nm) JS_FreeCString(ctx, nm);
-    JS_FreeValue(ctx, name);
-    JS_FreeValue(ctx, root);
-    if (is_svg) return doc;
-    JS_FreeValue(ctx, doc);
-    return JS_NULL;
 }
 
 static JSValue
@@ -10109,7 +9883,7 @@ ns_tag_caller_document(JSContext *ctx, JSValueConst node_val)
     JS_FreeValue(rctx, global);
 }
 
-static void
+void
 ns_js_set_doc_ready_state(ns_js *js, const ns_node *doc, int state)
 {
     if (!js || !doc) return;
@@ -11481,7 +11255,7 @@ ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
 
 /* The document.referrer of the document loading into iframe: the URL of
  * the document holding the iframe, cut down by the referrer policy. */
-static char *
+char *
 ns_js_frame_referrer(ns_js *js, ns_node *iframe, const char *frame_url)
 {
     const ns_node *holder = iframe->parent;
@@ -11511,107 +11285,6 @@ ns_js_frame_referrer(ns_js *js, ns_node *iframe, const char *frame_url)
     }
     char *referrer = ns_net_referer_for(frame_url, holder_url, policy);
     return referrer ? referrer : g_strdup("");
-}
-
-static void
-ns_js_mark_iframe_source(ns_js *js, ns_node *iframe, const char *origin,
-                         const char *abs_url)
-{
-    const char *srcdoc = ns_element_get_attr(iframe, "srcdoc");
-    const char *frame_url = srcdoc && *srcdoc ? origin
-                          : abs_url && *abs_url ? abs_url : origin;
-    if (js) {
-        char *referrer = ns_js_frame_referrer(js, iframe, frame_url);
-        ns_js_frame_set_source(js, iframe, frame_url ? frame_url : "",
-                               referrer);
-        g_free(referrer);
-    }
-    if (srcdoc && *srcdoc) {
-        ns_element_set_attr(iframe, "data-nd-frame-srcdoc", srcdoc);
-        ns_element_set_attr(iframe, "data-nd-frame-url", origin);
-        ns_element_set_attr(iframe, "data-nd-frame-doc-url", "about:srcdoc");
-        return;
-    }
-    ns_element_set_attr(iframe, "data-nd-frame-srcdoc", "");
-    ns_element_set_attr(iframe, "data-nd-frame-url",
-                        abs_url && *abs_url ? abs_url : origin);
-    ns_element_set_attr(iframe, "data-nd-frame-doc-url",
-                        abs_url && *abs_url ? "" : "about:blank");
-    if (abs_url && *abs_url) ns_css_mark_visited(abs_url);
-}
-
-static const char *
-ns_frame_src_attr(const ns_node *n)
-{
-    if (ns_node_is_element_named(n, "iframe")) return "src";
-    if (ns_node_is_element_named(n, "object")) return "data";
-    return NULL;
-}
-
-static gboolean
-ns_js_iframe_source_loaded(ns_js *js, ns_node *iframe)
-{
-    if (!js || !iframe) return FALSE;
-    if (!ns_element_get_attr(iframe, "data-nd-frame-loaded")) return FALSE;
-    const char *srcdoc = ns_element_get_attr(iframe, "srcdoc");
-    const char *loaded_srcdoc = ns_element_get_attr(iframe, "data-nd-frame-srcdoc");
-    if (srcdoc && *srcdoc)
-        return loaded_srcdoc && strcmp(loaded_srcdoc, srcdoc) == 0;
-
-    const char *attr = ns_frame_src_attr(iframe);
-    const char *src = attr ? ns_element_get_attr(iframe, attr) : NULL;
-    if (!src || !*src || g_str_has_prefix(src, "about:"))
-        return ns_node_is_element_named(iframe, "iframe");
-    const char *origin = (js->current_url && *js->current_url)
-                       ? js->current_url : "inline";
-    char *abs_url = ns_url_resolve(origin, src);
-    if (!abs_url) return FALSE;
-    const char *loaded_url = ns_element_get_attr(iframe, "data-nd-frame-url");
-    gboolean same = loaded_url && strcmp(loaded_url, abs_url) == 0;
-    g_free(abs_url);
-    return same;
-}
-
-void
-ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe, gboolean force)
-{
-    if (!js || !iframe || js->halted) return;
-    if (!ns_frame_src_attr(iframe)) return;
-    if (!force && ns_js_iframe_source_loaded(js, iframe)) return;
-    const char *loading = ns_element_get_attr(iframe, "loading");
-    gboolean lazy = loading && g_ascii_strcasecmp(loading, "lazy") == 0;
-    if (!force && lazy && js->iframe_load_depth == 0) {
-        const ns_box *box = js->layout_root
-            ? ns_box_find_by_dom(js->layout_root, iframe) : NULL;
-        double limit = js->layout_root
-            ? js->layout_root->scroll_y + ns_css_viewport_h() + 1500.0 : 0;
-        if (!box || box->y > limit) {
-            ns_js_deferred_iframe_add(js, iframe);
-            return;
-        }
-    }
-    if (force) {
-        ns_element_remove_attr(iframe, "data-nd-frame-loaded");
-        ns_css_mark_attr_dirty(iframe, "data-nd-frame-loaded", "1");
-    }
-    ns_js_deferred_iframe_remove(js, iframe);
-    if (!ns_js_pending_iframe_add(js, iframe)) return;
-    js->mutated = TRUE;
-}
-
-void
-ns_js_schedule_iframe_load(ns_js *js, ns_node *iframe)
-{
-    ns_js_schedule_iframe_load_full(js, iframe, FALSE);
-}
-
-gboolean
-ns_js_iframe_beyond_load_range(ns_js *js, ns_node *iframe)
-{
-    if (!js->layout_root) return TRUE;
-    const ns_box *box = ns_box_find_by_dom(js->layout_root, iframe);
-    double limit = js->layout_root->scroll_y + ns_css_viewport_h() + 1500.0;
-    return !box || box->y > limit;
 }
 
 static gboolean
@@ -12061,32 +11734,6 @@ ns_iframe_framing_blocked(const char *embedder_url, const char *framed_url,
     return FALSE;
 }
 
-/* Whether a frame's response is one a browser downloads instead of
- * showing: one sent as an attachment, or of a type it does not display. */
-static gboolean
-ns_frame_response_is_download(const ns_response *resp)
-{
-    if (!resp || resp->error) return FALSE;
-    if (resp->content_disposition) {
-        const char *cd = resp->content_disposition;
-        while (g_ascii_isspace(*cd)) cd++;
-        if (g_ascii_strncasecmp(cd, "attachment", 10) == 0) return TRUE;
-    }
-    const char *type = resp->content_type;
-    if (!type || !*type) return FALSE;
-    char *mime = g_ascii_strdown(type, strcspn(type, ";"));
-    g_strstrip(mime);
-    gboolean shown = !*mime || g_str_has_prefix(mime, "text/") ||
-        g_str_has_prefix(mime, "image/") || g_str_has_prefix(mime, "video/") ||
-        g_str_has_prefix(mime, "audio/") || g_str_has_suffix(mime, "+xml") ||
-        strcmp(mime, "application/xml") == 0 ||
-        strcmp(mime, "application/xhtml+xml") == 0 ||
-        strcmp(mime, "application/json") == 0 ||
-        strcmp(mime, "application/pdf") == 0;
-    g_free(mime);
-    return !shown;
-}
-
 static void
 ns_js_load_iframe_now(ns_js *js, ns_node *iframe)
 {
@@ -12521,31 +12168,6 @@ ns_js_process_pending_iframes(ns_js *js)
         ns_js_load_iframe_now(js, iframe);
     }
     g_hash_table_destroy(loaded);
-}
-
-static void
-ns_js_schedule_static_iframes_rec(ns_js *js, ns_node *n, int depth)
-{
-    if (!n || depth >= 512) return;
-    const char *frame_attr = ns_frame_src_attr(n);
-    if (frame_attr) {
-        if (!ns_element_get_attr(n, "data-nd-frame-loaded")) {
-            const char *src    = ns_element_get_attr(n, frame_attr);
-            const char *srcdoc = ns_element_get_attr(n, "srcdoc");
-            if ((src && *src) || (srcdoc && *srcdoc) ||
-                ns_node_is_element_named(n, "iframe"))
-                ns_js_schedule_iframe_load(js, n);
-        }
-        return;
-    }
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_js_schedule_static_iframes_rec(js, c, depth + 1);
-}
-
-void
-ns_js_schedule_static_iframes(ns_js *js, ns_node *n)
-{
-    ns_js_schedule_static_iframes_rec(js, n, 0);
 }
 
 int

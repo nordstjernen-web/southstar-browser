@@ -665,11 +665,22 @@ void ns_iframe_store_realm_window(ns_js *js, ns_node *iframe,
 JSValue ns_iframe_lookup_realm_window(ns_js *js, ns_node *iframe);
 JSValue ns_iframe_realm_window(JSContext *ctx, JSValueConst this_val,
                                ns_node *n);
-JSValue ns_iframe_content_document(JSContext *ctx, JSValueConst this_val,
-                                   ns_node *n);
-JSValue ns_iframe_platform_names(JSContext *fctx, ns_js *js);
+GHashTable *ns_js_platform_globals(ns_js *js);
+ns_node *ns_iframe_document_node(const ns_node *iframe);
+ns_node *ns_iframe_ensure_content_root(ns_node *iframe);
+void ns_frame_document_show_url(JSContext *ctx, JSValueConst doc,
+                                const char *url);
+JSValue ns_element_get_contentDocument(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_get_contentWindow(JSContext *ctx, JSValueConst this_val);
+JSValue ns_element_getSVGDocument(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
+const char *ns_frame_src_attr(const ns_node *n);
+void ns_js_mark_iframe_source(ns_js *js, ns_node *iframe, const char *origin,
+                              const char *abs_url);
+gboolean ns_frame_response_is_download(const struct ns_response *resp);
+void ns_js_set_doc_ready_state(ns_js *js, const ns_node *doc, int state);
+char *ns_js_frame_referrer(ns_js *js, ns_node *iframe, const char *frame_url);
 JSContext *ns_js_new_frame_context(ns_js *js);
-JSValue ns_js_frame_window_events(JSContext *fctx);
 void ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
                               JSValueConst parent_global);
 const char *ns_js_node_doc_base(ns_js *js, const ns_node *el);
@@ -698,7 +709,6 @@ void ns_js_deferred_iframe_add(ns_js *js, ns_node *frame);
 void ns_js_deferred_iframe_remove(ns_js *js, ns_node *frame);
 void ns_js_promote_deferred_iframes(ns_js *js);
 void ns_js_purge_subtree_pending_iframes(ns_js *js, ns_node *root);
-gboolean ns_js_iframe_beyond_load_range(ns_js *js, ns_node *iframe);
 void ns_js_schedule_iframe_load(ns_js *js, ns_node *iframe);
 void ns_js_run_script_element(ns_js *js, ns_node *n, const char *origin);
 JSValue ns_window_addEventListener(JSContext *ctx, JSValueConst this_val,

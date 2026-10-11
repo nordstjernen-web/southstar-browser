@@ -1970,6 +1970,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-layout",
 ]
 
 [[package]]
