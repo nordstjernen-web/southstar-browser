@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The GTK browser window (tabs, toolbar, address bar, menus, the bookmarks
+  popover, the downloads window, the task manager and session recovery)
+  moved to Rust (rust/shell). Meson now links the non-shell targets through
+  a new rust/static static library. The downloads window lists recent files
+  sorted by name.
 * The vendored Wuffs image decoders (~97k lines of C) are replaced with
   pure-Rust ones: the png crate with APNG, gif, zune-jpeg and an in-tree BMP
   decoder in rust/image-decoders. PNG, GIF and BMP pixels are unchanged;
