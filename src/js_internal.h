@@ -199,6 +199,29 @@ typedef void (*ns_ctx_drawfn)(cairo_t *cr, void *ud);
 /* Helpers defined in js.c, used by js_canvas.c */
 double ns_arg_d(JSContext *ctx, JSValueConst v);
 void ns_bind_fn(JSContext *ctx, JSValueConst obj, const char *name, JSCFunction *fn, int argc);
+typedef struct ns_fn_def { const char *name; int argc; } ns_fn_def;
+typedef struct ns_int_constant { const char *name; int value; } ns_int_constant;
+void ns_bind_fn_if_missing(JSContext *ctx, JSValueConst obj, const char *name,
+                           JSCFunction *fn, int argc);
+void ns_bind_fns(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
+                 const ns_fn_def *defs, gsize n);
+void ns_bind_ctors(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
+                   const ns_fn_def *defs, gsize n);
+void ns_bind_ctor_proto_fn(JSContext *ctx, JSValueConst global,
+                           const char *ctor_name, const char *fn_name,
+                           JSCFunction *fn, int argc);
+void ns_bind_ctor_int_constants(JSContext *ctx, JSValueConst global,
+                                const char *ctor_name,
+                                const ns_int_constant *constants, gsize count);
+JSValue ns_promise_resolve_take(JSContext *ctx, JSValue value);
+JSValue ns_event_noop(JSContext *ctx, JSValueConst this_val, int argc,
+                      JSValueConst *argv);
+JSValue ns_event_empty_array(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue ns_returns_null(JSContext *ctx, JSValueConst this_val, int argc,
+                        JSValueConst *argv);
+JSValue ns_ho_new(JSContext *ctx, int kind, JSValueConst proto);
+int     ns_ho_kind_of(JSValueConst v);
 const ns_box *ns_box_find_by_dom(const ns_box *root, const ns_node *target);
 uint32_t ns_js_array_length(JSContext *ctx, JSValueConst arr);
 void ns_js_promise_reject(JSContext *ctx, JSValue resolvers[2], const char *message);
@@ -262,7 +285,6 @@ JSValue ns_element_form_reset(JSContext *ctx, JSValueConst this_val,
 JSValue ns_submit_event_ctor(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv);
 gboolean ns_js_value_is_form_data(JSContext *ctx, JSValueConst v);
-JSValue ns_form_data_construct(JSContext *ctx, JSValueConst new_target);
 char   *ns_blob_bytes_as_string(JSContext *ctx, JSValueConst blob, gsize *out_len);
 JSContext *ns_js_pattern_context(void);
 const ns_node *ns_js_current_document(const ns_js *js);
@@ -470,8 +492,6 @@ JSValue ns_offscreen_construct(JSContext *ctx, JSValueConst new_target, int argc
 void ns_canvas_install(JSContext *ctx, JSValueConst global, gboolean window);
 
 /* Performance API (js_perf.c) and the js.c helpers it shares. */
-void ns_bind_fn_if_not_callable(JSContext *ctx, JSValueConst obj, const char *name,
-                                JSCFunction *fn, int argc);
 gboolean ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
                              gboolean *was_set);
 
@@ -785,12 +805,6 @@ gint64  ns_js_budget_enter(ns_js *js);
 void    ns_js_budget_leave(ns_js *js, gint64 saved);
 void    ns_js_queue_message_task(JSContext *ctx, JSJobFunc *func, int argc,
                                  JSValueConst *argv);
-gboolean ns_js_value_is_message_port(JSValueConst v);
-gboolean ns_js_value_is_broadcast_channel(JSValueConst v);
-JSValue ns_message_port_state(JSContext *ctx, JSValueConst v);
-JSValue ns_message_port_new_object(JSContext *ctx);
-JSValue ns_message_channel_construct(JSContext *ctx, JSValueConst new_target);
-JSValue ns_broadcast_channel_construct(JSContext *ctx, JSValueConst new_target);
 gboolean ns_listener_parse_options(JSContext *ctx, JSValueConst opts,
                                    gboolean *capture, gboolean *once,
                                    gboolean *passive, gboolean *passive_set,
@@ -984,7 +998,6 @@ void    ns_net_install_interfaces(JSContext *ctx, JSValueConst global);
 gpointer ns_js_net_enter_handler_realm(JSContext *ctx, JSValueConst obj,
                                        const char *type);
 void     ns_js_net_leave_handler_realm(JSContext *ctx, gpointer scope);
-void     ns_ho_install_attrs(JSContext *ctx, JSValueConst global);
 void     ns_net_install_file_reader(JSContext *ctx, JSValueConst global);
 JSValue ns_window_xhr_ctor(JSContext *ctx, JSValueConst this_val, int argc,
                            JSValueConst *argv);
@@ -1005,7 +1018,6 @@ gboolean ns_header_value_is_safe(const char *value);
 const char *ns_js_net_page_url(const ns_js *js);
 gboolean ns_js_net_csp_allows_connect(const ns_js *js, const char *url,
                                       const char *page);
-gboolean ns_js_net_host_is(JSValueConst v, int kind);
 void     ns_drain_mutations(ns_js *js);
 guint    ns_js_attach_idle(ns_js *js, GSourceFunc func, gpointer data);
 guint    ns_js_attach_timeout(ns_js *js, guint ms, GSourceFunc func, gpointer data);
@@ -1022,8 +1034,6 @@ gboolean ns_js_value_is_url_search_params(JSContext *ctx, JSValueConst v);
 char    *ns_js_usp_serialize(JSContext *ctx, JSValueConst usp, gsize *out_len,
                              char **out_content_type);
 void     ns_target_fire_event(JSContext *ctx, JSValueConst obj, const char *type);
-JSValue  ns_ho_construct(JSContext *ctx, JSValueConst new_target, ns_ho_kind kind);
-JSValue  ns_ho_new_default(JSContext *ctx, ns_ho_kind kind);
 void     ns_bind_ctor(JSContext *ctx, JSValueConst obj, const char *name,
                       JSCFunction *fn, int argc);
 JSValue  ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,

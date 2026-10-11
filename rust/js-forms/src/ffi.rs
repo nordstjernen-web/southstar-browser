@@ -8,6 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
+use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
@@ -32,7 +33,6 @@ unsafe extern "C" {
         message: *const c_char,
     ) -> JSValue;
     fn ns_js_value_is_form_data(ctx: *mut JSContext, v: JSValue) -> GBoolean;
-    fn ns_form_data_construct(ctx: *mut JSContext, new_target: JSValue) -> JSValue;
     fn ns_blob_bytes_as_string(
         ctx: *mut JSContext,
         blob: JSValue,
@@ -255,9 +255,7 @@ pub(crate) fn is_form_data(scope: &mut Scope<'_>, value: &Value) -> bool {
 }
 
 pub(crate) fn construct_form_data(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_form_data_construct(ctx, quickjs::raw(new_target)) };
-    quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })
+    host::construct(scope, new_target, HostKind::FormData)
 }
 
 pub(crate) fn blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {

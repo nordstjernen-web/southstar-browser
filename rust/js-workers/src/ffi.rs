@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 
+use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
@@ -35,12 +36,6 @@ unsafe extern "C" {
         argc: c_int,
         argv: *mut JSValue,
     );
-    fn ns_js_value_is_message_port(v: JSValue) -> c_int;
-    fn ns_js_value_is_broadcast_channel(v: JSValue) -> c_int;
-    fn ns_message_port_state(ctx: *mut JSContext, v: JSValue) -> JSValue;
-    fn ns_message_port_new_object(ctx: *mut JSContext) -> JSValue;
-    fn ns_message_channel_construct(ctx: *mut JSContext, new_target: JSValue) -> JSValue;
-    fn ns_broadcast_channel_construct(ctx: *mut JSContext, new_target: JSValue) -> JSValue;
     fn ns_listener_parse_options(
         ctx: *mut JSContext,
         opts: JSValue,
@@ -64,38 +59,28 @@ fn raw_ctx(scope: &Scope<'_>) -> *mut JSContext {
     quickjs::raw_context(scope)
 }
 
-fn take(scope: &mut Scope<'_>, raw: JSValue) -> JsResult {
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
-}
-
 pub(crate) fn is_message_port(value: &Value) -> bool {
-    unsafe { ns_js_value_is_message_port(quickjs::raw(value)) != 0 }
+    host::is(value, HostKind::MessagePort)
 }
 
 pub(crate) fn is_broadcast_channel(value: &Value) -> bool {
-    unsafe { ns_js_value_is_broadcast_channel(quickjs::raw(value)) != 0 }
+    host::is(value, HostKind::BroadcastChannel)
 }
 
 pub(crate) fn port_state(scope: &mut Scope<'_>, port: &Value) -> Option<Value> {
-    let raw = unsafe { ns_message_port_state(raw_ctx(scope), quickjs::raw(port)) };
-    let state = unsafe { quickjs::take_value(scope, raw) };
-    state.is_object().then_some(state)
+    host::state(scope, port, HostKind::MessagePort)
 }
 
 pub(crate) fn new_port_object(scope: &mut Scope<'_>) -> JsResult {
-    let raw = unsafe { ns_message_port_new_object(raw_ctx(scope)) };
-    take(scope, raw)
+    host::new_default(scope, HostKind::MessagePort)
 }
 
 pub(crate) fn construct_message_channel(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
-    let raw = unsafe { ns_message_channel_construct(raw_ctx(scope), quickjs::raw(new_target)) };
-    take(scope, raw)
+    host::construct(scope, new_target, HostKind::MessageChannel)
 }
 
 pub(crate) fn construct_broadcast_channel(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
-    let raw = unsafe { ns_broadcast_channel_construct(raw_ctx(scope), quickjs::raw(new_target)) };
-    take(scope, raw)
+    host::construct(scope, new_target, HostKind::BroadcastChannel)
 }
 
 pub(crate) fn dom_exception(
@@ -1365,8 +1350,13 @@ export_native!(
 export_native!(ns_worker_performance_clear, crate::noop);
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_transfer_is_port(_ctx: *mut JSContext, v: JSValue) -> c_int {
-    unsafe { ns_js_value_is_message_port(v) }
+pub unsafe extern "C" fn ns_worker_transfer_is_port(ctx: *mut JSContext, v: JSValue) -> c_int {
+    let is_port = unsafe {
+        quickjs::with_context(ctx, |scope| {
+            is_message_port(&quickjs::borrow_value(scope, v))
+        })
+    };
+    c_int::from(is_port)
 }
 
 #[unsafe(no_mangle)]

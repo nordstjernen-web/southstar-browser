@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
@@ -108,10 +109,10 @@ struct NsPerfResourceInfo {
 
 const _: () = assert!(core::mem::size_of::<NsPerfResourceInfo>() == 56);
 
-pub(crate) const HO_ABORT_CONTROLLER: c_int = 1;
-pub(crate) const HO_ABORT_SIGNAL: c_int = 2;
-pub(crate) const HO_XHR: c_int = 10;
-pub(crate) const HO_XHR_UPLOAD: c_int = 11;
+pub(crate) const HO_ABORT_CONTROLLER: HostKind = HostKind::AbortController;
+pub(crate) const HO_ABORT_SIGNAL: HostKind = HostKind::AbortSignal;
+pub(crate) const HO_XHR: HostKind = HostKind::Xhr;
+pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 type GAsyncReadyCallback =
@@ -209,7 +210,6 @@ unsafe extern "C" {
         f: quickjs::JSCFunction,
         argc: c_int,
     );
-    fn ns_ho_install_attrs(ctx: *mut JSContext, global: JSValue);
     fn ns_net_install_form_data(ctx: *mut JSContext, global: JSValue);
     fn ns_net_install_ports(ctx: *mut JSContext, global: JSValue);
     fn ns_net_install_file_reader(ctx: *mut JSContext, global: JSValue);
@@ -309,7 +309,6 @@ unsafe extern "C" {
         total: f64,
         length_computable: GBoolean,
     );
-    fn ns_js_net_host_state(ctx: *mut JSContext, v: JSValue, kind: c_int) -> JSValue;
     fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
     fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean;
     fn ns_js_credit_pumped_time(js: *mut NsJs, pump_start_us: i64);
@@ -334,9 +333,6 @@ unsafe extern "C" {
         out_len: *mut usize,
     ) -> *mut c_char;
     fn ns_target_fire_event(ctx: *mut JSContext, obj: JSValue, kind: *const c_char);
-    fn ns_ho_construct(ctx: *mut JSContext, new_target: JSValue, kind: c_int) -> JSValue;
-    fn ns_ho_new_default(ctx: *mut JSContext, kind: c_int) -> JSValue;
-    fn ns_js_net_host_is(v: JSValue, kind: c_int) -> GBoolean;
     fn ns_bind_ctor(
         ctx: *mut JSContext,
         obj: JSValue,
@@ -524,9 +520,7 @@ pub(crate) fn bind_socket_ctors(scope: &mut Scope<'_>, global: &Value) {
 }
 
 pub(crate) fn install_host_interfaces(scope: &mut Scope<'_>, global: &Value) {
-    let ctx = quickjs::raw_context(scope);
-    let raw = quickjs::raw(global);
-    unsafe { ns_ho_install_attrs(ctx, raw) };
+    host::install_attributes(scope, global);
 }
 
 pub(crate) fn install_neighbours(scope: &mut Scope<'_>, global: &Value) {
@@ -775,11 +769,8 @@ pub(crate) fn fire_progress_event(
     };
 }
 
-pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: c_int) -> Option<Value> {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_js_net_host_state(ctx, quickjs::raw(value), kind) };
-    let state = unsafe { quickjs::take_value(scope, raw) };
-    state.is_object().then_some(state)
+pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
+    host::state(scope, value, kind)
 }
 
 pub(crate) fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
@@ -823,20 +814,20 @@ pub(crate) fn serialize_form_body(scope: &mut Scope<'_>, value: &Value) -> Optio
     Some(Serialized { body, content_type })
 }
 
-pub(crate) fn host_construct(scope: &mut Scope<'_>, new_target: &Value, kind: c_int) -> JsResult {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_ho_construct(ctx, quickjs::raw(new_target), kind) };
-    quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })
+pub(crate) fn host_construct(
+    scope: &mut Scope<'_>,
+    new_target: &Value,
+    kind: HostKind,
+) -> JsResult {
+    host::construct(scope, new_target, kind)
 }
 
-pub(crate) fn host_new(scope: &mut Scope<'_>, kind: c_int) -> JsResult {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_ho_new_default(ctx, kind) };
-    quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })
+pub(crate) fn host_new(scope: &mut Scope<'_>, kind: HostKind) -> JsResult {
+    host::new_default(scope, kind)
 }
 
-pub(crate) fn host_is(value: &Value, kind: c_int) -> bool {
-    unsafe { ns_js_net_host_is(quickjs::raw(value), kind) != 0 }
+pub(crate) fn host_is(value: &Value, kind: HostKind) -> bool {
+    host::is(value, kind)
 }
 
 pub(crate) fn bind_illegal_ctor(scope: &mut Scope<'_>, global: &Value, name: &CStr) {

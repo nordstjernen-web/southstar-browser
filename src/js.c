@@ -2698,13 +2698,6 @@ ns_make_abort_error(JSContext *ctx)
     return exc;
 }
 
-static JSValue
-ns_event_noop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_UNDEFINED;
-}
-
 /* Platform objects whose state the page must not see.  What the engine
  * stores on one (its C functions and hidden-source scripts, see
  * JS_IsHostAccess) lives in a state object of its own, as if it were the
@@ -2713,23 +2706,6 @@ ns_event_noop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *arg
  * prototype accessors and nothing else; what the page defines on the object
  * is the object's own. */
 static JSClassID ns_hostobj_class_id;
-
-#define NS_HO_BIT(kind) (1u << (kind))
-#define NS_HO_XHR_EVENT_TARGETS (NS_HO_BIT(NS_HO_XHR) | NS_HO_BIT(NS_HO_XHR_UPLOAD))
-
-static const char *const ns_ho_iface_names[NS_HO_KIND_COUNT] = {
-    [NS_HO_ABORT_CONTROLLER] = "AbortController",
-    [NS_HO_ABORT_SIGNAL] = "AbortSignal",
-    [NS_HO_BROADCAST_CHANNEL] = "BroadcastChannel",
-    [NS_HO_FILE_READER] = "FileReader",
-    [NS_HO_FORM_DATA] = "FormData",
-    [NS_HO_MESSAGE_CHANNEL] = "MessageChannel",
-    [NS_HO_MESSAGE_PORT] = "MessagePort",
-    [NS_HO_TEXT_ENCODER] = "TextEncoder",
-    [NS_HO_TEXT_DECODER] = "TextDecoder",
-    [NS_HO_XHR] = "XMLHttpRequest",
-    [NS_HO_XHR_UPLOAD] = "XMLHttpRequestUpload",
-};
 
 static ns_hostobj *
 ns_ho_data(JSValueConst v)
@@ -2744,21 +2720,19 @@ ns_js_is_host_object(JSValueConst v)
     return ns_ho_data(v) != NULL;
 }
 
+int
+ns_ho_kind_of(JSValueConst v)
+{
+    ns_hostobj *d = ns_ho_data(v);
+    return d ? (int)d->kind : NS_HO_NONE;
+}
+
 static ns_hostobj *
 ns_ho_of(JSValueConst v, ns_ho_kind kind)
 {
     ns_hostobj *d = ns_ho_data(v);
     return d && d->kind == kind ? d : NULL;
 }
-
-static JSValue
-ns_ho_illegal(JSContext *ctx)
-{
-    return JS_ThrowTypeError(ctx, "Illegal invocation");
-}
-
-#define NS_HO_THIS(ctx, this_val, kind) \
-    do { if (!ns_ho_of(this_val, kind)) return ns_ho_illegal(ctx); } while (0)
 
 static void
 ns_hostobj_finalizer(JSRuntime *rt, JSValue val)
@@ -2884,8 +2858,8 @@ static JSClassDef ns_hostobj_class = {
     .exotic = &ns_hostobj_exotic,
 };
 
-static JSValue
-ns_ho_new(JSContext *ctx, ns_ho_kind kind, JSValueConst proto)
+JSValue
+ns_ho_new(JSContext *ctx, int kind, JSValueConst proto)
 {
     ns_new_class_id(&ns_hostobj_class_id);
     JSRuntime *rt = JS_GetRuntime(ctx);
@@ -2908,419 +2882,11 @@ ns_ho_new(JSContext *ctx, ns_ho_kind kind, JSValueConst proto)
     return obj;
 }
 
-JSValue
-ns_ho_new_default(JSContext *ctx, ns_ho_kind kind)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue proto = ns_proto_of(ctx, global, ns_ho_iface_names[kind]);
-    JS_FreeValue(ctx, global);
-    JSValue obj = ns_ho_new(ctx, kind, proto);
-    JS_FreeValue(ctx, proto);
-    return obj;
-}
-
-JSValue
-ns_ho_construct(JSContext *ctx, JSValueConst new_target, ns_ho_kind kind)
-{
-    if (!JS_IsObject(new_target))
-        return JS_ThrowTypeError(ctx,
-            "Failed to construct '%s': Please use the 'new' operator, this "
-            "DOM object constructor cannot be called as a function.",
-            ns_ho_iface_names[kind]);
-    JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-    if (JS_IsException(proto)) return proto;
-    JSValue obj = JS_IsObject(proto) ? ns_ho_new(ctx, kind, proto)
-                                     : ns_ho_new_default(ctx, kind);
-    JS_FreeValue(ctx, proto);
-    return obj;
-}
-
-JSValue
-ns_form_data_construct(JSContext *ctx, JSValueConst new_target)
-{
-    return ns_ho_construct(ctx, new_target, NS_HO_FORM_DATA);
-}
-
-gboolean
-ns_js_value_is_message_port(JSValueConst v)
-{
-    return ns_ho_of(v, NS_HO_MESSAGE_PORT) != NULL;
-}
-
-gboolean
-ns_js_value_is_broadcast_channel(JSValueConst v)
-{
-    return ns_ho_of(v, NS_HO_BROADCAST_CHANNEL) != NULL;
-}
-
-JSValue
-ns_message_port_state(JSContext *ctx, JSValueConst v)
-{
-    ns_hostobj *d = ns_ho_of(v, NS_HO_MESSAGE_PORT);
-    return d ? JS_DupValue(ctx, d->state) : JS_UNDEFINED;
-}
-
-JSValue
-ns_message_port_new_object(JSContext *ctx)
-{
-    return ns_ho_new_default(ctx, NS_HO_MESSAGE_PORT);
-}
-
-JSValue
-ns_message_channel_construct(JSContext *ctx, JSValueConst new_target)
-{
-    return ns_ho_construct(ctx, new_target, NS_HO_MESSAGE_CHANNEL);
-}
-
-JSValue
-ns_broadcast_channel_construct(JSContext *ctx, JSValueConst new_target)
-{
-    return ns_ho_construct(ctx, new_target, NS_HO_BROADCAST_CHANNEL);
-}
-
-typedef enum {
-    NS_HA_STRING, NS_HA_BOOL, NS_HA_NUMBER, NS_HA_NULL, NS_HA_UNDEFINED,
-    NS_HA_HANDLER,
-} ns_ho_attr_type;
-
-typedef struct ns_ho_attr {
-    const char     *iface;
-    guint           kinds;
-    const char     *name;
-    ns_ho_attr_type type;
-    gboolean        writable;
-} ns_ho_attr;
-
-/* The attributes of these interfaces, as accessors on their prototypes;
- * the value is the object's state of that name, or what a fresh object of
- * the interface has. */
-static const ns_ho_attr ns_ho_attrs[] = {
-    { "AbortController", NS_HO_BIT(NS_HO_ABORT_CONTROLLER), "signal", NS_HA_NULL, FALSE },
-    { "AbortSignal", NS_HO_BIT(NS_HO_ABORT_SIGNAL), "aborted", NS_HA_BOOL, FALSE },
-    { "AbortSignal", NS_HO_BIT(NS_HO_ABORT_SIGNAL), "onabort", NS_HA_HANDLER, TRUE },
-    { "AbortSignal", NS_HO_BIT(NS_HO_ABORT_SIGNAL), "reason", NS_HA_UNDEFINED, FALSE },
-    { "BroadcastChannel", NS_HO_BIT(NS_HO_BROADCAST_CHANNEL), "name", NS_HA_STRING, FALSE },
-    { "BroadcastChannel", NS_HO_BIT(NS_HO_BROADCAST_CHANNEL), "onmessage", NS_HA_HANDLER, TRUE },
-    { "BroadcastChannel", NS_HO_BIT(NS_HO_BROADCAST_CHANNEL), "onmessageerror", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "error", NS_HA_NULL, FALSE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onabort", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onerror", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onload", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onloadend", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onloadstart", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "onprogress", NS_HA_HANDLER, TRUE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "readyState", NS_HA_NUMBER, FALSE },
-    { "FileReader", NS_HO_BIT(NS_HO_FILE_READER), "result", NS_HA_NULL, FALSE },
-    { "MessageChannel", NS_HO_BIT(NS_HO_MESSAGE_CHANNEL), "port1", NS_HA_NULL, FALSE },
-    { "MessageChannel", NS_HO_BIT(NS_HO_MESSAGE_CHANNEL), "port2", NS_HA_NULL, FALSE },
-    { "MessagePort", NS_HO_BIT(NS_HO_MESSAGE_PORT), "onmessageerror", NS_HA_HANDLER, TRUE },
-    { "TextEncoder", NS_HO_BIT(NS_HO_TEXT_ENCODER), "encoding", NS_HA_STRING, FALSE },
-    { "TextDecoder", NS_HO_BIT(NS_HO_TEXT_DECODER), "encoding", NS_HA_STRING, FALSE },
-    { "TextDecoder", NS_HO_BIT(NS_HO_TEXT_DECODER), "fatal", NS_HA_BOOL, FALSE },
-    { "TextDecoder", NS_HO_BIT(NS_HO_TEXT_DECODER), "ignoreBOM", NS_HA_BOOL, FALSE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onabort", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onerror", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onload", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onloadend", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onloadstart", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "onprogress", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequestEventTarget", NS_HO_XHR_EVENT_TARGETS, "ontimeout", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "onreadystatechange", NS_HA_HANDLER, TRUE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "response", NS_HA_STRING, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "responseURL", NS_HA_STRING, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "responseXML", NS_HA_NULL, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "status", NS_HA_NUMBER, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "statusText", NS_HA_STRING, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "timeout", NS_HA_NUMBER, TRUE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "upload", NS_HA_NULL, FALSE },
-    { "XMLHttpRequest", NS_HO_BIT(NS_HO_XHR), "withCredentials", NS_HA_BOOL, TRUE },
-};
-
-static const ns_ho_attr *
-ns_ho_attr_checked(JSContext *ctx, JSValueConst this_val, int magic,
-                   ns_hostobj **out)
-{
-    if (magic < 0 || magic >= (int)G_N_ELEMENTS(ns_ho_attrs)) return NULL;
-    const ns_ho_attr *a = &ns_ho_attrs[magic];
-    ns_hostobj *d = ns_ho_data(this_val);
-    (void)ctx;
-    if (!d || !(a->kinds & NS_HO_BIT(d->kind))) return NULL;
-    *out = d;
-    return a;
-}
-
-static JSValue
-ns_ho_attr_get(JSContext *ctx, JSValueConst this_val, int argc,
-               JSValueConst *argv, int magic)
-{
-    (void)argc; (void)argv;
-    ns_hostobj *d = NULL;
-    const ns_ho_attr *a = ns_ho_attr_checked(ctx, this_val, magic, &d);
-    if (!a) return ns_ho_illegal(ctx);
-    JSValue v = JS_GetPropertyStr(ctx, d->state, a->name);
-    if (!JS_IsUndefined(v)) return v;
-    switch (a->type) {
-    case NS_HA_STRING:    return JS_NewString(ctx, "");
-    case NS_HA_BOOL:      return JS_FALSE;
-    case NS_HA_NUMBER:    return JS_NewInt32(ctx, 0);
-    case NS_HA_UNDEFINED: return JS_UNDEFINED;
-    case NS_HA_NULL:
-    case NS_HA_HANDLER:
-    default:              return JS_NULL;
-    }
-}
-
-static JSValue
-ns_ho_attr_set(JSContext *ctx, JSValueConst this_val, int argc,
-               JSValueConst *argv, int magic)
-{
-    ns_hostobj *d = NULL;
-    const ns_ho_attr *a = ns_ho_attr_checked(ctx, this_val, magic, &d);
-    if (!a) return ns_ho_illegal(ctx);
-    JSValueConst in = argc > 0 ? argv[0] : JS_UNDEFINED;
-    JSValue v;
-    switch (a->type) {
-    case NS_HA_HANDLER:
-        v = JS_IsObject(in) ? JS_DupValue(ctx, in) : JS_NULL;
-        break;
-    case NS_HA_STRING:
-        v = JS_ToString(ctx, in);
-        break;
-    case NS_HA_BOOL:
-        v = JS_NewBool(ctx, JS_ToBool(ctx, in) > 0);
-        break;
-    case NS_HA_NUMBER:
-        v = JS_ToNumber(ctx, in);
-        break;
-    default:
-        v = JS_DupValue(ctx, in);
-        break;
-    }
-    if (JS_IsException(v)) return v;
-    JS_SetPropertyStr(ctx, d->state, a->name, v);
-    return JS_UNDEFINED;
-}
-
-void
-ns_ho_install_attrs(JSContext *ctx, JSValueConst global)
-{
-    const char *iface = NULL;
-    JSValue proto = JS_UNDEFINED;
-    for (gsize i = 0; i < G_N_ELEMENTS(ns_ho_attrs); i++) {
-        const ns_ho_attr *a = &ns_ho_attrs[i];
-        if (!iface || strcmp(iface, a->iface) != 0) {
-            JS_FreeValue(ctx, proto);
-            iface = a->iface;
-            proto = ns_proto_of(ctx, global, iface);
-        }
-        if (!JS_IsObject(proto)) continue;
-        char *get_name = g_strconcat("get ", a->name, NULL);
-        JSValue getter = JS_NewCFunctionMagic(ctx, ns_ho_attr_get, get_name, 0,
-                                              JS_CFUNC_generic_magic, (int)i);
-        g_free(get_name);
-        JSValue setter = JS_UNDEFINED;
-        if (a->writable) {
-            char *set_name = g_strconcat("set ", a->name, NULL);
-            setter = JS_NewCFunctionMagic(ctx, ns_ho_attr_set, set_name, 1,
-                                          JS_CFUNC_generic_magic, (int)i);
-            g_free(set_name);
-        }
-        JSAtom atom = JS_NewAtom(ctx, a->name);
-        JS_DefinePropertyGetSet(ctx, proto, atom, getter, setter,
-                                JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
-        JS_FreeAtom(ctx, atom);
-    }
-    JS_FreeValue(ctx, proto);
-}
-
-void
-ns_bind_fn(JSContext *ctx, JSValueConst obj, const char *name,
-           JSCFunction *fn, int argc)
-{
-    JSValue f = JS_NewCFunction(ctx, fn, name, argc);
-    if (name[0] == '_' && name[1] == '_') {
-        JSAtom atom = JS_NewAtom(ctx, name);
-        JS_DefinePropertyValue(ctx, obj, atom, f,
-                               JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-        JS_FreeAtom(ctx, atom);
-    } else {
-        JS_SetPropertyStr(ctx, obj, name, f);
-    }
-}
-
 void
 ns_bind_event_target_listeners(JSContext *ctx, JSValueConst obj)
 {
     ns_bind_fn(ctx, obj, "addEventListener",    ns_target_addEventListener,    2);
     ns_bind_fn(ctx, obj, "removeEventListener", ns_target_removeEventListener, 2);
-}
-
-static void
-ns_bind_fn_if_missing(JSContext *ctx, JSValueConst obj, const char *name,
-                      JSCFunction *fn, int argc)
-{
-    JSAtom atom = JS_NewAtom(ctx, name);
-    int has = JS_HasProperty(ctx, obj, atom);
-    JS_FreeAtom(ctx, atom);
-    if (has <= 0)
-        ns_bind_fn(ctx, obj, name, fn, argc);
-}
-
-void
-ns_bind_fn_if_not_callable(JSContext *ctx, JSValueConst obj, const char *name,
-                           JSCFunction *fn, int argc)
-{
-    JSValue current = JS_GetPropertyStr(ctx, obj, name);
-    gboolean callable = JS_IsFunction(ctx, current);
-    JS_FreeValue(ctx, current);
-    if (!callable)
-        ns_bind_fn(ctx, obj, name, fn, argc);
-}
-
-static void ns_set_tostring_tag(JSContext *ctx, JSValueConst obj,
-                                const char *tag);
-
-JSValue
-ns_make_ctor(JSContext *ctx, JSCFunction *fn, const char *name, int argc)
-{
-    JSValue func = JS_NewCFunction2(ctx, fn, name, argc,
-                                    JS_CFUNC_constructor_or_func, 0);
-    JSValue proto = JS_NewObject(ctx);
-    JS_DefinePropertyValueStr(ctx, proto, "constructor",
-                              JS_DupValue(ctx, func),
-                              JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    ns_set_tostring_tag(ctx, proto, name);
-    JS_DefinePropertyValueStr(ctx, func, "prototype", proto, JS_PROP_WRITABLE);
-    return func;
-}
-
-void
-ns_bind_ctor(JSContext *ctx, JSValueConst obj, const char *name,
-             JSCFunction *fn, int argc)
-{
-    JS_SetPropertyStr(ctx, obj, name, ns_make_ctor(ctx, fn, name, argc));
-}
-
-typedef struct ns_fn_def { const char *name; int argc; } ns_fn_def;
-
-static void
-ns_bind_ctor_proto_fn(JSContext *ctx, JSValueConst global,
-                      const char *ctor_name, const char *fn_name,
-                      JSCFunction *fn, int argc)
-{
-    JSValue ctor = JS_GetPropertyStr(ctx, global, ctor_name);
-    JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-    if (JS_IsObject(proto))
-        ns_bind_fn_if_missing(ctx, proto, fn_name, fn, argc);
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-}
-
-static void
-ns_bind_fns(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
-            const ns_fn_def *defs, gsize n)
-{
-    for (gsize i = 0; i < n; i++)
-        ns_bind_fn(ctx, obj, defs[i].name, fn, defs[i].argc);
-}
-
-static void
-ns_bind_ctors(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
-              const ns_fn_def *defs, gsize n)
-{
-    for (gsize i = 0; i < n; i++)
-        ns_bind_ctor(ctx, obj, defs[i].name, fn, defs[i].argc);
-}
-
-typedef struct ns_int_constant {
-    const char *name;
-    int value;
-} ns_int_constant;
-
-static void
-ns_bind_ctor_int_constants(JSContext *ctx, JSValueConst global,
-                           const char *ctor_name,
-                           const ns_int_constant *constants, gsize count)
-{
-    JSValue ctor = JS_GetPropertyStr(ctx, global, ctor_name);
-    if (!JS_IsObject(ctor)) {
-        JS_FreeValue(ctx, ctor);
-        return;
-    }
-    JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-    for (gsize i = 0; i < count; i++) {
-        JS_DefinePropertyValueStr(ctx, ctor, constants[i].name,
-            JS_NewInt32(ctx, constants[i].value), JS_PROP_ENUMERABLE);
-        if (JS_IsObject(proto))
-            JS_DefinePropertyValueStr(ctx, proto, constants[i].name,
-                JS_NewInt32(ctx, constants[i].value), JS_PROP_ENUMERABLE);
-    }
-    JS_FreeValue(ctx, proto);
-    JS_FreeValue(ctx, ctor);
-}
-
-static JSValue
-ns_event_empty_array(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return JS_NewArray(ctx);
-}
-
-
-JSValue
-ns_returns_resolved_undefined(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) return promise;
-    JSValue undef = JS_UNDEFINED;
-    JS_Call(ctx, resolvers[0], JS_UNDEFINED, 1, &undef);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
-    return promise;
-}
-
-static JSValue
-ns_promise_resolve_take(JSContext *ctx, JSValue value)
-{
-    JSValue resolvers[2];
-    JSValue promise = JS_NewPromiseCapability(ctx, resolvers);
-    if (JS_IsException(promise)) {
-        JS_FreeValue(ctx, value);
-        return promise;
-    }
-    JSValueConst args[1] = { value };
-    JS_Call(ctx, resolvers[0], JS_UNDEFINED, 1, args);
-    JS_FreeValue(ctx, value);
-    JS_FreeValue(ctx, resolvers[0]);
-    JS_FreeValue(ctx, resolvers[1]);
-    return promise;
-}
-
-JSValue
-ns_returns_resolved_false(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_promise_resolve_take(ctx, JS_FALSE);
-}
-
-JSValue
-ns_returns_resolved_empty_array(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return ns_promise_resolve_take(ctx, JS_NewArray(ctx));
-}
-
-static JSValue
-ns_returns_null(JSContext *ctx, JSValueConst this_val,
-                int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_NULL;
 }
 
 JSValue
@@ -11407,13 +10973,6 @@ ns_js_net_pump_iteration(ns_js *js)
     g_main_context_iteration(js && js->main_context ? js->main_context : NULL,
                              TRUE);
     return TRUE;
-}
-
-gboolean
-ns_js_net_host_is(JSValueConst v, int kind)
-{
-    ns_hostobj *d = ns_ho_data(v);
-    return d && (int)d->kind == kind;
 }
 
 JSContext *

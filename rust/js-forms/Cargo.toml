@@ -12,6 +12,7 @@ southstar-datetime = { path = "../datetime" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-html-util = { path = "../html-util" }
+southstar-js-bind = { path = "../js-bind" }
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
 
 [lints]

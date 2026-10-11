@@ -877,6 +877,7 @@ pub mod quickjs {
     ) -> JSValue;
 
     const CFUNC_GENERIC: c_int = 0;
+    const CFUNC_CONSTRUCTOR_OR_FUNC: c_int = 4;
 
     #[repr(C)]
     struct JSMemoryUsage {
@@ -1382,6 +1383,15 @@ pub mod quickjs {
             )
         };
         Value::own(scope.ctx, raw)
+    }
+
+    pub fn c_constructor_or_function(
+        scope: &mut Scope<'_>,
+        name: &str,
+        arity: u32,
+        f: JSCFunction,
+    ) -> Value {
+        c_function_with(scope, name, arity, f, CFUNC_CONSTRUCTOR_OR_FUNC, 0)
     }
 
     pub fn function_realm(

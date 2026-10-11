@@ -1617,6 +1617,7 @@ dependencies = [
  "southstar-image-decoders",
  "southstar-ipc",
  "southstar-js-attrs",
+ "southstar-js-bind",
  "southstar-js-brand",
  "southstar-js-clone",
  "southstar-js-collections",
@@ -1823,6 +1824,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-js-bind"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-js-engine",
+]
+
+[[package]]
 name = "southstar-js-brand"
 version = "1.0.30-dev"
 dependencies = [
@@ -1961,6 +1969,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html-util",
+ "southstar-js-bind",
  "southstar-js-engine",
 ]
 
@@ -2068,6 +2077,7 @@ name = "southstar-js-net"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-js-bind",
  "southstar-js-engine",
 ]
 
@@ -2184,6 +2194,7 @@ name = "southstar-js-url"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-js-bind",
  "southstar-js-engine",
 ]
 
@@ -2209,6 +2220,7 @@ name = "southstar-js-workers"
 version = "1.0.30-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-js-bind",
  "southstar-js-clone",
  "southstar-js-engine",
 ]

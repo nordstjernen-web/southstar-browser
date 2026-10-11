@@ -7,14 +7,15 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
+use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::JsResult;
 
-pub(crate) const HO_FILE_READER: c_int = 4;
-pub(crate) const HO_TEXT_ENCODER: c_int = 8;
-pub(crate) const HO_TEXT_DECODER: c_int = 9;
+pub(crate) const HO_FILE_READER: HostKind = HostKind::FileReader;
+pub(crate) const HO_TEXT_ENCODER: HostKind = HostKind::TextEncoder;
+pub(crate) const HO_TEXT_DECODER: HostKind = HostKind::TextDecoder;
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -144,8 +145,6 @@ unsafe extern "C" {
         code: c_int,
         message: *const c_char,
     ) -> JSValue;
-    fn ns_ho_construct(ctx: *mut JSContext, new_target: JSValue, kind: c_int) -> JSValue;
-    fn ns_js_net_host_is(v: JSValue, kind: c_int) -> GBoolean;
     fn ns_js_bytes_view(
         ctx: *mut JSContext,
         value: JSValue,
@@ -311,14 +310,16 @@ pub(crate) fn dom_exception(
     quickjs::take_exception(scope)
 }
 
-pub(crate) fn host_construct(scope: &mut Scope<'_>, new_target: &Value, kind: c_int) -> JsResult {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_ho_construct(ctx, quickjs::raw(new_target), kind) };
-    quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })
+pub(crate) fn host_construct(
+    scope: &mut Scope<'_>,
+    new_target: &Value,
+    kind: HostKind,
+) -> JsResult {
+    host::construct(scope, new_target, kind)
 }
 
-pub(crate) fn host_is(value: &Value, kind: c_int) -> bool {
-    unsafe { ns_js_net_host_is(quickjs::raw(value), kind) != 0 }
+pub(crate) fn host_is(value: &Value, kind: HostKind) -> bool {
+    host::is(value, kind)
 }
 
 pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
