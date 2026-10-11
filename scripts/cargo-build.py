@@ -29,7 +29,7 @@ def depfile_entries(path):
     text = path.read_text().replace("\\\n", " ")
     for line in text.splitlines():
         head, sep, deps = line.partition(": ")
-        if sep and head.endswith(".a"):
+        if sep and head.endswith((".a", ".rlib")):
             return deps.split()
     return []
 
