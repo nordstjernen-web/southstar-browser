@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The Element wrapper class and the generic host-object class moved onto the
+  engine-neutral host classes, and js.c's DOM function tables and class
+  installers moved to rust/js-interfaces; js.c is down to about 1,200 lines.
 * webgpu.c moved to Rust (rust/webgpu): navigator.gpu over the external
   wgpu-native, with hand-declared, layout-checked FFI and no wgpu crates. It
   is still built only when wgpu-native is present and still gated by
