@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The FreeBSD, NetBSD and musl (Alpine) CI builds install the pinned Rust
+  1.99.0 with rustup, since their packaged Rust (FreeBSD 1.98, Alpine 1.96)
+  is older than the toolchain the build requires.
 * Inline layout (line boxes, line-height struts, inline-block vertical
   alignment, text-align and text-indent, vertical text, the text measurement
   cache and inline min/max-content widths) moved from layout.c to Rust

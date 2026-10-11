@@ -67,7 +67,7 @@ jobs:
             attempt=0
             until /usr/sbin/pkg_add -U \
                 meson ninja-build pkgconf bash zip ccache git-base \
-                gtk4 openssl brotli zstd uchardet sqlite3 libwebp libavif libpsl SDL2 rust
+                gtk4 openssl brotli zstd uchardet sqlite3 libwebp libavif libpsl SDL2
             do
               attempt=$((attempt + 1))
               if [ "$attempt" -ge 3 ]; then
@@ -84,9 +84,19 @@ jobs:
             # glib-mkenums, which glib2-tools provides; keep it on its own
             # pkg_add so a miss here cannot take the line above with it.
             /usr/sbin/pkg_add -U glib2-tools || true
+            # pkgsrc's rust lags behind the toolchain the build pins in
+            # rust-toolchain.toml, so install rustup and let it fetch that.
+            ftp -o /tmp/rustup-init \
+              https://static.rust-lang.org/rustup/dist/x86_64-unknown-netbsd/rustup-init
+            chmod +x /tmp/rustup-init
+            /tmp/rustup-init -y --profile minimal --default-toolchain none
           run: |
             set -e
-            export PATH="/usr/pkg/bin:/usr/pkg/sbin:$PATH"
+            export PATH="$HOME/.cargo/bin:/usr/pkg/bin:/usr/pkg/sbin:$PATH"
+            rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+              --profile minimal --component clippy,rustfmt
+            rustc --version
+            cargo --version
             # pkgsrc must precede the X11R7 base sets: X11R7 ships an old
             # pixman-1.pc (0.38.4) that would shadow the newer pkgsrc pixman
             # and break cairo's 'pixman-1 >= 0.40.0' requirement.

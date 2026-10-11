@@ -21,10 +21,23 @@ jobs:
           apk add --no-cache \
             build-base clang ccache pkgconf meson ninja git cmake \
             gtk4.0-dev libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev libwebp-dev libavif-dev sdl2-dev \
-            libseccomp-dev ffmpeg-dev rust cargo \
+            libseccomp-dev ffmpeg-dev curl \
             fontconfig font-dejavu ca-certificates file nodejs
 
       - uses: actions/checkout@v7
+
+      # Alpine's rust package lags behind the toolchain the build pins in
+      # rust-toolchain.toml, so install that with rustup.
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+            --profile minimal --component clippy,rustfmt
+          rustc --version
+          cargo --version
 
       - name: Restore ccache
         uses: actions/cache@v6
@@ -40,6 +53,8 @@ jobs:
           ccache --zero-stats
 
       - name: Build (musl libc)
+        env:
+          RUSTFLAGS: -C target-feature=-crt-static
         run: |
           export CC="ccache clang"
           meson setup builddir
