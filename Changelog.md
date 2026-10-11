@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The page navigation, scroll and timing glue (fragment navigation, viewport
+  scroll events, resize, pageshow and pagehide, resource origin checks,
+  navigation timing milestones and render-blocking status) moved from js.c
+  to Rust (rust/js-window, rust/js-perf, rust/js-loader).
 * DOM change recording (child list, attribute and character data records
   with the id, class and tag index and the form past-names upkeep, the
   recorded attribute setters, the orphan set, the pending change event and
