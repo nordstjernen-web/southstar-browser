@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Inline video playback (video.c) moved to Rust (rust/video): the video
+  cache, playback off the animation tick, autoplay, loop, mute and posters,
+  click-to-play, WebVTT cues, MSE streams and the audio and video helper
+  commands. Media events now reach page script after the call that raised
+  them returns.
 * The element-specific HTML bindings (the table API, <img> complete, natural
   size and currentSrc, labels, form, list, option index, select length,
   hidden, disabled, isContentEditable and enctype) moved from js.c to Rust
