@@ -142,7 +142,6 @@ struct ns_js {
     gboolean      halted;
     gboolean      in_pump;
     int           eval_depth;
-    GHashTable   *iframe_globals;
     int           iframe_load_depth;
     gint64        last_pump_us;
     gint64        last_orphan_sweep_us;
@@ -660,43 +659,37 @@ JSContext *ns_js_node_realm_context(const ns_js *js, const ns_node *node);
 void ns_js_frame_set_source(ns_js *js, const ns_node *frame, const char *url,
                             const char *referrer);
 void ns_js_frames_forget_node(ns_js *js, const ns_node *node);
-JSContext *ns_js_frame_take_initial_blank(ns_js *js, const ns_node *frame);
 void ns_js_frames_clear_initial_blank(ns_js *js);
 void ns_js_frames_reset(ns_js *js);
 void ns_js_frames_teardown(ns_js *js);
 JSValue ns_realm_proto_for(ns_js *js, JSContext *realm, JSValueConst proto);
 gboolean ns_realm_cloners_made(const ns_js *js);
 unsigned ns_iframe_effective_sandbox(const ns_node *node);
-JSValue ns_iframe_make_scope(JSContext *ctx, JSValue iframe_doc,
-                             const char *initial_url, const char *doc_url,
-                             unsigned sandbox);
-JSContext *ns_iframe_make_realm_context(ns_js *js, ns_node *iframe,
-                                        JSValueConst iframe_doc,
-                                        const char *initial_url,
-                                        const char *doc_url, unsigned sandbox,
-                                        JSContext *reuse, JSValue *out_window,
-                                        JSValue *out_location,
-                                        JSValue *out_history);
-void ns_iframe_store_realm_window(ns_js *js, ns_node *iframe,
-                                  JSValueConst window);
-JSValue ns_iframe_lookup_realm_window(ns_js *js, ns_node *iframe);
 JSValue ns_iframe_realm_window(JSContext *ctx, JSValueConst this_val,
                                ns_node *n);
 GHashTable *ns_js_platform_globals(ns_js *js);
 ns_node *ns_iframe_document_node(const ns_node *iframe);
-ns_node *ns_iframe_ensure_content_root(ns_node *iframe);
-void ns_frame_document_show_url(JSContext *ctx, JSValueConst doc,
-                                const char *url);
 JSValue ns_element_get_contentDocument(JSContext *ctx, JSValueConst this_val);
 JSValue ns_element_get_contentWindow(JSContext *ctx, JSValueConst this_val);
 JSValue ns_element_getSVGDocument(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv);
-const char *ns_frame_src_attr(const ns_node *n);
-void ns_js_mark_iframe_source(ns_js *js, ns_node *iframe, const char *origin,
-                              const char *abs_url);
-gboolean ns_frame_response_is_download(const struct ns_response *resp);
 void ns_js_set_doc_ready_state(ns_js *js, const ns_node *doc, int state);
-char *ns_js_frame_referrer(ns_js *js, ns_node *iframe, const char *frame_url);
+void ns_js_load_iframe_now(ns_js *js, ns_node *iframe);
+void ns_js_scrub_iframe_globals(ns_js *js, const ns_node *iframe);
+void ns_js_sweep_orphans(ns_js *js);
+void ns_js_unpin_subtree(ns_js *js, ns_node *root);
+struct ns_response *ns_js_fetch_resource(ns_js *js, const char *url,
+                                         const char *top_url,
+                                         const char *const *headers,
+                                         GError **error);
+gint64 ns_js_eval_budget_us(void);
+void ns_js_frame_scope_push(ns_js *js, JSContext *realm, ns_node *frame,
+                            void *buf);
+void *ns_js_frame_load_enter(ns_js *js, ns_node *frame, ns_node *doc,
+                             const char *url, JSValueConst realm_doc);
+void ns_js_frame_load_leave(ns_js *js, void *token);
+ns_node *ns_js_frame_eval_begin(ns_js *js, ns_node *script, gint64 deadline_us);
+void ns_js_frame_eval_end(ns_js *js, ns_node *previous_script);
 JSContext *ns_js_new_frame_context(ns_js *js);
 void ns_js_frame_realm_finish(ns_js *js, JSContext *fctx, JSValueConst fg,
                               JSValueConst parent_global);
@@ -705,19 +698,6 @@ JSValue ns_js_navigator_brand(const ns_js *js);
 JSValue ns_js_pristine_promise(const ns_js *js);
 JSClassID ns_js_storage_class_id(void);
 JSClassID ns_js_window_named_class_id(void);
-void ns_js_run_iframe_modules(ns_js *js, ns_node **modules, unsigned count,
-                              const char *origin, JSValue iframe_doc,
-                              JSValueConst iframe_scope, unsigned sandbox);
-typedef struct ns_iframe_exposed_names ns_iframe_exposed_names;
-ns_iframe_exposed_names *ns_iframe_exposed_names_new(void);
-void ns_iframe_exposed_names_scan(ns_iframe_exposed_names *names,
-                                  const char *src, size_t len);
-char *ns_iframe_exposed_names_script(const ns_iframe_exposed_names *names);
-void ns_iframe_exposed_names_free(ns_iframe_exposed_names *names);
-JSValue ns_js_iframe_proto_snapshot(JSContext *ctx);
-void ns_js_iframe_proto_cleanup(JSContext *ctx, JSValueConst before);
-void ns_js_iframe_clear_global_zone(JSContext *ctx);
-void ns_js_iframe_restore_globals(JSContext *ctx);
 unsigned ns_js_pending_iframe_count(const ns_js *js);
 gboolean ns_js_pending_iframe_add(ns_js *js, ns_node *frame);
 ns_node *ns_js_pending_iframe_first(const ns_js *js);

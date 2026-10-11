@@ -40,6 +40,7 @@ pub(crate) struct Page {
     pub initial_blank: HashMap<Frame, Ctx>,
     pub pending_loads: Vec<Frame>,
     pub deferred_loads: Vec<Frame>,
+    pub iframe_globals: HashMap<Frame, Vec<CString>>,
 }
 
 thread_local! {

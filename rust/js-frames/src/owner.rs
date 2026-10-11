@@ -117,8 +117,14 @@ fn build_content_document(scope: &mut Scope<'_>, iframe: Node<'_>) -> JsResult {
     } else {
         c"text/html"
     };
-    let document =
-        ffi::make_realm_document(scope, doc, url.as_deref(), charset.as_deref(), mime, is_xml)?;
+    let document = ffi::make_realm_document(
+        scope,
+        doc,
+        url.as_deref(),
+        charset.as_deref(),
+        Some(mime),
+        is_xml,
+    )?;
     show_url(scope, &document, shown.as_deref());
     if document.is_object() {
         let global = scope.global();

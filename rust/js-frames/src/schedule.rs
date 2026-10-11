@@ -33,7 +33,7 @@ pub(crate) fn mark_source(js: Js, iframe: Node<'_>, origin: Option<&CStr>, abs_u
         _ => origin,
     };
     if !js.is_null() {
-        let referrer = ffi::frame_referrer(js, iframe, frame_url);
+        let referrer = Some(crate::origin::frame_referrer(js, iframe, frame_url));
         let url = frame_url.map_or_else(CString::default, CStr::to_owned);
         page::update_frame(js, frame_of(iframe), |entry| {
             entry.url = Some(url);
