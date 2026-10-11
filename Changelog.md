@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Script and module evaluation (classic scripts, modules and their loader,
+  JSON modules, frame-realm scripts, content scripts and the console eval)
+  moved from js.c to Rust (rust/js-loader), over new engine-neutral compile
+  and evaluate calls in rust/js-engine.
 * Generated content and form-control text (CSS counters, ::before and
   ::after content and quotes, text-transform, control sizing and inline
   attributes, select and datalist rows and text input columns) moved from
