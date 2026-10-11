@@ -2096,319 +2096,6 @@ ns_window_document_for(JSContext *ctx, JSValueConst window)
     return js ? js->current_doc : NULL;
 }
 
-enum {
-    NS_INSTOF_TAG = 0,
-    NS_INSTOF_NODE,
-    NS_INSTOF_ELEMENT,
-    NS_INSTOF_DOCUMENT,
-    NS_INSTOF_FRAGMENT,
-    NS_INSTOF_TEXT,
-    NS_INSTOF_COMMENT,
-    NS_INSTOF_CHARDATA,
-    NS_INSTOF_DOCTYPE,
-    NS_INSTOF_HTMLCOLLECTION,
-    NS_INSTOF_NODELIST,
-    NS_INSTOF_HTMLELEMENT,
-    NS_INSTOF_SHADOW,
-};
-
-typedef struct { const char *ctor; const char *tags; int special; } ns_instof_def;
-
-static const ns_instof_def ns_instof_table[] = {
-    { "HTMLAnchorElement",        "a",                  NS_INSTOF_TAG },
-    { "HTMLAreaElement",          "area",               NS_INSTOF_TAG },
-    { "HTMLAudioElement",         "audio",              NS_INSTOF_TAG },
-    { "HTMLBRElement",            "br",                 NS_INSTOF_TAG },
-    { "HTMLBaseElement",          "base",               NS_INSTOF_TAG },
-    { "HTMLBodyElement",          "body",               NS_INSTOF_TAG },
-    { "HTMLButtonElement",        "button",             NS_INSTOF_TAG },
-    { "HTMLCanvasElement",        "canvas",             NS_INSTOF_TAG },
-    { "HTMLDListElement",         "dl",                 NS_INSTOF_TAG },
-    { "HTMLDataElement",          "data",               NS_INSTOF_TAG },
-    { "HTMLDataListElement",      "datalist",           NS_INSTOF_TAG },
-    { "HTMLDetailsElement",       "details",            NS_INSTOF_TAG },
-    { "HTMLDialogElement",        "dialog",             NS_INSTOF_TAG },
-    { "HTMLDivElement",           "div",                NS_INSTOF_TAG },
-    { "HTMLEmbedElement",         "embed",              NS_INSTOF_TAG },
-    { "HTMLFieldSetElement",      "fieldset",           NS_INSTOF_TAG },
-    { "HTMLFormElement",          "form",               NS_INSTOF_TAG },
-    { "HTMLHRElement",            "hr",                 NS_INSTOF_TAG },
-    { "HTMLHeadElement",          "head",               NS_INSTOF_TAG },
-    { "HTMLHeadingElement",       "h1 h2 h3 h4 h5 h6",  NS_INSTOF_TAG },
-    { "HTMLHtmlElement",          "html",               NS_INSTOF_TAG },
-    { "HTMLIFrameElement",        "iframe",             NS_INSTOF_TAG },
-    { "HTMLDirectoryElement",     "dir",                NS_INSTOF_TAG },
-    { "HTMLFontElement",          "font",               NS_INSTOF_TAG },
-    { "HTMLFrameElement",         "frame",              NS_INSTOF_TAG },
-    { "HTMLFrameSetElement",      "frameset",           NS_INSTOF_TAG },
-    { "HTMLParamElement",         "param",              NS_INSTOF_TAG },
-    { "HTMLMarqueeElement",       "marquee",            NS_INSTOF_TAG },
-    { "HTMLImageElement",         "img",                NS_INSTOF_TAG },
-    { "HTMLInputElement",         "input",              NS_INSTOF_TAG },
-    { "HTMLLIElement",            "li",                 NS_INSTOF_TAG },
-    { "HTMLLabelElement",         "label",              NS_INSTOF_TAG },
-    { "HTMLLegendElement",        "legend",             NS_INSTOF_TAG },
-    { "HTMLLinkElement",          "link",               NS_INSTOF_TAG },
-    { "HTMLMapElement",           "map",                NS_INSTOF_TAG },
-    { "HTMLMenuElement",          "menu",               NS_INSTOF_TAG },
-    { "HTMLMetaElement",          "meta",               NS_INSTOF_TAG },
-    { "HTMLMeterElement",         "meter",              NS_INSTOF_TAG },
-    { "HTMLModElement",           "ins del",            NS_INSTOF_TAG },
-    { "HTMLOListElement",         "ol",                 NS_INSTOF_TAG },
-    { "HTMLObjectElement",        "object",             NS_INSTOF_TAG },
-    { "HTMLOptGroupElement",      "optgroup",           NS_INSTOF_TAG },
-    { "HTMLOptionElement",        "option",             NS_INSTOF_TAG },
-    { "HTMLOutputElement",        "output",             NS_INSTOF_TAG },
-    { "HTMLParagraphElement",     "p",                  NS_INSTOF_TAG },
-    { "HTMLPictureElement",       "picture",            NS_INSTOF_TAG },
-    { "HTMLPreElement",           "pre listing xmp",    NS_INSTOF_TAG },
-    { "HTMLProgressElement",      "progress",           NS_INSTOF_TAG },
-    { "HTMLQuoteElement",         "q blockquote",       NS_INSTOF_TAG },
-    { "HTMLScriptElement",        "script",             NS_INSTOF_TAG },
-    { "HTMLSelectElement",        "select",             NS_INSTOF_TAG },
-    { "HTMLSlotElement",          "slot",               NS_INSTOF_TAG },
-    { "HTMLSourceElement",        "source",             NS_INSTOF_TAG },
-    { "HTMLSpanElement",          "span",               NS_INSTOF_TAG },
-    { "HTMLStyleElement",         "style",              NS_INSTOF_TAG },
-    { "HTMLTableCaptionElement",  "caption",            NS_INSTOF_TAG },
-    { "HTMLTableCellElement",     "td th",              NS_INSTOF_TAG },
-    { "HTMLTableColElement",      "col colgroup",       NS_INSTOF_TAG },
-    { "HTMLTableElement",         "table",              NS_INSTOF_TAG },
-    { "HTMLTableRowElement",      "tr",                 NS_INSTOF_TAG },
-    { "HTMLTableSectionElement",  "thead tbody tfoot",  NS_INSTOF_TAG },
-    { "HTMLTemplateElement",      "template",           NS_INSTOF_TAG },
-    { "HTMLTextAreaElement",      "textarea",           NS_INSTOF_TAG },
-    { "HTMLTimeElement",          "time",               NS_INSTOF_TAG },
-    { "HTMLTitleElement",         "title",              NS_INSTOF_TAG },
-    { "HTMLTrackElement",         "track",              NS_INSTOF_TAG },
-    { "HTMLUListElement",         "ul",                 NS_INSTOF_TAG },
-    { "HTMLVideoElement",         "video",              NS_INSTOF_TAG },
-    { "Node",                     NULL,                 NS_INSTOF_NODE },
-    { "Element",                  NULL,                 NS_INSTOF_ELEMENT },
-    { "HTMLElement",              NULL,                 NS_INSTOF_ELEMENT },
-    { "HTMLDocument",             NULL,                 NS_INSTOF_DOCUMENT },
-    { "Document",                 NULL,                 NS_INSTOF_DOCUMENT },
-    { "HTMLCollection",           NULL,                 NS_INSTOF_HTMLCOLLECTION },
-    { "NodeList",                 NULL,                 NS_INSTOF_NODELIST },
-    { "DocumentFragment",         NULL,                 NS_INSTOF_FRAGMENT },
-    { "Text",                     NULL,                 NS_INSTOF_TEXT },
-    { "CDATASection",             NULL,                 NS_INSTOF_TEXT },
-    { "ProcessingInstruction",    NULL,                 NS_INSTOF_CHARDATA },
-    { "Comment",                  NULL,                 NS_INSTOF_COMMENT },
-    { "CharacterData",            NULL,                 NS_INSTOF_CHARDATA },
-    { "DocumentType",             NULL,                 NS_INSTOF_DOCTYPE },
-    { "HTMLElement",              NULL,                 NS_INSTOF_HTMLELEMENT },
-    { "ShadowRoot",               NULL,                 NS_INSTOF_SHADOW },
-};
-
-/* NodeList and HTMLCollection are told apart by the kind of live collection. */
-static JSValue
-ns_instof_collection(JSContext *ctx, const ns_instof_def *d, JSValueConst v)
-{
-    if (d->special == NS_INSTOF_HTMLCOLLECTION)
-        return JS_NewBool(ctx, ns_live_collection_kind(v) == 1);
-    if (ns_live_collection_kind(v) == 0)
-        return JS_TRUE;
-    if (!JS_IsObject(v))
-        return JS_FALSE;
-    JSValue m = JS_GetPropertyStr(ctx, v, "__nsNodeList");
-    int hit = JS_ToBool(ctx, m);
-    JS_FreeValue(ctx, m);
-    return JS_NewBool(ctx, hit == 1);
-}
-
-/* Whether tag is one of the space-separated names in list. */
-static gboolean
-ns_instof_list_has(const char *list, const char *tag)
-{
-    size_t tlen = strlen(tag);
-    while (*list) {
-        while (*list == ' ') list++;
-        const char *tok = list;
-        while (*list && *list != ' ') list++;
-        if ((size_t)(list - tok) == tlen && strncmp(tok, tag, tlen) == 0)
-            return TRUE;
-    }
-    return FALSE;
-}
-
-/* Whether node n is an element with one of the tags of the table entry. */
-static gboolean
-ns_instof_tag_match(const ns_instof_def *d, const ns_node *n)
-{
-    if (n->kind != NS_NODE_ELEMENT || !n->name || !d->tags)
-        return FALSE;
-    if (n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS))
-        return FALSE;
-    return ns_instof_list_has(d->tags, n->name);
-}
-
-static gboolean
-ns_instof_is_shadow_host_attr(const ns_node *n)
-{
-    return n->kind == NS_NODE_ELEMENT &&
-           ns_element_get_attr(n, NS_SHADOW_ATTR) != NULL;
-}
-
-/* The entries decided by the kind of the node alone. */
-static gboolean
-ns_instof_leaf_match(int special, const ns_node *n)
-{
-    switch (special) {
-    case NS_INSTOF_TEXT:
-        return n->kind == NS_NODE_TEXT;
-    case NS_INSTOF_COMMENT:
-        return n->kind == NS_NODE_COMMENT;
-    case NS_INSTOF_CHARDATA:
-        return n->kind == NS_NODE_TEXT || n->kind == NS_NODE_COMMENT;
-    case NS_INSTOF_DOCTYPE:
-        return n->kind == NS_NODE_DOCTYPE;
-    default:
-        return FALSE;
-    }
-}
-
-/* The entries for elements, documents and document fragments. */
-static gboolean
-ns_instof_container_match(int special, const ns_node *n)
-{
-    switch (special) {
-    case NS_INSTOF_ELEMENT:
-        return n->kind == NS_NODE_ELEMENT;
-    case NS_INSTOF_DOCUMENT:
-        return n->kind == NS_NODE_DOCUMENT && !(n->flags & NS_NODE_FRAGMENT);
-    case NS_INSTOF_FRAGMENT:
-        return (n->flags & NS_NODE_FRAGMENT) != 0 ||
-               ns_instof_is_shadow_host_attr(n);
-    case NS_INSTOF_SHADOW:
-        return ns_instof_is_shadow_host_attr(n);
-    case NS_INSTOF_HTMLELEMENT:
-        return n->kind == NS_NODE_ELEMENT &&
-               !(n->flags & (NS_NODE_SVG_NS | NS_NODE_FOREIGN_NS));
-    default:
-        return FALSE;
-    }
-}
-
-/* Whether node n, the wrapper of an instance, is of the kind of the table
- * entry d. */
-static gboolean
-ns_instof_node_match(const ns_instof_def *d, const ns_node *n)
-{
-    /* A shadow root is stored as an element but is a DocumentFragment. */
-    if (ns_node_is_shadow_root(n))
-        return d->special == NS_INSTOF_NODE ||
-               d->special == NS_INSTOF_FRAGMENT ||
-               d->special == NS_INSTOF_SHADOW;
-    if (d->special == NS_INSTOF_NODE)
-        return TRUE;
-    if (d->special == NS_INSTOF_TAG)
-        return ns_instof_tag_match(d, n);
-    return ns_instof_leaf_match(d->special, n) ||
-           ns_instof_container_match(d->special, n);
-}
-
-/* Whether ctor is the interface object the table entry belongs to. The
- * [Symbol.hasInstance] of an interface object is inherited by the interfaces
- * that extend it, and those are not told apart by node kind: Attr extends
- * Node, HTMLUnknownElement extends HTMLElement, XMLDocument extends Document. */
-static gboolean
-ns_instof_is_entry_ctor(JSContext *ctx, JSValueConst ctor,
-                        const ns_instof_def *d)
-{
-    if (!JS_IsObject(ctor))
-        return FALSE;
-    JSValue nv = JS_GetPropertyStr(ctx, ctor, "name");
-    const char *name = JS_IsString(nv) ? JS_ToCString(ctx, nv) : NULL;
-    if (JS_IsException(nv))
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    gboolean same = name && strcmp(name, d->ctor) == 0;
-    if (name) JS_FreeCString(ctx, name);
-    JS_FreeValue(ctx, nv);
-    return same;
-}
-
-/* OrdinaryHasInstance: whether the prototype of ctor is on the prototype
- * chain of v. */
-static JSValue
-ns_instof_ordinary(JSContext *ctx, JSValueConst ctor, JSValueConst v)
-{
-    if (!JS_IsObject(v) || !JS_IsFunction(ctx, ctor))
-        return JS_FALSE;
-    JSValue proto = JS_GetPropertyStr(ctx, ctor, "prototype");
-    if (!JS_IsObject(proto)) {
-        if (JS_IsException(proto))
-            return proto;
-        JS_FreeValue(ctx, proto);
-        return JS_ThrowTypeError(ctx,
-            "operand 'prototype' property is not an object");
-    }
-    JSValue cur = JS_DupValue(ctx, v);
-    gboolean hit = FALSE;
-    for (;;) {
-        JSValue next = JS_GetPrototype(ctx, cur);
-        JS_FreeValue(ctx, cur);
-        if (JS_IsException(next)) {
-            JS_FreeValue(ctx, proto);
-            return next;
-        }
-        if (!JS_IsObject(next))
-            break;
-        hit = JS_VALUE_GET_PTR(next) == JS_VALUE_GET_PTR(proto);
-        cur = next;
-        if (hit) {
-            JS_FreeValue(ctx, cur);
-            break;
-        }
-    }
-    JS_FreeValue(ctx, proto);
-    return JS_NewBool(ctx, hit);
-}
-
-static JSValue
-ns_ctor_hasInstance(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv, int magic)
-{
-    if (argc < 1 || magic < 0 ||
-        magic >= (int)G_N_ELEMENTS(ns_instof_table))
-        return JS_FALSE;
-    const ns_instof_def *d = &ns_instof_table[magic];
-    /* A built-in interface that extends the entry's is told by its prototype
-     * chain; a class of the page that extends one keeps matching by node
-     * kind. */
-    if (JS_IsEngineFunction(this_val) &&
-        !ns_instof_is_entry_ctor(ctx, this_val, d))
-        return ns_instof_ordinary(ctx, this_val, argv[0]);
-    if (d->special == NS_INSTOF_HTMLCOLLECTION ||
-        d->special == NS_INSTOF_NODELIST)
-        return ns_instof_collection(ctx, d, argv[0]);
-    const ns_node *n = ns_unwrap_element(argv[0]);
-    if (!n)
-        return ns_instof_ordinary(ctx, this_val, argv[0]);
-    return JS_NewBool(ctx, ns_instof_node_match(d, n));
-}
-
-static void
-ns_install_hasinstance(JSContext *ctx, JSValueConst global)
-{
-    JSValue sym = JS_GetPropertyStr(ctx, global, "Symbol");
-    if (!JS_IsObject(sym)) { JS_FreeValue(ctx, sym); return; }
-    JSValue hi = JS_GetPropertyStr(ctx, sym, "hasInstance");
-    JS_FreeValue(ctx, sym);
-    JSAtom hi_atom = JS_ValueToAtom(ctx, hi);
-    JS_FreeValue(ctx, hi);
-    for (int i = 0; i < (int)G_N_ELEMENTS(ns_instof_table); i++) {
-        JSValue ctor = JS_GetPropertyStr(ctx, global, ns_instof_table[i].ctor);
-        if (JS_IsObject(ctor)) {
-            JSValue fn = JS_NewCFunctionMagic(ctx, ns_ctor_hasInstance,
-                "[Symbol.hasInstance]", 1, JS_CFUNC_generic_magic, i);
-            JS_DefinePropertyValue(ctx, ctor, hi_atom, fn, JS_PROP_CONFIGURABLE);
-        }
-        JS_FreeValue(ctx, ctor);
-    }
-    JS_FreeAtom(ctx, hi_atom);
-}
-
 static JSValue
 ns_element_get_accessKeyLabel(JSContext *ctx, JSValueConst this_val)
 {
@@ -4029,39 +3716,6 @@ ns_js_add_engine_private_names(JSContext *ctx)
     ns_net_add_private_names(ctx);
 }
 
-
-/* An interface object's [[Prototype]] is its parent interface object, as
- * its prototype object's is the parent's prototype object (WebIDL); many
- * were left at Function.prototype. */
-static const char ns_interface_ctor_links_src[] =
-    "(function(G){"
-    "  var FP = Function.prototype, OP = Object.prototype, gp = Object.getPrototypeOf,"
-    "      gopd = Object.getOwnPropertyDescriptor;"
-    "  Object.getOwnPropertyNames(G).forEach(function(n){"
-    "    if (!/^[A-Z]/.test(n)) return;"
-    "    var d = gopd(G, n); if (!d || typeof d.value !== 'function') return;"
-    "    var F = d.value, P = F.prototype;"
-    "    if (!P || typeof P !== 'object' || gp(F) !== FP) return;"
-    "    var PP = gp(P); if (!PP || PP === OP) return;"
-    "    var c = gopd(PP, 'constructor');"
-    "    if (!c || typeof c.value !== 'function' || c.value.prototype !== PP) return;"
-    /* DOMException's prototype inherits Error.prototype, but as an interface
-     * without a parent its interface object inherits Function.prototype. */
-    "    if (c.value === G.Error) return;"
-    "    try { Object.setPrototypeOf(F, c.value); } catch (e) {}"
-    "  });"
-    "})(globalThis)";
-
-void
-ns_js_link_interface_ctors(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_interface_ctor_links_src,
-                        sizeof(ns_interface_ctor_links_src) - 1,
-                        "<interface-ctor-links>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
-}
 
 /* The global object and the prototypes it inherits are immutable prototype
  * exotic objects for page scripts (WebIDL [Global]). */
@@ -6872,7 +6526,6 @@ ns_js_platform_globals(ns_js *js)
     return js->platform_globals;
 }
 
-static void ns_install_pdf_plugins(JSContext *ctx);
 
 static gboolean
 ns_obj_has_defined_own_prop(JSContext *ctx, JSValueConst obj, const char *name)
@@ -7863,30 +7516,6 @@ ns_install_window_compat(JSContext *ctx, JSValueConst global)
 
 }
 
-static void
-ns_define_element_unscopables(JSContext *ctx, JSValue proto)
-{
-    JSValue gobj = JS_GetGlobalObject(ctx);
-    JSValue sym = JS_GetPropertyStr(ctx, gobj, "Symbol");
-    JSValue us_sym = JS_GetPropertyStr(ctx, sym, "unscopables");
-    JSAtom us_atom = JS_ValueToAtom(ctx, us_sym);
-    if (us_atom != JS_ATOM_NULL) {
-        static const char *const names[] = {
-            "before", "after", "replaceWith", "remove",
-            "prepend", "append", "replaceChildren",
-        };
-        JSValue us = JS_NewObjectProto(ctx, JS_NULL);
-        for (gsize i = 0; i < G_N_ELEMENTS(names); i++)
-            JS_DefinePropertyValueStr(ctx, us, names[i], JS_TRUE,
-                                      JS_PROP_C_W_E);
-        JS_DefinePropertyValue(ctx, proto, us_atom, us, JS_PROP_CONFIGURABLE);
-        JS_FreeAtom(ctx, us_atom);
-    }
-    JS_FreeValue(ctx, us_sym);
-    JS_FreeValue(ctx, sym);
-    JS_FreeValue(ctx, gobj);
-}
-
 static JSValue
 ns_proto_of(JSContext *ctx, JSValueConst global, const char *ctor_name)
 {
@@ -7895,610 +7524,6 @@ ns_proto_of(JSContext *ctx, JSValueConst global, const char *ctor_name)
         ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
     JS_FreeValue(ctx, ctor);
     return proto;
-}
-
-static void
-ns_chain_proto(JSContext *ctx, JSValueConst global, const char *child_ctor,
-               JSValueConst parent_proto)
-{
-    if (!JS_IsObject(parent_proto)) return;
-    JSValue proto = ns_proto_of(ctx, global, child_ctor);
-    if (JS_IsObject(proto)) JS_SetPrototype(ctx, proto, parent_proto);
-    JS_FreeValue(ctx, proto);
-}
-
-static void
-ns_install_tostringtag(JSContext *ctx, JSValueConst global)
-{
-    JSValue sym = JS_GetPropertyStr(ctx, global, "Symbol");
-    if (!JS_IsObject(sym)) { JS_FreeValue(ctx, sym); return; }
-    JSValue tst = JS_GetPropertyStr(ctx, sym, "toStringTag");
-    JS_FreeValue(ctx, sym);
-    JSAtom tag_atom = JS_ValueToAtom(ctx, tst);
-    JS_FreeValue(ctx, tst);
-    if (tag_atom == JS_ATOM_NULL) return;
-
-    static const char *const base_ifaces[] = {
-        "HTMLElement", "HTMLUnknownElement", "Element", "Node",
-        "CharacterData", "Text",
-        "Comment", "CDATASection", "ProcessingInstruction", "Document",
-        "HTMLDocument", "XMLDocument", "DocumentFragment", "ShadowRoot",
-        "DocumentType", "Attr", "SVGElement", "SVGAElement", "SVGSVGElement",
-        "MathMLElement",
-        "Event", "UIEvent", "MouseEvent", "KeyboardEvent", "FocusEvent",
-        "InputEvent", "CompositionEvent", "TextEvent", "TouchEvent",
-        "PointerEvent", "WheelEvent", "DragEvent", "CustomEvent",
-        "ProgressEvent", "ErrorEvent", "MessageEvent", "CloseEvent",
-        "PopStateEvent", "HashChangeEvent", "StorageEvent", "AnimationEvent",
-        "TransitionEvent", "ClipboardEvent", "SubmitEvent", "BeforeUnloadEvent",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(base_ifaces); i++) {
-        JSValue proto = ns_proto_of(ctx, global, base_ifaces[i]);
-        if (JS_IsObject(proto))
-            JS_DefinePropertyValue(ctx, proto, tag_atom,
-                JS_NewString(ctx, base_ifaces[i]), JS_PROP_CONFIGURABLE);
-        JS_FreeValue(ctx, proto);
-    }
-    for (gsize i = 0; i < G_N_ELEMENTS(ns_instof_table); i++) {
-        const ns_instof_def *d = &ns_instof_table[i];
-        if (d->special != NS_INSTOF_TAG) continue;
-        JSValue proto = ns_proto_of(ctx, global, d->ctor);
-        if (JS_IsObject(proto))
-            JS_DefinePropertyValue(ctx, proto, tag_atom,
-                JS_NewString(ctx, d->ctor), JS_PROP_CONFIGURABLE);
-        JS_FreeValue(ctx, proto);
-    }
-    JS_FreeAtom(ctx, tag_atom);
-}
-
-/* The members each non-element node interface defines (WebIDL, as Chrome
- * ships them). The element member table used to be installed on Node,
- * Document, HTMLDocument and DocumentFragment as well, so a document, a
- * text node or a fragment had click(), style, tagName and the rest;
- * ns_install_node_shapes keeps only these names on those prototypes. A
- * name a character-data node, a doctype or a shadow root should have but
- * only found through Node.prototype (or DocumentFragment.prototype) is
- * moved down first. The __shady_ shims stay. */
-static const char ns_node_shapes_src[] =
-    "(function(G){"
-    "  var W = {"
-        "  Node: 'ATTRIBUTE_NODE CDATA_SECTION_NODE COMMENT_NODE "
-        "DOCUMENT_FRAGMENT_NODE DOCUMENT_NODE "
-        "DOCUMENT_POSITION_CONTAINED_BY DOCUMENT_POSITION_CONTAINS "
-        "DOCUMENT_POSITION_DISCONNECTED DOCUMENT_POSITION_FOLLOWING "
-        "DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC "
-        "DOCUMENT_POSITION_PRECEDING DOCUMENT_TYPE_NODE ELEMENT_NODE "
-        "ENTITY_NODE ENTITY_REFERENCE_NODE NOTATION_NODE "
-        "PROCESSING_INSTRUCTION_NODE TEXT_NODE appendChild baseURI "
-        "childNodes cloneNode compareDocumentPosition contains firstChild "
-        "getRootNode hasChildNodes insertBefore isConnected "
-        "isDefaultNamespace isEqualNode isSameNode lastChild "
-        "lookupNamespaceURI lookupPrefix nextSibling nodeName nodeType "
-        "nodeValue normalize ownerDocument parentElement parentNode "
-        "previousSibling removeChild replaceChild textContent',"
-        "  CharacterData: 'after appendData before data deleteData insertData length "
-        "nextElementSibling previousElementSibling remove replaceData "
-        "replaceWith substringData',"
-        "  Text: 'assignedSlot splitText wholeText',"
-        "  Comment: '',"
-        "  ProcessingInstruction: 'getAttribute getAttributeNames hasAttribute hasAttributes "
-        "removeAttribute setAttribute sheet target toggleAttribute',"
-        "  CDATASection: '',"
-        "  DocumentType: 'after before name publicId remove replaceWith systemId',"
-        "  Document: 'URL activeElement activeViewTransition adoptNode "
-        "adoptedStyleSheets alinkColor all anchors append applets "
-        "ariaNotify bgColor body browsingTopics captureEvents "
-        "caretPositionFromPoint caretRangeFromPoint characterSet charset "
-        "childElementCount children clear close compatMode contentType "
-        "cookie createAttribute createAttributeNS createCDATASection "
-        "createComment createDocumentFragment createElement createElementNS "
-        "createEvent createExpression createNSResolver createNodeIterator "
-        "createProcessingInstruction createRange createTextNode "
-        "createTreeWalker currentScript customElementRegistry defaultView "
-        "designMode dir doctype documentElement documentURI domain "
-        "elementFromPoint elementsFromPoint embeds evaluate execCommand "
-        "exitFullscreen exitPictureInPicture exitPointerLock featurePolicy "
-        "fgColor firstElementChild fonts forms fragmentDirective fullscreen "
-        "fullscreenElement fullscreenEnabled getAnimations getElementById "
-        "getElementsByClassName getElementsByName getElementsByTagName "
-        "getElementsByTagNameNS getSelection hasFocus hasPrivateToken "
-        "hasRedemptionRecord hasStorageAccess hasUnpartitionedCookieAccess "
-        "head hidden images implementation importNode inputEncoding "
-        "lastElementChild lastModified linkColor links moveBefore onabort "
-        "onanimationcancel onanimationend onanimationiteration "
-        "onanimationstart onauxclick onbeforecopy onbeforecut onbeforeinput "
-        "onbeforematch onbeforepaste onbeforetoggle onbeforexrselect onblur "
-        "oncancel oncanplay oncanplaythrough onchange onclick onclose "
-        "oncommand oncontentvisibilityautostatechange oncontextlost "
-        "oncontextmenu oncontextrestored oncopy oncuechange oncut "
-        "ondblclick ondrag ondragend ondragenter ondragleave ondragover "
-        "ondragstart ondrop ondurationchange onemptied onended onerror "
-        "onfocus onformdata onfreeze onfullscreenchange onfullscreenerror "
-        "ongotpointercapture oninput oninvalid onkeydown onkeypress onkeyup "
-        "onload onloadeddata onloadedmetadata onloadstart "
-        "onlostpointercapture onmousedown onmouseenter onmouseleave "
-        "onmousemove onmouseout onmouseover onmouseup onmousewheel onpaste "
-        "onpause onplay onplaying onpointercancel onpointerdown "
-        "onpointerenter onpointerleave onpointerlockchange "
-        "onpointerlockerror onpointermove onpointerout onpointerover "
-        "onpointerrawupdate onpointerup onprerenderingchange onprogress "
-        "onratechange onreadystatechange onreset onresize onresume onscroll "
-        "onscrollend onscrollsnapchange onscrollsnapchanging onsearch "
-        "onsecuritypolicyviolation onseeked onseeking onselect "
-        "onselectionchange onselectstart onslotchange onstalled onsubmit "
-        "onsuspend ontimeupdate ontoggle ontransitioncancel ontransitionend "
-        "ontransitionrun ontransitionstart onvisibilitychange "
-        "onvolumechange onwaiting onwebkitanimationend "
-        "onwebkitanimationiteration onwebkitanimationstart "
-        "onwebkitfullscreenchange onwebkitfullscreenerror "
-        "onwebkittransitionend onwheel open pictureInPictureElement "
-        "pictureInPictureEnabled plugins pointerLockElement prepend "
-        "prerendering queryCommandEnabled queryCommandIndeterm "
-        "queryCommandState queryCommandSupported queryCommandValue "
-        "querySelector querySelectorAll readyState referrer releaseEvents "
-        "replaceChildren requestStorageAccess rootElement scripts "
-        "scrollingElement startViewTransition styleSheets timeline title "
-        "visibilityState vlinkColor wasDiscarded webkitCancelFullScreen "
-        "webkitCurrentFullScreenElement webkitExitFullscreen "
-        "webkitFullscreenElement webkitFullscreenEnabled webkitHidden "
-        "webkitIsFullScreen webkitVisibilityState write writeln xmlEncoding "
-        "xmlStandalone xmlVersion',"
-        "  HTMLDocument: '',"
-        "  XMLDocument: '',"
-        "  DocumentFragment: 'append childElementCount children firstElementChild getElementById "
-        "lastElementChild moveBefore prepend querySelector querySelectorAll "
-        "replaceChildren',"
-        "  ShadowRoot: 'activeElement adoptedStyleSheets clonable customElementRegistry "
-        "delegatesFocus elementFromPoint elementsFromPoint "
-        "fullscreenElement getAnimations getHTML getSelection host "
-        "innerHTML mode onslotchange pictureInPictureElement "
-        "pointerLockElement referenceTarget serializable setHTML "
-        "setHTMLUnsafe slotAssignment styleSheets',"
-    "  };"
-    "  var up = { HTMLDocument: 'Document', XMLDocument: 'Document' };"
-    "  Object.keys(up).forEach(function(n){"
-    "    var C = G[n], U = G[up[n]]; if (!C || !U || !C.prototype || !U.prototype) return;"
-    "    var P = C.prototype, Q = U.prototype, want = new Set(W[up[n]].split(' '));"
-    "    Object.getOwnPropertyNames(P).forEach(function(k){"
-    "      if (!want.has(k) || Object.prototype.hasOwnProperty.call(Q, k)) return;"
-    "      try { Object.defineProperty(Q, k, Object.getOwnPropertyDescriptor(P, k)); } catch (e) {}"
-    "    });"
-    "  });"
-    "  var from = { CharacterData: ['Node'], Text: ['Node'], Comment: ['Node'],"
-    "    ProcessingInstruction: ['Node'], CDATASection: ['Node'],"
-    "    DocumentType: ['Node'], ShadowRoot: ['DocumentFragment', 'Node'] };"
-    "  var own = Object.prototype.hasOwnProperty, plan = [];"
-    "  Object.keys(W).forEach(function(n){"
-    "    var C = G[n]; if (typeof C !== 'function' || !C.prototype) return;"
-    "    var P = C.prototype, want = new Set(W[n] ? W[n].split(' ') : []), add = [];"
-    "    want.forEach(function(k){"
-    "      if (own.call(P, k)) return;"
-    "      (from[n] || []).some(function(s){"
-    "        var S = G[s] && G[s].prototype, d = S && Object.getOwnPropertyDescriptor(S, k);"
-    "        if (d) add.push([k, d]);"
-    "        return !!d;"
-    "      });"
-    "    });"
-    "    var del = Object.getOwnPropertyNames(P).filter(function(k){"
-    "      return k !== 'constructor' && !want.has(k) && k.slice(0, 8) !== '__shady_';"
-    "    });"
-    "    plan.push([P, add, del]);"
-    "  });"
-    "  plan.forEach(function(p){ p[1].forEach(function(a){"
-    "    try { Object.defineProperty(p[0], a[0], a[1]); } catch (e) {} }); });"
-    "  plan.forEach(function(p){ p[2].forEach(function(k){"
-    "    try { delete p[0][k]; } catch (e) {} }); });"
-    "})(globalThis)";
-
-static void
-ns_install_node_shapes(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_node_shapes_src, sizeof(ns_node_shapes_src) - 1,
-                        "<node-shapes>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
-}
-
-/* The same for elements: the element member table sits on Element.prototype
- * only, but it holds what HTMLElement and each HTML element interface define
- * as well (value, href, checked, click(), style...). Each HTML element
- * interface and HTMLElement take their members from it, SVGElement takes
- * the members of the SVG element interfaces this engine does not have yet
- * (getBBox() and the rest; an <svg> or <circle> is an SVGElement here), and
- * Element and HTMLElement then keep only their own. */
-static const char ns_element_shapes_src[] =
-    "(function(G){"
-    "  var W = {"
-        "  Element: 'activeViewTransition after animate append ariaActionsElements "
-        "ariaActiveDescendantElement ariaAtomic ariaAutoComplete "
-        "ariaBrailleLabel ariaBrailleRoleDescription ariaBusy ariaChecked "
-        "ariaColCount ariaColIndex ariaColIndexText ariaColSpan "
-        "ariaControlsElements ariaCurrent ariaDescribedByElements "
-        "ariaDescription ariaDetailsElements ariaDisabled "
-        "ariaErrorMessageElements ariaExpanded ariaFlowToElements "
-        "ariaHasPopup ariaHidden ariaInvalid ariaKeyShortcuts ariaLabel "
-        "ariaLabelledByElements ariaLevel ariaLive ariaModal ariaMultiLine "
-        "ariaMultiSelectable ariaNotify ariaOrientation ariaPlaceholder "
-        "ariaPosInSet ariaPressed ariaReadOnly ariaRelevant ariaRequired "
-        "ariaRoleDescription ariaRowCount ariaRowIndex ariaRowIndexText "
-        "ariaRowSpan ariaSelected ariaSetSize ariaSort ariaValueMax "
-        "ariaValueMin ariaValueNow ariaValueText assignedSlot attachShadow "
-        "attributes before checkVisibility childElementCount children "
-        "classList className clientHeight clientLeft clientTop clientWidth "
-        "closest computedStyleMap currentCSSZoom customElementRegistry "
-        "elementTiming firstElementChild getAnimations getAttribute "
-        "getAttributeNS getAttributeNames getAttributeNode "
-        "getAttributeNodeNS getBoundingClientRect getClientRects "
-        "getElementsByClassName getElementsByTagName getElementsByTagNameNS "
-        "getHTML hasAttribute hasAttributeNS hasAttributes "
-        "hasPointerCapture id innerHTML insertAdjacentElement "
-        "insertAdjacentHTML insertAdjacentText lastElementChild localName "
-        "matches moveBefore namespaceURI nextElementSibling onbeforecopy "
-        "onbeforecut onbeforepaste onfullscreenchange onfullscreenerror "
-        "onsearch onwebkitfullscreenchange onwebkitfullscreenerror "
-        "outerHTML part prefix prepend previousElementSibling pseudo "
-        "querySelector querySelectorAll releasePointerCapture remove "
-        "removeAttribute removeAttributeNS removeAttributeNode "
-        "replaceChildren replaceWith requestFullscreen requestPointerLock "
-        "role scroll scrollBy scrollHeight scrollIntoView "
-        "scrollIntoViewIfNeeded scrollLeft scrollTo scrollTop scrollWidth "
-        "setAttribute setAttributeNS setAttributeNode setAttributeNodeNS "
-        "setHTML setHTMLUnsafe setPointerCapture shadowRoot slot "
-        "startViewTransition tagName toggleAttribute webkitMatchesSelector "
-        "webkitRequestFullScreen webkitRequestFullscreen',"
-        "  HTMLElement: 'accessKey attachInternals attributeStyleMap autocapitalize "
-        "autocorrect autofocus blur click contentEditable dataset dir "
-        "draggable editContext enterKeyHint focus focusGroup "
-        "focusGroupStart hidden hidePopover inert innerText inputMode "
-        "isContentEditable lang nonce offsetHeight offsetLeft offsetParent "
-        "offsetTop offsetWidth onabort onanimationcancel onanimationend "
-        "onanimationiteration onanimationstart onauxclick onbeforeinput "
-        "onbeforematch onbeforetoggle onbeforexrselect onblur oncancel "
-        "oncanplay oncanplaythrough onchange onclick onclose oncommand "
-        "oncontentvisibilityautostatechange oncontextlost oncontextmenu "
-        "oncontextrestored oncopy oncuechange oncut ondblclick ondrag "
-        "ondragend ondragenter ondragleave ondragover ondragstart ondrop "
-        "ondurationchange onemptied onended onerror onfocus onformdata "
-        "ongotpointercapture oninput oninvalid onkeydown onkeypress onkeyup "
-        "onload onloadeddata onloadedmetadata onloadstart "
-        "onlostpointercapture onmousedown onmouseenter onmouseleave "
-        "onmousemove onmouseout onmouseover onmouseup onmousewheel onpaste "
-        "onpause onplay onplaying onpointercancel onpointerdown "
-        "onpointerenter onpointerleave onpointermove onpointerout "
-        "onpointerover onpointerrawupdate onpointerup onprogress "
-        "onratechange onreset onresize onscroll onscrollend "
-        "onscrollsnapchange onscrollsnapchanging onsecuritypolicyviolation "
-        "onseeked onseeking onselect onselectionchange onselectstart "
-        "onslotchange onstalled onsubmit onsuspend ontimeupdate ontoggle "
-        "ontransitioncancel ontransitionend ontransitionrun "
-        "ontransitionstart onvolumechange onwaiting onwebkitanimationend "
-        "onwebkitanimationiteration onwebkitanimationstart "
-        "onwebkittransitionend onwheel outerText popover showPopover "
-        "spellcheck style tabIndex title togglePopover translate "
-        "virtualKeyboardPolicy writingSuggestions',"
-        "  MathMLElement: 'attributeStyleMap autofocus blur dataset focus focusGroup "
-        "focusGroupStart nonce onabort onanimationcancel onanimationend "
-        "onanimationiteration onanimationstart onauxclick onbeforeinput "
-        "onbeforematch onbeforetoggle onbeforexrselect onblur oncancel "
-        "oncanplay oncanplaythrough onchange onclick onclose oncommand "
-        "oncontentvisibilityautostatechange oncontextlost oncontextmenu "
-        "oncontextrestored oncopy oncuechange oncut ondblclick ondrag "
-        "ondragend ondragenter ondragleave ondragover ondragstart ondrop "
-        "ondurationchange onemptied onended onerror onfocus onformdata "
-        "ongotpointercapture oninput oninvalid onkeydown onkeypress onkeyup "
-        "onload onloadeddata onloadedmetadata onloadstart "
-        "onlostpointercapture onmousedown onmouseenter onmouseleave "
-        "onmousemove onmouseout onmouseover onmouseup onmousewheel onpaste "
-        "onpause onplay onplaying onpointercancel onpointerdown "
-        "onpointerenter onpointerleave onpointermove onpointerout "
-        "onpointerover onpointerrawupdate onpointerup onprogress "
-        "onratechange onreset onresize onscroll onscrollend "
-        "onscrollsnapchange onscrollsnapchanging onsecuritypolicyviolation "
-        "onseeked onseeking onselect onselectionchange onselectstart "
-        "onslotchange onstalled onsubmit onsuspend ontimeupdate ontoggle "
-        "ontransitioncancel ontransitionend ontransitionrun "
-        "ontransitionstart onvolumechange onwaiting onwebkitanimationend "
-        "onwebkitanimationiteration onwebkitanimationstart "
-        "onwebkittransitionend onwheel style tabIndex',"
-        "  SVGElement: 'LENGTHADJUST_SPACING LENGTHADJUST_SPACINGANDGLYPHS "
-        "LENGTHADJUST_UNKNOWN SVG_CHANNEL_A SVG_CHANNEL_B SVG_CHANNEL_G "
-        "SVG_CHANNEL_R SVG_CHANNEL_UNKNOWN SVG_EDGEMODE_DUPLICATE "
-        "SVG_EDGEMODE_NONE SVG_EDGEMODE_UNKNOWN SVG_EDGEMODE_WRAP "
-        "SVG_FEBLEND_MODE_COLOR SVG_FEBLEND_MODE_COLOR_BURN "
-        "SVG_FEBLEND_MODE_COLOR_DODGE SVG_FEBLEND_MODE_DARKEN "
-        "SVG_FEBLEND_MODE_DIFFERENCE SVG_FEBLEND_MODE_EXCLUSION "
-        "SVG_FEBLEND_MODE_HARD_LIGHT SVG_FEBLEND_MODE_HUE "
-        "SVG_FEBLEND_MODE_LIGHTEN SVG_FEBLEND_MODE_LUMINOSITY "
-        "SVG_FEBLEND_MODE_MULTIPLY SVG_FEBLEND_MODE_NORMAL "
-        "SVG_FEBLEND_MODE_OVERLAY SVG_FEBLEND_MODE_SATURATION "
-        "SVG_FEBLEND_MODE_SCREEN SVG_FEBLEND_MODE_SOFT_LIGHT "
-        "SVG_FEBLEND_MODE_UNKNOWN SVG_FECOLORMATRIX_TYPE_HUEROTATE "
-        "SVG_FECOLORMATRIX_TYPE_LUMINANCETOALPHA "
-        "SVG_FECOLORMATRIX_TYPE_MATRIX SVG_FECOLORMATRIX_TYPE_SATURATE "
-        "SVG_FECOLORMATRIX_TYPE_UNKNOWN "
-        "SVG_FECOMPONENTTRANSFER_TYPE_DISCRETE "
-        "SVG_FECOMPONENTTRANSFER_TYPE_GAMMA "
-        "SVG_FECOMPONENTTRANSFER_TYPE_IDENTITY "
-        "SVG_FECOMPONENTTRANSFER_TYPE_LINEAR "
-        "SVG_FECOMPONENTTRANSFER_TYPE_TABLE "
-        "SVG_FECOMPONENTTRANSFER_TYPE_UNKNOWN "
-        "SVG_FECOMPOSITE_OPERATOR_ARITHMETIC SVG_FECOMPOSITE_OPERATOR_ATOP "
-        "SVG_FECOMPOSITE_OPERATOR_IN SVG_FECOMPOSITE_OPERATOR_OUT "
-        "SVG_FECOMPOSITE_OPERATOR_OVER SVG_FECOMPOSITE_OPERATOR_UNKNOWN "
-        "SVG_FECOMPOSITE_OPERATOR_XOR SVG_MARKERUNITS_STROKEWIDTH "
-        "SVG_MARKERUNITS_UNKNOWN SVG_MARKERUNITS_USERSPACEONUSE "
-        "SVG_MARKER_ORIENT_ANGLE SVG_MARKER_ORIENT_AUTO "
-        "SVG_MARKER_ORIENT_UNKNOWN SVG_MORPHOLOGY_OPERATOR_DILATE "
-        "SVG_MORPHOLOGY_OPERATOR_ERODE SVG_MORPHOLOGY_OPERATOR_UNKNOWN "
-        "SVG_SPREADMETHOD_PAD SVG_SPREADMETHOD_REFLECT "
-        "SVG_SPREADMETHOD_REPEAT SVG_SPREADMETHOD_UNKNOWN "
-        "SVG_STITCHTYPE_NOSTITCH SVG_STITCHTYPE_STITCH "
-        "SVG_STITCHTYPE_UNKNOWN SVG_TURBULENCE_TYPE_FRACTALNOISE "
-        "SVG_TURBULENCE_TYPE_TURBULENCE SVG_TURBULENCE_TYPE_UNKNOWN "
-        "SVG_ZOOMANDPAN_DISABLE SVG_ZOOMANDPAN_MAGNIFY "
-        "SVG_ZOOMANDPAN_UNKNOWN TEXTPATH_METHODTYPE_ALIGN "
-        "TEXTPATH_METHODTYPE_STRETCH TEXTPATH_METHODTYPE_UNKNOWN "
-        "TEXTPATH_SIDETYPE_LEFT TEXTPATH_SIDETYPE_RIGHT "
-        "TEXTPATH_SIDETYPE_UNKNOWN TEXTPATH_SPACINGTYPE_AUTO "
-        "TEXTPATH_SPACINGTYPE_EXACT TEXTPATH_SPACINGTYPE_UNKNOWN amplitude "
-        "animatedPoints animationsPaused async attributeStyleMap autofocus "
-        "azimuth baseFrequencyX baseFrequencyY beginElement beginElementAt "
-        "bias blur checkEnclosure checkIntersection className clipPathUnits "
-        "createSVGAngle createSVGLength createSVGMatrix createSVGNumber "
-        "createSVGPoint createSVGRect createSVGTransform "
-        "createSVGTransformFromMatrix crossOrigin currentScale "
-        "currentTranslate cx cy dataset decode decoding deselectAll "
-        "diffuseConstant disabled divisor download dx dy edgeMode elevation "
-        "endElement endElementAt exponent farthestViewportElement "
-        "filterUnits focus focusGroup focusGroupStart forceRedraw fr fx fy "
-        "getBBox getCTM getCharNumAtPosition getComputedTextLength "
-        "getCurrentTime getElementById getEnclosureList "
-        "getEndPositionOfChar getExtentOfChar getIntersectionList "
-        "getNumberOfChars getPointAtLength getRotationOfChar getScreenCTM "
-        "getSimpleDuration getStartPositionOfChar getStartTime "
-        "getSubStringLength getTotalLength gradientTransform gradientUnits "
-        "height href hreflang in1 in2 intercept interestForElement "
-        "isPointInFill isPointInStroke k1 k2 k3 k4 kernelMatrix "
-        "kernelUnitLengthX kernelUnitLengthY lengthAdjust limitingConeAngle "
-        "markerHeight markerUnits markerWidth maskContentUnits maskUnits "
-        "media method mode nearestViewportElement nonce numOctaves offset "
-        "onabort onanimationcancel onanimationend onanimationiteration "
-        "onanimationstart onauxclick onbeforeinput onbeforematch "
-        "onbeforetoggle onbeforexrselect onbegin onblur oncancel oncanplay "
-        "oncanplaythrough onchange onclick onclose oncommand "
-        "oncontentvisibilityautostatechange oncontextlost oncontextmenu "
-        "oncontextrestored oncopy oncuechange oncut ondblclick ondrag "
-        "ondragend ondragenter ondragleave ondragover ondragstart ondrop "
-        "ondurationchange onemptied onend onended onerror onfocus "
-        "onformdata ongotpointercapture oninput oninvalid onkeydown "
-        "onkeypress onkeyup onload onloadeddata onloadedmetadata "
-        "onloadstart onlostpointercapture onmousedown onmouseenter "
-        "onmouseleave onmousemove onmouseout onmouseover onmouseup "
-        "onmousewheel onpaste onpause onplay onplaying onpointercancel "
-        "onpointerdown onpointerenter onpointerleave onpointermove "
-        "onpointerout onpointerover onpointerrawupdate onpointerup "
-        "onprogress onratechange onrepeat onreset onresize onscroll "
-        "onscrollend onscrollsnapchange onscrollsnapchanging "
-        "onsecuritypolicyviolation onseeked onseeking onselect "
-        "onselectionchange onselectstart onslotchange onstalled onsubmit "
-        "onsuspend ontimeupdate ontoggle ontransitioncancel ontransitionend "
-        "ontransitionrun ontransitionstart onvolumechange onwaiting "
-        "onwebkitanimationend onwebkitanimationiteration "
-        "onwebkitanimationstart onwebkittransitionend onwheel operator "
-        "orderX orderY orientAngle orientType ownerSVGElement pathLength "
-        "patternContentUnits patternTransform patternUnits pauseAnimations "
-        "ping points pointsAtX pointsAtY pointsAtZ preserveAlpha "
-        "preserveAspectRatio primitiveUnits r radiusX radiusY refX refY "
-        "referrerPolicy rel relList requiredExtensions result rotate rx ry "
-        "scale seed selectSubString setCurrentTime setOrientToAngle "
-        "setOrientToAuto setStdDeviation sheet slope spacing "
-        "specularConstant specularExponent spreadMethod startOffset "
-        "stdDeviationX stdDeviationY stitchTiles style surfaceScale "
-        "suspendRedraw systemLanguage tabIndex tableValues target "
-        "targetElement targetX targetY textLength title transform type "
-        "unpauseAnimations unsuspendRedraw unsuspendRedrawAll values "
-        "viewBox viewportElement width x x1 x2 xChannelSelector y y1 y2 "
-        "yChannelSelector z zoomAndPan',"
-        "  HTMLAnchorElement: 'attributionSrc charset coords download hash host hostname href "
-        "hrefTranslate hreflang interestForElement name origin password "
-        "pathname ping port protocol referrerPolicy rel relList rev search "
-        "shape target text toString type username',"
-        "  HTMLAreaElement: 'alt attributionSrc coords download hash host hostname href "
-        "interestForElement noHref origin password pathname ping port "
-        "protocol referrerPolicy rel relList search shape target toString "
-        "username',"
-        "  HTMLBRElement: 'clear',"
-        "  HTMLBaseElement: 'href target',"
-        "  HTMLBodyElement: 'aLink background bgColor link onafterprint onbeforeprint "
-        "onbeforeunload onblur onerror onfocus ongamepadconnected "
-        "ongamepaddisconnected onhashchange onlanguagechange onload "
-        "onmessage onmessageerror onoffline ononline onpagehide onpageshow "
-        "onpopstate onrejectionhandled onresize onscroll onstorage "
-        "onunhandledrejection onunload text vLink',"
-        "  HTMLButtonElement: 'checkValidity command commandForElement disabled form formAction "
-        "formEnctype formMethod formNoValidate formTarget "
-        "interestForElement labels name popoverTargetAction "
-        "popoverTargetElement reportValidity setCustomValidity type "
-        "validationMessage validity value willValidate',"
-        "  HTMLCanvasElement: 'captureStream getContext height toBlob toDataURL "
-        "transferControlToOffscreen width',"
-        "  HTMLDListElement: 'compact',"
-        "  HTMLDataElement: 'value',"
-        "  HTMLDataListElement: 'options',"
-        "  HTMLDetailsElement: 'name open',"
-        "  HTMLDialogElement: 'close closedBy open requestClose returnValue show showModal',"
-        "  HTMLDirectoryElement: 'compact',"
-        "  HTMLDivElement: 'align',"
-        "  HTMLEmbedElement: 'align getSVGDocument height name src type width',"
-        "  HTMLFieldSetElement: 'checkValidity disabled elements form name reportValidity "
-        "setCustomValidity type validationMessage validity willValidate',"
-        "  HTMLFontElement: 'color face size',"
-        "  HTMLFormElement: 'acceptCharset action autocomplete checkValidity elements encoding "
-        "enctype length method name noValidate rel relList reportValidity "
-        "requestSubmit reset submit target',"
-        "  HTMLFrameElement: 'contentDocument contentWindow frameBorder longDesc marginHeight "
-        "marginWidth name noResize scrolling src',"
-        "  HTMLFrameSetElement: 'cols onafterprint onbeforeprint onbeforeunload onblur onerror "
-        "onfocus ongamepadconnected ongamepaddisconnected onhashchange "
-        "onlanguagechange onload onmessage onmessageerror onoffline "
-        "ononline onpagehide onpageshow onpopstate onrejectionhandled "
-        "onresize onscroll onstorage onunhandledrejection onunload rows',"
-        "  HTMLHRElement: 'align color noShade size width',"
-        "  HTMLHeadingElement: 'align',"
-        "  HTMLHtmlElement: 'version',"
-        "  HTMLIFrameElement: 'adAuctionHeaders align allow allowFullscreen allowPaymentRequest "
-        "browsingTopics contentDocument contentWindow credentialless csp "
-        "featurePolicy frameBorder getSVGDocument height loading longDesc "
-        "marginHeight marginWidth name privateToken referrerPolicy sandbox "
-        "scrolling src srcdoc width',"
-        "  HTMLImageElement: 'align alt attributionSrc border browsingTopics complete "
-        "crossOrigin currentSrc decode decoding fetchPriority height hspace "
-        "isMap loading longDesc lowsrc name naturalHeight naturalWidth "
-        "referrerPolicy sizes src srcset useMap vspace width x y',"
-        "  HTMLInputElement: 'accept align alt autocomplete checkValidity checked "
-        "createValueRange defaultChecked defaultValue dirName disabled "
-        "files form formAction formEnctype formMethod formNoValidate "
-        "formTarget height incremental indeterminate labels list max "
-        "maxLength min minLength multiple name pattern placeholder "
-        "popoverTargetAction popoverTargetElement readOnly reportValidity "
-        "required select selectionDirection selectionEnd selectionStart "
-        "setCustomValidity setRangeText setSelectionRange showPicker size "
-        "src step stepDown stepUp type useMap validationMessage validity "
-        "value valueAsDate valueAsNumber webkitEntries webkitdirectory "
-        "width willValidate',"
-        "  HTMLLIElement: 'type value',"
-        "  HTMLLabelElement: 'control form htmlFor',"
-        "  HTMLLegendElement: 'align form',"
-        "  HTMLLinkElement: 'as blocking charset crossOrigin disabled fetchPriority href "
-        "hreflang imageSizes imageSrcset integrity media referrerPolicy rel "
-        "relList rev sheet sizes target type',"
-        "  HTMLMapElement: 'areas name',"
-        "  HTMLMarqueeElement: 'behavior bgColor direction height hspace loop scrollAmount "
-        "scrollDelay start stop trueSpeed vspace width',"
-        "  HTMLMediaElement: 'HAVE_CURRENT_DATA HAVE_ENOUGH_DATA HAVE_FUTURE_DATA HAVE_METADATA "
-        "HAVE_NOTHING NETWORK_EMPTY NETWORK_IDLE NETWORK_LOADING "
-        "NETWORK_NO_SOURCE addTextTrack autoplay buffered canPlayType "
-        "captureStream controls controlsList crossOrigin currentSrc "
-        "currentTime defaultMuted defaultPlaybackRate disableRemotePlayback "
-        "duration ended error load loading loop mediaKeys muted "
-        "networkState onencrypted onwaitingforkey pause paused play "
-        "playbackRate played preload preservesPitch readyState remote "
-        "seekable seeking setMediaKeys setSinkId sinkId src srcObject "
-        "textTracks volume webkitAudioDecodedByteCount "
-        "webkitVideoDecodedByteCount',"
-        "  HTMLMenuElement: 'compact',"
-        "  HTMLMetaElement: 'content httpEquiv media name scheme',"
-        "  HTMLMeterElement: 'high labels low max min optimum value',"
-        "  HTMLModElement: 'cite dateTime',"
-        "  HTMLOListElement: 'compact reversed start type',"
-        "  HTMLObjectElement: 'align archive border checkValidity code codeBase codeType "
-        "contentDocument contentWindow data declare form getSVGDocument "
-        "height hspace name reportValidity setCustomValidity standby type "
-        "useMap validationMessage validity vspace width willValidate',"
-        "  HTMLOptGroupElement: 'disabled label',"
-        "  HTMLOptionElement: 'defaultSelected disabled form index label selected text value',"
-        "  HTMLOutputElement: 'checkValidity defaultValue form htmlFor labels name reportValidity "
-        "setCustomValidity type validationMessage validity value "
-        "willValidate',"
-        "  HTMLParagraphElement: 'align',"
-        "  HTMLParamElement: 'name type value valueType',"
-        "  HTMLPreElement: 'width',"
-        "  HTMLProgressElement: 'labels max position value',"
-        "  HTMLQuoteElement: 'cite',"
-        "  HTMLScriptElement: 'async attributionSrc blocking charset crossOrigin defer event "
-        "fetchPriority htmlFor innerText integrity noModule referrerPolicy "
-        "src text textContent type',"
-        "  HTMLSelectElement: 'add autocomplete checkValidity disabled form item labels length "
-        "multiple name namedItem options remove reportValidity required "
-        "selectedIndex selectedOptions setCustomValidity showPicker size "
-        "type validationMessage validity value willValidate',"
-        "  HTMLSlotElement: 'assign assignedElements assignedNodes name',"
-        "  HTMLSourceElement: 'height media sizes src srcset type width',"
-        "  HTMLStyleElement: 'blocking disabled media sheet type',"
-        "  HTMLTableCaptionElement: 'align',"
-        "  HTMLTableCellElement: 'abbr align axis bgColor cellIndex ch chOff colSpan headers height "
-        "noWrap rowSpan scope vAlign width',"
-        "  HTMLTableColElement: 'align ch chOff span vAlign width',"
-        "  HTMLTableElement: 'align bgColor border caption cellPadding cellSpacing createCaption "
-        "createTBody createTFoot createTHead deleteCaption deleteRow "
-        "deleteTFoot deleteTHead frame insertRow rows rules summary tBodies "
-        "tFoot tHead width',"
-        "  HTMLTableRowElement: 'align bgColor cells ch chOff deleteCell insertCell rowIndex "
-        "sectionRowIndex vAlign',"
-        "  HTMLTableSectionElement: 'align ch chOff deleteRow insertRow rows vAlign',"
-        "  HTMLTemplateElement: 'content htmlFor shadowRootClonable shadowRootCustomElementRegistry "
-        "shadowRootDelegatesFocus shadowRootMode shadowRootReferenceTarget "
-        "shadowRootSerializable shadowRootSlotAssignment',"
-        "  HTMLTextAreaElement: 'autocomplete checkValidity cols createValueRange defaultValue "
-        "dirName disabled form labels maxLength minLength name placeholder "
-        "readOnly reportValidity required rows select selectionDirection "
-        "selectionEnd selectionStart setCustomValidity setRangeText "
-        "setSelectionRange textLength type validationMessage validity value "
-        "willValidate wrap',"
-        "  HTMLTimeElement: 'dateTime',"
-        "  HTMLTitleElement: 'text',"
-        "  HTMLTrackElement: 'ERROR LOADED LOADING NONE default kind label readyState src "
-        "srclang track',"
-        "  HTMLUListElement: 'compact type',"
-        "  HTMLVideoElement: 'cancelVideoFrameCallback disablePictureInPicture "
-        "getVideoPlaybackQuality height onenterpictureinpicture "
-        "onleavepictureinpicture playsInline poster requestPictureInPicture "
-        "requestVideoFrameCallback videoHeight videoWidth "
-        "webkitDecodedFrameCount webkitDroppedFrameCount width',"
-        "  SVGSVGElement: 'SVG_ZOOMANDPAN_DISABLE SVG_ZOOMANDPAN_MAGNIFY "
-        "SVG_ZOOMANDPAN_UNKNOWN animationsPaused checkEnclosure "
-        "checkIntersection createSVGAngle createSVGLength createSVGMatrix "
-        "createSVGNumber createSVGPoint createSVGRect createSVGTransform "
-        "createSVGTransformFromMatrix currentScale currentTranslate "
-        "deselectAll forceRedraw getCurrentTime getElementById "
-        "getEnclosureList getIntersectionList height pauseAnimations "
-        "preserveAspectRatio setCurrentTime suspendRedraw unpauseAnimations "
-        "unsuspendRedraw unsuspendRedrawAll viewBox width x y zoomAndPan',"
-        "  SVGAElement: 'download href hreflang interestForElement ping referrerPolicy rel "
-        "relList target type',"
-    "  };"
-    "  var E = G.Element && G.Element.prototype, H = G.HTMLElement && G.HTMLElement.prototype;"
-    "  if (!E) return;"
-    "  var own = Object.prototype.hasOwnProperty;"
-    "  function down(n, srcs){"
-    "    var C = G[n]; if (typeof C !== 'function' || !C.prototype || !W[n]) return;"
-    "    var P = C.prototype;"
-    "    W[n].split(' ').forEach(function(k){"
-    "      if (!k || own.call(P, k)) return;"
-    "      srcs.some(function(S){"
-    "        var d = S && S !== P && Object.getOwnPropertyDescriptor(S, k);"
-    "        if (d) { try { Object.defineProperty(P, k, d); } catch (e) {} }"
-    "        return !!d;"
-    "      });"
-    "    });"
-    "  }"
-    "  Object.keys(W).forEach(function(n){"
-    "    if (n !== 'HTMLElement' && /^HTML.+Element$/.test(n)) down(n, [E, H]);"
-    "  });"
-    "  down('HTMLElement', [E]);"
-    "  down('SVGElement', [E, H]);"
-    "  down('MathMLElement', [E, H]);"
-    "  down('SVGSVGElement', [E]);"
-    "  down('SVGAElement', [E]);"
-    "  ['Element', 'HTMLElement'].forEach(function(n){"
-    "    var C = G[n]; if (typeof C !== 'function' || !C.prototype) return;"
-    "    var P = C.prototype, want = new Set(W[n].split(' '));"
-    "    Object.getOwnPropertyNames(P).forEach(function(k){"
-    "      if (k === 'constructor' || want.has(k) || k.slice(0, 8) === '__shady_') return;"
-    "      try { delete P[k]; } catch (e) {}"
-    "    });"
-    "  });"
-    "})(globalThis)";
-
-static void
-ns_install_element_shapes(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_element_shapes_src,
-                        sizeof(ns_element_shapes_src) - 1, "<element-shapes>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
 }
 
 static void
@@ -8555,76 +7580,6 @@ ns_install_web_api_shapes(JSContext *ctx, JSValueConst global)
     if (JS_IsException(result)) JS_FreeValue(ctx, JS_GetException(ctx));
     JS_FreeValue(ctx, result);
     (void)global;
-}
-
-/* HTML's PDF viewer plugins: when the user agent views PDFs itself
- * (pdfViewerEnabled), navigator.plugins holds the five PDF viewer plugin
- * objects and navigator.mimeTypes the two PDF MIME types, as the standard
- * prescribes for every browser. */
-static const char ns_pdf_plugins_src[] =
-    "(function(){"
-    " if (typeof PluginArray !== 'function' || typeof Plugin !== 'function' ||"
-    "     typeof MimeType !== 'function' || typeof MimeTypeArray !== 'function') return;"
-    " var nav = navigator; if (!nav || nav.pdfViewerEnabled !== true) return;"
-    " var pa = nav.plugins, ma = nav.mimeTypes;"
-    " if (!pa || !ma || typeof pa !== 'object' || typeof ma !== 'object') return;"
-    " var dp = Object.defineProperty, gopd = Object.getOwnPropertyDescriptor, st = new WeakMap();"
-    " function state(o){ var s = st.get(o); if (!s) throw new TypeError('Illegal invocation'); return s; }"
-    " function getter(P, name, f){"
-    "  var h = { get [name](){ return f(state(this)); } };"
-    "  dp(P, name, { get: gopd(h, name).get, enumerable: true, configurable: true }); }"
-    " function need(n, iface, op){"
-    "  if (n < 1) throw new TypeError(\"Failed to execute '\" + op + \"' on '\" + iface +"
-    "    \"': 1 argument required, but only 0 present.\"); }"
-    " function list(P, iface, refresh){"
-    "  var m = { item(index){ var s = state(this); need(arguments.length, iface, 'item');"
-    "      var i = index >>> 0; return i < s.items.length ? s.items[i] : null; },"
-    "    namedItem(name){ var s = state(this); need(arguments.length, iface, 'namedItem');"
-    "      name = String(name); for (var i = 0; i < s.items.length; i++)"
-    "        if (s.key(s.items[i]) === name) return s.items[i]; return null; } };"
-    "  dp(P, 'item', { value: m.item, writable: true, enumerable: true, configurable: true });"
-    "  dp(P, 'namedItem', { value: m.namedItem, writable: true, enumerable: true, configurable: true });"
-    "  if (refresh) dp(P, 'refresh', { value: { refresh(){ state(this); } }.refresh,"
-    "    writable: true, enumerable: true, configurable: true });"
-    "  getter(P, 'length', function(s){ return s.items.length; });"
-    "  dp(P, Symbol.iterator, { value: Array.prototype.values, writable: true, configurable: true }); }"
-    " function fill(o, items, key){"
-    "  Object.getOwnPropertyNames(o).forEach(function(k){ try { delete o[k]; } catch (e) {} });"
-    "  st.set(o, { items: items, key: key });"
-    "  items.forEach(function(it, i){ dp(o, i, { value: it, writable: false, enumerable: true, configurable: true }); });"
-    "  items.forEach(function(it){ var k = key(it); if (!(k in o))"
-    "    dp(o, k, { value: it, writable: false, enumerable: false, configurable: true }); }); }"
-    " var names = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',"
-    "              'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];"
-    " var types = ['application/pdf', 'text/pdf'];"
-    " function mimesFor(plugin){ return types.map(function(t){"
-    "   var m = Object.create(MimeType.prototype); st.set(m, { type: t, plugin: plugin }); return m; }); }"
-    " var plugins = names.map(function(n){ return Object.create(Plugin.prototype); });"
-    " var mimes = mimesFor(plugins[0]);"
-    " plugins.forEach(function(p, i){ fill(p, mimesFor(p), function(m){ return st.get(m).type; });"
-    "   st.get(p).name = names[i]; });"
-    " fill(pa, plugins, function(p){ return st.get(p).name; });"
-    " fill(ma, mimes, function(m){ return st.get(m).type; });"
-    " list(PluginArray.prototype, 'PluginArray', true);"
-    " list(MimeTypeArray.prototype, 'MimeTypeArray', false);"
-    " list(Plugin.prototype, 'Plugin', false);"
-    " getter(Plugin.prototype, 'name', function(s){ return s.name; });"
-    " getter(Plugin.prototype, 'description', function(){ return 'Portable Document Format'; });"
-    " getter(Plugin.prototype, 'filename', function(){ return 'internal-pdf-viewer'; });"
-    " getter(MimeType.prototype, 'type', function(s){ return s.type; });"
-    " getter(MimeType.prototype, 'description', function(){ return 'Portable Document Format'; });"
-    " getter(MimeType.prototype, 'suffixes', function(){ return 'pdf'; });"
-    " getter(MimeType.prototype, 'enabledPlugin', function(s){ return s.plugin; });"
-    "})()";
-
-static void
-ns_install_pdf_plugins(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_pdf_plugins_src, sizeof(ns_pdf_plugins_src) - 1,
-                        "<pdf-plugins>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
 }
 
 static void
@@ -8692,40 +7647,6 @@ ns_install_navigator_shape(JSContext *ctx)
 }
 
 static void
-ns_set_ctor_proto(JSContext *ctx, JSValueConst global, const char *ctor_name,
-                  JSValueConst proto)
-{
-    JSValue ctor = JS_GetPropertyStr(ctx, global, ctor_name);
-    if (JS_IsObject(ctor) && JS_IsObject(proto)) {
-        JS_DefinePropertyValueStr(ctx, ctor, "prototype",
-            JS_DupValue(ctx, proto), JS_PROP_WRITABLE);
-        JS_DefinePropertyValueStr(ctx, (JSValue)proto, "constructor",
-            JS_DupValue(ctx, ctor), JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-    }
-    JS_FreeValue(ctx, ctor);
-}
-
-static void
-ns_proto_delete_names(JSContext *ctx, JSValueConst proto,
-                      const char *const *names, gsize n)
-{
-    if (!JS_IsObject(proto)) return;
-    for (gsize i = 0; i < n; i++) {
-        JSAtom a = JS_NewAtom(ctx, names[i]);
-        JS_DeleteProperty(ctx, proto, a, 0);
-        JS_FreeAtom(ctx, a);
-    }
-}
-
-static const char *const ns_element_only_methods[] = {
-    "matches", "closest", "webkitMatchesSelector",
-};
-
-static const char *const ns_parent_query_methods[] = {
-    "querySelector", "querySelectorAll",
-};
-
-static void
 ns_proto_define_getset(JSContext *ctx, JSValueConst proto, const char *name,
                        JSValue (*getter)(JSContext *, JSValueConst),
                        JSValue (*setter)(JSContext *, JSValueConst,
@@ -8743,335 +7664,131 @@ ns_proto_define_getset(JSContext *ctx, JSValueConst proto, const char *name,
     JS_FreeAtom(ctx, atom);
 }
 
-/* MathMLElement extends Element and has the dataset of HTMLOrSVGElement; the
- * rest of its members are moved down from Element by the element shapes. */
-static JSValue
-ns_install_mathml_proto(JSContext *ctx, JSValueConst global,
-                        JSValueConst elem_proto)
+void
+ns_js_install_dom_members(JSContext *ctx, JSValueConst proto, int which)
 {
-    ns_chain_proto(ctx, global, "MathMLElement", elem_proto);
-    JSValue proto = ns_proto_of(ctx, global, "MathMLElement");
-    if (JS_IsObject(proto))
+    static const JSCFunctionListEntry track_accessors[] = {
+        JS_CGETSET_MAGIC_DEF("default", ns_element_bool_attr_getter,
+                             ns_element_bool_attr_setter, 3),
+    };
+    switch (which) {
+    case NS_DOM_MEMBERS_ELEMENT_FUNCTIONS:
+        JS_SetPropertyFunctionList(ctx, proto, ns_element_proto_funcs,
+                                   G_N_ELEMENTS(ns_element_proto_funcs));
+        break;
+    case NS_DOM_MEMBERS_ELEMENT_CLASS:
+        JS_SetClassProto(ctx, ns_element_class_id, JS_DupValue(ctx, proto));
+        ns_bind_fn(ctx, proto, "matches",               ns_element_matches, 1);
+        ns_bind_fn(ctx, proto, "webkitMatchesSelector", ns_element_matches, 1);
+        ns_bind_fn(ctx, proto, "closest",               ns_element_closest, 1);
+        break;
+    case NS_DOM_MEMBERS_HTML_ELEMENT:
         ns_proto_define_getset(ctx, proto, "dataset",
                                ns_element_get_dataset, NULL);
-    return proto;
+        ns_proto_define_getset(ctx, proto, "popover",
+                               ns_element_get_popover, ns_element_set_popover);
+        break;
+    case NS_DOM_MEMBERS_DATASET:
+        ns_proto_define_getset(ctx, proto, "dataset",
+                               ns_element_get_dataset, NULL);
+        break;
+    case NS_DOM_MEMBERS_TEXT:
+        ns_proto_define_getset(ctx, proto, "assignedSlot",
+                               ns_element_get_assignedSlot,
+                               ns_element_noop_set);
+        break;
+    case NS_DOM_MEMBERS_DOCUMENT_FRAGMENT:
+        ns_bind_fn(ctx, proto, "querySelector",
+                   ns_element_querySelector, 1);
+        ns_bind_fn(ctx, proto, "querySelectorAll",
+                   ns_element_querySelectorAll, 1);
+        break;
+    case NS_DOM_MEMBERS_TRACK:
+        JS_SetPropertyFunctionList(ctx, proto, track_accessors,
+                                   G_N_ELEMENTS(track_accessors));
+        break;
+    case NS_DOM_MEMBERS_DIALOG:
+        ns_proto_define_getset(ctx, proto, "closedBy",
+                               ns_dialog_get_closedBy,
+                               ns_dialog_set_closedBy);
+        break;
+    case NS_DOM_MEMBERS_BUTTON:
+        ns_proto_define_getset(ctx, proto, "command",
+                               ns_button_get_command,
+                               ns_button_set_command);
+        ns_proto_define_getset(ctx, proto, "commandForElement",
+                               ns_button_get_commandForElement,
+                               ns_button_set_commandForElement);
+        break;
+    case NS_DOM_MEMBERS_TEXT_PROPERTY:
+        ns_proto_define_getset(ctx, proto, "text",
+                               ns_element_get_text, ns_element_set_text);
+        break;
+    case NS_DOM_MEMBERS_DATA_PROPERTY:
+        ns_proto_define_getset(ctx, proto, "data",
+                               ns_element_get_data, ns_element_set_data);
+        break;
+    case NS_DOM_MEMBERS_VALUE_PROPERTY:
+        ns_proto_define_getset(ctx, proto, "value",
+                               ns_element_get_value_prop,
+                               ns_element_set_value_prop);
+        break;
+    case NS_DOM_MEMBERS_OPTIONS_METHODS:
+        JS_DefinePropertyValueStr(ctx, proto, "item",
+            JS_NewCFunction(ctx, ns_options_item, "item", 1),
+            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
+        JS_DefinePropertyValueStr(ctx, proto, "namedItem",
+            JS_NewCFunction(ctx, ns_options_namedItem, "namedItem", 1),
+            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
+        break;
+    default:
+        break;
+    }
 }
 
 static void
-ns_install_dom_hierarchy(ns_js *js, JSContext *ctx, JSValueConst global)
+ns_js_ensure_per_tag_protos(ns_js *js)
 {
-    JSValue node_proto = ns_proto_of(ctx, global, "Node");
-    if (!JS_IsObject(node_proto)) { JS_FreeValue(ctx, node_proto); return; }
+    if (!js->per_tag_protos)
+        js->per_tag_protos = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                   g_free, g_free);
+}
 
-    JSValue elem_proto = JS_NewObject(ctx);
-    JS_SetPrototype(ctx, elem_proto, node_proto);
-    JS_SetPropertyFunctionList(ctx, elem_proto, ns_element_proto_funcs,
-                               G_N_ELEMENTS(ns_element_proto_funcs));
-    ns_define_element_unscopables(ctx, elem_proto);
-    JS_SetClassProto(ctx, ns_element_class_id, JS_DupValue(ctx, elem_proto));
-    ns_bind_fn(ctx, elem_proto, "matches",               ns_element_matches, 1);
-    ns_bind_fn(ctx, elem_proto, "webkitMatchesSelector", ns_element_matches, 1);
-    ns_bind_fn(ctx, elem_proto, "closest",               ns_element_closest, 1);
+void
+ns_js_register_tag_proto(JSContext *ctx, const char *tag, JSValueConst proto)
+{
+    ns_js *js = js_from_ctx(ctx);
+    if (!js || !tag) return;
+    ns_js_ensure_per_tag_protos(js);
+    JSValue *old = g_hash_table_lookup(js->per_tag_protos, tag);
+    if (old) JS_FreeValue(ctx, *old);
+    JSValue *entry = g_new(JSValue, 1);
+    *entry = JS_DupValue(ctx, proto);
+    g_hash_table_insert(js->per_tag_protos, g_strdup(tag), entry);
+}
 
-    static const char *const element_spec_methods[] = {
-        "setAttribute", "getAttribute", "hasAttribute", "removeAttribute",
-        "toggleAttribute", "getAttributeNS", "setAttributeNS",
-        "removeAttributeNS", "hasAttributeNS", "getAttributeNames",
-        "attachShadow", "querySelector", "querySelectorAll",
-        "getElementsByTagName", "getElementsByClassName",
-        "insertAdjacentElement", "insertAdjacentHTML", "insertAdjacentText",
-        "getBoundingClientRect", "getClientRects", "scrollIntoView",
-        "append", "prepend", "before", "after", "remove", "replaceWith",
-        "replaceChildren",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(element_spec_methods); i++) {
-        JSValue fn = JS_GetPropertyStr(ctx, node_proto,
-                                       element_spec_methods[i]);
-        if (JS_IsFunction(ctx, fn))
-            JS_DefinePropertyValueStr(ctx, elem_proto,
-                                      element_spec_methods[i], fn,
-                                      JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-        else
-            JS_FreeValue(ctx, fn);
-    }
-
-    static const char *const element_spec_accessors[] = {
-        "children", "firstElementChild", "lastElementChild",
-        "childElementCount", "nextElementSibling", "previousElementSibling",
-        "innerHTML", "outerHTML", "id", "className", "classList",
-        "attributes", "tagName", "localName", "namespaceURI",
-        "scrollTop", "scrollLeft", "scrollWidth", "scrollHeight",
-        "clientTop", "clientLeft", "clientWidth", "clientHeight",
-        "shadowRoot", "assignedSlot",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(element_spec_accessors); i++) {
-        JSAtom atom = JS_NewAtom(ctx, element_spec_accessors[i]);
-        JSPropertyDescriptor d;
-        int r = JS_GetOwnProperty(ctx, &d, node_proto, atom);
-        if (r > 0) {
-            if (d.flags & JS_PROP_GETSET)
-                JS_DefinePropertyGetSet(ctx, elem_proto, atom,
-                                        d.getter, d.setter,
-                                        JS_PROP_CONFIGURABLE);
-            else
-                JS_DefinePropertyValue(ctx, elem_proto, atom, d.value,
-                                       JS_PROP_WRITABLE |
-                                       JS_PROP_CONFIGURABLE);
-        }
-        JS_FreeAtom(ctx, atom);
-    }
-
-    ns_proto_delete_names(ctx, node_proto, ns_element_only_methods,
-                          G_N_ELEMENTS(ns_element_only_methods));
-    ns_proto_delete_names(ctx, node_proto, ns_parent_query_methods,
-                          G_N_ELEMENTS(ns_parent_query_methods));
-    static const char *const doc_like[] = {
-        "Document", "HTMLDocument", "XMLDocument", "DocumentFragment",
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(doc_like); i++) {
-        JSValue p = ns_proto_of(ctx, global, doc_like[i]);
-        ns_proto_delete_names(ctx, p, ns_element_only_methods,
-                              G_N_ELEMENTS(ns_element_only_methods));
-        JS_FreeValue(ctx, p);
-    }
-
-    {
-        JSValue move_before = JS_GetPropertyStr(ctx, node_proto, "moveBefore");
-        if (JS_IsFunction(ctx, move_before)) {
-            for (gsize i = 0; i < G_N_ELEMENTS(doc_like); i++) {
-                JSValue p = ns_proto_of(ctx, global, doc_like[i]);
-                if (JS_IsObject(p))
-                    JS_DefinePropertyValueStr(ctx, p, "moveBefore",
-                                              JS_DupValue(ctx, move_before),
-                                              JS_PROP_C_W_E);
-                JS_FreeValue(ctx, p);
-            }
-        }
-        JS_FreeValue(ctx, move_before);
-        static const char *const parentnode_only_methods[] = { "moveBefore" };
-        ns_proto_delete_names(ctx, node_proto, parentnode_only_methods,
-                              G_N_ELEMENTS(parentnode_only_methods));
-    }
-
-    ns_set_ctor_proto(ctx, global, "Node", node_proto);
-    ns_set_ctor_proto(ctx, global, "Element", elem_proto);
-
-    JSValue htmlelem_proto = JS_NewObject(ctx);
-    JS_SetPrototype(ctx, htmlelem_proto, elem_proto);
-    ns_set_ctor_proto(ctx, global, "HTMLElement", htmlelem_proto);
-    ns_proto_define_getset(ctx, htmlelem_proto, "dataset",
-                           ns_element_get_dataset, NULL);
-    ns_proto_define_getset(ctx, htmlelem_proto, "popover",
-                           ns_element_get_popover, ns_element_set_popover);
-    ns_chain_proto(ctx, global, "SVGElement", elem_proto);
-    ns_chain_proto(ctx, global, "SVGSVGElement", elem_proto);
-    JSValue svg_proto = ns_proto_of(ctx, global, "SVGElement");
-    ns_chain_proto(ctx, global, "SVGAElement", svg_proto);
-    JSValue svga_proto = ns_proto_of(ctx, global, "SVGAElement");
-    if (JS_IsObject(svg_proto))
-        ns_proto_define_getset(ctx, svg_proto, "dataset",
-                               ns_element_get_dataset, NULL);
-    JSValue mathml_proto = ns_install_mathml_proto(ctx, global, elem_proto);
-
-    JSValue chardata_proto = ns_proto_of(ctx, global, "CharacterData");
-    if (JS_IsObject(chardata_proto)) {
-        JS_SetPrototype(ctx, chardata_proto, node_proto);
-        ns_chain_proto(ctx, global, "Text", chardata_proto);
-        ns_chain_proto(ctx, global, "Comment", chardata_proto);
-        ns_chain_proto(ctx, global, "ProcessingInstruction", chardata_proto);
-    }
-    JSValue text_proto    = ns_proto_of(ctx, global, "Text");
-    JSValue comment_proto = ns_proto_of(ctx, global, "Comment");
-    JSValue pi_proto      = ns_proto_of(ctx, global, "ProcessingInstruction");
-    JSValue cdata_proto   = ns_proto_of(ctx, global, "CDATASection");
-    JSValue doctype_proto = ns_proto_of(ctx, global, "DocumentType");
-    JSValue docfrag_proto = ns_proto_of(ctx, global, "DocumentFragment");
-    if (JS_IsObject(text_proto)) ns_chain_proto(ctx, global, "CDATASection", text_proto);
-    if (JS_IsObject(text_proto))
-        ns_proto_define_getset(ctx, text_proto, "assignedSlot",
-                               ns_element_get_assignedSlot,
-                               ns_element_noop_set);
-    if (JS_IsObject(doctype_proto)) JS_SetPrototype(ctx, doctype_proto, node_proto);
-    if (JS_IsObject(docfrag_proto)) {
-        JS_SetPrototype(ctx, docfrag_proto, node_proto);
-        ns_bind_fn(ctx, docfrag_proto, "querySelector",
-                   ns_element_querySelector, 1);
-        ns_bind_fn(ctx, docfrag_proto, "querySelectorAll",
-                   ns_element_querySelectorAll, 1);
-    }
-    JSValue shadow_proto = ns_proto_of(ctx, global, "ShadowRoot");
-    if (JS_IsObject(shadow_proto) && JS_IsObject(docfrag_proto))
-        JS_SetPrototype(ctx, shadow_proto, docfrag_proto);
-    JS_FreeValue(ctx, shadow_proto);
-
-    static const char *const misplaced_element_members[] = {
-        "attachShadow", "shadowRoot", "assignedSlot", "default",
-    };
-    ns_proto_delete_names(ctx, node_proto, misplaced_element_members,
-                          G_N_ELEMENTS(misplaced_element_members));
-    for (gsize i = 0; i < G_N_ELEMENTS(doc_like); i++) {
-        JSValue p = ns_proto_of(ctx, global, doc_like[i]);
-        ns_proto_delete_names(ctx, p, misplaced_element_members,
-                              G_N_ELEMENTS(misplaced_element_members));
-        JS_FreeValue(ctx, p);
-    }
-
-    JSValue doc_proto = ns_proto_of(ctx, global, "Document");
-    if (JS_IsObject(doc_proto)) JS_SetPrototype(ctx, doc_proto, node_proto);
-    JSValue htmldoc_proto = ns_proto_of(ctx, global, "HTMLDocument");
-    if (JS_IsObject(htmldoc_proto) && JS_IsObject(doc_proto))
-        JS_SetPrototype(ctx, htmldoc_proto, doc_proto);
-    js->proto_document = JS_IsObject(htmldoc_proto) ? htmldoc_proto
-                                                    : JS_DupValue(ctx, doc_proto);
-    if (JS_IsObject(htmldoc_proto)) JS_FreeValue(ctx, doc_proto);
-
-    js->proto_node        = node_proto;
-    js->proto_element     = elem_proto;
-    js->proto_htmlelement = htmlelem_proto;
-    js->proto_svgelement  = svg_proto;
-    js->proto_svgaelement = svga_proto;
-    js->proto_mathmlelement = mathml_proto;
-    js->proto_chardata    = chardata_proto;
-    js->proto_text        = text_proto;
-    js->proto_comment     = comment_proto;
-    js->proto_pi          = pi_proto;
-    js->proto_cdata       = cdata_proto;
-    js->proto_doctype     = doctype_proto;
-    js->proto_docfrag     = docfrag_proto;
-    JSValue unknownelem_proto = ns_proto_of(ctx, global, "HTMLUnknownElement");
-    if (JS_IsObject(unknownelem_proto)) JS_SetPrototype(ctx, unknownelem_proto, htmlelem_proto);
-    js->proto_htmlunknownelement = unknownelem_proto;
-    JSValue attr_proto = ns_proto_of(ctx, global, "Attr");
-    if (JS_IsObject(attr_proto)) JS_SetPrototype(ctx, attr_proto, node_proto);
-    JS_FreeValue(ctx, attr_proto);
-
-    {
-        static const JSCFunctionListEntry track_accessors[] = {
-            JS_CGETSET_MAGIC_DEF("default", ns_element_bool_attr_getter,
-                                 ns_element_bool_attr_setter, 3),
-        };
-        JSValue track_proto = ns_proto_of(ctx, global, "HTMLTrackElement");
-        if (JS_IsObject(track_proto))
-            JS_SetPropertyFunctionList(ctx, track_proto, track_accessors,
-                                       G_N_ELEMENTS(track_accessors));
-        JS_FreeValue(ctx, track_proto);
-    }
-    {
-        JSValue dialog_proto = ns_proto_of(ctx, global, "HTMLDialogElement");
-        if (JS_IsObject(dialog_proto))
-            ns_proto_define_getset(ctx, dialog_proto, "closedBy",
-                                   ns_dialog_get_closedBy,
-                                   ns_dialog_set_closedBy);
-        JS_FreeValue(ctx, dialog_proto);
-    }
-    {
-        JSValue button_proto = ns_proto_of(ctx, global, "HTMLButtonElement");
-        if (JS_IsObject(button_proto)) {
-            ns_proto_define_getset(ctx, button_proto, "command",
-                                   ns_button_get_command,
-                                   ns_button_set_command);
-            ns_proto_define_getset(ctx, button_proto, "commandForElement",
-                                   ns_button_get_commandForElement,
-                                   ns_button_set_commandForElement);
-        }
-        JS_FreeValue(ctx, button_proto);
-    }
-
-    js->per_tag_protos = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                               g_free, g_free);
-    static const struct {
-        const char *tag;
-        gboolean has_text, has_data, has_value;
-    } tag_props[] = {
-        { "option",   TRUE,  FALSE, TRUE  },
-        { "a",        TRUE,  FALSE, FALSE },
-        { "script",   TRUE,  FALSE, FALSE },
-        { "title",    TRUE,  FALSE, FALSE },
-        { "object",   FALSE, TRUE,  TRUE  },
-        { "input",    FALSE, FALSE, TRUE  },
-        { "select",   FALSE, FALSE, TRUE  },
-        { "textarea", FALSE, FALSE, TRUE  },
-        { "button",   FALSE, FALSE, TRUE  },
-        { "output",   FALSE, FALSE, TRUE  },
-        { "progress", FALSE, FALSE, TRUE  },
-        { "meter",    FALSE, FALSE, TRUE  },
-        { "li",       FALSE, FALSE, TRUE  },
-        { "param",    FALSE, FALSE, TRUE  },
-        { "data",     FALSE, FALSE, TRUE  },
-    };
-    for (gsize i = 0; i < G_N_ELEMENTS(ns_instof_table); i++) {
-        const ns_instof_def *d = &ns_instof_table[i];
-        if (d->special != NS_INSTOF_TAG || !d->tags) continue;
-        JSValue ctor = JS_GetPropertyStr(ctx, global, d->ctor);
-        JSValue proto = JS_IsObject(ctor)
-            ? JS_GetPropertyStr(ctx, ctor, "prototype") : JS_UNDEFINED;
-        JS_FreeValue(ctx, ctor);
-        if (JS_IsObject(proto)) {
-            JS_SetPrototype(ctx, proto, htmlelem_proto);
-            char **tags = g_strsplit(d->tags, " ", -1);
-            for (gsize t = 0; tags[t]; t++) {
-                if (!*tags[t]) continue;
-                JSValue *old = g_hash_table_lookup(js->per_tag_protos, tags[t]);
-                if (old) JS_FreeValue(ctx, *old);
-                JSValue *entry = g_new(JSValue, 1);
-                *entry = JS_DupValue(ctx, proto);
-                g_hash_table_insert(js->per_tag_protos,
-                                    g_strdup(tags[t]), entry);
-            }
-            g_strfreev(tags);
-        }
-        JS_FreeValue(ctx, proto);
-    }
-
-    JSValue media_proto = ns_proto_of(ctx, global, "HTMLMediaElement");
-    if (JS_IsObject(media_proto)) {
-        JS_SetPrototype(ctx, media_proto, htmlelem_proto);
-        ns_chain_proto(ctx, global, "HTMLAudioElement", media_proto);
-        ns_chain_proto(ctx, global, "HTMLVideoElement", media_proto);
-    }
-    JS_FreeValue(ctx, media_proto);
-
-    for (gsize i = 0; i < G_N_ELEMENTS(tag_props); i++) {
-        JSValue *slot = g_hash_table_lookup(js->per_tag_protos,
-                                            tag_props[i].tag);
-        gboolean is_new = (slot == NULL);
-        JSValue tp;
-        if (slot) {
-            tp = *slot;
-        } else {
-            tp = JS_NewObject(ctx);
-            JS_SetPrototype(ctx, tp, htmlelem_proto);
-        }
-        if (tag_props[i].has_text)
-            ns_proto_define_getset(ctx, tp, "text",
-                                   ns_element_get_text, ns_element_set_text);
-        if (tag_props[i].has_data)
-            ns_proto_define_getset(ctx, tp, "data",
-                                   ns_element_get_data, ns_element_set_data);
-        if (tag_props[i].has_value)
-            ns_proto_define_getset(ctx, tp, "value",
-                                   ns_element_get_value_prop,
-                                   ns_element_set_value_prop);
-        if (strcmp(tag_props[i].tag, "select") == 0) {
-            JS_DefinePropertyValueStr(ctx, tp, "item",
-                JS_NewCFunction(ctx, ns_options_item, "item", 1),
-                JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-            JS_DefinePropertyValueStr(ctx, tp, "namedItem",
-                JS_NewCFunction(ctx, ns_options_namedItem, "namedItem", 1),
-                JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-        }
-        if (is_new) {
-            JSValue *entry = g_new(JSValue, 1);
-            *entry = tp;
-            g_hash_table_insert(js->per_tag_protos,
-                                g_strdup(tag_props[i].tag), entry);
-        }
-    }
-    if (JS_IsObject(chardata_proto))
-        ns_proto_define_getset(ctx, chardata_proto, "data",
-                               ns_element_get_data, ns_element_set_data);
-
-    js->dom_protos_set    = 1;
+void
+ns_js_adopt_dom_protos(JSContext *ctx, const ns_js_dom_protos *protos)
+{
+    ns_js *js = js_from_ctx(ctx);
+    if (!js) return;
+    js->proto_node               = protos->node;
+    js->proto_element            = protos->element;
+    js->proto_htmlelement        = protos->htmlelement;
+    js->proto_htmlunknownelement = protos->htmlunknownelement;
+    js->proto_svgelement         = protos->svgelement;
+    js->proto_svgaelement        = protos->svgaelement;
+    js->proto_mathmlelement      = protos->mathmlelement;
+    js->proto_chardata           = protos->chardata;
+    js->proto_text               = protos->text;
+    js->proto_comment            = protos->comment;
+    js->proto_cdata              = protos->cdata;
+    js->proto_pi                 = protos->pi;
+    js->proto_doctype            = protos->doctype;
+    js->proto_docfrag            = protos->docfrag;
+    js->proto_document           = protos->document;
+    ns_js_ensure_per_tag_protos(js);
+    js->dom_protos_set = 1;
 
     if (js->pinned_wrappers_set) {
         GHashTableIter it;
@@ -9086,58 +7803,6 @@ ns_install_dom_hierarchy(ns_js *js, JSContext *ctx, JSValueConst global)
                                 kind_proto);
         }
     }
-}
-
-static JSValue
-ns_chrome_load_times(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    double origin = js ? js->time_origin_real_ms / 1000.0 : 0.0;
-    double now = ns_perf_now_ms(js) / 1000.0;
-    JSValue o = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, o, "requestTime",            JS_NewFloat64(ctx, origin));
-    JS_SetPropertyStr(ctx, o, "startLoadTime",          JS_NewFloat64(ctx, origin));
-    JS_SetPropertyStr(ctx, o, "commitLoadTime",         JS_NewFloat64(ctx, origin + 0.04));
-    JS_SetPropertyStr(ctx, o, "finishDocumentLoadTime", JS_NewFloat64(ctx, origin + 0.09));
-    JS_SetPropertyStr(ctx, o, "finishLoadTime",         JS_NewFloat64(ctx, origin + now));
-    JS_SetPropertyStr(ctx, o, "firstPaintTime",         JS_NewFloat64(ctx, origin + 0.1));
-    JS_SetPropertyStr(ctx, o, "firstPaintAfterLoadTime", JS_NewFloat64(ctx, 0.0));
-    JS_SetPropertyStr(ctx, o, "navigationType",         JS_NewString(ctx, "Other"));
-    JS_SetPropertyStr(ctx, o, "wasFetchedViaSpdy",      JS_TRUE);
-    JS_SetPropertyStr(ctx, o, "wasNpnNegotiated",       JS_TRUE);
-    JS_SetPropertyStr(ctx, o, "npnNegotiatedProtocol", JS_NewString(ctx, "h2"));
-    JS_SetPropertyStr(ctx, o, "wasAlternateProtocolAvailable", JS_FALSE);
-    JS_SetPropertyStr(ctx, o, "connectionInfo",         JS_NewString(ctx, "h2"));
-    return o;
-}
-
-static JSValue
-ns_chrome_csi(JSContext *ctx, JSValueConst this_val,
-              int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_js *js = js_from_ctx(ctx);
-    double now = ns_perf_now_ms(js);
-    JSValue o = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, o, "startE",
-                      JS_NewFloat64(ctx, js ? js->time_origin_real_ms : 0.0));
-    JS_SetPropertyStr(ctx, o, "onloadT",
-                      JS_NewFloat64(ctx, (js ? js->time_origin_real_ms : 0.0) + now));
-    JS_SetPropertyStr(ctx, o, "pageT", JS_NewFloat64(ctx, now));
-    JS_SetPropertyStr(ctx, o, "tran", JS_NewInt32(ctx, 15));
-    return o;
-}
-
-static void
-ns_install_window_chrome(JSContext *ctx, JSValueConst global)
-{
-    JSValue chrome = JS_NewObject(ctx);
-    ns_bind_fn(ctx, chrome, "loadTimes", ns_chrome_load_times, 0);
-    ns_bind_fn(ctx, chrome, "csi",       ns_chrome_csi,        0);
-
-    JS_SetPropertyStr(ctx, global, "chrome", chrome);
 }
 
 static double
@@ -10440,7 +9105,7 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
         JS_FreeValue(ctx, xml_ctor);
         JS_FreeValue(ctx, xml_proto);
     }
-    ns_install_dom_hierarchy(js, ctx, global);
+    ns_install_dom_hierarchy(ctx, global);
     ns_install_web_api_shapes(ctx, global);
     ns_bind_ctor(ctx, global, "FontFace", ns_window_fontface_ctor, 3);
     {

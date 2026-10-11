@@ -1057,6 +1057,50 @@ JSValue ns_make_ctor(JSContext *ctx, JSCFunction *fn, const char *name, int argc
 void    ns_install_namespace_object(JSContext *ctx, JSValueConst global,
                                     const char *name, JSValue obj, const char *tag);
 void    ns_js_link_interface_ctors(JSContext *ctx);
+void    ns_install_hasinstance(JSContext *ctx, JSValueConst global);
+void    ns_install_tostringtag(JSContext *ctx, JSValueConst global);
+void    ns_install_dom_hierarchy(JSContext *ctx, JSValueConst global);
+void    ns_install_window_chrome(JSContext *ctx, JSValueConst global);
+void    ns_define_element_unscopables(JSContext *ctx, JSValueConst proto);
+void    ns_install_node_shapes(JSContext *ctx);
+void    ns_install_element_shapes(JSContext *ctx);
+void    ns_install_pdf_plugins(JSContext *ctx);
+enum {
+    NS_DOM_MEMBERS_ELEMENT_FUNCTIONS = 0,
+    NS_DOM_MEMBERS_ELEMENT_CLASS,
+    NS_DOM_MEMBERS_HTML_ELEMENT,
+    NS_DOM_MEMBERS_DATASET,
+    NS_DOM_MEMBERS_TEXT,
+    NS_DOM_MEMBERS_DOCUMENT_FRAGMENT,
+    NS_DOM_MEMBERS_TRACK,
+    NS_DOM_MEMBERS_DIALOG,
+    NS_DOM_MEMBERS_BUTTON,
+    NS_DOM_MEMBERS_TEXT_PROPERTY,
+    NS_DOM_MEMBERS_DATA_PROPERTY,
+    NS_DOM_MEMBERS_VALUE_PROPERTY,
+    NS_DOM_MEMBERS_OPTIONS_METHODS,
+};
+typedef struct ns_js_dom_protos {
+    JSValue node;
+    JSValue element;
+    JSValue htmlelement;
+    JSValue htmlunknownelement;
+    JSValue svgelement;
+    JSValue svgaelement;
+    JSValue mathmlelement;
+    JSValue chardata;
+    JSValue text;
+    JSValue comment;
+    JSValue cdata;
+    JSValue pi;
+    JSValue doctype;
+    JSValue docfrag;
+    JSValue document;
+} ns_js_dom_protos;
+void    ns_js_install_dom_members(JSContext *ctx, JSValueConst proto, int which);
+void    ns_js_register_tag_proto(JSContext *ctx, const char *tag,
+                                 JSValueConst proto);
+void    ns_js_adopt_dom_protos(JSContext *ctx, const ns_js_dom_protos *protos);
 void    ns_js_lock_global_prototypes(JSContext *ctx);
 char   *ns_js_doc_base_url(ns_js *js);
 char   *ns_js_decode_data_url(const char *url, gsize *out_len);

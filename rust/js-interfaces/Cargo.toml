@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-interfaces"
+description = "DOM interface objects: the prototype hierarchy, instanceof, toStringTag, unscopables, member shapes, the PDF viewer plugins and window.chrome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

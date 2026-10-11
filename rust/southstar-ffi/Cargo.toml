@@ -60,6 +60,7 @@ southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-html = { path = "../js-html" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-input = { path = "../js-input" }
+southstar-js-interfaces = { path = "../js-interfaces" }
 southstar-js-intl = { path = "../js-intl" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
