@@ -1,0 +1,11 @@
+[package]
+name = "southstar-gtk-ffi"
+description = "The GTK 4, GDK, GObject, cairo and graphene declarations the Rust shell code calls, hand-written"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

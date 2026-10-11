@@ -1,0 +1,39 @@
+[package]
+name = "southstar-shell"
+description = "The static library meson links into the GTK shell: its ported files plus every module southstar-ffi carries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+southstar-ffi = { path = "../southstar-ffi" }
+southstar-glib = { path = "../glib" }
+southstar-gtk-ffi = { path = "../gtk-ffi" }
+
+[features]
+avif = ["southstar-ffi/avif"]
+sdl = ["southstar-ffi/sdl"]
+fontconfig = ["southstar-ffi/fontconfig"]
+font-fontconfig = ["southstar-ffi/font-fontconfig"]
+freetype = ["southstar-ffi/freetype"]
+pangoft2 = ["southstar-ffi/pangoft2"]
+poppler = ["southstar-ffi/poppler"]
+egl = ["southstar-ffi/egl"]
+ns-pango = ["southstar-ffi/ns-pango"]
+enchant = ["southstar-ffi/enchant"]
+http-brotli = ["southstar-ffi/http-brotli"]
+http-zstd = ["southstar-ffi/http-zstd"]
+libav = ["southstar-ffi/libav"]
+seccomp = ["southstar-ffi/seccomp"]
+wasm = ["southstar-ffi/wasm"]
+webgpu = ["southstar-ffi/webgpu"]
+woff2 = ["southstar-ffi/woff2"]
+
+[lints]
+workspace = true

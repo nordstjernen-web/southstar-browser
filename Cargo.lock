@@ -1732,6 +1732,10 @@ name = "southstar-glib"
 version = "0.9.9"
 
 [[package]]
+name = "southstar-gtk-ffi"
+version = "0.9.9"
+
+[[package]]
 name = "southstar-headless"
 version = "0.9.9"
 dependencies = [
@@ -2520,6 +2524,15 @@ version = "0.9.9"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
+]
+
+[[package]]
+name = "southstar-shell"
+version = "0.9.9"
+dependencies = [
+ "southstar-ffi",
+ "southstar-glib",
+ "southstar-gtk-ffi",
 ]
 
 [[package]]

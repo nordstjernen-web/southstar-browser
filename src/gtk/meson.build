@@ -1,13 +1,10 @@
 southstar_gtk_sources = files(
   'appmain.c',
-  'icons.c',
-  'pagelayers.c',
   'procview.c',
   'procwindow.c',
-  'titlerow.c',
 )
 
-southstar_gtk_deps = southstar_deps + [gtk4_dep]
+southstar_gtk_deps = [southstar_shell_rust_dep] + southstar_c_deps + [gtk4_dep]
 if host_machine.system() != 'windows'
   southstar_gtk_deps += [cc.find_library('rt', required: false)]
 endif

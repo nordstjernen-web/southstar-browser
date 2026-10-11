@@ -62,8 +62,7 @@ if host_machine.system() == 'windows'
   )
 endif
 
-southstar_deps = [
-  southstar_rust_dep,
+southstar_c_deps = [
   glib,
   gobject,
   gio,
@@ -86,42 +85,42 @@ southstar_deps = [
 ]
 
 if have_seccomp
-  southstar_deps += [libseccomp]
+  southstar_c_deps += [libseccomp]
 endif
 
 if have_poppler
-  southstar_deps += [libpoppler]
+  southstar_c_deps += [libpoppler]
 endif
 
 if have_avif
-  southstar_deps += [libavif]
+  southstar_c_deps += [libavif]
 endif
 
 if have_libav
-  southstar_deps += [libavformat, libavcodec, libavutil, libswscale]
+  southstar_c_deps += [libavformat, libavcodec, libavutil, libswscale]
 endif
 
 if have_fontconfig
-  southstar_deps += [libfontconfig]
+  southstar_c_deps += [libfontconfig]
 endif
 
 if have_pangoft2
-  southstar_deps += [libpangoft2]
+  southstar_c_deps += [libpangoft2]
 endif
 
 if have_freetype
-  southstar_deps += [libfreetype]
+  southstar_c_deps += [libfreetype]
 endif
 
-southstar_deps += [libpsl]
+southstar_c_deps += [libpsl]
 
-southstar_deps += http_backend_deps
+southstar_c_deps += http_backend_deps
 
 # macOS WebGL: src/glctx.c creates the offscreen GL context through CGL, whose
 # symbols live in the OpenGL framework. Unused targets drop it via
 # -dead_strip_dylibs.
 if host_machine.system() == 'darwin'
-  southstar_deps += [dependency('appleframeworks', modules: ['OpenGL'])]
+  southstar_c_deps += [dependency('appleframeworks', modules: ['OpenGL'])]
 endif
 
 sdl2_dep = dependency('sdl2', required: get_option('audio'))
@@ -133,8 +132,10 @@ if sdl2_dep.found()
 endif
 
 if have_webgpu
-  southstar_deps += [webgpu_dep]
+  southstar_c_deps += [webgpu_dep]
 endif
+
+southstar_deps = [southstar_rust_dep] + southstar_c_deps
 
 southstar_win_subsystem = (
   host_machine.system() == 'windows' ? 'windows' : 'console'

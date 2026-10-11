@@ -37,6 +37,7 @@ const PORTED: &[&str] = &[
     "html.c",
     "html_lexbor.c",
     "i18n.c",
+    "icons.c",
     "idb.c",
     "image.c",
     "image_ico.c",
@@ -55,6 +56,7 @@ const PORTED: &[&str] = &[
     "mic.c",
     "net.c",
     "netutil.c",
+    "pagelayers.c",
     "paint.c",
     "pdf.c",
     "print.c",
@@ -71,6 +73,7 @@ const PORTED: &[&str] = &[
     "svg.c",
     "texture.c",
     "threaddump.c",
+    "titlerow.c",
     "video.c",
     #[cfg(feature = "wasm")]
     "wasm.c",
