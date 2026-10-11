@@ -67,6 +67,7 @@ pub use southstar_js_mutation;
 pub use southstar_js_net;
 pub use southstar_js_node;
 pub use southstar_js_observers;
+pub use southstar_js_page;
 pub use southstar_js_perf;
 pub use southstar_js_realm;
 pub use southstar_js_reflect;

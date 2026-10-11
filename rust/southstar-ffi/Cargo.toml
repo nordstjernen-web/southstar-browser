@@ -70,6 +70,7 @@ southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-node = { path = "../js-node" }
 southstar-js-observers = { path = "../js-observers" }
+southstar-js-page = { path = "../js-page" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-reflect = { path = "../js-reflect" }

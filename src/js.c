@@ -187,7 +187,6 @@ typedef struct ns_hostobj {
     void     (*free_native)(JSRuntime *rt, gpointer native);
 } ns_hostobj;
 static ns_hostobj *ns_ho_of(JSValueConst v, ns_ho_kind kind);
-static void ns_js_link_interfaces(JSContext *ctx);
 typedef struct {
     char *saved;
     gboolean owns_slot;
@@ -195,7 +194,6 @@ typedef struct {
 static void ns_frame_url_enter(ns_js *js, ns_frame_url *fu, const char *url);
 static void ns_frame_url_leave(ns_js *js, ns_frame_url *fu);
 static void ns_js_run_content_script(ns_js *js, const char *src);
-static gboolean ns_dom_hidden_child(const ns_node *c);
 
 #define NS_SANDBOX_ACTIVE              (1u << 0)
 #define NS_SANDBOX_ALLOW_SCRIPTS       (1u << 1)
@@ -675,7 +673,7 @@ ns_message_task_free(ns_message_task *task)
     g_free(task);
 }
 
-static void
+void
 ns_js_drop_message_tasks(ns_js *js)
 {
     if (js->message_task_source) {
@@ -1528,7 +1526,7 @@ ns_partition_apply(ns_js *js, const char *new_url)
     js->partition_key = new_key;
 }
 
-static void
+void
 ns_storage_load_for(ns_js *js, const char *new_url)
 {
     if (!js) return;
@@ -3550,48 +3548,6 @@ ns_js_engine_version(void)
 }
 
 void
-ns_js_dump_stats(ns_js *js, GString *out)
-{
-    if (!js || !out)
-        return;
-    if (js->rt) {
-        JSMemoryUsage u;
-        memset(&u, 0, sizeof u);
-        JS_ComputeMemoryUsage(js->rt, &u);
-        g_string_append(out, "JavaScript heap\n");
-        g_string_append_printf(out, "  used        %lld bytes\n",
-                               (long long)u.memory_used_size);
-        g_string_append_printf(out, "  malloc      %lld bytes\n",
-                               (long long)u.malloc_size);
-        g_string_append_printf(out, "  malloc cap  %lld bytes\n",
-                               (long long)u.malloc_limit);
-        g_string_append_printf(out, "  objects     %lld\n",
-                               (long long)u.obj_count);
-        g_string_append_printf(out, "  properties  %lld\n",
-                               (long long)u.prop_count);
-        g_string_append_printf(out, "  atoms       %lld\n",
-                               (long long)u.atom_count);
-        g_string_append_printf(out, "  functions   %lld\n",
-                               (long long)u.c_func_count);
-    }
-    g_string_append(out, "\nEvent loop\n");
-    g_string_append_printf(out, "  timers          %u\n",
-                           ns_services_timer_count(js));
-    g_string_append_printf(out, "  anim frames     %u\n",
-                           ns_js_raf_count(js));
-    g_string_append_printf(out, "  pending fetch   %u\n",
-                           ns_js_net_pending_fetches(js));
-    g_string_append_printf(out, "  pending xhr     %u\n",
-                           ns_js_net_pending_xhrs(js));
-    g_string_append_printf(out, "  websockets      %u\n",
-                           ns_js_net_pending_sockets(js));
-    g_string_append_printf(out, "  event listeners %u\n",
-                           ns_dispatch_listener_count(js));
-    g_string_append_printf(out, "  frame contexts  %u\n",
-                           js->frame_ctxs ? js->frame_ctxs->len : 0);
-}
-
-void
 ns_js_forget_frame_context(ns_js *js, const ns_node *frame)
 {
     if (js->raf_frame_ctx == frame) js->raf_frame_ctx = NULL;
@@ -3894,12 +3850,6 @@ ns_element_animate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst
     JSValueConst job_arg[1] = { anim };
     JS_EnqueueJob(ctx, ns_anim_finish_job, 1, job_arg);
     return anim;
-}
-
-static gboolean
-ns_dom_hidden_child(const ns_node *c)
-{
-    return ns_node_is_embedded_doc(c) || ns_node_is_shadow_root(c);
 }
 
 static void
@@ -7275,492 +7225,143 @@ static const JSCFunctionListEntry ns_document_proto_methods[] = {
     JS_CFUNC_DEF("createTreeWalker",       3, ns_document_create_tree_walker),
 };
 
-static void
-ns_js_reset_runtime_state(ns_js *js)
+static const struct {
+    const JSCFunctionListEntry *funcs;
+    int count;
+} ns_proto_tables[] = {
+    [NS_PROTO_TABLE_DOCUMENT_METHODS] = {
+        ns_document_proto_methods, G_N_ELEMENTS(ns_document_proto_methods) },
+    [NS_PROTO_TABLE_DOCUMENT_ACCESSORS] = {
+        ns_document_proto_accessors, G_N_ELEMENTS(ns_document_proto_accessors) },
+    [NS_PROTO_TABLE_NAMED_NODE_MAP] = {
+        ns_namedmap_proto_funcs, G_N_ELEMENTS(ns_namedmap_proto_funcs) },
+    [NS_PROTO_TABLE_SRC] = {
+        ns_src_proto_funcs, G_N_ELEMENTS(ns_src_proto_funcs) },
+    [NS_PROTO_TABLE_IMAGE] = {
+        ns_image_proto_funcs, G_N_ELEMENTS(ns_image_proto_funcs) },
+    [NS_PROTO_TABLE_SOURCE] = {
+        ns_source_proto_funcs, G_N_ELEMENTS(ns_source_proto_funcs) },
+    [NS_PROTO_TABLE_MEDIA] = {
+        ns_media_proto_funcs, G_N_ELEMENTS(ns_media_proto_funcs) },
+    [NS_PROTO_TABLE_VIDEO] = {
+        ns_video_proto_funcs, G_N_ELEMENTS(ns_video_proto_funcs) },
+    [NS_PROTO_TABLE_IFRAME] = {
+        ns_iframe_proto_funcs, G_N_ELEMENTS(ns_iframe_proto_funcs) },
+    [NS_PROTO_TABLE_ANCHOR] = {
+        ns_anchor_proto_funcs, G_N_ELEMENTS(ns_anchor_proto_funcs) },
+    [NS_PROTO_TABLE_HREF] = {
+        ns_href_proto_funcs, G_N_ELEMENTS(ns_href_proto_funcs) },
+    [NS_PROTO_TABLE_DOM_IMPLEMENTATION] = {
+        ns_dom_implementation_proto_funcs,
+        G_N_ELEMENTS(ns_dom_implementation_proto_funcs) },
+    [NS_PROTO_TABLE_VALIDITY] = {
+        ns_validity_proto_funcs, G_N_ELEMENTS(ns_validity_proto_funcs) },
+};
+
+void
+ns_js_install_proto_table(JSContext *ctx, JSValueConst proto, int table)
 {
-    if (!js) return;
-    ns_top_layer_clear(js);
-    ns_focus_reset(js);
-    ns_js_forget_pending_change(js);
-    ns_storage_free_deferred_events(js);
-
-    ns_services_reset(js);
-    ns_lifecycle_reset(js);
-
-    ns_dispatch_reset(js);
-
-    ns_js_net_reset(js);
-
-    ns_ce_reset(js);
-    ns_css_clear_defined_elements();
-    ns_css_clear_registered_properties();
-
-    ns_js_cancel_async_scripts(js);
-
-    ns_attr_detach_all(js);
-    ns_attribute_maps_release_all(js);
-    if (js->pinned_wrappers_set) {
-        GList *pinned = g_hash_table_get_keys(js->pinned_wrappers_set);
-        g_hash_table_remove_all(js->pinned_wrappers_set);
-        for (GList *l = pinned; l; l = l->next) {
-            ns_node *node = l->data;
-            if (node && node->js_wrapper) {
-                JSValue v = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
-                JS_SetOpaque(v, NULL);
-                node->js_wrapper = NULL;
-                node->js_invalidate = NULL;
-                JS_FreeValue(js->ctx, v);
-            }
-        }
-        g_list_free(pinned);
-    }
-
-    ns_observers_reset(js);
-    ns_perf_reset_observers(js);
-
-    GPtrArray *orphans = ns_js_orphans_take_all(js);
-    if (orphans) {
-        for (guint i = 0; i < orphans->len; i++)
-            ns_node_free(g_ptr_array_index(orphans, i));
-        g_ptr_array_free(orphans, TRUE);
-    }
-
-    ns_js_frames_reset(js);
-    ns_window_links_clear(js, FALSE);
-    ns_js_drop_message_tasks(js);
-    ns_js_clear_frame_clocks(js, FALSE);
-    ns_js_drop_pending_rejections(js);
-    if (js->frame_ctxs) {
-        for (guint i = 0; i < js->frame_ctxs->len; i++)
-            JS_FreeContext(g_ptr_array_index(js->frame_ctxs, i));
-        g_ptr_array_set_size(js->frame_ctxs, 0);
-    }
-
-    ns_drain_microtasks(js);
-    JS_RunGC(js->rt);
+    if (table < 0 || table >= (int)G_N_ELEMENTS(ns_proto_tables)) return;
+    JS_SetPropertyFunctionList(ctx, proto, ns_proto_tables[table].funcs,
+                               ns_proto_tables[table].count);
 }
 
-
-static void
-ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
+JSValue
+ns_js_host_class_proto(JSContext *ctx, int which)
 {
-    ns_js_reset_runtime_state(js);
+    switch (which) {
+    case NS_HOST_PROTO_STYLE:      return JS_GetClassProto(ctx, ns_style_class_id);
+    case NS_HOST_PROTO_DATASET:    return JS_GetClassProto(ctx, ns_dataset_class_id);
+    case NS_HOST_PROTO_TOKEN_LIST: return JS_GetClassProto(ctx, ns_token_list_class_id);
+    default:                       return JS_UNDEFINED;
+    }
+}
 
+void
+ns_js_brand_node_classes(JSContext *ctx)
+{
+    ns_js_brand_node_interfaces(ctx, ns_element_class_id, ns_attr_class_id);
+}
+
+JSValue
+ns_js_new_document_object(ns_js *js)
+{
+    JSValue document = JS_NewObjectClass(js->ctx, ns_element_class_id);
+    if (js->current_doc) JS_SetOpaque(document, js->current_doc);
+    return document;
+}
+
+void
+ns_js_set_document(ns_js *js, ns_node *doc, char *origin)
+{
     js->current_doc = doc;
     js->ce_main_doc = doc;
     js->autofocus_processed = FALSE;
     js->active_modal = NULL;
-    ns_dom_set_active_modal(NULL);
-    g_free(js->current_url);
-    js->current_url = g_strdup(base_url ? base_url : "");
     g_free(js->document_origin);
-    js->document_origin = base_url && *base_url
-        ? ns_url_origin_from(base_url) : NULL;
+    js->document_origin = origin;
+}
 
-    if (doc) {
-        ns_doc_id_index_build(doc);
-        ns_doc_class_index_build(doc);
-        ns_doc_tag_index_build(doc);
-    }
-
-    ns_debug_log_emit(NS_DLOG_JS, "install", "document %s",
-                      js->current_url ? js->current_url : "(none)");
-
-    ns_storage_load_for(js, js->current_url);
-    ns_js_seed_cookies_from_jar(js);
-
-    JSContext *ctx = js->ctx;
-    JSValue global = JS_GetGlobalObject(ctx);
-
-    JSValue document = JS_NewObjectClass(ctx, ns_element_class_id);
-    if (js->current_doc) JS_SetOpaque(document, js->current_doc);
-    JS_SetPropertyStr(ctx, document, "URL",         JS_NewString(ctx, js->current_url));
-    JS_SetPropertyStr(ctx, document, "documentURI", JS_NewString(ctx, js->current_url));
-    JS_SetPropertyStr(ctx, document, "baseURI",     JS_NewString(ctx, js->current_url));
-    JS_SetPropertyStr(ctx, document, "characterSet", JS_NewString(ctx, "UTF-8"));
-    JS_DefinePropertyValueStr(ctx, document, "charset",
-                              JS_NewString(ctx, "UTF-8"), JS_PROP_C_W_E);
-    JS_SetPropertyStr(ctx, document, "inputEncoding", JS_NewString(ctx, "UTF-8"));
-    JS_SetPropertyStr(ctx, document, "contentType",  JS_NewString(ctx, "text/html"));
-    {
-        char *dom_host = ns_url_host_from(js->current_url);
-        JS_SetPropertyStr(ctx, document, "domain",
-                          JS_NewString(ctx, dom_host ? dom_host : ""));
-        g_free(dom_host);
-    }
-    JS_SetPropertyStr(ctx, document, "defaultView",  JS_DupValue(ctx, global));
-    JS_SetPropertyStr(ctx, document, "ownerDocument", JS_NULL);
-    JS_SetPropertyStr(ctx, document, "nodeName",     JS_NewString(ctx, "#document"));
-    JS_SetPropertyStr(ctx, document, "nodeType",     JS_NewInt32(ctx, 9));
-    ns_document_define_doctype_getter(ctx, document);
-    JS_SetPropertyStr(ctx, document, "xmlVersion",   JS_NewString(ctx, "1.0"));
-    JS_SetPropertyStr(ctx, document, "xmlEncoding",  JS_NULL);
-    JS_SetPropertyStr(ctx, document, "xmlStandalone", JS_FALSE);
-    ns_document_install_funcs(ctx, document);
-    {
-        JSValue doc_ctor = JS_GetPropertyStr(ctx, global, "HTMLDocument");
-        if (!JS_IsObject(doc_ctor)) {
-            JS_FreeValue(ctx, doc_ctor);
-            doc_ctor = JS_GetPropertyStr(ctx, global, "Document");
-        }
-        if (JS_IsObject(doc_ctor)) {
-            JSValue doc_proto = JS_GetPropertyStr(ctx, doc_ctor, "prototype");
-            if (JS_IsObject(doc_proto))
-                JS_SetPrototype(ctx, document, doc_proto);
-            JS_FreeValue(ctx, doc_proto);
-        }
-        JS_FreeValue(ctx, doc_ctor);
-    }
-    {
-        static const char *const doc_proto_ctors[] = {
-            "Document", "HTMLDocument", NULL
-        };
-        for (int i = 0; doc_proto_ctors[i]; i++) {
-            JSValue proto = ns_proto_of(ctx, global, doc_proto_ctors[i]);
-            if (JS_IsObject(proto)) {
-                JS_SetPropertyFunctionList(ctx, proto, ns_document_proto_methods,
-                                           G_N_ELEMENTS(ns_document_proto_methods));
-                JS_SetPropertyFunctionList(ctx, proto, ns_document_proto_accessors,
-                                           G_N_ELEMENTS(ns_document_proto_accessors));
-                JS_DefinePropertyValueStr(ctx, proto, "open",
-                    JS_NewCFunction(ctx, ns_document_open, "open", 0),
-                    JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-                JS_DefinePropertyValueStr(ctx, proto, "close",
-                    JS_NewCFunction(ctx, ns_document_close, "close", 0),
-                    JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-                JS_DefinePropertyValueStr(ctx, proto, "write",
-                    JS_NewCFunction(ctx, ns_document_write, "write", 1),
-                    JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-                JS_DefinePropertyValueStr(ctx, proto, "writeln",
-                    JS_NewCFunction(ctx, ns_document_writeln, "writeln", 1),
-                    JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-            }
-            JS_FreeValue(ctx, proto);
+void
+ns_js_release_pinned_wrappers(ns_js *js)
+{
+    if (!js->pinned_wrappers_set) return;
+    GList *pinned = g_hash_table_get_keys(js->pinned_wrappers_set);
+    g_hash_table_remove_all(js->pinned_wrappers_set);
+    for (GList *l = pinned; l; l = l->next) {
+        ns_node *node = l->data;
+        if (node && node->js_wrapper) {
+            JSValue v = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
+            JS_SetOpaque(v, NULL);
+            node->js_wrapper = NULL;
+            node->js_invalidate = NULL;
+            JS_FreeValue(js->ctx, v);
         }
     }
-    ns_document_expose_legacy_named(js->ctx, js->current_doc, document);
-    JS_SetPropertyStr(ctx, global, "document", document);
+    g_list_free(pinned);
+}
 
-    JSValue location = ns_window_make_location(ctx);
-    JS_SetPropertyStr(ctx, global, "location", location);
-    JS_SetPropertyStr(ctx, document, "location", JS_DupValue(ctx, location));
-    {
-        char *origin = ns_url_origin_from(js->current_url);
-        JS_SetPropertyStr(ctx, global, "origin",
-                          JS_NewString(ctx, origin ? origin : ""));
-        JS_SetPropertyStr(ctx, global, "isSecureContext",
-                          js->current_url &&
-                          g_str_has_prefix(js->current_url, "https:")
-                              ? JS_TRUE : JS_FALSE);
-        g_free(origin);
-    }
-    {
-        static const char *loc_fwd =
-            "(function(){"
-            " var loc = location;"
-            " var d = { configurable: true, enumerable: true,"
-            "   get: function(){ return loc; },"
-            "   set: function(v){ loc.href = v; } };"
-            " Object.defineProperty(globalThis, 'location', d);"
-            " try { Object.defineProperty(document, 'location', d); } catch(e){}"
-            "})();";
-        JSValue r = JS_Eval(ctx, loc_fwd, strlen(loc_fwd),
-                            "<location-forward>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-        if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, r);
-    }
+void
+ns_js_free_frame_contexts(ns_js *js)
+{
+    if (!js->frame_ctxs) return;
+    for (guint i = 0; i < js->frame_ctxs->len; i++)
+        JS_FreeContext(g_ptr_array_index(js->frame_ctxs, i));
+    g_ptr_array_set_size(js->frame_ctxs, 0);
+}
 
-    static const ns_fn_def shim_ctors[] = {
-        { "XMLDocument", 0 }, { "XSLTProcessor", 0 },
-        { "Range", 0 }, { "NodeFilter", 0 },
-        { "DOMTokenList", 0 }, { "NodeList", 0 }, { "HTMLCollection", 0 },
-        { "CSSStyleSheet", 0 }, { "CSSStyleDeclaration", 0 },
-        { "CSSRule", 0 }, { "CSSStyleRule", 0 },
-        { "MediaList", 0 }, { "MediaQueryList", 0 },
-        { "Selection", 0 }, { "Animation", 0 },
-        { "FileList", 0 },
-        { "HTMLInputElement", 0 }, { "HTMLAnchorElement", 0 },
-        { "HTMLImageElement", 0 }, { "HTMLFormElement", 0 },
-        { "HTMLSelectElement", 0 }, { "HTMLOptionElement", 0 },
-        { "HTMLButtonElement", 0 }, { "HTMLDivElement", 0 },
-        { "HTMLSpanElement", 0 }, { "HTMLTableElement", 0 },
-        { "HTMLTableRowElement", 0 }, { "HTMLTableCellElement", 0 },
-        { "HTMLLabelElement", 0 }, { "HTMLTextAreaElement", 0 },
-        { "HTMLVideoElement", 0 }, { "HTMLAudioElement", 0 },
-        { "HTMLMediaElement", 0 }, { "HTMLDialogElement", 0 },
-        { "HTMLDetailsElement", 0 }, { "HTMLScriptElement", 0 },
-        { "HTMLLinkElement", 0 }, { "HTMLMetaElement", 0 },
-        { "HTMLStyleElement", 0 }, { "HTMLBodyElement", 0 },
-        { "HTMLHtmlElement", 0 }, { "HTMLHeadElement", 0 },
-        { "HTMLIFrameElement", 0 }, { "HTMLCanvasElement", 0 },
-        { "HTMLAreaElement", 0 }, { "HTMLBaseElement", 0 },
-        { "HTMLBRElement", 0 }, { "HTMLDataElement", 0 },
-        { "HTMLDataListElement", 0 }, { "HTMLDListElement", 0 },
-        { "HTMLEmbedElement", 0 }, { "HTMLFieldSetElement", 0 },
-        { "HTMLHeadingElement", 0 }, { "HTMLHRElement", 0 },
-        { "HTMLLegendElement", 0 }, { "HTMLLIElement", 0 },
-        { "HTMLMapElement", 0 }, { "HTMLMenuElement", 0 },
-        { "HTMLMeterElement", 0 }, { "HTMLModElement", 0 },
-        { "HTMLObjectElement", 0 }, { "HTMLOListElement", 0 },
-        { "HTMLOptGroupElement", 0 }, { "HTMLOutputElement", 0 },
-        { "HTMLParagraphElement", 0 }, { "HTMLPictureElement", 0 },
-        { "HTMLPreElement", 0 }, { "HTMLProgressElement", 0 },
-        { "HTMLQuoteElement", 0 }, { "HTMLSlotElement", 0 },
-        { "HTMLSourceElement", 0 }, { "HTMLTableCaptionElement", 0 },
-        { "HTMLTableColElement", 0 }, { "HTMLTableSectionElement", 0 },
-        { "HTMLTemplateElement", 0 }, { "HTMLTimeElement", 0 },
-        { "HTMLTitleElement", 0 }, { "HTMLTrackElement", 0 },
-        { "HTMLUListElement", 0 }, { "HTMLUnknownElement", 0 },
-        { "HTMLFontElement", 0 }, { "HTMLMarqueeElement", 0 },
-        { "HTMLFrameElement", 0 }, { "HTMLFrameSetElement", 0 },
-        { "HTMLParamElement", 0 }, { "HTMLDirectoryElement", 0 },
-        { "CharacterData", 0 },
-        { "CDATASection", 0 },
-        { "ProcessingInstruction", 0 }, { "Attr", 0 },
-        { "DocumentType", 0 },
-        { "HTMLOptionsCollection", 0 }, { "HTMLAllCollection", 0 },
-        { "RadioNodeList", 0 },
-        { "ValidityState", 0 },
-        { "DOMStringList", 0 }, { "DOMStringMap", 0 },
-        { "NamedNodeMap", 0 }, { "TreeWalker", 0 }, { "NodeIterator", 0 },
-        { "MutationRecord", 0 }, { "IntersectionObserverEntry", 0 },
-        { "ResizeObserverEntry", 0 },
-        { "PerformanceEntry", 0 }, { "PerformanceMark", 0 },
-        { "PerformanceMeasure", 0 }, { "PerformanceResourceTiming", 0 },
-        { "PerformanceNavigationTiming", 0 },
-        { "FontFaceSet", 0 },
-        { "ReadableStream", 1 }, { "WritableStream", 1 },
-        { "TransformStream", 1 },
-        { "ByteLengthQueuingStrategy", 1 }, { "CountQueuingStrategy", 1 },
-        { "Geolocation", 0 }, { "Permissions", 0 },
-        { "Crypto", 0 }, { "SubtleCrypto", 0 }, { "CryptoKey", 0 },
-    };
-    ns_bind_ctors(ctx, global, ns_window_event_ctor, shim_ctors, G_N_ELEMENTS(shim_ctors));
-    {
-        JSValue proto = ns_proto_of(ctx, global, "NamedNodeMap");
-        if (JS_IsObject(proto)) {
-            JS_SetPropertyFunctionList(ctx, proto, ns_namedmap_proto_funcs,
-                                       G_N_ELEMENTS(ns_namedmap_proto_funcs));
-            JSAtom len_atom = JS_NewAtom(ctx, "length");
-            JS_DefinePropertyGetSet(ctx, proto, len_atom,
-                JS_NewCFunction2(ctx, ns_live_length_get, "get length", 0,
-                                 JS_CFUNC_generic, 0),
-                JS_UNDEFINED, JS_PROP_CONFIGURABLE);
-            JS_FreeAtom(ctx, len_atom);
-        }
-        JS_FreeValue(ctx, proto);
-    }
-    {
-        static const char *source =
-            "(function(p){"
-            " var A=Array.prototype;"
-            " function d(k,v){Object.defineProperty(p,k,{value:v,writable:true,configurable:true});}"
-            " d('entries',A.entries);d('keys',A.keys);d('values',A.values);d('forEach',A.forEach);"
-            " Object.defineProperty(p,Symbol.iterator,{value:A.values,writable:true,configurable:true});"
-            "})(NamedNodeMap.prototype)";
-        JSValue result = JS_Eval(ctx, source, strlen(source),
-                                 "<namednodemap>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-        if (JS_IsException(result)) JS_FreeValue(ctx, JS_GetException(ctx));
-        JS_FreeValue(ctx, result);
-    }
-    ns_bind_ctor(ctx, global, "ShadowRoot", ns_illegal_constructor, 0);
-    {
-        static const ns_int_constant constants[] = {
-            { "NETWORK_EMPTY", 0 },
-            { "NETWORK_IDLE", 1 },
-            { "NETWORK_LOADING", 2 },
-            { "NETWORK_NO_SOURCE", 3 },
-            { "HAVE_NOTHING", 0 },
-            { "HAVE_METADATA", 1 },
-            { "HAVE_CURRENT_DATA", 2 },
-            { "HAVE_FUTURE_DATA", 3 },
-            { "HAVE_ENOUGH_DATA", 4 },
-        };
-        ns_bind_ctor_int_constants(ctx, global, "HTMLMediaElement",
-                                   constants, G_N_ELEMENTS(constants));
-    }
-    static const ns_fn_def navigator_ctors[] = {
-        { "NavigatorUAData", 0 }, { "PluginArray", 0 },
-        { "MimeTypeArray", 0 }, { "Plugin", 0 }, { "MimeType", 0 },
-        { "MediaDevices", 0 }, { "MediaCapabilities", 0 },
-        { "NetworkInformation", 0 }, { "UserActivation", 0 },
-        { "StorageManager", 0 }, { "WakeLock", 0 },
-    };
-    ns_bind_ctors(ctx, global, ns_illegal_constructor,
-                  navigator_ctors, G_N_ELEMENTS(navigator_ctors));
-    ns_bind_ctor(ctx, global, "DOMImplementation", ns_illegal_constructor, 0);
-    ns_perf_install_entry_list(ctx, global);
-    {
-        static const struct {
-            const char *name;
-            const JSCFunctionListEntry *funcs;
-            int count;
-        } interfaces[] = {
-            { "HTMLScriptElement", ns_src_proto_funcs,
-              G_N_ELEMENTS(ns_src_proto_funcs) },
-            { "HTMLImageElement", ns_image_proto_funcs,
-              G_N_ELEMENTS(ns_image_proto_funcs) },
-            { "HTMLSourceElement", ns_source_proto_funcs,
-              G_N_ELEMENTS(ns_source_proto_funcs) },
-            { "HTMLTrackElement", ns_src_proto_funcs,
-              G_N_ELEMENTS(ns_src_proto_funcs) },
-            { "HTMLMediaElement", ns_media_proto_funcs,
-              G_N_ELEMENTS(ns_media_proto_funcs) },
-            { "HTMLVideoElement", ns_video_proto_funcs,
-              G_N_ELEMENTS(ns_video_proto_funcs) },
-            { "HTMLIFrameElement", ns_iframe_proto_funcs,
-              G_N_ELEMENTS(ns_iframe_proto_funcs) },
-            { "HTMLEmbedElement", ns_src_proto_funcs,
-              G_N_ELEMENTS(ns_src_proto_funcs) },
-            { "HTMLFrameElement", ns_src_proto_funcs,
-              G_N_ELEMENTS(ns_src_proto_funcs) },
-            { "HTMLAnchorElement", ns_anchor_proto_funcs,
-              G_N_ELEMENTS(ns_anchor_proto_funcs) },
-            { "HTMLAreaElement", ns_href_proto_funcs,
-              G_N_ELEMENTS(ns_href_proto_funcs) },
-            { "HTMLLinkElement", ns_href_proto_funcs,
-              G_N_ELEMENTS(ns_href_proto_funcs) },
-        };
-        for (gsize i = 0; i < G_N_ELEMENTS(interfaces); i++) {
-            JSValue proto = ns_proto_of(ctx, global, interfaces[i].name);
-            if (JS_IsObject(proto))
-                JS_SetPropertyFunctionList(ctx, proto, interfaces[i].funcs,
-                                           interfaces[i].count);
-            JS_FreeValue(ctx, proto);
-        }
-    }
-    {
-        JSValue implementation_proto =
-            ns_proto_of(ctx, global, "DOMImplementation");
-        if (JS_IsObject(implementation_proto))
-            JS_SetPropertyFunctionList(ctx, implementation_proto,
-                                       ns_dom_implementation_proto_funcs,
-                                       G_N_ELEMENTS(ns_dom_implementation_proto_funcs));
-        JS_FreeValue(ctx, implementation_proto);
-    }
-    {
-        JSValue tree_walker_proto = ns_proto_of(ctx, global, "TreeWalker");
-        ns_tree_walker_install_proto(ctx, tree_walker_proto);
-        JS_FreeValue(ctx, tree_walker_proto);
-    }
-    ns_live_wire_constructors(ctx, global);
-    {
-        JSValue validity_proto = ns_proto_of(ctx, global, "ValidityState");
-        if (JS_IsObject(validity_proto)) {
-            JS_SetPropertyFunctionList(ctx, validity_proto,
-                                       ns_validity_proto_funcs,
-                                       G_N_ELEMENTS(ns_validity_proto_funcs));
-            ns_set_tostring_tag(ctx, validity_proto, "ValidityState");
-        }
-        JS_FreeValue(ctx, validity_proto);
-    }
-    {
-        JSValue doc_ctor = JS_GetPropertyStr(ctx, global, "Document");
-        JSValue doc_proto = JS_GetPropertyStr(ctx, doc_ctor, "prototype");
-        JSValue xml_ctor = JS_GetPropertyStr(ctx, global, "XMLDocument");
-        JSValue xml_proto = JS_GetPropertyStr(ctx, xml_ctor, "prototype");
-        if (JS_IsObject(doc_proto) && JS_IsObject(xml_proto))
-            JS_SetPrototype(ctx, xml_proto, doc_proto);
-        JS_FreeValue(ctx, doc_ctor);
-        JS_FreeValue(ctx, doc_proto);
-        JS_FreeValue(ctx, xml_ctor);
-        JS_FreeValue(ctx, xml_proto);
-    }
-    ns_install_dom_hierarchy(ctx, global);
-    ns_install_web_api_shapes(ctx);
-    ns_bind_ctor(ctx, global, "FontFace", ns_window_fontface_ctor, 3);
-    {
-        JSValue ctor = JS_GetPropertyStr(ctx, global, "CSSStyleDeclaration");
-        JSValue proto = JS_GetClassProto(ctx, ns_style_class_id);
-        if (JS_IsObject(ctor) && JS_IsObject(proto)) {
-            JS_DefinePropertyValueStr(ctx, proto, "constructor",
-                                      JS_DupValue(ctx, ctor),
-                                      JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-            JS_DefinePropertyValueStr(ctx, ctor, "prototype", proto,
-                                      JS_PROP_WRITABLE);
-        } else {
-            JS_FreeValue(ctx, proto);
-        }
-        JS_FreeValue(ctx, ctor);
-    }
-    {
-        JSValue ctor = JS_GetPropertyStr(ctx, global, "DOMStringMap");
-        JSValue proto = JS_GetClassProto(ctx, ns_dataset_class_id);
-        if (JS_IsObject(ctor) && JS_IsObject(proto)) {
-            JS_DefinePropertyValueStr(ctx, proto, "constructor",
-                                      JS_DupValue(ctx, ctor),
-                                      JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-            JS_DefinePropertyValueStr(ctx, ctor, "prototype", proto,
-                                      JS_PROP_WRITABLE);
-        } else {
-            JS_FreeValue(ctx, proto);
-        }
-        JS_FreeValue(ctx, ctor);
-    }
-    {
-        JSValue ctor = JS_GetPropertyStr(ctx, global, "DOMTokenList");
-        JSValue proto = JS_GetClassProto(ctx, ns_token_list_class_id);
-        if (JS_IsObject(ctor) && JS_IsObject(proto)) {
-            JS_DefinePropertyValueStr(ctx, proto, "constructor",
-                                      JS_DupValue(ctx, ctor),
-                                      JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-            JS_DefinePropertyValueStr(ctx, ctor, "prototype", proto,
-                                      JS_PROP_WRITABLE);
-        } else {
-            JS_FreeValue(ctx, proto);
-        }
-        JS_FreeValue(ctx, ctor);
-    }
-    ns_bind_ctor(ctx, global, "XMLSerializer", ns_xml_serializer_ctor, 0);
+guint
+ns_js_frame_context_count(const ns_js *js)
+{
+    return js->frame_ctxs ? js->frame_ctxs->len : 0;
+}
 
-    ns_compression_install(ctx, global);
-    ns_bind_fn(ctx, global, "__ndNativeRange",  ns_native_range, 0);
-
-    ns_install_hasinstance(ctx, global);
-    ns_install_tostringtag(ctx, global);
-    {
-        static const char *const on_targets[] = {
-            "HTMLElement", "SVGElement", "MathMLElement", "Document", "Window",
-        };
-        for (gsize i = 0; i < G_N_ELEMENTS(on_targets); i++) {
-            JSValue p = ns_proto_of(ctx, global, on_targets[i]);
-            ns_install_event_handler_accessors(ctx, p);
-            JS_FreeValue(ctx, p);
-        }
-        ns_install_event_handler_accessors(ctx, global);
-    }
-    ns_idb_install(ctx, global);
-    ns_net_install_interfaces(ctx, global);
-
-    JS_FreeValue(ctx, global);
-
+void
+ns_js_eval_polyfills(ns_js *js)
+{
     ns_js_eval(js, ns_js_polyfills_src,
                sizeof(ns_js_polyfills_src) - 1, "<polyfills>");
     ns_js_eval(js, ns_js_streaming_src,
                sizeof(ns_js_streaming_src) - 1, "<streaming>");
-    ns_drain_microtasks(js);
-    {
-        JSValue g = JS_GetGlobalObject(ctx);
-        ns_install_event_attribute_getters(ctx, g);
-        JS_FreeValue(ctx, g);
-    }
-    ns_install_navigator_shape(ctx);
-    ns_install_pdf_plugins(ctx);
-    ns_js_link_interfaces(ctx);
-    ns_js_name_engine_members(ctx);
-    ns_js_shape_window_global(ctx);
-    ns_js_link_interface_ctors(ctx);
-    ns_js_lock_global_prototypes(ctx);
-    {
-        JSValue g = JS_GetGlobalObject(ctx);
-        JSValue doc_val = JS_GetPropertyStr(ctx, g, "document");
-        ns_document_lift_methods_to_proto(ctx, doc_val);
-        JS_FreeValue(ctx, doc_val);
-        JS_FreeValue(ctx, g);
-    }
-    ns_install_node_shapes(ctx);
-    ns_install_element_shapes(ctx);
-    ns_js_brand_node_interfaces(ctx, ns_element_class_id, ns_attr_class_id);
+}
+
+void
+ns_js_snapshot_platform_globals(ns_js *js)
+{
+    if (js->platform_globals) g_hash_table_destroy(js->platform_globals);
+    js->platform_globals = ns_js_snapshot_globals(js);
+}
+
+void
+ns_js_clear_doc_ready_states(ns_js *js)
+{
+    if (js->doc_ready_states) g_hash_table_remove_all(js->doc_ready_states);
+}
+
+const char *
+ns_js_early_inject_src(const ns_js *js)
+{
+    return js->early_inject_src;
 }
 
 void
@@ -7804,23 +7405,8 @@ ns_js_free(ns_js *js)
     ns_js_filereader_teardown(js);
     ns_attr_detach_all(js);
     ns_attribute_maps_teardown(js);
-    if (js->pinned_wrappers_set) {
-        GList *pinned = g_hash_table_get_keys(js->pinned_wrappers_set);
-        g_hash_table_remove_all(js->pinned_wrappers_set);
-        for (GList *l = pinned; l; l = l->next) {
-            ns_node *node = l->data;
-            if (node && node->js_wrapper) {
-                JSValue v = JS_MKPTR(JS_TAG_OBJECT, node->js_wrapper);
-                JS_SetOpaque(v, NULL);
-                node->js_wrapper = NULL;
-                node->js_invalidate = NULL;
-                JS_FreeValue(js->ctx, v);
-            }
-        }
-        g_list_free(pinned);
-        g_hash_table_destroy(js->pinned_wrappers_set);
-        js->pinned_wrappers_set = NULL;
-    }
+    ns_js_release_pinned_wrappers(js);
+    g_clear_pointer(&js->pinned_wrappers_set, g_hash_table_destroy);
     GPtrArray *orphans = ns_js_orphans_snapshot(js);
     if (orphans) {
         GPtrArray *roots = g_ptr_array_new();
@@ -8099,7 +7685,7 @@ static const char ns_interface_links_src[] =
     "  wrapGetter(owner(N, 'scheduling'), 'scheduling', 'Scheduling');"
     "})(globalThis)";
 
-static void
+void
 ns_js_link_interfaces(JSContext *ctx)
 {
     JSValue r = JS_Eval(ctx, ns_interface_links_src,
@@ -9403,92 +8989,6 @@ ns_js_run_content_script(ns_js *js, const char *src)
         JS_FreeAtom(js->ctx, atom);
     }
     JS_FreeValue(js->ctx, global);
-}
-
-/* Starts tracking the document's own <img> elements the way script-made
- * images are tracked, so each gets its load or error event, and its
- * resource timing entry, when the image cache finishes with it, and the
- * window's load event waits for them.  Images whose source depends on
- * layout (srcset, <picture>) or that load lazily are left to layout. */
-static void
-ns_js_track_document_images(ns_js *js, ns_node *n, int depth)
-{
-    if (!n || depth >= 512 || (depth > 0 && ns_dom_hidden_child(n))) return;
-    if (ns_node_is_element_named(n, "img")) {
-        const char *src = ns_element_get_attr(n, "src");
-        const char *loading = ns_element_get_attr(n, "loading");
-        if (src && *src && !ns_element_get_attr(n, "srcset") &&
-            !(loading && g_ascii_strcasecmp(loading, "lazy") == 0) &&
-            !ns_node_is_element_named(n->parent, "picture") &&
-            !ns_js_image_load_tracked(js, n) &&
-            !(n->flags & NS_NODE_IMG_LOAD_FIRED))
-            ns_js_start_image_load(js, n, src);
-        return;
-    }
-    if (ns_node_is_element_named(n, "template")) return;
-    for (ns_node *c = n->first_child; c; c = c->next_sibling)
-        ns_js_track_document_images(js, c, depth + 1);
-}
-
-void
-ns_js_run_scripts_in_doc(ns_js *js, ns_node *doc, const char *base_url_borrowed)
-{
-    if (!js || !doc) return;
-    g_autofree char *base_url = g_strdup(base_url_borrowed);
-    gboolean profile = ns_js_profile_enabled();
-    if (profile)
-        g_printerr("[profile] js run_scripts_in_doc start halted=%d in_pump=%d url=%s\n",
-                   js->halted, js->in_pump, base_url ? base_url : "(null)");
-    if (js->halted || js->in_pump) return;
-    ns_js_lifecycle_clear(js);
-    js->ready_state = 0;
-    if (js->doc_ready_states) g_hash_table_remove_all(js->doc_ready_states);
-    ns_js_frames_clear_initial_blank(js);
-    ns_js_mark_navigation(js, "domLoading");
-    gint64 t0 = g_get_monotonic_time();
-    ns_js_install_document(js, doc, base_url);
-    if (js->platform_globals) g_hash_table_destroy(js->platform_globals);
-    js->platform_globals = ns_js_snapshot_globals(js);
-    {
-        const char *early = g_getenv("NS_EARLY_JS_FILE");
-        char *early_src = NULL;
-        if (early && *early &&
-            g_file_get_contents(early, &early_src, NULL, NULL)) {
-            char *r = ns_js_eval_source(js, early_src, "early-inject");
-            g_free(r);
-            g_free(early_src);
-        }
-    }
-    if (js->early_inject_src && *js->early_inject_src) {
-        char *r = ns_js_eval_source(js, js->early_inject_src, "early-inject");
-        g_free(r);
-    }
-    ns_js_run_content_scripts(js, base_url && *base_url ? base_url : NULL,
-                              TRUE);
-    ns_js_schedule_static_iframes(js, doc);
-    ns_js_track_document_images(js, doc, 0);
-    {
-        /* Stylesheets the engine fetched before this document's realm
-         * existed go into its resource timing now. */
-        GPtrArray *sheets = ns_engine_take_resource_timings(base_url);
-        for (guint i = 0; i < sheets->len; i++) {
-            const ns_engine_resource_timing *t = g_ptr_array_index(sheets, i);
-            /* A frame's sheets belong to the frame's own timeline. */
-            if (t->in_frame) continue;
-            ns_perf_resource_info info = { 0 };
-            ns_js_element_perf_info(js, doc, &info);
-            info.render_blocking = t->render_blocking;
-            ns_perf_add_resource_timed(js, &info, t->url, t->initiator,
-                                       t->start_us, t->end_us, t->resp);
-        }
-        g_ptr_array_free(sheets, TRUE);
-    }
-    const char *origin = base_url && *base_url ? base_url : "inline";
-    GArray *tasks = g_array_new(FALSE, FALSE, sizeof(ns_script_task));
-    ns_js_register_import_maps(js, doc);
-    ns_js_collect_script_tasks(doc, tasks);
-    ns_js_run_parser_blocking_scripts(js, tasks, origin);
-    ns_js_lifecycle_start(js, doc, tasks, origin, t0);
 }
 
 void

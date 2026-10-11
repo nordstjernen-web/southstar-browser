@@ -1773,6 +1773,44 @@ void     ns_attribute_map_release_owner(ns_js *js, const ns_node *owner);
 void     ns_attribute_maps_release_all(ns_js *js);
 void     ns_attribute_maps_teardown(ns_js *js);
 
+typedef enum {
+    NS_PROTO_TABLE_DOCUMENT_METHODS,
+    NS_PROTO_TABLE_DOCUMENT_ACCESSORS,
+    NS_PROTO_TABLE_NAMED_NODE_MAP,
+    NS_PROTO_TABLE_SRC,
+    NS_PROTO_TABLE_IMAGE,
+    NS_PROTO_TABLE_SOURCE,
+    NS_PROTO_TABLE_MEDIA,
+    NS_PROTO_TABLE_VIDEO,
+    NS_PROTO_TABLE_IFRAME,
+    NS_PROTO_TABLE_ANCHOR,
+    NS_PROTO_TABLE_HREF,
+    NS_PROTO_TABLE_DOM_IMPLEMENTATION,
+    NS_PROTO_TABLE_VALIDITY,
+} ns_proto_table;
+
+typedef enum {
+    NS_HOST_PROTO_STYLE,
+    NS_HOST_PROTO_DATASET,
+    NS_HOST_PROTO_TOKEN_LIST,
+} ns_host_proto;
+
+void     ns_js_install_proto_table(JSContext *ctx, JSValueConst proto, int table);
+JSValue  ns_js_host_class_proto(JSContext *ctx, int which);
+void     ns_js_brand_node_classes(JSContext *ctx);
+JSValue  ns_js_new_document_object(ns_js *js);
+void     ns_js_set_document(ns_js *js, ns_node *doc, char *origin);
+void     ns_js_release_pinned_wrappers(ns_js *js);
+void     ns_js_free_frame_contexts(ns_js *js);
+guint    ns_js_frame_context_count(const ns_js *js);
+void     ns_js_eval_polyfills(ns_js *js);
+void     ns_js_link_interfaces(JSContext *ctx);
+void     ns_js_snapshot_platform_globals(ns_js *js);
+void     ns_js_clear_doc_ready_states(ns_js *js);
+const char *ns_js_early_inject_src(const ns_js *js);
+void     ns_js_drop_message_tasks(ns_js *js);
+void     ns_storage_load_for(ns_js *js, const char *new_url);
+
 void     ns_js_set_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
                                     const char *prefix, const char *local_name,
                                     const char *name, const char *value);

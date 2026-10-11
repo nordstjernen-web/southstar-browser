@@ -908,6 +908,10 @@ pub mod quickjs {
         pub malloc_size: i64,
         pub malloc_limit: i64,
         pub memory_used_size: i64,
+        pub atom_count: i64,
+        pub obj_count: i64,
+        pub prop_count: i64,
+        pub c_func_count: i64,
     }
 
     pub unsafe fn take_value(scope: &Scope<'_>, raw: JSValue) -> Value {
@@ -1426,6 +1430,10 @@ pub mod quickjs {
             malloc_size: usage.malloc_size,
             malloc_limit: usage.malloc_limit,
             memory_used_size: usage.memory_used_size,
+            atom_count: usage.rest[2],
+            obj_count: usage.rest[6],
+            prop_count: usage.rest[8],
+            c_func_count: usage.rest[17],
         }
     }
 

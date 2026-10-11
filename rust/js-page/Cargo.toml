@@ -1,0 +1,17 @@
+[package]
+name = "southstar-js-page"
+description = "Installing a parsed document into the page's realm: resetting the runtime state, the document object, the window globals and interfaces, then running the document's scripts; and the page's JavaScript statistics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-bind = { path = "../js-bind" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true
