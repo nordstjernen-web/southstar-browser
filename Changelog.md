@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* requestAnimationFrame, cancelAnimationFrame and requestVideoFrameCallback
+  with the animation-frame tick, scrollend, the animation, transition and
+  media load events and the page lifecycle tick moved from js.c to Rust
+  (rust/js-lifecycle).
 * Inline video playback (video.c) moved to Rust (rust/video): the video
   cache, playback off the animation tick, autoplay, loop, mute and posters,
   click-to-play, WebVTT cues, MSE streams and the audio and video helper
