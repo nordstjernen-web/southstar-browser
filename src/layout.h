@@ -1,4 +1,4 @@
-/* Southstar — layout tree API.
+/* Southstar — layout tree API, implemented in rust/layout, rust/layout-build, rust/layout-tree, rust/layout-block, rust/layout-inline, rust/layout-content, rust/layout-float, rust/layout-sizing, rust/layout-flex, rust/layout-grid, rust/layout-table, rust/layout-position, rust/layout-hit and rust/layout-query.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

@@ -1,6 +1,6 @@
 [package]
 name = "southstar-layout-build"
-description = "Box-tree construction from src/layout.c: inline runs collected from the DOM with white-space collapsing, links, inline attributes, form-control text, pseudo-element content and atomic inline boxes"
+description = "Box-tree construction from src/layout.c: blocks and block containers, inline runs with white-space collapsing, links, inline attributes, form-control text and atomic inline boxes, replaced, media and pseudo-element boxes, shadow slots, display: contents, flex and grid items, fieldset legends, the pending absolutely positioned boxes, the shared length and height helpers and the ns_layout_build entry point"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,8 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
 southstar-layout-content = { path = "../layout-content" }
+southstar-layout-tree = { path = "../layout-tree" }
+southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }
 
 [lints]

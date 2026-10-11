@@ -511,6 +511,78 @@ impl<'a> MediaRef<'a> {
     pub fn set_size_independent_of_image(self, independent: bool) {
         unsafe { (*self.0.as_ptr()).size_independent_of_image = GBoolean::from(independent) };
     }
+
+    fn get_mut(self) -> *mut NsBoxMedia {
+        self.0.as_ptr()
+    }
+
+    pub fn set_image_src(self, src: *mut c_char) {
+        unsafe { (*self.get_mut()).image_src = src };
+    }
+
+    pub fn set_image(self, image: *mut c_void) {
+        unsafe { (*self.get_mut()).image = image };
+    }
+
+    pub fn set_image_density(self, density: f64) {
+        unsafe { (*self.get_mut()).image_density = density };
+    }
+
+    pub fn set_declared_image_size(self, declared: bool) {
+        unsafe { (*self.get_mut()).declared_image_size = GBoolean::from(declared) };
+    }
+
+    pub fn set_placeholder_image_size(self, placeholder: bool) {
+        unsafe { (*self.get_mut()).placeholder_image_size = GBoolean::from(placeholder) };
+    }
+
+    pub fn set_intrinsic_ratio_only(self, ratio_only: bool) {
+        unsafe { (*self.get_mut()).intrinsic_ratio_only = GBoolean::from(ratio_only) };
+    }
+
+    pub fn set_video_src(self, src: *mut c_char) {
+        unsafe { (*self.get_mut()).video_src = src };
+    }
+
+    pub fn set_video_poster(self, poster: *mut c_char) {
+        unsafe { (*self.get_mut()).video_poster = poster };
+    }
+
+    pub fn set_video_audio_src(self, src: *mut c_char) {
+        unsafe { (*self.get_mut()).video_audio_src = src };
+    }
+
+    pub fn set_marker_image(self, src: *mut c_char, image: *mut c_void) {
+        let m = self.get_mut();
+        unsafe {
+            (*m).marker_image_src = src;
+            (*m).marker_image = image;
+        }
+    }
+
+    pub fn set_border_image(self, src: *mut c_char, image: *mut c_void) {
+        let m = self.get_mut();
+        unsafe {
+            (*m).border_image_src = src;
+            (*m).border_image = image;
+        }
+    }
+
+    pub fn set_bg_image(self, src: *mut c_char, image: *mut c_void) {
+        let m = self.get_mut();
+        unsafe {
+            (*m).bg_image_src = src;
+            (*m).bg_image = image;
+        }
+    }
+
+    pub fn set_bg_layers(self, srcs: *mut GPtrArray, images: *mut GPtrArray) {
+        let m = self.get_mut();
+        unsafe {
+            (*m).bg_layer_srcs = srcs;
+            (*m).bg_layer_images = images;
+        }
+    }
 }
 
 unsafe extern "C" {
@@ -919,6 +991,33 @@ impl<'a> BoxRef<'a> {
 
     pub fn is_rendered_legend(self) -> bool {
         self.raw().is_rendered_legend != 0
+    }
+
+    pub fn set_rendered_legend(self, legend: bool) {
+        unsafe { (*self.0.as_ptr()).is_rendered_legend = GBoolean::from(legend) };
+    }
+
+    pub fn set_svg_styles(self, styles: *mut GHashTable) {
+        unsafe { (*self.0.as_ptr()).svg_styles = styles };
+    }
+
+    pub fn read_definite_height(self) -> f64 {
+        unsafe { (*self.0.as_ptr()).definite_height_read = 1 };
+        self.raw().definite_height
+    }
+
+    pub fn cb_height_override(self) -> f64 {
+        self.raw().cb_height_override
+    }
+
+    pub fn ensure_media(self) -> MediaRef<'a> {
+        let b = self.0.as_ptr();
+        unsafe {
+            if (*b).media.is_null() {
+                (*b).media = southstar_glib::g_malloc0(size_of::<NsBoxMedia>()).cast();
+            }
+            MediaRef(NonNull::new_unchecked((*b).media), PhantomData)
+        }
     }
 
     pub fn set_border(self, e: Edges) {

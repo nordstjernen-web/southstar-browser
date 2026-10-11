@@ -6,13 +6,13 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, boolean, g_free, strdup};
+use southstar_glib::{GBoolean, boolean, g_free, strdup};
 use southstar_layout::{BoxRef, Edges, InlineAttr, NsBox, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{Context, Layout};
-use southstar_style::{NsCssValue, StyleRef, StyleTable, ValueRef};
+use southstar_style::{NsCssValue, StyleRef, ValueRef};
 
-use crate::{controls, counters, pseudo, tags, text_input};
+use crate::{controls, pseudo, tags};
 
 unsafe extern "C" {
     fn g_utf8_strup(s: *const c_char, len: isize) -> *mut c_char;
@@ -137,41 +137,13 @@ fn value<'a>(v: *const NsCssValue) -> Option<ValueRef<'a>> {
     unsafe { ValueRef::from_ptr(v) }
 }
 
-fn styles(t: *mut GHashTable) -> StyleTable {
-    unsafe { StyleTable::from_ptr(t) }
-}
-
 fn dup_or_null(bytes: Option<Vec<u8>>) -> *mut c_char {
     bytes.map_or(ptr::null_mut(), |b| strdup(&b))
-}
-
-fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_input_columns_active() -> GBoolean {
-    boolean(text_input::columns_active())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_input_columns_fit(root: *const NsBox) -> GBoolean {
-    boolean(unsafe { BoxRef::from_ptr(root) }.is_some_and(text_input::fit_columns))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_input_columns_clear() {
-    text_input::clear_columns();
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_tag_is_non_rendering(name: *const c_char) -> GBoolean {
     boolean(tags::is_non_rendering(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_node_is_non_rendering(n: *const NsNode) -> GBoolean {
-    boolean(tags::node_is_non_rendering(node(n)))
 }
 
 #[unsafe(no_mangle)]
@@ -198,57 +170,6 @@ pub unsafe extern "C" fn ns_layout_inline_attr_control_width(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_font_kerning_from_style(s: *const Style) -> c_int {
-    controls::font_kerning(style(s))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_font_ligatures_from_style(s: *const Style) -> *const c_char {
-    ptr_or_null(controls::font_keyword(
-        style(s),
-        controls::FontKeyword::Ligatures,
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_font_feature_settings_from_style(
-    s: *const Style,
-) -> *const c_char {
-    ptr_or_null(controls::font_keyword(
-        style(s),
-        controls::FontKeyword::Features,
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_font_variation_settings_from_style(
-    s: *const Style,
-) -> *const c_char {
-    ptr_or_null(controls::font_keyword(
-        style(s),
-        controls::FontKeyword::Variations,
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_counters_build(root: *const NsNode, table: *mut GHashTable) {
-    counters::build(node(root), styles(table));
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_counters_clear() {
-    counters::clear();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_resolve_pseudo_content(
-    raw: *const c_char,
-    host: *const NsNode,
-) -> *mut c_char {
-    dup_or_null(c_str(raw).and_then(|raw| pseudo::resolve_content(raw.to_bytes(), node(host))))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_pseudo_content_text(
     content: *const NsCssValue,
     host: *const NsNode,
@@ -258,13 +179,4 @@ pub unsafe extern "C" fn ns_layout_pseudo_content_text(
             .and_then(ValueRef::keyword_text)
             .and_then(|raw| pseudo::resolve_content(raw.to_bytes(), node(host))),
     )
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_quotes_string_for(
-    s: *const Style,
-    depth: c_int,
-    closing: GBoolean,
-) -> *mut c_char {
-    strdup(&pseudo::quotes_string(style(s), depth, closing != 0))
 }

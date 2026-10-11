@@ -39,6 +39,18 @@ struct CalcHead {
     px: f64,
     em: f64,
     rem: f64,
+    _viewport: [f64; 6],
+    _func: u8,
+    n_args: u8,
+    _arg_none: u8,
+    args: [CalcArg; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct CalcArg {
+    _px: f64,
+    pct: f64,
 }
 
 #[repr(C)]
@@ -117,7 +129,7 @@ impl Display {
 struct NsStyle {
     values: [*const NsCssValue; PROP_COUNT],
     display: Display,
-    _specified_inline: u8,
+    specified_inline: u8,
     before: *const Style,
     after: *const Style,
     first_letter: *const Style,
@@ -377,6 +389,18 @@ impl<'a> ValueRef<'a> {
         })
     }
 
+    pub fn calc_arg_pcts(self) -> Vec<f64> {
+        let v = self.raw();
+        if v.kind != KIND_CALC {
+            return Vec::new();
+        }
+        let c = unsafe { v.u.calc };
+        c.args[..usize::from(c.n_args).min(4)]
+            .iter()
+            .map(|a| a.pct)
+            .collect()
+    }
+
     pub fn calc(self) -> Option<(f64, f64)> {
         let v = self.raw();
         if v.kind == KIND_CALC {
@@ -517,6 +541,10 @@ impl<'a> StyleRef<'a> {
 
     pub fn display(self) -> Display {
         self.fields().display
+    }
+
+    pub fn specified_inline(self) -> bool {
+        self.fields().specified_inline != 0
     }
 
     pub fn vars_ptr(self) -> *const c_void {

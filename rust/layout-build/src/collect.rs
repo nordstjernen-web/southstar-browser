@@ -16,7 +16,8 @@ use southstar_layout_content::{pseudo, tags};
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 use crate::atomic::{is_atomic_inline, node_is_frame_fallback};
-use crate::ffi::{self, CollectState, RawLink};
+use crate::ffi::{self, RawLink};
+use crate::state::{self, CollectState};
 
 pub const LINE_SEPARATOR: &[u8] = "\u{2028}".as_bytes();
 pub const NBSP: &[u8] = "\u{a0}".as_bytes();
@@ -143,7 +144,7 @@ impl<'a> Collector<'a> {
     pub fn new(styles: StyleTable, abs_placeholders: bool) -> Collector<'a> {
         Collector {
             styles,
-            state: ffi::collect_state(),
+            state: state::collect_state(),
             active_href: ptr::null(),
             active_target: ptr::null(),
             active_link_node: ptr::null(),
@@ -286,9 +287,10 @@ impl<'a> Collector<'a> {
 
     fn absolute(&mut self, n: Node<'_>, s: StyleRef<'_>) {
         let fixed = keyword_is(s.get(PropId::Position), c"fixed");
-        let ph = ffi::collect_absolute(n, fixed, !fixed && self.abs_placeholders);
-        if !ph.is_null() {
-            self.push_atomic(ph);
+        if let Some(ph) =
+            state::collect_absolute(n.as_ptr(), fixed, !fixed && self.abs_placeholders)
+        {
+            self.push_atomic(ph.as_mut_ptr());
         }
     }
 
@@ -315,9 +317,8 @@ impl<'a> Collector<'a> {
             return;
         }
         if !same(self.state.form_control_inline, n) && is_atomic_inline(Some(n), self.styles) {
-            let sub = ffi::collect_atomic_block(n, self.styles, depth + 1);
-            if !sub.is_null() {
-                self.push_atomic(sub);
+            if let Some(sub) = crate::block::collect_atomic_block(n, self.styles, depth + 1) {
+                self.push_atomic(sub.as_mut_ptr());
             }
             return;
         }
@@ -354,8 +355,8 @@ impl<'a> Collector<'a> {
             let txt = content
                 .and_then(ValueRef::keyword_text)
                 .and_then(|raw| pseudo::resolve_content(raw.to_bytes(), Some(host)));
-            let b = ffi::pseudo_block_with_text(ps, txt.as_deref());
-            self.push_atomic(b);
+            let b = crate::generated::pseudo_block_with_text(ps, txt.as_deref());
+            self.push_atomic(b.as_mut_ptr());
             return;
         }
         let side = |p| length_or(ps.get(p), 0.0);

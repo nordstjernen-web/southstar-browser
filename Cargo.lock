@@ -2391,6 +2391,8 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-layout-content",
+ "southstar-layout-tree",
+ "southstar-paint",
  "southstar-style",
 ]
 

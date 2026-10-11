@@ -51,6 +51,7 @@ const PORTED: &[&str] = &[
     "js_intl.c",
     "js_perf.c",
     "js_realm.c",
+    "layout.c",
     "libsouthstar.c",
     "mat4.h",
     "mathml.c",

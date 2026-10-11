@@ -624,6 +624,12 @@ impl Layout {
         (index, trailing)
     }
 
+    pub fn xy_to_index_inside(&self, x: c_int, y: c_int) -> Option<c_int> {
+        let (mut index, mut trailing) = (0, 0);
+        let inside = unsafe { pango_layout_xy_to_index(self.0, x, y, &mut index, &mut trailing) };
+        (inside != 0).then_some(index)
+    }
+
     pub fn log_attrs(&self) -> &[LogAttr] {
         let mut n: c_int = 0;
         let attrs = unsafe { pango_layout_get_log_attrs_readonly(self.0, &mut n) };
