@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The window global's shape (the immutable global prototypes, the
+  WindowProperties chain, the navigator and web API singleton shapes and
+  namespace objects) moved from js.c to Rust (rust/js-interfaces).
 * The DOM interface installers (the prototype hierarchy, instanceof and
   Symbol.hasInstance, toStringTag, unscopables, node and element member
   shapes, the PDF viewer plugins, interface object links and window.chrome)
