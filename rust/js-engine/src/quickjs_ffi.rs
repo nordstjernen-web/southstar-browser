@@ -939,6 +939,7 @@ pub mod quickjs {
     ) -> JSValue;
 
     const CFUNC_GENERIC: c_int = 0;
+    const CFUNC_CONSTRUCTOR: c_int = 2;
     const CFUNC_CONSTRUCTOR_OR_FUNC: c_int = 4;
 
     #[repr(C)]
@@ -1090,6 +1091,18 @@ pub mod quickjs {
 
     unsafe extern "C" {
         fn JS_IsEngineFunction(v: JSValue) -> bool;
+        fn JS_AddEnginePrivateName(ctx: *mut JSContext, name: *const c_char) -> c_int;
+        fn JS_EvalFunction(ctx: *mut JSContext, fun_obj: JSValue) -> JSValue;
+    }
+
+    pub fn add_engine_private_name(scope: &mut Scope<'_>, name: &str) {
+        let name = super::c_text(name);
+        unsafe { JS_AddEnginePrivateName(scope.ctx, name.as_ptr()) };
+    }
+
+    pub fn eval_function(scope: &mut Scope<'_>, compiled: Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_EvalFunction(scope.ctx, compiled.into_raw()) };
+        scope.take(raw)
     }
 
     pub fn identity(value: &Value) -> usize {
@@ -1458,6 +1471,10 @@ pub mod quickjs {
         f: JSCFunction,
     ) -> Value {
         c_function_with(scope, name, arity, f, CFUNC_CONSTRUCTOR_OR_FUNC, 0)
+    }
+
+    pub fn c_constructor(scope: &mut Scope<'_>, name: &str, arity: u32, f: JSCFunction) -> Value {
+        c_function_with(scope, name, arity, f, CFUNC_CONSTRUCTOR, 0)
     }
 
     pub fn function_realm(

@@ -1,0 +1,22 @@
+[package]
+name = "southstar-js-runtime"
+description = "Creating and freeing a page's or a worker's JavaScript realm: the runtime and its interrupt handler, the window's and the worker global's installers in order, and the setup and teardown of every per-page state"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-config = { path = "../config" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-js-bind = { path = "../js-bind" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[features]
+wasm = []
+webgpu = []
+
+[lints]
+workspace = true

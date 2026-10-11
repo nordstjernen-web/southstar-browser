@@ -1130,6 +1130,8 @@ JSValue ns_returns_resolved_empty_array(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv);
 JSValue ns_cache_open(JSContext *ctx, JSValueConst this_val, int argc,
                       JSValueConst *argv);
+JSValue ns_window_find(JSContext *ctx, JSValueConst this_val, int argc,
+                       JSValueConst *argv);
 JSValue ns_window_event_ctor(JSContext *ctx, JSValueConst this_val, int argc,
                              JSValueConst *argv);
 void    ns_worker_install_constructor(JSContext *ctx, JSValueConst global);
@@ -1798,6 +1800,7 @@ typedef enum {
     NS_PROTO_TABLE_HREF,
     NS_PROTO_TABLE_DOM_IMPLEMENTATION,
     NS_PROTO_TABLE_VALIDITY,
+    NS_PROTO_TABLE_ELEMENT,
 } ns_proto_table;
 
 typedef enum {
@@ -1821,6 +1824,57 @@ void     ns_js_clear_doc_ready_states(ns_js *js);
 const char *ns_js_early_inject_src(const ns_js *js);
 void     ns_js_drop_message_tasks(ns_js *js);
 void     ns_storage_load_for(ns_js *js, const char *new_url);
+
+/* Creating and freeing a realm (rust/js-runtime) and the js.c pieces it
+ * reaches: the struct, the QuickJS runtime, context and classes. */
+typedef enum {
+    NS_JS_CLASS_ELEMENT,
+    NS_JS_CLASS_ATTR,
+    NS_JS_CLASS_STYLE,
+    NS_JS_CLASS_TOKEN_LIST,
+    NS_JS_CLASS_LIVE,
+    NS_JS_CLASS_DATASET,
+    NS_JS_CLASS_STORAGE,
+    NS_JS_CLASS_WINDOW_NAMED,
+} ns_js_class;
+
+ns_js   *ns_active_js(void);
+void     ns_set_active_js(ns_js *js);
+void     ns_js_deadlines(const ns_js *js, gint64 *eval_deadline_us,
+                         gint64 *monitor_deadline_us);
+ns_js   *ns_js_alloc(void);
+void     ns_js_set_time_origin(ns_js *js, gint64 origin_us, double origin_real_ms);
+gboolean ns_js_create_runtime(ns_js *js, size_t memory_limit, size_t stack_size,
+                              JSInterruptHandler *interrupt,
+                              JSHostPromiseRejectionTracker *rejection_tracker);
+gboolean ns_js_create_context(ns_js *js);
+void     ns_js_set_callbacks(ns_js *js, ns_js_log_cb log_cb, gpointer log_user_data,
+                             ns_js_mutated_cb mut_cb, gpointer mut_user_data,
+                             ns_js_navigate_cb nav_cb, gpointer nav_user_data);
+void     ns_js_init_tables(ns_js *js, GMainContext *main_context, gboolean page);
+void     ns_js_set_worker_host(ns_js *js, ns_worker_host *host,
+                               const char *partition_key);
+JSValue  ns_js_register_class(JSContext *ctx, int which);
+JSValue  ns_js_new_window_named(JSContext *ctx);
+void     ns_js_set_proto_document(ns_js *js, JSValue proto);
+void     ns_js_set_navigator_brand(ns_js *js, JSValue brand);
+void     ns_js_set_pristine_promise(ns_js *js, JSValue promise);
+void     ns_js_eval_worker_polyfills(ns_js *js);
+JSValue  ns_worker_compile(JSContext *ctx, const char *src, gsize len,
+                           const char *url, gboolean module,
+                           gboolean *parse_error);
+GHashTable *ns_js_pinned_wrappers(const ns_js *js);
+void     ns_js_detach_wrapper(ns_js *js, ns_node *node, gboolean release);
+void     ns_js_free_doc_ready_states(ns_js *js);
+void     ns_js_free_page_strings(ns_js *js);
+void     ns_js_stop_observer_tick(ns_js *js);
+void     ns_js_free_pinned_set(ns_js *js);
+void     ns_js_free_realm_values(ns_js *js);
+void     ns_js_free_platform_globals(ns_js *js);
+void     ns_js_free_partition(ns_js *js);
+void     ns_js_free_lookup_caches(ns_js *js);
+void     ns_js_free_window_values(ns_js *js);
+void     ns_js_free_engine(ns_js *js);
 
 void     ns_js_set_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
                                     const char *prefix, const char *local_name,
