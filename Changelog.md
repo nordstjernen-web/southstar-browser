@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The page's realm scopes, eval budget, microtask and message-task
+  scheduling, pumped fetches and runtime state accessors moved from js.c to
+  Rust (rust/js-runtime); about 60 fields left struct ns_js for Rust-owned
+  page state.
 * The JavaScript engine layer gained engine-neutral host classes with exotic
   property hooks; the Storage, DOMTokenList, CSSStyleDeclaration and
   WindowProperties classes moved off js.c onto them (rust/js-storage,
