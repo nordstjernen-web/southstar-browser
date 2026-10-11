@@ -449,3 +449,73 @@ unsafe extern "C" {
     pub fn cairo_surface_mark_dirty(surface: *mut CairoSurface);
     pub fn cairo_surface_destroy(surface: *mut CairoSurface);
 }
+
+opaque!(
+    GtkGesture,
+    GtkEventController,
+    GtkDropTarget,
+    GtkIMContext,
+    GtkAdjustment,
+    GtkNative,
+    GdkSurface,
+    GdkClipboard,
+    GdkFileList,
+    GValue,
+);
+
+pub type GAsyncReadyCallback =
+    Option<unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void)>;
+pub type GdkModifierType = c_uint;
+pub const ALT_MASK: GdkModifierType = 1 << 3;
+pub const META_MASK: GdkModifierType = 1 << 28;
+pub const BUTTON_PRIMARY: c_uint = 1;
+pub const BUTTON_MIDDLE: c_uint = 2;
+pub const BUTTON_SECONDARY: c_uint = 3;
+pub const EVENT_SEQUENCE_CLAIMED: c_int = 1;
+pub const ACTION_COPY: c_uint = 1 << 0;
+
+unsafe extern "C" {
+    pub fn g_type_check_value_holds(value: *const GValue, type_: GType) -> GBoolean;
+    pub fn g_value_get_boxed(value: *const GValue) -> *mut c_void;
+    pub fn g_file_get_path(file: *mut c_void) -> *mut c_char;
+
+    pub fn gdk_keyval_to_unicode(keyval: c_uint) -> u32;
+    pub fn gdk_keyval_name(keyval: c_uint) -> *const c_char;
+    pub fn gdk_keyval_to_lower(keyval: c_uint) -> c_uint;
+    pub fn gdk_surface_get_scale(surface: *mut GdkSurface) -> c_double;
+    pub fn gdk_clipboard_read_text_async(
+        clipboard: *mut GdkClipboard,
+        cancellable: *mut c_void,
+        callback: GAsyncReadyCallback,
+        user_data: *mut c_void,
+    );
+    pub fn gdk_clipboard_read_text_finish(
+        clipboard: *mut GdkClipboard,
+        result: *mut c_void,
+        error: *mut *mut c_void,
+    ) -> *mut c_char;
+    pub fn gdk_file_list_get_type() -> GType;
+    pub fn gdk_file_list_get_files(file_list: *mut GdkFileList) -> *mut GSList;
+
+    pub fn gtk_widget_get_height(widget: *mut GtkWidget) -> c_int;
+    pub fn gtk_widget_get_clipboard(widget: *mut GtkWidget) -> *mut GdkClipboard;
+    pub fn gtk_widget_get_native(widget: *mut GtkWidget) -> *mut GtkNative;
+    pub fn gtk_widget_get_scale_factor(widget: *mut GtkWidget) -> c_int;
+    pub fn gtk_native_get_surface(native: *mut GtkNative) -> *mut GdkSurface;
+    pub fn gtk_adjustment_get_upper(adjustment: *mut GtkAdjustment) -> c_double;
+    pub fn gtk_gesture_drag_new() -> *mut GtkGesture;
+    pub fn gtk_gesture_set_state(gesture: *mut GtkGesture, state: c_int) -> GBoolean;
+    pub fn gtk_gesture_single_set_button(gesture: *mut GtkGesture, button: c_uint);
+    pub fn gtk_gesture_single_get_current_button(gesture: *mut GtkGesture) -> c_uint;
+    pub fn gtk_event_controller_get_current_event_state(
+        controller: *mut GtkEventController,
+    ) -> GdkModifierType;
+    pub fn gtk_event_controller_motion_new() -> *mut GtkEventController;
+    pub fn gtk_event_controller_key_set_im_context(
+        controller: *mut GtkEventController,
+        im_context: *mut GtkIMContext,
+    );
+    pub fn gtk_drop_target_new(type_: GType, actions: c_uint) -> *mut GtkDropTarget;
+    pub fn gtk_im_multicontext_new() -> *mut GtkIMContext;
+    pub fn gtk_im_context_set_client_widget(context: *mut GtkIMContext, widget: *mut GtkWidget);
+}

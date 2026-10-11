@@ -13,14 +13,10 @@ use southstar_gtk_ffi::{
     self as gtk, Cairo, CairoSurface, GdkFrameClock, GrapheneRect, GtkSnapshot, GtkWidget,
 };
 
+use super::procview_state::NsProcView;
 use crate::procview::media::{
     self, FrameRing, HelperLine, Rect, SlotView, VideoCommand, clock_position, pick_frame,
 };
-
-#[repr(C)]
-pub struct NsProcView {
-    _private: [u8; 0],
-}
 
 macro_rules! opaque {
     ($($name:ident),* $(,)?) => {
