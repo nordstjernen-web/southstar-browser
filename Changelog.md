@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser (unreleased):
+Southstar Browser 0.9.9:
 ======
 * The box pool and box freeing, inline-run merging and splitting, order
   reordering and table box construction moved from layout.c to Rust

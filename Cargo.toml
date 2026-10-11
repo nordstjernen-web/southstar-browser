@@ -3,7 +3,7 @@ resolver = "3"
 members = ["rust/*"]
 
 [workspace.package]
-version = "1.0.30-dev"
+version = "0.9.9"
 edition = "2024"
 rust-version = "1.99"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"

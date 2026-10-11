@@ -28,7 +28,7 @@ Supported platforms:
 * macOS
 * FreeBSD and NetBSD
 
-**Version:** 1.0.30-dev. Southstar has not made a release of its own yet;
+**Version:** 0.9.9. Southstar has not made a release of its own yet;
 [Changelog.md](Changelog.md) records the Nordstjernen releases it grew from.
 
 **Standards.** Behaviour is measured against the spec text, section by
