@@ -104,6 +104,7 @@ pub use southstar_spellcheck;
 pub use southstar_svg;
 pub use southstar_texture;
 pub use southstar_threaddump;
+pub use southstar_video;
 pub use southstar_watchdog;
 pub use southstar_webaudio;
 pub use southstar_webcrypto;

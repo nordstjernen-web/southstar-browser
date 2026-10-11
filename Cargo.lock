@@ -1683,6 +1683,7 @@ dependencies = [
  "southstar-svg",
  "southstar-texture",
  "southstar-threaddump",
+ "southstar-video",
  "southstar-watchdog",
  "southstar-webaudio",
  "southstar-webcrypto",
@@ -2432,6 +2433,16 @@ dependencies = [
 [[package]]
 name = "southstar-threaddump"
 version = "1.0.30-dev"
+
+[[package]]
+name = "southstar-video"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
+]
 
 [[package]]
 name = "southstar-watchdog"

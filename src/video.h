@@ -1,4 +1,4 @@
-/* Southstar — inline video playback and poster cache.
+/* Southstar — inline video playback and poster cache, implemented in rust/video.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */
@@ -79,7 +79,7 @@ typedef struct ns_video {
     double       prev_tick_time;
     double       last_emit_time;
     double       duration;
-    GPtrArray   *cues;
+    void        *cues;
     gboolean     track_requested;
 } ns_video;
 

@@ -110,6 +110,7 @@ southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-webgl = { path = "../webgl" }
 southstar-texture = { path = "../texture" }
+southstar-video = { path = "../video" }
 southstar-watchdog = { path = "../watchdog" }
 southstar-engine = { path = "../engine" }
 southstar-headless = { path = "../headless" }
@@ -140,7 +141,7 @@ ns-pango = [
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]
 http-brotli = ["southstar-net/http-brotli"]
 http-zstd = ["southstar-net/http-zstd"]
-libav = ["southstar-headless/libav", "southstar-net/libav"]
+libav = ["southstar-headless/libav", "southstar-net/libav", "southstar-video/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 wasm = ["dep:southstar-js-wasm"]
 webgpu = ["southstar-canvas/webgpu", "southstar-net/webgpu"]
