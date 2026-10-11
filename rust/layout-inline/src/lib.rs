@@ -7,3 +7,4 @@ mod ffi;
 mod intrinsic;
 mod layout;
 mod measure;
+mod multicol;

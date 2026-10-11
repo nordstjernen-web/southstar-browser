@@ -1675,6 +1675,7 @@ dependencies = [
  "southstar-layout-query",
  "southstar-layout-sizing",
  "southstar-layout-table",
+ "southstar-layout-tree",
  "southstar-mat4",
  "southstar-mathml",
  "southstar-mic",
@@ -2352,6 +2353,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-tree",
  "southstar-paint",
  "southstar-style",
 ]
@@ -2393,6 +2395,16 @@ dependencies = [
 name = "southstar-layout-table"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-glib",
+ "southstar-layout",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-tree"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
  "southstar-glib",
  "southstar-layout",
  "southstar-style",

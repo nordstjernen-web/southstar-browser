@@ -147,18 +147,36 @@ int ns_layout_clear_kind_of(const ns_style *s);
 void ns_layout_image(ns_box *box, double parent_content_width);
 double ns_layout_text_input_intrinsic_width(const ns_box *box);
 void ns_layout_reset_container_queries(void);
-void ns_layout_inline_runs_join_splits(ns_box *box);
-void ns_layout_reorder_children_by_order(ns_box *box);
-gboolean ns_layout_inline_box_can_fragment_multicol(const ns_box *box,
-                                                    const ns_style *style,
-                                                    double basis);
-gboolean ns_layout_multicol_single_inline(ns_box *box, double inner_x,
-                                          double inner_y, double col_w,
-                                          double col_gap, int n_cols,
-                                          const ns_style *child_inherited,
-                                          double *cursor_y);
-gsize ns_layout_inline_run_break_before(const ns_box *run, double band_height);
-ns_box *ns_layout_inline_run_split(ns_box *run, gsize split);
+ns_box *ns_layout_box_new(ns_box_kind kind);
+ns_box *ns_layout_box_new_inline(void);
+void ns_layout_link_clear(gpointer data);
+ns_box *ns_layout_inline_merge_prefix(ns_box *prefix, ns_box *suffix);
+GArray *ns_layout_inline_links_ensure(ns_box *b);
+gboolean ns_layout_is_table_box(const ns_node *n, GHashTable *styles);
+gboolean ns_layout_node_is_table_internal(const ns_node *n, GHashTable *styles);
+ns_box *ns_layout_build_table(const ns_node *n, GHashTable *styles);
+ns_box *ns_layout_build_anonymous_table(const ns_node *start,
+                                        const ns_node *end,
+                                        GHashTable *styles);
+ns_box *ns_layout_build_block(const ns_node *n, GHashTable *styles);
+ns_box *ns_layout_build_inline_run(const ns_node *first,
+                                   const ns_node *last_excl,
+                                   GHashTable *styles);
+ns_box *ns_layout_build_pseudo_block_for(const ns_style *ps,
+                                         const ns_node *host);
+ns_box *ns_layout_build_pseudo_inline_for(const ns_style *ps,
+                                          const ns_node *host);
+void ns_layout_register_abs_pseudo(const ns_node *host, const ns_style *ps);
+void ns_layout_queue_absolute_node(const ns_node *n, const ns_style *s);
+void ns_layout_collect_box_bg_image(ns_box *box, const ns_style *s);
+void ns_layout_append_display_contents_children(ns_box *block,
+                                                const ns_node *n,
+                                                GHashTable *styles,
+                                                gboolean blockify_children,
+                                                ns_box **pending_before);
+void ns_layout_append_generated_after(ns_box *block, ns_box *gen);
+gboolean ns_layout_is_inline_dom(const ns_node *n, GHashTable *styles);
+gboolean ns_layout_continues_inline_run(const ns_node *n, GHashTable *styles);
 void *ns_layout_peek_image(const char *src);
 void ns_layout_append_inline_spacer(GString *out, GArray *attrs, double width);
 int ns_layout_control_pad_spaces(const ns_style *s, gboolean right);

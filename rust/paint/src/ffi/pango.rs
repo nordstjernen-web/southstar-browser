@@ -201,6 +201,7 @@ pango! {
     fn pango_layout_get_log_attrs_readonly(layout: *mut c_void, n_attrs: *mut c_int) -> *const LogAttr;
     fn pango_layout_get_iter(layout: *mut c_void) -> *mut c_void;
     fn pango_layout_iter_free(iter: *mut c_void);
+    fn pango_layout_iter_get_index(iter: *mut c_void) -> c_int;
     fn pango_layout_iter_next_line(iter: *mut c_void) -> GBoolean;
     fn pango_layout_iter_get_line_readonly(iter: *mut c_void) -> *mut RawLine;
     fn pango_layout_iter_get_line_extents(iter: *mut c_void, ink: *mut Rectangle, logical: *mut Rectangle);
@@ -844,6 +845,10 @@ impl<'a> LayoutIter<'a> {
 
     pub fn baseline(&self) -> c_int {
         unsafe { pango_layout_iter_get_baseline(self.0) }
+    }
+
+    pub fn index(&self) -> c_int {
+        unsafe { pango_layout_iter_get_index(self.0) }
     }
 }
 

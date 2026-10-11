@@ -279,31 +279,6 @@ style_is_block_level(const ns_style *s)
 }
 
 static gboolean
-style_display_is_table(const ns_style *s)
-{
-    return ns_display_is_table_wrapper(ns_css_display_of(s));
-}
-
-static gboolean
-style_display_is_table_row(const ns_style *s)
-{
-    return ns_display_is(ns_css_display_of(s), NS_DISPLAY_INTERNAL_TABLE_ROW);
-}
-
-static gboolean
-style_display_is_table_cell(const ns_style *s)
-{
-    return ns_display_is(ns_css_display_of(s), NS_DISPLAY_INTERNAL_TABLE_CELL);
-}
-
-static gboolean
-style_display_is_table_caption(const ns_style *s)
-{
-    return ns_display_is(ns_css_display_of(s),
-                         NS_DISPLAY_INTERNAL_TABLE_CAPTION);
-}
-
-static gboolean
 style_is_flex_container(const ns_style *s)
 {
     return ns_display_is_flex_container(ns_css_display_of(s));
@@ -349,51 +324,6 @@ self_start_is_far_side(const ns_style *s, gboolean horizontal_axis)
     if (!writing_mode) return FALSE;
     gboolean upward = keyword_is(s->values[NS_CSS_WRITING_MODE], "sideways-lr");
     return upward != rtl;
-}
-
-static double
-number_or(const ns_css_value *v, double fallback)
-{
-    if (!v) return fallback;
-    if (v->kind == NS_CSS_V_LENGTH) return v->u.length.v;
-    return fallback;
-}
-
-static int
-box_css_order(const ns_box *b)
-{
-    if (!b || !b->style) return 0;
-    return (int)number_or(b->style->values[NS_CSS_ORDER], 0);
-}
-
-static void
-reorder_children_by_order(ns_box *box)
-{
-    int n = 0;
-    gboolean any = FALSE;
-    for (ns_box *c = box->first_child; c; c = c->next_sibling) {
-        n++;
-        if (box_css_order(c) != 0) any = TRUE;
-    }
-    if (n < 2 || !any) return;
-    ns_box **arr = g_new(ns_box *, n);
-    int i = 0;
-    for (ns_box *c = box->first_child; c; c = c->next_sibling) arr[i++] = c;
-    for (int a = 1; a < n; a++) {
-        ns_box *key = arr[a];
-        int ko = box_css_order(key);
-        int b = a - 1;
-        while (b >= 0 && box_css_order(arr[b]) > ko) {
-            arr[b + 1] = arr[b];
-            b--;
-        }
-        arr[b + 1] = key;
-    }
-    for (int k = 0; k < n; k++)
-        arr[k]->next_sibling = (k + 1 < n) ? arr[k + 1] : NULL;
-    box->first_child = arr[0];
-    box->last_child  = arr[n - 1];
-    g_free(arr);
 }
 
 static gboolean
@@ -468,357 +398,11 @@ edges_from_style(const ns_style *s, double basis,
                                        NS_CSS_BORDER_LEFT_STYLE);
 }
 
-static ns_box *g_box_pool[16384];
-static int g_box_pool_n;
-
-static ns_box *
-box_new(ns_box_kind kind)
-{
-    ns_box *b;
-    if (g_box_pool_n > 0) {
-        b = g_box_pool[--g_box_pool_n];
-        memset(b, 0, sizeof(*b));
-    } else {
-        b = g_new0(ns_box, 1);
-    }
-    b->kind = kind;
-    b->colspan = 1;
-    b->rowspan = 1;
-    return b;
-}
-
-static void
-link_clear(gpointer data)
-{
-    ns_link_range *r = data;
-    g_free(r->href);
-    g_free(r->target);
-}
-
-static GArray *inline_links_ensure(ns_box *b);
-
 static ns_box_media *
 ns_box_media_ensure(ns_box *b)
 {
     if (!b->media) b->media = g_new0(ns_box_media, 1);
     return b->media;
-}
-
-static ns_box *
-inline_merge_prefix(ns_box *prefix, ns_box *suffix)
-{
-    if (!prefix) return suffix;
-    if (!suffix) return prefix;
-    gsize plen = prefix->text ? strlen(prefix->text) : 0;
-    gsize slen = suffix->text ? strlen(suffix->text) : 0;
-    if (plen > G_MAXSIZE - slen - 1) { ns_box_free(suffix); return prefix; }
-    char *combined = g_malloc(plen + slen + 1);
-    if (plen) memcpy(combined, prefix->text, plen);
-    if (slen) memcpy(combined + plen, suffix->text, slen);
-    combined[plen + slen] = '\0';
-    g_free(suffix->text);
-    suffix->text = combined;
-
-    if (suffix->attrs) {
-        for (guint i = 0; i < suffix->attrs->len; i++) {
-            ns_inline_attr *a = &g_array_index(suffix->attrs, ns_inline_attr, i);
-            a->start += plen;
-        }
-    }
-    if (suffix->links) {
-        for (guint i = 0; i < suffix->links->len; i++) {
-            ns_link_range *l = &g_array_index(suffix->links, ns_link_range, i);
-            l->start += plen;
-        }
-    }
-    if (prefix->attrs) {
-        for (guint i = 0; i < prefix->attrs->len; i++) {
-            ns_inline_attr a = g_array_index(prefix->attrs, ns_inline_attr, i);
-            g_array_append_val(suffix->attrs, a);
-        }
-    }
-    if (suffix->inline_atomics) {
-        for (guint i = 0; i < suffix->inline_atomics->len; i++)
-            g_array_index(suffix->inline_atomics, ns_inline_atomic, i).byte_off += plen;
-    }
-    if (prefix->inline_atomics) {
-        if (!suffix->inline_atomics)
-            suffix->inline_atomics = g_array_new(FALSE, FALSE, sizeof(ns_inline_atomic));
-        for (guint i = 0; i < prefix->inline_atomics->len; i++) {
-            ns_inline_atomic ia = g_array_index(prefix->inline_atomics, ns_inline_atomic, i);
-            if (ia.box && ia.box->parent == prefix) ia.box->parent = suffix;
-            g_array_append_val(suffix->inline_atomics, ia);
-        }
-        g_array_free(prefix->inline_atomics, TRUE);
-        prefix->inline_atomics = NULL;
-    }
-    if (prefix->links) {
-        GArray *dst = inline_links_ensure(suffix);
-        for (guint i = 0; i < prefix->links->len; i++) {
-            ns_link_range src = g_array_index(prefix->links, ns_link_range, i);
-            ns_link_range dup = src;
-            dup.href   = src.href   ? g_strdup(src.href)   : NULL;
-            dup.target = src.target ? g_strdup(src.target) : NULL;
-            g_array_append_val(dst, dup);
-        }
-    }
-    ns_box_free(prefix);
-    return suffix;
-}
-
-static ns_box *
-box_new_inline(void)
-{
-    ns_box *b = box_new(NS_BOX_INLINE);
-    b->attrs = g_array_new(FALSE, FALSE, sizeof(ns_inline_attr));
-    return b;
-}
-
-static GArray *
-inline_links_ensure(ns_box *b)
-{
-    if (!b->links) {
-        b->links = g_array_new(FALSE, FALSE, sizeof(ns_link_range));
-        g_array_set_clear_func(b->links, link_clear);
-    }
-    return b->links;
-}
-
-static void
-inline_run_drop_caches(ns_box *run)
-{
-    run->inline_layout_cache_valid = FALSE;
-    run->inline_natural_cache_valid = FALSE;
-    run->inline_min_cache_valid = FALSE;
-    if (run->paint_layout) ns_paint_drop_box_cache(run);
-}
-
-static void
-inline_split_attrs(ns_box *run, ns_box *tail, gsize split)
-{
-    GArray *head_attrs = g_array_new(FALSE, FALSE, sizeof(ns_inline_attr));
-    for (guint i = 0; run->attrs && i < run->attrs->len; i++) {
-        ns_inline_attr a = g_array_index(run->attrs, ns_inline_attr, i);
-        gsize end = a.start + a.len;
-        if (a.start < split) {
-            ns_inline_attr h = a;
-            if (end > split) h.len = split - a.start;
-            g_array_append_val(head_attrs, h);
-        }
-        if (end > split || a.start >= split) {
-            ns_inline_attr t = a;
-            t.start = MAX(a.start, split) - split;
-            t.len = end > split ? end - MAX(a.start, split) : 0;
-            g_array_append_val(tail->attrs, t);
-        }
-    }
-    if (run->attrs) g_array_free(run->attrs, TRUE);
-    run->attrs = head_attrs;
-}
-
-static ns_link_range
-link_range_copy(const ns_link_range *l, gsize start, gsize len)
-{
-    ns_link_range c = *l;
-    c.href = l->href ? g_strdup(l->href) : NULL;
-    c.target = l->target ? g_strdup(l->target) : NULL;
-    c.start = start;
-    c.len = len;
-    return c;
-}
-
-static void
-inline_split_links(ns_box *run, ns_box *tail, gsize split)
-{
-    if (!run->links) return;
-    GArray *head_links = g_array_new(FALSE, FALSE, sizeof(ns_link_range));
-    g_array_set_clear_func(head_links, link_clear);
-    for (guint i = 0; i < run->links->len; i++) {
-        const ns_link_range *l = &g_array_index(run->links, ns_link_range, i);
-        gsize end = l->start + l->len;
-        if (l->start < split) {
-            ns_link_range h = link_range_copy(l, l->start,
-                                              MIN(end, split) - l->start);
-            g_array_append_val(head_links, h);
-        }
-        if (end > split) {
-            gsize from = MAX(l->start, split);
-            ns_link_range t = link_range_copy(l, from - split, end - from);
-            g_array_append_val(inline_links_ensure(tail), t);
-        }
-    }
-    g_array_free(run->links, TRUE);
-    run->links = head_links;
-}
-
-static void
-inline_split_atomics(ns_box *run, ns_box *tail, gsize split)
-{
-    if (!run->inline_atomics) return;
-    GArray *head_atomics = g_array_new(FALSE, FALSE, sizeof(ns_inline_atomic));
-    for (guint i = 0; i < run->inline_atomics->len; i++) {
-        ns_inline_atomic ia =
-            g_array_index(run->inline_atomics, ns_inline_atomic, i);
-        if (ia.byte_off < split) {
-            g_array_append_val(head_atomics, ia);
-            continue;
-        }
-        if (!tail->inline_atomics)
-            tail->inline_atomics =
-                g_array_new(FALSE, FALSE, sizeof(ns_inline_atomic));
-        ia.byte_off -= split;
-        if (ia.box && ia.box->parent == run) ia.box->parent = tail;
-        g_array_append_val(tail->inline_atomics, ia);
-    }
-    g_array_free(run->inline_atomics, TRUE);
-    run->inline_atomics = head_atomics;
-}
-
-static ns_box *
-inline_run_split(ns_box *run, gsize split)
-{
-    ns_box *tail = box_new_inline();
-    tail->dom = run->dom;
-    tail->style = run->style;
-    tail->inline_split_tail = TRUE;
-    tail->text = g_strdup(run->text + split);
-    run->text[split] = '\0';
-
-    inline_split_attrs(run, tail, split);
-    inline_split_links(run, tail, split);
-    inline_split_atomics(run, tail, split);
-
-    tail->parent = run->parent;
-    tail->next_sibling = run->next_sibling;
-    run->next_sibling = tail;
-    if (run->parent && run->parent->last_child == run)
-        run->parent->last_child = tail;
-    inline_run_drop_caches(run);
-    return tail;
-}
-
-static void
-inline_runs_join_splits(ns_box *box)
-{
-    ns_box *prev = NULL;
-    for (ns_box *c = box->first_child; c; ) {
-        ns_box *next = c->next_sibling;
-        if (!next || !next->inline_split_tail ||
-            c->kind != NS_BOX_INLINE || next->kind != NS_BOX_INLINE) {
-            prev = c;
-            c = next;
-            continue;
-        }
-        gboolean head_is_tail = c->inline_split_tail;
-        ns_box *after = next->next_sibling;
-        ns_box *joined = inline_merge_prefix(c, next);
-        joined->inline_split_tail = head_is_tail;
-        joined->parent = box;
-        joined->next_sibling = after;
-        if (prev) prev->next_sibling = joined;
-        else box->first_child = joined;
-        if (!after) box->last_child = joined;
-        inline_run_drop_caches(joined);
-        c = joined;
-    }
-}
-
-static gsize
-inline_run_break_before(const ns_box *run, double band_height)
-{
-    NsPangoLayout *layout = ns_paint_build_inline_layout(NULL, run);
-    if (!layout) return 0;
-    gsize split = 0;
-    NsPangoLayoutIter *iter = ns_pango_layout_get_iter(layout);
-    do {
-        NsPangoRectangle logical;
-        ns_pango_layout_iter_get_line_extents(iter, NULL, &logical);
-        if ((double)logical.y / NS_PANGO_SCALE >= band_height - 0.5) {
-            split = (gsize)ns_pango_layout_iter_get_index(iter);
-            break;
-        }
-    } while (ns_pango_layout_iter_next_line(iter));
-    ns_pango_layout_iter_free(iter);
-    g_object_unref(layout);
-    return split;
-}
-
-static void
-box_append_child(ns_box *parent, ns_box *child)
-{
-    if (parent->last_child && parent->last_child->kind == NS_BOX_INLINE &&
-        child->kind == NS_BOX_INLINE && !parent->last_child->style &&
-        !child->style) {
-        ns_box *prefix = parent->last_child;
-        ns_box *previous = NULL;
-        for (ns_box *c = parent->first_child; c && c != prefix;
-             c = c->next_sibling)
-            previous = c;
-        ns_box *merged = inline_merge_prefix(prefix, child);
-        merged->parent = parent;
-        if (previous) previous->next_sibling = merged;
-        else parent->first_child = merged;
-        parent->last_child = merged;
-        return;
-    }
-    child->parent = parent;
-    if (!parent->first_child) parent->first_child = child;
-    else                       parent->last_child->next_sibling = child;
-    parent->last_child = child;
-}
-
-void
-ns_box_free(ns_box *box)
-{
-    if (!box) return;
-    GPtrArray *stack = g_ptr_array_new();
-    g_ptr_array_add(stack, box);
-    while (stack->len > 0) {
-        ns_box *cur = g_ptr_array_index(stack, stack->len - 1);
-        g_ptr_array_set_size(stack, stack->len - 1);
-        for (ns_box *c = cur->first_child; c; ) {
-            ns_box *next = c->next_sibling;
-            g_ptr_array_add(stack, c);
-            c = next;
-        }
-        if (cur->paint_layout) ns_paint_drop_box_cache(cur);
-        if (cur->links) g_array_free(cur->links, TRUE);
-        if (cur->attrs) g_array_free(cur->attrs, TRUE);
-        if (cur->table_col_hints) g_array_free(cur->table_col_hints, TRUE);
-        if (cur->grid_col_tracks) g_array_free(cur->grid_col_tracks, TRUE);
-        if (cur->grid_row_tracks) g_array_free(cur->grid_row_tracks, TRUE);
-        if (cur->inline_atomics) {
-            for (guint i = 0; i < cur->inline_atomics->len; i++) {
-                ns_inline_atomic *ia = &g_array_index(cur->inline_atomics,
-                                                      ns_inline_atomic, i);
-                if (ia->box) g_ptr_array_add(stack, ia->box);
-            }
-            g_array_free(cur->inline_atomics, TRUE);
-        }
-        if (cur->atomic_line_heights) {
-            g_array_free(cur->atomic_line_heights, TRUE);
-        }
-        g_free(cur->text);
-        if (cur->media) {
-            g_free(cur->media->image_src);
-            g_free(cur->media->bg_image_src);
-            g_free(cur->media->marker_image_src);
-            g_free(cur->media->border_image_src);
-            if (cur->media->bg_layer_srcs)
-                g_ptr_array_free(cur->media->bg_layer_srcs, TRUE);
-            if (cur->media->bg_layer_images)
-                g_ptr_array_free(cur->media->bg_layer_images, TRUE);
-            g_free(cur->media->video_src);
-            g_free(cur->media->video_poster);
-            g_free(cur->media->video_audio_src);
-            g_free(cur->media);
-        }
-        if (g_box_pool_n < (int)G_N_ELEMENTS(g_box_pool))
-            g_box_pool[g_box_pool_n++] = cur;
-        else
-            g_free(cur);
-    }
-    g_ptr_array_free(stack, TRUE);
 }
 
 static gboolean box_first_baseline(const ns_box *b, double *out);
@@ -1018,133 +602,7 @@ continues_inline_run(const ns_node *n, GHashTable *styles)
     return is_inline_dom(n, styles) || node_leaves_inline_run_open(n, styles);
 }
 
-static ns_display_internal
-node_table_internal(const ns_node *n, GHashTable *styles)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return NS_DISPLAY_INTERNAL_NONE;
-    ns_display d = ns_css_display_of(
-        styles ? g_hash_table_lookup(styles, n) : NULL);
-    return ns_display_is_table_internal(d) ? d.internal
-                                           : NS_DISPLAY_INTERNAL_NONE;
-}
-
-static gboolean
-node_is_row_group(const ns_node *n, GHashTable *styles)
-{
-    ns_display_internal k = node_table_internal(n, styles);
-    return k == NS_DISPLAY_INTERNAL_TABLE_ROW_GROUP ||
-           k == NS_DISPLAY_INTERNAL_TABLE_HEADER_GROUP ||
-           k == NS_DISPLAY_INTERNAL_TABLE_FOOTER_GROUP;
-}
-
-static gboolean
-is_table_row(const ns_node *n, GHashTable *styles)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return FALSE;
-    if (n->name && strcmp(n->name, "tr") == 0) return TRUE;
-    return style_display_is_table_row(g_hash_table_lookup(styles, n));
-}
-
-static gboolean
-is_table_box(const ns_node *n, GHashTable *styles)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT) return FALSE;
-    if (n->name && strcmp(n->name, "table") == 0) return TRUE;
-    return style_display_is_table(g_hash_table_lookup(styles, n));
-}
-
-static gboolean
-is_cell_element(const ns_node *n, GHashTable *styles)
-{
-    if (ns_node_is_element_named(n, "td") ||
-        ns_node_is_element_named(n, "th"))
-        return TRUE;
-    if (!n || n->kind != NS_NODE_ELEMENT) return FALSE;
-    return style_display_is_table_cell(g_hash_table_lookup(styles, n));
-}
-
-static gboolean
-is_table_caption(const ns_node *n, GHashTable *styles)
-{
-    if (ns_node_is_element_named(n, "caption")) return TRUE;
-    if (!n || n->kind != NS_NODE_ELEMENT) return FALSE;
-    return style_display_is_table_caption(g_hash_table_lookup(styles, n));
-}
-
-static gboolean
-node_is_table_internal(const ns_node *n, GHashTable *styles)
-{
-    return node_table_internal(n, styles) != NS_DISPLAY_INTERNAL_NONE ||
-           is_cell_element(n, styles) || is_table_row(n, styles) ||
-           is_table_caption(n, styles);
-}
-
 static void queue_absolute_node(const ns_node *n, const ns_style *s);
-
-static void
-collect_rows_recurse(const ns_node *n, GHashTable *styles, GPtrArray *out, int depth)
-{
-    if (!n || depth >= NS_LAYOUT_MAX_DEPTH) return;
-    if (n->kind == NS_NODE_ELEMENT && n->name) {
-        if (is_table_row(n, styles)) {
-            const ns_style *rs = g_hash_table_lookup(styles, n);
-            if (rs && style_is_none(rs)) return;
-            if (rs && style_is_absolute_or_fixed(rs)) {
-                queue_absolute_node(n, rs);
-                return;
-            }
-            g_ptr_array_add(out, (gpointer)n);
-            return;
-        }
-        if (n != NULL && (strcmp(n->name, "table") == 0 ||
-                          style_display_is_table_caption(g_hash_table_lookup(styles, n)) ||
-                          style_display_is_table(g_hash_table_lookup(styles, n))))
-            return;
-    }
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        collect_rows_recurse(c, styles, out, depth + 1);
-}
-
-typedef enum { ROW_GROUP_BODY, ROW_GROUP_HEADER, ROW_GROUP_FOOTER } row_group_kind;
-
-static row_group_kind
-node_row_group(const ns_node *n, GHashTable *styles)
-{
-    if (ns_node_is_element_named(n, "thead")) return ROW_GROUP_HEADER;
-    if (ns_node_is_element_named(n, "tfoot")) return ROW_GROUP_FOOTER;
-    const ns_style *s = styles ? g_hash_table_lookup(styles, n) : NULL;
-    ns_display d = ns_css_display_of(s);
-    if (ns_display_is(d, NS_DISPLAY_INTERNAL_TABLE_HEADER_GROUP))
-        return ROW_GROUP_HEADER;
-    if (ns_display_is(d, NS_DISPLAY_INTERNAL_TABLE_FOOTER_GROUP))
-        return ROW_GROUP_FOOTER;
-    return ROW_GROUP_BODY;
-}
-
-static void
-collect_rows(const ns_node *table, GHashTable *styles, GPtrArray *out)
-{
-    if (!table) return;
-    GPtrArray *header = g_ptr_array_new();
-    GPtrArray *body   = g_ptr_array_new();
-    GPtrArray *footer = g_ptr_array_new();
-    for (const ns_node *c = table->first_child; c; c = c->next_sibling) {
-        row_group_kind g = node_row_group(c, styles);
-        GPtrArray *dst = g == ROW_GROUP_HEADER ? header
-                       : g == ROW_GROUP_FOOTER ? footer
-                                               : body;
-        collect_rows_recurse(c, styles, dst, 0);
-    }
-    for (guint i = 0; i < header->len; i++)
-        g_ptr_array_add(out, g_ptr_array_index(header, i));
-    for (guint i = 0; i < body->len; i++)
-        g_ptr_array_add(out, g_ptr_array_index(body, i));
-    for (guint i = 0; i < footer->len; i++)
-        g_ptr_array_add(out, g_ptr_array_index(footer, i));
-    g_ptr_array_free(header, TRUE);
-    g_ptr_array_free(body, TRUE);
-    g_ptr_array_free(footer, TRUE);
-}
 
 static ns_box *build_block(const ns_node *n, GHashTable *styles);
 static ns_box *build_inline_run(const ns_node *first, const ns_node *last_excl, GHashTable *styles);
@@ -1470,7 +928,7 @@ append_generated_after(ns_box *block, ns_box *gen)
     ns_box *last = block->first_child;
     while (last && last->next_sibling) last = last->next_sibling;
     if (!last || last->kind != NS_BOX_INLINE) {
-        box_append_child(block, gen);
+        ns_layout_box_append_child(block, gen);
         return;
     }
     gsize ll = last->text ? strlen(last->text) : 0;
@@ -1485,322 +943,6 @@ append_generated_after(ns_box *block, ns_box *gen)
     inline_append_attrs(last, gen, ll);
     inline_take_atomics(last, gen, ll);
     ns_box_free(gen);
-}
-
-static ns_box *
-cell_pseudo_before(ns_box *cell, const ns_node *n, const ns_style *s)
-{
-    if (!s || !s->before) return NULL;
-    ns_box *before_block = build_pseudo_block_for(s->before, n);
-    if (before_block) {
-        box_append_child(cell, before_block);
-        return NULL;
-    }
-    if (style_is_absolute_or_fixed(s->before)) return NULL;
-    return build_pseudo_inline_for(s->before, n);
-}
-
-static void
-cell_pseudo_after(ns_box *cell, const ns_node *n, const ns_style *s)
-{
-    if (!s || !s->after) return;
-    ns_box *after_block = build_pseudo_block_for(s->after, n);
-    if (after_block) {
-        box_append_child(cell, after_block);
-        return;
-    }
-    if (style_is_absolute_or_fixed(s->after)) return;
-    ns_box *gen = build_pseudo_inline_for(s->after, n);
-    if (gen) append_generated_after(cell, gen);
-}
-
-static void
-cell_append_run(ns_box *cell, ns_box *run, ns_box **pending_before)
-{
-    if (*pending_before) {
-        run = inline_merge_prefix(*pending_before, run);
-        *pending_before = NULL;
-    }
-    if (run->text && run->text[0] != '\0')
-        box_append_child(cell, run);
-    else
-        ns_box_free(run);
-}
-
-static void
-cell_flush_pending(ns_box *cell, ns_box **pending_before)
-{
-    if (!*pending_before) return;
-    box_append_child(cell, *pending_before);
-    *pending_before = NULL;
-}
-
-static ns_box *
-build_cell(const ns_node *n, GHashTable *styles)
-{
-    ns_box *cell = box_new(NS_BOX_TABLE_CELL);
-    cell->dom = n;
-    cell->style = g_hash_table_lookup(styles, n);
-    collect_box_bg_image(cell, cell->style);
-    const char *cs_attr = ns_element_get_attr(n, "colspan");
-    if (cs_attr) cell->colspan = ns_parse_int(cs_attr, 1, 1, 100);
-    const char *rs_attr = ns_element_get_attr(n, "rowspan");
-    if (rs_attr) cell->rowspan = ns_parse_int(rs_attr, 1, 1, 100);
-    const ns_style *s = cell->style;
-    if (s) {
-        register_abs_pseudo(n, s->before);
-        register_abs_pseudo(n, s->after);
-    }
-    ns_box *pending_before = cell_pseudo_before(cell, n, s);
-    const ns_node *c = n->first_child;
-    while (c) {
-        if (is_inline_dom(c, styles)) {
-            const ns_node *start = c;
-            while (c && continues_inline_run(c, styles)) c = c->next_sibling;
-            cell_append_run(cell, build_inline_run(start, c, styles),
-                            &pending_before);
-        } else {
-            cell_flush_pending(cell, &pending_before);
-            ns_box *child = build_block(c, styles);
-            if (child) box_append_child(cell, child);
-            if (c) c = c->next_sibling;
-        }
-    }
-    cell_flush_pending(cell, &pending_before);
-    cell_pseudo_after(cell, n, s);
-    return cell;
-}
-
-static void
-append_table_col_hint(ns_box *table, const ns_node *n, GHashTable *styles,
-                      int span, const ns_style *fallback)
-{
-    if (span < 1) span = 1;
-    if (!table->table_col_hints)
-        table->table_col_hints = g_array_new(FALSE, FALSE,
-                                             sizeof(ns_table_col_hint));
-    const ns_style *s = styles ? g_hash_table_lookup(styles, n) : NULL;
-    if (!s) s = fallback;
-    ns_table_col_hint hint = { .style = s, .span = span };
-    g_array_append_val(table->table_col_hints, hint);
-}
-
-static void
-collect_table_col_hints(ns_box *table, const ns_node *n, GHashTable *styles)
-{
-    if (!table || !n) return;
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (c->kind != NS_NODE_ELEMENT || !c->name) continue;
-        if (strcmp(c->name, "col") == 0) {
-            int span = ns_parse_int(ns_element_get_attr(c, "span"), 1, 1, 1000);
-            append_table_col_hint(table, c, styles, span, NULL);
-            continue;
-        }
-        if (strcmp(c->name, "colgroup") != 0) continue;
-        const ns_style *group_style = styles ? g_hash_table_lookup(styles, c) : NULL;
-        gboolean saw_col = FALSE;
-        for (const ns_node *col = c->first_child; col; col = col->next_sibling) {
-            if (!ns_node_is_element_named(col, "col")) continue;
-            int span = ns_parse_int(ns_element_get_attr(col, "span"), 1, 1, 1000);
-            append_table_col_hint(table, col, styles, span, group_style);
-            saw_col = TRUE;
-        }
-        if (!saw_col) {
-            int span = ns_parse_int(ns_element_get_attr(c, "span"), 1, 1, 1000);
-            append_table_col_hint(table, c, styles, span, NULL);
-        }
-    }
-}
-
-static ns_box *
-build_table_caption(const ns_node *n, GHashTable *styles)
-{
-    ns_box *caption = box_new(NS_BOX_TABLE_CAPTION);
-    caption->dom = n;
-    caption->style = g_hash_table_lookup(styles, n);
-    collect_box_bg_image(caption, caption->style);
-    append_display_contents_children(caption, n, styles, FALSE, NULL);
-    return caption;
-}
-
-static ns_box *
-build_anonymous_table_cell(const ns_node *n, GHashTable *styles)
-{
-    ns_box *cell = box_new(NS_BOX_TABLE_CELL);
-    gboolean any = FALSE;
-    const ns_node *c = n ? n->first_child : NULL;
-    while (c) {
-        if (c->kind == NS_NODE_ELEMENT && c->name &&
-            ns_layout_tag_is_non_rendering(c->name)) {
-            c = c->next_sibling;
-            continue;
-        }
-        if (is_table_caption(c, styles)) {
-            c = c->next_sibling;
-            continue;
-        }
-        if (c->kind == NS_NODE_TEXT && text_is_ws_only(c->text)) {
-            c = c->next_sibling;
-            continue;
-        }
-        if (c->kind == NS_NODE_ELEMENT) {
-            const ns_style *cs = g_hash_table_lookup(styles, c);
-            if (cs && style_is_none(cs)) {
-                c = c->next_sibling;
-                continue;
-            }
-            if (style_is_contents(cs)) {
-                append_display_contents_children(cell, c, styles, FALSE, NULL);
-                if (cell->last_child) any = TRUE;
-                c = c->next_sibling;
-                continue;
-            }
-        }
-        if (is_inline_dom(c, styles)) {
-            const ns_node *start = c;
-            c = c->next_sibling;
-            while (c && !is_table_caption(c, styles)) {
-                if (c->kind == NS_NODE_ELEMENT && c->name &&
-                    ns_layout_tag_is_non_rendering(c->name)) {
-                    c = c->next_sibling;
-                    continue;
-                }
-                if (c->kind == NS_NODE_ELEMENT) {
-                    const ns_style *cs = g_hash_table_lookup(styles, c);
-                    if (style_is_contents(cs)) break;
-                }
-                if (!continues_inline_run(c, styles)) break;
-                c = c->next_sibling;
-            }
-            ns_box *run = build_inline_run(start, c, styles);
-            if (run && run->text && run->text[0]) {
-                box_append_child(cell, run);
-                any = TRUE;
-            } else if (run) {
-                ns_box_free(run);
-            }
-        } else {
-            ns_box *child = build_block(c, styles);
-            if (child) {
-                box_append_child(cell, child);
-                any = TRUE;
-            }
-            if (c) c = c->next_sibling;
-        }
-    }
-    if (!any) {
-        ns_box_free(cell);
-        return NULL;
-    }
-    return cell;
-}
-
-static ns_box *
-build_table_row(const ns_node *tr, GHashTable *styles)
-{
-    ns_box *row = box_new(NS_BOX_TABLE_ROW);
-    row->dom = tr;
-    row->style = g_hash_table_lookup(styles, tr);
-    for (const ns_node *c = tr->first_child; c; c = c->next_sibling) {
-        if (!is_cell_element(c, styles)) continue;
-        if (style_is_none(g_hash_table_lookup(styles, c))) continue;
-        box_append_child(row, build_cell(c, styles));
-    }
-    return row;
-}
-
-static ns_box *
-build_row_from_cell_run(const ns_node *start, const ns_node *end,
-                        const ns_node *dom, GHashTable *styles)
-{
-    ns_box *row = box_new(NS_BOX_TABLE_ROW);
-    row->dom = dom;
-    for (const ns_node *c = start; c != end; c = c->next_sibling) {
-        if (!is_cell_element(c, styles)) continue;
-        const ns_style *cs = g_hash_table_lookup(styles, c);
-        if (cs && (style_is_none(cs) || style_is_absolute_or_fixed(cs)))
-            continue;
-        box_append_child(row, build_cell(c, styles));
-    }
-    if (row->first_child) return row;
-    ns_box_free(row);
-    return NULL;
-}
-
-static ns_box *
-build_table(const ns_node *n, GHashTable *styles)
-{
-    ns_box *table = box_new(NS_BOX_TABLE);
-    table->dom = n;
-    table->style = g_hash_table_lookup(styles, n);
-    collect_table_col_hints(table, n, styles);
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
-        if (!is_table_caption(c, styles)) continue;
-        ns_box *caption = build_table_caption(c, styles);
-        box_append_child(table, caption);
-    }
-    GPtrArray *rows = g_ptr_array_new();
-    collect_rows(n, styles, rows);
-    gboolean has_direct_cells = FALSE;
-    if (rows->len == 0)
-        for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-            if (is_cell_element(c, styles)) { has_direct_cells = TRUE; break; }
-    if (rows->len == 0 && has_direct_cells) {
-        ns_box *row = build_row_from_cell_run(n->first_child, NULL, n, styles);
-        if (row) box_append_child(table, row);
-    } else if (rows->len == 0) {
-        ns_box *cell = build_anonymous_table_cell(n, styles);
-        if (cell) {
-            ns_box *row = box_new(NS_BOX_TABLE_ROW);
-            row->dom = n;
-            box_append_child(row, cell);
-            box_append_child(table, row);
-        }
-    } else {
-        for (guint i = 0; i < rows->len; i++)
-            box_append_child(table,
-                             build_table_row(g_ptr_array_index(rows, i),
-                                             styles));
-    }
-    g_ptr_array_free(rows, TRUE);
-    return table;
-}
-
-static ns_box *
-build_anonymous_table(const ns_node *start, const ns_node *end,
-                      GHashTable *styles)
-{
-    ns_box *table = box_new(NS_BOX_TABLE);
-    for (const ns_node *c = start; c != end; c = c->next_sibling)
-        if (is_table_caption(c, styles))
-            box_append_child(table, build_table_caption(c, styles));
-
-    const ns_node *cells = NULL;
-    for (const ns_node *c = start; c != end; c = c->next_sibling) {
-        if (is_cell_element(c, styles)) {
-            if (!cells) cells = c;
-            continue;
-        }
-        if (cells) {
-            ns_box *row = build_row_from_cell_run(cells, c, NULL, styles);
-            if (row) box_append_child(table, row);
-            cells = NULL;
-        }
-        if (is_table_row(c, styles))
-            box_append_child(table, build_table_row(c, styles));
-        else if (node_is_row_group(c, styles))
-            for (const ns_node *r = c->first_child; r; r = r->next_sibling)
-                if (is_table_row(r, styles))
-                    box_append_child(table, build_table_row(r, styles));
-    }
-    if (cells) {
-        ns_box *row = build_row_from_cell_run(cells, end, NULL, styles);
-        if (row) box_append_child(table, row);
-    }
-
-    if (table->first_child) return table;
-    ns_box_free(table);
-    return NULL;
 }
 
 typedef struct collector_ctx {
@@ -1985,7 +1127,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             g_array_append_val(g_abs_pending, e);
         }
         if (ctx->atomics && !fixed && ctx->abs_placeholders && g_abs_ph_set) {
-            ns_box *ph = box_new(NS_BOX_BLOCK);
+            ns_box *ph = ns_layout_box_new(NS_BOX_BLOCK);
             ns_atomic_raw rec = { .start = ctx->out->len, .box = ph };
             g_string_append(ctx->out, "\xef\xbf\xbc");
             g_array_append_val(ctx->atomics, rec);
@@ -2796,7 +1938,7 @@ build_inline_run_impl(const ns_node *first, const ns_node *last_excl,
     GArray  *raw_attrs = g_array_new(FALSE, FALSE, sizeof(ns_inline_attr));
     GArray  *raw_atomics = g_array_new(FALSE, FALSE, sizeof(ns_atomic_raw));
     GArray  *ws_ranges = g_array_new(FALSE, FALSE, sizeof(ns_ws_range));
-    g_array_set_clear_func(raw_links, link_clear);
+    g_array_set_clear_func(raw_links, ns_layout_link_clear);
     collector_ctx ctx = {
         .styles = styles, .out = buf, .links = raw_links, .attrs = raw_attrs,
         .atomics = raw_atomics, .abs_placeholders = abs_placeholders,
@@ -2869,7 +2011,7 @@ build_inline_run_impl(const ns_node *first, const ns_node *last_excl,
     }
     map[buf->len] = collapsed->len;
 
-    ns_box *box = box_new_inline();
+    ns_box *box = ns_layout_box_new_inline();
     if (!trailing_preserved && collapsed->len > 0 &&
         collapsed->str[collapsed->len - 1] == ' ')
         g_string_set_size(collapsed, collapsed->len - 1);
@@ -2890,7 +2032,7 @@ build_inline_run_impl(const ns_node *first, const ns_node *last_excl,
             .target = r->target ? g_strdup(r->target) : NULL,
             .dom = r->dom,
         };
-        g_array_append_val(inline_links_ensure(box), out);
+        g_array_append_val(ns_layout_inline_links_ensure(box), out);
     }
 
     for (guint i = 0; i < raw_attrs->len; i++) {
@@ -3098,7 +2240,7 @@ build_inline_run_no_abs_placeholders(const ns_node *first,
 static ns_box *
 build_form_control_block(const ns_node *n, const ns_style *s, GHashTable *styles)
 {
-    ns_box *block = box_new(NS_BOX_BLOCK);
+    ns_box *block = ns_layout_box_new(NS_BOX_BLOCK);
     block->dom = n;
     block->style = s;
     collect_box_bg_image(block, s);
@@ -3107,7 +2249,7 @@ build_form_control_block(const ns_node *n, const ns_style *s, GHashTable *styles
     ns_box *run = build_inline_run(n, n->next_sibling, styles);
     g_form_control_inline = prev_fc;
     if (run && run->text && run->text[0]) {
-        box_append_child(block, run);
+        ns_layout_box_append_child(block, run);
     } else if (run) {
         ns_box_free(run);
     }
@@ -3155,7 +2297,7 @@ build_image_box(const ns_node *n)
     const ns_node *img = n;
     double density = 1.0;
     char *url = ns_layout_choose_img_url(n, &img, &density);
-    ns_box *box = box_new(NS_BOX_IMAGE);
+    ns_box *box = ns_layout_box_new(NS_BOX_IMAGE);
     box->dom = img;
     ns_box_media *m = ns_box_media_ensure(box);
     m->image_src = url;
@@ -3214,7 +2356,7 @@ first_media_source_url(const ns_node *n)
 static ns_box *
 build_audio_box(const ns_node *n)
 {
-    ns_box *box = box_new(NS_BOX_VIDEO);
+    ns_box *box = ns_layout_box_new(NS_BOX_VIDEO);
     box->dom = n;
     ns_box_media *m = ns_box_media_ensure(box);
     const char *src = first_media_source_url(n);
@@ -3232,7 +2374,7 @@ static ns_box *
 build_video_box(const ns_node *n)
 {
     const char *src = first_media_source_url(n);
-    ns_box *box = box_new(NS_BOX_VIDEO);
+    ns_box *box = ns_layout_box_new(NS_BOX_VIDEO);
     box->dom = n;
     ns_box_media *m = ns_box_media_ensure(box);
     if (src) m->video_src = g_strdup(src);
@@ -3258,13 +2400,13 @@ build_video_box(const ns_node *n)
 static ns_box *
 pseudo_block_with_text(const ns_style *ps, const char *txt)
 {
-    ns_box *block = box_new(NS_BOX_BLOCK);
+    ns_box *block = ns_layout_box_new(NS_BOX_BLOCK);
     block->style = ps;
     collect_box_bg_image(block, ps);
     if (txt && *txt) {
-        ns_box *txtrun = box_new_inline();
+        ns_box *txtrun = ns_layout_box_new_inline();
         txtrun->text = g_strdup(txt);
-        box_append_child(block, txtrun);
+        ns_layout_box_append_child(block, txtrun);
     }
     return block;
 }
@@ -3326,7 +2468,7 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
         ns_box *inner = pseudo_block_with_text(ps, txt);
         g_free(quote);
         g_free(resolved);
-        ns_box *run = box_new_inline();
+        ns_box *run = ns_layout_box_new_inline();
         run->style = ps;
         run->text = g_strdup("\xef\xbf\xbc");
         run->inline_atomics = g_array_new(FALSE, FALSE, sizeof(ns_inline_atomic));
@@ -3336,7 +2478,7 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
         return run;
     }
 
-    ns_box *box = box_new_inline();
+    ns_box *box = ns_layout_box_new_inline();
     box->text = g_strdup(txt);
     g_free(quote);
     g_free(resolved);
@@ -3509,11 +2651,11 @@ append_display_contents_children(ns_box *block, const ns_node *n,
                                !style_is_absolute_or_fixed(s->before))
         ? build_pseudo_inline_for(s->before, n) : NULL;
     if (pending_before && *pending_before) {
-        contents_before = inline_merge_prefix(*pending_before, contents_before);
+        contents_before = ns_layout_inline_merge_prefix(*pending_before, contents_before);
         *pending_before = NULL;
     }
     if (contents_before)
-        box_append_child(block, contents_before);
+        ns_layout_box_append_child(block, contents_before);
 
     const ns_node *shadow_root = layout_shadow_root(n);
     const ns_node *c = shadow_root ? shadow_root->first_child : n->first_child;
@@ -3526,12 +2668,12 @@ append_display_contents_children(ns_box *block, const ns_node *n,
         if (blockify_children) {
             if (c->kind == NS_NODE_TEXT) {
                 if (text_is_ws_only(c->text)) { c = c->next_sibling; continue; }
-                ns_box *item = box_new(NS_BOX_BLOCK);
+                ns_box *item = ns_layout_box_new(NS_BOX_BLOCK);
                 item->style = NULL;
                 ns_box *run = build_inline_run(c, c->next_sibling, styles);
                 if (run && run->text && run->text[0]) {
-                    box_append_child(item, run);
-                    box_append_child(block, item);
+                    ns_layout_box_append_child(item, run);
+                    ns_layout_box_append_child(block, item);
                 } else {
                     if (run) ns_box_free(run);
                     ns_box_free(item);
@@ -3549,7 +2691,7 @@ append_display_contents_children(ns_box *block, const ns_node *n,
             }
             if (cs && style_is_absolute_or_fixed(cs)) {
                 ns_box *child = build_block(c, styles);
-                if (child) box_append_child(block, child);
+                if (child) ns_layout_box_append_child(block, child);
                 c = c->next_sibling;
                 continue;
             }
@@ -3562,12 +2704,12 @@ append_display_contents_children(ns_box *block, const ns_node *n,
                              strcmp(c->name, "video") == 0 ||
                              strcmp(c->name, "table") == 0))) {
                 ns_box *child = build_block(c, styles);
-                if (child) box_append_child(block, child);
+                if (child) ns_layout_box_append_child(block, child);
                 c = c->next_sibling;
                 continue;
             }
             ns_box *item = build_blockified_inline_item(c, styles, pending_before);
-            if (item) box_append_child(block, item);
+            if (item) ns_layout_box_append_child(block, item);
             c = c->next_sibling;
             continue;
         }
@@ -3599,19 +2741,19 @@ append_display_contents_children(ns_box *block, const ns_node *n,
             }
             ns_box *run = build_inline_run(start, c, styles);
             if (run && run->text && run->text[0])
-                box_append_child(block, run);
+                ns_layout_box_append_child(block, run);
             else if (run)
                 ns_box_free(run);
         } else {
             ns_box *child = build_block(c, styles);
-            if (child) box_append_child(block, child);
+            if (child) ns_layout_box_append_child(block, child);
             if (c) c = c->next_sibling;
         }
     }
 
     if (s && s->after && !style_is_absolute_or_fixed(s->after)) {
         ns_box *contents_after = build_pseudo_inline_for(s->after, n);
-        if (contents_after) box_append_child(block, contents_after);
+        if (contents_after) ns_layout_box_append_child(block, contents_after);
     }
     g_contents_depth--;
 }
@@ -3619,14 +2761,14 @@ append_display_contents_children(ns_box *block, const ns_node *n,
 static ns_box *
 pseudo_item_block(ns_box *run, const ns_style *ps)
 {
-    ns_box *item = box_new(NS_BOX_BLOCK);
+    ns_box *item = ns_layout_box_new(NS_BOX_BLOCK);
     item->style = ps;
     collect_box_bg_image(item, ps);
     for (guint i = run->attrs ? run->attrs->len : 0; i-- > 0;)
         if (g_array_index(run->attrs, ns_inline_attr, i).kind ==
             NS_INLINE_BG_COLOR)
             g_array_remove_index(run->attrs, i);
-    box_append_child(item, run);
+    ns_layout_box_append_child(item, run);
     return item;
 }
 
@@ -3680,7 +2822,7 @@ build_blockified_inline_item(const ns_node *n, GHashTable *styles,
                              ns_box **pending_before)
 {
     const ns_style *s = g_hash_table_lookup(styles, n);
-    ns_box *item = box_new(NS_BOX_BLOCK);
+    ns_box *item = ns_layout_box_new(NS_BOX_BLOCK);
     item->dom = n;
     item->style = s;
     collect_box_bg_image(item, s);
@@ -3692,7 +2834,7 @@ build_blockified_inline_item(const ns_node *n, GHashTable *styles,
 
     ns_box *before_block = (s && s->before)
         ? build_pseudo_block_for(s->before, n) : NULL;
-    if (before_block) box_append_child(item, before_block);
+    if (before_block) ns_layout_box_append_child(item, before_block);
     ns_box *after_block = (s && s->after)
         ? build_pseudo_block_for(s->after, n) : NULL;
 
@@ -3708,16 +2850,16 @@ build_blockified_inline_item(const ns_node *n, GHashTable *styles,
     g_pseudo_block_before = saved_before;
     g_pseudo_block_after = saved_after;
     if (pending_before && *pending_before) {
-        run = inline_merge_prefix(*pending_before, run);
+        run = ns_layout_inline_merge_prefix(*pending_before, run);
         *pending_before = NULL;
     }
     if (run && run->text && run->text[0]) {
-        box_append_child(item, run);
+        ns_layout_box_append_child(item, run);
     } else if (run) {
         ns_box_free(run);
     }
 
-    if (after_block) box_append_child(item, after_block);
+    if (after_block) ns_layout_box_append_child(item, after_block);
 
     if (!item->first_child && !style_has_atomic_inline_box(s)) {
         ns_box_free(item);
@@ -3755,7 +2897,7 @@ build_rendered_legend(const ns_node *n, GHashTable *styles)
     ns_box *legend = build_block(n, styles);
     g_blockified_legend = saved;
     if (!legend) {
-        legend = box_new(NS_BOX_BLOCK);
+        legend = ns_layout_box_new(NS_BOX_BLOCK);
         legend->dom = n;
         legend->style = g_hash_table_lookup(styles, n);
     }
@@ -3778,7 +2920,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                                                  "data-nd-frame-url");
             if (fu && *fu) g_base_url_for_layout = fu;
         }
-        ns_box *root = box_new(NS_BOX_BLOCK);
+        ns_box *root = ns_layout_box_new(NS_BOX_BLOCK);
         for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
             const ns_style *cs = c->kind == NS_NODE_ELEMENT
                 ? g_hash_table_lookup(styles, c) : NULL;
@@ -3787,7 +2929,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                 continue;
             }
             ns_box *child = build_block(c, styles);
-            if (child) box_append_child(root, child);
+            if (child) ns_layout_box_append_child(root, child);
         }
         g_base_url_for_layout = saved_base;
         return root;
@@ -3817,7 +2959,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
 
     if (n->name && strcmp(n->name, "br") == 0) {
         if (!ns_layout_clear_kind_of(s)) return NULL;
-        ns_box *clearance = box_new(NS_BOX_BLOCK);
+        ns_box *clearance = ns_layout_box_new(NS_BOX_BLOCK);
         clearance->dom = n;
         clearance->style = s;
         return clearance;
@@ -3830,7 +2972,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
     }
 
     if (n->name && strcmp(n->name, "math") == 0) {
-        ns_box *mb = box_new(NS_BOX_MATH);
+        ns_box *mb = ns_layout_box_new(NS_BOX_MATH);
         mb->dom = n;
         mb->style = s;
         return mb;
@@ -3858,7 +3000,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
     }
 
     if (n->name && strcmp(n->name, "svg") == 0) {
-        ns_box *box = box_new(NS_BOX_SVG);
+        ns_box *box = ns_layout_box_new(NS_BOX_SVG);
         box->dom = n;
         box->style = s;
         box->svg_styles = styles;
@@ -3907,7 +3049,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
     }
 
     if (n->name && strcmp(n->name, "canvas") == 0) {
-        ns_box *cb = box_new(NS_BOX_IMAGE);
+        ns_box *cb = ns_layout_box_new(NS_BOX_IMAGE);
         cb->dom = n;
         cb->style = s;
         ns_box_media *cm = ns_box_media_ensure(cb);
@@ -3949,14 +3091,14 @@ build_block_impl(const ns_node *n, GHashTable *styles)
         }
     }
 
-    if (is_table_box(n, styles))
-        return build_table(n, styles);
+    if (ns_layout_is_table_box(n, styles))
+        return ns_layout_build_table(n, styles);
 
     if (n->name && strcmp(n->name, "slot") == 0) {
         const ns_node *host = layout_slot_host(n);
         const ns_node *sr = host ? layout_shadow_root(host) : NULL;
         const char *slot_name = ns_element_get_attr(n, "name");
-        ns_box *sbox = box_new(NS_BOX_BLOCK);
+        ns_box *sbox = ns_layout_box_new(NS_BOX_BLOCK);
         sbox->dom = n;
         sbox->style = s;
         gboolean any = FALSE;
@@ -3977,7 +3119,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                 } else {
                     cb = build_block(lc, styles);
                 }
-                if (cb) { box_append_child(sbox, cb); any = TRUE; }
+                if (cb) { ns_layout_box_append_child(sbox, cb); any = TRUE; }
             }
         }
         if (any) return sbox;
@@ -3987,7 +3129,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
     if (!style_is_block(s) && !contains_block_media(n, styles) &&
         !style_is_absolute_or_fixed(s) && n != g_blockified_legend) return NULL;
 
-    ns_box *block = box_new(NS_BOX_BLOCK);
+    ns_box *block = ns_layout_box_new(NS_BOX_BLOCK);
     block->dom = n;
     block->style = s;
     const ns_node *rendered_legend = fieldset_rendered_legend_node(n, styles);
@@ -4006,7 +3148,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
 
     ns_box *before_block = (s && s->before)
         ? build_pseudo_block_for(s->before, n) : NULL;
-    if (before_block) box_append_child(block, before_block);
+    if (before_block) ns_layout_box_append_child(block, before_block);
 
     ns_box *pending_before = (s && s->before && !before_block &&
                               !style_is_absolute_or_fixed(s->before))
@@ -4015,14 +3157,14 @@ build_block_impl(const ns_node *n, GHashTable *styles)
     gboolean blockify_children = style_is_flex_container(s) ||
                                  style_is_grid_container(s);
     if (blockify_children && pending_before) {
-        box_append_child(block, pseudo_item_block(pending_before, s->before));
+        ns_layout_box_append_child(block, pseudo_item_block(pending_before, s->before));
         pending_before = NULL;
     }
 
     const ns_node *saved_skip = g_inline_skip_node;
     if (rendered_legend) {
         ns_box *legend = build_rendered_legend(rendered_legend, styles);
-        if (legend) box_append_child(block, legend);
+        if (legend) ns_layout_box_append_child(block, legend);
         g_inline_skip_node = rendered_legend;
     }
 
@@ -4049,16 +3191,16 @@ build_block_impl(const ns_node *n, GHashTable *styles)
         if (blockify_children) {
             if (c->kind == NS_NODE_TEXT) {
                 if (text_is_ws_only(c->text)) { c = c->next_sibling; continue; }
-                ns_box *item = box_new(NS_BOX_BLOCK);
+                ns_box *item = ns_layout_box_new(NS_BOX_BLOCK);
                 item->style = NULL;
                 ns_box *run = build_inline_run(c, c->next_sibling, styles);
                 if (pending_before) {
-                    run = inline_merge_prefix(pending_before, run);
+                    run = ns_layout_inline_merge_prefix(pending_before, run);
                     pending_before = NULL;
                 }
                 if (run && run->text && run->text[0]) {
-                    box_append_child(item, run);
-                    box_append_child(block, item);
+                    ns_layout_box_append_child(item, run);
+                    ns_layout_box_append_child(block, item);
                 } else {
                     if (run) ns_box_free(run);
                     ns_box_free(item);
@@ -4077,7 +3219,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
             }
             if (cs && style_is_absolute_or_fixed(cs)) {
                 ns_box *child = build_block(c, styles);
-                if (child) box_append_child(block, child);
+                if (child) ns_layout_box_append_child(block, child);
                 c = c->next_sibling;
                 continue;
             }
@@ -4090,13 +3232,13 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                              strcmp(c->name, "video") == 0 ||
                              strcmp(c->name, "table") == 0))) {
                 ns_box *child = build_block(c, styles);
-                if (child) box_append_child(block, child);
+                if (child) ns_layout_box_append_child(block, child);
                 c = c->next_sibling;
                 continue;
             }
             ns_box *item = build_blockified_inline_item(c, styles,
                                                         &pending_before);
-            if (item) box_append_child(block, item);
+            if (item) ns_layout_box_append_child(block, item);
             c = c->next_sibling;
             continue;
         }
@@ -4109,17 +3251,17 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                 continue;
             }
         }
-        if (node_is_table_internal(c, styles)) {
+        if (ns_layout_node_is_table_internal(c, styles)) {
             const ns_node *start = c;
-            while (c && (node_is_table_internal(c, styles) ||
+            while (c && (ns_layout_node_is_table_internal(c, styles) ||
                          (c->kind == NS_NODE_TEXT && text_is_ws_only(c->text))))
                 c = c->next_sibling;
             if (pending_before) {
-                box_append_child(block, pending_before);
+                ns_layout_box_append_child(block, pending_before);
                 pending_before = NULL;
             }
-            ns_box *anon = build_anonymous_table(start, c, styles);
-            if (anon) box_append_child(block, anon);
+            ns_box *anon = ns_layout_build_anonymous_table(start, c, styles);
+            if (anon) ns_layout_box_append_child(block, anon);
             continue;
         }
         if (is_inline_dom(c, styles)) {
@@ -4147,40 +3289,40 @@ build_block_impl(const ns_node *n, GHashTable *styles)
             }
             ns_box *run = build_inline_run(start, c, styles);
             if (pending_before) {
-                run = inline_merge_prefix(pending_before, run);
+                run = ns_layout_inline_merge_prefix(pending_before, run);
                 pending_before = NULL;
             }
 
             if (run->text && run->text[0] != '\0')
-                box_append_child(block, run);
+                ns_layout_box_append_child(block, run);
             else
                 ns_box_free(run);
         } else {
             if (pending_before) {
-                box_append_child(block, pending_before);
+                ns_layout_box_append_child(block, pending_before);
                 pending_before = NULL;
             }
             ns_box *child = build_block(c, styles);
-            if (child) box_append_child(block, child);
+            if (child) ns_layout_box_append_child(block, child);
             if (c) c = c->next_sibling;
         }
     }
     g_inline_skip_node = saved_skip;
 
     if (pending_before) {
-        box_append_child(block, pending_before);
+        ns_layout_box_append_child(block, pending_before);
         pending_before = NULL;
     }
 
     ns_box *after_block = (s && s->after)
         ? build_pseudo_block_for(s->after, n) : NULL;
-    if (after_block) box_append_child(block, after_block);
+    if (after_block) ns_layout_box_append_child(block, after_block);
 
     if (s && s->after && !after_block &&
         !style_is_absolute_or_fixed(s->after)) {
         ns_box *gen = build_pseudo_inline_for(s->after, n);
         if (gen && blockify_children) {
-            box_append_child(block, pseudo_item_block(gen, s->after));
+            ns_layout_box_append_child(block, pseudo_item_block(gen, s->after));
             gen = NULL;
         }
         if (gen) append_generated_after(block, gen);
@@ -4389,212 +3531,6 @@ inline_box_form_hit(const ns_box *box, double local_x, double local_y,
     if (atomic_hit) return atomic_hit;
     if (button_hit) return button_hit;
     return field_hit;
-}
-
-static gboolean
-inline_attr_can_fragment(ns_inline_attr_kind k)
-{
-    switch (k) {
-    case NS_INLINE_INPUT_FIELD:
-    case NS_INLINE_INPUT_FIELD_FOCUSED:
-    case NS_INLINE_BUTTON:
-    case NS_INLINE_CHECKBOX:
-    case NS_INLINE_CHECKBOX_CHECKED:
-    case NS_INLINE_RADIO:
-    case NS_INLINE_RADIO_CHECKED:
-    case NS_INLINE_PROGRESS:
-    case NS_INLINE_METER:
-    case NS_INLINE_CARET:
-    case NS_INLINE_SELECTION:
-        return FALSE;
-    default:
-        return TRUE;
-    }
-}
-
-static gboolean
-inline_box_can_fragment_multicol(const ns_box *box, const ns_style *style,
-                                 double basis)
-{
-    if (!box || box->kind != NS_BOX_INLINE || !box->text || !*box->text)
-        return FALSE;
-    if (box->inline_atomics && box->inline_atomics->len > 0)
-        return FALSE;
-    if (keyword_is(style ? style->values[NS_CSS_WHITE_SPACE] : NULL, "nowrap") ||
-        keyword_is(style ? style->values[NS_CSS_WHITE_SPACE] : NULL, "pre"))
-        return FALSE;
-    if (keyword_is(style ? style->values[NS_CSS_TEXT_OVERFLOW] : NULL, "ellipsis"))
-        return FALSE;
-    if (style && style->values[NS_CSS_LINE_CLAMP])
-        return FALSE;
-    if (fabs(ns_text_indent_px(style, basis)) > 0.01)
-        return FALSE;
-    if (box->attrs) {
-        for (guint i = 0; i < box->attrs->len; i++) {
-            const ns_inline_attr *a =
-                &g_array_index(box->attrs, ns_inline_attr, i);
-            if (!inline_attr_can_fragment(a->kind)) return FALSE;
-        }
-    }
-    return TRUE;
-}
-
-static gsize
-range_end_clamped(gsize start, gsize len, gsize cap)
-{
-    gsize end = len > G_MAXSIZE - start ? G_MAXSIZE : start + len;
-    return end > cap ? cap : end;
-}
-
-static ns_box *
-inline_box_clone_range(const ns_box *src, gsize start, gsize end)
-{
-    gsize text_len = src && src->text ? strlen(src->text) : 0;
-    if (!src || start >= text_len || end <= start) return NULL;
-    if (end > text_len) end = text_len;
-
-    ns_box *out = box_new_inline();
-    out->dom = src->dom;
-    out->style = src->style;
-    out->text = g_strndup(src->text + start, end - start);
-
-    if (src->attrs) {
-        for (guint i = 0; i < src->attrs->len; i++) {
-            const ns_inline_attr *a =
-                &g_array_index(src->attrs, ns_inline_attr, i);
-            gsize a_end = range_end_clamped(a->start, a->len, text_len);
-            gsize is = MAX(a->start, start);
-            gsize ie = MIN(a_end, end);
-            if (ie <= is) continue;
-            ns_inline_attr copy = *a;
-            copy.start = is - start;
-            copy.len = ie - is;
-            g_array_append_val(out->attrs, copy);
-            if (copy.bg_image_src) {
-                ns_box_media *m = ns_box_media_ensure(out);
-                if (!m->bg_image_src) {
-                    m->bg_image_src = g_strdup(copy.bg_image_src);
-                    m->bg_image = copy.bg_image;
-                }
-            }
-        }
-    }
-
-    if (src->links) {
-        for (guint i = 0; i < src->links->len; i++) {
-            const ns_link_range *r =
-                &g_array_index(src->links, ns_link_range, i);
-            gsize r_end = range_end_clamped(r->start, r->len, text_len);
-            gsize is = MAX(r->start, start);
-            gsize ie = MIN(r_end, end);
-            if (ie <= is) continue;
-            ns_link_range copy = {
-                .start = is - start,
-                .len = ie - is,
-                .href = r->href ? g_strdup(r->href) : NULL,
-                .target = r->target ? g_strdup(r->target) : NULL,
-                .dom = r->dom,
-            };
-            g_array_append_val(inline_links_ensure(out), copy);
-        }
-    }
-
-    return out;
-}
-
-static NsPangoLayout *
-inline_box_layout_for_multicol(const ns_box *box, double content_width,
-                               const ns_style *parent_style)
-{
-    NsPangoLayout *layout = make_pango_layout(parent_style);
-    ns_pango_layout_set_width(layout, (int)(content_width * NS_PANGO_SCALE));
-    ns_pango_layout_set_wrap(layout, ns_paint_wrap_mode_for(parent_style));
-    if (!(box->inline_atomics && box->inline_atomics->len > 0))
-        ns_paint_apply_css_line_spacing(layout, parent_style);
-    ns_pango_layout_set_text(layout, box->text, -1);
-
-    NsPangoAttrList *i18n = ns_pango_attr_list_new();
-    ns_paint_apply_i18n(layout, i18n, box);
-    ns_paint_apply_font_features(i18n, parent_style, 0, G_MAXUINT);
-    ns_layout_apply_inline_spacing(i18n, parent_style, box->text);
-    ns_layout_apply_inline_layout_attrs(i18n, box);
-    ns_inline_layout_set_attrs(layout, i18n, box);
-    ns_pango_attr_list_unref(i18n);
-    return layout;
-}
-
-static gboolean
-layout_multicol_single_inline(ns_box *box, double inner_x, double inner_y,
-                              double col_w, double col_gap, int n_cols,
-                              const ns_style *child_inherited,
-                              double *cursor_y)
-{
-    ns_box *src = box ? box->first_child : NULL;
-    if (!src || src->next_sibling || n_cols < 2)
-        return FALSE;
-    if (!inline_box_can_fragment_multicol(src, child_inherited, col_w))
-        return FALSE;
-
-    NsPangoLayout *layout = inline_box_layout_for_multicol(src, col_w,
-                                                         child_inherited);
-    int line_count = ns_pango_layout_get_line_count(layout);
-    if (line_count <= 1) {
-        g_object_unref(layout);
-        return FALSE;
-    }
-
-    GPtrArray *fragments = g_ptr_array_new();
-    int per_col = line_count / n_cols + (line_count % n_cols != 0);
-    gsize text_len = strlen(src->text);
-    for (int col = 0; col < n_cols; col++) {
-        int first_line = col * per_col;
-        int after_line = first_line + per_col;
-        if (first_line >= line_count) break;
-        if (after_line > line_count) after_line = line_count;
-        NsPangoLayoutLine *first =
-            ns_pango_layout_get_line_readonly(layout, first_line);
-        NsPangoLayoutLine *after =
-            after_line < line_count
-            ? ns_pango_layout_get_line_readonly(layout, after_line) : NULL;
-        if (!first) continue;
-        gsize start = (gsize)first->start_index;
-        gsize end = after ? (gsize)after->start_index : text_len;
-        ns_box *frag = inline_box_clone_range(src, start, end);
-        if (!frag) continue;
-        frag->x = inner_x + col * (col_w + col_gap);
-        frag->y = inner_y;
-        ns_layout_box(frag, col_w, child_inherited);
-        g_ptr_array_add(fragments, frag);
-    }
-    g_object_unref(layout);
-
-    if (fragments->len < 2) {
-        for (guint i = 0; i < fragments->len; i++)
-            ns_box_free(g_ptr_array_index(fragments, i));
-        g_ptr_array_free(fragments, TRUE);
-        return FALSE;
-    }
-
-    box->first_child = NULL;
-    box->last_child = NULL;
-    for (guint i = 0; i < fragments->len; i++) {
-        ns_box *frag = g_ptr_array_index(fragments, i);
-        frag->parent = NULL;
-        frag->next_sibling = NULL;
-        box_append_child(box, frag);
-    }
-    g_ptr_array_free(fragments, TRUE);
-    src->parent = NULL;
-    src->next_sibling = NULL;
-    ns_box_free(src);
-
-    double max_h = 0;
-    for (ns_box *c = box->first_child; c; c = c->next_sibling) {
-        if (c->content_height > max_h) max_h = c->content_height;
-    }
-    box->content_width = col_w * n_cols + col_gap * (n_cols - 1);
-    *cursor_y = inner_y + max_h;
-    return TRUE;
 }
 
 static gboolean
@@ -4849,12 +3785,6 @@ ns_layout_flex_direction_of(const ns_style *s)
     return flex_direction_of(s);
 }
 
-void
-ns_layout_box_append_child(ns_box *parent, ns_box *child)
-{
-    box_append_child(parent, child);
-}
-
 const ns_node *
 ns_layout_flat_parent(const ns_node *n)
 {
@@ -4906,7 +3836,7 @@ ns_layout_abs_build_box(const ns_node *dom, const ns_style *pseudo,
         g_abs_force_build = FALSE;
         return abox;
     }
-    ns_box *abox = box_new(NS_BOX_BLOCK);
+    ns_box *abox = ns_layout_box_new(NS_BOX_BLOCK);
     abox->style = pseudo;
     collect_box_bg_image(abox, pseudo);
     ns_box *gen = build_pseudo_inline_for(pseudo, dom);
@@ -4915,7 +3845,7 @@ ns_layout_abs_build_box(const ns_node *dom, const ns_style *pseudo,
         ns_box_free(gen);
         gen = NULL;
     }
-    if (gen) box_append_child(abox, gen);
+    if (gen) ns_layout_box_append_child(abox, gen);
     return abox;
 }
 
@@ -4955,43 +3885,74 @@ ns_layout_image_dimension_attr(const ns_node *n, const char *name)
     return image_dimension_attr(n, name);
 }
 
-void
-ns_layout_inline_runs_join_splits(ns_box *box)
-{
-    inline_runs_join_splits(box);
-}
 
-void
-ns_layout_reorder_children_by_order(ns_box *box)
+ns_box *
+ns_layout_build_block(const ns_node *n, GHashTable *styles)
 {
-    reorder_children_by_order(box);
-}
-
-gboolean
-ns_layout_inline_box_can_fragment_multicol(const ns_box *box,
-                                           const ns_style *style, double basis)
-{
-    return inline_box_can_fragment_multicol(box, style, basis);
-}
-
-gboolean
-ns_layout_multicol_single_inline(ns_box *box, double inner_x, double inner_y,
-                                 double col_w, double col_gap, int n_cols,
-                                 const ns_style *child_inherited,
-                                 double *cursor_y)
-{
-    return layout_multicol_single_inline(box, inner_x, inner_y, col_w, col_gap,
-                                         n_cols, child_inherited, cursor_y);
-}
-
-gsize
-ns_layout_inline_run_break_before(const ns_box *run, double band_height)
-{
-    return inline_run_break_before(run, band_height);
+    return build_block(n, styles);
 }
 
 ns_box *
-ns_layout_inline_run_split(ns_box *run, gsize split)
+ns_layout_build_inline_run(const ns_node *first, const ns_node *last_excl,
+                           GHashTable *styles)
 {
-    return inline_run_split(run, split);
+    return build_inline_run(first, last_excl, styles);
+}
+
+ns_box *
+ns_layout_build_pseudo_block_for(const ns_style *ps, const ns_node *host)
+{
+    return build_pseudo_block_for(ps, host);
+}
+
+ns_box *
+ns_layout_build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
+{
+    return build_pseudo_inline_for(ps, host);
+}
+
+void
+ns_layout_register_abs_pseudo(const ns_node *host, const ns_style *ps)
+{
+    register_abs_pseudo(host, ps);
+}
+
+void
+ns_layout_queue_absolute_node(const ns_node *n, const ns_style *s)
+{
+    queue_absolute_node(n, s);
+}
+
+void
+ns_layout_collect_box_bg_image(ns_box *box, const ns_style *s)
+{
+    collect_box_bg_image(box, s);
+}
+
+void
+ns_layout_append_display_contents_children(ns_box *block, const ns_node *n,
+                                           GHashTable *styles,
+                                           gboolean blockify_children,
+                                           ns_box **pending_before)
+{
+    append_display_contents_children(block, n, styles, blockify_children,
+                                     pending_before);
+}
+
+void
+ns_layout_append_generated_after(ns_box *block, ns_box *gen)
+{
+    append_generated_after(block, gen);
+}
+
+gboolean
+ns_layout_is_inline_dom(const ns_node *n, GHashTable *styles)
+{
+    return is_inline_dom(n, styles);
+}
+
+gboolean
+ns_layout_continues_inline_run(const ns_node *n, GHashTable *styles)
+{
+    return continues_inline_run(n, styles);
 }

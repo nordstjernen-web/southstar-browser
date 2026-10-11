@@ -4,6 +4,9 @@
 
 mod image_map;
 mod image_source;
+mod tree;
+
+pub use tree::{BoxPool, LinkVec, link_clear_fn};
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
@@ -64,7 +67,7 @@ pub struct NsBox {
     flex_main_size: f64,
     has_flex_main: GBoolean,
     is_rendered_legend: GBoolean,
-    _inline_split_tail: GBoolean,
+    inline_split_tail: GBoolean,
     margin_top_through: f64,
     paint_top: f64,
     paint_bottom: f64,
@@ -164,6 +167,7 @@ impl TableColHint {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct InlineAtomic {
     byte_off: usize,
     b: *const NsBox,
@@ -183,9 +187,14 @@ impl InlineAtomic {
     pub fn owner_offset(&self) -> (f64, f64) {
         (self.owner_offset_x, self.owner_offset_y)
     }
+
+    pub fn set_byte_off(&mut self, byte_off: usize) {
+        self.byte_off = byte_off;
+    }
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct LinkRange {
     pub start: usize,
     pub len: usize,
@@ -248,6 +257,7 @@ pub mod inline_kind {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct InlineAttr {
     pub kind: c_uint,
     pub start: usize,
@@ -269,7 +279,7 @@ pub struct InlineAttr {
     family: *const c_char,
     dom: *const c_void,
     style: *const Style,
-    _bg_image_src: *const c_char,
+    bg_image_src: *const c_char,
     bg_image: *mut c_void,
 }
 
@@ -304,7 +314,7 @@ impl InlineAttr {
             family: core::ptr::null(),
             dom: core::ptr::null(),
             style: core::ptr::null(),
-            _bg_image_src: core::ptr::null(),
+            bg_image_src: core::ptr::null(),
             bg_image: core::ptr::null_mut(),
         }
     }
@@ -337,7 +347,7 @@ impl InlineAttr {
     }
 
     pub fn with_bg_image(mut self, src: *const c_char, image: *mut c_void) -> InlineAttr {
-        self._bg_image_src = src;
+        self.bg_image_src = src;
         self.bg_image = image;
         self
     }
@@ -368,6 +378,10 @@ impl InlineAttr {
 
     pub fn bg_image(&self) -> *mut c_void {
         self.bg_image
+    }
+
+    pub fn bg_image_src(&self) -> Option<&CStr> {
+        c_str(self.bg_image_src)
     }
 }
 

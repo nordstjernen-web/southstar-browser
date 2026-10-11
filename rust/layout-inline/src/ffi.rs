@@ -12,7 +12,7 @@ use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{AttrList, Attribute, Context, Layout};
 use southstar_style::StyleRef;
 
-use crate::{attrs, intrinsic, layout};
+use crate::{attrs, intrinsic, layout, multicol};
 
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
@@ -35,6 +35,7 @@ unsafe extern "C" {
     fn ns_css_writing_mode(s: *const Style) -> c_int;
     fn ns_css_text_orientation(s: *const Style) -> c_int;
     fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char;
+    fn ns_text_indent_px(s: *const Style, basis: f64) -> f64;
 }
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
@@ -51,6 +52,15 @@ pub(crate) fn new_layout(parent_style: *const Style) -> Layout {
     let layout = Layout::new(unsafe { Context::from_raw(paint::ns_paint_text_context()) });
     unsafe { paint::ns_paint_apply_inline_font(layout.raw(), parent_style) };
     layout
+}
+
+pub(crate) fn style_text_indent(s: *const Style, basis: f64) -> f64 {
+    unsafe { ns_text_indent_px(s, basis) }
+}
+
+pub(crate) fn paint_inline_layout(run: BoxRef<'_>) -> Option<Layout> {
+    let raw = unsafe { paint::ns_paint_build_inline_layout(ptr::null_mut(), run.as_ptr()) };
+    (!raw.is_null()).then(|| unsafe { Layout::from_owned(raw) })
 }
 
 pub(crate) fn wrap_mode_for(s: *const Style) -> c_int {
@@ -263,4 +273,56 @@ pub unsafe extern "C" fn ns_inline_layout_set_attrs(
     };
     let list = (!list.is_null()).then(|| unsafe { AttrList::borrowed(list) });
     attrs::set_attrs(&layout, list.as_deref(), unsafe { BoxRef::from_ptr(b) });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_layout_inline_box_can_fragment_multicol(
+    b: *const NsBox,
+    style: *const Style,
+    basis: f64,
+) -> GBoolean {
+    let can =
+        unsafe { BoxRef::from_ptr(b) }.is_some_and(|b| multicol::can_fragment(b, style, basis));
+    GBoolean::from(can)
+}
+
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn ns_layout_multicol_single_inline(
+    b: *mut NsBox,
+    inner_x: f64,
+    inner_y: f64,
+    col_w: f64,
+    col_gap: f64,
+    n_cols: c_int,
+    child_inherited: *const Style,
+    cursor_y: *mut f64,
+) -> GBoolean {
+    let Some(b) = (unsafe { BoxRef::from_ptr(b) }) else {
+        return 0;
+    };
+    let cols = multicol::Columns {
+        inner_x,
+        inner_y,
+        col_w,
+        col_gap,
+        n_cols,
+    };
+    match multicol::layout_single_inline(b, &cols, child_inherited) {
+        Some(y) => {
+            if let Some(out) = unsafe { cursor_y.as_mut() } {
+                *out = y;
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_layout_inline_run_break_before(
+    run: *const NsBox,
+    band_height: f64,
+) -> usize {
+    unsafe { BoxRef::from_ptr(run) }.map_or(0, |run| multicol::run_break_before(run, band_height))
 }

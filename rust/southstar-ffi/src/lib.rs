@@ -96,6 +96,7 @@ pub use southstar_layout_position;
 pub use southstar_layout_query;
 pub use southstar_layout_sizing;
 pub use southstar_layout_table;
+pub use southstar_layout_tree;
 pub use southstar_mat4;
 pub use southstar_mathml;
 pub use southstar_mic;
