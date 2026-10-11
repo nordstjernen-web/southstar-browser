@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The GTK shell's title row, icons, page layers and entry point moved to
+  Rust (rust/shell, over a new hand-written GTK FFI crate rust/gtk-ffi),
+  starting phase 4. The shell executable links its own Rust static library,
+  southstar-shell, so the renderer and libsouthstar stay free of GTK.
 * The page's realm scopes, eval budget, microtask and message-task
   scheduling, pumped fetches and runtime state accessors moved from js.c to
   Rust (rust/js-runtime); about 60 fields left struct ns_js for Rust-owned
