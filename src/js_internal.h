@@ -1731,6 +1731,58 @@ JSValue  ns_element_int_attr_getter(JSContext *ctx, JSValueConst this_val, int m
 JSValue  ns_make_svg_animated_length(JSContext *ctx, const ns_node *n, const char *attr);
 JSValue  ns_element_img_natural_width(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_element_img_natural_height(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_img_complete(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_img_current_src(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_zero_int(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_null(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_empty_array_prop(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_noop_set(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_isContentEditable(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_labels(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_form_enctype(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_form_enctype(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val);
+JSValue  ns_element_get_hidden(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_hidden(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_disabled(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_disabled(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_option_index(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_select_length(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_list_ref(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_list_set(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_form(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_content(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_set_rows(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_table_rows(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_table_caption(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_table_thead(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_table_tfoot(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_table_tbodies(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_tr_cells(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_table_createCaption(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_table_createTHead(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_table_createTBody(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_table_createTFoot(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_table_deleteCaption(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_table_deleteTHead(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_table_deleteTFoot(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_table_insertRow(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_table_deleteRow(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv);
+JSValue  ns_tr_insertCell(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_tr_deleteCell(JSContext *ctx, JSValueConst this_val, int argc,
+                          JSValueConst *argv);
+JSValue  ns_element_toDataURL(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
 JSValue  ns_element_dimension_getter(JSContext *ctx, JSValueConst this_val, int magic);
 JSValue  ns_svg_beginElement(JSContext *ctx, JSValueConst this_val, int argc,
                              JSValueConst *argv);

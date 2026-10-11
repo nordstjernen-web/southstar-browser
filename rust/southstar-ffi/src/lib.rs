@@ -47,6 +47,7 @@ pub use southstar_js_custom_elements;
 pub use southstar_js_dispatch;
 pub use southstar_js_document;
 pub use southstar_js_dom_factory;
+pub use southstar_js_elements;
 pub use southstar_js_events;
 pub use southstar_js_focus;
 pub use southstar_js_fonts;

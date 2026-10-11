@@ -4,6 +4,7 @@
 
 use core::ffi::{c_double, c_int, c_uint, c_void};
 
+use southstar_glib as glib;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
@@ -61,6 +62,18 @@ pub(crate) fn set_context_kind(st: *mut CanvasState, kind: i32) {
 
 pub(crate) fn origin_clean(st: *mut CanvasState) -> bool {
     state(st).origin_clean != 0
+}
+
+pub(crate) fn base64(data: &[u8]) -> Vec<u8> {
+    let encoded = unsafe { glib::g_base64_encode(data.as_ptr(), data.len()) };
+    if encoded.is_null() {
+        return Vec::new();
+    }
+    let text = unsafe { core::ffi::CStr::from_ptr(encoded) }
+        .to_bytes()
+        .to_vec();
+    unsafe { glib::g_free(encoded.cast()) };
+    text
 }
 
 pub(crate) fn surface_of(st: *mut CanvasState) -> Option<Surface> {
@@ -149,6 +162,24 @@ pub unsafe extern "C" fn ns_element_getContext(
             argc,
             argv,
             crate::context::element_get_context,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_toDataURL(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        quickjs::call_native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            crate::context::element_to_data_url,
         )
     }
 }

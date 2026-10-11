@@ -104,6 +104,11 @@ impl<'a> ImageRef<'a> {
         self.raw().http_status
     }
 
+    pub fn natural_size(self) -> (i32, i32) {
+        let image = self.raw();
+        (image.natural_width, image.natural_height)
+    }
+
     pub fn source_url(self) -> *const c_char {
         let image = self.raw();
         if image.final_url.is_null() {

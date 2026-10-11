@@ -280,6 +280,39 @@ pub(crate) fn convert_to_blob(
     Ok(promise)
 }
 
+pub(crate) fn element_to_data_url(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    _: &[Value],
+) -> Result<Value, Value> {
+    let el = host::unwrap_element(this);
+    let js = crate::ffi::state::js_of(scope);
+    if el.is_null() || js.is_null() {
+        return Ok(scope.string("data:,"));
+    }
+    let Some(st) = crate::state::state_for(js, el) else {
+        return Ok(scope.string("data:,"));
+    };
+    let Some(surface) = host::surface_of(st) else {
+        return Ok(scope.string("data:,"));
+    };
+    if !host::origin_clean(st) {
+        return Err(crate::api::throw_dom(
+            scope,
+            "SecurityError",
+            "Tainted canvases may not be exported.",
+        ));
+    }
+    match surface.png() {
+        Some(png) => {
+            let mut url = b"data:image/png;base64,".to_vec();
+            url.extend_from_slice(&host::base64(&png));
+            Ok(scope.string_from_bytes(&url))
+        }
+        None => Ok(scope.string("data:,")),
+    }
+}
+
 const MATRIX_KEYS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
 
 pub(crate) fn dommatrix(scope: &mut Scope<'_>, m: [f64; 6]) -> Value {
