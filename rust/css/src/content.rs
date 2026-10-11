@@ -26,7 +26,7 @@ fn unescape_cp(cp: u32) -> char {
     }
 }
 
-pub(crate) fn append_unescaped(out: &mut Vec<u8>, s: &[u8], pos: &mut usize) {
+pub fn append_unescaped(out: &mut Vec<u8>, s: &[u8], pos: &mut usize) {
     let mut p = *pos;
     let at = |i: usize| s.get(i).copied().unwrap_or(0);
     if at(p) == b'\\' && at(p + 1) != 0 {

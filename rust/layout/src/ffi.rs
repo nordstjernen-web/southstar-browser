@@ -282,6 +282,66 @@ const _: () = assert!(
 );
 
 impl InlineAttr {
+    pub fn new(kind: c_uint, start: usize, len: usize) -> InlineAttr {
+        InlineAttr {
+            kind,
+            start,
+            len,
+            font_size_px: 0.0,
+            font_weight: 0,
+            font_stretch: 0,
+            font_kerning: 0,
+            font_ligatures: core::ptr::null(),
+            font_features: core::ptr::null(),
+            font_variations: core::ptr::null(),
+            box_w: 0.0,
+            box_h: 0.0,
+            native_chrome: 0,
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+            family: core::ptr::null(),
+            dom: core::ptr::null(),
+            style: core::ptr::null(),
+            _bg_image_src: core::ptr::null(),
+            bg_image: core::ptr::null_mut(),
+        }
+    }
+
+    pub fn with_font_settings(
+        mut self,
+        ligatures: *const c_char,
+        features: *const c_char,
+        variations: *const c_char,
+    ) -> InlineAttr {
+        self.font_ligatures = ligatures;
+        self.font_features = features;
+        self.font_variations = variations;
+        self
+    }
+
+    pub fn with_family(mut self, family: *const c_char) -> InlineAttr {
+        self.family = family;
+        self
+    }
+
+    pub fn with_dom(mut self, dom: *const c_void) -> InlineAttr {
+        self.dom = dom;
+        self
+    }
+
+    pub fn with_style(mut self, style: *const Style) -> InlineAttr {
+        self.style = style;
+        self
+    }
+
+    pub fn with_bg_image(mut self, src: *const c_char, image: *mut c_void) -> InlineAttr {
+        self._bg_image_src = src;
+        self.bg_image = image;
+        self
+    }
+
     pub fn font_ligatures(&self) -> Option<&CStr> {
         c_str(self.font_ligatures)
     }

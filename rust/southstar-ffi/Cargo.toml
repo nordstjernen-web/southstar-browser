@@ -87,6 +87,7 @@ southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-layout = { path = "../layout" }
 southstar-layout-block = { path = "../layout-block" }
+southstar-layout-content = { path = "../layout-content" }
 southstar-layout-flex = { path = "../layout-flex" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-layout-grid = { path = "../layout-grid" }

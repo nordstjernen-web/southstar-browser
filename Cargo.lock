@@ -1664,6 +1664,7 @@ dependencies = [
  "southstar-js-workers",
  "southstar-layout",
  "southstar-layout-block",
+ "southstar-layout-content",
  "southstar-layout-flex",
  "southstar-layout-float",
  "southstar-layout-grid",
@@ -2274,6 +2275,19 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-layout-float",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-content"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-css",
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-html-util",
+ "southstar-layout",
+ "southstar-paint",
  "southstar-style",
 ]
 

@@ -1,0 +1,20 @@
+[package]
+name = "southstar-layout-content"
+description = "Generated content and form-control text from src/layout.c: CSS counters, ::before/::after content with attr(), counter() and quotes, text-transform, the inline attributes emitted for controls and styled runs, control sizing and chrome, meter and progress states, select and datalist rows and text input columns"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css = { path = "../css" }
+southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
+southstar-html-util = { path = "../html-util" }
+southstar-layout = { path = "../layout" }
+southstar-paint = { path = "../paint" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

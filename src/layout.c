@@ -888,9 +888,6 @@ node_has_media_metadata(const ns_node *n)
 
 #define NS_LAYOUT_MAX_DEPTH 512
 
-static gboolean tag_is_non_rendering(const char *name);
-static gboolean node_is_non_rendering(const ns_node *n);
-
 static gboolean
 node_is_frame_fallback(const ns_node *n)
 {
@@ -909,7 +906,7 @@ contains_block_media_depth(const ns_node *n, GHashTable *styles, int depth)
         return FALSE;
     for (const ns_node *c = n->first_child; c; c = c->next_sibling) {
         if (c->kind != NS_NODE_ELEMENT || !c->name) continue;
-        if (node_is_non_rendering(c)) continue;
+        if (ns_layout_node_is_non_rendering(c)) continue;
         if (node_has_media_metadata(c) ||
             (is_replaced_block_tag(c->name) &&
              !is_inline_level_replaced(c, styles)) ||
@@ -1316,7 +1313,6 @@ ns_vertical_stack_text(const char *text)
 }
 static struct ns_image_cache *g_image_cache_for_layout;
 static const char    *g_base_url_for_layout;
-static GHashTable    *g_counters_for_layout;
 static gboolean       g_svg_defs_computed_for_layout;
 static ns_box *ns_layout_build_(const ns_node *doc, GHashTable *styles, double viewport_width);
 
@@ -1379,6 +1375,12 @@ collect_peek_image(const char *src)
                                     abs ? abs : src);
     g_free(abs);
     return img;
+}
+
+void *
+ns_layout_peek_image(const char *src)
+{
+    return collect_peek_image(src);
 }
 
 static void
@@ -1629,7 +1631,7 @@ build_anonymous_table_cell(const ns_node *n, GHashTable *styles)
     const ns_node *c = n ? n->first_child : NULL;
     while (c) {
         if (c->kind == NS_NODE_ELEMENT && c->name &&
-            tag_is_non_rendering(c->name)) {
+            ns_layout_tag_is_non_rendering(c->name)) {
             c = c->next_sibling;
             continue;
         }
@@ -1659,7 +1661,7 @@ build_anonymous_table_cell(const ns_node *n, GHashTable *styles)
             c = c->next_sibling;
             while (c && !is_table_caption(c, styles)) {
                 if (c->kind == NS_NODE_ELEMENT && c->name &&
-                    tag_is_non_rendering(c->name)) {
+                    ns_layout_tag_is_non_rendering(c->name)) {
                     c = c->next_sibling;
                     continue;
                 }
@@ -1855,21 +1857,6 @@ collector_note_ws(collector_ctx *ctx, const ns_node *parent, gsize start)
     g_array_append_val(ctx->ws_ranges, r);
 }
 
-static void
-append_inline_spacer(collector_ctx *ctx, double width)
-{
-    if (!(width > 0)) return;
-    gsize start = ctx->out->len;
-    g_string_append(ctx->out, "\xef\xbf\xbc");
-    ns_inline_attr spacer = {
-        .kind = NS_INLINE_SPACER,
-        .start = start,
-        .len = 3,
-        .box_w = width,
-    };
-    g_array_append_val(ctx->attrs, spacer);
-}
-
 static double
 inline_box_side_px(const ns_style *s, ns_css_prop padding,
                    ns_css_prop border_width, ns_css_prop border_style)
@@ -1881,1125 +1868,20 @@ inline_box_side_px(const ns_style *s, ns_css_prop padding,
     return side;
 }
 
-static int
-control_pad_spaces(const ns_style *s, ns_css_prop prop)
-{
-    if (!s) return 0;
-    double fs = length_or(s->values[NS_CSS_FONT_SIZE], 16);
-    if (!(fs > 0)) fs = 16;
-    double pad = length_resolve(s->values[prop], fs * 20.0, 0);
-    double space = fs * 0.25;
-    if (!(space > 0) || pad <= space) return 0;
-    int n = (int)((pad - space) / space + 0.5);
-    if (n < 0) n = 0;
-    if (n > 12) n = 12;
-    return n;
-}
-
-static int
-text_input_leading_spaces(const ns_style *s)
-{
-    return control_pad_spaces(s, NS_CSS_PADDING_LEFT);
-}
-
-static GHashTable *g_input_columns_for_layout;
-
-static int
-text_input_size_attr(const ns_node *n)
-{
-    const char *size_str = ns_element_get_attr(n, "size");
-    return size_str ? ns_parse_int(size_str, 20, 4, 80) : 20;
-}
-
-static int
-text_input_columns(const ns_node *n)
-{
-    int size = text_input_size_attr(n);
-    if (!g_input_columns_for_layout) return size;
-    gpointer fitted = g_hash_table_lookup(g_input_columns_for_layout, n);
-    return fitted ? MIN(GPOINTER_TO_INT(fitted), 4096) : size;
-}
-
-static gboolean
-text_input_align_rtl(const ns_style *s, const ns_node *n)
-{
-    for (const ns_node *p = n; p; p = p->parent) {
-        if (p->kind != NS_NODE_ELEMENT) continue;
-        const char *dir = ns_element_get_attr(p, "dir");
-        if (!dir) continue;
-        if (g_ascii_strcasecmp(dir, "rtl") == 0) return TRUE;
-        if (g_ascii_strcasecmp(dir, "ltr") == 0) return FALSE;
-    }
-    return keyword_is(s ? s->values[NS_CSS_DIRECTION] : NULL, "rtl");
-}
-
-static glong
-text_input_align_offset(const ns_style *s, const ns_node *n, glong span)
-{
-    if (span <= 0) return 0;
-    const ns_css_value *ta = s ? s->values[NS_CSS_TEXT_ALIGN] : NULL;
-    gboolean rtl = text_input_align_rtl(s, n);
-    if (keyword_is(ta, "center"))
-        return span / 2;
-    if (keyword_is(ta, "right") ||
-        (keyword_is(ta, "end") && !rtl) ||
-        (keyword_is(ta, "start") && rtl) ||
-        (!ta && rtl))
-        return span;
-    return 0;
-}
-
-static glong
-text_input_align_skip_cps(const ns_style *s, const ns_node *n,
-                          glong cps, glong size)
-{
-    if (cps <= size) return 0;
-    return text_input_align_offset(s, n, cps - size);
-}
-
-static glong
-text_input_focused_skip_cps(const char *value, gsize caret_byte,
-                            glong cps, glong size)
-{
-    if (!value || cps <= size) return 0;
-    glong max_skip = cps - size;
-    glong caret_cp = g_utf8_pointer_to_offset(value, value + caret_byte);
-    glong skip = caret_cp > size ? caret_cp - size : 0;
-    if (skip > max_skip) skip = max_skip;
-    if (skip < 0) skip = 0;
-    return skip;
-}
-
-static const char *
-text_input_advance_cps(const char *p, glong cps)
-{
-    for (glong i = 0; p && *p && i < cps; i++)
-        p = g_utf8_next_char(p);
-    return p ? p : "";
-}
-
-static gboolean
-name_in(const char *name, const char *const *set)
-{
-    if (!name) return FALSE;
-    for (; *set; set++) if (strcmp(name, *set) == 0) return TRUE;
-    return FALSE;
-}
-
-static gboolean
-tag_is_bold(const char *name)
-{
-    static const char *const set[] = { "b", "strong", NULL };
-    return name_in(name, set);
-}
-
-static gboolean
-tag_is_italic(const char *name)
-{
-    static const char *const set[] = { "i", "em", "cite", "dfn", NULL };
-    return name_in(name, set);
-}
-
-static gboolean
-tag_is_monospace(const char *name)
-{
-    static const char *const set[] = { "code", "tt", "kbd", "samp", "pre", NULL };
-    return name_in(name, set);
-}
-
-static gboolean
-tag_is_underline(const char *name)
-{
-    static const char *const set[] = { "u", "ins", NULL };
-    return name_in(name, set);
-}
-
-static gboolean
-tag_is_strike(const char *name)
-{
-    static const char *const set[] = { "s", "del", "strike", NULL };
-    return name_in(name, set);
-}
-
-static gboolean
-tag_is_non_rendering(const char *name)
-{
-    static const char *const set[] = {
-        "area", "base", "head", "link", "meta", "noscript", "param",
-        "script", "source", "style", "template", "title", "track", NULL,
-    };
-    return name_in(name, set);
-}
-
-static gboolean
-node_is_non_rendering(const ns_node *n)
-{
-    if (!n || !tag_is_non_rendering(n->name)) return FALSE;
-    if (n->name && g_ascii_strcasecmp(n->name, "noscript") == 0) {
-        const ns_node *root = ns_node_root(n);
-        if (root && (root->flags & NS_NODE_SCRIPTING_DISABLED))
-            return FALSE;
-    }
-    return TRUE;
-}
-
-static void
-emit_attr(GArray *attrs, ns_inline_attr_kind k, gsize start, gsize end)
-{
-    if (end <= start) return;
-    ns_inline_attr a = { .kind = k, .start = start, .len = end - start };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_attr_styled(GArray *attrs, ns_inline_attr_kind k, gsize start, gsize end,
-                 const ns_style *style)
-{
-    if (end <= start) return;
-    ns_inline_attr a = { .kind = k, .start = start, .len = end - start,
-                         .style = style };
-    g_array_append_val(attrs, a);
-}
-
-static gboolean
-inline_run_at_line_start(const GString *out)
-{
-    if (!out || out->len == 0) return TRUE;
-    gsize i = out->len;
-    while (i > 0) {
-        if ((guchar)out->str[i - 1] == ' ') { i--; continue; }
-        if (i >= 2 && (guchar)out->str[i - 2] == 0xc2 &&
-            (guchar)out->str[i - 1] == 0xa0) { i -= 2; continue; }
-        break;
-    }
-    if (i == 0) return TRUE;
-    if (i >= 3 && (guchar)out->str[i - 3] == 0xe2 &&
-        (guchar)out->str[i - 2] == 0x80 &&
-        ((guchar)out->str[i - 1] == 0xa8 || (guchar)out->str[i - 1] == 0xa9))
-        return TRUE;
-    if ((guchar)out->str[i - 1] == '\n') return TRUE;
-    return FALSE;
-}
-
-static double
-control_dim_px_basis(const ns_css_value *v, double font_size, double basis)
-{
-    if (!v) return 0;
-    if (v->kind == NS_CSS_V_CALC) {
-        double out = v->u.calc.px;
-        if (basis > 0) out += v->u.calc.pct * basis / 100.0;
-        return out > 0 ? out : 0;
-    }
-    if (v->kind != NS_CSS_V_LENGTH) return 0;
-    switch (v->u.length.unit) {
-    case NS_CSS_UNIT_PX:
-    case NS_CSS_UNIT_NUMBER:
-        return v->u.length.v;
-    case NS_CSS_UNIT_EM:
-        return v->u.length.v * font_size;
-    case NS_CSS_UNIT_REM:
-        return v->u.length.v * 16.0;
-    case NS_CSS_UNIT_PERCENT:
-        return basis > 0 ? v->u.length.v * basis / 100.0 : 0;
-    case NS_CSS_UNIT_VW:
-        return v->u.length.v * ns_css_viewport_w() / 100.0;
-    case NS_CSS_UNIT_VH:
-        return v->u.length.v * ns_css_viewport_h() / 100.0;
-    case NS_CSS_UNIT_VMIN:
-        return v->u.length.v * MIN(ns_css_viewport_w(), ns_css_viewport_h()) / 100.0;
-    case NS_CSS_UNIT_VMAX:
-        return v->u.length.v * MAX(ns_css_viewport_w(), ns_css_viewport_h()) / 100.0;
-    case NS_CSS_UNIT_CQW:
-        return v->u.length.v * (ns_css_container_w() > 0 ? ns_css_container_w() : ns_css_viewport_w()) / 100.0;
-    case NS_CSS_UNIT_CQH:
-        return v->u.length.v * (ns_css_container_h() > 0 ? ns_css_container_h() : ns_css_viewport_h()) / 100.0;
-    case NS_CSS_UNIT_CQMIN: {
-        double cw = ns_css_container_w() > 0 ? ns_css_container_w() : ns_css_viewport_w();
-        double ch = ns_css_container_h() > 0 ? ns_css_container_h() : ns_css_viewport_h();
-        return v->u.length.v * MIN(cw, ch) / 100.0;
-    }
-    case NS_CSS_UNIT_CQMAX: {
-        double cw = ns_css_container_w() > 0 ? ns_css_container_w() : ns_css_viewport_w();
-        double ch = ns_css_container_h() > 0 ? ns_css_container_h() : ns_css_viewport_h();
-        return v->u.length.v * MAX(cw, ch) / 100.0;
-    }
-    case NS_CSS_UNIT_EX:
-    case NS_CSS_UNIT_CH:
-        return v->u.length.v * font_size * 0.5;
-    case NS_CSS_UNIT_CAP:
-        return v->u.length.v * font_size * 0.7;
-    case NS_CSS_UNIT_IC:
-        return v->u.length.v * font_size;
-    case NS_CSS_UNIT_LH:
-        return v->u.length.v * font_size * 1.5;
-    case NS_CSS_UNIT_RLH:
-        return v->u.length.v * 24.0;
-    case NS_CSS_UNIT_REX:
-    case NS_CSS_UNIT_RCH:
-        return v->u.length.v * 8.0;
-    case NS_CSS_UNIT_RCAP:
-        return v->u.length.v * 11.2;
-    case NS_CSS_UNIT_RIC:
-        return v->u.length.v * 16.0;
-    }
-    return 0;
-}
-
-static double
-control_dim_px_clamped(const ns_style *s, ns_css_prop value_prop,
-                       ns_css_prop min_prop, ns_css_prop max_prop,
-                       double font_size, double basis)
-{
-    if (!s) return 0;
-    double out = control_dim_px_basis(s->values[value_prop], font_size, basis);
-    double mn = control_dim_px_basis(s->values[min_prop], font_size, basis);
-    double mx = control_dim_px_basis(s->values[max_prop], font_size, basis);
-    if (mn > 0 && out > 0 && out < mn) out = mn;
-    if (mx > 0 && out > mx) out = mx;
-    return out;
-}
-
-static gboolean
-control_is_border_box(const ns_node *dom, const ns_style *s)
-{
-    if (s && keyword_is(s->values[NS_CSS_BOX_SIZING], "border-box"))
-        return TRUE;
-    if (s && keyword_is(s->values[NS_CSS_BOX_SIZING], "content-box"))
-        return FALSE;
-    if (!dom || !dom->name) return FALSE;
-    if (strcmp(dom->name, "button") == 0 || strcmp(dom->name, "select") == 0)
-        return TRUE;
-    if (strcmp(dom->name, "input") != 0) return FALSE;
-    const char *type = ns_element_get_attr(dom, "type");
-    if (!type || !*type) return FALSE;
-    return g_ascii_strcasecmp(type, "submit") == 0 ||
-           g_ascii_strcasecmp(type, "reset") == 0 ||
-           g_ascii_strcasecmp(type, "button") == 0 ||
-           g_ascii_strcasecmp(type, "checkbox") == 0 ||
-           g_ascii_strcasecmp(type, "radio") == 0 ||
-           g_ascii_strcasecmp(type, "color") == 0 ||
-           g_ascii_strcasecmp(type, "search") == 0;
-}
-
-double
-ns_control_css_extra_w(const ns_node *dom, const ns_style *s)
-{
-    if (!s || control_is_border_box(dom, s)) return 0;
-    ns_edges m, p, b;
-    edges_from_style(s, 0, &m, &p, &b);
-    return p.left + p.right + b.left + b.right;
-}
-
-double
-ns_control_css_extra_h(const ns_node *dom, const ns_style *s)
-{
-    if (!s || control_is_border_box(dom, s)) return 0;
-    ns_edges m, p, b;
-    edges_from_style(s, 0, &m, &p, &b);
-    return p.top + p.bottom + b.top + b.bottom;
-}
-
-static double
-inline_attr_control_width(const ns_inline_attr *r, const ns_box *box)
-{
-    if (!r || !r->style) return r && r->box_w > 0 ? r->box_w : 0;
-    double fs = length_or(r->style->values[NS_CSS_FONT_SIZE], 16);
-    double w = control_dim_px_clamped(r->style, NS_CSS_WIDTH,
-                                      NS_CSS_MIN_WIDTH, NS_CSS_MAX_WIDTH,
-                                      fs, box ? box->content_width : 0);
-    if (w > 0) w += ns_control_css_extra_w(r->dom, r->style);
-    return w > 0 ? w : r->box_w;
-}
-
-static gboolean
-style_has_visible_control_box(const ns_style *s)
-{
-    if (!s) return FALSE;
-    const ns_css_value *bg = s->values[NS_CSS_BACKGROUND_COLOR];
-    if (bg && bg->kind == NS_CSS_V_COLOR && bg->u.color.a > 0)
-        return TRUE;
-    if (s->values[NS_CSS_BOX_SHADOW] &&
-        s->values[NS_CSS_BOX_SHADOW]->kind == NS_CSS_V_SHADOW &&
-        s->values[NS_CSS_BOX_SHADOW]->u.shadow.n > 0)
-        return TRUE;
-    if (s->values[NS_CSS_BACKGROUND_IMAGE] &&
-        (s->values[NS_CSS_BACKGROUND_IMAGE]->kind == NS_CSS_V_URL ||
-         s->values[NS_CSS_BACKGROUND_IMAGE]->kind == NS_CSS_V_GRADIENT))
-        return TRUE;
-    if (length_or(s->values[NS_CSS_BORDER_RADIUS], 0) > 0 ||
-        length_or(s->values[NS_CSS_BORDER_TOP_LEFT_RADIUS], 0) > 0 ||
-        length_or(s->values[NS_CSS_BORDER_TOP_RIGHT_RADIUS], 0) > 0 ||
-        length_or(s->values[NS_CSS_BORDER_BOTTOM_RIGHT_RADIUS], 0) > 0 ||
-        length_or(s->values[NS_CSS_BORDER_BOTTOM_LEFT_RADIUS], 0) > 0)
-        return TRUE;
-    const ns_css_prop widths[4] = {
-        NS_CSS_BORDER_TOP_WIDTH,
-        NS_CSS_BORDER_RIGHT_WIDTH,
-        NS_CSS_BORDER_BOTTOM_WIDTH,
-        NS_CSS_BORDER_LEFT_WIDTH,
-    };
-    const ns_css_prop styles_p[4] = {
-        NS_CSS_BORDER_TOP_STYLE,
-        NS_CSS_BORDER_RIGHT_STYLE,
-        NS_CSS_BORDER_BOTTOM_STYLE,
-        NS_CSS_BORDER_LEFT_STYLE,
-    };
-    for (int i = 0; i < 4; i++) {
-        if (length_or(s->values[widths[i]], 0) <= 0) continue;
-        const ns_css_value *st = s->values[styles_p[i]];
-        if (!keyword_is(st, "none") && !keyword_is(st, "hidden"))
-            return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean
-control_style_strips_chrome(const ns_style *s)
-{
-    static const ns_css_prop styles_p[4] = {
-        NS_CSS_BORDER_TOP_STYLE, NS_CSS_BORDER_RIGHT_STYLE,
-        NS_CSS_BORDER_BOTTOM_STYLE, NS_CSS_BORDER_LEFT_STYLE,
-    };
-    static const ns_css_prop widths_p[4] = {
-        NS_CSS_BORDER_TOP_WIDTH, NS_CSS_BORDER_RIGHT_WIDTH,
-        NS_CSS_BORDER_BOTTOM_WIDTH, NS_CSS_BORDER_LEFT_WIDTH,
-    };
-    if (!s) return FALSE;
-    (void)widths_p;
-    for (int i = 0; i < 4; i++) {
-        const ns_css_value *st = s->values[styles_p[i]];
-        if (!keyword_is(st, "none") && !keyword_is(st, "hidden"))
-            return FALSE;
-    }
-    return TRUE;
-}
-
-static gboolean
-control_prefers_css_chrome(ns_inline_attr_kind k, const ns_node *dom,
-                           const ns_style *s)
-{
-    if (!dom || !s) return FALSE;
-    if (keyword_is(s->values[NS_CSS_APPEARANCE], "none"))
-        return TRUE;
-    if (control_style_strips_chrome(s)) return TRUE;
-    if (style_has_visible_control_box(s)) return TRUE;
-    if (!ns_element_get_attr(dom, "class")) return FALSE;
-    ns_display d = ns_css_display_of(s);
-    if (ns_display_is_block_level(d) || display_is_atomic_inline_container(d))
-        return k == NS_INLINE_INPUT_FIELD ||
-               k == NS_INLINE_INPUT_FIELD_FOCUSED ||
-               k == NS_INLINE_BUTTON;
-    return FALSE;
-}
-
-static void
-emit_form_attr_sized(GArray *attrs, ns_inline_attr_kind k, gsize start, gsize end,
-                     const ns_node *dom, GHashTable *styles)
-{
-    if (end <= start) return;
-    double bw = 0, bh = 0;
-    const ns_style *s = NULL;
-    double fs = 16;
-    const char *bg_image_src = NULL;
-    void *bg_image = NULL;
-    if (dom && styles) {
-        s = g_hash_table_lookup(styles, dom);
-        if (s) {
-            fs = length_or(s->values[NS_CSS_FONT_SIZE], 16);
-            bw = control_dim_px_clamped(s, NS_CSS_WIDTH,
-                                        NS_CSS_MIN_WIDTH, NS_CSS_MAX_WIDTH,
-                                        fs, 0);
-            bh = control_dim_px_clamped(s, NS_CSS_HEIGHT,
-                                        NS_CSS_MIN_HEIGHT, NS_CSS_MAX_HEIGHT,
-                                        fs, 0);
-            if (bw > 0) bw += ns_control_css_extra_w(dom, s);
-            if (bh > 0) bh += ns_control_css_extra_h(dom, s);
-            const ns_css_value *bg = s->values[NS_CSS_BACKGROUND_IMAGE];
-            if (bg && bg->kind == NS_CSS_V_URL && bg->u.url) {
-                bg_image_src = bg->u.url;
-                if (g_image_cache_for_layout) {
-                    char *abs = g_base_url_for_layout
-                        ? ns_url_resolve(g_base_url_for_layout, bg_image_src)
-                        : NULL;
-                    bg_image = ns_image_cache_peek(g_image_cache_for_layout,
-                                                   abs ? abs : bg_image_src);
-                    g_free(abs);
-                }
-            }
-        }
-    }
-    if (dom && dom->name && strcmp(dom->name, "textarea") == 0) {
-        if (bw <= 0) {
-            const char *cols = ns_element_get_attr(dom, "cols");
-            int c = cols ? atoi(cols) : 20;
-            if (c <= 0) c = 20;
-            bw = c * (fs * 0.5) + 8.0;
-        }
-        if (bh <= 0) {
-            const char *rows = ns_element_get_attr(dom, "rows");
-            int r = rows ? atoi(rows) : 2;
-            if (r <= 0) r = 2;
-            double line_h = fs * 1.3;
-            bh = r * line_h + 6.0;
-        }
-    }
-    ns_inline_attr a = {
-        .kind = k, .start = start, .len = end - start, .dom = dom,
-        .box_w = bw, .box_h = bh,
-        .native_chrome = !control_prefers_css_chrome(k, dom, s),
-        .style = s,
-        .bg_image_src = bg_image_src,
-        .bg_image = bg_image,
-    };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_control_text_style(GArray *attrs, const ns_style *s,
-                        gsize field_start, gsize field_end,
-                        gsize val_start, gsize val_end,
-                        gboolean is_placeholder, gboolean disabled)
-{
-    if (field_end > field_start) {
-        double ifs = s ? length_or(s->values[NS_CSS_FONT_SIZE], 0) : 0;
-        if (ifs > 0) {
-            ns_inline_attr a = {
-                .kind = NS_INLINE_FONT_SIZE,
-                .start = field_start, .len = field_end - field_start,
-                .font_size_px = ifs,
-            };
-            g_array_append_val(attrs, a);
-        }
-        const ns_css_value *ffam = s ? s->values[NS_CSS_FONT_FAMILY] : NULL;
-        if (ffam && ffam->kind == NS_CSS_V_KEYWORD && ffam->u.keyword) {
-            ns_inline_attr a = {
-                .kind = NS_INLINE_FONT_FAMILY,
-                .start = field_start, .len = field_end - field_start,
-                .family = ffam->u.keyword,
-            };
-            g_array_append_val(attrs, a);
-        }
-    }
-    if (val_end <= val_start) return;
-    const ns_style *phs = (s && is_placeholder) ? s->placeholder : NULL;
-    guint8 cr = 0, cg = 0, cb = 0, ca = 255;
-    gboolean have_color = FALSE;
-    if (is_placeholder) {
-        const ns_css_value *pc = phs ? phs->values[NS_CSS_COLOR] : NULL;
-        if (pc && pc->kind == NS_CSS_V_COLOR) {
-            cr = pc->u.color.r; cg = pc->u.color.g;
-            cb = pc->u.color.b; ca = pc->u.color.a;
-        } else {
-            cr = cg = cb = 0x75;
-        }
-        have_color = TRUE;
-    } else {
-        const ns_css_value *cv = s ? s->values[NS_CSS_COLOR] : NULL;
-        if (cv && cv->kind == NS_CSS_V_COLOR) {
-            cr = cv->u.color.r; cg = cv->u.color.g;
-            cb = cv->u.color.b; ca = cv->u.color.a;
-            have_color = TRUE;
-        }
-    }
-    if (disabled) { cr = cg = cb = 0x82; ca = 255; have_color = TRUE; }
-    if (phs) {
-        const ns_css_value *ov = phs->values[NS_CSS_OPACITY];
-        if (ov && ov->kind == NS_CSS_V_LENGTH)
-            ca = (guint8)lround(ca * CLAMP(ov->u.length.v, 0.0, 1.0));
-        if (keyword_is(phs->values[NS_CSS_VISIBILITY], "hidden") ||
-            keyword_is(phs->values[NS_CSS_VISIBILITY], "collapse"))
-            ca = 0;
-    }
-    if (have_color) {
-        ns_inline_attr a = {
-            .kind = NS_INLINE_COLOR,
-            .start = val_start, .len = val_end - val_start,
-            .r = cr, .g = cg, .b = cb, .a = ca,
-        };
-        g_array_append_val(attrs, a);
-    }
-    if (phs) {
-        if (keyword_is(phs->values[NS_CSS_FONT_STYLE], "italic") ||
-            keyword_is(phs->values[NS_CSS_FONT_STYLE], "oblique"))
-            emit_attr(attrs, NS_INLINE_ITALIC, val_start, val_end);
-        int phw = ns_css_font_weight_number(phs->values[NS_CSS_FONT_WEIGHT], -1);
-        if (phw > 0) {
-            ns_inline_attr a = {
-                .kind = NS_INLINE_FONT_WEIGHT,
-                .start = val_start, .len = val_end - val_start,
-                .font_weight = phw,
-            };
-            g_array_append_val(attrs, a);
-        }
-    }
-}
-
-static void
-emit_font_size_attr(GArray *attrs, gsize start, gsize end, double font_size_px)
-{
-    if (end <= start) return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_SIZE, .start = start,
-                         .len = end - start, .font_size_px = font_size_px };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_font_weight_attr(GArray *attrs, gsize start, gsize end, int font_weight)
-{
-    if (end <= start || font_weight <= 0) return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_WEIGHT, .start = start,
-                         .len = end - start, .font_weight = font_weight };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_font_stretch_attr(GArray *attrs, gsize start, gsize end, int font_stretch)
-{
-    if (end <= start) return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_STRETCH, .start = start,
-                         .len = end - start, .font_stretch = font_stretch };
-    g_array_append_val(attrs, a);
-}
-
-static int
-font_kerning_int_from_style(const ns_style *s)
-{
-    const char *kw = s ? ns_style_keyword(s, NS_CSS_FONT_KERNING) : NULL;
-    if (!kw) return -1;
-    if (strcmp(kw, "none") == 0) return 0;
-    if (strcmp(kw, "normal") == 0 || strcmp(kw, "auto") == 0) return 1;
-    return -1;
-}
-
-static const char *
-font_ligatures_from_style(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_FONT_VARIANT_LIGATURES] : NULL;
-    return v && v->kind == NS_CSS_V_KEYWORD ? v->u.keyword : NULL;
-}
-
-static const char *
-font_feature_settings_from_style(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_FONT_FEATURE_SETTINGS] : NULL;
-    return v && v->kind == NS_CSS_V_KEYWORD ? v->u.keyword : NULL;
-}
-
-static const char *
-font_variation_settings_from_style(const ns_style *s)
-{
-    const ns_css_value *v = s ? s->values[NS_CSS_FONT_VARIATION_SETTINGS] : NULL;
-    return v && v->kind == NS_CSS_V_KEYWORD ? v->u.keyword : NULL;
-}
-
-static void
-emit_font_features_attr(GArray *attrs, gsize start, gsize end,
-                        int font_kerning, const char *font_ligatures,
-                        const char *font_features)
-{
-    if (end <= start ||
-        (font_kerning < 0 && !font_ligatures && !font_features))
-        return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_FEATURES, .start = start,
-                         .len = end - start, .font_kerning = font_kerning,
-                         .font_ligatures = font_ligatures,
-                         .font_features = font_features };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_font_variations_attr(GArray *attrs, gsize start, gsize end,
-                          const char *font_variations)
-{
-    if (end <= start || !font_variations) return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_VARIATIONS, .start = start,
-                         .len = end - start,
-                         .font_variations = font_variations };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_color_attr(GArray *attrs, gsize start, gsize end,
-                guint8 r, guint8 g, guint8 b, guint8 a8)
-{
-    if (end <= start) return;
-    ns_inline_attr a = { .kind = NS_INLINE_COLOR, .start = start,
-                         .len = end - start, .r = r, .g = g, .b = b, .a = a8 };
-    g_array_append_val(attrs, a);
-}
-
-static void
-emit_font_family_attr(GArray *attrs, gsize start, gsize end, const char *family)
-{
-    if (end <= start || !family) return;
-    ns_inline_attr a = { .kind = NS_INLINE_FONT_FAMILY, .start = start,
-                         .len = end - start, .family = family };
-    g_array_append_val(attrs, a);
-}
-
-static void
-counter_apply_decl(GHashTable *counters, const char *decl, gboolean increment)
-{
-    if (!decl || !*decl) return;
-    const char *p = decl;
-    while (*p) {
-        while (*p && g_ascii_isspace(*p)) p++;
-        if (!*p) break;
-        const char *name_s = p;
-        while (*p && !g_ascii_isspace(*p)) p++;
-        gsize nlen = (gsize)(p - name_s);
-        if (nlen == 0) break;
-        char *name = g_strndup(name_s, nlen);
-        if (strcmp(name, "none") == 0) { g_free(name); break; }
-        while (*p && g_ascii_isspace(*p)) p++;
-        int val = increment ? 1 : 0;
-        if (*p == '-' || g_ascii_isdigit(*p)) {
-            char *end = NULL;
-            long v = strtol(p, &end, 10);
-            if (end != p) { val = (int)v; p = end; }
-        }
-        gint cur = increment
-            ? GPOINTER_TO_INT(g_hash_table_lookup(counters, name))
-            : 0;
-        g_hash_table_insert(counters, g_strdup(name),
-                            GINT_TO_POINTER(cur + val));
-        g_free(name);
-    }
-}
-
-static gchar *
-counter_format(gint v, const char *style)
-{
-    if (!style || strcmp(style, "decimal") == 0)
-        return g_strdup_printf("%d", v);
-    if (strcmp(style, "decimal-leading-zero") == 0)
-        return g_strdup_printf("%02d", v);
-    if (strcmp(style, "lower-roman") == 0 || strcmp(style, "upper-roman") == 0) {
-        if (v < 1 || v > 3999) return g_strdup_printf("%d", v);
-        static const struct { int n; const char *s; } R[] = {
-            {1000,"m"},{900,"cm"},{500,"d"},{400,"cd"},{100,"c"},{90,"xc"},
-            {50,"l"},{40,"xl"},{10,"x"},{9,"ix"},{5,"v"},{4,"iv"},{1,"i"}
-        };
-        GString *s = g_string_new(NULL);
-        for (gsize i = 0; i < G_N_ELEMENTS(R); i++)
-            while (v >= R[i].n) { g_string_append(s, R[i].s); v -= R[i].n; }
-        if (style[0] == 'u') {
-            char *up = g_ascii_strup(s->str, -1);
-            g_string_free(s, TRUE);
-            return up;
-        }
-        return g_string_free(s, FALSE);
-    }
-    if (strcmp(style, "lower-alpha") == 0 || strcmp(style, "lower-latin") == 0 ||
-        strcmp(style, "upper-alpha") == 0 || strcmp(style, "upper-latin") == 0) {
-        if (v < 1) return g_strdup_printf("%d", v);
-        char base = (style[0] == 'u') ? 'A' : 'a';
-        GString *s = g_string_new(NULL);
-        char buf[16]; int n = 0;
-        while (v > 0 && n < (int)sizeof(buf)) { v--; buf[n++] = base + (v % 26); v /= 26; }
-        while (n > 0) g_string_append_c(s, buf[--n]);
-        return g_string_free(s, FALSE);
-    }
-    if (strcmp(style, "lower-greek") == 0) {
-        static const gunichar greek[24] = {
-            0x3B1, 0x3B2, 0x3B3, 0x3B4, 0x3B5, 0x3B6, 0x3B7, 0x3B8,
-            0x3B9, 0x3BA, 0x3BB, 0x3BC, 0x3BD, 0x3BE, 0x3BF, 0x3C0,
-            0x3C1, 0x3C3, 0x3C4, 0x3C5, 0x3C6, 0x3C7, 0x3C8, 0x3C9,
-        };
-        if (v < 1) return g_strdup_printf("%d", v);
-        gunichar bg[16];
-        int n = 0, w = v;
-        while (w > 0 && n < 16) { w--; bg[n++] = greek[w % 24]; w /= 24; }
-        GString *s = g_string_new(NULL);
-        while (n > 0) g_string_append_unichar(s, bg[--n]);
-        return g_string_free(s, FALSE);
-    }
-    return g_strdup_printf("%d", v);
-}
-
-static void
-counter_apply_style(GHashTable *current, const ns_style *s)
-{
-    if (!s) return;
-    if (s->values[NS_CSS_COUNTER_RESET] &&
-        s->values[NS_CSS_COUNTER_RESET]->kind == NS_CSS_V_KEYWORD)
-        counter_apply_decl(current,
-            s->values[NS_CSS_COUNTER_RESET]->u.keyword, FALSE);
-    if (s->values[NS_CSS_COUNTER_INCREMENT] &&
-        s->values[NS_CSS_COUNTER_INCREMENT]->kind == NS_CSS_V_KEYWORD)
-        counter_apply_decl(current,
-            s->values[NS_CSS_COUNTER_INCREMENT]->u.keyword, TRUE);
-}
-
-static void
-counter_walk(const ns_node *n, GHashTable *styles,
-             GHashTable *current, GHashTable *snapshots, int depth)
-{
-    if (!n || depth >= NS_LAYOUT_MAX_DEPTH) return;
-    const ns_style *s = NULL;
-    if (n->kind == NS_NODE_ELEMENT && styles) {
-        s = g_hash_table_lookup(styles, n);
-        counter_apply_style(current, s);
-        if (s) counter_apply_style(current, s->before);
-        gboolean need = FALSE;
-        if (s && s->before && s->before->values[NS_CSS_CONTENT]) {
-            const ns_css_value *cv = s->before->values[NS_CSS_CONTENT];
-            if (cv->kind == NS_CSS_V_KEYWORD && cv->u.keyword &&
-                strstr(cv->u.keyword, "counter")) need = TRUE;
-        }
-        if (s && s->after && s->after->values[NS_CSS_CONTENT]) {
-            const ns_css_value *cv = s->after->values[NS_CSS_CONTENT];
-            if (cv->kind == NS_CSS_V_KEYWORD && cv->u.keyword &&
-                strstr(cv->u.keyword, "counter")) need = TRUE;
-        }
-        if (need) {
-            GHashTable *snap = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                                     g_free, NULL);
-            GHashTableIter it;
-            gpointer k, v;
-            g_hash_table_iter_init(&it, current);
-            while (g_hash_table_iter_next(&it, &k, &v))
-                g_hash_table_insert(snap, g_strdup((const char *)k), v);
-            g_hash_table_insert(snapshots, (gpointer)n, snap);
-        }
-    }
-    for (const ns_node *c = n->first_child; c; c = c->next_sibling)
-        counter_walk(c, styles, current, snapshots, depth + 1);
-    if (s) counter_apply_style(current, s->after);
-}
-
-static void
-counter_snapshot_destroy(gpointer p) { g_hash_table_destroy(p); }
-
-static GHashTable *
-build_counter_snapshots(const ns_node *root, GHashTable *styles)
-{
-    GHashTable *snapshots = g_hash_table_new_full(
-        g_direct_hash, g_direct_equal, NULL, counter_snapshot_destroy);
-    GHashTable *current = g_hash_table_new_full(
-        g_str_hash, g_str_equal, g_free, NULL);
-    counter_walk(root, styles, current, snapshots, 0);
-    g_hash_table_destroy(current);
-    return snapshots;
-}
-
-static char *
-substitute_one_counter(const char *body, const ns_node *host, gboolean is_counters)
-{
-    const char *p = body;
-    while (*p && g_ascii_isspace(*p)) p++;
-    const char *name_s = p;
-    while (*p && *p != ',' && *p != ')' && !g_ascii_isspace(*p)) p++;
-    gsize nlen = (gsize)(p - name_s);
-    if (nlen == 0) return g_strdup("");
-    char *name = g_strndup(name_s, nlen);
-    char *sep = NULL;
-    char *style = NULL;
-    while (*p == ',' || g_ascii_isspace(*p)) {
-        if (*p == ',') p++;
-        while (*p && g_ascii_isspace(*p)) p++;
-        if (*p == '"' || *p == '\'') {
-            char q = *p++;
-            const char *vs = p;
-            while (*p && *p != q) p++;
-            char *v = g_strndup(vs, p - vs);
-            if (*p) p++;
-            if (!sep) sep = v;
-            else { g_free(v); }
-        } else if (g_ascii_isalpha(*p)) {
-            const char *vs = p;
-            while (*p && *p != ',' && *p != ')' && !g_ascii_isspace(*p)) p++;
-            if (!style) style = g_strndup(vs, p - vs);
-        } else {
-            break;
-        }
-    }
-    if (is_counters && !sep) sep = g_strdup("");
-    GHashTable *snap = g_counters_for_layout
-        ? g_hash_table_lookup(g_counters_for_layout, host) : NULL;
-    int v = snap ? GPOINTER_TO_INT(g_hash_table_lookup(snap, name)) : 0;
-    char *formatted = counter_format(v, style);
-    g_free(name); g_free(sep); g_free(style);
-    return formatted;
-}
-
-static char *
-resolve_pseudo_content(const char *raw, const ns_node *host)
-{
-    if (!raw || !*raw) return NULL;
-    if (strcmp(raw, "none") == 0 || strcmp(raw, "normal") == 0) return NULL;
-    gboolean has_func = strchr(raw, '(') != NULL;
-    gboolean has_string = strchr(raw, '"') || strchr(raw, '\'');
-    if (!has_func && !has_string) return g_strdup(raw);
-    GString *out = g_string_new(NULL);
-    const char *p = raw;
-    while (*p) {
-        while (*p && g_ascii_isspace(*p)) p++;
-        if (!*p || *p == '/') break;
-        if (*p == '"' || *p == '\'') {
-            char q = *p++;
-            const char *start = p;
-            while (*p && *p != q) {
-                if (*p == '\\' && p[1]) { p += 2; continue; }
-                p++;
-            }
-            char *raw_str = g_strndup(start, p - start);
-            for (const char *r = raw_str; *r; )
-                ns_css_append_unescaped(out, &r);
-            g_free(raw_str);
-            if (*p == q) p++;
-        } else if (g_str_has_prefix(p, "attr(")) {
-            p += 5;
-            while (*p == ' ') p++;
-            const char *start = p;
-            while (*p && *p != ')' && *p != ',' && *p != ' ') p++;
-            if (host && p != start) {
-                char *attr_name = g_strndup(start, p - start);
-                const char *val = ns_element_get_attr(host, attr_name);
-                if (val) g_string_append(out, val);
-                g_free(attr_name);
-            }
-            while (*p && *p != ')') p++;
-            if (*p == ')') p++;
-        } else if (g_str_has_prefix(p, "counter(") ||
-                   g_str_has_prefix(p, "counters(")) {
-            gboolean is_counters = (p[7] == 's');
-            p += is_counters ? 9 : 8;
-            const char *body_s = p;
-            int depth = 1;
-            while (*p && depth > 0) {
-                if (*p == '(') depth++;
-                else if (*p == ')') { depth--; if (depth == 0) break; }
-                p++;
-            }
-            char *body = g_strndup(body_s, p - body_s);
-            if (*p == ')') p++;
-            char *sub = substitute_one_counter(body, host, is_counters);
-            if (sub) g_string_append(out, sub);
-            g_free(sub);
-            g_free(body);
-        } else {
-            const char *id = p;
-            while (*p && (g_ascii_isalnum((guchar)*p) || *p == '-')) p++;
-            if (*p == '(') {
-                int depth = 0;
-                for (; *p; p++) {
-                    if (*p == '(') depth++;
-                    else if (*p == ')') { depth--; if (depth == 0) { p++; break; } }
-                }
-            } else {
-                while (*p && !g_ascii_isspace(*p) && *p != '"' && *p != '\'') p++;
-                if (p > id)
-                    g_string_append_len(out, id, p - id);
-                else
-                    p++;
-            }
-        }
-    }
-    return g_string_free(out, FALSE);
-}
-
-static char *
-apply_text_transform(const char *src, const char *tt)
-{
-    if (!src || !tt) return NULL;
-    if (strcmp(tt, "uppercase") == 0)
-        return g_utf8_strup(src, -1);
-    if (strcmp(tt, "lowercase") == 0)
-        return g_utf8_strdown(src, -1);
-    if (strcmp(tt, "capitalize") == 0) {
-        GString *out = g_string_new(NULL);
-        gboolean at_word_start = TRUE;
-        for (const char *p = src; p && *p; ) {
-            gunichar c = g_utf8_get_char(p);
-            const char *next = g_utf8_next_char(p);
-            if (g_unichar_isspace(c) || c == '-' || c == '/') {
-                g_string_append_len(out, p, next - p);
-                at_word_start = TRUE;
-            } else {
-                if (at_word_start) {
-                    gunichar uc = g_unichar_totitle(c);
-                    char buf[8];
-                    gint nb = g_unichar_to_utf8(uc, buf);
-                    g_string_append_len(out, buf, nb);
-                    at_word_start = FALSE;
-                } else {
-                    g_string_append_len(out, p, next - p);
-                }
-            }
-            p = next;
-        }
-        return g_string_free(out, FALSE);
-    }
-    return NULL;
-}
-
-typedef struct ns_progress_state {
-    gboolean determinate;
-    double max;
-    double value;
-    double frac;
-} ns_progress_state;
-
-typedef struct ns_meter_state {
-    double min;
-    double max;
-    double value;
-    double low;
-    double high;
-    double optimum;
-    double frac;
-    int quality;
-} ns_meter_state;
-
-static gboolean
-parse_float_attr(const ns_node *n, const char *attr, double *out)
-{
-    return ns_html_parse_float(ns_element_get_attr(n, attr), out);
-}
-
-static ns_progress_state
-progress_state_for(const ns_node *n)
-{
-    ns_progress_state st = {0};
-    double parsed;
-    st.max = parse_float_attr(n, "max", &parsed) && parsed > 0 ? parsed : 1.0;
-    st.determinate = ns_element_get_attr(n, "value") != NULL;
-    if (st.determinate) {
-        st.value = parse_float_attr(n, "value", &parsed) && parsed > 0 ? parsed : 0.0;
-        if (st.value > st.max) st.value = st.max;
-        st.frac = st.max > 0 ? st.value / st.max : 0;
-    } else {
-        st.value = 0;
-        st.frac = -1;
-    }
-    return st;
-}
-
-static ns_meter_state
-meter_state_for(const ns_node *n)
-{
-    ns_meter_state st = {0};
-    double parsed;
-    st.min = parse_float_attr(n, "min", &parsed) ? parsed : 0.0;
-    double candidate_max = parse_float_attr(n, "max", &parsed) ? parsed : 1.0;
-    st.max = candidate_max >= st.min ? candidate_max : st.min;
-    double candidate_value = parse_float_attr(n, "value", &parsed) ? parsed : 0.0;
-    st.value = candidate_value;
-    if (st.value < st.min) st.value = st.min;
-    if (st.value > st.max) st.value = st.max;
-    double candidate_low = parse_float_attr(n, "low", &parsed) ? parsed : st.min;
-    st.low = candidate_low;
-    if (st.low < st.min) st.low = st.min;
-    if (st.low > st.max) st.low = st.max;
-    double candidate_high = parse_float_attr(n, "high", &parsed) ? parsed : st.max;
-    st.high = candidate_high;
-    if (st.high < st.low) st.high = st.low;
-    if (st.high > st.max) st.high = st.max;
-    double midpoint = st.min + (st.max - st.min) / 2.0;
-    double candidate_optimum = parse_float_attr(n, "optimum", &parsed) ? parsed : midpoint;
-    st.optimum = candidate_optimum;
-    if (st.optimum < st.min) st.optimum = st.min;
-    if (st.optimum > st.max) st.optimum = st.max;
-    st.frac = st.max > st.min ? (st.value - st.min) / (st.max - st.min) : 1.0;
-    if (st.optimum >= st.low && st.optimum <= st.high)
-        st.quality = (st.value >= st.low && st.value <= st.high) ? 0 : 1;
-    else if (st.optimum < st.low)
-        st.quality = st.value < st.low ? 0 : (st.value <= st.high ? 1 : 2);
-    else
-        st.quality = st.value > st.high ? 0 : (st.value >= st.low ? 1 : 2);
-    return st;
-}
-
-static char *
-quotes_string_for(const ns_style *s, int depth, gboolean closing)
-{
-    if (depth < 0) depth = 0;
-    const ns_css_value *qv = s ? s->values[NS_CSS_QUOTES] : NULL;
-    const char *spec = (qv && qv->kind == NS_CSS_V_KEYWORD) ? qv->u.keyword
-                                                            : NULL;
-    if (spec && strcmp(spec, "none") == 0) return g_strdup("");
-    if (spec && strchr(spec, '"') == NULL && strchr(spec, '\'') == NULL)
-        spec = NULL;
-    if (spec) {
-        GPtrArray *parts = g_ptr_array_new_with_free_func(g_free);
-        for (const char *p = spec; *p; ) {
-            if (*p == '"' || *p == '\'') {
-                char term = *p++;
-                GString *part = g_string_new(NULL);
-                while (*p && *p != term)
-                    ns_css_append_unescaped(part, &p);
-                g_ptr_array_add(parts, g_string_free(part, FALSE));
-                if (*p) p++;
-            } else {
-                p++;
-            }
-        }
-        guint pairs = parts->len / 2;
-        char *result = NULL;
-        if (pairs > 0) {
-            guint pair = (guint)depth < pairs ? (guint)depth : pairs - 1;
-            result = g_strdup(g_ptr_array_index(parts,
-                                                pair * 2 + (closing ? 1 : 0)));
-        }
-        g_ptr_array_free(parts, TRUE);
-        if (result) return result;
-    }
-    if (depth % 2 == 0)
-        return g_strdup(closing ? "\xe2\x80\x9d" : "\xe2\x80\x9c");
-    return g_strdup(closing ? "\xe2\x80\x99" : "\xe2\x80\x98");
-}
-
-char *
-ns_layout_pseudo_content_text(const ns_css_value *content, const ns_node *host)
-{
-    if (!content || content->kind != NS_CSS_V_KEYWORD || !content->u.keyword)
-        return NULL;
-    return resolve_pseudo_content(content->u.keyword, host);
-}
-
-static void
-append_pseudo_content(GString *out, const ns_css_value *cv,
-                      const ns_node *host, const ns_style *host_style)
-{
-    if (!cv || cv->kind != NS_CSS_V_KEYWORD || !cv->u.keyword) return;
-    char *resolved = resolve_pseudo_content(cv->u.keyword, host);
-    if (!resolved) return;
-    char *quote = NULL;
-    const char *txt = resolved;
-    if (strcmp(resolved, "open-quote") == 0)
-        txt = quote = quotes_string_for(host_style, 0, FALSE);
-    else if (strcmp(resolved, "close-quote") == 0)
-        txt = quote = quotes_string_for(host_style, 0, TRUE);
-    else if (strcmp(resolved, "no-open-quote") == 0 ||
-             strcmp(resolved, "no-close-quote") == 0) { g_free(resolved); return; }
-    g_string_append(out, txt);
-    g_free(quote);
-    g_free(resolved);
-}
-
-static gboolean
-pseudo_generates_box(const ns_style *ps)
-{
-    const ns_css_value *cv = ps ? ps->values[NS_CSS_CONTENT] : NULL;
-    return cv && cv->kind == NS_CSS_V_KEYWORD && cv->u.keyword &&
-           strcmp(cv->u.keyword, "none") != 0 &&
-           strcmp(cv->u.keyword, "normal") != 0;
-}
-
 static ns_box *pseudo_block_with_text(const ns_style *ps, const char *txt);
 
 static void
 append_pseudo_inline(collector_ctx *ctx, const ns_style *ps,
                      const ns_node *host)
 {
-    if (!pseudo_generates_box(ps) || style_is_none(ps)) return;
+    if (!ns_layout_pseudo_generates_box(ps) || style_is_none(ps)) return;
     if (style_is_absolute_or_fixed(ps)) {
-        append_pseudo_content(ctx->out, ps->values[NS_CSS_CONTENT], host, ps);
+        ns_layout_append_pseudo_content(ctx->out, ps->values[NS_CSS_CONTENT],
+                                        host, ps);
         return;
     }
     if (ctx->atomics && ns_display_is_atomic_inline(ns_css_display_of(ps))) {
-        char *txt = resolve_pseudo_content(
+        char *txt = ns_layout_resolve_pseudo_content(
             ps->values[NS_CSS_CONTENT]->u.keyword, host);
         ns_atomic_raw rec = {
             .start = ctx->out->len,
@@ -3010,104 +1892,15 @@ append_pseudo_inline(collector_ctx *ctx, const ns_style *ps,
         g_array_append_val(ctx->atomics, rec);
         return;
     }
-    append_inline_spacer(ctx, length_or(ps->values[NS_CSS_MARGIN_LEFT], 0));
-    append_inline_spacer(ctx, length_or(ps->values[NS_CSS_PADDING_LEFT], 0));
-    append_pseudo_content(ctx->out, ps->values[NS_CSS_CONTENT], host, ps);
-    append_inline_spacer(ctx, length_or(ps->values[NS_CSS_PADDING_RIGHT], 0));
-    append_inline_spacer(ctx, length_or(ps->values[NS_CSS_MARGIN_RIGHT], 0));
-}
-
-static void
-emit_open_select_option(collector_ctx *ctx, const ns_node *option)
-{
-    if (!option) return;
-    g_string_append(ctx->out, "\xe2\x80\xa8");
-    gsize start = ctx->out->len;
-    g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-    char *t = ns_option_label_dup(option);
-    if (t && *t) g_string_append(ctx->out, t);
-    g_free(t);
-    g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-    emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
-                         start, ctx->out->len, option, ctx->styles);
-}
-
-static void
-emit_listbox_option(collector_ctx *ctx, const ns_node *option, gboolean first)
-{
-    if (!option) return;
-    if (!first) g_string_append(ctx->out, "\xe2\x80\xa8");
-    gsize start = ctx->out->len;
-    g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-    char *t = ns_option_label_dup(option);
-    if (t && *t) g_string_append(ctx->out, t);
-    g_free(t);
-    g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-    emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
-                         start, ctx->out->len, option, ctx->styles);
-}
-
-static const ns_node *
-find_datalist_by_id(const ns_node *node, const char *id, int depth)
-{
-    if (!node || !id || depth >= NS_LAYOUT_MAX_DEPTH) return NULL;
-    if (node->kind == NS_NODE_ELEMENT && node->name &&
-        strcmp(node->name, "datalist") == 0) {
-        const char *did = ns_element_get_attr(node, "id");
-        if (did && strcmp(did, id) == 0) return node;
-    }
-    for (const ns_node *c = node->first_child; c; c = c->next_sibling) {
-        const ns_node *m = find_datalist_by_id(c, id, depth + 1);
-        if (m) return m;
-    }
-    return NULL;
-}
-
-static char *
-datalist_option_value(const ns_node *option)
-{
-    const char *v = ns_element_get_attr(option, "value");
-    if (v && *v) return g_strdup(v);
-    return ns_option_label_dup(option);
-}
-
-static void
-emit_datalist_suggestions(collector_ctx *ctx, const ns_node *input)
-{
-    const char *list_id = ns_element_get_attr(input, "list");
-    if (!list_id || !*list_id) return;
-    const ns_node *root = input;
-    while (root->parent) root = root->parent;
-    const ns_node *dl = find_datalist_by_id(root, list_id, 0);
-    if (!dl) return;
-
-    const char *cur = ns_input_used_value(input);
-    char *needle = (cur && *cur) ? g_utf8_casefold(cur, -1) : NULL;
-    int shown = 0;
-    for (const ns_node *o = dl->first_child; o && shown < 8; o = o->next_sibling) {
-        if (!ns_node_is_element_named(o, "option")) continue;
-        char *val = datalist_option_value(o);
-        if (!val || !*val) { g_free(val); continue; }
-        gboolean match = TRUE;
-        if (needle) {
-            char *vl = g_utf8_casefold(val, -1);
-            match = strstr(vl, needle) != NULL &&
-                    g_ascii_strcasecmp(vl, needle) != 0;
-            g_free(vl);
-        }
-        if (match) {
-            g_string_append(ctx->out, "\xe2\x80\xa8");
-            gsize start = ctx->out->len;
-            g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-            g_string_append(ctx->out, val);
-            g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
-                                 start, ctx->out->len, o, ctx->styles);
-            shown++;
-        }
-        g_free(val);
-    }
-    g_free(needle);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs,
+                                   length_or(ps->values[NS_CSS_MARGIN_LEFT], 0));
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs,
+                                   length_or(ps->values[NS_CSS_PADDING_LEFT], 0));
+    ns_layout_append_pseudo_content(ctx->out, ps->values[NS_CSS_CONTENT], host, ps);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs,
+                                   length_or(ps->values[NS_CSS_PADDING_RIGHT], 0));
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs,
+                                   length_or(ps->values[NS_CSS_MARGIN_RIGHT], 0));
 }
 
 static void
@@ -3150,14 +1943,14 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                 if (anchor_pos != caret_pos) {
                     gsize s0 = anchor_pos < caret_pos ? anchor_pos : caret_pos;
                     gsize s1 = anchor_pos < caret_pos ? caret_pos : anchor_pos;
-                    emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
+                    ns_layout_emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
                 }
-                emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
+                ns_layout_emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
             }
             return;
         }
         char *xformed = ctx->text_transform
-                        ? apply_text_transform(n->text, ctx->text_transform)
+                        ? ns_layout_apply_text_transform(n->text, ctx->text_transform)
                         : NULL;
         g_string_append(ctx->out, xformed ? xformed : n->text);
         g_free(xformed);
@@ -3175,7 +1968,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         return;
     }
     if (n->kind != NS_NODE_ELEMENT) return;
-    if (node_is_non_rendering(n)) return;
+    if (ns_layout_node_is_non_rendering(n)) return;
     if (n == g_inline_skip_node) return;
     const ns_style *s = g_hash_table_lookup(ctx->styles, n);
     if (s && style_is_none(s)) return;
@@ -3235,15 +2028,14 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         double frac = 0;
         guint8 r = 0, g = 0, b = 0, alpha = 0;
         if (is_meter) {
-            ns_meter_state st = meter_state_for(n);
-            frac = st.frac;
-            if (st.quality == 0) { r = 0x2e; g = 0x9d; b = 0x54; }
-            else if (st.quality == 1) { r = 0xd0; g = 0xa4; b = 0x1f; }
+            int quality = 0;
+            frac = ns_layout_meter_fraction(n, &quality);
+            if (quality == 0) { r = 0x2e; g = 0x9d; b = 0x54; }
+            else if (quality == 1) { r = 0xd0; g = 0xa4; b = 0x1f; }
             else { r = 0xc4; g = 0x43; b = 0x3c; }
             alpha = 255;
         } else {
-            ns_progress_state st = progress_state_for(n);
-            frac = st.frac;
+            frac = ns_layout_progress_fraction(n);
         }
         ns_inline_attr attr = {
             .kind = is_meter ? NS_INLINE_METER : NS_INLINE_PROGRESS,
@@ -3267,11 +2059,11 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                            g_ascii_strcasecmp(type, "tel") == 0 ||
                            g_ascii_strcasecmp(type, "number") == 0;
         if (is_text) {
-            if (!inline_run_at_line_start(ctx->out))
+            if (!ns_layout_inline_run_at_line_start(ctx->out))
                 g_string_append(ctx->out, "\xc2\xa0\xc2\xa0\xc2\xa0");
             gsize start = ctx->out->len;
             g_string_append(ctx->out, "\xc2\xa0");
-            int leading = text_input_leading_spaces(s);
+            int leading = ns_layout_text_input_leading_spaces(s);
             for (int i = 0; i < leading; i++)
                 g_string_append(ctx->out, "\xc2\xa0");
             const char *real_value = ns_input_used_value(n);
@@ -3293,14 +2085,14 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             if (real_value && anchor_byte > strlen(real_value))
                 anchor_byte = strlen(real_value);
             else if (!real_value) anchor_byte = 0;
-            int size = text_input_columns(n);
+            int size = ns_layout_text_input_columns(n);
             glong displayed_chars = 0;
             if (v && *v && is_password && !is_placeholder) {
                 glong cps = g_utf8_strlen(v, -1);
                 glong skip_cps = focused
-                    ? text_input_focused_skip_cps(real_value, caret_byte,
+                    ? ns_layout_text_input_focused_skip_cps(real_value, caret_byte,
                                                   cps, size)
-                    : text_input_align_skip_cps(s, n, cps, size);
+                    : ns_layout_text_input_align_skip_cps(s, n, cps, size);
                 glong shown_cps = cps - skip_cps;
                 if (shown_cps > size) shown_cps = size;
                 for (glong i = 0; i < shown_cps; i++)
@@ -3323,11 +2115,11 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                 glong value_cps = g_utf8_strlen(v, -1);
                 if (value_cps > size) {
                     glong skip_cps = focused && real_value && v == real_value
-                        ? text_input_focused_skip_cps(real_value, caret_byte,
+                        ? ns_layout_text_input_focused_skip_cps(real_value, caret_byte,
                                                       value_cps, size)
-                        : text_input_align_skip_cps(s, n, value_cps, size);
-                    const char *p = text_input_advance_cps(v, skip_cps);
-                    const char *q = text_input_advance_cps(p, size);
+                        : ns_layout_text_input_align_skip_cps(s, n, value_cps, size);
+                    const char *p = ns_layout_text_input_advance_cps(v, skip_cps);
+                    const char *q = ns_layout_text_input_advance_cps(p, size);
                     display_v = p;
                     display_bytes = (gsize)(q - p);
                     if (real_value && v == real_value) {
@@ -3357,7 +2149,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             if (pad < 0) pad = 0;
             glong left_pad = 0, right_pad = pad;
             if (pad > 0) {
-                left_pad = text_input_align_offset(s, n, pad);
+                left_pad = ns_layout_text_input_align_offset(s, n, pad);
                 right_pad = pad - left_pad;
             }
             if (left_pad > 0) {
@@ -3378,8 +2170,8 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             ns_inline_attr_kind kind = focused
                                        ? NS_INLINE_INPUT_FIELD_FOCUSED
                                        : NS_INLINE_INPUT_FIELD;
-            emit_form_attr_sized(ctx->attrs, kind, start, ctx->out->len, n, ctx->styles);
-            emit_control_text_style(ctx->attrs, s, start, ctx->out->len,
+            ns_layout_emit_form_attr_sized(ctx->attrs, kind, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_control_text_style(ctx->attrs, s, start, ctx->out->len,
                                     val_start, disp_end, is_placeholder,
                                     ns_element_get_attr(n, "disabled") != NULL);
             if (!is_placeholder && disp_end > val_start &&
@@ -3394,12 +2186,12 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                 if (anchor_pos != caret_pos) {
                     gsize s0 = anchor_pos < caret_pos ? anchor_pos : caret_pos;
                     gsize s1 = anchor_pos < caret_pos ? caret_pos : anchor_pos;
-                    emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
+                    ns_layout_emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
                 }
-                emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
+                ns_layout_emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
             }
             if (focused && g_datalist_open_for_layout)
-                emit_datalist_suggestions(ctx, n);
+                ns_layout_emit_datalist_suggestions(ctx->out, ctx->attrs, ctx->styles, n);
         } else if (type && (g_ascii_strcasecmp(type, "submit") == 0 ||
                             g_ascii_strcasecmp(type, "button") == 0 ||
                             g_ascii_strcasecmp(type, "reset") == 0)) {
@@ -3409,8 +2201,8 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                 v = g_ascii_strcasecmp(type, "submit") == 0 ? "Submit"
                   : g_ascii_strcasecmp(type, "reset")  == 0 ? "Reset"
                                                             : "Button";
-            int lead  = control_pad_spaces(s, NS_CSS_PADDING_LEFT);
-            int trail = control_pad_spaces(s, NS_CSS_PADDING_RIGHT);
+            int lead  = ns_layout_control_pad_spaces(s, FALSE);
+            int trail = ns_layout_control_pad_spaces(s, TRUE);
             g_string_append(ctx->out, "\xc2\xa0");
             for (int i = 0; i < lead; i++)
                 g_string_append(ctx->out, "\xc2\xa0");
@@ -3418,13 +2210,13 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             for (int i = 0; i < trail; i++)
                 g_string_append(ctx->out, "\xc2\xa0");
             g_string_append(ctx->out, "\xc2\xa0");
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
             g_string_append_c(ctx->out, ' ');
         } else if (type && g_ascii_strcasecmp(type, "checkbox") == 0) {
             gboolean checked = ns_input_is_checked(n);
             gsize start = ctx->out->len;
             g_string_append(ctx->out, checked ? "\xe2\x98\x91" : "\xe2\x98\x90");
-            emit_form_attr_sized(ctx->attrs,
+            ns_layout_emit_form_attr_sized(ctx->attrs,
                 checked ? NS_INLINE_CHECKBOX_CHECKED : NS_INLINE_CHECKBOX,
                 start, ctx->out->len, n, ctx->styles);
             g_string_append_c(ctx->out, ' ');
@@ -3432,14 +2224,14 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             gboolean checked = ns_input_is_checked(n);
             gsize start = ctx->out->len;
             g_string_append(ctx->out, checked ? "\xe2\x97\x89" : "\xe2\x97\x8b");
-            emit_form_attr_sized(ctx->attrs,
+            ns_layout_emit_form_attr_sized(ctx->attrs,
                 checked ? NS_INLINE_RADIO_CHECKED : NS_INLINE_RADIO,
                 start, ctx->out->len, n, ctx->styles);
             g_string_append_c(ctx->out, ' ');
         } else if (type && g_ascii_strcasecmp(type, "file") == 0) {
             gsize start = ctx->out->len;
             g_string_append(ctx->out, "\xc2\xa0" "Choose File" "\xc2\xa0");
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
             const char *fpath = ns_element_get_attr(n, "data-nd-file-path");
             if (fpath && *fpath) {
                 const char *base = strrchr(fpath, '/');
@@ -3464,7 +2256,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             g_string_append(ctx->out, "\xc2\xa0");
             g_string_append(ctx->out, hex);
             g_string_append(ctx->out, "\xc2\xa0");
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
             guint8 r8 = 0, g8 = 0, b8 = 0;
             if (hex[0] == '#' && strlen(hex) >= 7) {
                 unsigned int rv, gv, bv;
@@ -3472,7 +2264,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                     r8 = (guint8)rv; g8 = (guint8)gv; b8 = (guint8)bv;
                 }
             }
-            emit_color_attr(ctx->attrs, swatch_start, swatch_end, r8, g8, b8, 255);
+            ns_layout_emit_color_attr(ctx->attrs, swatch_start, swatch_end, r8, g8, b8, 255);
         } else if (type && (g_ascii_strcasecmp(type, "range") == 0)) {
             const char *v = ns_element_get_attr(n, "value");
             const char *mn = ns_element_get_attr(n, "min");
@@ -3494,7 +2286,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                     g_string_append(ctx->out, "\xe2\x94\x80");
             }
             g_string_append_printf(ctx->out, " %g\xc2\xa0", vv);
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
         } else if (type && (g_ascii_strcasecmp(type, "date") == 0 ||
                             g_ascii_strcasecmp(type, "datetime-local") == 0 ||
                             g_ascii_strcasecmp(type, "time") == 0 ||
@@ -3506,7 +2298,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             if (v && *v) g_string_append(ctx->out, v);
             else         g_string_append(ctx->out, "____-__-__");
             g_string_append(ctx->out, "\xc2\xa0");
-            emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
+            ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD, start, ctx->out->len, n, ctx->styles);
         }
         return;
     }
@@ -3518,10 +2310,10 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                 ? g_hash_table_lookup(ctx->styles, n) : NULL;
             GString *pseudo = g_string_new(NULL);
             if (bs && bs->before)
-                append_pseudo_content(pseudo, bs->before->values[NS_CSS_CONTENT],
+                ns_layout_append_pseudo_content(pseudo, bs->before->values[NS_CSS_CONTENT],
                                       n, bs->before);
             if (bs && bs->after)
-                append_pseudo_content(pseudo, bs->after->values[NS_CSS_CONTENT],
+                ns_layout_append_pseudo_content(pseudo, bs->after->values[NS_CSS_CONTENT],
                                       n, bs->after);
             if (pseudo->len > 0) {
                 label = g_string_free(pseudo, FALSE);
@@ -3544,7 +2336,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         g_string_append(ctx->out, "\xc2\xa0");
         g_string_append(ctx->out, label);
         g_string_append(ctx->out, "\xc2\xa0");
-        emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
+        ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_BUTTON, start, ctx->out->len, n, ctx->styles);
         g_free(label);
         return;
     }
@@ -3570,12 +2362,12 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                     for (const ns_node *opt = c->first_child;
                          opt && shown < cap; opt = opt->next_sibling) {
                         if (!ns_node_is_element_named(opt, "option")) continue;
-                        emit_listbox_option(ctx, opt, first);
+                        ns_layout_emit_listbox_option(ctx->out, ctx->attrs, ctx->styles, opt, first);
                         first = FALSE;
                         shown++;
                     }
                 } else if (strcmp(c->name, "option") == 0) {
-                    emit_listbox_option(ctx, c, first);
+                    ns_layout_emit_listbox_option(ctx->out, ctx->attrs, ctx->styles, c, first);
                     first = FALSE;
                     shown++;
                 }
@@ -3583,7 +2375,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             if (shown == 0) {
                 gsize start = ctx->out->len;
                 g_string_append(ctx->out, "\xc2\xa0\xc2\xa0");
-                emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
+                ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
                                      start, ctx->out->len, n, ctx->styles);
             }
             return;
@@ -3596,7 +2388,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         if (*label) g_string_append(ctx->out, label);
         g_string_append(ctx->out, n == g_open_select_for_layout
                                   ? " \xe2\x96\xb4\xc2\xa0" : " \xe2\x96\xbe\xc2\xa0");
-        emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
+        ns_layout_emit_form_attr_sized(ctx->attrs, NS_INLINE_INPUT_FIELD,
                              start, ctx->out->len, n, ctx->styles);
         g_free(label);
         if (n == g_open_select_for_layout) {
@@ -3620,9 +2412,9 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
                     }
                     for (const ns_node *o = grp->first_child; o; o = o->next_sibling)
                         if (ns_node_is_element_named(o, "option"))
-                            emit_open_select_option(ctx, o);
+                            ns_layout_emit_open_select_option(ctx->out, ctx->attrs, ctx->styles, o);
                 } else {
-                    emit_open_select_option(ctx, opts[0]);
+                    ns_layout_emit_open_select_option(ctx->out, ctx->attrs, ctx->styles, opts[0]);
                 }
             }
         }
@@ -3691,9 +2483,9 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         ns_inline_attr_kind ta_kind = focused
                                        ? NS_INLINE_INPUT_FIELD_FOCUSED
                                        : NS_INLINE_INPUT_FIELD;
-        emit_form_attr_sized(ctx->attrs, ta_kind, start, ctx->out->len,
+        ns_layout_emit_form_attr_sized(ctx->attrs, ta_kind, start, ctx->out->len,
                              n, ctx->styles);
-        emit_control_text_style(ctx->attrs, s, start, ctx->out->len,
+        ns_layout_emit_control_text_style(ctx->attrs, s, start, ctx->out->len,
                                 val_start, disp_end, is_placeholder,
                                 ns_element_get_attr(n, "disabled") != NULL);
         if (!is_placeholder && disp_end > val_start &&
@@ -3708,9 +2500,9 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
             if (anchor_pos != caret_pos) {
                 gsize s0 = anchor_pos < caret_pos ? anchor_pos : caret_pos;
                 gsize s1 = anchor_pos < caret_pos ? caret_pos : anchor_pos;
-                emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
+                ns_layout_emit_attr(ctx->attrs, NS_INLINE_SELECTION, s0, s1);
             }
-            emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
+            ns_layout_emit_attr(ctx->attrs, NS_INLINE_CARET, caret_pos, caret_pos + 1);
         }
         return;
     }
@@ -3734,15 +2526,15 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
     double pr = inline_box_side_px(s, NS_CSS_PADDING_RIGHT,
                                    NS_CSS_BORDER_RIGHT_WIDTH,
                                    NS_CSS_BORDER_RIGHT_STYLE);
-    append_inline_spacer(ctx, ml);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs, ml);
     gsize elem_start = ctx->out->len;
-    append_inline_spacer(ctx, pl);
-    gboolean bold   = tag_is_bold(n->name);
-    gboolean italic = tag_is_italic(n->name);
-    gboolean mono   = tag_is_monospace(n->name);
-    gboolean uline  = tag_is_underline(n->name);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs, pl);
+    gboolean bold   = ns_layout_tag_is_bold(n->name);
+    gboolean italic = ns_layout_tag_is_italic(n->name);
+    gboolean mono   = ns_layout_tag_is_monospace(n->name);
+    gboolean uline  = ns_layout_tag_is_underline(n->name);
     gboolean oline  = FALSE;
-    gboolean strike = tag_is_strike(n->name);
+    gboolean strike = ns_layout_tag_is_strike(n->name);
     const ns_css_value *fw = s ? s->values[NS_CSS_FONT_WEIGHT] : NULL;
     int font_weight_self = ns_css_font_weight_number(fw, -1);
     gboolean font_weight_active = font_weight_self > 0;
@@ -3781,19 +2573,19 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
     int font_stretch_self = ns_css_font_stretch_rank(fst);
     gboolean font_stretch_active = fst != NULL;
     gsize stretch_start = ctx->out->len;
-    int font_kerning_self = font_kerning_int_from_style(s);
-    const char *font_ligatures_self = font_ligatures_from_style(s);
-    const char *font_features_self = font_feature_settings_from_style(s);
+    int font_kerning_self = ns_layout_font_kerning_from_style(s);
+    const char *font_ligatures_self = ns_layout_font_ligatures_from_style(s);
+    const char *font_features_self = ns_layout_font_feature_settings_from_style(s);
     gboolean font_features_active =
         font_kerning_self >= 0 || font_ligatures_self != NULL ||
         font_features_self != NULL;
     gsize features_start = ctx->out->len;
-    const char *font_variations_self = font_variation_settings_from_style(s);
+    const char *font_variations_self = ns_layout_font_variation_settings_from_style(s);
     gsize variations_start = ctx->out->len;
 
     gboolean is_q = strcmp(n->name, "q") == 0;
     if (is_q) {
-        char *open_q = quotes_string_for(s, ctx->q_depth, FALSE);
+        char *open_q = ns_layout_quotes_string_for(s, ctx->q_depth, FALSE);
         g_string_append(ctx->out, open_q);
         g_free(open_q);
         ctx->q_depth++;
@@ -3900,56 +2692,56 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
     ctx->text_transform = prev_text_transform;
 
     if (fs_active && ctx->out->len > fs_start)
-        emit_font_size_attr(ctx->attrs, fs_start, ctx->out->len, font_size_self);
+        ns_layout_emit_font_size_attr(ctx->attrs, fs_start, ctx->out->len, font_size_self);
     if (color_active && ctx->out->len > color_start)
-        emit_color_attr(ctx->attrs, color_start, ctx->out->len, cr, cg, cb, ca);
+        ns_layout_emit_color_attr(ctx->attrs, color_start, ctx->out->len, cr, cg, cb, ca);
     if (family_str && ctx->out->len > family_start)
-        emit_font_family_attr(ctx->attrs, family_start, ctx->out->len, family_str);
+        ns_layout_emit_font_family_attr(ctx->attrs, family_start, ctx->out->len, family_str);
     if (font_weight_active && ctx->out->len > weight_start)
-        emit_font_weight_attr(ctx->attrs, weight_start, ctx->out->len, font_weight_self);
+        ns_layout_emit_font_weight_attr(ctx->attrs, weight_start, ctx->out->len, font_weight_self);
     if (font_stretch_active && ctx->out->len > stretch_start)
-        emit_font_stretch_attr(ctx->attrs, stretch_start, ctx->out->len,
+        ns_layout_emit_font_stretch_attr(ctx->attrs, stretch_start, ctx->out->len,
                                font_stretch_self);
     if (font_features_active && ctx->out->len > features_start)
-        emit_font_features_attr(ctx->attrs, features_start, ctx->out->len,
+        ns_layout_emit_font_features_attr(ctx->attrs, features_start, ctx->out->len,
                                 font_kerning_self, font_ligatures_self,
                                 font_features_self);
     if (font_variations_self && ctx->out->len > variations_start)
-        emit_font_variations_attr(ctx->attrs, variations_start, ctx->out->len,
+        ns_layout_emit_font_variations_attr(ctx->attrs, variations_start, ctx->out->len,
                                   font_variations_self);
 
     if (bold && --ctx->bold_depth == 0)
-        emit_attr(ctx->attrs, NS_INLINE_BOLD, ctx->bold_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_BOLD, ctx->bold_start, ctx->out->len);
     if (italic && --ctx->italic_depth == 0)
-        emit_attr(ctx->attrs, NS_INLINE_ITALIC, ctx->italic_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_ITALIC, ctx->italic_start, ctx->out->len);
     if (mono && --ctx->mono_depth == 0)
-        emit_attr(ctx->attrs, NS_INLINE_MONOSPACE, ctx->mono_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_MONOSPACE, ctx->mono_start, ctx->out->len);
     if (uline && --ctx->underline_depth == 0)
-        emit_attr_styled(ctx->attrs, NS_INLINE_UNDERLINE, ctx->underline_start,
+        ns_layout_emit_attr_styled(ctx->attrs, NS_INLINE_UNDERLINE, ctx->underline_start,
                          ctx->out->len, decor_style);
     if (oline && --ctx->overline_depth == 0)
-        emit_attr_styled(ctx->attrs, NS_INLINE_OVERLINE, ctx->overline_start,
+        ns_layout_emit_attr_styled(ctx->attrs, NS_INLINE_OVERLINE, ctx->overline_start,
                          ctx->out->len, decor_style);
     if (strike && --ctx->strike_depth == 0)
-        emit_attr_styled(ctx->attrs, NS_INLINE_STRIKETHROUGH, ctx->strike_start,
+        ns_layout_emit_attr_styled(ctx->attrs, NS_INLINE_STRIKETHROUGH, ctx->strike_start,
                          ctx->out->len, decor_style);
     if (sup && ctx->out->len > rise_start)
-        emit_attr(ctx->attrs, NS_INLINE_SUPERSCRIPT, rise_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_SUPERSCRIPT, rise_start, ctx->out->len);
     if (sub && ctx->out->len > rise_start)
-        emit_attr(ctx->attrs, NS_INLINE_SUBSCRIPT, rise_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_SUBSCRIPT, rise_start, ctx->out->len);
     if (small_caps && ctx->out->len > sc_start)
-        emit_attr(ctx->attrs, NS_INLINE_SMALL_CAPS, sc_start, ctx->out->len);
+        ns_layout_emit_attr(ctx->attrs, NS_INLINE_SMALL_CAPS, sc_start, ctx->out->len);
     if (bidi_override)
         g_string_append(ctx->out, "\xe2\x80\xac");   /* PDF */
     if (bidi_isolate || bidi_plaintext)
         g_string_append(ctx->out, "\xe2\x81\xa9");   /* PDI */
     if (is_q) {
         ctx->q_depth--;
-        char *close_q = quotes_string_for(s, ctx->q_depth, TRUE);
+        char *close_q = ns_layout_quotes_string_for(s, ctx->q_depth, TRUE);
         g_string_append(ctx->out, close_q);
         g_free(close_q);
     }
-    append_inline_spacer(ctx, pr);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs, pr);
     if (ctx->out->len > elem_start) {
         ns_inline_attr elem = {
             .kind = NS_INLINE_ELEMENT,
@@ -3960,7 +2752,7 @@ collect_walk(const ns_node *n, collector_ctx *ctx, int depth)
         };
         g_array_append_val(ctx->attrs, elem);
     }
-    append_inline_spacer(ctx, mr);
+    ns_layout_append_inline_spacer(ctx->out, ctx->attrs, mr);
     ctx->active_href   = prev_href;
     ctx->active_target = prev_target;
     ctx->active_link_node = prev_link_node;
@@ -4239,9 +3031,9 @@ build_inline_run_impl(const ns_node *first, const ns_node *last_excl,
                     };
                     g_array_append_val(box->attrs, a);
                 }
-                int fk = font_kerning_int_from_style(fl);
-                const char *flig = font_ligatures_from_style(fl);
-                const char *ffea = font_feature_settings_from_style(fl);
+                int fk = ns_layout_font_kerning_from_style(fl);
+                const char *flig = ns_layout_font_ligatures_from_style(fl);
+                const char *ffea = ns_layout_font_feature_settings_from_style(fl);
                 if (fk >= 0 || flig || ffea) {
                     ns_inline_attr a = {
                         .kind = NS_INLINE_FONT_FEATURES,
@@ -4252,7 +3044,7 @@ build_inline_run_impl(const ns_node *first, const ns_node *last_excl,
                     };
                     g_array_append_val(box->attrs, a);
                 }
-                const char *fvar = font_variation_settings_from_style(fl);
+                const char *fvar = ns_layout_font_variation_settings_from_style(fl);
                 if (fvar) {
                     ns_inline_attr a = {
                         .kind = NS_INLINE_FONT_VARIATIONS,
@@ -4516,7 +3308,7 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
     const ns_css_value *cv = ps->values[NS_CSS_CONTENT];
     if (!cv || cv->kind != NS_CSS_V_KEYWORD || !cv->u.keyword) return NULL;
     gboolean inline_atomic = ns_display_is_atomic_inline(ns_css_display_of(ps));
-    char *resolved = resolve_pseudo_content(cv->u.keyword, host);
+    char *resolved = ns_layout_resolve_pseudo_content(cv->u.keyword, host);
     if (!resolved) {
         if (!inline_atomic) return NULL;
         resolved = g_strdup("");
@@ -4524,9 +3316,9 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
     char *quote = NULL;
     const char *txt = resolved;
     if (strcmp(txt, "open-quote") == 0)
-        txt = quote = quotes_string_for(ps, 0, FALSE);
+        txt = quote = ns_layout_quotes_string_for(ps, 0, FALSE);
     else if (strcmp(txt, "close-quote") == 0)
-        txt = quote = quotes_string_for(ps, 0, TRUE);
+        txt = quote = ns_layout_quotes_string_for(ps, 0, TRUE);
     else if (strcmp(txt, "no-open-quote") == 0 ||
              strcmp(txt, "no-close-quote") == 0) { g_free(resolved); return NULL; }
 
@@ -4609,9 +3401,9 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
         };
         g_array_append_val(box->attrs, a);
     }
-    int fk = font_kerning_int_from_style(ps);
-    const char *flig = font_ligatures_from_style(ps);
-    const char *ffea = font_feature_settings_from_style(ps);
+    int fk = ns_layout_font_kerning_from_style(ps);
+    const char *flig = ns_layout_font_ligatures_from_style(ps);
+    const char *ffea = ns_layout_font_feature_settings_from_style(ps);
     if (fk >= 0 || flig || ffea) {
         ns_inline_attr a = {
             .kind = NS_INLINE_FONT_FEATURES,
@@ -4622,7 +3414,7 @@ build_pseudo_inline_for(const ns_style *ps, const ns_node *host)
         };
         g_array_append_val(box->attrs, a);
     }
-    const char *fvar = font_variation_settings_from_style(ps);
+    const char *fvar = ns_layout_font_variation_settings_from_style(ps);
     if (fvar) {
         ns_inline_attr a = {
             .kind = NS_INLINE_FONT_VARIATIONS,
@@ -4727,7 +3519,7 @@ append_display_contents_children(ns_box *block, const ns_node *n,
     const ns_node *c = shadow_root ? shadow_root->first_child : n->first_child;
     while (c) {
         if (c->kind == NS_NODE_ELEMENT && c->name &&
-            tag_is_non_rendering(c->name)) {
+            ns_layout_tag_is_non_rendering(c->name)) {
             c = c->next_sibling;
             continue;
         }
@@ -4794,7 +3586,7 @@ append_display_contents_children(ns_box *block, const ns_node *n,
             c = c->next_sibling;
             while (c) {
                 if (c->kind == NS_NODE_ELEMENT && c->name &&
-                    tag_is_non_rendering(c->name)) {
+                    ns_layout_tag_is_non_rendering(c->name)) {
                     c = c->next_sibling;
                     continue;
                 }
@@ -4850,14 +3642,14 @@ build_pseudo_block_for(const ns_style *ps, const ns_node *host)
         d.outer == NS_DISPLAY_OUTER_INLINE)
         return NULL;
     char *resolved = *cv->u.keyword
-        ? resolve_pseudo_content(cv->u.keyword, host) : g_strdup("");
+        ? ns_layout_resolve_pseudo_content(cv->u.keyword, host) : g_strdup("");
     if (!resolved) return NULL;
     char *quote = NULL;
     const char *txt = resolved;
     if (strcmp(txt, "open-quote") == 0)
-        txt = quote = quotes_string_for(ps, 0, FALSE);
+        txt = quote = ns_layout_quotes_string_for(ps, 0, FALSE);
     else if (strcmp(txt, "close-quote") == 0)
-        txt = quote = quotes_string_for(ps, 0, TRUE);
+        txt = quote = ns_layout_quotes_string_for(ps, 0, TRUE);
     else if (strcmp(txt, "no-open-quote") == 0 ||
              strcmp(txt, "no-close-quote") == 0)
         txt = "";
@@ -5239,7 +4031,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
                                         : n->first_child;
     while (c) {
         if (c->kind == NS_NODE_ELEMENT && c->name &&
-            tag_is_non_rendering(c->name)) {
+            ns_layout_tag_is_non_rendering(c->name)) {
             c = c->next_sibling;
             continue;
         }
@@ -5335,7 +4127,7 @@ build_block_impl(const ns_node *n, GHashTable *styles)
             c = c->next_sibling;
             while (c) {
                 if (c->kind == NS_NODE_ELEMENT && c->name &&
-                    tag_is_non_rendering(c->name)) {
+                    ns_layout_tag_is_non_rendering(c->name)) {
                     c = c->next_sibling;
                     continue;
                 }
@@ -5577,7 +4369,7 @@ inline_box_form_hit(const ns_box *box, double local_x, double local_y,
             double y0 = (double)r0.y / NS_PANGO_SCALE - bleed_y;
             double x1 = (double)(r1.x + r1.width) / NS_PANGO_SCALE + bleed_x;
             double y1 = (double)(r0.y + r0.height) / NS_PANGO_SCALE + bleed_y;
-            double css_w = inline_attr_control_width(r, box);
+            double css_w = ns_layout_inline_attr_control_width(r, box);
             if (css_w > 0) {
                 x0 = (double)r0.x / NS_PANGO_SCALE;
                 x1 = x0 + css_w;
@@ -5814,95 +4606,6 @@ height_keyword_stretches(const ns_css_value *v)
             strcmp(v->u.keyword, "-moz-available") == 0);
 }
 
-static double
-control_char_cell_px(const ns_style *s)
-{
-    NsPangoLayout *layout = make_pango_layout(s);
-    if (!layout) return 0;
-    NsPangoContext *ctx = ns_pango_layout_get_context(layout);
-    const NsPangoFontDescription *fd =
-        ns_pango_layout_get_font_description(layout);
-    if (!fd) fd = ns_pango_context_get_font_description(ctx);
-    NsPangoFontMetrics *fm = fd ? ns_pango_context_get_metrics(ctx, fd, NULL)
-                                : NULL;
-    double cell = 0;
-    if (fm) {
-        cell = (double)ns_pango_font_metrics_get_approximate_char_width(fm) /
-               NS_PANGO_SCALE;
-        ns_pango_font_metrics_unref(fm);
-    }
-    g_object_unref(layout);
-    return cell;
-}
-
-static gboolean
-node_is_windowed_text_input(const ns_node *n)
-{
-    if (!n || n->kind != NS_NODE_ELEMENT || !n->name) return FALSE;
-    if (strcmp(n->name, "input") != 0) return FALSE;
-    const char *type = ns_element_get_attr(n, "type");
-    return !type || !*type ||
-        g_ascii_strcasecmp(type, "text") == 0 ||
-        g_ascii_strcasecmp(type, "search") == 0 ||
-        g_ascii_strcasecmp(type, "email") == 0 ||
-        g_ascii_strcasecmp(type, "url") == 0 ||
-        g_ascii_strcasecmp(type, "tel") == 0 ||
-        g_ascii_strcasecmp(type, "number") == 0 ||
-        g_ascii_strcasecmp(type, "password") == 0;
-}
-
-static glong
-text_input_display_cps(const ns_node *n)
-{
-    const char *v = ns_input_used_value(n);
-    if (!v || !*v) v = ns_element_get_attr(n, "placeholder");
-    return (v && *v) ? g_utf8_strlen(v, -1) : 0;
-}
-
-static gboolean
-control_width_is_definite(const ns_style *s)
-{
-    double fs = length_or(s->values[NS_CSS_FONT_SIZE], 16);
-    return control_dim_px_clamped(s, NS_CSS_WIDTH, NS_CSS_MIN_WIDTH,
-                                  NS_CSS_MAX_WIDTH, fs, 0) > 0;
-}
-
-static gboolean
-collect_text_input_columns(const ns_box *b, GHashTable *cols)
-{
-    if (!b) return FALSE;
-    gboolean changed = FALSE;
-    if (b->style && b->content_width > 0 &&
-        node_is_windowed_text_input(b->dom)) {
-        int have = text_input_size_attr(b->dom);
-        glong shown = text_input_display_cps(b->dom);
-        double cell = shown > 0 ? control_char_cell_px(b->style) : 0;
-        if (cell > 0) {
-            int overhead = 2 + text_input_leading_spaces(b->style);
-            double cells = floor(b->content_width / cell) - overhead;
-            int fit = cells < 1 ? 1
-                    : cells > G_MAXINT16 ? G_MAXINT16 : (int)cells;
-            gboolean grow = fit > have && shown > have;
-            gboolean shrink = fit < have && shown > fit &&
-                              control_width_is_definite(b->style);
-            if (grow || shrink) {
-                g_hash_table_insert(cols, (gpointer)b->dom,
-                                    GINT_TO_POINTER(fit));
-                changed = TRUE;
-            }
-        }
-    }
-    for (const ns_box *c = b->first_child; c; c = c->next_sibling)
-        if (collect_text_input_columns(c, cols)) changed = TRUE;
-    if (b->inline_atomics)
-        for (guint i = 0; i < b->inline_atomics->len; i++)
-            if (collect_text_input_columns(
-                    g_array_index(b->inline_atomics, ns_inline_atomic, i).box,
-                    cols))
-                changed = TRUE;
-    return changed;
-}
-
 ns_box *
 ns_layout_build(const ns_node *doc, GHashTable *styles, double viewport_width,
                 const ns_node *focused_input, gsize focused_caret_byte,
@@ -5923,18 +4626,14 @@ ns_layout_build(const ns_node *doc, GHashTable *styles, double viewport_width,
     g_base_url_for_layout = base_url;
     g_svg_defs_computed_for_layout = FALSE;
     ns_image_cache_begin_generation(image_cache);
-    g_counters_for_layout = build_counter_snapshots(doc, styles);
+    ns_layout_counters_build(doc, styles);
     ns_box *root = ns_layout_build_(doc, styles, viewport_width);
-    if (!g_input_columns_for_layout) {
-        GHashTable *cols = g_hash_table_new(g_direct_hash, g_direct_equal);
-        if (collect_text_input_columns(root, cols)) {
-            g_input_columns_for_layout = cols;
-            ns_box_free(root);
-            ns_image_cache_begin_generation(image_cache);
-            root = ns_layout_build_(doc, styles, viewport_width);
-            g_input_columns_for_layout = NULL;
-        }
-        g_hash_table_destroy(cols);
+    if (!ns_layout_input_columns_active() &&
+        ns_layout_input_columns_fit(root)) {
+        ns_box_free(root);
+        ns_image_cache_begin_generation(image_cache);
+        root = ns_layout_build_(doc, styles, viewport_width);
+        ns_layout_input_columns_clear();
     }
     ns_image_cache_collect(image_cache);
     g_focused_input_for_layout = NULL;
@@ -5944,10 +4643,7 @@ ns_layout_build(const ns_node *doc, GHashTable *styles, double viewport_width,
     g_image_cache_for_layout = NULL;
     g_base_url_for_layout = NULL;
     g_svg_defs_computed_for_layout = FALSE;
-    if (g_counters_for_layout) {
-        g_hash_table_destroy(g_counters_for_layout);
-        g_counters_for_layout = NULL;
-    }
+    ns_layout_counters_clear();
     ns_layout_record_frame_viewports(root);
     return root;
 }
@@ -6227,12 +4923,6 @@ gboolean
 ns_layout_box_first_baseline(const ns_box *b, double *out)
 {
     return box_first_baseline(b, out);
-}
-
-double
-ns_layout_inline_attr_control_width(const ns_inline_attr *r, const ns_box *box)
-{
-    return inline_attr_control_width(r, box);
 }
 
 gboolean

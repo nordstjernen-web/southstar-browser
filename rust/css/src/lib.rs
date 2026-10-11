@@ -59,6 +59,7 @@ mod values;
 mod vars;
 
 pub use color::parse_color;
+pub use content::append_unescaped;
 pub use ffi::{
     MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
     Selector, SelectorList,

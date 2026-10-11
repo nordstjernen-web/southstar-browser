@@ -85,6 +85,7 @@ pub use southstar_js_window;
 pub use southstar_js_workers;
 pub use southstar_layout;
 pub use southstar_layout_block;
+pub use southstar_layout_content;
 pub use southstar_layout_flex;
 pub use southstar_layout_float;
 pub use southstar_layout_grid;
