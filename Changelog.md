@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The remaining small DOM and window bindings (nodeValue, data and length,
+  token lists and attributes, element.style, SVG lengths, DOMRect,
+  checkVisibility and the box lookup, the DOMException helpers, window.find,
+  hashchange and window focus events, pointer capture, showPicker,
+  caches.open, the document base URL and defaultView) moved from js.c to
+  Rust.
 * Realm creation and teardown (ns_js_new, the worker realm and its script
   evaluation, ns_js_free and the interrupt handler) moved from js.c to Rust
   (rust/js-runtime).
