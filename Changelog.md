@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* document.elementFromPoint and elementsFromPoint, image readiness with
+  <img> load and error events, execCommand and the queryCommand methods,
+  confirm and prompt moved from js.c to Rust (rust/js-geometry, the new
+  rust/js-images, rust/js-services). Images that become ready together now
+  fire their events in load-start order.
 * CompressionStream and DecompressionStream's zlib codec moved from js.c to
   Rust (rust/js-compression); the performance object and its prototype moved
   to rust/js-perf, the StaticRange constructor to rust/js-traversal and the
