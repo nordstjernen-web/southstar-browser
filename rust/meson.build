@@ -64,6 +64,12 @@ endif
 if have_libav
   southstar_rust_features += ['libav']
 endif
+if have_audio_native_vorbis
+  southstar_rust_features += ['audio-native-vorbis']
+endif
+if have_audio_native_opus
+  southstar_rust_features += ['audio-native-opus']
+endif
 if have_http_brotli
   southstar_rust_features += ['http-brotli']
 endif

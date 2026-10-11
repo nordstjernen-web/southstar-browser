@@ -289,6 +289,10 @@ impl<'a> Attr<'a> {
         unsafe { self.attr.as_ref() }
     }
 
+    pub fn as_ptr(self) -> *const NsAttr {
+        self.attr.as_ptr()
+    }
+
     pub fn name(self) -> Option<&'a CStr> {
         c_str(self.get().name)
     }

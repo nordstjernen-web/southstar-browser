@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use super::helpers::ns_js_purge_subtree_rafs;
+use super::page_object::{ns_active_js, ns_js_release_wrapper};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -122,7 +124,6 @@ unsafe extern "C" {
     fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64);
     fn ns_js_orphan_count(js: *mut NsJs) -> c_int;
     fn ns_js_orphans_collect(js: *mut NsJs) -> *mut GPtrArray;
-    fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_purge_subtree_pending_iframes(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut NsNode);
@@ -131,7 +132,6 @@ unsafe extern "C" {
     fn ns_js_pending_iframe_first(js: *const NsJs) -> *mut NsNode;
     fn ns_js_pending_iframe_remove_first(js: *mut NsJs);
     fn ns_js_load_iframe_now(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_js_release_wrapper(js: *mut NsJs, node: *mut NsNode);
     fn ns_dom_set_active_modal(modal: *const NsNode);
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
@@ -142,7 +142,6 @@ unsafe extern "C" {
         event: JSValue,
         default_prevented: *mut GBoolean,
     );
-    fn ns_active_js() -> *mut NsJs;
 }
 
 fn context_of(js: Option<Js>) -> *mut GMainContext {

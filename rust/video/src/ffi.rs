@@ -645,6 +645,18 @@ fn c_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_video_take_load_events(video: *mut NsVideo) -> GBoolean {
+    let Some(video) = (unsafe { video.as_mut() }) else {
+        return glib::FALSE;
+    };
+    if !video.loaded.get() || video.load_events_fired.get() {
+        return glib::FALSE;
+    }
+    video.load_events_fired.set(true);
+    glib::TRUE
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn ns_video_cache_new() -> *mut Cache {
     Box::into_raw(Box::new(Cache::new()))
 }

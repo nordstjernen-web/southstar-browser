@@ -104,6 +104,26 @@ impl<'a> ImageRef<'a> {
         self.raw().http_status
     }
 
+    pub fn request_us(self) -> i64 {
+        self.raw().request_us
+    }
+
+    pub fn response_us(self) -> i64 {
+        self.raw().response_us
+    }
+
+    pub fn body_size(self) -> i64 {
+        self.raw().body_size
+    }
+
+    pub fn next_hop_protocol(self) -> *const c_char {
+        self.raw().next_hop_protocol
+    }
+
+    pub fn timing_allow_origin(self) -> *const c_char {
+        self.raw().timing_allow_origin
+    }
+
     pub fn natural_size(self) -> (i32, i32) {
         let image = self.raw();
         (image.natural_width, image.natural_height)

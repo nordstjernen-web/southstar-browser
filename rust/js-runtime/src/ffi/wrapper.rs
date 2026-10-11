@@ -13,13 +13,12 @@ use southstar_js_engine::{
     Attributes, ClassHooks, HostClass, OwnProperty, PropertyDefinition, PropertyKey, Scope, Value,
 };
 
+use super::page_object::{ns_active_js, ns_js_kind_proto};
 use super::{Js, NsJs};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 
 unsafe extern "C" {
-    fn ns_active_js() -> *mut NsJs;
-    fn ns_js_kind_proto(js: *const NsJs, node: *const NsNode) -> JSValue;
     fn ns_realm_cloners_made(js: *const NsJs) -> GBoolean;
     fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> *mut JSContext;
     fn ns_realm_proto_for(js: *mut NsJs, realm: *mut JSContext, proto: JSValue) -> JSValue;

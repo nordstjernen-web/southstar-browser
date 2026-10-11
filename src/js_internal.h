@@ -58,57 +58,6 @@ G_STATIC_ASSERT(sizeof(ns_canvas_state) == 232);
 G_STATIC_ASSERT(G_STRUCT_OFFSET(ns_canvas_state, ctx2d) == 184);
 #endif
 
-struct ns_js {
-    JSRuntime    *rt;
-    JSContext    *ctx;
-    JSContext    *main_realm_ctx;
-    GPtrArray    *frame_ctxs;
-    char         *current_url;
-    ns_node       *current_doc;
-    ns_node      *raf_frame_ctx;
-    JSValue       pristine_promise;
-    const struct ns_box *layout_root;
-    GHashTable   *pinned_wrappers_set;
-    char         *cookie_value;
-    GHashTable   *cookie_buckets;
-    char         *partition_key;
-    guint64       opaque_counter;
-    JSValue       navigator_brand;
-    gboolean      halted;
-    ns_csp *csp;
-    gint64        time_origin_us;
-    double        time_origin_real_ms;
-    ns_js_navigation_timing navigation_timing;
-    const ns_node *ce_main_doc;
-    GHashTable   *platform_globals;
-    JSValue       form_data_helper;
-    int           form_data_helper_set;
-    JSValue       proto_node;
-    JSValue       proto_element;
-    JSValue       proto_htmlelement;
-    JSValue       proto_htmlunknownelement;
-    JSValue       proto_svgelement;
-    JSValue       proto_svgaelement;
-    JSValue       proto_mathmlelement;
-    JSValue       proto_chardata;
-    JSValue       proto_text;
-    JSValue       proto_comment;
-    JSValue       proto_cdata;
-    JSValue       proto_pi;
-    JSValue       proto_doctype;
-    JSValue       proto_docfrag;
-    JSValue       proto_document;
-    GHashTable   *per_tag_protos;
-    int           dom_protos_set;
-    void         *runtime;
-};
-
-static inline ns_js *
-js_from_ctx(JSContext *ctx)
-{
-    return ctx ? (ns_js *)JS_GetContextOpaque(ctx) : NULL;
-}
-
 typedef void (*ns_ctx_drawfn)(cairo_t *cr, void *ud);
 
 /* Helpers defined in js.c, used by js_canvas.c */
@@ -396,7 +345,6 @@ ns_dommatrix_make(JSContext *ctx, double a, double b, double c, double d,
 JSValue
 ns_element_getContext(JSContext *ctx, JSValueConst this_val,
                       int argc, JSValueConst *argv);
-
 
 /* The canvas objects' WebIDL surface (js_canvas_api.c). */
 enum {

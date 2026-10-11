@@ -277,6 +277,23 @@ impl<'a> Node<'a> {
         }
     }
 
+    pub fn link_before(self, child: Node, reference: Node) {
+        unsafe {
+            let parent = self.raw();
+            let reference = reference.raw();
+            let child = child.raw();
+            (*child).parent = parent;
+            (*child).next_sibling = reference;
+            (*child).prev_sibling = (*reference).prev_sibling;
+            if (*reference).prev_sibling.is_null() {
+                (*parent).first_child = child;
+            } else {
+                (*(*reference).prev_sibling).next_sibling = child;
+            }
+            (*reference).prev_sibling = child;
+        }
+    }
+
     pub fn insert_before(self, child: Node) {
         if self == child || self.parent().is_none() {
             return;

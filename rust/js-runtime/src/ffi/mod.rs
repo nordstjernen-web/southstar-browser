@@ -4,7 +4,9 @@
 
 pub(crate) mod exports;
 pub(crate) mod glue;
+pub(crate) mod helpers;
 pub(crate) mod natives;
+pub(crate) mod page_object;
 pub(crate) mod scopes;
 pub(crate) mod state;
 pub(crate) mod wrapper;
@@ -19,12 +21,12 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::worker::{self, EvalStatus};
 use crate::{Element, interrupt, page, teardown};
+use page_object::*;
 use state::{DataFn, LogFn, NavigateFn, PageState, Slots};
 
 pub(crate) type Native = JSCFunction;
 pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
 
-type InterruptHandler = unsafe extern "C" fn(rt: *mut c_void, opaque: *mut c_void) -> c_int;
 type RejectionTrackerFn = unsafe extern "C" fn(
     ctx: *mut JSContext,
     promise: JSValue,
@@ -122,38 +124,17 @@ const PROTO_TABLE_ELEMENT: c_int = 13;
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
-    fn ns_js_alloc() -> *mut NsJs;
-    fn ns_js_set_time_origin(js: *mut NsJs, origin_us: i64, origin_real_ms: f64);
-    fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming;
     fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming);
     fn ns_perf_init(js: *mut NsJs);
     fn ns_perf_teardown(js: *mut NsJs);
-    fn ns_js_create_runtime(
-        js: *mut NsJs,
-        memory_limit: usize,
-        stack_size: usize,
-        interrupt: InterruptHandler,
-        rejection_tracker: RejectionTrackerFn,
-    ) -> GBoolean;
-    fn ns_js_create_context(js: *mut NsJs) -> GBoolean;
     fn g_main_context_default() -> *mut GMainContext;
-    fn ns_js_init_tables(js: *mut NsJs, page: GBoolean);
-    fn ns_js_set_partition_key(js: *mut NsJs, partition_key: *const c_char);
-    fn ns_js_runtime_state(js: *const NsJs) -> *mut c_void;
-    fn ns_js_set_runtime_state(js: *mut NsJs, state: *mut c_void);
-    fn ns_js_slots_of(js: *mut NsJs, out: *mut Slots);
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn ns_js_mutation_init(js: *mut NsJs);
     fn ns_storage_init(js: *mut NsJs);
     fn ns_media_init(js: *mut NsJs);
     fn ns_js_register_class(ctx: *mut JSContext, which: c_int) -> JSValue;
     fn ns_js_new_window_named(ctx: *mut JSContext) -> JSValue;
-    fn ns_js_set_proto_document(js: *mut NsJs, proto: JSValue);
-    fn ns_js_set_navigator_brand(js: *mut NsJs, brand: JSValue);
-    fn ns_js_set_pristine_promise(js: *mut NsJs, promise: JSValue);
     fn ns_js_install_proto_table(ctx: *mut JSContext, proto: JSValue, table: c_int);
-    fn ns_active_js() -> *mut NsJs;
-    fn ns_set_active_js(js: *mut NsJs);
 
     fn ns_js_promise_rejection_tracker(
         ctx: *mut JSContext,
@@ -197,7 +178,6 @@ unsafe extern "C" {
     fn ns_webgpu_install(ctx: *mut JSContext, js: *mut NsJs, navigator: JSValue);
     fn ns_worker_install_location(ctx: *mut JSContext, global: JSValue, url: *const c_char);
     fn ns_worker_shape_global(ctx: *mut JSContext, service_worker: GBoolean);
-    fn ns_js_eval_worker_polyfills(js: *mut NsJs);
     fn ns_worker_compile(
         ctx: *mut JSContext,
         src: *const c_char,
@@ -207,21 +187,10 @@ unsafe extern "C" {
         parse_error: *mut GBoolean,
     ) -> JSValue;
 
-    fn ns_js_pinned_wrappers(js: *const NsJs) -> *mut GHashTable;
-    fn ns_js_detach_wrapper(js: *mut NsJs, node: *mut NsNode, release: GBoolean);
     fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_mutation_teardown(js: *mut NsJs);
     fn ns_node_free(node: *mut NsNode);
-
-    fn ns_js_free_page_strings(js: *mut NsJs);
-    fn ns_js_free_pinned_set(js: *mut NsJs);
-    fn ns_js_free_realm_values(js: *mut NsJs);
-    fn ns_js_free_platform_globals(js: *mut NsJs);
-    fn ns_js_free_partition(js: *mut NsJs);
-    fn ns_js_free_lookup_caches(js: *mut NsJs);
-    fn ns_js_free_window_values(js: *mut NsJs);
-    fn ns_js_free_engine(js: *mut NsJs);
 
     fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
     fn ns_top_layer_clear(js: *mut NsJs);

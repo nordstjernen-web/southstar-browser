@@ -19,28 +19,8 @@ if not meson.is_cross_build() and qjsc_prog.found() and qjs_prog.found()
   )
 endif
 
-polyfills_h = custom_target(
-  'polyfills.h',
-  input: ['../scripts/embed-text.py', '../data/js/polyfills.js'],
-  output: 'polyfills.h',
-  command: [python, '@INPUT0@', '@INPUT1@', '@OUTPUT@',
-            'ns_js_polyfills_src'],
-)
-
-streaming_h = custom_target(
-  'streaming.h',
-  input: ['../scripts/embed-text.py', '../data/js/streaming.js'],
-  output: 'streaming.h',
-  command: [python, '@INPUT0@', '@INPUT1@', '@OUTPUT@',
-            'ns_js_streaming_src'],
-)
-
 southstar_engine_sources = files(
   'video_decode.c',
-)
-
-southstar_engine_sources += files(
-  'js.c',
 )
 
 if have_avif
@@ -174,7 +154,7 @@ if host_machine.system() == 'windows'
   )
 endif
 
-southstar_embed_sources = southstar_engine_sources + [polyfills_h, streaming_h]
+southstar_embed_sources = southstar_engine_sources
 
 libsouthstar_lib = library(
   'southstar',

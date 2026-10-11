@@ -382,13 +382,15 @@ endif
 # canPlayType/mediaCapabilities may honestly advertise native Ogg audio only
 # where the decoder that plays it is built: the desktop (SDL2) southstar-audio
 # helper.
+have_audio_native_vorbis = false
+have_audio_native_opus = false
 if get_option('audio').allowed()
   sdl2_probe = dependency('sdl2', required: false)
   if sdl2_probe.found() and libvorbisfile.found()
-    add_project_arguments('-DNS_AUDIO_NATIVE_VORBIS=1', language: 'c')
+    have_audio_native_vorbis = true
   endif
   if sdl2_probe.found() and libopusfile.found()
-    add_project_arguments('-DNS_AUDIO_NATIVE_OPUS=1', language: 'c')
+    have_audio_native_opus = true
   endif
 endif
 libenchant = dependency('enchant-2', required: false)
