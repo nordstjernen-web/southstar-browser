@@ -8,8 +8,8 @@ use std::ffi::CString;
 
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, MAX_DEPTH};
-use southstar_js_engine::quickjs::{self, JSValue};
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::quickjs;
+use southstar_js_engine::{Attributes, Scope, Trace, Value};
 
 use crate::ffi::{
     build_attributes, build_labels, current_document, document_root_for, form_elements_named,
@@ -90,6 +90,17 @@ pub(crate) struct Live {
     cache: RefCell<Option<Snapshot>>,
 }
 
+impl Trace for Live {
+    fn trace(&self, visit: &mut dyn FnMut(&Value)) {
+        visit(&self.owner);
+        if let Ok(cache) = self.cache.try_borrow()
+            && let Some(snap) = cache.as_ref()
+        {
+            visit(&snap.items);
+        }
+    }
+}
+
 pub(crate) enum Key<'a> {
     Index(u32),
     Name(&'a CStr),
@@ -98,15 +109,6 @@ pub(crate) enum Key<'a> {
 impl Live {
     pub(crate) fn owner(&self) -> &Value {
         &self.owner
-    }
-
-    pub(crate) fn cache_raw(&self) -> JSValue {
-        match self.cache.try_borrow() {
-            Ok(cache) => cache
-                .as_ref()
-                .map_or(quickjs::UNDEFINED, |snap| quickjs::raw(&snap.items)),
-            Err(_) => quickjs::UNDEFINED,
-        }
     }
 
     pub(crate) fn collection_kind(&self) -> c_int {
@@ -147,7 +149,7 @@ pub(crate) fn make(
     );
     let param = param.map(truncated);
     let param_lower = param.as_deref().map(|p| p.to_ascii_lowercase().into());
-    let back = Box::new(Live {
+    let back = Live {
         owner: owner.clone(),
         kind,
         param,
@@ -155,7 +157,7 @@ pub(crate) fn make(
         param2: param2.map(truncated),
         html_collection,
         cache: RefCell::new(None),
-    });
+    };
     let object = live_new_object(scope, back);
     if object.is_object()
         && let Some(protos) = page::live_protos(js_of(scope))

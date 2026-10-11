@@ -50,8 +50,6 @@ unsafe extern "C" {
         code: c_int,
         message: *const c_char,
     ) -> JSValue;
-    fn ns_live_object_new(ctx: *mut JSContext, back: *mut c_void) -> JSValue;
-    fn ns_live_back_of(v: JSValue) -> *mut c_void;
     fn ns_live_build_attributes(ctx: *mut JSContext, owner: JSValue) -> JSValue;
     fn ns_live_build_labels(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_form_elements_named_lookup(
@@ -139,20 +137,29 @@ pub(crate) fn selector_syntax_error(scope: &mut Scope<'_>, selector: &[u8]) -> V
     quickjs::take_exception(scope)
 }
 
-pub(crate) fn live_new_object(scope: &mut Scope<'_>, back: Box<Live>) -> Value {
-    let back = Box::into_raw(back);
-    let raw = unsafe { ns_live_object_new(quickjs::raw_context(scope), back.cast()) };
-    if !quickjs::raw_is_object(raw) {
-        drop(unsafe { Box::from_raw(back) });
+pub(crate) fn live_new_object(scope: &mut Scope<'_>, back: Live) -> Value {
+    match crate::class::new_live(scope, back) {
+        Ok(object) => object,
+        Err(error) => {
+            let raw = quickjs::result_raw(scope, Err(error));
+            unsafe { quickjs::take_value(scope, raw) }
+        }
     }
-    unsafe { quickjs::take_value(scope, raw) }
 }
 
 pub(crate) fn live_of<'a>(value: &Value) -> Option<&'a Live> {
-    if !value.is_object() {
-        return None;
+    let back = value.with_instance(&crate::class::LIVE_CLASS, |back: &Live| {
+        core::ptr::from_ref(back)
+    })?;
+    unsafe { back.as_ref() }
+}
+
+fn back_of(obj: JSValue) -> *const Live {
+    unsafe {
+        quickjs::with_raw(obj, |value| {
+            live_of(value).map_or(ptr::null(), core::ptr::from_ref)
+        })
     }
-    unsafe { back(ns_live_back_of(quickjs::raw(value))) }
 }
 
 unsafe fn back<'a>(back: *const c_void) -> Option<&'a Live> {
@@ -433,7 +440,7 @@ pub unsafe extern "C" fn ns_live_snapshot(ctx: *mut JSContext, obj: JSValue) -> 
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_live_collection_kind(obj: JSValue) -> c_int {
-    let Some(back) = (unsafe { back(ns_live_back_of(obj)) }) else {
+    let Some(back) = (unsafe { back(back_of(obj).cast()) }) else {
         return -1;
     };
     back.collection_kind()
@@ -441,7 +448,7 @@ pub unsafe extern "C" fn ns_live_collection_kind(obj: JSValue) -> c_int {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_live_owner_node(obj: JSValue) -> *mut NsNode {
-    unsafe { back(ns_live_back_of(obj)) }
+    unsafe { back(back_of(obj).cast()) }
         .and_then(|back| unwrap_node(back.owner()))
         .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
@@ -471,118 +478,16 @@ pub unsafe extern "C" fn ns_live_wire_constructors(ctx: *mut JSContext, global: 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_back_free(back: *mut c_void) {
-    if !back.is_null() {
-        drop(unsafe { Box::from_raw(back.cast::<Live>()) });
-    }
+pub unsafe extern "C" fn ns_live_register_class(ctx: *mut JSContext) {
+    unsafe { quickjs::with_context(ctx, crate::class::register) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_live_back_of(obj: JSValue) -> *mut c_void {
+    back_of(obj).cast_mut().cast()
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_live_back_owner(back: *const c_void) -> JSValue {
     unsafe { self::back(back) }.map_or(quickjs::UNDEFINED, |back| quickjs::raw(back.owner()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_back_cache(back: *const c_void) -> JSValue {
-    unsafe { self::back(back) }.map_or(quickjs::UNDEFINED, Live::cache_raw)
-}
-
-fn key<'a>(is_index: GBoolean, index: u32, name: *const c_char) -> live::Key<'a> {
-    if is_index != 0 {
-        live::Key::Index(index)
-    } else {
-        live::Key::Name(if name.is_null() {
-            c""
-        } else {
-            unsafe { CStr::from_ptr(name) }
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_get_own(
-    ctx: *mut JSContext,
-    back: *const c_void,
-    is_index: GBoolean,
-    index: u32,
-    name: *const c_char,
-    out: *mut JSValue,
-) -> c_int {
-    let Some(back) = (unsafe { self::back(back) }) else {
-        return 0;
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            match live::get_own(scope, back, key(is_index, index, name)) {
-                Some(value) => {
-                    if let Some(out) = out.as_mut() {
-                        *out = quickjs::into_raw(value);
-                    }
-                    1
-                }
-                None => 0,
-            }
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_named_access(back: *const c_void) -> GBoolean {
-    unsafe { self::back(back) }.map_or(glib::FALSE, |back| glib::boolean(back.named_access()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_delete(
-    ctx: *mut JSContext,
-    back: *const c_void,
-    is_index: GBoolean,
-    index: u32,
-    name: *const c_char,
-) -> c_int {
-    let Some(back) = (unsafe { self::back(back) }) else {
-        return 1;
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            live::deletable(scope, back, key(is_index, index, name)) as c_int
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_define_rejects(
-    ctx: *mut JSContext,
-    back: *const c_void,
-    name: *const c_char,
-) -> c_int {
-    let Some(back) = (unsafe { self::back(back) }) else {
-        return 0;
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            live::named_exists(scope, back, key(glib::FALSE, 0, name)) as c_int
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_own_names(
-    ctx: *mut JSContext,
-    back: *const c_void,
-    obj: JSValue,
-    named: *mut GPtrArray,
-) -> u32 {
-    let Some(back) = (unsafe { self::back(back) }) else {
-        return 0;
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let obj = quickjs::borrow_value(scope, obj);
-            live::own_names(scope, back, &obj, |name| {
-                if !named.is_null() {
-                    glib::g_ptr_array_add(named, glib::strdup(name).cast());
-                }
-            })
-        })
-    }
 }

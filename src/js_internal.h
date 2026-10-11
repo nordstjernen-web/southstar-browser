@@ -1837,10 +1837,13 @@ void     ns_js_remove_attr_ns_recorded(ns_js *js, ns_node *n, const char *namesp
 gboolean ns_valid_element_local_name(const char *s);
 void     ns_token_list_register_class(JSContext *ctx, JSValue proto);
 JSValue  ns_token_list_class_proto(JSContext *ctx);
-ns_node *ns_dataset_node(JSValueConst obj);
 ns_node *ns_namedmap_owner(JSValueConst this_val);
-void    *ns_attr_opaque(JSValueConst value);
-JSValue  ns_attr_new_object(JSContext *ctx, void *state);
+void     ns_attr_register_class(JSContext *ctx, JSValue proto);
+JSClassID ns_attr_class_id(void);
+void     ns_dataset_register_class(JSContext *ctx, JSValue proto);
+JSValue  ns_dataset_class_proto(JSContext *ctx);
+JSValue  ns_element_get_dataset(JSContext *ctx, JSValueConst this_val);
+void     ns_live_register_class(JSContext *ctx);
 void     ns_attr_apply_proto(JSContext *ctx, JSValueConst obj);
 JSValue  ns_tlist_contains(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue  ns_tlist_add(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -1853,11 +1856,6 @@ JSValue  ns_tlist_toString(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 JSValue  ns_tlist_get_length(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_tlist_get_value(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_tlist_set_value(JSContext *ctx, JSValueConst this_val, JSValueConst val);
-char    *ns_dataset_named_value(JSValueConst obj, const char *name);
-char   **ns_dataset_names(JSValueConst obj);
-int      ns_dataset_named_set(JSContext *ctx, JSValueConst obj, const char *name,
-                              JSValueConst val);
-void     ns_dataset_named_delete(JSContext *ctx, JSValueConst obj, const char *name);
 gboolean ns_element_has_dataset(const ns_node *el);
 JSValue  ns_namedmap_getNamedItem(JSContext *ctx, JSValueConst this_val, int argc,
                                   JSValueConst *argv);
@@ -1882,7 +1880,6 @@ JSValue  ns_element_removeAttributeNode(JSContext *ctx, JSValueConst this_val, i
 JSValue  ns_attr_to_js(JSContext *ctx, JSValueConst owner, const ns_attr *a,
                        gboolean include_base);
 ns_node *ns_attr_owner(JSValueConst value);
-void     ns_attr_state_release(void *state);
 void     ns_attr_detach_matching(ns_js *js, ns_node *owner, const char *namespace_uri,
                                  const char *local_name);
 void     ns_attr_detach_owner(ns_js *js, ns_node *owner);
@@ -2086,18 +2083,7 @@ ns_node *ns_live_owner_node(JSValueConst obj);
 void     ns_live_install_protos(JSContext *ctx);
 JSValue  ns_live_proto(JSContext *ctx, int which);
 void     ns_live_wire_constructors(JSContext *ctx, JSValueConst global);
-void     ns_live_back_free(void *back);
 JSValue  ns_live_back_owner(const void *back);
-JSValue  ns_live_back_cache(const void *back);
-int      ns_live_get_own(JSContext *ctx, const void *back, gboolean is_index, uint32_t index,
-                         const char *name, JSValue *out);
-gboolean ns_live_named_access(const void *back);
-int      ns_live_delete(JSContext *ctx, const void *back, gboolean is_index, uint32_t index,
-                        const char *name);
-int      ns_live_define_rejects(JSContext *ctx, const void *back, const char *name);
-uint32_t ns_live_own_names(JSContext *ctx, const void *back, JSValueConst obj,
-                           GPtrArray *named);
-JSValue  ns_live_object_new(JSContext *ctx, void *back);
 void    *ns_live_back_of(JSValueConst obj);
 JSValue  ns_live_build_attributes(JSContext *ctx, JSValueConst owner);
 JSValue  ns_live_build_labels(JSContext *ctx, const ns_node *n);

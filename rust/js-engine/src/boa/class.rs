@@ -6,11 +6,12 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use boa_engine::builtins::object::OrdinaryObject;
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaKey};
 use boa_engine::{JsString, JsValue};
 
 use super::{Scope, Value};
-use crate::{HostClass, Trace};
+use crate::{HostClass, OwnProperty, Trace};
 
 thread_local! {
     static PROTOTYPES: RefCell<HashMap<usize, Value>> = RefCell::new(HashMap::new());
@@ -49,6 +50,13 @@ impl PropertyKey {
         })
     }
 
+    pub fn array_index(&self, _scope: &mut Scope<'_>) -> Option<u32> {
+        match &self.0 {
+            BoaKey::Index(index) => Some(index.get()),
+            _ => None,
+        }
+    }
+
     pub fn to_c_bytes(&self, _scope: &mut Scope<'_>) -> Option<Vec<u8>> {
         let text = match &self.0 {
             BoaKey::String(text) => text.to_std_string_escaped(),
@@ -61,6 +69,10 @@ impl PropertyKey {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct SetFlags;
+
+#[derive(Clone)]
 pub struct PropertyDefinition {
     pub value: Value,
     pub getter: Value,
@@ -71,6 +83,12 @@ pub struct PropertyDefinition {
 }
 
 impl PropertyDefinition {
+    pub fn throws(&self) -> bool {
+        false
+    }
+
+    pub fn clear_configurable(&mut self) {}
+
     pub fn has_get(&self) -> bool {
         self.has_get
     }
@@ -148,6 +166,109 @@ impl Scope<'_> {
         PropertyKey(BoaKey::from(JsString::from(
             String::from_utf8_lossy(name).as_ref(),
         )))
+    }
+
+    pub fn index_key(&mut self, index: u32) -> PropertyKey {
+        PropertyKey(BoaKey::from(index))
+    }
+
+    pub fn is_host_access(&mut self) -> bool {
+        false
+    }
+
+    pub fn has_key(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
+        let object = self.object(object)?;
+        object
+            .has_property(key.0.clone(), self.ctx)
+            .map_err(|error| self.error(error))
+    }
+
+    pub fn own_property_of(
+        &mut self,
+        object: &Value,
+        key: &PropertyKey,
+    ) -> Result<Option<OwnProperty>, Value> {
+        let key = key.to_value(self);
+        let descriptor = OrdinaryObject::get_own_property_descriptor(
+            &JsValue::undefined(),
+            &[object.0.clone(), key.0],
+            self.ctx,
+        )
+        .map_err(|error| self.error(error))?;
+        if descriptor.is_undefined() {
+            return Ok(None);
+        }
+        let descriptor = Value(descriptor);
+        let getter = self.get(&descriptor, "get")?;
+        let setter = self.get(&descriptor, "set")?;
+        let writable = self.get(&descriptor, "writable")?;
+        let enumerable = self.get(&descriptor, "enumerable")?;
+        let configurable = self.get(&descriptor, "configurable")?;
+        Ok(Some(OwnProperty {
+            value: self.get(&descriptor, "value")?,
+            accessor: !getter.0.is_undefined() || !setter.0.is_undefined(),
+            getter,
+            setter,
+            writable: self.to_bool(&writable),
+            enumerable: self.to_bool(&enumerable),
+            configurable: self.to_bool(&configurable),
+        }))
+    }
+
+    pub fn own_keys_of(&mut self, object: &Value) -> Result<Vec<PropertyKey>, Value> {
+        let object = self.object(object)?;
+        let keys = object
+            .own_property_keys(self.ctx)
+            .map_err(|error| self.error(error))?;
+        Ok(keys.into_iter().map(PropertyKey).collect())
+    }
+
+    pub fn delete_key_of(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
+        let object = self.object(object)?;
+        object
+            .delete_property_or_throw(key.0.clone(), self.ctx)
+            .map_err(|error| self.error(error))
+    }
+
+    pub fn define_forward(
+        &mut self,
+        target: &Value,
+        key: &PropertyKey,
+        definition: &PropertyDefinition,
+    ) -> Result<bool, Value> {
+        self.define_ordinary(target, key, definition)
+    }
+
+    pub fn define_value_key(
+        &mut self,
+        object: &Value,
+        key: &PropertyKey,
+        value: &Value,
+    ) -> Result<bool, Value> {
+        let object = self.object(object)?;
+        let descriptor = BoaPropertyDescriptor::builder()
+            .value(value.0.clone())
+            .writable(true)
+            .enumerable(true)
+            .configurable(true)
+            .build();
+        object
+            .define_property_or_throw(key.0.clone(), descriptor, self.ctx)
+            .map_err(|error| self.error(error))
+    }
+
+    pub fn set_with_receiver(
+        &mut self,
+        target: &Value,
+        key: &PropertyKey,
+        value: &Value,
+        _receiver: &Value,
+        _flags: SetFlags,
+    ) -> Result<bool, Value> {
+        let target = self.object(target)?;
+        target
+            .set(key.0.clone(), value.0.clone(), false, self.ctx)
+            .map_err(|error| self.error(error))
     }
 
     pub fn define_ordinary(

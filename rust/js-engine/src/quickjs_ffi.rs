@@ -20,7 +20,7 @@ use crate::{
 
 mod class;
 
-pub use class::{PropertyDefinition, PropertyKey};
+pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 

@@ -95,7 +95,44 @@ unsafe extern "C" {
         flags: c_int,
     ) -> c_int;
     fn js_malloc(ctx: *mut JSContext, size: usize) -> *mut c_void;
+    fn JS_AtomIsArrayIndex(ctx: *mut JSContext, pval: *mut u32, atom: JSAtom) -> bool;
+    fn JS_NewAtomUInt32(ctx: *mut JSContext, n: u32) -> JSAtom;
+    fn JS_HasProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> c_int;
+    fn JS_GetOwnProperty(
+        ctx: *mut JSContext,
+        desc: *mut JSPropertyDescriptor,
+        obj: JSValue,
+        prop: JSAtom,
+    ) -> c_int;
+    fn JS_GetOwnPropertyNames(
+        ctx: *mut JSContext,
+        ptab: *mut *mut JSPropertyEnum,
+        plen: *mut u32,
+        obj: JSValue,
+        flags: c_int,
+    ) -> c_int;
+    fn JS_FreePropertyEnum(ctx: *mut JSContext, tab: *mut JSPropertyEnum, len: u32);
+    fn JS_DeleteProperty(ctx: *mut JSContext, obj: JSValue, prop: JSAtom, flags: c_int) -> c_int;
+    fn JS_SetPropertyReceiver(
+        ctx: *mut JSContext,
+        obj: JSValue,
+        prop: JSAtom,
+        val: JSValue,
+        this_obj: JSValue,
+        flags: c_int,
+    ) -> c_int;
+    fn JS_IsHostAccess(ctx: *mut JSContext) -> bool;
 }
+
+const PROP_HAS_CONFIGURABLE: c_int = 1 << 8;
+const PROP_HAS_WRITABLE: c_int = 1 << 9;
+const PROP_HAS_ENUMERABLE: c_int = 1 << 10;
+const PROP_THROW: c_int = 1 << 14;
+const GPN_STRING_MASK: c_int = 1 << 0;
+const GPN_SYMBOL_MASK: c_int = 1 << 1;
+
+#[derive(Clone, Copy)]
+pub struct SetFlags(c_int);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_new_class_id(slot: *mut u32) -> u32 {
@@ -153,6 +190,11 @@ impl PropertyKey {
     pub fn raw_atom(&self) -> u32 {
         self.atom
     }
+
+    pub fn array_index(&self, scope: &mut Scope<'_>) -> Option<u32> {
+        let mut index = 0u32;
+        unsafe { JS_AtomIsArrayIndex(scope.ctx, &mut index, self.atom) }.then_some(index)
+    }
 }
 
 impl Clone for PropertyKey {
@@ -180,7 +222,26 @@ pub struct PropertyDefinition {
     flags: c_int,
 }
 
+impl Clone for PropertyDefinition {
+    fn clone(&self) -> PropertyDefinition {
+        PropertyDefinition {
+            value: self.value.clone(),
+            getter: self.getter.clone(),
+            setter: self.setter.clone(),
+            flags: self.flags,
+        }
+    }
+}
+
 impl PropertyDefinition {
+    pub fn throws(&self) -> bool {
+        self.flags & PROP_THROW != 0
+    }
+
+    pub fn clear_configurable(&mut self) {
+        self.flags = (self.flags & !PROP_CONFIGURABLE) | PROP_HAS_CONFIGURABLE;
+    }
+
     pub fn has_get(&self) -> bool {
         self.flags & super::PROP_HAS_GET != 0
     }
@@ -375,7 +436,7 @@ unsafe extern "C" fn set_property(
     prop: JSAtom,
     value: JSValue,
     receiver: JSValue,
-    _flags: c_int,
+    flags: c_int,
 ) -> c_int {
     let Some(hook) = class_of(obj).and_then(|class| class.hooks.set) else {
         return 0;
@@ -384,7 +445,14 @@ unsafe extern "C" fn set_property(
     let value = borrow(ctx, value);
     let receiver = borrow(ctx, receiver);
     let key = PropertyKey::borrowed(ctx, prop);
-    let result = hook(&mut Scope::of(ctx), &object, &key, &value, &receiver);
+    let result = hook(
+        &mut Scope::of(ctx),
+        &object,
+        &key,
+        &value,
+        &receiver,
+        SetFlags(flags),
+    );
     status(ctx, result)
 }
 
@@ -535,6 +603,160 @@ impl Scope<'_> {
             atom: unsafe { JS_NewAtomLen(self.ctx, name.as_ptr().cast(), name.len()) },
             owned: true,
         }
+    }
+
+    pub fn index_key(&mut self, index: u32) -> PropertyKey {
+        PropertyKey {
+            ctx: self.ctx,
+            atom: unsafe { JS_NewAtomUInt32(self.ctx, index) },
+            owned: true,
+        }
+    }
+
+    pub fn is_host_access(&mut self) -> bool {
+        unsafe { JS_IsHostAccess(self.ctx) }
+    }
+
+    fn int_status(&self, status: c_int) -> Result<bool, Value> {
+        if status < 0 {
+            Err(self.exception())
+        } else {
+            Ok(status != 0)
+        }
+    }
+
+    pub fn has_key(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
+        let status = unsafe { JS_HasProperty(self.ctx, object.raw, key.atom) };
+        self.int_status(status)
+    }
+
+    pub fn own_property_of(
+        &mut self,
+        object: &Value,
+        key: &PropertyKey,
+    ) -> Result<Option<OwnProperty>, Value> {
+        let mut desc = JSPropertyDescriptor {
+            flags: 0,
+            value: super::UNDEFINED,
+            getter: super::UNDEFINED,
+            setter: super::UNDEFINED,
+        };
+        let status = unsafe { JS_GetOwnProperty(self.ctx, &mut desc, object.raw, key.atom) };
+        if !self.int_status(status)? {
+            return Ok(None);
+        }
+        Ok(Some(OwnProperty {
+            value: Value::own(self.ctx, desc.value),
+            getter: Value::own(self.ctx, desc.getter),
+            setter: Value::own(self.ctx, desc.setter),
+            accessor: desc.flags & PROP_GETSET != 0,
+            writable: desc.flags & PROP_WRITABLE != 0,
+            enumerable: desc.flags & PROP_ENUMERABLE != 0,
+            configurable: desc.flags & PROP_CONFIGURABLE != 0,
+        }))
+    }
+
+    pub fn own_keys_of(&mut self, object: &Value) -> Result<Vec<PropertyKey>, Value> {
+        let mut tab: *mut JSPropertyEnum = ptr::null_mut();
+        let mut len = 0u32;
+        let status = unsafe {
+            JS_GetOwnPropertyNames(
+                self.ctx,
+                &mut tab,
+                &mut len,
+                object.raw,
+                GPN_STRING_MASK | GPN_SYMBOL_MASK,
+            )
+        };
+        self.int_status(status)?;
+        let entries = if tab.is_null() {
+            &[][..]
+        } else {
+            unsafe { core::slice::from_raw_parts(tab, len as usize) }
+        };
+        let keys = entries
+            .iter()
+            .map(|entry| PropertyKey {
+                ctx: self.ctx,
+                atom: unsafe { JS_DupAtom(self.ctx, entry.atom) },
+                owned: true,
+            })
+            .collect();
+        unsafe { JS_FreePropertyEnum(self.ctx, tab, len) };
+        Ok(keys)
+    }
+
+    pub fn delete_key_of(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
+        let status = unsafe { JS_DeleteProperty(self.ctx, object.raw, key.atom, 0) };
+        self.int_status(status)
+    }
+
+    pub fn define_forward(
+        &mut self,
+        target: &Value,
+        key: &PropertyKey,
+        definition: &PropertyDefinition,
+    ) -> Result<bool, Value> {
+        let status = unsafe {
+            JS_DefineProperty(
+                self.ctx,
+                target.raw,
+                key.atom,
+                definition.value.raw,
+                definition.getter.raw,
+                definition.setter.raw,
+                definition.flags,
+            )
+        };
+        self.int_status(status)
+    }
+
+    pub fn define_value_key(
+        &mut self,
+        object: &Value,
+        key: &PropertyKey,
+        value: &Value,
+    ) -> Result<bool, Value> {
+        let flags = PROP_CONFIGURABLE
+            | PROP_WRITABLE
+            | PROP_ENUMERABLE
+            | super::PROP_HAS_VALUE
+            | PROP_HAS_WRITABLE
+            | PROP_HAS_ENUMERABLE
+            | PROP_HAS_CONFIGURABLE;
+        let status = unsafe {
+            JS_DefineProperty(
+                self.ctx,
+                object.raw,
+                key.atom,
+                value.raw,
+                super::UNDEFINED,
+                super::UNDEFINED,
+                flags,
+            )
+        };
+        self.int_status(status)
+    }
+
+    pub fn set_with_receiver(
+        &mut self,
+        target: &Value,
+        key: &PropertyKey,
+        value: &Value,
+        receiver: &Value,
+        flags: SetFlags,
+    ) -> Result<bool, Value> {
+        let status = unsafe {
+            JS_SetPropertyReceiver(
+                self.ctx,
+                target.raw,
+                key.atom,
+                JS_DupValue(self.ctx, value.raw),
+                receiver.raw,
+                flags.0,
+            )
+        };
+        self.int_status(status)
     }
 
     pub fn define_ordinary(

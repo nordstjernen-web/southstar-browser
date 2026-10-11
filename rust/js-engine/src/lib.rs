@@ -20,7 +20,7 @@ use quickjs_ffi as backend;
 #[cfg(feature = "quickjs")]
 pub use backend::quickjs;
 pub use backend::{
-    ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Realm, Scope, Value,
+    ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Realm, Scope, SetFlags, Value,
     engine_version,
 };
 
@@ -37,8 +37,14 @@ pub type DefineHook =
 
 pub type DeleteHook = for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey) -> Result<bool, Value>;
 
-pub type SetHook =
-    for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey, &Value, &Value) -> Result<bool, Value>;
+pub type SetHook = for<'a> fn(
+    &mut Scope<'a>,
+    &Value,
+    &PropertyKey,
+    &Value,
+    &Value,
+    SetFlags,
+) -> Result<bool, Value>;
 
 #[derive(Clone, Copy)]
 pub struct ClassHooks {

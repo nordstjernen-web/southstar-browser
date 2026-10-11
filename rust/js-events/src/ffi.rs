@@ -19,9 +19,6 @@ pub(crate) struct NsJs {
 unsafe extern "C" {
     fn ns_unwrap_element(v: JSValue) -> *const NsNode;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_event_state(v: JSValue) -> JSValue;
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_event_new_proto(ctx: *mut JSContext, proto: JSValue) -> JSValue;
     fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
     fn ns_submit_event_ctor(
         ctx: *mut JSContext,
@@ -63,21 +60,45 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
     unsafe { quickjs::take_value(scope, raw) }
 }
 
-pub(crate) fn event_state(scope: &mut Scope<'_>, value: &Value) -> Option<Value> {
-    let raw = unsafe { ns_event_state(quickjs::raw(value)) };
-    let state = unsafe { quickjs::take_value(scope, raw) };
-    state.is_object().then_some(state)
+pub(crate) fn event_state(_scope: &mut Scope<'_>, value: &Value) -> Option<Value> {
+    crate::class::state_of(value).filter(Value::is_object)
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_event_new(ctx_of(scope)) };
+    let event = crate::class::new_event(scope, None);
+    let raw = quickjs::result_raw(scope, event);
     unsafe { quickjs::take_value(scope, raw) }
 }
 
 pub(crate) fn new_event_with_proto(scope: &mut Scope<'_>, proto: &Value) -> JsResult {
-    let raw = unsafe { ns_event_new_proto(ctx_of(scope), quickjs::raw(proto)) };
-    let event = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, event)
+    crate::class::new_event(scope, Some(proto))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_event_new(ctx: *mut JSContext) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let event = crate::class::new_event(scope, None);
+            quickjs::result_raw(scope, event)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_event_new_proto(ctx: *mut JSContext, proto: JSValue) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::borrow_value(scope, proto);
+            let event = crate::class::new_event(scope, Some(&proto));
+            quickjs::result_raw(scope, event)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_event_state(value: JSValue) -> JSValue {
+    let state = unsafe { quickjs::with_raw(value, crate::class::state_of) };
+    state.map_or(quickjs::UNDEFINED, quickjs::into_raw)
 }
 
 pub(crate) fn has_page(scope: &Scope<'_>) -> bool {

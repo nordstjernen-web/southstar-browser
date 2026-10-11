@@ -759,8 +759,21 @@ id, and `ns_new_class_id` now lives in `js-engine` so C and Rust share one
 class-id allocator. Boa 0.22 keeps custom internal methods crate-private, so
 on Boa a host class is an ordinary object with the instance data and the
 per-class prototype, and its hooks do not run: named and indexed access on
-Storage, DOMTokenList, CSSStyleDeclaration and WindowProperties is missing
+Storage, DOMTokenList, CSSStyleDeclaration, WindowProperties, DOMStringMap
+and the live collections, and the Event class's hidden state, are missing
 there until Boa exposes exotic objects or the classes move to a Proxy.
+
+Hooks reach the ordinary object operations through `PropertyKey`
+(`array_index`, `to_c_bytes`) and the scope: `has_key`, `own_property_of`,
+`own_keys_of`, `delete_key_of`, `define_ordinary` (the definition without
+the exotic hook), `define_forward` (the same definition on another object),
+`define_value_key`, and `set_with_receiver`, the forwarded ordinary [[Set]]
+that keeps the caller's strict-mode flags (`SetFlags`). `is_host_access`
+reports whether engine code rather than a page script is touching the
+object (QuickJS's `JS_IsHostAccess`, which the Event class uses to show the
+engine its hidden state). On Boa `is_host_access` is always false,
+`set_with_receiver` ignores the receiver and `PropertyDefinition` carries
+no throw flag.
 
 ### Phase 8 — Remaining web platform features
 

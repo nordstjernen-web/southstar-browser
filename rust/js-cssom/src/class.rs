@@ -3,7 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
-use southstar_js_engine::{ClassHooks, HostClass, OwnProperty, PropertyKey, Scope, Trace, Value};
+use southstar_js_engine::{
+    ClassHooks, HostClass, OwnProperty, PropertyKey, Scope, SetFlags, Trace, Value,
+};
 
 use crate::{declaration, ffi};
 
@@ -89,6 +91,7 @@ fn set(
     key: &PropertyKey,
     value: &Value,
     _receiver: &Value,
+    _flags: SetFlags,
 ) -> Result<bool, Value> {
     let Some(node) = node_of(obj) else {
         return Ok(false);

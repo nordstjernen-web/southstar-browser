@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{
-    ClassHooks, HostClass, OwnProperty, PropertyDefinition, PropertyKey, Scope, Value,
+    ClassHooks, HostClass, OwnProperty, PropertyDefinition, PropertyKey, Scope, SetFlags, Value,
 };
 
 use crate::store::Area;
@@ -71,6 +71,7 @@ fn set(
     key: &PropertyKey,
     value: &Value,
     _receiver: &Value,
+    _flags: SetFlags,
 ) -> JsResult<bool> {
     if area_tag(obj) == 0 {
         return Ok(false);

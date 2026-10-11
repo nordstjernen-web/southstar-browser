@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -60,10 +60,7 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_dataset_node(obj: JSValue) -> *mut NsNode;
     fn ns_namedmap_owner(obj: JSValue) -> *mut NsNode;
-    fn ns_attr_new_object(ctx: *mut JSContext, state: *mut c_void) -> JSValue;
-    fn ns_attr_opaque(obj: JSValue) -> *mut c_void;
     fn ns_attr_apply_proto(ctx: *mut JSContext, obj: JSValue);
     fn ns_valid_element_local_name(name: *const c_char) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
@@ -229,10 +226,6 @@ pub(crate) fn make_attributes_live(scope: &mut Scope<'_>, owner: &Value) -> Resu
     quickjs::checked(scope, value)
 }
 
-fn dataset_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_dataset_node(quickjs::raw(value))) }
-}
-
 pub(crate) fn named_map_owner(value: &Value) -> Option<Element> {
     unsafe { Node::from_ptr(ns_namedmap_owner(quickjs::raw(value))) }
 }
@@ -264,31 +257,11 @@ pub(crate) fn new_text(js: Js, text: &[u8]) -> Element {
 pub(crate) type Shared = Rc<RefCell<AttrState>>;
 
 pub(crate) fn new_attr_object(scope: &mut Scope<'_>, state: Shared) -> Result<Value, Value> {
-    let opaque = Rc::into_raw(state).cast_mut().cast::<c_void>();
-    let raw = unsafe { ns_attr_new_object(quickjs::raw_context(scope), opaque) };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    let checked = quickjs::checked(scope, value);
-    if checked.is_err() {
-        unsafe { release_state(opaque) };
-    }
-    checked
+    crate::class::new_attr(scope, state)
 }
 
 pub(crate) fn state_of(value: &Value) -> Option<Shared> {
-    let opaque = unsafe { ns_attr_opaque(quickjs::raw(value)) }.cast::<RefCell<AttrState>>();
-    if opaque.is_null() {
-        return None;
-    }
-    unsafe {
-        Rc::increment_strong_count(opaque);
-        Some(Rc::from_raw(opaque))
-    }
-}
-
-unsafe fn release_state(opaque: *mut c_void) {
-    if !opaque.is_null() {
-        drop(unsafe { Rc::from_raw(opaque.cast::<RefCell<AttrState>>()) });
-    }
+    crate::class::attr_state(value)
 }
 
 pub(crate) fn apply_attr_proto(scope: &mut Scope<'_>, entry: &Value) {
@@ -325,15 +298,6 @@ unsafe fn with_value<R>(
             f(scope, &value)
         })
     }
-}
-
-fn strv(names: &[Vec<u8>]) -> *mut *mut c_char {
-    let strv = unsafe { glib::g_malloc0((names.len() + 1) * size_of::<*mut c_char>()) }
-        .cast::<*mut c_char>();
-    for (i, name) in names.iter().enumerate() {
-        unsafe { *strv.add(i) = glib::strdup(c_string(name).as_bytes()) };
-    }
-    strv
 }
 
 macro_rules! method {
@@ -476,65 +440,47 @@ pub unsafe extern "C" fn ns_namedmap_get_length(ctx: *mut JSContext, this_val: J
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dataset_named_value(obj: JSValue, name: *const c_char) -> *mut c_char {
-    let node = unsafe { Node::from_ptr(ns_dataset_node(obj)) };
-    let (Some(node), Some(name)) = (node, c_str(name)) else {
-        return ptr::null_mut();
-    };
-    crate::dataset::named_value(node, name.to_bytes())
-        .map_or(ptr::null_mut(), |value| glib::strdup(value.to_bytes()))
+pub unsafe extern "C" fn ns_element_get_dataset(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
+    unsafe {
+        with_value(ctx, this_val, |scope, this| {
+            let dataset = crate::class::element_dataset(scope, this);
+            quickjs::result_raw(scope, dataset)
+        })
+    }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dataset_names(obj: JSValue) -> *mut *mut c_char {
-    let node = unsafe { Node::from_ptr(ns_dataset_node(obj)) };
-    strv(&node.map(crate::dataset::names).unwrap_or_default())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dataset_named_set(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    name: *const c_char,
-    value: JSValue,
-) -> c_int {
-    let Some(name) = c_str(name) else {
-        return 0;
-    };
+pub unsafe extern "C" fn ns_dataset_register_class(ctx: *mut JSContext, proto: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {
-            let obj = quickjs::borrow_value(scope, obj);
-            let Some(node) = dataset_node(&obj) else {
-                return 0;
-            };
-            let value = quickjs::borrow_value(scope, value);
-            match crate::dataset::named_set(scope, node, name.to_bytes(), &value) {
-                Ok(()) => 1,
-                Err(error) => {
-                    quickjs::result_raw(scope, Err(error));
-                    -1
-                }
-            }
+            let proto = quickjs::take_value(scope, proto);
+            crate::class::register_dataset(scope, proto);
         })
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dataset_named_delete(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    name: *const c_char,
-) {
-    let Some(name) = c_str(name) else {
-        return;
-    };
+pub unsafe extern "C" fn ns_dataset_class_proto(ctx: *mut JSContext) -> JSValue {
     unsafe {
-        with_value(ctx, obj, |scope, obj| {
-            if let Some(node) = dataset_node(obj) {
-                crate::dataset::named_delete(scope, node, name.to_bytes());
-            }
+        quickjs::with_context(ctx, |scope| {
+            quickjs::into_raw(crate::class::dataset_prototype(scope))
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_attr_register_class(ctx: *mut JSContext, proto: JSValue) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let proto = quickjs::take_value(scope, proto);
+            crate::class::register_attr(scope, proto);
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_attr_class_id() -> u32 {
+    quickjs::class_id(&crate::class::ATTR_CLASS)
 }
 
 #[unsafe(no_mangle)]
@@ -563,19 +509,10 @@ pub unsafe extern "C" fn ns_attr_to_js(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_attr_owner(value: JSValue) -> *mut NsNode {
-    let opaque = unsafe { ns_attr_opaque(value) }.cast::<RefCell<AttrState>>();
-    let Some(state) = (unsafe { opaque.as_ref() }) else {
-        return ptr::null_mut();
-    };
+    let state = unsafe { quickjs::with_raw(value, crate::class::attr_state) };
     state
-        .borrow()
-        .owner
+        .and_then(|state| state.borrow().owner)
         .map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_state_release(state: *mut c_void) {
-    unsafe { release_state(state) };
 }
 
 #[unsafe(no_mangle)]
