@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The leftover element and window bindings (the window Event constructor,
+  form.elements with RadioNodeList, input.files, click activation behaviour,
+  Element.animate(), canvas.toBlob(), replaceWholeText(), structuredClone(),
+  the <body> window handlers, the window's compatibility members and
+  IdleDeadline) moved from js.c to Rust.
 * Iframe document loading and the frame script runner (the fetch with CSP
   and framing checks, document building, frame realm scripts, frame globals,
   the referrer and the cross-origin check) moved from js.c to Rust (rust/js-
