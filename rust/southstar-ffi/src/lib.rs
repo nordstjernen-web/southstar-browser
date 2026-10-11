@@ -58,6 +58,7 @@ pub use southstar_js_html;
 pub use southstar_js_images;
 pub use southstar_js_input;
 pub use southstar_js_intl;
+pub use southstar_js_lifecycle;
 pub use southstar_js_loader;
 pub use southstar_js_media;
 pub use southstar_js_net;

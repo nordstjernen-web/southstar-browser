@@ -108,9 +108,6 @@ struct ns_js {
     gboolean      mutated;
     GMainContext *main_context;
     ns_worker_host *worker_host;
-    GArray       *raf_pending;
-    int           next_raf_id;
-    gint64        raf_last_us;
     ns_node      *raf_frame_ctx;
     JSValue       pristine_promise;
     GHashTable   *style_table;
@@ -145,19 +142,11 @@ struct ns_js {
                                         navigators the Navigator getters
                                         accept */
     guint         message_task_source;
-    guint         lifecycle_source;
-    GArray       *lifecycle_tasks;
-    ns_node      *lifecycle_doc;
-    char         *lifecycle_origin;
-    int           lifecycle_phase;
-    gint64        lifecycle_start_us;
     gint64        eval_deadline_us;
     gint64        js_monitor_deadline_us;
     gboolean      halted;
     gboolean      in_pump;
     gboolean      in_scroll_dispatch;
-    GPtrArray    *pending_scrollend;
-    gboolean      pending_scrollend_doc;
     int           eval_depth;
     GHashTable   *iframe_globals;
     int           iframe_load_depth;
@@ -166,9 +155,6 @@ struct ns_js {
     int           dispatch_depth;
     int           callback_depth;
     guint         observer_tick_source;
-    guint         raf_tick_source;
-    gint64        raf_host_us;
-    gboolean      raf_host_driven;
     JSValue       iframe_doc;
     int           iframe_doc_set;
     ns_csp *csp;
@@ -2049,5 +2035,43 @@ void     ns_js_note_user_activation(ns_js *js);
 void     ns_js_input_install_wpt(JSContext *ctx, JSValueConst global);
 void     ns_js_input_teardown(ns_js *js);
 gboolean ns_js_wpt_hooks_enabled(const ns_js *js);
+
+/* requestAnimationFrame and the animation-frame tick, scrollend, animation
+ * and media load events and the page lifecycle tick (rust/js-lifecycle). */
+typedef struct ns_raf_scope ns_raf_scope;
+struct ns_video;
+JSValue  ns_media_request_video_frame_callback(JSContext *ctx,
+                                               JSValueConst this_val,
+                                               int argc, JSValueConst *argv);
+void     ns_js_queue_scrollend_document(ns_js *js);
+void     ns_js_purge_frame_rafs(ns_js *js, const ns_node *frame);
+void     ns_js_purge_media_rafs(ns_js *js, const ns_node *root);
+guint    ns_js_raf_count(const ns_js *js);
+void     ns_js_raf_set_host_driven(ns_js *js);
+void     ns_js_lifecycle_clear(ns_js *js);
+void     ns_js_lifecycle_start(ns_js *js, ns_node *doc, GArray *tasks,
+                               const char *origin, gint64 start_us);
+GArray  *ns_js_lifecycle_tasks(const ns_js *js);
+void     ns_lifecycle_reset(ns_js *js);
+void     ns_lifecycle_teardown(ns_js *js);
+ns_raf_scope *ns_js_raf_scope_enter(ns_js *js, JSContext *ctx, ns_node *frame);
+JSContext *ns_js_raf_scope_context(const ns_raf_scope *scope);
+void     ns_js_raf_scope_leave(ns_raf_scope *scope);
+void     ns_js_callback_depth_add(ns_js *js, int delta);
+gboolean ns_js_mutated(const ns_js *js);
+void     ns_js_forget_frame_context(ns_js *js, const ns_node *frame);
+void     ns_js_process_pending_iframes(ns_js *js);
+gboolean ns_js_image_settled(const ns_image *img, gboolean *failed);
+gboolean ns_js_video_take_load_events(struct ns_video *video);
+gboolean ns_js_filereader_pending(const ns_js *js);
+gboolean ns_js_observer_tick_pending(const ns_js *js);
+gboolean ns_js_message_tasks_pending(const ns_js *js);
+int      ns_js_iframe_load_depth(const ns_js *js);
+gboolean ns_js_load_delayed(ns_js *js);
+void     ns_js_set_ready_state(ns_js *js, int state);
+void     ns_js_mark_navigation(ns_js *js, const char *legacy_key);
+void     ns_js_run_content_scripts(ns_js *js, const char *url,
+                                   gboolean document_start);
+gboolean ns_js_profile_enabled(void);
 
 #endif

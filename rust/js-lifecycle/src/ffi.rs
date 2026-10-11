@@ -1,0 +1,616 @@
+//! Southstar — the C ABI of the animation-frame and lifecycle ticks as declared in src/js.h and src/js_internal.h, and the js.c calls they make.
+//! Copyright 2026 Andreas Røsdal
+//! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ptr;
+use std::ffi::CString;
+
+use southstar_dom::{Node, NsNode};
+use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_js_engine::quickjs::{self, JSContext, JSValue};
+use southstar_js_engine::{Scope, Value};
+use southstar_layout::{BoxRef, NsBox};
+
+use crate::{events, frames, lifecycle, scrollend};
+
+#[repr(C)]
+pub(crate) struct NsJs {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+struct RafScope {
+    _private: [u8; 0],
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Js(*mut NsJs);
+
+impl Js {
+    pub fn from_data(data: *mut c_void) -> Js {
+        Js(data.cast())
+    }
+
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    pub fn key(self) -> usize {
+        self.0 as usize
+    }
+
+    pub fn halted(self) -> bool {
+        unsafe { ns_js_halted(self.0) != 0 }
+    }
+
+    pub fn in_pump(self) -> bool {
+        unsafe { ns_js_in_pump(self.0) != 0 }
+    }
+
+    pub fn eval_depth(self) -> c_int {
+        unsafe { ns_js_eval_depth(self.0) }
+    }
+
+    pub fn callback_depth(self) -> c_int {
+        unsafe { ns_js_callback_depth(self.0) }
+    }
+
+    pub fn dispatch_depth(self) -> c_int {
+        unsafe { ns_js_dispatch_depth(self.0) }
+    }
+
+    pub fn iframe_load_depth(self) -> c_int {
+        unsafe { ns_js_iframe_load_depth(self.0) }
+    }
+
+    pub fn is_worker(self) -> bool {
+        unsafe { ns_js_is_worker(self.0) != 0 }
+    }
+
+    pub fn ctx(self) -> *mut JSContext {
+        unsafe { ns_js_main_context(self.0) }
+    }
+
+    pub fn has_ctx(self) -> bool {
+        !self.ctx().is_null()
+    }
+
+    pub fn mutated(self) -> bool {
+        unsafe { ns_js_mutated(self.0) != 0 }
+    }
+
+    pub fn current_document(self) -> *const NsNode {
+        unsafe { ns_js_current_document(self.0) }
+    }
+
+    pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
+        let ctx = self.ctx();
+        if ctx.is_null() {
+            return None;
+        }
+        Some(unsafe { quickjs::with_context(ctx, f) })
+    }
+
+    pub fn log(self, line: &str) {
+        if let Ok(line) = CString::new(line.replace('\0', "")) {
+            unsafe { ns_js_log_line(self.0, line.as_ptr()) };
+        }
+    }
+
+    pub fn context_frame(self, scope: &Scope<'_>) -> *mut NsNode {
+        unsafe { ns_js_context_frame(self.0, quickjs::raw_context(scope)) }
+    }
+
+    pub fn budget_enter(self) -> i64 {
+        unsafe { ns_js_budget_enter(self.0) }
+    }
+
+    pub fn budget_leave(self, saved: i64) {
+        unsafe { ns_js_budget_leave(self.0, saved) };
+    }
+
+    pub fn callback_depth_add(self, delta: c_int) {
+        unsafe { ns_js_callback_depth_add(self.0, delta) };
+    }
+
+    pub fn drain_microtasks(self) {
+        unsafe { ns_drain_microtasks(self.0) };
+    }
+
+    pub fn drain_mutations(self) {
+        unsafe { ns_drain_mutations(self.0) };
+    }
+
+    pub fn flush_ready_images(self) {
+        unsafe { ns_js_flush_ready_images(self.0) };
+    }
+
+    pub fn flush_autofocus(self) {
+        unsafe { ns_js_flush_autofocus(self.0) };
+    }
+
+    pub fn promote_deferred_iframes(self) {
+        unsafe { ns_js_promote_deferred_iframes(self.0) };
+    }
+
+    pub fn process_pending_iframes(self) {
+        unsafe { ns_js_process_pending_iframes(self.0) };
+    }
+
+    pub fn forget_frame_context(self, frame: *const NsNode) {
+        unsafe { ns_js_forget_frame_context(self.0, frame) };
+    }
+
+    pub fn node_in_page(self, node: *const NsNode) -> bool {
+        unsafe { ns_js_node_in_page(self.0, node) != 0 }
+    }
+
+    pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
+        unsafe {
+            ns_js_dispatch_built_event(
+                self.0,
+                target,
+                kind.as_ptr(),
+                quickjs::into_raw(event),
+                ptr::null_mut(),
+            )
+        };
+    }
+
+    pub fn dispatch_window_only(self, document: *const NsNode, kind: &CStr, event: Value) {
+        unsafe {
+            ns_js_dispatch_window_only_event(
+                self.0,
+                document,
+                kind.as_ptr(),
+                quickjs::into_raw(event),
+                ptr::null_mut(),
+            )
+        };
+    }
+
+    pub fn dispatch(self, target: *const NsNode, kind: &CStr) {
+        unsafe { ns_js_dispatch_event(self.0, target, kind.as_ptr(), ptr::null_mut()) };
+    }
+
+    pub fn fire_img_load_once(self, node: *mut NsNode, failed: bool) {
+        unsafe { ns_js_fire_img_load_once(self.0, node, glib::boolean(failed)) };
+    }
+
+    pub fn time_origin_ms(self, realm: *mut JSContext, now_us: i64) -> f64 {
+        unsafe { ns_perf_relative_ms(now_us, ns_js_time_origin_us(self.0, realm.cast())) }
+    }
+
+    pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
+        unsafe { ns_js_attach_timeout(self.0, ms, func, self.0.cast()) }
+    }
+
+    pub fn source_remove(self, id: c_uint) {
+        unsafe { ns_js_source_remove(self.0, id) };
+    }
+
+    pub fn timeout_add(self, ms: c_uint, func: SourceFunc) -> c_uint {
+        unsafe { g_timeout_add(ms, func, self.0.cast()) }
+    }
+
+    pub fn set_ready_state(self, state: c_int) {
+        unsafe { ns_js_set_ready_state(self.0, state) };
+    }
+
+    pub fn mark_navigation(self, key: &CStr) {
+        unsafe { ns_js_mark_navigation(self.0, key.as_ptr()) };
+    }
+
+    pub fn run_next_script_schedule(
+        self,
+        tasks: *mut GArray,
+        schedule: c_int,
+        origin: &CStr,
+    ) -> bool {
+        unsafe { ns_js_run_next_script_schedule(self.0, tasks, schedule, origin.as_ptr()) != 0 }
+    }
+
+    pub fn drain_load_event_scripts(self) {
+        unsafe { ns_js_drain_load_event_scripts(self.0) };
+    }
+
+    pub fn schedule_pending_script_drain(self) {
+        unsafe { ns_js_schedule_pending_script_drain(self.0) };
+    }
+
+    pub fn upgrade_custom_elements(self, root: *mut NsNode) {
+        unsafe { ns_ce_upgrade_subtree_all(self.0, root) };
+    }
+
+    pub fn fire_page_transition(self, kind: &CStr) {
+        unsafe { ns_js_fire_page_transition(self.0, kind.as_ptr(), glib::FALSE) };
+    }
+
+    pub fn run_content_scripts(self, url: Option<&CStr>) {
+        unsafe {
+            ns_js_run_content_scripts(self.0, url.map_or(ptr::null(), CStr::as_ptr), glib::FALSE)
+        };
+    }
+
+    pub fn load_blocked(self) -> bool {
+        unsafe {
+            ns_js_image_loads_pending(self.0) != 0
+                || ns_js_pending_iframe_count(self.0) > 0
+                || ns_js_has_pending_script_roots(self.0) != 0
+                || ns_js_load_delayed(self.0) != 0
+        }
+    }
+
+    pub fn has_pending_work(self) -> bool {
+        unsafe {
+            ns_services_timers_pending(self.0, glib::FALSE) != 0
+                || frames::has_pending(self)
+                || ns_js_net_pending_fetches(self.0) > 0
+                || ns_js_net_pending_xhrs(self.0) > 0
+                || ns_js_net_pending_sockets(self.0) > 0
+                || ns_js_filereader_pending(self.0) != 0
+                || ns_js_pending_iframe_count(self.0) > 0
+                || ns_mutation_drain_pending(self.0) != 0
+                || ns_js_observer_tick_pending(self.0) != 0
+                || ns_js_async_scripts_pending(self.0) != 0
+                || ns_ce_has_pending(self.0) != 0
+                || ns_workers_pending(self.0) != 0
+        }
+    }
+
+    pub fn needs_tick(self) -> bool {
+        self.has_pending_work()
+            || unsafe {
+                ns_services_timers_pending(self.0, glib::TRUE) != 0
+                    || ns_js_message_tasks_pending(self.0) != 0
+                    || ns_js_image_loads_pending(self.0) != 0
+            }
+    }
+}
+
+pub(crate) type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+
+pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
+pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
+
+unsafe extern "C" {
+    fn ns_js_halted(js: *const NsJs) -> GBoolean;
+    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
+    fn ns_js_eval_depth(js: *const NsJs) -> c_int;
+    fn ns_js_callback_depth(js: *const NsJs) -> c_int;
+    fn ns_js_dispatch_depth(js: *const NsJs) -> c_int;
+    fn ns_js_iframe_load_depth(js: *const NsJs) -> c_int;
+    fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
+    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_mutated(js: *const NsJs) -> GBoolean;
+    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
+    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
+    fn ns_js_context_frame(js: *mut NsJs, ctx: *mut JSContext) -> *mut NsNode;
+    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
+    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
+    fn ns_js_callback_depth_add(js: *mut NsJs, delta: c_int);
+    fn ns_drain_microtasks(js: *mut NsJs);
+    fn ns_drain_mutations(js: *mut NsJs);
+    fn ns_js_flush_ready_images(js: *mut NsJs);
+    fn ns_js_flush_autofocus(js: *mut NsJs);
+    fn ns_js_promote_deferred_iframes(js: *mut NsJs);
+    fn ns_js_process_pending_iframes(js: *mut NsJs);
+    fn ns_js_forget_frame_context(js: *mut NsJs, frame: *const NsNode);
+    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
+    fn ns_js_raf_scope_enter(
+        js: *mut NsJs,
+        ctx: *mut JSContext,
+        frame: *mut NsNode,
+    ) -> *mut RafScope;
+    fn ns_js_raf_scope_context(scope: *const RafScope) -> *mut JSContext;
+    fn ns_js_raf_scope_leave(scope: *mut RafScope);
+    fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_void) -> i64;
+    fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
+    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
+    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
+    fn ns_unwrap_element(value: JSValue) -> *const NsNode;
+    fn ns_js_dispatch_built_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: *const c_char,
+        event: JSValue,
+        default_prevented: *mut GBoolean,
+    ) -> GBoolean;
+    fn ns_js_dispatch_window_only_event(
+        js: *mut NsJs,
+        target_doc: *const NsNode,
+        kind: *const c_char,
+        event: JSValue,
+        default_prevented: *mut GBoolean,
+    );
+    fn ns_js_dispatch_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: *const c_char,
+        default_prevented: *mut GBoolean,
+    ) -> GBoolean;
+    fn ns_js_fire_img_load_once(js: *mut NsJs, node: *mut NsNode, failed: GBoolean);
+    fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
+    fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
+    fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
+    fn ns_js_attach_timeout(
+        js: *mut NsJs,
+        ms: c_uint,
+        func: SourceFunc,
+        data: *mut c_void,
+    ) -> c_uint;
+    fn ns_js_source_remove(js: *mut NsJs, id: c_uint);
+    fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
+    fn g_source_remove(id: c_uint) -> GBoolean;
+    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
+    fn g_get_monotonic_time() -> i64;
+    fn ns_engine_in_blocking_fetch() -> GBoolean;
+    fn ns_js_set_ready_state(js: *mut NsJs, state: c_int);
+    fn ns_js_mark_navigation(js: *mut NsJs, key: *const c_char);
+    fn ns_js_run_next_script_schedule(
+        js: *mut NsJs,
+        tasks: *mut GArray,
+        schedule: c_int,
+        origin: *const c_char,
+    ) -> GBoolean;
+    fn ns_js_drain_load_event_scripts(js: *mut NsJs);
+    fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
+    fn ns_js_has_pending_script_roots(js: *const NsJs) -> GBoolean;
+    fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
+    fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
+    fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
+    fn ns_js_profile_enabled() -> GBoolean;
+    fn ns_js_image_loads_pending(js: *const NsJs) -> GBoolean;
+    fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
+    fn ns_js_load_delayed(js: *mut NsJs) -> GBoolean;
+    fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
+    fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
+    fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
+    fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
+    fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
+    fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
+    fn ns_js_observer_tick_pending(js: *const NsJs) -> GBoolean;
+    fn ns_js_async_scripts_pending(js: *const NsJs) -> GBoolean;
+    fn ns_ce_has_pending(js: *const NsJs) -> GBoolean;
+    fn ns_workers_pending(js: *const NsJs) -> GBoolean;
+    fn ns_js_message_tasks_pending(js: *const NsJs) -> GBoolean;
+}
+
+pub(crate) type AnimEventCb = unsafe extern "C" fn(
+    node: *const NsNode,
+    kind: *const c_char,
+    name: *const c_char,
+    elapsed_ms: f64,
+    user: *mut c_void,
+);
+
+pub(crate) fn monotonic_us() -> i64 {
+    unsafe { g_get_monotonic_time() }
+}
+
+pub(crate) fn in_blocking_fetch() -> bool {
+    unsafe { ns_engine_in_blocking_fetch() != 0 }
+}
+
+pub(crate) fn profile_enabled() -> bool {
+    unsafe { ns_js_profile_enabled() != 0 }
+}
+
+pub(crate) fn source_remove_default(id: c_uint) {
+    unsafe { g_source_remove(id) };
+}
+
+pub(crate) fn array_free(tasks: *mut GArray) {
+    if !tasks.is_null() {
+        unsafe { g_array_free(tasks, glib::TRUE) };
+    }
+}
+
+pub(crate) fn with_context<R>(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+    unsafe { quickjs::with_context(ctx, f) }
+}
+
+pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
+    Js(quickjs::context_opaque(scope).cast())
+}
+
+pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: *const NsNode) -> Value {
+    let raw = unsafe { ns_make_event(quickjs::raw_context(scope), kind.as_ptr(), target) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
+    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
+    unsafe { ns_unwrap_element(quickjs::raw(value)) }.cast_mut()
+}
+
+pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
+    let mut failed = glib::FALSE;
+    (unsafe { ns_js_image_settled(image, &mut failed) } != 0).then_some(failed != 0)
+}
+
+pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {
+    unsafe { ns_js_video_take_load_events(video) != 0 }
+}
+
+pub(crate) fn drain_anim_events(js: Js, anim: *mut c_void, cb: AnimEventCb) {
+    unsafe { ns_anim_drain_events(anim, Some(cb), js.0.cast()) };
+}
+
+pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {
+    unsafe { Node::from_ptr(node) }
+}
+
+pub(crate) fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
+    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
+}
+
+pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
+    unsafe { BoxRef::from_ptr(b) }
+}
+
+pub(crate) struct CallbackScope(*mut RafScope);
+
+impl CallbackScope {
+    pub fn enter(js: Js, realm: *mut JSContext, frame: *mut NsNode) -> Option<CallbackScope> {
+        let scope = unsafe { ns_js_raf_scope_enter(js.0, realm, frame) };
+        (!scope.is_null()).then_some(CallbackScope(scope))
+    }
+
+    pub fn context(&self) -> *mut JSContext {
+        unsafe { ns_js_raf_scope_context(self.0) }
+    }
+
+    pub fn run<R>(&self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
+        unsafe { quickjs::with_context(self.context(), f) }
+    }
+
+    pub fn leave(self) {
+        unsafe { ns_js_raf_scope_leave(self.0) };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_requestAnimationFrame(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, frames::request_animation_frame) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_window_cancelAnimationFrame(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, frames::cancel_animation_frame) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_media_request_video_frame_callback(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe {
+        quickjs::call_native(
+            ctx,
+            this_val,
+            argc,
+            argv,
+            frames::request_video_frame_callback,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_run_animation_frame(js: *mut NsJs) -> GBoolean {
+    let js = Js(js);
+    if js.is_null() {
+        return glib::FALSE;
+    }
+    glib::boolean(frames::run(js))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_has_pending_animation_frame(js: *const NsJs) -> GBoolean {
+    glib::boolean(frames::has_pending(Js(js.cast_mut())))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_has_pending_work(js: *const NsJs) -> GBoolean {
+    let js = Js(js.cast_mut());
+    glib::boolean(!js.is_null() && js.has_pending_work())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_needs_tick(js: *const NsJs) -> GBoolean {
+    let js = Js(js.cast_mut());
+    glib::boolean(!js.is_null() && js.needs_tick())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_raf_count(js: *const NsJs) -> c_uint {
+    frames::count(Js(js.cast_mut())) as c_uint
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_raf_set_host_driven(js: *mut NsJs) {
+    frames::set_host_driven(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64 {
+    frames::idle_frame_end(Js(js.cast_mut()), now, end)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode) {
+    frames::purge_frame(Js(js), frame);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode) {
+    frames::purge_media(Js(js), root);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_queue_scrollend(js: *mut NsJs, el: *const NsNode) {
+    scrollend::queue(Js(js), el);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_queue_scrollend_document(js: *mut NsJs) {
+    scrollend::queue_document(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_dispatch_anim_events(js: *mut NsJs, anim: *mut c_void) {
+    events::dispatch_anim_events(Js(js), anim);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_fire_media_load_events(js: *mut NsJs, layout: *const NsBox) {
+    events::fire_media_load_events(Js(js), layout);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_lifecycle_clear(js: *mut NsJs) {
+    lifecycle::clear(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_lifecycle_start(
+    js: *mut NsJs,
+    doc: *mut NsNode,
+    tasks: *mut GArray,
+    origin: *const c_char,
+    start_us: i64,
+) {
+    lifecycle::start(Js(js), doc, tasks, text(origin), start_us);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray {
+    lifecycle::tasks(Js(js.cast_mut()))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_lifecycle_reset(js: *mut NsJs) {
+    crate::reset(Js(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_lifecycle_teardown(js: *mut NsJs) {
+    crate::teardown(Js(js));
+}

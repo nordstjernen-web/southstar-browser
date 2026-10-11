@@ -1,0 +1,94 @@
+//! Southstar — the scrollend events queued by scrolling and fired at the next animation frame.
+//! Copyright 2026 Andreas Røsdal
+//! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+use southstar_dom::NsNode;
+use southstar_js_engine::{Scope, Value};
+
+use crate::ffi::{self, Js};
+use crate::{Page, page, page_or_new};
+
+#[derive(Default)]
+pub(crate) struct Scrollend {
+    targets: Vec<*const NsNode>,
+    document: bool,
+}
+
+pub(crate) fn clear(page: &Page) {
+    let mut scrollend = page.scrollend.borrow_mut();
+    scrollend.targets = Vec::new();
+    scrollend.document = false;
+}
+
+pub(crate) fn queue(js: Js, el: *const NsNode) {
+    if js.is_null() || el.is_null() {
+        return;
+    }
+    let page = page_or_new(js);
+    let mut scrollend = page.scrollend.borrow_mut();
+    if !scrollend.targets.contains(&el) {
+        scrollend.targets.push(el);
+    }
+}
+
+pub(crate) fn queue_document(js: Js) {
+    if !js.is_null() {
+        page_or_new(js).scrollend.borrow_mut().document = true;
+    }
+}
+
+fn not_cancelable(scope: &mut Scope<'_>, event: &Value) {
+    let _ = scope.set(event, "cancelable", Value::boolean(false));
+}
+
+pub(crate) fn flush(js: Js) {
+    let ctx = js.ctx();
+    if ctx.is_null() {
+        return;
+    }
+    let Some(page) = page(js) else {
+        return;
+    };
+    let (targets, document) = {
+        let mut scrollend = page.scrollend.borrow_mut();
+        if !scrollend.document && scrollend.targets.is_empty() {
+            return;
+        }
+        (
+            core::mem::take(&mut scrollend.targets),
+            core::mem::take(&mut scrollend.document),
+        )
+    };
+    for el in targets {
+        if !js.node_in_page(el) {
+            continue;
+        }
+        let event = ffi::with_context(ctx, |scope| {
+            let event = ffi::make_event(scope, c"scrollend", el);
+            let _ = scope.set(&event, "bubbles", Value::boolean(false));
+            not_cancelable(scope, &event);
+            event
+        });
+        js.dispatch_built(el, c"scrollend", event);
+    }
+    if !document {
+        return;
+    }
+    let event = ffi::with_context(ctx, |scope| {
+        let global = scope.global();
+        let event = ffi::make_event(scope, c"scrollend", core::ptr::null());
+        not_cancelable(scope, &event);
+        let _ = scope.set(&event, "target", global);
+        event
+    });
+    js.dispatch_window_only(js.current_document(), c"scrollend", event);
+    let doc = js.current_document();
+    if !doc.is_null() {
+        let event = ffi::with_context(ctx, |scope| {
+            let event = ffi::make_event(scope, c"scrollend", doc);
+            not_cancelable(scope, &event);
+            event
+        });
+        js.dispatch_built(doc, c"scrollend", event);
+    }
+}
