@@ -90,7 +90,7 @@ southstar_rust_lib = custom_target(
     cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
     meson.current_build_dir() / 'cargo-target',
     ns_is_release ? 'release' : 'dev',
-    'southstar-ffi', '@OUTPUT@', '@DEPFILE@',
+    'southstar-static', '@OUTPUT@', '@DEPFILE@',
   ] + southstar_rust_features,
   env: southstar_rust_env,
   console: true,

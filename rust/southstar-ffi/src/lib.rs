@@ -1,4 +1,4 @@
-//! Southstar — the one static library meson links into the C targets, gathering every ported module.
+//! Southstar — every ported module, gathered for the static libraries meson links into the C targets and the shell.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

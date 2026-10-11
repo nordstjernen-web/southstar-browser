@@ -4,6 +4,10 @@
 
 use core::ffi::{c_char, c_double, c_float, c_int, c_uint, c_void};
 
+mod widgets;
+
+pub use widgets::*;
+
 pub type GType = usize;
 pub type GBoolean = c_int;
 pub type GDestroyNotify = Option<unsafe extern "C" fn(data: *mut c_void)>;

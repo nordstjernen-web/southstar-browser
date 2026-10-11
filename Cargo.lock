@@ -2649,6 +2649,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-static"
+version = "0.9.9"
+dependencies = [
+ "southstar-ffi",
+]
+
+[[package]]
 name = "southstar-style"
 version = "0.9.9"
 dependencies = [
