@@ -85,6 +85,8 @@ const PORTED: &[&str] = &[
     "ws.c",
     "webcrypto.c",
     "webgl.c",
+    #[cfg(feature = "webgpu")]
+    "webgpu.c",
     "xml.c",
     #[cfg(feature = "woff2")]
     "woff2.c",

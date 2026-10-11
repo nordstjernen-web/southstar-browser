@@ -47,10 +47,6 @@ if have_avif
   southstar_engine_sources += files('image_avif.c')
 endif
 
-if have_webgpu
-  southstar_engine_sources += files('webgpu.c')
-endif
-
 southstar_win_resources = []
 if host_machine.system() == 'windows'
   windows = import('windows')
@@ -126,10 +122,6 @@ ns_sdl_deps = []
 if sdl2_dep.found()
   ns_sdl_deps += [sdl2_dep]
   ns_lib_c_args += ['-DNS_HAVE_SDL']
-endif
-
-if have_webgpu
-  southstar_c_deps += [webgpu_dep]
 endif
 
 southstar_deps = [southstar_rust_dep] + southstar_c_deps

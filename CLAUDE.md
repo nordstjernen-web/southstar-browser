@@ -25,7 +25,7 @@ Update Changelog.md
   `WebGL2RenderingContext` interface objects also carry the GL enum
   constants so feature code resolves them without a live context.
 - **WebGPU** (`navigator.gpu`) is an **experimental** feature that layers
-  `src/webgpu.c` over the external
+  `rust/webgpu` over the external
   [wgpu-native](https://github.com/gfx-rs/wgpu-native) library (the
   `webgpu.h`/`wgpu.h` headers are vendored in-tree under
   `third_party/wgpu-native/`). The `webgpu` meson feature is `auto`: it is
@@ -446,7 +446,7 @@ don't add `meson test` targets.
 - Don't add AI-style web-API surface area, even as stubs. WebGL is a
   deliberate exception — extend `src/webgl.c`, don't re-architect it.
 - WebGPU is an experimental exception layered over external wgpu-native
-  (`src/webgpu.c`). The `webgpu` feature is `auto`: built
+  (`rust/webgpu`). The `webgpu` feature is `auto`: built
   only when wgpu-native is actually present, so a machine without it still
   gets a build with no WebGPU surface or dependency. Keep it behind the
   `--enable-webgpu` / `NS_WEBGPU_ALLOW` runtime gate, and don't make

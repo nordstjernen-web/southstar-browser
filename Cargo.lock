@@ -1783,6 +1783,7 @@ dependencies = [
  "southstar-webaudio",
  "southstar-webcrypto",
  "southstar-webgl",
+ "southstar-webgpu",
  "southstar-websocket",
  "southstar-woff2",
  "southstar-xml",
@@ -2723,6 +2724,14 @@ dependencies = [
  "southstar-config",
  "southstar-dom",
  "southstar-glib",
+ "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-webgpu"
+version = "0.9.9"
+dependencies = [
+ "southstar-dom",
  "southstar-js-engine",
 ]
 

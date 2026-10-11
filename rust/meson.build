@@ -73,6 +73,7 @@ endif
 southstar_rust_link_deps += http_backend_deps
 if have_webgpu
   southstar_rust_features += ['webgpu']
+  southstar_rust_link_deps += [webgpu_dep]
 endif
 if have_wasm
   southstar_rust_features += ['wasm']

@@ -121,6 +121,8 @@ pub use southstar_watchdog;
 pub use southstar_webaudio;
 pub use southstar_webcrypto;
 pub use southstar_webgl;
+#[cfg(feature = "webgpu")]
+pub use southstar_webgpu;
 pub use southstar_websocket;
 #[cfg(feature = "woff2")]
 pub use southstar_woff2;

@@ -259,7 +259,7 @@ elif have_egl
   add_project_arguments('-DNS_HAVE_EGL=1', language: 'c')
 endif
 
-# WebGPU (navigator.gpu) layers src/webgpu.c over the external wgpu-native
+# WebGPU (navigator.gpu) layers rust/webgpu over the external wgpu-native
 # library; the webgpu.h/wgpu.h headers are vendored in-tree (pinned API) while
 # the library is located via pkg-config (wgpu_native) or an extracted release
 # passed with -Dwgpu_native_root. The feature is 'auto': it is built whenever

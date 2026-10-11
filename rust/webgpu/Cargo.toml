@@ -1,0 +1,15 @@
+[package]
+name = "southstar-webgpu"
+description = "Experimental WebGPU: navigator.gpu over the external wgpu-native library, ported from webgpu.c"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+
+[lints]
+workspace = true

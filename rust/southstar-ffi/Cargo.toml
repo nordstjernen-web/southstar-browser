@@ -117,6 +117,7 @@ southstar-svg = { path = "../svg" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-webcrypto = { path = "../webcrypto" }
 southstar-webgl = { path = "../webgl" }
+southstar-webgpu = { path = "../webgpu", optional = true }
 southstar-texture = { path = "../texture" }
 southstar-video = { path = "../video" }
 southstar-watchdog = { path = "../watchdog" }
@@ -152,7 +153,7 @@ http-zstd = ["southstar-net/http-zstd"]
 libav = ["southstar-headless/libav", "southstar-net/libav", "southstar-video/libav"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 wasm = ["dep:southstar-js-wasm", "southstar-js-runtime/wasm"]
-webgpu = ["southstar-canvas/webgpu", "southstar-js-runtime/webgpu", "southstar-net/webgpu"]
+webgpu = ["dep:southstar-webgpu", "southstar-canvas/webgpu", "southstar-js-runtime/webgpu", "southstar-net/webgpu"]
 woff2 = ["dep:southstar-woff2", "southstar-font/woff2"]
 
 [lints]
