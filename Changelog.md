@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* CompressionStream and DecompressionStream's zlib codec moved from js.c to
+  Rust (rust/js-compression); the performance object and its prototype moved
+  to rust/js-perf, the StaticRange constructor to rust/js-traversal and the
+  SharedArrayBuffer hiding to rust/js-realm.
 * The box-tree queries (find-in-page match counting and navigation, CSS
   scroll snapping for scrollers and the viewport, paint bounds and subtree
   extents, inline element rectangles, image, video and frame viewport
