@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The vendored Wuffs image decoders (~97k lines of C) are replaced with
+  pure-Rust ones: the png crate with APNG, gif, zune-jpeg and an in-tree BMP
+  decoder in rust/image-decoders. PNG, GIF and BMP pixels are unchanged;
+  JPEG differs by at most a few levels of IDCT rounding.
 * Inline-run construction (the inline collector, white-space collapsing,
   form-control and pseudo-element text, first-letter and decoration styling,
   and atomic-inline detection) moved from layout.c to Rust (rust/layout-
