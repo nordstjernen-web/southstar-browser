@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* Inline-run construction (the inline collector, white-space collapsing,
+  form-control and pseudo-element text, first-letter and decoration styling,
+  and atomic-inline detection) moved from layout.c to Rust (rust/layout-
+  build), with identical layout.
 * The dataset, live collection (HTMLCollection, NodeList, NamedNodeMap),
   Attr and Event classes moved off js.c onto the engine-neutral host classes
   (rust/js-attrs, rust/js-collections, rust/js-events), which gained a host-
