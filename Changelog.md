@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Block layout (the per-box dispatch, block widths and auto margins, margin
+  collapsing, float placement and clearance, multicol columns, heights,
+  fieldset legends and legacy alignment) moved from layout.c to Rust
+  (rust/layout-block), with identical layout.
 * The leftover element and window bindings (the window Event constructor,
   form.elements with RadioNodeList, input.files, click activation behaviour,
   Element.animate(), canvas.toBlob(), replaceWholeText(), structuredClone(),
