@@ -3224,28 +3224,6 @@ ns_bind_fns(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
         ns_bind_fn(ctx, obj, defs[i].name, fn, defs[i].argc);
 }
 
-void
-ns_install_namespace_object(JSContext *ctx, JSValueConst global,
-                            const char *name, JSValue obj,
-                            const char *tag)
-{
-    JSValue proto = JS_NewObject(ctx);
-    JS_SetPrototype(ctx, obj, proto);
-    JS_FreeValue(ctx, proto);
-    JSValue sym = JS_GetPropertyStr(ctx, global, "Symbol");
-    JSValue tag_sym = JS_GetPropertyStr(ctx, sym, "toStringTag");
-    JSAtom tag_atom = JS_ValueToAtom(ctx, tag_sym);
-    if (tag_atom != JS_ATOM_NULL) {
-        JS_DefinePropertyValue(ctx, obj, tag_atom, JS_NewString(ctx, tag),
-            JS_PROP_CONFIGURABLE);
-        JS_FreeAtom(ctx, tag_atom);
-    }
-    JS_FreeValue(ctx, tag_sym);
-    JS_FreeValue(ctx, sym);
-    JS_DefinePropertyValueStr(ctx, global, name, obj,
-        JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-}
-
 static void
 ns_bind_ctors(JSContext *ctx, JSValueConst obj, JSCFunction *fn,
               const ns_fn_def *defs, gsize n)
@@ -3716,64 +3694,6 @@ ns_js_add_engine_private_names(JSContext *ctx)
     ns_net_add_private_names(ctx);
 }
 
-
-/* The global object and the prototypes it inherits are immutable prototype
- * exotic objects for page scripts (WebIDL [Global]). */
-void
-ns_js_lock_global_prototypes(JSContext *ctx)
-{
-    JSValue o = JS_GetGlobalObject(ctx);
-    for (int depth = 0; JS_IsObject(o) && depth < 8; depth++) {
-        JS_SetImmutablePrototype(ctx, o);
-        JSValue next = JS_GetPrototype(ctx, o);
-        JS_FreeValue(ctx, o);
-        o = next;
-    }
-    JS_FreeValue(ctx, o);
-}
-
-/* The window's prototype chain as WebIDL has a [Global] interface's:
- * Window.prototype > WindowProperties > EventTarget.prototype; Window's
- * members are the window's own, so Window.prototype keeps only its tag, and
- * EventTarget's methods serve windows through the registry et_src keeps. */
-static const char ns_window_global_shape_src[] =
-    "(function(G){"
-    "  var gp = Object.getPrototypeOf, sp = Object.setPrototypeOf,"
-    "      def = Object.defineProperty, gopd = Object.getOwnPropertyDescriptor;"
-    "  var ETC = G.EventTarget, WC = G.Window;"
-    "  if (typeof ETC !== 'function' || typeof WC !== 'function') return;"
-    "  var ET = ETC.prototype, W = WC.prototype, named = gp(W);"
-    "  if (named === Object.prototype || named === null) {"
-    "    named = Object.create(ET);"
-    "    try { sp(W, named); } catch (e) {}"
-    "  } else if (named !== ET) {"
-    "    try { sp(named, ET); } catch (e) {}"
-    "  }"
-    "  if (named !== ET)"
-    "    try { def(named, Symbol.toStringTag, { value: 'WindowProperties', configurable: true }); } catch (e) {}"
-    "  Object.getOwnPropertyNames(W).forEach(function(k){"
-    "    if (k !== 'constructor') try { delete W[k]; } catch (e) {} });"
-    "  Object.getOwnPropertySymbols(W).forEach(function(k){ try { delete W[k]; } catch (e) {} });"
-    "  def(W, Symbol.toStringTag, { value: 'Window', configurable: true });"
-    "  try { delete G[Symbol.toStringTag]; } catch (e) {}"
-    "  var adopt = G.__ndAdoptWindowEventOps;"
-    "  if (typeof adopt === 'function') adopt(G);"
-    "  [['addEventListener', 2], ['removeEventListener', 2], ['dispatchEvent', 1]].forEach(function(m){"
-    "    var d = gopd(ET, m[0]);"
-    "    if (d && typeof d.value === 'function')"
-    "      try { def(d.value, 'length', { value: m[1], configurable: true }); } catch (e) {} });"
-    "})(globalThis)";
-
-static void
-ns_js_shape_window_global(JSContext *ctx)
-{
-    JSValue r = JS_Eval(ctx, ns_window_global_shape_src,
-                        sizeof(ns_window_global_shape_src) - 1,
-                        "<window-global-shape>",
-                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(r)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, r);
-}
 
 /* A frame window's listener operations join the page's registry (see
  * et_src), and its tag is its Window.prototype's. */
@@ -7527,126 +7447,6 @@ ns_proto_of(JSContext *ctx, JSValueConst global, const char *ctor_name)
 }
 
 static void
-ns_install_web_api_shapes(JSContext *ctx, JSValueConst global)
-{
-    static const char *const source =
-        "(function(){"
-        " function normalize(name,obj,tag,evented){"
-        "  var C=globalThis[name];"
-        "  if(typeof C!=='function'||!C.prototype||!obj)return;"
-        "  var P=C.prototype;"
-        "  if(evented&&typeof EventTarget==='function'&&EventTarget.prototype)"
-        "   try{Object.setPrototypeOf(P,EventTarget.prototype);}catch(e){}"
-        "  Object.getOwnPropertyNames(obj).forEach(function(k){"
-        "   if(k[0]==='_'||k==='constructor')return;"
-        "   var d=Object.getOwnPropertyDescriptor(obj,k);if(!d||!d.configurable)return;"
-        "   if(Object.prototype.hasOwnProperty.call(P,k)){try{delete obj[k];}catch(e){}return;}"
-        "   if(d.get||d.set||typeof d.value==='function'){"
-        "    try{Object.defineProperty(P,k,d);delete obj[k];}catch(e){}return;"
-        "   }"
-        "   (function(value,writable,enumerable){"
-        "    var holder={get value(){return value;},set value(v){value=v;}};"
-        "    var hd=Object.getOwnPropertyDescriptor(holder,'value');"
-        "    try{Object.defineProperty(P,k,{configurable:true,enumerable:enumerable,"
-        "     get:hd.get,set:writable?hd.set:undefined});delete obj[k];}catch(e){}"
-        "   })(d.value,d.writable,d.enumerable);"
-        "  });"
-        "  try{Object.setPrototypeOf(obj,P);}catch(e){}"
-        "  try{delete obj[Symbol.toStringTag];}catch(e){}"
-        "  try{Object.defineProperty(P,Symbol.toStringTag,{value:tag||name,configurable:true});}catch(e){}"
-        " }"
-        " normalize('History',globalThis.history,'History',false);"
-        " normalize('Performance',globalThis.performance,'Performance',true);"
-        " normalize('Screen',globalThis.screen,'Screen',true);"
-        " normalize('Crypto',globalThis.crypto,'Crypto',false);"
-        " normalize('SubtleCrypto',globalThis.crypto&&globalThis.crypto.subtle,'SubtleCrypto',false);"
-        " normalize('Permissions',globalThis.navigator&&navigator.permissions,'Permissions',false);"
-        " normalize('NetworkInformation',globalThis.navigator&&navigator.connection,'NetworkInformation',true);"
-        " normalize('NavigatorUAData',globalThis.navigator&&navigator.userAgentData,'NavigatorUAData',false);"
-        " normalize('PluginArray',globalThis.navigator&&navigator.plugins,'PluginArray',false);"
-        " normalize('MimeTypeArray',globalThis.navigator&&navigator.mimeTypes,'MimeTypeArray',false);"
-        " normalize('MediaDevices',globalThis.navigator&&navigator.mediaDevices,'MediaDevices',true);"
-        " normalize('MediaCapabilities',globalThis.navigator&&navigator.mediaCapabilities,'MediaCapabilities',false);"
-        " normalize('UserActivation',globalThis.navigator&&navigator.userActivation,'UserActivation',false);"
-        " normalize('StorageManager',globalThis.navigator&&navigator.storage,'StorageManager',false);"
-        " normalize('WakeLock',globalThis.navigator&&navigator.wakeLock,'WakeLock',false);"
-        " var PS=globalThis.PermissionStatus&&PermissionStatus.prototype;"
-        " if(PS&&typeof EventTarget==='function'&&EventTarget.prototype)"
-        "  try{Object.setPrototypeOf(PS,EventTarget.prototype);"
-        "   Object.defineProperty(PS,Symbol.toStringTag,{value:'PermissionStatus',configurable:true});}catch(e){}"
-        "})()";
-    JSValue result = JS_Eval(ctx, source, strlen(source),
-                             "<web-api-shapes>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(result)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, result);
-    (void)global;
-}
-
-static void
-ns_install_navigator_shape(JSContext *ctx)
-{
-    /* The getters accept the window's navigator and the navigators in the
-     * engine's set (see <navigator-iface>), each frame realm's own. */
-    static const char *const source =
-        "(function(others){"
-        " if(typeof Navigator!=='function'||typeof navigator!=='object'||!navigator)return;"
-        " var nav=navigator,P=Navigator.prototype;"
-        " if(!(others instanceof WeakSet))others=new WeakSet();"
-        /* An attribute whose value is an object ([SameObject] in WebIDL) is
-         * each navigator's own: a frame's navigator gets objects of its own
-         * realm (ns_realm_install_singletons hands them over). */
-        " var slots=new WeakMap(),mine=Object.create(null);slots.set(nav,mine);"
-        " function objectGetter(name){"
-        "  var holder={get [name](){var m=slots.get(this);if(!m)throw new TypeError('Illegal invocation');return m[name];}};"
-        "  return Object.getOwnPropertyDescriptor(holder,name).get;"
-        " }"
-        " Object.getOwnPropertyNames(nav).forEach(function(name){"
-        "  if(name[0]==='_')return;"
-        "  var d=Object.getOwnPropertyDescriptor(nav,name);"
-        "  if(!d||!d.configurable)return;"
-        "  if(Object.prototype.hasOwnProperty.call(P,name)){try{delete nav[name];}catch(e){}return;}"
-        "  if(typeof d.value==='function'){"
-        "   try{Object.defineProperty(P,name,{value:d.value,writable:true,enumerable:true,configurable:true});delete nav[name];}catch(e){}"
-        "   return;"
-        "  }"
-        "  if(d.value&&typeof d.value==='object'){"
-        "   mine[name]=d.value;"
-        "   try{Object.defineProperty(P,name,{get:objectGetter(name),enumerable:true,configurable:true});delete nav[name];}catch(e){}"
-        "   return;"
-        "  }"
-        "  (function(value){"
-        "   var holder={get value(){if(this!==nav&&!others.has(this))throw new TypeError('Illegal invocation');return value;}};"
-        "   var get=Object.getOwnPropertyDescriptor(holder,'value').get;"
-        "   try{Object.defineProperty(P,name,{get:get,enumerable:true,configurable:true});delete nav[name];}catch(e){}"
-        "  })(d.value);"
-        " });"
-        " Object.getOwnPropertyNames(P).forEach(function(name){"
-        "  if(name==='constructor')return;"
-        "  var d=Object.getOwnPropertyDescriptor(P,name);"
-        "  if(!d||!d.configurable||!('value' in d)||!d.value||typeof d.value!=='object')return;"
-        "  mine[name]=d.value;"
-        "  try{Object.defineProperty(P,name,{get:objectGetter(name),enumerable:true,configurable:true});}catch(e){}"
-        " });"
-        " Object.defineProperty(others,'navigatorObjects',{value:function(){return mine;}});"
-        " Object.defineProperty(others,'adoptNavigatorObjects',{value:function(n,values){slots.set(n,values);}});"
-        " try{Object.setPrototypeOf(nav,P);}catch(e){}"
-        " try{Object.defineProperty(P,Symbol.toStringTag,{value:'Navigator',configurable:true});}catch(e){}"
-        "})";
-    JSValue fn = JS_Eval(ctx, source, strlen(source),
-                         "<navigator-shape>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_HIDE_SOURCE);
-    if (JS_IsException(fn)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return;
-    }
-    ns_js *js = js_from_ctx(ctx);
-    JSValueConst args[1] = { js ? js->navigator_brand : JS_UNDEFINED };
-    JSValue result = JS_Call(ctx, fn, JS_UNDEFINED, 1, args);
-    if (JS_IsException(result)) JS_FreeValue(ctx, JS_GetException(ctx));
-    JS_FreeValue(ctx, result);
-    JS_FreeValue(ctx, fn);
-}
-
-static void
 ns_proto_define_getset(JSContext *ctx, JSValueConst proto, const char *name,
                        JSValue (*getter)(JSContext *, JSValueConst),
                        JSValue (*setter)(JSContext *, JSValueConst,
@@ -9106,7 +8906,7 @@ ns_js_install_document(ns_js *js, ns_node *doc, const char *base_url)
         JS_FreeValue(ctx, xml_proto);
     }
     ns_install_dom_hierarchy(ctx, global);
-    ns_install_web_api_shapes(ctx, global);
+    ns_install_web_api_shapes(ctx);
     ns_bind_ctor(ctx, global, "FontFace", ns_window_fontface_ctor, 3);
     {
         JSValue ctor = JS_GetPropertyStr(ctx, global, "CSSStyleDeclaration");

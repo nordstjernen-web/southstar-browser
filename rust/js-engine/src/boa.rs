@@ -948,6 +948,8 @@ impl Scope<'_> {
         Ok(())
     }
 
+    pub fn set_immutable_prototype(&mut self, _object: &Value) {}
+
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
         let native = PromiseJob::new(move |ctx| {
             job(&mut Scope { ctx });

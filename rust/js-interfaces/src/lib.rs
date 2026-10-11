@@ -1,9 +1,10 @@
-//! Southstar — the DOM interface objects: prototype hierarchy, instanceof, toStringTag, unscopables, member shapes, PDF plugins and window.chrome.
+//! Southstar — the DOM and window interface objects: prototype hierarchy, instanceof, toStringTag, unscopables, member shapes, the global's shape, PDF plugins and window.chrome.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod chrome;
 mod ffi;
+mod global;
 mod hierarchy;
 mod instof;
 mod sources;
@@ -105,5 +106,9 @@ pub fn link_interface_ctors(scope: &mut Scope<'_>) {
 }
 
 pub use chrome::install as install_window_chrome;
+pub use global::{
+    install_namespace_object, install_navigator_shape, install_web_api_shapes,
+    lock_global_prototypes, shape_window_global,
+};
 pub use hierarchy::install as install_dom_hierarchy;
 pub use instof::{install_has_instance, install_to_string_tag};

@@ -315,6 +315,7 @@ unsafe extern "C" {
     fn JS_AtomToValue(ctx: *mut JSContext, atom: JSAtom) -> JSValue;
     fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
     fn JS_SetPrototype(ctx: *mut JSContext, obj: JSValue, proto: JSValue) -> c_int;
+    fn JS_SetImmutablePrototype(ctx: *mut JSContext, obj: JSValue);
     fn JS_MarkValue(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void);
     fn JS_JSONStringify(
         ctx: *mut JSContext,
@@ -2310,6 +2311,12 @@ impl Scope<'_> {
     pub fn set_prototype(&mut self, object: &Value, prototype: &Value) -> Result<(), Value> {
         let status = unsafe { JS_SetPrototype(self.ctx, object.raw, prototype.raw) };
         self.status(status)
+    }
+
+    pub fn set_immutable_prototype(&mut self, object: &Value) {
+        if object.is_object() {
+            unsafe { JS_SetImmutablePrototype(self.ctx, object.raw) };
+        }
     }
 
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {

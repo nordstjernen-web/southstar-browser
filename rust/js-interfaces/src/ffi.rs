@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -78,6 +78,7 @@ unsafe extern "C" {
     fn ns_js_adopt_dom_protos(ctx: *mut JSContext, protos: *const RawDomProtos);
     fn ns_perf_now_ms(js: *const NsJs) -> f64;
     fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
+    fn ns_js_navigator_brand(js: *const NsJs) -> JSValue;
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
@@ -134,6 +135,14 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: DomProtos) {
         document: quickjs::into_raw(protos.document),
     };
     unsafe { ns_js_adopt_dom_protos(quickjs::raw_context(scope), &raw) };
+}
+
+pub(crate) fn navigator_brand(scope: &Scope<'_>) -> Value {
+    let js: *const NsJs = quickjs::context_opaque(scope).cast::<NsJs>().cast_const();
+    if js.is_null() {
+        return Value::undefined();
+    }
+    unsafe { quickjs::borrow_value(scope, ns_js_navigator_brand(js)) }
 }
 
 pub(crate) fn page_clock(scope: &Scope<'_>) -> (f64, f64) {
@@ -202,4 +211,48 @@ pub unsafe extern "C" fn ns_install_pdf_plugins(ctx: *mut JSContext) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_link_interface_ctors(ctx: *mut JSContext) {
     unsafe { with_scope(ctx, crate::link_interface_ctors) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_lock_global_prototypes(ctx: *mut JSContext) {
+    unsafe { with_scope(ctx, crate::lock_global_prototypes) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_shape_window_global(ctx: *mut JSContext) {
+    unsafe { with_scope(ctx, crate::shape_window_global) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_install_web_api_shapes(ctx: *mut JSContext) {
+    unsafe { with_scope(ctx, crate::install_web_api_shapes) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_install_navigator_shape(ctx: *mut JSContext) {
+    unsafe { with_scope(ctx, crate::install_navigator_shape) };
+}
+
+fn text<'a>(p: *const c_char) -> &'a str {
+    if p.is_null() {
+        return "";
+    }
+    unsafe { CStr::from_ptr(p) }.to_str().unwrap_or_default()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_install_namespace_object(
+    ctx: *mut JSContext,
+    global: JSValue,
+    name: *const c_char,
+    obj: JSValue,
+    tag: *const c_char,
+) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let global = quickjs::borrow_value(scope, global);
+            let object = quickjs::take_value(scope, obj);
+            crate::install_namespace_object(scope, &global, text(name), object, text(tag));
+        })
+    };
 }

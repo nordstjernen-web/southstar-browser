@@ -1065,6 +1065,9 @@ void    ns_define_element_unscopables(JSContext *ctx, JSValueConst proto);
 void    ns_install_node_shapes(JSContext *ctx);
 void    ns_install_element_shapes(JSContext *ctx);
 void    ns_install_pdf_plugins(JSContext *ctx);
+void    ns_install_web_api_shapes(JSContext *ctx);
+void    ns_install_navigator_shape(JSContext *ctx);
+void    ns_js_shape_window_global(JSContext *ctx);
 enum {
     NS_DOM_MEMBERS_ELEMENT_FUNCTIONS = 0,
     NS_DOM_MEMBERS_ELEMENT_CLASS,
