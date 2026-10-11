@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* webgpu.c moved to Rust (rust/webgpu): navigator.gpu over the external
+  wgpu-native, with hand-declared, layout-checked FFI and no wgpu crates. It
+  is still built only when wgpu-native is present and still gated by
+  --enable-webgpu at runtime.
 * The rest of layout.c (block, pseudo-element, legend, image and media box
   builders, shadow roots and slots, form-control blocks, the abspos queue
   and ns_layout_build) moved to Rust (rust/layout-build), and layout.c is
