@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* Floats and block-formatting-context helpers (rust/layout-float) and
+  replaced-element and intrinsic sizing (rust/layout-sizing) moved from
+  layout.c to Rust, with identical layout.
 * The page navigation, scroll and timing glue (fragment navigation, viewport
   scroll events, resize, pageshow and pagehide, resource origin checks,
   navigation timing milestones and render-blocking status) moved from js.c
