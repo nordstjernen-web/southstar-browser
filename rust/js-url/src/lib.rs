@@ -1,4 +1,4 @@
-//! Southstar — URL, URLSearchParams, atob/btoa, TextEncoder/TextDecoder, object URLs and FileReader.
+//! Southstar — URL, URLSearchParams, atob/btoa, TextEncoder/TextDecoder, object URLs with the blob: URL registry, and FileReader.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,6 +6,7 @@ mod base64;
 mod blob;
 mod ffi;
 mod file_reader;
+mod registry;
 mod search_params;
 mod text_codec;
 mod url;
@@ -29,6 +30,7 @@ pub(crate) const ALL: Attributes = Attributes {
 pub(crate) struct Page {
     url_helper: Option<Value>,
     search_params_helper: Option<Value>,
+    reads: Vec<file_reader::PendingRead>,
 }
 
 thread_local! {
@@ -37,6 +39,22 @@ thread_local! {
 
 pub(crate) fn with_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
     PAGES.with(|pages| f(pages.borrow_mut().entry(js).or_default()))
+}
+
+pub(crate) fn page_holding<R>(f: impl Fn(&Page) -> Option<R>) -> Option<(Js, R)> {
+    PAGES.with(|pages| {
+        pages
+            .borrow()
+            .iter()
+            .find_map(|(&js, page)| f(page).map(|found| (js, found)))
+    })
+}
+
+pub(crate) fn with_existing_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> Option<R> {
+    PAGES
+        .try_with(|pages| pages.borrow_mut().get_mut(&js).map(f))
+        .ok()
+        .flatten()
 }
 
 pub(crate) fn teardown(js: Js) {

@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-url"
-description = "URL, URLSearchParams, atob/btoa, TextEncoder/TextDecoder, object URLs and FileReader"
+description = "URL, URLSearchParams, atob/btoa, TextEncoder/TextDecoder, object URLs with the blob: URL registry, and FileReader"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

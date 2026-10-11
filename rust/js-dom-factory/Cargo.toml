@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-dom-factory"
-description = "Document factories, DOMImplementation, importNode/adoptNode/cloneNode, name validation, namespace lookups and the hyperlink URL-part accessors"
+description = "Document factories, the window node constructors, DOMParser, CloseWatcher, DOMImplementation, importNode/adoptNode/cloneNode, name validation, namespace lookups and the hyperlink URL-part accessors"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

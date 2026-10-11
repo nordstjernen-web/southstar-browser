@@ -1,8 +1,8 @@
-//! Southstar — the C ABI of the URL, codec, object-URL and FileReader bindings, and the js.c and net.c calls they make.
+//! Southstar — the C ABI of the URL, codec, object-URL, blob: URL registry and FileReader bindings, and the js.c and net.c calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -37,6 +37,40 @@ impl Js {
         self.0 == 0
     }
 }
+
+#[repr(C)]
+pub(crate) struct GBytes {
+    _private: [u8; 0],
+}
+
+pub(crate) struct SharedBytes(*mut GBytes);
+
+unsafe impl Send for SharedBytes {}
+
+impl SharedBytes {
+    pub(crate) fn new(bytes: &[u8]) -> SharedBytes {
+        SharedBytes(unsafe { g_bytes_new(bytes.as_ptr().cast(), bytes.len()) })
+    }
+}
+
+impl Drop for SharedBytes {
+    fn drop(&mut self) {
+        unsafe { g_bytes_unref(self.0) };
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Source(c_uint);
+
+type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+
+type BlobResolver = Option<
+    unsafe extern "C" fn(
+        url: *const c_char,
+        out_type: *mut *mut c_char,
+        user_data: *mut c_void,
+    ) -> *mut GBytes,
+>;
 
 #[repr(C)]
 struct NsUrlParts {
@@ -81,15 +115,20 @@ unsafe extern "C" {
     fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_blob_urls_put(
+    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
+    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_attach_idle(js: *mut NsJs, func: SourceFunc, data: *mut c_void) -> c_uint;
+    fn ns_js_attach_timeout(
         js: *mut NsJs,
-        url: *const c_char,
-        bytes: *const u8,
-        len: usize,
-        kind: *const c_char,
-    );
-    fn ns_js_blob_urls_remove(js: *mut NsJs, url: *const c_char);
-    fn ns_js_filereader_schedule(ctx: *mut JSContext, reader: JSValue, generation: i64);
+        ms: c_uint,
+        func: SourceFunc,
+        data: *mut c_void,
+    ) -> c_uint;
+    fn ns_js_source_remove(js: *mut NsJs, id: c_uint);
+    fn ns_net_set_blob_resolver(resolver: BlobResolver, user_data: *mut c_void);
+    fn g_bytes_new(data: *const c_void, size: usize) -> *mut GBytes;
+    fn g_bytes_ref(bytes: *mut GBytes) -> *mut GBytes;
+    fn g_bytes_unref(bytes: *mut GBytes);
     fn ns_xhr_fire_progress_event(
         ctx: *mut JSContext,
         target: JSValue,
@@ -209,29 +248,30 @@ pub(crate) fn mark_mutated(js: Js) {
     unsafe { ns_js_mark_mutated(js.ptr()) };
 }
 
-pub(crate) fn blob_urls_put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
-    let url = cstring(url);
-    let kind = kind.map(cstring);
-    let kind_ptr = kind.as_ref().map_or(ptr::null(), |k| k.as_ptr());
-    unsafe {
-        ns_js_blob_urls_put(
-            js.ptr(),
-            url.as_ptr(),
-            bytes.as_ptr(),
-            bytes.len(),
-            kind_ptr,
-        )
-    };
+unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
+    crate::file_reader::complete(data as usize as u64);
+    glib::FALSE
 }
 
-pub(crate) fn blob_urls_remove(js: Js, url: &[u8]) {
-    let url = cstring(url);
-    unsafe { ns_js_blob_urls_remove(js.ptr(), url.as_ptr()) };
+pub(crate) fn attach_read_idle(js: Js, id: u64) -> Source {
+    Source(unsafe { ns_js_attach_idle(js.ptr(), read_ready, id as usize as *mut c_void) })
 }
 
-pub(crate) fn schedule_file_reader(scope: &mut Scope<'_>, reader: &Value, generation: i64) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_js_filereader_schedule(ctx, quickjs::raw(reader), generation) };
+pub(crate) fn attach_read_retry(js: Js, id: u64, ms: u32) -> Source {
+    Source(unsafe { ns_js_attach_timeout(js.ptr(), ms, read_ready, id as usize as *mut c_void) })
+}
+
+pub(crate) fn source_remove(js: Js, source: Source) {
+    unsafe { ns_js_source_remove(js.ptr(), source.0) };
+}
+
+pub(crate) fn in_pump(js: Js) -> bool {
+    unsafe { ns_js_in_pump(js.ptr()) != 0 }
+}
+
+pub(crate) fn in_main_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
+    let ctx = unsafe { ns_js_main_context(js.ptr()) };
+    unsafe { quickjs::with_context(ctx, f) }
 }
 
 pub(crate) fn fire_progress(
@@ -372,12 +412,83 @@ pub unsafe extern "C" fn ns_net_install_file_reader(ctx: *mut JSContext, global:
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_filereader_run(ctx: *mut JSContext, reader: JSValue, generation: i64) {
-    unsafe {
-        with_value(ctx, reader, |scope, reader| {
-            crate::file_reader::run(scope, reader, generation)
-        })
+pub unsafe extern "C" fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean {
+    glib::boolean(crate::file_reader::pending(Js(js as usize)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_filereader_teardown(js: *mut NsJs) {
+    crate::file_reader::teardown(Js(js as usize));
+}
+
+unsafe extern "C" fn resolve_blob(
+    url: *const c_char,
+    out_type: *mut *mut c_char,
+    _user_data: *mut c_void,
+) -> *mut GBytes {
+    if !out_type.is_null() {
+        unsafe { *out_type = ptr::null_mut() };
     }
+    if url.is_null() {
+        return ptr::null_mut();
+    }
+    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
+    crate::registry::resolve(url, |entry| {
+        if !out_type.is_null() {
+            let kind = entry
+                .kind
+                .as_ref()
+                .map_or(ptr::null_mut(), |k| glib::strdup(k.as_bytes()));
+            unsafe { *out_type = kind };
+        }
+        unsafe { g_bytes_ref(entry.bytes.0) }
+    })
+    .unwrap_or(ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_blob_registry_add(js: *mut NsJs) {
+    if !js.is_null() && crate::registry::add_page(Js(js as usize)) {
+        unsafe { ns_net_set_blob_resolver(Some(resolve_blob), ptr::null_mut()) };
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_blob_registry_remove(js: *mut NsJs) {
+    if !js.is_null() {
+        crate::registry::remove_page(Js(js as usize));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_blob_urls_free(js: *mut NsJs) {
+    crate::registry::free_page(Js(js as usize));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_blob_url_lookup(
+    js: *mut NsJs,
+    url: *const c_char,
+    out_type: *mut *mut c_char,
+) -> *mut GBytes {
+    if !out_type.is_null() {
+        unsafe { *out_type = ptr::null_mut() };
+    }
+    if js.is_null() || url.is_null() {
+        return ptr::null_mut();
+    }
+    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
+    crate::registry::with_entry(Js(js as usize), url, |entry| {
+        if !out_type.is_null() {
+            let kind = entry
+                .kind
+                .as_ref()
+                .map_or(ptr::null_mut(), |k| k.as_ptr().cast_mut());
+            unsafe { *out_type = kind };
+        }
+        entry.bytes.0
+    })
+    .unwrap_or(ptr::null_mut())
 }
 
 #[unsafe(no_mangle)]

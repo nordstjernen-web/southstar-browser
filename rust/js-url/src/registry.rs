@@ -1,0 +1,85 @@
+//! Southstar — the blob: URL registry: each page's object URLs and the pages the network resolver searches.
+//! Copyright 2026 Andreas Røsdal
+//! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+use std::collections::HashMap;
+use std::ffi::CString;
+use std::sync::{LazyLock, Mutex, MutexGuard};
+
+use crate::ffi::{Js, SharedBytes, cstring};
+
+pub(crate) struct Entry {
+    pub bytes: SharedBytes,
+    pub kind: Option<CString>,
+}
+
+#[derive(Default)]
+struct Registry {
+    installed: bool,
+    pages: Vec<Js>,
+    urls: HashMap<Js, HashMap<Vec<u8>, Entry>>,
+}
+
+static REGISTRY: LazyLock<Mutex<Registry>> = LazyLock::new(Mutex::default);
+
+fn registry() -> MutexGuard<'static, Registry> {
+    REGISTRY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn key(url: &[u8]) -> Vec<u8> {
+    cstring(url).into_bytes()
+}
+
+pub(crate) fn add_page(js: Js) -> bool {
+    let mut registry = registry();
+    let install = !registry.installed;
+    registry.installed = true;
+    if !registry.pages.contains(&js) {
+        registry.pages.push(js);
+    }
+    install
+}
+
+pub(crate) fn remove_page(js: Js) {
+    let mut registry = registry();
+    if let Some(index) = registry.pages.iter().position(|&p| p == js) {
+        registry.pages.swap_remove(index);
+    }
+}
+
+pub(crate) fn put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
+    let entry = Entry {
+        bytes: SharedBytes::new(bytes),
+        kind: kind.map(cstring).filter(|k| !k.is_empty()),
+    };
+    registry()
+        .urls
+        .entry(js)
+        .or_default()
+        .insert(key(url), entry);
+}
+
+pub(crate) fn remove(js: Js, url: &[u8]) {
+    if let Some(urls) = registry().urls.get_mut(&js) {
+        urls.remove(&key(url));
+    }
+}
+
+pub(crate) fn free_page(js: Js) {
+    let urls = registry().urls.remove(&js);
+    drop(urls);
+}
+
+pub(crate) fn with_entry<R>(js: Js, url: &[u8], f: impl FnOnce(&Entry) -> R) -> Option<R> {
+    let registry = registry();
+    registry.urls.get(&js)?.get(url).map(f)
+}
+
+pub(crate) fn resolve<R>(url: &[u8], f: impl FnOnce(&Entry) -> R) -> Option<R> {
+    let registry = registry();
+    registry
+        .pages
+        .iter()
+        .find_map(|js| registry.urls.get(js)?.get(url))
+        .map(f)
+}

@@ -42,8 +42,6 @@ JSClassID ns_new_class_id(JSClassID *pclass_id)
 #endif
 
 #include "anim.h"
-#include "camera.h"
-#include "mic.h"
 #include "config.h"
 #include "css.h"
 #include "datetime.h"
@@ -1347,7 +1345,6 @@ ns_event_state(JSValueConst v)
 
 
 static ns_node *ns_unwrap_element_mut(JSValueConst val);
-static void ns_tag_caller_document(JSContext *ctx, JSValueConst node_val);
 
 typedef struct {
     JSValue element;
@@ -3655,86 +3652,6 @@ ns_returns_resolved_empty_array(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue
-ns_cam_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    gboolean want_video = argc > 0 && JS_ToBool(ctx, argv[0]);
-    gboolean want_audio = argc > 1 && JS_ToBool(ctx, argv[1]);
-    int d = ns_camera_permission(js);
-    if (d == 1) {
-        if (want_video) ns_camera_acquire();
-        if (want_audio) ns_mic_acquire();
-        return JS_NewString(ctx, "granted");
-    }
-    if (d == 0)
-        return JS_NewString(ctx, "denied");
-    return JS_NewString(ctx, "pending");
-}
-
-static JSValue
-ns_cam_release(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    ns_camera_release();
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_mic_release_js(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    ns_mic_release();
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_cam_label(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    ns_camera *cam = ns_camera_active();
-    GPtrArray *list = ns_camera_enumerate();
-    const char *label = NULL;
-    if (cam) {
-        for (guint i = 0; i < list->len; i++) {
-            ns_camera_info *info = g_ptr_array_index(list, i);
-            if (g_strcmp0(info->device, ns_camera_device(cam)) == 0) {
-                label = info->label;
-                break;
-            }
-        }
-    }
-    if (!label && list->len > 0)
-        label = ((ns_camera_info *)g_ptr_array_index(list, 0))->label;
-    JSValue r = JS_NewString(ctx, label ? label : "Camera");
-    for (guint i = 0; i < list->len; i++)
-        ns_camera_info_free(g_ptr_array_index(list, i));
-    g_ptr_array_free(list, TRUE);
-    return r;
-}
-
-static JSValue
-ns_cam_enumerate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    GPtrArray *list = ns_camera_enumerate();
-    JSValue arr = JS_NewArray(ctx);
-    uint32_t n = 0;
-    for (guint i = 0; i < list->len; i++) {
-        ns_camera_info *info = g_ptr_array_index(list, i);
-        JSValue dev = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, dev, "deviceId", JS_NewString(ctx, info->device));
-        JS_SetPropertyStr(ctx, dev, "groupId", JS_NewString(ctx, info->device));
-        JS_SetPropertyStr(ctx, dev, "kind", JS_NewString(ctx, "videoinput"));
-        JS_SetPropertyStr(ctx, dev, "label", JS_NewString(ctx, info->label));
-        JS_SetPropertyUint32(ctx, arr, n++, dev);
-        ns_camera_info_free(info);
-    }
-    g_ptr_array_free(list, TRUE);
-    return arr;
-}
-
-static JSValue
 ns_returns_null(JSContext *ctx, JSValueConst this_val,
                 int argc, JSValueConst *argv)
 {
@@ -3987,440 +3904,6 @@ ns_js_url_parses(ns_js *js, const char *url)
 
 
 
-
-static JSValue
-ns_window_document_fragment_ctor(JSContext *ctx, JSValueConst this_val,
-                                 int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    if (!js_from_ctx(ctx)) return JS_NULL;
-    ns_node *frag = ns_node_new_document();
-    frag->flags |= NS_NODE_FRAGMENT;
-    g_hash_table_add(js_from_ctx(ctx)->orphan_nodes, frag);
-    return ns_make_element(ctx, frag);
-}
-
-static JSValue
-ns_window_text_ctor(JSContext *ctx, JSValueConst this_val,
-                    int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NULL;
-    char *dup;
-    size_t len = 0;
-    if (argc >= 1 && !JS_IsUndefined(argv[0])) {
-        const char *s = JS_ToCStringLen(ctx, &len, argv[0]);
-        if (!s) return JS_EXCEPTION;
-        dup = g_memdup2(s, len + 1);
-        dup[len] = '\0';
-        JS_FreeCString(ctx, s);
-    } else {
-        dup = g_strdup("");
-    }
-    ns_node *n = ns_node_new_text_len(dup, (guint32)len);
-    g_hash_table_add(js->orphan_nodes, n);
-    JSValue wrapper = ns_make_element(ctx, n);
-    ns_tag_caller_document(ctx, wrapper);
-    return wrapper;
-}
-
-static JSValue
-ns_window_comment_ctor(JSContext *ctx, JSValueConst this_val,
-                       int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return JS_NULL;
-    char *dup;
-    size_t len = 0;
-    if (argc >= 1 && !JS_IsUndefined(argv[0])) {
-        const char *s = JS_ToCStringLen(ctx, &len, argv[0]);
-        if (!s) return JS_EXCEPTION;
-        dup = g_memdup2(s, len + 1);
-        dup[len] = '\0';
-        JS_FreeCString(ctx, s);
-    } else {
-        dup = g_strdup("");
-    }
-    ns_node *n = ns_node_new_comment_len(dup, (guint32)len);
-    g_hash_table_add(js->orphan_nodes, n);
-    JSValue wrapper = ns_make_element(ctx, n);
-    ns_tag_caller_document(ctx, wrapper);
-    return wrapper;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static JSValue
-ns_window_image_ctor(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx)) return JS_NULL;
-    ns_node *el = ns_node_new_element(g_strdup("img"));
-    if (argc >= 1) {
-        int32_t w = 0;
-        if (JS_ToInt32(ctx, &w, argv[0]) == 0 && w > 0) {
-            char buf[16];
-            g_snprintf(buf, sizeof buf, "%d", w);
-            ns_element_set_attr(el, "width", buf);
-        }
-    }
-    if (argc >= 2) {
-        int32_t h = 0;
-        if (JS_ToInt32(ctx, &h, argv[1]) == 0 && h > 0) {
-            char buf[16];
-            g_snprintf(buf, sizeof buf, "%d", h);
-            ns_element_set_attr(el, "height", buf);
-        }
-    }
-    g_hash_table_add(js_from_ctx(ctx)->orphan_nodes, el);
-    return ns_make_element(ctx, el);
-}
-
-static JSValue
-ns_window_audio_ctor(JSContext *ctx, JSValueConst this_val,
-                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx)) return JS_NULL;
-    ns_node *el = ns_node_new_element(g_strdup("audio"));
-    if (argc >= 1) {
-        const char *s = JS_ToCString(ctx, argv[0]);
-        if (s) { ns_element_set_attr(el, "src", s); JS_FreeCString(ctx, s); }
-    }
-    g_hash_table_add(js_from_ctx(ctx)->orphan_nodes, el);
-    return ns_make_element(ctx, el);
-}
-
-static JSValue
-ns_window_option_ctor(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (!js_from_ctx(ctx)) return JS_NULL;
-    ns_node *el = ns_node_new_element(g_strdup("option"));
-    if (argc >= 1) {
-        const char *t = JS_ToCString(ctx, argv[0]);
-        if (t) {
-            ns_node_append_child(el, ns_node_new_text(g_strdup(t)));
-            JS_FreeCString(ctx, t);
-        }
-    }
-    if (argc >= 2) {
-        const char *v = JS_ToCString(ctx, argv[1]);
-        if (v) { ns_element_set_attr(el, "value", v); JS_FreeCString(ctx, v); }
-    }
-    if (argc >= 3 && JS_ToBool(ctx, argv[2]))
-        ns_element_set_attr(el, "defaultSelected", "");
-    if (argc >= 4 && JS_ToBool(ctx, argv[3]))
-        ns_element_set_attr(el, "selected", "");
-    g_hash_table_add(js_from_ctx(ctx)->orphan_nodes, el);
-    return ns_make_element(ctx, el);
-}
-
-static JSValue
-ns_dom_parser_parseFromString(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1) return JS_NULL;
-    const char *src = JS_ToCString(ctx, argv[0]);
-    if (!src) return JS_NULL;
-    const char *mime = (argc >= 2) ? JS_ToCString(ctx, argv[1]) : NULL;
-    gboolean as_xml = mime && (strstr(mime, "xml") != NULL ||
-                               strstr(mime, "svg") != NULL);
-    ns_node *doc;
-    if (as_xml) {
-        int error_line = 1, error_column = 1;
-        doc = ns_xml_parse_reporting(src, -1, &error_line, &error_column);
-        gboolean has_root = FALSE;
-        if (doc)
-            for (const ns_node *c = doc->first_child; c; c = c->next_sibling)
-                if (c->kind == NS_NODE_ELEMENT) { has_root = TRUE; break; }
-        if (!has_root) {
-            if (doc) ns_node_free(doc);
-            char *report = g_strdup_printf(
-                "<parsererror xmlns=\"http://www.mozilla.org/newlayout/xml/"
-                "parsererror.xml\">error on line %d at column %d: "
-                "XML parsing error</parsererror>", error_line, error_column);
-            doc = ns_xml_parse(report, -1);
-            g_free(report);
-        }
-        if (!doc)
-            doc = ns_html_parse_fragment_with_scripting(NULL, src, -1,
-                                                        FALSE);
-    } else {
-        doc = ns_html_parse_with_scripting(src, -1, FALSE);
-    }
-    JS_FreeCString(ctx, src);
-    if (!doc) { if (mime) JS_FreeCString(ctx, mime); return JS_NULL; }
-    ns_mark_scripts_already_started(doc);
-    if (js_from_ctx(ctx)) g_hash_table_add(js_from_ctx(ctx)->orphan_nodes, doc);
-    JSValue cu = JS_GetPropertyStr(ctx, this_val, "__ns_creator_url");
-    const char *doc_url = JS_IsString(cu) ? JS_ToCString(ctx, cu) : NULL;
-    JSValue wrapper = ns_make_realm_document(ctx, doc, doc_url, "UTF-8",
-                                             mime, as_xml, TRUE);
-    if (doc_url) JS_FreeCString(ctx, doc_url);
-    JS_FreeValue(ctx, cu);
-    if (JS_IsObject(wrapper))
-        JS_DefinePropertyValueStr(ctx, wrapper, "defaultView", JS_NULL,
-                                  JS_PROP_C_W_E);
-    if (mime) JS_FreeCString(ctx, mime);
-    return wrapper;
-}
-
-static JSValue
-ns_window_dom_parser_ctor(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue proto = JS_IsObject(this_val)
-                        ? JS_GetPropertyStr(ctx, this_val, "prototype") : JS_NULL;
-    JSValue obj = JS_IsObject(proto) ? JS_NewObjectProto(ctx, proto)
-                                     : JS_NewObject(ctx);
-    JS_FreeValue(ctx, proto);
-    JSValue g = JS_GetGlobalObject(ctx);
-    JSValue docv = JS_GetPropertyStr(ctx, g, "document");
-    JSValue urlv = JS_IsObject(docv) ? JS_GetPropertyStr(ctx, docv, "URL")
-                                     : JS_UNDEFINED;
-    if (JS_IsString(urlv))
-        JS_DefinePropertyValueStr(ctx, obj, "__ns_creator_url",
-                                  JS_DupValue(ctx, urlv),
-                                  JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);
-    JS_FreeValue(ctx, urlv);
-    JS_FreeValue(ctx, docv);
-    JS_FreeValue(ctx, g);
-    return obj;
-}
-
-
-
-static JSValue
-ns_close_watcher_fire(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue evt = ns_event_new(ctx);
-    JS_SetPropertyStr(ctx, evt, "type", JS_NewString(ctx, "close"));
-    JS_SetPropertyStr(ctx, evt, "target", JS_DupValue(ctx, this_val));
-    JSValueConst args[1] = { evt };
-    JSValue disp = JS_GetPropertyStr(ctx, this_val, "dispatchEvent");
-    if (JS_IsFunction(ctx, disp)) {
-        JSValue r = JS_Call(ctx, disp, this_val, 1, args);
-        JS_FreeValue(ctx, r);
-    }
-    JS_FreeValue(ctx, disp);
-    JS_FreeValue(ctx, evt);
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_close_watcher_noop(JSContext *ctx, JSValueConst this_val,
-                      int argc, JSValueConst *argv)
-{
-    (void)ctx; (void)this_val; (void)argc; (void)argv;
-    return JS_UNDEFINED;
-}
-
-static JSValue
-ns_window_close_watcher_ctor(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
-{
-    (void)argc; (void)argv;
-    JSValue obj;
-    JSValue proto = JS_IsObject(this_val)
-                        ? JS_GetPropertyStr(ctx, this_val, "prototype") : JS_NULL;
-    if (JS_IsObject(proto)) {
-        obj = JS_NewObjectProto(ctx, proto);
-    } else {
-        obj = JS_NewObject(ctx);
-    }
-    JS_FreeValue(ctx, proto);
-    JS_SetPropertyStr(ctx, obj, "_listeners", JS_NewArray(ctx));
-    JS_SetPropertyStr(ctx, obj, "oncancel", JS_NULL);
-    JS_SetPropertyStr(ctx, obj, "onclose", JS_NULL);
-    ns_bind_fn(ctx, obj, "addEventListener",    ns_target_addEventListener,    2);
-    ns_bind_fn(ctx, obj, "removeEventListener", ns_target_removeEventListener, 2);
-    ns_bind_fn(ctx, obj, "dispatchEvent",       ns_target_dispatchEvent,       1);
-    ns_bind_fn(ctx, obj, "requestClose",        ns_close_watcher_fire,         0);
-    ns_bind_fn(ctx, obj, "close",               ns_close_watcher_fire,         0);
-    ns_bind_fn(ctx, obj, "destroy",             ns_close_watcher_noop,         0);
-    return obj;
-}
-
-typedef struct {
-    GBytes *bytes;
-    char   *type;
-} ns_blob_entry;
-
-static void
-ns_blob_entry_free(gpointer p)
-{
-    ns_blob_entry *e = p;
-    if (!e) return;
-    if (e->bytes) g_bytes_unref(e->bytes);
-    g_free(e->type);
-    g_free(e);
-}
-
-static GPtrArray *g_blob_js_registry = NULL;
-static GMutex     g_blob_js_registry_lock;
-
-static GBytes *
-ns_js_net_blob_resolver(const char *url, char **out_type, gpointer user_data)
-{
-    (void)user_data;
-    if (out_type) *out_type = NULL;
-    if (!url) return NULL;
-    GBytes *found = NULL;
-    g_mutex_lock(&g_blob_js_registry_lock);
-    for (guint i = 0; g_blob_js_registry && i < g_blob_js_registry->len; i++) {
-        ns_js *js = g_ptr_array_index(g_blob_js_registry, i);
-        if (!js || !js->blob_urls) continue;
-        ns_blob_entry *e = g_hash_table_lookup(js->blob_urls, url);
-        if (e) {
-            if (out_type) *out_type = e->type ? g_strdup(e->type) : NULL;
-            found = e->bytes ? g_bytes_ref(e->bytes) : NULL;
-            break;
-        }
-    }
-    g_mutex_unlock(&g_blob_js_registry_lock);
-    return found;
-}
-
-static void
-ns_js_blob_registry_add(ns_js *js)
-{
-    if (!js) return;
-    g_mutex_lock(&g_blob_js_registry_lock);
-    gboolean install = !g_blob_js_registry;
-    if (install)
-        g_blob_js_registry = g_ptr_array_new();
-    if (!g_ptr_array_find(g_blob_js_registry, js, NULL))
-        g_ptr_array_add(g_blob_js_registry, js);
-    g_mutex_unlock(&g_blob_js_registry_lock);
-    if (install)
-        ns_net_set_blob_resolver(ns_js_net_blob_resolver, NULL);
-}
-
-static void
-ns_js_blob_registry_remove(ns_js *js)
-{
-    g_mutex_lock(&g_blob_js_registry_lock);
-    if (g_blob_js_registry && js)
-        g_ptr_array_remove_fast(g_blob_js_registry, js);
-    g_mutex_unlock(&g_blob_js_registry_lock);
-}
-
-static void
-ns_js_blob_urls_put_entry(ns_js *js, const char *url, ns_blob_entry *entry)
-{
-    g_mutex_lock(&g_blob_js_registry_lock);
-    if (!js->blob_urls)
-        js->blob_urls = g_hash_table_new_full(g_str_hash, g_str_equal,
-                                              g_free, ns_blob_entry_free);
-    g_hash_table_replace(js->blob_urls, g_strdup(url), entry);
-    g_mutex_unlock(&g_blob_js_registry_lock);
-}
-
-void
-ns_js_blob_urls_put(ns_js *js, const char *url, const guint8 *bytes, gsize len,
-                    const char *type)
-{
-    if (!js || !url) return;
-    ns_blob_entry *e = g_new0(ns_blob_entry, 1);
-    e->bytes = g_bytes_new(bytes, len);
-    e->type = type && *type ? g_strdup(type) : NULL;
-    ns_js_blob_urls_put_entry(js, url, e);
-}
-
-void
-ns_js_blob_urls_remove(ns_js *js, const char *url)
-{
-    if (!js || !js->blob_urls || !url) return;
-    g_mutex_lock(&g_blob_js_registry_lock);
-    g_hash_table_remove(js->blob_urls, url);
-    g_mutex_unlock(&g_blob_js_registry_lock);
-}
-
-GBytes *
-ns_js_blob_url_lookup(ns_js *js, const char *url, char **out_type)
-{
-    if (out_type) *out_type = NULL;
-    if (!js || !js->blob_urls || !url) return NULL;
-    ns_blob_entry *e = g_hash_table_lookup(js->blob_urls, url);
-    if (!e) return NULL;
-    if (out_type) *out_type = e->type;
-    return e->bytes;
-}
-
-typedef struct ns_filereader_idle {
-    ns_js  *js;
-    JSValue self;
-    guint   source;
-    gint64  gen;
-} ns_filereader_idle;
-
-static gboolean
-ns_filereader_complete(gpointer ud)
-{
-    ns_filereader_idle *fr = ud;
-    ns_js *js = fr->js;
-    if (js && js->in_pump) {
-        fr->source = ns_js_attach_timeout(js, 4, ns_filereader_complete, fr);
-        return G_SOURCE_REMOVE;
-    }
-    JSContext *ctx = js->ctx;
-    JSValue self = fr->self;
-    ns_filereader_run(ctx, self, fr->gen);
-    JS_FreeValue(ctx, self);
-    if (js->filereader_idles)
-        g_ptr_array_remove_fast(js->filereader_idles, fr);
-    g_free(fr);
-    return G_SOURCE_REMOVE;
-}
-
-void
-ns_js_filereader_schedule(JSContext *ctx, JSValueConst self, gint64 gen)
-{
-    ns_js *js = js_from_ctx(ctx);
-    if (!js) return;
-    ns_filereader_idle *fr = g_new0(ns_filereader_idle, 1);
-    fr->js = js;
-    fr->self = JS_DupValue(ctx, self);
-    fr->gen = gen;
-    if (!js->filereader_idles)
-        js->filereader_idles = g_ptr_array_new();
-    g_ptr_array_add(js->filereader_idles, fr);
-    fr->source = ns_js_attach_idle(js, ns_filereader_complete, fr);
-}
 
 JSValue
 ns_window_event_ctor(JSContext *ctx, JSValueConst this_val,
@@ -5351,12 +4834,6 @@ gboolean
 ns_js_mutated(const ns_js *js)
 {
     return js->mutated;
-}
-
-gboolean
-ns_js_filereader_pending(const ns_js *js)
-{
-    return js->filereader_idles && js->filereader_idles->len > 0;
 }
 
 gboolean
@@ -10142,11 +9619,11 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     ns_bind_ctor(ctx, global, "Navigator", ns_illegal_constructor, 0);
     JSValue navigator = ns_services_window_navigator(ctx);
 
-    ns_bind_fn(ctx, global, "__nd_camera_request",   ns_cam_request,   2);
-    ns_bind_fn(ctx, global, "__nd_camera_release",   ns_cam_release,   0);
-    ns_bind_fn(ctx, global, "__nd_mic_release",      ns_mic_release_js, 0);
-    ns_bind_fn(ctx, global, "__nd_camera_label",     ns_cam_label,     0);
-    ns_bind_fn(ctx, global, "__nd_camera_enumerate", ns_cam_enumerate, 0);
+    ns_bind_fn(ctx, global, "__nd_camera_request",   ns_services_camera_request,   2);
+    ns_bind_fn(ctx, global, "__nd_camera_release",   ns_services_camera_release,   0);
+    ns_bind_fn(ctx, global, "__nd_mic_release",      ns_services_mic_release,      0);
+    ns_bind_fn(ctx, global, "__nd_camera_label",     ns_services_camera_label,     0);
+    ns_bind_fn(ctx, global, "__nd_camera_enumerate", ns_services_camera_enumerate, 0);
 
     ns_sw_install_container(ctx, navigator);
 
@@ -10614,7 +10091,7 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
     return js;
 }
 
-static void
+void
 ns_tag_caller_document(JSContext *ctx, JSValueConst node_val)
 {
     ns_js *js = js_from_ctx(ctx);
@@ -11314,7 +10791,7 @@ ns_js_free(ns_js *js)
     ns_perf_teardown(js);
     ns_traversal_teardown(js);
     ns_services_teardown(js);
-    if (js->blob_urls) g_hash_table_destroy(js->blob_urls);
+    ns_js_blob_urls_free(js);
     ns_canvas_states_teardown(js);
     ns_js_images_teardown(js);
     ns_dispatch_teardown_listeners(js);
@@ -11324,17 +10801,7 @@ ns_js_free(ns_js *js)
         js->observer_tick_source = 0;
     }
     ns_js_loader_teardown(js);
-    if (js->filereader_idles) {
-        for (guint i = 0; i < js->filereader_idles->len; i++) {
-            ns_filereader_idle *fr = g_ptr_array_index(js->filereader_idles, i);
-            if (!fr) continue;
-            ns_js_source_remove(js, fr->source);
-            JS_FreeValue(js->ctx, fr->self);
-            g_free(fr);
-        }
-        g_ptr_array_free(js->filereader_idles, TRUE);
-        js->filereader_idles = NULL;
-    }
+    ns_js_filereader_teardown(js);
     ns_attr_detach_all(js);
     ns_attribute_maps_release_all(js);
     if (js->attribute_maps) {

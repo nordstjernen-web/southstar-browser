@@ -23,7 +23,7 @@ fn finish(scope: &mut Scope<'_>, this: &Value, node: Element) -> Value {
     wrapper
 }
 
-fn text_node(kind: core::ffi::c_uint, text: &[u8]) -> Element {
+pub(crate) fn text_node(kind: core::ffi::c_uint, text: &[u8]) -> Element {
     node::new_text(kind, glib::strdup(text), text.len() as u32)
 }
 

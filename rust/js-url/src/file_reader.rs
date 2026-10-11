@@ -1,13 +1,30 @@
-//! Southstar — FileReader: the four read methods, abort and the event sequence a finished read fires.
+//! Southstar — FileReader: the four read methods, abort, the idle that completes a read and the event sequence it fires.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::CStr;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, HO_FILE_READER};
-use crate::{ALL, JsResult, bind_fn, get, illegal_invocation, int64_prop, set};
+use crate::ffi::{self, HO_FILE_READER, Js, Source};
+use crate::{
+    ALL, JsResult, bind_fn, get, illegal_invocation, int64_prop, page_holding, set,
+    with_existing_page, with_page,
+};
+
+const PUMP_RETRY_MS: u32 = 4;
+
+pub(crate) struct PendingRead {
+    id: u64,
+    reader: Value,
+    generation: i64,
+    source: Source,
+}
+
+thread_local! {
+    static NEXT_READ: Cell<u64> = const { Cell::new(1) };
+}
 
 const INVALID_STATE_ERR: i32 = 11;
 const EMPTY: i32 = 0;
@@ -81,6 +98,63 @@ pub(crate) fn run(scope: &mut Scope<'_>, reader: &Value, generation: i64) {
     }
 }
 
+fn schedule(scope: &mut Scope<'_>, reader: &Value, generation: i64) {
+    let js = Js::of(scope);
+    if js.is_null() {
+        return;
+    }
+    let id = NEXT_READ.with(|next| next.replace(next.get() + 1));
+    let source = ffi::attach_read_idle(js, id);
+    let read = PendingRead {
+        id,
+        reader: reader.clone(),
+        generation,
+        source,
+    };
+    with_page(js, |page| page.reads.push(read));
+}
+
+pub(crate) fn complete(id: u64) {
+    let Some((js, ())) = page_holding(|page| page.reads.iter().any(|r| r.id == id).then_some(()))
+    else {
+        return;
+    };
+    if ffi::in_pump(js) {
+        let source = ffi::attach_read_retry(js, id, PUMP_RETRY_MS);
+        with_existing_page(js, |page| {
+            if let Some(read) = page.reads.iter_mut().find(|r| r.id == id) {
+                read.source = source;
+            }
+        });
+        return;
+    }
+    let pending = with_existing_page(js, |page| {
+        page.reads
+            .iter()
+            .find(|r| r.id == id)
+            .map(|r| (r.reader.clone(), r.generation))
+    })
+    .flatten();
+    let Some((reader, generation)) = pending else {
+        return;
+    };
+    ffi::in_main_context(js, |scope| run(scope, &reader, generation));
+    drop(reader);
+    with_existing_page(js, |page| page.reads.retain(|r| r.id != id));
+}
+
+pub(crate) fn pending(js: Js) -> bool {
+    with_existing_page(js, |page| !page.reads.is_empty()).unwrap_or(false)
+}
+
+pub(crate) fn teardown(js: Js) {
+    let reads = with_existing_page(js, |page| core::mem::take(&mut page.reads)).unwrap_or_default();
+    for read in &reads {
+        ffi::source_remove(js, read.source);
+    }
+    drop(reads);
+}
+
 fn is_blob(scope: &mut Scope<'_>, value: &Value) -> bool {
     value.is_object() && get(scope, value, "__ndBlobBytes").is_object()
 }
@@ -139,7 +213,7 @@ fn read(scope: &mut Scope<'_>, this: &Value, args: &[Value], how: Read) -> JsRes
     set(scope, this, "result", Value::null());
     set(scope, this, "error", Value::null());
     set(scope, this, "readyState", Value::int(LOADING));
-    ffi::schedule_file_reader(scope, this, generation);
+    schedule(scope, this, generation);
     Ok(Value::undefined())
 }
 

@@ -1,8 +1,9 @@
-//! Southstar — document factories, DOMImplementation, importNode/adoptNode/cloneNode, name validation, namespace lookups and the hyperlink URL-part accessors.
+//! Southstar — document factories, the window's node constructors, DOMParser, CloseWatcher, DOMImplementation, importNode/adoptNode/cloneNode, name validation, namespace lookups and the hyperlink URL-part accessors.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod adopt;
+mod constructors;
 mod factories;
 mod ffi;
 mod hyperlink;

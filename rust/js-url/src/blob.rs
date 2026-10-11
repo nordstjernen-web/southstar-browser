@@ -55,7 +55,7 @@ fn blob_type(scope: &mut Scope<'_>, blob: &Value) -> Option<Vec<u8>> {
 fn register(scope: &mut Scope<'_>, js: Js, url: &[u8], object: &Value) {
     let bytes = blob_bytes(scope, object);
     let kind = blob_type(scope, object);
-    ffi::blob_urls_put(js, url, &bytes, kind.as_deref());
+    crate::registry::put(js, url, &bytes, kind.as_deref());
 }
 
 pub(crate) fn create_object_url(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
@@ -94,7 +94,7 @@ pub(crate) fn revoke_object_url(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     if let (false, Some(url)) = (js.is_null(), args.first())
         && let Ok(url) = scope.to_bytes(url)
     {
-        ffi::blob_urls_remove(js, &url);
+        crate::registry::remove(js, &url);
     }
     Ok(Value::undefined())
 }

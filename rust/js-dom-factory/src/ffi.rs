@@ -12,7 +12,9 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::names::{self, NameError};
-use crate::{Element, JsResult, adopt, factories, hyperlink, implementation, namespaces};
+use crate::{
+    Element, JsResult, adopt, constructors, factories, hyperlink, implementation, namespaces,
+};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -47,6 +49,62 @@ struct UrlParts {
     hash: *mut c_char,
     username: *mut c_char,
     password: *mut c_char,
+}
+
+type JsCFunction = unsafe extern "C" fn(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue;
+
+pub(crate) enum TargetMethod {
+    AddEventListener,
+    RemoveEventListener,
+    DispatchEvent,
+}
+
+unsafe extern "C" {
+    fn ns_target_addEventListener(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_target_removeEventListener(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_target_dispatchEvent(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: c_int,
+        argv: *mut JSValue,
+    ) -> JSValue;
+    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
+    fn ns_tag_caller_document(ctx: *mut JSContext, node_val: JSValue);
+    fn ns_xml_parse_reporting(
+        input: *const c_char,
+        len: isize,
+        error_line: *mut c_int,
+        error_column: *mut c_int,
+    ) -> *mut NsNode;
+    fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
+    fn ns_html_parse_with_scripting(
+        input: *const c_char,
+        len: isize,
+        scripting: GBoolean,
+    ) -> *mut NsNode;
+    fn ns_html_parse_fragment_with_scripting(
+        context_tag: *const c_char,
+        input: *const c_char,
+        len: isize,
+        scripting: GBoolean,
+    ) -> *mut NsNode;
+    fn ns_node_free(node: *mut NsNode);
+    fn ns_mark_scripts_already_started(root: *mut NsNode);
 }
 
 unsafe extern "C" {
@@ -402,6 +460,72 @@ pub(crate) fn reflect_href_set(scope: &mut Scope<'_>, this: &Value, val: &Value)
     quickjs::checked(scope, value).map(|_| ())
 }
 
+pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node: &Value) {
+    unsafe { ns_tag_caller_document(quickjs::raw_context(scope), quickjs::raw(node)) };
+}
+
+pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
+    let raw = unsafe { ns_event_new(quickjs::raw_context(scope)) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn target_method(
+    scope: &mut Scope<'_>,
+    name: &str,
+    arity: u32,
+    method: TargetMethod,
+) -> Value {
+    let f: JsCFunction = match method {
+        TargetMethod::AddEventListener => ns_target_addEventListener,
+        TargetMethod::RemoveEventListener => ns_target_removeEventListener,
+        TargetMethod::DispatchEvent => ns_target_dispatchEvent,
+    };
+    quickjs::c_function(scope, name, arity, f)
+}
+
+pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Element>, c_int, c_int) {
+    let source = cstring(source);
+    let (mut line, mut column) = (1, 1);
+    let doc = unsafe { ns_xml_parse_reporting(source.as_ptr(), -1, &mut line, &mut column) };
+    (unsafe { Node::from_ptr(doc) }, line, column)
+}
+
+pub(crate) fn parse_xml(source: &[u8]) -> Option<Element> {
+    let source = cstring(source);
+    unsafe { Node::from_ptr(ns_xml_parse(source.as_ptr(), -1)) }
+}
+
+pub(crate) fn parse_html(source: &[u8]) -> Option<Element> {
+    let source = cstring(source);
+    unsafe {
+        Node::from_ptr(ns_html_parse_with_scripting(
+            source.as_ptr(),
+            -1,
+            glib::FALSE,
+        ))
+    }
+}
+
+pub(crate) fn parse_html_fragment(source: &[u8]) -> Option<Element> {
+    let source = cstring(source);
+    unsafe {
+        Node::from_ptr(ns_html_parse_fragment_with_scripting(
+            ptr::null(),
+            source.as_ptr(),
+            -1,
+            glib::FALSE,
+        ))
+    }
+}
+
+pub(crate) fn free_node(node: Element) {
+    unsafe { ns_node_free(node.as_mut_ptr()) };
+}
+
+pub(crate) fn mark_scripts_already_started(root: Element) {
+    unsafe { ns_mark_scripts_already_started(root.as_mut_ptr()) };
+}
+
 unsafe fn native(
     ctx: *mut JSContext,
     this_val: JSValue,
@@ -449,6 +573,15 @@ methods! {
     ns_impl_create_html_document => implementation::create_html_document,
     ns_impl_create_document => implementation::create_document,
     ns_impl_create_document_type => implementation::create_document_type,
+    ns_window_document_fragment_ctor => constructors::document_fragment,
+    ns_window_text_ctor => constructors::text,
+    ns_window_comment_ctor => constructors::comment,
+    ns_window_image_ctor => constructors::image,
+    ns_window_audio_ctor => constructors::audio,
+    ns_window_option_ctor => constructors::option,
+    ns_window_dom_parser_ctor => constructors::dom_parser,
+    ns_dom_parser_parseFromString => constructors::parse_from_string,
+    ns_window_close_watcher_ctor => constructors::close_watcher,
 }
 
 unsafe fn with_this(

@@ -127,7 +127,6 @@ struct ns_js {
     GHashTable   *orphan_nodes;
     GHashTable   *pinned_wrappers_set;
     GHashTable   *attribute_maps;
-    GPtrArray    *filereader_idles;
     char         *cookie_value;
     GHashTable   *cookie_buckets;
     char         *partition_key;
@@ -164,7 +163,6 @@ struct ns_js {
     gint64        time_origin_us;
     double        time_origin_real_ms;
     ns_js_navigation_timing navigation_timing;
-    GHashTable   *blob_urls;
     const ns_node *ce_main_doc;
     GHashTable   *platform_globals;
     int           ignore_destructive_writes;
@@ -916,6 +914,16 @@ JSValue ns_services_clear_timer(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv);
 JSValue ns_services_request_idle_callback(JSContext *ctx, JSValueConst this_val,
                                           int argc, JSValueConst *argv);
+JSValue ns_services_camera_request(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_services_camera_release(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue ns_services_mic_release(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue ns_services_camera_label(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+JSValue ns_services_camera_enumerate(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
 void ns_services_install_idle_deadline(JSContext *ctx, JSValueConst proto);
 void ns_services_run_due_timers(ns_js *js);
 gboolean ns_services_timers_pending(const ns_js *js, gboolean include_idle);
@@ -1286,12 +1294,11 @@ JSValue  ns_window_filereader_ctor(JSContext *ctx, JSValueConst this_val, int ar
 void     ns_url_install_interface(JSContext *ctx);
 void     ns_usp_install_interface(JSContext *ctx);
 void     ns_net_install_text_codecs(JSContext *ctx, JSValueConst global);
-void     ns_filereader_run(JSContext *ctx, JSValueConst self, gint64 gen);
 void     ns_url_teardown(ns_js *js);
-void     ns_js_filereader_schedule(JSContext *ctx, JSValueConst self, gint64 gen);
-void     ns_js_blob_urls_put(ns_js *js, const char *url, const guint8 *bytes, gsize len,
-                             const char *type);
-void     ns_js_blob_urls_remove(ns_js *js, const char *url);
+void     ns_js_filereader_teardown(ns_js *js);
+void     ns_js_blob_registry_add(ns_js *js);
+void     ns_js_blob_registry_remove(ns_js *js);
+void     ns_js_blob_urls_free(ns_js *js);
 gboolean ns_js_bytes_view(JSContext *ctx, JSValueConst value, const uint8_t **out_data,
                           size_t *out_len, JSValue *out_holder);
 void     ns_js_orphan_node(ns_js *js, ns_node *n);
@@ -1527,6 +1534,25 @@ JSValue  ns_impl_create_html_document(JSContext *ctx, JSValueConst this_val, int
                                       JSValueConst *argv);
 JSValue  ns_impl_create_document(JSContext *ctx, JSValueConst this_val, int argc,
                                  JSValueConst *argv);
+JSValue  ns_window_document_fragment_ctor(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv);
+JSValue  ns_window_text_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+JSValue  ns_window_comment_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_window_image_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_window_audio_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
+JSValue  ns_window_option_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv);
+JSValue  ns_window_dom_parser_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                   JSValueConst *argv);
+JSValue  ns_dom_parser_parseFromString(JSContext *ctx, JSValueConst this_val, int argc,
+                                       JSValueConst *argv);
+JSValue  ns_window_close_watcher_ctor(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+void     ns_tag_caller_document(JSContext *ctx, JSValueConst node_val);
 JSValue  ns_impl_create_document_type(JSContext *ctx, JSValueConst this_val, int argc,
                                       JSValueConst *argv);
 JSValue  ns_document_implementation(JSContext *ctx, JSValueConst this_val);
