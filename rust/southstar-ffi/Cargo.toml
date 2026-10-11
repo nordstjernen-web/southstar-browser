@@ -66,6 +66,7 @@ southstar-js-intl = { path = "../js-intl" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-media = { path = "../js-media" }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-node = { path = "../js-node" }
 southstar-js-observers = { path = "../js-observers" }

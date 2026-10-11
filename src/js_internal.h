@@ -116,17 +116,13 @@ struct ns_js {
     const void   *box_lookup_cache_root;
     const void   *box_lookup_pending_root;
     int           box_lookup_pending_count;
-    const ns_node *change_pending;
-    char          *change_baseline;
     gboolean      autofocus_processed;
     const ns_node *active_modal;
     gint64         user_activation_us;
     gboolean       user_ever_activated;
     ns_image_cache *image_cache;
     struct ns_anim *anim;
-    GHashTable   *orphan_nodes;
     GHashTable   *pinned_wrappers_set;
-    GHashTable   *attribute_maps;
     char         *cookie_value;
     GHashTable   *cookie_buckets;
     char         *partition_key;
@@ -1755,6 +1751,26 @@ void     ns_node_iters_pre_remove(ns_js *js, ns_node *removed);
 void     ns_traversal_teardown(ns_js *js);
 gboolean ns_js_selection_state(const ns_js *js, const char **text, double rect[4]);
 void     ns_js_track_orphan(ns_js *js, ns_node *node);
+void     ns_js_mutation_init(ns_js *js);
+void     ns_js_mutation_teardown(ns_js *js);
+gboolean ns_js_orphan_tracked(ns_js *js, const ns_node *node);
+int      ns_js_orphan_count(ns_js *js);
+GPtrArray *ns_js_orphans_collect(ns_js *js);
+GPtrArray *ns_js_orphans_take_all(ns_js *js);
+GPtrArray *ns_js_orphans_snapshot(ns_js *js);
+void     ns_js_purge_subtree_node_refs(ns_js *js, ns_node *root);
+void     ns_js_purge_subtree_rafs(ns_js *js, ns_node *root);
+void     ns_element_clear_children(ns_node *n);
+void     ns_js_set_attr_recorded_paint_only(ns_js *js, ns_node *n,
+                                            const char *name, const char *value);
+void     ns_js_forget_pending_change(ns_js *js);
+void     ns_js_forget_pending_change_for(ns_js *js, const ns_node *el);
+JSValue  ns_attribute_map_lookup(ns_js *js, const ns_node *owner);
+void     ns_attribute_map_remember(JSContext *ctx, ns_js *js, const ns_node *owner,
+                                   JSValueConst map);
+void     ns_attribute_map_release_owner(ns_js *js, const ns_node *owner);
+void     ns_attribute_maps_release_all(ns_js *js);
+void     ns_attribute_maps_teardown(ns_js *js);
 
 void     ns_js_set_attr_ns_recorded(ns_js *js, ns_node *n, const char *namespace_uri,
                                     const char *prefix, const char *local_name,

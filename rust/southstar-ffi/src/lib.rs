@@ -63,6 +63,7 @@ pub use southstar_js_intl;
 pub use southstar_js_lifecycle;
 pub use southstar_js_loader;
 pub use southstar_js_media;
+pub use southstar_js_mutation;
 pub use southstar_js_net;
 pub use southstar_js_node;
 pub use southstar_js_observers;

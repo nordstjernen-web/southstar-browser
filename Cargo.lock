@@ -1643,6 +1643,7 @@ dependencies = [
  "southstar-js-lifecycle",
  "southstar-js-loader",
  "southstar-js-media",
+ "southstar-js-mutation",
  "southstar-js-net",
  "southstar-js-node",
  "southstar-js-observers",
@@ -2070,6 +2071,15 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-webaudio",
+]
+
+[[package]]
+name = "southstar-js-mutation"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-glib",
+ "southstar-js-engine",
 ]
 
 [[package]]
