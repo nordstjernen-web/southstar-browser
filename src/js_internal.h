@@ -127,7 +127,6 @@ struct ns_js {
     gboolean       user_ever_activated;
     ns_image_cache *image_cache;
     struct ns_anim *anim;
-    GHashTable   *js_image_loads;
     GHashTable   *orphan_nodes;
     GHashTable   *pinned_wrappers_set;
     GHashTable   *attribute_maps;
@@ -888,6 +887,20 @@ JSValue ns_media_set_srcObject(JSContext *ctx, JSValueConst this_val,
                                JSValueConst val);
 gboolean ns_js_user_activation_state(ns_js *js, gboolean *ever_activated);
 int ns_js_clipboard_write(ns_js *js, const char *text);
+JSValue ns_services_confirm(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv);
+JSValue ns_services_prompt(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv);
+JSValue ns_services_exec_command(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv);
+JSValue ns_services_query_command_supported(JSContext *ctx, JSValueConst this_val,
+                                            int argc, JSValueConst *argv);
+JSValue ns_services_query_command_enabled(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv);
+gboolean ns_js_selection_copyable(const ns_js *js);
+gboolean ns_js_copy_selection(ns_js *js);
+gboolean ns_js_has_selection_commands(const ns_js *js);
+gboolean ns_js_selection_command(ns_js *js, const char *cmd);
 JSValue ns_services_alert(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv);
 JSValue ns_services_queue_microtask(JSContext *ctx, JSValueConst this_val,
@@ -1465,6 +1478,16 @@ void     ns_js_record_attr_change(ns_js *js, ns_node *target, const char *name,
 void     ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
                             const char *old_value, const char *new_value);
 void     ns_js_start_image_load(ns_js *js, ns_node *el, const char *src);
+void     ns_js_fire_img_load_once(ns_js *js, ns_node *node, gboolean failed);
+gboolean ns_js_image_loads_pending(const ns_js *js);
+void     ns_js_flush_ready_images(ns_js *js);
+gboolean ns_js_image_load_tracked(ns_js *js, const ns_node *el);
+void     ns_js_images_forget_node(ns_js *js, const ns_node *node);
+void     ns_js_images_teardown(ns_js *js);
+ns_image_cache *ns_js_image_cache(const ns_js *js);
+JSContext *ns_js_image_load_realm(ns_js *js);
+void     ns_js_record_image_timing(ns_js *js, const ns_node *node, const char *url,
+                                   const ns_image *img);
 void     ns_js_schedule_iframe_load_full(ns_js *js, ns_node *iframe, gboolean force);
 
 JSValue  ns_document_createElement(JSContext *ctx, JSValueConst this_val, int argc,

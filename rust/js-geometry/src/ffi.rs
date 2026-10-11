@@ -78,6 +78,15 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
+    fn ns_box_hit_test_local(
+        root: *const NsBox,
+        x: f64,
+        y: f64,
+        local_x: *mut f64,
+        local_y: *mut f64,
+    ) -> *const NsBox;
+    fn ns_box_image_map_area(b: *const NsBox, local_x: f64, local_y: f64) -> *const NsNode;
+    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_box_inline_rect_for_dom(
         root: *const NsBox,
         target: *const NsNode,
@@ -243,6 +252,24 @@ pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &[u8], value: &[u8]
 
 pub(crate) fn find_by_dom(root: BoxRef<'_>, node: Element) -> Option<BoxRef<'static>> {
     unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+}
+
+pub(crate) fn hit_test_local(
+    root: BoxRef<'_>,
+    x: f64,
+    y: f64,
+) -> Option<(BoxRef<'static>, f64, f64)> {
+    let (mut local_x, mut local_y) = (0.0, 0.0);
+    let hit = unsafe { ns_box_hit_test_local(root.as_ptr(), x, y, &mut local_x, &mut local_y) };
+    unsafe { BoxRef::from_ptr(hit) }.map(|b| (b, local_x, local_y))
+}
+
+pub(crate) fn image_map_area(b: BoxRef<'_>, local_x: f64, local_y: f64) -> Option<Element> {
+    unsafe { Node::from_ptr(ns_box_image_map_area(b.as_ptr(), local_x, local_y)) }
+}
+
+pub(crate) fn current_doc(js: Js) -> Option<Element> {
+    unsafe { Node::from_ptr(ns_js_current_document(js.0)) }
 }
 
 pub(crate) fn inline_rect_for_dom(root: BoxRef<'_>, node: Element) -> Option<Rect> {
@@ -446,6 +473,8 @@ natives! {
     ns_element_createSVGTransform => crate::svg::create_svg_transform,
     ns_svg_beginElement => crate::svg::begin_element,
     ns_svg_setCurrentTime => crate::svg::set_current_time,
+    ns_document_element_from_point => crate::hit::element_from_point,
+    ns_document_elements_from_point => crate::hit::elements_from_point,
 }
 
 getters! {

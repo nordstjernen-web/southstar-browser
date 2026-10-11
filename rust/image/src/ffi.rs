@@ -88,6 +88,22 @@ impl<'a> ImageRef<'a> {
         self.raw().failed != 0
     }
 
+    pub fn as_ptr(self) -> *const c_void {
+        self.0.as_ptr().cast()
+    }
+
+    pub fn url(self) -> *const c_char {
+        self.raw().url
+    }
+
+    pub fn error(self) -> *const c_char {
+        self.raw().error
+    }
+
+    pub fn http_status(self) -> c_long {
+        self.raw().http_status
+    }
+
     pub fn source_url(self) -> *const c_char {
         let image = self.raw();
         if image.final_url.is_null() {

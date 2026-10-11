@@ -10,7 +10,7 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::screen::{self, Metrics};
-use crate::{clipboard_item, console, media, navigator, rtc, timers, window};
+use crate::{clipboard_item, commands, console, media, navigator, rtc, timers, window};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -246,6 +246,10 @@ unsafe extern "C" {
     ) -> JSValue;
     fn ns_js_user_activation_state(js: *const NsJs, ever: *mut GBoolean) -> GBoolean;
     fn ns_js_clipboard_write(js: *const NsJs, text: *const c_char) -> c_int;
+    fn ns_js_selection_copyable(js: *const NsJs) -> GBoolean;
+    fn ns_js_copy_selection(js: *const NsJs) -> GBoolean;
+    fn ns_js_has_selection_commands(js: *const NsJs) -> GBoolean;
+    fn ns_js_selection_command(js: *const NsJs, cmd: *const c_char) -> GBoolean;
     fn ns_net_navigator_languages() -> *mut *mut c_char;
     fn ns_net_navigator_platform() -> *const c_char;
     fn ns_net_ua_hint_platform() -> *const c_char;
@@ -457,6 +461,22 @@ pub(crate) fn clipboard_write(js: Js, text: &str) -> Option<bool> {
     }
 }
 
+pub(crate) fn selection_copyable(js: Js) -> bool {
+    unsafe { ns_js_selection_copyable(js.0) != 0 }
+}
+
+pub(crate) fn copy_selection(js: Js) -> bool {
+    unsafe { ns_js_copy_selection(js.0) != 0 }
+}
+
+pub(crate) fn has_selection_commands(js: Js) -> bool {
+    unsafe { ns_js_has_selection_commands(js.0) != 0 }
+}
+
+pub(crate) fn selection_command(js: Js, cmd: &core::ffi::CStr) -> bool {
+    unsafe { ns_js_selection_command(js.0, cmd.as_ptr()) != 0 }
+}
+
 pub(crate) fn languages() -> Vec<String> {
     let list = unsafe { ns_net_navigator_languages() };
     let mut out = Vec::new();
@@ -611,6 +631,11 @@ macro_rules! export_native {
 
 export_native! {
     ns_services_alert => console::alert,
+    ns_services_confirm => commands::confirm,
+    ns_services_prompt => commands::prompt,
+    ns_services_exec_command => commands::exec_command,
+    ns_services_query_command_supported => commands::query_command_supported,
+    ns_services_query_command_enabled => commands::query_command_enabled,
     ns_services_queue_microtask => window::queue_microtask,
     ns_services_notification_ctor => window::notification,
     ns_services_match_media => media::match_media,

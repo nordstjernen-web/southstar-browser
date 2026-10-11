@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-geometry"
-description = "CSSOM View geometry and scrolling: getBoundingClientRect and getClientRects, the offset, client and scroll metrics, element and window scrolling with scrollIntoView, and the SVG geometry behind getBBox, getCTM, getScreenCTM and path lengths"
+description = "CSSOM View geometry and scrolling: getBoundingClientRect and getClientRects, the offset, client and scroll metrics, element and window scrolling with scrollIntoView, elementFromPoint and elementsFromPoint, and the SVG geometry behind getBBox, getCTM, getScreenCTM and path lengths"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

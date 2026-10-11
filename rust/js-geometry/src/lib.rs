@@ -1,9 +1,10 @@
-//! Southstar — CSSOM View geometry and scrolling: client rects, offset, client and scroll metrics, element and window scrolling, and SVG geometry.
+//! Southstar — CSSOM View geometry and scrolling: client rects, offset, client and scroll metrics, element and window scrolling, hit testing with elementFromPoint, and SVG geometry.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod boxes;
 mod ffi;
+mod hit;
 mod metrics;
 mod scroll;
 mod svg;

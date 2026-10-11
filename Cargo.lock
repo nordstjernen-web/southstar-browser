@@ -1634,6 +1634,7 @@ dependencies = [
  "southstar-js-frames",
  "southstar-js-geometry",
  "southstar-js-html",
+ "southstar-js-images",
  "southstar-js-input",
  "southstar-js-intl",
  "southstar-js-loader",
@@ -1978,6 +1979,15 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+]
+
+[[package]]
+name = "southstar-js-images"
+version = "1.0.30-dev"
+dependencies = [
+ "southstar-dom",
+ "southstar-image",
+ "southstar-layout",
 ]
 
 [[package]]

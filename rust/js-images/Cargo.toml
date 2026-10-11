@@ -1,0 +1,16 @@
+[package]
+name = "southstar-js-images"
+description = "Image readiness for script: each page's tracked <img> loads through the image cache, their load and error events, the image a node shows, and the rescans when a document's base URL changes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-dom = { path = "../dom" }
+southstar-image = { path = "../image" }
+southstar-layout = { path = "../layout" }
+
+[lints]
+workspace = true

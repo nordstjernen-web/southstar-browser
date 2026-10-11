@@ -54,6 +54,7 @@ pub use southstar_js_forms;
 pub use southstar_js_frames;
 pub use southstar_js_geometry;
 pub use southstar_js_html;
+pub use southstar_js_images;
 pub use southstar_js_input;
 pub use southstar_js_intl;
 pub use southstar_js_loader;
