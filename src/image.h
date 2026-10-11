@@ -90,19 +90,19 @@ ns_image       *ns_image_cache_insert_encoded(ns_image_cache *cache,
 ns_texture *ns_image_decode_bytes(const guchar *data, gsize len,
                                   int *out_w, int *out_h);
 
-ns_texture *ns_image_decode_wuffs(const guchar *data, gsize len,
-                                  int *out_w, int *out_h);
+ns_texture *ns_image_decode_raster(const guchar *data, gsize len,
+                                   int *out_w, int *out_h);
 
 gboolean ns_image_png_is_animated(const guchar *data, gsize len);
 
-GArray *ns_image_decode_wuffs_anim_to_pixels(const guchar *data, gsize len,
-                                             int *out_w, int *out_h);
+GArray *ns_image_decode_raster_anim_to_pixels(const guchar *data, gsize len,
+                                              int *out_w, int *out_h);
 
-guint8 *ns_image_wuffs_decode_to_bgra(const guchar *data, gsize len,
-                                      int *out_w, int *out_h,
-                                      gsize *out_stride, gsize *out_buf_len);
+guint8 *ns_image_raster_decode_to_bgra(const guchar *data, gsize len,
+                                       int *out_w, int *out_h,
+                                       gsize *out_stride, gsize *out_buf_len);
 
-gboolean ns_image_wuffs_supports_bytes(const guchar *data, gsize len);
+gboolean ns_image_raster_supports_bytes(const guchar *data, gsize len);
 
 ns_texture *ns_image_decode_webp(const guchar *data, gsize len,
                                  int *out_w, int *out_h);

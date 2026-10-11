@@ -87,7 +87,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   HTTP CONNECT and SOCKS proxies, plus HSTS, CSP, subresource-integrity
   checks, partitioned cookies, speculative subresource loading, request
   coalescing and a `Vary`-aware HTTP cache.
-- **Images and graphics** — Wuffs decodes PNG/APNG, GIF, BMP, JPEG and lossy
+- **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg` and an in-tree BMP decoder) read PNG/APNG, GIF, BMP, JPEG and lossy
   WebP; libwebp handles lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
@@ -152,7 +152,7 @@ Southstar is an independent engine — no upstream browser code.
 **Vendored in-tree**, built from the main tree with no submodules:
 [lexbor](https://github.com/lexbor/lexbor) (HTML5 → DOM parser, CSS, and the
 WHATWG URL module), [QuickJS](https://github.com/quickjs-ng/quickjs)
-(quickjs-ng fork, no JIT), [Wuffs](https://github.com/google/wuffs)
+(quickjs-ng fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio) and [minimp3](https://github.com/lieff/minimp3)
 (MP3). The only setup-time download is

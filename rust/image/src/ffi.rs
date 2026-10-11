@@ -202,14 +202,14 @@ unsafe extern "C" {
         out_w: *mut c_int,
         out_h: *mut c_int,
     ) -> *mut Texture;
-    fn ns_image_wuffs_supports_bytes(data: *const u8, len: usize) -> GBoolean;
-    fn ns_image_decode_wuffs(
+    fn ns_image_raster_supports_bytes(data: *const u8, len: usize) -> GBoolean;
+    fn ns_image_decode_raster(
         data: *const u8,
         len: usize,
         out_w: *mut c_int,
         out_h: *mut c_int,
     ) -> *mut Texture;
-    fn ns_image_wuffs_decode_to_bgra(
+    fn ns_image_raster_decode_to_bgra(
         data: *const u8,
         len: usize,
         out_w: *mut c_int,
@@ -218,7 +218,7 @@ unsafe extern "C" {
         out_buf_len: *mut usize,
     ) -> *mut u8;
     fn ns_image_png_is_animated(data: *const u8, len: usize) -> GBoolean;
-    fn ns_image_decode_wuffs_anim_to_pixels(
+    fn ns_image_decode_raster_anim_to_pixels(
         data: *const u8,
         len: usize,
         out_w: *mut c_int,
@@ -579,8 +579,8 @@ pub unsafe extern "C" fn ns_image_decode_bytes(
                 return tex;
             }
         }
-        if ns_image_wuffs_supports_bytes(data, len) != 0 {
-            let tex = ns_image_decode_wuffs(data, len, out_w, out_h);
+        if ns_image_raster_supports_bytes(data, len) != 0 {
+            let tex = ns_image_decode_raster(data, len, out_w, out_h);
             if !tex.is_null() {
                 return tex;
             }
@@ -666,9 +666,9 @@ pub unsafe extern "C" fn ns_image_decode_bytes_to_pixels(
         return ptr::null_mut();
     }
     unsafe {
-        if ns_image_wuffs_supports_bytes(data, len) != 0 {
+        if ns_image_raster_supports_bytes(data, len) != 0 {
             let pix =
-                ns_image_wuffs_decode_to_bgra(data, len, out_w, out_h, out_stride, out_buf_len);
+                ns_image_raster_decode_to_bgra(data, len, out_w, out_h, out_stride, out_buf_len);
             if !pix.is_null() {
                 store(out_format, TEXTURE_BGRA_PREMULTIPLIED);
                 return pix;
@@ -776,7 +776,7 @@ unsafe fn pixel_frames_for(
         if (bytes.len() >= 6 && bytes.starts_with(b"GIF"))
             || ns_image_png_is_animated(data, len) != 0
         {
-            return ns_image_decode_wuffs_anim_to_pixels(data, len, out_w, out_h);
+            return ns_image_decode_raster_anim_to_pixels(data, len, out_w, out_h);
         }
         if ns_image_webp_supports_bytes(data, len) != 0 {
             return ns_image_decode_webp_anim_to_pixels(data, len, out_w, out_h);

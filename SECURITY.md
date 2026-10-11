@@ -34,7 +34,7 @@ trusted.
 **Out of scope**
 
 - Bugs in third-party libraries (OpenSSL, GTK 4, GLib, lexbor, QuickJS,
-  Wuffs, …). Report upstream; we update when fixes ship.
+  the png/gif/zune-jpeg crates, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
   implemented, off by default and gated behind a per-site trust prompt.
@@ -306,9 +306,8 @@ attacker-controlled bytes and no path-traversal is possible.
 - HTML is parsed exclusively by [lexbor](https://github.com/lexbor/lexbor);
   there is no hand-rolled HTML tokenizer.
 - URL parsing routes through lexbor's WHATWG URL module.
-- PNG/APNG, GIF, BMP, and JPEG bytes are decoded by
-  [Wuffs](https://github.com/google/wuffs) (memory-safe,
-  transpiled-to-C). SVG is rendered in-engine. Nothing else decodes
+- PNG/APNG, GIF, BMP, and JPEG bytes are decoded in safe Rust by the
+  `png`, `gif` and `zune-jpeg` crates and an in-tree BMP decoder. SVG is rendered in-engine. Nothing else decodes
   images: there is no plugin-loaded fallback decoder, so the set of
   parsers exposed to untrusted bytes is fixed at build time. Decoding
   happens inside the sandboxed renderer.

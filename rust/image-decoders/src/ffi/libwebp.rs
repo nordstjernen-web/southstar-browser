@@ -8,6 +8,7 @@ use core::ptr::{self, NonNull};
 
 const DECODER_ABI_VERSION: c_int = 0x0209;
 const DEMUX_ABI_VERSION: c_int = 0x0107;
+const MODE_BGRA: c_int = 3;
 const MODE_BGRA_PREMULTIPLIED: c_int = 8;
 const VP8_STATUS_OK: c_int = 0;
 
@@ -126,6 +127,14 @@ pub fn info(data: &[u8]) -> Option<(i32, i32)> {
 }
 
 pub fn decode_premultiplied_bgra(data: &[u8], out: &mut [u8], stride: usize) -> bool {
+    decode_bgra(data, out, stride, MODE_BGRA_PREMULTIPLIED)
+}
+
+pub fn decode_straight_bgra(data: &[u8], out: &mut [u8], stride: usize) -> bool {
+    decode_bgra(data, out, stride, MODE_BGRA)
+}
+
+fn decode_bgra(data: &[u8], out: &mut [u8], stride: usize, mode: c_int) -> bool {
     let Ok(stride) = c_int::try_from(stride) else {
         return false;
     };
@@ -134,7 +143,7 @@ pub fn decode_premultiplied_bgra(data: &[u8], out: &mut [u8], stride: usize) -> 
         return false;
     }
     let mut config = unsafe { config.assume_init() };
-    config.output.colorspace = MODE_BGRA_PREMULTIPLIED;
+    config.output.colorspace = mode;
     config.output.is_external_memory = 1;
     config.output.u.rgba = RgbaBuffer {
         rgba: out.as_mut_ptr(),

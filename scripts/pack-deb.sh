@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a portable Southstar .deb by repackaging the bundle that
 # pack-linux.sh produces. The binary statically links the in-tree engine
-# (lexbor, quickjs, wuffs). Stable desktop deps (GTK, OpenSSL, rsvg, …) are
+# (lexbor, quickjs). Stable desktop deps (GTK, OpenSSL, rsvg, …) are
 # computed from the binary's SONAMEs with dpkg-shlibdeps, falling back to
 # a hand-maintained list. The image-codec libraries whose SONAMEs differ
 # per distro release (libavif and its AV1 codecs) are bundled in

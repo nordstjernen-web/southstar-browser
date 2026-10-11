@@ -231,7 +231,7 @@ const SOUTHSTAR_TAIL: &str = concat!(
     "at your option. It comes with ABSOLUTELY NO WARRANTY.</p>",
     "<p>It bundles third-party open-source software under ",
     "the MIT, BSD, Apache\u{a0}2.0, LGPL, MPL and zlib licenses, ",
-    "including lexbor, QuickJS, Wuffs, GTK\u{a0}4, Cairo, ",
+    "including lexbor, QuickJS, png, gif, zune-jpeg, GTK\u{a0}4, Cairo, ",
     "libcurl, OpenSSL, uchardet, libwebp, libpsl, SQLite and zlib. Each ",
     "component\u{2019}s copyright notice and full license text is ",
     "reproduced in the notices.</p>",

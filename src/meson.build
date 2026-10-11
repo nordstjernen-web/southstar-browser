@@ -36,7 +36,6 @@ streaming_h = custom_target(
 )
 
 southstar_engine_sources = files(
-  'image_wuffs.c',
   'layout.c',
   'video_decode.c',
 )
@@ -76,7 +75,6 @@ southstar_c_deps = [
   libquickjs,
   libwebp,
   libwebpdemux,
-  libwuffs,
   libplmpeg,
   libuchardet,
   liblexbor,

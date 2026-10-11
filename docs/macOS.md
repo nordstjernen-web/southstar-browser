@@ -125,7 +125,7 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-QuickJS, lexbor, Wuffs, pl_mpeg and minimp3 are vendored in-tree,
+QuickJS, lexbor, pl_mpeg and minimp3 are vendored in-tree,
 so `meson setup` requires no submodules or setup-time downloads.
 
 To match CI exactly:

@@ -92,8 +92,8 @@ The QuickJS JS engine (forked from
 HTML / WHATWG-URL parser are both vendored in-tree at
 `src/quickjs/` and `src/lexbor/` respectively, so the first
 `meson setup` no longer touches the network for either of them. The
-only remaining source subproject is Wuffs (image decoders), shipped
-as a single-file release under `subprojects/wuffs/`.
+image decoders are Rust crates built by Cargo; no C image-decoder
+subproject remains.
 
 Build artifacts:
 

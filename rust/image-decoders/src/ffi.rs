@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the ICO and WebP decoders, as declared in src/image.h, and the texture and Wuffs calls they make.
+//! Southstar — the C ABI of the raster (PNG/GIF/BMP/JPEG), ICO and WebP decoders, as declared in src/image.h, and the texture calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -57,20 +57,6 @@ unsafe extern "C" {
     ) -> *mut NsTexture;
     fn ns_texture_unref(texture: *mut NsTexture);
     fn ns_image_pixel_frame_clear(data: *mut c_void);
-    fn ns_image_decode_wuffs(
-        data: *const u8,
-        len: usize,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-    ) -> *mut NsTexture;
-    fn ns_image_wuffs_decode_to_bgra(
-        data: *const u8,
-        len: usize,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-        out_stride: *mut usize,
-        out_buf_len: *mut usize,
-    ) -> *mut u8;
 }
 
 pub struct Buffer {
@@ -82,10 +68,6 @@ impl Buffer {
     pub fn try_new(len: usize) -> Option<Buffer> {
         let ptr = NonNull::new(unsafe { g_try_malloc(len) }.cast())?;
         Some(Buffer { ptr, len })
-    }
-
-    unsafe fn from_glib(ptr: *mut u8, len: usize) -> Option<Buffer> {
-        NonNull::new(ptr).map(|ptr| Buffer { ptr, len })
     }
 
     fn into_raw(self) -> *mut u8 {
@@ -143,38 +125,6 @@ impl Texture {
         core::mem::forget(self);
         ptr
     }
-}
-
-pub fn wuffs_decode(data: &[u8]) -> Option<Decoded> {
-    let (mut width, mut height) = (0, 0);
-    let texture =
-        unsafe { ns_image_decode_wuffs(data.as_ptr(), data.len(), &mut width, &mut height) };
-    NonNull::new(texture).map(|texture| Decoded {
-        texture: Texture(texture),
-        width,
-        height,
-    })
-}
-
-pub fn wuffs_decode_to_bgra(data: &[u8]) -> Option<Pixels> {
-    let (mut width, mut height, mut stride, mut len) = (0, 0, 0, 0);
-    let ptr = unsafe {
-        ns_image_wuffs_decode_to_bgra(
-            data.as_ptr(),
-            data.len(),
-            &mut width,
-            &mut height,
-            &mut stride,
-            &mut len,
-        )
-    };
-    let buffer = unsafe { Buffer::from_glib(ptr, len) }?;
-    Some(Pixels {
-        buffer,
-        width,
-        height,
-        stride,
-    })
 }
 
 unsafe fn set<T>(out: *mut T, value: T) {
@@ -276,6 +226,87 @@ pub unsafe extern "C" fn ns_image_decode_webp_anim_to_pixels(
 ) -> *mut GArray {
     let data = unsafe { southstar_glib::slice(data, len) };
     let Some((frames, width, height)) = crate::decode_webp_animation(data) else {
+        return ptr::null_mut();
+    };
+    let array = unsafe { g_array_new(FALSE, FALSE, core::mem::size_of::<PixelFrame>() as c_uint) };
+    unsafe { g_array_set_clear_func(array, ns_image_pixel_frame_clear) };
+    for frame in frames {
+        let frame = pixel_frame(frame);
+        unsafe { g_array_append_vals(array, (&raw const frame).cast(), 1) };
+    }
+    unsafe {
+        set(out_w, width);
+        set(out_h, height);
+    }
+    array
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_raster_supports_bytes(data: *const u8, len: usize) -> GBoolean {
+    let supported =
+        !data.is_null() && crate::raster::supports(unsafe { southstar_glib::slice(data, len) });
+    if supported { TRUE } else { FALSE }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_decode_raster(
+    data: *const u8,
+    len: usize,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+) -> *mut c_void {
+    if data.is_null() {
+        return ptr::null_mut();
+    }
+    let data = unsafe { southstar_glib::slice(data, len) };
+    let decoded = crate::decode_raster(data).and_then(Pixels::into_texture);
+    unsafe { texture_result(decoded, out_w, out_h) }.cast()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_raster_decode_to_bgra(
+    data: *const u8,
+    len: usize,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+    out_stride: *mut usize,
+    out_buf_len: *mut usize,
+) -> *mut u8 {
+    if data.is_null() {
+        return ptr::null_mut();
+    }
+    let data = unsafe { southstar_glib::slice(data, len) };
+    let Some(pixels) = crate::decode_raster(data) else {
+        return ptr::null_mut();
+    };
+    unsafe {
+        set(out_w, pixels.width);
+        set(out_h, pixels.height);
+        set(out_stride, pixels.stride);
+        set(out_buf_len, pixels.stride * pixels.height as usize);
+    }
+    pixels.buffer.into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_png_is_animated(data: *const u8, len: usize) -> GBoolean {
+    let animated = !data.is_null()
+        && crate::raster::png_is_animated(unsafe { southstar_glib::slice(data, len) });
+    if animated { TRUE } else { FALSE }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_decode_raster_anim_to_pixels(
+    data: *const u8,
+    len: usize,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+) -> *mut GArray {
+    if data.is_null() {
+        return ptr::null_mut();
+    }
+    let data = unsafe { southstar_glib::slice(data, len) };
+    let Some((frames, width, height)) = crate::decode_raster_animation(data) else {
         return ptr::null_mut();
     };
     let array = unsafe { g_array_new(FALSE, FALSE, core::mem::size_of::<PixelFrame>() as c_uint) };

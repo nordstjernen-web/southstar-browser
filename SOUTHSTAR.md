@@ -14,7 +14,7 @@ See `README.md` for the product vision and `CLAUDE.md` for working rules.
   scope, not corners. A working subset beats an unfinished superset.
 - **Vertical slices that ship** — every task ends in something runnable.
 - **Few small auditable deps**, vendored in-tree: lexbor (HTML + WHATWG
-  URL), QuickJS (JS interpreter), Wuffs (image decode); WebAssembly runs on
+  URL), QuickJS (JS interpreter), the png/gif/zune-jpeg crates (image decode); WebAssembly runs on
   the pure-Rust wasmi interpreter.
 - **No automated test suite** — verify by running the browser.
 - No JIT, therefore more secure. However, this means the rest of the browser
@@ -184,7 +184,7 @@ committed, listed to keep the long view in one place:
   document rendering is still limited. Real child-document layout/paint
   would close one of the larger remaining HTML gaps.
 - **Image animation** — APNG/animated-WebP playback (GIF animation
-  already works through the Wuffs path).
+  already works through the PNG decoder).
 - **Accessibility** — no AT-SPI / accessibility tree is exposed yet;
   a minimal accessible-name + role surface would be a high-value,
   self-contained slice.

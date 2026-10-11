@@ -1,8 +1,9 @@
-//! Southstar — image decoders: ICO/CUR containers (pixels via the Wuffs chain) and WebP stills and animations over libwebp.
+//! Southstar — image decoders: PNG/APNG, GIF, BMP and JPEG in pure Rust, ICO/CUR containers over them, and WebP stills and animations over libwebp.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+pub mod raster;
 
 use ffi::libwebp::{self, AnimDecoder};
 use ffi::{Buffer, Texture};
@@ -30,6 +31,37 @@ impl Pixels {
             height,
         })
     }
+}
+
+fn canvas_pixels(canvas: &raster::Canvas) -> Option<Pixels> {
+    let mut buffer = Buffer::try_new(canvas.pixels.len())?;
+    buffer.copy_from_slice(&canvas.pixels);
+    Some(Pixels {
+        buffer,
+        width: canvas.width as i32,
+        height: canvas.height as i32,
+        stride: canvas.stride(),
+    })
+}
+
+pub fn decode_raster(data: &[u8]) -> Option<Pixels> {
+    canvas_pixels(&raster::decode(data)?)
+}
+
+pub fn decode_raster_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
+    let frames = raster::decode_animation(data)?;
+    let (width, height) = (
+        frames[0].canvas.width as i32,
+        frames[0].canvas.height as i32,
+    );
+    let mut out = Vec::with_capacity(frames.len());
+    for frame in frames {
+        out.push(Frame {
+            pixels: canvas_pixels(&frame.canvas)?,
+            delay_ms: frame.delay_ms,
+        });
+    }
+    Some((out, width, height))
 }
 
 pub struct Frame {
@@ -116,7 +148,7 @@ fn decode_dib_entry(p: &[u8]) -> Option<Decoded> {
     bmp[34..38].fill(0);
     bmp[data_off..].copy_from_slice(&p[pixel_off..pixel_off + xor_size]);
 
-    let mut pixels = ffi::wuffs_decode_to_bgra(&bmp)?;
+    let mut pixels = decode_raster(&bmp)?;
     drop(bmp);
 
     let and_row = u64::from(w).div_ceil(32) * 4;
@@ -177,7 +209,7 @@ pub fn decode_ico(data: &[u8]) -> Option<Decoded> {
     let off = read_u32(&e[12..]) as usize;
     let payload = &data[off..off + size];
     if is_png(payload) {
-        return ffi::wuffs_decode(payload);
+        return decode_raster(payload).and_then(Pixels::into_texture);
     }
     decode_dib_entry(payload)
 }
@@ -210,7 +242,12 @@ fn webp_still(data: &[u8]) -> Option<Pixels> {
     }
     let stride = w as usize * 4;
     let mut buffer = Buffer::try_new(stride * h as usize)?;
-    if !libwebp::decode_premultiplied_bgra(data, &mut buffer, stride) {
+    if data.get(12..16) == Some(b"VP8L") {
+        if !libwebp::decode_straight_bgra(data, &mut buffer, stride) {
+            return None;
+        }
+        raster::premultiply_bgra(&mut buffer);
+    } else if !libwebp::decode_premultiplied_bgra(data, &mut buffer, stride) {
         return None;
     }
     Some(Pixels {

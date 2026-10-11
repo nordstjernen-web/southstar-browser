@@ -432,11 +432,12 @@ follow a library's changing struct layouts.
   `i18n.c`, `spellcheck.c` (Enchant via FFI), `safebrowsing.c` (SHA-256 via
   `sha2`), `csp.c`, `bytecode_cache.c`, `config.c`, `history.c`,
   `bookmarks.c`, `proc_limits.h`.
-- **Image decoders.** Replace the Wuffs chain (`image_wuffs.c`) and
-  `image_webp.c`/`image_ico.c` with the pure-Rust `png`, `gif`, `zune-jpeg`
-  and `image-webp` crates (BMP and ICO are small enough to port by hand);
-  libavif stays behind FFI. This retires ~97k vendored lines and keeps the
-  memory-safety reason Wuffs was chosen for.
+- **Image decoders.** Done for the Wuffs chain: `image_wuffs.c` and the
+  vendored Wuffs subproject are replaced by the pure-Rust `png` (with APNG),
+  `gif` and `zune-jpeg` crates and a hand-written BMP decoder in
+  `rust/image-decoders`; ICO was already ported. WebP stays on libwebp until
+  `image-webp` replaces it, and libavif stays behind FFI. This retired ~97k
+  vendored lines and keeps the memory-safety reason Wuffs was chosen for.
 - **A JavaScript engine bake-off and pilot.** Build the first
   `js-engine` layer with two backends, QuickJS-ng (over a first
   `quickjs-sys`) and Boa, plus `southstar-jsshell`, and run test262 and the
@@ -797,7 +798,7 @@ What is left is third-party C. Each library gets its own decision:
 
 | Library | Lines | Recommendation |
 |---|---:|---|
-| Wuffs | ~97k | Replaced in phase 2 by Rust image crates |
+| Wuffs | ~97k | Replaced in phase 2 by `png`, `gif`, `zune-jpeg` and an in-tree BMP decoder (done) |
 | WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
 | QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
 | lexbor | ~289k | Replace with Southstar's own Rust HTML5 tokenizer, tree builder and WHATWG URL parser, written from the specs (D1 still keeps Servo's `html5ever` and `url` out); the largest remaining piece of vendored C |
@@ -857,7 +858,7 @@ the existing ones, not a test suite.
 | OpenSSL (WebCrypto) | `openssl` crate | — |
 | lexbor (HTML, URL) | own `lexbor-sys` | Southstar's own parser (D1) |
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
-| Wuffs, libwebp | `png`, `gif`, `zune-jpeg`, `image-webp` | — |
+| Wuffs (done), libwebp | `png`, `gif`, `zune-jpeg` (in use), `image-webp` | — |
 | libavif | FFI | — |
 | WAMR | `wasmi` (D9, done) | — |
 | SQLite | `rusqlite` | — |

@@ -155,17 +155,22 @@ top-level and exposes `liblexbor` as a declared dependency directly
 in the parent scope. No system lexbor or CMake fallback is consulted
 — the in-tree copy is always built.
 
-### Image decoding: Wuffs
+### Image decoding: pure-Rust decoders
 
-PNG/APNG, GIF, BMP, and JPEG bytes are decoded through
-[Wuffs](https://github.com/google/wuffs), a memory-safe
-transpiled-to-C image-decoder library. The single-file release is
-vendored at `subprojects/wuffs/wuffs-v0.4.c` and built as a static
-subproject. `ns_image_decode_bytes` (`rust/image`) runs the decoders
-in order: ICO (`rust/image-decoders`) → Wuffs (PNG/APNG, GIF, BMP, JPEG)
-→ WebP via libwebp (`rust/image-decoders`) → AVIF via libavif when built with it
-(`src/image_avif.c`, optional) → SVG in-engine (`src/svg.c`). Nothing
-follows, so an unsupported format fails to decode.
+PNG/APNG, GIF, BMP and JPEG bytes are decoded in Rust by
+`rust/image-decoders` (`src/raster/`): the `png` crate (including APNG
+frames), the `gif` crate and `zune-jpeg`, plus a small in-tree BMP decoder
+(core/info/V2–V5 headers, 1/2/4/8-bit palettes, RLE4/RLE8, bit fields,
+24/32-bit, top-down). They draw into premultiplied BGRA canvases with the
+same premultiplication, compositing, disposal and delay rules the former
+Wuffs chain used, so PNG, GIF and BMP pixels are unchanged; JPEG differs
+from Wuffs by a few levels of IDCT rounding. No orientation is applied
+from EXIF. `ns_image_decode_bytes` (`rust/image`) is the whole chain:
+ICO (`rust/image-decoders`), then `ns_image_decode_raster`, then WebP
+(`rust/image-decoders`, libwebp), then AVIF when built, then SVG in-engine
+(`src/svg.c`). Nothing follows — gdk-pixbuf no longer decodes page
+images, so an unsupported format simply fails to decode rather than
+reaching a loader plugin installed on the user's machine.
 
 ### URL parsing: lexbor URL module
 
@@ -222,7 +227,7 @@ lossy VP8 (the dominant variant served by the BBC, Wikipedia
 thumbnails, and most modern CDNs), lossless VP8L, and **animated
 WebP** (via libwebpdemux's `WebPAnimDecoder`, playing like animated
 GIFs) — is decoded in-tree by `src/image_webp.c`, tried right after
-the Wuffs decoders. No gdk-pixbuf loader, no
+the PNG/GIF/BMP/JPEG decoders. No gdk-pixbuf loader, no
 `loaders.cache` registration, and no sandbox interaction is
 involved; the old `webp-pixbuf-loader` runtime dependency is gone.
 

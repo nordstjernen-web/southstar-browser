@@ -1,6 +1,6 @@
 [package]
 name = "southstar-image-decoders"
-description = "Image decoders: ICO/CUR containers and WebP (still and animated) over libwebp"
+description = "Image decoders: PNG/APNG, GIF, JPEG and BMP in pure Rust, ICO/CUR containers, and WebP (still and animated) over libwebp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,10 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+gif = { version = "0.14", default-features = false, features = ["std"] }
+png = { version = "0.18", default-features = false }
 southstar-glib = { path = "../glib" }
+zune-jpeg = { version = "0.5", default-features = false, features = ["std", "x86", "neon"] }
 
 [lints]
 workspace = true

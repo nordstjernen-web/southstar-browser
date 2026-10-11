@@ -406,7 +406,6 @@ if have_seccomp
   add_project_arguments('-DNS_HAVE_SECCOMP=1', language: 'c')
 endif
 
-libwuffs = dependency('wuffs', fallback: ['wuffs', 'wuffs_dep'])
 libplmpeg = dependency('plmpeg', fallback: ['plmpeg', 'plmpeg_dep'])
 zlib = dependency('zlib')
 

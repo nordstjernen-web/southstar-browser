@@ -37,18 +37,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 implied. See the License for the specific language governing permissions
 and limitations under the License.
 
-### Wuffs — Apache License 2.0
-
-> Memory-safe PNG / GIF / BMP / JPEG decoders, transpiled from the
-> Wuffs language to C. Vendored as the single-file release in
-> `subprojects/wuffs/wuffs-v0.4.c`.
-> <https://github.com/google/wuffs-mirror-release-c>
->
-> Copyright (c) 2017 The Wuffs Authors.
-
-Licensed under the Apache License, Version 2.0. See the lexbor section
-above for the license text (same license).
-
 ### quickjs-ng — MIT License
 
 > JavaScript engine.
@@ -362,7 +350,6 @@ shipped with the upstream sources. As of this release:
 >     See the License for the specific language governing permissions and
 >     limitations under the License.
 
-- Wuffs ships no `NOTICE` file.
 
 If a future upstream release adds one, it will be included verbatim
 in this section.

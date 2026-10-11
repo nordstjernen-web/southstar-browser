@@ -11,7 +11,7 @@ Comment:
  completeness; it is not DFSG-free on its own.
  .
  The in-tree third-party engines (lexbor, QuickJS, WAMR) and vendored
- single-file libraries (Wuffs, pl_mpeg, miniaudio) carry their own free
+ single-file libraries (pl_mpeg, miniaudio) carry their own free
  licenses, reproduced from THIRD-PARTY-LICENSES.md below.
 
 Files: *
@@ -20,10 +20,6 @@ License: GPL-3+ or NSL-1.0
 
 Files: src/lexbor/*
 Copyright: 2018-2025 Alexander Borisov
-License: Apache-2.0
-
-Files: subprojects/wuffs/*
-Copyright: 2019 The Wuffs Authors
 License: Apache-2.0
 
 Files: src/quickjs/*
