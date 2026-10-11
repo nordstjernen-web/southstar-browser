@@ -10,7 +10,7 @@ use southstar_glib::GBoolean;
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{context, history, location, message, named, navigation, set};
+use crate::{context, history, location, message, named, navigation, page, set};
 
 type JobFunc =
     unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
@@ -388,7 +388,6 @@ unsafe extern "C" {
     fn ns_js_top_url(js: *mut NsJs) -> *const c_char;
     fn ns_js_set_top_url(js: *mut NsJs, url: *const c_char);
     fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
-    fn ns_js_anchor_fragment_navigate(js: *mut NsJs, url: *const c_char) -> GBoolean;
     fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
     fn ns_js_can_navigate(js: *const NsJs) -> GBoolean;
     fn ns_js_fragment_navigated(js: *mut NsJs, url: *const c_char);
@@ -580,11 +579,6 @@ pub(crate) fn set_top_url(js: Js, url: &[u8]) {
 pub(crate) fn url_parses(js: Js, url: &[u8]) -> bool {
     let url = c_string(url);
     unsafe { ns_js_url_parses(js.ptr(), url.as_ptr()) != 0 }
-}
-
-pub(crate) fn anchor_fragment_navigate(js: Js, url: &[u8]) -> bool {
-    let url = c_string(url);
-    unsafe { ns_js_anchor_fragment_navigate(js.ptr(), url.as_ptr()) != 0 }
 }
 
 pub(crate) fn in_frame_load(js: Js) -> bool {
@@ -853,4 +847,209 @@ pub unsafe extern "C" fn ns_document_expose_legacy_named(
             named::expose_legacy_named(scope, root, &document);
         })
     }
+}
+
+unsafe extern "C" {
+    fn ns_js_halted(js: *const NsJs) -> GBoolean;
+    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
+    fn ns_js_page_url(js: *const NsJs) -> *const c_char;
+    fn ns_window_scroll_prop(ctx: *mut JSContext, prop: *const c_char) -> f64;
+    fn ns_js_queue_scrollend_document(js: *mut NsJs);
+    fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
+    fn ns_js_dispatch_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: *const c_char,
+        default_prevented: *mut GBoolean,
+    ) -> GBoolean;
+    fn ns_js_dispatch_window_only_event(
+        js: *mut NsJs,
+        target_doc: *const NsNode,
+        kind: *const c_char,
+        event: JSValue,
+        default_prevented: *mut GBoolean,
+    );
+    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
+    fn ns_observer_schedule_tick(js: *mut NsJs);
+    fn ns_services_reeval_media_queries(js: *mut NsJs);
+    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
+    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
+    fn ns_cors_allows(
+        doc_url: *const c_char,
+        resp_url: *const c_char,
+        cors_header: *const c_char,
+    ) -> GBoolean;
+    fn ns_js_frame_of_realm(js: *const NsJs, realm: *mut JSContext) -> *mut NsNode;
+}
+
+pub(crate) fn halted(js: Js) -> bool {
+    unsafe { ns_js_halted(js.ptr()) != 0 }
+}
+
+pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
+    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+}
+
+pub(crate) fn window_scroll_prop(scope: &mut Scope<'_>, prop: &CStr) -> f64 {
+    unsafe { ns_window_scroll_prop(quickjs::raw_context(scope), prop.as_ptr()) }
+}
+
+pub(crate) fn queue_scrollend_document(js: Js) {
+    unsafe { ns_js_queue_scrollend_document(js.ptr()) };
+}
+
+pub(crate) fn set_hit_viewport(x: f64, y: f64) {
+    unsafe { ns_box_set_hit_viewport(x, y) };
+}
+
+pub(crate) fn dispatch_node_event(js: Js, target: Node<'_>, kind: &CStr) {
+    unsafe {
+        ns_js_dispatch_event(
+            js.ptr(),
+            target.as_ptr(),
+            kind.as_ptr(),
+            core::ptr::null_mut(),
+        )
+    };
+}
+
+pub(crate) fn dispatch_window_only_event(js: Js, doc: Option<Node<'_>>, kind: &CStr, event: Value) {
+    unsafe {
+        ns_js_dispatch_window_only_event(
+            js.ptr(),
+            Node::ptr_or_null(doc),
+            kind.as_ptr(),
+            quickjs::into_raw(event),
+            core::ptr::null_mut(),
+        )
+    };
+}
+
+pub(crate) fn make_node_event(
+    scope: &mut Scope<'_>,
+    kind: &CStr,
+    target: Option<Node<'_>>,
+) -> Value {
+    let raw = unsafe {
+        ns_make_event(
+            quickjs::raw_context(scope),
+            kind.as_ptr(),
+            Node::ptr_or_null(target),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+pub(crate) fn schedule_observer_tick(js: Js) {
+    unsafe { ns_observer_schedule_tick(js.ptr()) };
+}
+
+pub(crate) fn reeval_media_queries(js: Js) {
+    unsafe { ns_services_reeval_media_queries(js.ptr()) };
+}
+
+pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
+    let url = c_string(url);
+    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
+}
+
+pub(crate) fn url_same_origin(a: &[u8], b: &[u8]) -> bool {
+    let a = c_string(a);
+    let b = c_string(b);
+    unsafe { ns_url_same_origin(a.as_ptr(), b.as_ptr()) != 0 }
+}
+
+pub(crate) fn cors_allows(doc_url: Option<&[u8]>, url: &[u8], allow: &[u8]) -> bool {
+    let doc_url = doc_url.map(c_string);
+    let url = c_string(url);
+    let allow = c_string(allow);
+    let doc_ptr = doc_url.as_ref().map_or(core::ptr::null(), |d| d.as_ptr());
+    unsafe { ns_cors_allows(doc_ptr, url.as_ptr(), allow.as_ptr()) != 0 }
+}
+
+fn caller_document_url(js: Js, ctx: *mut JSContext) -> Option<Vec<u8>> {
+    let frame = unsafe { Node::from_ptr(ns_js_frame_of_realm(js.ptr(), JS_GetCallerRealm(ctx))) };
+    if let Some(url) = frame.and_then(|frame| frame.attr(c"data-nd-frame-url"))
+        && !url.is_empty()
+    {
+        return Some(url.to_bytes().to_vec());
+    }
+    let origin = unsafe { ns_js_document_origin(js.ptr()) };
+    let url = if origin.is_null() {
+        unsafe { ns_js_page_url(js.ptr()) }
+    } else {
+        origin
+    };
+    (!url.is_null()).then(|| unsafe { borrowed(url) })
+}
+
+fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
+    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_anchor_fragment_navigate(
+    js: *mut NsJs,
+    abs_url: *const c_char,
+) -> GBoolean {
+    let Some(abs_url) = opt_bytes(abs_url) else {
+        return 0;
+    };
+    southstar_glib::boolean(page::anchor_fragment_navigate(Js::of(js), abs_url))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64) {
+    page::note_viewport_scroll(Js::of(js), x, y);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_dispatch_resize(js: *mut NsJs) {
+    if !js.is_null() {
+        page::dispatch_resize(Js::of(js));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_reeval_media_queries(js: *mut NsJs) {
+    reeval_media_queries(Js::of(js));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_fire_page_transition(
+    js: *mut NsJs,
+    kind: *const c_char,
+    persisted: GBoolean,
+) {
+    if js.is_null() || kind.is_null() {
+        return;
+    }
+    let kind = unsafe { CStr::from_ptr(kind) };
+    page::fire_page_transition(Js::of(js), kind, persisted != 0);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_resource_origin_clean(
+    js: *mut NsJs,
+    ctx: *mut JSContext,
+    url: *const c_char,
+    cors_allow_origin: *const c_char,
+) -> GBoolean {
+    let Some(url) = opt_bytes(url) else {
+        return 0;
+    };
+    if js.is_null() {
+        return 0;
+    }
+    let js = Js::of(js);
+    let caller = if url.starts_with(b"data:") || url.starts_with(b"blob:") {
+        None
+    } else {
+        caller_document_url(js, ctx)
+    };
+    southstar_glib::boolean(page::resource_origin_clean(
+        caller,
+        url,
+        opt_bytes(cors_allow_origin),
+    ))
 }

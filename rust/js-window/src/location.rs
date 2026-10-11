@@ -98,7 +98,7 @@ fn navigate_unless_fragment(js: Js, target: &[u8]) {
         return;
     }
     let absolute = ffi::url_resolve(Some(&ffi::top_url(js)), target);
-    if !absolute.is_some_and(|absolute| ffi::anchor_fragment_navigate(js, &absolute)) {
+    if !absolute.is_some_and(|absolute| crate::page::anchor_fragment_navigate(js, &absolute)) {
         ffi::navigate(js, target, false);
     }
 }

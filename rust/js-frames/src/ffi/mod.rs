@@ -829,6 +829,14 @@ pub unsafe extern "C" fn ns_js_node_realm_context(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_realm_for_node(
+    js: *const NsJs,
+    node: *const NsNode,
+) -> *mut JSContext {
+    unsafe { ns_js_node_realm_context(js, node) }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_frame_node(js: *mut NsJs, window: JSValue) -> *mut NsNode {
     let js = Js::of(js);
     if js.is_null() || !quickjs::raw_is_object(window) {

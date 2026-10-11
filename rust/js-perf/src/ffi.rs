@@ -9,6 +9,7 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 use crate::entry::{Fetch, ResourceInfo, Response};
+use crate::navigation;
 use crate::timeline::{self, Observer};
 
 #[repr(C)]
@@ -461,6 +462,40 @@ macro_rules! export_native {
             }
         )*
     };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming) {
+    if let Some(timing) = unsafe { timing.as_mut() } {
+        navigation::coarsen(timing);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const c_char) {
+    let js = Js::of(js);
+    let Some(key) = (unsafe { bytes(legacy_key) }) else {
+        return;
+    };
+    let Ok(key) = core::str::from_utf8(key) else {
+        return;
+    };
+    if js.is_null() {
+        return;
+    }
+    let timing = unsafe { ns_js_page_navigation_timing(js.ptr()) }.cast_mut();
+    let Some(field) = unsafe { timing.as_mut() }.and_then(|t| navigation::milestone(t, key)) else {
+        return;
+    };
+    *field = crate::now_ms(js);
+    let absolute_ms = (page_time_origin_real_ms(js) + *field).floor() as i64;
+    if let Some(ctx) = main_context(js) {
+        unsafe {
+            quickjs::with_context(ctx, |scope| {
+                navigation::record_legacy_milestone(scope, key, absolute_ms)
+            })
+        };
+    }
 }
 
 export_native! {

@@ -141,7 +141,6 @@ struct ns_js {
     gint64        js_monitor_deadline_us;
     gboolean      halted;
     gboolean      in_pump;
-    gboolean      in_scroll_dispatch;
     int           eval_depth;
     GHashTable   *iframe_globals;
     int           iframe_load_depth;
@@ -492,6 +491,8 @@ gboolean ns_js_get_bool_prop(JSContext *ctx, JSValueConst obj, const char *key,
                              gboolean *was_set);
 
 double ns_perf_now_ms(const ns_js *js);
+void   ns_perf_coarsen_navigation_timing(ns_js_navigation_timing *timing);
+const char *ns_js_page_url(const ns_js *js);
 gint64 ns_js_time_origin_us(const ns_js *js, gconstpointer realm);
 double ns_js_time_origin_real_ms(const ns_js *js, gconstpointer realm);
 double ns_perf_realm_now_ms(JSContext *ctx);

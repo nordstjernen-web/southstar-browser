@@ -1,9 +1,10 @@
-//! Southstar — the Performance API: performance.*, resource timing, the page and frame clocks and PerformanceObserver.
+//! Southstar — the Performance API: performance.*, resource and navigation timing, the page and frame clocks and PerformanceObserver.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod entry;
 mod ffi;
+mod navigation;
 mod object;
 mod timeline;
 

@@ -11,7 +11,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GError};
 use southstar_js_engine::quickjs::{self, JSContext};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Schedule, Task, compile, fetch, hold, import_map, page, scan, schedule};
+use crate::{Schedule, Task, blocking, compile, fetch, hold, import_map, page, scan, schedule};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -76,7 +76,7 @@ const _: () = assert!(
 );
 
 #[repr(C)]
-pub(crate) struct PerfInfo {
+pub struct PerfInfo {
     timeline: *const c_void,
     document_url: *const c_char,
     render_blocking: GBoolean,
@@ -129,7 +129,9 @@ unsafe extern "C" {
         target: *const NsNode,
         ty: *const c_char,
     ) -> GBoolean;
-    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
+    fn ns_js_page_url(js: *const NsJs) -> *const c_char;
+    fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> *mut JSContext;
+    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
     fn ns_js_fetch_subresource(
         js: *mut NsJs,
         url: *const c_char,
@@ -515,7 +517,7 @@ impl Js {
 
     pub(crate) fn element_perf_info(self, n: Node) -> PerfInfo {
         let mut info = PerfInfo::empty();
-        unsafe { ns_js_element_perf_info(self.0, n.as_ptr(), &mut info) };
+        fill_element_perf_info(self.0, Some(n), &mut info);
         info
     }
 
@@ -1000,5 +1002,46 @@ pub unsafe extern "C" fn ns_js_attrs_type_is(
             let attributes = quickjs::borrow_value(scope, attributes);
             GBoolean::from(compile::attributes_type_is(scope, &attributes, want))
         })
+    }
+}
+
+fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) {
+    let frame = el.and_then(blocking::content_frame);
+    let frame_ptr = Node::ptr_or_null(frame);
+    let has_js = !js.is_null();
+    let frame_ctx = if frame.is_some() && has_js {
+        unsafe { ns_js_frame_context(js, frame_ptr) }
+    } else {
+        ptr::null_mut()
+    };
+    info.timeline = if frame_ctx.is_null() {
+        frame_ptr.cast()
+    } else {
+        frame_ctx.cast_const().cast()
+    };
+    let frame_url = if frame.is_some() && has_js {
+        unsafe { ns_js_frame_url(js, frame_ptr) }
+    } else {
+        ptr::null()
+    };
+    info.document_url = if !frame_url.is_null() {
+        frame_url
+    } else if has_js {
+        unsafe { ns_js_page_url(js) }
+    } else {
+        ptr::null()
+    };
+    info.render_blocking = glib::boolean(el.is_some_and(blocking::render_blocking));
+    info.cors_mode = glib::boolean(el.is_some_and(|el| el.attr(c"crossorigin").is_some()));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_element_perf_info(
+    js: *mut NsJs,
+    el: *const NsNode,
+    info: *mut PerfInfo,
+) {
+    if let Some(info) = unsafe { info.as_mut() } {
+        fill_element_perf_info(js, node(el), info);
     }
 }

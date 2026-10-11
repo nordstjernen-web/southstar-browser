@@ -5013,37 +5013,6 @@ ns_js_activate_label(ns_js *js, const ns_node *label, const ns_node *target)
     ns_js_activate_element(js, control);
 }
 
-gboolean
-ns_js_anchor_fragment_navigate(ns_js *js, const char *abs_url)
-{
-    if (!abs_url || !js->current_url || !*js->current_url) return FALSE;
-    const char *h = strchr(abs_url, '#');
-    if (!h) return FALSE;
-    size_t base_len = (size_t)(h - abs_url);
-    const char *cur = js->current_url;
-    const char *ch = strchr(cur, '#');
-    size_t cur_len = ch ? (size_t)(ch - cur) : strlen(cur);
-    if (cur_len != base_len || strncmp(cur, abs_url, base_len) != 0)
-        return FALSE;
-    if (strcmp(cur, abs_url) == 0) {
-        if (js->fragment_nav_cb)
-            js->fragment_nav_cb(abs_url, js->fragment_nav_user_data);
-        return TRUE;
-    }
-    char *old_url = g_strdup(cur);
-    g_free(js->current_url);
-    js->current_url = g_strdup(abs_url);
-    if (js->soft_nav_cb)
-        js->soft_nav_cb(js->current_url, FALSE, js->soft_nav_user_data);
-    if (js->fragment_nav_cb)
-        js->fragment_nav_cb(js->current_url, js->fragment_nav_user_data);
-    char *new_url = g_strdup(js->current_url);
-    ns_js_dispatch_hashchange(js, old_url, new_url);
-    g_free(new_url);
-    g_free(old_url);
-    return TRUE;
-}
-
 JSValue
 ns_element_activation_behavior(JSContext *ctx, const ns_node *act,
                                const ns_node *target)
@@ -5153,87 +5122,6 @@ ns_js_node_doc_base(ns_js *js, const ns_node *el)
     return js ? js->current_url : NULL;
 }
 
-JSContext *
-ns_js_realm_for_node(ns_js *js, const ns_node *node)
-{
-    return ns_js_node_realm_context(js, node);
-}
-
-/* The frame element whose content document holds node, or NULL for the
- * page's own document (fallback content inside an <object> included). */
-static ns_node *
-ns_js_node_content_frame(const ns_node *node)
-{
-    const ns_node *p = node;
-    while (p && !(p->kind == NS_NODE_DOCUMENT && !(p->flags & NS_NODE_FRAGMENT)))
-        p = p->parent;
-    ns_node *frame = p ? p->parent : NULL;
-    return frame && (ns_node_is_element_named(frame, "iframe") ||
-                     ns_node_is_element_named(frame, "frame") ||
-                     ns_node_is_element_named(frame, "object"))
-        ? frame : NULL;
-}
-
-static gboolean
-ns_js_attr_has_token(const ns_node *el, const char *attr, const char *token)
-{
-    const char *v = ns_element_get_attr(el, attr);
-    if (!v) return FALSE;
-    gchar **parts = g_strsplit_set(v, " \t\n\f\r", -1);
-    gboolean found = FALSE;
-    for (int i = 0; parts[i] && !found; i++)
-        found = g_ascii_strcasecmp(parts[i], token) == 0;
-    g_strfreev(parts);
-    return found;
-}
-
-/* Whether a script or stylesheet link blocks rendering, as
- * PerformanceResourceTiming.renderBlockingStatus reports it: the element
- * is in its document's <head> and has blocking="render", or is a
- * parser-inserted classic script without async or defer, or a stylesheet
- * link the parser created for media that applies to the screen. */
-static gboolean
-ns_js_element_render_blocking(const ns_node *el)
-{
-    if (!el || el->kind != NS_NODE_ELEMENT) return FALSE;
-    gboolean in_head = FALSE;
-    for (const ns_node *p = el->parent; p && p->kind == NS_NODE_ELEMENT;
-         p = p->parent)
-        if (ns_node_is_element_named(p, "head")) { in_head = TRUE; break; }
-    if (!in_head) return FALSE;
-    if (ns_js_attr_has_token(el, "blocking", "render")) return TRUE;
-    if (el->flags & NS_NODE_NOT_PARSER_INSERTED) return FALSE;
-    if (ns_node_is_element_named(el, "script"))
-        return !ns_script_type_is_module(el) &&
-               !ns_element_get_attr(el, "async") &&
-               !ns_element_get_attr(el, "defer");
-    if (ns_node_is_element_named(el, "link")) {
-        const char *media = ns_element_get_attr(el, "media");
-        return ns_js_attr_has_token(el, "rel", "stylesheet") &&
-               !ns_js_attr_has_token(el, "rel", "alternate") &&
-               (!media || !*media || g_ascii_strcasecmp(media, "all") == 0 ||
-                g_ascii_strcasecmp(media, "screen") == 0);
-    }
-    return FALSE;
-}
-
-/* The resource timing details that come from the element a resource is
- * loaded for: the timeline of its document (the frame's realm, the frame
- * element for a frame without one yet, NULL for the page's own), that
- * document's URL, its render-blocking status and its CORS mode. */
-void
-ns_js_element_perf_info(ns_js *js, const ns_node *el,
-                        ns_perf_resource_info *info)
-{
-    ns_node *frame = ns_js_node_content_frame(el);
-    JSContext *fctx = frame && js ? ns_js_frame_context(js, frame) : NULL;
-    info->timeline = fctx ? (gconstpointer)fctx : (gconstpointer)frame;
-    const char *url = frame && js ? ns_js_frame_url(js, frame) : NULL;
-    info->document_url = url ? url : js ? js->current_url : NULL;
-    info->render_blocking = ns_js_element_render_blocking(el);
-    info->cors_mode = el && ns_element_get_attr(el, "crossorigin") != NULL;
-}
-
 char *
 ns_js_node_document_base_url(ns_js *js, const ns_node *node)
 {
@@ -5246,53 +5134,6 @@ ns_js_node_document_base_url(ns_js *js, const ns_node *node)
     }
     const char *fallback = ns_js_node_doc_base(js, node);
     return ns_js_document_base_url(js, doc, fallback);
-}
-
-static gboolean
-ns_js_urls_share_http_authority(const char *a, const char *b)
-{
-    if (!ns_url_is_http_or_https(a)) return FALSE;
-    const char *authority = strstr(a, "://") + 3;
-    size_t authority_len = strcspn(authority, "/?#\\");
-    if (authority_len == 0) return FALSE;
-    size_t n = (size_t)(authority - a) + authority_len;
-    return strncmp(a, b, n) == 0 &&
-           (b[n] == '\0' || b[n] == '/' || b[n] == '?' || b[n] == '#');
-}
-
-static gboolean
-ns_js_urls_same_origin(const char *a, const char *b)
-{
-    if (!a || !b) return FALSE;
-    if (ns_js_urls_share_http_authority(a, b)) return TRUE;
-    if (ns_url_is_http_or_https(a) || ns_url_is_http_or_https(b))
-        return ns_url_same_origin(a, b);
-    const char *ca = strchr(a, ':'), *cb = strchr(b, ':');
-    return ca && cb && ca - a == cb - b &&
-           g_ascii_strncasecmp(a, b, (gsize)(ca - a)) == 0;
-}
-
-static const char *
-ns_js_caller_document_url(ns_js *js, JSContext *ctx)
-{
-    ns_node *frame = ns_js_frame_of_realm(js, JS_GetCallerRealm(ctx));
-    if (frame) {
-        const char *fu = ns_element_get_attr(frame, "data-nd-frame-url");
-        if (fu && *fu) return fu;
-    }
-    return js->document_origin ? js->document_origin : js->current_url;
-}
-
-gboolean
-ns_js_resource_origin_clean(ns_js *js, JSContext *ctx, const char *url,
-                            const char *cors_allow_origin)
-{
-    if (!js || !url) return FALSE;
-    if (g_str_has_prefix(url, "data:") || g_str_has_prefix(url, "blob:"))
-        return TRUE;
-    const char *doc_url = ns_js_caller_document_url(js, ctx);
-    if (ns_js_urls_same_origin(url, doc_url)) return TRUE;
-    return cors_allow_origin && ns_cors_allows(doc_url, url, cors_allow_origin);
 }
 
 
@@ -6314,65 +6155,6 @@ ns_ce_attr_changed(ns_js *js, ns_node *node, const char *attr,
     ns_ce_attribute_changed(js, node, attr, old_value, new_value);
 }
 
-void
-ns_js_note_viewport_scroll(ns_js *js, double x, double y)
-{
-    if (!js || !js->ctx || js->halted) return;
-    JSContext *ctx = js->ctx;
-    if (ns_window_scroll_prop(ctx, "scrollX") != x ||
-        ns_window_scroll_prop(ctx, "scrollY") != y)
-        ns_js_queue_scrollend_document(js);
-    ns_box_set_hit_viewport(x, y);
-    JSValue global = JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, global, "scrollX", JS_NewFloat64(ctx, x));
-    JS_SetPropertyStr(ctx, global, "scrollY", JS_NewFloat64(ctx, y));
-    JS_SetPropertyStr(ctx, global, "pageXOffset", JS_NewFloat64(ctx, x));
-    JS_SetPropertyStr(ctx, global, "pageYOffset", JS_NewFloat64(ctx, y));
-    if (js->in_scroll_dispatch) {
-        JS_FreeValue(ctx, global);
-        return;
-    }
-    js->in_scroll_dispatch = TRUE;
-    /* Viewport scrolling fires one scroll event at the document, which
-     * bubbles to the window. */
-    if (js->current_doc) {
-        ns_js_dispatch_event(js, js->current_doc, "scroll", NULL);
-    } else {
-        JSValue ev = ns_make_window_event(ctx, "scroll");
-        ns_js_dispatch_window_only_event(js, NULL, "scroll", ev, NULL);
-    }
-    JS_FreeValue(ctx, global);
-    js->in_scroll_dispatch = FALSE;
-    ns_observer_schedule_tick(js);
-}
-
-void
-ns_js_reeval_media_queries(ns_js *js)
-{
-    ns_services_reeval_media_queries(js);
-}
-
-void
-ns_js_dispatch_resize(ns_js *js)
-{
-    if (!js || !js->ctx) return;
-    JSContext *ctx = js->ctx;
-    JSValue ev = ns_make_window_event(ctx, "resize");
-    ns_js_dispatch_window_only_event(js, js->current_doc, "resize", ev, NULL);
-    ns_services_reeval_media_queries(js);
-}
-
-void
-ns_js_fire_page_transition(ns_js *js, const char *type, gboolean persisted)
-{
-    if (!js || !js->ctx || !type) return;
-    JSContext *ctx = js->ctx;
-    /* Fired at the window, but with the document as the event's target. */
-    JSValue ev = ns_make_event(ctx, type, js->current_doc);
-    JS_SetPropertyStr(ctx, ev, "persisted", persisted ? JS_TRUE : JS_FALSE);
-    ns_js_dispatch_window_only_event(js, js->current_doc, type, ev, NULL);
-}
-
 JSValue
 ns_illegal_constructor(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
@@ -6660,82 +6442,6 @@ ns_js_adopt_dom_protos(JSContext *ctx, const ns_js_dom_protos *protos)
     }
 }
 
-static double
-ns_js_coarsen_performance_ms(double value)
-{
-    if (value <= 0) return 0;
-    return floor(value * 10.0) / 10.0;
-}
-
-static void
-ns_js_coarsen_navigation_timing(ns_js *js)
-{
-    js->time_origin_us = (js->time_origin_us / 100) * 100;
-    js->time_origin_real_ms = ns_js_coarsen_performance_ms(
-        js->time_origin_real_ms);
-    js->navigation_timing.origin_us = js->time_origin_us;
-    js->navigation_timing.origin_real_ms = js->time_origin_real_ms;
-    js->navigation_timing.domain_lookup_start_ms =
-        ns_js_coarsen_performance_ms(
-            js->navigation_timing.domain_lookup_start_ms);
-    js->navigation_timing.domain_lookup_end_ms =
-        ns_js_coarsen_performance_ms(
-            js->navigation_timing.domain_lookup_end_ms);
-    js->navigation_timing.connect_start_ms = ns_js_coarsen_performance_ms(
-        js->navigation_timing.connect_start_ms);
-    js->navigation_timing.connect_end_ms = ns_js_coarsen_performance_ms(
-        js->navigation_timing.connect_end_ms);
-    js->navigation_timing.secure_connection_start_ms =
-        ns_js_coarsen_performance_ms(
-            js->navigation_timing.secure_connection_start_ms);
-    js->navigation_timing.request_start_ms = ns_js_coarsen_performance_ms(
-        js->navigation_timing.request_start_ms);
-    js->navigation_timing.response_start_ms = ns_js_coarsen_performance_ms(
-        js->navigation_timing.response_start_ms);
-    js->navigation_timing.response_end_ms = ns_js_coarsen_performance_ms(
-        js->navigation_timing.response_end_ms);
-}
-
-static void
-ns_js_set_navigation_milestone(ns_js *js, double *field,
-                               const char *legacy_key);
-
-void
-ns_js_mark_navigation(ns_js *js, const char *legacy_key)
-{
-    ns_js_navigation_timing *t = &js->navigation_timing;
-    double *field =
-        g_str_equal(legacy_key, "domInteractive") ? &t->dom_interactive_ms :
-        g_str_equal(legacy_key, "domContentLoadedEventStart")
-            ? &t->dom_content_loaded_event_start_ms :
-        g_str_equal(legacy_key, "domContentLoadedEventEnd")
-            ? &t->dom_content_loaded_event_end_ms :
-        g_str_equal(legacy_key, "domComplete") ? &t->dom_complete_ms :
-        g_str_equal(legacy_key, "loadEventStart") ? &t->load_event_start_ms :
-        g_str_equal(legacy_key, "loadEventEnd") ? &t->load_event_end_ms :
-        NULL;
-    ns_js_set_navigation_milestone(js, field, legacy_key);
-}
-
-static void
-ns_js_set_navigation_milestone(ns_js *js, double *field,
-                               const char *legacy_key)
-{
-    if (!js || !field || !legacy_key) return;
-    *field = ns_perf_now_ms(js);
-    JSValue global = JS_GetGlobalObject(js->ctx);
-    JSValue performance = JS_GetPropertyStr(js->ctx, global, "performance");
-    JSValue timing = JS_GetPropertyStr(js->ctx, performance, "timing");
-    if (JS_IsObject(timing)) {
-        gint64 absolute_ms = (gint64)floor(js->time_origin_real_ms + *field);
-        JS_SetPropertyStr(js->ctx, timing, legacy_key,
-                          JS_NewInt64(js->ctx, absolute_ms));
-    }
-    JS_FreeValue(js->ctx, timing);
-    JS_FreeValue(js->ctx, performance);
-    JS_FreeValue(js->ctx, global);
-}
-
 static void
 ns_install_idle_deadline(JSContext *ctx, JSValueConst global)
 {
@@ -6767,7 +6473,9 @@ ns_js_new(ns_js_log_cb log_cb, gpointer log_user_data,
         js->navigation_timing.origin_us = js->time_origin_us;
         js->navigation_timing.origin_real_ms = js->time_origin_real_ms;
     }
-    ns_js_coarsen_navigation_timing(js);
+    ns_perf_coarsen_navigation_timing(&js->navigation_timing);
+    js->time_origin_us = js->navigation_timing.origin_us;
+    js->time_origin_real_ms = js->navigation_timing.origin_real_ms;
     ns_perf_init(js);
     js->rt = JS_NewRuntime();
     if (js->rt) {
@@ -9736,8 +9444,7 @@ ns_js_run_scripts_in_doc(ns_js *js, ns_node *doc, const char *base_url_borrowed)
     js->ready_state = 0;
     if (js->doc_ready_states) g_hash_table_remove_all(js->doc_ready_states);
     ns_js_frames_clear_initial_blank(js);
-    ns_js_set_navigation_milestone(js,
-        &js->navigation_timing.dom_loading_ms, "domLoading");
+    ns_js_mark_navigation(js, "domLoading");
     gint64 t0 = g_get_monotonic_time();
     ns_js_install_document(js, doc, base_url);
     if (js->platform_globals) g_hash_table_destroy(js->platform_globals);
@@ -9953,6 +9660,12 @@ ns_js_flush_style(ns_js *js)
     ns_js_flush_layout(js);
 }
 
+
+const char *
+ns_js_page_url(const ns_js *js)
+{
+    return js->current_url;
+}
 
 const char *
 ns_js_current_url(const ns_js *js)
