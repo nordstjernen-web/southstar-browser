@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The rest of layout.c (block, pseudo-element, legend, image and media box
+  builders, shadow roots and slots, form-control blocks, the abspos queue
+  and ns_layout_build) moved to Rust (rust/layout-build), and layout.c is
+  gone: layout is entirely Rust, with identical layout.
 * The GTK browser window (tabs, toolbar, address bar, menus, the bookmarks
   popover, the downloads window, the task manager and session recovery)
   moved to Rust (rust/shell). Meson now links the non-shell targets through
