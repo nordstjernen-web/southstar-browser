@@ -8,10 +8,10 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GError};
-use southstar_js_engine::Scope;
 use southstar_js_engine::quickjs::{self, JSContext};
+use southstar_js_engine::{Scope, Value};
 
-use crate::{Schedule, Task, fetch, hold, import_map, page, scan, schedule};
+use crate::{Schedule, Task, compile, fetch, hold, import_map, page, scan, schedule};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -204,6 +204,8 @@ unsafe extern "C" {
     fn g_array_append_vals(array: *mut GArray, data: *const c_void, len: c_uint) -> *mut GArray;
     fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> quickjs::JSValue;
     fn JS_ThrowReferenceError(ctx: *mut JSContext, fmt: *const c_char, ...) -> quickjs::JSValue;
+    fn js_strdup(ctx: *mut JSContext, s: *const c_char) -> *mut c_char;
+    fn g_get_monotonic_time() -> i64;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -799,19 +801,25 @@ pub unsafe extern "C" fn ns_js_loader_teardown(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_module_resolve(
-    js: *mut NsJs,
+pub unsafe extern "C" fn ns_js_module_normalize(
+    ctx: *mut JSContext,
     base: *const c_char,
     name: *const c_char,
+    opaque: *mut c_void,
 ) -> *mut c_char {
     let Some(name) = (unsafe { cstr(name) }) else {
         return ptr::null_mut();
     };
     let base = unsafe { cstr(base) }.filter(|base| !base.is_empty());
-    let resolved = import_map::resolve(Js(js), name.to_bytes())
+    let resolved = import_map::resolve(Js(opaque.cast()), name.to_bytes())
         .or_else(|| url_resolve(base, name).map(CString::into_bytes))
         .unwrap_or_else(|| name.to_bytes().to_vec());
-    glib::strdup(&resolved)
+    let end = resolved
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(resolved.len());
+    let resolved = CString::new(&resolved[..end]).unwrap_or_default();
+    unsafe { js_strdup(ctx, resolved.as_ptr()) }
 }
 
 #[unsafe(no_mangle)]
@@ -833,5 +841,164 @@ pub unsafe extern "C" fn ns_js_module_fetch(
             glib::strdup(&body)
         }
         None => ptr::null_mut(),
+    }
+}
+
+unsafe fn bytes<'a>(p: *const c_char, len: usize) -> &'a [u8] {
+    if p.is_null() || len == 0 {
+        &[]
+    } else {
+        unsafe { core::slice::from_raw_parts(p.cast(), len) }
+    }
+}
+
+unsafe fn name_bytes<'a>(p: *const c_char) -> &'a [u8] {
+    unsafe { cstr(p) }.map_or(&[], CStr::to_bytes)
+}
+
+fn rethrow(scope: &mut Scope<'_>, error: Option<Value>) -> quickjs::JSValue {
+    match error {
+        Some(error) => quickjs::result_raw(scope, Err(error)),
+        None => quickjs::EXCEPTION,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_js_profile_enabled() -> GBoolean {
+    GBoolean::from(compile::profile_enabled())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_js_profile_begin() -> i64 {
+    if compile::profile_enabled() {
+        unsafe { g_get_monotonic_time() }
+    } else {
+        0
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_profile_eval(
+    start_us: i64,
+    len: usize,
+    cached: GBoolean,
+    origin: *const c_char,
+) {
+    if compile::profile_enabled() {
+        let origin = unsafe { cstr(origin) }.unwrap_or(c"<inline>");
+        let elapsed = unsafe { g_get_monotonic_time() } - start_us;
+        compile::report_eval(elapsed, len, cached != 0, origin.to_bytes());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_profile_module(start_us: i64, len: usize, origin: *const c_char) {
+    if compile::profile_enabled() {
+        let origin = unsafe { cstr(origin) }.unwrap_or(c"module");
+        let elapsed = unsafe { g_get_monotonic_time() } - start_us;
+        compile::report_module(elapsed, len, origin.to_bytes());
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_bytecode_cache_lookup(
+    ctx: *mut JSContext,
+    src: *const c_char,
+    len: usize,
+) -> quickjs::JSValue {
+    let src = unsafe { bytes(src, len) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            compile::cached_script(scope, src).map_or(quickjs::UNDEFINED, quickjs::into_raw)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_bytecode_cache_store(
+    ctx: *mut JSContext,
+    compiled: quickjs::JSValue,
+    src: *const c_char,
+    len: usize,
+) {
+    let src = unsafe { bytes(src, len) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let compiled = quickjs::borrow_value(scope, compiled);
+            compile::store_script(scope, &compiled, src);
+        });
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_module_bytecode_lookup(
+    ctx: *mut JSContext,
+    name: *const c_char,
+    src: *const c_char,
+    len: usize,
+) -> quickjs::JSValue {
+    let name = unsafe { name_bytes(name) };
+    let src = unsafe { bytes(src, len) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            match compile::cached_module(scope, name, src) {
+                None => quickjs::UNDEFINED,
+                Some(Ok(module)) => quickjs::into_raw(module),
+                Some(Err(error)) => rethrow(scope, error),
+            }
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_module_bytecode_store(
+    ctx: *mut JSContext,
+    module: quickjs::JSValue,
+    name: *const c_char,
+    src: *const c_char,
+    len: usize,
+) {
+    let name = unsafe { name_bytes(name) };
+    let src = unsafe { bytes(src, len) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let module = quickjs::borrow_value(scope, module);
+            compile::store_module(scope, &module, name, src);
+        });
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_module_set_import_meta(
+    ctx: *mut JSContext,
+    module: quickjs::JSValue,
+    is_main: GBoolean,
+) -> c_int {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let module = quickjs::borrow_value(scope, module);
+            match compile::set_import_meta(scope, &module, is_main != 0) {
+                Ok(()) => 0,
+                Err(error) => {
+                    rethrow(scope, error);
+                    -1
+                }
+            }
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_attrs_type_is(
+    ctx: *mut JSContext,
+    attributes: quickjs::JSValue,
+    want: *const c_char,
+) -> GBoolean {
+    let want = unsafe { name_bytes(want) };
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let attributes = quickjs::borrow_value(scope, attributes);
+            GBoolean::from(compile::attributes_type_is(scope, &attributes, want))
+        })
     }
 }

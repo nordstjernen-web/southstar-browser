@@ -16,3 +16,8 @@ pub unsafe extern "C" fn ns_js_brand_node_interfaces(
         });
     }
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_name_engine_members(ctx: *mut JSContext) {
+    unsafe { quickjs::with_context(ctx, crate::names::name_engine_members) };
+}

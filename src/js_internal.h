@@ -1354,7 +1354,20 @@ gboolean ns_js_async_scripts_pending(const ns_js *js);
 void     ns_parser_hold_forget(ns_js *js, const ns_node *n);
 void     ns_js_cancel_async_scripts(ns_js *js);
 void     ns_js_loader_teardown(ns_js *js);
-char    *ns_js_module_resolve(ns_js *js, const char *base, const char *name);
+char    *ns_js_module_normalize(JSContext *ctx, const char *base_name,
+                                const char *name, void *opaque);
+gboolean ns_js_attrs_type_is(JSContext *ctx, JSValueConst attributes,
+                             const char *want);
+int      ns_js_module_set_import_meta(JSContext *ctx, JSValueConst module,
+                                      gboolean is_main);
+JSValue  ns_js_bytecode_cache_lookup(JSContext *ctx, const char *src, gsize len);
+void     ns_js_bytecode_cache_store(JSContext *ctx, JSValueConst compiled,
+                                    const char *src, gsize len);
+JSValue  ns_js_module_bytecode_lookup(JSContext *ctx, const char *name,
+                                      const char *src, gsize len);
+void     ns_js_module_bytecode_store(JSContext *ctx, JSValueConst module,
+                                     const char *name, const char *src,
+                                     gsize len);
 char    *ns_js_module_fetch(ns_js *js, JSContext *ctx, const char *name,
                             gboolean json, gsize *out_len);
 void     ns_js_eval_script_source(ns_js *js, ns_node *script, const char *source,
@@ -2073,5 +2086,9 @@ void     ns_js_mark_navigation(ns_js *js, const char *legacy_key);
 void     ns_js_run_content_scripts(ns_js *js, const char *url,
                                    gboolean document_start);
 gboolean ns_js_profile_enabled(void);
+gint64   ns_js_profile_begin(void);
+void     ns_js_profile_eval(gint64 start_us, gsize len, gboolean cached,
+                            const char *origin);
+void     ns_js_profile_module(gint64 start_us, gsize len, const char *origin);
 
 #endif

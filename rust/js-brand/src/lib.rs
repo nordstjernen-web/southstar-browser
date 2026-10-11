@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+mod names;
 
 use southstar_js_engine::quickjs::{self, BrandMode};
 use southstar_js_engine::{Scope, Value};

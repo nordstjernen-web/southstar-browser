@@ -2036,6 +2036,7 @@ dependencies = [
 name = "southstar-js-loader"
 version = "1.0.30-dev"
 dependencies = [
+ "southstar-bytecode-cache",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",

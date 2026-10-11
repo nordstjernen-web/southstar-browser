@@ -935,6 +935,8 @@ pub mod quickjs {
 
     pub const UNDEFINED: JSValue = super::UNDEFINED;
 
+    pub const EXCEPTION: JSValue = super::mkval(super::TAG_EXCEPTION, 0);
+
     pub unsafe fn free_raw(rt: *mut c_void, raw: JSValue) {
         if !rt.is_null() {
             unsafe { super::JS_FreeValueRT(rt.cast(), raw) };
@@ -1449,6 +1451,50 @@ pub mod quickjs {
         mode: BrandMode,
     ) {
         unsafe { JS_SetCFunctionBrand(scope.ctx, function.raw, brand, mode) };
+    }
+
+    const TAG_MODULE: i64 = -3;
+    const WRITE_OBJ_BYTECODE: c_int = 1 << 0;
+    const READ_OBJ_BYTECODE: c_int = 1 << 0;
+
+    unsafe extern "C" {
+        fn JS_GetImportMeta(ctx: *mut JSContext, m: *mut c_void) -> JSValue;
+        fn JS_GetModuleName(ctx: *mut JSContext, m: *mut c_void) -> super::JSAtom;
+    }
+
+    pub fn is_module(value: &Value) -> bool {
+        value.raw.tag == TAG_MODULE
+    }
+
+    pub fn write_bytecode(scope: &mut Scope<'_>, compiled: &Value) -> Option<Vec<u8>> {
+        let mut len = 0usize;
+        let buf =
+            unsafe { super::JS_WriteObject(scope.ctx, &mut len, compiled.raw, WRITE_OBJ_BYTECODE) };
+        if buf.is_null() {
+            return None;
+        }
+        let bytes = unsafe { core::slice::from_raw_parts(buf, len) }.to_vec();
+        unsafe { super::js_free(scope.ctx, buf.cast()) };
+        Some(bytes)
+    }
+
+    pub fn read_bytecode(scope: &mut Scope<'_>, bytes: &[u8]) -> Result<Value, Value> {
+        let raw = unsafe {
+            super::JS_ReadObject(scope.ctx, bytes.as_ptr(), bytes.len(), READ_OBJ_BYTECODE)
+        };
+        scope.take(raw)
+    }
+
+    pub fn module_name(scope: &mut Scope<'_>, module: &Value) -> Result<Value, Value> {
+        let atom = unsafe { JS_GetModuleName(scope.ctx, module.raw.u.ptr) };
+        let raw = unsafe { JS_AtomToString(scope.ctx, atom) };
+        unsafe { super::JS_FreeAtom(scope.ctx, atom) };
+        scope.take(raw)
+    }
+
+    pub fn import_meta(scope: &mut Scope<'_>, module: &Value) -> Result<Value, Value> {
+        let raw = unsafe { JS_GetImportMeta(scope.ctx, module.raw.u.ptr) };
+        scope.take(raw)
     }
 }
 
