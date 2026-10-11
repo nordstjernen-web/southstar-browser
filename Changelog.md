@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The dataset, live collection (HTMLCollection, NodeList, NamedNodeMap),
+  Attr and Event classes moved off js.c onto the engine-neutral host classes
+  (rust/js-attrs, rust/js-collections, rust/js-events), which gained a host-
+  access check and a forwarded ordinary [[Set]].
 * The GTK shell's title row, icons, page layers and entry point moved to
   Rust (rust/shell, over a new hand-written GTK FFI crate rust/gtk-ffi),
   starting phase 4. The shell executable links its own Rust static library,
