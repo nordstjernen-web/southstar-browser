@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser (unreleased):
 ======
+* The script bytecode cache glue, module specifier normalization, import
+  attributes, import.meta and the NS_PROFILE script profiler moved from js.c
+  to Rust (rust/js-loader), and native member naming to rust/js-brand.
 * requestAnimationFrame, cancelAnimationFrame and requestVideoFrameCallback
   with the animation-frame tick, scrollend, the animation, transition and
   media load events and the page lifecycle tick moved from js.c to Rust
