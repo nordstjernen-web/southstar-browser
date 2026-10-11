@@ -2168,6 +2168,7 @@ version = "1.0.30-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
+ "southstar-js-bind",
  "southstar-js-engine",
 ]
 

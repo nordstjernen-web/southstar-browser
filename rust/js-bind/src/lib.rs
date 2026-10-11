@@ -100,6 +100,14 @@ pub fn bind_int_constants<'n>(
     Ok(())
 }
 
+pub fn has_defined_own(scope: &mut Scope<'_>, object: &Value, name: &str) -> bool {
+    let key = scope.string(name);
+    match scope.own_property(object, &key) {
+        Ok(Some(descriptor)) => descriptor.accessor || !descriptor.value.is_undefined(),
+        _ => false,
+    }
+}
+
 pub fn prototype_of(scope: &mut Scope<'_>, global: &Value, constructor_name: &str) -> Value {
     match scope.get(global, constructor_name) {
         Ok(constructor) if constructor.is_object() => scope

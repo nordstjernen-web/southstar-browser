@@ -87,6 +87,13 @@ unsafe extern "C" {
         magic: c_int,
     ) -> JSValue;
     fn ns_int_attr_index(attr: *const c_char) -> c_int;
+    fn ns_form_controls_snapshot(ctx: *mut JSContext, form: JSValue) -> JSValue;
+    fn ns_js_record_character_data(js: *mut NsJs, node: *mut NsNode, old_value: *const c_char);
+    fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
+    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
+    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
+    fn ns_element_find_shadow_child(host: *const NsNode) -> *mut NsNode;
+    fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
 }
 
 fn raw(node: Option<Element>) -> *mut NsNode {
@@ -208,6 +215,51 @@ pub(crate) fn set_attr_recorded_bytes(js: Option<Js>, node: Element, name: &CStr
 
 pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
     unsafe { ns_js_remove_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr()) };
+}
+
+pub(crate) fn form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult {
+    let raw = unsafe { ns_form_controls_snapshot(quickjs::raw_context(scope), quickjs::raw(form)) };
+    checked_raw(scope, raw)
+}
+
+pub(crate) fn replace_text(node: Element, text: &[u8]) {
+    node.set_text(glib::strdup(text), text.len() as u32, true);
+}
+
+pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
+    let mut old = old.to_vec();
+    old.push(0);
+    unsafe { ns_js_record_character_data(js.0, node.as_mut_ptr(), old.as_ptr().cast()) };
+}
+
+pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
+    unsafe { ns_js_schedule_iframe_load(raw_js(js), node.as_mut_ptr()) };
+}
+
+pub(crate) fn resolve_against_document_base(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
+    let base = unsafe { ns_js_doc_base_url(raw_js(js)) };
+    if base.is_null() {
+        return None;
+    }
+    let resolved = if unsafe { *base } != 0 {
+        owned_text(unsafe { ns_url_resolve(base, href.as_ptr()) })
+    } else {
+        None
+    };
+    unsafe { glib::g_free(base.cast()) };
+    resolved
+}
+
+pub(crate) fn is_shadow_root(node: Element) -> bool {
+    unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+}
+
+pub(crate) fn has_shadow_child(host: Element) -> bool {
+    !unsafe { ns_element_find_shadow_child(host.as_ptr()) }.is_null()
+}
+
+pub(crate) fn has_assigned_slot(node: Element) -> bool {
+    !unsafe { ns_node_assigned_slot_node(node.as_ptr()) }.is_null()
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
@@ -392,6 +444,9 @@ getters! {
     ns_element_get_disabled => crate::element::disabled,
     ns_element_get_option_index => crate::element::option_index,
     ns_element_get_select_length => crate::element::select_length,
+    ns_element_get_text_length => crate::node_value::text_length,
+    ns_element_get_nodeValue => crate::node_value::node_value,
+    ns_element_get_data => crate::node_value::data,
     ns_element_get_list_ref => crate::element::list,
     ns_element_get_form => crate::element::form,
     ns_element_img_complete => crate::image::complete,
@@ -414,6 +469,8 @@ setters! {
     ns_element_list_set => crate::element::set_list,
     ns_element_set_content => crate::element::set_content,
     ns_element_set_rows => crate::table::set_rows,
+    ns_element_set_nodeValue => crate::node_value::set_node_value,
+    ns_element_set_data => crate::node_value::set_data,
 }
 
 methods! {
@@ -436,6 +493,16 @@ pub unsafe extern "C" fn ns_live_build_labels(ctx: *mut JSContext, n: *const NsN
         quickjs::with_context(ctx, |scope| {
             let result = crate::element::build_labels(scope, Node::from_ptr(n));
             quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_element_is_rendered(ctx: *mut JSContext, v: JSValue) -> GBoolean {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let value = quickjs::borrow_value(scope, v);
+            glib::boolean(crate::node_value::is_rendered(scope, &value))
         })
     }
 }

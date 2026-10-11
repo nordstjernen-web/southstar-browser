@@ -179,7 +179,6 @@ struct ns_js {
     JSValue       proto_document;
     GHashTable   *per_tag_protos;
     int           dom_protos_set;
-    gboolean      in_hashchange;
 };
 
 static inline ns_js *
@@ -381,6 +380,33 @@ JSValue  ns_element_animate(JSContext *ctx, JSValueConst this_val, int argc,
                             JSValueConst *argv);
 void     ns_install_window_compat(JSContext *ctx, JSValueConst global);
 void     ns_install_body_reflected_handlers(JSContext *ctx, JSValueConst wrapper);
+JSValue  ns_element_get_text_length(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_nodeValue(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_data(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_data(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_style(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_style(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_classList(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_classList(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_relList(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_set_relList(JSContext *ctx, JSValueConst this_val, JSValueConst val);
+JSValue  ns_element_get_sandbox_list(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_sizes_list(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_get_attributes(JSContext *ctx, JSValueConst this_val);
+JSValue  ns_element_checkVisibility(JSContext *ctx, JSValueConst this_val, int argc,
+                                    JSValueConst *argv);
+JSValue  ns_element_setPointerCapture(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_element_releasePointerCapture(JSContext *ctx, JSValueConst this_val, int argc,
+                                          JSValueConst *argv);
+JSValue  ns_element_hasPointerCapture(JSContext *ctx, JSValueConst this_val, int argc,
+                                      JSValueConst *argv);
+JSValue  ns_element_show_picker(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv);
+JSValue  ns_document_get_defaultView(JSContext *ctx, JSValueConst this_val);
+gboolean ns_obj_has_defined_own_prop(JSContext *ctx, JSValueConst obj, const char *name);
+void     ns_box_lookup_forget(ns_js *js);
+const ns_node *ns_js_iframe_document_node(const ns_js *js);
 JSValue  ns_array_namedItem(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv);
 void     ns_element_insert_before_single(ns_js *js, ns_node *parent, ns_node *newc,
@@ -1181,6 +1207,10 @@ void     ns_cssom_style_set(JSContext *ctx, ns_node *node, const char *name,
 void     ns_cssom_teardown(ns_js *js);
 ns_node *ns_style_decl_node(JSValueConst this_val);
 JSValue  ns_style_decl_proto(JSContext *ctx);
+JSValue  ns_style_decl_new(JSContext *ctx, JSValueConst element);
+gboolean ns_is_style_decl(JSValueConst v);
+JSValue  ns_token_list_new(JSContext *ctx, JSValueConst element, const char *attr);
+gboolean ns_is_token_list(JSValueConst v);
 gboolean ns_js_element_is_rendered(JSContext *ctx, JSValueConst v);
 GHashTable *ns_js_style_table(const ns_js *js);
 struct ns_anim *ns_js_anim(const ns_js *js);
@@ -1273,7 +1303,6 @@ const ns_node *ns_js_active_modal(const ns_js *js);
 gboolean ns_js_has_window_action(const ns_js *js);
 void     ns_event_type_init_flags(const char *type, gboolean at_document,
                                   gboolean *bubbles, gboolean *cancelable);
-void     ns_js_fire_window_focus_event(ns_js *js, ns_node *doc, const char *type);
 gboolean ns_node_is_disabled_form_control(const ns_node *el);
 const ns_node *ns_click_activation_target(const ns_node *el);
 void     ns_js_synthetic_activation(ns_js *js, const ns_node *act,
@@ -1940,7 +1969,6 @@ void     ns_js_scroll_viewport(ns_js *js, double x, double y);
 void     ns_js_queue_scrollend(ns_js *js, const ns_node *el);
 void     ns_js_notify_scroll_to(ns_js *js, const ns_node *target);
 JSValue  ns_element_int_attr_getter(JSContext *ctx, JSValueConst this_val, int magic);
-JSValue  ns_make_svg_animated_length(JSContext *ctx, const ns_node *n, const char *attr);
 JSValue  ns_element_img_natural_width(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_element_img_natural_height(JSContext *ctx, JSValueConst this_val);
 JSValue  ns_element_img_complete(JSContext *ctx, JSValueConst this_val);

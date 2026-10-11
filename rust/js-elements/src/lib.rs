@@ -5,6 +5,7 @@
 mod element;
 mod ffi;
 mod image;
+mod node_value;
 mod table;
 
 use southstar_dom::{MAX_DEPTH, Node};

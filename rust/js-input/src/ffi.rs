@@ -550,3 +550,25 @@ pub unsafe extern "C" fn ns_js_input_install_wpt(ctx: *mut JSContext, global: JS
 pub unsafe extern "C" fn ns_js_input_teardown(js: *mut NsJs) {
     crate::teardown(Js::of(js));
 }
+
+macro_rules! capture_methods {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub unsafe extern "C" fn $name(
+                ctx: *mut JSContext,
+                this_val: JSValue,
+                argc: c_int,
+                argv: *mut JSValue,
+            ) -> JSValue {
+                unsafe { quickjs::call_native(ctx, this_val, argc, argv, $f) }
+            }
+        )*
+    };
+}
+
+capture_methods! {
+    ns_element_setPointerCapture => crate::capture::set,
+    ns_element_releasePointerCapture => crate::capture::release,
+    ns_element_hasPointerCapture => crate::capture::has,
+}

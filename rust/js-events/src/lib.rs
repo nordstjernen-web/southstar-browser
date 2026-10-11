@@ -5,6 +5,7 @@
 mod attrs;
 mod ctors;
 mod event;
+mod exceptions;
 mod ffi;
 mod install;
 

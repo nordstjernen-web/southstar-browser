@@ -42,6 +42,17 @@ unsafe extern "C" {
     ) -> JSValue;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
+    fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
+    fn ns_js_page_csp(js: *const NsJs) -> *const c_void;
+    fn ns_csp_allows(
+        csp: *const c_void,
+        kind: c_int,
+        resource_url: *const c_char,
+        document_url: *const c_char,
+    ) -> GBoolean;
+    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
+    fn ns_iframe_realm_window(ctx: *mut JSContext, this_val: JSValue, node: *mut NsNode)
+    -> JSValue;
     fn ns_js_cookie_value(js: *const NsJs) -> *const c_char;
     fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char);
     fn ns_js_partition_key(js: *const NsJs) -> *const c_char;
@@ -148,6 +159,73 @@ pub(crate) fn current_document(js: Js) -> Option<Element> {
         return None;
     }
     node_of(unsafe { ns_js_current_document(js.0) })
+}
+
+const CSP_BASE_URI: c_int = 12;
+
+fn borrowed_c_str(text: *const c_char) -> Option<&'static CStr> {
+    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
+}
+
+pub(crate) fn current_url_c(js: Js) -> Option<&'static CStr> {
+    borrowed_c_str(unsafe { ns_js_current_url(js.0) })
+}
+
+pub(crate) fn node_doc_base(js: Js, node: Option<Element>) -> Option<&'static CStr> {
+    borrowed_c_str(unsafe { ns_js_node_doc_base(js.0, raw(node)) })
+}
+
+pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
+    take_glib_string(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) })
+}
+
+pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) -> bool {
+    if js.is_null() {
+        return true;
+    }
+    let csp = unsafe { ns_js_page_csp(js.0) };
+    if csp.is_null() {
+        return true;
+    }
+    let url = c_bytes(url);
+    let document_url = document_url.map_or(ptr::null(), CStr::as_ptr);
+    unsafe { ns_csp_allows(csp, CSP_BASE_URI, url.as_ptr(), document_url) != 0 }
+}
+
+pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame: Element) -> Value {
+    let raw = unsafe {
+        ns_iframe_realm_window(
+            quickjs::raw_context(scope),
+            quickjs::raw(element),
+            frame.as_mut_ptr(),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+fn glib_bytes(bytes: Option<Vec<u8>>) -> *mut c_char {
+    bytes.map_or(ptr::null_mut(), |bytes| glib::strdup(&bytes))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char {
+    glib_bytes(crate::base_url::page_base_url(Js(js)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_node_document_base_url(
+    js: *mut NsJs,
+    node: *const NsNode,
+) -> *mut c_char {
+    glib_bytes(crate::base_url::node_base_url(Js(js), node_of(node)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_document_get_defaultView(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), crate::view::default_view) }
 }
 
 pub(crate) fn current_url(js: Js) -> Option<Vec<u8>> {

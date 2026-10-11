@@ -501,7 +501,7 @@ pub(crate) fn dimension(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsRe
     let attr = if width { c"width" } else { c"height" };
     let node = ffi::unwrap_node(this);
     if let Some(n) = node.filter(|n| n.flags() & FLAG_SVG_NS != 0) {
-        return Ok(ffi::svg_animated_length(scope, n, attr));
+        return Ok(crate::svg::animated_length(scope, n, attr));
     }
     if let Some(n) = node.filter(|n| STRING_DIMENSIONS.iter().any(|tag| name_is(*n, tag))) {
         let value = ffi::attr_bytes(n, attr).unwrap_or_default();

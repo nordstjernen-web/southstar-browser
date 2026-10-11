@@ -113,6 +113,21 @@ fn focused_document(js: Js) -> Option<Element> {
     crate::peek(js, |page| page.focused_doc).or_else(|| top_document(js.current_document()))
 }
 
+fn fire_window_focus_event(js: Js, doc: Element, kind: &CStr) {
+    if js.halted() || js.in_pump() {
+        return;
+    }
+    js.in_document_realm(doc, || {
+        js.scope(|scope| {
+            let event = ffi::make_window_event(scope, kind);
+            let window = js.event_window_for_document(scope, doc);
+            let _ = scope.set(&event, "target", window);
+            let _ = scope.set(&event, "relatedTarget", Value::null());
+            js.dispatch_window_only(doc, kind, event);
+        });
+    });
+}
+
 fn dispatch_focus_event(js: Js, target: Element, kind: &CStr, related: Option<Element>) {
     if js.halted() || js.in_pump() {
         return;
@@ -188,7 +203,7 @@ fn run_focus_update(js: Js, index: usize, same_doc: bool) {
         };
         crate::with(js, |page| page.focused_doc = window_doc(Some(new_doc)));
         if let Some(old_doc) = guard(js, index, 2) {
-            js.fire_window_focus_event(old_doc, c"blur");
+            fire_window_focus_event(js, old_doc, c"blur");
         }
         if has_focus_now(js) {
             return;
@@ -196,7 +211,7 @@ fn run_focus_update(js: Js, index: usize, same_doc: bool) {
         let Some(new_doc) = guard(js, index, 3) else {
             return;
         };
-        js.fire_window_focus_event(new_doc, c"focus");
+        fire_window_focus_event(js, new_doc, c"focus");
         if has_focus_now(js) {
             return;
         }

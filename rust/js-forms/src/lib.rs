@@ -9,6 +9,7 @@ mod files;
 mod form_data;
 mod internals;
 mod labels;
+mod picker;
 mod select;
 mod selection;
 mod submit;

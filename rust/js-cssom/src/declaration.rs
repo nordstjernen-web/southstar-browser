@@ -642,3 +642,27 @@ pub(crate) fn install_style_proto(scope: &mut Scope<'_>, proto: &Value) -> Resul
         1,
     )
 }
+
+pub(crate) fn element_style(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    _args: &[Value],
+) -> Result<Value, Value> {
+    if ffi::unwrap_element(this).is_none() {
+        return Ok(Value::null());
+    }
+    let cached = scope
+        .get(this, "__nsStyleDecl")
+        .unwrap_or_else(|_| Value::undefined());
+    if ffi::is_style_decl(&cached) {
+        return Ok(cached);
+    }
+    let declaration = ffi::new_style_decl(scope, this)?;
+    let hidden = Attributes {
+        writable: false,
+        enumerable: false,
+        configurable: false,
+    };
+    let _ = scope.define(this, "__nsStyleDecl", declaration.clone(), hidden);
+    Ok(declaration)
+}

@@ -41,6 +41,8 @@ unsafe extern "C" {
     fn ns_multipart_boundary() -> *mut c_char;
     fn ns_js_pattern_context() -> *mut JSContext;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
+    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
+    fn ns_js_consume_user_activation(js: *mut NsJs);
     fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
     fn ns_js_events_suspended(js: *const NsJs) -> GBoolean;
     fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
@@ -530,6 +532,14 @@ impl Page {
 
     pub(crate) fn remove_attr_recorded(page: Option<Page>, node: Element, name: &CStr) {
         unsafe { ns_js_remove_attr_recorded(Page::raw(page), mut_ptr(node), name.as_ptr()) };
+    }
+
+    pub(crate) fn has_transient_activation(self) -> bool {
+        unsafe { ns_js_has_transient_activation(self.0) != 0 }
+    }
+
+    pub(crate) fn consume_user_activation(self) {
+        unsafe { ns_js_consume_user_activation(self.0) };
     }
 
     pub(crate) fn halted(self) -> bool {
@@ -1561,6 +1571,16 @@ pub unsafe extern "C" fn ns_form_named_control(
             quickjs::result_raw(scope, result)
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_show_picker(
+    ctx: *mut JSContext,
+    this_val: JSValue,
+    argc: c_int,
+    argv: *mut JSValue,
+) -> JSValue {
+    unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::picker::show_picker) }
 }
 
 #[unsafe(no_mangle)]

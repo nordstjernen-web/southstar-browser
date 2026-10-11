@@ -2,11 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod base_url;
 mod cookie;
 mod elements;
 mod ffi;
 mod props;
 mod realm;
+mod view;
 mod write;
 
 use southstar_dom::{Kind, Node};

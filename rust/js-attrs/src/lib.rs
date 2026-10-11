@@ -4,6 +4,7 @@
 
 mod attr;
 mod dataset;
+mod element;
 mod ffi;
 mod named_map;
 mod token_list;

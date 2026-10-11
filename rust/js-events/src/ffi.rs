@@ -265,3 +265,35 @@ pub unsafe extern "C" fn ns_events_install_window(ctx: *mut JSContext, global: J
 pub unsafe extern "C" fn ns_events_install_worker(ctx: *mut JSContext, global: JSValue) {
     unsafe { with_value(ctx, global, crate::install::install_worker) }
 }
+
+fn c_bytes<'a>(text: *const c_char) -> &'a [u8] {
+    if text.is_null() {
+        return &[];
+    }
+    unsafe { CStr::from_ptr(text) }.to_bytes()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_throw_dom_exception(
+    ctx: *mut JSContext,
+    name: *const c_char,
+    code: c_int,
+    message: *const c_char,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let error =
+                crate::exceptions::dom_exception(scope, c_bytes(name), code, c_bytes(message));
+            quickjs::result_raw(scope, Err(error))
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_make_abort_error(ctx: *mut JSContext) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            quickjs::into_raw(crate::exceptions::abort_error(scope))
+        })
+    }
+}

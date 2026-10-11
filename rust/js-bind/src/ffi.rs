@@ -69,6 +69,21 @@ unsafe fn with_scope<R>(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>) -> R
     unsafe { quickjs::with_context(ctx, f) }
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_obj_has_defined_own_prop(
+    ctx: *mut JSContext,
+    obj: JSValue,
+    name: *const c_char,
+) -> c_int {
+    let name = unsafe { text(name) };
+    unsafe {
+        with_scope(ctx, |scope| {
+            let object = quickjs::borrow_value(scope, obj);
+            c_int::from(crate::has_defined_own(scope, &object, &name))
+        })
+    }
+}
+
 fn make_constructor(scope: &mut Scope<'_>, f: JSCFunction, name: &str, argc: c_int) -> Value {
     let constructor = quickjs::c_constructor_or_function(scope, name, arity(argc), f);
     let _ = crate::attach_prototype(scope, &constructor, name);

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -51,7 +51,25 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_fire_window_focus_event(js: *mut NsJs, doc: *mut NsNode, kind: *const c_char);
+    fn ns_make_window_event(ctx: *mut JSContext, kind: *const c_char) -> JSValue;
+    fn ns_js_event_window_for_document(js: *mut NsJs, doc: *const NsNode) -> JSValue;
+    fn ns_js_dispatch_window_only_event(
+        js: *mut NsJs,
+        target_doc: *const NsNode,
+        kind: *const c_char,
+        event: JSValue,
+        default_prevented: *mut GBoolean,
+    );
+    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> *mut JSContext;
+    fn ns_js_main_realm_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_realm_scope_push(js: *mut NsJs, realm: *mut JSContext, buf: *mut c_void);
+    fn ns_js_frame_scope_push(
+        js: *mut NsJs,
+        realm: *mut JSContext,
+        frame: *mut NsNode,
+        buf: *mut c_void,
+    );
+    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
     fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_active_modal(js: *const NsJs) -> *const NsNode;
@@ -107,6 +125,9 @@ unsafe extern "C" {
     fn ns_summary_toggle_target(el: *const NsNode) -> *mut NsNode;
     fn ns_node_is_button(el: *const NsNode) -> GBoolean;
 }
+
+#[repr(C, align(16))]
+struct ScopeBuffer([u8; 128]);
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(ptr) }
@@ -200,8 +221,52 @@ impl Js {
         prevented != 0
     }
 
-    pub fn fire_window_focus_event(self, doc: Element, kind: &CStr) {
-        unsafe { ns_js_fire_window_focus_event(self.ptr(), doc.as_mut_ptr(), kind.as_ptr()) };
+    pub fn in_document_realm(self, doc: Element, f: impl FnOnce()) {
+        let realm = match doc.parent() {
+            Some(_) => unsafe { ns_js_node_realm_context(self.ptr(), doc.as_ptr()) },
+            None => {
+                let main = unsafe { ns_js_main_realm_context(self.ptr()) };
+                if main.is_null() {
+                    unsafe { ns_js_main_context(self.ptr()) }
+                } else {
+                    main
+                }
+            }
+        };
+        if realm.is_null() {
+            return;
+        }
+        let mut buffer = ScopeBuffer([0; 128]);
+        let buffer = buffer.0.as_mut_ptr().cast::<c_void>();
+        match doc.parent() {
+            Some(frame) if realm != unsafe { ns_js_main_context(self.ptr()) } => unsafe {
+                ns_js_frame_scope_push(self.ptr(), realm, frame.as_mut_ptr(), buffer)
+            },
+            Some(_) => {
+                f();
+                return;
+            }
+            None => unsafe { ns_js_realm_scope_push(self.ptr(), realm, buffer) },
+        }
+        f();
+        unsafe { ns_js_realm_scope_pop(self.ptr(), buffer) };
+    }
+
+    pub fn dispatch_window_only(self, doc: Element, kind: &CStr, event: Value) {
+        unsafe {
+            ns_js_dispatch_window_only_event(
+                self.ptr(),
+                doc.as_ptr(),
+                kind.as_ptr(),
+                quickjs::into_raw(event),
+                ptr::null_mut(),
+            )
+        };
+    }
+
+    pub fn event_window_for_document(self, scope: &mut Scope<'_>, doc: Element) -> Value {
+        let raw = unsafe { ns_js_event_window_for_document(self.ptr(), doc.as_ptr()) };
+        unsafe { quickjs::take_value(scope, raw) }
     }
 
     pub fn checkable_pre_click(self, el: Element, kind: i32) -> CheckableState {
@@ -288,6 +353,11 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
 
 pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value {
     el.map_or_else(Value::null, |el| wrap(scope, el))
+}
+
+pub(crate) fn make_window_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
+    let raw = unsafe { ns_make_window_event(quickjs::raw_context(scope), kind.as_ptr()) };
+    unsafe { quickjs::take_value(scope, raw) }
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {

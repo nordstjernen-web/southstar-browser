@@ -201,6 +201,8 @@ unsafe extern "C" {
     fn ns_js_element_is_rendered(ctx: *mut JSContext, value: JSValue) -> GBoolean;
     fn ns_style_decl_node(value: JSValue) -> *mut NsNode;
     fn ns_style_decl_proto(ctx: *mut JSContext) -> JSValue;
+    fn ns_style_decl_new(ctx: *mut JSContext, element: JSValue) -> JSValue;
+    fn ns_is_style_decl(value: JSValue) -> GBoolean;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_unwrap_element(value: JSValue) -> *const NsNode;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
@@ -465,6 +467,16 @@ pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value 
 
 pub(crate) fn style_decl_node(value: &Value) -> Option<Node<'static>> {
     unsafe { Node::from_ptr(ns_style_decl_node(quickjs::raw(value))) }
+}
+
+pub(crate) fn is_style_decl(value: &Value) -> bool {
+    unsafe { ns_is_style_decl(quickjs::raw(value)) != 0 }
+}
+
+pub(crate) fn new_style_decl(scope: &mut Scope<'_>, element: &Value) -> Result<Value, Value> {
+    let raw = unsafe { ns_style_decl_new(quickjs::raw_context(scope), quickjs::raw(element)) };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
 }
 
 pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
@@ -1112,4 +1124,17 @@ pub unsafe extern "C" fn ns_element_animate(
     argv: *mut JSValue,
 ) -> JSValue {
     unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::animate::element_animate) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_element_get_style(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
+    unsafe {
+        quickjs::call_native(
+            ctx,
+            this_val,
+            0,
+            core::ptr::null_mut(),
+            crate::declaration::element_style,
+        )
+    }
 }

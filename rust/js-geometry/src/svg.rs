@@ -612,3 +612,65 @@ pub(crate) fn begin_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
 pub(crate) fn set_current_time(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::undefined())
 }
+
+fn svg_length_unit(suffix: &[u8]) -> i32 {
+    const UNITS: [(&[u8], i32); 8] = [
+        (b"em", 3),
+        (b"ex", 4),
+        (b"px", 5),
+        (b"cm", 6),
+        (b"mm", 7),
+        (b"in", 8),
+        (b"pt", 9),
+        (b"pc", 10),
+    ];
+    if suffix == b"%" {
+        return 2;
+    }
+    UNITS
+        .iter()
+        .find(|(name, _)| suffix.eq_ignore_ascii_case(name))
+        .map_or(1, |&(_, unit)| unit)
+}
+
+fn svg_length(scope: &mut Scope<'_>, text: &CStr) -> Value {
+    let (value, unit) = if text.is_empty() {
+        (0.0, 1)
+    } else {
+        let (value, end) = ffi::ascii_strtod_prefix(text);
+        let rest = &text.to_bytes()[end..];
+        let suffix = &rest[rest.iter().take_while(|&&b| b == b' ').count()..];
+        let unit = if rest.is_empty() {
+            1
+        } else {
+            svg_length_unit(suffix)
+        };
+        (value, unit)
+    };
+    let length = scope.new_object();
+    let _ = scope.set(&length, "unitType", Value::int(unit));
+    let _ = scope.set(&length, "value", Value::number(value));
+    let _ = scope.set(&length, "valueInSpecifiedUnits", Value::number(value));
+    let shown = if text.is_empty() {
+        scope.string("0")
+    } else {
+        scope.string_from_bytes(text.to_bytes())
+    };
+    let _ = scope.set(&length, "valueAsString", shown);
+    length
+}
+
+pub(crate) fn animated_length(scope: &mut Scope<'_>, n: Element, attr: &CStr) -> Value {
+    let base = n.attr(attr).unwrap_or(c"0");
+    let mut anim_name = b"data-nd-anim-".to_vec();
+    anim_name.extend_from_slice(attr.to_bytes());
+    anim_name.truncate(ANIM_ATTR_MAX);
+    let anim_name = std::ffi::CString::new(anim_name).unwrap_or_default();
+    let anim = n.attr(&anim_name).filter(|a| !a.is_empty()).unwrap_or(base);
+    let animated = scope.new_object();
+    let base_value = svg_length(scope, base);
+    let _ = scope.set(&animated, "baseVal", base_value);
+    let anim_value = svg_length(scope, anim);
+    let _ = scope.set(&animated, "animVal", anim_value);
+    animated
+}

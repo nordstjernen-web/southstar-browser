@@ -69,7 +69,30 @@ unsafe extern "C" {
     fn ns_valid_element_local_name(name: *const c_char) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
+    fn ns_token_list_new(ctx: *mut JSContext, element: JSValue, attr: *const c_char) -> JSValue;
+    fn ns_is_token_list(obj: JSValue) -> GBoolean;
+    fn ns_element_reflect_str_get(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        attr: *const c_char,
+        null_if_absent: GBoolean,
+    ) -> JSValue;
+    fn ns_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> JSValue;
+    fn ns_attribute_map_remember(
+        ctx: *mut JSContext,
+        js: *mut NsJs,
+        owner: *const NsNode,
+        map: JSValue,
+    );
+    fn ns_make_live(
+        ctx: *mut JSContext,
+        owner: JSValue,
+        kind: c_int,
+        param: *const c_char,
+    ) -> JSValue;
 }
+
+const LIVE_ATTRIBUTES: c_int = 12;
 
 fn opt_ptr(text: Option<&CStr>) -> *const c_char {
     text.map_or(ptr::null(), CStr::as_ptr)
@@ -157,6 +180,73 @@ fn token_list_node_raw(obj: JSValue) -> (Option<Element>, &'static CStr) {
         unsafe { Node::from_ptr(node) },
         c_str(attr).unwrap_or(c"class"),
     )
+}
+
+pub(crate) fn is_token_list(value: &Value) -> bool {
+    unsafe { ns_is_token_list(quickjs::raw(value)) != 0 }
+}
+
+pub(crate) fn new_token_list(
+    scope: &mut Scope<'_>,
+    element: &Value,
+    attr: &'static CStr,
+) -> Result<Value, Value> {
+    let raw = unsafe {
+        ns_token_list_new(
+            quickjs::raw_context(scope),
+            quickjs::raw(element),
+            attr.as_ptr(),
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
+}
+
+pub(crate) fn reflect_str_get(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    attr: &CStr,
+) -> Result<Value, Value> {
+    let raw = unsafe {
+        ns_element_reflect_str_get(
+            quickjs::raw_context(scope),
+            quickjs::raw(this),
+            attr.as_ptr(),
+            glib::FALSE,
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
+}
+
+pub(crate) fn attribute_map_lookup(scope: &mut Scope<'_>, js: Js, owner: Element) -> Option<Value> {
+    let raw = unsafe { ns_attribute_map_lookup(js.0, owner.as_ptr()) };
+    let map = unsafe { quickjs::take_value(scope, raw) };
+    (!map.is_undefined()).then_some(map)
+}
+
+pub(crate) fn attribute_map_remember(scope: &mut Scope<'_>, js: Js, owner: Element, map: &Value) {
+    unsafe {
+        ns_attribute_map_remember(
+            quickjs::raw_context(scope),
+            js.0,
+            owner.as_ptr(),
+            quickjs::raw(map),
+        )
+    };
+}
+
+pub(crate) fn make_attributes_live(scope: &mut Scope<'_>, owner: &Value) -> Result<Value, Value> {
+    let raw = unsafe {
+        ns_make_live(
+            quickjs::raw_context(scope),
+            quickjs::raw(owner),
+            LIVE_ATTRIBUTES,
+            ptr::null(),
+        )
+    };
+    let value = unsafe { quickjs::take_value(scope, raw) };
+    quickjs::checked(scope, value)
 }
 
 fn dataset_node(value: &Value) -> Option<Element> {
@@ -281,6 +371,54 @@ macro_rules! method {
 }
 
 method!(ns_tlist_contains, crate::token_list::contains);
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_make_token_list(
+    ctx: *mut JSContext,
+    element: JSValue,
+    attr: *const c_char,
+) -> JSValue {
+    let Some(attr) = c_str(attr) else {
+        return quickjs::into_raw(Value::null());
+    };
+    unsafe {
+        with_value(ctx, element, |scope, element| {
+            let result = crate::element::token_list(scope, element, attr);
+            quickjs::result_raw(scope, result)
+        })
+    }
+}
+
+macro_rules! getter {
+    ($name:ident, $f:path) => {
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
+            unsafe { getter(ctx, this_val, $f) }
+        }
+    };
+}
+
+macro_rules! setter {
+    ($name:ident, $f:path) => {
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(
+            ctx: *mut JSContext,
+            this_val: JSValue,
+            val: JSValue,
+        ) -> JSValue {
+            unsafe { setter(ctx, this_val, val, $f) }
+        }
+    };
+}
+
+getter!(ns_element_get_classList, crate::element::class_list);
+getter!(ns_element_get_relList, crate::element::rel_list);
+getter!(ns_element_get_sandbox_list, crate::element::sandbox_list);
+getter!(ns_element_get_sizes_list, crate::element::sizes_list);
+getter!(ns_element_get_attributes, crate::element::attributes);
+setter!(ns_element_set_style, crate::element::set_style);
+setter!(ns_element_set_classList, crate::element::set_class_list);
+setter!(ns_element_set_relList, crate::element::set_rel_list);
 method!(ns_tlist_add, crate::token_list::add);
 method!(ns_tlist_remove, crate::token_list::remove);
 method!(ns_tlist_toggle, crate::token_list::toggle);

@@ -5,9 +5,11 @@
 mod boxes;
 mod ffi;
 mod hit;
+mod lookup;
 mod metrics;
 mod scroll;
 mod svg;
+mod visibility;
 
 use southstar_dom::Node;
 use southstar_js_engine::Value;

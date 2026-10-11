@@ -222,3 +222,39 @@ pub(crate) fn inline_rect_for_this(scope: &mut Scope<'_>, this: &Value) -> Optio
     let node = ffi::unwrap_node(this).filter(|n| n.is_element())?;
     ffi::inline_rect_for_dom(root, node)
 }
+
+fn constructed_dom_rect(scope: &mut Scope<'_>, r: Rect) -> Option<Value> {
+    let global = scope.global();
+    let constructor = scope.get(&global, "DOMRect").ok()?;
+    if !scope.is_function(&constructor) {
+        return None;
+    }
+    let args = [
+        Value::number(r.x),
+        Value::number(r.y),
+        Value::number(r.w),
+        Value::number(r.h),
+    ];
+    scope.construct(&constructor, &args).ok()
+}
+
+pub(crate) fn make_dom_rect(scope: &mut Scope<'_>, r: Rect) -> Value {
+    if let Some(rect) = constructed_dom_rect(scope, r) {
+        return rect;
+    }
+    let rect = scope.new_object();
+    let members = [
+        ("x", r.x),
+        ("y", r.y),
+        ("top", r.y),
+        ("left", r.x),
+        ("right", r.x + r.w),
+        ("bottom", r.y + r.h),
+        ("width", r.w),
+        ("height", r.h),
+    ];
+    for (name, value) in members {
+        let _ = scope.set(&rect, name, Value::number(value));
+    }
+    rect
+}

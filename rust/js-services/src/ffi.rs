@@ -10,7 +10,9 @@ use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::screen::{self, Metrics};
-use crate::{camera, clipboard_item, commands, console, media, navigator, rtc, timers, window};
+use crate::{
+    caches, camera, clipboard_item, commands, console, media, navigator, rtc, timers, window,
+};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -730,6 +732,8 @@ export_native! {
     ns_services_set_timeout => timers::set_timeout,
     ns_services_set_interval => timers::set_interval,
     ns_services_clear_timer => timers::clear,
+    ns_element_async_method => timers::element_async,
+    ns_cache_open => caches::open,
     ns_services_request_idle_callback => timers::request_idle_callback,
     ns_services_camera_request => camera::request,
     ns_services_camera_release => camera::release,

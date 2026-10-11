@@ -28,12 +28,15 @@ impl Js {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    pub fn addr(self) -> usize {
+        self.0 as usize
+    }
 }
 
 unsafe extern "C" {
     fn ns_unwrap_element(v: JSValue) -> *const NsNode;
     fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_make_dom_rect(ctx: *mut JSContext, x: f64, y: f64, w: f64, h: f64) -> JSValue;
     fn ns_dommatrix_make(
         ctx: *mut JSContext,
         a: f64,
@@ -42,11 +45,6 @@ unsafe extern "C" {
         d: f64,
         e: f64,
         f: f64,
-    ) -> JSValue;
-    fn ns_make_svg_animated_length(
-        ctx: *mut JSContext,
-        node: *const NsNode,
-        attr: *const c_char,
     ) -> JSValue;
     fn ns_element_int_attr_getter(ctx: *mut JSContext, this_val: JSValue, magic: c_int) -> JSValue;
     fn ns_element_img_natural_width(ctx: *mut JSContext, this_val: JSValue) -> JSValue;
@@ -77,7 +75,6 @@ unsafe extern "C" {
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_hit_test_local(
         root: *const NsBox,
         x: f64,
@@ -106,6 +103,12 @@ unsafe extern "C" {
     fn ns_css_viewport_w() -> f64;
     fn ns_css_viewport_h() -> f64;
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
+    fn ns_active_js() -> *mut NsJs;
+    fn ns_js_computed_text(
+        ctx: *mut JSContext,
+        node: *const NsNode,
+        name: *const c_char,
+    ) -> *mut c_char;
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -122,8 +125,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, r: Rect) -> Value {
-    let raw = unsafe { ns_make_dom_rect(quickjs::raw_context(scope), r.x, r.y, r.w, r.h) };
-    unsafe { quickjs::take_value(scope, raw) }
+    crate::boxes::make_dom_rect(scope, r)
 }
 
 pub(crate) fn dom_matrix(scope: &mut Scope<'_>, m: [f64; 6]) -> Value {
@@ -137,13 +139,6 @@ pub(crate) fn dom_matrix(scope: &mut Scope<'_>, m: [f64; 6]) -> Value {
             m[4],
             m[5],
         )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
-}
-
-pub(crate) fn svg_animated_length(scope: &mut Scope<'_>, node: Element, attr: &CStr) -> Value {
-    let raw = unsafe {
-        ns_make_svg_animated_length(quickjs::raw_context(scope), node.as_ptr(), attr.as_ptr())
     };
     unsafe { quickjs::take_value(scope, raw) }
 }
@@ -250,8 +245,24 @@ pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &[u8], value: &[u8]
     unsafe { ns_js_set_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
 }
 
-pub(crate) fn find_by_dom(root: BoxRef<'_>, node: Element) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<'a>> {
+    crate::lookup::find_by_dom(root, node.as_ptr().cast())
+}
+
+pub(crate) fn active_js() -> Option<Js> {
+    let js = unsafe { ns_active_js() };
+    (!js.is_null()).then_some(Js(js))
+}
+
+pub(crate) fn computed_text(scope: &mut Scope<'_>, node: Element, name: &CStr) -> Option<CString> {
+    let text =
+        unsafe { ns_js_computed_text(quickjs::raw_context(scope), node.as_ptr(), name.as_ptr()) };
+    if text.is_null() {
+        return None;
+    }
+    let owned = unsafe { CStr::from_ptr(text) }.to_owned();
+    unsafe { southstar_glib::g_free(text.cast()) };
+    Some(owned)
 }
 
 pub(crate) fn hit_test_local(
@@ -322,6 +333,18 @@ pub(crate) fn ascii_strtod(text: &CStr, at: usize) -> Option<(f64, usize)> {
     let v = unsafe { g_ascii_strtod(start, &mut end) };
     let used = (end as usize).wrapping_sub(start as usize);
     (!end.is_null() && used > 0).then_some((v, at + used))
+}
+
+pub(crate) fn ascii_strtod_prefix(text: &CStr) -> (f64, usize) {
+    let start = text.as_ptr();
+    let mut end: *mut c_char = ptr::null_mut();
+    let v = unsafe { g_ascii_strtod(start, &mut end) };
+    let used = if end.is_null() {
+        0
+    } else {
+        (end as usize).wrapping_sub(start as usize)
+    };
+    (v, used.min(text.to_bytes().len()))
 }
 
 unsafe fn native(
@@ -471,6 +494,7 @@ natives! {
     ns_element_createSVGRect => crate::svg::create_svg_rect,
     ns_element_createSVGMatrix => crate::svg::create_svg_matrix,
     ns_element_createSVGTransform => crate::svg::create_svg_transform,
+    ns_element_checkVisibility => crate::visibility::check_visibility,
     ns_svg_beginElement => crate::svg::begin_element,
     ns_svg_setCurrentTime => crate::svg::set_current_time,
     ns_document_element_from_point => crate::hit::element_from_point,
@@ -510,4 +534,50 @@ pub unsafe extern "C" fn ns_element_dimension_getter(
             crate::metrics::dimension(scope, this, magic)
         })
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_make_dom_rect(
+    ctx: *mut JSContext,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> JSValue {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let rect = crate::boxes::make_dom_rect(scope, Rect { x, y, w, h });
+            quickjs::into_raw(rect)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_box_find_by_dom(
+    root: *const NsBox,
+    target: *const NsNode,
+) -> *const NsBox {
+    let Some(root) = (unsafe { BoxRef::from_ptr(root) }) else {
+        return ptr::null();
+    };
+    if target.is_null() {
+        return ptr::null();
+    }
+    crate::lookup::find_by_dom(root, target.cast()).map_or(ptr::null(), BoxRef::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_box_for_node(js: *mut NsJs, n: *const NsNode) -> *const NsBox {
+    let Some(root) = layout_root(Js(js)) else {
+        return ptr::null();
+    };
+    if n.is_null() {
+        return ptr::null();
+    }
+    crate::lookup::find_by_dom(root, n.cast()).map_or(ptr::null(), BoxRef::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ns_box_lookup_forget(js: *mut NsJs) {
+    crate::lookup::forget(Js(js));
 }

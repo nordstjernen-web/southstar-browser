@@ -158,6 +158,28 @@ pub(crate) fn set_interval(
     Ok(schedule(scope, this, args, true))
 }
 
+pub(crate) fn element_async(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let Some(callback) = args.first().filter(|f| scope.is_function(f)).cloned() else {
+        return Ok(Value::int(0));
+    };
+    let bind = scope
+        .get(&callback, "bind")
+        .unwrap_or_else(|_| Value::undefined());
+    let mut bound = Value::undefined();
+    if scope.is_function(&bind) {
+        bound = scope.call(&bind, &callback, std::slice::from_ref(this))?;
+    }
+    if !scope.is_function(&bound) {
+        bound = callback;
+    }
+    let delay = args.get(1).cloned().unwrap_or_else(|| Value::int(0));
+    set_timeout(scope, &Value::undefined(), &[bound, delay])
+}
+
 pub(crate) fn clear(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value> {
     let js = ffi::js_of(scope);
     if js.is_null() || args.is_empty() {
