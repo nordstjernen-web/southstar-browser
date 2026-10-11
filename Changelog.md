@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The tab view (procview.c) moved to Rust (rust/shell): the renderer process
+  and worker thread, page drawing and tiles, scrolling, input forwarding,
+  the audio and video helpers, loading and history, zoom, the context menu,
+  the find and permission bars, printing, saving and developer tools. The
+  shell no longer compiles any C of its own.
 * The Windows launcher (southstar-launcher.exe: the console handoff,
   starting app\southstar-ui.exe, and the extract-the-ZIP and missing-runtime
   messages) moved to Rust (rust/launcher), and the embedding shim's
