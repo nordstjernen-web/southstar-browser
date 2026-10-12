@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["rust/*"]
+exclude = ["third_party"]
 
 [workspace.package]
 version = "0.9.9"
@@ -25,3 +26,6 @@ debug = false
 [profile.dev]
 panic = "abort"
 overflow-checks = false
+
+[patch.crates-io]
+boa_engine = { path = "third_party/boa_engine" }

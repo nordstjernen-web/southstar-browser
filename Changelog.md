@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* boa_engine 0.22 is vendored in third_party/boa_engine (patched in through
+  Cargo's [patch.crates-io]) as the base of a Southstar fork of Boa: the
+  browser needs embedder hooks stock Boa keeps private (exotic host objects,
+  interrupts for runaway scripts, raw object handles) before it can run on
+  Boa and QuickJS can be removed. The copy is unmodified so far.
 * js.c, the last C of the JavaScript bindings, moved to Rust: the page's
   record (realms, DOM prototypes, storage partition, cookies and CSP) now
   lives in rust/js-runtime, the image and video readiness helpers in
