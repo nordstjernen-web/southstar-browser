@@ -33,6 +33,10 @@ SLICES=(
     WebCryptoAPI/digest
     xhr/formdata
     html/semantics/forms/the-form-element
+    html/syntax/parsing
+    html/syntax/parsing-html-fragments
+    html/syntax/serializing-html-fragments
+    domparsing
 )
 
 WPT_ROOT=${NS_WPT_ROOT:-}

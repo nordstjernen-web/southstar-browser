@@ -2,7 +2,7 @@
 
 Tracks Southstar's results on the
 [web-platform-tests](https://github.com/web-platform-tests/wpt)
-suite over time: a fixed 15-area slice measured exactly (see
+suite over time: a fixed 19-area slice measured exactly (see
 "Tracked slice" below), and a sampled estimate of the whole-suite
 score browsers are compared by. See `docs/wpt.md` for how the
 harness integration works. Scores update via `scripts/wpt-score.sh`
@@ -11,6 +11,8 @@ place — review the diff and commit it together with the data files
 they regenerate.
 
 ## History
+
+The 15-area slice, June to October 2026:
 
 | Date | Southstar | WPT | Files ok | Subtests passing | Notes |
 |------|--------------|-----|----------|------------------|-------|
@@ -96,9 +98,19 @@ results. The Notes column records whether a row came from a full or
 partial run — a partial row mixes revisions for the areas it did not
 touch.
 
+The 19-area slice, from October 2026: the 15 areas plus
+`html/syntax/parsing`, `html/syntax/parsing-html-fragments`,
+`html/syntax/serializing-html-fragments` and `domparsing`, added to
+measure the HTML parser while lexbor is replaced (the first row is
+lexbor's baseline):
+
+| Date | Southstar | WPT | Files ok | Subtests passing | Notes |
+|------|--------------|-----|----------|------------------|-------|
+| 2026-10-12 | 5200ed7 | 510951e15 | 652/1025 (63%) | 77820/81855 (95%) | partial: html/syntax/parsing html/syntax/parsing-html-fragments html/syntax/serializing-html-fragments domparsing |
+
 ## Per-area results — 2026-10-12
 
-Per-file detail for this run: `docs/wpt-runs/2026-10-12-e1910cb.tsv`.
+Per-file detail for this run: `docs/wpt-runs/2026-10-12-5200ed7.tsv`.
 
 | Area | Files ok | Subtests passing | Fail | Timeout | Notrun | Precondition failed |
 |------|----------|------------------|------|---------|--------|---------------------|
@@ -117,7 +129,11 @@ Per-file detail for this run: `docs/wpt-runs/2026-10-12-e1910cb.tsv`.
 | `WebCryptoAPI/digest` | 2/5 | 164/535 | 371 | 0 | 0 | 0 |
 | `xhr/formdata` | 15/18 | 77/80 | 3 | 0 | 0 | 0 |
 | `html/semantics/forms/the-form-element` | 7/18 | 107/124 | 11 | 2 | 4 | 0 |
-| **Total** | **510/742** | **70887/71907** | **949** | **28** | **37** | **6** |
+| `html/syntax/parsing` | 112/213 | 6139/7981 | 1842 | 0 | 0 | 0 |
+| `html/syntax/parsing-html-fragments` | 11/11 | 20/20 | 0 | 0 | 0 | 0 |
+| `html/syntax/serializing-html-fragments` | 4/8 | 356/375 | 19 | 0 | 0 | 0 |
+| `domparsing` | 15/51 | 418/1572 | 1154 | 0 | 0 | 0 |
+| **Total** | **652/1025** | **77820/81855** | **3964** | **28** | **37** | **6** |
 
 ## ROI by area — 2026-10-12
 
@@ -132,12 +148,15 @@ file.
 
 | Area | Available gain | Affected files | Gain/file | Harness-broken | Near-ok |
 |------|----------------|----------------|-----------|----------------|---------|
+| `html/syntax/parsing` | 1842 | 101 | 18.2 | 0 | 39 |
+| `domparsing` | 1154 | 36 | 32.1 | 2 | 8 |
 | `WebCryptoAPI/digest` | 371 | 3 | 123.7 | 0 | 0 |
 | `dom/nodes` | 231 | 107 | 2.2 | 13 | 63 |
 | `dom/ranges` | 180 | 19 | 9.5 | 0 | 3 |
 | `dom/events` | 89 | 51 | 1.7 | 23 | 25 |
 | `html/dom/elements` | 55 | 9 | 6.1 | 1 | 5 |
 | `url` | 33 | 8 | 4.1 | 0 | 4 |
+| `html/syntax/serializing-html-fragments` | 19 | 4 | 4.8 | 0 | 1 |
 | `hr-time` | 17 | 6 | 2.8 | 1 | 4 |
 | `html/semantics/forms/the-form-element` | 17 | 11 | 1.5 | 2 | 8 |
 | `dom/collections` | 10 | 5 | 2.0 | 0 | 4 |
@@ -147,6 +166,7 @@ file.
 | `xhr/formdata` | 3 | 3 | 1.0 | 0 | 3 |
 | `dom/lists` | 0 | 0 | - | 0 | 0 |
 | `html/webappapis/atob` | 0 | 0 | - | 0 | 0 |
+| `html/syntax/parsing-html-fragments` | 0 | 0 | - | 0 | 0 |
 
 ## Top 10 improvements — 2026-07-13
 
@@ -312,7 +332,9 @@ The loop, drivable end-to-end by a Claude session:
 `dom/lists`, `dom/collections`, `url`, `console`, `hr-time`,
 `html/webappapis/atob`, `html/webappapis/timers`,
 `html/dom/elements`, `WebCryptoAPI/digest`, `xhr/formdata`,
-`html/semantics/forms/the-form-element`
+`html/semantics/forms/the-form-element`, `html/syntax/parsing`,
+`html/syntax/parsing-html-fragments`,
+`html/syntax/serializing-html-fragments`, `domparsing`
 
 The slice is fixed so results stay comparable between runs; WPT
 itself moves, so small drifts in totals between WPT revisions are
