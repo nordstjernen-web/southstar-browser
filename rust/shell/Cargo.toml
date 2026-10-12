@@ -16,6 +16,7 @@ southstar-config = { path = "../config" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }
+southstar-media-shm = { path = "../media-shm" }
 
 [features]
 avif = ["southstar-ffi/avif"]

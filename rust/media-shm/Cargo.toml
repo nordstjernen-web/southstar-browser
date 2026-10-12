@@ -1,0 +1,11 @@
+[package]
+name = "southstar-media-shm"
+description = "The shared-memory layouts of the audio clock and the video frame ring, as declared in src/media_shm.h"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

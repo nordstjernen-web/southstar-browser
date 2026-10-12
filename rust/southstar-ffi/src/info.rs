@@ -83,6 +83,7 @@ const PORTED: &[&str] = &[
     "titlerow.c",
     "video.c",
     "video_decode.c",
+    "videoproc/main.c",
     #[cfg(feature = "wasm")]
     "wasm.c",
     "watchdog.c",

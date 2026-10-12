@@ -265,3 +265,21 @@ southstar_helper_rust_dep = declare_dependency(
   dependencies: [glib] + http_backend_deps + (have_seccomp ? [libseccomp] : []),
 )
 
+
+if have_libav
+  southstar_video_rust_lib = custom_target(
+    'southstar-video-rust',
+    output: 'libsouthstar_video_helper.a',
+    depfile: 'libsouthstar_video_helper.a.d',
+    command: [
+      cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
+      meson.current_build_dir() / 'cargo-target',
+      ns_is_release ? 'release' : 'dev',
+      'southstar-video-helper', '@OUTPUT@', '@DEPFILE@',
+    ] + southstar_helper_rust_features,
+    env: southstar_rust_env,
+    console: true,
+    build_by_default: true,
+    depends: southstar_helper_rust_lib,
+  )
+endif

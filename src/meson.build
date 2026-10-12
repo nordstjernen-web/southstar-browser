@@ -247,19 +247,17 @@ else
 endif
 
 if have_libav
-  videoproc_deps = [libavformat, libavcodec, libavutil, libswscale,
-                    dependency('threads')]
-  videoproc_sources = files('videoproc/main.c')
+  videoproc_deps = [libavformat, libavcodec, libavutil, libswscale]
   if host_machine.system() == 'linux'
-    videoproc_deps += [southstar_helper_rust_dep]
-    videoproc_deps += [cc.find_library('rt', required: false)]
+    videoproc_deps += [glib] + http_backend_deps + (have_seccomp ? [libseccomp] : [])
   endif
   executable(
     'southstar-video',
-    videoproc_sources,
-    include_directories: include_directories('.'),
-    dependencies: videoproc_deps + [cc.find_library('m', required: false)],
-    link_args: southstar_link_args,
+    link_with: southstar_video_rust_lib,
+    link_language: 'c',
+    dependencies: videoproc_deps + [cc.find_library('rt', required: false),
+                                    cc.find_library('m', required: false)],
+    link_args: southstar_link_args + rust_native_libs,
     win_subsystem: 'windows',
     install: true,
   )

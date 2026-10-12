@@ -5,8 +5,13 @@
 use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::Ordering;
 use std::ffi::CString;
+
+use southstar_media_shm::{
+    AUDIO_CLOCK_MAGIC, AUDIO_CLOCK_SLOTS, AUDIO_CLOCK_VERSION, AudioClockHdr, VIDEO_RING_MAGIC,
+    VIDEO_RING_VERSION, VideoRingHdr,
+};
 
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
 use southstar_gtk_ffi::{
@@ -44,60 +49,7 @@ type AsyncReady =
 
 const SUBPROCESS_FLAGS: c_uint = (1 << 0) | (1 << 2) | (1 << 5);
 const FILE_TEST_IS_EXECUTABLE: c_uint = 1 << 3;
-const AUDIO_CLOCK_MAGIC: u32 = 0x4e53_4143;
-const AUDIO_CLOCK_VERSION: u32 = 1;
-const AUDIO_CLOCK_SLOTS: u32 = 16;
-const VIDEO_RING_MAGIC: u32 = 0x4e53_5647;
-const VIDEO_RING_VERSION: u32 = 2;
 const RESYNC_INTERVAL_US: i64 = 950_000;
-
-#[repr(C)]
-struct AudioClockSlot {
-    sequence: AtomicU32,
-    flags: u32,
-    monotonic_us: i64,
-    position: f64,
-    token: [u8; 64],
-}
-
-#[repr(C)]
-struct AudioClockHdr {
-    magic: u32,
-    version: u32,
-    nslots: u32,
-    reserved: u32,
-    slots: [AudioClockSlot; 16],
-}
-
-#[repr(C)]
-struct VideoRingSlot {
-    sequence: AtomicU32,
-    generation: u32,
-    pts: f64,
-    duration: f64,
-}
-
-#[repr(C)]
-struct VideoRingHdr {
-    magic: u32,
-    version: u32,
-    width: u32,
-    height: u32,
-    stride: u32,
-    nslots: u32,
-    frame_bytes: u32,
-    published: AtomicU32,
-    released: AtomicU32,
-    generation: AtomicU32,
-    clock_sequence: AtomicU32,
-    clock_flags: u32,
-    clock_monotonic_us: i64,
-    clock_position: f64,
-    slots: [VideoRingSlot; 8],
-}
-
-const _: () = assert!(core::mem::size_of::<AudioClockHdr>() == 1424);
-const _: () = assert!(core::mem::size_of::<VideoRingHdr>() == 256);
 
 unsafe extern "C" {
     fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView;

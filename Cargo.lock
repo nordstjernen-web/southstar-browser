@@ -2535,6 +2535,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-media-shm"
+version = "0.9.9"
+
+[[package]]
 name = "southstar-mic"
 version = "0.9.9"
 
@@ -2643,6 +2647,7 @@ dependencies = [
  "southstar-ffi",
  "southstar-glib",
  "southstar-gtk-ffi",
+ "southstar-media-shm",
 ]
 
 [[package]]
@@ -2710,6 +2715,15 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-style",
+]
+
+[[package]]
+name = "southstar-video-helper"
+version = "0.9.9"
+dependencies = [
+ "southstar-av",
+ "southstar-helper-ffi",
+ "southstar-media-shm",
 ]
 
 [[package]]
