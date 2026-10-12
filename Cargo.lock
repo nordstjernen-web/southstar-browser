@@ -2705,6 +2705,7 @@ version = "0.9.9"
 name = "southstar-video"
 version = "0.9.9"
 dependencies = [
+ "southstar-av",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",

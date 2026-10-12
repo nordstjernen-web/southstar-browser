@@ -19,9 +19,7 @@ if not meson.is_cross_build() and qjsc_prog.found() and qjs_prog.found()
   )
 endif
 
-southstar_engine_sources = files(
-  'video_decode.c',
-)
+southstar_engine_sources = []
 
 southstar_win_resources = []
 if host_machine.system() == 'windows'

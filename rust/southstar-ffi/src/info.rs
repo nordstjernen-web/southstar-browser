@@ -82,6 +82,7 @@ const PORTED: &[&str] = &[
     "threaddump.c",
     "titlerow.c",
     "video.c",
+    "video_decode.c",
     #[cfg(feature = "wasm")]
     "wasm.c",
     "watchdog.c",

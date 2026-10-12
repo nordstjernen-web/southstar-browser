@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/video.h: the ns_video struct and the video cache, over the decoder of src/video_decode.h, the network, textures, the camera, the DOM and the box tree.
+//! Southstar — the C ABI of src/video.h and src/video_decode.h: the ns_video struct, the video cache and the decoder, over the network, textures, the camera, the DOM and the box tree.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -11,6 +11,7 @@ use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{Kind, PropId, StyleRef};
 
+use crate::decode::Decoder;
 use crate::vtt::Cue;
 use crate::{Cache, FetchKind, Sink};
 
@@ -65,12 +66,6 @@ impl Texture {
         NonNull::new(p).map(Texture)
     }
 
-    fn retain(p: *mut c_void) -> Option<Texture> {
-        let t = NonNull::new(p)?;
-        unsafe { ns_texture_ref(t.as_ptr()) };
-        Some(Texture(t))
-    }
-
     pub fn width(&self) -> i32 {
         unsafe { ns_texture_get_width(self.0.as_ptr()) }
     }
@@ -80,83 +75,20 @@ impl Texture {
     }
 }
 
+impl Clone for Texture {
+    fn clone(&self) -> Texture {
+        unsafe { ns_texture_ref(self.0.as_ptr()) };
+        Texture(self.0)
+    }
+}
+
 impl Drop for Texture {
     fn drop(&mut self) {
         unsafe { ns_texture_unref(self.0.as_ptr()) };
     }
 }
 
-#[repr(transparent)]
-pub struct Player(NonNull<c_void>);
-
-impl Player {
-    pub fn new(bytes: &[u8]) -> Option<Player> {
-        NonNull::new(unsafe { ns_video_player_new(bytes.as_ptr(), bytes.len()) }).map(Player)
-    }
-
-    pub fn has_audio(&self) -> bool {
-        unsafe { ns_video_player_has_audio(self.0.as_ptr()) != 0 }
-    }
-
-    pub fn width(&self) -> i32 {
-        unsafe { ns_video_player_width(self.0.as_ptr()) }
-    }
-
-    pub fn height(&self) -> i32 {
-        unsafe { ns_video_player_height(self.0.as_ptr()) }
-    }
-
-    pub fn duration(&self) -> f64 {
-        unsafe { ns_video_player_duration(self.0.as_ptr()) }
-    }
-
-    pub fn buffered_end(&self) -> f64 {
-        unsafe { ns_video_player_buffered_end(self.0.as_ptr()) }
-    }
-
-    pub fn note_end(&mut self, end: f64) {
-        unsafe { ns_video_player_note_end(self.0.as_ptr(), end) };
-    }
-
-    pub fn extend(&mut self, bytes: &[u8]) -> bool {
-        unsafe { ns_video_player_extend(self.0.as_ptr(), bytes.as_ptr(), bytes.len()) != 0 }
-    }
-
-    pub fn frame_at(&mut self, seconds: f64, looping: bool) -> (Option<Texture>, bool) {
-        let mut ended: GBoolean = 0;
-        let frame = unsafe {
-            ns_video_player_frame_at(self.0.as_ptr(), seconds, glib::boolean(looping), &mut ended)
-        };
-        (Texture::retain(frame), ended != 0)
-    }
-}
-
-impl Drop for Player {
-    fn drop(&mut self) {
-        unsafe { ns_video_player_free(self.0.as_ptr()) };
-    }
-}
-
-pub fn probe_chunk_range(init: &[u8], chunk: &[u8]) -> Option<(f64, f64)> {
-    let (init_ptr, init_len) = if init.is_empty() {
-        (ptr::null(), 0)
-    } else {
-        (init.as_ptr(), init.len())
-    };
-    let mut start = 0.0;
-    let mut end = 0.0;
-    let ranged = unsafe {
-        ns_video_probe_chunk_range(
-            init_ptr,
-            init_len,
-            chunk.as_ptr(),
-            chunk.len(),
-            &mut start,
-            &mut end,
-        )
-    };
-    (ranged != 0).then_some((start, end))
-}
+pub use crate::decode::{Player, probe_chunk_range};
 
 pub struct Cues(pub Vec<Cue>);
 
@@ -379,29 +311,15 @@ unsafe extern "C" {
     fn ns_texture_unref(texture: *mut c_void);
     fn ns_texture_get_width(texture: *mut c_void) -> c_int;
     fn ns_texture_get_height(texture: *mut c_void) -> c_int;
-    fn ns_video_player_new(bytes: *const u8, len: usize) -> *mut c_void;
-    fn ns_video_player_free(player: *mut c_void);
-    fn ns_video_player_has_audio(player: *const c_void) -> GBoolean;
-    fn ns_video_player_width(player: *const c_void) -> c_int;
-    fn ns_video_player_height(player: *const c_void) -> c_int;
-    fn ns_video_player_duration(player: *const c_void) -> f64;
-    fn ns_video_player_buffered_end(player: *const c_void) -> f64;
-    fn ns_video_player_note_end(player: *mut c_void, end: f64);
-    fn ns_video_probe_chunk_range(
-        init: *const u8,
-        init_len: usize,
-        chunk: *const u8,
-        chunk_len: usize,
-        out_start: *mut f64,
-        out_end: *mut f64,
-    ) -> GBoolean;
-    fn ns_video_player_extend(player: *mut c_void, bytes: *const u8, len: usize) -> GBoolean;
-    fn ns_video_player_frame_at(
-        player: *mut c_void,
-        seconds: f64,
-        looping: GBoolean,
-        out_ended: *mut GBoolean,
+    fn ns_texture_new(
+        width: c_int,
+        height: c_int,
+        format: c_int,
+        bytes: *mut c_void,
+        stride: usize,
     ) -> *mut c_void;
+    fn g_bytes_new_static(data: *const c_void, size: usize) -> *mut c_void;
+    fn g_bytes_unref(bytes: *mut c_void);
     fn ns_camera_active() -> *mut c_void;
     fn ns_camera_next_frame(camera: *mut c_void) -> *mut c_void;
     fn ns_image_decode_bytes(
@@ -463,6 +381,73 @@ pub fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
             href.as_ptr(),
         )
     })
+}
+
+const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;
+
+pub fn texture_from_bgra(width: i32, height: i32, pixels: &[u8], stride: usize) -> Option<Texture> {
+    unsafe {
+        let bytes = g_bytes_new_static(pixels.as_ptr().cast(), pixels.len());
+        let texture = ns_texture_new(width, height, TEXTURE_BGRA_PREMULTIPLIED, bytes, stride);
+        g_bytes_unref(bytes);
+        Texture::adopt(texture)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_new(bytes: *const u8, len: usize) -> *mut c_void {
+    if bytes.is_null() {
+        return ptr::null_mut();
+    }
+    let bytes = unsafe { glib::slice(bytes, len) };
+    Player::new(bytes).map_or(ptr::null_mut(), |p| p.into_raw().cast())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_free(player: *mut c_void) {
+    drop(unsafe { Player::from_raw(player.cast()) });
+}
+
+unsafe fn decoder<'a>(player: *const c_void) -> Option<&'a mut Decoder> {
+    unsafe { player.cast::<Decoder>().cast_mut().as_mut() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_width(player: *const c_void) -> c_int {
+    unsafe { decoder(player) }.map_or(0, |d| d.width())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_height(player: *const c_void) -> c_int {
+    unsafe { decoder(player) }.map_or(0, |d| d.height())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_duration(player: *const c_void) -> f64 {
+    unsafe { decoder(player) }.map_or(0.0, |d| d.duration())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_player_frame_at(
+    player: *mut c_void,
+    seconds: f64,
+    looping: GBoolean,
+    out_ended: *mut GBoolean,
+) -> *mut c_void {
+    let (frame, ended) = match unsafe { decoder(player) } {
+        Some(d) => d.frame_at(seconds, looping != 0),
+        None => (None, false),
+    };
+    if let Some(out) = unsafe { out_ended.as_mut() } {
+        *out = glib::boolean(ended);
+    }
+    frame.map_or(ptr::null_mut(), |t| t.0.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_video_codec_available(codec: *const c_char) -> GBoolean {
+    let codec = unsafe { glib::bytes(codec) }.unwrap_or_default();
+    glib::boolean(crate::decode::codec_available(codec))
 }
 
 pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {

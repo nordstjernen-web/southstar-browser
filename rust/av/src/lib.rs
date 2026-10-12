@@ -66,6 +66,7 @@ pub const AV_LOG_QUIET: core::ffi::c_int = constant("AV_LOG_QUIET");
 pub const SWS_BILINEAR: core::ffi::c_int = constant("SWS_BILINEAR");
 pub const AVSEEK_FLAG_BACKWARD: core::ffi::c_int = constant("AVSEEK_FLAG_BACKWARD");
 pub const AVSEEK_SIZE: core::ffi::c_int = constant("AVSEEK_SIZE");
+pub const AVSEEK_FORCE: core::ffi::c_int = constant("AVSEEK_FORCE");
 
 pub const AV_CODEC_ID_NONE: core::ffi::c_int = constant("AV_CODEC_ID_NONE");
 pub const AV_CODEC_ID_VP8: core::ffi::c_int = constant("AV_CODEC_ID_VP8");
@@ -129,6 +130,7 @@ pub mod io_context {
     use super::*;
     pub const BUFFER: Field<AVIOContext, *mut u8> = field("AVIOContext.buffer");
     pub const EOF_REACHED: Field<AVIOContext, core::ffi::c_int> = field("AVIOContext.eof_reached");
+    pub const ERROR: Field<AVIOContext, core::ffi::c_int> = field("AVIOContext.error");
 }
 
 pub mod packet {

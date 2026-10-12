@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, cairo, libpsl, pango, epoxy]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libplmpeg, libuchardet, cairo, libpsl, pango, epoxy]
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif
@@ -39,7 +39,7 @@ if have_libav
     'AVCodecParameters.height',
     'AVCodecContext.ch_layout', 'AVCodecContext.sample_rate',
     'AVCodecContext.sample_fmt',
-    'AVIOContext.buffer', 'AVIOContext.eof_reached',
+    'AVIOContext.buffer', 'AVIOContext.eof_reached', 'AVIOContext.error',
     'AVPacket.stream_index', 'AVPacket.pts', 'AVPacket.duration',
     'AVFrame.data', 'AVFrame.linesize', 'AVFrame.width', 'AVFrame.height',
     'AVFrame.format', 'AVFrame.pts', 'AVFrame.nb_samples',
@@ -61,7 +61,7 @@ if have_libav
     ['AV_SAMPLE_FMT_NONE', 'AV_SAMPLE_FMT_NONE'],
     ['AV_LOG_QUIET', 'AV_LOG_QUIET'], ['SWS_BILINEAR', 'SWS_BILINEAR'],
     ['AVSEEK_FLAG_BACKWARD', 'AVSEEK_FLAG_BACKWARD'],
-    ['AVSEEK_SIZE', 'AVSEEK_SIZE'],
+    ['AVSEEK_SIZE', 'AVSEEK_SIZE'], ['AVSEEK_FORCE', 'AVSEEK_FORCE'],
     ['AV_CODEC_ID_NONE', 'AV_CODEC_ID_NONE'],
     ['AV_CODEC_ID_VP8', 'AV_CODEC_ID_VP8'], ['AV_CODEC_ID_VP9', 'AV_CODEC_ID_VP9'],
     ['AV_CODEC_ID_AV1', 'AV_CODEC_ID_AV1'], ['AV_CODEC_ID_H264', 'AV_CODEC_ID_H264'],
@@ -153,6 +153,7 @@ if have_enchant
 endif
 if have_libav
   southstar_rust_features += ['libav']
+  southstar_rust_link_deps += [libavformat, libavcodec, libavutil, libswscale]
 endif
 if have_audio_native_vorbis
   southstar_rust_features += ['audio-native-vorbis']
