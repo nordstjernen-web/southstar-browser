@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* Inline video decoding (video_decode.c) moved to Rust (rust/video):
+  MPEG-1 through the vendored pl_mpeg, WebM through FFmpeg over rust/av's
+  meson-computed layouts. The engine library now contains no C of its own.
 * AVIF decoding (image_avif.c) moved to Rust (rust/image-decoders, behind
   the avif feature): libavif is called through hand-written declarations
   whose struct offsets meson computes from the installed avif.h, so any

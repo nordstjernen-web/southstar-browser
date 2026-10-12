@@ -6,7 +6,6 @@ deleted on 12 October — and the C left in the project is the media code:
 
 | Left | Lines | Where it goes |
 |---|---:|---|
-| `video_decode.c` | 676 | `rust/video`, over `rust/av` (phase 8) |
 | `audio/main.c` | 1,605 | a Rust `southstar-audio` executable, over `rust/av` (phase 1) |
 | `videoproc/main.c` | 743 | a Rust `southstar-video` executable, over `rust/av` (phase 1) |
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
@@ -73,7 +72,7 @@ one is a separate, later decision (§9).
 | 5 | Networking and storage | 13,500 | Done; libcurl and libnghttp2 replaced by `rust/http` |
 | 6 | Engine core: DOM → style → layout → paint → pipeline | 82,672 | Done |
 | 7 | JavaScript bindings | 77,729 | Done; the Boa switch continues on the engine track |
-| 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 | Done except `video_decode.c` |
+| 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 | Done |
 | 9 | Vendored libraries; decide the long-term build | — | Wuffs, WAMR and lexbor's URL parser replaced; lexbor's HTML parser, QuickJS, pl_mpeg and minimp3 remain |
 | | **Total** | **221,452** | |
 
@@ -1258,10 +1257,11 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `win_launcher.c`, `embed_shim.c` | 374 | `rust/launcher` (a Windows-only static library linked into `southstar-launcher.exe`, exporting `main`) and `rust/static` (the `ns_app_self_exe` stub for `libsouthstar` and the renderer) | 4 |
 | `procview.c` | 5,348 | `rust/shell` (the tab view: renderer process and worker thread, page drawing and tiles, scrolling, input forwarding, the media helper pumping and X-Audio side channel, loading and history, zoom, context menu, find and permission bars, printing, saving and developer tools; ported in five stages, the shell executable now builds no C of its own) | 4 |
 | `image_avif.c` | 75 | `rust/image-decoders` (behind the `avif` feature; libavif through hand-written declarations with meson-computed struct offsets, D14) | 2 |
+| `video_decode.c` | 676 | `rust/video` (`decode.rs`: pl_mpeg's MPEG-1 through hand-declared FFI to the vendored decoder, VP9/VP8/AV1 WebM through `rust/av` and swscale behind the `libav` feature; `libsouthstar` now builds from no C sources) | 8 |
 | `js.c` | 66,600 | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` (ported in about sixty sections between 7 and 12 October 2026, from structured cloning to the page's realm record; each binding area is its own crate over the engine-neutral `Scope`/`Value` API, with the QuickJS-specific glue — the DOM prototypes' function-list tables, host-class trampolines and the realm record in `rust/js-runtime` — kept in `js-engine`'s `quickjs` module and `rust/js-interfaces`; the section-by-section record is in the git history and `Changelog.md`) | 7 (JavaScript bindings) |
 
 ### Being ported
 
 | Module | Crate | Notes |
 |---|---|---|
-| `video_decode.c`, `audio/main.c`, `videoproc/main.c` | `rust/video`, new helper crates, all over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts; `rust/av` has landed |
+| `audio/main.c`, `videoproc/main.c` | new helper crates over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts |
