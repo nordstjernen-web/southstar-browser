@@ -46,7 +46,7 @@ Update Changelog.md
   stream plays **inline** — frames are decoded in the sandboxed renderer
   and advanced off the animation tick (`rust/video`), honouring
   `autoplay`/`loop`/`muted`/`poster` and click-to-play/pause. Audio plays
-  via the unsandboxed `southstar-audio` helper (`src/audio/main.c`),
+  via the unsandboxed `southstar-audio` helper (`rust/audio-helper`),
   which decodes in-tree — pl_mpeg for the MPEG-1/MP2 track, the vendored
   CC0 [minimp3](https://github.com/lieff/minimp3) (`src/audio/minimp3.h`)
   for standalone `.mp3` files — and outputs through SDL2's audio device
@@ -68,7 +68,7 @@ Update Changelog.md
   `libav` build path (`-DNS_HAVE_LIBAV`) adds inline
   **VP9/VP8 video** (libav demux+decode → swscale → texture, in
   `rust/video/src/decode.rs`) and **Opus/Vorbis audio** (decoded in the helper,
-  `src/audio/main.c`) for `.webm`/`.opus`/`.ogg` sources. It is **required on
+  `rust/audio-helper`) for `.webm`/`.opus`/`.ogg` sources. It is **required on
   Linux and Windows** (`libav_required` in `meson.build` — YouTube and most
   modern sites serve VP9/WebM, so the external-player fallback there is
   unacceptable; the Windows CI/packaging builds a minimal LGPL FFmpeg via
