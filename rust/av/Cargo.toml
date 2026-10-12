@@ -1,0 +1,11 @@
+[package]
+name = "southstar-av"
+description = "FFmpeg's libav* over hand-written declarations, with struct offsets and enum values meson computes from the installed headers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

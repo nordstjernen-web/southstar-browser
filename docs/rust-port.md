@@ -1,9 +1,27 @@
 # Porting Southstar Browser to Rust
 
-Status: **in progress** — phase 0 (toolchain, build integration, the first
-ported module) has landed; see §12. Written in October 2026 against `main` at
-the commit that added this file. Sizes and facts below were taken from the code on that tree.
-Where they disagree with older docs (`media.md` calls the audio helper
+Status (12 October 2026): **the engine is Rust.** Every engine, shell,
+renderer and binding module is ported — `js.c`, the last and largest, was
+deleted on 12 October — and the C left in the project is the media code:
+
+| Left | Lines | Where it goes |
+|---|---:|---|
+| `video_decode.c` | 676 | `rust/video`, over `rust/av` (phase 8) |
+| `audio/main.c` | 1,605 | a Rust `southstar-audio` executable, over `rust/av` (phase 1) |
+| `videoproc/main.c` | 743 | a Rust `southstar-video` executable, over `rust/av` (phase 1) |
+| `image_avif.c` | 75 | `rust/image-decoders`, behind the `avif` feature (phase 2) |
+| `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
+| `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
+| `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules; each is deleted once no C includes it, and the image headers become Rust `include_bytes!` data |
+
+After those, the work is the JavaScript engine track (Boa as the default, then
+QuickJS removed, §6) and the vendored C libraries (lexbor's HTML parser,
+QuickJS, pl_mpeg, minimp3; phase 9). §12 lists every ported module.
+
+The plan was written in October 2026 against the `main` of that time. §4
+describes the C code as it was then, and the phase descriptions keep the plan
+as written, with a "Done" note where the port took a different route. Where
+older docs disagree with the code (`media.md` calls the audio helper
 unsandboxed and the video ring three slots), the code is right.
 
 ## 1. Summary
@@ -46,19 +64,19 @@ are replaced one by one (phase 9, D13). System libraries reached through FFI
 (GTK, Cairo, Pango, OpenSSL, FFmpeg, SQLite, SDL2, …) are not tree code; each
 one is a separate, later decision (§9).
 
-| Phase | What | Project C retired (lines) |
-|---|---|---:|
-| 0 | Toolchain, build integration, CI, a pilot module | 150 |
-| 1 | Helper processes and the sandbox library | 3,974 |
-| 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 |
-| 3 | Renderer host and IPC protocol | 5,028 |
-| 4 | GTK shell, watchdog and headless driver | 13,291 |
-| 5 | Networking and storage | 13,500 |
-| 6 | Engine core: DOM → style → layout → paint → pipeline | 82,672 |
-| 7 | JavaScript bindings | 77,729 |
-| 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 |
-| 9 | Vendored libraries; decide the long-term build | — |
-| | **Total** | **221,452** |
+| Phase | What | Project C retired (lines) | Status |
+|---|---|---:|---|
+| 0 | Toolchain, build integration, CI, a pilot module | 150 | Done |
+| 1 | Helper processes and the sandbox library | 3,974 | Sandbox and launcher done; the audio and video helpers are next |
+| 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 | Done except `image_avif.c` |
+| 3 | Renderer host and IPC protocol | 5,028 | Done |
+| 4 | GTK shell, watchdog and headless driver | 13,291 | Done |
+| 5 | Networking and storage | 13,500 | Done; libcurl and libnghttp2 replaced by `rust/http` |
+| 6 | Engine core: DOM → style → layout → paint → pipeline | 82,672 | Done |
+| 7 | JavaScript bindings | 77,729 | Done; the Boa switch continues on the engine track |
+| 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 | Done except `video_decode.c` |
+| 9 | Vendored libraries; decide the long-term build | — | Wuffs, WAMR and lexbor's URL parser replaced; lexbor's HTML parser, QuickJS, pl_mpeg and minimp3 remain |
+| | **Total** | **221,452** | |
 
 Every project source file is assigned to exactly one phase.
 
@@ -75,9 +93,10 @@ only estimates given. Decisions that need an owner are collected in §11.
 - No vendored C left in the tree.
 - Same platforms as today: Linux (glibc and musl), Windows (MSYS2/MinGW),
   macOS, FreeBSD, NetBSD.
-- Feature parity at every step, including the curl and nghttp2 HTTP backends,
-  single-process mode, headless mode, the C embedding API (`libsouthstar.h`)
-  and the optional features (WebGPU, AVIF, spell checking, HTTP/3).
+- Feature parity at every step, including single-process mode, headless
+  mode, the C embedding API (`libsouthstar.h`) and the optional features
+  (WebGPU, AVIF, spell checking). The HTTP backends were rewritten rather than
+  kept (D7); HTTP/3 was dropped with them.
 - The same security posture: process-per-tab, seccomp + Landlock on Linux, the
   macOS sandbox profile, Windows mitigations, no JIT.
 - No performance or memory regression beyond noise.
@@ -103,10 +122,14 @@ explicit Rust reading:
   Southstar writes its own (lexbor is replaced in phase 9) and keeps uchardet
   behind FFI (decision D1).
 - **Few small auditable dependencies.** Crates pull in transitive trees.
-  Every crate is pinned in `Cargo.lock`, vendored for offline builds (§5.6),
-  licence-checked with `cargo-deny`, and listed in `THIRD-PARTY-LICENSES.md`.
-  Prefer crates with no or few dependencies; an async runtime (`tokio`) is not
-  added unless decision D7 calls for it.
+  Every crate is pinned in `Cargo.lock` and listed in
+  `THIRD-PARTY-LICENSES.md`; vendoring for offline builds is D4 (§5.6), and a
+  `cargo-deny` licence check is still to be added. Prefer crates with no or few
+  dependencies; no async runtime. In practice the default build's crates.io
+  dependencies are the image decoders (`png`, `gif`, `zune-jpeg`) and `wasmi`
+  with their trees. Every system library — GTK, Cairo, ns-pango, OpenSSL,
+  SQLite, SDL2, FFmpeg, libavif, GLib — is reached through hand-written
+  declarations, not `-sys` crates or bindgen.
 - **No comments beyond one header line per file.** In Rust that header is a
   `//!` line. Clippy's `undocumented_unsafe_blocks` lint expects
   `// SAFETY:` comments, which the rule forbids; this plan keeps the rule and
@@ -252,6 +275,16 @@ staticlibs in one binary each carry their own copy of `std` and collide.
 `southstar-ffi` therefore depends on every ported crate and is the single
 archive meson links.
 
+As built (October 2026) the layout is flatter than the sketch: every crate is
+`rust/<name>` (about 135 of them) and there are no `-sys` crates. Foreign
+functions are declared by hand in each crate's `ffi.rs`, or in a shared FFI
+crate when several crates need them (`rust/glib`, `rust/gtk-ffi`,
+`rust/sqlite`, `rust/av`). The static libraries meson links are
+`rust/static` (`libsouthstar_static`: the renderer and `libsouthstar`),
+`rust/shell` (the GTK shell), `rust/launcher` (Windows) and
+`rust/helper-ffi` (the media helpers); `southstar-ffi` is the plain library
+the first two share.
+
 ### 5.2 Meson drives Cargo
 
 Meson stays the build entry point during the port, so `meson setup builddir &&
@@ -269,9 +302,15 @@ meson compile -C builddir` keeps working on every platform:
 - The engine library and executables link `libsouthstar_ffi.a`; meson
   installs the Rust executables exactly where the C ones were installed, so
   packaging scripts do not change paths.
-- Meson will pass the configured features (`webgpu`, `avif`, `http_backend`,
-  `js_engine`, libav presence) to Cargo as `--features` once ported code
-  depends on them, so one option set controls both languages.
+- Meson passes the configured features (`webgpu`, `avif`, `libav`, `seccomp`,
+  `enchant`, `ns-pango`, …) to Cargo as `--features`, so one option set
+  controls both languages.
+- Struct layouts of system C libraries that change between the versions
+  Southstar supports (FFmpeg 6.0–8.x, libavif) are not hard-coded. Meson asks
+  the installed headers with `compute_int('offsetof(…)')` and passes the
+  offsets and enum values to Cargo as `NS_AV_LAYOUT` / `NS_AVIF_LAYOUT`;
+  `rust/av` reads them at compile time into typed `Field<S, T>` accessors. A
+  field the code uses but meson did not compute fails the build.
 - Cargo profiles mirror the meson profiles: release = LTO, `codegen-units = 1`,
   `panic = "abort"`, stripped; development = debug info, frame pointers.
 
@@ -292,6 +331,13 @@ point and builds whatever C remains through `build.rs` and the `cc` crate.
   `ns_style`, `ns_box`, …) are defined once, in Rust, as `#[repr(C)]`, and
   the C header is generated from them with `cbindgen` for that period. Size
   and offset assertions are emitted on both sides.
+
+  Done differently: neither bindgen nor cbindgen was adopted. Exports were
+  written by hand against the C headers, shared structs became hand-written
+  `#[repr(C)]` mirrors (`rust/dom`, `rust/layout`, `rust/style`, `rust/image`,
+  `rust/video`), and layouts were pinned with `static_assert`s in the C
+  headers and `const` assertions in Rust. With the C callers gone, those
+  assertions now only guard the mirrors against each other.
 - Memory crosses the boundary in GLib's allocator: anything Rust hands to C
   that C will `g_free` is allocated with `g_malloc`/`g_strdup`, and anything C
   hands to Rust is released with `g_free`. Rust-owned values stay behind
@@ -302,22 +348,12 @@ point and builds whatever C remains through `build.rs` and the `cc` crate.
 
 ### 5.4 Toolchain version
 
-Rust 2024 edition needs **Rust 1.85**, which is exactly what Debian 13
-(trixie) ships; the nightly packages build in `debian:trixie`. Two pulls the
-other way:
-
-- `gtk4` 0.11 (current gtk-rs) requires Rust 1.92; `gtk4` 0.10 needs 1.83 but
-  only exposes APIs up to GTK 4.20 (Windows uses GTK ≥ 4.22.1).
-- Ubuntu 24.04's default `rustc` is 1.75; versioned `rustc-1.85`, `-1.89`,
-  `-1.91` packages exist, and none newer. trixie-backports carries 1.94–1.95.
-
-Decision D3 picks between "MSRV 1.85, gtk4 0.10" and "MSRV 1.92+, distro
-builds use backports/versioned compilers". CI pins the chosen version with
-`rust-toolchain.toml`. Settled in October 2026: the minimum was first
-**1.91**, because Boa needs it and becomes the default engine, and later that
-month moved to **1.99**, the current stable release, with
-`rust-toolchain.toml` pinning 1.99.0. Ubuntu 24.04 and Debian 13 package
+The minimum is **Rust 1.99**, pinned by `rust-toolchain.toml` (D3). It was
+1.85 (the 2024 edition, Debian 13's compiler) at first, then 1.91 because Boa
+needs it, then the current stable release. Ubuntu 24.04 and Debian 13 package
 nothing that new, so they build with rustup; rolling distributions ship it.
+The original question, which `gtk4` crate version the MSRV allows, went away:
+the shell uses the hand-written `rust/gtk-ffi`, not gtk-rs.
 
 ### 5.5 CI
 
@@ -327,13 +363,17 @@ The workflows that build today all gain a Rust toolchain:
 |---|---|---|
 | `linux.yml` | Ubuntu 26.04, GCC | rustup, pinned |
 | `macos.yml` | macOS 26 arm64 | rustup, pinned |
-| `windows.yml` | MSYS2 MINGW64 | MSYS2's `mingw-w64-x86_64-rust` (`x86_64-pc-windows-gnu`, the ABI the C side already uses) |
+| `windows.yml` | MSYS2 MINGW64 | rustup, pinned, `x86_64-pc-windows-gnu` (the ABI the C side uses; MSYS2's own `rust` package lags behind the pin) |
 | `musl.yml` | Alpine 3.24 | rustup, pinned (Alpine's `rust` lags behind; built without `crt-static`, like Alpine's own toolchain) |
 | `freebsd.yml`, `netbsd.yml` | VMs, nightly | rustup, pinned (the `pkg`/pkgsrc `rust` lags behind) |
 | `release.yml` | `ubuntu:24.04`, `ubuntu:26.04`, `debian:trixie` containers | distro packages when they reach 1.99 (a versioned `rustc-1.99` is tried); rustup otherwise, pinned to 1.99.0 |
 
 Every workflow adds `cargo clippy --all-targets -- -D warnings` and
-`cargo fmt --check`, the Rust form of "no new warnings".
+`cargo fmt --check`, the Rust form of "no new warnings". Linux runs on every
+push, FreeBSD and NetBSD nightly; the Windows, macOS and musl workflows run
+only when started by hand, so code behind `cfg(windows)` or with a `c_long` in
+it is linted locally for both `x86_64-pc-windows-gnu` and
+`x86_64-unknown-linux-gnu` before pushing.
 
 ### 5.6 Offline builds and packaging
 
@@ -406,6 +446,19 @@ porting step, so the helpers wait until it is made; phase 2's leaf modules,
 whose C APIs are opaque pointers and plain scalars, go first. `security.c`
 can still be ported on its own.
 
+**FFmpeg decision (12 October 2026, D14).** Neither `ffmpeg-sys-next` nor
+build-time bindgen: `rust/av` declares the ~50 libav entry points the media
+code calls by hand, and meson computes the ~30 struct offsets and ~30 enum
+values it reads from the installed headers (§5.2). That costs no new crates
+and no libclang, and the build follows whatever FFmpeg 6.0–8.x the machine
+has. libavif gets the same treatment for `image_avif.c`, and libvorbisfile's
+`OggVorbis_File` size for the audio helper. SDL2's audio API, pl_mpeg's and
+minimp3's structs are ABI-stable (SDL2) or pinned in the tree (pl_mpeg,
+minimp3), so they are declared directly. The helpers become Rust static
+libraries exporting `main`, linked into the existing executables the way
+`rust/launcher` is, and `rust/helper-ffi` becomes an ordinary dependency of
+them.
+
 ### Phase 2 — Leaf modules
 
 Scope (8.7k lines), roughly in this order — modules with no project dependencies first:
@@ -473,7 +526,10 @@ Scope (5k lines): `ipc_http.c`, `renderer_serve.c`, `renderer_tiles.c`,
 Exit: the shell (still C) drives a Rust renderer host; single-process and
 headless modes work; WPT slice and smoke unchanged.
 
-The renderer executable has no C sources left: its entry point is
+Done (October 2026) as `rust/ipc`, `rust/renderer-host` and
+`rust/renderer-client`, calling the engine through its Rust crates rather
+than through bindgen over `libsouthstar.h`. The renderer executable has no C
+sources left: its entry point is
 `ns_renderer_main` in the one Rust library, and because the shell links that
 library too and has its own `main`, the linker aliases `main` to it for the
 renderer only (`--defsym`, or `-alias` on macOS).
@@ -498,6 +554,14 @@ Scope (13.3k lines): `src/gtk/*` (10.4k), `headless.c` (2.3k) and
 Exit: `southstar` is a Rust executable; every UI path in `docs/Controls.md`
 works on all platforms.
 
+Done (October 2026), with one change of route: the shell calls GTK through
+`rust/gtk-ffi`, hand-written declarations of the GTK, GDK, GIO and GObject
+functions it uses, instead of `gtk4-rs`, which keeps the dependency tree
+empty and the MSRV free of gtk-rs. `rust/headless` and `rust/watchdog` hold the
+headless driver and the watchdog. `macos_dock.m` (the Dock menu, Objective-C)
+is the one shell file still not Rust; it moves to Rust over `objc_msgSend`
+declarations when a macOS box can check it.
+
 ### Phase 5 — Networking and storage
 
 Scope (13.5k lines): `net.c` (7.2k), `net_http2.c` (2.7k), `net_backend.h`,
@@ -517,6 +581,12 @@ Scope (13.5k lines): `net.c` (7.2k), `net_http2.c` (2.7k), `net_backend.h`,
   handle, a fetch pool, per-connection threads.
 
 Exit: both backends fetch byte-identically, as they do today.
+
+Done (October 2026) by a different route (D7): `net.c` and its siblings were
+translated into `rust/net`, then libcurl and libnghttp2 were replaced
+outright by `rust/http`, an HTTP/1.1, HTTP/2, FTP and proxy client written in
+Rust on threads, with TLS through OpenSSL's libssl. There is one backend, and
+HTTP/3 was dropped.
 
 ### Phase 6 — Engine core: DOM, style, layout, paint
 
@@ -584,12 +654,12 @@ Scope (77.7k lines): `js.c` and its siblings (`js_canvas*.c`, `js_intl.c`,
   implementation. Helpers that early ports put in the `quickjs` module (the
   reflection `rust/js-clone` uses, for example) move onto the neutral API in
   step 1 of the JavaScript engine track below.
-- **Own `quickjs-sys`, not `rquickjs`.** `rquickjs` bundles its own
+- **Own QuickJS declarations, not `rquickjs`.** `rquickjs` bundles its own
   quickjs-ng and has none of the fork's hooks (`get_own_property_receiver`,
   host-function mode, brands, engine-private names, realm queries,
-  `JS_RepointArrayBuffer`, …). Southstar binds its in-tree fork directly and
-  keeps `-Dquickjs=quickjs` (Bellard's QuickJS) working as a fourth backend
-  through the same adapter idea as `ns_quickjs.c`.
+  `JS_RepointArrayBuffer`, …). Southstar binds its in-tree fork directly,
+  by hand, in `rust/js-engine`'s `quickjs` module (`quickjs_ffi.rs`).
+  Bellard's QuickJS was dropped as a backend in October 2026.
 - **Binding style** (decision D8): a small declarative layer (macros or
   tables) replacing the ~27 `JSCFunctionListEntry` tables and hand-written
   getters, or a generator driven by WebIDL. Settled by the phase 2 pilot.
@@ -610,6 +680,15 @@ WPT slice scores are not lower and the Speedometer runs
 (`scripts/speedometer*-bench.sh`) are within noise; the Boa backend builds,
 runs the same bindings and has a published row in the comparison table.
 
+Status (12 October 2026): the first half is done — `js.c` and every sibling
+are Rust, spread over ~45 `rust/js-*` crates, and no project C calls the
+QuickJS API. The bindings are hand-written natives over the neutral
+`Scope`/`Value` API plus QuickJS function-list tables for the DOM prototypes
+(D8 settled on hand-written bindings; WebIDL generation was not needed). The
+second half, the Boa backend running the browser, is the engine track below:
+the browser build does not yet offer Boa, and the fork in
+`third_party/boa_engine` is where the missing embedder hooks go.
+
 #### JavaScript engines
 
 Today every binding is written against the QuickJS-ng fork's C API, so the
@@ -626,14 +705,18 @@ available:
 
 | Engine | Language, licence | test262 | Execution | Rust embedding | Fit for Southstar |
 |---|---|---:|---|---|---|
-| QuickJS-ng (in-tree fork) | C, MIT | 83.5% (upstream; 23,288/23,726 language tests, 23/3,382 intl402) | bytecode interpreter | own `quickjs-sys` | **Default backend.** Keeps the fork's hooks and today's behaviour; Southstar's own `Intl` lives in the bindings |
-| QuickJS (Bellard) | C, MIT | 82.2% | bytecode interpreter | own `quickjs-sys` + adapter | Backend for parity with `-Dquickjs=quickjs` |
-| [Boa](https://github.com/boa-dev/boa) 0.22 (2026-08-28) | Rust, MIT/Unlicense | 95.6% | register bytecode VM, NaN-boxing, inline caches; no JIT | `Class` trait, `NativeFunction`, `Trace`/`Finalize` for host objects, pluggable job queue and module loader; `Context` is `!Send` | **Optional backend.** Best pure-Rust conformance, native Temporal, `Intl` through ICU4X behind a feature. No asynchronous interrupt hook (only `RuntimeLimits` for loops, recursion and stack), no bytecode serialisation, MSRV 1.91 |
+| QuickJS-ng (in-tree fork) | C, MIT | 83.5% (upstream; 23,288/23,726 language tests, 23/3,382 intl402) | bytecode interpreter | own declarations in `rust/js-engine` | **Default backend** until the switch. Keeps the fork's hooks and today's behaviour; Southstar's own `Intl` lives in the bindings |
+| QuickJS (Bellard) | C, MIT | 82.2% | bytecode interpreter | — | Dropped as a backend (October 2026) |
+| [Boa](https://github.com/boa-dev/boa) 0.22 (2026-08-28) | Rust, MIT/Unlicense | 95.6% | register bytecode VM, NaN-boxing, inline caches; no JIT | `Class` trait, `NativeFunction`, `Trace`/`Finalize` for host objects, pluggable job queue and module loader; `Context` is `!Send` | **The target default** (D12). Best pure-Rust conformance, native Temporal, `Intl` through ICU4X behind a feature. No asynchronous interrupt hook (only `RuntimeLimits` for loops, recursion and stack), no bytecode serialisation, MSRV 1.91; forked in-tree to add the missing hooks |
 | [Nova](https://github.com/trynova/nova) 1.0 (2026-03-15) | Rust, MPL-2.0 | ~80% (own metrics; not in the current test262.fyi run) | interpreter, data-oriented heap with a compacting safepoint GC | built for embedding; API young | **Experimental backend.** Known gaps: RegExp without lookaround or backreferences, dense-only arrays, Promise subclassing; MSRV 1.95 |
 | [Brimstone](https://github.com/Hans-Halverson/brimstone) | Rust, MIT | >97% of language tests (own claim) | Ignition-style bytecode VM | none documented, no releases, "not ready for production" | Watch; revisit when it has an embedding API |
 | `rquickjs` 0.14 | Rust bindings, MIT | as QuickJS-ng | — | mature (classes, interrupts, memory limits, windows-gnu) | Not used: bundles stock quickjs-ng without the fork's hooks. Its API is a good model for `js-engine` |
 | V8 (`v8` crate), SpiderMonkey (`mozjs`) | C++ | 97.6%, 98.5% | JIT | mature | **Excluded**: upstream browser engine code, which the project rules keep out; neither builds for windows-gnu (MSYS2) |
 | Kiesel, yavashark, Starlight | Zig / Rust | 94.6% / — / — | — | — | Not candidates: Kiesel is Zig, yavashark is early, Starlight is abandoned |
+
+These test262 figures are test262.fyi's; Southstar's own run through
+`southstar-jsshell` (`docs/js-engines.md`, 52,131 tests) gives 83.3% for
+QuickJS-ng and 94.4% for Boa.
 
 No pure-Rust engine has a JIT; every candidate is an interpreter like QuickJS.
 Boa is the only pure-Rust engine with both higher conformance than QuickJS-ng
@@ -669,14 +752,17 @@ implementations stay in the bindings so every backend shows the same objects;
 using Boa's native ones is a later, measured choice.
 
 **Selecting an engine.** A meson combo option `js_engine` with the values
-`quickjs-ng` (default), `quickjs`, `boa` and `nova` replaces `-Dquickjs` (kept
-as an alias until phase 7 ends) and maps to the `js-engine` features. Like
-WebGPU and wgpu-native, an optional engine is never vendored into the tree:
-Boa and Nova come from crates.io through Cargo (vendored only in release
-tarballs, D4), and a default build contains no trace of them. Boa needs a
+`quickjs-ng` (default) and `boa` (and `nova` if it gets a backend) maps to the
+`js-engine` features. It does not exist yet: today Boa is chosen only for
+`southstar-jsshell`, with `--no-default-features --features boa`. Boa was
+first meant to come from crates.io like any optional dependency. Since 12
+October 2026 its engine crate is vendored as a fork in `third_party/boa_engine`
+(patched in through `[patch.crates-io]`), because the hooks the browser needs
+are private in stock Boa. Its other crates (`boa_parser`, `boa_gc`, …) still
+come from crates.io, and a default build compiles none of them. Boa needs a
 compiler of at least 1.91 and Nova 1.95; both sit below 1.99, the floor for
-every build (D3). The About page and
-`--print-config` report the engine a build uses.
+every build (D3). The About page and `--print-config` report the engine a
+build uses.
 
 **Comparing engines.** Every backend is measured the same way, and the
 results go into a table in `docs/` next to the WPT scoreboard:
@@ -694,8 +780,8 @@ The shell numbers come first, from the phase 2 bake-off; the browser numbers
 follow as phase 7 lands. `scripts/js-engine-compare.py` builds
 `southstar-jsshell` once per engine, runs test262 (in worker processes, so a
 hang or a crash costs one test, not the run) and the Octane suite, and
-rewrites `docs/js-engines.md`. Whether a pure-Rust engine ever becomes the default
-is decision D12, made on these numbers, not in advance.
+rewrites `docs/js-engines.md`. D12 has since made Boa the target default; these
+numbers decide when the switch happens, not whether.
 
 #### The JavaScript engine track
 
@@ -730,14 +816,20 @@ in step with every new neutral-API helper cost more than it gave.
    go on that API with both a QuickJS and a Boa implementation. Earlier ports
    that reached into the `quickjs` module (`rust/js-clone`, `rust/canvas`,
    `rust/js-perf`, …) are moved onto it.
-2. **`-Djs_engine=quickjs-ng|quickjs|boa`.** The meson option maps to the
-   `js-engine` features and replaces `-Dquickjs` (kept as an alias for a
-   while). Selecting Boa brings in its crates.io dependencies (D4); Rust 1.91,
+2. **`-Djs_engine=quickjs-ng|boa`.** The meson option maps to the
+   `js-engine` features (not added yet). Selecting Boa brings in its crates.io dependencies (D4); Rust 1.91,
    which Boa needs, is below 1.99, the floor for every build (D3). About and
    `--print-config` name the engine.
 3. **Boa runs the browser.** Once the C bindings are gone (the end of phase
    7), the Boa build runs the same bindings. Until then it can build and run
    `southstar-jsshell` and every binding crate that is already engine-neutral.
+   The C bindings are gone as of 12 October 2026, so this is the current
+   step. What still holds the browser to QuickJS is the transitional glue:
+   the DOM prototypes' QuickJS function-list tables, `rust/js-runtime`'s
+   realm record and the `quickjs` module calls left in the binding crates.
+   Each moves onto the neutral API, and the Boa fork gains the hooks the host
+   classes need (exotic internal methods, interrupts, finalizers on raw
+   instances).
    The gaps found along the way are closed in the Boa backend or reported
    upstream: interrupts for runaway scripts, receiver-aware property access,
    function brands, engine-private names, realm queries, and repointing
@@ -746,8 +838,9 @@ in step with every new neutral-API helper cost more than it gave.
    test262, the WPT slice, Speedometer, start-up, memory and size.
 5. **Switch the default** once the Boa build matches the QuickJS-ng build on
    the WPT slice and is acceptable on speed and memory.
-6. **Retire QuickJS.** Delete `src/quickjs/`, `src/ns_quickjs.c`, the
-   `quickjs` wrap and the `quickjs` module in `js-engine`. That takes out
+6. **Retire QuickJS.** Delete `src/quickjs/`, its meson wiring and the
+   `quickjs` module in `js-engine` (`src/ns_quickjs.c` already went with
+   Bellard's backend). That takes out
    about 101,000 lines of vendored C.
 
 Host classes with exotic behaviour (October 2026). The bindings declare a
@@ -801,6 +894,12 @@ Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),
 Some of these can move earlier; they sit at the edge of the engine and only
 depend on the JS binding style.
 
+Status (October 2026): done except `video_decode.c`. WebGL stayed on libepoxy
+(`rust/webgl`); WebGPU stayed on the external wgpu-native, with hand-declared,
+layout-checked FFI in `rust/webgpu`, rather than the `wgpu` crate; Wasm runs on
+`wasmi` (`rust/js-wasm`). `video_decode.c` follows the helpers onto `rust/av`
+(D14).
+
 ### Phase 9 — Vendored libraries and the end of C
 
 What is left is third-party C. Each library gets its own decision:
@@ -811,8 +910,8 @@ What is left is third-party C. Each library gets its own decision:
 | WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
 | QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
 | lexbor | ~289k, ~68k after `rust/url` | Replace with Southstar's own Rust WHATWG URL parser (`rust/url`, done) and HTML5 tokenizer and tree builder (`rust/html5`), written from the specs (D1 still keeps Servo's `html5ever` and `url` out); see "Replacing lexbor" below |
-| pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
-| ns-pango, Cairo, GTK 4, libcurl, OpenSSL, SQLite, FFmpeg, SDL2, uchardet, libpsl, libseccomp | system / subproject | Keep behind FFI |
+| pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate, so pl_mpeg's video half would be a hand port of its ~4k lines) |
+| ns-pango, Cairo, GTK 4, OpenSSL, SQLite, FFmpeg, SDL2, libwebp, libavif, uchardet, libpsl, libseccomp, Enchant, libepoxy | system / subproject | Keep behind FFI (libcurl and libnghttp2 are already gone) |
 
 Then decide whether Cargo becomes the build entry point (D10). Meson can stay
 if C libraries remain; Cargo with `build.rs` is simpler once the C is only
@@ -963,7 +1062,7 @@ checked with what already exists:
 |---|---|---|
 | Build | `meson compile -C builddir`, clippy, rustfmt | No warnings, every CI platform |
 | Smoke | `scripts/dev.sh smoke` | All fixtures match `data/baseline/` |
-| Rendering | `scripts/render-tests.sh` (53 pages, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
+| Rendering | `scripts/render-tests.sh` (the render fixtures, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
 | Web platform | `scripts/wpt-score.sh` | Slice score not lower (70,743 of 71,907 subtests on the 2026-07-13 slice) |
 | JavaScript | `scripts/test262-run.sh` | Not lower |
 | Performance | `scripts/speedometer-bench.sh`, `speedometer4-bench.sh` | Within noise |
@@ -977,27 +1076,27 @@ the existing ones, not a test suite.
 
 | Today (C) | During the port | Later option |
 |---|---|---|
-| GTK 4 | `gtk4-rs` (shell only) | — |
-| Cairo | `cairo-sys-rs` | `tiny-skia` or a GPU rasterizer, after a display list exists |
-| ns-pango | own `ns-pango-sys` | `rustybuzz` + `swash` (a text-stack redesign) |
-| libcurl | `curl` crate | — |
-| libnghttp2, ngtcp2, nghttp3, gnutls | FFI (D7) | `h2`, `quinn` + `h3` |
-| OpenSSL (WebCrypto) | `openssl` crate | — |
+| GTK 4 | hand-written `rust/gtk-ffi` (shell only; planned as `gtk4-rs`) | — |
+| Cairo | hand-written FFI (planned as `cairo-sys-rs`) | `tiny-skia` or a GPU rasterizer, after a display list exists |
+| ns-pango | hand-written FFI over the renamed API | `rustybuzz` + `swash` (a text-stack redesign) |
+| libcurl | replaced by `rust/http` (done) | — |
+| libnghttp2, ngtcp2, nghttp3, gnutls | replaced by `rust/http`'s own HTTP/2; HTTP/3 dropped (D7, done) | — |
+| OpenSSL (TLS, WebCrypto) | hand-written FFI (`rust/http`, `rust/webcrypto`) | — |
 | lexbor (HTML; URL until October 2026) | hand-written FFI in `rust/html-parser` | `rust/url` (done) and `rust/html5`, Southstar's own parsers (phase 9) |
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
 | Wuffs (done), libwebp | `png`, `gif`, `zune-jpeg` (in use), `image-webp` | — |
 | libavif | FFI | — |
 | WAMR | `wasmi` (D9, done) | — |
-| SQLite | `rusqlite` | — |
+| SQLite | hand-written `rust/sqlite` (planned as `rusqlite`) | — |
 | uchardet | FFI | Own detector (D1 excludes `chardetng`) |
 | libpsl | FFI | `psl` crate |
-| libseccomp, Landlock | `seccompiler` or `libseccomp`, `landlock` | — |
-| SDL2 | `sdl2` crate | `cpal` |
-| FFmpeg | `ffmpeg-sys-next` | — |
+| libseccomp, Landlock | hand-written FFI and syscalls in `rust/sandbox` | — |
+| SDL2 | hand-written FFI (the audio helper) | `cpal` |
+| FFmpeg | hand-written `rust/av` with meson-computed layouts (D14; planned as `ffmpeg-sys-next`) | — |
 | pl_mpeg, minimp3 | FFI | `symphonia` (audio) |
 | Enchant | FFI | — |
 | libepoxy | FFI | `glow` |
-| wgpu-native | `wgpu` (feature, off by default) | — |
+| wgpu-native | hand-written FFI in `rust/webgpu` (feature, off by default) | `wgpu` |
 | GLib | `glib-sys` at boundaries, `glib` for the event loop | Own event loop |
 
 ## 10. Risks
@@ -1023,16 +1122,17 @@ the existing ones, not a test suite.
 | D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep uchardet behind FFI and replace lexbor with Southstar's own parsers (phase 9, D13) |
 | D2 | Incremental port in place (this plan) or a clean rewrite in a new tree? | Incremental: the C browser already passes 98% of the tracked WPT slice, and a rewrite would have to reach that bar again before it could replace anything |
 | D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | Decided (October 2026): 1.91, the version Boa needs, then 1.99, the current stable release, pinned in `rust-toolchain.toml`. Ubuntu 24.04 and Debian 13 build with rustup; the floor no longer holds back gtk-rs 0.11 (1.92) |
-| D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small |
+| D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Open. Recommendation: commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small. Nothing is vendored yet apart from the Boa fork, which is source the project modifies rather than a cache of crates.io |
 | D5 | Keep the no-comments rule in Rust, including no `// SAFETY:` comments? | Keep it; confine `unsafe` to `ffi` modules |
 | D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |
 | D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Decided (October 2026): neither. libcurl and libnghttp2 are replaced by an in-tree Rust client, `rust/http`, on threads (no async runtime), with TLS through OpenSSL |
-| D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Either targets `js-engine`, not an engine; decide after the phase 2 pilot, with a lean toward WebIDL generation now that several backends must be served |
+| D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Settled in practice (October 2026): hand-written natives over `js-engine` with small registration tables; the whole of js.c was ported that way without a generator |
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 (done, October 2026) |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
 | D11 | Which JavaScript engines get backends? | QuickJS-ng (default until the switch), Boa (the target default), and optionally Nova and quickjs-rust as experiments. Bellard's QuickJS is dropped (October 2026). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (C QuickJS underneath) |
 | D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired |
 | D13 | Pure-Rust end state: replace all vendored C (lexbor, WAMR, Wuffs, pl_mpeg/minimp3, QuickJS)? | Decided (October 2026): yes. System libraries behind FFI are decided separately |
+| D14 | FFmpeg (and libavif) bindings for the media code, whose struct layouts change across supported versions: `ffmpeg-sys-next`, build-time bindgen, or hand-written declarations? | Decided (12 October 2026): hand-written declarations in `rust/av`, with the offsets and enum values computed by meson from the installed headers (§5.2); no crates and no libclang |
 
 ## 12. Tracking
 
@@ -1158,9 +1258,11 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `webgpu.c` | 2,830 | `rust/webgpu` (engine-neutral bindings; the webgpu.h/wgpu.h FFI declared by hand with compile-time layout asserts; an optional dependency behind `southstar-ffi`'s `webgpu` feature, so a stock build carries no WebGPU code) | 8 |
 | `win_launcher.c`, `embed_shim.c` | 374 | `rust/launcher` (a Windows-only static library linked into `southstar-launcher.exe`, exporting `main`) and `rust/static` (the `ns_app_self_exe` stub for `libsouthstar` and the renderer) | 4 |
 | `procview.c` | 5,348 | `rust/shell` (the tab view: renderer process and worker thread, page drawing and tiles, scrolling, input forwarding, the media helper pumping and X-Audio side channel, loading and history, zoom, context menu, find and permission bars, printing, saving and developer tools; ported in five stages, the shell executable now builds no C of its own) | 4 |
+| `js.c` | 66,600 | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` (ported in about sixty sections between 7 and 12 October 2026, from structured cloning to the page's realm record; each binding area is its own crate over the engine-neutral `Scope`/`Value` API, with the QuickJS-specific glue — the DOM prototypes' function-list tables, host-class trampolines and the realm record in `rust/js-runtime` — kept in `js-engine`'s `quickjs` module and `rust/js-interfaces`; the section-by-section record is in the git history and `Changelog.md`) | 7 (JavaScript bindings) |
 
 ### Being ported
 
-| Module | Sections so far | Crate |
+| Module | Crate | Notes |
 |---|---|---|
-| `js.c` | structured cloning (`structuredClone`, transfer lists, window and port messages) and the wire graph worker messages travel in between runtimes, in `rust/js-clone` over new QuickJS reflection helpers in `rust/js-engine`'s `quickjs` module; js.c calls them through `src/js_internal.h`; the forms bindings (FormData and its multipart/form-data body, constraint validation and `ValidityState`, `requestSubmit`/`submit`/`reset`, the submit event and `SubmitEvent`, the listed controls behind `form.elements`) in `rust/js-forms` over the engine-neutral `Scope`/`Value` API and `rust/dom`; MutationObserver, IntersectionObserver and ResizeObserver (constructors, methods, each page's observers and records, the mutation-record microtask and the intersection and resize ticks) in `rust/js-observers`, written against the engine-neutral `Scope`/`Value` API, with layout geometry read through `rust/layout`'s box handle and the realm-scoped callback call left in js.c (`ns_js_call_observer`); History, the Navigation API, Location (its URL parts, navigation, fragment changes and the scheme allow-list), `window.open` and `window.postMessage` between windows and frames (target origins, the outward-to-inner frame window links, delivery into the receiving realm; each page's session history and window links live in a thread-local map keyed by the page) in `rust/js-window` over the engine-neutral API, with js.c keeping the URL, navigation callbacks and event dispatch behind small accessors; MessagePort, MessageChannel and BroadcastChannel (entangled ports and their queues, transfer lists that move a port to another realm, the delivery task, the realm's broadcast channels) in `rust/js-workers` over the engine-neutral `Scope`/`Value` API, with the host-object wrappers, the listener-option parsing and the generic event-target dispatch left in js.c; dedicated and service workers in the same crate (the host shared with the worker thread, the thread and its GLib loop, the messages and their wire bytes, ports bridged between the two runtimes, script fetching, importScripts, error reporting, the worker console, location and global-object shape, service-worker registration, lifecycle and fetch interception, whose answers go to `rust/js-net`), with js.c keeping the worker realm's runtime setup and its list of platform installers (`ns_worker_js_new`) and script compilation (`ns_worker_js_eval`); the window's and the workers' navigator (identity, client hints, permissions, clipboard, geolocation, mediaDevices, battery, plugins, storage manager, user activation) in `rust/js-services` over the neutral API, which gains `enqueue_call` on both backends, then the window console (formatting, count and time state per page), alert, screen and its orientation, matchMedia and the MediaQueryList re-evaluation, Notification and queueMicrotask, with `is_error` and `json_stringify` added to the neutral API, then setTimeout, setInterval, requestIdleCallback and IdleDeadline (each page's timer table, ids, nesting clamp, the due-timer fast path and the GLib sources, on the window, frame and worker loops alike), with js.c keeping the realm and budget scope a callback runs in (`ns_js_timer_scope_enter`/`_leave`) and requestAnimationFrame; fetch (request extraction, stream bodies, abort signals, service worker routing, CORS and the Response it settles with), the Request and Response constructors and body mixin, AbortController/AbortSignal, XMLHttpRequest with XMLHttpRequestUpload (open/send, synchronous requests, the response types, readystatechange and progress events), the WebSocket and EventSource objects over the rust/websocket and rust/eventsource transports, and the network interface installer in `rust/js-net`, each page's pending fetches, requests, signal timeouts and sockets in per-page Rust state, the host-object machinery, event dispatch and service worker plumbing left in js.c behind small accessors; getComputedStyle (the resolved values of shorthands, used sizes, insets and transforms from layout, animation and transition lists and pseudo-element styles, and the read-only declaration with its Proxy), element.style's CSSStyleDeclaration over the style attribute, the CSS namespace (supports, escape, registerProperty and the @property validity check), the adopted-style-sheet and media-list helpers the CSSOM polyfill calls and the Web Animations hooks over the animation engine in `rust/js-cssom`, which calls the style engine and the animation engine through their C ABI and reads computed styles through `rust/style`; the CSSStyleDeclaration host class and its exotic property hooks stay in js.c as trampolines; Event and its subclasses (the constructors, the attribute getters on the interface prototypes, the legacy init*Event() methods, preventDefault, stopPropagation, cancelBubble, returnValue, srcElement, isTrusted, a command or toggle event's retargeted source and composedPath()) in `rust/js-events` over the engine-neutral API, with the event object's hidden engine state (its exotic class) and the dispatch path left in js.c behind small accessors; the Web Audio bindings (AudioContext and OfflineAudioContext, the node factories and nodes, AudioParam automation, AudioBuffer and offline rendering over `rust/webaudio`) and EME (`requestMediaKeySystemAccess`, `setMediaKeys`) in `rust/js-media` over the engine-neutral API; the WebCrypto bindings (the crypto object, getRandomValues, randomUUID, `crypto.subtle` and `CryptoKey` with algorithm normalization and JWK import/export) in `rust/js-crypto` over the engine-neutral API, calling `rust/webcrypto` directly, whose C ABI and `src/webcrypto.h` are gone; custom elements (the `customElements` registry, name validation, `whenDefined`, element upgrades and the connected, disconnected and attributeChanged callbacks, each page's definitions in per-page Rust state) in `rust/js-custom-elements`, with js.c keeping the popover and script-src steps of an attribute change; Web Storage (`localStorage` and `sessionStorage`: the Storage interface and the logic behind its named-property hooks, the quota, partitioned session buckets, the persisted per-origin local area and storage-event delivery) in `rust/js-storage` over the engine-neutral API, with the Storage class's exotic hooks left in js.c as trampolines; URL, URLSearchParams, atob and btoa, TextEncoder and TextDecoder, `URL.createObjectURL`/`revokeObjectURL` and FileReader in `rust/js-url` over the engine-neutral API, with js.c keeping the `blob:` URL registry the network resolver reads and the FileReader idle source; the WebRTC stubs (RTCPeerConnection, RTCDataChannel) and ClipboardItem in `rust/js-services`, and `navigator.sendBeacon` in `rust/js-net`; Range, Selection, TreeWalker and NodeIterator (`getSelection`, the native range object, filtered traversal and the NodeIterator pre-removal steps) in `rust/js-traversal`, with js.c keeping the selection snapshot and orphan set behind `ns_js_selection_state` and `ns_js_track_orphan`; innerText and outerText with the rendered-text walk, the CharacterData methods, splitText, wholeText and normalize in `rust/js-text` over the engine-neutral API, reading styles through `rust/style`; HTMLMediaElement (playback state, play, pause, load and seeking, volume, mute and rate, TimeRanges, srcObject and the video pipeline events), the MSE natives, `canPlayType`, `MediaSource.isTypeSupported` and mediaCapabilities in `rust/js-media`, with each page's media and MSE embedder hooks in per-page Rust state and js.c keeping the function tables and requestVideoFrameCallback; popovers, `<dialog>`, invoker commands (`popovertarget`, `commandfor`), the top layer and close watchers, the focusing steps and autofocus, and exclusive `<details name>` groups in `rust/js-top-layer`, each page's top-layer state in per-page Rust state; the Document property bindings (`cookie` and the jar seeding, `title`, `dir`, `body`, `head`, `documentElement`, `scrollingElement`, `activeElement`, `currentScript`, the legacy colours, `scripts`, `anchors`, `readyState`, `referrer`, `compatMode`, `designMode`, `lastModified` and visibility) in `rust/js-document`, with the live collections, `defaultView` and `document.write` left in js.c; DOMTokenList, `dataset` (DOMStringMap), NamedNodeMap and Attr nodes with `get`/`set`/`removeAttributeNode` in `rust/js-attrs`, with js.c keeping the three classes' trampolines, the token-list constructor, the `attributes` getter and `Attr.cloneNode`; CSSOM View geometry and scrolling (`getBoundingClientRect`, `getClientRects`, the offset, client and scroll metrics, element and window scrolling and `scrollIntoView`) and SVG geometry (`getBBox`, `getCTM`, `getScreenCTM`, `getTotalLength`, `getPointAtLength`, `matrixTransform`, the `createSVG*` factories) in `rust/js-geometry`, with js.c keeping `ns_box_find_by_dom` and its lookup cache; shadow DOM and slots (`attachShadow` and its checks, the ShadowRoot accessors, slot assignment, `assignedSlot` and `getRootNode`) in `rust/js-shadow`; the form-control bindings (values and sanitization, `valueAsNumber` and `valueAsDate`, `stepUp`/`stepDown`, the text selection APIs and `setRangeText`, checkedness and radio groups with click activation, select options, `selectedIndex` and `add`, `label.control`, progress and meter) in `rust/js-forms`; Node mutation (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `moveBefore`, the ChildNode and ParentNode methods with their node-or-string conversion, and the pre-insertion and pre-replacement validity checks) in `rust/js-node`, with the change recording left in js.c; selector queries and live collections (`querySelector`, `querySelectorAll`, `matches` and `closest` with their fast paths and the per-page query cache, `getElementById` and `getElementsBy*`, static NodeLists and the live HTMLCollection, NodeList and RadioNodeList) in `rust/js-collections`, matching through the style engine's selector matcher and with the live-collection class left in js.c as trampolines; the window's browsing-context members (`window`, `self`, `frames`, `length`, `top`, `parent`, `name`, `closed`, `opener`, `print`, `stop`, `focus`), the viewport metrics and named access on window and document in `rust/js-window`, with the WindowProperties exotic hooks left in js.c as trampolines; reflected HTML attributes (string and URL, enumerated, ARIA, integer and boolean reflection, and `dir`, `translate`, `type`, `autocomplete`, `autocapitalize`, `spellcheck`, `htmlFor`, `draggable`, `contentEditable`, `tabIndex`, `id`, `className`) in `rust/js-reflect`, with the prototype tables and the per-tag installer left in js.c; focus (focusability, the focus update steps and their events, focus-visible, sequential navigation, `focus()`, `blur()`, `document.hasFocus()`), `click()` and keyboard activation, the Fullscreen API and Pointer Lock in `rust/js-focus`, with the activation behaviour itself and the window focus event left in js.c; the document factories (`createElement`, `createElementNS`, `createTextNode`, `createComment`, `createCDATASection`, `createProcessingInstruction`, `createAttribute`, `createDocumentFragment`, `createEvent`), `cloneNode`, `importNode` and `adoptNode`, DOMImplementation, the DOM name checks, the namespace lookups and the `<a>`/`<area>` URL parts in `rust/js-dom-factory`; the HTML fragment parsing and serialization bindings (`innerHTML`, `outerHTML`, `getHTML`, `setHTMLUnsafe`, `insertAdjacentHTML`/`Element`/`Text`, `textContent` and `text`, XMLSerializer, microdata) in `rust/js-html`, serializing through `rust/dom` and parsing through lexbor; iframe browsing contexts and their realms (the realm cloner, the frame global, scope and cross-origin window bootstraps, the frame table, sandbox flags, the frame load queues and the frame-script helpers) in `rust/js-frames`, with `ns_js_load_iframe_now`, `ns_js_run_iframe_scripts` and the engine context creation left in js.c; script, module and stylesheet loading (classic and module scheduling, the parser hold, inserted scripts and the deferred and async roots, import maps, module source fetching, script fetching with CSP, nosniff and integrity and the load and error events, stylesheet links) in `rust/js-loader`, with compilation and evaluation left in js.c; text tracks (VTTCue, `textTracks`, `addTextTrack`) in `rust/js-media`, CSS Font Loading (FontFace, `document.fonts` and its ready and load promises) in `rust/js-fonts`, and ElementInternals with CustomStateSet in `rust/js-forms`; EventTarget and event dispatch (the listener registry and its options, `dispatchEvent` for every kind of target, the capture, target and bubble path with window listeners, inline and IDL event handlers, ErrorEvent and `reportError`, the promise rejection tracker and the key, input, toggle and resource event builders) in `rust/js-dispatch`, with realm switching left in js.c behind small accessors; `document.open`, `write`, `writeln` and `close` with the script-inserted write buffer, and the realm and synthetic documents of frames, DOMParser and DOMImplementation (the Document constructor, their cookie, getters and buffered writes, method lifting to the prototype) in `rust/js-document`; the shell's mouse and pointer, wheel, touch, clipboard and drag event dispatch with drag sessions and the WPT test-driver input hooks in `rust/js-input`; the Node tree getters, `compareDocumentPosition`, `isEqualNode` and `contains`, the node names, `ownerDocument`, `baseURI`, `isConnected`, template `content` and the Element attribute methods, also in `rust/js-node`; CompressionStream and DecompressionStream's zlib codec in `rust/js-compression`, the `performance` object and its prototype (timing, navigation, memory, toJSON) in `rust/js-perf`, the StaticRange constructor in `rust/js-traversal` and the SharedArrayBuffer hiding in `rust/js-realm`; hit testing (`elementFromPoint`, `elementsFromPoint`, frames' documents mapped into their content boxes, image-map areas) in `rust/js-geometry`; image readiness (each page's tracked `<img>` loads through the image cache in per-page Rust state, their ready idle and load/error events, `ns_js_image_for_node` and the base-URL rescans) in `rust/js-images`, with js.c keeping the resource timing entry and the layout media-event walk; the editing commands (`execCommand`, `queryCommandSupported`, `queryCommandEnabled`) and `confirm`/`prompt` in `rust/js-services`, with the clipboard and selection callbacks left in js.c behind small accessors; the element-specific HTML bindings (the table API — `rows`, `caption`, `tHead`, `tFoot`, `tBodies`, `cells`, the create and delete methods for captions and sections, `insertRow`/`deleteRow`, `insertCell`/`deleteCell`; `<img>` `complete`, `naturalWidth`/`naturalHeight`, `currentSrc`; `labels` and the label collection; `form`, `list`, option `index`, select `length`, `enctype`/`encoding`, `isContentEditable`, `hidden`, `disabled`, the `content` setter and the constant stubs) in `rust/js-elements`, with `canvas.toDataURL()` in `rust/canvas`; requestAnimationFrame, cancelAnimationFrame and requestVideoFrameCallback with the animation-frame tick, the scrollend queue, the animation and transition events and the media load events, has-pending-work and needs-tick, and the page lifecycle tick (readystatechange, deferred and async scripts, DOMContentLoaded, the load blockers, load, pageshow and content scripts) in `rust/js-lifecycle`, each page's queues and lifecycle state in per-page Rust state, with the realm switching a callback runs in left in js.c behind `ns_js_raf_scope_enter`/`_leave`; script compilation bookkeeping (the bytecode cache over classic scripts and modules, module specifier normalization, import attributes, `import.meta` and the `NS_PROFILE` eval and module lines) in `rust/js-loader`, and native member naming (`ns_js_name_engine_members`) in `rust/js-brand`; the window's node constructors (`DocumentFragment`, `Text`, `Comment`, `Image`, `Audio`, `Option`), `DOMParser` with `parseFromString` and `CloseWatcher` in `rust/js-dom-factory`; the getUserMedia camera and microphone helpers in `rust/js-services`; the `blob:` URL registry the network resolver reads (with `ns_js_blob_url_lookup` kept as C ABI) and the FileReader completion idle in `rust/js-url`; the frame owner bindings (the document a frame holds and its on-demand content root, `contentDocument`, `contentWindow` with its cross-origin proxy, `getSVGDocument`, the child frame windows behind `window.frames`, the platform names and window events a frame realm starts from) and a frame's source and load scheduling (marking the source, lazy frames deferred outside the load range, scheduling a parsed tree's frames, download responses) in `rust/js-frames`, with js.c keeping clearing a frame's content and the platform global snapshot; the DOM interface installers (the interface hierarchy and prototype chains, the instanceof table and `[Symbol.hasInstance]`, `Symbol.toStringTag`, Element's unscopables, the node and element member shapes as Rust tables, the PDF viewer plugins, interface object links and `window.chrome`) in `rust/js-interfaces`, with js.c keeping the C function tables, the per-tag prototype table and the cached prototypes behind `ns_js_install_dom_members`, `ns_js_register_tag_proto` and `ns_js_adopt_dom_protos`; the window global's shape (the immutable global prototype chain, the WindowProperties chain and `EventTarget` method lengths, the web API and navigator singleton shapes and namespace objects such as the worker `console`) in `rust/js-interfaces`, with `Scope::set_immutable_prototype` added to the neutral API (a no-op on Boa); the host-object interfaces (kinds, prototype attribute accessors, construction and brand checks) and the generic binding helpers (`ns_bind_fn`, `ns_make_ctor`, `ns_bind_ctor` and friends, integer constants, the stock no-op, null, empty-array and resolved-promise natives) in `rust/js-bind`, with js.c keeping only the host-object QuickJS class and its exotic hooks (`ns_ho_new`, `ns_ho_kind_of`); DOM change recording and mutation bookkeeping (indexing and recording child-list, attribute and character-data changes, the recorded attribute setters, the orphan set, the pending change event, the per-element NamedNodeMap cache and the clear-children, insert-sibling and script-started tree helpers) in `rust/js-mutation`, with js.c keeping the orphan sweep's scheduling; the page navigation and scroll glue (fragment navigation, viewport scroll events, resize, page transitions, the resource origin checks behind canvas tainting) in `rust/js-window`, the navigation timing milestones in `rust/js-perf`, and render-blocking status with element resource timing in `rust/js-loader`; installing a parsed document into the page's realm (the runtime reset, the document object and its prototype members, location, the shim and illegal constructors, the element prototype tables, the host class prototypes and the window's final shapes), starting its scripts (early-inject and content scripts, static frames, the document's own image loads, stylesheet resource timing, import maps, parser-blocking scripts and the lifecycle start) and the JavaScript stats dump in `rust/js-page`, with js.c keeping the QuickJS function tables, class prototypes and the polyfill sources behind small accessors; iframe document loading (`ns_js_load_iframe_now`: the fetch under CSP, X-Frame-Options and frame-ancestors, building and running the document), the frame script runner, clearing a frame's content, recording and scrubbing the page globals a frame load leaves, the frame referrer and the cross-origin check in `rust/js-frames`, with js.c keeping the frame-scope, frame-load and evaluation brackets and context creation; the leftover element and window bindings: the window Event constructor in `rust/js-events`; `form.elements` with its snapshot and named lookup, RadioNodeList's value, `input.files` and the form element's indexed and named property values in `rust/js-forms`, with the form's exotic hooks left in js.c as trampolines; activation behaviour (summary, label, link, `javascript:` URL, frame-targeted link, download, button, submit and reset) in `rust/js-focus`; `Element.animate()` in `rust/js-cssom`; `canvas.toBlob()` in `rust/canvas`; `replaceWholeText` in `rust/js-text`; `structuredClone()` in `rust/js-clone`; the window event handlers `<body>` and `<frameset>` reflect in `rust/js-dispatch`; the window's compatibility members in `rust/js-interfaces`; and IdleDeadline in `rust/js-services`; script and module evaluation (classic scripts with the iframe-document wrapper and inline source positions, module evaluation with `import.meta` and its error and rejection lines, frame-realm scripts, the module loader and JSON modules, `data:` URL decoding for scripts, content scripts, the console's `ns_js_eval_source` and purging a freed subtree's script references) in `rust/js-loader` over new engine-neutral `compile_script`, `eval_script_bytes`, `compile_module`, `evaluate` and `value_module` calls in `rust/js-engine` (on QuickJS and Boa), with js.c keeping small accessors for the evaluation state and the site-quirk script; creating and freeing a realm (`ns_js_new`'s navigation timing, runtime limits, engine-private names, per-page state init and every window installer in order; the worker realm's setup, stack limit and script evaluation; `ns_js_free`'s ordered subsystem teardown, the pinned wrappers and orphaned subtrees; the interrupt handler with the eval budget and the 60 s monitor) in `rust/js-runtime`, with js.c keeping the `ns_js` struct, its allocation, the QuickJS runtime and context creation, engine class registration and the field setters and frees behind small accessors; the remaining small DOM and window bindings: `nodeValue`, `data` and `length` in `rust/js-elements`; token lists, their put-forwards setters and `attributes` in `rust/js-attrs`; `element.style` in `rust/js-cssom`; SVG animated lengths, DOMRect, `checkVisibility` and the DOM-to-box lookup with its per-thread map in `rust/js-geometry`; DOMException throwing and AbortError in `rust/js-events`; `window.find`, the window's document, window events, hashchange and main-window dispatch in `rust/js-window`; window focus and blur in `rust/js-focus`; pointer capture in `rust/js-input`; `showPicker` in `rust/js-forms`; `async()` and `caches.open` in `rust/js-services`; the document base URL under CSP `base-uri` and `defaultView` in `rust/js-document`; engine-neutral host classes in `rust/js-engine` (a static `HostClass` with get-own, receiver get-own, own-keys, define, delete and set hooks, typed and traced instance data and per-realm class prototypes; on QuickJS real engine classes dispatched through one set of exotic trampolines, with `ns_new_class_id` moved into js-engine; on Boa ordinary objects whose hooks do not run yet), and on them the Storage class's named properties in `rust/js-storage`, DOMTokenList's indexed tokens in `rust/js-attrs`, CSSStyleDeclaration's named properties in `rust/js-cssom` and WindowProperties' named access in `rust/js-window`; the realm and scheduling plumbing (realm, frame, dispatch, frame-load, timer and animation-frame scopes with the top-level URL slot, the eval budget and script monitor, microtask and mutation draining, the timer gate, message tasks and GLib sources, the observer tick, pumped resource fetches, byte views and body bytes, URLSearchParams serialization, promise rejection, observer calls, orphan sweeping, unpinning and pending frame loads) and the page's runtime state with its accessors in `rust/js-runtime`, with `struct ns_js` keeping only the engine handles, the URL and document js.c still reads (reached from Rust through `ns_js_slots_of`), the cookie partition, CSP, the time origin and the cached prototypes; on the host classes, DOMStringMap (`element.dataset`) and the Attr class in `rust/js-attrs`, the live collection class behind HTMLCollection, NodeList, RadioNodeList and NamedNodeMap in `rust/js-collections` and the Event class with its hidden engine state in `rust/js-events`, the host-class API gaining array-index keys, own-property queries, forwarded definitions, a forwarded ordinary [[Set]] with `SetFlags` and `is_host_access` (QuickJS's `JS_IsHostAccess`; always false on Boa); the Element wrapper class (named access, wrapper invalidation, the finalizer and the per-kind prototypes) and the generic host-object class on raw host classes, whose instance data is a bare pointer C and Rust both read, and the QuickJS function tables of the DOM prototypes with their installers (`ns_js_register_class`, `ns_js_install_dom_members`, the document's functions, the interface links) in `rust/js-interfaces` over `quickjs::FunctionListEntry` | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` |
+| `video_decode.c`, `audio/main.c`, `videoproc/main.c` | `rust/video`, new helper crates, all over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts; `rust/av` has landed |
+| `image_avif.c` | `rust/image-decoders` (`avif` feature) | libavif through the same meson-computed layouts |

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* rust/av declares the FFmpeg entry points the media code calls, with the
+  struct offsets and enum values meson computes from the installed FFmpeg
+  (and libavif) headers, so the media helpers, video decoding and AVIF can
+  move to Rust without bindgen, -sys crates or one FFmpeg version's layout.
+* docs/rust-port.md reviewed against the tree: the status, phase table,
+  dependency map and decisions now record what was actually built (no
+  bindgen or gtk-rs, rust/http instead of libcurl, js.c done) and what is
+  left (the media C, macos_dock.m, the C headers, Boa, lexbor's HTML parser).
 * boa_engine 0.22 is vendored in third_party/boa_engine (patched in through
   Cargo's [patch.crates-io]) as the base of a Southstar fork of Boa: the
   browser needs embedder hooks stock Boa keeps private (exotic host objects,

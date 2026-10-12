@@ -19,6 +19,95 @@ southstar_rust_env = {
   'NS_BUILD_DATE': build_date,
   'NS_LEXBOR_VERSION': lexbor_version,
 }
+rust_cc = meson.get_compiler('c')
+if have_libav
+  av_layout_prefix = '''#include <stddef.h>
+#include <errno.h>
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/log.h>
+#include <libswscale/swscale.h>
+#include <libswresample/swresample.h>'''
+  av_layout_deps = [libavformat, libavcodec, libavutil, libswscale, libswresample]
+  av_layout = []
+  foreach member : [
+    'AVFormatContext.nb_streams', 'AVFormatContext.streams',
+    'AVFormatContext.duration', 'AVFormatContext.pb',
+    'AVStream.codecpar', 'AVStream.time_base', 'AVStream.duration',
+    'AVStream.avg_frame_rate', 'AVStream.r_frame_rate',
+    'AVCodecParameters.codec_id', 'AVCodecParameters.width',
+    'AVCodecParameters.height',
+    'AVCodecContext.ch_layout', 'AVCodecContext.sample_rate',
+    'AVCodecContext.sample_fmt',
+    'AVIOContext.buffer', 'AVIOContext.eof_reached',
+    'AVPacket.stream_index', 'AVPacket.pts', 'AVPacket.duration',
+    'AVFrame.data', 'AVFrame.linesize', 'AVFrame.width', 'AVFrame.height',
+    'AVFrame.format', 'AVFrame.pts', 'AVFrame.nb_samples',
+    'AVFrame.ch_layout', 'AVFrame.best_effort_timestamp',
+    'AVChannelLayout.nb_channels',
+  ]
+    parts = member.split('.')
+    av_layout += member + '=' + rust_cc.compute_int(
+      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
+      prefix: av_layout_prefix, dependencies: av_layout_deps).to_string()
+  endforeach
+  foreach constant : [
+    ['sizeof.AVChannelLayout', 'sizeof(AVChannelLayout)'],
+    ['AVERROR_EAGAIN', 'AVERROR(EAGAIN)'], ['AVERROR_EOF', 'AVERROR_EOF'],
+    ['AVMEDIA_TYPE_VIDEO', 'AVMEDIA_TYPE_VIDEO'],
+    ['AVMEDIA_TYPE_AUDIO', 'AVMEDIA_TYPE_AUDIO'],
+    ['AV_PIX_FMT_BGRA', 'AV_PIX_FMT_BGRA'],
+    ['AV_SAMPLE_FMT_FLT', 'AV_SAMPLE_FMT_FLT'],
+    ['AV_SAMPLE_FMT_NONE', 'AV_SAMPLE_FMT_NONE'],
+    ['AV_LOG_QUIET', 'AV_LOG_QUIET'], ['SWS_BILINEAR', 'SWS_BILINEAR'],
+    ['AVSEEK_FLAG_BACKWARD', 'AVSEEK_FLAG_BACKWARD'],
+    ['AVSEEK_SIZE', 'AVSEEK_SIZE'],
+    ['AV_CODEC_ID_NONE', 'AV_CODEC_ID_NONE'],
+    ['AV_CODEC_ID_VP8', 'AV_CODEC_ID_VP8'], ['AV_CODEC_ID_VP9', 'AV_CODEC_ID_VP9'],
+    ['AV_CODEC_ID_AV1', 'AV_CODEC_ID_AV1'], ['AV_CODEC_ID_H264', 'AV_CODEC_ID_H264'],
+    ['AV_CODEC_ID_HEVC', 'AV_CODEC_ID_HEVC'],
+    ['AV_CODEC_ID_MPEG4', 'AV_CODEC_ID_MPEG4'],
+    ['AV_CODEC_ID_THEORA', 'AV_CODEC_ID_THEORA'],
+    ['AV_CODEC_ID_OPUS', 'AV_CODEC_ID_OPUS'],
+    ['AV_CODEC_ID_VORBIS', 'AV_CODEC_ID_VORBIS'],
+    ['AV_CODEC_ID_AAC', 'AV_CODEC_ID_AAC'], ['AV_CODEC_ID_MP3', 'AV_CODEC_ID_MP3'],
+    ['AV_CODEC_ID_FLAC', 'AV_CODEC_ID_FLAC'], ['AV_CODEC_ID_ALAC', 'AV_CODEC_ID_ALAC'],
+    ['AV_CODEC_ID_AC3', 'AV_CODEC_ID_AC3'], ['AV_CODEC_ID_EAC3', 'AV_CODEC_ID_EAC3'],
+  ]
+    av_layout += constant[0] + '=' + rust_cc.compute_int(
+      constant[1], prefix: av_layout_prefix, dependencies: av_layout_deps,
+      low: -2147483648, high: 2147483647).to_string()
+  endforeach
+  southstar_rust_env += {'NS_AV_LAYOUT': ','.join(av_layout)}
+endif
+if have_avif
+  avif_layout_prefix = '#include <stddef.h>\n#include <avif/avif.h>'
+  avif_layout = []
+  foreach member : [
+    'avifDecoder.maxThreads', 'avifDecoder.imageSizeLimit',
+    'avifDecoder.imageDimensionLimit', 'avifDecoder.strictFlags',
+    'avifDecoder.image', 'avifImage.width', 'avifImage.height',
+    'avifRGBImage.format', 'avifRGBImage.depth',
+    'avifRGBImage.alphaPremultiplied', 'avifRGBImage.pixels',
+    'avifRGBImage.rowBytes',
+  ]
+    parts = member.split('.')
+    avif_layout += member + '=' + rust_cc.compute_int(
+      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
+      prefix: avif_layout_prefix, dependencies: [libavif]).to_string()
+  endforeach
+  foreach constant : [
+    ['sizeof.avifRGBImage', 'sizeof(avifRGBImage)'],
+    ['AVIF_RGB_FORMAT_BGRA', 'AVIF_RGB_FORMAT_BGRA'],
+    ['AVIF_STRICT_DISABLED', 'AVIF_STRICT_DISABLED'],
+    ['AVIF_RESULT_OK', 'AVIF_RESULT_OK'],
+  ]
+    avif_layout += constant[0] + '=' + rust_cc.compute_int(
+      constant[1], prefix: avif_layout_prefix, dependencies: [libavif],
+      low: -2147483648, high: 2147483647).to_string()
+  endforeach
+  southstar_rust_env += {'NS_AVIF_LAYOUT': ','.join(avif_layout)}
+endif
 if use_ns_pango
   southstar_rust_features += ['ns-pango']
 endif

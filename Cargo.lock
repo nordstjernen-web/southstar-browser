@@ -1524,6 +1524,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-av"
+version = "0.9.9"
+
+[[package]]
 name = "southstar-bookmarks"
 version = "0.9.9"
 dependencies = [
