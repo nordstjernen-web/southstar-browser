@@ -28,8 +28,9 @@ commit still builds, launches and passes the same checks as today:
    and algorithms. Redesigns (a display list, a Rust-native text stack, an
    arena-based DOM) are separate, later steps with their own decisions.
 4. **Vendored C libraries are decided one by one.** Some are replaced during
-   the port where a Rust crate is a clear win (Wuffs, WAMR); lexbor, Cairo,
-   ns-pango and GTK stay C behind FFI until a separate decision.
+   the port where a Rust crate is a clear win (Wuffs, WAMR), lexbor by
+   Southstar's own URL and HTML parsers (phase 9); Cairo, ns-pango and GTK
+   stay C behind FFI until a separate decision.
 5. **The JavaScript engine moves to Rust too.** The Rust bindings are written
    once against an engine-neutral layer (`rust/js-engine`). QuickJS-ng and a
    pure-Rust engine ([Boa](https://github.com/boa-dev/boa); Nova as an
@@ -99,8 +100,8 @@ explicit Rust reading:
   `stylo`, `webrender`, `url` (rust-url, a Servo project), `encoding_rs` and
   `chardetng`. This plan treats them as excluded. That rules out the usual
   shortcuts for HTML parsing, CSS parsing, URL parsing and encoding detection;
-  Southstar keeps lexbor and uchardet behind FFI or writes its own (decision
-  D1).
+  Southstar writes its own (lexbor is replaced in phase 9) and keeps uchardet
+  behind FFI (decision D1).
 - **Few small auditable dependencies.** Crates pull in transitive trees.
   Every crate is pinned in `Cargo.lock`, vendored for offline builds (§5.6),
   licence-checked with `cargo-deny`, and listed in `THIRD-PARTY-LICENSES.md`.
@@ -544,8 +545,8 @@ Approach:
   Rust (an arena with `NodeId` handles instead of raw links, `Rc`-free
   sharing, owned strings) only after phase 7.
 - **lexbor memory.** Node names and text borrow lexbor's memory today. The
-  DOM port keeps that ownership model (lexbor stays, decision D1) and only
-  changes it if lexbor is replaced.
+  DOM port keeps that ownership model; when lexbor is replaced (phase 9), the
+  borrowed strings point into a per-document arena instead.
 - **Globals.** Each file-scope static becomes a `static` with a `Mutex`,
   `OnceLock` or `Cell`, or a `thread_local!` where C uses `__thread`. The
   `__thread` ones exist because the image pool builds SVG documents off the
@@ -809,13 +810,126 @@ What is left is third-party C. Each library gets its own decision:
 | Wuffs | ~97k | Replaced in phase 2 by `png`, `gif`, `zune-jpeg` and an in-tree BMP decoder (done) |
 | WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
 | QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
-| lexbor | ~289k | Replace with Southstar's own Rust HTML5 tokenizer, tree builder and WHATWG URL parser, written from the specs (D1 still keeps Servo's `html5ever` and `url` out); the largest remaining piece of vendored C |
+| lexbor | ~289k | Replace with Southstar's own Rust WHATWG URL parser (`rust/url`) and HTML5 tokenizer and tree builder (`rust/html5`), written from the specs (D1 still keeps Servo's `html5ever` and `url` out); see "Replacing lexbor" below |
 | pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
 | ns-pango, Cairo, GTK 4, libcurl, OpenSSL, SQLite, FFmpeg, SDL2, uchardet, libpsl, libseccomp | system / subproject | Keep behind FFI |
 
 Then decide whether Cargo becomes the build entry point (D10). Meson can stay
 if C libraries remain; Cargo with `build.rs` is simpler once the C is only
 vendored libraries.
+
+#### Replacing lexbor
+
+**What lexbor does today.** The in-tree copy is upstream lexbor 3.1.0 with no
+Southstar changes. Only two Rust files call it, and no C does:
+
+| Cluster | lexbor modules | Lines | Only caller |
+|---|---|---:|---|
+| URL | `url` (6.8k), `unicode` (211k, of which 206k is the `res.h` table), `punycode` (0.8k), `encoding` (1.8k) | ~220k | `rust/net/src/ffi/lexbor.rs` (347), used only by `rust/net/src/url.rs` |
+| HTML | `html` (47k, ~7k of it element interfaces the engine never uses), `dom` (7.6k), `tag` (1.1k), `ns` (0.4k) | ~56k | `rust/html-parser/src/ffi.rs` (663) |
+| Shared or unused | `core` (8.8k), `ports` (0.9k), `utils/http` and `utils/warc` (unused) | ~11k | — |
+
+The two clusters do not include each other's headers, so they are removed
+separately. The engine uses lexbor only to parse: `rust/dom` serializes,
+`rust/xml` parses XML, and uchardet with `g_convert` decodes bytes, so the
+HTML parser only ever sees UTF-8.
+
+What it costs today:
+
+- Every page holds two trees. lexbor builds its own DOM, `walk_into` in
+  `rust/html-parser` copies it into `ns_node`s whose names, text and attribute
+  values point into lexbor's memory, and the whole lexbor document stays
+  alive as the root's `backing` for the page's lifetime.
+- Script source positions are guessed by re-scanning the bytes for `<script`
+  (`script_positions` in `rust/html-parser`), which is wrong when that text
+  appears inside a comment or another script.
+- `rust/net/src/url.rs` carries a host-setter workaround and a per-thread
+  lexbor parser, and the WPT `url` area fails 177 subtests (IdnaTestV2 59,
+  a-element 24, url-setters-a-area 23, toascii 19, url-setters 12, …).
+
+`src/html.h` stays the contract: the ten crates that call `ns_html_parse*`
+and every user of `ns_url_*` keep working unchanged.
+
+**Step 1: `rust/url`, a WHATWG URL parser.** A safe crate with no
+dependencies: the basic URL parser with state override, the host parser
+(domain, IPv4, IPv6, opaque), the percent-encode sets, UTS #46 ToASCII with
+the flags the URL Standard sets (CheckBidi, CheckJoiners, no CheckHyphens, no
+STD3 rules, non-transitional, no DNS length check), Punycode, NFC, the URL API
+setters and the serializer. Its Unicode tables are generated by
+`scripts/gen-url-tables.py` from the Unicode Character Database, replacing
+`scripts/gen-idna-validity.py` (which wrote a C file into lexbor). Its API is
+the surface `rust/net/src/ffi/lexbor.rs` gives `url.rs` — parse against an
+optional base, serialize, the scheme and its kind, host, port, credentials,
+path, query, fragment and the nine setters — so `url.rs` changes its imports
+and drops the workaround. A later option is a hook that percent-encodes the
+query in the document's legacy charset through `g_convert`. Checked with a
+throwaway harness that runs WPT's `urltestdata.json`, `setters_tests.json`,
+`IdnaTestV2.json` and `toascii.json` through both parsers, then with
+`scripts/wpt-score.sh url` (not lower than 8502/8679). The cut-over commit
+deletes lexbor's `url/`, `unicode/`, `punycode/` and `encoding/` (about 76% of
+its lines).
+
+**Step 2: `rust/html5`, an HTML tokenizer and tree builder.** A safe library
+with no dependencies that knows nothing about `ns_node`: it builds through a
+`TreeSink` trait, the pattern `rust/xml`'s `Dom` trait already uses.
+
+- Tokenizer: every state of the WHATWG tokenizer, CR/LF normalization, a line
+  and column for every token, fast paths that skip to the next `<`, `&`, CR or
+  NUL, and buffers reused rather than allocated per token.
+- Character references: a table generated from WHATWG's `entities.json`
+  (2,231 names) with longest-match lookup, the legacy names without a
+  semicolon, the attribute-value rule and the numeric C1 remapping.
+- Names: a generated tag enum over static `&'static CStr` names (no code
+  compares node names by pointer), the SVG and MathML case tables and the
+  foreign-attribute namespaces.
+- Tree builder: the current spec, including the relaxed `<select>` parsing and
+  `<selectedcontent>` lexbor 3.x already follows — the open-element stack and
+  its scopes, active formatting elements with the Noah's Ark limit, the
+  adoption agency algorithm, foster parenting, template insertion modes,
+  quirks mode from the doctype, fragment parsing with a context element, the
+  scripting flag and the tokenizer state switches. Iterative throughout.
+
+`rust/html-parser` becomes the sink that writes `ns_node`s directly, with no
+intermediate tree and no copy pass. Element names point at the static names;
+text, comments and attribute values go into one arena per document attached
+as the root's `backing`, so the borrowed-string flags and the
+`own_strings_deep` callers work unchanged. Namespaces and their flags,
+`data-nd-ns-uri`, the internal-attribute filter, quirks and scripting flags,
+whitespace pruning, declarative shadow roots and media metadata stay as they
+are; script positions come from the tokenizer. Checked with throwaway
+harnesses — html5lib-tests' tokenizer JSON, then its tree-construction files
+and a corpus of real pages run through both parsers with the serialized
+`ns_node` trees diffed byte for byte.
+
+**Order.** Each step builds, passes clippy and rustfmt, is smoke-launched and
+is pushed on its own:
+
+1. Baseline: add `html/syntax/parsing`, `html/syntax/serializing-html-fragments`
+   and `domparsing` to the WPT slice and score them with lexbor; record
+   render-test PNGs and parse times over the render-test pages and a few large
+   pages.
+2. `rust/url` and its cut-over, with the regenerated `url` scores.
+3. The `rust/html5` tokenizer, then the tree builder.
+4. The HTML cut-over: `src/lexbor` deleted with its meson wiring and
+   `NS_LEXBOR_VERSION`, and the about pages, licences, packaging notes and
+   docs updated. It ships only with render tests pixel-identical, the WPT
+   slice not lower, Speedometer within noise and parsing no slower than
+   lexbor.
+5. Later, as separate behaviour changes measured by WPT: declarative shadow
+   roots attached during tree building as the spec does; a re-entrant parser
+   whose `document.write` writes into the token stream (replacing the
+   fragment splice in `rust/js-document`); incremental parsing as bytes
+   arrive; a preload scanner.
+
+**Risks.** Rare tree-construction cases (lexbor stays the reference while both
+exist, plus html5lib-tests and WPT); speed (no per-token or per-name
+allocation and no copy pass, measured before the cut-over); deep nesting (a
+depth cap like Blink's 512 is a separate decision, since lexbor has none); the
+SVG image threads call `ns_html_parse`, so the parser keeps no mutable global
+state; the IDNA tables are pinned to the Unicode version WPT's IdnaTestV2
+expects.
+
+After lexbor, the only vendored C left is QuickJS and pl_mpeg/minimp3.
 
 ## 7. Engineering rules during the port
 
@@ -864,7 +978,7 @@ the existing ones, not a test suite.
 | libcurl | `curl` crate | — |
 | libnghttp2, ngtcp2, nghttp3, gnutls | FFI (D7) | `h2`, `quinn` + `h3` |
 | OpenSSL (WebCrypto) | `openssl` crate | — |
-| lexbor (HTML, URL) | own `lexbor-sys` | Southstar's own parser (D1) |
+| lexbor (HTML, URL) | hand-written FFI in `rust/html-parser` and `rust/net` | `rust/url` and `rust/html5`, Southstar's own parsers (phase 9) |
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
 | Wuffs (done), libwebp | `png`, `gif`, `zune-jpeg` (in use), `image-webp` | — |
 | libavif | FFI | — |
@@ -901,7 +1015,7 @@ the existing ones, not a test suite.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep lexbor and uchardet behind FFI |
+| D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep uchardet behind FFI and replace lexbor with Southstar's own parsers (phase 9, D13) |
 | D2 | Incremental port in place (this plan) or a clean rewrite in a new tree? | Incremental: the C browser already passes 98% of the tracked WPT slice, and a rewrite would have to reach that bar again before it could replace anything |
 | D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | Decided (October 2026): 1.91, the version Boa needs, then 1.99, the current stable release, pinned in `rust-toolchain.toml`. Ubuntu 24.04 and Debian 13 build with rustup; the floor no longer holds back gtk-rs 0.11 (1.92) |
 | D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small |
