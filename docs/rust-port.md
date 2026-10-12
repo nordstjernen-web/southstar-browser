@@ -11,7 +11,7 @@ deleted on 12 October — and the C left in the project is the media code:
 | `videoproc/main.c` | 743 | a Rust `southstar-video` executable, over `rust/av` (phase 1) |
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
-| `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules; each is deleted once no C includes it, and the image headers become Rust `include_bytes!` data |
+| `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules. Fewer than ten are still included by C; the rest document the `ns_*` C ABI that Rust crates still use to call each other (and that 117 crate headers name). They go when those calls become ordinary Rust calls — a later, mechanical clean-up — except `libsouthstar.h`, the public embedding API. The about-page GIF and stylesheet headers are data the Rust build reads with `include_bytes!`/`include_str!` |
 
 After those, the work is the JavaScript engine track (Boa as the default, then
 QuickJS removed, §6) and the vendored C libraries (lexbor's HTML parser,
