@@ -254,7 +254,7 @@ if have_libav
   endif
   executable(
     'southstar-video',
-    link_with: southstar_video_rust_lib,
+    link_whole: southstar_video_rust_lib,
     link_language: 'c',
     dependencies: videoproc_deps + [cc.find_library('rt', required: false),
                                     cc.find_library('m', required: false)],
