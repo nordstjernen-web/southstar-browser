@@ -148,6 +148,7 @@ pub mod frame {
     pub const WIDTH: Field<AVFrame, core::ffi::c_int> = field("AVFrame.width");
     pub const HEIGHT: Field<AVFrame, core::ffi::c_int> = field("AVFrame.height");
     pub const FORMAT: Field<AVFrame, core::ffi::c_int> = field("AVFrame.format");
+    pub const EXTENDED_DATA: Field<AVFrame, *mut *mut u8> = field("AVFrame.extended_data");
     pub const PTS: Field<AVFrame, i64> = field("AVFrame.pts");
     pub const NB_SAMPLES: Field<AVFrame, core::ffi::c_int> = field("AVFrame.nb_samples");
     pub const CH_LAYOUT: Field<AVFrame, u8> = field("AVFrame.ch_layout");

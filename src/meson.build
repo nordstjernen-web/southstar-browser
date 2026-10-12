@@ -209,7 +209,10 @@ if sdl2_dep.found()
     install: false,
   )
 
-  audio_deps = [sdl2_dep, libplmpeg, southstar_helper_rust_dep]
+  audio_deps = [sdl2_dep, libplmpeg, glib] + http_backend_deps
+  if have_seccomp
+    audio_deps += [libseccomp]
+  endif
   if have_libav
     audio_deps += [libavformat, libavcodec, libavutil, libswresample]
   endif
@@ -227,18 +230,16 @@ if sdl2_dep.found()
   audio_lib_deps = [cc.find_library('m', required: false),
                     cc.find_library('rt', required: false)]
 
-  # On Linux the helper confines itself with the same Landlock + seccomp
-  # profile as the renderer once its audio device and network stack are up,
-  # so attacker-controlled codec bytes are decoded inside the sandbox.
-  audio_sandbox_sources = []
-
+  # The helper is rust/audio-helper, whose static library exports main; on
+  # Linux it confines itself with the same Landlock + seccomp profile as the
+  # renderer once its audio device and network stack are up, so
+  # attacker-controlled codec bytes are decoded inside the sandbox.
   executable(
     'southstar-audio',
-    files('audio/main.c') + audio_sandbox_sources,
-    include_directories: include_directories('audio', '.'),
+    link_whole: southstar_audio_rust_lib,
     link_with: libminimp3,
     dependencies: audio_deps + audio_lib_deps,
-    link_args: southstar_link_args,
+    link_args: southstar_link_args + rust_native_libs,
     win_subsystem: 'windows',
     install: true,
   )

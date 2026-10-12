@@ -1,4 +1,4 @@
-//! Southstar — the audio-clock and video-frame-ring layouts the media helpers share with the shell, mirroring src/media_shm.h.
+//! Southstar — the audio-clock and video-frame-ring layouts the media helpers share with the shell.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

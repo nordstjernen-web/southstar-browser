@@ -1,0 +1,27 @@
+[package]
+name = "southstar-audio-helper"
+description = "The southstar-audio helper process: decodes MPEG-1/MP2, MP3, WebM and Ogg audio, mixes and resamples it and plays it through SDL2, driven by line commands from the shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+southstar-av = { path = "../av" }
+southstar-helper-ffi = { path = "../helper-ffi" }
+southstar-http = { path = "../http" }
+southstar-media-shm = { path = "../media-shm" }
+
+[features]
+libav = []
+vorbisfile = []
+opusfile = []
+seccomp = ["southstar-helper-ffi/seccomp"]
+
+[lints]
+workspace = true

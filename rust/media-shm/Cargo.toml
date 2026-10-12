@@ -1,6 +1,6 @@
 [package]
 name = "southstar-media-shm"
-description = "The shared-memory layouts of the audio clock and the video frame ring, as declared in src/media_shm.h"
+description = "The shared-memory layouts of the audio clock and the video frame ring the media helpers share with the shell"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

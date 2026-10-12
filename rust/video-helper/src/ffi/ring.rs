@@ -1,4 +1,4 @@
-//! Southstar — the shared-memory frame ring a player publishes BGRA frames and its clock into, laid out as src/media_shm.h declares.
+//! Southstar — the shared-memory frame ring a player publishes BGRA frames and its clock into, laid out as rust/media-shm declares.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

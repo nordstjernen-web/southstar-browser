@@ -1524,6 +1524,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-audio-helper"
+version = "0.9.9"
+dependencies = [
+ "southstar-av",
+ "southstar-helper-ffi",
+ "southstar-http",
+ "southstar-media-shm",
+]
+
+[[package]]
 name = "southstar-av"
 version = "0.9.9"
 

@@ -42,7 +42,7 @@ if have_libav
     'AVIOContext.buffer', 'AVIOContext.eof_reached', 'AVIOContext.error',
     'AVPacket.stream_index', 'AVPacket.pts', 'AVPacket.duration',
     'AVFrame.data', 'AVFrame.linesize', 'AVFrame.width', 'AVFrame.height',
-    'AVFrame.format', 'AVFrame.pts', 'AVFrame.nb_samples',
+    'AVFrame.format', 'AVFrame.pts', 'AVFrame.nb_samples', 'AVFrame.extended_data',
     'AVFrame.ch_layout', 'AVFrame.best_effort_timestamp',
     'AVChannelLayout.nb_channels',
   ]
@@ -79,6 +79,20 @@ if have_libav
       low: -2147483648, high: 2147483647).to_string()
   endforeach
   southstar_rust_env += {'NS_AV_LAYOUT': ','.join(av_layout)}
+endif
+if libvorbisfile.found()
+  vorbis_layout_prefix = '#include <stddef.h>\n#include <vorbis/vorbisfile.h>'
+  vorbis_layout = []
+  foreach member : ['vorbis_info.channels', 'vorbis_info.rate']
+    parts = member.split('.')
+    vorbis_layout += member + '=' + rust_cc.compute_int(
+      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
+      prefix: vorbis_layout_prefix, dependencies: [libvorbisfile]).to_string()
+  endforeach
+  vorbis_layout += 'sizeof.OggVorbis_File=' + rust_cc.compute_int(
+    'sizeof(OggVorbis_File)', prefix: vorbis_layout_prefix,
+    dependencies: [libvorbisfile]).to_string()
+  southstar_rust_env += {'NS_VORBIS_LAYOUT': ','.join(vorbis_layout)}
 endif
 if have_avif
   avif_layout_prefix = '#include <stddef.h>\n#include <avif/avif.h>'
@@ -277,6 +291,37 @@ if have_libav
       ns_is_release ? 'release' : 'dev',
       'southstar-video-helper', '@OUTPUT@', '@DEPFILE@',
     ] + southstar_helper_rust_features,
+    env: southstar_rust_env,
+    console: true,
+    build_by_default: true,
+    depends: southstar_helper_rust_lib,
+  )
+endif
+
+if rust_sdl2.found()
+  southstar_audio_rust_features = []
+  if have_libav
+    southstar_audio_rust_features += ['libav']
+  endif
+  if libvorbisfile.found()
+    southstar_audio_rust_features += ['vorbisfile']
+  endif
+  if libopusfile.found()
+    southstar_audio_rust_features += ['opusfile']
+  endif
+  if have_seccomp
+    southstar_audio_rust_features += ['seccomp']
+  endif
+  southstar_audio_rust_lib = custom_target(
+    'southstar-audio-rust',
+    output: 'libsouthstar_audio_helper.a',
+    depfile: 'libsouthstar_audio_helper.a.d',
+    command: [
+      cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
+      meson.current_build_dir() / 'cargo-target',
+      ns_is_release ? 'release' : 'dev',
+      'southstar-audio-helper', '@OUTPUT@', '@DEPFILE@',
+    ] + southstar_audio_rust_features,
     env: southstar_rust_env,
     console: true,
     build_by_default: true,
