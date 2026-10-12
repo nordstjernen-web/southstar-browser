@@ -42,9 +42,9 @@ Update Changelog.md
 - The **one vendored, in-tree** video codec is MPEG-1, decoded by the
   vendored MIT-licensed [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
   single-file decoder (`subprojects/plmpeg/`, wrapped by
-  `src/video_decode.c`). A `<video>` whose source is an `.mpg`/`.mpeg`/`.m1v`
+  `rust/video/src/decode.rs`). A `<video>` whose source is an `.mpg`/`.mpeg`/`.m1v`
   stream plays **inline** — frames are decoded in the sandboxed renderer
-  and advanced off the animation tick (`src/video.c`), honouring
+  and advanced off the animation tick (`rust/video`), honouring
   `autoplay`/`loop`/`muted`/`poster` and click-to-play/pause. Audio plays
   via the unsandboxed `southstar-audio` helper (`src/audio/main.c`),
   which decodes in-tree — pl_mpeg for the MPEG-1/MP2 track, the vendored
@@ -55,7 +55,7 @@ Update Changelog.md
   commands that ride the render-response `X-Audio` side-channel to the
   shell, which spawns and pumps the helper (`src/gtk/procview.c`).
   MSE video frames decode in a third process, `southstar-video`
-  (`src/videoproc/main.c`, built when libav is present): the renderer
+  (`rust/video-helper`, built when libav is present): the renderer
   materializes the growing stream to `~/.cache/southstar/msvideo/`
   and drives it with `video …` lines on the same side-channel; the
   helper writes BGRA frames into a shm ring that the shell composites
@@ -67,7 +67,7 @@ Update Changelog.md
   `libswscale`/`libswresample`, system packages — never vendored): the
   `libav` build path (`-DNS_HAVE_LIBAV`) adds inline
   **VP9/VP8 video** (libav demux+decode → swscale → texture, in
-  `src/video_decode.c`) and **Opus/Vorbis audio** (decoded in the helper,
+  `rust/video/src/decode.rs`) and **Opus/Vorbis audio** (decoded in the helper,
   `src/audio/main.c`) for `.webm`/`.opus`/`.ogg` sources. It is **required on
   Linux and Windows** (`libav_required` in `meson.build` — YouTube and most
   modern sites serve VP9/WebM, so the external-player fallback there is

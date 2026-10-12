@@ -142,7 +142,7 @@ describes the boundary.
 - **14 · YouTube watch-page playback** — baseline shipped: a streaming
   `<video>` (MSE/`blob:`, no file URL) plays *inline* — the renderer
   materializes the growing stream and the `southstar-video` helper
-  (`src/videoproc/main.c`, built when libav is present) decodes frames
+  (`rust/video-helper`, built when libav is present) decodes frames
   into a shm ring the shell composites over the page (see
   `docs/media.md`). Next: widen codec/site coverage and surface clearer
   in-page feedback when the helper is unavailable.

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The MSE video helper southstar-video is now Rust (rust/video-helper),
+  with FFmpeg through rust/av; its line protocol, shared-memory frame ring,
+  clock and decoded frames are unchanged (byte-identical on a VP9 test
+  stream), and the shared-memory layouts live in one crate, rust/media-shm,
+  used by the helper and the shell alike.
 * Inline video decoding (video_decode.c) moved to Rust (rust/video):
   MPEG-1 through the vendored pl_mpeg, WebM through FFmpeg over rust/av's
   meson-computed layouts. The engine library now contains no C of its own.

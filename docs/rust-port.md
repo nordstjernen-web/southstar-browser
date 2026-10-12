@@ -7,7 +7,6 @@ deleted on 12 October — and the C left in the project is the media code:
 | Left | Lines | Where it goes |
 |---|---:|---|
 | `audio/main.c` | 1,605 | a Rust `southstar-audio` executable, over `rust/av` (phase 1) |
-| `videoproc/main.c` | 743 | a Rust `southstar-video` executable, over `rust/av` (phase 1) |
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
 | `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules. Fewer than ten are still included by C; the rest document the `ns_*` C ABI that Rust crates still use to call each other (and that 117 crate headers name). They go when those calls become ordinary Rust calls — a later, mechanical clean-up — except `libsouthstar.h`, the public embedding API. The about-page GIF and stylesheet headers are data the Rust build reads with `include_bytes!`/`include_str!` |
@@ -65,7 +64,7 @@ one is a separate, later decision (§9).
 | Phase | What | Project C retired (lines) | Status |
 |---|---|---:|---|
 | 0 | Toolchain, build integration, CI, a pilot module | 150 | Done |
-| 1 | Helper processes and the sandbox library | 3,974 | Sandbox and launcher done; the audio and video helpers are next |
+| 1 | Helper processes and the sandbox library | 3,974 | Done except the audio helper |
 | 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 | Done |
 | 3 | Renderer host and IPC protocol | 5,028 | Done |
 | 4 | GTK shell, watchdog and headless driver | 13,291 | Done |
@@ -1258,10 +1257,11 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `procview.c` | 5,348 | `rust/shell` (the tab view: renderer process and worker thread, page drawing and tiles, scrolling, input forwarding, the media helper pumping and X-Audio side channel, loading and history, zoom, context menu, find and permission bars, printing, saving and developer tools; ported in five stages, the shell executable now builds no C of its own) | 4 |
 | `image_avif.c` | 75 | `rust/image-decoders` (behind the `avif` feature; libavif through hand-written declarations with meson-computed struct offsets, D14) | 2 |
 | `video_decode.c` | 676 | `rust/video` (`decode.rs`: pl_mpeg's MPEG-1 through hand-declared FFI to the vendored decoder, VP9/VP8/AV1 WebM through `rust/av` and swscale behind the `libav` feature; `libsouthstar` now builds from no C sources) | 8 |
+| `videoproc/main.c` | 743 | `rust/video-helper` (the `southstar-video` executable from a Rust static library exporting `main`, FFmpeg through `rust/av`; the shared-memory frame ring and clock layouts moved into `rust/media-shm`, shared with `rust/shell`) | 1 |
 | `js.c` | 66,600 | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` (ported in about sixty sections between 7 and 12 October 2026, from structured cloning to the page's realm record; each binding area is its own crate over the engine-neutral `Scope`/`Value` API, with the QuickJS-specific glue — the DOM prototypes' function-list tables, host-class trampolines and the realm record in `rust/js-runtime` — kept in `js-engine`'s `quickjs` module and `rust/js-interfaces`; the section-by-section record is in the git history and `Changelog.md`) | 7 (JavaScript bindings) |
 
 ### Being ported
 
 | Module | Crate | Notes |
 |---|---|---|
-| `audio/main.c`, `videoproc/main.c` | new helper crates over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts |
+| `audio/main.c` | `rust/audio-helper` over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts |
