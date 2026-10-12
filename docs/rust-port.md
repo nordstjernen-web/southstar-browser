@@ -1,12 +1,11 @@
 # Porting Southstar Browser to Rust
 
-Status (12 October 2026): **the engine is Rust.** Every engine, shell,
-renderer and binding module is ported — `js.c`, the last and largest, was
-deleted on 12 October — and the C left in the project is the media code:
+Status (12 October 2026): **the browser is Rust.** Every engine, shell,
+renderer, binding and media module is ported — `js.c`, the largest, and the
+media helpers went on 12 October. The project C left:
 
 | Left | Lines | Where it goes |
 |---|---:|---|
-| `audio/main.c` | 1,605 | a Rust `southstar-audio` executable, over `rust/av` (phase 1) |
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
 | `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules. Fewer than ten are still included by C; the rest document the `ns_*` C ABI that Rust crates still use to call each other (and that 117 crate headers name). They go when those calls become ordinary Rust calls — a later, mechanical clean-up — except `libsouthstar.h`, the public embedding API. The about-page GIF and stylesheet headers are data the Rust build reads with `include_bytes!`/`include_str!` |
@@ -64,7 +63,7 @@ one is a separate, later decision (§9).
 | Phase | What | Project C retired (lines) | Status |
 |---|---|---:|---|
 | 0 | Toolchain, build integration, CI, a pilot module | 150 | Done |
-| 1 | Helper processes and the sandbox library | 3,974 | Done except the audio helper |
+| 1 | Helper processes and the sandbox library | 3,974 | Done |
 | 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 | Done |
 | 3 | Renderer host and IPC protocol | 5,028 | Done |
 | 4 | GTK shell, watchdog and headless driver | 13,291 | Done |
@@ -1258,10 +1257,9 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `image_avif.c` | 75 | `rust/image-decoders` (behind the `avif` feature; libavif through hand-written declarations with meson-computed struct offsets, D14) | 2 |
 | `video_decode.c` | 676 | `rust/video` (`decode.rs`: pl_mpeg's MPEG-1 through hand-declared FFI to the vendored decoder, VP9/VP8/AV1 WebM through `rust/av` and swscale behind the `libav` feature; `libsouthstar` now builds from no C sources) | 8 |
 | `videoproc/main.c` | 743 | `rust/video-helper` (the `southstar-video` executable from a Rust static library exporting `main`, FFmpeg through `rust/av`; the shared-memory frame ring and clock layouts moved into `rust/media-shm`, shared with `rust/shell`) | 1 |
+| `audio/main.c` | 1,605 | `rust/audio-helper` (the `southstar-audio` executable from a Rust static library exporting `main`: the line protocol, SDL2 mixing and resampling under one mutex, pl_mpeg, minimp3, vorbisfile and opusfile through hand-declared FFI with vorbisfile's layout computed by meson, libav through `rust/av`, the clock through `rust/media-shm`, downloads and the sandbox through `rust/helper-ffi`; `media_shm.h` and `helper_download.h` are gone) | 1 |
 | `js.c` | 66,600 | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` (ported in about sixty sections between 7 and 12 October 2026, from structured cloning to the page's realm record; each binding area is its own crate over the engine-neutral `Scope`/`Value` API, with the QuickJS-specific glue — the DOM prototypes' function-list tables, host-class trampolines and the realm record in `rust/js-runtime` — kept in `js-engine`'s `quickjs` module and `rust/js-interfaces`; the section-by-section record is in the git history and `Changelog.md`) | 7 (JavaScript bindings) |
 
 ### Being ported
 
-| Module | Crate | Notes |
-|---|---|---|
-| `audio/main.c` | `rust/audio-helper` over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts |
+Nothing: the project C left is `gtk/macos_dock.m` (waiting for a macOS box) and minimp3's four-line `minimp3_impl.c`, which goes with minimp3 in phase 9.

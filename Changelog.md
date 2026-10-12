@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The audio helper southstar-audio is now Rust (rust/audio-helper): the
+  same decoders (pl_mpeg, minimp3, libav, vorbisfile, opusfile), mixing and
+  resampling to 44.1 kHz stereo through SDL2 or the silent fallback, the
+  shared-memory clock (rust/media-shm), downloads and the Linux sandbox, with
+  an unchanged line protocol. With it the browser has no project C left
+  except the macOS Dock menu and a four-line minimp3 wrapper.
 * The MSE video helper southstar-video is now Rust (rust/video-helper),
   with FFmpeg through rust/av; its line protocol, shared-memory frame ring,
   clock and decoded frames are unchanged (byte-identical on a VP9 test
