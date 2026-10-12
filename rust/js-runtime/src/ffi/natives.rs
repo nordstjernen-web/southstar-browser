@@ -29,6 +29,8 @@ macro_rules! installers {
     };
 }
 
+pub(crate) use super::record::{ns_bind_event_target_listeners, ns_illegal_constructor};
+
 macro_rules! context_installers {
     ($($name:ident),* $(,)?) => {
         unsafe extern "C" {
@@ -38,7 +40,6 @@ macro_rules! context_installers {
 }
 
 natives! {
-    ns_illegal_constructor,
     ns_services_alert,
     ns_services_set_timeout,
     ns_services_set_interval,
@@ -187,7 +188,6 @@ installers! {
     ns_idb_install,
     ns_install_event_attribute_getters,
     ns_crypto_install_worker,
-    ns_bind_event_target_listeners,
     ns_sw_install_scope,
 }
 

@@ -1001,3 +1001,15 @@ pub unsafe extern "C" fn ns_video_active_cue_text(v: *const NsVideo) -> *const c
         .and_then(|cues| crate::vtt::active(&cues.0, v.cur_time))
         .map_or(ptr::null(), |c| c.text.as_ptr())
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_video_take_load_events(video: *mut NsVideo) -> GBoolean {
+    let Some(video) = (unsafe { video.as_mut() }) else {
+        return glib::FALSE;
+    };
+    if !video.loaded.get() || video.load_events_fired.get() {
+        return glib::FALSE;
+    }
+    video.load_events_fired.set(true);
+    glib::TRUE
+}

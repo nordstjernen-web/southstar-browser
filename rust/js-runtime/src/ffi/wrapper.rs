@@ -18,8 +18,6 @@ use super::{Js, NsJs};
 const FLAG_FRAGMENT: u32 = 1 << 2;
 
 unsafe extern "C" {
-    fn ns_active_js() -> *mut NsJs;
-    fn ns_js_kind_proto(js: *const NsJs, node: *const NsNode) -> JSValue;
     fn ns_realm_cloners_made(js: *const NsJs) -> GBoolean;
     fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> *mut JSContext;
     fn ns_realm_proto_for(js: *mut NsJs, realm: *mut JSContext, proto: JSValue) -> JSValue;
@@ -209,7 +207,7 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
 
 fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
     let js_ptr = js.map_or(ptr::null_mut(), Js::ptr);
-    let mut proto = unsafe { ns_js_kind_proto(js_ptr, n.as_ptr()) };
+    let mut proto = unsafe { super::record::kind_proto_raw(js_ptr, n.as_ptr()) };
     let ctx = quickjs::raw_context(scope);
     let node_realm = match js {
         Some(js) if unsafe { ns_realm_cloners_made(js.ptr()) } != 0 => {
@@ -305,7 +303,7 @@ pub unsafe extern "C" fn ns_invalidate_wrapper(n: *mut NsNode) {
     let Some(target) = node(n) else {
         return;
     };
-    let js = unsafe { ns_active_js() };
+    let js = super::record::ns_active_js();
     unsafe {
         ns_mut_scrub_node(js, n);
         ns_attr_detach_owner(js, n);

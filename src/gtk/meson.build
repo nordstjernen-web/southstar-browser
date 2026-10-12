@@ -26,7 +26,7 @@ executable(
   southstar_engine_sources +
     southstar_gtk_sources + southstar_gtk_platform_sources +
     southstar_icon_resources +
-    southstar_win_resources + [polyfills_h],
+    southstar_win_resources,
   dependencies: southstar_gtk_deps,
   c_args: ['-DNS_HAVE_GTK=1'],
   include_directories: include_directories('..', '.'),

@@ -1,10 +1,11 @@
-//! Southstar — the C ABI of realm creation and teardown as declared in src/js.h and src/js_internal.h, and the js.c accessors it reaches.
+//! Southstar — the C ABI of realm creation and teardown as declared in src/js.h and src/js_internal.h.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) mod exports;
 pub(crate) mod glue;
 pub(crate) mod natives;
+pub(crate) mod record;
 pub(crate) mod scopes;
 pub(crate) mod state;
 pub(crate) mod wrapper;
@@ -19,24 +20,12 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::worker::{self, EvalStatus};
 use crate::{Element, interrupt, page, teardown};
-use state::{DataFn, LogFn, NavigateFn, PageState, Slots};
+use state::{DataFn, LogFn, NavigateFn, PageState};
 
 pub(crate) type Native = JSCFunction;
 pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
 
-type InterruptHandler = unsafe extern "C" fn(rt: *mut c_void, opaque: *mut c_void) -> c_int;
-type RejectionTrackerFn = unsafe extern "C" fn(
-    ctx: *mut JSContext,
-    promise: JSValue,
-    reason: JSValue,
-    is_handled: bool,
-    opaque: *mut c_void,
-);
-
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use record::NsJs;
 
 #[repr(C)]
 pub(crate) struct WorkerHost {
@@ -122,38 +111,17 @@ const PROTO_TABLE_ELEMENT: c_int = 13;
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
-    fn ns_js_alloc() -> *mut NsJs;
-    fn ns_js_set_time_origin(js: *mut NsJs, origin_us: i64, origin_real_ms: f64);
-    fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming;
     fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming);
     fn ns_perf_init(js: *mut NsJs);
     fn ns_perf_teardown(js: *mut NsJs);
-    fn ns_js_create_runtime(
-        js: *mut NsJs,
-        memory_limit: usize,
-        stack_size: usize,
-        interrupt: InterruptHandler,
-        rejection_tracker: RejectionTrackerFn,
-    ) -> GBoolean;
-    fn ns_js_create_context(js: *mut NsJs) -> GBoolean;
     fn g_main_context_default() -> *mut GMainContext;
-    fn ns_js_init_tables(js: *mut NsJs, page: GBoolean);
-    fn ns_js_set_partition_key(js: *mut NsJs, partition_key: *const c_char);
-    fn ns_js_runtime_state(js: *const NsJs) -> *mut c_void;
-    fn ns_js_set_runtime_state(js: *mut NsJs, state: *mut c_void);
-    fn ns_js_slots_of(js: *mut NsJs, out: *mut Slots);
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn ns_js_mutation_init(js: *mut NsJs);
     fn ns_storage_init(js: *mut NsJs);
     fn ns_media_init(js: *mut NsJs);
     fn ns_js_register_class(ctx: *mut JSContext, which: c_int) -> JSValue;
     fn ns_js_new_window_named(ctx: *mut JSContext) -> JSValue;
-    fn ns_js_set_proto_document(js: *mut NsJs, proto: JSValue);
-    fn ns_js_set_navigator_brand(js: *mut NsJs, brand: JSValue);
-    fn ns_js_set_pristine_promise(js: *mut NsJs, promise: JSValue);
     fn ns_js_install_proto_table(ctx: *mut JSContext, proto: JSValue, table: c_int);
-    fn ns_active_js() -> *mut NsJs;
-    fn ns_set_active_js(js: *mut NsJs);
 
     fn ns_js_promise_rejection_tracker(
         ctx: *mut JSContext,
@@ -170,7 +138,6 @@ unsafe extern "C" {
         opaque: *mut c_void,
     );
     fn ns_worker_log_cb(line: *const c_char, user_data: *mut c_void);
-    fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
 
     fn ns_worker_host_closing(host: *const WorkerHost) -> GBoolean;
 
@@ -197,31 +164,11 @@ unsafe extern "C" {
     fn ns_webgpu_install(ctx: *mut JSContext, js: *mut NsJs, navigator: JSValue);
     fn ns_worker_install_location(ctx: *mut JSContext, global: JSValue, url: *const c_char);
     fn ns_worker_shape_global(ctx: *mut JSContext, service_worker: GBoolean);
-    fn ns_js_eval_worker_polyfills(js: *mut NsJs);
-    fn ns_worker_compile(
-        ctx: *mut JSContext,
-        src: *const c_char,
-        len: usize,
-        url: *const c_char,
-        module: GBoolean,
-        parse_error: *mut GBoolean,
-    ) -> JSValue;
 
-    fn ns_js_pinned_wrappers(js: *const NsJs) -> *mut GHashTable;
-    fn ns_js_detach_wrapper(js: *mut NsJs, node: *mut NsNode, release: GBoolean);
     fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_mutation_teardown(js: *mut NsJs);
     fn ns_node_free(node: *mut NsNode);
-
-    fn ns_js_free_page_strings(js: *mut NsJs);
-    fn ns_js_free_pinned_set(js: *mut NsJs);
-    fn ns_js_free_realm_values(js: *mut NsJs);
-    fn ns_js_free_platform_globals(js: *mut NsJs);
-    fn ns_js_free_partition(js: *mut NsJs);
-    fn ns_js_free_lookup_caches(js: *mut NsJs);
-    fn ns_js_free_window_values(js: *mut NsJs);
-    fn ns_js_free_engine(js: *mut NsJs);
 
     fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
     fn ns_top_layer_clear(js: *mut NsJs);
@@ -277,11 +224,10 @@ pub(crate) struct Js(*mut NsJs);
 
 impl Js {
     fn alloc() -> Js {
-        let js = Js(unsafe { ns_js_alloc() });
-        let mut slots = Slots::empty();
-        unsafe { ns_js_slots_of(js.0, &mut slots) };
+        let js = Js(record::alloc());
+        let slots = unsafe { record::slots_of(js.0) };
         let state = Box::into_raw(Box::new(PageState::new(slots)));
-        unsafe { ns_js_set_runtime_state(js.0, state.cast()) };
+        unsafe { record::set_runtime_state(js.0, state.cast()) };
         js
     }
 
@@ -293,7 +239,7 @@ impl Js {
         if ctx.is_null() {
             return None;
         }
-        Js::of(unsafe { JS_GetContextOpaque(ctx) }.cast())
+        Js::of(unsafe { quickjs::opaque_of(ctx) }.cast())
     }
 
     pub(crate) fn ptr(self) -> *mut NsJs {
@@ -301,7 +247,7 @@ impl Js {
     }
 
     pub(crate) fn st(self) -> &'static PageState {
-        unsafe { &*ns_js_runtime_state(self.0).cast::<PageState>() }
+        unsafe { &*record::runtime_state(self.0).cast::<PageState>() }
     }
 
     pub fn ctx(self) -> *mut JSContext {
@@ -361,13 +307,12 @@ impl Js {
     }
 
     pub fn set_navigation_timing(self, timing: NavigationTiming) {
-        let slot = unsafe { ns_js_page_navigation_timing(self.0) }.cast_mut();
-        unsafe { *slot = timing };
+        unsafe { record::set_navigation_timing(self.0, timing) };
         self.set_time_origin(timing.origin_us, timing.origin_real_ms);
     }
 
     pub fn set_time_origin(self, origin_us: i64, origin_real_ms: f64) {
-        unsafe { ns_js_set_time_origin(self.0, origin_us, origin_real_ms) };
+        unsafe { record::set_time_origin(self.0, origin_us, origin_real_ms) };
     }
 
     pub fn perf_init(self) {
@@ -384,17 +329,17 @@ impl Js {
         stack_size: usize,
         tracker: RejectionTracker,
     ) -> bool {
-        let tracker: RejectionTrackerFn = match tracker {
+        let tracker: quickjs::RejectionTracker = match tracker {
             RejectionTracker::Page => ns_js_promise_rejection_tracker,
             RejectionTracker::Worker => ns_worker_promise_rejection_tracker,
         };
         unsafe {
-            ns_js_create_runtime(self.0, memory_limit, stack_size, interrupt_handler, tracker) != 0
+            record::create_runtime(self.0, memory_limit, stack_size, interrupt_handler, tracker)
         }
     }
 
     pub fn create_context(self) -> bool {
-        unsafe { ns_js_create_context(self.0) != 0 }
+        unsafe { record::create_context(self.0) }
     }
 
     pub fn set_callbacks(self, callbacks: Callbacks) {
@@ -410,7 +355,7 @@ impl Js {
 
     pub fn init_tables(self, main_context: *mut GMainContext, page: bool) {
         self.st().main_context.set(main_context);
-        unsafe { ns_js_init_tables(self.0, glib::GBoolean::from(page)) };
+        unsafe { record::init_tables(self.0, page) };
     }
 
     pub fn init_page_states(self) {
@@ -427,7 +372,7 @@ impl Js {
             .filter(|origin| !origin.is_empty())
             .map_or(ptr::null(), CStr::as_ptr);
         self.st().worker_host.set(setup.host);
-        unsafe { ns_js_set_partition_key(self.0, partition) };
+        unsafe { record::set_partition_key(self.0, partition) };
         self.set_callbacks(Callbacks {
             log: Some(ns_worker_log_cb),
             log_data: setup.host.cast(),
@@ -453,15 +398,15 @@ impl Js {
     }
 
     pub fn set_proto_document(self, proto: Value) {
-        unsafe { ns_js_set_proto_document(self.0, quickjs::into_raw(proto)) };
+        unsafe { record::set_proto_document(self.0, proto) };
     }
 
     pub fn set_navigator_brand(self, brand: Value) {
-        unsafe { ns_js_set_navigator_brand(self.0, quickjs::into_raw(brand)) };
+        unsafe { record::set_navigator_brand(self.0, brand) };
     }
 
     pub fn set_pristine_promise(self, promise: Value) {
-        unsafe { ns_js_set_pristine_promise(self.0, quickjs::into_raw(promise)) };
+        unsafe { record::set_pristine_promise(self.0, promise) };
     }
 
     pub fn make_performance_object(self, scope: &mut Scope<'_>, include_memory: bool) -> Value {
@@ -487,19 +432,19 @@ impl Js {
     }
 
     pub fn eval_worker_polyfills(self) {
-        unsafe { ns_js_eval_worker_polyfills(self.0) };
+        unsafe { record::eval_worker_polyfills(self.0) };
     }
 
     pub fn is_active(self) -> bool {
-        unsafe { ns_active_js() == self.0 }
+        record::ns_active_js() == self.0
     }
 
     pub fn clear_active(self) {
-        unsafe { ns_set_active_js(ptr::null_mut()) };
+        record::ns_set_active_js(ptr::null_mut());
     }
 
     pub fn take_pinned_wrappers(self) -> Vec<Element> {
-        let set = unsafe { ns_js_pinned_wrappers(self.0) };
+        let set = unsafe { record::pinned_wrappers(self.0) };
         if set.is_null() {
             return Vec::new();
         }
@@ -514,7 +459,7 @@ impl Js {
     }
 
     pub fn detach_wrapper(self, node: Element, release: bool) {
-        unsafe { ns_js_detach_wrapper(self.0, node.as_mut_ptr(), GBoolean::from(release)) };
+        unsafe { record::detach_wrapper(self.0, node.as_mut_ptr(), release) };
     }
 
     pub fn current_document(self) -> Option<*const NsNode> {
@@ -563,7 +508,7 @@ impl Js {
     }
 
     pub fn free_page_strings(self) {
-        unsafe { ns_js_free_page_strings(self.0) };
+        unsafe { record::free_page_strings(self.0) };
     }
 
     pub fn teardown_page_services(self) {
@@ -600,7 +545,7 @@ impl Js {
     }
 
     pub fn free_pinned_set(self) {
-        unsafe { ns_js_free_pinned_set(self.0) };
+        unsafe { record::free_pinned_set(self.0) };
     }
 
     pub fn teardown_input_states(self) {
@@ -612,21 +557,21 @@ impl Js {
     }
 
     pub fn free_realm_values(self) {
-        unsafe { ns_js_free_realm_values(self.0) };
+        unsafe { record::free_realm_values(self.0) };
     }
 
     pub fn teardown_registries(self) {
         unsafe {
             ns_observers_teardown(self.0);
             ns_ce_teardown(self.0);
-            ns_js_free_platform_globals(self.0);
+            record::free_platform_globals(self.0);
             ns_storage_teardown(self.0);
             ns_media_teardown(self.0);
         }
     }
 
     pub fn free_partition(self) {
-        unsafe { ns_js_free_partition(self.0) };
+        unsafe { record::free_partition(self.0) };
     }
 
     pub fn teardown_style_states(self) {
@@ -635,10 +580,6 @@ impl Js {
             ns_cssom_teardown(self.0);
             ns_url_teardown(self.0);
         }
-    }
-
-    pub fn free_lookup_caches(self) {
-        unsafe { ns_js_free_lookup_caches(self.0) };
     }
 
     pub fn teardown_windows(self) {
@@ -654,7 +595,7 @@ impl Js {
     }
 
     pub fn free_window_values(self) {
-        unsafe { ns_js_free_window_values(self.0) };
+        unsafe { record::free_window_values(self.0) };
     }
 
     pub fn teardown_dispatch(self) {
@@ -665,8 +606,8 @@ impl Js {
     }
 
     pub fn free_engine(self) {
-        let state = unsafe { ns_js_runtime_state(self.0) }.cast::<PageState>();
-        unsafe { ns_js_free_engine(self.0) };
+        let state = unsafe { record::runtime_state(self.0) }.cast::<PageState>();
+        unsafe { record::free_engine(self.0) };
         if !state.is_null() {
             drop(unsafe { Box::from_raw(state) });
         }
@@ -847,19 +788,7 @@ pub(crate) fn worker_compile(
     url: &CStr,
     module: bool,
 ) -> (Result<Value, Value>, bool) {
-    let mut parse_error: GBoolean = glib::FALSE;
-    let raw = unsafe {
-        ns_worker_compile(
-            quickjs::raw_context(scope),
-            source.as_ptr(),
-            len,
-            url.as_ptr(),
-            GBoolean::from(module),
-            &mut parse_error,
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    (quickjs::checked(scope, value), parse_error != 0)
+    unsafe { record::worker_compile(scope, source, len, url, module) }
 }
 
 pub(crate) fn coarsen_navigation_timing(timing: &mut NavigationTiming) {
@@ -871,7 +800,7 @@ pub(crate) fn default_main_context() -> *mut GMainContext {
 }
 
 pub(crate) fn set_active(js: Js) {
-    unsafe { ns_set_active_js(js.0) };
+    record::ns_set_active_js(js.0);
 }
 
 pub(crate) fn monotonic_us() -> i64 {

@@ -1541,6 +1541,114 @@ pub mod quickjs {
         scope.rt().cast()
     }
 
+    pub type InterruptHandler = unsafe extern "C" fn(rt: *mut c_void, opaque: *mut c_void) -> c_int;
+
+    pub type RejectionTracker = unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        promise: JSValue,
+        reason: JSValue,
+        is_handled: bool,
+        opaque: *mut c_void,
+    );
+
+    pub type ModuleNormalize = unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        base: *const c_char,
+        name: *const c_char,
+        opaque: *mut c_void,
+    ) -> *mut c_char;
+
+    pub type ModuleLoader = unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        name: *const c_char,
+        opaque: *mut c_void,
+        attributes: JSValue,
+    ) -> *mut c_void;
+
+    unsafe extern "C" {
+        fn JS_SetInterruptHandler(rt: *mut c_void, cb: InterruptHandler, opaque: *mut c_void);
+        fn JS_SetMemoryLimit(rt: *mut c_void, limit: usize);
+        fn JS_SetHostPromiseRejectionTracker(
+            rt: *mut c_void,
+            cb: RejectionTracker,
+            opaque: *mut c_void,
+        );
+        fn JS_SetRuntimeOpaque(rt: *mut c_void, opaque: *mut c_void);
+        fn JS_SetContextOpaque(ctx: *mut JSContext, opaque: *mut c_void);
+        fn JS_SetModuleLoaderFunc2(
+            rt: *mut c_void,
+            normalize: ModuleNormalize,
+            loader: ModuleLoader,
+            check_attributes: *const c_void,
+            opaque: *mut c_void,
+        );
+        fn JS_GetCallerRealm(ctx: *mut JSContext) -> *mut JSContext;
+    }
+
+    pub unsafe fn new_runtime(
+        memory_limit: usize,
+        stack_size: usize,
+        interrupt: InterruptHandler,
+        interrupt_opaque: *mut c_void,
+        tracker: RejectionTracker,
+    ) -> *mut c_void {
+        let rt = unsafe { super::JS_NewRuntime() }.cast::<c_void>();
+        if rt.is_null() {
+            return rt;
+        }
+        unsafe {
+            JS_SetInterruptHandler(rt, interrupt, interrupt_opaque);
+            JS_SetMemoryLimit(rt, memory_limit);
+            JS_SetHostPromiseRejectionTracker(rt, tracker, core::ptr::null_mut());
+            super::JS_SetMaxStackSize(rt.cast(), stack_size);
+        }
+        rt
+    }
+
+    pub unsafe fn free_runtime(rt: *mut c_void) {
+        if !rt.is_null() {
+            unsafe { super::JS_FreeRuntime(rt.cast()) };
+        }
+    }
+
+    pub unsafe fn set_runtime_opaque(rt: *mut c_void, opaque: *mut c_void) {
+        unsafe { JS_SetRuntimeOpaque(rt, opaque) };
+    }
+
+    pub unsafe fn set_module_loader(
+        rt: *mut c_void,
+        normalize: ModuleNormalize,
+        loader: ModuleLoader,
+        opaque: *mut c_void,
+    ) {
+        unsafe { JS_SetModuleLoaderFunc2(rt, normalize, loader, core::ptr::null(), opaque) };
+    }
+
+    pub unsafe fn new_context(rt: *mut c_void, opaque: *mut c_void) -> *mut JSContext {
+        let ctx = unsafe { super::JS_NewContext(rt.cast()) };
+        if !ctx.is_null() {
+            unsafe { JS_SetContextOpaque(ctx, opaque) };
+        }
+        ctx
+    }
+
+    pub unsafe fn free_context(ctx: *mut JSContext) {
+        if !ctx.is_null() {
+            unsafe { super::JS_FreeContext(ctx) };
+        }
+    }
+
+    pub unsafe fn opaque_of(ctx: *mut JSContext) -> *mut c_void {
+        if ctx.is_null() {
+            return core::ptr::null_mut();
+        }
+        unsafe { JS_GetContextOpaque(ctx) }
+    }
+
+    pub fn caller_realm(scope: &Scope<'_>) -> *mut JSContext {
+        unsafe { JS_GetCallerRealm(scope.ctx) }
+    }
+
     pub fn context_opaque(scope: &Scope<'_>) -> *mut c_void {
         unsafe { JS_GetContextOpaque(scope.ctx) }
     }

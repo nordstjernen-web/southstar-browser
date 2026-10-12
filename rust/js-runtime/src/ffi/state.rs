@@ -46,22 +46,6 @@ pub(crate) struct Slots {
     pub pinned_wrappers_set: *mut *mut GHashTable,
 }
 
-impl Slots {
-    pub fn empty() -> Slots {
-        Slots {
-            rt: ptr::null_mut(),
-            ctx: ptr::null_mut(),
-            main_realm_ctx: ptr::null_mut(),
-            current_url: ptr::null_mut(),
-            current_doc: ptr::null_mut(),
-            raf_frame_ctx: ptr::null_mut(),
-            ce_main_doc: ptr::null_mut(),
-            halted: ptr::null_mut(),
-            pinned_wrappers_set: ptr::null_mut(),
-        }
-    }
-}
-
 pub(crate) struct Hook<F: Copy> {
     pub f: Cell<Option<F>>,
     pub data: Cell<*mut c_void>,
