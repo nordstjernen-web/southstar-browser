@@ -9,7 +9,6 @@ deleted on 12 October — and the C left in the project is the media code:
 | `video_decode.c` | 676 | `rust/video`, over `rust/av` (phase 8) |
 | `audio/main.c` | 1,605 | a Rust `southstar-audio` executable, over `rust/av` (phase 1) |
 | `videoproc/main.c` | 743 | a Rust `southstar-video` executable, over `rust/av` (phase 1) |
-| `image_avif.c` | 75 | `rust/image-decoders`, behind the `avif` feature (phase 2) |
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
 | `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules; each is deleted once no C includes it, and the image headers become Rust `include_bytes!` data |
@@ -68,7 +67,7 @@ one is a separate, later decision (§9).
 |---|---|---:|---|
 | 0 | Toolchain, build integration, CI, a pilot module | 150 | Done |
 | 1 | Helper processes and the sandbox library | 3,974 | Sandbox and launcher done; the audio and video helpers are next |
-| 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 | Done except `image_avif.c` |
+| 2 | Leaf modules, image decoders, a JavaScript pilot | 8,670 | Done |
 | 3 | Renderer host and IPC protocol | 5,028 | Done |
 | 4 | GTK shell, watchdog and headless driver | 13,291 | Done |
 | 5 | Networking and storage | 13,500 | Done; libcurl and libnghttp2 replaced by `rust/http` |
@@ -1258,6 +1257,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `webgpu.c` | 2,830 | `rust/webgpu` (engine-neutral bindings; the webgpu.h/wgpu.h FFI declared by hand with compile-time layout asserts; an optional dependency behind `southstar-ffi`'s `webgpu` feature, so a stock build carries no WebGPU code) | 8 |
 | `win_launcher.c`, `embed_shim.c` | 374 | `rust/launcher` (a Windows-only static library linked into `southstar-launcher.exe`, exporting `main`) and `rust/static` (the `ns_app_self_exe` stub for `libsouthstar` and the renderer) | 4 |
 | `procview.c` | 5,348 | `rust/shell` (the tab view: renderer process and worker thread, page drawing and tiles, scrolling, input forwarding, the media helper pumping and X-Audio side channel, loading and history, zoom, context menu, find and permission bars, printing, saving and developer tools; ported in five stages, the shell executable now builds no C of its own) | 4 |
+| `image_avif.c` | 75 | `rust/image-decoders` (behind the `avif` feature; libavif through hand-written declarations with meson-computed struct offsets, D14) | 2 |
 | `js.c` | 66,600 | `rust/js-clone`, `rust/js-forms`, `rust/js-observers`, `rust/js-window`, `rust/js-workers`, `rust/js-services`, `rust/js-net`, `rust/js-cssom`, `rust/js-events`, `rust/js-media`, `rust/js-crypto`, `rust/js-custom-elements`, `rust/js-storage`, `rust/js-url`, `rust/js-traversal`, `rust/js-text`, `rust/js-top-layer`, `rust/js-document`, `rust/js-attrs`, `rust/js-geometry`, `rust/js-shadow`, `rust/js-node`, `rust/js-collections`, `rust/js-reflect`, `rust/js-focus`, `rust/js-dom-factory`, `rust/js-html`, `rust/js-frames`, `rust/js-loader`, `rust/js-fonts`, `rust/js-dispatch`, `rust/js-input`, `rust/js-compression`, `rust/js-perf`, `rust/js-images`, `rust/js-elements`, `rust/js-lifecycle`, `rust/js-interfaces`, `rust/js-bind`, `rust/js-mutation`, `rust/js-page`, `rust/js-runtime` (ported in about sixty sections between 7 and 12 October 2026, from structured cloning to the page's realm record; each binding area is its own crate over the engine-neutral `Scope`/`Value` API, with the QuickJS-specific glue — the DOM prototypes' function-list tables, host-class trampolines and the realm record in `rust/js-runtime` — kept in `js-engine`'s `quickjs` module and `rust/js-interfaces`; the section-by-section record is in the git history and `Changelog.md`) | 7 (JavaScript bindings) |
 
 ### Being ported
@@ -1265,4 +1265,3 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | Module | Crate | Notes |
 |---|---|---|
 | `video_decode.c`, `audio/main.c`, `videoproc/main.c` | `rust/video`, new helper crates, all over `rust/av` | D14: libav through hand-written declarations and meson-computed layouts; `rust/av` has landed |
-| `image_avif.c` | `rust/image-decoders` (`avif` feature) | libavif through the same meson-computed layouts |

@@ -10,8 +10,12 @@ publish.workspace = true
 [dependencies]
 gif = { version = "0.14", default-features = false, features = ["std"] }
 png = { version = "0.18", default-features = false }
+southstar-av = { path = "../av", optional = true }
 southstar-glib = { path = "../glib" }
 zune-jpeg = { version = "0.5", default-features = false, features = ["std", "x86", "neon"] }
+
+[features]
+avif = ["dep:southstar-av"]
 
 [lints]
 workspace = true

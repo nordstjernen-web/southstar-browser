@@ -137,6 +137,7 @@ if have_pangoft2
 endif
 if have_avif
   southstar_rust_features += ['avif']
+  southstar_rust_link_deps += [libavif]
 endif
 if have_poppler
   southstar_rust_features += ['poppler']

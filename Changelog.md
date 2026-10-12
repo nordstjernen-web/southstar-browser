@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* AVIF decoding (image_avif.c) moved to Rust (rust/image-decoders, behind
+  the avif feature): libavif is called through hand-written declarations
+  whose struct offsets meson computes from the installed avif.h, so any
+  libavif 1.x works; limits and output (premultiplied BGRA) are unchanged.
 * rust/av declares the FFmpeg entry points the media code calls, with the
   struct offsets and enum values meson computes from the installed FFmpeg
   (and libavif) headers, so the media helpers, video decoding and AVIF can

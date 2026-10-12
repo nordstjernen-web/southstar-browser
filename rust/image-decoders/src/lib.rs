@@ -279,6 +279,54 @@ fn webp_animation_first_frame(data: &[u8]) -> Option<Pixels> {
     })
 }
 
+#[cfg(feature = "avif")]
+const AVIF_MAX_DIM: u32 = 16384;
+#[cfg(feature = "avif")]
+const AVIF_MAX_PIXELS: u32 = 64 * 1024 * 1024;
+#[cfg(feature = "avif")]
+const AVIF_MAX_INPUT: usize = 32 * 1024 * 1024;
+
+pub fn avif_supports(data: &[u8]) -> bool {
+    data.len() >= 12
+        && &data[4..8] == b"ftyp"
+        && [b"avif", b"avis", b"mif1", b"msf1"].contains(&&data[8..12].try_into().unwrap_or([0; 4]))
+}
+
+#[cfg(feature = "avif")]
+pub fn decode_avif(data: &[u8]) -> Option<Pixels> {
+    if !avif_supports(data) || data.len() > AVIF_MAX_INPUT {
+        return None;
+    }
+    let limits = ffi::libavif::Limits {
+        max_pixels: AVIF_MAX_PIXELS,
+        max_dimension: AVIF_MAX_DIM,
+    };
+    let decoder = ffi::libavif::Decoder::new(data, &limits)?;
+    let (w, h) = decoder.size();
+    if w == 0
+        || h == 0
+        || w > AVIF_MAX_DIM
+        || h > AVIF_MAX_DIM
+        || u64::from(w) * u64::from(h) > u64::from(AVIF_MAX_PIXELS)
+    {
+        return None;
+    }
+    let rgb = decoder.to_bgra_premultiplied()?;
+    let stride = rgb.row_bytes();
+    if stride < w as usize * 4 {
+        return None;
+    }
+    let pixels = rgb.pixels(h as usize)?;
+    let mut buffer = Buffer::try_new(pixels.len())?;
+    buffer.copy_from_slice(pixels);
+    Some(Pixels {
+        buffer,
+        width: w as i32,
+        height: h as i32,
+        stride,
+    })
+}
+
 pub fn decode_webp(data: &[u8]) -> Option<Pixels> {
     webp_still(data).or_else(|| webp_animation_first_frame(data))
 }

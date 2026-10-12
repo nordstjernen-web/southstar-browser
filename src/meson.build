@@ -23,10 +23,6 @@ southstar_engine_sources = files(
   'video_decode.c',
 )
 
-if have_avif
-  southstar_engine_sources += files('image_avif.c')
-endif
-
 southstar_win_resources = []
 if host_machine.system() == 'windows'
   windows = import('windows')

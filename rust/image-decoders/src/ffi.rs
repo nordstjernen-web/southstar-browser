@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#[cfg(feature = "avif")]
+pub(crate) mod libavif;
 pub(crate) mod libwebp;
 
 use core::ffi::{c_int, c_uint, c_void};
@@ -160,6 +162,30 @@ pub unsafe extern "C" fn ns_image_decode_ico(
     }
     let data = unsafe { southstar_glib::slice(data, len) };
     unsafe { texture_result(crate::decode_ico(data), out_w, out_h) }.cast()
+}
+
+#[cfg(feature = "avif")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_avif_supports_bytes(data: *const u8, len: usize) -> GBoolean {
+    let supported =
+        !data.is_null() && crate::avif_supports(unsafe { southstar_glib::slice(data, len) });
+    if supported { TRUE } else { FALSE }
+}
+
+#[cfg(feature = "avif")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_image_decode_avif(
+    data: *const u8,
+    len: usize,
+    out_w: *mut c_int,
+    out_h: *mut c_int,
+) -> *mut c_void {
+    if data.is_null() {
+        return ptr::null_mut();
+    }
+    let data = unsafe { southstar_glib::slice(data, len) };
+    let decoded = crate::decode_avif(data).and_then(Pixels::into_texture);
+    unsafe { texture_result(decoded, out_w, out_h) }.cast()
 }
 
 #[unsafe(no_mangle)]
