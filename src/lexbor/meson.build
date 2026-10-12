@@ -56,11 +56,6 @@ lexbor_srcs = files(
   'source/lexbor/dom/interfaces/shadow_root.c',
   'source/lexbor/dom/interfaces/text.c',
 
-  'source/lexbor/encoding/decode.c',
-  'source/lexbor/encoding/encode.c',
-  'source/lexbor/encoding/encoding.c',
-  'source/lexbor/encoding/res.c',
-
   'source/lexbor/html/attribute_steps.c',
   'source/lexbor/html/common.c',
   'source/lexbor/html/element_steps.c',
@@ -186,15 +181,7 @@ lexbor_srcs = files(
 
   'source/lexbor/ns/ns.c',
 
-  'source/lexbor/punycode/punycode.c',
-
   'source/lexbor/tag/tag.c',
-
-  'source/lexbor/unicode/idna.c',
-  'source/lexbor/unicode/idna_validity.c',
-  'source/lexbor/unicode/unicode.c',
-
-  'source/lexbor/url/url.c',
 
   'source/lexbor/utils/http.c',
   'source/lexbor/utils/warc.c',

@@ -810,7 +810,7 @@ What is left is third-party C. Each library gets its own decision:
 | Wuffs | ~97k | Replaced in phase 2 by `png`, `gif`, `zune-jpeg` and an in-tree BMP decoder (done) |
 | WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
 | QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
-| lexbor | ~289k | Replace with Southstar's own Rust WHATWG URL parser (`rust/url`) and HTML5 tokenizer and tree builder (`rust/html5`), written from the specs (D1 still keeps Servo's `html5ever` and `url` out); see "Replacing lexbor" below |
+| lexbor | ~289k, ~68k after `rust/url` | Replace with Southstar's own Rust WHATWG URL parser (`rust/url`, done) and HTML5 tokenizer and tree builder (`rust/html5`), written from the specs (D1 still keeps Servo's `html5ever` and `url` out); see "Replacing lexbor" below |
 | pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate) |
 | ns-pango, Cairo, GTK 4, libcurl, OpenSSL, SQLite, FFmpeg, SDL2, uchardet, libpsl, libseccomp | system / subproject | Keep behind FFI |
 
@@ -820,14 +820,18 @@ vendored libraries.
 
 #### Replacing lexbor
 
-**What lexbor does today.** The in-tree copy is upstream lexbor 3.1.0 with no
-Southstar changes. Only two Rust files call it, and no C does:
+**What lexbor did when this plan was written.** The in-tree copy is lexbor
+3.1.0. Only two Rust files called it, and no C does:
 
 | Cluster | lexbor modules | Lines | Only caller |
 |---|---|---:|---|
 | URL | `url` (6.8k), `unicode` (211k, of which 206k is the `res.h` table), `punycode` (0.8k), `encoding` (1.8k) | ~220k | `rust/net/src/ffi/lexbor.rs` (347), used only by `rust/net/src/url.rs` |
 | HTML | `html` (47k, ~7k of it element interfaces the engine never uses), `dom` (7.6k), `tag` (1.1k), `ns` (0.4k) | ~56k | `rust/html-parser/src/ffi.rs` (663) |
 | Shared or unused | `core` (8.8k), `ports` (0.9k), `utils/http` and `utils/warc` (unused) | ~11k | — |
+
+Status: step 1 is done (October 2026). `rust/url` replaced the URL cluster,
+whose ~220k lines are deleted; the WPT `url` area went from 8502 to 8646 of
+8679 subtests, and lexbor now builds only the HTML cluster and `core`.
 
 The two clusters do not include each other's headers, so they are removed
 separately. The engine uses lexbor only to parse: `rust/dom` serializes,
@@ -850,7 +854,7 @@ What it costs today:
 `src/html.h` stays the contract: the ten crates that call `ns_html_parse*`
 and every user of `ns_url_*` keep working unchanged.
 
-**Step 1: `rust/url`, a WHATWG URL parser.** A safe crate with no
+**Step 1 (done): `rust/url`, a WHATWG URL parser.** A safe crate with no
 dependencies: the basic URL parser with state override, the host parser
 (domain, IPv4, IPv6, opaque), the percent-encode sets, UTS #46 ToASCII with
 the flags the URL Standard sets (CheckBidi, CheckJoiners, no CheckHyphens, no
@@ -883,7 +887,8 @@ with no dependencies that knows nothing about `ns_node`: it builds through a
   compares node names by pointer), the SVG and MathML case tables and the
   foreign-attribute namespaces.
 - Tree builder: the current spec, including the relaxed `<select>` parsing and
-  `<selectedcontent>` lexbor 3.x already follows — the open-element stack and
+  `<selectedcontent>` lexbor 3.x already follows, and the processing
+  instructions (`<?target data?>` as PI nodes) it tokenizes — the open-element stack and
   its scopes, active formatting elements with the Noah's Ark limit, the
   adoption agency algorithm, foster parenting, template insertion modes,
   quirks mode from the doctype, fragment parsing with a context element, the
@@ -978,7 +983,7 @@ the existing ones, not a test suite.
 | libcurl | `curl` crate | — |
 | libnghttp2, ngtcp2, nghttp3, gnutls | FFI (D7) | `h2`, `quinn` + `h3` |
 | OpenSSL (WebCrypto) | `openssl` crate | — |
-| lexbor (HTML, URL) | hand-written FFI in `rust/html-parser` and `rust/net` | `rust/url` and `rust/html5`, Southstar's own parsers (phase 9) |
+| lexbor (HTML; URL until October 2026) | hand-written FFI in `rust/html-parser` | `rust/url` (done) and `rust/html5`, Southstar's own parsers (phase 9) |
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
 | Wuffs (done), libwebp | `png`, `gif`, `zune-jpeg` (in use), `image-webp` | — |
 | libavif | FFI | — |

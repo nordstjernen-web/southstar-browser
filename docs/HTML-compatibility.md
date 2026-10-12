@@ -32,7 +32,7 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 | HTML tokenizer + tree construction | in-tree lexbor, `rust/html-parser` |
 | Parse dispatch, charset decode | `src/html.c` |
 | DOM tree + node APIs | `rust/dom`, exposed in `src/js.c` |
-| WHATWG URL | lexbor URL module via `src/net.c` (`ns_url_*`) |
+| WHATWG URL | `rust/url`, behind the `ns_url_*` helpers in `rust/net` |
 | CSS cascade / selectors | `src/css.c`, `src/css.h` |
 | Layout (block/inline/flex/grid/table) | `src/layout.c`, `src/layout.h` |
 | Paint (Cairo) / text (Pango) | `rust/paint`, `src/render.c`, `rust/font` |
@@ -91,8 +91,8 @@ standards mode (see [§13](#13-the-html-syntax)).
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| WHATWG URL parsing & serialisation | ✅ | lexbor URL module via `ns_url_resolve`, `ns_url_parts_new`, `ns_url_host_from`, `ns_url_origin_from` in `src/net.c` |
-| IDN / Punycode | ✅ | handled inside the lexbor URL module |
+| WHATWG URL parsing & serialisation | ✅ | `rust/url` via `ns_url_resolve`, `ns_url_parts_new`, `ns_url_host_from`, `ns_url_origin_from` in `rust/net` |
+| IDN / Punycode | ✅ | UTS #46 ToASCII in `rust/url`, over tables generated from the Unicode Character Database |
 | Origin & same-origin/same-site | ✅ | `ns_url_same_origin`, `ns_url_is_same_site` (`src/net.c`) |
 | Character encodings → UTF-8 | ✅ | uchardet detection in `ns_html_decode_body` (`src/html.c`), `g_convert` to UTF-8, Latin-1 last-resort |
 | Content-type sniffing | 🟡 | charset sniffing delegated to uchardet; no full MIME sniffing standard |

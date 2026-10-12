@@ -2545,6 +2545,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-http",
  "southstar-http-cache",
+ "southstar-url",
 ]
 
 [[package]]
@@ -2691,6 +2692,10 @@ dependencies = [
 
 [[package]]
 name = "southstar-threaddump"
+version = "0.9.9"
+
+[[package]]
+name = "southstar-url"
 version = "0.9.9"
 
 [[package]]

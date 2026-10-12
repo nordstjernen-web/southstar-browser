@@ -172,13 +172,17 @@ ICO (`rust/image-decoders`), then `ns_image_decode_raster`, then WebP
 images, so an unsupported format simply fails to decode rather than
 reaching a loader plugin installed on the user's machine.
 
-### URL parsing: lexbor URL module
+### URL parsing: `rust/url`
 
-The `ns_url_*` helpers in `src/net.c` route URL resolution, origin
-extraction, and host extraction through `lxb_url_parse` /
-`lxb_url_serialize` from lexbor's WHATWG URL module. No separate URL
-library or build option — it's part of the same `liblexbor_static.a`
-that the HTML parser uses.
+The `ns_url_*` helpers (`rust/net/src/url.rs`) route URL resolution,
+origin extraction, host extraction and the URL setters through
+`rust/url` (`southstar-url`), a WHATWG URL parser written from the URL
+Standard with no crates.io dependency: the basic URL parser, the host
+parser with UTS #46 IDNA, Punycode and NFC, the serializer and the URL
+API setters. Its Unicode tables (`rust/url/src/tables.rs`) are generated
+by `scripts/gen-url-tables.py` from the Unicode Character Database;
+regenerate them for a new Unicode version rather than editing them.
+Servo's `url` and `idna` crates stay out (D1).
 
 ### HTTP client: `rust/http`
 
