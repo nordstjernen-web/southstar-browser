@@ -10,7 +10,6 @@ mod ffi;
 mod hold;
 mod import_map;
 mod page;
-mod quirks;
 mod scan;
 mod schedule;
 

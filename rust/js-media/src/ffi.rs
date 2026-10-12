@@ -65,6 +65,10 @@ pub(crate) type MseRemoveFn = unsafe extern "C" fn(
 pub(crate) type MseBytesFn =
     unsafe extern "C" fn(stream: c_uint, kind: c_char, data: *mut c_void) -> usize;
 
+const FORMAT_LIBAV: c_uint = 1;
+const FORMAT_VORBIS: c_uint = 2;
+const FORMAT_OPUS: c_uint = 4;
+
 unsafe extern "C" {
     fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
     fn ns_target_dispatchEvent(
@@ -92,6 +96,7 @@ unsafe extern "C" {
     fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
     fn ns_video_codec_available(codec: *const c_char) -> GBoolean;
     fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
+    fn ns_media_native_formats() -> c_uint;
     fn ns_js_bytes_view(
         ctx: *mut JSContext,
         value: JSValue,
@@ -212,10 +217,11 @@ pub(crate) struct NativeFormats {
 }
 
 pub(crate) fn native_formats() -> NativeFormats {
+    let bits = unsafe { ns_media_native_formats() };
     NativeFormats {
-        libav: cfg!(feature = "libav"),
-        vorbis: cfg!(feature = "audio-native-vorbis"),
-        opus: cfg!(feature = "audio-native-opus"),
+        libav: bits & FORMAT_LIBAV != 0,
+        vorbis: bits & FORMAT_VORBIS != 0,
+        opus: bits & FORMAT_OPUS != 0,
     }
 }
 

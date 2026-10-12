@@ -33,6 +33,18 @@ pub(crate) struct Realm(*mut c_void);
 #[repr(C, align(16))]
 struct ScopeBuffer([u8; 128]);
 
+#[repr(C)]
+struct PerfInfo {
+    timeline: *const c_void,
+    document_url: *const c_char,
+    render_blocking: GBoolean,
+    cors_mode: GBoolean,
+    next_hop_protocol: *const c_char,
+    timing_allow_origin: *const c_char,
+    status: core::ffi::c_long,
+    body_size: i64,
+}
+
 type GBoolean = c_int;
 type ImageReadyFn = unsafe extern "C" fn(img: *mut c_void, user_data: *mut c_void);
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
@@ -207,7 +219,44 @@ pub(crate) fn request_repaint(js: Js) {
 }
 
 pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
-    unsafe { ns_js_record_image_timing(js.0, node.as_ptr(), img.url(), img.as_ptr()) };
+    let url = img.url();
+    if js.is_null() || url.is_null() {
+        return;
+    }
+    let mut info = PerfInfo {
+        timeline: ptr::null(),
+        document_url: ptr::null(),
+        render_blocking: 0,
+        cors_mode: 0,
+        next_hop_protocol: ptr::null(),
+        timing_allow_origin: ptr::null(),
+        status: 0,
+        body_size: 0,
+    };
+    unsafe { ns_js_element_perf_info(js.0, node.as_ptr(), &mut info) };
+    if unsafe { ns_perf_has_resource(js.0, info.timeline, url, c"img".as_ptr()) } != 0 {
+        return;
+    }
+    info.next_hop_protocol = img.next_hop_protocol();
+    info.timing_allow_origin = img.timing_allow_origin();
+    info.status = img.http_status();
+    info.body_size = img.body_size();
+    let now = unsafe { g_get_monotonic_time() };
+    let (request_us, response_us) = img.fetch_times_us();
+    let origin_us = unsafe { ns_js_page_time_origin_us(js.0) };
+    let start = if request_us >= origin_us {
+        request_us
+    } else {
+        now
+    };
+    let end = if response_us >= start {
+        response_us
+    } else {
+        now
+    };
+    unsafe {
+        ns_perf_add_resource_timed(js.0, &info, url, c"img".as_ptr(), start, end, ptr::null())
+    };
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
@@ -263,82 +312,11 @@ pub unsafe extern "C" fn ns_js_start_image_load(
     }
 }
 
-#[repr(C)]
-struct PerfInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: GBoolean,
-    cors_mode: GBoolean,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: core::ffi::c_long,
-    body_size: i64,
-}
-
-const _: () = assert!(core::mem::size_of::<PerfInfo>() == 56);
-
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_record_image_timing(
-    js: *mut NsJs,
-    node: *const NsNode,
-    url: *const c_char,
-    img: *const c_void,
-) {
-    let Some(image) = (unsafe { ImageRef::from_ptr(img) }) else {
-        return;
-    };
-    if js.is_null() || url.is_null() {
-        return;
-    }
-    let mut info = PerfInfo {
-        timeline: ptr::null(),
-        document_url: ptr::null(),
-        render_blocking: 0,
-        cors_mode: 0,
-        next_hop_protocol: ptr::null(),
-        timing_allow_origin: ptr::null(),
-        status: 0,
-        body_size: 0,
-    };
-    unsafe {
-        ns_js_element_perf_info(js, node, &mut info);
-        if ns_perf_has_resource(js, info.timeline, url, c"img".as_ptr()) != 0 {
-            return;
-        }
-    }
-    info.next_hop_protocol = image.next_hop_protocol();
-    info.timing_allow_origin = image.timing_allow_origin();
-    info.status = image.http_status();
-    info.body_size = image.body_size();
-    let now = unsafe { g_get_monotonic_time() };
-    let origin = unsafe { ns_js_page_time_origin_us(js) };
-    let start = if image.request_us() >= origin {
-        image.request_us()
-    } else {
-        now
-    };
-    let end = if image.response_us() >= start {
-        image.response_us()
-    } else {
-        now
-    };
-    unsafe {
-        ns_perf_add_resource_timed(js, &info, url, c"img".as_ptr(), start, end, ptr::null());
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_settled(
-    img: *const c_void,
-    failed: *mut GBoolean,
-) -> GBoolean {
-    let Some(image) = (unsafe { ImageRef::from_ptr(img) }) else {
-        return 0;
-    };
-    if let Some(failed) = unsafe { failed.as_mut() } {
-        *failed = GBoolean::from(image.failed());
-    }
-    GBoolean::from(image.loaded() || image.failed())
+pub unsafe extern "C" fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void {
+    node_arg(el)
+        .and_then(|el| crate::image_for_node(js_arg(js), el))
+        .map_or(ptr::null(), ImageRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]
@@ -348,27 +326,15 @@ pub unsafe extern "C" fn ns_js_image_natural_size(
     width: *mut c_int,
     height: *mut c_int,
 ) -> GBoolean {
-    let image = unsafe { ns_js_image_for_node(js, el) };
-    let Some(image) = (unsafe { ImageRef::from_ptr(image) }) else {
+    let Some(image) = node_arg(el).and_then(|el| crate::image_for_node(js_arg(js), el)) else {
         return 0;
     };
     let (w, h) = image.natural_size();
     unsafe {
-        if let Some(width) = width.as_mut() {
-            *width = w;
-        }
-        if let Some(height) = height.as_mut() {
-            *height = h;
-        }
+        *width = w;
+        *height = h;
     }
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void {
-    node_arg(el)
-        .and_then(|el| crate::image_for_node(js_arg(js), el))
-        .map_or(ptr::null(), ImageRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]

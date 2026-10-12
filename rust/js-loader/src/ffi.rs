@@ -169,6 +169,7 @@ unsafe extern "C" {
     fn ns_js_iframe_document(js: *const NsJs, out: *mut quickjs::JSValue) -> GBoolean;
     fn ns_js_frame_url_push(js: *mut NsJs, url: *const c_char) -> *mut c_void;
     fn ns_js_frame_url_pop(js: *mut NsJs, fu: *mut c_void);
+    fn ns_js_apply_site_quirks(js: *mut NsJs);
     fn ns_js_budget_enter(js: *mut NsJs) -> i64;
     fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
     fn ns_js_flush_document_write(js: *mut NsJs);
@@ -553,14 +554,7 @@ impl Js {
     }
 
     pub(crate) fn apply_site_quirks(self) {
-        if self.is_null() || self.halted() {
-            return;
-        }
-        let url = unsafe { cstr(ns_js_current_url(self.0)) };
-        if !url.is_some_and(|url| crate::quirks::applies_to(url.to_bytes())) {
-            return;
-        }
-        self.with_main_scope(crate::quirks::apply);
+        unsafe { ns_js_apply_site_quirks(self.0) }
     }
 
     pub(crate) fn budget_enter(self) -> i64 {
@@ -1076,55 +1070,6 @@ pub unsafe extern "C" fn ns_js_eval_script_source(
             eval::eval(Js(js), source, origin);
             Js(js).swap_current_script(previous);
         }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_compile(
-    ctx: *mut JSContext,
-    src: *const c_char,
-    len: usize,
-    url: *const c_char,
-    module: GBoolean,
-    parse_error: *mut GBoolean,
-) -> quickjs::JSValue {
-    let source = unsafe { bytes(src, len) };
-    let url = unsafe { cstr(url) };
-    unsafe {
-        if let Some(flag) = parse_error.as_mut() {
-            *flag = glib::FALSE;
-        }
-        quickjs::with_context(ctx, |scope| {
-            let mark_parse_error = || {
-                if let Some(flag) = parse_error.as_mut() {
-                    *flag = glib::TRUE;
-                }
-            };
-            if module == 0 {
-                let options = southstar_js_engine::ScriptOptions {
-                    name: url.map(CStr::to_bytes),
-                    line: 1,
-                    ..southstar_js_engine::ScriptOptions::default()
-                };
-                let compiled = scope.compile_script(source, &options);
-                if compiled.is_err() {
-                    mark_parse_error();
-                }
-                return quickjs::result_raw(scope, compiled);
-            }
-            let name = url.map_or(&b""[..], CStr::to_bytes);
-            let module = match eval::compile_module_cached(scope, source, name) {
-                Ok(module) => module,
-                Err(error) => {
-                    mark_parse_error();
-                    return quickjs::result_raw(scope, Err(error));
-                }
-            };
-            match compile::set_import_meta(scope, &module, true) {
-                Ok(()) => quickjs::into_raw(module),
-                Err(error) => rethrow(scope, error),
-            }
-        })
     }
 }
 

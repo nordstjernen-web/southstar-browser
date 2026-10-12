@@ -13,8 +13,8 @@ See `README.md` for the product vision and `CLAUDE.md` for working rules.
 - **One competent human's worth of code** — when work balloons, cut
   scope, not corners. A working subset beats an unfinished superset.
 - **Vertical slices that ship** — every task ends in something runnable.
-- **Few small auditable deps**, vendored in-tree: lexbor (HTML + WHATWG
-  URL), QuickJS (JS interpreter), the png/gif/zune-jpeg crates (image decode); WebAssembly runs on
+- **Few small auditable deps**, vendored in-tree: lexbor (HTML parsing;
+  URLs go through Southstar's own `rust/url`), QuickJS (JS interpreter), the png/gif/zune-jpeg crates (image decode); WebAssembly runs on
   the pure-Rust wasmi interpreter.
 - **No automated test suite** — verify by running the browser.
 - No JIT, therefore more secure. However, this means the rest of the browser

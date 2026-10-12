@@ -6,7 +6,6 @@ pub mod fetch;
 pub mod forms;
 pub mod hop;
 pub mod host;
-pub mod lexbor;
 pub mod netlog;
 pub mod proxy;
 pub mod queue;

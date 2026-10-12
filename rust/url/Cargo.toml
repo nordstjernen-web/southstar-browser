@@ -1,0 +1,11 @@
+[package]
+name = "southstar-url"
+description = "The WHATWG URL parser: parsing against a base, the host parser with UTS #46 IDNA, serialization and the URL API setters"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -1,9 +1,13 @@
-//! Southstar — URL helpers over lexbor's WHATWG parser: resolving, the URL setters, origins, sites, hosts, components, referrers, tracking-parameter stripping, Refresh parsing and the user agent strings.
+//! Southstar — URL helpers over rust/url's WHATWG parser: resolving, the URL setters, origins, sites, hosts, components, referrers, tracking-parameter stripping, Refresh parsing and the user agent strings.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::borrow::Cow;
+use std::cell::RefCell;
+
+use southstar_url::{Host, Scheme, Setter, Url};
+
 use crate::ffi::host;
-use crate::ffi::lexbor::{self, Parser, Setter, Url};
 
 const TRACKING_PARAMS: [&str; 41] = [
     "gclid",
@@ -256,112 +260,83 @@ pub fn parse_refresh(input: &[u8]) -> Option<(f64, Option<Vec<u8>>)> {
     Some((seconds, url.filter(|u| !u.is_empty())))
 }
 
-pub fn resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    let base = base.filter(|b| !b.is_empty());
-    if href.is_empty() && base.is_none() {
-        return None;
+fn is_encoded_surrogate(bytes: &[u8]) -> bool {
+    matches!(bytes, [0xed, 0xa0..=0xbf, 0x80..=0xbf, ..])
+}
+
+fn scalar_values(input: &[u8]) -> Cow<'_, str> {
+    if let Ok(text) = core::str::from_utf8(input) {
+        return Cow::Borrowed(text);
     }
-    let parser = Parser::open()?;
-    let base_url = match base {
-        Some(base) => {
-            let url = parser.parse(None, base)?;
-            parser.clean();
-            Some(url)
+    let mut out = String::with_capacity(input.len());
+    let mut rest = input;
+    while !rest.is_empty() {
+        match core::str::from_utf8(rest) {
+            Ok(text) => {
+                out.push_str(text);
+                break;
+            }
+            Err(error) => {
+                let (valid, after) = rest.split_at(error.valid_up_to());
+                out.push_str(core::str::from_utf8(valid).unwrap_or_default());
+                out.push('\u{fffd}');
+                let skip = if is_encoded_surrogate(after) {
+                    3
+                } else {
+                    error.error_len().unwrap_or(after.len())
+                };
+                rest = &after[skip..];
+            }
         }
-        None => None,
-    };
-    let resolved = parser.parse(base_url.as_ref(), href)?;
-    resolved.serialize().filter(|s| !s.is_empty())
+    }
+    Cow::Owned(out)
 }
 
-fn is_special(u: &Url) -> bool {
-    (lexbor::SCHEME_HTTP..=lexbor::SCHEME_FILE).contains(&u.scheme_type())
+fn parse(input: &[u8], base: Option<&Url>) -> Option<Url> {
+    Url::parse(&scalar_values(input), base)
 }
 
-fn has_credentials_or_port(u: &Url) -> bool {
-    !u.username().is_empty() || !u.password().is_empty() || u.port().is_some()
+fn href(url: &Url) -> Option<Vec<u8>> {
+    Some(url.href().into_bytes()).filter(|s| !s.is_empty())
 }
 
-fn set_host(u: &mut Url, parser: &Parser, v: &[u8], hostname_only: bool) {
-    let special = is_special(u);
-    let mut brackets = false;
-    let mut colon = v.len();
-    let mut end = 0;
-    while end < v.len() {
-        let c = v[end];
-        if c == b'/' || c == b'?' || c == b'#' || (special && c == b'\\') {
-            break;
+thread_local! {
+    static LAST_BASE: RefCell<Option<(Vec<u8>, Url)>> = const { RefCell::new(None) };
+}
+
+fn with_base<T>(base: &[u8], f: impl FnOnce(&Url) -> Option<T>) -> Option<T> {
+    let mut f = Some(f);
+    let cached = LAST_BASE.try_with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if !matches!(&*slot, Some((key, _)) if key == base) {
+            *slot = Some((base.to_vec(), parse(base, None)?));
         }
-        match c {
-            b'[' => brackets = true,
-            b']' => brackets = false,
-            b':' if !brackets && colon == v.len() => colon = end,
-            _ => {}
-        }
-        end += 1;
+        let url = &slot.as_ref()?.1;
+        f.take().and_then(|f| f(url))
+    });
+    match cached {
+        Ok(result) => result,
+        Err(_) => f.take().and_then(|f| f(&parse(base, None)?)),
     }
-    if colon == v.len() && end == 0 && !special && has_credentials_or_port(u) {
-        return;
-    }
-    if colon == v.len() || hostname_only || u.scheme_type() == lexbor::SCHEME_FILE {
-        let setter = if hostname_only {
-            Setter::Hostname
-        } else {
-            Setter::Host
-        };
-        u.set(parser, setter, v);
-        return;
-    }
-    if colon == 0 || !u.set(parser, Setter::Hostname, &v[..colon]) {
-        return;
-    }
-    let digits = colon
-        + 1
-        + v[colon + 1..end]
-            .iter()
-            .take_while(|c| c.is_ascii_digit())
-            .count();
-    if digits == colon + 1 {
-        return;
-    }
-    let mut port = 0u64;
-    for &d in &v[colon + 1..digits] {
-        if port > 65535 {
-            break;
-        }
-        port = port * 10 + u64::from(d - b'0');
-    }
-    if port > 65535 {
-        return;
-    }
-    u.set(parser, Setter::Port, &v[colon + 1..digits]);
 }
 
-fn apply_setter(u: &mut Url, parser: &Parser, component: &[u8], value: &[u8]) {
-    let userinfo_or_port = matches!(component, b"username" | b"password" | b"port");
-    if userinfo_or_port && u.host_is_empty() {
-        return;
+pub fn resolve(base: Option<&[u8]>, href_input: &[u8]) -> Option<Vec<u8>> {
+    match base.filter(|b| !b.is_empty()) {
+        Some(base) => with_base(base, |base| href(&parse(href_input, Some(base))?)),
+        None if href_input.is_empty() => None,
+        None => href(&parse(href_input, None)?),
     }
-    let setter = match component {
-        b"protocol" => Setter::Protocol,
-        b"username" => Setter::Username,
-        b"password" => Setter::Password,
-        b"host" => return set_host(u, parser, value, false),
-        b"hostname" => return set_host(u, parser, value, true),
-        b"port" => Setter::Port,
-        b"pathname" => Setter::Pathname,
-        b"search" => Setter::Search,
-        b"hash" => Setter::Hash,
-        _ => return,
-    };
-    u.set(parser, setter, value);
 }
 
-pub fn set_component(href: &[u8], component: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-    let parser = Parser::open()?;
-    let mut url = parser.parse(None, href)?;
-    apply_setter(&mut url, &parser, component, value);
-    url.serialize().filter(|s| !s.is_empty())
+pub fn set_component(href_input: &[u8], component: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+    let mut url = parse(href_input, None)?;
+    if let Some(setter) = core::str::from_utf8(component)
+        .ok()
+        .and_then(Setter::by_name)
+    {
+        url.set(setter, &String::from_utf8_lossy(value));
+    }
+    href(&url)
 }
 
 pub fn to_ascii(url: &[u8]) -> Option<Vec<u8>> {
@@ -374,25 +349,27 @@ pub fn to_ascii(url: &[u8]) -> Option<Vec<u8>> {
     resolve(None, url)
 }
 
-fn parse_with_host(parser: &Parser, url: &[u8]) -> Option<Url> {
-    parser.parse(None, url).filter(Url::has_host)
+fn non_empty_host(url: &Url) -> Option<&Host> {
+    url.host().filter(|h| **h != Host::Empty)
+}
+
+fn parse_with_host(url: &[u8]) -> Option<Url> {
+    parse(url, None).filter(|u| non_empty_host(u).is_some())
 }
 
 fn origin(url: &[u8], default_port: bool) -> Option<Vec<u8>> {
-    let parser = Parser::open()?;
-    let u = parse_with_host(&parser, url)?;
-    let host = u.serialize_host()?;
-    let mut out = u.scheme_name().to_vec();
+    let u = parse_with_host(url)?;
+    let mut out = u.scheme().as_bytes().to_vec();
     out.extend_from_slice(b"://");
-    out.extend_from_slice(&host);
+    out.extend_from_slice(u.host_string().as_bytes());
     let port = match (u.port(), default_port) {
         (Some(port), _) => Some(port),
         (None, false) => None,
-        (None, true) => Some(match u.scheme_type() {
-            lexbor::SCHEME_HTTP | lexbor::SCHEME_WS => 80,
-            lexbor::SCHEME_HTTPS | lexbor::SCHEME_WSS => 443,
-            lexbor::SCHEME_FTP => 21,
-            _ => 0,
+        (None, true) => Some(match u.scheme_kind() {
+            Scheme::Http | Scheme::Ws => 80,
+            Scheme::Https | Scheme::Wss => 443,
+            Scheme::Ftp => 21,
+            Scheme::File | Scheme::Other => 0,
         }),
     };
     if let Some(port) = port {
@@ -416,9 +393,8 @@ pub fn origin_from_any(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn host_from(url: &[u8]) -> Option<Vec<u8>> {
-    let parser = Parser::open()?;
-    let u = parse_with_host(&parser, url)?;
-    u.serialize_host().filter(|h| !h.is_empty())
+    let u = parse_with_host(url)?;
+    Some(u.host_string().into_bytes()).filter(|h| !h.is_empty())
 }
 
 pub fn same_origin(a: &[u8], b: &[u8]) -> bool {
@@ -451,23 +427,16 @@ fn prefixed(prefix: u8, value: &[u8]) -> Vec<u8> {
 }
 
 fn parts_at_depth(url: &[u8], depth: u32) -> Option<Parts> {
-    let parser = Parser::open()?;
-    let u = parser.parse(None, url)?;
-    let href = u
-        .serialize()
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| url.to_vec());
-    let scheme = u.serialize_scheme().unwrap_or_default();
-    let protocol = if scheme.is_empty() {
+    let u = parse(url, None)?;
+    let href = href(&u).unwrap_or_else(|| url.to_vec());
+    let protocol = if u.scheme().is_empty() {
         Vec::new()
     } else {
-        [&scheme[..], b":"].concat()
+        [u.scheme().as_bytes(), b":"].concat()
     };
-    let hostname = if u.has_host() {
-        u.serialize_host().unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let hostname = non_empty_host(&u)
+        .map(|h| h.serialize().into_bytes())
+        .unwrap_or_default();
     let port = u
         .port()
         .map_or_else(Vec::new, |p| p.to_string().into_bytes());
@@ -486,7 +455,7 @@ fn parts_at_depth(url: &[u8], depth: u32) -> Option<Parts> {
     } else {
         b"null".to_vec()
     };
-    let pathname = u.serialize_path().unwrap_or_default();
+    let pathname = u.path_string().into_bytes();
     if depth == 0
         && protocol == b"blob:"
         && !pathname.is_empty()
@@ -503,10 +472,10 @@ fn parts_at_depth(url: &[u8], depth: u32) -> Option<Parts> {
         hostname,
         port,
         pathname,
-        search: prefixed(b'?', u.query()),
-        hash: prefixed(b'#', u.fragment()),
-        username: u.username().to_vec(),
-        password: u.password().to_vec(),
+        search: prefixed(b'?', u.query().unwrap_or_default().as_bytes()),
+        hash: prefixed(b'#', u.fragment().unwrap_or_default().as_bytes()),
+        username: u.username().as_bytes().to_vec(),
+        password: u.password().as_bytes().to_vec(),
     })
 }
 

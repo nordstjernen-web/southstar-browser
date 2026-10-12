@@ -152,12 +152,12 @@ http-brotli = ["southstar-net/http-brotli"]
 http-zstd = ["southstar-net/http-zstd"]
 libav = [
     "southstar-headless/libav",
-    "southstar-js-media/libav",
+    "southstar-js-runtime/libav",
     "southstar-net/libav",
     "southstar-video/libav",
 ]
-audio-native-vorbis = ["southstar-js-media/audio-native-vorbis"]
-audio-native-opus = ["southstar-js-media/audio-native-opus"]
+audio-native-vorbis = ["southstar-js-runtime/audio-native-vorbis"]
+audio-native-opus = ["southstar-js-runtime/audio-native-opus"]
 seccomp = ["southstar-net/seccomp", "southstar-sandbox/seccomp"]
 wasm = ["dep:southstar-js-wasm", "southstar-js-runtime/wasm"]
 webgpu = ["dep:southstar-webgpu", "southstar-canvas/webgpu", "southstar-js-runtime/webgpu", "southstar-net/webgpu"]

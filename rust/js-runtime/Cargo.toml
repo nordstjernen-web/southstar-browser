@@ -17,6 +17,9 @@ southstar-js-engine = { path = "../js-engine", default-features = false, feature
 [features]
 wasm = []
 webgpu = []
+libav = []
+audio-native-vorbis = []
+audio-native-opus = []
 
 [lints]
 workspace = true

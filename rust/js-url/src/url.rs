@@ -1,4 +1,4 @@
-//! Southstar — the URL interface: construction through the lexbor-backed ns_url_* helpers, canParse, parse and the prototype accessors.
+//! Southstar — the URL interface: construction through the ns_url_* helpers over rust/url, canParse, parse and the prototype accessors.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

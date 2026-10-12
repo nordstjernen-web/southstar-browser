@@ -20,7 +20,6 @@ pub(crate) fn free(js: Js) {
     js.teardown_registries();
     js.free_partition();
     js.teardown_style_states();
-    js.free_lookup_caches();
     if js.is_active() {
         js.clear_active();
     }

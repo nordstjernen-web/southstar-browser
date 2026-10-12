@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use super::helpers::ns_js_purge_subtree_rafs;
-use super::page_object::{ns_active_js, ns_js_release_wrapper};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -325,7 +323,7 @@ pub(crate) fn dispatch_window_only_event(
 }
 
 pub(crate) fn active_js() -> Option<Js> {
-    Js::of(unsafe { ns_active_js() })
+    Js::of(super::record::ns_active_js())
 }
 
 pub(crate) fn unwrap_element(value: JSValue) -> *const NsNode {
@@ -438,7 +436,7 @@ pub(crate) fn collect_orphans(js: Js) -> Vec<*mut NsNode> {
 
 pub(crate) fn free_orphan_subtree(js: Js, root: *mut NsNode) {
     unsafe {
-        ns_js_purge_subtree_rafs(js.ptr(), root);
+        super::record::ns_js_purge_subtree_rafs(js.ptr(), root);
         ns_js_purge_subtree_pending_iframes(js.ptr(), root);
         ns_js_purge_subtree_script_refs(js.ptr(), root);
         ns_js_purge_subtree_node_refs(js.ptr(), root);
@@ -464,7 +462,7 @@ pub(crate) fn load_first_pending_iframe(js: Js, iframe: *mut NsNode) {
 pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
     let set = js.pinned_set();
     if unsafe { glib::g_hash_table_remove(set, node.cast()) } != 0 {
-        unsafe { ns_js_release_wrapper(js.ptr(), node) };
+        unsafe { super::record::release_wrapper(js.ptr(), node) };
         return true;
     }
     false

@@ -386,12 +386,8 @@ have_audio_native_vorbis = false
 have_audio_native_opus = false
 if get_option('audio').allowed()
   sdl2_probe = dependency('sdl2', required: false)
-  if sdl2_probe.found() and libvorbisfile.found()
-    have_audio_native_vorbis = true
-  endif
-  if sdl2_probe.found() and libopusfile.found()
-    have_audio_native_opus = true
-  endif
+  have_audio_native_vorbis = sdl2_probe.found() and libvorbisfile.found()
+  have_audio_native_opus = sdl2_probe.found() and libopusfile.found()
 endif
 libenchant = dependency('enchant-2', required: false)
 have_enchant = libenchant.found()

@@ -104,26 +104,6 @@ impl<'a> ImageRef<'a> {
         self.raw().http_status
     }
 
-    pub fn request_us(self) -> i64 {
-        self.raw().request_us
-    }
-
-    pub fn response_us(self) -> i64 {
-        self.raw().response_us
-    }
-
-    pub fn body_size(self) -> i64 {
-        self.raw().body_size
-    }
-
-    pub fn next_hop_protocol(self) -> *const c_char {
-        self.raw().next_hop_protocol
-    }
-
-    pub fn timing_allow_origin(self) -> *const c_char {
-        self.raw().timing_allow_origin
-    }
-
     pub fn natural_size(self) -> (i32, i32) {
         let image = self.raw();
         (image.natural_width, image.natural_height)
@@ -152,6 +132,23 @@ impl<'a> ImageRef<'a> {
 
     pub fn set_render_surface(self, surface: *mut c_void) {
         unsafe { (*self.0.as_ptr()).render_surface = surface };
+    }
+
+    pub fn fetch_times_us(self) -> (i64, i64) {
+        let image = self.raw();
+        (image.request_us, image.response_us)
+    }
+
+    pub fn next_hop_protocol(self) -> *const c_char {
+        self.raw().next_hop_protocol
+    }
+
+    pub fn timing_allow_origin(self) -> *const c_char {
+        self.raw().timing_allow_origin
+    }
+
+    pub fn body_size(self) -> i64 {
+        self.raw().body_size
     }
 }
 
@@ -1354,4 +1351,18 @@ pub unsafe extern "C" fn ns_image_cache_collect(cache: *mut Cache) {
         };
         purge(cache, victim);
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_image_settled(
+    img: *const c_void,
+    failed: *mut GBoolean,
+) -> GBoolean {
+    let Some(image) = (unsafe { ImageRef::from_ptr(img) }) else {
+        return FALSE;
+    };
+    if !failed.is_null() {
+        unsafe { *failed = glib::boolean(image.failed()) };
+    }
+    glib::boolean(image.loaded() || image.failed())
 }
