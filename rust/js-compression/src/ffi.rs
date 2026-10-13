@@ -4,7 +4,6 @@
 
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 #[repr(C)]
@@ -43,7 +42,6 @@ unsafe extern "C" {
     fn deflate(strm: *mut ZStream, flush: c_int) -> c_int;
     fn inflateEnd(strm: *mut ZStream) -> c_int;
     fn deflateEnd(strm: *mut ZStream) -> c_int;
-    fn JS_ThrowInternalError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
 }
 
 const Z_OK: c_int = 0;
@@ -152,31 +150,10 @@ impl Drop for Zlib {
 }
 
 pub(crate) fn internal_error(scope: &mut Scope<'_>, message: &str) -> Value {
-    let message = std::ffi::CString::new(message).unwrap_or_default();
-    unsafe {
-        JS_ThrowInternalError(
-            quickjs::raw_context(scope),
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    scope.internal_error(message)
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_compression_install(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    target: &southstar_js_engine::Value,
-) {
-    crate::install(scope, target);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_compression_install(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::install(scope, &global);
-        });
-    }
+pub fn nsr_compression_install(scope: &mut Scope<'_>, global: &Value) {
+    crate::install(scope, global);
 }
