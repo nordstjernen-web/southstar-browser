@@ -7,8 +7,7 @@ use core::ptr;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
-use southstar_js_engine::quickjs::{self, JSContext};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_layout::{BoxRef, NsBox};
 
 use super::cairo::Surface;
@@ -17,13 +16,12 @@ use super::state::NsJs;
 use crate::bitmap::{ImageBitmap, Source};
 
 unsafe extern "C" {
-    fn ns_unwrap_element(val: quickjs::JSValue) -> *const NsNode;
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_js_box_for_node(js: *mut NsJs, node: *const NsNode) -> *const NsBox;
     fn ns_js_image_for_node(js: *mut NsJs, node: *const NsNode) -> *const c_void;
     fn ns_js_resource_origin_clean(
         js: *mut NsJs,
-        ctx: *mut JSContext,
+        ctx: ContextHandle,
         url: *const c_char,
         cors_allow_origin: *const c_char,
     ) -> c_int;
@@ -108,13 +106,12 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     if let Some(source) = super::with_bitmap(src, ImageBitmap::source).flatten() {
         return Some(source);
     }
-    let raw = quickjs::raw(src);
     let mut node = super::objects::offscreen_node(src);
     if node.is_null() {
-        node = unsafe { ns_unwrap_element(raw) };
+        node = super::context::unwrap_element(src).ptr().cast();
     }
     let name = unsafe { Node::from_ptr(node.cast()) }?.name()?.to_bytes();
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     if js.is_null() {
         return None;
     }
@@ -138,8 +135,8 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     } else {
         ptr::null()
     };
-    let ctx = quickjs::raw_context(scope);
-    let origin_clean = unsafe { ns_js_resource_origin_clean(js, ctx, found.url, allow) } != 0;
+    let origin_clean =
+        unsafe { ns_js_resource_origin_clean(js, scope.handle(), found.url, allow) } != 0;
     if let Some(image) = found.cacheable
         && let Some(cached) = unsafe { Surface::from_borrowed(image.render_surface()) }
     {

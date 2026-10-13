@@ -126,7 +126,6 @@ installers! {
     ns_cssom_install_window,
     ns_js_input_install_wpt,
     ns_crypto_install_window,
-    ns_webgl_install,
     ns_media_install_audio,
     ns_xhr_install_interface,
     ns_install_abort_signal_interface,

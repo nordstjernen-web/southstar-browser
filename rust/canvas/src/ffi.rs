@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the ported canvas sections, as declared in src/js_internal.h, and the GLib and CSS calls behind them.
+//! Southstar — the unsafe edge of the canvas: its C ABI, the engine calls it makes, and the GLib, CSS and cairo calls behind them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -11,20 +11,23 @@ use southstar_glib as glib;
 pub(crate) mod cairo;
 pub(crate) mod context;
 mod draw;
+mod exports;
+mod imports;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod objects;
 pub(crate) mod pango;
 mod source;
 pub(crate) mod state;
-mod style;
 
 pub(crate) use draw::{ctx_state, mark_mutated};
 pub(crate) use source::drawimage_source;
 
 pub(crate) use objects::{
-    canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image, element_attr,
-    is_path2d, new_gradient, new_imagedata, new_imagedata_from, new_offscreen_canvas_node,
-    new_pattern, new_textmetrics, ns_pattern_set_transform, path2d_context, set_element_attr,
-    with_bitmap, with_hidden,
+    canvas_realm, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image,
+    drawimage_source_surface, element_attr, in_realm, is_image_bitmap, is_path2d, new_gradient,
+    new_imagedata, new_imagedata_from, new_in_realm, new_offscreen_canvas_node, new_pattern,
+    new_textmetrics, path2d_context, set_element_attr, with_bitmap, with_hidden,
 };
 
 unsafe extern "C" {

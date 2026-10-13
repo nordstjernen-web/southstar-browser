@@ -604,7 +604,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         0,
         imports::nsr_custom_state_set_ctor,
     );
-    ffi::install(scope, ns_webgl_install, global);
+    ffi::install_webgl(scope, global);
     bind_constructor(scope, global, "Audio", 1, imports::nsr_window_audio_ctor);
     ffi::install(scope, ns_media_install_audio, global);
     bind_constructor(

@@ -1,24 +1,15 @@
-//! Southstar — the C ABI of webgpu.h and the cairo, canvas and DOM calls WebGPU makes.
+//! Southstar — WebGPU's entry points and the cairo, canvas and DOM calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_void};
 use core::ptr::{self, NonNull};
 
+use southstar_canvas::host as canvas;
 use southstar_dom::{Node, NsNode};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 unsafe extern "C" {
-    fn ns_js_drawimage_source_surface(
-        ctx: *mut JSContext,
-        src: JSValue,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-        threw: *mut c_int,
-    ) -> *mut c_void;
-    fn JS_GetException(ctx: *mut JSContext) -> JSValue;
-    fn JS_ThrowInternalError(ctx: *mut JSContext, fmt: *const core::ffi::c_char, ...) -> JSValue;
     fn cairo_image_surface_create(format: c_int, w: c_int, h: c_int) -> *mut c_void;
     fn cairo_surface_status(s: *mut c_void) -> c_int;
     fn cairo_surface_destroy(s: *mut c_void);
@@ -94,37 +85,18 @@ pub(crate) fn drawimage_source(
     scope: &mut Scope<'_>,
     src: &Value,
 ) -> Result<Option<SourceImage>, Value> {
-    let (mut w, mut h, mut threw) = (0, 0, 0);
-    let raw = unsafe {
-        ns_js_drawimage_source_surface(
-            quickjs::raw_context(scope),
-            quickjs::raw(src),
-            &mut w,
-            &mut h,
-            &mut threw,
-        )
-    };
-    if threw != 0 {
-        let raw = unsafe { JS_GetException(quickjs::raw_context(scope)) };
-        return Err(unsafe { quickjs::take_value(scope, raw) });
-    }
-    Ok(NonNull::new(raw).map(|s| SourceImage {
-        surface: Surface(s),
-        w,
-        h,
+    let source = canvas::drawimage_source_surface(scope, src)?;
+    Ok(source.and_then(|(raw, w, h)| {
+        NonNull::new(raw).map(|s| SourceImage {
+            surface: Surface(s),
+            w,
+            h,
+        })
     }))
 }
 
 pub(crate) fn internal_error(scope: &mut Scope<'_>, message: &str) -> Value {
-    let message = std::ffi::CString::new(message).unwrap_or_default();
-    unsafe {
-        JS_ThrowInternalError(
-            quickjs::raw_context(scope),
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    scope.internal_error(message)
 }
 
 pub(crate) fn canvas_attr(canvas: usize, name: &CStr) -> Option<Vec<u8>> {
@@ -133,36 +105,8 @@ pub(crate) fn canvas_attr(canvas: usize, name: &CStr) -> Option<Vec<u8>> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgpu_install(
-    ctx: *mut JSContext,
-    _js: *mut c_void,
-    navigator: JSValue,
-) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let navigator = quickjs::borrow_value(scope, navigator);
-            crate::install::install(scope, &navigator);
-        });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgpu_get_context(
-    ctx: *mut JSContext,
-    _js: *mut c_void,
-    canvas_obj: JSValue,
-    canvas: *const NsNode,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let canvas_obj = quickjs::borrow_value(scope, canvas_obj);
-            quickjs::into_raw(crate::context::get_context(
-                scope,
-                &canvas_obj,
-                canvas as usize,
-            ))
-        })
-    }
+pub fn nsr_webgpu_get_context(scope: &mut Scope<'_>, canvas_obj: &Value, canvas: usize) -> Value {
+    crate::context::get_context(scope, canvas_obj, canvas)
 }
 
 #[unsafe(no_mangle)]
@@ -171,9 +115,6 @@ pub unsafe extern "C" fn ns_webgpu_canvas_surface(canvas: *const NsNode) -> *mut
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_webgpu_install(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    navigator: &southstar_js_engine::Value,
-) {
+pub fn nsr_webgpu_install(scope: &mut Scope<'_>, navigator: &Value) {
     crate::install::install(scope, navigator);
 }

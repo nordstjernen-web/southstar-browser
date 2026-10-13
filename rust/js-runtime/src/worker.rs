@@ -189,7 +189,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     ffi::imports::nsr_install_event_attribute_getters(scope, &current_global);
     ffi::install_context(scope, ns_js_name_engine_members);
     ffi::install(scope, ns_crypto_install_worker, &global);
-    ffi::install(scope, ns_webgl_install, &global);
+    ffi::install_webgl(scope, &global);
     ffi::install_canvas(scope, &global, false);
 
     install_scope_members(scope, &global, setup, origin_real_ms);

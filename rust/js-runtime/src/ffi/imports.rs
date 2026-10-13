@@ -181,6 +181,7 @@ unsafe extern "Rust" {
         document: &Value,
         node: &Value,
     );
+    pub(crate) safe fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value);
     #[cfg(feature = "webgpu")]
     pub(crate) safe fn nsr_webgpu_install(scope: &mut Scope<'_>, navigator: &Value);
     pub(crate) safe fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value);

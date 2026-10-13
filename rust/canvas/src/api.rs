@@ -2,8 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::quickjs::{self, JSCFunction};
-use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
+use southstar_js_engine::{
+    Attributes, BoundFn, ContextHandle, ElementType, NativeFn, Scope, Value,
+};
 
 use crate::ffi;
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
@@ -42,32 +43,14 @@ const fn attr(name: &'static str, ty: AttrType) -> AttrDef {
     AttrDef { name, ty }
 }
 
-#[derive(Clone, Copy)]
-enum Callable {
-    C(JSCFunction),
-    Native(NativeFn),
-}
-
 struct Method {
     name: &'static str,
-    f: Callable,
+    f: NativeFn,
     length: u32,
 }
 
-const fn method(name: &'static str, f: JSCFunction, length: u32) -> Method {
-    Method {
-        name,
-        f: Callable::C(f),
-        length,
-    }
-}
-
 const fn native(name: &'static str, f: NativeFn, length: u32) -> Method {
-    Method {
-        name,
-        f: Callable::Native(f),
-        length,
-    }
+    Method { name, f, length }
 }
 
 #[derive(Clone, Copy)]
@@ -206,7 +189,7 @@ static OFFSCREEN_CTX2D_METHODS: [Method; 44] = ctx2d_methods!();
 
 static GRADIENT_METHODS: [Method; 1] = [native("addColorStop", gradient::add_color_stop, 2)];
 
-static PATTERN_METHODS: [Method; 1] = [method("setTransform", ffi::ns_pattern_set_transform, 0)];
+static PATTERN_METHODS: [Method; 1] = [native("setTransform", pattern_set_transform, 0)];
 
 static IMAGEDATA_ATTRS: [AttrDef; 5] = [
     attr("colorSpace", Readonly),
@@ -382,10 +365,7 @@ fn api_call(
         );
         return Err(scope.type_error(&message));
     }
-    match m.f {
-        Callable::C(f) => quickjs::call_c_function(scope, f, this, args),
-        Callable::Native(f) => f(scope, this, args),
-    }
+    (m.f)(scope, this, args)
 }
 
 fn sync_canvas(scope: &mut Scope<'_>, this: &Value) {
@@ -885,14 +865,14 @@ pub(crate) fn clamped_array(
     n: usize,
 ) -> Result<Value, Value> {
     let buffer = match rgba {
-        Some(bytes) => quickjs::array_buffer_copy(realm, bytes)?,
+        Some(bytes) => realm.new_array_buffer(bytes)?,
         None => {
             let mut zeros = Vec::new();
             if zeros.try_reserve_exact(n).is_err() {
                 return Err(realm.range_error("ImageData allocation failed"));
             }
             zeros.resize(n, 0);
-            quickjs::array_buffer_copy(realm, &zeros)?
+            realm.new_array_buffer(&zeros)?
         }
     };
     let global = realm.global();
@@ -1033,7 +1013,8 @@ pub(crate) fn imagedata_construct(
         return Err(scope.type_error(&message));
     }
     let proto = api_proto_of_ctor(scope, new_target, "ImageData");
-    if args[0].is_object() && quickjs::typed_array_type(&args[0]) == quickjs::TYPED_ARRAY_UINT8C {
+    if args[0].is_object() && scope.typed_array_element(&args[0]) == Some(ElementType::Uint8Clamped)
+    {
         imagedata_from_array(scope, &proto, args)
     } else {
         imagedata_from_size(scope, &proto, args)
@@ -1042,7 +1023,7 @@ pub(crate) fn imagedata_construct(
 
 pub(crate) fn imagedata_new(
     scope: &mut Scope<'_>,
-    realm: &mut Scope<'_>,
+    realm: ContextHandle,
     size: (i32, i32),
     rgba: Option<&[u8]>,
 ) -> Result<Value, Value> {
@@ -1053,9 +1034,11 @@ pub(crate) fn imagedata_new(
     if w > IMAGEDATA_MAX as i32 || h > IMAGEDATA_MAX as i32 {
         return Err(scope.range_error("ImageData too large"));
     }
-    let data = clamped_array(realm, rgba, w as usize * h as usize * 4)?;
-    let proto = api_proto(realm, "ImageData");
-    let obj = hidden::new(realm, KIND_IMAGEDATA, &proto);
+    let (obj, data) = ffi::in_realm(scope, realm, |realm| {
+        let data = clamped_array(realm, rgba, w as usize * h as usize * 4)?;
+        let proto = api_proto(realm, "ImageData");
+        Ok::<_, Value>((hidden::new(realm, KIND_IMAGEDATA, &proto), data))
+    })?;
     imagedata_finish(scope, &obj, size, data, b"srgb");
     Ok(obj)
 }
@@ -1116,7 +1099,7 @@ pub(crate) fn offscreen_construct(
         }
         *dim = d.trunc();
     }
-    if quickjs::context_opaque(scope).is_null() {
+    if scope.context_opaque().is_null() {
         return Err(scope.type_error("OffscreenCanvas is not available here"));
     }
     let proto = api_proto_of_ctor(scope, new_target, "OffscreenCanvas");

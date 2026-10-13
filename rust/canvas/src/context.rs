@@ -232,7 +232,7 @@ fn make_blob(scope: &mut Scope<'_>, data: &[u8], kind: &str) -> Result<Value, Va
     let global = scope.global();
     let blob_ctor = scope.get(&global, "Blob")?;
     let u8_ctor = scope.get(&global, "Uint8Array")?;
-    let buffer = southstar_js_engine::quickjs::array_buffer_copy(scope, data)?;
+    let buffer = scope.new_array_buffer(data)?;
     let bytes = scope.construct(&u8_ctor, &[buffer])?;
     let parts = scope.new_array();
     scope.set_index(&parts, 0, bytes)?;
@@ -283,7 +283,7 @@ pub(crate) fn convert_to_blob(
 fn png_bytes_object(scope: &mut Scope<'_>, png: &[u8]) -> Result<Value, Value> {
     let global = scope.global();
     let u8_ctor = scope.get(&global, "Uint8Array")?;
-    let buffer = southstar_js_engine::quickjs::array_buffer_copy(scope, png)?;
+    let buffer = scope.new_array_buffer(png)?;
     let bytes = scope.construct(&u8_ctor, &[buffer])?;
     let blob = scope.new_object();
     scope.set(&blob, "__ndBlobBytes", bytes)?;

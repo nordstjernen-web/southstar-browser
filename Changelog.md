@@ -66,6 +66,11 @@ Southstar Browser 0.9.9:
   constructors, DOMParser, CloseWatcher and Document through them, and their
   old QuickJS C exports are kept only in a legacy.rs behind the quickjs
   feature until the prototype tables call the nsr_ functions.
+* The canvas 2D API, WebGL and WebGPU (rust/canvas, rust/webgl,
+  rust/webgpu) no longer touch QuickJS: they call each other through Cargo
+  dependencies and Rust-ABI entry points instead of C shims, the 2D
+  context's drawing state holds an engine-neutral object identity, and all
+  three build against Boa (once rust/js-runtime does).
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

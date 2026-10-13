@@ -657,6 +657,10 @@ pub(crate) fn install_canvas(scope: &mut Scope<'_>, global: &Value, window: bool
     imports::nsr_canvas_install(scope, global, window);
 }
 
+pub(crate) fn install_webgl(scope: &mut Scope<'_>, global: &Value) {
+    imports::nsr_webgl_install(scope, global);
+}
+
 pub(crate) fn install_worker_location(scope: &mut Scope<'_>, global: &Value, url: Option<&CStr>) {
     let url = url.map_or_else(String::new, |url| url.to_string_lossy().into_owned());
     imports::nsr_worker_install_location(scope, global, &url);

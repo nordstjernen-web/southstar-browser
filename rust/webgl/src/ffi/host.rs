@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of webgl.h and the engine, canvas, cairo and GL-context calls WebGL makes.
+//! Southstar — WebGL's entry points and the engine, canvas, cairo and GL-context calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,12 +6,11 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::rc::{Rc, Weak};
 
+use southstar_canvas::host as canvas;
 use southstar_dom::{Node, NsNode};
 use southstar_glib as glib;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Scope, Value};
 
 use crate::context::WebGl;
@@ -24,27 +23,6 @@ unsafe extern "C" {
     fn ns_js_current_url(js: *const c_void) -> *const c_char;
     fn ns_js_request_repaint(js: *mut c_void);
     fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_canvas_realm(ctx: *mut JSContext, el: *const NsNode) -> *mut JSContext;
-    fn ns_api_proto(realm: *mut JSContext, iface: *const c_char) -> JSValue;
-    fn ns_api_interface(
-        ctx: *mut JSContext,
-        global: JSValue,
-        name: *const c_char,
-        ctor: JSValue,
-        parent: *const c_char,
-    ) -> JSValue;
-    fn ns_hidden_new(realm: *mut JSContext, kind: c_int, proto: JSValue) -> JSValue;
-    fn ns_hidden_is(v: JSValue, kind: c_int) -> c_int;
-    fn ns_hget(ctx: *mut JSContext, obj: JSValue, name: *const c_char) -> JSValue;
-    fn ns_hset(ctx: *mut JSContext, obj: JSValue, name: *const c_char, val: JSValue);
-    fn ns_js_drawimage_source_surface(
-        ctx: *mut JSContext,
-        src: JSValue,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-        threw: *mut c_int,
-    ) -> *mut c_void;
-    fn JS_GetException(ctx: *mut JSContext) -> JSValue;
     fn cairo_image_surface_create(format: c_int, w: c_int, h: c_int) -> *mut c_void;
     fn cairo_surface_status(s: *mut c_void) -> c_int;
     fn cairo_surface_destroy(s: *mut c_void);
@@ -140,19 +118,8 @@ pub(crate) fn page_url_and_origin(js: usize) -> (Option<Vec<u8>>, Option<Vec<u8>
     (url_bytes, origin_bytes)
 }
 
-fn c_text(text: &str) -> CString {
-    CString::new(text).unwrap_or_default()
-}
-
-fn canvas_realm(scope: &Scope<'_>, canvas: usize) -> *mut JSContext {
-    unsafe { ns_canvas_realm(quickjs::raw_context(scope), canvas as *const NsNode) }
-}
-
 pub(crate) fn api_proto(scope: &mut Scope<'_>, canvas: usize, iface: &str) -> Value {
-    let realm = canvas_realm(scope, canvas);
-    let name = c_text(iface);
-    let raw = unsafe { ns_api_proto(realm, name.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    canvas::api_proto(scope, canvas, iface)
 }
 
 pub(crate) fn api_interface(
@@ -162,43 +129,19 @@ pub(crate) fn api_interface(
     ctor: Value,
     parent: Option<&str>,
 ) -> Value {
-    let name = c_text(name);
-    let parent = parent.map(c_text);
-    let raw = unsafe {
-        ns_api_interface(
-            quickjs::raw_context(scope),
-            quickjs::raw(global),
-            name.as_ptr(),
-            quickjs::into_raw(ctor),
-            parent.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    canvas::api_interface(scope, global, name, ctor, parent)
 }
 
 pub(crate) fn new_info(scope: &mut Scope<'_>, canvas: usize, kind: i32, iface: &str) -> Value {
-    let realm = canvas_realm(scope, canvas);
-    let name = c_text(iface);
-    let proto = unsafe { ns_api_proto(realm, name.as_ptr()) };
-    let proto = unsafe { quickjs::take_value(scope, proto) };
-    let raw = unsafe { ns_hidden_new(realm, kind, quickjs::raw(&proto)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    canvas::new_hidden(scope, canvas, kind, iface)
 }
 
 pub(crate) fn hidden_set(scope: &mut Scope<'_>, object: &Value, name: &str, value: Value) {
-    let name = c_text(name);
-    unsafe {
-        ns_hset(
-            quickjs::raw_context(scope),
-            quickjs::raw(object),
-            name.as_ptr(),
-            quickjs::into_raw(value),
-        )
-    };
+    canvas::hidden_set(scope, object, name, value);
 }
 
 pub(crate) fn hidden_is(object: &Value, kind: i32) -> bool {
-    unsafe { ns_hidden_is(quickjs::raw(object), kind) != 0 }
+    canvas::hidden_is(object, kind)
 }
 
 pub(crate) fn hidden_get(
@@ -206,21 +149,7 @@ pub(crate) fn hidden_get(
     object: &Value,
     name: &str,
 ) -> Result<Value, Value> {
-    let name = c_text(name);
-    let raw = unsafe {
-        ns_hget(
-            quickjs::raw_context(scope),
-            quickjs::raw(object),
-            name.as_ptr(),
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
-}
-
-fn pending_exception(scope: &Scope<'_>) -> Value {
-    let raw = unsafe { JS_GetException(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    canvas::hidden_get(scope, object, name)
 }
 
 pub(crate) struct SourceImage {
@@ -239,23 +168,13 @@ pub(crate) fn drawimage_source(
     scope: &mut Scope<'_>,
     src: &Value,
 ) -> Result<Option<SourceImage>, Value> {
-    let (mut w, mut h, mut threw) = (0, 0, 0);
-    let raw = unsafe {
-        ns_js_drawimage_source_surface(
-            quickjs::raw_context(scope),
-            quickjs::raw(src),
-            &mut w,
-            &mut h,
-            &mut threw,
-        )
-    };
-    if threw != 0 {
-        return Err(pending_exception(scope));
-    }
-    Ok(NonNull::new(raw).map(|s| SourceImage {
-        surface: Surface(s),
-        w,
-        h,
+    let source = canvas::drawimage_source_surface(scope, src)?;
+    Ok(source.and_then(|(raw, w, h)| {
+        NonNull::new(raw).map(|s| SourceImage {
+            surface: Surface(s),
+            w,
+            h,
+        })
     }))
 }
 
@@ -289,14 +208,14 @@ pub(crate) fn canvas_object_of(value: &Value) -> Option<Value> {
 
 struct Registered {
     gl: Weak<WebGl>,
-    object: JSValue,
+    object: *mut c_void,
 }
 
 thread_local! {
     static BY_NODE: RefCell<HashMap<usize, Registered>> = RefCell::new(HashMap::new());
 }
 
-fn registered(canvas: usize) -> Option<(Rc<WebGl>, JSValue)> {
+fn registered(canvas: usize) -> Option<(Rc<WebGl>, *mut c_void)> {
     BY_NODE.with(|map| {
         let map = map.borrow();
         let entry = map.get(&canvas)?;
@@ -317,47 +236,37 @@ pub(crate) fn forget_context(canvas: usize) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgl_get_context(
-    ctx: *mut JSContext,
-    js: *mut c_void,
-    canvas_obj: JSValue,
-    canvas: *const NsNode,
-    version: c_int,
-    attrs: JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            if let Some((_, object)) = registered(canvas as usize) {
-                return quickjs::into_raw(quickjs::borrow_value(scope, object));
-            }
-            let canvas_obj = quickjs::borrow_value(scope, canvas_obj);
-            let attrs = quickjs::borrow_value(scope, attrs);
-            let Some((gl, proto)) =
-                crate::install::new_context(scope, js as usize, canvas as usize, version, &attrs)
-            else {
-                return quickjs::into_raw(Value::null());
-            };
-            let weak = Rc::downgrade(&gl);
-            let host = ContextHost { gl, canvas_obj };
-            let obj = scope.new_traced_host_object(proto.is_object().then_some(&proto), host);
-            let object = quickjs::raw(&obj);
-            BY_NODE.with(|map| {
-                map.borrow_mut()
-                    .insert(canvas as usize, Registered { gl: weak, object })
-            });
-            quickjs::into_raw(obj)
-        })
+pub fn nsr_webgl_get_context(
+    scope: &mut Scope<'_>,
+    js: usize,
+    canvas_obj: &Value,
+    canvas: usize,
+    version: i32,
+    attrs: &Value,
+) -> Result<Value, Value> {
+    if let Some((_, object)) = registered(canvas) {
+        return Ok(scope.object_from_identity(object));
     }
+    let Some((gl, proto)) = crate::install::new_context(scope, js, canvas, version, attrs) else {
+        return Ok(Value::null());
+    };
+    let weak = Rc::downgrade(&gl);
+    let host = ContextHost {
+        gl,
+        canvas_obj: canvas_obj.clone(),
+    };
+    let obj = scope.new_traced_host_object(proto.is_object().then_some(&proto), host);
+    let object = obj.object_identity();
+    BY_NODE.with(|map| {
+        map.borrow_mut()
+            .insert(canvas, Registered { gl: weak, object })
+    });
+    Ok(obj)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgl_install(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::install::install(scope, &global);
-        });
-    }
+pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
+    crate::install::install(scope, global);
 }
 
 #[unsafe(no_mangle)]

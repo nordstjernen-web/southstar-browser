@@ -13,6 +13,7 @@ mod ffi;
 mod font;
 mod gradient;
 mod hidden;
+pub mod host;
 mod images;
 mod path;
 mod path2d;

@@ -410,18 +410,6 @@ impl Drop for OwnedContext {
     }
 }
 
-impl Path {
-    pub unsafe fn from_raw(path: *mut CairoPathData) -> Option<Path> {
-        (!path.is_null()).then_some(Path(path))
-    }
-
-    pub fn into_raw(self) -> *mut CairoPathData {
-        let raw = self.0;
-        core::mem::forget(self);
-        raw
-    }
-}
-
 impl Drop for Surface {
     fn drop(&mut self) {
         unsafe { cairo_surface_destroy(self.0) };

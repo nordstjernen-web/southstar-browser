@@ -1578,6 +1578,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-layout",
 ]
 
@@ -2805,6 +2806,7 @@ version = "0.9.9"
 name = "southstar-webgl"
 version = "0.9.9"
 dependencies = [
+ "southstar-canvas",
  "southstar-config",
  "southstar-dom",
  "southstar-glib",
@@ -2815,6 +2817,7 @@ dependencies = [
 name = "southstar-webgpu"
 version = "0.9.9"
 dependencies = [
+ "southstar-canvas",
  "southstar-dom",
  "southstar-js-engine",
 ]

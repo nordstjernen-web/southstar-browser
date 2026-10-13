@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the canvas drawing state: the ns_canvas_state struct the C drawing code reads, its lifetime and the per-page table.
+//! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and its C ABI.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib as glib;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
+use southstar_js_engine::ContextHandle;
 
 use super::cairo::{Cairo, Surface};
 
@@ -28,21 +28,11 @@ pub struct CanvasState {
     pub shadow_ox: c_double,
     pub shadow_oy: c_double,
     pub origin_clean: c_int,
-    pub ctx2d: JSValue,
-    pub jsctx: *mut JSContext,
-    pub rt: *mut c_void,
+    pub ctx2d: *mut c_void,
+    pub jsctx: ContextHandle,
     pub owned_node: *mut c_void,
     pub context_kind: c_int,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<CanvasState>() == 232
-        && core::mem::offset_of!(CanvasState, font) == 96
-        && core::mem::offset_of!(CanvasState, origin_clean) == 176
-        && core::mem::offset_of!(CanvasState, ctx2d) == 184
-        && core::mem::offset_of!(CanvasState, context_kind) == 224
-);
 
 #[repr(C)]
 pub struct NsJs {
@@ -163,14 +153,12 @@ pub(crate) fn reset(st: *mut CanvasState, w: i32, h: i32) {
     st.shadow_ox = 0.0;
     st.shadow_oy = 0.0;
     st.origin_clean = 1;
-    if quickjs::raw_is_object(st.ctx2d) && !st.jsctx.is_null() {
+    if !st.ctx2d.is_null() {
         let ctx2d = st.ctx2d;
-        unsafe {
-            quickjs::with_context(st.jsctx, |scope| {
-                let obj = quickjs::borrow_value(scope, ctx2d);
-                crate::api::ctx2d_init_state(scope, &obj);
-            });
-        }
+        st.jsctx.with(|scope| {
+            let obj = scope.object_from_identity(ctx2d);
+            crate::api::ctx2d_init_state(scope, &obj);
+        });
     }
 }
 
@@ -191,9 +179,8 @@ pub(crate) fn new_state(w: i32, h: i32) -> Box<CanvasState> {
         shadow_ox: 0.0,
         shadow_oy: 0.0,
         origin_clean: 0,
-        ctx2d: quickjs::UNDEFINED,
-        jsctx: ptr::null_mut(),
-        rt: ptr::null_mut(),
+        ctx2d: ptr::null_mut(),
+        jsctx: ContextHandle::NULL,
         owned_node: ptr::null_mut(),
         context_kind: 0,
     });
@@ -204,8 +191,10 @@ pub(crate) fn new_state(w: i32, h: i32) -> Box<CanvasState> {
 impl Drop for CanvasState {
     fn drop(&mut self) {
         release_drawing(self);
-        if quickjs::raw_is_object(self.ctx2d) {
-            unsafe { quickjs::free_raw(self.rt, self.ctx2d) };
+        let ctx2d = core::mem::replace(&mut self.ctx2d, ptr::null_mut());
+        if !ctx2d.is_null() {
+            self.jsctx
+                .with(|scope| unsafe { scope.release_identity(ctx2d) });
         }
         if !self.owned_node.is_null() {
             unsafe { ns_node_free(self.owned_node) };
@@ -250,7 +239,7 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> *mut c_void {
 }
 
 pub(crate) fn js_of(scope: &southstar_js_engine::Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn transfer_to_image_bitmap(
@@ -314,21 +303,6 @@ pub unsafe extern "C" fn ns_canvas_dim_from_attr(
 ) -> c_int {
     let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap_or_default();
     crate::state::dimension(Node(el), name, defv)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ctx_state(ctx: *mut JSContext, this_val: JSValue) -> *mut CanvasState {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let js = js_of(scope);
-            let this = quickjs::borrow_value(scope, this_val);
-            if js.is_null() || !crate::hidden::is_ctx2d(&this) {
-                return ptr::null_mut();
-            }
-            let el = Node(crate::hidden::ptr(&this) as *const NsNode);
-            crate::state::state_for(js, el).unwrap_or(ptr::null_mut())
-        })
-    }
 }
 
 pub(crate) fn clear_patterns(st: &mut CanvasState) {
