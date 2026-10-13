@@ -292,3 +292,14 @@ pub unsafe extern "C" fn ns_install_namespace_object(
 pub unsafe extern "C" fn ns_install_window_compat(ctx: *mut JSContext, global: JSValue) {
     unsafe { with_object(ctx, global, crate::compat::install_window_compat) };
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_install_namespace_object(
+    scope: &mut Scope<'_>,
+    global: &Value,
+    name: &str,
+    object: Value,
+    tag: &str,
+) {
+    crate::install_namespace_object(scope, global, name, object, tag);
+}

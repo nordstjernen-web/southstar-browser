@@ -916,3 +916,22 @@ pub fn nsr_services_console_emit(
 ) {
     console::emit(scope, Js(js), prefix, args);
 }
+
+macro_rules! nsr_natives {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
+            }
+        )*
+    };
+}
+
+nsr_natives! {
+    nsr_cache_open => caches::open,
+    nsr_services_set_timeout => timers::set_timeout,
+    nsr_services_set_interval => timers::set_interval,
+    nsr_services_clear_timer => timers::clear,
+    nsr_services_queue_microtask => window::queue_microtask,
+}

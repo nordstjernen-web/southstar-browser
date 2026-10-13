@@ -1413,3 +1413,63 @@ pub unsafe fn nsr_js_dispatch_built_event(
         None => (false, false),
     }
 }
+
+macro_rules! nsr_natives {
+    ($($name:ident => $f:path;)*) => {
+        $(
+            #[allow(non_snake_case)]
+            #[unsafe(no_mangle)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
+            }
+        )*
+    };
+}
+
+nsr_natives! {
+    nsr_element_addEventListener => crate::listeners::element_add;
+    nsr_element_removeEventListener => crate::listeners::element_remove;
+    nsr_window_addEventListener => crate::listeners::window_add;
+    nsr_window_removeEventListener => crate::listeners::window_remove;
+    nsr_element_dispatchEvent => crate::target::element_dispatch;
+    nsr_window_dispatchEvent => crate::target::window_dispatch;
+    nsr_target_dispatchEvent => crate::target::dispatch;
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_listener_parse_options(
+    scope: &mut Scope<'_>,
+    opts: &Value,
+    strict_signal: bool,
+) -> Result<(bool, bool, bool, bool, Option<Value>), Value> {
+    crate::listeners::parse_options(scope, opts, strict_signal).map(|parsed| {
+        (
+            parsed.capture,
+            parsed.once,
+            parsed.passive,
+            parsed.passive_set,
+            parsed.signal,
+        )
+    })
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_listeners_compact_dead(scope: &mut Scope<'_>, owner: &Value) {
+    crate::target::compact_dead(scope, owner);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_target_dispatch_with_event(scope: &mut Scope<'_>, obj: &Value, kind: &str, ev: &Value) {
+    crate::target::dispatch_with_event(scope, obj, kind, ev);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str) {
+    let ev = crate::target::make_event(scope, obj, kind);
+    crate::target::dispatch_with_event(scope, obj, kind, &ev);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, ev: &Value) {
+    crate::target::dispatch_engine_event(scope, target, ev);
+}

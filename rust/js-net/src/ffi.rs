@@ -1515,3 +1515,26 @@ pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::Time
     let data = Box::into_raw(Box::new(ticket)).cast();
     js.attach_timeout(ms, on_abort_timeout, data);
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_response_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::body::response_ctor(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_request_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::body::request_ctor(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
+    crate::body::install(scope, global);
+}

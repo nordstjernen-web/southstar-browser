@@ -1089,3 +1089,56 @@ pub fn nsr_make_element(
 pub fn nsr_unwrap_element(value: &southstar_js_engine::Value) -> *const NsNode {
     Node::ptr_or_null(crate::api::unwrap_element(value))
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_worker_js_eval(
+    js: *mut NsJs,
+    source: &core::ffi::CStr,
+    len: usize,
+    url: &core::ffi::CStr,
+    module: bool,
+) -> Result<(), (bool, southstar_js_engine::Value)> {
+    let Some(js) = Js::of(js) else {
+        return Err((false, southstar_js_engine::Value::undefined()));
+    };
+    match js.scope(|scope| crate::worker::eval(scope, source, len, url, module)) {
+        None => Err((false, southstar_js_engine::Value::undefined())),
+        Some(crate::worker::EvalStatus::Done) => Ok(()),
+        Some(crate::worker::EvalStatus::ParseError(thrown)) => Err((true, thrown)),
+        Some(crate::worker::EvalStatus::Thrown(thrown)) => Err((false, thrown)),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_queue_message_task(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    f: southstar_js_engine::TaskFn,
+    args: &[southstar_js_engine::Value],
+) -> Result<(), southstar_js_engine::Value> {
+    crate::api::queue_message_task(scope, f, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_exception_message(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    exception: &southstar_js_engine::Value,
+) -> Vec<u8> {
+    crate::api::exception_message(scope, exception)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_bind_event_target_listeners(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    object: &southstar_js_engine::Value,
+) {
+    crate::api::bind_event_target_listeners(scope, object);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_illegal_constructor(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::api::illegal_constructor(scope, this, args)
+}

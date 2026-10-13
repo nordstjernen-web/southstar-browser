@@ -379,3 +379,13 @@ pub fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Val
 pub fn nsr_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     crate::ctors::event_ctor(scope, this, args)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_composed_path(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::event::composed_path(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::ctors::window_event_ctor(scope, this, args)
+}
