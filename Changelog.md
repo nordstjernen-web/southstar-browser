@@ -59,6 +59,11 @@ Southstar Browser 0.9.9:
   Rust-ABI entry points over the neutral API, keep their C symbols only for
   the callers still on QuickJS, are bound by the realm setup directly, and
   build on Boa.
+* rust/js-attrs, rust/js-collections and rust/js-node run on the neutral
+  JavaScript API: their natives are exported as Rust-ABI nsr_ entry points,
+  they reach the realm record through rust/js-runtime's typed API, and their
+  old QuickJS C exports are kept only in a legacy.rs behind the quickjs
+  feature until the prototype tables call the nsr_ functions.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

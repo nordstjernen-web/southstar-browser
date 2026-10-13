@@ -498,6 +498,11 @@ pub unsafe extern "C" fn ns_live_build_labels(ctx: *mut JSContext, n: *const NsN
 }
 
 #[unsafe(no_mangle)]
+pub unsafe fn nsr_live_build_labels(scope: &mut Scope<'_>, n: *const NsNode) -> JsResult {
+    crate::element::build_labels(scope, unsafe { Node::from_ptr(n) })
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_element_is_rendered(ctx: *mut JSContext, v: JSValue) -> GBoolean {
     unsafe {
         quickjs::with_context(ctx, |scope| {

@@ -748,6 +748,21 @@ pub unsafe extern "C" fn ns_attribute_map_remember(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Option<Value> {
+    match (Js::of(js), unsafe { node(owner) }) {
+        (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
+        _ => None,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, map: &Value) {
+    if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
+        attribute_maps::remember(js, owner, map.clone());
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode) {
     if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
         attribute_maps::release_owner(js, owner);

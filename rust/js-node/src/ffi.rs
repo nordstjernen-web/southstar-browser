@@ -1,38 +1,27 @@
-//! Southstar — the C ABI of the node mutation bindings as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the node bindings' calls into the page record and the other binding crates, and the mutation methods' entry points.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int};
 use core::ptr;
-use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::Element;
 
+mod imports;
 mod query;
 
 pub(crate) use query::*;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
     fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
@@ -82,26 +71,21 @@ fn raw_js(js: Option<Js>) -> *mut NsJs {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     (!js.is_null()).then_some(Js(js))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    let name = CString::new(name).unwrap_or_default();
-    let message = CString::new(message).unwrap_or_default();
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    imports::nsr_dom_exception(scope, name.as_bytes(), code, c_prefix(message.as_bytes()))
+}
+
+fn c_prefix(bytes: &[u8]) -> &[u8] {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    &bytes[..end]
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
@@ -238,43 +222,31 @@ pub(crate) fn insert_before_single(
     };
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-macro_rules! methods {
+macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
-methods! {
-    ns_element_appendChild => crate::child::append_child,
-    ns_element_removeChild => crate::child::remove_child,
-    ns_element_insertBefore => crate::child::insert_before,
-    ns_element_replaceChild => crate::child::replace_child,
-    ns_element_moveBefore => crate::child::move_before,
-    ns_element_before => crate::sequence::before,
-    ns_element_after => crate::sequence::after,
-    ns_element_replaceWith => crate::sequence::replace_with,
-    ns_element_remove_self => crate::sequence::remove,
-    ns_element_append => crate::sequence::append,
-    ns_element_prepend => crate::sequence::prepend,
-    ns_element_replaceChildren => crate::sequence::replace_children,
+pub(crate) use rust_methods;
+
+rust_methods! {
+    nsr_element_appendChild => crate::child::append_child,
+    nsr_element_removeChild => crate::child::remove_child,
+    nsr_element_insertBefore => crate::child::insert_before,
+    nsr_element_replaceChild => crate::child::replace_child,
+    nsr_element_moveBefore => crate::child::move_before,
+    nsr_element_before => crate::sequence::before,
+    nsr_element_after => crate::sequence::after,
+    nsr_element_replaceWith => crate::sequence::replace_with,
+    nsr_element_remove_self => crate::sequence::remove,
+    nsr_element_append => crate::sequence::append,
+    nsr_element_prepend => crate::sequence::prepend,
+    nsr_element_replaceChildren => crate::sequence::replace_children,
 }

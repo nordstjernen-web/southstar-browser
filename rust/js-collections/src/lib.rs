@@ -4,6 +4,8 @@
 
 pub mod class;
 mod ffi;
+#[cfg(feature = "quickjs")]
+mod legacy;
 pub mod live;
 mod nodelist;
 mod page;

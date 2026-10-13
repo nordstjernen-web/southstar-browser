@@ -724,6 +724,20 @@ pub unsafe extern "C" fn ns_tag_owner_document(
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_doc_wrapper_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
+    adopt::doc_is_xml(scope, doc)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_validate_attr_ns(
+    scope: &mut Scope<'_>,
+    namespace: Option<&[u8]>,
+    qname: &[u8],
+) -> JsResult<()> {
+    names::validate_attr_ns(namespace, qname).map_err(|error| name_error(scope, error))
+}
+
+#[unsafe(no_mangle)]
 pub fn nsr_tag_owner_document(
     scope: &mut southstar_js_engine::Scope<'_>,
     document: &southstar_js_engine::Value,

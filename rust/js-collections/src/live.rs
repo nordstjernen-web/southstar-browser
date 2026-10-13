@@ -8,7 +8,6 @@ use std::ffi::CString;
 
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, MAX_DEPTH};
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{Attributes, Scope, Trace, Value};
 
 use crate::ffi::{
@@ -662,7 +661,7 @@ const OPERATION: Attributes = Attributes {
 const PROTO_DECORATOR: &str = "(function(hc, nl, rnl){ var A = Array.prototype; function def(o,k,v){   Object.defineProperty(o,k,{value:v,writable:true,configurable:true}); } def(hc, Symbol.toStringTag, 'HTMLCollection'); Object.defineProperty(hc, Symbol.iterator,   {value:A.values, writable:true, configurable:true}); def(nl, Symbol.toStringTag, 'NodeList'); def(nl, 'entries', A.entries); def(nl, 'keys',    A.keys); def(nl, 'values',  A.values); def(nl, 'forEach', A.forEach); Object.defineProperty(nl, Symbol.iterator,   {value:A.values, writable:true, configurable:true}); def(rnl, Symbol.toStringTag, 'RadioNodeList');})";
 
 fn define_length(scope: &mut Scope<'_>, proto: &Value) {
-    let getter = quickjs::c_function(scope, "get length", 0, crate::ffi::ns_live_length_get);
+    let getter = scope.function("get length", 0, crate::ffi::live_length);
     let _ = scope.define_accessor(
         proto,
         "length",
@@ -674,12 +673,12 @@ fn define_length(scope: &mut Scope<'_>, proto: &Value) {
 
 pub(crate) fn install_protos(scope: &mut Scope<'_>) {
     let html = scope.new_object();
-    let item_fn = quickjs::c_function(scope, "item", 1, crate::ffi::live_item_native);
+    let item_fn = scope.function("item", 1, crate::ffi::live_item);
     let _ = scope.define(&html, "item", item_fn, OPERATION);
     let named_fn = scope.function("namedItem", 1, named_item);
     let _ = scope.define(&html, "namedItem", named_fn, OPERATION);
     let node = scope.new_object();
-    let item_fn = quickjs::c_function(scope, "item", 1, crate::ffi::live_item_native);
+    let item_fn = scope.function("item", 1, crate::ffi::live_item);
     let _ = scope.define(&node, "item", item_fn, OPERATION);
     let radio = scope.new_object();
     let _ = scope.set_prototype(&radio, &node);
