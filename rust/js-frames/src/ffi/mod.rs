@@ -1023,3 +1023,10 @@ pub unsafe fn nsr_realm_proto_for(
     };
     cloner::proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> Value {
+    let js = Js::of(js);
+    let window = unsafe { Node::from_ptr(frame) }.and_then(|frame| realm::stored_window(js, frame));
+    window.unwrap_or_else(Value::null)
+}

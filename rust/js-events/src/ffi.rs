@@ -328,3 +328,49 @@ pub unsafe extern "C" fn ns_make_abort_error(ctx: *mut JSContext) -> JSValue {
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_new(scope: &mut Scope<'_>) -> JsResult {
+    crate::class::new_event(scope, None)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_prevent_default(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::event::prevent_default(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_stop_propagation(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::event::stop_propagation(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_stop_immediate(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::event::stop_immediate(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_define_cancel_bubble(scope: &mut Scope<'_>, event: &Value) {
+    crate::event::define_cancel_bubble(scope, event);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_mark_default_prevented(scope: &mut Scope<'_>, event: &Value) {
+    crate::event::mark_default_prevented(scope, event);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value {
+    let target = unsafe { Node::from_ptr(target) };
+    crate::event::make_event(scope, kind, target)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
+    crate::event::adopt_interface(scope, event, iface);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value) {
+    crate::event::define_source(scope, event, source);
+}

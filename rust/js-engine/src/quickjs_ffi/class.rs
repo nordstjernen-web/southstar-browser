@@ -122,6 +122,7 @@ unsafe extern "C" {
         flags: c_int,
     ) -> c_int;
     fn JS_IsHostAccess(ctx: *mut JSContext) -> bool;
+    fn JS_IsHostCaller(ctx: *mut JSContext) -> bool;
 }
 
 const PROP_HAS_CONFIGURABLE: c_int = 1 << 8;
@@ -633,6 +634,10 @@ impl Scope<'_> {
 
     pub fn is_host_access(&mut self) -> bool {
         unsafe { JS_IsHostAccess(self.ctx) }
+    }
+
+    pub fn is_host_caller(&mut self) -> bool {
+        unsafe { JS_IsHostCaller(self.ctx) }
     }
 
     fn int_status(&self, status: c_int) -> Result<bool, Value> {

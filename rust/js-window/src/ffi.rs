@@ -1215,3 +1215,8 @@ pub unsafe fn nsr_window_install_state(
 ) {
     context::install_state(scope, Js::of(js), global);
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
+    Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
+}

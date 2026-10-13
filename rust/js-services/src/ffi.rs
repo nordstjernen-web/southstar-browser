@@ -906,3 +906,13 @@ pub fn nsr_services_worker_navigator(
 ) -> southstar_js_engine::Value {
     navigator::worker(scope)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_console_emit(
+    js: *const NsJs,
+    scope: &mut Scope<'_>,
+    prefix: &str,
+    args: &[Value],
+) {
+    console::emit(scope, Js(js), prefix, args);
+}

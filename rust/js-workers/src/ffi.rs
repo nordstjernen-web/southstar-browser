@@ -1587,3 +1587,8 @@ pub fn nsr_worker_promise_rejection_tracker(
         worker_scope::unhandled_rejection(scope, reason);
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
+    worker::report_exception(Js(js as usize), exception)
+}

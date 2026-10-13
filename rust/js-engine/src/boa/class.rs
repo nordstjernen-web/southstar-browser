@@ -390,6 +390,10 @@ impl Scope<'_> {
         false
     }
 
+    pub fn is_host_caller(&mut self) -> bool {
+        false
+    }
+
     pub fn has_key(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
         let object = self.object(object)?;
         object
