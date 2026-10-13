@@ -56,7 +56,6 @@ macro_rules! natives {
 }
 
 natives! {
-    ns_window_event_ctor => ffi::nsr_window_event_ctor,
     ns_event_prevent_default => ffi::nsr_event_prevent_default,
     ns_event_stop_propagation => ffi::nsr_event_stop_propagation,
     ns_event_stop_immediate => ffi::nsr_event_stop_immediate,
@@ -76,7 +75,6 @@ macro_rules! value_hooks {
 
 value_hooks! {
     ns_event_define_cancel_bubble => ffi::nsr_event_define_cancel_bubble,
-    ns_install_event_attribute_getters => ffi::nsr_install_event_attribute_getters,
 }
 
 #[unsafe(no_mangle)]
