@@ -575,10 +575,6 @@ fn finish_written_document(js: Js, iframe: Node<'_>) -> bool {
     if iframe.attr(c"data-nd-doc-written").is_none() {
         return false;
     }
-    let src = schedule::src_attr(iframe).and_then(|attr| iframe.attr(attr));
-    if non_empty(src).is_some() || non_empty(iframe.attr(c"srcdoc")).is_some() {
-        return false;
-    }
     ffi::set_attr(iframe, c"data-nd-frame-loaded", Some(c"1"));
     load::mark_attr_dirty(iframe, c"data-nd-frame-loaded");
     load::dispatch_resource_event(js, iframe, c"load");

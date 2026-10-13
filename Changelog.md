@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* A frame document rewritten with document.open()/write()/close() stays:
+  the frame no longer re-navigates to its src attribute afterwards (the
+  written document replaced the src navigation, as the HTML spec says), and
+  setting src again still navigates. Acid3: 96/100; the four remaining
+  failures assert pre-2025 name validation and pre-Selectors-4 :first-child
+  behaviour that current specs changed.
 * DOMException carries the legacy code constants (INDEX_SIZE_ERR …
   DATA_CLONE_ERR) on the interface and its prototype, and live Ranges follow
   node removal and insertion again: the polyfill now wraps every prototype

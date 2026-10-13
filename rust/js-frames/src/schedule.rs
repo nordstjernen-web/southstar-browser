@@ -104,6 +104,7 @@ pub(crate) fn schedule(js: Js, iframe: Node<'_>, force: bool) {
         return;
     }
     if force {
+        ffi::remove_attr(iframe, c"data-nd-doc-written");
         ffi::remove_attr(iframe, c"data-nd-frame-loaded");
         ffi::mark_attr_dirty(iframe, c"data-nd-frame-loaded", c"1");
     }
