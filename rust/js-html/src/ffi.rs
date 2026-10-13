@@ -437,16 +437,6 @@ setters! {
     nsr_element_set_itemValue => microdata::item_value_set,
 }
 
-#[allow(non_snake_case)]
-#[unsafe(no_mangle)]
-pub fn nsr_xml_serializer_ctor(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    this: &southstar_js_engine::Value,
-    args: &[southstar_js_engine::Value],
-) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
-    markup::xml_serializer_ctor(scope, this, args)
-}
-
 methods! {
     nsr_element_getHTML => markup::get_html,
     nsr_element_setHTMLUnsafe => markup::set_html_unsafe,
