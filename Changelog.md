@@ -95,6 +95,15 @@ Southstar Browser 0.9.9:
   are thrown through the neutral layer (which gained Scope::reference_error),
   the bytecode cache and import.meta use the neutral bytecode and module
   calls, and the loader's dead C-ABI module hooks are gone.
+* Twenty-one more binding crates run on the neutral JavaScript API only:
+  HTML elements, geometry, custom elements, traversal and ranges, media,
+  CSSOM, URL and encoding, lifecycle and animation frames, focus,
+  performance, observers, shadow DOM, storage, input, fonts, mutation,
+  brands, WebAssembly, compression, Web Crypto, IndexedDB and WebExtension
+  content scripts. Their natives are Rust-ABI functions the window and
+  worker realms bind directly; the remaining C-ABI QuickJS shims for
+  unconverted callers sit in quickjs-only legacy.rs files. The neutral API
+  gained Scope::internal_error.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt
