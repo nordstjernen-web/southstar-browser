@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* DOMException carries the legacy code constants (INDEX_SIZE_ERR …
+  DATA_CLONE_ERR) on the interface and its prototype, and live Ranges follow
+  node removal and insertion again: the polyfill now wraps every prototype
+  that owns appendChild/insertBefore/removeChild/replaceChild, not only the
+  nearest one, which the interface shapes later deleted. Acid3: 95/100.
 * Engine-created events (submit, click, input, …) keep their type,
   cancelable flag and hidden state on Boa again: the Boa backend now answers
   is_host_access/is_host_caller from the browser's native-call stack and
