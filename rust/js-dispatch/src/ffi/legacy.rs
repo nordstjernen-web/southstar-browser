@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_int};
 use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 
 use super::exports::put_prevented;
 use super::{Js, NsJs, node, opt_text};
@@ -51,82 +51,11 @@ macro_rules! natives {
 natives! {
     ns_element_addEventListener => crate::listeners::element_add;
     ns_element_removeEventListener => crate::listeners::element_remove;
-    ns_document_addEventListener => crate::listeners::document_add;
-    ns_document_removeEventListener => crate::listeners::document_remove;
     ns_window_addEventListener => crate::listeners::window_add;
     ns_window_removeEventListener => crate::listeners::window_remove;
-    ns_target_addEventListener => crate::target::add;
-    ns_target_removeEventListener => crate::target::remove;
     ns_element_dispatchEvent => crate::target::element_dispatch;
-    ns_document_dispatchEvent => crate::target::document_dispatch;
     ns_window_dispatchEvent => crate::target::window_dispatch;
     ns_target_dispatchEvent => crate::target::dispatch;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_listener_parse_options(
-    ctx: *mut JSContext,
-    opts: JSValue,
-    capture: *mut GBoolean,
-    once: *mut GBoolean,
-    passive: *mut GBoolean,
-    passive_set: *mut GBoolean,
-    signal_out: *mut JSValue,
-    strict_signal: GBoolean,
-) -> GBoolean {
-    let parsed = in_context(ctx, |scope| {
-        let opts = borrowed(scope, opts);
-        match crate::listeners::parse_options(scope, &opts, strict_signal != 0) {
-            Ok(parsed) => Ok(parsed),
-            Err(error) => Err(quickjs::result_raw(scope, Err(error))),
-        }
-    });
-    let put = |slot: *mut GBoolean, value: bool| {
-        if let Some(slot) = unsafe { slot.as_mut() } {
-            *slot = glib::boolean(value);
-        }
-    };
-    put(capture, false);
-    put(once, false);
-    put(passive, false);
-    put(passive_set, false);
-    if let Some(slot) = unsafe { signal_out.as_mut() } {
-        *slot = quickjs::into_raw(Value::null());
-    }
-    let Ok(parsed) = parsed else {
-        return glib::FALSE;
-    };
-    put(capture, parsed.capture);
-    put(once, parsed.once);
-    put(passive, parsed.passive);
-    put(passive_set, parsed.passive_set);
-    if let (Some(slot), Some(signal)) = (unsafe { signal_out.as_mut() }, parsed.signal) {
-        *slot = quickjs::into_raw(signal);
-    }
-    glib::TRUE
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_listeners_compact_dead(ctx: *mut JSContext, owner: JSValue) {
-    in_context(ctx, |scope| {
-        let owner = borrowed(scope, owner);
-        crate::target::compact_dead(scope, &owner);
-    });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_target_handler_realm(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    kind: *const c_char,
-    listener_key: *const c_char,
-) -> ContextHandle {
-    let kind = opt_text(kind).unwrap_or_default();
-    let key = opt_text(listener_key).unwrap_or_default();
-    in_context(ctx, |scope| {
-        let obj = borrowed(scope, obj);
-        crate::target::handler_realm(scope, &obj, &kind, &key)
-    })
 }
 
 #[unsafe(no_mangle)]
@@ -191,19 +120,6 @@ pub unsafe extern "C" fn ns_xhr_fire_progress_event(
             total,
             length_computable != 0,
         );
-    });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_engine_event(
-    ctx: *mut JSContext,
-    target: JSValue,
-    ev: JSValue,
-) {
-    in_context(ctx, |scope| {
-        let target = borrowed(scope, target);
-        let ev = borrowed(scope, ev);
-        crate::target::dispatch_engine_event(scope, &target, &ev);
     });
 }
 
@@ -274,14 +190,6 @@ pub unsafe extern "C" fn ns_js_fire_element_handlers(
     let event = in_context(js.ctx().as_ptr().cast(), |scope| borrowed(scope, event));
     crate::handlers::fire_inline(js, element, &kind, &event);
     crate::handlers::fire_property(js, element, &kind, &event);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_install_event_handler_props(ctx: *mut JSContext, target: JSValue) {
-    in_context(ctx, |scope| {
-        let target = borrowed(scope, target);
-        crate::handlers::install_props(scope, &target);
-    });
 }
 
 #[unsafe(no_mangle)]
