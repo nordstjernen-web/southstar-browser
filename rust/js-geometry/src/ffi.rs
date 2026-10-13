@@ -1,20 +1,20 @@
-//! Southstar — the C ABI of the geometry and scrolling bindings as declared in src/js_internal.h, and the js.c, layout and style calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the geometry and scrolling bindings, and the engine, layout and style calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, StyleTable, Transform};
 
-use crate::{Element, Rect};
+use crate::{Element, JsResult, Rect};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -35,20 +35,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_dommatrix_make(
-        ctx: *mut JSContext,
-        a: f64,
-        b: f64,
-        c: f64,
-        d: f64,
-        e: f64,
-        f: f64,
-    ) -> JSValue;
-    fn ns_element_int_attr_getter(ctx: *mut JSContext, this_val: JSValue, magic: c_int) -> JSValue;
-    fn ns_element_img_natural_width(ctx: *mut JSContext, this_val: JSValue) -> JSValue;
-    fn ns_element_img_natural_height(ctx: *mut JSContext, this_val: JSValue) -> JSValue;
     fn ns_element_get_attr_len(
         node: *const NsNode,
         name: *const c_char,
@@ -105,23 +91,39 @@ unsafe extern "C" {
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
     fn ns_active_js() -> *mut NsJs;
     fn ns_js_computed_text(
-        ctx: *mut JSContext,
+        ctx: ContextHandle,
         node: *const NsNode,
         name: *const c_char,
     ) -> *mut c_char;
 }
 
+unsafe extern "Rust" {
+    safe fn nsr_dommatrix_make(scope: &mut Scope<'_>, m: [f64; 6]) -> Value;
+    safe fn nsr_element_int_attr_getter(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        magic: i32,
+    ) -> Result<Value, Value>;
+    safe fn nsr_element_img_natural_width(
+        scope: &mut Scope<'_>,
+        this: &Value,
+    ) -> Result<Value, Value>;
+    safe fn nsr_element_img_natural_height(
+        scope: &mut Scope<'_>,
+        this: &Value,
+    ) -> Result<Value, Value>;
+}
+
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, r: Rect) -> Value {
@@ -129,44 +131,19 @@ pub(crate) fn dom_rect(scope: &mut Scope<'_>, r: Rect) -> Value {
 }
 
 pub(crate) fn dom_matrix(scope: &mut Scope<'_>, m: [f64; 6]) -> Value {
-    let raw = unsafe {
-        ns_dommatrix_make(
-            quickjs::raw_context(scope),
-            m[0],
-            m[1],
-            m[2],
-            m[3],
-            m[4],
-            m[5],
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_dommatrix_make(scope, m)
 }
 
-pub(crate) fn int_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsValueResult {
-    let raw = unsafe {
-        ns_element_int_attr_getter(quickjs::raw_context(scope), quickjs::raw(this), magic)
-    };
-    checked(scope, raw)
+pub(crate) fn int_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    nsr_element_int_attr_getter(scope, this, magic)
 }
 
-pub(crate) fn img_natural_size(scope: &mut Scope<'_>, this: &Value, width: bool) -> JsValueResult {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe {
-        if width {
-            ns_element_img_natural_width(ctx, quickjs::raw(this))
-        } else {
-            ns_element_img_natural_height(ctx, quickjs::raw(this))
-        }
-    };
-    checked(scope, raw)
-}
-
-type JsValueResult = Result<Value, Value>;
-
-fn checked(scope: &mut Scope<'_>, raw: JSValue) -> JsValueResult {
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+pub(crate) fn img_natural_size(scope: &mut Scope<'_>, this: &Value, width: bool) -> JsResult {
+    if width {
+        nsr_element_img_natural_width(scope, this)
+    } else {
+        nsr_element_img_natural_height(scope, this)
+    }
 }
 
 pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
@@ -255,8 +232,7 @@ pub(crate) fn active_js() -> Option<Js> {
 }
 
 pub(crate) fn computed_text(scope: &mut Scope<'_>, node: Element, name: &CStr) -> Option<CString> {
-    let text =
-        unsafe { ns_js_computed_text(quickjs::raw_context(scope), node.as_ptr(), name.as_ptr()) };
+    let text = unsafe { ns_js_computed_text(scope.handle(), node.as_ptr(), name.as_ptr()) };
     if text.is_null() {
         return None;
     }
@@ -347,25 +323,6 @@ pub(crate) fn ascii_strtod_prefix(text: &CStr) -> (f64, usize) {
     (v, used.min(text.to_bytes().len()))
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-unsafe fn getter(ctx: *mut JSContext, this_val: JSValue, f: NativeFn) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), f) }
-}
-
-unsafe fn setter(ctx: *mut JSContext, this_val: JSValue, val: JSValue, f: NativeFn) -> JSValue {
-    let mut argv = [val];
-    unsafe { quickjs::call_native(ctx, this_val, 1, argv.as_mut_ptr(), f) }
-}
-
 fn write_rect(r: Rect, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64) {
     unsafe {
         *x = r.x;
@@ -415,35 +372,27 @@ pub unsafe extern "C" fn ns_box_visual_padding_box(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_for_this(ctx: *mut JSContext, this_val: JSValue) -> *const NsBox {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            crate::boxes::box_for_this(scope, &this).map_or(ptr::null(), BoxRef::as_ptr)
-        })
-    }
+pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
+    crate::boxes::box_for_this(scope, this).map_or(ptr::null(), BoxRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_scroll_prop(ctx: *mut JSContext, prop: *const c_char) -> f64 {
+pub unsafe extern "C" fn ns_window_scroll_prop(ctx: ContextHandle, prop: *const c_char) -> f64 {
     if prop.is_null() {
         return 0.0;
     }
     let prop = unsafe { CStr::from_ptr(prop) }.to_str().unwrap_or_default();
-    unsafe { quickjs::with_context(ctx, |scope| crate::boxes::window_scroll(scope, prop)) }
+    ctx.with(|scope| crate::boxes::window_scroll(scope, prop))
+        .unwrap_or(0.0)
 }
 
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
             }
         )*
     };
@@ -453,8 +402,9 @@ macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+                $f(scope, this, &[])
             }
         )*
     };
@@ -464,110 +414,70 @@ macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+                $f(scope, this, core::slice::from_ref(value)).map(drop)
             }
         )*
     };
 }
 
 natives! {
-    ns_element_getBoundingClientRect => crate::metrics::get_bounding_client_rect,
-    ns_element_getClientRects => crate::metrics::get_client_rects,
-    ns_element_scroll_to => crate::scroll::element_scroll_to,
-    ns_element_scroll_by => crate::scroll::element_scroll_by,
-    ns_element_scrollIntoView => crate::scroll::scroll_into_view,
-    ns_window_scroll_to => crate::scroll::window_scroll_to,
-    ns_window_scroll_by => crate::scroll::window_scroll_by,
-    ns_window_scroll_by_lines => crate::scroll::window_scroll_by_lines,
-    ns_window_scroll_by_pages => crate::scroll::window_scroll_by_pages,
-    ns_element_getBBox => crate::svg::get_bbox,
-    ns_element_getCTM => crate::svg::get_ctm,
-    ns_element_getScreenCTM => crate::svg::get_screen_ctm,
-    ns_element_getTotalLength => crate::svg::get_total_length,
-    ns_element_getPointAtLength => crate::svg::get_point_at_length,
-    ns_element_createSVGPoint => crate::svg::create_svg_point,
-    ns_element_createSVGRect => crate::svg::create_svg_rect,
-    ns_element_createSVGMatrix => crate::svg::create_svg_matrix,
-    ns_element_createSVGTransform => crate::svg::create_svg_transform,
-    ns_element_checkVisibility => crate::visibility::check_visibility,
-    ns_svg_beginElement => crate::svg::begin_element,
-    ns_svg_setCurrentTime => crate::svg::set_current_time,
-    ns_document_element_from_point => crate::hit::element_from_point,
-    ns_document_elements_from_point => crate::hit::elements_from_point,
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_element_from_point(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::hit::element_from_point(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_elements_from_point(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::hit::elements_from_point(scope, this, args)
+    nsr_element_getBoundingClientRect => crate::metrics::get_bounding_client_rect,
+    nsr_element_getClientRects => crate::metrics::get_client_rects,
+    nsr_element_scroll_to => crate::scroll::element_scroll_to,
+    nsr_element_scroll_by => crate::scroll::element_scroll_by,
+    nsr_element_scrollIntoView => crate::scroll::scroll_into_view,
+    nsr_window_scroll_to => crate::scroll::window_scroll_to,
+    nsr_window_scroll_by => crate::scroll::window_scroll_by,
+    nsr_window_scroll_by_lines => crate::scroll::window_scroll_by_lines,
+    nsr_window_scroll_by_pages => crate::scroll::window_scroll_by_pages,
+    nsr_element_getBBox => crate::svg::get_bbox,
+    nsr_element_getCTM => crate::svg::get_ctm,
+    nsr_element_getScreenCTM => crate::svg::get_screen_ctm,
+    nsr_element_getTotalLength => crate::svg::get_total_length,
+    nsr_element_getPointAtLength => crate::svg::get_point_at_length,
+    nsr_element_createSVGPoint => crate::svg::create_svg_point,
+    nsr_element_createSVGRect => crate::svg::create_svg_rect,
+    nsr_element_createSVGMatrix => crate::svg::create_svg_matrix,
+    nsr_element_createSVGTransform => crate::svg::create_svg_transform,
+    nsr_element_checkVisibility => crate::visibility::check_visibility,
+    nsr_svg_beginElement => crate::svg::begin_element,
+    nsr_svg_setCurrentTime => crate::svg::set_current_time,
+    nsr_document_element_from_point => crate::hit::element_from_point,
+    nsr_document_elements_from_point => crate::hit::elements_from_point,
 }
 
 getters! {
-    ns_element_get_offsetWidth => crate::metrics::get_offset_width,
-    ns_element_get_offsetHeight => crate::metrics::get_offset_height,
-    ns_element_get_offsetTop => crate::metrics::get_offset_top,
-    ns_element_get_offsetLeft => crate::metrics::get_offset_left,
-    ns_element_get_offsetParent => crate::metrics::get_offset_parent,
-    ns_element_get_clientWidth => crate::metrics::get_client_width,
-    ns_element_get_clientHeight => crate::metrics::get_client_height,
-    ns_element_get_clientTop => crate::metrics::get_client_top,
-    ns_element_get_clientLeft => crate::metrics::get_client_left,
-    ns_element_get_scrollTop => crate::metrics::get_scroll_top,
-    ns_element_get_scrollLeft => crate::metrics::get_scroll_left,
-    ns_element_get_scrollWidth => crate::metrics::get_scroll_width,
-    ns_element_get_scrollHeight => crate::metrics::get_scroll_height,
-    ns_element_get_ownerSVGElement => crate::svg::get_owner_svg_element,
+    nsr_element_get_offsetWidth => crate::metrics::get_offset_width,
+    nsr_element_get_offsetHeight => crate::metrics::get_offset_height,
+    nsr_element_get_offsetTop => crate::metrics::get_offset_top,
+    nsr_element_get_offsetLeft => crate::metrics::get_offset_left,
+    nsr_element_get_offsetParent => crate::metrics::get_offset_parent,
+    nsr_element_get_clientWidth => crate::metrics::get_client_width,
+    nsr_element_get_clientHeight => crate::metrics::get_client_height,
+    nsr_element_get_clientTop => crate::metrics::get_client_top,
+    nsr_element_get_clientLeft => crate::metrics::get_client_left,
+    nsr_element_get_scrollTop => crate::metrics::get_scroll_top,
+    nsr_element_get_scrollLeft => crate::metrics::get_scroll_left,
+    nsr_element_get_scrollWidth => crate::metrics::get_scroll_width,
+    nsr_element_get_scrollHeight => crate::metrics::get_scroll_height,
+    nsr_element_get_ownerSVGElement => crate::svg::get_owner_svg_element,
 }
 
 setters! {
-    ns_element_set_scrollTop => crate::scroll::set_scroll_top,
-    ns_element_set_scrollLeft => crate::scroll::set_scroll_left,
+    nsr_element_set_scrollTop => crate::scroll::set_scroll_top,
+    nsr_element_set_scrollLeft => crate::scroll::set_scroll_left,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_dimension_getter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    unsafe {
-        quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), |scope, this, _| {
-            crate::metrics::dimension(scope, this, magic)
-        })
-    }
+pub fn nsr_element_dimension_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    crate::metrics::dimension(scope, this, magic)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_make_dom_rect(
-    ctx: *mut JSContext,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let rect = crate::boxes::make_dom_rect(scope, Rect { x, y, w, h });
-            quickjs::into_raw(rect)
-        })
-    }
+pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value {
+    crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
 }
 
 #[unsafe(no_mangle)]

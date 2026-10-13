@@ -538,15 +538,15 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
 
     imports::nsr_window_install_actions(scope, global);
     bind_native(scope, global, "find", 7, imports::nsr_window_find);
-    let scroll_methods: [(&str, Native, u32); 5] = [
-        ("scrollTo", ns_window_scroll_to, 2),
-        ("scrollBy", ns_window_scroll_by, 2),
-        ("scroll", ns_window_scroll_to, 2),
-        ("scrollByLines", ns_window_scroll_by_lines, 1),
-        ("scrollByPages", ns_window_scroll_by_pages, 1),
+    let scroll_methods: [(&str, NativeFn, u32); 5] = [
+        ("scrollTo", imports::nsr_window_scroll_to, 2),
+        ("scrollBy", imports::nsr_window_scroll_by, 2),
+        ("scroll", imports::nsr_window_scroll_to, 2),
+        ("scrollByLines", imports::nsr_window_scroll_by_lines, 1),
+        ("scrollByPages", imports::nsr_window_scroll_by_pages, 1),
     ];
     for (name, native, arity) in scroll_methods {
-        bind_fn(scope, global, name, native, arity);
+        bind_native(scope, global, name, arity, native);
     }
     bind_native(scope, global, "open", 3, imports::nsr_window_open_method);
     let service_methods: [(&str, NativeFn, u32); 3] = [
