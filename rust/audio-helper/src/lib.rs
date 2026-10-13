@@ -6,6 +6,7 @@ mod decode;
 mod ffi;
 mod helper;
 mod mixer;
+mod mp3;
 
 use core::ffi::{c_char, c_int};
 

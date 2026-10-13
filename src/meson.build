@@ -179,14 +179,6 @@ executable(
 
 sdl2_dep = dependency('sdl2', required: get_option('audio'))
 if sdl2_dep.found()
-  libminimp3 = static_library(
-    'minimp3',
-    files('audio/minimp3_impl.c'),
-    include_directories: include_directories('audio'),
-    c_args: cc.get_supported_arguments(['-w']),
-    install: false,
-  )
-
   audio_deps = [sdl2_dep, glib] + http_backend_deps
   if have_seccomp
     audio_deps += [libseccomp]
@@ -200,7 +192,7 @@ if sdl2_dep.found()
   if libopusfile.found()
     audio_deps += [libopusfile]
   endif
-  # libm is needed by minimp3 on Linux and the BSDs; it is part of
+  # libm is linked for the Rust helper's math on Linux and the BSDs; it is part of
   # the C runtime on macOS and Windows, where find_library('m') is a harmless
   # no-op. librt carries shm_open/shm_unlink (the audio clock's POSIX shared
   # memory) on the BSDs, where they live outside libc; it is a harmless no-op
@@ -215,7 +207,6 @@ if sdl2_dep.found()
   executable(
     'southstar-audio',
     link_whole: southstar_audio_rust_lib,
-    link_with: libminimp3,
     dependencies: audio_deps + audio_lib_deps,
     link_args: southstar_link_args + rust_native_libs,
     win_subsystem: 'windows',

@@ -47,8 +47,8 @@ Update Changelog.md
   and advanced off the animation tick (`rust/video`), honouring
   `autoplay`/`loop`/`muted`/`poster` and click-to-play/pause. Audio plays
   via the unsandboxed `southstar-audio` helper (`rust/audio-helper`),
-  which decodes in-tree — `rust/plmpeg` for the MPEG-1/MP2 track, the vendored
-  CC0 [minimp3](https://github.com/lieff/minimp3) (`src/audio/minimp3.h`)
+  which decodes in-tree — `rust/plmpeg` for the MPEG-1/MP2 track, `rust/minimp3`
+  (a pure-Rust port of the CC0 [minimp3](https://github.com/lieff/minimp3))
   for standalone `.mp3` files — and outputs through SDL2's audio device
   (WASAPI/CoreAudio/ALSA), mixing and resampling the streams itself. The
   renderer emits `open`/`play`/`pause`/`seek`/`stop`/`loop`/`volume`
@@ -61,7 +61,7 @@ Update Changelog.md
   helper writes BGRA frames into a shm ring that the shell composites
   over the page surface each tick (see `docs/media.md`). Without the
   helper (headless, Windows) the renderer decodes in-process as before. The
-  in-tree decoders stay `rust/plmpeg` (MPEG-1 video + MP2) + minimp3 (MP3) — don't
+  in-tree decoders stay `rust/plmpeg` (MPEG-1 video + MP2) + `rust/minimp3` (MP3) — don't
   vendor further single-file codecs. **WebM is the one FFmpeg-backed
   extension**, over `libav\*` (`libavformat`/`libavcodec`/`libavutil`/
   `libswscale`/`libswresample`, system packages — never vendored): the

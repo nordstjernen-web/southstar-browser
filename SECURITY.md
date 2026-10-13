@@ -119,7 +119,7 @@ socket, so it normally needs no `/dev/shm` name at all.
   thread.
 - **Media decoding.** Southstar decodes a fixed, in-tree set of media
   rather than shelling out to an external player: MPEG-1 (`rust/plmpeg`) and
-  MP3 (minimp3) always, plus WebM/VP9/VP8 video and Opus/Vorbis audio
+  MP3 (`rust/minimp3`) always, plus WebM/VP9/VP8 video and Opus/Vorbis audio
   through FFmpeg's `libav*` where it is built in. Video frames decode
   inside the seccomp + Landlock renderer, so attacker-controlled codec
   bytes stay within the strongest sandbox; audio and out-of-process MSE

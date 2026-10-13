@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* MP3 decoding in the southstar-audio helper uses rust/minimp3, a pure-Rust
+  port of minimp3 with bit-identical output; the vendored C minimp3 and its
+  libminimp3 build target are removed. The tree has no C code of its own left.
 * The 75 C headers that described the interfaces between modules are deleted;
   src/libsouthstar.h, the public embedding API, is the one left. The about-page
   logo, splash and stylesheet are embedded from plain .gif/.css files, and the

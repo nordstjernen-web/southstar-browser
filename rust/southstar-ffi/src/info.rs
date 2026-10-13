@@ -15,6 +15,7 @@ const PORTED: &[&str] = &[
     "anim.c",
     "appmain.c",
     "audio/main.c",
+    "audio/minimp3_impl.c",
     "bookmarks.c",
     "bytecode_cache.c",
     "cache.c",

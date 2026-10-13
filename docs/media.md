@@ -60,7 +60,7 @@ The MPEG-1 stream's **MP2 audio track** plays too (unless the element is
 `muted`), as does a WebM's **Opus/Vorbis** track when libav is built in. The
 seccomp-sandboxed renderer can't open a sound device, so audio is handed to the
 unsandboxed `southstar-audio` helper. The helper decodes to PCM — `rust/plmpeg` for
-the MPEG-1/MP2 track, [minimp3](https://github.com/lieff/minimp3) (CC0, vendored)
+the MPEG-1/MP2 track, `rust/minimp3` (a Rust port of the CC0 [minimp3](https://github.com/lieff/minimp3))
 for standalone `.mp3` files, and libav for Opus/Vorbis (WebM/Ogg) — and plays it
 through [SDL2](https://www.libsdl.org/)'s audio device (WASAPI on Windows,
 CoreAudio on macOS, ALSA/PulseAudio on Linux), mixing and resampling the streams

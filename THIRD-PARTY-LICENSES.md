@@ -89,8 +89,8 @@ license text (same license).
 
 ### minimp3 — CC0 1.0 Universal (public domain dedication)
 
-> Single-file MP3 decoder, used by the `southstar-audio` helper.
-> Vendored at `src/audio/minimp3.h`.
+> Single-file MP3 decoder, ported to Rust as `rust/minimp3` and used by
+> the `southstar-audio` helper.
 > <https://github.com/lieff/minimp3>
 
 To the extent possible under law, the authors have dedicated all

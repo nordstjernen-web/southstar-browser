@@ -1,0 +1,11 @@
+[package]
+name = "southstar-minimp3"
+description = "An MPEG-1/2/2.5 Layer I/II/III audio decoder producing float PCM frame by frame, ported from minimp3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

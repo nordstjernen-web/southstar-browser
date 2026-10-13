@@ -151,7 +151,7 @@ Southstar is an independent engine — no upstream browser code.
 (fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
-(MP3). The only setup-time download is
+(MP3, ported to Rust). The only setup-time download is
 [ns-pango](https://github.com/nordstjernen-web/ns-pango), the text-shaping
 fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 

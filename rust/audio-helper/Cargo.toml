@@ -16,6 +16,7 @@ southstar-av = { path = "../av" }
 southstar-helper-ffi = { path = "../helper-ffi" }
 southstar-http = { path = "../http" }
 southstar-media-shm = { path = "../media-shm" }
+southstar-minimp3 = { path = "../minimp3" }
 southstar-plmpeg = { path = "../plmpeg" }
 
 [features]

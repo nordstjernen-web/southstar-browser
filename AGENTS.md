@@ -30,7 +30,7 @@ nothing imported.
   `rust/video/src/decode.rs`); such `<video>` plays inline (`rust/video`).
   Audio plays via the unsandboxed `southstar-audio` helper
   (`rust/audio-helper`), which decodes MPEG-1/MP2 (`rust/plmpeg`) and MP3
-  (vendored minimp3, `src/audio/minimp3.h`) and outputs through SDL2.
+  (`rust/minimp3`, a Rust port of minimp3) and outputs through SDL2.
   MSE video frames decode in the `southstar-video` helper
   (`rust/video-helper`, built when libav is present); the shell
   composites its BGRA frames from a shm ring (see `docs/media.md`).

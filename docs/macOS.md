@@ -125,7 +125,7 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-Boa (`third_party/boa_engine`) and minimp3 are in-tree,
+Boa (`third_party/boa_engine`) is in-tree,
 so `meson setup` requires no submodules or setup-time downloads.
 
 To match CI exactly:

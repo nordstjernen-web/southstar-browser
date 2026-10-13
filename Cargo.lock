@@ -1531,6 +1531,7 @@ dependencies = [
  "southstar-helper-ffi",
  "southstar-http",
  "southstar-media-shm",
+ "southstar-minimp3",
  "southstar-plmpeg",
 ]
 
@@ -2617,6 +2618,10 @@ version = "0.9.9"
 
 [[package]]
 name = "southstar-mic"
+version = "0.9.9"
+
+[[package]]
+name = "southstar-minimp3"
 version = "0.9.9"
 
 [[package]]

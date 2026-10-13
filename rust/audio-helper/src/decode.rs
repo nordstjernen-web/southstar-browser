@@ -7,9 +7,9 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::ffi::mp3;
 use crate::ffi::sdl::AudioStream;
 use crate::mixer::{DEVICE_RATE, MAX_FLOATS, MAX_SECONDS};
+use crate::mp3;
 use southstar_plmpeg::Plm;
 
 pub const MAX_BYTES: u64 = 256 * 1024 * 1024;
