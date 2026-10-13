@@ -24,6 +24,18 @@ pub use backend::{
     engine_version,
 };
 
+mod handles;
+mod table;
+
+pub use handles::{
+    ContextHandle, InterruptFn, JobOutcome, MemoryUsage, ModuleLoadFn, ModuleNormalizeFn,
+    RejectionTrackerFn, RuntimeHandle, RuntimeOptions,
+};
+pub use table::{
+    GetterFn, GetterMagicFn, Prop, SetterFn, SetterMagicFn, accessor, accessor_magic, getter,
+    method, method_enumerable,
+};
+
 pub type GetOwnHook =
     for<'a> fn(&mut Scope<'a>, &Value, &PropertyKey) -> Result<Option<OwnProperty>, Value>;
 

@@ -26,6 +26,7 @@ const DEF_CFUNC: u8 = 0;
 const DEF_CGETSET: u8 = 1;
 const DEF_CGETSET_MAGIC: u8 = 2;
 const CFUNC_GENERIC: u8 = 0;
+const CFUNC_GENERIC_MAGIC: u8 = 1;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -35,6 +36,7 @@ union FunctionType {
     setter: Option<Setter>,
     getter_magic: Option<GetterMagic>,
     setter_magic: Option<SetterMagic>,
+    generic_magic: Option<super::quickjs::JSCFunctionMagic>,
 }
 
 #[repr(C)]
@@ -134,6 +136,57 @@ pub const fn getset_magic(
                 set: FunctionType { setter_magic: set },
             },
         },
+    }
+}
+
+pub(super) fn method_entry(
+    name: *const c_char,
+    length: u8,
+    f: super::quickjs::JSCFunctionMagic,
+    magic: i16,
+    enumerable: bool,
+) -> FunctionListEntry {
+    let enumerable = if enumerable { PROP_ENUMERABLE } else { 0 };
+    FunctionListEntry {
+        name,
+        prop_flags: PROP_WRITABLE | PROP_CONFIGURABLE | enumerable,
+        def_type: DEF_CFUNC,
+        magic,
+        u: EntryValue {
+            func: FunctionDef {
+                length,
+                cproto: CFUNC_GENERIC_MAGIC,
+                cfunc: FunctionType {
+                    generic_magic: Some(f),
+                },
+            },
+        },
+    }
+}
+
+pub(super) fn accessor_entry(
+    name: *const c_char,
+    get: Option<GetterMagic>,
+    set: Option<SetterMagic>,
+    magic: i16,
+) -> FunctionListEntry {
+    FunctionListEntry {
+        name,
+        prop_flags: PROP_CONFIGURABLE | PROP_ENUMERABLE,
+        def_type: DEF_CGETSET_MAGIC,
+        magic,
+        u: EntryValue {
+            getset: GetSetDef {
+                get: FunctionType { getter_magic: get },
+                set: FunctionType { setter_magic: set },
+            },
+        },
+    }
+}
+
+pub(super) fn install_entries(scope: &mut Scope<'_>, object: &Value, list: &[FunctionListEntry]) {
+    unsafe {
+        JS_SetPropertyFunctionList(scope.ctx, object.raw, list.as_ptr(), list.len() as c_int);
     }
 }
 

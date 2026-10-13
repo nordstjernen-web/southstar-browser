@@ -20,6 +20,8 @@ use crate::{
 
 mod class;
 mod function_list;
+mod runtime;
+mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 

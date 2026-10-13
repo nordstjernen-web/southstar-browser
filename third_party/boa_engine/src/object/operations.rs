@@ -857,7 +857,7 @@ impl JsObject {
     /// Abstract operation [`GetFunctionRealm`][spec].
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-getfunctionrealm
-    pub(crate) fn get_function_realm(&self, context: &mut Context) -> JsResult<Realm> {
+    pub fn get_function_realm(&self, context: &mut Context) -> JsResult<Realm> {
         if let Some(fun) = self.downcast_ref::<OrdinaryFunction>() {
             return Ok(fun.realm().clone());
         }

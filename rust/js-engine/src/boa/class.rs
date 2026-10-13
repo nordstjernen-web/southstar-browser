@@ -190,7 +190,7 @@ impl Scope<'_> {
     pub fn has_key(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
         let object = self.object(object)?;
         object
-            .has_property(key.0.clone(), self.ctx)
+            .has_property(key.0.clone(), self.cx())
             .map_err(|error| self.error(error))
     }
 
@@ -203,7 +203,7 @@ impl Scope<'_> {
         let descriptor = OrdinaryObject::get_own_property_descriptor(
             &JsValue::undefined(),
             &[object.0.clone(), key.0],
-            self.ctx,
+            self.cx(),
         )
         .map_err(|error| self.error(error))?;
         if descriptor.is_undefined() {
@@ -229,7 +229,7 @@ impl Scope<'_> {
     pub fn own_keys_of(&mut self, object: &Value) -> Result<Vec<PropertyKey>, Value> {
         let object = self.object(object)?;
         let keys = object
-            .own_property_keys(self.ctx)
+            .own_property_keys(self.cx())
             .map_err(|error| self.error(error))?;
         Ok(keys.into_iter().map(PropertyKey).collect())
     }
@@ -237,7 +237,7 @@ impl Scope<'_> {
     pub fn delete_key_of(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {
         let object = self.object(object)?;
         object
-            .delete_property_or_throw(key.0.clone(), self.ctx)
+            .delete_property_or_throw(key.0.clone(), self.cx())
             .map_err(|error| self.error(error))
     }
 
@@ -264,7 +264,7 @@ impl Scope<'_> {
             .configurable(true)
             .build();
         object
-            .define_property_or_throw(key.0.clone(), descriptor, self.ctx)
+            .define_property_or_throw(key.0.clone(), descriptor, self.cx())
             .map_err(|error| self.error(error))
     }
 
@@ -278,7 +278,7 @@ impl Scope<'_> {
     ) -> Result<bool, Value> {
         let target = self.object(target)?;
         target
-            .set(key.0.clone(), value.0.clone(), false, self.ctx)
+            .set(key.0.clone(), value.0.clone(), false, self.cx())
             .map_err(|error| self.error(error))
     }
 
@@ -300,7 +300,7 @@ impl Scope<'_> {
             descriptor = descriptor.maybe_set(definition.setter.0.as_object());
         }
         object
-            .define_property_or_throw(key.0.clone(), descriptor.build(), self.ctx)
+            .define_property_or_throw(key.0.clone(), descriptor.build(), self.cx())
             .map_err(|error| self.error(error))
     }
 }

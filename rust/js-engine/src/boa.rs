@@ -3,14 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::any::Any;
+use std::marker::PhantomData;
 use std::path::Path;
-use std::rc::Rc;
 
 use boa_engine::builtins::object::OrdinaryObject;
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::job::PromiseJob;
-use boa_engine::module::SimpleModuleLoader;
 use boa_engine::object::builtins::{
     AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat32Array,
     JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise, JsTypedArray, JsUint8Array,
@@ -33,10 +32,12 @@ use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
 
 use crate::{
     Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
-    RealmInit, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
+    RealmInit, RuntimeHandle, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
 };
 
 mod class;
+mod runtime;
+mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 
@@ -171,53 +172,64 @@ impl Value {
 }
 
 pub struct Engine {
-    ctx: Context,
+    rt: RuntimeHandle,
 }
 
 impl Engine {
     pub fn new(module_root: &Path) -> Engine {
-        let ctx = SimpleModuleLoader::new(module_root)
-            .ok()
-            .and_then(|loader| {
-                Context::builder()
-                    .module_loader(Rc::new(loader))
-                    .build()
-                    .ok()
-            })
-            .unwrap_or_default();
-        Engine { ctx }
+        Engine {
+            rt: runtime::engine_runtime(module_root),
+        }
     }
 
     pub fn set_max_stack_size(&mut self, _bytes: usize) {}
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        f(&mut Scope { ctx: &mut self.ctx })
+        f(&mut Scope::of(runtime::default_context(self.rt)))
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        unsafe { self.rt.free() };
     }
 }
 
 pub struct Realm(boa_engine::realm::Realm);
 
 pub struct Scope<'a> {
-    ctx: &'a mut Context,
+    ctx: *mut Context,
+    engine: PhantomData<&'a mut Context>,
 }
 
 impl Scope<'_> {
+    fn of(ctx: *mut Context) -> Scope<'static> {
+        Scope {
+            ctx,
+            engine: PhantomData,
+        }
+    }
+
+    fn cx(&mut self) -> &mut Context {
+        unsafe { &mut *self.ctx }
+    }
+
     fn error(&mut self, error: JsError) -> Value {
-        match error.into_opaque(self.ctx) {
+        match error.into_opaque(self.cx()) {
             Ok(value) => Value(value),
             Err(uncatchable) => Value(JsString::from(uncatchable.to_string().as_str()).into()),
         }
     }
 
     fn object(&mut self, value: &Value) -> Result<JsObject, Value> {
-        value.0.to_object(self.ctx).map_err(|e| self.error(e))
+        value.0.to_object(self.cx()).map_err(|e| self.error(e))
     }
 
     pub fn eval_script(&mut self, source: &str, name: &str) -> Result<Value, Value> {
         let path = Path::new(name);
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let source = Source::from_bytes(source).with_path(&path);
-        self.ctx.eval(source).map(Value).map_err(|e| self.error(e))
+        self.cx().eval(source).map(Value).map_err(|e| self.error(e))
     }
 
     pub fn eval_native_script(&mut self, source: &str, name: &str) -> Result<Value, Value> {
@@ -227,8 +239,8 @@ impl Scope<'_> {
     pub fn eval_module(&mut self, source: &str, path: &Path) -> Result<Value, Value> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let source = Source::from_bytes(source).with_path(&path);
-        let module = Module::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
-        let promise = module.load_link_evaluate(self.ctx);
+        let module = Module::parse(source, None, self.cx()).map_err(|e| self.error(e))?;
+        let promise = module.load_link_evaluate(self.cx());
         Ok(Value(promise.into()))
     }
 
@@ -242,7 +254,7 @@ impl Scope<'_> {
         if let Some(path) = &path {
             source = source.with_path(path);
         }
-        self.ctx.eval(source).map(Value).map_err(|e| self.error(e))
+        self.cx().eval(source).map(Value).map_err(|e| self.error(e))
     }
 
     pub fn compile_script(
@@ -255,7 +267,7 @@ impl Scope<'_> {
         if let Some(path) = &path {
             source = source.with_path(path);
         }
-        let script = Script::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
+        let script = Script::parse(source, None, self.cx()).map_err(|e| self.error(e))?;
         Ok(self.compiled(Compiled::Script(script)))
     }
 
@@ -265,12 +277,12 @@ impl Scope<'_> {
         if let Some(path) = &path {
             source = source.with_path(path);
         }
-        let module = Module::parse(source, None, self.ctx).map_err(|e| self.error(e))?;
+        let module = Module::parse(source, None, self.cx()).map_err(|e| self.error(e))?;
         Ok(self.compiled(Compiled::Module(module)))
     }
 
     pub fn value_module(&mut self, _name: &[u8], value: Value) -> Result<Value, Value> {
-        let module = Module::from_value_as_default(value.0, self.ctx);
+        let module = Module::from_value_as_default(value.0, self.cx());
         Ok(self.compiled(Compiled::Module(module)))
     }
 
@@ -289,16 +301,18 @@ impl Scope<'_> {
             .and_then(|object| object.downcast_ref::<Compiled>().map(|c| c.clone()));
         match &record {
             Some(Compiled::Script(script)) => script
-                .evaluate(self.ctx)
+                .evaluate(self.cx())
                 .map(Value)
                 .map_err(|e| self.error(e)),
-            Some(Compiled::Module(module)) => Ok(Value(module.load_link_evaluate(self.ctx).into())),
+            Some(Compiled::Module(module)) => {
+                Ok(Value(module.load_link_evaluate(self.cx()).into()))
+            }
             None => Err(self.type_error("not a compiled script or module")),
         }
     }
 
     pub fn run_jobs(&mut self) -> Result<(), Value> {
-        self.ctx.run_jobs().map_err(|e| self.error(e))
+        self.cx().run_jobs().map_err(|e| self.error(e))
     }
 
     pub fn promise_state(&mut self, value: &Value) -> PromiseState {
@@ -317,11 +331,11 @@ impl Scope<'_> {
     }
 
     pub fn global(&mut self) -> Value {
-        Value(self.ctx.global_object().into())
+        Value(self.cx().global_object().into())
     }
 
     pub fn new_object(&mut self) -> Value {
-        Value(JsObject::with_object_proto(self.ctx.intrinsics()).into())
+        Value(JsObject::with_object_proto(self.cx().intrinsics()).into())
     }
 
     pub fn string(&mut self, text: &str) -> Value {
@@ -329,14 +343,14 @@ impl Scope<'_> {
     }
 
     pub fn new_array(&mut self) -> Value {
-        match JsArray::new(self.ctx) {
+        match JsArray::new(self.cx()) {
             Ok(array) => Value(array.into()),
             Err(error) => self.error(error),
         }
     }
 
     pub fn new_object_with_proto(&mut self, prototype: &Value) -> Value {
-        let object = JsObject::with_object_proto(self.ctx.intrinsics());
+        let object = JsObject::with_object_proto(self.cx().intrinsics());
         object.set_prototype(prototype.0.as_object());
         Value(object.into())
     }
@@ -376,13 +390,13 @@ impl Scope<'_> {
                 let this = Value(this.clone());
                 let args: Vec<Value> = args.iter().cloned().map(Value).collect();
                 let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
-                f(&mut Scope { ctx }, &this, &args, &data)
+                f(&mut Scope::of(ctx), &this, &args, &data)
                     .map(|value| value.0)
                     .map_err(|error| JsError::from_opaque(error.0))
             },
             captures,
         );
-        let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
+        let function = FunctionObjectBuilder::new(self.cx().realm(), native)
             .name(JsString::from(name))
             .length(arity as usize)
             .build();
@@ -402,13 +416,13 @@ impl Scope<'_> {
                 let this = Value(this.clone());
                 let args: Vec<Value> = args.iter().cloned().map(Value).collect();
                 let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
-                f(&mut Scope { ctx }, &this, &args, &data)
+                f(&mut Scope::of(ctx), &this, &args, &data)
                     .map(|value| value.0)
                     .map_err(|error| JsError::from_opaque(error.0))
             },
             captures,
         );
-        let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
+        let function = FunctionObjectBuilder::new(self.cx().realm(), native)
             .name(JsString::from(name))
             .length(arity as usize)
             .constructor(true)
@@ -420,11 +434,11 @@ impl Scope<'_> {
         let native = NativeFunction::from_copy_closure(move |this, args, ctx| {
             let this = Value(this.clone());
             let args: Vec<Value> = args.iter().cloned().map(Value).collect();
-            f(&mut Scope { ctx }, &this, &args)
+            f(&mut Scope::of(ctx), &this, &args)
                 .map(|value| value.0)
                 .map_err(|error| JsError::from_opaque(error.0))
         });
-        let function = FunctionObjectBuilder::new(self.ctx.realm(), native)
+        let function = FunctionObjectBuilder::new(self.cx().realm(), native)
             .name(JsString::from(name))
             .length(arity as usize)
             .constructor(constructor)
@@ -435,7 +449,7 @@ impl Scope<'_> {
     pub fn get(&mut self, object: &Value, key: &str) -> Result<Value, Value> {
         let object = self.object(object)?;
         object
-            .get(JsString::from(key), self.ctx)
+            .get(JsString::from(key), self.cx())
             .map(Value)
             .map_err(|e| self.error(e))
     }
@@ -443,7 +457,7 @@ impl Scope<'_> {
     pub fn set_index(&mut self, object: &Value, index: u32, value: Value) -> Result<(), Value> {
         let object = self.object(object)?;
         object
-            .set(index, value.0, true, self.ctx)
+            .set(index, value.0, true, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -451,7 +465,7 @@ impl Scope<'_> {
     pub fn get_index(&mut self, object: &Value, index: u32) -> Result<Value, Value> {
         let object = self.object(object)?;
         object
-            .get(index, self.ctx)
+            .get(index, self.cx())
             .map(Value)
             .map_err(|e| self.error(e))
     }
@@ -470,7 +484,7 @@ impl Scope<'_> {
             .enumerable(attributes.enumerable)
             .configurable(attributes.configurable);
         object
-            .define_property_or_throw(key, descriptor, self.ctx)
+            .define_property_or_throw(key, descriptor, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -501,7 +515,7 @@ impl Scope<'_> {
             .enumerable(attributes.enumerable)
             .configurable(attributes.configurable);
         object
-            .define_property_or_throw(JsString::from(key), descriptor, self.ctx)
+            .define_property_or_throw(JsString::from(key), descriptor, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -534,14 +548,14 @@ impl Scope<'_> {
     pub fn has_property(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
         let object = self.object(object)?;
         object
-            .has_property(JsString::from(key), self.ctx)
+            .has_property(JsString::from(key), self.cx())
             .map_err(|e| self.error(e))
     }
 
     pub fn delete(&mut self, object: &Value, key: &str) -> Result<bool, Value> {
         let object = self.object(object)?;
         object
-            .delete_property_or_throw(JsString::from(key), self.ctx)
+            .delete_property_or_throw(JsString::from(key), self.cx())
             .map_err(|e| self.error(e))
     }
 
@@ -551,7 +565,7 @@ impl Scope<'_> {
         };
         let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
         callable
-            .call(&this.0, &args, self.ctx)
+            .call(&this.0, &args, self.cx())
             .map(Value)
             .map_err(|e| self.error(e))
     }
@@ -562,19 +576,19 @@ impl Scope<'_> {
         };
         let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
         constructor
-            .construct(&args, None, self.ctx)
+            .construct(&args, None, self.cx())
             .map(|object| Value(object.into()))
             .map_err(|e| self.error(e))
     }
 
     pub fn to_number(&mut self, value: &Value) -> Result<f64, Value> {
-        value.0.to_number(self.ctx).map_err(|e| self.error(e))
+        value.0.to_number(self.cx()).map_err(|e| self.error(e))
     }
 
     pub fn to_bytes(&mut self, value: &Value) -> Result<Vec<u8>, Value> {
         value
             .0
-            .to_string(self.ctx)
+            .to_string(self.cx())
             .map(|text| text.to_std_string_lossy().into_bytes())
             .map_err(|e| self.error(e))
     }
@@ -584,24 +598,24 @@ impl Scope<'_> {
     }
 
     pub fn to_int32(&mut self, value: &Value) -> Result<i32, Value> {
-        value.0.to_i32(self.ctx).map_err(|e| self.error(e))
+        value.0.to_i32(self.cx()).map_err(|e| self.error(e))
     }
 
     pub fn to_int64(&mut self, value: &Value) -> Result<i64, Value> {
         value
             .0
-            .to_number(self.ctx)
+            .to_number(self.cx())
             .map(int64_modulo)
             .map_err(|e| self.error(e))
     }
 
     pub fn to_bigint64(&mut self, value: &Value) -> Result<i64, Value> {
-        value.0.to_big_int64(self.ctx).map_err(|e| self.error(e))
+        value.0.to_big_int64(self.cx()).map_err(|e| self.error(e))
     }
 
     pub fn range_error(&mut self, message: &str) -> Value {
         let error = JsNativeError::range().with_message(message.to_owned());
-        Value(error.into_opaque(self.ctx).into())
+        Value(error.into_opaque(self.cx()).into())
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
@@ -640,7 +654,7 @@ impl Scope<'_> {
     pub fn set(&mut self, object: &Value, key: &str, value: Value) -> Result<(), Value> {
         let object = self.object(object)?;
         object
-            .set(JsString::from(key), value.0, true, self.ctx)
+            .set(JsString::from(key), value.0, true, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -648,47 +662,50 @@ impl Scope<'_> {
     pub fn to_string(&mut self, value: &Value) -> Result<String, Value> {
         value
             .0
-            .to_string(self.ctx)
+            .to_string(self.cx())
             .map(|text| text.to_std_string_escaped())
             .map_err(|e| self.error(e))
     }
 
     pub fn syntax_error(&mut self, message: &str) -> Value {
         let error = JsNativeError::syntax().with_message(message.to_owned());
-        Value(error.into_opaque(self.ctx).into())
+        Value(error.into_opaque(self.cx()).into())
     }
 
     pub fn freeze(&mut self, object: &Value) -> Result<(), Value> {
         let object = self.object(object)?;
         object
-            .set_integrity_level(IntegrityLevel::Frozen, self.ctx)
+            .set_integrity_level(IntegrityLevel::Frozen, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
 
     pub fn get_key(&mut self, object: &Value, key: &Value) -> Result<Value, Value> {
         let object = self.object(object)?;
-        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let key = key
+            .0
+            .to_property_key(self.cx())
+            .map_err(|e| self.error(e))?;
         object
-            .get(key, self.ctx)
+            .get(key, self.cx())
             .map(Value)
             .map_err(|e| self.error(e))
     }
 
     pub fn type_error(&mut self, message: &str) -> Value {
         let error = JsNativeError::typ().with_message(message.to_owned());
-        Value(error.into_opaque(self.ctx).into())
+        Value(error.into_opaque(self.cx()).into())
     }
 
     pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
         let error = JsNativeError::error()
             .with_message(message.to_owned())
-            .into_opaque(self.ctx);
+            .into_opaque(self.cx());
         let _ = error.set(
             JsString::from("name"),
             JsString::from(name),
             false,
-            self.ctx,
+            self.cx(),
         );
         Value(error.into())
     }
@@ -741,10 +758,10 @@ impl Scope<'_> {
             TypedArrayKind::Int32 | TypedArrayKind::Uint32 | TypedArrayKind::Float32 => 4,
             _ => 8,
         };
-        let byte_offset = array.byte_offset(self.ctx).ok()?;
-        let length = array.byte_length(self.ctx).ok()?;
+        let byte_offset = array.byte_offset(self.cx()).ok()?;
+        let length = array.byte_length(self.cx()).ok()?;
         let buffer =
-            JsArrayBuffer::from_object(array.buffer(self.ctx).ok()?.as_object()?.clone()).ok()?;
+            JsArrayBuffer::from_object(array.buffer(self.cx()).ok()?.as_object()?.clone()).ok()?;
         let data = buffer.data()?;
         let bytes = data.get(byte_offset..byte_offset.checked_add(length)?)?;
         Some(f(TypedArrayBytes {
@@ -784,10 +801,10 @@ impl Scope<'_> {
             return Some(f(&mut data));
         }
         let array = JsTypedArray::from_object(object).ok()?;
-        let byte_offset = array.byte_offset(self.ctx).ok()?;
-        let length = array.byte_length(self.ctx).ok()?;
+        let byte_offset = array.byte_offset(self.cx()).ok()?;
+        let length = array.byte_length(self.cx()).ok()?;
         let buffer =
-            JsArrayBuffer::from_object(array.buffer(self.ctx).ok()?.as_object()?.clone()).ok()?;
+            JsArrayBuffer::from_object(array.buffer(self.cx()).ok()?.as_object()?.clone()).ok()?;
         let mut data = buffer.data_mut()?;
         let bytes = data.get_mut(byte_offset..byte_offset.checked_add(length)?)?;
         Some(f(bytes))
@@ -795,8 +812,8 @@ impl Scope<'_> {
 
     pub fn new_typed_array(&mut self, kind: ElementType, bytes: &[u8]) -> Result<Value, Value> {
         let block = AlignedVec::from_iter(0, bytes.iter().copied());
-        let buffer = JsArrayBuffer::from_byte_block(block, self.ctx).map_err(|e| self.error(e))?;
-        let ctx = &mut *self.ctx;
+        let buffer = JsArrayBuffer::from_byte_block(block, self.cx()).map_err(|e| self.error(e))?;
+        let ctx = self.cx();
         let array: Result<JsValue, JsError> = match kind {
             ElementType::Int8 => JsInt8Array::from_array_buffer(buffer, ctx).map(Into::into),
             ElementType::Uint8 => JsUint8Array::from_array_buffer(buffer, ctx).map(Into::into),
@@ -826,16 +843,16 @@ impl Scope<'_> {
         let object = value.0.as_object()?.clone();
         let (buffer, byte_offset, length) = match JsTypedArray::from_object(object.clone()) {
             Ok(array) => (
-                array.buffer(self.ctx).ok()?,
-                array.byte_offset(self.ctx).ok()?,
-                array.byte_length(self.ctx).ok()?,
+                array.buffer(self.cx()).ok()?,
+                array.byte_offset(self.cx()).ok()?,
+                array.byte_length(self.cx()).ok()?,
             ),
             Err(_) => {
                 let view = JsDataView::from_object(object).ok()?;
                 (
-                    view.buffer(self.ctx).ok()?,
-                    usize::try_from(view.byte_offset(self.ctx).ok()?).ok()?,
-                    usize::try_from(view.byte_length(self.ctx).ok()?).ok()?,
+                    view.buffer(self.cx()).ok()?,
+                    usize::try_from(view.byte_offset(self.cx()).ok()?).ok()?,
+                    usize::try_from(view.byte_length(self.cx()).ok()?).ok()?,
                 )
             }
         };
@@ -858,7 +875,7 @@ impl Scope<'_> {
     ) -> Result<Vec<Value>, Value> {
         let object = self.object(object)?;
         let keys = object
-            .own_property_keys(self.ctx)
+            .own_property_keys(self.cx())
             .map_err(|e| self.error(e))?;
         Ok(keys
             .into_iter()
@@ -875,7 +892,7 @@ impl Scope<'_> {
         let descriptor = OrdinaryObject::get_own_property_descriptor(
             &JsValue::undefined(),
             &[object.0.clone(), key.0.clone()],
-            self.ctx,
+            self.cx(),
         )
         .map_err(|e| self.error(e))?;
         if descriptor.is_undefined() {
@@ -929,9 +946,9 @@ impl Scope<'_> {
         };
         let object = self.object(value)?;
         let array = JsTypedArray::from_object(object).map_err(|e| self.error(e))?;
-        let buffer = array.buffer(self.ctx).map_err(|e| self.error(e))?;
-        let byte_offset = array.byte_offset(self.ctx).map_err(|e| self.error(e))?;
-        let length = array.length(self.ctx).map_err(|e| self.error(e))?;
+        let buffer = array.buffer(self.cx()).map_err(|e| self.error(e))?;
+        let byte_offset = array.byte_offset(self.cx()).map_err(|e| self.error(e))?;
+        let length = array.length(self.cx()).map_err(|e| self.error(e))?;
         Ok(Some(TypedArrayView {
             buffer: Value(buffer),
             byte_offset,
@@ -942,7 +959,7 @@ impl Scope<'_> {
 
     pub fn new_array_buffer(&mut self, bytes: &[u8]) -> Result<Value, Value> {
         let block = AlignedVec::from_iter(0, bytes.iter().copied());
-        JsArrayBuffer::from_byte_block(block, self.ctx)
+        JsArrayBuffer::from_byte_block(block, self.cx())
             .map(|buffer| Value(buffer.into()))
             .map_err(|e| self.error(e))
     }
@@ -957,7 +974,7 @@ impl Scope<'_> {
         let keys = OrdinaryObject::keys(
             &JsValue::undefined(),
             std::slice::from_ref(&object.0),
-            self.ctx,
+            self.cx(),
         )
         .map_err(|e| self.error(e))?;
         let keys = Value(keys);
@@ -968,9 +985,12 @@ impl Scope<'_> {
 
     pub fn set_key(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
         let target = self.object(object)?;
-        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let key = key
+            .0
+            .to_property_key(self.cx())
+            .map_err(|e| self.error(e))?;
         target
-            .set(key, value.0, true, self.ctx)
+            .set(key, value.0, true, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -982,28 +1002,37 @@ impl Scope<'_> {
         value: Value,
         attributes: Attributes,
     ) -> Result<(), Value> {
-        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let key = key
+            .0
+            .to_property_key(self.cx())
+            .map_err(|e| self.error(e))?;
         self.define_key(object, key, value, attributes)
     }
 
     pub fn delete_key(&mut self, object: &Value, key: &Value) -> Result<bool, Value> {
         let target = self.object(object)?;
-        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let key = key
+            .0
+            .to_property_key(self.cx())
+            .map_err(|e| self.error(e))?;
         target
-            .delete_property_or_throw(key, self.ctx)
+            .delete_property_or_throw(key, self.cx())
             .map_err(|e| self.error(e))
     }
 
     pub fn define_entry(&mut self, object: &Value, key: &Value, value: Value) -> Result<(), Value> {
         let target = self.object(object)?;
-        let key = key.0.to_property_key(self.ctx).map_err(|e| self.error(e))?;
+        let key = key
+            .0
+            .to_property_key(self.cx())
+            .map_err(|e| self.error(e))?;
         let descriptor = BoaPropertyDescriptor::builder()
             .value(value.0)
             .writable(true)
             .enumerable(true)
             .configurable(true);
         target
-            .define_property_or_throw(key, descriptor, self.ctx)
+            .define_property_or_throw(key, descriptor, self.cx())
             .map(|_| ())
             .map_err(|e| self.error(e))
     }
@@ -1018,7 +1047,7 @@ impl Scope<'_> {
     pub fn to_object(&mut self, value: &Value) -> Result<Value, Value> {
         value
             .0
-            .to_object(self.ctx)
+            .to_object(self.cx())
             .map(|o| Value(o.into()))
             .map_err(|e| self.error(e))
     }
@@ -1033,10 +1062,10 @@ impl Scope<'_> {
 
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
         let native = PromiseJob::new(move |ctx| {
-            job(&mut Scope { ctx });
+            job(&mut Scope::of(ctx));
             Ok(JsValue::undefined())
         });
-        self.ctx.enqueue_job(native.into());
+        self.cx().enqueue_job(native.into());
         Ok(())
     }
 
@@ -1048,9 +1077,9 @@ impl Scope<'_> {
     }
 
     pub fn json_stringify(&mut self, value: &Value) -> Result<Value, Value> {
-        let json = self.ctx.intrinsics().objects().json();
+        let json = self.cx().intrinsics().objects().json();
         let stringify = json
-            .get(boa_engine::js_string!("stringify"), self.ctx)
+            .get(boa_engine::js_string!("stringify"), self.cx())
             .map_err(|e| self.error(e))?;
         self.call(
             &Value(stringify),
@@ -1065,7 +1094,7 @@ impl Scope<'_> {
         };
         let args: Vec<JsValue> = args.iter().map(|arg| arg.0.clone()).collect();
         let native = PromiseJob::new(move |ctx| callable.call(&JsValue::undefined(), &args, ctx));
-        self.ctx.enqueue_job(native.into());
+        self.cx().enqueue_job(native.into());
         Ok(())
     }
 
@@ -1084,7 +1113,7 @@ impl Scope<'_> {
     pub fn to_string_value(&mut self, value: &Value) -> Result<Value, Value> {
         value
             .0
-            .to_string(self.ctx)
+            .to_string(self.cx())
             .map(|text| Value(text.into()))
             .map_err(|e| self.error(e))
     }
@@ -1097,16 +1126,16 @@ impl Scope<'_> {
         constructor.0.is_object()
             && value
                 .0
-                .instance_of(&constructor.0, self.ctx)
+                .instance_of(&constructor.0, self.cx())
                 .unwrap_or(false)
     }
 
     pub fn new_error(&mut self) -> Value {
-        Value(JsNativeError::error().into_opaque(self.ctx).into())
+        Value(JsNativeError::error().into_opaque(self.cx()).into())
     }
 
     pub fn new_promise(&mut self) -> Result<(Value, Value, Value), Value> {
-        let (promise, resolvers) = JsPromise::new_pending(self.ctx);
+        let (promise, resolvers) = JsPromise::new_pending(self.cx());
         Ok((
             Value(promise.into()),
             Value(resolvers.resolve.into()),
@@ -1116,34 +1145,30 @@ impl Scope<'_> {
 
     pub fn rejected_promise(&mut self, reason: &Value) -> Result<Value, Value> {
         let error = JsError::from_opaque(reason.0.clone());
-        JsPromise::reject(error, self.ctx)
+        JsPromise::reject(error, self.cx())
             .map(|promise| Value(promise.into()))
             .map_err(|e| self.error(e))
     }
 
     pub fn new_detached_realm(&mut self) -> Option<Realm> {
-        self.ctx.create_realm().ok().map(Realm)
+        self.cx().create_realm().ok().map(Realm)
     }
 
     pub fn in_realm<R>(&mut self, realm: &Realm, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        let previous = self.ctx.enter_realm(realm.0.clone());
-        let result = f(&mut Scope {
-            ctx: &mut *self.ctx,
-        });
-        self.ctx.enter_realm(previous);
+        let previous = self.cx().enter_realm(realm.0.clone());
+        let result = f(&mut Scope::of(self.ctx));
+        self.cx().enter_realm(previous);
         result
     }
 
     pub fn new_realm(&mut self, init: RealmInit) -> Result<Value, Value> {
-        let realm = self.ctx.create_realm().map_err(|e| self.error(e))?;
-        let previous = self.ctx.enter_realm(realm);
+        let realm = self.cx().create_realm().map_err(|e| self.error(e))?;
+        let previous = self.cx().enter_realm(realm);
         let result = {
-            let mut scope = Scope {
-                ctx: &mut *self.ctx,
-            };
+            let mut scope = Scope::of(self.ctx);
             init(&mut scope).map(|()| scope.global())
         };
-        self.ctx.enter_realm(previous);
+        self.cx().enter_realm(previous);
         result
     }
 }
