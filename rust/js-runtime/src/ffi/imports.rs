@@ -259,6 +259,7 @@ unsafe extern "Rust" {
         base: &str,
         name: &str,
     ) -> Result<String, Value>;
+    pub(crate) safe fn nsr_idb_install(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_js_module_load(
         scope: &mut Scope<'_>,
         name: &str,

@@ -1,4 +1,4 @@
-//! Southstar — the GLib file, hashing, clock and logging calls behind IndexedDB storage, and the ns_idb_install entry point.
+//! Southstar — the GLib file, hashing, clock and logging calls behind IndexedDB storage, and the nsr_idb_install entry point.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GStr};
-#[cfg(not(feature = "quickjs"))]
-use southstar_js_engine::Scope;
+use southstar_js_engine::{Scope, Value};
 
 const CHECKSUM_SHA256: c_int = 2;
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
@@ -34,6 +33,7 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: u32) -> i64;
     fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
+    fn ns_js_storage_partition(js: *const c_void) -> *const c_char;
 }
 
 fn cstring(bytes: &[u8]) -> CString {
@@ -136,48 +136,12 @@ pub fn warning(message: &[u8]) {
     };
 }
 
-#[cfg(feature = "quickjs")]
-mod host {
-    use core::ffi::{c_char, c_void};
-
-    use southstar_js_engine::Scope;
-    use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-
-    unsafe extern "C" {
-        fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut c_void;
-        fn ns_js_storage_partition(js: *const c_void) -> *const c_char;
-    }
-
-    pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {
-        let ctx = quickjs::raw_context(scope);
-        let partition =
-            unsafe { southstar_glib::bytes(ns_js_storage_partition(JS_GetContextOpaque(ctx))) }?;
-        Some(partition.to_vec())
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_idb_install(ctx: *mut JSContext, global: JSValue) {
-        unsafe {
-            quickjs::with_context(ctx, |scope| {
-                let global = quickjs::borrow_value(scope, global);
-                crate::install(scope, &global);
-            });
-        }
-    }
+pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {
+    let partition = unsafe { glib::bytes(ns_js_storage_partition(scope.context_opaque())) }?;
+    Some(partition.to_vec())
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_idb_install(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    target: &southstar_js_engine::Value,
-) {
-    crate::install(scope, target);
-}
-
-#[cfg(feature = "quickjs")]
-pub use host::partition;
-
-#[cfg(not(feature = "quickjs"))]
-pub fn partition(_scope: &Scope<'_>) -> Option<Vec<u8>> {
-    None
+pub fn nsr_idb_install(scope: &mut Scope<'_>, global: &Value) {
+    crate::install(scope, global);
 }

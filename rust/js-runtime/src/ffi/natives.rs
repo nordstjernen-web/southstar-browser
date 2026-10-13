@@ -60,7 +60,6 @@ installers! {
     ns_js_input_install_wpt,
     ns_net_install_text_codecs,
     ns_storage_install_window,
-    ns_idb_install,
 }
 
 context_installers! {

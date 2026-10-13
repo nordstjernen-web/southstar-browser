@@ -217,7 +217,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     );
     imports::nsr_install_abort_signal_interface(scope, &global);
     imports::nsr_net_install_interfaces(scope, &global);
-    ffi::install(scope, ns_idb_install, &global);
+    ffi::imports::nsr_idb_install(scope, &global);
     js.eval_worker_polyfills();
     let current_global = scope.global();
     ffi::imports::nsr_install_event_attribute_getters(scope, &current_global);
