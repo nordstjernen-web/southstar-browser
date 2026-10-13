@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 0.9.11-dev:
+======
+
 Southstar Browser 0.9.10:
 ======
 * <script type="module"> works on Boa: modules get import.meta (url, main,
