@@ -4,12 +4,12 @@
 
 use core::ffi::CStr;
 
-use southstar_js_bind::{bind_constructor, bind_function, bind_native};
+use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{NativeFn, PromiseState, Scope, Value};
 
 use crate::ffi::imports;
-use crate::ffi::natives::*;
-use crate::ffi::{self, Js, Native, RejectionTracker, WorkerSetup};
+use crate::ffi::legacy::ns_illegal_constructor;
+use crate::ffi::{self, Js, RejectionTracker, WorkerSetup};
 use crate::interrupt;
 use crate::page::{bind_ctor, bind_url};
 
@@ -17,20 +17,10 @@ const DENY_OPAQUE_IDB: &str = "(function(){var f=self.indexedDB;if(!f)return;fun
 
 const WORKER_INTERFACES: [&str; 3] = ["WorkerLocation", "WorkerNavigator", "NavigatorUAData"];
 
-enum Binding {
-    Raw(Native),
-    Rust(NativeFn),
-}
-
 pub(crate) enum EvalStatus {
     Done,
     ParseError(Value),
     Thrown(Value),
-}
-
-fn bind_fn(scope: &mut Scope<'_>, object: &Value, name: &str, native: Native, arity: u32) {
-    let function = ffi::c_function(scope, name, arity, native);
-    let _ = bind_function(scope, object, name, function);
 }
 
 fn text(value: Option<&CStr>) -> String {
@@ -64,56 +54,21 @@ pub(crate) fn create(js: Js, setup: &WorkerSetup<'_>) -> bool {
 fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin_real_ms: f64) {
     let global = scope.global();
     imports::nsr_worker_install_console(scope, &global);
-    let functions: [(&str, Binding, u32); 11] = [
-        (
-            "setTimeout",
-            Binding::Rust(imports::nsr_services_set_timeout),
-            2,
-        ),
-        (
-            "setInterval",
-            Binding::Rust(imports::nsr_services_set_interval),
-            2,
-        ),
-        (
-            "clearTimeout",
-            Binding::Rust(imports::nsr_services_clear_timer),
-            1,
-        ),
-        (
-            "clearInterval",
-            Binding::Rust(imports::nsr_services_clear_timer),
-            1,
-        ),
-        (
-            "postMessage",
-            Binding::Rust(imports::nsr_worker_global_post_message),
-            1,
-        ),
-        ("close", Binding::Rust(imports::nsr_worker_global_close), 0),
-        (
-            "importScripts",
-            Binding::Rust(imports::nsr_worker_import_scripts),
-            1,
-        ),
-        (
-            "structuredClone",
-            Binding::Rust(imports::nsr_window_structured_clone),
-            1,
-        ),
-        (
-            "queueMicrotask",
-            Binding::Rust(imports::nsr_services_queue_microtask),
-            1,
-        ),
-        ("btoa", Binding::Rust(imports::nsr_window_btoa), 1),
-        ("atob", Binding::Rust(imports::nsr_window_atob), 1),
+    let functions: [(&str, NativeFn, u32); 11] = [
+        ("setTimeout", imports::nsr_services_set_timeout, 2),
+        ("setInterval", imports::nsr_services_set_interval, 2),
+        ("clearTimeout", imports::nsr_services_clear_timer, 1),
+        ("clearInterval", imports::nsr_services_clear_timer, 1),
+        ("postMessage", imports::nsr_worker_global_post_message, 1),
+        ("close", imports::nsr_worker_global_close, 0),
+        ("importScripts", imports::nsr_worker_import_scripts, 1),
+        ("structuredClone", imports::nsr_window_structured_clone, 1),
+        ("queueMicrotask", imports::nsr_services_queue_microtask, 1),
+        ("btoa", imports::nsr_window_btoa, 1),
+        ("atob", imports::nsr_window_atob, 1),
     ];
-    for (name, binding, arity) in functions {
-        match binding {
-            Binding::Raw(native) => bind_fn(scope, &global, name, native, arity),
-            Binding::Rust(native) => bind_native(scope, &global, name, arity, native),
-        }
+    for (name, native, arity) in functions {
+        bind_native(scope, &global, name, arity, native);
     }
     bind_constructor(
         scope,

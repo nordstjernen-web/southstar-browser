@@ -58,10 +58,6 @@ impl RawDomProtos {
     }
 }
 
-pub(crate) fn c_function(scope: &mut Scope<'_>, name: &str, arity: u32, native: Native) -> Value {
-    quickjs::c_function(scope, name, arity, native)
-}
-
 pub(crate) fn c_constructor_or_function(
     scope: &mut Scope<'_>,
     name: &str,

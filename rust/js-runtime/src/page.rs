@@ -10,7 +10,7 @@ use southstar_js_bind::{
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::imports;
-use crate::ffi::natives::*;
+use crate::ffi::legacy::ns_illegal_constructor;
 use crate::ffi::{self, Callbacks, Class, Js, Native, NavigationTiming, RejectionTracker};
 
 const PAGE_STACK_SIZE: usize = 5 * 1024 * 1024;
@@ -170,11 +170,6 @@ fn navigation_timing(given: Option<NavigationTiming>) -> NavigationTiming {
     };
     ffi::coarsen_navigation_timing(&mut timing);
     timing
-}
-
-fn bind_fn(scope: &mut Scope<'_>, object: &Value, name: &str, native: Native, arity: u32) {
-    let function = ffi::c_function(scope, name, arity, native);
-    let _ = bind_function(scope, object, name, function);
 }
 
 fn make_ctor(scope: &mut Scope<'_>, name: &str, native: Native, arity: u32) -> Value {
