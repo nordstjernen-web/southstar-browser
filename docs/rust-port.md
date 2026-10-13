@@ -877,9 +877,8 @@ the exotic hook), `define_forward` (the same definition on another object),
 that keeps the caller's strict-mode flags (`SetFlags`). `is_host_access`
 reports whether engine code rather than a page script is touching the
 object (QuickJS's `JS_IsHostAccess`, which the Event class uses to show the
-engine its hidden state). On Boa `is_host_access` is always false,
-`set_with_receiver` ignores the receiver and `PropertyDefinition` carries
-no throw flag.
+engine its hidden state). On Boa `PropertyDefinition` carries no throw
+flag.
 
 A class built with `HostClass::new_raw` keeps a bare pointer as its
 instance data instead of boxed Rust data (`new_raw_instance`,
@@ -934,7 +933,7 @@ whose only engine type is a context can switch its declaration to
 | `array_buffer_copy`, `array_buffer_bytes`, `fill_array_buffer`, `array_buffer_data`, `new_typed_array(kind)`, `to_index` | `scope.new_array_buffer`, `array_buffer_bytes`, `with_buffer_bytes_mut`, `new_typed_array(ElementType, bytes)`, `to_index` |
 | `object_from_identity`, `identity_raw`, `set_identity_opaque`, pinning by `mem::forget(v.clone())` / `JS_FreeValue(identity_raw(..))` | `scope.object_from_identity`, `value.object_identity()`, `scope.clear_identity_instance`, `scope.retain_identity(&v)` / `scope.release_identity(id)` |
 | `with_host`, `raw_instance`, `class_id` | `value.with_host`, `value.with_instance(&CLASS, ..)`, `value.raw_instance(&CLASS)`; classes are `HostClass` statics |
-| `add_engine_private_name`, `is_engine_function`, `new_function_brand`, `set_function_brand` | the same names on `Scope`; `BrandMode` is at the crate root (no-ops on Boa) |
+| `add_engine_private_name`, `is_engine_function`, `new_function_brand`, `set_function_brand` | the same names on `Scope`; `BrandMode` is at the crate root (private names and brands are no-ops on Boa) |
 | `write_bytecode`, `read_bytecode`, `eval_function`, `is_module`, `module_name`, `import_meta` | `scope.write_bytecode` (`None` on Boa), `read_bytecode`, `evaluate`, `is_module`, `module_name`, `import_meta` |
 
 Calls between crates. The binding crates call each other through symbols
@@ -989,10 +988,23 @@ that exercises the crate against the previous build.
 
 On Boa the fork supplies the interrupt check (`Context::set_interrupt_handler`,
 polled at loop back-edges and calls; the script stops with an uncatchable
-error), the host exotic methods and raw-instance finalizers. Gaps it still
-reports rather than hides: `caller_handle` is the current realm,
-`is_host_access` is always false, there is no bytecode cache or
-`import.meta`, and brands, engine-private names and `memory_usage` do
+error), the host exotic methods and raw-instance finalizers, a module's
+`import.meta` object (`Module::import_meta`, created once through the loader's
+`init_import_meta` hook) and `ArrayBuffer`s over embedder memory
+(`JsArrayBuffer::from_external_bytes`, for WebAssembly memories). The module
+loader keeps one module record per resolved URL and realm. Object
+serialization (`write_object`/`read_object`, for worker messages and
+IndexedDB values) is a self-contained byte encoding in
+`rust/js-engine/src/boa/serialize.rs`. Host access follows QuickJS's rule
+(`rust/js-engine/src/boa/access.rs`): an access is the embedder's when no
+script frame was pushed since the embedder's Rust last took over (each
+native function, job, module load and `ContextHandle::with` records
+`Context::frame_depth`) or when the newest frame runs engine code
+(`eval_native_script`, or compiled with `hide_source`); embedder functions
+carry the fork's
+`FunctionObjectBuilder::host` flag, which `is_native_function` reads. Gaps it
+still reports rather than hides: `caller_handle` is the current realm, there
+is no bytecode cache, and brands, engine-private names and `memory_usage` do
 nothing. Each is a further hook for the fork.
 
 ### Phase 8 — Remaining web platform features
@@ -1303,7 +1315,7 @@ observe the same sequence, and the DSP gives bit-identical samples.
 | `image.c` | 909 | `rust/image` (`ns_image` stays a `#[repr(C)]` struct the C reads and writes) | 8 |
 | the parser glue | 852 | `rust/html-parser` (first over the vendored library's exported functions, then the `rust/html5` sink) | 6 (DOM and parsing) |
 | `dom.c` | 3,028 | `rust/dom` (ported in five sections; the node and attribute memory stays GLib's and the document indexes stay GLib tables, so the C that reads `ns_node` keeps working) | 6 (DOM and parsing) |
-| `idb.c` | 1,219 | `rust/idb` (SQLite through `rust/sqlite`, values in QuickJS's object serialization as before) | 5 |
+| `idb.c` | 1,219 | `rust/idb` (SQLite through `rust/sqlite`, values in the engine's object serialization) | 5 |
 | `print.c` | 218 | `rust/print` (the box tree through `rust/layout`, a `#[repr(C)]` mirror of `ns_box` with borrowed box handles) | 6 (layout) |
 | `selection.c` | 546 | `rust/selection` (boxes through `rust/layout`) | 6 (layout) |
 | `svg.c` | 2,542 | `rust/svg` (computed styles through the new shared `rust/style`) | 6 (layout) |
