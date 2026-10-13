@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 0.9.9:
+Southstar Browser 0.9.10:
 ======
 * <script type="module"> works on Boa: modules get import.meta (url, main,
   resolve()), share one instance per URL and realm, and support cycles,
@@ -53,6 +53,9 @@ Southstar Browser 0.9.9:
 * The C-ABI QuickJS shims (legacy.rs) are gone from the binding crates:
   their last callers had moved to the Rust-ABI nsr_ entry points. The window
   and worker realms bind their illegal constructors through the neutral API.
+
+Southstar Browser 0.9.9:
+======
 * rust/js-interfaces no longer touches QuickJS: the DOM prototype tables
   (element, document, media, anchor and the rest, about 700 entries) are
   engine-neutral Prop tables that call the binding crates' Rust natives

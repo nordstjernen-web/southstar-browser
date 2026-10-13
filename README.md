@@ -28,7 +28,7 @@ Supported platforms:
 * macOS
 * FreeBSD and NetBSD
 
-**Version:** 0.9.9, Southstar's first release.
+**Version:** 0.9.10, the first all-Rust release.
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 

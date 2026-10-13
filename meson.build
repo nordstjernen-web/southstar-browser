@@ -1,7 +1,7 @@
 project(
   'southstar',
   ['c', 'cpp'],
-  version: '0.9.9',
+  version: '0.9.10',
   license: 'LicenseRef-NSL-1.0 OR GPL-3.0-or-later',
   default_options: [
     'c_std=gnu2x,c2x,gnu11,c11',
