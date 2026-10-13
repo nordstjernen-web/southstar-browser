@@ -851,12 +851,13 @@ realm holds the class prototype (`register_class`, `set_class_prototype`,
 `new_instance_with`, `Value::with_instance`). On QuickJS a class is a real
 engine class: one set of exotic-method trampolines dispatches on the class
 id, and `ns_new_class_id` now lives in `js-engine` so C and Rust share one
-class-id allocator. Boa 0.22 keeps custom internal methods crate-private, so
-on Boa a host class is an ordinary object with the instance data and the
-per-class prototype, and its hooks do not run: named and indexed access on
-Storage, DOMTokenList, CSSStyleDeclaration, WindowProperties, DOMStringMap
-and the live collections, and the Event class's hidden state, are missing
-there until Boa exposes exotic objects or the classes move to a Proxy.
+class-id allocator. On Boa, whose own exotic internal methods are
+crate-private, the fork adds host exotic methods
+(`boa_engine::object::{HostExoticHooks, set_host_exotic_hooks,
+host_internal_methods}`): an instance of a class with hooks gets internal
+methods that ask the class's hooks first (with the `[[Get]]` receiver for
+`get_own_property_receiver`) and never fill Boa's property caches, and the
+class prototype is kept per realm in the realm's host-defined data.
 
 Hooks reach the ordinary object operations through `PropertyKey`
 (`array_index`, `to_c_bytes`) and the scope: `has_key`, `own_property_of`,
@@ -876,7 +877,8 @@ instance data instead of boxed Rust data (`new_raw_instance`,
 object is collected; the Element class uses it so a node wrapper points
 straight at its `ns_node` and the node's `js_wrapper` points back at the
 object's identity (`object_identity`, `object_from_identity`). On Boa the
-pointer is kept but the finalizer does not run.
+finalizer runs from the collector's finalize phase, and the identity is the
+object's allocation (`JsObject::identity` in the fork).
 
 ##### Converting a crate off raw QuickJS
 
@@ -974,12 +976,13 @@ warnings` and, for a crate with no raw code left, with
 `--no-default-features --features <crate>/boa`; build, and compare a page
 that exercises the crate against the previous build.
 
-Boa gaps the neutral layer reports rather than hides: no asynchronous
-interrupt (runaway scripts are not stopped), `caller_handle` is the current
-realm, no bytecode cache or `import.meta`, raw-instance finalizers and
-exotic class hooks do not run, class prototypes are per thread rather than
-per realm, and brands, engine-private names and `memory_usage` do
-nothing. Each is a hook for the Boa fork.
+On Boa the fork supplies the interrupt check (`Context::set_interrupt_handler`,
+polled at loop back-edges and calls; the script stops with an uncatchable
+error), the host exotic methods and raw-instance finalizers. Gaps it still
+reports rather than hides: `caller_handle` is the current realm,
+`is_host_access` is always false, there is no bytecode cache or
+`import.meta`, and brands, engine-private names and `memory_usage` do
+nothing. Each is a further hook for the fork.
 
 ### Phase 8 — Remaining web platform features
 

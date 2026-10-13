@@ -96,6 +96,12 @@ pub struct Vm {
 
     pub(crate) shadow_stack: ShadowStack,
 
+    /// The embedder's interrupt check, polled at loop back-edges and calls.
+    pub(crate) interrupt_handler: Option<InterruptHandler>,
+
+    /// Polls left until the interrupt check runs again.
+    pub(crate) interrupt_countdown: u32,
+
     #[cfg(feature = "trace")]
     pub(crate) trace: bool,
     #[cfg(feature = "trace")]
@@ -421,6 +427,8 @@ impl Vm {
             native_active_function: None,
             host_call_depth: 0,
             shadow_stack: ShadowStack::default(),
+            interrupt_handler: None,
+            interrupt_countdown: INTERRUPT_INTERVAL,
             #[cfg(feature = "trace")]
             trace: false,
             #[cfg(feature = "trace")]
@@ -1013,8 +1021,31 @@ impl Context {
         CompletionRecord::Throw(JsError::from_native(JsNativeError::error()))
     }
 
+    /// Runs the embedder's interrupt check every [`INTERRUPT_INTERVAL`] polls.
+    #[inline]
+    pub(crate) fn check_interrupt(&mut self) -> JsResult<()> {
+        if self.vm.interrupt_handler.is_none() {
+            return Ok(());
+        }
+        self.vm.interrupt_countdown = self.vm.interrupt_countdown.saturating_sub(1);
+        if self.vm.interrupt_countdown > 0 {
+            return Ok(());
+        }
+        self.vm.interrupt_countdown = INTERRUPT_INTERVAL;
+        if self
+            .vm
+            .interrupt_handler
+            .as_ref()
+            .is_some_and(|interrupt| (interrupt.0)())
+        {
+            return Err(RuntimeLimitError::Interrupted.into());
+        }
+        Ok(())
+    }
+
     /// Checks if we haven't exceeded the defined runtime limits.
-    pub(crate) fn check_runtime_limits(&self) -> JsResult<()> {
+    pub(crate) fn check_runtime_limits(&mut self) -> JsResult<()> {
+        self.check_interrupt()?;
         // Must throw if the number of recursive calls exceeds the defined limit.
         //
         // `host_call_depth` accounts for nested host calls that re-enter the VM by invoking
@@ -1032,6 +1063,19 @@ impl Context {
         Ok(())
     }
 }
+
+/// The embedder's interrupt check.
+#[derive(Clone)]
+pub(crate) struct InterruptHandler(pub(crate) std::rc::Rc<dyn Fn() -> bool>);
+
+impl std::fmt::Debug for InterruptHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("InterruptHandler")
+    }
+}
+
+/// How many loop back-edges and calls pass between two interrupt checks.
+pub(crate) const INTERRUPT_INTERVAL: u32 = 1024;
 
 /// Yields once to the executor.
 fn yield_now() -> impl Future<Output = ()> {

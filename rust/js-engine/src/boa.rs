@@ -31,8 +31,9 @@ use boa_engine::native_function::NativeFunctionObject;
 use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
 
 use crate::{
-    Attributes, BoundFn, ElementType, Job, NativeFn, ObjectKind, PromiseState, PropertyDescriptor,
-    RealmInit, RuntimeHandle, ScriptOptions, Trace, TypedArrayBytes, TypedArrayView, int64_modulo,
+    Attributes, BoundFn, ElementType, HostClass, Job, NativeFn, ObjectKind, PromiseState,
+    PropertyDescriptor, RealmInit, RuntimeHandle, ScriptOptions, Trace, TypedArrayBytes,
+    TypedArrayView, int64_modulo,
 };
 
 mod class;
@@ -63,13 +64,39 @@ impl ObjectKey {
 
 type HostTrace = fn(&dyn Any, &mut dyn FnMut(&Value));
 
-#[derive(JsData)]
 struct HostData {
     data: Box<dyn Any>,
     trace: Option<HostTrace>,
+    class: *const HostClass,
 }
 
-impl Finalize for HostData {}
+impl HostData {
+    fn class(&self) -> Option<&'static HostClass> {
+        unsafe { self.class.as_ref() }
+    }
+}
+
+impl JsData for HostData {
+    fn internal_methods(&self) -> &'static boa_engine::object::InternalObjectMethods
+    where
+        Self: Sized,
+    {
+        let exotic = self
+            .class()
+            .is_some_and(|class| class::has_hooks(&class.hooks));
+        boa_engine::object::host_internal_methods(exotic)
+    }
+}
+
+impl Finalize for HostData {
+    fn finalize(&self) {
+        if let Some(finalize) = self.class().and_then(|class| class.raw_finalize)
+            && let Some(raw) = class::take_raw(&*self.data)
+        {
+            finalize(raw);
+        }
+    }
+}
 
 unsafe impl BoaTrace for HostData {
     custom_trace!(this, mark, {
@@ -621,7 +648,7 @@ impl Scope<'_> {
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
-        self.host_object(prototype, data, None)
+        self.host_object(prototype, data, None, core::ptr::null())
     }
 
     pub fn new_traced_host_object<T: Any + Trace>(
@@ -629,7 +656,7 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
     ) -> Value {
-        self.host_object(prototype, data, Some(trace_as::<T>))
+        self.host_object(prototype, data, Some(trace_as::<T>), core::ptr::null())
     }
 
     fn host_object<T: Any>(
@@ -637,11 +664,13 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
         trace: Option<HostTrace>,
+        class: *const HostClass,
     ) -> Value {
         let prototype = prototype.and_then(|p| p.0.as_object());
         let host = HostData {
             data: Box::new(data),
             trace,
+            class,
         };
         let object = JsObject::from_proto_and_data(prototype, host);
         Value(object.upcast().into())

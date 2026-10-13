@@ -589,6 +589,13 @@ impl Context {
         self.vm.runtime_limits = runtime_limits;
     }
 
+    /// Sets the embedder's interrupt check, polled at loop back-edges and calls; returning
+    /// `true` stops the running script with an uncatchable error.
+    #[inline]
+    pub fn set_interrupt_handler(&mut self, handler: Option<std::rc::Rc<dyn Fn() -> bool>>) {
+        self.vm.interrupt_handler = handler.map(crate::vm::InterruptHandler);
+    }
+
     /// Get a mutable reference to the [`RuntimeLimits`].
     #[inline]
     pub fn runtime_limits_mut(&mut self) -> &mut RuntimeLimits {

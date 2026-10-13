@@ -271,7 +271,7 @@ impl BoaRuntime {
             simple: simple.map(Rc::new),
             runtime: Cell::new(ptr::null()),
         });
-        let Ok(context) = Context::builder()
+        let Ok(mut context) = Context::builder()
             .host_hooks(hooks.clone())
             .job_executor(executor.clone())
             .module_loader(loader.clone())
@@ -279,6 +279,11 @@ impl BoaRuntime {
         else {
             return RuntimeHandle::NULL;
         };
+        if let Some(interrupt) = options.interrupt {
+            let opaque = options.interrupt_opaque;
+            let handler: Rc<dyn Fn() -> bool> = Rc::new(move || interrupt(opaque));
+            context.set_interrupt_handler(Some(handler));
+        }
         let runtime = Box::into_raw(Box::new(BoaRuntime {
             ctx: Box::into_raw(Box::new(context)),
             options: *options,

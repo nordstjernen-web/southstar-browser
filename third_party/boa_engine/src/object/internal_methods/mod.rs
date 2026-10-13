@@ -20,6 +20,7 @@ use crate::{
     vm::source_info::NativeSourceInfo,
 };
 
+pub(crate) mod host;
 pub(crate) mod immutable_prototype;
 pub(crate) mod string;
 

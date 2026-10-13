@@ -42,6 +42,10 @@ pub mod shape;
 pub(crate) use builtins::*;
 
 pub use datatypes::JsData;
+pub use internal_methods::InternalObjectMethods;
+pub use internal_methods::host::{
+    HostExoticHooks, host_internal_methods, ordinary_define_own_property_of, set_host_exotic_hooks,
+};
 pub use jsobject::*;
 
 /// Const `constructor`, usually set on prototypes as a key to point to their respective constructor object.

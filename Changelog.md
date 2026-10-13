@@ -28,6 +28,12 @@ Southstar Browser 0.9.9:
   record in rust/js-runtime runs on it (with a typed API other crates call
   directly), DOMTokenList's prototype comes from the first Prop table, and
   docs/rust-port.md has a conversion guide for the remaining crates.
+* The Boa fork gained the embedder hooks host classes need: host exotic
+  internal methods (named and indexed access on Storage, DOMTokenList, form
+  controls and the other hooked classes now work on Boa), an interrupt
+  check that stops runaway scripts with an uncatchable error, and object
+  identities for weak node-wrapper pointers. On Boa, raw-instance
+  finalizers now run and class prototypes are kept per realm.
 * The audio helper southstar-audio is now Rust (rust/audio-helper): the
   same decoders (pl_mpeg, minimp3, libav, vorbisfile, opusfile), mixing and
   resampling to 44.1 kHz stereo through SDL2 or the silent fallback, the

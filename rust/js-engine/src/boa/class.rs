@@ -1,23 +1,20 @@
-//! Southstar — host classes on Boa: instances carrying Rust data and per-class prototypes; Boa 0.22 has no public custom internal methods, so a class's exotic hooks do not run.
+//! Southstar — host classes on Boa: instances carrying Rust data, per-realm class prototypes, raw-instance finalizers, and the class hooks run as the Boa fork's host exotic methods.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::any::Any;
-use std::cell::RefCell;
-use std::collections::HashMap;
 
 use boa_engine::builtins::object::OrdinaryObject;
+use boa_engine::object::{HostExoticHooks, ordinary_define_own_property_of, set_host_exotic_hooks};
+use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaKey};
-use boa_engine::{JsString, JsValue};
+use boa_engine::{Context, JsError, JsObject, JsResult, JsString, JsValue};
+use boa_gc::custom_trace;
 
-use super::{Scope, Value};
-use crate::{HostClass, OwnProperty, Trace};
+use super::{HostData, Scope, Value};
+use crate::{ClassHooks, HostClass, OwnProperty, Trace};
 
-thread_local! {
-    static PROTOTYPES: RefCell<HashMap<usize, Value>> = RefCell::new(HashMap::new());
-}
-
-struct ClassInstance<T> {
+pub(super) struct ClassInstance<T> {
     class: usize,
     data: T,
 }
@@ -30,10 +27,36 @@ impl<T: Trace> Trace for ClassInstance<T> {
 
 struct NoData;
 
-struct RawData(core::cell::Cell<*mut core::ffi::c_void>);
+pub(super) struct RawData(core::cell::Cell<*mut core::ffi::c_void>);
+
+#[derive(Default, Finalize, JsData)]
+struct ClassPrototypes(Vec<(usize, JsValue)>);
+
+unsafe impl BoaTrace for ClassPrototypes {
+    custom_trace!(this, mark, {
+        for (_, prototype) in &this.0 {
+            mark(prototype);
+        }
+    });
+}
 
 fn class_key(class: &HostClass) -> usize {
     core::ptr::from_ref(class) as usize
+}
+
+pub(super) fn has_hooks(hooks: &ClassHooks) -> bool {
+    hooks.get_own_property.is_some()
+        || hooks.get_own_property_receiver.is_some()
+        || hooks.own_keys.is_some()
+        || hooks.define_own_property.is_some()
+        || hooks.delete.is_some()
+        || hooks.set.is_some()
+}
+
+pub(super) fn take_raw(data: &dyn Any) -> Option<*mut core::ffi::c_void> {
+    let instance = data.downcast_ref::<ClassInstance<RawData>>()?;
+    let raw = instance.data.0.replace(core::ptr::null_mut());
+    (!raw.is_null()).then_some(raw)
 }
 
 #[derive(Clone)]
@@ -82,14 +105,45 @@ pub struct PropertyDefinition {
     has_value: bool,
     has_get: bool,
     has_set: bool,
+    descriptor: BoaPropertyDescriptor,
 }
 
 impl PropertyDefinition {
+    fn of(descriptor: &BoaPropertyDescriptor) -> PropertyDefinition {
+        PropertyDefinition {
+            value: Value(descriptor.value().cloned().unwrap_or_default()),
+            getter: Value(descriptor.get().cloned().unwrap_or_default()),
+            setter: Value(descriptor.set().cloned().unwrap_or_default()),
+            has_value: descriptor.value().is_some(),
+            has_get: descriptor.get().is_some(),
+            has_set: descriptor.set().is_some(),
+            descriptor: descriptor.clone(),
+        }
+    }
+
     pub fn throws(&self) -> bool {
         false
     }
 
-    pub fn clear_configurable(&mut self) {}
+    pub fn clear_configurable(&mut self) {
+        let mut builder = BoaPropertyDescriptor::builder();
+        if let Some(value) = self.descriptor.value() {
+            builder = builder.value(value.clone());
+        }
+        if let Some(writable) = self.descriptor.writable() {
+            builder = builder.writable(writable);
+        }
+        if let Some(get) = self.descriptor.get() {
+            builder = builder.get(get.clone());
+        }
+        if let Some(set) = self.descriptor.set() {
+            builder = builder.set(set.clone());
+        }
+        if let Some(enumerable) = self.descriptor.enumerable() {
+            builder = builder.enumerable(enumerable);
+        }
+        self.descriptor = builder.configurable(false).build();
+    }
 
     pub fn has_get(&self) -> bool {
         self.has_get
@@ -104,17 +158,154 @@ impl PropertyDefinition {
     }
 }
 
+fn descriptor_of(property: OwnProperty) -> BoaPropertyDescriptor {
+    let builder = if property.accessor {
+        BoaPropertyDescriptor::builder()
+            .get(property.getter.0)
+            .set(property.setter.0)
+    } else {
+        BoaPropertyDescriptor::builder()
+            .value(property.value.0)
+            .writable(property.writable)
+    };
+    builder
+        .enumerable(property.enumerable)
+        .configurable(property.configurable)
+        .build()
+}
+
+fn class_of(object: &JsObject) -> Option<&'static HostClass> {
+    object.downcast_ref::<HostData>()?.class()
+}
+
+fn thrown(error: Value) -> JsError {
+    JsError::from_opaque(error.0)
+}
+
+struct ExoticHooks;
+
+static EXOTIC_HOOKS: ExoticHooks = ExoticHooks;
+
+impl HostExoticHooks for ExoticHooks {
+    fn get_own_property(
+        &self,
+        object: &JsObject,
+        key: &BoaKey,
+        receiver: &JsValue,
+        context: &mut Context,
+    ) -> JsResult<Option<BoaPropertyDescriptor>> {
+        let Some(class) = class_of(object) else {
+            return Ok(None);
+        };
+        let this = Value(object.clone().into());
+        let key = PropertyKey(key.clone());
+        let receiver = Value(receiver.clone());
+        let mut scope = Scope::of(context);
+        let own = match (
+            class.hooks.get_own_property,
+            class.hooks.get_own_property_receiver,
+        ) {
+            (Some(hook), _) if receiver.same_object(&this) => hook(&mut scope, &this, &key),
+            (_, Some(hook)) => hook(&mut scope, &this, &key, &receiver),
+            (Some(hook), None) => hook(&mut scope, &this, &key),
+            (None, None) => return Ok(None),
+        };
+        own.map(|own| own.map(descriptor_of)).map_err(thrown)
+    }
+
+    fn define_own_property(
+        &self,
+        object: &JsObject,
+        key: &BoaKey,
+        desc: &BoaPropertyDescriptor,
+        context: &mut Context,
+    ) -> Option<JsResult<bool>> {
+        let hook = class_of(object)?.hooks.define_own_property?;
+        let this = Value(object.clone().into());
+        let definition = PropertyDefinition::of(desc);
+        let result = hook(
+            &mut Scope::of(context),
+            &this,
+            &PropertyKey(key.clone()),
+            &definition,
+        );
+        Some(result.map_err(thrown))
+    }
+
+    fn delete(
+        &self,
+        object: &JsObject,
+        key: &BoaKey,
+        context: &mut Context,
+    ) -> Option<JsResult<bool>> {
+        let hook = class_of(object)?.hooks.delete?;
+        let this = Value(object.clone().into());
+        let result = hook(&mut Scope::of(context), &this, &PropertyKey(key.clone()));
+        Some(result.map_err(thrown))
+    }
+
+    fn own_property_keys(&self, object: &JsObject, context: &mut Context) -> JsResult<Vec<BoaKey>> {
+        let Some(hook) = class_of(object).and_then(|class| class.hooks.own_keys) else {
+            return Ok(Vec::new());
+        };
+        let this = Value(object.clone().into());
+        hook(&mut Scope::of(context), &this)
+            .map(|keys| keys.into_iter().map(|key| key.0).collect())
+            .map_err(thrown)
+    }
+
+    fn set(
+        &self,
+        object: &JsObject,
+        key: &BoaKey,
+        value: &JsValue,
+        receiver: &JsValue,
+        context: &mut Context,
+    ) -> Option<JsResult<bool>> {
+        let hook = class_of(object)?.hooks.set?;
+        let this = Value(object.clone().into());
+        let result = hook(
+            &mut Scope::of(context),
+            &this,
+            &PropertyKey(key.clone()),
+            &Value(value.clone()),
+            &Value(receiver.clone()),
+            SetFlags,
+        );
+        Some(result.map_err(thrown))
+    }
+}
+
 impl Scope<'_> {
-    pub fn register_class(&mut self, _class: &'static HostClass) {}
+    pub fn register_class(&mut self, _class: &'static HostClass) {
+        set_host_exotic_hooks(&EXOTIC_HOOKS);
+    }
 
     pub fn set_class_prototype(&mut self, class: &HostClass, prototype: Value) {
-        PROTOTYPES.with(|map| map.borrow_mut().insert(class_key(class), prototype));
+        let key = class_key(class);
+        let realm = self.cx().realm().clone();
+        let mut host = realm.host_defined_mut();
+        if host.get::<ClassPrototypes>().is_none() {
+            host.insert(ClassPrototypes::default());
+        }
+        if let Some(prototypes) = host.get_mut::<ClassPrototypes>() {
+            prototypes.0.retain(|(known, _)| *known != key);
+            prototypes.0.push((key, prototype.0));
+        }
     }
 
     pub fn class_prototype(&mut self, class: &HostClass) -> Value {
-        PROTOTYPES
-            .with(|map| map.borrow().get(&class_key(class)).cloned())
-            .unwrap_or_else(Value::undefined)
+        let key = class_key(class);
+        let realm = self.cx().realm().clone();
+        let host = realm.host_defined();
+        let prototype = host.get::<ClassPrototypes>().and_then(|prototypes| {
+            prototypes
+                .0
+                .iter()
+                .find(|(known, _)| *known == key)
+                .map(|(_, prototype)| prototype.clone())
+        });
+        prototype.map_or_else(Value::undefined, Value)
     }
 
     fn instance_prototype(
@@ -128,13 +319,34 @@ impl Scope<'_> {
         }
     }
 
+    fn class_instance<T: Any>(
+        &mut self,
+        class: &HostClass,
+        prototype: Option<&Value>,
+        data: T,
+        trace: Option<super::HostTrace>,
+    ) -> Value {
+        let prototype = self.instance_prototype(class, prototype);
+        let instance = ClassInstance {
+            class: class_key(class),
+            data,
+        };
+        self.host_object(
+            prototype.as_ref(),
+            instance,
+            trace,
+            core::ptr::from_ref(class),
+        )
+    }
+
     pub unsafe fn new_raw_instance(
         &mut self,
         class: &HostClass,
         prototype: Option<&Value>,
         data: *mut core::ffi::c_void,
     ) -> Result<Value, Value> {
-        self.new_instance_with(class, prototype, RawData(core::cell::Cell::new(data)))
+        let raw = RawData(core::cell::Cell::new(data));
+        Ok(self.class_instance(class, prototype, raw, None))
     }
 
     pub fn new_instance(
@@ -142,7 +354,7 @@ impl Scope<'_> {
         class: &HostClass,
         prototype: Option<&Value>,
     ) -> Result<Value, Value> {
-        self.new_instance_with(class, prototype, NoData)
+        Ok(self.class_instance(class, prototype, NoData, None))
     }
 
     pub fn new_instance_with<T: Any>(
@@ -151,12 +363,7 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
     ) -> Result<Value, Value> {
-        let prototype = self.instance_prototype(class, prototype);
-        let instance = ClassInstance {
-            class: class_key(class),
-            data,
-        };
-        Ok(self.new_host_object(prototype.as_ref(), instance))
+        Ok(self.class_instance(class, prototype, data, None))
     }
 
     pub fn new_traced_instance<T: Any + Trace>(
@@ -165,12 +372,8 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
     ) -> Result<Value, Value> {
-        let prototype = self.instance_prototype(class, prototype);
-        let instance = ClassInstance {
-            class: class_key(class),
-            data,
-        };
-        Ok(self.new_traced_host_object(prototype.as_ref(), instance))
+        let trace = Some(super::trace_as::<ClassInstance<T>> as super::HostTrace);
+        Ok(self.class_instance(class, prototype, data, trace))
     }
 
     pub fn property_key(&mut self, name: &[u8]) -> PropertyKey {
@@ -289,18 +492,8 @@ impl Scope<'_> {
         definition: &PropertyDefinition,
     ) -> Result<bool, Value> {
         let object = self.object(object)?;
-        let mut descriptor = BoaPropertyDescriptor::builder();
-        if definition.has_value {
-            descriptor = descriptor.value(definition.value.0.clone());
-        }
-        if definition.has_get {
-            descriptor = descriptor.maybe_get(definition.getter.0.as_object());
-        }
-        if definition.has_set {
-            descriptor = descriptor.maybe_set(definition.setter.0.as_object());
-        }
-        object
-            .define_property_or_throw(key.0.clone(), descriptor.build(), self.cx())
+        let descriptor = definition.descriptor.clone();
+        ordinary_define_own_property_of(&object, &key.0, descriptor, self.cx())
             .map_err(|error| self.error(error))
     }
 }
@@ -334,8 +527,10 @@ impl Value {
     }
 
     pub fn is_instance_of_class(&self, class: &HostClass) -> bool {
-        let key = class_key(class);
-        self.with_host::<ClassInstance<NoData>, _>(|instance| instance.class == key)
-            .unwrap_or(false)
+        self.0.as_object().is_some_and(|object| {
+            object
+                .downcast_ref::<HostData>()
+                .is_some_and(|host| core::ptr::addr_eq(host.class, core::ptr::from_ref(class)))
+        })
     }
 }
