@@ -36,17 +36,16 @@ Southstar Browser 0.9.9:
   record in rust/js-runtime runs on it (with a typed API other crates call
   directly), DOMTokenList's prototype comes from the first Prop table, and
   docs/rust-port.md has a conversion guide for the remaining crates.
-* The forms bindings (rust/js-forms) and the messaging and worker bindings
-  (rust/js-workers) are off raw QuickJS: every native has a Rust-ABI nsr_
-  entry point with Prop-table signatures, the engine and DOM calls they
-  make go through nsr_ twins, and the C-ABI shims the unconverted crates
-  still bind sit in a quickjs-only legacy.rs. js-forms builds on Boa;
-  js-workers waits only for rust/js-clone.
-* The forms bindings (rust/js-forms) are off raw QuickJS: every native has
-  a Rust-ABI nsr_ entry point with Prop-table signatures, the engine and
-  DOM calls they make go through nsr_ twins, the crate builds on Boa, and
-  the C-ABI shims the unconverted crates still bind sit in a quickjs-only
-  legacy.rs.
+* The forms bindings (rust/js-forms), the iframe browsing contexts
+  (rust/js-frames) and the messaging and worker bindings (rust/js-workers)
+  are off raw QuickJS: every native has a Rust-ABI nsr_ entry point with
+  Prop-table signatures, the engine and DOM calls they make go through nsr_
+  twins, and the C-ABI shims the unconverted crates still bind sit in a
+  quickjs-only legacy.rs. The frame-realm cloner runs on new neutral calls
+  (full property descriptors, private keys, native-function clones,
+  forwarders, registered host classes, plain-object tests) with QuickJS and
+  Boa implementations. js-forms and js-frames build on Boa; js-workers
+  waits only for rust/js-clone.
 * EventTarget and event dispatch (rust/js-dispatch) run on the neutral
   JavaScript API: realms are context handles, the event, console, frame and
   worker calls go through Rust-ABI entry points, the window's and worker's

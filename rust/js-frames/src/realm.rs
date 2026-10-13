@@ -3,11 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
-use southstar_js_engine::Value;
+use southstar_js_engine::{Attributes, Value};
 
 use crate::bootstrap;
 use crate::cloner;
-use crate::ffi::qjs::{Ctx, PROP_CONFIGURABLE, PROP_WRITABLE};
+use crate::ffi::ctx::Ctx;
 use crate::ffi::{self, Js};
 use crate::owner;
 use crate::page::{self, Frame};
@@ -336,7 +336,11 @@ pub(crate) fn run_modules(
         location,
         history,
     ];
-    let flags = PROP_WRITABLE | PROP_CONFIGURABLE;
+    let flags = Attributes {
+        writable: true,
+        enumerable: false,
+        configurable: true,
+    };
     let mut saved = Vec::with_capacity(SWAPPED_GLOBALS.len());
     for (name, value) in SWAPPED_GLOBALS.iter().zip(values) {
         saved.push(ctx.get(&global, name));

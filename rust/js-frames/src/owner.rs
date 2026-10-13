@@ -7,7 +7,7 @@ use std::ffi::{CStr, CString};
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::qjs::Ctx;
+use crate::ffi::ctx::Ctx;
 use crate::ffi::{self, Js};
 use crate::realm;
 

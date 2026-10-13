@@ -8,8 +8,8 @@ use southstar_dom::{Kind, MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};
 
 use crate::exposed::ExposedNames;
+use crate::ffi::ctx::Ctx;
 use crate::ffi::load;
-use crate::ffi::qjs::Ctx;
 use crate::ffi::{self, Js};
 use crate::origin::{self, CROSS_ORIGIN};
 use crate::page;

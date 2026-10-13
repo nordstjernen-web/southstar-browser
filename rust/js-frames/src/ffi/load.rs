@@ -1,4 +1,4 @@
-//! Southstar — the C calls loading a frame's document makes: fetching, decoding and parsing it, the engine state its load runs under and the page events it fires.
+//! Southstar — the calls loading a frame's document makes: fetching, decoding and parsing it, the engine state its load runs under and the page events it fires.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,10 +8,10 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GError};
-use southstar_js_engine::Value;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
+use southstar_js_engine::{ContextHandle, Value};
 
-use super::qjs::Ctx;
+use super::ctx::Ctx;
+use super::imports::{nsr_js_frame_load_enter, nsr_realmdoc_deny_cookie, nsr_window_link_outward};
 use super::{Js, NsJs, opt_ptr, owned_text};
 
 #[repr(C)]
@@ -161,23 +161,14 @@ unsafe extern "C" {
     fn ns_script_type_supported(node: *const NsNode) -> GBoolean;
     fn ns_script_skipped_by_nomodule(node: *const NsNode) -> GBoolean;
     fn ns_script_type_is_module(node: *const NsNode) -> GBoolean;
-    fn ns_realmdoc_deny_cookie(ctx: *mut JSContext, doc: JSValue);
-    fn ns_window_link_outward(js: *mut NsJs, outward: JSValue, realm_window: JSValue);
     fn ns_js_eval_budget_us() -> i64;
     fn ns_js_frame_scope_push(
         js: *mut NsJs,
-        realm: *mut JSContext,
+        realm: ContextHandle,
         frame: *mut NsNode,
         buf: *mut c_void,
     );
     fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_frame_load_enter(
-        js: *mut NsJs,
-        frame: *mut NsNode,
-        doc: *mut NsNode,
-        url: *const c_char,
-        realm_doc: JSValue,
-    ) -> *mut c_void;
     fn ns_js_frame_load_leave(js: *mut NsJs, token: *mut c_void);
     fn ns_js_frame_eval_begin(js: *mut NsJs, script: *mut NsNode, deadline_us: i64) -> *mut NsNode;
     fn ns_js_frame_eval_end(js: *mut NsJs, previous_script: *mut NsNode);
@@ -577,11 +568,11 @@ pub(crate) fn script_type_is_module(script: Node<'_>) -> bool {
 }
 
 pub(crate) fn deny_cookie(ctx: Ctx, doc: &Value) {
-    unsafe { ns_realmdoc_deny_cookie(ctx.ptr(), quickjs::raw(doc)) };
+    ctx.try_enter(|scope| nsr_realmdoc_deny_cookie(scope, doc));
 }
 
 pub(crate) fn link_outward(js: Js, outward: &Value, realm_window: &Value) {
-    unsafe { ns_window_link_outward(js.ptr(), quickjs::raw(outward), quickjs::raw(realm_window)) };
+    unsafe { nsr_window_link_outward(js.ptr(), outward, realm_window) };
 }
 
 pub(crate) fn eval_budget_us() -> i64 {
@@ -591,7 +582,7 @@ pub(crate) fn eval_budget_us() -> i64 {
 pub(crate) fn in_frame_scope<R>(js: Js, realm: Ctx, frame: Node<'_>, f: impl FnOnce() -> R) -> R {
     let mut buffer = ScopeBuffer([0; 128]);
     let buf: *mut c_void = buffer.0.as_mut_ptr().cast();
-    unsafe { ns_js_frame_scope_push(js.ptr(), realm.ptr(), frame.as_mut_ptr(), buf) };
+    unsafe { ns_js_frame_scope_push(js.ptr(), realm.handle(), frame.as_mut_ptr(), buf) };
     let result = f();
     unsafe { ns_js_realm_scope_pop(js.ptr(), buf) };
     result
@@ -606,12 +597,12 @@ pub(crate) fn during_frame_load<R>(
     f: impl FnOnce() -> R,
 ) -> R {
     let token = unsafe {
-        ns_js_frame_load_enter(
+        nsr_js_frame_load_enter(
             js.ptr(),
             frame.as_mut_ptr(),
             doc.as_mut_ptr(),
             url.as_ptr(),
-            quickjs::raw(realm_doc),
+            realm_doc,
         )
     };
     let result = f();

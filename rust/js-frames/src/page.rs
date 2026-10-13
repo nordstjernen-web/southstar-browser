@@ -10,7 +10,7 @@ use southstar_js_engine::Value;
 
 use crate::cloner::Shared;
 use crate::ffi::Js;
-use crate::ffi::qjs::Ctx;
+use crate::ffi::ctx::Ctx;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Frame(pub usize);

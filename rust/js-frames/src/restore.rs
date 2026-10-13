@@ -4,7 +4,7 @@
 
 use southstar_js_engine::Value;
 
-use crate::ffi::qjs::Ctx;
+use crate::ffi::ctx::Ctx;
 use crate::ffi::{self, Binding, Js};
 
 const PROTO_SNAPSHOT: &str = "(function(){var p=[Object.prototype,Array.prototype,Function.prototype,String.prototype,Number.prototype,Boolean.prototype,RegExp.prototype,Date.prototype,typeof Promise==='function'?Promise.prototype:null,typeof Map==='function'?Map.prototype:null,typeof Set==='function'?Set.prototype:null,typeof WeakMap==='function'?WeakMap.prototype:null,typeof WeakSet==='function'?WeakSet.prototype:null];return p.map(function(o){var m=Object.create(null);if(!o)return m;Object.getOwnPropertyNames(o).forEach(function(k){try{if(Object.prototype.propertyIsEnumerable.call(o,k))m[k]=1;}catch(e){}});return m;});})()";

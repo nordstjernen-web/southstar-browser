@@ -6,14 +6,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use southstar_js_engine::Value;
-use southstar_js_engine::quickjs;
+use southstar_js_engine::{Attributes, Value};
 
-use crate::ffi::qjs::{
-    Atom, Ctx, Descriptor, GPN_ENUM_ONLY, GPN_PRIVATE, GPN_STRING, GPN_SYMBOL, PROP_C_W_E,
-    PROP_CONFIGURABLE, PROP_ENUMERABLE, PROP_HAS_CONFIGURABLE, PROP_HAS_ENUMERABLE, PROP_HAS_GET,
-    PROP_HAS_SET, PROP_HAS_VALUE, PROP_HAS_WRITABLE, PROP_WRITABLE, class_id, storage_area,
-};
+use crate::ffi::ctx::{Ctx, Descriptor, Key, Keys};
 use crate::ffi::{self, Js};
 use crate::page;
 
@@ -95,7 +90,11 @@ const SINGLETON_NAMES: &[&str] = &[
     "customElements",
 ];
 
-const PLAIN_OBJECT_CLASS: u32 = 1;
+const ALL: Attributes = Attributes {
+    writable: true,
+    enumerable: true,
+    configurable: true,
+};
 const MAX_DEPTH: u32 = 32;
 
 pub(crate) type Shared = Rc<RefCell<Cloner>>;
@@ -106,14 +105,20 @@ pub(crate) struct Cloner {
     memo: HashMap<usize, (Value, Value)>,
 }
 
-fn copied_flags(desc: &Descriptor) -> i32 {
-    PROP_HAS_CONFIGURABLE
-        | PROP_HAS_ENUMERABLE
-        | (desc.flags & (PROP_CONFIGURABLE | PROP_ENUMERABLE))
+fn identity(value: &Value) -> usize {
+    value.object_identity() as usize
 }
 
-fn data_flags(desc: &Descriptor) -> i32 {
-    PROP_HAS_VALUE | PROP_HAS_WRITABLE | (desc.flags & PROP_WRITABLE)
+fn data_descriptor(value: Value, like: &Descriptor) -> Descriptor {
+    Descriptor {
+        value,
+        getter: Value::undefined(),
+        setter: Value::undefined(),
+        accessor: false,
+        configurable: like.configurable,
+        enumerable: like.enumerable,
+        writable: like.writable,
+    }
 }
 
 impl Cloner {
@@ -143,8 +148,8 @@ impl Cloner {
         eprintln!(
             "NSREALM memo={} objproto={} errproto={} src==main:{}",
             self.memo.len(),
-            self.memo.contains_key(&quickjs::identity(&object_proto)) as i32,
-            self.memo.contains_key(&quickjs::identity(&error_proto)) as i32,
+            self.memo.contains_key(&identity(&object_proto)) as i32,
+            self.memo.contains_key(&identity(&error_proto)) as i32,
             (src == main) as i32
         );
     }
@@ -154,7 +159,7 @@ impl Cloner {
             return;
         }
         self.memo
-            .entry(quickjs::identity(from))
+            .entry(identity(from))
             .or_insert_with(|| (from.clone(), to.clone()));
     }
 
@@ -162,7 +167,7 @@ impl Cloner {
         if !from.is_object() {
             return None;
         }
-        self.memo.get(&quickjs::identity(from)).map(|(_, to)| to)
+        self.memo.get(&identity(from)).map(|(_, to)| to)
     }
 
     fn map_pair(&mut self, from: &Value, to: &Value) {
@@ -205,11 +210,13 @@ impl Cloner {
             let count = src.to_int32(&length).max(0) as u32;
             for index in 0..count {
                 let from = src
-                    .enter(|scope| scope.get_index(&from_list, index))
-                    .unwrap_or_else(|_| Value::undefined());
+                    .try_enter(|scope| scope.get_index(&from_list, index).ok())
+                    .flatten()
+                    .unwrap_or_else(Value::undefined);
                 let to = dst
-                    .enter(|scope| scope.get_index(&to_list, index))
-                    .unwrap_or_else(|_| Value::undefined());
+                    .try_enter(|scope| scope.get_index(&to_list, index).ok())
+                    .flatten()
+                    .unwrap_or_else(Value::undefined);
                 self.map_pair(&from, &to);
             }
         }
@@ -225,7 +232,7 @@ impl Cloner {
         if depth > MAX_DEPTH {
             return value.clone();
         }
-        let Some(mut out) = self.dst.clone_c_function(value) else {
+        let Some(mut out) = self.dst.clone_native_function(value) else {
             return value.clone();
         };
         if out.is_undefined() {
@@ -243,31 +250,31 @@ impl Cloner {
         out
     }
 
-    fn clone_descriptor_into(&mut self, to: &Value, atom: &Atom, desc: &Descriptor, depth: u32) {
-        let mut flags = copied_flags(desc);
-        let undefined = Value::undefined();
-        if desc.is_accessor() {
-            let getter = self.clone_value(&desc.getter, depth + 1);
-            let setter = self.clone_value(&desc.setter, depth + 1);
-            flags |= PROP_HAS_GET | PROP_HAS_SET;
-            self.dst
-                .define(to, atom, &undefined, &getter, &setter, flags);
+    fn clone_descriptor_into(&mut self, to: &Value, key: &Key, desc: &Descriptor, depth: u32) {
+        let copy = if desc.accessor {
+            Descriptor {
+                value: Value::undefined(),
+                getter: self.clone_value(&desc.getter, depth + 1),
+                setter: self.clone_value(&desc.setter, depth + 1),
+                accessor: true,
+                configurable: desc.configurable,
+                enumerable: desc.enumerable,
+                writable: false,
+            }
         } else {
-            let value = self.clone_value(&desc.value, depth + 1);
-            flags |= data_flags(desc);
-            self.dst
-                .define(to, atom, &value, &undefined, &undefined, flags);
-        }
+            data_descriptor(self.clone_value(&desc.value, depth + 1), desc)
+        };
+        self.dst.define(to, key, &copy);
     }
 
     fn clone_own_properties(&mut self, from: &Value, to: &Value, depth: u32) {
         let src = self.src;
-        let Some(keys) = src.own_keys(from, GPN_STRING | GPN_SYMBOL) else {
+        let Some(keys) = src.own_keys(from, Keys::StringsAndSymbols) else {
             return;
         };
-        for atom in &keys {
-            if let Some(desc) = src.own_property(from, atom) {
-                self.clone_descriptor_into(to, atom, &desc, depth);
+        for key in &keys {
+            if let Some(desc) = src.own_property(from, key) {
+                self.clone_descriptor_into(to, key, &desc, depth);
             }
         }
     }
@@ -288,7 +295,7 @@ impl Cloner {
         if plain_namespace {
             return true;
         }
-        let constructor = Atom::new(src, c"constructor");
+        let constructor = Key::new(src, c"constructor");
         src.has_own(value, &constructor).unwrap_or(false)
     }
 
@@ -300,14 +307,14 @@ impl Cloner {
         }
     }
 
-    fn adopt_property(&mut self, object: &Value, atom: &Atom) {
-        let Some(desc) = self.src.own_property(object, atom) else {
+    fn adopt_property(&mut self, object: &Value, key: &Key) {
+        let Some(desc) = self.src.own_property(object, key) else {
             return;
         };
-        let accessor = desc.is_accessor();
+        let accessor = desc.accessor;
         let function = !accessor && self.src.is_function(&desc.value);
-        if desc.flags & PROP_CONFIGURABLE != 0 && (accessor || function) {
-            self.clone_descriptor_into(object, atom, &desc, 0);
+        if desc.configurable && (accessor || function) {
+            self.clone_descriptor_into(object, key, &desc, 0);
         }
     }
 
@@ -316,11 +323,11 @@ impl Cloner {
             return;
         }
         self.adopt_prototype(object);
-        let Some(keys) = self.src.own_keys(object, GPN_STRING | GPN_SYMBOL) else {
+        let Some(keys) = self.src.own_keys(object, Keys::StringsAndSymbols) else {
             return;
         };
-        for atom in &keys {
-            self.adopt_property(object, atom);
+        for key in &keys {
+            self.adopt_property(object, key);
         }
     }
 
@@ -340,7 +347,7 @@ impl Cloner {
         let proto = src.get(function, "prototype");
         proto.is_object()
             && src
-                .own_keys(&proto, GPN_STRING | GPN_SYMBOL)
+                .own_keys(&proto, Keys::StringsAndSymbols)
                 .is_some_and(|keys| keys.len() > 1)
     }
 
@@ -370,26 +377,19 @@ impl Cloner {
         &mut self,
         function: &Value,
         out: &Value,
-        atom: &Atom,
+        key: &Key,
         is_proto: bool,
         depth: u32,
     ) {
-        let Some(desc) = self.src.own_property(function, atom) else {
+        let Some(desc) = self.src.own_property(function, key) else {
             return;
         };
-        if !desc.is_accessor()
-            && is_proto
-            && desc.value.is_object()
-            && !self.ctor_owns_proto(function)
-        {
+        if !desc.accessor && is_proto && desc.value.is_object() && !self.ctor_owns_proto(function) {
             self.put(&desc.value, &desc.value);
-            let flags = copied_flags(&desc) | data_flags(&desc);
-            let undefined = Value::undefined();
-            self.dst
-                .define(out, atom, &desc.value, &undefined, &undefined, flags);
+            self.dst.define(out, key, &desc);
             return;
         }
-        self.clone_descriptor_into(out, atom, &desc, depth);
+        self.clone_descriptor_into(out, key, &desc, depth);
     }
 
     fn clone_js_function(&mut self, function: &Value, depth: u32) -> Value {
@@ -399,21 +399,21 @@ impl Cloner {
         };
         self.put(function, &out);
         let src = self.src;
-        let Some(keys) = src.own_keys(function, GPN_STRING | GPN_SYMBOL) else {
+        let Some(keys) = src.own_keys(function, Keys::StringsAndSymbols) else {
             return out;
         };
-        let name = Atom::new(src, c"name");
-        let length = Atom::new(src, c"length");
-        let prototype = Atom::new(src, c"prototype");
-        for atom in &keys {
-            if atom.same(&name) || atom.same(&length) {
+        let name = Key::new(src, c"name");
+        let length = Key::new(src, c"length");
+        let prototype = Key::new(src, c"prototype");
+        for key in &keys {
+            if key.same(&name) || key.same(&length) {
                 continue;
             }
-            let is_proto = atom.same(&prototype);
+            let is_proto = key.same(&prototype);
             if is_proto && !constructor {
                 continue;
             }
-            self.forwarder_property(function, &out, atom, is_proto, depth);
+            self.forwarder_property(function, &out, key, is_proto, depth);
         }
         out
     }
@@ -429,20 +429,17 @@ impl Cloner {
     }
 
     fn new_shell(&self, value: &Value) -> Option<Value> {
-        let class = class_id(value);
-        let named = ffi::window_named_class_id();
-        if named != 0 && class == named {
-            return self.dst.new_object_class(named);
+        if ffi::is_window_named(value) {
+            return ffi::new_window_named(self.dst);
         }
-        if class != PLAIN_OBJECT_CLASS || !self.object_is_shape(value) {
+        if !self.src.is_plain_object(value) || !self.object_is_shape(value) {
             return None;
         }
         self.dst.new_object_proto(&Value::null())
     }
 
     fn clone_class_protos(&mut self) {
-        let count = self.dst.class_count();
-        for class in 1..count {
+        for class in self.dst.registered_classes() {
             if self.dst.class_proto(class).is_object() {
                 continue;
             }
@@ -454,36 +451,32 @@ impl Cloner {
         }
     }
 
-    fn clone_storage(&mut self, value: &Value) -> Value {
-        let Some(out) = self.dst.new_storage(storage_area(value)) else {
+    fn clone_storage(&mut self, value: &Value, area: i32) -> Value {
+        let Some(out) = ffi::new_storage(self.dst, area) else {
             return value.clone();
         };
         self.put(value, &out);
         out
     }
 
-    fn instance_is_plain(&self, value: &Value, class: u32, depth: u32) -> bool {
-        let object_class = class_id(&self.dst.new_object());
-        class == object_class && depth <= 3 && !value.is_array()
+    fn instance_is_plain(&self, value: &Value, depth: u32) -> bool {
+        self.src.is_plain_object(value) && depth <= 3 && !value.is_array()
     }
 
     fn clone_instance_properties(&mut self, value: &Value, out: &Value, depth: u32) {
         let src = self.src;
-        let Some(keys) = src.own_keys(value, GPN_STRING | GPN_SYMBOL | GPN_PRIVATE) else {
+        let Some(keys) = src.own_keys(value, Keys::WithPrivate) else {
             return;
         };
-        let undefined = Value::undefined();
-        for atom in &keys {
-            let Some(desc) = src.own_property(value, atom) else {
+        for key in &keys {
+            let Some(desc) = src.own_property(value, key) else {
                 continue;
             };
-            if desc.is_accessor() {
-                self.clone_descriptor_into(out, atom, &desc, depth);
+            if desc.accessor {
+                self.clone_descriptor_into(out, key, &desc, depth);
             } else {
                 let cloned = self.clone_instance(&desc.value, depth + 1);
-                let flags = copied_flags(&desc) | data_flags(&desc);
-                self.dst
-                    .define(out, atom, &cloned, &undefined, &undefined, flags);
+                self.dst.define(out, key, &data_descriptor(cloned, &desc));
             }
         }
     }
@@ -510,24 +503,22 @@ impl Cloner {
         if let Some(hit) = self.lookup(value) {
             return hit.clone();
         }
-        let class = class_id(value);
-        let storage = ffi::storage_class_id();
-        if storage != 0 && class == storage {
-            return self.clone_storage(value);
+        if let Some(area) = ffi::storage_area(value) {
+            return self.clone_storage(value, area);
         }
-        if !self.instance_is_plain(value, class, depth) {
+        if !self.instance_is_plain(value, depth) {
             return value.clone();
         }
         self.clone_plain_instance(value, depth)
     }
 
-    fn adopt_navigator_value(&mut self, mine: &Value, atom: &Atom, values: &Value) {
-        let value = self.src.get_atom(mine, atom);
+    fn adopt_navigator_value(&mut self, mine: &Value, key: &Key, values: &Value) {
+        let value = self.src.get_key(mine, key);
         if !value.is_object() {
             return;
         }
         let own = self.clone_instance(&value, 0);
-        if let Some(name) = atom.name()
+        if let Some(name) = key.name()
             && own.is_object()
         {
             self.dst.set(values, &name.to_string_lossy(), own);
@@ -546,25 +537,25 @@ impl Cloner {
         if !mine.is_object() || !src.is_function(&adopt) {
             return;
         }
-        let Some(keys) = src.own_keys(&mine, GPN_STRING | GPN_ENUM_ONLY) else {
+        let Some(keys) = src.own_keys(&mine, Keys::EnumerableStrings) else {
             return;
         };
         let Some(values) = self.dst.new_object_proto(&Value::null()) else {
             return;
         };
-        for atom in &keys {
-            self.adopt_navigator_value(&mine, atom, &values);
+        for key in &keys {
+            self.adopt_navigator_value(&mine, key, &values);
         }
         let _ = src.call(&adopt, brand, &[frame_nav.clone(), values]);
     }
 
     fn install_singleton(&mut self, parent_global: &Value, frame_global: &Value, name: &str) {
         let dst = self.dst;
-        let atom = Atom::new(dst, &std::ffi::CString::new(name).unwrap_or_default());
-        let Some(desc) = dst.own_property(frame_global, &atom) else {
+        let key = Key::new(dst, &std::ffi::CString::new(name).unwrap_or_default());
+        let Some(desc) = dst.own_property(frame_global, &key) else {
             return;
         };
-        if desc.is_accessor() || !desc.value.is_object() {
+        if desc.accessor || !desc.value.is_object() {
             return;
         }
         let parent_value = self.src.get(parent_global, name);
@@ -572,13 +563,7 @@ impl Cloner {
             return;
         }
         let own = self.clone_instance(&desc.value, 0);
-        let flags = PROP_HAS_VALUE
-            | PROP_HAS_WRITABLE
-            | PROP_HAS_CONFIGURABLE
-            | PROP_HAS_ENUMERABLE
-            | (desc.flags & (PROP_WRITABLE | PROP_CONFIGURABLE | PROP_ENUMERABLE));
-        let undefined = Value::undefined();
-        dst.define(frame_global, &atom, &own, &undefined, &undefined, flags);
+        dst.define(frame_global, &key, &data_descriptor(own, &desc));
     }
 
     fn register_navigator(&mut self, nav: &Value) {
@@ -600,9 +585,9 @@ impl Cloner {
 
     fn client_information(&self, frame_global: &Value, nav: &Value) {
         let dst = self.dst;
-        let atom = Atom::new(dst, c"clientInformation");
-        if dst.has_own(frame_global, &atom) == Some(true) && nav.is_object() {
-            dst.define_value(frame_global, &atom, nav.clone(), PROP_C_W_E);
+        let key = Key::new(dst, c"clientInformation");
+        if dst.has_own(frame_global, &key) == Some(true) && nav.is_object() {
+            dst.define_value(frame_global, &key, nav.clone(), ALL);
         }
     }
 

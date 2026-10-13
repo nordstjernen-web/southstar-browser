@@ -8,17 +8,17 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::Value;
 
-use crate::ffi::qjs::{Ctx, GPN_STRING};
+use crate::ffi::ctx::{Ctx, Keys};
 use crate::ffi::{self, Js};
 use crate::page;
 use crate::realm::frame_of;
 
 fn global_names(ctx: Ctx) -> Vec<CString> {
     let global = ctx.global();
-    ctx.own_keys(&global, GPN_STRING)
+    ctx.own_keys(&global, Keys::Strings)
         .unwrap_or_default()
         .iter()
-        .filter_map(|atom| atom.name())
+        .filter_map(|key| key.name())
         .collect()
 }
 
