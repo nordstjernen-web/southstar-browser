@@ -448,6 +448,16 @@ natives! {
     nsr_document_elements_from_point => crate::hit::elements_from_point,
 }
 
+#[unsafe(no_mangle)]
+pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
+    crate::boxes::box_for_this(scope, this).map_or(ptr::null(), BoxRef::as_ptr)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value {
+    crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
+}
+
 getters! {
     nsr_element_get_offsetWidth => crate::metrics::get_offset_width,
     nsr_element_get_offsetHeight => crate::metrics::get_offset_height,

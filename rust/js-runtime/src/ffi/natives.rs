@@ -40,19 +40,6 @@ macro_rules! context_installers {
 }
 
 natives! {
-    ns_mutation_observer_ctor,
-    ns_mutation_observer_observe,
-    ns_mutation_observer_disconnect,
-    ns_mutation_observer_takeRecords,
-    ns_intersection_observer_ctor,
-    ns_intersection_observer_observe,
-    ns_intersection_observer_unobserve,
-    ns_intersection_observer_disconnect,
-    ns_intersection_observer_takeRecords,
-    ns_resize_observer_ctor,
-    ns_resize_observer_observe,
-    ns_resize_observer_unobserve,
-    ns_resize_observer_disconnect,
     ns_window_requestAnimationFrame,
     ns_window_cancelAnimationFrame,
     ns_window_url_update_object,

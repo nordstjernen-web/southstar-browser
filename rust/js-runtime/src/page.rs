@@ -396,28 +396,18 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     let performance = js.make_performance_object(scope, chrome_compat);
     let _ = scope.set(global, "performance", performance);
 
-    bind_ctor(
-        scope,
-        global,
-        "MutationObserver",
-        ns_mutation_observer_ctor,
-        1,
-    );
-    bind_ctor(
-        scope,
-        global,
-        "IntersectionObserver",
-        ns_intersection_observer_ctor,
-        1,
-    );
-    bind_ctor(scope, global, "ResizeObserver", ns_resize_observer_ctor, 1);
-    bind_constructor(
-        scope,
-        global,
-        "PerformanceObserver",
-        1,
-        imports::nsr_perf_observer_ctor,
-    );
+    let observer_constructors: [(&str, NativeFn); 4] = [
+        ("MutationObserver", imports::nsr_mutation_observer_ctor),
+        (
+            "IntersectionObserver",
+            imports::nsr_intersection_observer_ctor,
+        ),
+        ("ResizeObserver", imports::nsr_resize_observer_ctor),
+        ("PerformanceObserver", imports::nsr_perf_observer_ctor),
+    ];
+    for (name, constructor) in observer_constructors {
+        bind_constructor(scope, global, name, 1, constructor);
+    }
     bind_ctor(
         scope,
         global,
@@ -426,73 +416,88 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
         0,
     );
     imports::nsr_perf_install_entry_list(scope, global);
-    let observer_methods: [(&str, &str, Native, u32); 10] = [
+    let observer_methods: [(&str, &str, u32, NativeFn); 13] = [
         (
             "MutationObserver",
             "observe",
-            ns_mutation_observer_observe,
             2,
+            imports::nsr_mutation_observer_observe,
         ),
         (
             "MutationObserver",
             "disconnect",
-            ns_mutation_observer_disconnect,
             0,
+            imports::nsr_mutation_observer_disconnect,
         ),
         (
             "MutationObserver",
             "takeRecords",
-            ns_mutation_observer_takeRecords,
             0,
+            imports::nsr_mutation_observer_take_records,
         ),
         (
             "IntersectionObserver",
             "observe",
-            ns_intersection_observer_observe,
             1,
+            imports::nsr_intersection_observer_observe,
         ),
         (
             "IntersectionObserver",
             "unobserve",
-            ns_intersection_observer_unobserve,
             1,
+            imports::nsr_intersection_observer_unobserve,
         ),
         (
             "IntersectionObserver",
             "disconnect",
-            ns_intersection_observer_disconnect,
             0,
+            imports::nsr_intersection_observer_disconnect,
         ),
         (
             "IntersectionObserver",
             "takeRecords",
-            ns_intersection_observer_takeRecords,
             0,
+            imports::nsr_intersection_observer_take_records,
         ),
-        ("ResizeObserver", "observe", ns_resize_observer_observe, 2),
+        (
+            "ResizeObserver",
+            "observe",
+            2,
+            imports::nsr_resize_observer_observe,
+        ),
         (
             "ResizeObserver",
             "unobserve",
-            ns_resize_observer_unobserve,
             1,
+            imports::nsr_resize_observer_unobserve,
         ),
         (
             "ResizeObserver",
             "disconnect",
-            ns_resize_observer_disconnect,
             0,
+            imports::nsr_resize_observer_disconnect,
+        ),
+        (
+            "PerformanceObserver",
+            "observe",
+            1,
+            imports::nsr_perf_observer_observe,
+        ),
+        (
+            "PerformanceObserver",
+            "disconnect",
+            0,
+            imports::nsr_perf_observer_disconnect,
+        ),
+        (
+            "PerformanceObserver",
+            "takeRecords",
+            0,
+            imports::nsr_perf_observer_take_records,
         ),
     ];
-    for (constructor, name, native, arity) in observer_methods {
-        bind_proto_fn(scope, global, constructor, name, native, arity);
-    }
-    let perf_observer_methods: [(&str, u32, NativeFn); 3] = [
-        ("observe", 1, imports::nsr_perf_observer_observe),
-        ("disconnect", 0, imports::nsr_perf_observer_disconnect),
-        ("takeRecords", 0, imports::nsr_perf_observer_take_records),
-    ];
-    for (name, arity, native) in perf_observer_methods {
-        bind_prototype_native_if_missing(scope, global, "PerformanceObserver", name, arity, native);
+    for (constructor, name, arity, native) in observer_methods {
+        bind_prototype_native_if_missing(scope, global, constructor, name, arity, native);
     }
     let observer = get_or_undefined(scope, global, "PerformanceObserver");
     let entry_types = ffi::supported_entry_types(scope);

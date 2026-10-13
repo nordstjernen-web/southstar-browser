@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the observers as declared in src/js_internal.h, and the js.c and layout calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the observers, and the realm, geometry and layout calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox, Style};
 
 use crate::mutation::{self, Emit};
@@ -45,26 +45,12 @@ pub(crate) struct Rect {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_log_line(js: *const NsJs, line: *const c_char);
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_observer_schedule_tick(js: *const NsJs);
-    fn ns_js_call_observer(
-        js: *const NsJs,
-        ctx: *mut JSContext,
-        callback: JSValue,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-        report_type: *const c_char,
-        fresh_budget: GBoolean,
-    ) -> JSValue;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_unwrap_element(value: JSValue) -> *const NsNode;
     fn ns_node_arm_js_invalidate(node: *const NsNode);
-    fn ns_make_dom_rect(ctx: *mut JSContext, x: f64, y: f64, w: f64, h: f64) -> JSValue;
-    fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
-    fn ns_box_for_this(ctx: *mut JSContext, this_val: JSValue) -> *const NsBox;
+    safe fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_border_box(b: *const NsBox, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64);
     fn ns_box_visual_border_box(
@@ -85,19 +71,20 @@ unsafe extern "C" {
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
 }
 
+unsafe extern "Rust" {
+    safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
+    safe fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox;
+}
+
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope) as usize)
+    Js(scope.context_opaque() as usize)
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     if js.is_null() {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
-        return None;
-    }
-    Some(unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.ptr()) }.with(f)
 }
 
 pub(crate) fn has_main_context(js: Js) -> bool {
@@ -135,34 +122,28 @@ pub(crate) fn call_observer(
     fresh_budget: bool,
 ) -> Result<Value, Value> {
     let js = js_of(scope);
-    let mut raw_args: Vec<JSValue> = args.iter().map(quickjs::raw).collect();
-    let raw = unsafe {
-        ns_js_call_observer(
-            js.ptr(),
-            quickjs::raw_context(scope),
-            quickjs::raw(callback),
-            quickjs::raw(this),
-            raw_args.len() as c_int,
-            raw_args.as_mut_ptr(),
-            report_type.map_or(core::ptr::null(), CStr::as_ptr),
-            southstar_glib::boolean(fresh_budget),
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    let report = report_type.map(|text| text.to_string_lossy().into_owned());
+    api::call_observer(
+        js.ptr().cast_mut().cast(),
+        scope.handle(),
+        callback,
+        this,
+        args,
+        report.as_deref(),
+        fresh_budget,
+    )
 }
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: usize) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node as *const NsNode) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node as *const NsNode).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn node_address(value: &Value) -> usize {
-    unsafe { ns_unwrap_element(quickjs::raw(value)) as usize }
+    Node::ptr_or_null(api::unwrap_element(value)) as usize
 }
 
 pub(crate) fn arm_invalidate(node: usize) {
@@ -170,22 +151,15 @@ pub(crate) fn arm_invalidate(node: usize) {
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: Rect) -> Value {
-    let raw =
-        unsafe { ns_make_dom_rect(quickjs::raw_context(scope), rect.x, rect.y, rect.w, rect.h) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_dom_rect(scope, rect.x, rect.y, rect.w, rect.h)
 }
 
 pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {
-    unsafe { ns_perf_realm_now_ms(quickjs::raw_context(scope)) }
+    ns_perf_realm_now_ms(scope.handle())
 }
 
 pub(crate) fn box_for(scope: &mut Scope<'_>, value: &Value) -> Option<BoxRef<'static>> {
-    unsafe {
-        BoxRef::from_ptr(ns_box_for_this(
-            quickjs::raw_context(scope),
-            quickjs::raw(value),
-        ))
-    }
+    unsafe { BoxRef::from_ptr(nsr_box_for_this(scope, value)) }
 }
 
 pub(crate) fn find_by_dom(root: BoxRef<'_>, node: usize) -> Option<BoxRef<'static>> {
@@ -329,44 +303,33 @@ pub unsafe extern "C" fn ns_observers_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-macro_rules! export_native {
+macro_rules! nsr_natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            pub fn $name(
+                scope: &mut Scope<'_>,
+                this: &Value,
+                args: &[Value],
+            ) -> Result<Value, Value> {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
-export_native! {
-    ns_mutation_observer_ctor => mutation::constructor,
-    ns_mutation_observer_observe => mutation::observe,
-    ns_mutation_observer_disconnect => mutation::disconnect,
-    ns_mutation_observer_takeRecords => mutation::take_records,
-    ns_intersection_observer_ctor => intersection::constructor,
-    ns_intersection_observer_observe => intersection::observe,
-    ns_intersection_observer_unobserve => intersection::unobserve,
-    ns_intersection_observer_disconnect => intersection::disconnect,
-    ns_intersection_observer_takeRecords => intersection::take_records,
-    ns_resize_observer_ctor => resize::constructor,
-    ns_resize_observer_observe => resize::observe,
-    ns_resize_observer_unobserve => resize::unobserve,
-    ns_resize_observer_disconnect => resize::disconnect,
+nsr_natives! {
+    nsr_mutation_observer_ctor => mutation::constructor,
+    nsr_mutation_observer_observe => mutation::observe,
+    nsr_mutation_observer_disconnect => mutation::disconnect,
+    nsr_mutation_observer_take_records => mutation::take_records,
+    nsr_intersection_observer_ctor => intersection::constructor,
+    nsr_intersection_observer_observe => intersection::observe,
+    nsr_intersection_observer_unobserve => intersection::unobserve,
+    nsr_intersection_observer_disconnect => intersection::disconnect,
+    nsr_intersection_observer_take_records => intersection::take_records,
+    nsr_resize_observer_ctor => resize::constructor,
+    nsr_resize_observer_observe => resize::observe,
+    nsr_resize_observer_unobserve => resize::unobserve,
+    nsr_resize_observer_disconnect => resize::disconnect,
 }

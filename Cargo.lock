@@ -2273,6 +2273,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-layout",
 ]
 
