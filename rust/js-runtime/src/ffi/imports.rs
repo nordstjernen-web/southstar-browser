@@ -26,6 +26,11 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_structured_clone(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool);
     pub(crate) safe fn nsr_form_indexed_control(
         scope: &mut Scope<'_>,

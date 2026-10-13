@@ -1961,6 +1961,7 @@ dependencies = [
 name = "southstar-js-clone"
 version = "0.9.9"
 dependencies = [
+ "southstar-js-bind",
  "southstar-js-engine",
 ]
 

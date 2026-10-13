@@ -98,7 +98,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         ),
         (
             "structuredClone",
-            Binding::Raw(ns_window_structured_clone),
+            Binding::Rust(imports::nsr_window_structured_clone),
             1,
         ),
         (

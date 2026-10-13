@@ -93,7 +93,6 @@ natives! {
     ns_window_text_decoder_ctor,
     ns_window_filereader_ctor,
     ns_window_get_selection,
-    ns_window_structured_clone,
 }
 
 installers! {

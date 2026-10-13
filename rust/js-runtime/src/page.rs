@@ -845,12 +845,12 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     js.install_window_state(scope, global);
     ffi::imports::nsr_services_install_screen(scope, global);
 
-    bind_fn(
+    bind_native(
         scope,
         global,
         "structuredClone",
-        ns_window_structured_clone,
         1,
+        ffi::imports::nsr_window_structured_clone,
     );
     bind_native(
         scope,
