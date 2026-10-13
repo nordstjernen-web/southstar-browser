@@ -11,9 +11,9 @@ use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
 use boa_engine::job::PromiseJob;
 use boa_engine::object::builtins::{
-    AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat32Array,
-    JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise, JsTypedArray, JsUint8Array,
-    JsUint8ClampedArray, JsUint16Array, JsUint32Array,
+    AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat16Array,
+    JsFloat32Array, JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise,
+    JsTypedArray, JsUint8Array, JsUint8ClampedArray, JsUint16Array, JsUint32Array,
 };
 use boa_engine::object::{FunctionObjectBuilder, IntegrityLevel};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
@@ -786,10 +786,12 @@ impl Scope<'_> {
 
     pub unsafe fn external_array_buffer(
         &mut self,
-        _data: *mut u8,
-        _len: usize,
+        data: *mut u8,
+        len: usize,
     ) -> Result<Value, Value> {
-        Err(self.type_error("ArrayBuffers over external memory are not available on this engine"))
+        unsafe { JsArrayBuffer::from_external_bytes(data, len, self.cx()) }
+            .map(|buffer| Value(buffer.into()))
+            .map_err(|e| self.error(e))
     }
 
     pub fn buffer_source_bytes(&mut self, value: &Value) -> Option<Vec<u8>> {
@@ -804,7 +806,7 @@ impl Scope<'_> {
         let array = JsTypedArray::from_object(value.0.as_object()?.clone()).ok()?;
         let element_size = match array.kind()? {
             TypedArrayKind::Int8 | TypedArrayKind::Uint8 | TypedArrayKind::Uint8Clamped => 1,
-            TypedArrayKind::Int16 | TypedArrayKind::Uint16 => 2,
+            TypedArrayKind::Int16 | TypedArrayKind::Uint16 | TypedArrayKind::Float16 => 2,
             TypedArrayKind::Int32 | TypedArrayKind::Uint32 | TypedArrayKind::Float32 => 4,
             _ => 8,
         };
@@ -835,8 +837,7 @@ impl Scope<'_> {
             TypedArrayKind::BigUint64 => ElementType::BigUint64,
             TypedArrayKind::Float32 => ElementType::Float32,
             TypedArrayKind::Float64 => ElementType::Float64,
-            #[allow(unreachable_patterns)]
-            _ => ElementType::Float16,
+            TypedArrayKind::Float16 => ElementType::Float16,
         })
     }
 
@@ -882,9 +883,7 @@ impl Scope<'_> {
             }
             ElementType::Float32 => JsFloat32Array::from_array_buffer(buffer, ctx).map(Into::into),
             ElementType::Float64 => JsFloat64Array::from_array_buffer(buffer, ctx).map(Into::into),
-            ElementType::Float16 => {
-                return Err(self.type_error("Float16Array is not available on this engine"));
-            }
+            ElementType::Float16 => JsFloat16Array::from_array_buffer(buffer, ctx).map(Into::into),
         };
         array.map(Value).map_err(|e| self.error(e))
     }

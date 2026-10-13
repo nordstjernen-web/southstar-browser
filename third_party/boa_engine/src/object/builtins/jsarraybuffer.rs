@@ -100,6 +100,28 @@ impl JsArrayBuffer {
     /// # Ok(())
     /// # }
     /// ```
+    /// Creates a fixed-length `ArrayBuffer` that views `len` bytes of embedder memory at `ptr`
+    /// instead of owning its bytes. Detaching it drops the view; it cannot be transferred.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must stay valid for reads and writes of `len` bytes until the buffer is detached.
+    pub unsafe fn from_external_bytes(
+        ptr: *mut u8,
+        len: usize,
+        context: &mut Context,
+    ) -> JsResult<Self> {
+        let prototype = context
+            .intrinsics()
+            .constructors()
+            .array_buffer()
+            .prototype();
+        let obj = JsObject::new(context.root_shape(), prototype, unsafe {
+            ArrayBuffer::from_external(ptr, len)
+        });
+        Ok(Self { inner: obj })
+    }
+
     pub fn from_byte_block(byte_block: AlignedVec<u8>, context: &mut Context) -> JsResult<Self> {
         let constructor = context
             .intrinsics()

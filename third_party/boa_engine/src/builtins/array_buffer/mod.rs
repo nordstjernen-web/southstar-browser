@@ -209,6 +209,17 @@ pub struct ArrayBuffer {
 
     /// The `[[ArrayBufferDetachKey]]` internal slot.
     detach_key: JsValue,
+
+    /// Memory owned by the embedder that this buffer views instead of `data`.
+    #[unsafe_ignore_trace]
+    external: Option<ExternalBytes>,
+}
+
+/// A view of embedder-owned memory backing an `ArrayBuffer`.
+#[derive(Debug, Clone, Copy)]
+struct ExternalBytes {
+    ptr: *mut u8,
+    len: usize,
 }
 
 impl ArrayBuffer {
@@ -217,18 +228,58 @@ impl ArrayBuffer {
             data: Some(data),
             max_byte_len: None,
             detach_key,
+            external: None,
         }
     }
 
+    /// Creates a fixed-length buffer over `len` bytes of embedder memory at `ptr`.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be valid for reads and writes of `len` bytes until the buffer is detached.
+    pub(crate) unsafe fn from_external(ptr: *mut u8, len: usize) -> Self {
+        Self {
+            data: None,
+            max_byte_len: None,
+            detach_key: JsValue::undefined(),
+            external: Some(ExternalBytes { ptr, len }),
+        }
+    }
+
+    fn external_bytes(&self) -> Option<&[u8]> {
+        let external = self.external?;
+        if external.len == 0 {
+            return Some(&[]);
+        }
+        Some(unsafe { std::slice::from_raw_parts(external.ptr, external.len) })
+    }
+
+    fn external_bytes_mut(&mut self) -> Option<&mut [u8]> {
+        let external = self.external?;
+        if external.len == 0 {
+            return Some(&mut []);
+        }
+        Some(unsafe { std::slice::from_raw_parts_mut(external.ptr, external.len) })
+    }
+
     pub(crate) fn len(&self) -> usize {
-        self.data.as_ref().map_or(0, AlignedVec::len)
+        match self.external {
+            Some(external) => external.len,
+            None => self.data.as_ref().map_or(0, AlignedVec::len),
+        }
     }
 
     pub(crate) fn bytes(&self) -> Option<&[u8]> {
+        if self.external.is_some() {
+            return self.external_bytes();
+        }
         self.data.as_deref()
     }
 
     pub(crate) fn bytes_mut(&mut self) -> Option<&mut [u8]> {
+        if self.external.is_some() {
+            return self.external_bytes_mut();
+        }
         self.data.as_deref_mut()
     }
 
@@ -244,7 +295,7 @@ impl ArrayBuffer {
     /// Gets the inner bytes of the buffer without accessing the current atomic length.
     #[track_caller]
     pub(crate) fn bytes_with_len(&self, len: usize) -> Option<&[u8]> {
-        if let Some(s) = self.data.as_deref() {
+        if let Some(s) = self.bytes() {
             Some(&s[..len])
         } else {
             None
@@ -254,7 +305,7 @@ impl ArrayBuffer {
     /// Gets the mutable inner bytes of the buffer without accessing the current atomic length.
     #[track_caller]
     pub(crate) fn bytes_with_len_mut(&mut self, len: usize) -> Option<&mut [u8]> {
-        if let Some(s) = self.data.as_deref_mut() {
+        if let Some(s) = self.bytes_mut() {
             Some(&mut s[..len])
         } else {
             None
@@ -264,7 +315,7 @@ impl ArrayBuffer {
     /// Gets the underlying vector for this buffer.
     #[must_use]
     pub fn data(&self) -> Option<&[u8]> {
-        self.data.as_deref()
+        self.bytes()
     }
 
     /// Resizes the buffer to the new size, clamped to the maximum byte length if present.
@@ -306,6 +357,7 @@ impl ArrayBuffer {
                 .into());
         }
 
+        self.external = None;
         Ok(self.data.take())
     }
 
@@ -318,7 +370,7 @@ impl ArrayBuffer {
     pub(crate) const fn is_detached(&self) -> bool {
         // 1. If arrayBuffer.[[ArrayBufferData]] is null, return true.
         // 2. Return false.
-        self.data.is_none()
+        self.data.is_none() && self.external.is_none()
     }
 
     pub(crate) fn is_fixed_len(&self) -> bool {
@@ -787,6 +839,12 @@ impl ArrayBuffer {
             new_length.to_index(context)?
         };
 
+        if buf.borrow().data().external.is_some() {
+            return Err(JsNativeError::typ()
+                .with_message("cannot transfer a buffer over external memory")
+                .into());
+        }
+
         // 5. If IsDetachedBuffer(arrayBuffer) is true, throw a TypeError exception.
         let Some(mut bytes) = buf.borrow_mut().data_mut().data.take() else {
             return Err(JsNativeError::typ()
@@ -854,6 +912,7 @@ impl ArrayBuffer {
                 data: Some(bytes),
                 max_byte_len: new_max_len,
                 detach_key: JsValue::undefined(),
+                external: None,
             },
         )
         .into())
@@ -909,6 +968,7 @@ impl ArrayBuffer {
                 //    c. Set obj.[[ArrayBufferMaxByteLength]] to maxByteLength.
                 max_byte_len,
                 detach_key: JsValue::undefined(),
+                external: None,
             },
         );
 
