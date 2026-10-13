@@ -10,17 +10,13 @@ Comment:
  in Debian's main component. The NSL-1.0 alternative is documented below for
  completeness; it is not DFSG-free on its own.
  .
- The in-tree third-party engines (lexbor, QuickJS, WAMR) and vendored
+ The in-tree third-party engines (QuickJS, WAMR) and vendored
  single-file libraries (pl_mpeg, miniaudio) carry their own free
  licenses, reproduced from THIRD-PARTY-LICENSES.md below.
 
 Files: *
 Copyright: 2026 Andreas Røsdal
 License: GPL-3+ or NSL-1.0
-
-Files: src/lexbor/*
-Copyright: 2018-2025 Alexander Borisov
-License: Apache-2.0
 
 Files: src/quickjs/*
 Copyright: 2017-2024 Fabrice Bellard

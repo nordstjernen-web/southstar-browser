@@ -18,25 +18,6 @@ project's own license terms.
 
 ## Statically linked
 
-### lexbor — Apache License 2.0
-
-> HTML parser.
-> <https://github.com/lexbor/lexbor>
->
-> Copyright (c) 2018-2025 Alexander Borisov
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may
-not use this software except in compliance with the License. You may
-obtain a copy of the License at:
-
-  <http://www.apache.org/licenses/LICENSE-2.0>
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-implied. See the License for the specific language governing permissions
-and limitations under the License.
-
 ### quickjs-ng — MIT License
 
 > JavaScript engine.
@@ -209,8 +190,17 @@ authorization of the copyright holder.
 >
 > Copyright (c) 1998-2026 The OpenSSL Project Authors. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0. See the lexbor section
-above for the license text (same license).
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this software except in compliance with the License. You may
+obtain a copy of the License at:
+
+  <http://www.apache.org/licenses/LICENSE-2.0>
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions
+and limitations under the License.
 
 ### libwebp — BSD 3-Clause License
 
@@ -412,25 +402,7 @@ These are linked only when present on the build host (meson
 Apache 2.0 section 4(d) requires propagating any `NOTICE` files
 shipped with the upstream sources. As of this release:
 
-- lexbor ships a `NOTICE` file, carried in the fork at
-  `src/lexbor/NOTICE` and reproduced verbatim here:
-
->     Lexbor.
->
->     Copyright 2018-2020 Alexander Borisov
->
->     Licensed under the Apache License, Version 2.0 (the "License");
->     you may not use this file except in compliance with the License.
->     You may obtain a copy of the License at
->
->         http://www.apache.org/licenses/LICENSE-2.0
->
->     Unless required by applicable law or agreed to in writing, software
->     distributed under the License is distributed on an "AS IS" BASIS,
->     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
->     See the License for the specific language governing permissions and
->     limitations under the License.
-
+No bundled component currently ships a `NOTICE` file.
 
 If a future upstream release adds one, it will be included verbatim
 in this section.

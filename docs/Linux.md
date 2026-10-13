@@ -82,7 +82,7 @@ The zip contains the `southstar` binary, the application icon,
 the desktop entry, `README.md`, `THIRD-PARTY-LICENSES.md`, and a
 generated `INSTALL.md` listing the runtime requirements.
 
-The in-tree browser engine — lexbor, quickjs, and the
+The in-tree browser engine — rust/html5, quickjs, and the
 uchardet wrapper — is statically linked. The GTK desktop stack stays
 dynamic because it expects to find pixbuf loaders, IM modules, and
 font/theme data on the host at runtime; fully-static GTK isn't

@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* HTML is parsed by Southstar's own HTML5 parser, rust/html5, instead of
+  the vendored lexbor C library, which is removed from the tree (~68,000
+  lines). The tokenizer and tree builder are written from the WHATWG HTML
+  Standard in safe Rust with no dependencies: every tokenizer state, named
+  character references generated from WHATWG's entities.json
+  (scripts/gen-html-entities.py), every insertion mode with the adoption
+  agency, foster parenting, templates, foreign content, quirks, fragment
+  parsing, the relaxed <select> parsing and processing instructions. The
+  engine DOM is now built directly, without a second tree and copy pass, and
+  inline script source positions come from the tokenizer (they were wrong
+  after a "<script" inside a comment or script). The parsed trees are
+  identical on html5lib's tree-construction tests, the render tests and 30
+  live sites, and the render-test images are pixel-identical.
 * The engine-neutral JavaScript layer (rust/js-engine) gained what the
   bindings still took from QuickJS directly, each with a QuickJS and a Boa
   implementation: context and runtime handles that replace raw JSContext

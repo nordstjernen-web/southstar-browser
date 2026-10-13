@@ -67,7 +67,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
 
 ## Browser features
 
-- **HTML/CSS** — HTML is parsed by the in-tree lexbor engine; the CSS engine
+- **HTML/CSS** — HTML is parsed by Southstar's own `rust/html5`; the CSS engine
   covers the modern cascade and CSSOM, Media Queries Level 4, container
   queries and units, flex, grid, transforms, gradients, animations and
   vertical writing modes.
@@ -150,8 +150,7 @@ instructions are in
 Southstar is an independent engine — no upstream browser code.
 
 **Vendored in-tree**, built from the main tree with no submodules:
-[lexbor](https://github.com/lexbor/lexbor) (the HTML5 → DOM parser; URLs are
-parsed by Southstar's own `rust/url`), [QuickJS](https://github.com/quickjs-ng/quickjs)
+[QuickJS](https://github.com/quickjs-ng/quickjs)
 (quickjs-ng fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio) and [minimp3](https://github.com/lieff/minimp3)

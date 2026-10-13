@@ -12,7 +12,7 @@ the CI workflow installs. No Visual Studio, no MSVC, no vcpkg.
 The rationale is identical to the macOS Homebrew path: one
 package source, audited DLLs, and the resulting binary is a
 single PE32+ executable that links the same GTK 4 / libcurl /
-Cairo / Pango / lexbor libraries shipped to Linux users.
+Cairo / Pango libraries shipped to Linux users.
 
 ## One-time setup
 
@@ -88,10 +88,10 @@ meson compile -C builddir
 ```
 
 The QuickJS JS engine (forked from
-[quickjs-ng](https://github.com/quickjs-ng/quickjs)) and the lexbor
-HTML / WHATWG-URL parser are both vendored in-tree at
-`src/quickjs/` and `src/lexbor/` respectively, so the first
-`meson setup` no longer touches the network for either of them. The
+[quickjs-ng](https://github.com/quickjs-ng/quickjs)) is vendored in-tree at
+`src/quickjs/`, and the HTML and URL parsers are Southstar's own
+Rust crates, so the first `meson setup` does not touch the network
+for any of them. The
 image decoders are Rust crates built by Cargo; no C image-decoder
 subproject remains.
 
@@ -103,7 +103,6 @@ Build artifacts:
   sandboxed renderer the shell spawns per tab. Ship it next to
   `southstar.exe` (the packaging scripts do).
 - `builddir/src/quickjs/libqjs.a`
-- `builddir/src/lexbor/liblexbor_static.a`
 
 Running the exe directly out of `builddir` works as long as the
 MSYS2 mingw64 `bin` directory is on `PATH` (it is inside the

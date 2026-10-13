@@ -181,7 +181,7 @@ fi
 cat > "$STAGE/INSTALL.md" <<EOF
 # Southstar ${VERSION} — Linux ${ARCH} binary
 
-Stripped, LTO-optimised build. The browser engine itself (lexbor for
+Stripped, LTO-optimised build. The browser engine itself (rust/html5 for
 HTML, quickjs for JavaScript, Rust crates for image decoding, wasmi for
 WebAssembly) is statically linked into the binary. The GTK 4 desktop
 stack stays dynamic because it expects to find pixbuf loaders, IM

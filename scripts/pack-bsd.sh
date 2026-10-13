@@ -52,7 +52,7 @@ esac
 cat > "$STAGE/INSTALL.md" <<EOF
 # Southstar ${VERSION} — ${OS} x86_64
 
-Portable build. The browser engine (lexbor for HTML, quickjs for
+Portable build. The browser engine (rust/html5 for HTML, quickjs for
 JavaScript, Rust crates for image decoding, wasmi for WebAssembly) is statically
 linked into the binary; GTK 4 and the other shared runtime libraries come
 from your system. The Linux syscall sandbox (seccomp) does not exist on

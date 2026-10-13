@@ -33,7 +33,7 @@ trusted.
 
 **Out of scope**
 
-- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, lexbor, QuickJS,
+- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, QuickJS,
   the png/gif/zune-jpeg crates, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
@@ -303,9 +303,9 @@ attacker-controlled bytes and no path-traversal is possible.
 
 ### Parsers
 
-- HTML is parsed exclusively by [lexbor](https://github.com/lexbor/lexbor);
-  there is no hand-rolled HTML tokenizer.
-- URL parsing routes through lexbor's WHATWG URL module.
+- HTML is parsed exclusively by `rust/html5`, a memory-safe Rust tokenizer
+  and tree builder written from the WHATWG HTML Standard.
+- URL parsing routes through `rust/url`, Southstar's WHATWG URL parser.
 - PNG/APNG, GIF, BMP, and JPEG bytes are decoded in safe Rust by the
   `png`, `gif` and `zune-jpeg` crates and an in-tree BMP decoder. SVG is rendered in-engine. Nothing else decodes
   images: there is no plugin-loaded fallback decoder, so the set of
@@ -344,7 +344,7 @@ Iframes are rendered. An `<iframe src>` is fetched through the same
 hardened network pipeline as any other resource (TLS verification,
 `http`/`https` only, mixed-content blocking, redirect clamp, response-size
 cap, CSP `frame-src`); `srcdoc` is parsed inline. The content document is
-parsed by lexbor and laid out in place.
+parsed by `rust/html5` and laid out in place.
 
 A loaded frame gets a JavaScript realm, but **within the parent tab's
 single QuickJS runtime** — there is no separate runtime, context, or OS

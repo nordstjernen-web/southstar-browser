@@ -200,7 +200,7 @@
         <ul>
           <li>Initial WebExtensions support with declarativeNetRequest content blocking and EasyList/ABP filter lists.</li>
           <li>Local SafeBrowsing-style phishing and malware protection.</li>
-          <li>Updated vendored QuickJS and Lexbor engines, with DOM, XHR, and CSS spec-compliance fixes.</li>
+          <li>Updated the vendored QuickJS engine and the HTML parser, with DOM, XHR, and CSS spec-compliance fixes.</li>
         </ul>
       </description>
     </release>

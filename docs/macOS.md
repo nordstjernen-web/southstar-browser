@@ -2,7 +2,7 @@
 
 Southstar runs natively on macOS through GTK 4's Quartz backend — no
 X11, no XQuartz, no WebKit. The same C engine shipped to Linux
-and Windows links the same GTK 4 / OpenSSL / Cairo / Pango / lexbor
+and Windows links the same GTK 4 / OpenSSL / Cairo / Pango
 libraries here; there is no Xcode project and no CocoaPods. This page
 covers both **installing the prebuilt app** and **building from source**.
 
@@ -125,7 +125,7 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-QuickJS, lexbor, pl_mpeg and minimp3 are vendored in-tree,
+QuickJS, pl_mpeg and minimp3 are vendored in-tree,
 so `meson setup` requires no submodules or setup-time downloads.
 
 To match CI exactly:

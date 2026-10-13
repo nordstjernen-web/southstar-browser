@@ -5,7 +5,7 @@ pkgver=1.0.29
 pkgrel=0
 pkgdesc="Small, hand-written web browser written in C with GTK 4"
 url="https://github.com/nordstjernen-web/southstar-browser"
-# quickjs and lexbor are vendored C and build in-tree; the engine also links
+# quickjs is vendored C and builds in-tree; the engine also links
 # a little C++ (poppler, libavif). Restrict to arches the deps + WAMR asm cover.
 arch="x86_64 aarch64"
 license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"

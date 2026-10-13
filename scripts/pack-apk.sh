@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a portable Southstar Alpine package (.apk) by repackaging the
 # bundle that pack-linux.sh produces. The binary is statically linked
-# against the in-tree engine (lexbor, quickjs). tracedeps is disabled
+# against the in-tree engine (quickjs). tracedeps is disabled
 # (the APKBUILD has no source=), so every shared library the binary
 # links against (see `objdump -p | grep NEEDED`) must be declared
 # manually in depends= below — keep that list in sync with the binary.
