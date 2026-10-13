@@ -10,8 +10,11 @@ Southstar Browser 0.9.9:
   anywhere, runtime creation with interrupt, rejection-tracker and module
   hooks, one-at-a-time job execution, declarative property tables (Prop)
   in place of QuickJS function lists, object identities and pins, brands,
-  bytecode and module records. rust/js-bind is the first crate fully on the
-  neutral API, and docs/rust-port.md has a conversion guide for the rest.
+  bytecode and module records. rust/js-bind, rust/js-realm, rust/js-intl
+  and rust/js-temporal are fully on the neutral API, the page/worker realm
+  record in rust/js-runtime runs on it (with a typed API other crates call
+  directly), DOMTokenList's prototype comes from the first Prop table, and
+  docs/rust-port.md has a conversion guide for the remaining crates.
 * The audio helper southstar-audio is now Rust (rust/audio-helper): the
   same decoders (pl_mpeg, minimp3, libav, vorbisfile, opusfile), mixing and
   resampling to 44.1 kHz stereo through SDL2 or the silent fallback, the

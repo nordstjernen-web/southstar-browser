@@ -825,7 +825,11 @@ in step with every new neutral-API helper cost more than it gave.
    realm record and the `quickjs` module calls left in the binding crates.
    Each moves onto the neutral API, and the Boa fork gains the hooks the host
    classes need (exotic internal methods, interrupts, finalizers on raw
-   instances).
+   instances). Since 13 October 2026 the neutral API has everything the
+   crates take from QuickJS (context and runtime handles, `Prop` tables,
+   native jobs, identities, brands, bytecode and module records), the realm
+   record in `rust/js-runtime` uses it, and the remaining crates convert by
+   the guide in "Converting a crate off raw QuickJS" below.
    The gaps found along the way are closed in the Boa backend or reported
    upstream: interrupts for runaway scripts, receiver-aware property access,
    function brands, engine-private names, realm queries, and repointing
@@ -878,10 +882,16 @@ pointer is kept but the finalizer does not run.
 
 Removing QuickJS means every `rust/js-*` crate, `rust/canvas`,
 `rust/webgl` and `rust/webgpu` stops using `southstar_js_engine::quickjs`
-and raw `JS_*` declarations. `rust/js-bind` and `rust/js-runtime` are the
-worked examples. A converted crate uses only the neutral API; the one
-exception is an optional `legacy.rs` of C-ABI shims kept for callers that
-are not converted yet, deleted entry by entry as its last caller moves.
+and raw `JS_*` declarations. A converted crate uses only the neutral API;
+the one exception is a `legacy.rs` of C-ABI shims kept for callers that
+are not converted yet, compiled only with the `quickjs` feature and
+deleted entry by entry as its last caller moves. Worked examples:
+`rust/js-bind` (neutral core, `legacy.rs`, `quickjs`/`boa` features),
+`rust/js-realm`, `rust/js-intl` and `rust/js-temporal` (fully neutral,
+called through Cargo dependencies), `rust/js-runtime` (record, scopes and
+scheduling neutral; `ffi/imports.rs` declares the `nsr_` functions it calls;
+`ffi/legacy.rs` and `ffi/natives.rs` hold what is still raw), and the
+`TLIST_PROTO`/`SRC_PROTO` tables in `rust/js-interfaces/src/ffi/tables.rs`.
 
 Contexts and runtimes. `ContextHandle` (one realm: a JSContext on QuickJS,
 a realm of the runtime's single `Context` on Boa) and `RuntimeHandle` are
@@ -939,15 +949,37 @@ converted caller is done and the wrapper disappears when the callee is
 converted. A converted callee keeps the old `ns_` C symbol in `legacy.rs`
 while raw callers remain.
 
-Order of work for one crate: convert its natives to `NativeFn` and its
-tables to `Prop`; switch records holding `*mut JSContext` to
-`ContextHandle`; replace each import by option 1, 2 or 3 above; move the
-exports raw crates still call into `legacy.rs`; in `rust/js-runtime`'s
-`ffi/natives.rs` and the installers in `page.rs` and `worker.rs`, switch
-this crate's natives and installers from the `ns_` C declarations to `nsr_`
-Rust ones (`bind_native` instead of `bind_fn`). Check with
-`cargo clippy -p <crate> -- -D warnings`, build, and load a page that
-exercises the crate.
+`rust/js-runtime` is the hub every realm is built by. Binding crates may
+depend on it (it depends on no binding crate) and call
+`southstar_js_runtime::api` — `make_element`, `unwrap_element`,
+`call_observer`, `queue_message_task`, `bytes_view`, `body_bytes`,
+`node_wrapper`, … — instead of its `ns_` exports; its context-only exports
+(`ns_js_main_context`, `ns_js_realm_scope_push`, …) already speak
+`ContextHandle`.
+
+Order of work for one crate: most natives are already Rust `NativeFn`s
+behind a `natives!`/`method!`-style macro, so export each one as an `nsr_`
+twin (or call it directly when the caller can depend on the crate); turn
+the crate's `FunctionListEntry` tables into `Prop` tables; switch records
+holding `*mut JSContext` to `ContextHandle`; replace each import by option
+1, 2 or 3 above, keeping `extern "Rust"` declarations in one
+`ffi/imports.rs`; move the exports raw crates still call into `legacy.rs`
+behind `#[cfg(feature = "quickjs")]` and give the crate `quickjs`/`boa`
+features like `rust/js-bind`. Then, in `rust/js-runtime`, delete the
+crate's entries from `ffi/natives.rs` and bind its natives and installers
+in `page.rs`/`worker.rs` through the `nsr_` declarations or the crate's own
+functions (`bind_native` instead of `bind_fn`), as `worker.rs` does for Intl,
+Temporal and ShadowRealm. Check with `cargo clippy -p <crate> -- -D
+warnings` and, for a crate with no raw code left, with
+`--no-default-features --features <crate>/boa`; build, and compare a page
+that exercises the crate against the previous build.
+
+Boa gaps the neutral layer reports rather than hides: no asynchronous
+interrupt (runaway scripts are not stopped), `caller_handle` is the current
+realm, no bytecode cache or `import.meta`, raw-instance finalizers and
+exotic class hooks do not run, class prototypes are per thread rather than
+per realm, and brands, engine-private names and `memory_usage` do
+nothing. Each is a hook for the Boa fork.
 
 ### Phase 8 — Remaining web platform features
 
