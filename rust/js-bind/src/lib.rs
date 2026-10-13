@@ -3,11 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod class;
-mod ffi;
 pub mod host;
+mod legacy;
 pub mod natives;
 
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 pub use host::HostKind;
 
@@ -28,6 +28,41 @@ pub fn bind_function(
     } else {
         scope.set(object, name, function)
     }
+}
+
+pub fn bind_native(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
+    let function = scope.function(name, arity, f);
+    let _ = bind_function(scope, object, name, function);
+}
+
+pub fn make_constructor(scope: &mut Scope<'_>, name: &str, arity: u32, f: NativeFn) -> Value {
+    let constructor = scope.constructor_or_function(name, arity, f);
+    let _ = attach_prototype(scope, &constructor, name);
+    constructor
+}
+
+pub fn bind_constructor(
+    scope: &mut Scope<'_>,
+    object: &Value,
+    name: &str,
+    arity: u32,
+    f: NativeFn,
+) {
+    let constructor = make_constructor(scope, name, arity, f);
+    let _ = scope.set(object, name, constructor);
+}
+
+pub fn bind_prototype_native_if_missing(
+    scope: &mut Scope<'_>,
+    global: &Value,
+    constructor_name: &str,
+    name: &str,
+    arity: u32,
+    f: NativeFn,
+) {
+    let _ = bind_prototype_function_if_missing(scope, global, constructor_name, name, |scope| {
+        scope.function(name, arity, f)
+    });
 }
 
 pub fn bind_function_if_missing(

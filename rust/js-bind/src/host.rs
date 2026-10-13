@@ -4,7 +4,7 @@
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi;
+use crate::class;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum HostKind {
@@ -253,21 +253,21 @@ const ACCESSOR: Attributes = Attributes {
 };
 
 pub fn kind_of(value: &Value) -> Option<HostKind> {
-    ffi::host_kind(value)
+    HostKind::from_raw(class::kind_of(value)?)
 }
 
 pub fn is(value: &Value, kind: HostKind) -> bool {
     kind_of(value) == Some(kind)
 }
 
-pub fn state(scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
-    ffi::host_state(scope, value, kind)
+pub fn state(_scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
+    class::kind_state(value, kind.raw()).filter(Value::is_object)
 }
 
 pub fn new_default(scope: &mut Scope<'_>, kind: HostKind) -> Result<Value, Value> {
     let global = scope.global();
     let prototype = crate::prototype_of(scope, &global, kind.interface());
-    ffi::new_host(scope, kind, &prototype)
+    class::new_host_object(scope, kind.raw(), &prototype)
 }
 
 pub fn construct(
@@ -285,7 +285,7 @@ pub fn construct(
     }
     let prototype = scope.get(new_target, "prototype")?;
     if prototype.is_object() {
-        ffi::new_host(scope, kind, &prototype)
+        class::new_host_object(scope, kind.raw(), &prototype)
     } else {
         new_default(scope, kind)
     }
@@ -302,7 +302,7 @@ fn checked(
         .and_then(|index| ATTRS.get(index));
     let found = attr.and_then(|attr| {
         let kind = kind_of(this).filter(|kind| attr.kinds.contains(kind))?;
-        ffi::host_state(scope, this, kind).map(|state| (attr, state))
+        state(scope, this, kind).map(|state| (attr, state))
     });
     found.ok_or_else(|| scope.type_error("Illegal invocation"))
 }
