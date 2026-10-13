@@ -82,6 +82,9 @@ pub struct NativeFunctionObject {
 
     /// The [`Realm`] in which the function is defined, or `None` if the realm is uninitialized.
     pub(crate) realm: Option<Realm>,
+
+    /// Whether the embedder made this function, as opposed to a built-in of the engine.
+    pub(crate) host: bool,
 }
 
 // SAFETY: this traces all fields that need to be traced by the GC.
@@ -93,6 +96,13 @@ unsafe impl Trace for NativeFunctionObject {
 }
 
 impl NativeFunctionObject {
+    /// Returns whether the embedder made this function through
+    /// [`FunctionObjectBuilder::host`](crate::object::FunctionObjectBuilder::host).
+    #[must_use]
+    pub const fn is_host(&self) -> bool {
+        self.host
+    }
+
     /// The Rust function this object calls.
     #[must_use]
     pub fn function(&self) -> &NativeFunction {
@@ -362,6 +372,7 @@ pub(crate) fn native_function_call(
         name,
         constructor,
         realm,
+        ..
     } = obj
         .downcast_ref::<NativeFunctionObject>()
         .expect("the object should be a native function object")
@@ -417,6 +428,7 @@ fn native_function_construct(
         name,
         constructor,
         realm,
+        ..
     } = obj
         .downcast_ref::<NativeFunctionObject>()
         .expect("the object should be a native function object")

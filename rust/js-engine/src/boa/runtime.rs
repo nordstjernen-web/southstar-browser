@@ -183,6 +183,7 @@ impl HostHooks for Hooks {
             })
             .unwrap_or_default();
         let handled = matches!(operation, OperationType::Handle);
+        let _host = super::access::enter(context);
         tracker(
             &mut Scope::of(context),
             &Value(promise.into()),
@@ -217,6 +218,7 @@ impl Loader {
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_default();
         let specifier = request.specifier().to_std_string_escaped();
+        let _host = super::access::enter(context);
         let mut scope = Scope::of(context);
         let name = match options.module_normalize {
             Some(normalize) => normalize(&mut scope, &base, &specifier),
@@ -487,6 +489,7 @@ impl ContextHandle {
         let record = self.record()?;
         let ctx = unsafe { (*record.runtime).ctx };
         let current = unsafe { (*ctx).realm().clone() };
+        let _host = super::access::enter(unsafe { &*ctx });
         if current == record.realm {
             return Some(f(&mut Scope::of(ctx)));
         }

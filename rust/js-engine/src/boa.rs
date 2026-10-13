@@ -27,7 +27,6 @@ use boa_engine::{
 use boa_gc::custom_trace;
 
 use boa_engine::builtins::error::Error as BoaError;
-use boa_engine::native_function::NativeFunctionObject;
 use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
 
 use crate::{
@@ -217,7 +216,9 @@ impl Engine {
     pub fn set_max_stack_size(&mut self, _bytes: usize) {}
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        f(&mut Scope::of(runtime::default_context(self.rt)))
+        let ctx = runtime::default_context(self.rt);
+        let _host = unsafe { ctx.as_ref() }.map(access::enter);
+        f(&mut Scope::of(ctx))
     }
 }
 
@@ -286,6 +287,9 @@ impl Scope<'_> {
         let path = source_path(options.name);
         let mut source = Source::from_bytes(source);
         if let Some(path) = &path {
+            if options.hide_source {
+                access::mark_engine_path(path);
+            }
             source = source.with_path(path);
         }
         self.cx().eval(source).map(Value).map_err(|e| self.error(e))
@@ -299,6 +303,9 @@ impl Scope<'_> {
         let path = source_path(options.name);
         let mut source = Source::from_bytes(source);
         if let Some(path) = &path {
+            if options.hide_source {
+                access::mark_engine_path(path);
+            }
             source = source.with_path(path);
         }
         let script = Script::parse(source, None, self.cx()).map_err(|e| self.error(e))?;
@@ -435,6 +442,7 @@ impl Scope<'_> {
         let function = FunctionObjectBuilder::new(self.cx().realm(), native)
             .name(JsString::from(name))
             .length(arity as usize)
+            .host(true)
             .build();
         Value(function.into())
     }
@@ -464,6 +472,7 @@ impl Scope<'_> {
             .name(JsString::from(name))
             .length(arity as usize)
             .constructor(true)
+            .host(true)
             .build();
         Value(function.into())
     }
@@ -480,6 +489,7 @@ impl Scope<'_> {
             .name(JsString::from(name))
             .length(arity as usize)
             .constructor(constructor)
+            .host(true)
             .build();
         Value(function.into())
     }
@@ -1084,7 +1094,7 @@ impl Scope<'_> {
         value
             .0
             .as_object()
-            .is_some_and(|o| o.is::<NativeFunctionObject>())
+            .is_some_and(|object| access::is_engine_function(&object))
     }
 
     pub fn to_object(&mut self, value: &Value) -> Result<Value, Value> {
@@ -1107,6 +1117,7 @@ impl Scope<'_> {
 
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
         let native = PromiseJob::new(move |ctx| {
+            let _host = access::enter(ctx);
             job(&mut Scope::of(ctx));
             Ok(JsValue::undefined())
         });

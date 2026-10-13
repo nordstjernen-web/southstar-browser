@@ -20,6 +20,7 @@ impl Scope<'_> {
         let function = FunctionObjectBuilder::new(&realm, native)
             .name(JsString::from(name.as_str()))
             .length(arity)
+            .host(true)
             .build();
         Value(function.into())
     }

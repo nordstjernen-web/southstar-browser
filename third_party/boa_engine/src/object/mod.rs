@@ -45,6 +45,7 @@ pub use datatypes::JsData;
 pub use internal_methods::InternalObjectMethods;
 pub use internal_methods::host::{
     HostExoticHooks, host_internal_methods, ordinary_define_own_property_of, set_host_exotic_hooks,
+    set_with_receiver,
 };
 pub use jsobject::*;
 
@@ -395,6 +396,7 @@ pub struct FunctionObjectBuilder<'realm> {
     constructor: Option<ConstructorKind>,
     name: JsString,
     length: usize,
+    host: bool,
 }
 
 impl<'realm> FunctionObjectBuilder<'realm> {
@@ -408,7 +410,17 @@ impl<'realm> FunctionObjectBuilder<'realm> {
             constructor: None,
             name: js_string!(),
             length: 0,
+            host: false,
         }
+    }
+
+    /// Marks the function as made by the embedder rather than being an engine built-in.
+    ///
+    /// The default is `false`.
+    #[must_use]
+    pub const fn host(mut self, yes: bool) -> Self {
+        self.host = yes;
+        self
     }
 
     /// Specify the name property of object function object.
@@ -453,6 +465,7 @@ impl<'realm> FunctionObjectBuilder<'realm> {
                 name: self.name.clone(),
                 constructor: self.constructor,
                 realm: Some(self.realm.clone()),
+                host: self.host,
             },
             vec![self.length.into(), self.name.into()],
         );
@@ -903,6 +916,7 @@ impl<'ctx> ConstructorBuilder<'ctx> {
                 name: self.name.clone(),
                 constructor: self.kind,
                 realm: Some(self.context.realm().clone()),
+                host: false,
             };
             let internal_methods = data.internal_methods();
             let mut constructor = Object {

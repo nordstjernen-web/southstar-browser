@@ -5,7 +5,9 @@
 use std::any::Any;
 
 use boa_engine::builtins::object::OrdinaryObject;
-use boa_engine::object::{HostExoticHooks, ordinary_define_own_property_of, set_host_exotic_hooks};
+use boa_engine::object::{
+    HostExoticHooks, ordinary_define_own_property_of, set_host_exotic_hooks, set_with_receiver,
+};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaKey};
 use boa_engine::{Context, JsError, JsObject, JsResult, JsString, JsValue};
@@ -481,13 +483,18 @@ impl Scope<'_> {
         target: &Value,
         key: &PropertyKey,
         value: &Value,
-        _receiver: &Value,
+        receiver: &Value,
         _flags: SetFlags,
     ) -> Result<bool, Value> {
         let target = self.object(target)?;
-        target
-            .set(key.0.clone(), value.0.clone(), false, self.cx())
-            .map_err(|error| self.error(error))
+        set_with_receiver(
+            &target,
+            key.0.clone(),
+            value.0.clone(),
+            receiver.0.clone(),
+            self.cx(),
+        )
+        .map_err(|error| self.error(error))
     }
 
     pub fn define_ordinary(

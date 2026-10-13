@@ -104,6 +104,22 @@ pub fn ordinary_define_own_property_of(
     ))
 }
 
+/// `[[Set]]` on `object` with an explicit `receiver`, so an accessor found on `object` runs
+/// with `receiver` as its `this`, for hooks that forward an assignment to a prototype.
+///
+/// # Errors
+/// Propagates an error from the setter or from the receiver's property definition.
+pub fn set_with_receiver(
+    object: &JsObject,
+    key: PropertyKey,
+    value: JsValue,
+    receiver: JsValue,
+    context: &mut Context,
+) -> JsResult<bool> {
+    let context = &mut InternalMethodPropertyContext::new(context);
+    object.__set__(key, value, receiver, context)
+}
+
 static HOST_EXOTIC_INTERNAL_METHODS: InternalObjectMethods = InternalObjectMethods {
     __get_own_property__: host_get_own_property,
     __define_own_property__: host_define_own_property,

@@ -23,6 +23,7 @@ impl Scope<'_> {
         let realm = self.cx().realm().clone();
         let job = PromiseJob::with_realm(
             move |ctx| {
+                let _host = super::access::enter(ctx);
                 f(&mut Scope::of(ctx), &args)
                     .map(|value| value.0)
                     .map_err(|error| JsError::from_opaque(error.0))
@@ -56,8 +57,8 @@ impl Scope<'_> {
 
     pub fn add_engine_private_name(&mut self, _name: &str) {}
 
-    pub fn is_engine_function(&mut self, _value: &Value) -> bool {
-        false
+    pub fn is_engine_function(&mut self, value: &Value) -> bool {
+        self.is_native_function(value)
     }
 
     pub fn array_buffer_ptr(&mut self, value: &Value) -> Option<(*mut u8, usize)> {

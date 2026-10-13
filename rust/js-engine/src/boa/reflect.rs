@@ -69,12 +69,13 @@ impl Scope<'_> {
         let Some(object) = function.0.as_object() else {
             return Ok(Value(JsValue::undefined()));
         };
-        let Some((native, name, constructor)) =
+        let Some((native, name, constructor, host)) =
             object.downcast_ref::<NativeFunctionObject>().map(|data| {
                 (
                     data.function().clone(),
                     data.name().clone(),
                     data.is_constructor(),
+                    data.is_host(),
                 )
             })
         else {
@@ -90,6 +91,7 @@ impl Scope<'_> {
             .name(name)
             .length(length as usize)
             .constructor(constructor)
+            .host(host)
             .build();
         Ok(Value(clone.into()))
     }
@@ -126,6 +128,7 @@ impl Scope<'_> {
             .name(JsString::from(name.split('\0').next().unwrap_or_default()))
             .length(length.max(0) as usize)
             .constructor(constructor)
+            .host(true)
             .build();
         Ok(Value(function.into()))
     }
