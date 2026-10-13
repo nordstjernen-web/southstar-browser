@@ -25,6 +25,7 @@ mod runtime;
 mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
+pub use misc::clear_identity_instance;
 
 pub const ENGINE_NAME: &str = "quickjs-ng";
 

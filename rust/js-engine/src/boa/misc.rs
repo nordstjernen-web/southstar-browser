@@ -4,12 +4,35 @@
 
 use core::ffi::c_void;
 
-use boa_engine::{JsObject, JsString};
+use boa_engine::job::PromiseJob;
+use boa_engine::{JsError, JsObject, JsString};
 
 use super::{Compiled, Scope, Value};
-use crate::{BrandMode, MemoryUsage};
+use crate::{BrandMode, MemoryUsage, TaskFn};
+
+pub unsafe fn clear_identity_instance(identity: *mut c_void) {
+    if !identity.is_null() {
+        let object = Value(unsafe { JsObject::from_identity(identity) }.into());
+        unsafe { object.set_raw_instance(core::ptr::null_mut()) };
+    }
+}
 
 impl Scope<'_> {
+    pub fn enqueue_native(&mut self, f: TaskFn, args: &[Value]) -> Result<(), Value> {
+        let args = args.to_vec();
+        let realm = self.cx().realm().clone();
+        let job = PromiseJob::with_realm(
+            move |ctx| {
+                f(&mut Scope::of(ctx), &args)
+                    .map(|value| value.0)
+                    .map_err(|error| JsError::from_opaque(error.0))
+            },
+            realm,
+        );
+        self.cx().enqueue_job(job.into());
+        Ok(())
+    }
+
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn object_from_identity(&mut self, identity: *mut c_void) -> Value {
         if identity.is_null() {
@@ -31,15 +54,17 @@ impl Scope<'_> {
         }
     }
 
-    pub unsafe fn clear_identity_instance(&mut self, identity: *mut c_void) {
-        let object = self.object_from_identity(identity);
-        unsafe { object.set_raw_instance(core::ptr::null_mut()) };
-    }
-
     pub fn add_engine_private_name(&mut self, _name: &str) {}
 
     pub fn is_engine_function(&mut self, _value: &Value) -> bool {
         false
+    }
+
+    pub fn array_buffer_ptr(&mut self, value: &Value) -> Option<(*mut u8, usize)> {
+        let object = value.0.as_object()?.clone();
+        let buffer = boa_engine::object::builtins::JsArrayBuffer::from_object(object).ok()?;
+        let mut data = buffer.data_mut()?;
+        Some((data.as_mut_ptr(), data.len()))
     }
 
     pub fn to_index(&mut self, value: &Value) -> Result<u64, Value> {

@@ -21,7 +21,7 @@ use quickjs_ffi as backend;
 pub use backend::quickjs;
 pub use backend::{
     ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Realm, Scope, SetFlags, Value,
-    engine_version,
+    clear_identity_instance, engine_version,
 };
 
 mod handles;
@@ -119,7 +119,10 @@ impl HostClass {
         }
     }
 
-    #[cfg_attr(not(feature = "quickjs"), allow(dead_code))]
+    pub fn id(&self) -> u32 {
+        self.assigned_id()
+    }
+
     pub(crate) fn assigned_id(&self) -> u32 {
         self.id.load(core::sync::atomic::Ordering::Acquire)
     }
@@ -160,6 +163,8 @@ pub type BoundFn = for<'a> fn(&mut Scope<'a>, &Value, &[Value], &[Value]) -> Res
 pub type RealmInit = for<'a> fn(&mut Scope<'a>) -> Result<(), Value>;
 
 pub type Job = for<'a> fn(&mut Scope<'a>);
+
+pub type TaskFn = for<'a> fn(&mut Scope<'a>, &[Value]) -> Result<Value, Value>;
 
 pub trait Trace {
     fn trace(&self, visit: &mut dyn FnMut(&Value));
