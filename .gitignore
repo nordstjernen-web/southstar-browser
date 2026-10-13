@@ -44,7 +44,6 @@ build.ninja
 compile_commands.json
 
 # Meson auto-downloaded subprojects (wrap files only are committed).
-# QuickJS lives in src/, not subprojects/.
 /subprojects/packagecache/
 /subprojects/ns-pango/
 

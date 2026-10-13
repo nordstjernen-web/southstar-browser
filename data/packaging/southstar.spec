@@ -50,7 +50,7 @@ ExclusiveOS:    linux
 Southstar is an independent, lightweight web browser built entirely
 from scratch in C, using GTK 4 for the UI and its own HTTP client for networking.
 It is a clean-room implementation with no upstream browser engine: the
-HTML parser (rust/html5), the JavaScript interpreter (QuickJS), and the
+HTML parser (rust/html5), the JavaScript interpreter (Boa), and the
 image decoders (Rust crates) are all integrated in-tree. The engine is a
 hardened, zero-JIT HTML/CSS renderer aimed at secure general web
 browsing, document reading, embedded systems, and embedding in other

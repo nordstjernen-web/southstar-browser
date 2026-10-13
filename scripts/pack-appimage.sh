@@ -60,7 +60,6 @@ meson compile -C "$BUILDDIR"
 rm -rf "$APPDIR"
 DESTDIR="$APPDIR" meson install -C "$BUILDDIR"
 
-rm -f "$APPDIR/usr/bin/qjs" "$APPDIR/usr/bin/qjsc"
 rm -rf "$APPDIR/usr/include" "$APPDIR/usr/lib" "$APPDIR/usr/lib64" \
        "$APPDIR/usr/lib32"
 

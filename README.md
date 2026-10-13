@@ -14,13 +14,10 @@ Java/JVM versions have been removed.
 ![Southstar Browser showing its start page](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
-[QuickJS-ng](https://github.com/quickjs-ng/quickjs), an interpreter (no JIT)
-that is forked into the tree at `src/quickjs/` and extended there with the
-browser's hooks. The bindings are being rewritten in Rust against an
-engine-neutral layer (`rust/js-engine`) so that the pure-Rust engine
-[Boa](https://github.com/boa-dev/boa) can take over: Boa becomes the default
-once the bindings run on it, and QuickJS is then removed. Until then Boa runs
-only the standalone test shell (`southstar-jsshell`).
+[Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
+(an interpreter, no JIT), forked into the tree at `third_party/boa_engine` and
+extended there with the hooks the browser needs. The bindings are Rust, over
+the engine layer in `rust/js-engine`.
 
 Supported platforms:
 * Linux
@@ -76,7 +73,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   metrics across layouts, so measuring and painting a run reach HarfBuzz once
   instead of three times. `-Dns-pango=disabled` links the system Pango
   instead.
-- **JavaScript** on the QuickJS interpreter — DOM, Shadow DOM, observer APIs,
+- **JavaScript** on the Boa interpreter — DOM, Shadow DOM, observer APIs,
   Canvas 2D (`Path2D`, `ImageBitmap`, `DOMMatrix`), WebCrypto
   (`crypto.subtle` over OpenSSL), custom elements including customized
   built-ins (`is=` / `{extends}`), and the `Navigation` API for single-page
@@ -150,8 +147,8 @@ instructions are in
 Southstar is an independent engine — no upstream browser code.
 
 **Vendored in-tree**, built from the main tree with no submodules:
-[QuickJS](https://github.com/quickjs-ng/quickjs)
-(quickjs-ng fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
+[Boa](https://github.com/boa-dev/boa)
+(fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio) and [minimp3](https://github.com/lieff/minimp3)
 (MP3). The only setup-time download is

@@ -14,10 +14,5 @@ southstar-extensions = { path = "../extensions", default-features = false }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 
-[features]
-default = ["quickjs"]
-quickjs = ["southstar-extensions/quickjs", "southstar-js-engine/quickjs"]
-boa = ["southstar-extensions/boa", "southstar-js-engine/boa"]
-
 [lints]
 workspace = true

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* Boa is Southstar's JavaScript engine and QuickJS-ng is gone: src/quickjs
+  (about 101,000 lines of C), rust/js-engine's QuickJS backend, the
+  quickjs/boa Cargo features of the binding crates, the polyfill verifier
+  that ran on qjs, scripts/test262-run.sh and scripts/js-engine-compare.py are
+  removed. about:southstar reports boa_engine.
 * The macOS Dock icon setter (macos_dock.m) is Rust, in rust/shell over the
   Objective-C runtime; the tree has no Objective-C left and meson no longer
   enables the objc language.

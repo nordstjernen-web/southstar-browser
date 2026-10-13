@@ -16,9 +16,6 @@ southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
 
 [features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs"]
-boa = ["southstar-js-engine/boa"]
 ns-pango = []
 webgpu = []
 

@@ -43,10 +43,5 @@ southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-traversal = { path = "../js-traversal" }
 southstar-js-window = { path = "../js-window" }
 
-[features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs", "southstar-js-bind/quickjs"]
-boa = ["southstar-js-engine/boa", "southstar-js-bind/boa"]
-
 [lints]
 workspace = true

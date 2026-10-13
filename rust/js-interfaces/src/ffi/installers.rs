@@ -28,13 +28,6 @@ const HOST_PROTO_STYLE: c_int = 0;
 const HOST_PROTO_DATASET: c_int = 1;
 const HOST_PROTO_TOKEN_LIST: c_int = 2;
 
-#[cfg(feature = "quickjs")]
-unsafe extern "C" {
-    fn ns_element_class_id() -> u32;
-    fn ns_attr_class_id() -> u32;
-    fn ns_js_brand_node_interfaces(ctx: ContextHandle, element_cid: u32, attr_cid: u32);
-}
-
 fn bind_all(scope: &mut Scope<'_>, proto: &Value, functions: &[(&str, NativeFn)]) {
     for &(name, f) in functions {
         bind_native(scope, proto, name, 1, f);
@@ -153,12 +146,6 @@ pub fn host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
     }
 }
 
-#[cfg(feature = "quickjs")]
-pub fn brand_node_classes(ctx: ContextHandle) {
-    unsafe { ns_js_brand_node_interfaces(ctx, ns_element_class_id(), ns_attr_class_id()) };
-}
-
-#[cfg(not(feature = "quickjs"))]
 pub fn brand_node_classes(_ctx: ContextHandle) {}
 
 pub fn link_interfaces(scope: &mut Scope<'_>) {

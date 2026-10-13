@@ -11,10 +11,5 @@ publish.workspace = true
 southstar-js-engine = { path = "../js-engine", default-features = false }
 wasmi = { version = "2.0", default-features = false, features = ["std", "validate"] }
 
-[features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs"]
-boa = ["southstar-js-engine/boa"]
-
 [lints]
 workspace = true

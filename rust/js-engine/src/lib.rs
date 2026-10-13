@@ -1,28 +1,14 @@
-//! Southstar — the engine-neutral JavaScript layer: one API over the in-tree QuickJS-ng fork or Boa, picked by a Cargo feature.
+//! Southstar — the JavaScript engine layer: the API the bindings use, implemented over the in-tree Boa fork.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-#[cfg(all(feature = "quickjs", feature = "boa"))]
-compile_error!("enable exactly one JavaScript engine: the `quickjs` or the `boa` feature");
-#[cfg(not(any(feature = "quickjs", feature = "boa")))]
-compile_error!("enable a JavaScript engine: the `quickjs` or the `boa` feature");
-
-#[cfg(feature = "boa")]
 mod boa;
-#[cfg(feature = "quickjs")]
-mod quickjs_ffi;
 
-#[cfg(feature = "boa")]
-use boa as backend;
-#[cfg(feature = "quickjs")]
-use quickjs_ffi as backend;
-
-#[cfg(feature = "quickjs")]
-pub use backend::quickjs;
 pub use backend::{
     ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Realm, Scope, SetFlags, Value,
     clear_identity_instance, engine_version,
 };
+use boa as backend;
 
 mod handles;
 mod table;
@@ -125,11 +111,6 @@ impl HostClass {
 
     pub(crate) fn assigned_id(&self) -> u32 {
         self.id.load(core::sync::atomic::Ordering::Acquire)
-    }
-
-    #[cfg_attr(not(feature = "quickjs"), allow(dead_code))]
-    pub(crate) fn id_slot(&self) -> &core::sync::atomic::AtomicU32 {
-        &self.id
     }
 }
 

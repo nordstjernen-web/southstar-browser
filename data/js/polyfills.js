@@ -4317,8 +4317,7 @@
         defineCtor('indexedDB', Object.create(IDBFactory.prototype));
     })();
 
-    // Workers need DOMException too; QuickJS-ng has it built in, the
-    // original QuickJS does not.
+    // Workers need DOMException too.
     if (typeof DOMException !== 'function') {
         var DOM_EXCEPTION_CODES = {
             IndexSizeError:               1,

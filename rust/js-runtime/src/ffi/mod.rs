@@ -5,8 +5,6 @@
 pub(crate) mod exports;
 pub(crate) mod glue;
 pub(crate) mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub(crate) mod record;
 pub(crate) mod scopes;
 pub(crate) mod state;

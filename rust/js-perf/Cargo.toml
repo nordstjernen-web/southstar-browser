@@ -11,10 +11,5 @@ publish.workspace = true
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-net = { path = "../net" }
 
-[features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs"]
-boa = ["southstar-js-engine/boa"]
-
 [lints]
 workspace = true

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a portable Southstar RPM by repackaging the bundle that
 # pack-linux.sh produces. The binary is already statically linked
-# against the in-tree engine (quickjs); the RPM only
+# against the in-tree engine; the RPM only
 # needs to declare the dynamic GTK / OpenSSL / rsvg system deps, and rpm's
 # auto-Requires picks those up from the binary's SONAMEs.
 set -euo pipefail

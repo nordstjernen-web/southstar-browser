@@ -16,9 +16,6 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-temporal = { path = "../js-temporal", default-features = false }
 
 [features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs", "southstar-js-temporal/quickjs"]
-boa = ["southstar-js-engine/boa", "southstar-js-temporal/boa"]
 boa-intl = ["southstar-js-engine/boa-intl"]
 
 [lints]

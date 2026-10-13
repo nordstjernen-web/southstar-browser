@@ -80,8 +80,7 @@ ns_buildtype = get_option('buildtype')
 ns_is_release = (ns_buildtype == 'release' or ns_buildtype == 'minsize')
 # Every build profile gets -O3 (via default_options optimization=3) plus
 # dead-section pruning. Southstar leans on the optimizer to inline the
-# QuickJS interpreter dispatch and our box-layout
-# loops; -O2 left ~30% on the table for JS-heavy pages. The -O level is
+# box-layout loops; -O2 left ~30% on the table for JS-heavy pages. The -O level is
 # left to meson's optimization option so it isn't passed twice (which
 # warns); we only add the section-GC flags here. Dev/non-release builds
 # keep -g3 + frame pointers so step debugging still works under -O3.
@@ -422,8 +421,7 @@ if have_wasm
   add_project_arguments('-DNS_HAVE_WASM=1', language: 'c')
 endif
 
-subdir('src/quickjs')
-message('JS engine: quickjs (in-tree quickjs-ng fork, full DOM bindings)')
+message('JS engine: Boa')
 
 install_data(
   'data/icons/hicolor/scalable/apps/southstar.svg',

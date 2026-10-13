@@ -62,7 +62,7 @@ nothing imported.
   sentence, then the copyright and SPDX lines), nothing else — including no
   `// SAFETY:` comments; keep `unsafe` in small `ffi` modules instead.
 - Bundled external projects are exempt from this comments policy.
-  In particular, do not reformat or strip comments from `src/quickjs/`
+  In particular, do not reformat or strip comments from `third_party/`
   or `subprojects/` just to satisfy Southstar style.
 
 ## Autonomous mode — read this every session
@@ -137,12 +137,8 @@ so local builds and CI compile with the minimum supported version.
 - No `#[test]`s. Check a port against the C it replaces with a throwaway
   differential harness, then in the browser itself.
 
-The QuickJS engine is integrated into the main tree at `src/quickjs/`
-(forked from [quickjs-ng](https://github.com/quickjs-ng/quickjs); we
-modify it freely — JIT, profiling, and other browser-side hooks live
-there). It is not a meson subproject — `src/quickjs/meson.build` is
-loaded via `subdir()` from the top-level and exposes `libquickjs` as
-a declared dependency directly in the parent scope.
+The JavaScript engine is Boa, forked in-tree at `third_party/boa_engine`
+(patched in through `[patch.crates-io]`); QuickJS-ng was removed in October 2026.
 
 ### HTML parser: `rust/html5`
 
@@ -249,7 +245,7 @@ Required dependency (Debian/Ubuntu `libssl-dev`, Fedora/RHEL
 WebCrypto SubtleCrypto surface) is implemented in `src/webcrypto.c`
 directly over OpenSSL's EVP/`OSSL_PARAM` APIs — hashing, HMAC, AES
 (GCM/CBC/CTR/KW), RSA (PKCS1/PSS/OAEP), ECDSA/ECDH (P-256/384/521),
-Ed25519/X25519, PBKDF2 and HKDF. The QuickJS `CryptoKey` class and `subtle.*`
+Ed25519/X25519, PBKDF2 and HKDF. The `CryptoKey` class and `subtle.*`
 argument marshalling live in `src/js.c`. OpenSSL is already linked
 transitively through libcurl's TLS backend on Linux and
 Windows/MSYS2; `meson` depends on `libcrypto` explicitly so the
@@ -316,7 +312,7 @@ dropped with `-Davif=disabled`. Both are auto-detected.
 `ccache` is the single biggest build-time win and meson picks it up
 automatically. With `ccache` installed, a clean `meson setup builddir
 && meson compile -C builddir` drops from ~35s to ~1s once the cache
-is warm — in-tree libraries (quickjs) hit the cache
+is warm — in-tree libraries hit the cache
 and re-link in negligible time. Install once:
 
 ```sh

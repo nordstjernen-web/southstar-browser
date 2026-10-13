@@ -1,24 +1,5 @@
 python = import('python').find_installation()
 
-qjsc_prog = find_program('qjsc', required: false)
-qjs_prog  = find_program('qjs',  required: false)
-
-if not meson.is_cross_build() and qjsc_prog.found() and qjs_prog.found()
-  # files() so the script path is absolute — a raw '../scripts/...' string would
-  # be resolved relative to the build dir and break out-of-tree builds.
-  verify_polyfills_py = files('../scripts/verify-polyfills.py')
-  polyfills_verify = custom_target(
-    'polyfills-verify',
-    input: ['../data/js/polyfills.js', '../scripts/verify-polyfills.js'],
-    output: 'polyfills.verified',
-    command: [
-      python, verify_polyfills_py,
-      qjsc_prog, qjs_prog, '@INPUT0@', '@INPUT1@', '@OUTPUT@',
-    ],
-    build_by_default: true,
-  )
-endif
-
 southstar_engine_sources = []
 
 southstar_win_resources = []
@@ -41,7 +22,6 @@ southstar_c_deps = [
   gmodule,
   libcrypto,
   libm,
-  libquickjs,
   libwebp,
   libwebpdemux,
   libplmpeg,
@@ -125,7 +105,7 @@ if host_machine.system() == 'netbsd'
 endif
 
 # The gmodule-2.0 dependency injects -Wl,--export-dynamic, which dumps every
-# internal engine symbol (~6000: ns_*, quickjs) into the executables'
+# internal engine symbol (~6000 ns_* symbols) into the executables'
 # .dynsym. Combined with -Wl,-z,now that bloats the dynamic-linker symbol
 # resolution done on every process start — and the renderer is forked+exec'd
 # afresh, so it pays that cost on each cold start. A version script localises

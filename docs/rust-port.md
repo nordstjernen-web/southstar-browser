@@ -781,6 +781,11 @@ numbers decide when the switch happens, not whether.
 
 #### The JavaScript engine track
 
+Status (13 October 2026): done. Boa runs the browser and is the only engine;
+`src/quickjs/` (about 101,000 lines of C), the `quickjs` backend of
+`rust/js-engine`, the per-crate `quickjs`/`boa` features and the C-ABI
+`legacy.rs` shims are deleted. What follows records how the track went.
+
 This runs alongside phase 7. It ends with a pure-Rust engine, Boa, as the
 default and QuickJS retired. QuickJS-ng and Boa coexist as configure-time
 options for as long as that takes.
@@ -1015,7 +1020,7 @@ What is left is third-party C. Each library gets its own decision:
 |---|---:|---|
 | Wuffs | ~97k | Replaced in phase 2 by `png`, `gif`, `zune-jpeg` and an in-tree BMP decoder (done) |
 | WAMR | ~73k | Replaced with `wasmi` (D9, October 2026) |
-| QuickJS-ng fork | ~101k | Coexists with Boa as a `js_engine` option, then is retired once Boa is the default (the JavaScript engine track, D12) |
+| QuickJS-ng fork | ~101k | Removed in October 2026; Boa is the only engine (the JavaScript engine track, D12) |
 | HTML/URL library | ~289k | Replaced by Southstar's own Rust WHATWG URL parser (`rust/url`) and HTML5 tokenizer and tree builder (`rust/html5`), written from the specs (D1 still keeps Servo's `html5ever` and `url` out); done, see "Replacing the vendored HTML parser" below |
 | pl_mpeg, minimp3 | ~6k | Keep, or move to Rust decoders (`symphonia` covers MP1/MP2/MP3 audio; MPEG-1 video has no maintained crate, so pl_mpeg's video half would be a hand port of its ~4k lines) |
 | ns-pango, Cairo, GTK 4, OpenSSL, SQLite, FFmpeg, SDL2, libwebp, libavif, uchardet, libpsl, libseccomp, Enchant, libepoxy | system / subproject | Keep behind FFI (libcurl and libnghttp2 are already gone) |

@@ -180,26 +180,12 @@ so local builds and CI compile with the minimum supported version.
   engine code and stay out.
 - No `#[test]`s. Check a port against the C it replaces with a throwaway
   differential harness, then in the browser itself.
-- **Goal: a pure-Rust browser, the JavaScript engine included.** QuickJS-ng
-  and Boa coexist as build options for a while; Boa becomes the default once
-  it meets the bar in docs/rust-port.md ("The JavaScript engine track"), and
-  QuickJS is then removed. So bindings ported out of js.c use the neutral
-  `js-engine` API (`Scope`, `Value`); its `quickjs` module is only for the
-  transitional C glue. New capabilities go on the neutral API, with a Boa
-  implementation.
-- JavaScript engines: `rust/js-engine` is the engine-neutral layer (feature
-  `quickjs`, the default, over the in-tree fork; feature `boa`, optional).
-  `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on
-  either; `scripts/js-engine-compare.py` rebuilds both shells, runs test262 and
-  Octane, and rewrites `docs/js-engines.md`. The QuickJS shell links
-  `builddir/src/quickjs/libqjs.a`, so build the browser first.
-
-The QuickJS engine is integrated into the main tree at `src/quickjs/`
-(forked from [quickjs-ng](https://github.com/quickjs-ng/quickjs); we
-modify it freely — JIT, profiling, and other browser-side hooks live
-there). It is not a meson subproject — `src/quickjs/meson.build` is
-loaded via `subdir()` from the top-level and exposes `libquickjs` as
-a declared dependency directly in the parent scope.
+- **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
+  (patched in through `[patch.crates-io]`). QuickJS-ng was removed in October
+  2026. Bindings use the `rust/js-engine` API (`Scope`, `Value`, `HostClass`);
+  engine hooks the bindings need go into the Boa fork.
+- `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on the same
+  engine layer.
 
 ### Text layout: ns-pango
 
@@ -337,7 +323,7 @@ Required dependency (Debian/Ubuntu `libssl-dev`, Fedora/RHEL
 WebCrypto SubtleCrypto surface) is implemented in `src/webcrypto.c`
 directly over OpenSSL's EVP/`OSSL_PARAM` APIs — hashing, HMAC, AES
 (GCM/CBC/CTR/KW), RSA (PKCS1/PSS/OAEP), ECDSA/ECDH (P-256/384/521),
-Ed25519/X25519, PBKDF2 and HKDF. The QuickJS `CryptoKey` class and `subtle.*` argument
+Ed25519/X25519, PBKDF2 and HKDF. The `CryptoKey` class and `subtle.*` argument
 marshalling live in `src/js.c`. OpenSSL is already linked transitively
 through libcurl's TLS backend on Linux and Windows/MSYS2; `meson`
 depends on `libcrypto` explicitly so the headers resolve.
@@ -398,7 +384,7 @@ On macOS and Windows it is not used and the syscall filter is a no-op.
 `ccache` is the single biggest build-time win and meson picks it up
 automatically. With `ccache` installed, a clean `meson setup builddir
 && meson compile -C builddir` drops from ~35s to ~1s once the cache
-is warm — in-tree libraries (quickjs) hit the cache
+is warm — in-tree libraries hit the cache
 and re-link in negligible time. Install once:
 
 ```sh

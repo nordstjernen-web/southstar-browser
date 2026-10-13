@@ -18,21 +18,6 @@ southstar-js-realm = { path = "../js-realm", default-features = false }
 southstar-js-temporal = { path = "../js-temporal", default-features = false }
 
 [features]
-default = ["quickjs"]
-quickjs = [
-    "southstar-js-bind/quickjs",
-    "southstar-js-engine/quickjs",
-    "southstar-js-intl/quickjs",
-    "southstar-js-realm/quickjs",
-    "southstar-js-temporal/quickjs",
-]
-boa = [
-    "southstar-js-bind/boa",
-    "southstar-js-engine/boa",
-    "southstar-js-intl/boa",
-    "southstar-js-realm/boa",
-    "southstar-js-temporal/boa",
-]
 wasm = []
 webgpu = []
 libav = []

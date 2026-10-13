@@ -14,10 +14,5 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-webaudio = { path = "../webaudio" }
 
-[features]
-default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs", "southstar-js-runtime/quickjs"]
-boa = ["southstar-js-engine/boa", "southstar-js-runtime/boa"]
-
 [lints]
 workspace = true

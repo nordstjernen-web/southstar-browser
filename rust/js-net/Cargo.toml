@@ -13,18 +13,5 @@ southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 
-[features]
-default = ["quickjs"]
-quickjs = [
-    "southstar-js-bind/quickjs",
-    "southstar-js-engine/quickjs",
-    "southstar-js-runtime/quickjs",
-]
-boa = [
-    "southstar-js-bind/boa",
-    "southstar-js-engine/boa",
-    "southstar-js-runtime/boa",
-]
-
 [lints]
 workspace = true

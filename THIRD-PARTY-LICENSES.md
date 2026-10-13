@@ -18,14 +18,9 @@ project's own license terms.
 
 ## Statically linked
 
-### quickjs-ng — MIT License
+### The MIT License
 
-> JavaScript engine.
-> <https://github.com/quickjs-ng/quickjs>
->
-> Copyright (c) 2017-2026 Fabrice Bellard
-> Copyright (c) 2017-2026 Charlie Gordon
-> Copyright (c) 2023-2026 the quickjs-ng contributors
+> The text the MIT-licensed components below refer to.
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
@@ -49,7 +44,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### Boa (boa_engine) — The Unlicense OR MIT License
 
 > JavaScript engine, vendored in third_party/boa_engine as the base of
-> Southstar's Boa fork (built only with the `boa` engine feature).
+> Southstar's JavaScript engine.
 > <https://github.com/boa-dev/boa>
 >
 > Used under the Unlicense, reproduced below; the MIT License is the
@@ -88,7 +83,7 @@ For more information, please refer to <https://unlicense.org>
 >
 > Copyright (c) 2019 Dominic Szablewski
 
-Licensed under the MIT License. See the quickjs-ng section above for the
+Licensed under the MIT License. See the MIT License text above for the
 license text (same license).
 
 ### minimp3 — CC0 1.0 Universal (public domain dedication)
@@ -232,7 +227,7 @@ THIS SOFTWARE.
 >
 > Copyright (c) 2014-2024 Tim Rühsen
 
-Licensed under the MIT License. See the quickjs-ng section above for the
+Licensed under the MIT License. See the MIT License text above for the
 full text (same license).
 
 ### SQLite — public domain
@@ -252,7 +247,7 @@ non-commercial, without restriction.
 >
 > Copyright (c) 2013-2014 Intel Corporation
 
-Licensed under the MIT License. See the quickjs-ng section above for the
+Licensed under the MIT License. See the MIT License text above for the
 full text (same license).
 
 ### zlib — zlib License
