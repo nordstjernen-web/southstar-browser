@@ -6,6 +6,8 @@ mod attribute_maps;
 mod attrs;
 mod change;
 mod ffi;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod orphans;
 mod record;
 mod tree;

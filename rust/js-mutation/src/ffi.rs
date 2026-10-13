@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of DOM change recording as declared in src/js_internal.h and src/js.h, and the js.c calls it makes.
+//! Southstar — the C ABI and Rust-ABI entry points of DOM change recording, and the page calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,8 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::attrs::QualifiedName;
 use crate::{Element, attribute_maps, attrs, change, orphans, record, tree};
@@ -24,9 +24,8 @@ pub(crate) struct Js(*mut NsJs);
 unsafe extern "C" {
     fn ns_qcache_invalidate(js: *mut NsJs);
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_main_realm(js: *const NsJs) -> *mut JSContext;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
+    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
     fn ns_css_mark_childlist_dirty(parent: *mut NsNode, added: *mut NsNode);
     fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
@@ -165,13 +164,8 @@ pub(crate) fn is_shadow_root(node: Element) -> bool {
     unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
 }
 
-fn page_context(js: Js) -> *mut JSContext {
-    let ctx = unsafe { ns_js_main_context(js.0) };
-    if ctx.is_null() {
-        unsafe { ns_js_main_realm(js.0) }
-    } else {
-        ctx
-    }
+fn page_context(js: Js) -> ContextHandle {
+    unsafe { ns_js_main_context(js.0).or(ns_js_main_realm(js.0)) }
 }
 
 pub(crate) fn has_main_context(js: Js) -> bool {
@@ -179,15 +173,11 @@ pub(crate) fn has_main_context(js: Js) -> bool {
 }
 
 pub(crate) fn with_page_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
-    let ctx = page_context(js);
-    if !ctx.is_null() {
-        unsafe { quickjs::with_context(ctx, f) };
-    }
+    page_context(js).with(f);
 }
 
 pub(crate) fn element_value(scope: &mut Scope<'_>, node: Element) -> Option<Value> {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    Some(unsafe { quickjs::take_value(scope, raw) })
+    api::make_element(scope, node.as_ptr()).ok()
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
@@ -726,24 +716,18 @@ pub unsafe extern "C" fn ns_js_commit_change(js: *mut NsJs, el: *const NsNode) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> JSValue {
+pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Value {
     let map = match (Js::of(js), unsafe { node(owner) }) {
         (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
         _ => None,
     };
-    quickjs::into_raw(map.unwrap_or_else(Value::undefined))
+    map.unwrap_or_else(Value::undefined)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attribute_map_remember(
-    ctx: *mut JSContext,
-    js: *mut NsJs,
-    owner: *const NsNode,
-    map: JSValue,
-) {
+pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, map: &Value) {
     if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
-        let map = unsafe { quickjs::with_context(ctx, |scope| quickjs::borrow_value(scope, map)) };
-        attribute_maps::remember(js, owner, map);
+        attribute_maps::remember(js, owner, map.clone());
     }
 }
 
