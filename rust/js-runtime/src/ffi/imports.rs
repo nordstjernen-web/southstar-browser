@@ -174,6 +174,20 @@ unsafe extern "Rust" {
     );
     #[cfg(feature = "webgpu")]
     pub(crate) safe fn nsr_webgpu_install(scope: &mut Scope<'_>, navigator: &Value);
+    pub(crate) safe fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_find(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_install_actions(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_install_browsing_context(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_install_history(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_open_method(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_worker_install_location(
         scope: &mut Scope<'_>,
         global: &Value,

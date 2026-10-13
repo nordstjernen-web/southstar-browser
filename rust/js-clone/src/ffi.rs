@@ -203,3 +203,23 @@ pub unsafe extern "C" fn ns_window_structured_clone(
 ) -> JSValue {
     unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::structured_clone) }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_structured_clone_transfer(
+    scope: &mut Scope<'_>,
+    value: &Value,
+    transfer: &Value,
+    seed_from: &Value,
+    seed_to: &Value,
+) -> Result<Value, Value> {
+    crate::clone_transfer(scope, value, transfer, (seed_from, seed_to))
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_structured_clone(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::structured_clone(scope, this, args)
+}

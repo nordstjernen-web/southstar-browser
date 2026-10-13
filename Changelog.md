@@ -49,6 +49,11 @@ Southstar Browser 0.9.9:
   worker calls go through Rust-ABI entry points, the window's and worker's
   listener and dispatch methods are bound from them, and the C shims the
   unconverted crates still call are kept in a QuickJS-only legacy module.
+* The window bindings (rust/js-window: History, the Navigation API,
+  Location, window.open, postMessage, named access) are off raw QuickJS:
+  realms are context handles, the page realm binds them through Rust-ABI
+  nsr_ entry points, and the C shims raw callers still use are confined to
+  a QuickJS-only legacy.rs.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

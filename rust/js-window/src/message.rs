@@ -59,10 +59,9 @@ fn main_realm(js: Js) -> Option<Realm> {
 }
 
 fn is_main_window(js: Js, window: &Value) -> bool {
-    main_realm(js).is_some_and(|realm| {
-        let global = realm.enter(|scope| scope.global());
-        global.same_object(window)
-    })
+    main_realm(js)
+        .and_then(|realm| realm.enter(|scope| scope.global()))
+        .is_some_and(|global| global.same_object(window))
 }
 
 fn origin_of(scope: &mut Scope<'_>, window: &Value) -> Option<Vec<u8>> {
@@ -109,7 +108,7 @@ fn adopt_data(scope: &mut Scope<'_>, realm: Realm, event: &Value) {
         } else {
             Value::undefined()
         };
-        if let Ok(adopted) = realm.enter(|realm_scope| {
+        if let Some(Ok(adopted)) = realm.enter(|realm_scope| {
             ffi::structured_clone_transfer(
                 realm_scope,
                 &data,
@@ -133,14 +132,16 @@ fn adopt_data(scope: &mut Scope<'_>, realm: Realm, event: &Value) {
                 .unwrap_or_else(|_| Value::undefined())
         })
         .collect();
-    let realm_ports = realm.enter(|realm_scope| {
-        let array = realm_scope.new_array();
-        for (index, item) in items.into_iter().enumerate() {
-            let _ = realm_scope.set_index(&array, index as u32, item);
-        }
-        let _ = realm_scope.freeze(&array);
-        array
-    });
+    let realm_ports = realm
+        .enter(|realm_scope| {
+            let array = realm_scope.new_array();
+            for (index, item) in items.into_iter().enumerate() {
+                let _ = realm_scope.set_index(&array, index as u32, item);
+            }
+            let _ = realm_scope.freeze(&array);
+            array
+        })
+        .unwrap_or_else(Value::undefined);
     set(scope, event, "ports", realm_ports);
 }
 
@@ -169,15 +170,17 @@ fn message_realm(scope: &mut Scope<'_>, target: &Value) -> Realm {
 }
 
 fn event_prototype(realm: Realm) -> Value {
-    realm.enter(|scope| {
-        let global = scope.global();
-        let constructor = get(scope, &global, "MessageEvent");
-        if constructor.is_object() {
-            get(scope, &constructor, "prototype")
-        } else {
-            Value::undefined()
-        }
-    })
+    realm
+        .enter(|scope| {
+            let global = scope.global();
+            let constructor = get(scope, &global, "MessageEvent");
+            if constructor.is_object() {
+                get(scope, &constructor, "prototype")
+            } else {
+                Value::undefined()
+            }
+        })
+        .unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn deliver(scope: &mut Scope<'_>, target: &Value, event: &Value) {
@@ -205,7 +208,9 @@ pub(crate) fn deliver(scope: &mut Scope<'_>, target: &Value, event: &Value) {
         && let Some(main) = main_realm(js)
     {
         let source = get(scope, event, "source");
-        let parent_global = main.enter(|main_scope| main_scope.global());
+        let parent_global = main
+            .enter(|main_scope| main_scope.global())
+            .unwrap_or_else(Value::undefined);
         if source.same_object(target) {
             set(scope, event, "source", actual.clone());
         } else if source.same_object(&parent_global) {
@@ -270,7 +275,9 @@ fn window_or_global(scope: &mut Scope<'_>, window: &Value, realm: Realm) -> Valu
     } else if realm == Realm::of(scope) {
         scope.global()
     } else {
-        realm.enter(|realm_scope| realm_scope.global())
+        realm
+            .enter(|realm_scope| realm_scope.global())
+            .unwrap_or_else(|| scope.global())
     }
 }
 
@@ -396,7 +403,9 @@ fn post_message(
     if realm == Realm::of(scope) {
         post(scope, posted)
     } else {
-        realm.enter(|realm_scope| post(realm_scope, posted))
+        realm
+            .enter(|realm_scope| post(realm_scope, posted))
+            .unwrap_or_else(|| Ok(Value::undefined()))
     }
 }
 

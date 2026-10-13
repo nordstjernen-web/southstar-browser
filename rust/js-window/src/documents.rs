@@ -43,7 +43,7 @@ fn frame_document(
 
 pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
     let js = ffi::js_of(scope);
-    let forwarded = ffi::forward_of(scope, js, window);
+    let forwarded = crate::message::forward_of(js, window);
     let window = if forwarded.is_object() {
         &forwarded
     } else {

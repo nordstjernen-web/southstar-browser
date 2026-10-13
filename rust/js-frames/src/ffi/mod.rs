@@ -1030,3 +1030,31 @@ pub unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> 
     let window = unsafe { Node::from_ptr(frame) }.and_then(|frame| realm::stored_window(js, frame));
     window.unwrap_or_else(Value::null)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_iframe_cross_origin_window(scope: &mut Scope<'_>, target: &Value) -> Value {
+    let raw = unsafe {
+        ns_iframe_cross_origin_window(
+            quickjs::raw_context(scope),
+            quickjs::into_raw(target.clone()),
+        )
+    };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_window_frame_node(js: *mut NsJs, window: &Value) -> *mut NsNode {
+    unsafe { ns_window_frame_node(js, quickjs::raw(window)) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_window_child_frame_window(
+    scope: &mut Scope<'_>,
+    doc: *mut NsNode,
+    index: u32,
+    name: Option<&CStr>,
+    raw: bool,
+) -> Result<Value, Value> {
+    let doc = unsafe { Node::from_ptr(doc) };
+    owner::child_frame_window(scope, doc, index, name, raw)
+}

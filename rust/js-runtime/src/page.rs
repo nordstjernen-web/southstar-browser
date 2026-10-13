@@ -300,7 +300,7 @@ fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
     bind_fn(scope, global, "clearTimeout", ns_services_clear_timer, 1);
     bind_fn(scope, global, "clearInterval", ns_services_clear_timer, 1);
     bind_fn(scope, global, "fetch", ns_js_fetch, 1);
-    ffi::install(scope, ns_window_bind_post_message, global);
+    imports::nsr_window_bind_post_message(scope, global);
 
     bind_ctor(scope, global, "Navigator", ns_illegal_constructor, 0);
     let navigator = ffi::window_navigator(scope);
@@ -516,20 +516,25 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     }
     js.sync_window_metrics();
 
-    ffi::install(scope, ns_window_install_actions, global);
-    let window_methods: [(&str, Native, u32); 10] = [
-        ("find", ns_window_find, 7),
+    imports::nsr_window_install_actions(scope, global);
+    bind_native(scope, global, "find", 7, imports::nsr_window_find);
+    let scroll_methods: [(&str, Native, u32); 5] = [
         ("scrollTo", ns_window_scroll_to, 2),
         ("scrollBy", ns_window_scroll_by, 2),
         ("scroll", ns_window_scroll_to, 2),
         ("scrollByLines", ns_window_scroll_by_lines, 1),
         ("scrollByPages", ns_window_scroll_by_pages, 1),
-        ("open", ns_window_open_method, 3),
+    ];
+    for (name, native, arity) in scroll_methods {
+        bind_fn(scope, global, name, native, arity);
+    }
+    bind_native(scope, global, "open", 3, imports::nsr_window_open_method);
+    let dialog_methods: [(&str, Native, u32); 3] = [
         ("confirm", ns_services_confirm, 1),
         ("prompt", ns_services_prompt, 2),
         ("matchMedia", ns_services_match_media, 1),
     ];
-    for (name, native, arity) in window_methods {
+    for (name, native, arity) in dialog_methods {
         bind_fn(scope, global, name, native, arity);
     }
     ffi::install(scope, ns_cssom_install_window, global);
@@ -564,7 +569,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
 
     ffi::install(scope, ns_events_install_window_base, global);
     bind_ctor(scope, global, "History", ns_illegal_constructor, 0);
-    ffi::install(scope, ns_window_install_history, global);
+    imports::nsr_window_install_history(scope, global);
     ffi::install(scope, ns_crypto_install_window, global);
 
     bind_fn(scope, global, "btoa", ns_window_btoa, 1);
@@ -768,7 +773,7 @@ fn install_named_properties(scope: &mut Scope<'_>, global: &Value) {
 }
 
 fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
-    ffi::install(scope, ns_window_install_browsing_context, global);
+    imports::nsr_window_install_browsing_context(scope, global);
     for name in WINDOW_EVENT_HANDLERS {
         let _ = scope.set(global, name, Value::null());
     }
