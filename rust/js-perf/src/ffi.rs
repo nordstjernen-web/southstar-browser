@@ -1,12 +1,11 @@
-//! Southstar — the C ABI of the Performance API as declared in src/js_internal.h, and the page state it reads through js.c.
+//! Southstar — the C ABI and Rust-ABI entry points of the Performance API, and the page state they read.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use std::ffi::CString;
 
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::entry::{Fetch, ResourceInfo, Response};
 use crate::navigation;
@@ -35,7 +34,7 @@ impl Js {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct RawObject(JSValue);
+pub(crate) struct RawObject(usize);
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -122,8 +121,8 @@ unsafe extern "C" {
     fn g_get_real_time() -> i64;
     fn ns_js_page_time_origin_us(js: *const NsJs) -> i64;
     fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
-    fn ns_js_main_realm(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_log_line(js: *const NsJs, line: *const c_char);
@@ -159,15 +158,14 @@ pub(crate) fn page_time_origin_real_ms(js: Js) -> f64 {
 }
 
 pub(crate) fn main_realm(js: Js) -> usize {
-    unsafe { ns_js_main_realm(js.ptr()) as usize }
+    unsafe { ns_js_main_realm(js.ptr()) }.as_ptr() as usize
 }
 
-pub(crate) fn main_context(js: Js) -> Option<*mut JSContext> {
+pub(crate) fn main_context(js: Js) -> Option<ContextHandle> {
     if js.is_null() {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    (!ctx.is_null()).then_some(ctx)
+    unsafe { ns_js_main_context(js.ptr()) }.non_null()
 }
 
 pub(crate) fn navigation_timing(js: Js) -> Option<NavigationTiming> {
@@ -193,46 +191,35 @@ pub(crate) fn log_line(js: Js, line: &[u8]) {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope) as usize)
+    Js(scope.context_opaque() as usize)
 }
 
 pub(crate) fn realm_of(scope: &Scope<'_>) -> usize {
-    quickjs::raw_context(scope) as usize
+    scope.handle().as_ptr() as usize
 }
 
 pub(crate) fn raw_object(value: &Value) -> RawObject {
-    RawObject(quickjs::raw(value))
+    RawObject(value.object_identity() as usize)
 }
 
-pub(crate) fn wrapper_value(scope: &Scope<'_>, observer: &Observer) -> Option<Value> {
+pub(crate) fn wrapper_value(scope: &mut Scope<'_>, observer: &Observer) -> Option<Value> {
     let raw = observer.wrapper.get()?;
-    Some(unsafe { quickjs::borrow_value(scope, raw.0) })
+    Some(scope.object_from_identity(raw.0 as *mut c_void))
 }
 
 pub(crate) fn pin_wrapper(js: Js, observer: &Observer) -> Option<Value> {
-    let ctx = main_context(js)?;
-    unsafe { quickjs::with_context(ctx, |scope| wrapper_value(scope, observer)) }
+    main_context(js)?
+        .with(|scope| wrapper_value(scope, observer))
+        .flatten()
 }
 
 pub(crate) fn enqueue_drain(js: Js) {
     let Some(ctx) = main_context(js) else {
         return;
     };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let _ = scope.enqueue_job(crate::drain);
-        });
-    }
-}
-
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: southstar_js_engine::NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+    ctx.with(|scope| {
+        let _ = scope.enqueue_job(crate::drain);
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -261,15 +248,9 @@ pub fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64 {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64 {
-    if ctx.is_null() {
-        return crate::realm_now_ms(Js(0), 0);
-    }
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            crate::realm_now_ms(js_of(scope), realm_of(scope))
-        })
-    }
+pub extern "C" fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64 {
+    ctx.with(|scope| crate::realm_now_ms(js_of(scope), realm_of(scope)))
+        .unwrap_or_else(|| crate::realm_now_ms(Js(0), 0))
 }
 
 #[unsafe(no_mangle)]
@@ -281,9 +262,9 @@ pub unsafe extern "C" fn ns_js_start_frame_clock(js: *const NsJs, frame: *const 
 pub unsafe extern "C" fn ns_js_adopt_frame_clock(
     js: *const NsJs,
     frame: *const c_void,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
 ) {
-    timeline::adopt_frame_clock(Js::of(js), frame as usize, ctx as usize);
+    timeline::adopt_frame_clock(Js::of(js), frame as usize, ctx.as_ptr() as usize);
 }
 
 #[unsafe(no_mangle)]
@@ -403,81 +384,6 @@ pub unsafe extern "C" fn ns_perf_move_timeline(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_make_performance_object(
-    ctx: *mut JSContext,
-    js: *const NsJs,
-    include_memory: c_int,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            quickjs::into_raw(crate::object::make_performance_object(
-                scope,
-                Js::of(js),
-                include_memory != 0,
-            ))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_performance_extend_event_target(
-    ctx: *mut JSContext,
-    global: JSValue,
-    performance: JSValue,
-) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            let performance = quickjs::borrow_value(scope, performance);
-            crate::object::extend_event_target(scope, &global, &performance);
-        });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_supported_entry_types(ctx: *mut JSContext) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            quickjs::into_raw(crate::supported_entry_types(scope))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_perf_install_entry_list(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    target: &southstar_js_engine::Value,
-) {
-    crate::install_entry_list(scope, target);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_install_entry_list(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::install_entry_list(scope, &global);
-        });
-    }
-}
-
-macro_rules! export_native {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
-            }
-        )*
-    };
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming) {
     if let Some(timing) = unsafe { timing.as_mut() } {
         navigation::coarsen(timing);
@@ -503,42 +409,70 @@ pub unsafe extern "C" fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const
     *field = crate::now_ms(js);
     let absolute_ms = (page_time_origin_real_ms(js) + *field).floor() as i64;
     if let Some(ctx) = main_context(js) {
-        unsafe {
-            quickjs::with_context(ctx, |scope| {
-                navigation::record_legacy_milestone(scope, key, absolute_ms)
-            })
-        };
+        ctx.with(|scope| navigation::record_legacy_milestone(scope, key, absolute_ms));
     }
 }
 
-export_native! {
-    ns_perf_observer_ctor => crate::observer_ctor,
-    ns_perf_observer_observe => crate::observe,
-    ns_perf_observer_disconnect => crate::disconnect,
-    ns_perf_observer_takeRecords => crate::take_records,
+#[unsafe(no_mangle)]
+pub fn nsr_perf_observer_ctor(
+    scope: &mut Scope<'_>,
+    new_target: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::observer_ctor(scope, new_target, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_perf_observer_observe(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::observe(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_perf_observer_disconnect(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::disconnect(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_perf_observer_take_records(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::take_records(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, global: &Value) {
+    crate::install_entry_list(scope, global);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe fn nsr_make_performance_object(
-    scope: &mut southstar_js_engine::Scope<'_>,
+    scope: &mut Scope<'_>,
     js: *const NsJs,
     include_memory: bool,
-) -> southstar_js_engine::Value {
+) -> Value {
     crate::object::make_performance_object(scope, Js::of(js), include_memory)
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_perf_supported_entry_types(
-    scope: &mut southstar_js_engine::Scope<'_>,
-) -> southstar_js_engine::Value {
+pub fn nsr_perf_supported_entry_types(scope: &mut Scope<'_>) -> Value {
     crate::supported_entry_types(scope)
 }
 
 #[unsafe(no_mangle)]
 pub fn nsr_performance_extend_event_target(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    global: &southstar_js_engine::Value,
-    performance: &southstar_js_engine::Value,
+    scope: &mut Scope<'_>,
+    global: &Value,
+    performance: &Value,
 ) {
     crate::object::extend_event_target(scope, global, performance);
 }

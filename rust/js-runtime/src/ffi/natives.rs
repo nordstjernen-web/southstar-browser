@@ -53,10 +53,6 @@ natives! {
     ns_resize_observer_observe,
     ns_resize_observer_unobserve,
     ns_resize_observer_disconnect,
-    ns_perf_observer_ctor,
-    ns_perf_observer_observe,
-    ns_perf_observer_disconnect,
-    ns_perf_observer_takeRecords,
     ns_window_requestAnimationFrame,
     ns_window_cancelAnimationFrame,
     ns_window_url_update_object,
@@ -74,7 +70,6 @@ natives! {
 }
 
 installers! {
-    ns_perf_install_entry_list,
     ns_js_input_install_wpt,
     ns_net_install_text_codecs,
     ns_storage_install_window,

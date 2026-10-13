@@ -278,6 +278,27 @@ unsafe extern "Rust" {
         include_memory: bool,
     ) -> Value;
     pub(crate) safe fn nsr_perf_supported_entry_types(scope: &mut Scope<'_>) -> Value;
+    pub(crate) safe fn nsr_perf_observer_ctor(
+        scope: &mut Scope<'_>,
+        new_target: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_perf_observer_observe(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_perf_observer_disconnect(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_perf_observer_take_records(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_performance_extend_event_target(
         scope: &mut Scope<'_>,
         global: &Value,

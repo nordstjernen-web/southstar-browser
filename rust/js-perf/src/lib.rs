@@ -4,6 +4,8 @@
 
 mod entry;
 mod ffi;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod navigation;
 mod object;
 mod timeline;
@@ -11,7 +13,6 @@ mod timeline;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{NativeFn, Scope, Trace, Value};
 
 use crate::entry::{Entry, Fetch, ResourceInfo, Response, relative_ms};
@@ -624,7 +625,7 @@ pub(crate) fn get_entries_by_type(
 }
 
 pub(crate) fn memory_get(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    let usage = quickjs::memory_usage(scope);
+    let usage = scope.memory_usage();
     let used = usage.memory_used_size.max(0);
     let total = if usage.malloc_size > 0 {
         usage.malloc_size
@@ -813,7 +814,9 @@ pub(crate) fn observer_ctor(
         .filter(Value::is_object);
     let callback = args.first().filter(|cb| scope.is_function(cb)).cloned();
     let callback_realm = match &callback {
-        Some(cb) => quickjs::function_realm(scope, cb).map_or(0, |realm| realm as usize),
+        Some(cb) => scope
+            .function_handle(cb)
+            .map_or(0, |realm| realm.as_ptr() as usize),
         None => 0,
     };
     let observer = Rc::new(Observer {

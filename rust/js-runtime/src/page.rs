@@ -411,12 +411,12 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
     );
     bind_ctor(scope, global, "ResizeObserver", ns_resize_observer_ctor, 1);
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "PerformanceObserver",
-        ns_perf_observer_ctor,
         1,
+        imports::nsr_perf_observer_ctor,
     );
     bind_ctor(
         scope,
@@ -425,8 +425,8 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ns_illegal_constructor,
         0,
     );
-    ffi::install(scope, ns_perf_install_entry_list, global);
-    let observer_methods: [(&str, &str, Native, u32); 13] = [
+    imports::nsr_perf_install_entry_list(scope, global);
+    let observer_methods: [(&str, &str, Native, u32); 10] = [
         (
             "MutationObserver",
             "observe",
@@ -482,27 +482,17 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
             ns_resize_observer_disconnect,
             0,
         ),
-        (
-            "PerformanceObserver",
-            "observe",
-            ns_perf_observer_observe,
-            1,
-        ),
-        (
-            "PerformanceObserver",
-            "disconnect",
-            ns_perf_observer_disconnect,
-            0,
-        ),
-        (
-            "PerformanceObserver",
-            "takeRecords",
-            ns_perf_observer_takeRecords,
-            0,
-        ),
     ];
     for (constructor, name, native, arity) in observer_methods {
         bind_proto_fn(scope, global, constructor, name, native, arity);
+    }
+    let perf_observer_methods: [(&str, u32, NativeFn); 3] = [
+        ("observe", 1, imports::nsr_perf_observer_observe),
+        ("disconnect", 0, imports::nsr_perf_observer_disconnect),
+        ("takeRecords", 0, imports::nsr_perf_observer_take_records),
+    ];
+    for (name, arity, native) in perf_observer_methods {
+        bind_prototype_native_if_missing(scope, global, "PerformanceObserver", name, arity, native);
     }
     let observer = get_or_undefined(scope, global, "PerformanceObserver");
     let entry_types = ffi::supported_entry_types(scope);
