@@ -1,12 +1,10 @@
-//! Southstar — the C ABI of the font loading bindings as declared in src/js_internal.h, and the js.c and font loader calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the font loading bindings, and the realm and font loader calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{c_uint, c_void};
 
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::{font_face, font_set, ready};
 
@@ -37,7 +35,7 @@ type IdleCallback = unsafe extern "C" fn(user_data: *mut c_void);
 unsafe extern "C" {
     fn ns_js_flush_layout(js: *mut NsJs);
     fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_font_pending_count() -> c_uint;
     fn ns_font_add_idle_cb(cb: Option<IdleCallback>, user_data: *mut c_void);
@@ -45,7 +43,7 @@ unsafe extern "C" {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(quickjs::context_opaque(scope).cast())
+    Js::from_ptr(scope.context_opaque().cast())
 }
 
 pub(crate) fn flush_layout(js: Js) {
@@ -71,11 +69,7 @@ unsafe extern "C" fn fonts_idle(user_data: *mut c_void) {
     if js.is_null() || !ready::has_waiting(js) {
         return;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
-        return;
-    }
-    unsafe { quickjs::with_context(ctx, |scope| ready::fonts_idle(scope, js)) };
+    unsafe { ns_js_main_context(js.ptr()) }.with(|scope| ready::fonts_idle(scope, js));
 }
 
 pub(crate) fn wait_for_fonts(js: Js) {
@@ -86,14 +80,13 @@ pub(crate) fn stop_waiting_for_fonts(js: Js) {
     unsafe { ns_font_remove_idle_cb(Some(fonts_idle), js.ptr().cast()) };
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+#[unsafe(no_mangle)]
+pub fn nsr_window_fontface_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    font_face::construct(scope, this, args)
 }
 
 #[allow(non_snake_case)]
@@ -107,18 +100,8 @@ pub fn nsr_window_fontface_ctor(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_fontface_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, font_face::construct) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_get_fonts(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-    unsafe { native(ctx, this_val, 0, ptr::null_mut(), font_set::document_fonts) }
+pub fn nsr_document_get_fonts(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    font_set::document_fonts(scope, this, &[])
 }
 
 #[unsafe(no_mangle)]
