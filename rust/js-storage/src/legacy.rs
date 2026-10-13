@@ -33,7 +33,7 @@ pub extern "C" fn ns_js_storage_class_id() -> u32 {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_storage_area_of(obj: JSValue) -> c_int {
-    unsafe { quickjs::with_raw(obj, crate::ffi::nsr_storage_area_of) }
+    unsafe { quickjs::with_raw(obj, crate::ffi::nsr_storage_area_of) }.unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]

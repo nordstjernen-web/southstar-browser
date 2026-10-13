@@ -580,23 +580,3 @@ pub unsafe extern "C" fn ns_lifecycle_reset(js: *mut NsJs) {
 pub unsafe extern "C" fn ns_lifecycle_teardown(js: *mut NsJs) {
     crate::teardown(Js(js));
 }
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_window_requestAnimationFrame(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    frames::request_animation_frame(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_window_cancelAnimationFrame(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    frames::cancel_animation_frame(scope, this, args)
-}
