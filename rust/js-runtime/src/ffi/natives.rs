@@ -1,4 +1,4 @@
-//! Southstar — the binding natives and global installers the window and worker realms are built from, as declared in src/js_internal.h.
+//! Southstar — the raw-QuickJS natives and installers the window and worker realms still bind; each moves to an nsr_ Rust declaration when its crate is converted.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -29,7 +29,7 @@ macro_rules! installers {
     };
 }
 
-pub(crate) use super::record::{ns_bind_event_target_listeners, ns_illegal_constructor};
+pub(crate) use super::legacy::ns_illegal_constructor;
 
 macro_rules! context_installers {
     ($($name:ident),* $(,)?) => {

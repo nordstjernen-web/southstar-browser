@@ -2,26 +2,23 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_void};
 use core::ptr;
-use std::ffi::CString;
 
 use southstar_dom::{Kind, Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{
-    Attributes, ClassHooks, HostClass, OwnProperty, PropertyDefinition, PropertyKey, Scope, Value,
+    Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
+    Scope, Value,
 };
 
-use super::{Js, NsJs};
+use super::{Js, NsJs, imports};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 
 unsafe extern "C" {
     fn ns_realm_cloners_made(js: *const NsJs) -> GBoolean;
-    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> *mut JSContext;
-    fn ns_realm_proto_for(js: *mut NsJs, realm: *mut JSContext, proto: JSValue) -> JSValue;
-    fn ns_install_body_reflected_handlers(ctx: *mut JSContext, wrapper: JSValue);
+    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> ContextHandle;
     fn ns_mut_scrub_node(js: *const NsJs, node: *const NsNode);
     fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode);
     fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode);
@@ -33,9 +30,6 @@ unsafe extern "C" {
     fn ns_js_frames_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_top_layer_forget_node(js: *const NsJs, n: *const NsNode);
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
-    fn ns_form_indexed_control(ctx: *mut JSContext, form: JSValue, index: u32) -> JSValue;
-    fn ns_form_named_control(ctx: *mut JSContext, form: JSValue, name: *const c_char) -> JSValue;
-    fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
 }
 
 pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new_raw(
@@ -60,15 +54,9 @@ fn finalize_element(data: *mut c_void) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_register_class(ctx: *mut JSContext, proto: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let proto = quickjs::take_value(scope, proto);
-            scope.register_class(&ELEMENT_CLASS);
-            scope.set_class_prototype(&ELEMENT_CLASS, proto);
-        })
-    }
+pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
+    scope.register_class(&ELEMENT_CLASS);
+    scope.set_class_prototype(&ELEMENT_CLASS, proto);
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Node<'static>> {
@@ -112,22 +100,18 @@ fn named_get_own(
     if reserved(&name) {
         return Ok(None);
     }
-    let ctx = quickjs::raw_context(scope);
     if is_array_index(&name) {
         let index = core::str::from_utf8(&name)
             .ok()
             .and_then(|digits| digits.parse::<u64>().ok())
             .unwrap_or(0) as u32;
-        let raw = unsafe { ns_form_indexed_control(ctx, quickjs::raw(obj), index) };
-        let control = quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })?;
+        let control = imports::nsr_form_indexed_control(scope, obj, index)?;
         if control.is_undefined() {
             return Ok(None);
         }
         return Ok(Some(OwnProperty::data(control, false, true, true)));
     }
-    let name = CString::new(name).unwrap_or_default();
-    let raw = unsafe { ns_form_named_control(ctx, quickjs::raw(obj), name.as_ptr()) };
-    let control = quickjs::checked(scope, unsafe { quickjs::take_value(scope, raw) })?;
+    let control = imports::nsr_form_named_control(scope, obj, &name)?;
     if control.is_null() || control.is_undefined() {
         return Ok(None);
     }
@@ -163,21 +147,13 @@ fn named_define(
     scope.define_ordinary(obj, key, definition)
 }
 
-fn page_document_object(js: Js) -> Value {
-    let main = js.main_realm();
-    let ctx = if main.is_null() { js.ctx() } else { main };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
+fn page_document_object(js: Js) -> Result<Value, Value> {
+    js.main_or_current()
+        .with(|scope| {
             let global = scope.global();
-            match scope.get(&global, "document") {
-                Ok(document) => document,
-                Err(error) => {
-                    let raw = quickjs::result_raw(scope, Err(error));
-                    quickjs::take_value(scope, raw)
-                }
-            }
+            scope.get(&global, "document")
         })
-    }
+        .unwrap_or_else(|| Ok(Value::undefined()))
 }
 
 fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
@@ -207,8 +183,8 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
 
 fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
     let js_ptr = js.map_or(ptr::null_mut(), Js::ptr);
-    let mut proto = unsafe { super::record::kind_proto_raw(js_ptr, n.as_ptr()) };
-    let ctx = quickjs::raw_context(scope);
+    let proto = unsafe { super::record::kind_proto_value(js_ptr, n.as_ptr()) };
+    let proto = proto.unwrap_or_else(Value::undefined);
     let node_realm = match js {
         Some(js) if unsafe { ns_realm_cloners_made(js.ptr()) } != 0 => {
             let realm = unsafe { ns_js_node_realm_context(js.ptr().cast(), n.as_ptr()) };
@@ -217,37 +193,36 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
                     .last()
                     .unwrap_or(n);
                 if !matches!(root.kind(), Kind::Document) || root.flags() & FLAG_FRAGMENT != 0 {
-                    ctx
+                    scope.handle()
                 } else {
-                    ptr::null_mut()
+                    ContextHandle::NULL
                 }
             } else {
                 realm
             }
         }
-        _ => ptr::null_mut(),
+        _ => ContextHandle::NULL,
     };
-    if !node_realm.is_null() && quickjs::raw_is_object(proto) {
-        proto = unsafe { ns_realm_proto_for(js_ptr, node_realm, proto) };
+    if !node_realm.is_null() && proto.is_object() {
+        return unsafe { imports::nsr_realm_proto_for(js_ptr, node_realm, &proto) };
     }
-    unsafe { quickjs::borrow_value(scope, proto) }
+    proto
 }
 
-fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Value> {
-    let ctx = quickjs::raw_context(scope);
-    let js = Js::of_context(ctx);
+pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Value> {
+    let js = Js::of_scope(scope);
     if let Some(js) = js
         && ptr::eq(n.as_ptr(), unsafe { *js.st().slots.ce_main_doc })
         && n.parent().is_none()
     {
-        let document = page_document_object(js);
+        let document = page_document_object(js)?;
         if !document.is_undefined() && !document.is_null() {
-            return quickjs::checked(scope, document);
+            return Ok(document);
         }
     }
     let wrapper = n.js_wrapper();
     if !wrapper.is_null() {
-        return Ok(quickjs::object_from_identity(scope, wrapper));
+        return Ok(scope.object_from_identity(wrapper));
     }
     let obj = unsafe { scope.new_raw_instance(&ELEMENT_CLASS, None, n.as_mut_ptr().cast()) }?;
     n.set_js_wrapper(obj.object_identity());
@@ -263,39 +238,23 @@ fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Value> {
         && n.name()
             .is_some_and(|name| matches!(name.to_bytes(), b"body" | b"frameset"))
     {
-        unsafe { ns_install_body_reflected_handlers(ctx, quickjs::raw(&obj)) };
+        imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
     if let Some(js) = js {
         let pinned = unsafe { *js.st().slots.pinned_wrappers_set };
         if !pinned.is_null() {
-            core::mem::forget(obj.clone());
+            scope.retain_identity(&obj);
             unsafe { glib::g_hash_table_add(pinned, n.as_mut_ptr().cast()) };
         }
     }
     Ok(obj)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_make_element(ctx: *mut JSContext, cnode: *const NsNode) -> JSValue {
-    let Some(n) = node(cnode) else {
-        return quickjs::into_raw(Value::null());
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let element = make(scope, n);
-            quickjs::result_raw(scope, element)
-        })
+pub(crate) fn make_element(scope: &mut Scope<'_>, cnode: *const NsNode) -> Result<Value, Value> {
+    match node(cnode) {
+        Some(n) => make(scope, n),
+        None => Ok(Value::null()),
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_unwrap_element(value: JSValue) -> *const NsNode {
-    quickjs::raw_instance(value, &ELEMENT_CLASS).cast()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_element_class_id() -> u32 {
-    quickjs::class_id(&ELEMENT_CLASS)
 }
 
 #[unsafe(no_mangle)]
@@ -311,7 +270,7 @@ pub unsafe extern "C" fn ns_invalidate_wrapper(n: *mut NsNode) {
     }
     let wrapper = target.js_wrapper();
     if !wrapper.is_null() {
-        unsafe { quickjs::set_identity_opaque(wrapper, ptr::null_mut()) };
+        unsafe { southstar_js_engine::clear_identity_instance(wrapper) };
         target.set_js_wrapper(ptr::null_mut());
         if let Some(page) = Js::of(js) {
             let ctx = page.ctx();
@@ -320,7 +279,7 @@ pub unsafe extern "C" fn ns_invalidate_wrapper(n: *mut NsNode) {
                 && !pinned.is_null()
                 && unsafe { glib::g_hash_table_remove(pinned, n.cast()) } != 0
             {
-                unsafe { JS_FreeValue(ctx, quickjs::identity_raw(wrapper)) };
+                ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
             }
         }
     }
@@ -350,16 +309,7 @@ pub unsafe extern "C" fn ns_node_arm_js_invalidate(n: *mut NsNode) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_new_document_object(js: *mut NsJs) -> JSValue {
-    let Some(page) = Js::of(js) else {
-        return quickjs::UNDEFINED;
-    };
+pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
     let current_doc = unsafe { *page.st().slots.current_doc };
-    unsafe {
-        quickjs::with_context(page.ctx(), |scope| {
-            let document = scope.new_raw_instance(&ELEMENT_CLASS, None, current_doc.cast());
-            quickjs::result_raw(scope, document)
-        })
-    }
+    unsafe { scope.new_raw_instance(&ELEMENT_CLASS, None, current_doc.cast()) }
 }

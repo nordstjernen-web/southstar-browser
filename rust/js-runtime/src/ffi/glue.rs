@@ -8,10 +8,10 @@ use std::ffi::CString;
 
 use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 
-use super::state::{JobFn, MessageTask};
+use super::imports;
+use super::state::MessageTask;
 use super::{GMainContext, Js, NsJs};
 
 pub(crate) type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
@@ -56,12 +56,6 @@ unsafe extern "C" {
     fn g_main_loop_unref(lp: *mut GMainLoop);
     fn g_error_free(error: *mut GError);
 
-    fn JS_GetPendingJobRealm(rt: *mut c_void) -> *mut JSContext;
-    fn JS_ExecutePendingJob(rt: *mut c_void, pctx: *mut *mut JSContext) -> c_int;
-    fn JS_IsRunningScript(ctx: *mut JSContext) -> bool;
-    fn JS_RunGC(rt: *mut c_void);
-    fn JS_EnqueueJob(ctx: *mut JSContext, func: JobFn, argc: c_int, argv: *mut JSValue) -> c_int;
-
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -95,25 +89,11 @@ unsafe extern "C" {
         end_us: i64,
         resp: *const Response,
     );
-    fn ns_blob_bytes_as_string(
-        ctx: *mut JSContext,
-        blob: JSValue,
-        out_len: *mut usize,
-    ) -> *mut c_char;
-    fn ns_unwrap_element(val: JSValue) -> *const NsNode;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_storage_drain_deferred_events(js: *mut NsJs);
     fn ns_js_report_pending_rejections(js: *mut NsJs);
     fn ns_storage_schedule_flush(js: *mut NsJs);
     fn ns_services_run_due_timers(js: *mut NsJs);
-    fn ns_js_report_uncaught(js: *mut NsJs, ex: JSValue, origin: *const c_char);
-    fn ns_target_report_exception(js: *mut NsJs, ctx: *mut JSContext, kind: *const c_char);
-    fn ns_target_handler_realm(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        kind: *const c_char,
-        listener_key: *const c_char,
-    ) -> *mut JSContext;
     fn ns_intersection_observers_tick(js: *mut NsJs);
     fn ns_resize_observers_tick(js: *mut NsJs);
     fn ns_js_raf_set_host_driven(js: *mut NsJs);
@@ -133,13 +113,6 @@ unsafe extern "C" {
     fn ns_dom_set_active_modal(modal: *const NsNode);
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
-    fn ns_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    );
 }
 
 fn context_of(js: Option<Js>) -> *mut GMainContext {
@@ -193,20 +166,20 @@ pub(crate) fn pump_iteration(js: Option<Js>) {
     unsafe { g_main_context_iteration(context_of(js), glib::TRUE) };
 }
 
-pub(crate) fn pending_job_realm(js: Js) -> *mut JSContext {
-    unsafe { JS_GetPendingJobRealm(js.rt()) }
+pub(crate) fn pending_job_realm(js: Js) -> ContextHandle {
+    js.rt().pending_job_context()
 }
 
-pub(crate) fn execute_pending_job(js: Js, failed: &mut *mut JSContext) -> c_int {
-    unsafe { JS_ExecutePendingJob(js.rt(), failed) }
+pub(crate) fn execute_pending_job(js: Js) -> JobOutcome {
+    js.rt().run_pending_job()
 }
 
-pub(crate) fn is_running_script(ctx: *mut JSContext) -> bool {
-    unsafe { JS_IsRunningScript(ctx) }
+pub(crate) fn is_running_script(ctx: ContextHandle) -> bool {
+    ctx.with(|scope| scope.is_running_script()).unwrap_or(false)
 }
 
 pub(crate) fn run_gc(js: Js) {
-    unsafe { JS_RunGC(js.rt()) };
+    js.rt().gc();
 }
 
 pub(crate) fn engine_in_blocking_fetch() -> bool {
@@ -225,25 +198,12 @@ pub(crate) fn exception_text(
     (message, stack)
 }
 
-pub(crate) fn pending_exception_text(ctx: *mut JSContext) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let exception = quickjs::take_exception(scope);
-            exception_text(scope, &exception)
-        })
-    }
-}
-
-pub(crate) fn borrowed_exception_text(
-    ctx: *mut JSContext,
-    exception: JSValue,
+pub(crate) fn exception_text_in(
+    ctx: ContextHandle,
+    exception: &Value,
 ) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let exception = quickjs::borrow_value(scope, exception);
-            exception_text(scope, &exception)
-        })
-    }
+    ctx.with(|scope| exception_text(scope, exception))
+        .unwrap_or((None, None))
 }
 
 pub(crate) fn c_line(bytes: &[u8]) -> CString {
@@ -273,8 +233,9 @@ pub(crate) fn run_due_timers(js: Js) {
     unsafe { ns_services_run_due_timers(js.ptr()) };
 }
 
-pub(crate) fn report_uncaught(js: Js, exception: JSValue, origin: *const c_char) {
-    unsafe { ns_js_report_uncaught(js.ptr(), exception, origin) };
+pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: *const c_char) {
+    let origin = text(origin).map(|origin| origin.to_string_lossy().into_owned());
+    unsafe { imports::nsr_js_report_uncaught(js.ptr(), exception, origin.as_deref()) };
 }
 
 pub(crate) fn observers_tick(js: Js) {
@@ -317,17 +278,18 @@ pub(crate) fn dispatch_window_only_event(
     js: Js,
     doc: *const NsNode,
     kind: *const c_char,
-    event: JSValue,
+    event: Value,
 ) {
-    unsafe { ns_js_dispatch_window_only_event(js.ptr(), doc, kind, event, ptr::null_mut()) };
+    let kind = text(kind).map_or_else(String::new, |kind| kind.to_string_lossy().into_owned());
+    unsafe { imports::nsr_js_dispatch_window_only_event(js.ptr(), doc, &kind, event) };
 }
 
 pub(crate) fn active_js() -> Option<Js> {
     Js::of(super::record::ns_active_js())
 }
 
-pub(crate) fn unwrap_element(value: JSValue) -> *const NsNode {
-    unsafe { ns_unwrap_element(value) }
+pub(crate) fn unwrap_element(value: &Value) -> *const NsNode {
+    southstar_dom::Node::ptr_or_null(super::wrapper::unwrap(value))
 }
 
 pub(crate) fn is_detached_document(doc: *const NsNode) -> bool {
@@ -337,84 +299,49 @@ pub(crate) fn is_detached_document(doc: *const NsNode) -> bool {
     node.kind() != southstar_dom::Kind::Document || node.flags() & NODE_FRAGMENT != 0
 }
 
-pub(crate) fn handler_realm(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    kind: *const c_char,
-) -> *mut JSContext {
-    unsafe { ns_target_handler_realm(ctx, obj, kind, c"fn".as_ptr()) }
+pub(crate) fn handler_realm(scope: &mut Scope<'_>, obj: &Value, kind: &str) -> ContextHandle {
+    imports::nsr_target_handler_realm(scope, obj, kind, "fn")
 }
 
-pub(crate) fn function_realm(scope: &mut Scope<'_>, function: &Value) -> *mut JSContext {
-    let ctx = quickjs::raw_context(scope);
+pub(crate) fn function_realm(scope: &mut Scope<'_>, function: &Value) -> ContextHandle {
+    let ctx = scope.handle();
     if !scope.is_function(function) {
         return ctx;
     }
-    quickjs::function_realm(scope, function).unwrap_or(ctx)
+    scope.function_handle(function).unwrap_or(ctx)
 }
 
 pub(crate) fn call_observer(
     js: Option<Js>,
-    ctx: *mut JSContext,
-    cb: JSValue,
-    this_val: JSValue,
-    args: &[JSValue],
-    report_type: *const c_char,
-) -> JSValue {
-    let realm = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let cb = quickjs::borrow_value(scope, cb);
-            function_realm(scope, &cb)
-        })
-    };
-    let mut returned = super::scopes::in_realm(js, realm, || unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let cb = quickjs::borrow_value(scope, cb);
-            let this = quickjs::borrow_value(scope, this_val);
-            let args: Vec<Value> = args
-                .iter()
-                .map(|&a| quickjs::borrow_value(scope, a))
-                .collect();
-            let result = scope.call(&cb, &this, &args);
-            quickjs::result_raw(scope, result)
-        })
-    });
-    if !report_type.is_null() && quickjs::raw_is_exception(returned) {
-        if let Some(js) = js {
-            unsafe { ns_target_report_exception(js.ptr(), ctx, report_type) };
-        } else {
-            unsafe { ns_target_report_exception(ptr::null_mut(), ctx, report_type) };
+    ctx: ContextHandle,
+    cb: &Value,
+    this: &Value,
+    args: &[Value],
+    report_type: Option<&str>,
+) -> Result<Value, Value> {
+    let realm = ctx.with(|scope| function_realm(scope, cb)).unwrap_or(ctx);
+    let returned =
+        super::scopes::in_realm(js, realm, || ctx.with(|scope| scope.call(cb, this, args)));
+    let returned = returned.unwrap_or_else(|| Ok(Value::undefined()));
+    match (returned, report_type) {
+        (Err(exception), Some(kind)) => {
+            let page = js.map_or(ptr::null_mut(), Js::ptr);
+            ctx.with(|scope| unsafe {
+                imports::nsr_target_report_exception(page, scope, Some(kind), &exception)
+            });
+            Ok(Value::undefined())
         }
-        returned = quickjs::UNDEFINED;
+        (returned, _) => returned,
     }
-    returned
 }
 
-pub(crate) fn enqueue_job(ctx: *mut JSContext, func: JobFn, argc: c_int, argv: *mut JSValue) {
-    unsafe { JS_EnqueueJob(ctx, func, argc, argv) };
-}
-
-pub(crate) fn message_task(ctx: *mut JSContext, func: JobFn, args: &[JSValue]) -> MessageTask {
-    let args = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            args.iter()
-                .map(|&a| quickjs::borrow_value(scope, a))
-                .collect()
-        })
-    };
-    MessageTask { ctx, func, args }
+pub(crate) fn message_task(ctx: ContextHandle, run: super::state::TaskRun) -> MessageTask {
+    MessageTask { ctx, run }
 }
 
 pub(crate) fn run_message_task(task: MessageTask) {
-    let mut raw: Vec<JSValue> = task.args.iter().map(quickjs::raw).collect();
-    let result = unsafe { (task.func)(task.ctx, raw.len() as c_int, raw.as_mut_ptr()) };
-    unsafe {
-        quickjs::with_context(task.ctx, |scope| {
-            let value = quickjs::take_value(scope, result);
-            let _ = quickjs::checked(scope, value);
-        })
-    };
-    drop(task);
+    let MessageTask { ctx, run } = task;
+    let _ = ctx.with(|scope| drop(run(scope)));
 }
 
 pub(crate) fn orphan_count(js: Js) -> c_int {
@@ -573,15 +500,15 @@ pub(crate) fn add_resource_timing(
     };
 }
 
-pub(crate) struct BytesView {
+pub struct BytesView {
     pub data: *const u8,
     pub len: usize,
     pub holder: Value,
 }
 
 pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesView> {
-    if quickjs::is_array_buffer(value) {
-        let (data, len) = quickjs::array_buffer_data(scope, value)?;
+    if scope.object_kind(value) == Some(ObjectKind::ArrayBuffer) {
+        let (data, len) = scope.array_buffer_ptr(value)?;
         return Some(BytesView {
             data,
             len,
@@ -592,7 +519,7 @@ pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesVi
         return None;
     }
     let buffer = scope.get(value, "buffer").ok()?;
-    if !quickjs::is_array_buffer(&buffer) {
+    if scope.object_kind(&buffer) != Some(ObjectKind::ArrayBuffer) {
         return None;
     }
     let offset = scope.get(value, "byteOffset");
@@ -603,9 +530,9 @@ pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesVi
     if !offset.is_number() || !length.is_number() {
         return None;
     }
-    let offset = quickjs::to_index(scope, &offset).ok()?;
-    let length = quickjs::to_index(scope, &length).ok()?;
-    let (base, total) = quickjs::array_buffer_data(scope, &buffer)?;
+    let offset = scope.to_index(&offset).ok()?;
+    let length = scope.to_index(&length).ok()?;
+    let (base, total) = scope.array_buffer_ptr(&buffer)?;
     let total = total as u64;
     if offset > total || length > total - offset {
         return None;
@@ -625,8 +552,8 @@ pub(crate) fn bytes_of(view: &BytesView) -> &[u8] {
     }
 }
 
-pub(crate) fn blob_bytes(ctx: *mut JSContext, value: JSValue, out_len: *mut usize) -> *mut c_char {
-    unsafe { ns_blob_bytes_as_string(ctx, value, out_len) }
+pub(crate) fn blob_bytes(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
+    imports::nsr_blob_bytes(scope, value)
 }
 
 pub(crate) fn g_bytes(bytes: &[u8]) -> *mut c_char {

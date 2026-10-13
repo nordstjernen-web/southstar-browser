@@ -9,8 +9,7 @@ use std::collections::{HashMap, VecDeque};
 
 use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
-use southstar_js_engine::Value;
-use southstar_js_engine::quickjs::{JSContext, JSValue};
+use southstar_js_engine::{ContextHandle, RuntimeHandle, Scope, Value};
 
 use super::scopes::RealmScope;
 use super::{GMainContext, WorkerHost};
@@ -30,14 +29,13 @@ pub(crate) type ViewportScrollFn =
 pub(crate) type TextQueryFn =
     unsafe extern "C" fn(text: *const c_char, data: *mut c_void) -> GBoolean;
 pub(crate) type DelayFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-pub(crate) type JobFn =
-    unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
+pub(crate) type TaskRun = Box<dyn FnOnce(&mut Scope<'_>) -> Result<Value, Value>>;
 
 #[repr(C)]
 pub(crate) struct Slots {
-    pub rt: *mut *mut c_void,
-    pub ctx: *mut *mut JSContext,
-    pub main_realm_ctx: *mut *mut JSContext,
+    pub rt: *mut RuntimeHandle,
+    pub ctx: *mut ContextHandle,
+    pub main_realm_ctx: *mut ContextHandle,
     pub current_url: *mut *mut c_char,
     pub current_doc: *mut *mut NsNode,
     pub raf_frame_ctx: *mut *mut NsNode,
@@ -74,9 +72,8 @@ impl<F: Copy> Hook<F> {
 }
 
 pub(crate) struct MessageTask {
-    pub ctx: *mut JSContext,
-    pub func: JobFn,
-    pub args: Vec<Value>,
+    pub ctx: ContextHandle,
+    pub run: TaskRun,
 }
 
 pub(crate) struct PageState {
@@ -125,12 +122,12 @@ pub(crate) struct PageState {
     pub callback_depth: Cell<c_int>,
     pub last_orphan_sweep_us: Cell<i64>,
     pub observer_tick_source: Cell<c_uint>,
-    pub iframe_doc: Cell<Option<JSValue>>,
+    pub iframe_doc: RefCell<Option<Value>>,
     pub selection_text: Cell<*mut c_char>,
     pub selection_has_range: Cell<bool>,
     pub selection_rect: Cell<[f64; 4]>,
     pub ignore_destructive_writes: Cell<c_int>,
-    pub module_ctx: Cell<*mut JSContext>,
+    pub module_ctx: Cell<ContextHandle>,
 }
 
 impl PageState {
@@ -181,12 +178,12 @@ impl PageState {
             callback_depth: Cell::new(0),
             last_orphan_sweep_us: Cell::new(0),
             observer_tick_source: Cell::new(0),
-            iframe_doc: Cell::new(None),
+            iframe_doc: RefCell::new(None),
             selection_text: Cell::new(ptr::null_mut()),
             selection_has_range: Cell::new(false),
             selection_rect: Cell::new([0.0; 4]),
             ignore_destructive_writes: Cell::new(0),
-            module_ctx: Cell::new(ptr::null_mut()),
+            module_ctx: Cell::new(ContextHandle::NULL),
         }
     }
 

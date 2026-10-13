@@ -1,9 +1,11 @@
-//! Southstar — the C ABI of realm creation and teardown as declared in src/js.h and src/js_internal.h.
+//! Southstar — the page record's handle (Js), realm creation and teardown, and their C ABI as declared in src/js.h and src/js_internal.h.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) mod exports;
 pub(crate) mod glue;
+pub(crate) mod imports;
+pub(crate) mod legacy;
 pub(crate) mod natives;
 pub(crate) mod record;
 pub(crate) mod scopes;
@@ -15,17 +17,17 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSCFunction, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
-use crate::worker::{self, EvalStatus};
+use crate::worker;
 use crate::{Element, interrupt, page, teardown};
 use state::{DataFn, LogFn, NavigateFn, PageState};
 
-pub(crate) type Native = JSCFunction;
-pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
+pub(crate) use legacy::{
+    Native, c_constructor, c_constructor_or_function, c_function, install, install_context,
+};
 
-pub(crate) use record::NsJs;
+pub use record::NsJs;
 
 #[repr(C)]
 pub(crate) struct WorkerHost {
@@ -119,51 +121,13 @@ unsafe extern "C" {
     fn ns_js_mutation_init(js: *mut NsJs);
     fn ns_storage_init(js: *mut NsJs);
     fn ns_media_init(js: *mut NsJs);
-    fn ns_js_register_class(ctx: *mut JSContext, which: c_int) -> JSValue;
-    fn ns_js_new_window_named(ctx: *mut JSContext) -> JSValue;
-    fn ns_js_install_proto_table(ctx: *mut JSContext, proto: JSValue, table: c_int);
-
-    fn ns_js_promise_rejection_tracker(
-        ctx: *mut JSContext,
-        promise: JSValue,
-        reason: JSValue,
-        is_handled: bool,
-        opaque: *mut c_void,
-    );
-    fn ns_worker_promise_rejection_tracker(
-        ctx: *mut JSContext,
-        promise: JSValue,
-        reason: JSValue,
-        is_handled: bool,
-        opaque: *mut c_void,
-    );
     fn ns_worker_log_cb(line: *const c_char, user_data: *mut c_void);
 
     fn ns_worker_host_closing(host: *const WorkerHost) -> GBoolean;
 
-    fn ns_services_window_navigator(ctx: *mut JSContext) -> JSValue;
-    fn ns_services_worker_navigator(ctx: *mut JSContext) -> JSValue;
     fn ns_services_chrome_compat() -> GBoolean;
-    fn ns_make_performance_object(
-        ctx: *mut JSContext,
-        js: *mut NsJs,
-        include_memory: GBoolean,
-    ) -> JSValue;
-    fn ns_perf_supported_entry_types(ctx: *mut JSContext) -> JSValue;
-    fn ns_performance_extend_event_target(
-        ctx: *mut JSContext,
-        global: JSValue,
-        performance: JSValue,
-    );
     fn ns_js_sync_window_metrics(js: *const NsJs);
-    fn ns_canvas_register_classes(rt: *mut c_void);
-    fn ns_canvas_install(ctx: *mut JSContext, global: JSValue, window: GBoolean);
-    fn ns_window_install_state(js: *mut NsJs, ctx: *mut JSContext, global: JSValue);
-    fn ns_live_proto(ctx: *mut JSContext, which: c_int) -> JSValue;
-    #[cfg(feature = "webgpu")]
-    fn ns_webgpu_install(ctx: *mut JSContext, js: *mut NsJs, navigator: JSValue);
-    fn ns_worker_install_location(ctx: *mut JSContext, global: JSValue, url: *const c_char);
-    fn ns_worker_shape_global(ctx: *mut JSContext, service_worker: GBoolean);
+    fn ns_worker_shape_global(ctx: ContextHandle, service_worker: GBoolean);
 
     fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
@@ -235,11 +199,12 @@ impl Js {
         (!js.is_null()).then_some(Js(js.cast_mut()))
     }
 
-    pub(crate) fn of_context(ctx: *mut JSContext) -> Option<Js> {
-        if ctx.is_null() {
-            return None;
-        }
-        Js::of(unsafe { quickjs::opaque_of(ctx) }.cast())
+    pub(crate) fn of_context(ctx: ContextHandle) -> Option<Js> {
+        Js::of(ctx.opaque().cast())
+    }
+
+    pub(crate) fn of_scope(scope: &Scope<'_>) -> Option<Js> {
+        Js::of(scope.context_opaque().cast())
     }
 
     pub(crate) fn ptr(self) -> *mut NsJs {
@@ -250,19 +215,23 @@ impl Js {
         unsafe { &*record::runtime_state(self.0).cast::<PageState>() }
     }
 
-    pub fn ctx(self) -> *mut JSContext {
+    pub fn ctx(self) -> ContextHandle {
         unsafe { *self.st().slots.ctx }
     }
 
-    pub fn set_ctx(self, ctx: *mut JSContext) {
+    pub fn set_ctx(self, ctx: ContextHandle) {
         unsafe { *self.st().slots.ctx = ctx };
     }
 
-    pub fn main_realm(self) -> *mut JSContext {
+    pub fn main_realm(self) -> ContextHandle {
         unsafe { *self.st().slots.main_realm_ctx }
     }
 
-    pub fn rt(self) -> *mut c_void {
+    pub fn main_or_current(self) -> ContextHandle {
+        self.main_realm().or(self.ctx())
+    }
+
+    pub fn rt(self) -> RuntimeHandle {
         unsafe { *self.st().slots.rt }
     }
 
@@ -299,11 +268,7 @@ impl Js {
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let ctx = self.ctx();
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        self.ctx().with(f)
     }
 
     pub fn set_navigation_timing(self, timing: NavigationTiming) {
@@ -329,13 +294,20 @@ impl Js {
         stack_size: usize,
         tracker: RejectionTracker,
     ) -> bool {
-        let tracker: quickjs::RejectionTracker = match tracker {
-            RejectionTracker::Page => ns_js_promise_rejection_tracker,
-            RejectionTracker::Worker => ns_worker_promise_rejection_tracker,
+        let tracker: southstar_js_engine::RejectionTrackerFn = match tracker {
+            RejectionTracker::Page => imports::nsr_js_promise_rejection_tracker,
+            RejectionTracker::Worker => imports::nsr_worker_promise_rejection_tracker,
         };
-        unsafe {
-            record::create_runtime(self.0, memory_limit, stack_size, interrupt_handler, tracker)
-        }
+        let options = RuntimeOptions {
+            memory_limit,
+            stack_size,
+            interrupt: Some(interrupt_handler),
+            interrupt_opaque: self.0.cast(),
+            rejection_tracker: Some(tracker),
+            module_normalize: Some(imports::nsr_js_module_normalize),
+            module_load: Some(imports::nsr_js_module_load),
+        };
+        unsafe { record::create_runtime(self.0, &options) }
     }
 
     pub fn create_context(self) -> bool {
@@ -410,10 +382,7 @@ impl Js {
     }
 
     pub fn make_performance_object(self, scope: &mut Scope<'_>, include_memory: bool) -> Value {
-        let ctx = quickjs::raw_context(scope);
-        let raw =
-            unsafe { ns_make_performance_object(ctx, self.0, GBoolean::from(include_memory)) };
-        unsafe { quickjs::take_value(scope, raw) }
+        unsafe { imports::nsr_make_performance_object(scope, self.0, include_memory) }
     }
 
     pub fn sync_window_metrics(self) {
@@ -421,14 +390,12 @@ impl Js {
     }
 
     pub fn install_window_state(self, scope: &mut Scope<'_>, global: &Value) {
-        unsafe {
-            ns_window_install_state(self.0, quickjs::raw_context(scope), quickjs::raw(global))
-        };
+        unsafe { imports::nsr_window_install_state(self.0, scope, global) };
     }
 
     #[cfg(feature = "webgpu")]
     pub fn install_webgpu(self, scope: &mut Scope<'_>, navigator: &Value) {
-        unsafe { ns_webgpu_install(quickjs::raw_context(scope), self.0, quickjs::raw(navigator)) };
+        imports::nsr_webgpu_install(scope, navigator);
     }
 
     pub fn eval_worker_polyfills(self) {
@@ -614,120 +581,60 @@ impl Js {
     }
 }
 
-unsafe extern "C" fn interrupt_handler(_rt: *mut c_void, opaque: *mut c_void) -> c_int {
-    if opaque.is_null() {
-        return 0;
-    }
-    c_int::from(interrupt::should_interrupt(Js(opaque.cast())))
+fn interrupt_handler(opaque: *mut c_void) -> bool {
+    Js::of(opaque.cast()).is_some_and(interrupt::should_interrupt)
 }
 
-unsafe extern "C" fn engine_name(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::call_native(ctx, this_val, argc, argv, |scope, _this, _args| {
-            Ok(scope.string("quickjs"))
-        })
-    }
+fn engine_name(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
+    let name = southstar_js_engine::ENGINE_NAME;
+    Ok(scope.string(name.split('-').next().unwrap_or(name)))
 }
 
-unsafe extern "C" fn is_engine_function(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::call_native(ctx, this_val, argc, argv, |_scope, _this, args| {
-            Ok(Value::boolean(
-                args.first().is_some_and(quickjs::is_engine_function),
-            ))
-        })
-    }
+fn is_engine_function(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let engine = args
+        .first()
+        .is_some_and(|value| scope.is_engine_function(value));
+    Ok(Value::boolean(engine))
 }
 
 pub(crate) fn engine_name_native(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "__jsEngine", 0, engine_name)
+    scope.function("__jsEngine", 0, engine_name)
 }
 
 pub(crate) fn is_engine_function_native(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "__ndIsEngineFunction", 1, is_engine_function)
-}
-
-pub(crate) fn c_function(scope: &mut Scope<'_>, name: &str, arity: u32, native: Native) -> Value {
-    quickjs::c_function(scope, name, arity, native)
-}
-
-pub(crate) fn c_constructor_or_function(
-    scope: &mut Scope<'_>,
-    name: &str,
-    arity: u32,
-    native: Native,
-) -> Value {
-    quickjs::c_constructor_or_function(scope, name, arity, native)
-}
-
-pub(crate) fn c_constructor(
-    scope: &mut Scope<'_>,
-    name: &str,
-    arity: u32,
-    native: Native,
-) -> Value {
-    quickjs::c_constructor(scope, name, arity, native)
-}
-
-pub(crate) fn install(scope: &mut Scope<'_>, installer: Installer, target: &Value) {
-    unsafe { installer(quickjs::raw_context(scope), quickjs::raw(target)) };
-}
-
-pub(crate) fn install_context(
-    scope: &mut Scope<'_>,
-    installer: unsafe extern "C" fn(*mut JSContext),
-) {
-    unsafe { installer(quickjs::raw_context(scope)) };
+    scope.function("__ndIsEngineFunction", 1, is_engine_function)
 }
 
 pub(crate) fn add_engine_private_name(scope: &mut Scope<'_>, name: &str) {
-    quickjs::add_engine_private_name(scope, name);
+    scope.add_engine_private_name(name);
 }
 
 pub(crate) fn register_class(scope: &mut Scope<'_>, class: Class) -> Value {
-    let raw = unsafe { ns_js_register_class(quickjs::raw_context(scope), class as c_int) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_js_register_class(scope, class as c_int)
 }
 
 pub(crate) fn new_window_named(scope: &mut Scope<'_>) -> Option<Value> {
-    let raw = unsafe { ns_js_new_window_named(quickjs::raw_context(scope)) };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value).ok()
+    imports::nsr_js_new_window_named(scope).ok()
 }
 
 pub(crate) fn install_element_proto_table(scope: &mut Scope<'_>, proto: &Value) {
-    unsafe {
-        ns_js_install_proto_table(
-            quickjs::raw_context(scope),
-            quickjs::raw(proto),
-            PROTO_TABLE_ELEMENT,
-        )
-    };
+    imports::nsr_js_install_proto_table(scope, proto, PROTO_TABLE_ELEMENT);
 }
 
 pub(crate) fn live_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
-    let raw = unsafe { ns_live_proto(quickjs::raw_context(scope), which) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_live_proto(scope, which)
 }
 
 pub(crate) fn window_navigator(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_services_window_navigator(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_services_window_navigator(scope)
 }
 
 pub(crate) fn worker_navigator(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_services_worker_navigator(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_services_worker_navigator(scope)
 }
 
 pub(crate) fn chrome_compat() -> bool {
@@ -735,8 +642,7 @@ pub(crate) fn chrome_compat() -> bool {
 }
 
 pub(crate) fn supported_entry_types(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_perf_supported_entry_types(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_perf_supported_entry_types(scope)
 }
 
 pub(crate) fn performance_extend_event_target(
@@ -744,41 +650,20 @@ pub(crate) fn performance_extend_event_target(
     global: &Value,
     performance: &Value,
 ) {
-    unsafe {
-        ns_performance_extend_event_target(
-            quickjs::raw_context(scope),
-            quickjs::raw(global),
-            quickjs::raw(performance),
-        )
-    };
-}
-
-pub(crate) fn register_canvas_classes(scope: &mut Scope<'_>) {
-    unsafe { ns_canvas_register_classes(quickjs::runtime(scope)) };
+    imports::nsr_performance_extend_event_target(scope, global, performance);
 }
 
 pub(crate) fn install_canvas(scope: &mut Scope<'_>, global: &Value, window: bool) {
-    unsafe {
-        ns_canvas_install(
-            quickjs::raw_context(scope),
-            quickjs::raw(global),
-            GBoolean::from(window),
-        )
-    };
+    imports::nsr_canvas_install(scope, global, window);
 }
 
 pub(crate) fn install_worker_location(scope: &mut Scope<'_>, global: &Value, url: Option<&CStr>) {
-    unsafe {
-        ns_worker_install_location(
-            quickjs::raw_context(scope),
-            quickjs::raw(global),
-            url.map_or(ptr::null(), CStr::as_ptr),
-        )
-    };
+    let url = url.map_or_else(String::new, |url| url.to_string_lossy().into_owned());
+    imports::nsr_worker_install_location(scope, global, &url);
 }
 
 pub(crate) fn shape_worker_global(scope: &mut Scope<'_>, service_worker: bool) {
-    unsafe { ns_worker_shape_global(quickjs::raw_context(scope), GBoolean::from(service_worker)) };
+    unsafe { ns_worker_shape_global(scope.handle(), GBoolean::from(service_worker)) };
 }
 
 pub(crate) fn worker_compile(
@@ -884,36 +769,6 @@ pub unsafe extern "C" fn ns_worker_js_new(realm: *const WorkerRealm) -> *mut NsJ
         js.0
     } else {
         ptr::null_mut()
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_js_eval(
-    js: *mut NsJs,
-    src: *const c_char,
-    len: usize,
-    url: *const c_char,
-    module: GBoolean,
-    exception: *mut JSValue,
-) -> c_int {
-    unsafe { *exception = quickjs::UNDEFINED };
-    if js.is_null() {
-        return 2;
-    }
-    let source = unsafe { c_text(src) }.unwrap_or(c"");
-    let url = unsafe { c_text(url) }.unwrap_or(c"<worker>");
-    let status = Js(js).scope(|scope| worker::eval(scope, source, len, url, module != 0));
-    match status {
-        None => 2,
-        Some(EvalStatus::Done) => 0,
-        Some(EvalStatus::ParseError(thrown)) => {
-            unsafe { *exception = quickjs::into_raw(thrown) };
-            1
-        }
-        Some(EvalStatus::Thrown(thrown)) => {
-            unsafe { *exception = quickjs::into_raw(thrown) };
-            2
-        }
     }
 }
 

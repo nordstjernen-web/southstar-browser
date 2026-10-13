@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub mod api;
 mod budget;
 mod ffi;
 mod interrupt;
@@ -13,7 +14,6 @@ mod worker;
 
 use southstar_dom::Node;
 use southstar_js_engine::Scope;
-use southstar_js_engine::quickjs;
 
 pub(crate) type Element = Node<'static>;
 
@@ -46,7 +46,7 @@ const ENGINE_PRIVATE_NAMES: [&str; 24] = [
 
 pub(crate) fn add_engine_private_names(scope: &mut Scope<'_>) {
     for name in ENGINE_PRIVATE_NAMES {
-        quickjs::add_engine_private_name(scope, name);
+        scope.add_engine_private_name(name);
     }
 }
 

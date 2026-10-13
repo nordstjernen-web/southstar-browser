@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Kind, Node, NsNode};
 use southstar_glib as glib;
-use southstar_js_engine::quickjs::{JSContext, JSValue};
+use southstar_js_engine::{ContextHandle, Value};
 
 use super::Js;
 use crate::budget;
@@ -17,8 +17,8 @@ const FRAME_URL_ATTR: &CStr = c"data-nd-frame-url";
 unsafe extern "C" {
     fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode;
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_js_frame_of_realm(js: *const c_void, realm: *mut JSContext) -> *mut NsNode;
-    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> *mut JSContext;
+    fn ns_js_frame_of_realm(js: *const c_void, realm: ContextHandle) -> *mut NsNode;
+    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> ContextHandle;
     fn ns_node_root(n: *const NsNode) -> *const NsNode;
     fn ns_doc_id_index_build(doc: *mut NsNode);
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
@@ -41,7 +41,7 @@ impl FrameUrl {
 
 #[repr(C)]
 pub(crate) struct RealmScope {
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     doc: *mut NsNode,
     frame: *mut NsNode,
     url: *mut c_char,
@@ -54,7 +54,7 @@ pub(crate) struct RealmScope {
 impl RealmScope {
     pub const fn inactive() -> RealmScope {
         RealmScope {
-            ctx: ptr::null_mut(),
+            ctx: ContextHandle::NULL,
             doc: ptr::null_mut(),
             frame: ptr::null_mut(),
             url: ptr::null_mut(),
@@ -68,7 +68,7 @@ impl RealmScope {
 
 #[repr(C)]
 struct DispatchScope {
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     doc: *mut NsNode,
     frame: *mut NsNode,
     entered: bool,
@@ -77,15 +77,15 @@ struct DispatchScope {
 
 pub(crate) struct TimerScope {
     js: Js,
-    ctx: *mut JSContext,
-    previous_ctx: *mut JSContext,
+    ctx: ContextHandle,
+    previous_ctx: ContextHandle,
     frame_scope: RealmScope,
     budget: i64,
 }
 
 pub(crate) struct RafScope {
     js: Js,
-    previous_ctx: *mut JSContext,
+    previous_ctx: ContextHandle,
     previous_doc: *mut NsNode,
     previous_frame: *mut NsNode,
     frame: *mut NsNode,
@@ -96,7 +96,7 @@ struct FrameLoadScope {
     url: FrameUrl,
     doc: *mut NsNode,
     script: *mut NsNode,
-    iframe_doc: Option<JSValue>,
+    iframe_doc: Option<Value>,
     frame: *mut NsNode,
 }
 
@@ -177,11 +177,11 @@ pub(crate) fn node_root(node: *const NsNode) -> *const NsNode {
     unsafe { ns_node_root(node) }
 }
 
-pub(crate) fn frame_of_realm(js: Js, realm: *mut JSContext) -> *mut NsNode {
+pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> *mut NsNode {
     unsafe { ns_js_frame_of_realm(js.ptr().cast(), realm) }
 }
 
-pub(crate) fn node_realm_context(js: Js, node: *const NsNode) -> *mut JSContext {
+pub(crate) fn node_realm_context(js: Js, node: *const NsNode) -> ContextHandle {
     unsafe { ns_js_node_realm_context(js.ptr().cast(), node) }
 }
 
@@ -198,7 +198,7 @@ fn save(js: Js, scope: &mut RealmScope) {
 
 pub(crate) fn frame_scope_enter(
     js: Js,
-    realm: *mut JSContext,
+    realm: ContextHandle,
     frame: *mut NsNode,
     scope: &mut RealmScope,
 ) {
@@ -220,12 +220,11 @@ pub(crate) fn frame_scope_enter(
     js.set_current_url_raw(unsafe { glib::g_strdup(non_null_text(frame_url_attr(frame))) });
 }
 
-pub(crate) fn realm_url(js: Js, realm: *mut JSContext) -> *const c_char {
+pub(crate) fn realm_url(js: Js, realm: ContextHandle) -> *const c_char {
     if realm.is_null() {
         return ptr::null();
     }
-    let main = js.main_realm();
-    let main = if main.is_null() { js.ctx() } else { main };
+    let main = js.main_or_current();
     if realm == main {
         return top_url(js);
     }
@@ -242,7 +241,7 @@ pub(crate) fn realm_url(js: Js, realm: *mut JSContext) -> *const c_char {
     }
 }
 
-pub(crate) fn realm_scope_enter(js: Option<Js>, realm: *mut JSContext, scope: &mut RealmScope) {
+pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mut RealmScope) {
     *scope = RealmScope::inactive();
     let Some(js) = js else {
         return;
@@ -298,7 +297,7 @@ pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
     js.set_ctx(scope.ctx);
 }
 
-pub(crate) fn in_realm<R>(js: Option<Js>, realm: *mut JSContext, f: impl FnOnce() -> R) -> R {
+pub(crate) fn in_realm<R>(js: Option<Js>, realm: ContextHandle, f: impl FnOnce() -> R) -> R {
     let mut scope = RealmScope::inactive();
     realm_scope_enter(js, realm, &mut scope);
     let result = f();
@@ -306,7 +305,7 @@ pub(crate) fn in_realm<R>(js: Option<Js>, realm: *mut JSContext, f: impl FnOnce(
     result
 }
 
-pub(crate) unsafe fn realm_scope_push(js: Option<Js>, realm: *mut JSContext, buf: *mut c_void) {
+pub(crate) unsafe fn realm_scope_push(js: Option<Js>, realm: ContextHandle, buf: *mut c_void) {
     let scope = buf.cast::<RealmScope>();
     unsafe {
         scope.write(RealmScope::inactive());
@@ -320,7 +319,7 @@ pub(crate) unsafe fn realm_scope_pop(js: Option<Js>, buf: *mut c_void) {
 
 pub(crate) unsafe fn frame_scope_push(
     js: Js,
-    realm: *mut JSContext,
+    realm: ContextHandle,
     frame: *mut NsNode,
     buf: *mut c_void,
 ) {
@@ -355,7 +354,7 @@ pub(crate) unsafe fn frame_url_pop(js: Js, token: *mut c_void) {
 
 pub(crate) unsafe fn dispatch_scope_enter(
     js: Js,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     doc: *mut NsNode,
     frame: *mut NsNode,
     buf: *mut c_void,
@@ -393,7 +392,7 @@ pub(crate) fn frame_load_enter(
     frame: *mut NsNode,
     doc: *mut NsNode,
     url: *const c_char,
-    realm_doc: Option<JSValue>,
+    realm_doc: Option<Value>,
 ) -> *mut c_void {
     let mut scope = Box::new(FrameLoadScope {
         url: FrameUrl::new(),
@@ -410,10 +409,11 @@ pub(crate) fn frame_load_enter(
     }
     let state = js.st();
     scope.script = state.current_script.get();
-    scope.iframe_doc = state.iframe_doc.get();
-    if realm_doc.is_some() {
-        state.iframe_doc.set(realm_doc);
-    }
+    scope.iframe_doc = if realm_doc.is_some() {
+        state.iframe_doc.replace(realm_doc)
+    } else {
+        state.iframe_doc.borrow().clone()
+    };
     scope.frame = js.frame();
     js.set_frame(frame);
     state
@@ -429,13 +429,14 @@ pub(crate) unsafe fn frame_load_leave(js: Js, token: *mut c_void) {
         .iframe_load_depth
         .set(state.iframe_load_depth.get() - 1);
     js.set_frame(scope.frame);
-    state.iframe_doc.set(scope.iframe_doc);
+    let previous_doc = scope.iframe_doc.take();
+    drop(state.iframe_doc.replace(previous_doc));
     state.current_script.set(scope.script);
     js.set_current_doc(scope.doc);
     frame_url_leave(js, &mut scope.url);
 }
 
-pub(crate) fn realm_url_enter(js: Js, realm: *mut JSContext) -> *mut c_void {
+pub(crate) fn realm_url_enter(js: Js, realm: ContextHandle) -> *mut c_void {
     let url = realm_url(js, realm);
     if url.is_null() || unsafe { *url } == 0 {
         return ptr::null_mut();
@@ -446,7 +447,7 @@ pub(crate) fn realm_url_enter(js: Js, realm: *mut JSContext) -> *mut c_void {
     token
 }
 
-pub(crate) fn timer_scope_enter(js: Js, ctx: *mut JSContext, frame: *mut NsNode) -> *mut c_void {
+pub(crate) fn timer_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
     let previous_ctx = js.ctx();
     let mut ctx = if ctx.is_null() { previous_ctx } else { ctx };
     if !frame.is_null() {
@@ -473,7 +474,7 @@ pub(crate) fn timer_scope_enter(js: Js, ctx: *mut JSContext, frame: *mut NsNode)
     Box::into_raw(scope).cast()
 }
 
-pub(crate) unsafe fn timer_scope_context(scope: *const c_void) -> *mut JSContext {
+pub(crate) unsafe fn timer_scope_context(scope: *const c_void) -> ContextHandle {
     unsafe { (*scope.cast::<TimerScope>()).ctx }
 }
 
@@ -486,7 +487,7 @@ impl TimerScope {
         self.js
     }
 
-    pub fn ctx(&self) -> *mut JSContext {
+    pub fn ctx(&self) -> ContextHandle {
         self.ctx
     }
 
@@ -504,12 +505,12 @@ impl TimerScope {
     }
 }
 
-pub(crate) fn raf_scope_enter(js: Js, ctx: *mut JSContext, frame: *mut NsNode) -> *mut c_void {
+pub(crate) fn raf_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
     if !frame.is_null() && node_root(frame) != node_root(js.current_doc()) {
         return ptr::null_mut();
     }
     let current_realm = if frame.is_null() {
-        ptr::null_mut()
+        ContextHandle::NULL
     } else {
         node_realm_context(js, frame)
     };

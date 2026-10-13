@@ -5,7 +5,6 @@
 use core::ffi::CStr;
 
 use southstar_js_bind::bind_function;
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{PromiseState, Scope, Value};
 
 use crate::ffi::natives::*;
@@ -154,7 +153,6 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     ffi::install_context(scope, ns_js_name_engine_members);
     ffi::install(scope, ns_crypto_install_worker, &global);
     ffi::install(scope, ns_webgl_install, &global);
-    ffi::register_canvas_classes(scope);
     ffi::install_canvas(scope, &global, false);
 
     install_scope_members(scope, &global, setup, origin_real_ms);
@@ -190,7 +188,7 @@ fn install_scope_members(
     bind_fn(scope, global, "reportError", ns_worker_report_error, 1);
     let listeners = scope.new_array();
     let _ = scope.set(global, "_listeners", listeners);
-    ffi::install(scope, ns_bind_event_target_listeners, global);
+    crate::api::bind_event_target_listeners(scope, global);
     bind_fn(scope, global, "dispatchEvent", ns_target_dispatchEvent, 1);
     for name in ["onmessage", "onmessageerror", "onerror"] {
         let _ = scope.set(global, name, Value::null());
@@ -246,7 +244,7 @@ pub(crate) fn eval(
 ) -> EvalStatus {
     let (compiled, parse_error) = ffi::worker_compile(scope, source, len, url, module);
     let result = compiled.and_then(|function| {
-        let value = quickjs::eval_function(scope, function)?;
+        let value = scope.evaluate(function)?;
         if !module {
             return Ok(value);
         }

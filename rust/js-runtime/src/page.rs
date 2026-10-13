@@ -579,7 +579,6 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
 }
 
 fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
-    ffi::register_canvas_classes(scope);
     bind_ctor(scope, global, "Image", ns_window_image_ctor, 2);
     bind_ctor(scope, global, "MediaError", ns_illegal_constructor, 0);
     let _ = bind_int_constants(scope, global, "MediaError", MEDIA_ERRORS);

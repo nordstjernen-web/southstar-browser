@@ -4,6 +4,8 @@
 
 use core::ffi::c_int;
 
+use southstar_js_engine::{ContextHandle, JobOutcome, Value};
+
 use crate::budget;
 use crate::ffi::glue;
 use crate::ffi::scopes::{self, node_root};
@@ -23,8 +25,7 @@ pub(crate) fn add_depth(cell: &core::cell::Cell<c_int>, delta: c_int) -> c_int {
 pub(crate) fn drain_microtasks(js: Js) {
     let saved = budget::push(js);
     let state = js.st();
-    let mut failed = core::ptr::null_mut();
-    let mut status = 0;
+    let mut failure: Option<(ContextHandle, Value)> = None;
     add_depth(&state.callback_depth, 1);
     loop {
         let deadline = state.eval_deadline_us.get();
@@ -32,18 +33,22 @@ pub(crate) fn drain_microtasks(js: Js) {
             break;
         }
         let realm = glue::pending_job_realm(js);
-        status = scopes::in_realm(Some(js), realm, || {
-            glue::execute_pending_job(js, &mut failed)
-        });
-        if status <= 0 {
-            break;
+        match scopes::in_realm(Some(js), realm, || glue::execute_pending_job(js)) {
+            JobOutcome::Idle => break,
+            JobOutcome::Ran(_) => {}
+            JobOutcome::Failed(ctx, exception) => {
+                failure = Some((ctx, exception));
+                break;
+            }
         }
     }
     add_depth(&state.callback_depth, -1);
-    if status < 0 && state.log.is_set() {
+    if let Some((failed, exception)) = failure
+        && state.log.is_set()
+    {
         let mut line = b"[error] microtask threw".to_vec();
         if !failed.is_null() {
-            let (message, stack) = glue::pending_exception_text(failed);
+            let (message, stack) = glue::exception_text_in(failed, &exception);
             line.extend_from_slice(b": ");
             line.extend_from_slice(message.as_deref().unwrap_or(b"(no message)"));
             if let Some(stack) = stack {

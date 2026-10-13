@@ -7,21 +7,19 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable};
-use southstar_js_engine::Value;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
+use southstar_js_engine::ContextHandle;
 
 use super::glue::{self, Response, SourceFn};
 use super::scopes;
 use super::state::{
-    DataFn, DelayFn, DownloadFn, FormSubmitFn, JobFn, NavigateFn, NodeFn, PageState, TextQueryFn,
-    UrlFn, ViewportScrollFn,
+    DataFn, DelayFn, DownloadFn, FormSubmitFn, NavigateFn, NodeFn, PageState, TextQueryFn, UrlFn,
+    ViewportScrollFn,
 };
 use super::{GMainContext, Js, NsJs, WorkerHost};
 use crate::scheduling::{self, RunTasks};
 use crate::{budget, orphans};
 
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
-const BODY_BYTES_MAX: usize = 32 * 1024 * 1024;
 const SOURCE_REMOVE: GBoolean = 0;
 const SOURCE_CONTINUE: GBoolean = 1;
 
@@ -160,7 +158,7 @@ pub unsafe extern "C" fn ns_js_fetch_subresource(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_realm_document_url(
     js: *mut NsJs,
-    realm: *mut JSContext,
+    realm: ContextHandle,
 ) -> *const c_char {
     unsafe extern "C" {
         fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
@@ -187,7 +185,7 @@ pub unsafe extern "C" fn ns_js_budget_leave(js: *mut NsJs, saved: i64) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_context_frame(js: *mut NsJs, ctx: *mut JSContext) -> *mut NsNode {
+pub unsafe extern "C" fn ns_js_context_frame(js: *mut NsJs, ctx: ContextHandle) -> *mut NsNode {
     with(js, ptr::null_mut(), |js| {
         if ctx.is_null() || ctx == js.main_realm() {
             return ptr::null_mut();
@@ -195,206 +193,6 @@ pub unsafe extern "C" fn ns_js_context_frame(js: *mut NsJs, ctx: *mut JSContext)
         let frame = scopes::frame_of_realm(js, ctx);
         if frame.is_null() { js.frame() } else { frame }
     })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_bytes_view(
-    ctx: *mut JSContext,
-    value: JSValue,
-    out_data: *mut *const u8,
-    out_len: *mut usize,
-    out_holder: *mut JSValue,
-) -> GBoolean {
-    unsafe {
-        if !out_data.is_null() {
-            *out_data = ptr::null();
-        }
-        if !out_len.is_null() {
-            *out_len = 0;
-        }
-        if !out_holder.is_null() {
-            *out_holder = quickjs::UNDEFINED;
-        }
-    }
-    let view = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, value);
-            glue::bytes_view(scope, &value)
-        })
-    };
-    let Some(view) = view else {
-        return 0;
-    };
-    unsafe {
-        if !out_data.is_null() {
-            *out_data = view.data;
-        }
-        if !out_len.is_null() {
-            *out_len = view.len;
-        }
-        if !out_holder.is_null() {
-            *out_holder = quickjs::into_raw(view.holder);
-        }
-    }
-    1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_body_bytes(
-    ctx: *mut JSContext,
-    value: JSValue,
-    out_len: *mut usize,
-) -> *mut c_char {
-    if !out_len.is_null() {
-        unsafe { *out_len = 0 };
-    }
-    enum Body {
-        Bytes(Vec<u8>),
-        Blob,
-        Nothing,
-    }
-    let body = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, value);
-            if value.is_undefined() || value.is_null() {
-                return Body::Nothing;
-            }
-            if value.is_string() {
-                return scope.to_bytes(&value).map_or(Body::Nothing, Body::Bytes);
-            }
-            if let Some(view) = glue::bytes_view(scope, &value) {
-                return Body::Bytes(glue::bytes_of(&view).to_vec());
-            }
-            if value.is_object() {
-                return match scope.get(&value, "__ndBlobBytes") {
-                    Ok(bytes) if !bytes.is_undefined() && !bytes.is_null() => Body::Blob,
-                    _ => Body::Nothing,
-                };
-            }
-            Body::Nothing
-        })
-    };
-    match body {
-        Body::Bytes(bytes) => {
-            if bytes.len() > BODY_BYTES_MAX {
-                return ptr::null_mut();
-            }
-            if !out_len.is_null() {
-                unsafe { *out_len = bytes.len() };
-            }
-            glue::g_bytes(&bytes)
-        }
-        Body::Blob => glue::blob_bytes(ctx, value, out_len),
-        Body::Nothing => ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_value_is_url_search_params(
-    ctx: *mut JSContext,
-    value: JSValue,
-) -> GBoolean {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, value);
-            if !value.is_object() || scope.is_function(&value) {
-                return 0;
-            }
-            let pairs = scope
-                .get(&value, "__ndPairs")
-                .unwrap_or_else(|_| Value::undefined());
-            if !pairs.is_array() {
-                return 0;
-            }
-            let append = scope
-                .get(&value, "append")
-                .unwrap_or_else(|_| Value::undefined());
-            let get_all = scope
-                .get(&value, "getAll")
-                .unwrap_or_else(|_| Value::undefined());
-            flag(scope.is_function(&append) && scope.is_function(&get_all))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_usp_serialize(
-    ctx: *mut JSContext,
-    usp: JSValue,
-    out_len: *mut usize,
-    out_content_type: *mut *mut c_char,
-) -> *mut c_char {
-    if !out_content_type.is_null() {
-        unsafe {
-            *out_content_type =
-                glib::g_strdup(c"application/x-www-form-urlencoded;charset=UTF-8".as_ptr())
-        };
-    }
-    let text = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let usp = quickjs::borrow_value(scope, usp);
-            let to_string = scope
-                .get(&usp, "toString")
-                .unwrap_or_else(|_| Value::undefined());
-            let text = if scope.is_function(&to_string) {
-                scope.call(&to_string, &usp, &[])
-            } else {
-                Ok(scope.string(""))
-            };
-            text.map(|text| scope.to_bytes(&text).unwrap_or_default())
-        })
-    };
-    let bytes = text.unwrap_or_default();
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    if !out_len.is_null() {
-        unsafe { *out_len = end };
-    }
-    glue::g_bytes(&bytes[..end])
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_promise_reject(
-    ctx: *mut JSContext,
-    resolvers: *mut JSValue,
-    message: *const c_char,
-) {
-    let message = glue::text(message).map_or(&b""[..], |m| m.to_bytes());
-    let name_len = message
-        .iter()
-        .position(|&b| b == b':')
-        .unwrap_or(message.len());
-    let colon = name_len < message.len();
-    let is_dom_name = name_len > 5
-        && name_len < 64
-        && message[name_len - 5..name_len] == *b"Error"
-        && message[..name_len].iter().all(u8::is_ascii_alphanumeric);
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let resolve = quickjs::take_value(scope, *resolvers);
-            let reject = quickjs::take_value(scope, *resolvers.add(1));
-            let error = scope.new_error();
-            let lossy = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
-            if is_dom_name {
-                let name = scope.string(&lossy(&message[..name_len]));
-                let _ = scope.set(&error, "name", name);
-                let mut rest = if colon {
-                    &message[name_len + 1..]
-                } else {
-                    message
-                };
-                while let Some((b' ', tail)) = rest.split_first() {
-                    rest = tail;
-                }
-                let text = scope.string(&lossy(rest));
-                let _ = scope.set(&error, "message", text);
-            } else {
-                let text = scope.string(&lossy(message));
-                let _ = scope.set(&error, "message", text);
-            }
-            let _ = scope.call(&reject, &Value::undefined(), &[error]);
-            drop(resolve);
-        })
-    };
 }
 
 #[unsafe(no_mangle)]
@@ -421,7 +219,7 @@ pub unsafe extern "C" fn ns_js_attach_idle(
     glue::attach_idle(Js::of(js), func, data)
 }
 
-unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
+pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
     let js = Js(data.cast());
     match scheduling::run_message_tasks(js) {
         RunTasks::Done => SOURCE_REMOVE,
@@ -437,30 +235,6 @@ unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_drop_message_tasks(js: *mut NsJs) {
     with(js, (), scheduling::drop_message_tasks);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_queue_message_task(
-    ctx: *mut JSContext,
-    func: JobFn,
-    argc: c_int,
-    argv: *mut JSValue,
-) {
-    let js = Js::of_context(ctx);
-    let Some(js) = js.filter(|_| argc <= 3) else {
-        glue::enqueue_job(ctx, func, argc, argv);
-        return;
-    };
-    let args = if argc > 0 && !argv.is_null() {
-        unsafe { core::slice::from_raw_parts(argv, argc as usize) }
-    } else {
-        &[]
-    };
-    let task = glue::message_task(ctx, func, args);
-    if scheduling::queue_message_task(js, task) {
-        let source = glue::attach_timeout(Some(js), 0, run_message_tasks, js.ptr().cast());
-        js.st().message_task_source.set(source);
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -487,7 +261,7 @@ pub unsafe extern "C" fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_url(js: *mut NsJs, realm: *mut JSContext) -> *const c_char {
+pub unsafe extern "C" fn ns_js_realm_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char {
     with(js, ptr::null(), |js| scopes::realm_url(js, realm))
 }
 
@@ -523,74 +297,15 @@ pub unsafe extern "C" fn ns_js_timer_gate(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_timer_scope_enter(
     js: *mut NsJs,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     frame: *mut NsNode,
 ) -> *mut c_void {
     scopes::timer_scope_enter(Js(js), ctx, frame)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_timer_scope_context(scope: *const c_void) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_timer_scope_context(scope: *const c_void) -> ContextHandle {
     unsafe { scopes::timer_scope_context(scope) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_timer_scope_leave(
-    scope: *mut c_void,
-    threw: GBoolean,
-    exception: JSValue,
-) {
-    let mut scope = unsafe { scopes::timer_scope_take(scope) };
-    let js = scope.js();
-    let ctx = scope.ctx();
-    scheduling::add_depth(&js.st().callback_depth, -1);
-    budget::pop(js, scope.budget());
-    if threw != 0 {
-        let (message, stack) = glue::borrowed_exception_text(ctx, exception);
-        if let Some(message) = message
-            && js.st().log.is_set()
-        {
-            let mut line = b"JS error in timer: ".to_vec();
-            line.extend_from_slice(&message);
-            if let Some(stack) = stack {
-                line.push(b'\n');
-                line.extend_from_slice(&stack);
-            }
-            let line = glue::c_line(&line);
-            glue::log_line(js, line.as_ptr());
-        }
-        glue::report_uncaught(js, exception, js.current_url_raw());
-    }
-    scheduling::drain_mutations(js);
-    scope.leave();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_timer_this_is_detached_window(
-    js: *mut NsJs,
-    ctx: *mut JSContext,
-    this_val: JSValue,
-) -> GBoolean {
-    let Some(js) = Js::of(js) else {
-        return 0;
-    };
-    if !quickjs::raw_is_object(this_val) {
-        return 0;
-    }
-    let doc = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            match scope.get(&this, "document") {
-                Ok(doc) => glue::unwrap_element(quickjs::raw(&doc)),
-                Err(_) => ptr::null(),
-            }
-        })
-    };
-    if doc.is_null() || doc == js.current_doc().cast_const() || glue::is_detached_document(doc) {
-        return 0;
-    }
-    let top = scopes::top_document(js.current_doc());
-    flag(!top.is_null() && scopes::top_document(doc.cast_mut()) != top)
 }
 
 #[unsafe(no_mangle)]
@@ -606,41 +321,6 @@ pub unsafe extern "C" fn ns_js_halt(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_halted(js: *const NsJs) -> GBoolean {
     with(js, 0, |js| flag(js.halted()))
-}
-
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_js_call_observer(
-    js: *mut NsJs,
-    ctx: *mut JSContext,
-    cb: JSValue,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    report_type: *const c_char,
-    fresh_budget: GBoolean,
-) -> JSValue {
-    let js = Js::of(js);
-    let saved = js.map_or(0, |js| js.st().eval_deadline_us.get());
-    if let Some(js) = js
-        && fresh_budget != 0
-    {
-        js.st()
-            .eval_deadline_us
-            .set(super::monotonic_us() + budget::eval_budget_us());
-    }
-    let args = if argc > 0 && !argv.is_null() {
-        unsafe { core::slice::from_raw_parts(argv, argc as usize) }
-    } else {
-        &[]
-    };
-    let result = glue::call_observer(js, ctx, cb, this_val, args, report_type);
-    if let Some(js) = js
-        && fresh_budget != 0
-    {
-        js.st().eval_deadline_us.set(saved);
-    }
-    result
 }
 
 unsafe extern "C" fn observer_tick(data: *mut c_void) -> GBoolean {
@@ -684,14 +364,14 @@ pub unsafe extern "C" fn ns_js_dispatch_finish(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_raf_scope_enter(
     js: *mut NsJs,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     frame: *mut NsNode,
 ) -> *mut c_void {
     scopes::raf_scope_enter(Js(js), ctx, frame)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_scope_context(scope: *const c_void) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_raf_scope_context(scope: *const c_void) -> ContextHandle {
     unsafe { scopes::raf_scope_js(scope) }.ctx()
 }
 
@@ -1056,26 +736,23 @@ pub unsafe extern "C" fn ns_js_submit_form(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_realm_context(js: *const NsJs) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle {
     Js(js.cast_mut()).main_realm()
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_realm(js: *const NsJs) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_main_realm(js: *const NsJs) -> ContextHandle {
     Js(js.cast_mut()).main_realm()
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_context(js: *const NsJs) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_main_context(js: *const NsJs) -> ContextHandle {
     Js(js.cast_mut()).ctx()
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_pattern_context() -> *mut JSContext {
-    glue::active_js().map_or(ptr::null_mut(), |js| {
-        let main = js.main_realm();
-        if main.is_null() { js.ctx() } else { main }
-    })
+pub unsafe extern "C" fn ns_js_pattern_context() -> ContextHandle {
+    glue::active_js().map_or(ContextHandle::NULL, Js::main_or_current)
 }
 
 #[unsafe(no_mangle)]
@@ -1095,10 +772,7 @@ pub unsafe extern "C" fn ns_js_set_document(js: *mut NsJs, doc: *mut NsNode, ori
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_url_enter(
-    js: *mut NsJs,
-    realm: *mut JSContext,
-) -> *mut c_void {
+pub unsafe extern "C" fn ns_js_realm_url_enter(js: *mut NsJs, realm: ContextHandle) -> *mut c_void {
     with(js, ptr::null_mut(), |js| scopes::realm_url_enter(js, realm))
 }
 
@@ -1130,23 +804,13 @@ pub unsafe extern "C" fn ns_js_events_suspended(js: *const NsJs) -> GBoolean {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_document_window_event(
-    js: *mut NsJs,
-    kind: *const c_char,
-    event: JSValue,
-) {
-    let js = Js(js);
-    glue::dispatch_window_only_event(js, js.current_doc(), kind, event);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_in_main_realm(
     js: *mut NsJs,
     f: unsafe extern "C" fn(data: *mut c_void),
     data: *mut c_void,
 ) {
     let js = Js::of(js);
-    let realm = js.map_or(ptr::null_mut(), Js::main_realm);
+    let realm = js.map_or(ContextHandle::NULL, Js::main_realm);
     scopes::in_realm(js, realm, || unsafe { f(data) });
 }
 
@@ -1257,41 +921,29 @@ pub unsafe extern "C" fn ns_js_current_document(js: *const NsJs) -> *const NsNod
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_realm(js: *mut NsJs, ctx: *mut JSContext, doc: *mut NsNode) {
+pub unsafe extern "C" fn ns_js_set_realm(js: *mut NsJs, ctx: ContextHandle, doc: *mut NsNode) {
     let js = Js(js);
     js.set_ctx(ctx);
     js.set_current_doc(doc);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_module_context(js: *const NsJs) -> *mut JSContext {
+pub unsafe extern "C" fn ns_js_module_context(js: *const NsJs) -> ContextHandle {
     let js = Js(js.cast_mut());
-    let module = js.st().module_ctx.get();
-    if module.is_null() { js.ctx() } else { module }
+    js.st().module_ctx.get().or(js.ctx())
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_swap_module_context(
     js: *mut NsJs,
-    ctx: *mut JSContext,
-) -> *mut JSContext {
+    ctx: ContextHandle,
+) -> ContextHandle {
     Js(js).st().module_ctx.replace(ctx)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_iframe_document(js: *const NsJs, out: *mut JSValue) -> GBoolean {
-    match Js(js.cast_mut()).st().iframe_doc.get() {
-        Some(doc) => {
-            unsafe { *out = doc };
-            1
-        }
-        None => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_iframe_document_node(js: *const NsJs) -> *const NsNode {
-    match Js(js.cast_mut()).st().iframe_doc.get() {
+    match &*Js(js.cast_mut()).st().iframe_doc.borrow() {
         Some(doc) => glue::unwrap_element(doc),
         None => ptr::null(),
     }
@@ -1363,19 +1015,7 @@ pub unsafe extern "C" fn ns_js_frame_eval_end(js: *mut NsJs, previous_script: *m
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_enter_handler_realm(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    kind: *const c_char,
-) -> *mut c_void {
-    let scope = scopes::realm_scope_new();
-    let realm = glue::handler_realm(ctx, obj, kind);
-    unsafe { scopes::realm_scope_push(Js::of_context(ctx), realm, scope) };
-    scope
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_leave_handler_realm(ctx: *mut JSContext, scope: *mut c_void) {
+pub unsafe extern "C" fn ns_js_net_leave_handler_realm(ctx: ContextHandle, scope: *mut c_void) {
     unsafe {
         scopes::realm_scope_pop(Js::of_context(ctx), scope);
         scopes::realm_scope_free(scope);
@@ -1385,7 +1025,7 @@ pub unsafe extern "C" fn ns_js_net_leave_handler_realm(ctx: *mut JSContext, scop
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_realm_scope_push(
     js: *mut NsJs,
-    realm: *mut JSContext,
+    realm: ContextHandle,
     buf: *mut c_void,
 ) {
     unsafe { scopes::realm_scope_push(Js::of(js), realm, buf) };
@@ -1399,23 +1039,11 @@ pub unsafe extern "C" fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_frame_scope_push(
     js: *mut NsJs,
-    realm: *mut JSContext,
+    realm: ContextHandle,
     frame: *mut NsNode,
     buf: *mut c_void,
 ) {
     unsafe { scopes::frame_scope_push(Js(js), realm, frame, buf) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_load_enter(
-    js: *mut NsJs,
-    frame: *mut NsNode,
-    doc: *mut NsNode,
-    url: *const c_char,
-    realm_doc: JSValue,
-) -> *mut c_void {
-    let realm_doc = quickjs::raw_is_object(realm_doc).then_some(realm_doc);
-    scopes::frame_load_enter(Js(js), frame, doc, url, realm_doc)
 }
 
 #[unsafe(no_mangle)]
@@ -1426,7 +1054,7 @@ pub unsafe extern "C" fn ns_js_frame_load_leave(js: *mut NsJs, token: *mut c_voi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_dispatch_scope_enter(
     js: *mut NsJs,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     doc: *mut NsNode,
     frame: *mut NsNode,
     buf: *mut c_void,
