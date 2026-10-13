@@ -11,15 +11,15 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime" }
+southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }
 southstar-mat4 = { path = "../mat4" }
 southstar-style = { path = "../style" }
 
 [features]
 default = ["quickjs"]
-quickjs = ["southstar-js-engine/quickjs"]
-boa = ["southstar-js-engine/boa"]
+quickjs = ["southstar-js-engine/quickjs", "southstar-js-runtime/quickjs"]
+boa = ["southstar-js-engine/boa", "southstar-js-runtime/boa"]
 
 [lints]
 workspace = true
