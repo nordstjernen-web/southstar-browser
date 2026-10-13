@@ -80,7 +80,7 @@ ns_buildtype = get_option('buildtype')
 ns_is_release = (ns_buildtype == 'release' or ns_buildtype == 'minsize')
 # Every build profile gets -O3 (via default_options optimization=3) plus
 # dead-section pruning. Southstar leans on the optimizer to inline the
-# lexbor parser walks, QuickJS interpreter dispatch, and our box-layout
+# QuickJS interpreter dispatch and our box-layout
 # loops; -O2 left ~30% on the table for JS-heavy pages. The -O level is
 # left to meson's optimization option so it isn't passed twice (which
 # warns); we only add the section-GC flags here. Dev/non-release builds
@@ -407,15 +407,6 @@ endif
 libplmpeg = dependency('plmpeg', fallback: ['plmpeg', 'plmpeg_dep'])
 zlib = dependency('zlib')
 
-fs = import('fs')
-lexbor_version = '0.0.0'
-if fs.is_file('src/lexbor/version')
-  lexbor_version_raw = fs.read('src/lexbor/version').strip()
-  lexbor_version = lexbor_version_raw.split('=')[1]
-endif
-add_project_arguments('-DNS_LEXBOR_VERSION="' + lexbor_version + '"',
-                      language: 'c')
-
 build_date = get_option('build_date')
 if build_date == ''
   date_cmd = run_command('date', '-u', '+%Y-%m-%d', check: false)
@@ -430,8 +421,6 @@ have_wasm = get_option('wasm').allowed()
 if have_wasm
   add_project_arguments('-DNS_HAVE_WASM=1', language: 'c')
 endif
-
-subdir('src/lexbor')
 
 subdir('src/quickjs')
 message('JS engine: quickjs (in-tree quickjs-ng fork, full DOM bindings)')

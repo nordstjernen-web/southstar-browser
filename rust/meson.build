@@ -17,7 +17,6 @@ southstar_rust_env = {
   'NS_RUSTC_VERSION': rustc.version(),
   'NS_VERSION': meson.project_version(),
   'NS_BUILD_DATE': build_date,
-  'NS_LEXBOR_VERSION': lexbor_version,
 }
 rust_cc = meson.get_compiler('c')
 if have_libav

@@ -38,7 +38,6 @@ const PORTED: &[&str] = &[
     "headless.c",
     "history.c",
     "html.c",
-    "html_lexbor.c",
     "i18n.c",
     "icons.c",
     "idb.c",

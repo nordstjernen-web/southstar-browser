@@ -46,7 +46,6 @@ southstar_c_deps = [
   libwebpdemux,
   libplmpeg,
   libuchardet,
-  liblexbor,
   sqlite3,
   zlib,
 ]
@@ -126,7 +125,7 @@ if host_machine.system() == 'netbsd'
 endif
 
 # The gmodule-2.0 dependency injects -Wl,--export-dynamic, which dumps every
-# internal engine symbol (~6000: ns_*, lexbor, quickjs) into the executables'
+# internal engine symbol (~6000: ns_*, quickjs) into the executables'
 # .dynsym. Combined with -Wl,-z,now that bloats the dynamic-linker symbol
 # resolution done on every process start — and the renderer is forked+exec'd
 # afresh, so it pays that cost on each cold start. A version script localises

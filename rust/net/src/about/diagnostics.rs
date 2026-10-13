@@ -97,9 +97,7 @@ pub fn html() -> Vec<u8> {
     );
     kv(&mut s, "User agent", user_agent().as_deref());
     kv(&mut s, "JavaScript engine", v.js_engine.as_deref());
-    if let Some(lexbor) = option_env!("NS_LEXBOR_VERSION") {
-        kv(&mut s, "HTML / CSS (lexbor)", Some(lexbor.as_bytes()));
-    }
+    kv(&mut s, "HTML parser", Some(b"rust/html5 (in-tree)"));
     let [major, minor, micro] = v.glib;
     kv(
         &mut s,
