@@ -16,6 +16,7 @@ southstar-av = { path = "../av" }
 southstar-helper-ffi = { path = "../helper-ffi" }
 southstar-http = { path = "../http" }
 southstar-media-shm = { path = "../media-shm" }
+southstar-plmpeg = { path = "../plmpeg" }
 
 [features]
 libav = []

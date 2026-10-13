@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Build a source RPM (.src.rpm) of Southstar. Every subproject the build
-# needs (pl_mpeg) is vendored in the tarball, and the one remaining
-# wrap — ns-pango, cloned with git — is switched off in the spec, so
+# Build a source RPM (.src.rpm) of Southstar. The one subproject wrap —
+# ns-pango, cloned with git — is switched off in the spec, so
 # `rpmbuild --rebuild` resolves offline against the system Pango.
 set -euo pipefail
 

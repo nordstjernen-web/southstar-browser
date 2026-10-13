@@ -12,6 +12,7 @@ southstar-av = { path = "../av", optional = true }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-plmpeg = { path = "../plmpeg" }
 southstar-style = { path = "../style" }
 
 [features]

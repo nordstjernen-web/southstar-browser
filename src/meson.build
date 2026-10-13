@@ -24,7 +24,6 @@ southstar_c_deps = [
   libm,
   libwebp,
   libwebpdemux,
-  libplmpeg,
   libuchardet,
   sqlite3,
   zlib,
@@ -188,7 +187,7 @@ if sdl2_dep.found()
     install: false,
   )
 
-  audio_deps = [sdl2_dep, libplmpeg, glib] + http_backend_deps
+  audio_deps = [sdl2_dep, glib] + http_backend_deps
   if have_seccomp
     audio_deps += [libseccomp]
   endif
@@ -201,7 +200,7 @@ if sdl2_dep.found()
   if libopusfile.found()
     audio_deps += [libopusfile]
   endif
-  # libm is needed by pl_mpeg / minimp3 on Linux and the BSDs; it is part of
+  # libm is needed by minimp3 on Linux and the BSDs; it is part of
   # the C runtime on macOS and Windows, where find_library('m') is a harmless
   # no-op. librt carries shm_open/shm_unlink (the audio clock's POSIX shared
   # memory) on the BSDs, where they live outside libc; it is a harmless no-op

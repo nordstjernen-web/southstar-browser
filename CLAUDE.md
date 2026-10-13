@@ -40,14 +40,14 @@ Update Changelog.md
   resolves to `null`. wgpu-native is a large dependency and deliberately
   stays an opt-in build input, never vendored.
 - The **one vendored, in-tree** video codec is MPEG-1, decoded by the
-  vendored MIT-licensed [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
-  single-file decoder (`subprojects/plmpeg/`, wrapped by
+  in-tree `rust/plmpeg` (`southstar-plmpeg`), a pure-Rust port of the
+  MIT-licensed [pl_mpeg](https://github.com/phoboslab/pl_mpeg) demuxer and decoders, used by
   `rust/video/src/decode.rs`). A `<video>` whose source is an `.mpg`/`.mpeg`/`.m1v`
   stream plays **inline** — frames are decoded in the sandboxed renderer
   and advanced off the animation tick (`rust/video`), honouring
   `autoplay`/`loop`/`muted`/`poster` and click-to-play/pause. Audio plays
   via the unsandboxed `southstar-audio` helper (`rust/audio-helper`),
-  which decodes in-tree — pl_mpeg for the MPEG-1/MP2 track, the vendored
+  which decodes in-tree — `rust/plmpeg` for the MPEG-1/MP2 track, the vendored
   CC0 [minimp3](https://github.com/lieff/minimp3) (`src/audio/minimp3.h`)
   for standalone `.mp3` files — and outputs through SDL2's audio device
   (WASAPI/CoreAudio/ALSA), mixing and resampling the streams itself. The
@@ -61,7 +61,7 @@ Update Changelog.md
   helper writes BGRA frames into a shm ring that the shell composites
   over the page surface each tick (see `docs/media.md`). Without the
   helper (headless, Windows) the renderer decodes in-process as before. The
-  in-tree decoders stay pl_mpeg (MPEG-1 video + MP2) + minimp3 (MP3) — don't
+  in-tree decoders stay `rust/plmpeg` (MPEG-1 video + MP2) + minimp3 (MP3) — don't
   vendor further single-file codecs. **WebM is the one FFmpeg-backed
   extension**, over `libav\*` (`libavformat`/`libavcodec`/`libavutil`/
   `libswscale`/`libswresample`, system packages — never vendored): the

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* MPEG-1 playback is pure Rust: the vendored C pl_mpeg decoder
+  (subprojects/plmpeg) is replaced by rust/plmpeg, an in-tree port with no
+  dependencies covering the MPEG-PS demuxer, MPEG-1 video, MP2 audio, seeking
+  and looping. A differential harness found frames and samples byte-identical
+  to the C decoder.
 * Boa is Southstar's JavaScript engine and QuickJS-ng is gone: src/quickjs
   (about 101,000 lines of C), rust/js-engine's QuickJS backend, the
   quickjs/boa Cargo features of the binding crates, the polyfill verifier

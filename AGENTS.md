@@ -26,10 +26,10 @@ nothing imported.
   off at runtime until the browser is started with `--enable-webgpu`
   (which sets `NS_WEBGPU_ALLOW=1`).
 - The one vendored, in-tree video codec is MPEG-1, decoded by the
-  vendored pl_mpeg decoder (`subprojects/plmpeg/`, wrapped by
+  in-tree Rust port of pl_mpeg (`rust/plmpeg`, used by
   `rust/video/src/decode.rs`); such `<video>` plays inline (`rust/video`).
   Audio plays via the unsandboxed `southstar-audio` helper
-  (`rust/audio-helper`), which decodes MPEG-1/MP2 (pl_mpeg) and MP3
+  (`rust/audio-helper`), which decodes MPEG-1/MP2 (`rust/plmpeg`) and MP3
   (vendored minimp3, `src/audio/minimp3.h`) and outputs through SDL2.
   MSE video frames decode in the `southstar-video` helper
   (`rust/video-helper`, built when libav is present); the shell

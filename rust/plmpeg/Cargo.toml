@@ -1,0 +1,11 @@
+[package]
+name = "southstar-plmpeg"
+description = "MPEG-1 playback from memory: the MPEG program stream demuxer, the MPEG-1 video decoder and the MP2 audio decoder, ported from pl_mpeg"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish.workspace = true
+
+[lints]
+workspace = true

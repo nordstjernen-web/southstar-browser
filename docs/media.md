@@ -13,8 +13,8 @@ and the html process renders html.
 
 `<video>` plays **inline** when the source is MPEG-1 (an `.mpg` / `.mpeg` /
 `.m1v` stream). The bytes are decoded entirely in-tree by
-[pl_mpeg](https://github.com/phoboslab/pl_mpeg) — a single-file, MIT-licensed
-MPEG-1 video decoder — inside the sandboxed renderer process; no external
+`rust/plmpeg`, a pure-Rust port of the MIT-licensed
+[pl_mpeg](https://github.com/phoboslab/pl_mpeg) MPEG-1 video decoder, inside the sandboxed renderer process; no external
 library, no GPU API, and no syscalls beyond memory are needed, so it runs
 comfortably under the seccomp filter. Decoded BGRA frames are advanced off the
 renderer's existing animation tick, honouring the `autoplay`, `loop`, `muted`,
@@ -59,7 +59,7 @@ How libav is obtained differs by platform, to keep it redistributable:
 The MPEG-1 stream's **MP2 audio track** plays too (unless the element is
 `muted`), as does a WebM's **Opus/Vorbis** track when libav is built in. The
 seccomp-sandboxed renderer can't open a sound device, so audio is handed to the
-unsandboxed `southstar-audio` helper. The helper decodes to PCM — pl_mpeg for
+unsandboxed `southstar-audio` helper. The helper decodes to PCM — `rust/plmpeg` for
 the MPEG-1/MP2 track, [minimp3](https://github.com/lieff/minimp3) (CC0, vendored)
 for standalone `.mp3` files, and libav for Opus/Vorbis (WebM/Ogg) — and plays it
 through [SDL2](https://www.libsdl.org/)'s audio device (WASAPI on Windows,

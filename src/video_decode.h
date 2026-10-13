@@ -1,4 +1,4 @@
-/* Southstar — inline video decoding (pl_mpeg MPEG-1, libav containers), implemented in rust/video.
+/* Southstar — inline video decoding (MPEG-1 through rust/plmpeg, libav containers), implemented in rust/video.
  * Copyright 2026 Andreas Røsdal
  * SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
  */

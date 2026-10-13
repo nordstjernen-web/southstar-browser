@@ -88,7 +88,7 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   WebP; libwebp handles lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
-  [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
+  a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
   present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). MSE/`blob:`
   streaming and HLS/DASH manifests play through the `southstar-video`
   helper, and a `<track default>` WebVTT file is drawn over the video. Other
@@ -150,7 +150,7 @@ Southstar is an independent engine — no upstream browser code.
 [Boa](https://github.com/boa-dev/boa)
 (fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
 (memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
-(MPEG-1 video + MP2 audio) and [minimp3](https://github.com/lieff/minimp3)
+(MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
 (MP3). The only setup-time download is
 [ns-pango](https://github.com/nordstjernen-web/ns-pango), the text-shaping
 fork; `-Dns-pango=disabled` links the system Pango and needs no network.

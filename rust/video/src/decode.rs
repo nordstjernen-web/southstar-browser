@@ -1,4 +1,4 @@
-//! Southstar — inline video decoding: MPEG-1 through pl_mpeg and, with libav, Matroska/WebM and ISO-BMFF containers.
+//! Southstar — inline video decoding: MPEG-1 through rust/plmpeg and, with libav, Matroska/WebM and ISO-BMFF containers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -90,7 +90,7 @@ impl Decoder {
             return None;
         }
         if bytes_are_mpeg1(bytes) {
-            let plm = mpeg1::Mpeg1::open(copy_bytes(bytes)?)?;
+            let mut plm = mpeg1::Mpeg1::open(copy_bytes(bytes)?)?;
             let (w, h) = (plm.width(), plm.height());
             if !dimensions_valid(w, h) {
                 return None;

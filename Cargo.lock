@@ -1531,6 +1531,7 @@ dependencies = [
  "southstar-helper-ffi",
  "southstar-http",
  "southstar-media-shm",
+ "southstar-plmpeg",
 ]
 
 [[package]]
@@ -2659,6 +2660,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-plmpeg"
+version = "0.9.9"
+
+[[package]]
 name = "southstar-print"
 version = "0.9.9"
 dependencies = [
@@ -2790,6 +2795,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-plmpeg",
  "southstar-style",
 ]
 

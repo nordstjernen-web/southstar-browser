@@ -10,19 +10,15 @@ Comment:
  in Debian's main component. The NSL-1.0 alternative is documented below for
  completeness; it is not DFSG-free on its own.
  .
- The vendored Boa fork and the vendored
- single-file libraries (pl_mpeg, miniaudio) carry their own free
+ The vendored Boa fork and the libraries ported from single-file C
+ decoders (pl_mpeg, minimp3) carry their own free
  licenses, reproduced from THIRD-PARTY-LICENSES.md below.
 
 Files: *
 Copyright: 2026 Andreas Røsdal
 License: GPL-3+ or NSL-1.0
 
-Files: src/wamr/*
-Copyright: 2019 Intel Corporation
-License: Apache-2.0
-
-Files: subprojects/plmpeg/*
+Files: rust/plmpeg/*
 Copyright: 2019 Dominic Szablewski
 License: Expat
 

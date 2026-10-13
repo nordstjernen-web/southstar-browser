@@ -78,7 +78,8 @@ For more information, please refer to <https://unlicense.org>
 ### pl_mpeg — MIT License
 
 > Single-file MPEG-1 video and MP2 audio decoder and MPEG-PS demuxer.
-> Vendored at `subprojects/plmpeg/pl_mpeg.h`.
+> Ported to Rust in `rust/plmpeg`; the license text is kept at
+> `rust/plmpeg/LICENSE-pl_mpeg`.
 > <https://github.com/phoboslab/pl_mpeg>
 >
 > Copyright (c) 2019 Dominic Szablewski

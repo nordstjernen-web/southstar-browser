@@ -7,9 +7,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
+use crate::ffi::mp3;
 use crate::ffi::sdl::AudioStream;
-use crate::ffi::{mp3, plm};
 use crate::mixer::{DEVICE_RATE, MAX_FLOATS, MAX_SECONDS};
+use southstar_plmpeg::Plm;
 
 pub const MAX_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -108,6 +109,26 @@ fn is_mpeg1(b: &[u8]) -> bool {
     b.len() >= 4 && b[..3] == [0, 0, 1] && (b[3] == 0xBA || b[3] == 0xB3)
 }
 
+fn decode_mpeg1(bytes: &[u8]) -> Option<Decoded> {
+    let mut stream = Vec::new();
+    stream.try_reserve_exact(bytes.len()).ok()?;
+    stream.extend_from_slice(bytes);
+    let mut plm = Plm::new(stream);
+    plm.set_video_enabled(false);
+    plm.set_audio_enabled(true);
+    let rate = plm.samplerate();
+    if plm.num_audio_streams() < 1 || rate <= 0 || rate > 48000 {
+        return None;
+    }
+    let mut pcm = Collector::new(rate, 2);
+    while let Some(samples) = plm.decode_audio() {
+        if pcm.push(&samples.interleaved)? {
+            break;
+        }
+    }
+    pcm.finish(rate, 2)
+}
+
 #[cfg(feature = "vorbisfile")]
 fn is_ogg(b: &[u8]) -> bool {
     b.starts_with(b"OggS")
@@ -145,7 +166,7 @@ fn decode_container(_bytes: &[u8]) -> Option<Decoded> {
 
 fn decode(bytes: &[u8]) -> Option<Decoded> {
     let mut decoded = if is_mpeg1(bytes) {
-        plm::decode(bytes)
+        decode_mpeg1(bytes)
     } else {
         decode_container(bytes)
     };
