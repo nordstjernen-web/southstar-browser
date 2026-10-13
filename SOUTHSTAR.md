@@ -13,7 +13,7 @@ See `README.md` for the product vision and `CLAUDE.md` for working rules.
 - **One competent human's worth of code** — when work balloons, cut
   scope, not corners. A working subset beats an unfinished superset.
 - **Vertical slices that ship** — every task ends in something runnable.
-- **Few small auditable deps**, vendored in-tree: QuickJS (JS interpreter), the png/gif/zune-jpeg crates (image decode); WebAssembly runs on
+- **Few small auditable deps**, in-tree or pure Rust: the Boa JavaScript interpreter (a patched fork), the png/gif/zune-jpeg crates (image decode); WebAssembly runs on
   the pure-Rust wasmi interpreter.
 - **No automated test suite** — verify by running the browser.
 - No JIT, therefore more secure. However, this means the rest of the browser
@@ -26,7 +26,7 @@ WebRTC / WebUSB / WebBluetooth / WebMIDI / WebHID;
 service-worker push and background sync (registration, lifecycle, and
 `FetchEvent` network interception via `respondWith` *are* supported —
 `ns_sw_post_fetch_request` routes `fetch()` through the worker);
-DRM / EME; **JIT** (QuickJS
+DRM / EME; **JIT** (Boa is an
 interpreter only — W^X holds process-wide); plugins (NPAPI / PPAPI /
 WebExtensions); sync / accounts / telemetry /
 "studies".
@@ -50,7 +50,7 @@ A usable HTML5 + modern-CSS + ~ES2020 browser. `rust/html5` parses to a DOM;
 the engine does the CSS cascade and selectors, block/inline/flex/grid/
 table/multicol/float/positioned layout, and Cairo + Pango paint
 (gradients incl. `repeating-*` and gradient masks, filters, transforms,
-transitions / `@keyframes`). QuickJS bindings cover DOM, Shadow DOM,
+transitions / `@keyframes`). JavaScript bindings (`rust/js-*`, on Boa) cover DOM, Shadow DOM,
 `fetch`/XHR, canvas 2D, storage (`localStorage`/`sessionStorage`,
 IndexedDB over SQLite), `WebSocket`/`EventSource`, the
 Resize/Intersection/Mutation observers, and `crypto.subtle`
@@ -77,7 +77,7 @@ The codebase is layered so the GUI stays thin and the engine stays
 toolkit-agnostic:
 
 - **`src/` — common C core.** The engine (HTML parse, CSS cascade,
-  layout, Cairo/Pango paint, QuickJS, image decode, networking)
+  layout, Cairo/Pango paint, image decode, networking)
   plus frontend-agnostic `ns_` helpers shared by alternative GUIs
   (the `ns_net_fetch_*` networking calls, the `ns_url_*` URL helpers,
   the `src/headless.c` driver, and the `ns_browser` embedding API in

@@ -125,7 +125,7 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-QuickJS and minimp3 are vendored in-tree,
+Boa (`third_party/boa_engine`) and minimp3 are in-tree,
 so `meson setup` requires no submodules or setup-time downloads.
 
 To match CI exactly:
@@ -260,7 +260,7 @@ them large:
    `--single-process` and forfeit the per-tab security boundary. This is
    real engineering, not configuration.
 2. **Hardened Runtime.** WebAssembly runs in the wasmi interpreter and
-   QuickJS is interpreter-only, so neither maps executable memory; the
+   Boa is interpreter-only, so neither maps executable memory; the
    entitlements the build signs with are in
    `packaging/macos/entitlements.plist`. A browser also needs
    `com.apple.security.network.client`.

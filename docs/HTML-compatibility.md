@@ -36,7 +36,7 @@ implemented · 31 🟡 partial · 0 ❌ absent · 7 🚫 absent by design**.
 | CSS cascade / selectors | `src/css.c`, `src/css.h` |
 | Layout (block/inline/flex/grid/table) | `src/layout.c`, `src/layout.h` |
 | Paint (Cairo) / text (Pango) | `rust/paint`, `src/render.c`, `rust/font` |
-| JavaScript (QuickJS-ng, interpreter) | `src/js.c`, `src/js.h` |
+| JavaScript (Boa, interpreter) | `rust/js-*`, `rust/js-engine`, `third_party/boa_engine` |
 | Networking | `src/net.c`, cookies/cache in `src/cache.c` |
 | Images / media | `src/image*.c`, `src/video.c`, `src/video_decode.c`, `rust/webaudio`, `src/audio/` |
 | Security (CSP/SOP/sandbox) | `src/csp.c`, `src/security.c` |
@@ -255,7 +255,7 @@ validation.
 | `script` inline / external | ✅ | `ns_js_run_scripts_in_doc` (`src/js.c`); `script.text` returns/sets the child text content per spec |
 | `async` / `defer` | ✅ | `defer` delays to end of parse |
 | `type="module"` / `nomodule` | 🟡 | modules detected and run; full module graph/`import` resolution limited |
-| Engine | ✅ | QuickJS-ng (in-tree, **interpreter only, no JIT** — W^X holds); ≈ES2020+; per-call eval budget plus a 60 s absolute execution monitor that halts a runaway page (armed on the outermost JS entry, enforced in the interrupt callback — `src/js.c`) |
+| Engine | ✅ | Boa (pure Rust, patched fork in `third_party/boa_engine`, **interpreter only, no JIT** — W^X holds); per-call eval budget plus a 60 s absolute execution monitor that halts a runaway page (armed on the outermost JS entry, enforced in the Boa fork's interrupt handler — `rust/js-runtime/src/budget.rs`, `interrupt.rs`) |
 | `noscript` | ✅ | `display:none` when JS enabled |
 | `template` (`.content`) | ✅ | `template.content` is a `DocumentFragment` (snapshot clone of the parsed children); descendants of a `<template>` are hidden from the document's tree-walk: `document.querySelectorAll`, `getElementsByTagName`/`ClassName`/`Name`, `getElementById`, the CSS selector engine, and the id/class/tag indexes all stop at a `<template>` and don't descend into its children. The child accessors on the template element — `firstChild`, `lastChild`, `firstElementChild`, `lastElementChild`, `children`, `childNodes`, `childElementCount`, `hasChildNodes()` — all report empty/null, matching the spec model where template content lives in the content fragment rather than as children of the template element. Only `template.content`-rooted queries see the parsed nodes |
 | `slot` / shadow projection | 🟡 | `attachShadow` + slot assignment (bounded) |
@@ -373,7 +373,7 @@ surface).
 ## §10 Web workers · §11 Worklets
 
 ✅ **Dedicated workers are implemented** (classic and module). `new
-Worker(url, options)` creates a dedicated worker in its own QuickJS
+Worker(url, options)` creates a dedicated worker in its own JavaScript
 runtime on its own thread; `{type: 'module'}` evaluates the entry script
 as an ES module with static and dynamic `import` resolved through the
 same module loader the main realm uses (`importScripts` throws a
@@ -392,9 +392,12 @@ SubtleCrypto surface — verified by computing `SHA-256` inside a worker).
 
 Worker script creation is guarded by mixed-content checks and CSP
 `worker-src` with the expected fallback through `child-src`,
-`script-src`, and `default-src`. Message payloads cross runtimes through
-QuickJS object serialization without bytecode or SharedArrayBuffer
-flags; functions and SharedArrayBuffer are rejected. A `postMessage`
+`script-src`, and `default-src`. Message payloads cross runtimes as a
+wire graph (`rust/js-clone`) turned into bytes by the engine's object
+serializer; functions and SharedArrayBuffer are rejected. Boa does not
+provide that serializer yet (`Scope::write_object` in
+`rust/js-engine/src/boa.rs`), so for now any message other than
+`undefined` fails with `DataCloneError`. A `postMessage`
 transfer list transfers its `ArrayBuffer`s — they are serialized to the
 receiver and then detached in the sender (`JS_DetachArrayBuffer`), and a
 non-transferable entry throws `DataCloneError`.
@@ -447,7 +450,7 @@ workers are not implemented yet.
 | `localStorage` | ✅ | persistent, origin-partitioned, **no quota enforced** |
 | `sessionStorage` | ✅ | per-session |
 | `storage` event | ✅ | the `StorageEvent` interface is complete — the constructor reflects every dictionary member (`key`/`oldValue`/`newValue`/`url`/`storageArea`) with spec defaults (`key`/`oldValue`/`newValue` `null`, `url` `""`, `storageArea` `null`), the legacy `initStorageEvent(type, bubbles, cancelable, key, oldValue, newValue, url, storageArea)` is provided (`ns_storage_event_ctor` in `src/js.c`), and `onstorage`/`addEventListener('storage')` deliver dispatched events with intact fields. A storage area mutation does **not** fire a `storage` event on the window that made the change (per spec), and with one browsing context per tab there is no other same-origin context to notify — so same-tab mutations correctly fire nothing |
-| IndexedDB | 🟡 | SQLite-backed, origin-partitioned; supports databases, version upgrades, object stores, indexes, key ranges, cursors, requests/events, and structured-clone persistence through QuickJS serialization. Transaction rollback/blocking semantics and cross-context versionchange coordination are simplified |
+| IndexedDB | 🟡 | SQLite-backed, origin-partitioned; supports databases, version upgrades, object stores, indexes, key ranges, cursors, requests/events, and value persistence through the engine's object serialization, which Boa does not provide yet, so storing a record currently throws. Transaction rollback/blocking semantics and cross-context versionchange coordination are simplified |
 
 ## §13 The HTML syntax
 

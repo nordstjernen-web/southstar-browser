@@ -33,7 +33,7 @@ trusted.
 
 **Out of scope**
 
-- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, QuickJS,
+- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, Boa,
   the png/gif/zune-jpeg crates, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
@@ -326,13 +326,19 @@ attacker-controlled bytes and no path-traversal is possible.
 
 ### JavaScript
 
-JavaScript runs in [QuickJS](https://github.com/quickjs-ng/quickjs), an
-interpreter — no JIT, no machine-code generation. The DOM/JS bridge
+JavaScript runs in [Boa](https://github.com/boa-dev/boa), a pure-Rust
+bytecode interpreter (a patched fork in `third_party/boa_engine`) — no JIT, no machine-code generation. The DOM/JS bridge
 invalidates opaque pointers on node free and re-validates on every
 call, so DOM mutation cannot dangle a JS-held handle.
 
-Each tab has its own QuickJS runtime and context; tabs do not share JS
-state. Within a single tab, navigating across origins (e.g. from
+Each tab has its own JavaScript runtime (`rust/js-runtime` creates it with
+`RuntimeHandle::new`: one Boa `Context` with its own job queue and module
+loader) and its main realm in it (`new_context`, a fresh Boa realm); tabs do
+not share JS state, and each tab's renderer is a separate process. A page's
+scripts run under an eval budget and a 60 s absolute monitor: the runtime
+installs an interrupt handler in the Boa fork, which polls it on loop
+back-edges and calls, and a script past either deadline is halted
+(`rust/js-runtime/src/budget.rs`, `interrupt.rs`). Within a single tab, navigating across origins (e.g. from
 `news.example.com` to `evil.com`) tears down the runtime and starts a
 fresh one, so attacker-controlled globals (`window.foo = secret;`),
 prototype pollution, leftover module state, and any other in-memory
@@ -346,9 +352,9 @@ hardened network pipeline as any other resource (TLS verification,
 cap, CSP `frame-src`); `srcdoc` is parsed inline. The content document is
 parsed by `rust/html5` and laid out in place.
 
-A loaded frame gets a JavaScript realm, but **within the parent tab's
-single QuickJS runtime** — there is no separate runtime, context, or OS
-process per frame. The realm is a synthetic scope: the frame sees its own
+A loaded frame gets its own Boa realm (own global object and built-ins),
+but **within the parent tab's single runtime** — there is no separate
+runtime, heap, or OS process per frame. The frame sees its own
 `window`, `document`, `location`, and `history`, and `top`/`parent`/`self`/
 `frames` are redirected to the frame itself rather than exposing the parent's
 real global. This is a best-effort JavaScript-level boundary for ordinary
@@ -405,9 +411,9 @@ The `document.cookie` setter:
 ## Known gaps
 
 - **Iframe isolation is JS-level, not a runtime or process boundary.**
-  A loaded frame shares the parent tab's QuickJS runtime and global
-  prototypes; its separate `window`/`document`/`location` and redirected
-  `top`/`parent` are a synthetic scope, not a true cross-origin sandbox.
+  A loaded frame has its own realm but shares the parent tab's runtime,
+  heap and process; its separate `window`/`document`/`location` and
+  redirected `top`/`parent` are not a true cross-origin sandbox.
   Cross-document `postMessage` is correspondingly limited. A
   per-origin/per-frame runtime would close this and is tracked as future
   work; until then, do not rely on a cross-origin frame being contained

@@ -11,9 +11,9 @@ gave way to Southstar's own `rust/html5`. The project C left:
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
 | `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules. Fewer than ten are still included by C; the rest document the `ns_*` C ABI that Rust crates still use to call each other (and that 117 crate headers name). They go when those calls become ordinary Rust calls — a later, mechanical clean-up — except `libsouthstar.h`, the public embedding API. The about-page GIF and stylesheet headers are data the Rust build reads with `include_bytes!`/`include_str!` |
 
-After those, the work is the JavaScript engine track (Boa as the default, then
-QuickJS removed, §6) and the vendored C libraries (QuickJS, pl_mpeg, minimp3;
-phase 9; the HTML parser is now `rust/html5`). §12 lists every ported module.
+The JavaScript engine track is done (Boa is the only engine, QuickJS removed,
+§6); what remains is the vendored C libraries (pl_mpeg, minimp3; phase 9; the
+HTML parser is now `rust/html5`). §12 lists every ported module.
 
 The plan was written in October 2026 against the `main` of that time. §4
 describes the C code as it was then, and the phase descriptions keep the plan
@@ -70,9 +70,9 @@ one is a separate, later decision (§9).
 | 4 | GTK shell, watchdog and headless driver | 13,291 | Done |
 | 5 | Networking and storage | 13,500 | Done; libcurl and libnghttp2 replaced by `rust/http` |
 | 6 | Engine core: DOM → style → layout → paint → pipeline | 82,672 | Done |
-| 7 | JavaScript bindings | 77,729 | Done; the Boa switch continues on the engine track |
+| 7 | JavaScript bindings | 77,729 | Done; Boa is the only engine (engine track done) |
 | 8 | Remaining web platform features (WebGL, WebGPU, Wasm, media) | 16,438 | Done |
-| 9 | Vendored libraries; decide the long-term build | — | Wuffs, WAMR and the vendored HTML/URL library replaced (`rust/url`, `rust/html5`); QuickJS, pl_mpeg and minimp3 remain |
+| 9 | Vendored libraries; decide the long-term build | — | Wuffs, WAMR and the vendored HTML/URL library replaced (`rust/url`, `rust/html5`), QuickJS removed with the switch to Boa; pl_mpeg and minimp3 remain |
 | | **Total** | **221,452** | |
 
 Every project source file is assigned to exactly one phase.
@@ -1100,7 +1100,7 @@ whose `document.write` writes into the token stream (replacing the fragment
 splice in `rust/js-document`); incremental parsing as bytes arrive; a preload
 scanner; a depth cap like Blink's 512 (there is none today).
 
-After this, the only vendored C left is QuickJS and pl_mpeg/minimp3.
+After this, the only vendored C left is pl_mpeg/minimp3 (QuickJS is gone).
 
 ## 7. Engineering rules during the port
 
@@ -1197,7 +1197,7 @@ the existing ones, not a test suite.
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 (done, October 2026) |
 | D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
 | D11 | Which JavaScript engines get backends? | QuickJS-ng (default until the switch), Boa (the target default), and optionally Nova and quickjs-rust as experiments. Bellard's QuickJS is dropped (October 2026). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (C QuickJS underneath) |
-| D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired |
+| D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired. Done 13 October 2026: Boa is the only engine |
 | D13 | Pure-Rust end state: replace all vendored C (the HTML library, WAMR, Wuffs, pl_mpeg/minimp3, QuickJS)? | Decided (October 2026): yes. System libraries behind FFI are decided separately |
 | D14 | FFmpeg (and libavif) bindings for the media code, whose struct layouts change across supported versions: `ffmpeg-sys-next`, build-time bindgen, or hand-written declarations? | Decided (12 October 2026): hand-written declarations in `rust/av`, with the offsets and enum values computed by meson from the installed headers (§5.2); no crates and no libclang |
 

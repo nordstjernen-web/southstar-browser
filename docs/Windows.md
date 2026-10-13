@@ -87,9 +87,8 @@ meson setup builddir
 meson compile -C builddir
 ```
 
-The QuickJS JS engine (forked from
-[quickjs-ng](https://github.com/quickjs-ng/quickjs)) is vendored in-tree at
-`src/quickjs/`, and the HTML and URL parsers are Southstar's own
+The JavaScript engine is Boa (a patched fork in
+`third_party/boa_engine`), and the HTML and URL parsers are Southstar's own
 Rust crates, so the first `meson setup` does not touch the network
 for any of them. The
 image decoders are Rust crates built by Cargo; no C image-decoder
@@ -102,7 +101,6 @@ Build artifacts:
 - `builddir/src/southstar-renderer.exe` — the out-of-process,
   sandboxed renderer the shell spawns per tab. Ship it next to
   `southstar.exe` (the packaging scripts do).
-- `builddir/src/quickjs/libqjs.a`
 
 Running the exe directly out of `builddir` works as long as the
 MSYS2 mingw64 `bin` directory is on `PATH` (it is inside the
@@ -156,15 +154,7 @@ Run it from the MINGW64 shell:
 ```
 
 The script builds (or reuses) a separate `builddir-release/`
-tree configured with `--buildtype=release`, so `NDEBUG` is
-defined when QuickJS and friends compile. That matters because
-quickjs-ng v0.14.0 has an unconditional `assert(list_empty(&rt->gc_obj_list))`
-in `JS_FreeRuntime` (`quickjs.c:2323`) that fires on any leaked
-JS object at context-teardown time — which is easy to hit when
-real-world JS-heavy pages (e.g., DuckDuckGo) navigate while
-event handlers / in-flight `fetch()` promises still hold
-JSValues. Production builds need that assertion compiled out;
-debugging the actual leak is a separate task.
+tree configured with `--buildtype=release`.
 
 Typical output: 77 DLLs, ~86 MB. The bundle is portable — extract
 the whole `southstar-win64` folder to another Windows box and
