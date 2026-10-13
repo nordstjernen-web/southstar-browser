@@ -7,8 +7,7 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
-#[cfg(feature = "quickjs")]
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
+use southstar_js_engine::{Scope, Value};
 
 #[cfg(windows)]
 pub(crate) const DIR_SEPARATOR: u8 = b'\\';
@@ -226,22 +225,14 @@ pub(crate) fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     unsafe { glib::bytes(psl_registrable_domain(psl, host.as_ptr())) }.map(<[u8]>::to_vec)
 }
 
-#[cfg(feature = "quickjs")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ext_content_scripts_for_url(
-    ctx: *mut JSContext,
-    global: JSValue,
-    url: *const c_char,
-    at_start: GBoolean,
-) -> *mut c_char {
-    let url = unsafe { glib::bytes(url) };
-    let script = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::content_scripts_for_url(scope, &global, url, at_start != 0)
-        })
-    };
-    script.map_or(ptr::null_mut(), |script| glib::strdup(&script))
+pub fn nsr_ext_content_scripts_for_url(
+    scope: &mut Scope<'_>,
+    global: &Value,
+    url: Option<&[u8]>,
+    at_start: bool,
+) -> Option<Vec<u8>> {
+    crate::content_scripts_for_url(scope, global, url, at_start)
 }
 
 #[unsafe(no_mangle)]
