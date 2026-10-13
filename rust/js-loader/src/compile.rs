@@ -6,7 +6,6 @@ use core::ffi::CStr;
 use std::sync::OnceLock;
 
 use southstar_glib as glib;
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 const MIN_CACHED_SOURCE: usize = 1024;
@@ -22,7 +21,7 @@ pub(crate) fn cached_script(scope: &mut Scope<'_>, src: &[u8]) -> Option<Value> 
         return None;
     }
     let bytecode = southstar_bytecode_cache::get(src)?;
-    quickjs::read_bytecode(scope, &bytecode).ok()
+    scope.read_bytecode(&bytecode).ok()
 }
 
 pub(crate) fn store_script(scope: &mut Scope<'_>, compiled: &Value, src: &[u8]) {
@@ -33,7 +32,7 @@ pub(crate) fn store_script(scope: &mut Scope<'_>, compiled: &Value, src: &[u8]) 
 }
 
 fn store(scope: &mut Scope<'_>, compiled: &Value, key: &[u8]) {
-    if let Some(bytecode) = quickjs::write_bytecode(scope, compiled).filter(|b| !b.is_empty()) {
+    if let Some(bytecode) = scope.write_bytecode(compiled).filter(|b| !b.is_empty()) {
         southstar_bytecode_cache::put(key, &bytecode);
     }
 }
@@ -50,19 +49,20 @@ pub(crate) fn cached_module(
     scope: &mut Scope<'_>,
     name: &[u8],
     src: &[u8],
-) -> Option<Result<Value, Option<Value>>> {
+) -> Option<Result<Value, Value>> {
     if src.len() < MIN_CACHED_SOURCE {
         return None;
     }
     let bytecode = southstar_bytecode_cache::get(&module_key(name, src))?;
-    let module = quickjs::read_bytecode(scope, &bytecode)
+    let module = scope
+        .read_bytecode(&bytecode)
         .ok()
-        .filter(quickjs::is_module)?;
+        .filter(|module| scope.is_module(module))?;
     Some(set_import_meta(scope, &module, false).map(|()| module))
 }
 
 pub(crate) fn store_module(scope: &mut Scope<'_>, module: &Value, name: &[u8], src: &[u8]) {
-    if src.len() < MIN_CACHED_SOURCE || !quickjs::is_module(module) {
+    if src.len() < MIN_CACHED_SOURCE || !scope.is_module(module) {
         return;
     }
     store(scope, module, &module_key(name, src));
@@ -72,12 +72,12 @@ pub(crate) fn set_import_meta(
     scope: &mut Scope<'_>,
     module: &Value,
     is_main: bool,
-) -> Result<(), Option<Value>> {
-    if !quickjs::is_module(module) {
-        return Err(None);
+) -> Result<(), Value> {
+    if !scope.is_module(module) {
+        return Err(scope.type_error("not a module"));
     }
-    let name = quickjs::module_name(scope, module).map_err(Some)?;
-    let meta = quickjs::import_meta(scope, module).map_err(Some)?;
+    let name = scope.module_name(module)?;
+    let meta = scope.import_meta(module)?;
     let _ = scope.define(&meta, "url", name, IMPORT_META_FIELD);
     let _ = scope.define(&meta, "main", Value::boolean(is_main), IMPORT_META_FIELD);
     Ok(())

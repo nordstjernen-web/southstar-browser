@@ -6,7 +6,6 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_dom::{Kind, Node};
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{PromiseState, Scope, ScriptOptions, Value};
 
 use crate::compile;
@@ -51,10 +50,6 @@ fn origin_is_engine_code(origin: Option<&CStr>) -> bool {
 
 fn or_default<'a>(origin: Option<&'a CStr>, fallback: &'a CStr) -> &'a [u8] {
     origin.unwrap_or(fallback).to_bytes()
-}
-
-fn pending(scope: &mut Scope<'_>, error: Option<Value>) -> Value {
-    error.unwrap_or_else(|| quickjs::take_exception(scope))
 }
 
 fn leave_eval(js: Js) {
@@ -132,7 +127,7 @@ pub(crate) fn eval(js: Js, src: &[u8], origin: Option<&CStr>) {
     let hide_source = origin_is_engine_code(origin);
     let budget = js.budget_enter();
     js.main_realm().enter(|scope| {
-        if let Some(document) = js.iframe_document(scope)
+        if let Some(document) = js.iframe_document()
             && eval_in_iframe_document(js, scope, document, src, origin, hide_source)
         {
             return;
@@ -200,22 +195,21 @@ pub(crate) fn compile_module_cached(
     name: &[u8],
 ) -> Result<Value, Value> {
     if let Some(cached) = compile::cached_module(scope, name, src) {
-        return cached.map_err(|error| pending(scope, error));
+        return cached;
     }
     let module = scope.compile_module(src, name)?;
     compile::store_module(scope, &module, name, src);
-    compile::set_import_meta(scope, &module, false).map_err(|error| pending(scope, error))?;
+    compile::set_import_meta(scope, &module, false)?;
     Ok(module)
 }
 
 pub(crate) fn load_module(
     js: Js,
-    realm: Realm,
     scope: &mut Scope<'_>,
     name: &CStr,
     json: bool,
-) -> Option<Result<Value, Value>> {
-    let body = crate::fetch::module_source(js, realm, name, json)?;
+) -> Result<Value, Value> {
+    let body = crate::fetch::module_source(js, scope, name, json)?;
     let module = if json {
         let text = source_text(&body);
         let label = String::from_utf8_lossy(name.to_bytes()).into_owned();
@@ -237,7 +231,7 @@ pub(crate) fn load_module(
         line.extend_from_slice(&message);
         js.log(&line);
     }
-    Some(module)
+    module
 }
 
 pub(crate) fn eval_module(js: Js, src: &[u8], origin: Option<&CStr>) {
@@ -247,11 +241,8 @@ pub(crate) fn eval_module(js: Js, src: &[u8], origin: Option<&CStr>) {
         let copy = source_text(src);
         let started = compile::profile_begin();
         js.eval_depth_add(1);
-        let module = compile_module_cached(scope, &copy, name).and_then(|module| {
-            compile::set_import_meta(scope, &module, true)
-                .map(|()| module)
-                .map_err(|error| pending(scope, error))
-        });
+        let module = compile_module_cached(scope, &copy, name)
+            .and_then(|module| compile::set_import_meta(scope, &module, true).map(|()| module));
         js.ignore_destructive_writes_add(1);
         let result = module.and_then(|module| scope.evaluate(module));
         js.ignore_destructive_writes_add(-1);

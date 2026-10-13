@@ -1091,6 +1091,11 @@ pub fn nsr_unwrap_element(value: &southstar_js_engine::Value) -> *const NsNode {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe fn nsr_js_iframe_document(js: *const NsJs) -> Option<southstar_js_engine::Value> {
+    crate::api::iframe_document(js)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe fn nsr_worker_js_eval(
     js: *mut NsJs,
     source: &core::ffi::CStr,

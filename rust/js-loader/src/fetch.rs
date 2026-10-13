@@ -5,8 +5,9 @@
 use core::ffi::CStr;
 
 use southstar_dom::Node;
+use southstar_js_engine::{Scope, Value};
 
-use crate::ffi::{self, CSP_SCRIPT, CSP_STYLE, Fetched, Js, Realm};
+use crate::ffi::{self, CSP_SCRIPT, CSP_STYLE, Fetched, Js};
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_LINK_LOAD_FIRED, FLAG_NOT_PARSER_INSERTED,
     MAX_SCRIPT_BYTES, content_type_is_javascript, page, skipped_by_nomodule, source_is_empty,
@@ -243,7 +244,7 @@ fn count_load(js: Js, count: bool, bytes: usize) {
     });
 }
 
-fn over_limit(js: Js, ctx: Realm, name: &CStr) -> bool {
+fn over_limit(js: Js, name: &CStr) -> bool {
     if js.is_null() {
         return false;
     }
@@ -264,43 +265,49 @@ fn over_limit(js: Js, ctx: Realm, name: &CStr) -> bool {
             name.to_bytes(),
         ]));
     }
-    ctx.throw_range_error(b"module load limit exceeded");
     true
 }
 
-pub(crate) fn module_source(js: Js, ctx: Realm, name: &CStr, json: bool) -> Option<Vec<u8>> {
-    if over_limit(js, ctx, name) {
-        return None;
+fn reference_error(scope: &mut Scope<'_>, message: &[u8]) -> Value {
+    scope.reference_error(&String::from_utf8_lossy(message))
+}
+
+pub(crate) fn module_source(
+    js: Js,
+    scope: &mut Scope<'_>,
+    name: &CStr,
+    json: bool,
+) -> Result<Vec<u8>, Value> {
+    if over_limit(js, name) {
+        return Err(scope.range_error("module load limit exceeded"));
     }
     if starts_with(name, b"data:") {
         let Some(body) = ffi::decode_data_url(name) else {
-            ctx.throw_reference_error(b"invalid data: module URL");
-            return None;
+            return Err(reference_error(scope, b"invalid data: module URL"));
         };
         count_load(js, false, body.len());
-        return Some(body);
+        return Ok(body);
     }
     if starts_with(name, b"blob:") {
         let Some(body) = js.with_blob(name, <[u8]>::to_vec) else {
-            ctx.throw_reference_error(&line(&[b"blob module URL not found: ", name.to_bytes()]));
-            return None;
+            let message = line(&[b"blob module URL not found: ", name.to_bytes()]);
+            return Err(reference_error(scope, &message));
         };
         if body.len() > MAX_SCRIPT_BYTES {
-            ctx.throw_range_error(b"blob module exceeds script size limit");
-            return None;
+            return Err(scope.range_error("blob module exceeds script size limit"));
         }
         count_load(js, true, body.len());
-        return Some(body);
+        return Ok(body);
     }
     if !ffi::url_is_http_or_https(name) {
-        ctx.throw_reference_error(&line(&[
+        let message = line(&[
             b"module specifier must be absolute http/https URL: ",
             name.to_bytes(),
-        ]));
-        return None;
+        ]);
+        return Err(reference_error(scope, &message));
     }
     count_load(js, true, 0);
-    let info = js.module_perf_info(ctx);
+    let info = js.module_perf_info(scope.handle());
     let fetched = js.fetch(name, js.module_top_url(), !json, c"script", &info);
     let body = fetched
         .response
@@ -314,9 +321,9 @@ pub(crate) fn module_source(js: Js, ctx: Realm, name: &CStr, json: bool) -> Opti
             let why = failure_reason(&fetched, b"fetch failed");
             js.log(&line(&[b"module ", name.to_bytes(), b": ", &why]));
         }
-        ctx.throw_reference_error(&line(&[b"module fetch failed: ", name.to_bytes()]));
-        return None;
+        let message = line(&[b"module fetch failed: ", name.to_bytes()]);
+        return Err(reference_error(scope, &message));
     };
     count_load(js, false, body.len());
-    Some(body)
+    Ok(body)
 }

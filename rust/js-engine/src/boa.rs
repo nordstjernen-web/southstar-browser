@@ -648,6 +648,11 @@ impl Scope<'_> {
         Value(error.into_opaque(self.cx()).into())
     }
 
+    pub fn reference_error(&mut self, message: &str) -> Value {
+        let error = JsNativeError::reference().with_message(message.to_owned());
+        Value(error.into_opaque(self.cx()).into())
+    }
+
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
         self.host_object(prototype, data, None, core::ptr::null())
     }

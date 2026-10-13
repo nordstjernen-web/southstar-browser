@@ -211,6 +211,7 @@ unsafe extern "C" {
     fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ThrowInternalError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
+    fn JS_ThrowReferenceError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_ThrowSyntaxError(ctx: *mut JSContext, fmt: *const c_char, ...) -> JSValue;
     fn JS_FreezeObject(ctx: *mut JSContext, obj: JSValue) -> c_int;
     fn JS_ThrowDOMException(
@@ -2270,6 +2271,12 @@ impl Scope<'_> {
     pub fn range_error(&mut self, message: &str) -> Value {
         let message = c_text(message);
         unsafe { JS_ThrowRangeError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
+        self.exception()
+    }
+
+    pub fn reference_error(&mut self, message: &str) -> Value {
+        let message = c_text(message);
+        unsafe { JS_ThrowReferenceError(self.ctx, c"%s".as_ptr(), message.as_ptr()) };
         self.exception()
     }
 

@@ -2217,6 +2217,7 @@ version = "0.9.9"
 dependencies = [
  "southstar-bytecode-cache",
  "southstar-dom",
+ "southstar-extensions",
  "southstar-glib",
  "southstar-js-engine",
 ]

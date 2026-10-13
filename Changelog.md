@@ -46,6 +46,16 @@ Southstar Browser 0.9.9:
   forwarders, registered host classes, plain-object tests) with QuickJS and
   Boa implementations. js-forms and js-frames build on Boa; js-workers
   waits only for rust/js-clone.
+* The forms bindings (rust/js-forms) and the messaging and worker bindings
+  (rust/js-workers) are off raw QuickJS: every native has a Rust-ABI nsr_
+  entry point with Prop-table signatures, the engine and DOM calls they
+  make go through nsr_ twins, and the C-ABI shims the unconverted crates
+  still bind sit in a quickjs-only legacy.rs. Both build on Boa.
+* The forms bindings (rust/js-forms) are off raw QuickJS: every native has
+  a Rust-ABI nsr_ entry point with Prop-table signatures, the engine and
+  DOM calls they make go through nsr_ twins, the crate builds on Boa, and
+  the C-ABI shims the unconverted crates still bind sit in a quickjs-only
+  legacy.rs.
 * EventTarget and event dispatch (rust/js-dispatch) run on the neutral
   JavaScript API: realms are context handles, the event, console, frame and
   worker calls go through Rust-ABI entry points, the window's and worker's
@@ -80,6 +90,11 @@ Southstar Browser 0.9.9:
   they export Rust-ABI entry points over the neutral API and call the other
   binding crates through nsr_ twins, the services keep their C symbols only
   for callers still on QuickJS, and the realm setup binds them directly.
+* Structured cloning (rust/js-clone) and script and module loading
+  (rust/js-loader) are off raw QuickJS and build on Boa: module fetch errors
+  are thrown through the neutral layer (which gained Scope::reference_error),
+  the bytecode cache and import.meta use the neutral bytecode and module
+  calls, and the loader's dead C-ABI module hooks are gone.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt
