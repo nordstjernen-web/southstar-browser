@@ -169,3 +169,11 @@ pub unsafe extern "C" fn ns_webgpu_get_context(
 pub unsafe extern "C" fn ns_webgpu_canvas_surface(canvas: *const NsNode) -> *mut c_void {
     crate::context::canvas_surface(canvas as usize).unwrap_or(ptr::null_mut())
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_webgpu_install(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    navigator: &southstar_js_engine::Value,
+) {
+    crate::install::install(scope, navigator);
+}

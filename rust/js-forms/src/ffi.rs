@@ -1593,3 +1593,26 @@ pub unsafe extern "C" fn ns_form_controls_snapshot(ctx: *mut JSContext, form: JS
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_form_indexed_control(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    form: &southstar_js_engine::Value,
+    index: u32,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::collection::indexed_control(scope, form, index)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_form_named_control(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    form: &southstar_js_engine::Value,
+    name: &[u8],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::collection::named_control(scope, form, name)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_reset_form(scope: &mut southstar_js_engine::Scope<'_>, form: *mut NsNode) {
+    crate::submit::reset_form(scope, node(form));
+}

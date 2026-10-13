@@ -519,3 +519,11 @@ pub unsafe extern "C" fn ns_blob_bytes_as_string(
 pub unsafe extern "C" fn ns_url_teardown(js: *const c_void) {
     crate::teardown(Js(js as usize));
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_blob_bytes(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    blob: &southstar_js_engine::Value,
+) -> Vec<u8> {
+    crate::blob::blob_bytes(scope, blob)
+}

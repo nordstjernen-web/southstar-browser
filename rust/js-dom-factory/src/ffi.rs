@@ -722,3 +722,22 @@ pub unsafe extern "C" fn ns_tag_owner_document(
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_tag_owner_document(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    document: &southstar_js_engine::Value,
+    node: &southstar_js_engine::Value,
+) {
+    adopt::tag_owner_document(scope, document, node);
+}
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_attr_cloneNode(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    adopt::clone_attr(scope, this, args)
+}

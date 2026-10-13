@@ -1011,3 +1011,15 @@ pub unsafe extern "C" fn ns_js_load_iframe_now(js: *mut NsJs, iframe: *mut NsNod
         crate::load::load_now(Js::of(js), iframe);
     }
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_realm_proto_for(
+    js: *mut NsJs,
+    realm: southstar_js_engine::ContextHandle,
+    proto: &southstar_js_engine::Value,
+) -> southstar_js_engine::Value {
+    let (Some(cx), js) = (Ctx::from_ptr(realm.as_ptr().cast()), Js::of(js)) else {
+        return proto.clone();
+    };
+    cloner::proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
+}

@@ -1199,3 +1199,19 @@ pub unsafe extern "C" fn ns_js_resource_origin_clean(
         opt_bytes(cors_allow_origin),
     ))
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_new_window_named(
+    scope: &mut southstar_js_engine::Scope<'_>,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::class::new_window_named(scope)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_window_install_state(
+    js: *const NsJs,
+    scope: &mut southstar_js_engine::Scope<'_>,
+    global: &southstar_js_engine::Value,
+) {
+    context::install_state(scope, Js::of(js), global);
+}

@@ -600,3 +600,13 @@ pub unsafe extern "C" fn ns_element_compareDocumentPosition(
     };
     int(position)
 }
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_isSameNode(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::attributes::is_same_node(scope, this, args)
+}

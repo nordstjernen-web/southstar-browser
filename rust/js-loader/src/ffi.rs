@@ -1303,3 +1303,54 @@ pub unsafe extern "C" fn ns_js_element_perf_info(
         fill_element_perf_info(js, node(el), info);
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_compile_module_cached(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    src: &[u8],
+    name: &[u8],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    eval::compile_module_cached(scope, src, name)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_module_set_import_meta(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    module: &southstar_js_engine::Value,
+    is_main: bool,
+) -> Result<(), southstar_js_engine::Value> {
+    compile::set_import_meta(scope, module, is_main)
+        .map_err(|error| error.unwrap_or_else(|| quickjs::take_exception(scope)))
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_module_normalize(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    base: &str,
+    name: &str,
+) -> Result<String, southstar_js_engine::Value> {
+    let js = Js(scope.context_opaque().cast());
+    let base = CString::new(base.replace('\0', "")).unwrap_or_default();
+    let base = Some(base.as_c_str()).filter(|base| !base.is_empty());
+    let name = CString::new(name.replace('\0', "")).unwrap_or_default();
+    let resolved = import_map::resolve(js, name.to_bytes())
+        .or_else(|| url_resolve(base, &name).map(CString::into_bytes))
+        .unwrap_or_else(|| name.to_bytes().to_vec());
+    Ok(String::from_utf8_lossy(&resolved).into_owned())
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_module_load(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    name: &str,
+    attributes: &southstar_js_engine::Value,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    let js = Js(scope.context_opaque().cast());
+    let json = compile::attributes_type_is(scope, attributes, b"json");
+    let name = CString::new(name.replace('\0', "")).unwrap_or_default();
+    let realm = Realm(quickjs::raw_context(scope));
+    match eval::load_module(js, realm, scope, &name, json) {
+        Some(result) => result,
+        None => Err(quickjs::take_exception(scope)),
+    }
+}

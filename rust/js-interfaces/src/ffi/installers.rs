@@ -497,3 +497,21 @@ pub unsafe extern "C" fn ns_js_link_interfaces(ctx: *mut JSContext) {
         JS_FreeValue(ctx, result);
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_register_class(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    which: c_int,
+) -> southstar_js_engine::Value {
+    let raw = unsafe { ns_js_register_class(quickjs::raw_context(scope), which) };
+    unsafe { quickjs::take_value(scope, raw) }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_install_proto_table(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    proto: &southstar_js_engine::Value,
+    table: c_int,
+) {
+    unsafe { ns_js_install_proto_table(quickjs::raw_context(scope), quickjs::raw(proto), table) };
+}

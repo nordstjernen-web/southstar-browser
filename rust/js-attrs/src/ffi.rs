@@ -539,3 +539,16 @@ pub unsafe extern "C" fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode)
 pub unsafe extern "C" fn ns_attr_detach_all(js: *mut NsJs) {
     attr::detach_all(Js(js));
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_attr_to_js(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    owner: &southstar_js_engine::Value,
+    attr: *const NsAttr,
+    include_base: bool,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    match unsafe { Attr::from_ptr(attr) } {
+        Some(attr) => attr::to_js(scope, owner, attr, include_base),
+        None => Ok(southstar_js_engine::Value::undefined()),
+    }
+}

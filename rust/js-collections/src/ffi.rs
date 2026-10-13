@@ -491,3 +491,16 @@ pub unsafe extern "C" fn ns_live_back_of(obj: JSValue) -> *mut c_void {
 pub unsafe extern "C" fn ns_live_back_owner(back: *const c_void) -> JSValue {
     unsafe { self::back(back) }.map_or(quickjs::UNDEFINED, |back| quickjs::raw(back.owner()))
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_live_owner_node(obj: &southstar_js_engine::Value) -> *mut NsNode {
+    unsafe { ns_live_owner_node(quickjs::raw(obj)) }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_live_proto(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    which: c_int,
+) -> southstar_js_engine::Value {
+    live::proto(js_of(scope), which).unwrap_or_else(southstar_js_engine::Value::undefined)
+}

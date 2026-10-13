@@ -1566,3 +1566,24 @@ pub unsafe extern "C" fn ns_worker_shape_global(ctx: *mut JSContext, service_wor
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_worker_install_location(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    global: &southstar_js_engine::Value,
+    url: &str,
+) {
+    worker_scope::install_location(scope, global, url);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_worker_promise_rejection_tracker(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    _promise: &southstar_js_engine::Value,
+    reason: &southstar_js_engine::Value,
+    handled: bool,
+) {
+    if !handled {
+        worker_scope::unhandled_rejection(scope, reason);
+    }
+}

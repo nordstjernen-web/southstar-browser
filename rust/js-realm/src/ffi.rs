@@ -26,3 +26,11 @@ pub unsafe extern "C" fn ns_hide_shared_array_buffer(ctx: *mut JSContext, global
         });
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_hide_shared_array_buffer(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    global: &southstar_js_engine::Value,
+) {
+    crate::hide_shared_array_buffer(scope, global);
+}

@@ -1319,3 +1319,84 @@ pub unsafe extern "C" fn ns_body_forward_content_handler(
         crate::body_handlers::forward_content_handler(scope, element, &name, code.as_deref());
     });
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_install_body_reflected_handlers(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    wrapper: &southstar_js_engine::Value,
+) {
+    crate::body_handlers::install(scope, wrapper);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_dispatch_window_only_event(
+    js: *mut NsJs,
+    target_doc: *const NsNode,
+    kind: &str,
+    event: southstar_js_engine::Value,
+) -> bool {
+    crate::dispatch::dispatch_window_only(Js::of(js), node(target_doc), kind, event)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_promise_rejection_tracker(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    promise: &southstar_js_engine::Value,
+    reason: &southstar_js_engine::Value,
+    handled: bool,
+) {
+    crate::errors::track_rejection(scope, promise, reason, handled);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_report_uncaught(
+    js: *mut NsJs,
+    exception: &southstar_js_engine::Value,
+    origin: Option<&str>,
+) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::errors::report_exception_at(js, exception, origin, 0, 0);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_target_report_exception(
+    js: *mut NsJs,
+    scope: &mut southstar_js_engine::Scope<'_>,
+    kind: Option<&str>,
+    exception: &southstar_js_engine::Value,
+) {
+    crate::errors::report_handler_exception(Js::of(js), scope, kind, exception);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_target_handler_realm(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    obj: &southstar_js_engine::Value,
+    kind: &str,
+    listener_key: &str,
+) -> southstar_js_engine::ContextHandle {
+    let realm = crate::target::handler_realm(scope, obj, kind, listener_key);
+    southstar_js_engine::ContextHandle::from_ptr(realm.cast())
+}
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_target_addEventListener(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::target::add(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_target_removeEventListener(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::target::remove(scope, this, args)
+}

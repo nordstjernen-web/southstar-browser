@@ -892,3 +892,17 @@ pub unsafe extern "C" fn ns_services_reset(js: *const NsJs) {
 pub unsafe extern "C" fn ns_services_teardown(js: *const NsJs) {
     crate::teardown(Js(js));
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_window_navigator(
+    scope: &mut southstar_js_engine::Scope<'_>,
+) -> southstar_js_engine::Value {
+    navigator::window(scope)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_worker_navigator(
+    scope: &mut southstar_js_engine::Scope<'_>,
+) -> southstar_js_engine::Value {
+    navigator::worker(scope)
+}

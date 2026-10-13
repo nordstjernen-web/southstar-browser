@@ -504,3 +504,28 @@ export_native! {
     ns_perf_observer_disconnect => crate::disconnect,
     ns_perf_observer_takeRecords => crate::take_records,
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_make_performance_object(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    js: *const NsJs,
+    include_memory: bool,
+) -> southstar_js_engine::Value {
+    crate::object::make_performance_object(scope, Js::of(js), include_memory)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_perf_supported_entry_types(
+    scope: &mut southstar_js_engine::Scope<'_>,
+) -> southstar_js_engine::Value {
+    crate::supported_entry_types(scope)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_performance_extend_event_target(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    global: &southstar_js_engine::Value,
+    performance: &southstar_js_engine::Value,
+) {
+    crate::object::extend_event_target(scope, global, performance);
+}

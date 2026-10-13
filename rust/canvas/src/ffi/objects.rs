@@ -729,3 +729,12 @@ pub unsafe extern "C" fn ns_canvas_clone_object(ctx: *mut JSContext, v: JSValue)
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_canvas_install(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    global: &southstar_js_engine::Value,
+    window: bool,
+) {
+    crate::api::install(scope, global, window);
+}
