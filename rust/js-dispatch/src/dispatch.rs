@@ -463,7 +463,7 @@ pub(crate) fn window_for_document(js: Js, scope: &mut Scope<'_>, doc: Option<Ele
             || is_named(Some(frame), b"frame")
             || is_named(Some(frame), b"object"))
     {
-        let realm = js.frame_realm_window(scope, frame);
+        let realm = js.frame_realm_window(frame);
         if realm.is_object() {
             return realm;
         }

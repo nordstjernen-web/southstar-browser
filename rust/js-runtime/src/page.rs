@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_bind::{
-    attach_prototype, bind_constructor, bind_function, bind_int_constants,
+    attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
     bind_prototype_function_if_missing, prototype_of,
 };
 use southstar_js_engine::{Attributes, Scope, Value};
@@ -250,7 +250,7 @@ fn install_window(js: Js, scope: &mut Scope<'_>) {
     install_node_constants(scope, &global, &element_proto);
     let function = ffi::is_engine_function_native(scope);
     let _ = bind_function(scope, &global, "__ndIsEngineFunction", function);
-    ffi::install(scope, ns_js_install_event_target, &global);
+    imports::nsr_js_install_event_target(scope, &global);
     install_named_properties(scope, &global);
     let _ = eval_shape(scope, SCHEDULER, "<post-message>");
     install_window_tail(js, scope, &global);
@@ -490,21 +490,27 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
 }
 
 fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
-    bind_fn(
+    bind_native(
         scope,
         global,
         "addEventListener",
-        ns_window_addEventListener,
         2,
+        imports::nsr_window_addEventListener,
     );
-    bind_fn(
+    bind_native(
         scope,
         global,
         "removeEventListener",
-        ns_window_removeEventListener,
         2,
+        imports::nsr_window_removeEventListener,
     );
-    bind_fn(scope, global, "dispatchEvent", ns_window_dispatchEvent, 1);
+    bind_native(
+        scope,
+        global,
+        "dispatchEvent",
+        1,
+        imports::nsr_window_dispatchEvent,
+    );
     for key in ["scrollY", "scrollX", "pageYOffset", "pageXOffset"] {
         let _ = scope.set(global, key, Value::int(0));
     }
@@ -792,7 +798,13 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ns_window_structured_clone,
         1,
     );
-    bind_fn(scope, global, "reportError", ns_window_report_error, 1);
+    bind_native(
+        scope,
+        global,
+        "reportError",
+        1,
+        imports::nsr_window_report_error,
+    );
     bind_fn(
         scope,
         global,

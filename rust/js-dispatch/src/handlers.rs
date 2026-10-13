@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::{
@@ -131,7 +131,7 @@ pub(crate) fn push_current_event(
     if in_shadow || !scope.is_function(function) {
         return None;
     }
-    let realm = southstar_js_engine::quickjs::function_realm(scope, function).ok()?;
+    let realm = scope.function_handle(function).ok()?;
     let realm_global = ffi::global_of(realm);
     if !global_is_window(scope, &realm_global) {
         return None;
@@ -234,7 +234,7 @@ pub(crate) fn fire_inline(js: Js, target: Element, kind: &str, event: &Value) ->
     }
     let target_doc = nearest_document(target.parent());
     let frame = target_doc.and_then(|doc| doc.parent());
-    let mut realm = frame.map_or(core::ptr::null_mut(), |frame| js.frame_context(frame));
+    let mut realm = frame.map_or(ContextHandle::NULL, |frame| js.frame_context(frame));
     if realm.is_null() {
         if frame.is_some_and(|frame| js.iframe_is_cross_origin(frame)) {
             return false;
@@ -385,7 +385,7 @@ pub(crate) fn fire_window_property(
         return false;
     }
     let mut ctx = js.ctx();
-    let mut frame_realm = core::ptr::null_mut();
+    let mut frame_realm = ContextHandle::NULL;
     if let Some(doc) = nearest_document(target)
         && doc.parent().is_some()
     {
@@ -426,7 +426,8 @@ pub(crate) fn fire_window_property(
         }
         js.microtask_checkpoint();
         true
-    });
+    })
+    .unwrap_or(false);
     if reflected
         && let Some(body) = current_doc.and_then(|doc| ffi::first_element(doc, c"body"))
         && fire_inline(js, body, kind, event)

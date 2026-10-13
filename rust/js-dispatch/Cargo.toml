@@ -10,7 +10,14 @@ publish.workspace = true
 [dependencies]
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
-southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-js-bind = { path = "../js-bind", default-features = false }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-runtime = { path = "../js-runtime" }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs", "southstar-js-bind/quickjs"]
+boa = ["southstar-js-engine/boa", "southstar-js-bind/boa"]
 
 [lints]
 workspace = true

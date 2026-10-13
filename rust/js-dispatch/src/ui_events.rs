@@ -92,7 +92,7 @@ pub(crate) fn input_event(
     }
     let Some(event) = js.scope(|scope| {
         let event = ffi::make_event(scope, kind, Some(target));
-        ffi::adopt_interface(scope, &event, c"InputEvent");
+        ffi::adopt_interface(scope, &event, "InputEvent");
         set(scope, &event, "bubbles", Value::boolean(true));
         set(
             scope,
@@ -150,7 +150,7 @@ pub(crate) fn toggle_event(
             None => Value::null(),
         };
         ffi::define_source(scope, &event, source);
-        ffi::adopt_interface(scope, &event, c"ToggleEvent");
+        ffi::adopt_interface(scope, &event, "ToggleEvent");
         event
     }) else {
         return (false, false);

@@ -83,6 +83,36 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    pub(crate) safe fn nsr_window_addEventListener(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    pub(crate) safe fn nsr_window_removeEventListener(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    pub(crate) safe fn nsr_window_dispatchEvent(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    pub(crate) safe fn nsr_target_dispatchEvent(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_report_error(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_js_install_event_target(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_js_register_class(scope: &mut Scope<'_>, which: c_int) -> Value;
     pub(crate) safe fn nsr_install_window_chrome(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_install_window_compat(scope: &mut Scope<'_>, global: &Value);

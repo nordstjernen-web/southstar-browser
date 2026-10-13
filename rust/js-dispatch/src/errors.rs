@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::quickjs::{self, JSContext};
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::{JsResult, get, set};
@@ -16,7 +15,7 @@ const HIDDEN: Attributes = Attributes {
 
 pub(crate) struct Rejection {
     seq: u64,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     promise: Value,
     reason: Value,
 }
@@ -198,13 +197,13 @@ pub(crate) fn report_error(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
 
 fn dispatch_rejection_event(
     js: Js,
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     kind: &str,
     promise: &Value,
     reason: &Value,
     cancelable: bool,
 ) -> bool {
-    let (event, target_doc) = ffi::in_context(ctx, |scope| {
+    let Some((event, target_doc)) = ffi::in_context(ctx, |scope| {
         let global = scope.global();
         let event = crate::target::make_event(scope, &global, kind);
         adopt_global_proto(scope, &event, "PromiseRejectionEvent");
@@ -213,7 +212,9 @@ fn dispatch_rejection_event(
         set(scope, &event, "cancelable", Value::boolean(cancelable));
         let doc = ffi::window_document_for(scope, &global);
         (event, doc)
-    });
+    }) else {
+        return false;
+    };
     crate::dispatch::dispatch_window_only(js, target_doc, kind, event)
 }
 
@@ -227,7 +228,7 @@ pub(crate) fn track_rejection(
     if js.is_null() {
         return;
     }
-    let key = quickjs::identity(promise);
+    let key = promise.object_identity() as usize;
     if handled {
         let pending = crate::with(js, |page| page.pending_rejections.remove(&key));
         if pending.is_some() {

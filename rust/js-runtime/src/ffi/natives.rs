@@ -73,9 +73,6 @@ natives! {
     ns_perf_observer_observe,
     ns_perf_observer_disconnect,
     ns_perf_observer_takeRecords,
-    ns_window_addEventListener,
-    ns_window_removeEventListener,
-    ns_window_dispatchEvent,
     ns_window_find,
     ns_window_scroll_to,
     ns_window_scroll_by,
@@ -131,8 +128,6 @@ natives! {
     ns_document_ctor,
     ns_window_get_selection,
     ns_window_structured_clone,
-    ns_window_report_error,
-    ns_target_dispatchEvent,
 }
 
 installers! {
@@ -155,7 +150,6 @@ installers! {
     ns_net_install_text_codecs,
     ns_fetch_install_interfaces,
     ns_events_install_window,
-    ns_js_install_event_target,
     ns_window_install_browsing_context,
     ns_install_idle_deadline,
     ns_js_net_install_sockets,

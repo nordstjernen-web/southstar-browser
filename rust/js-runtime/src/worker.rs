@@ -226,7 +226,13 @@ fn install_scope_members(
     let listeners = scope.new_array();
     let _ = scope.set(global, "_listeners", listeners);
     crate::api::bind_event_target_listeners(scope, global);
-    bind_fn(scope, global, "dispatchEvent", ns_target_dispatchEvent, 1);
+    bind_native(
+        scope,
+        global,
+        "dispatchEvent",
+        1,
+        imports::nsr_target_dispatchEvent,
+    );
     for name in ["onmessage", "onmessageerror", "onerror"] {
         let _ = scope.set(global, name, Value::null());
     }

@@ -39,6 +39,16 @@ Southstar Browser 0.9.9:
   make go through nsr_ twins, and the C-ABI shims the unconverted crates
   still bind sit in a quickjs-only legacy.rs. js-forms builds on Boa;
   js-workers waits only for rust/js-clone.
+* The forms bindings (rust/js-forms) are off raw QuickJS: every native has
+  a Rust-ABI nsr_ entry point with Prop-table signatures, the engine and
+  DOM calls they make go through nsr_ twins, the crate builds on Boa, and
+  the C-ABI shims the unconverted crates still bind sit in a quickjs-only
+  legacy.rs.
+* EventTarget and event dispatch (rust/js-dispatch) run on the neutral
+  JavaScript API: realms are context handles, the event, console, frame and
+  worker calls go through Rust-ABI entry points, the window's and worker's
+  listener and dispatch methods are bound from them, and the C shims the
+  unconverted crates still call are kept in a QuickJS-only legacy module.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

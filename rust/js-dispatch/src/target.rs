@@ -4,8 +4,7 @@
 
 use std::cell::Cell;
 
-use southstar_js_engine::quickjs::{self, JSContext};
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::handlers;
@@ -178,7 +177,7 @@ pub(crate) fn handler_realm(
     obj: &Value,
     kind: &str,
     listener_key: &str,
-) -> *mut JSContext {
+) -> ContextHandle {
     let mut function = with_key(&["on", kind], |name| get(scope, obj, name));
     if !scope.is_function(&function) {
         function = Value::undefined();
@@ -350,7 +349,7 @@ fn dispatch_guard(scope: &mut Scope<'_>, event: &Value) -> JsResult<()> {
     if dispatching || uninitialized {
         return Err(ffi::invalid_state(
             scope,
-            c"Event is already being dispatched or was not initialized",
+            "Event is already being dispatched or was not initialized",
         ));
     }
     Ok(())
@@ -385,7 +384,9 @@ pub(crate) fn dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
     }
     dispatch_guard(scope, &event)?;
     let kind = event_kind(scope, &event)?;
-    if quickjs::identity(&event) != ENGINE_EVENT.with(Cell::get) && !ffi::is_host_caller(scope) {
+    if event.object_identity() as usize != ENGINE_EVENT.with(Cell::get)
+        && !ffi::is_host_caller(scope)
+    {
         set(scope, &event, "_is_trusted", Value::boolean(false));
     }
     set(scope, &event, "target", this.clone());
@@ -512,7 +513,7 @@ pub(crate) fn dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, event
     if !scope.is_function(&dispatch) {
         return;
     }
-    let outer = ENGINE_EVENT.with(|engine| engine.replace(quickjs::identity(event)));
+    let outer = ENGINE_EVENT.with(|engine| engine.replace(event.object_identity() as usize));
     let result = scope.call(&dispatch, target, core::slice::from_ref(event));
     ENGINE_EVENT.with(|engine| engine.set(outer));
     if let Err(exception) = result {
