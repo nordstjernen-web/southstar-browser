@@ -32,6 +32,8 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool);
+    pub(crate) safe fn nsr_cssom_install_window(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_crypto_install_window(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_crypto_install_window_subtle(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_crypto_install_worker(scope: &mut Scope<'_>, global: &Value);

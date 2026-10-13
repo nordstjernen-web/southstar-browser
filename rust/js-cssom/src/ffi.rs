@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the CSSOM bindings as declared in src/js_internal.h, and the js.c, style-engine and animation calls they make.
+//! Southstar — the C and Rust-ABI entry points of the CSSOM bindings, and the realm, style-engine and animation calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
@@ -171,26 +171,27 @@ type KeyframeCb = unsafe extern "C" fn(
     user: *mut c_void,
 );
 
+unsafe extern "Rust" {
+    safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
+    safe fn nsr_port_add_event_listener(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_port_remove_event_listener(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool;
+}
+
 unsafe extern "C" {
-    fn JS_IsHostAccess(ctx: *mut JSContext) -> bool;
     fn ns_js_style_table(js: *const NsJs) -> *mut GHashTable;
     fn ns_js_anim(js: *const NsJs) -> *mut c_void;
     fn ns_js_flush_layout(js: *mut NsJs);
     fn ns_js_flush_style(js: *mut NsJs);
     fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_port_add_event_listener(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_port_remove_event_listener(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
@@ -198,10 +199,7 @@ unsafe extern "C" {
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_js_element_is_rendered(ctx: *mut JSContext, value: JSValue) -> GBoolean;
     fn ns_js_node_unpinned(js: *const c_void, node: *const NsNode) -> GBoolean;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_unwrap_element(value: JSValue) -> *const NsNode;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
     fn ns_input_is_one_line_text(node: *const NsNode) -> GBoolean;
@@ -361,29 +359,23 @@ pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope) as usize)
+    Js(scope.context_opaque() as usize)
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_event_new(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_event_new(scope).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn port_add_event_listener(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "addEventListener", 2, ns_port_add_event_listener)
+    scope.function("addEventListener", 2, nsr_port_add_event_listener)
 }
 
 pub(crate) fn port_remove_event_listener(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(
-        scope,
-        "removeEventListener",
-        2,
-        ns_port_remove_event_listener,
-    )
+    scope.function("removeEventListener", 2, nsr_port_remove_event_listener)
 }
 
-pub(crate) fn host_access(scope: &Scope<'_>) -> bool {
-    unsafe { JS_IsHostAccess(quickjs::raw_context(scope)) }
+pub(crate) fn host_access(scope: &mut Scope<'_>) -> bool {
+    scope.is_host_access()
 }
 
 pub(crate) fn style_table(js: Js) -> StyleTable {
@@ -454,12 +446,11 @@ pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn style_decl_node(value: &Value) -> Option<Node<'static>> {
@@ -479,27 +470,22 @@ pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
 }
 
 pub(crate) fn write_ignored(scope: &Scope<'_>, node: Node<'_>) -> bool {
-    let js = quickjs::context_opaque(scope);
+    let js = scope.context_opaque();
     unsafe { ns_js_node_unpinned(js, node.as_ptr()) != 0 }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_register_style_class(ctx: *mut JSContext, proto: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let proto = quickjs::take_value(scope, proto);
-            crate::class::register(scope, proto);
-        })
-    }
+pub fn nsr_cssom_register_style_class(scope: &mut Scope<'_>, proto: Value) {
+    crate::class::register(scope, proto);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_style_class_proto(ctx: *mut JSContext) -> JSValue {
-    unsafe { quickjs::with_context(ctx, |scope| quickjs::into_raw(style_decl_proto(scope))) }
+pub fn nsr_style_class_proto(scope: &mut Scope<'_>) -> Value {
+    style_decl_proto(scope)
 }
 
 pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
-    unsafe { ns_js_element_is_rendered(quickjs::raw_context(scope), quickjs::raw(value)) != 0 }
+    nsr_js_element_is_rendered(scope, value)
 }
 
 pub(crate) fn grid_resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<String> {
@@ -1036,49 +1022,31 @@ pub(crate) fn computed_text_raw(js: Js, node: Node<'_>, name: &str) -> *mut c_ch
     }
 }
 
-type Install = for<'a> fn(&mut Scope<'a>, &Value) -> Result<(), Value>;
-
-unsafe fn install(ctx: *mut JSContext, target: JSValue, f: Install) {
-    if ctx.is_null() {
-        return;
-    }
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let target = quickjs::borrow_value(scope, target);
-            f(scope, &target).ok();
-        })
-    };
+#[unsafe(no_mangle)]
+pub fn nsr_cssom_install_window(scope: &mut Scope<'_>, global: &Value) {
+    css::install_window(scope, global).ok();
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_install_window(ctx: *mut JSContext, global: JSValue) {
-    unsafe { install(ctx, global, css::install_window) };
+pub fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value) {
+    css::install_css(scope, global).ok();
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_install_css(ctx: *mut JSContext, global: JSValue) {
-    unsafe { install(ctx, global, css::install_css) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_install_style_proto(ctx: *mut JSContext, proto: JSValue) {
-    unsafe { install(ctx, proto, declaration::install_style_proto) };
+pub fn nsr_cssom_install_style_proto(scope: &mut Scope<'_>, proto: &Value) {
+    declaration::install_style_proto(scope, proto).ok();
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_computed_text(
-    ctx: *mut JSContext,
+    ctx: ContextHandle,
     node: *const NsNode,
     name: *const c_char,
 ) -> *mut c_char {
     let (Some(node), false) = (unsafe { Node::from_ptr(node) }, name.is_null()) else {
         return core::ptr::null_mut();
     };
-    let js = if ctx.is_null() {
-        Js(0)
-    } else {
-        unsafe { quickjs::with_context(ctx, |scope| js_of(scope)) }
-    };
+    let js = ctx.with(|scope| js_of(scope)).unwrap_or(Js(0));
     let name = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     computed_text_raw(js, node, &name)
 }
@@ -1105,24 +1073,15 @@ pub unsafe extern "C" fn ns_cssom_style_own_value(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_style_set(
-    ctx: *mut JSContext,
+pub unsafe fn nsr_cssom_style_set(
+    scope: &mut Scope<'_>,
     node: *mut NsNode,
-    name: *const c_char,
-    value: JSValue,
+    name: &str,
+    value: &Value,
 ) {
-    let (Some(node), false) = (unsafe { Node::from_ptr(node) }, name.is_null()) else {
-        return;
-    };
-    let name = unsafe { CStr::from_ptr(name) }
-        .to_string_lossy()
-        .into_owned();
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, value);
-            declaration::set_named(scope, node, &name, &value);
-        })
-    };
+    if let Some(node) = unsafe { Node::from_ptr(node) } {
+        declaration::set_named(scope, node, name, value);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1131,24 +1090,15 @@ pub unsafe extern "C" fn ns_cssom_teardown(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_animate(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, crate::animate::element_animate) }
+pub fn nsr_element_animate(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::animate::element_animate(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_get_style(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-    unsafe {
-        quickjs::call_native(
-            ctx,
-            this_val,
-            0,
-            core::ptr::null_mut(),
-            crate::declaration::element_style,
-        )
-    }
+pub fn nsr_element_get_style(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::declaration::element_style(scope, this, &[])
 }

@@ -557,7 +557,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     for (name, native, arity) in service_methods {
         bind_native(scope, global, name, arity, native);
     }
-    ffi::install(scope, ns_cssom_install_window, global);
+    imports::nsr_cssom_install_window(scope, global);
     bind_fn(
         scope,
         global,
@@ -930,7 +930,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     );
     imports::nsr_worker_install_constructor(scope, global);
     imports::nsr_js_net_install_sockets(scope, global);
-    ffi::install(scope, ns_cssom_install_css, global);
+    imports::nsr_cssom_install_css(scope, global);
     ffi::imports::nsr_crypto_install_window_subtle(scope, global);
     #[cfg(feature = "wasm")]
     ffi::imports::nsr_wasm_install(scope, global);

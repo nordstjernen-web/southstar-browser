@@ -378,3 +378,8 @@ pub fn nsr_element_set_node_value(
 ) -> JsResult<()> {
     crate::node_value::set_node_value(scope, this, value)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
+    crate::node_value::is_rendered(scope, value)
+}
