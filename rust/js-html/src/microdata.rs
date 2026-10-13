@@ -144,15 +144,15 @@ pub fn item_id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult
 }
 
 pub fn item_type_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    Ok(ffi::token_list(scope, this, c"itemtype"))
+    ffi::token_list(scope, this, c"itemtype")
 }
 
 pub fn item_prop_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    Ok(ffi::token_list(scope, this, c"itemprop"))
+    ffi::token_list(scope, this, c"itemprop")
 }
 
 pub fn item_ref_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    Ok(ffi::token_list(scope, this, c"itemref"))
+    ffi::token_list(scope, this, c"itemref")
 }
 
 pub fn item_value_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {

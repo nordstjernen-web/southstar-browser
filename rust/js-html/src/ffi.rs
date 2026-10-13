@@ -1,15 +1,15 @@
-//! Southstar — the C ABI of the markup, text and microdata bindings as declared in src/js_internal.h, and the js.c and parser calls they make.
+//! Southstar — the Rust-ABI entry points of the markup, text and microdata bindings, and the engine and parser calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult, markup, microdata, text};
 
@@ -22,17 +22,6 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
-    fn ns_make_token_list(ctx: *mut JSContext, element: JSValue, attr: *const c_char) -> JSValue;
-    fn ns_nodelist_from_array(ctx: *mut JSContext, arr: JSValue) -> JSValue;
-    fn ns_js_array_length(ctx: *mut JSContext, arr: JSValue) -> u32;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
@@ -43,7 +32,6 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
-    fn ns_element_set_nodeValue(ctx: *mut JSContext, this_val: JSValue, val: JSValue) -> JSValue;
     fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
     fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
     fn ns_js_mark_mutated(js: *mut NsJs);
@@ -92,6 +80,20 @@ unsafe extern "C" {
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
 
+unsafe extern "Rust" {
+    safe fn nsr_make_token_list(
+        scope: &mut Scope<'_>,
+        element: &Value,
+        attr: &'static CStr,
+    ) -> Result<Value, Value>;
+    safe fn nsr_nodelist_from_array(scope: &mut Scope<'_>, array: Value) -> Value;
+    safe fn nsr_element_set_node_value(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        value: &Value,
+    ) -> Result<(), Value>;
+}
+
 fn raw(node: Option<Element>) -> *mut NsNode {
     node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
@@ -110,17 +112,16 @@ pub(crate) fn c_string(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     (!js.is_null()).then_some(Js(js))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    node(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dom_exception(
@@ -129,36 +130,24 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    api::dom_exception(
+        scope,
+        &name.to_string_lossy(),
+        code,
+        &message.to_string_lossy(),
+    )
 }
 
-pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &CStr) -> Value {
-    let raw = unsafe {
-        ns_make_token_list(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            attr.as_ptr(),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &'static CStr) -> JsResult {
+    nsr_make_token_list(scope, this, attr)
 }
 
 pub(crate) fn nodelist_from_array(scope: &mut Scope<'_>, array: Value) -> Value {
-    let raw =
-        unsafe { ns_nodelist_from_array(quickjs::raw_context(scope), quickjs::into_raw(array)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_nodelist_from_array(scope, array)
 }
 
 pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    unsafe { ns_js_array_length(quickjs::raw_context(scope), quickjs::raw(array)) }
+    api::array_length(scope, array)
 }
 
 pub(crate) fn current_document(js: Option<Js>) -> Option<Element> {
@@ -190,15 +179,7 @@ pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
 }
 
 pub(crate) fn set_node_value(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
-    let raw = unsafe {
-        ns_element_set_nodeValue(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            quickjs::raw(val),
-        )
-    };
-    let result = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, result).map(drop)
+    nsr_element_set_node_value(scope, this, val)
 }
 
 pub(crate) fn replace_all_recorded(js: Option<Js>, node: Element, added: Option<Element>) {
@@ -396,52 +377,13 @@ impl Drop for NameSet {
     }
 }
 
-unsafe fn getter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value) -> JsResult,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let result = f(scope, &this);
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-unsafe fn setter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value, &Value) -> JsResult<()>,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let val = quickjs::borrow_value(scope, val);
-            let result = f(scope, &this, &val).map(|()| Value::undefined());
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+                $f(scope, this)
             }
         )*
     };
@@ -451,12 +393,9 @@ macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+                $f(scope, this, value)
             }
         )*
     };
@@ -466,40 +405,36 @@ macro_rules! methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
 getters! {
-    ns_element_get_textContent => text::text_content_get,
-    ns_element_get_text => text::text_get,
-    ns_element_get_innerHTML => markup::inner_html_get,
-    ns_element_get_outerHTML => markup::outer_html_get,
-    ns_element_get_itemScope => microdata::item_scope_get,
-    ns_element_get_itemId => microdata::item_id_get,
-    ns_element_get_itemType => microdata::item_type_get,
-    ns_element_get_itemProp => microdata::item_prop_get,
-    ns_element_get_itemRef => microdata::item_ref_get,
-    ns_element_get_itemValue => microdata::item_value_get,
-    ns_element_get_properties => microdata::properties_get,
+    nsr_element_get_textContent => text::text_content_get,
+    nsr_element_get_text => text::text_get,
+    nsr_element_get_innerHTML => markup::inner_html_get,
+    nsr_element_get_outerHTML => markup::outer_html_get,
+    nsr_element_get_itemScope => microdata::item_scope_get,
+    nsr_element_get_itemId => microdata::item_id_get,
+    nsr_element_get_itemType => microdata::item_type_get,
+    nsr_element_get_itemProp => microdata::item_prop_get,
+    nsr_element_get_itemRef => microdata::item_ref_get,
+    nsr_element_get_itemValue => microdata::item_value_get,
+    nsr_element_get_properties => microdata::properties_get,
 }
 
 setters! {
-    ns_element_set_textContent => text::text_content_set,
-    ns_element_set_text => text::text_set,
-    ns_element_set_innerHTML => markup::inner_html_set,
-    ns_element_set_outerHTML => markup::outer_html_set,
-    ns_element_set_itemScope => microdata::item_scope_set,
-    ns_element_set_itemId => microdata::item_id_set,
-    ns_element_set_itemValue => microdata::item_value_set,
+    nsr_element_set_textContent => text::text_content_set,
+    nsr_element_set_text => text::text_set,
+    nsr_element_set_innerHTML => markup::inner_html_set,
+    nsr_element_set_outerHTML => markup::outer_html_set,
+    nsr_element_set_itemScope => microdata::item_scope_set,
+    nsr_element_set_itemId => microdata::item_id_set,
+    nsr_element_set_itemValue => microdata::item_value_set,
 }
 
 #[allow(non_snake_case)]
@@ -513,11 +448,11 @@ pub fn nsr_xml_serializer_ctor(
 }
 
 methods! {
-    ns_element_getHTML => markup::get_html,
-    ns_element_setHTMLUnsafe => markup::set_html_unsafe,
-    ns_element_insertAdjacentHTML => markup::insert_adjacent_html,
-    ns_element_insertAdjacentElement => text::insert_adjacent_element,
-    ns_element_insertAdjacentText => text::insert_adjacent_text,
-    ns_document_getItems => microdata::get_items,
-    ns_xml_serializer_ctor => markup::xml_serializer_ctor,
+    nsr_element_getHTML => markup::get_html,
+    nsr_element_setHTMLUnsafe => markup::set_html_unsafe,
+    nsr_element_insertAdjacentHTML => markup::insert_adjacent_html,
+    nsr_element_insertAdjacentElement => text::insert_adjacent_element,
+    nsr_element_insertAdjacentText => text::insert_adjacent_text,
+    nsr_document_getItems => microdata::get_items,
+    nsr_xml_serializer_ctor => markup::xml_serializer_ctor,
 }
