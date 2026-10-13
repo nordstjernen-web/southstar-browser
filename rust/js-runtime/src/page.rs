@@ -580,7 +580,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
         imports::nsr_window_cancelAnimationFrame,
     );
-    ffi::install(scope, ns_js_input_install_wpt, global);
+    imports::nsr_js_input_install_wpt(scope, global);
     bind_native(
         scope,
         global,

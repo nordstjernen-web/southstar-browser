@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the shell's input events and drag sessions as declared in src/js.h and src/js_internal.h, and the js.c calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the shell's input events and drag sessions, and the realm, event and dispatch calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,8 +9,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::transfer::DragSession;
@@ -25,16 +25,6 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
-    fn ns_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_path_has_active_listener(
         js: *mut NsJs,
         target: *const NsNode,
@@ -54,9 +44,9 @@ unsafe extern "C" {
         meta: GBoolean,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_main_realm(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
+    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
+    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
@@ -85,7 +75,7 @@ unsafe extern "C" {
         w: *mut f64,
         h: *mut f64,
     );
-    fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
+    fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn g_file_get_contents(
         filename: *const c_char,
         contents: *mut *mut c_char,
@@ -99,6 +89,16 @@ unsafe extern "C" {
         result_uncertain: *mut GBoolean,
     ) -> *mut c_char;
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
+}
+
+unsafe extern "Rust" {
+    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
+    unsafe fn nsr_js_dispatch_built_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> (bool, bool);
 }
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
@@ -127,9 +127,9 @@ impl Js {
         self.0 == 0
     }
 
-    pub fn ctx(self) -> *mut JSContext {
+    pub fn ctx(self) -> ContextHandle {
         if self.is_null() {
-            return ptr::null_mut();
+            return ContextHandle::NULL;
         }
         unsafe { ns_js_main_context(self.ptr()) }
     }
@@ -139,25 +139,14 @@ impl Js {
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let ctx = self.ctx();
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        self.ctx().with(f)
     }
 
     pub fn realm_scope<R>(self, node: Element, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let mut ctx = unsafe { ns_js_node_realm_context(self.ptr(), node.as_ptr()) };
-        if ctx.is_null() {
-            ctx = unsafe { ns_js_main_realm(self.ptr()) };
-        }
-        if ctx.is_null() {
-            ctx = self.ctx();
-        }
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        unsafe { ns_js_node_realm_context(self.ptr(), node.as_ptr()) }
+            .or(unsafe { ns_js_main_realm(self.ptr()) })
+            .or(self.ctx())
+            .with(f)
     }
 
     pub fn current_document(self) -> Option<Element> {
@@ -199,17 +188,8 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: Element, kind: &str, event: Value) -> (bool, bool) {
-        let mut prevented: GBoolean = 0;
-        let fired = with_c(kind, |kind| unsafe {
-            ns_js_dispatch_built_event(
-                self.ptr(),
-                target.as_ptr(),
-                kind,
-                quickjs::into_raw(event),
-                &mut prevented,
-            )
-        });
-        (fired != 0, prevented != 0)
+        let kind = kind.replace('\0', " ");
+        unsafe { nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind, event) }
     }
 
     pub fn dispatch_key(
@@ -273,28 +253,24 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(quickjs::context_opaque(scope).cast())
+    Js::of(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
-    node(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), el.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str, target: Element) -> Value {
-    let ctx = quickjs::raw_context(scope);
-    let raw = with_c(kind, |kind| unsafe {
-        ns_make_event(ctx, kind, target.as_ptr())
-    });
-    unsafe { quickjs::take_value(scope, raw) }
+    let kind = kind.replace('\0', " ");
+    unsafe { nsr_make_event(scope, &kind, target.as_ptr()) }
 }
 
 pub(crate) fn realm_now_ms(scope: &Scope<'_>) -> f64 {
-    unsafe { ns_perf_realm_now_ms(quickjs::raw_context(scope)) }
+    unsafe { ns_perf_realm_now_ms(scope.handle()) }
 }
 
 pub(crate) fn is_focusable(el: Element) -> bool {
@@ -534,16 +510,8 @@ pub unsafe extern "C" fn ns_js_dispatch_drag_event(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_input_install_wpt(ctx: *mut JSContext, global: JSValue) {
-    if ctx.is_null() {
-        return;
-    }
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::wpt::install(scope, &global);
-        })
-    };
+pub fn nsr_js_input_install_wpt(scope: &mut Scope<'_>, global: &Value) {
+    crate::wpt::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
@@ -554,21 +522,21 @@ pub unsafe extern "C" fn ns_js_input_teardown(js: *mut NsJs) {
 macro_rules! capture_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
+            #[allow(non_snake_case)]
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { quickjs::call_native(ctx, this_val, argc, argv, $f) }
+            pub fn $name(
+                scope: &mut Scope<'_>,
+                this: &Value,
+                args: &[Value],
+            ) -> Result<Value, Value> {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
 capture_methods! {
-    ns_element_setPointerCapture => crate::capture::set,
-    ns_element_releasePointerCapture => crate::capture::release,
-    ns_element_hasPointerCapture => crate::capture::has,
+    nsr_element_setPointerCapture => crate::capture::set,
+    nsr_element_releasePointerCapture => crate::capture::release,
+    nsr_element_hasPointerCapture => crate::capture::has,
 }

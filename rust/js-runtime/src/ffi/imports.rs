@@ -601,6 +601,7 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_js_input_install_wpt(scope: &mut Scope<'_>, global: &Value);
 }
 
 unsafe extern "Rust" {

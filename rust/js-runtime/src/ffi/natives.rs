@@ -35,5 +35,4 @@ natives! {
 }
 
 installers! {
-    ns_js_input_install_wpt,
 }
