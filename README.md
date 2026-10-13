@@ -4,12 +4,15 @@ Southstar Browser
 Southstar Browser is a web browser focused on support for modern HTML, CSS
 and JavaScript standards. It is the next step for
 [Nordstjernen](https://github.com/nordstjernen-web/nordstjernen-browser)
-(Northstar): Southstar will become a **Rust rewrite** of that browser.
+(Northstar), **rewritten in Rust**.
 
-The rewrite starts from a working browser rather than an empty repository.
-This tree is the Nordstjernen C codebase — its full history included —
-renamed to Southstar Browser and trimmed to the desktop: the Android, iOS and
-Java/JVM versions have been removed.
+The rewrite started from a working browser rather than an empty repository:
+the Nordstjernen C codebase, its full history included, renamed to Southstar
+Browser and trimmed to the desktop. It was then ported to Rust module by
+module while it kept running, and in October 2026 the last of the project's
+C went, the QuickJS-ng engine included. All of Southstar's own code is now
+Rust; C remains only in the system libraries it links (GTK, Cairo, Pango,
+OpenSSL, FFmpeg, SDL2, …).
 
 ![Southstar Browser showing its start page](docs/screenshot.png)
 
@@ -40,9 +43,9 @@ that are non-goals by design: `embed`/`object` plugins, `frame`/`frameset`,
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The core engine is about 210,000 lines of project C and
-headers, excluding vendored libraries and generated assets — small enough for
-one person to read and audit end-to-end.
+**Minimalism.** The browser is about 330,000 lines of Rust in some 140
+crates under `rust/`, excluding the vendored Boa fork and generated tables —
+small enough for one person to read and audit end-to-end.
 
 <img src="docs/southstar-now.png" alt="Southstar Now!" width="140">
 
@@ -50,12 +53,13 @@ one person to read and audit end-to-end.
 
 - [x] Start from Nordstjernen: import the C codebase with its history, rename
       it to Southstar Browser, and remove the Android, iOS and Java versions.
-- [ ] Rewrite the browser in Rust — the plan is in
-      [docs/rust-port.md](docs/rust-port.md).
+- [x] Rewrite the browser in Rust: every C module ported, QuickJS-ng
+      replaced by Boa, and the vendored C decoders replaced by Rust ports.
+- [ ] Bring the Boa build up to and past the QuickJS-era browser on the WPT
+      slice, Acid3, speed and memory.
 
-What the rewrite starts from — the processes, the engine's data model and how
-they fit together — and the order it is ported in are described in
-[docs/rust-port.md](docs/rust-port.md).
+How the port was done (the processes, the engine's data model and the order
+the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
 
 ## Download
 
