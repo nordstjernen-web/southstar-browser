@@ -552,3 +552,87 @@ pub unsafe fn nsr_attr_to_js(
         None => Ok(southstar_js_engine::Value::undefined()),
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_contains(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::contains(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::token_list::add(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_remove(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::remove(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_toggle(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::toggle(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_replace(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::replace(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::token_list::item(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_supports(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::supports(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_tlist_toString(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::token_list::get_value(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_get_length(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::token_list::get_length(scope, this, &[])
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_get_value(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::token_list::get_value(scope, this, &[])
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tlist_set_value(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+) -> Result<(), Value> {
+    crate::token_list::set_value(scope, this, core::slice::from_ref(value)).map(drop)
+}

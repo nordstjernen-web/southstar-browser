@@ -455,3 +455,18 @@ pub unsafe extern "C" fn ns_html_parse_int(s: *const c_char, out: *mut i64) -> G
 pub unsafe extern "C" fn ns_int_attr_index(attr: *const c_char) -> c_int {
     c_str(attr).map_or(-1, |attr| numeric::int_attr_index(attr.to_bytes()))
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_element_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    strings::attr_get(scope, this, magic)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_element_attr_setter(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+    magic: i32,
+) -> JsResult<()> {
+    strings::attr_set(scope, this, value, magic)
+}

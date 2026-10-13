@@ -7,6 +7,7 @@ use core::ffi::c_int;
 use southstar_js_engine::quickjs::{
     FunctionListEntry, JSContext, JSValue, cfunc, getset, getset_magic,
 };
+use southstar_js_engine::{Prop, Scope, Value, accessor, accessor_magic, method};
 
 use super::natives::{
     ns_document_get_all, ns_document_get_forms, ns_document_get_images, ns_document_get_links,
@@ -1691,58 +1692,6 @@ unsafe extern "C" {
         argc: c_int,
         argv: *mut JSValue,
     ) -> JSValue;
-    pub(crate) fn ns_tlist_add(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_contains(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_get_length(ctx: *mut JSContext, this: JSValue) -> JSValue;
-    pub(crate) fn ns_tlist_get_value(ctx: *mut JSContext, this: JSValue) -> JSValue;
-    pub(crate) fn ns_tlist_item(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_remove(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_replace(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_set_value(ctx: *mut JSContext, this: JSValue, value: JSValue)
-    -> JSValue;
-    pub(crate) fn ns_tlist_supports(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_toString(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    pub(crate) fn ns_tlist_toggle(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
     pub(crate) fn ns_tr_deleteCell(
         ctx: *mut JSContext,
         this: JSValue,
@@ -1770,17 +1719,83 @@ unsafe extern "C" {
     ) -> JSValue;
 }
 
-pub(crate) static TLIST_PROTO_FUNCS: [FunctionListEntry; 10] = [
-    cfunc(c"contains", 1, ns_tlist_contains),
-    cfunc(c"add", 1, ns_tlist_add),
-    cfunc(c"remove", 1, ns_tlist_remove),
-    cfunc(c"toggle", 1, ns_tlist_toggle),
-    cfunc(c"replace", 2, ns_tlist_replace),
-    cfunc(c"item", 1, ns_tlist_item),
-    cfunc(c"supports", 1, ns_tlist_supports),
-    cfunc(c"toString", 0, ns_tlist_toString),
-    getset(c"length", Some(ns_tlist_get_length), None),
-    getset(c"value", Some(ns_tlist_get_value), Some(ns_tlist_set_value)),
+unsafe extern "Rust" {
+    safe fn nsr_tlist_contains(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_add(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_remove(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_toggle(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_replace(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_item(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_supports(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    safe fn nsr_tlist_toString(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_tlist_get_length(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value>;
+    safe fn nsr_tlist_get_value(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value>;
+    safe fn nsr_tlist_set_value(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        value: &Value,
+    ) -> Result<(), Value>;
+    safe fn nsr_element_attr_getter(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        magic: i32,
+    ) -> Result<Value, Value>;
+    safe fn nsr_element_attr_setter(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        value: &Value,
+        magic: i32,
+    ) -> Result<(), Value>;
+}
+
+pub(crate) static TLIST_PROTO: [Prop; 10] = [
+    method("contains", 1, nsr_tlist_contains),
+    method("add", 1, nsr_tlist_add),
+    method("remove", 1, nsr_tlist_remove),
+    method("toggle", 1, nsr_tlist_toggle),
+    method("replace", 2, nsr_tlist_replace),
+    method("item", 1, nsr_tlist_item),
+    method("supports", 1, nsr_tlist_supports),
+    method("toString", 0, nsr_tlist_toString),
+    accessor("length", Some(nsr_tlist_get_length), None),
+    accessor(
+        "value",
+        Some(nsr_tlist_get_value),
+        Some(nsr_tlist_set_value),
+    ),
 ];
 
 pub(crate) static VALIDITY_PROTO_FUNCS: [FunctionListEntry; 1] =
@@ -3865,10 +3880,10 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [FunctionListEntry; 497] = [
     ),
 ];
 
-pub(crate) static SRC_PROTO_FUNCS: [FunctionListEntry; 1] = [getset_magic(
-    c"src",
-    Some(ns_element_attr_getter),
-    Some(ns_element_attr_setter),
+pub(crate) static SRC_PROTO: [Prop; 1] = [accessor_magic(
+    "src",
+    Some(nsr_element_attr_getter),
+    Some(nsr_element_attr_setter),
     3,
 )];
 
@@ -3907,17 +3922,17 @@ pub(crate) static IMAGE_PROTO_FUNCS: [FunctionListEntry; 6] = [
     ),
 ];
 
-pub(crate) static SOURCE_PROTO_FUNCS: [FunctionListEntry; 2] = [
-    getset_magic(
-        c"src",
-        Some(ns_element_attr_getter),
-        Some(ns_element_attr_setter),
+pub(crate) static SOURCE_PROTO: [Prop; 2] = [
+    accessor_magic(
+        "src",
+        Some(nsr_element_attr_getter),
+        Some(nsr_element_attr_setter),
         3,
     ),
-    getset_magic(
-        c"srcset",
-        Some(ns_element_attr_getter),
-        Some(ns_element_attr_setter),
+    accessor_magic(
+        "srcset",
+        Some(nsr_element_attr_getter),
+        Some(nsr_element_attr_setter),
         29,
     ),
 ];

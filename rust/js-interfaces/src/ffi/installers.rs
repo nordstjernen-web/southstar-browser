@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int};
 
+use southstar_js_engine::Prop;
 use southstar_js_engine::quickjs::{self, FunctionListEntry, JSCFunction, JSContext, JSValue};
 
 use super::tables::{self, *};
@@ -174,6 +175,15 @@ unsafe fn set_list(ctx: *mut JSContext, obj: JSValue, list: &'static [FunctionLi
     unsafe { JS_SetPropertyFunctionList(ctx, obj, list.as_ptr(), list.len() as c_int) };
 }
 
+unsafe fn install_props(ctx: *mut JSContext, obj: JSValue, props: &'static [Prop]) {
+    unsafe {
+        quickjs::with_context(ctx, |scope| {
+            let obj = quickjs::borrow_value(scope, obj);
+            scope.install_props(&obj, props);
+        })
+    }
+}
+
 unsafe fn set_tostring_tag(ctx: *mut JSContext, obj: JSValue, tag: &CStr) {
     unsafe {
         let global = JS_GetGlobalObject(ctx);
@@ -261,7 +271,7 @@ pub unsafe extern "C" fn ns_js_register_class(ctx: *mut JSContext, which: c_int)
             }
             CLASS_TOKEN_LIST => {
                 let proto = JS_NewObject(ctx);
-                set_list(ctx, proto, &TLIST_PROTO_FUNCS);
+                install_props(ctx, proto, &TLIST_PROTO);
                 ns_token_list_register_class(ctx, JS_DupValue(ctx, proto));
                 proto
             }
@@ -439,13 +449,20 @@ pub unsafe extern "C" fn ns_js_install_proto_table(
     proto: JSValue,
     table: c_int,
 ) {
+    let props: Option<&'static [Prop]> = match table {
+        3 => Some(&SRC_PROTO),
+        5 => Some(&SOURCE_PROTO),
+        _ => None,
+    };
+    if let Some(props) = props {
+        unsafe { install_props(ctx, proto, props) };
+        return;
+    }
     let list: &'static [FunctionListEntry] = match table {
         0 => &DOCUMENT_PROTO_METHODS,
         1 => &DOCUMENT_PROTO_ACCESSORS,
         2 => &NAMEDMAP_PROTO_FUNCS,
-        3 => &SRC_PROTO_FUNCS,
         4 => &IMAGE_PROTO_FUNCS,
-        5 => &SOURCE_PROTO_FUNCS,
         6 => &MEDIA_PROTO_FUNCS,
         7 => &VIDEO_PROTO_FUNCS,
         8 => &IFRAME_PROTO_FUNCS,
