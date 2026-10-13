@@ -92,11 +92,6 @@ installers! {
     ns_idb_install,
 }
 
-#[cfg(feature = "wasm")]
-installers! {
-    ns_wasm_install,
-}
-
 context_installers! {
     ns_usp_install_interface,
     ns_url_install_interface,

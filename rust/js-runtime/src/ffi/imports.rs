@@ -354,6 +354,8 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
+    #[cfg(feature = "wasm")]
+    pub(crate) safe fn nsr_wasm_install(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_worker_install_location(
         scope: &mut Scope<'_>,
         global: &Value,
