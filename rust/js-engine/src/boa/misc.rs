@@ -1,4 +1,4 @@
-//! Southstar — the remaining neutral scope helpers on Boa: object identities and pins; engine-private names, brands and bytecode are not available, so they report nothing.
+//! Southstar — the remaining neutral scope helpers on Boa: object identities and pins; import.meta; engine-private names, brands and bytecode are not available, so they report nothing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -113,7 +113,13 @@ impl Scope<'_> {
         Ok(Value(JsString::from(name.as_str()).into()))
     }
 
-    pub fn import_meta(&mut self, _module: &Value) -> Result<Value, Value> {
-        Err(self.type_error("import.meta is not available on this engine"))
+    pub fn import_meta(&mut self, module: &Value) -> Result<Value, Value> {
+        let Some(module) = Self::module_of(module) else {
+            return Err(self.type_error("not a module"));
+        };
+        match module.import_meta(self.cx()) {
+            Some(meta) => Ok(Value(meta.into())),
+            None => Err(self.type_error("a synthetic module has no import.meta")),
+        }
     }
 }

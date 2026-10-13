@@ -5,7 +5,7 @@
 use core::cell::{Cell, RefCell};
 use core::ffi::c_void;
 use core::ptr;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -26,6 +26,7 @@ pub(super) struct BoaRuntime {
     options: RuntimeOptions,
     opaque: Cell<*mut c_void>,
     executor: Rc<Executor>,
+    loader: Rc<Loader>,
     records: RefCell<Vec<*mut RealmRecord>>,
 }
 
@@ -194,6 +195,7 @@ impl HostHooks for Hooks {
 struct Loader {
     simple: Option<Rc<SimpleModuleLoader>>,
     runtime: Cell<*const BoaRuntime>,
+    modules: RefCell<HashMap<String, Vec<(Realm, Module)>>>,
 }
 
 impl Loader {
@@ -221,6 +223,10 @@ impl Loader {
             None => Ok(specifier),
         }
         .map_err(|error| JsError::from_opaque(error.0))?;
+        let realm = scope.cx().realm().clone();
+        if let Some(module) = self.loaded(&name, &realm) {
+            return Ok(module);
+        }
         let attributes = scope.new_object();
         for attribute in request.attributes() {
             let key = attribute.key().to_std_string_escaped();
@@ -237,11 +243,33 @@ impl Loader {
                 Compiled::Script(_) => None,
             }
         });
-        module.ok_or_else(|| {
-            JsNativeError::typ()
-                .with_message("module loader did not return a module")
-                .into()
-        })
+        let module = module.ok_or_else(|| {
+            JsError::from(
+                JsNativeError::typ().with_message("module loader did not return a module"),
+            )
+        })?;
+        self.modules
+            .borrow_mut()
+            .entry(name)
+            .or_default()
+            .push((realm, module.clone()));
+        Ok(module)
+    }
+
+    fn forget_realm(&self, realm: &Realm) {
+        self.modules.borrow_mut().retain(|_, modules| {
+            modules.retain(|(owner, _)| owner != realm);
+            !modules.is_empty()
+        });
+    }
+
+    fn loaded(&self, name: &str, realm: &Realm) -> Option<Module> {
+        self.modules
+            .borrow()
+            .get(name)?
+            .iter()
+            .find(|(owner, _)| owner == realm)
+            .map(|(_, module)| module.clone())
     }
 }
 
@@ -270,6 +298,7 @@ impl BoaRuntime {
         let loader = Rc::new(Loader {
             simple: simple.map(Rc::new),
             runtime: Cell::new(ptr::null()),
+            modules: RefCell::new(HashMap::new()),
         });
         let Ok(mut context) = Context::builder()
             .host_hooks(hooks.clone())
@@ -289,6 +318,7 @@ impl BoaRuntime {
             options: *options,
             opaque: Cell::new(ptr::null_mut()),
             executor,
+            loader: loader.clone(),
             records: RefCell::new(Vec::new()),
         }));
         hooks.runtime.set(runtime);
@@ -491,6 +521,7 @@ impl ContextHandle {
         record.realm.host_defined_mut().remove::<RealmTag>();
         if let Some(runtime) = unsafe { record.runtime.as_ref() } {
             runtime.records.borrow_mut().retain(|&r| r != raw);
+            runtime.loader.forget_realm(&record.realm);
         }
         LIVE.with(|live| live.borrow_mut().remove(&(raw as usize)));
         drop(unsafe { Box::from_raw(raw) });

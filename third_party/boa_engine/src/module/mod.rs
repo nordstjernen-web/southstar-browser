@@ -750,6 +750,28 @@ impl Module {
     pub fn path(&self) -> Option<&Path> {
         self.inner.path.as_deref()
     }
+
+    /// Returns the module's `import.meta` object, creating it through the module loader's
+    /// [`ModuleLoader::init_import_meta`] hook the first time, exactly as the `import.meta`
+    /// expression does. Synthetic modules have no `import.meta` and return `None`.
+    pub fn import_meta(&self, context: &mut Context) -> Option<JsObject> {
+        let ModuleKind::SourceText(src) = self.kind() else {
+            return None;
+        };
+        if let Some(import_meta) = src.import_meta().borrow().clone() {
+            return Some(import_meta);
+        }
+        let import_meta = JsObject::with_null_proto();
+        context
+            .module_loader()
+            .init_import_meta(&import_meta, self, context);
+        Some(
+            src.import_meta()
+                .borrow_mut()
+                .get_or_insert(import_meta)
+                .clone(),
+        )
+    }
 }
 
 impl PartialEq for Module {

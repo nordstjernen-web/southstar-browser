@@ -1,4 +1,4 @@
-//! Southstar — compiled-script bookkeeping: the bytecode cache over classic scripts and modules, import attributes, import.meta and the script profiler's report lines.
+//! Southstar — compiled-script bookkeeping: the bytecode cache over classic scripts and modules, import attributes, import.meta (url, main and resolve) and the script profiler's report lines.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -78,9 +78,34 @@ pub(crate) fn set_import_meta(
     }
     let name = scope.module_name(module)?;
     let meta = scope.import_meta(module)?;
+    let resolve = scope.bound_function(
+        "resolve",
+        1,
+        import_meta_resolve,
+        std::slice::from_ref(&name),
+    );
     let _ = scope.define(&meta, "url", name, IMPORT_META_FIELD);
+    let _ = scope.define(&meta, "resolve", resolve, IMPORT_META_FIELD);
     let _ = scope.define(&meta, "main", Value::boolean(is_main), IMPORT_META_FIELD);
     Ok(())
+}
+
+fn import_meta_resolve(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+    data: &[Value],
+) -> Result<Value, Value> {
+    let base = match data.first() {
+        Some(url) => scope.to_string(url)?,
+        None => String::new(),
+    };
+    let specifier = match args.first() {
+        Some(specifier) => scope.to_string(specifier)?,
+        None => "undefined".to_owned(),
+    };
+    let resolved = crate::ffi::nsr_js_module_normalize(scope, &base, &specifier)?;
+    Ok(scope.string(&resolved))
 }
 
 pub(crate) fn attributes_type_is(scope: &mut Scope<'_>, attributes: &Value, want: &[u8]) -> bool {
