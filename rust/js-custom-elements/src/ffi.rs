@@ -2,13 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::Element;
 
@@ -21,7 +21,7 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(usize);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
+    pub(crate) fn of(js: *const NsJs) -> Js {
         Js(js as usize)
     }
 
@@ -35,17 +35,12 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn JS_GetCallerRealm(ctx: *mut JSContext) -> *mut JSContext;
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode;
     fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
-    fn ns_js_node_wrapper(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_js_wrapper_pinned(js: *const NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_popover_removing(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_new_orphan_element(ctx: *mut JSContext, name: *const c_char) -> JSValue;
     fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
     fn ns_css_register_defined_element(tag: *const c_char);
@@ -64,35 +59,29 @@ fn text(text: *const c_char) -> Option<String> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(quickjs::context_opaque(scope).cast())
+    Js::of(scope.context_opaque().cast())
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     if js.is_null() {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
-        return None;
-    }
-    Some(unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.ptr()) }.with(f)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;
     }
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn node_wrapper(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_js_node_wrapper(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::node_wrapper(scope, node.as_ptr()).unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn wrapper_pinned(js: Js, node: Element) -> bool {
@@ -112,14 +101,14 @@ pub(crate) fn main_document(js: Js) -> usize {
 }
 
 pub(crate) fn realm_document(scope: &mut Scope<'_>) -> Option<Element> {
-    let realm = unsafe { JS_GetCallerRealm(quickjs::raw_context(scope)) };
-    unsafe {
-        quickjs::with_context(realm, |scope| {
+    scope
+        .caller_handle()
+        .with(|scope| {
             let global = scope.global();
             let document = crate::get(scope, &global, "document");
             unwrap_node(&document)
         })
-    }
+        .flatten()
 }
 
 pub(crate) fn popover_removing(js: Js, node: Element) {
@@ -127,9 +116,7 @@ pub(crate) fn popover_removing(js: Js, node: Element) {
 }
 
 pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &str) -> Value {
-    let name = c_string(name);
-    let raw = unsafe { ns_js_new_orphan_element(quickjs::raw_context(scope), name.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::new_orphan_element(scope, name.as_bytes()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn log_enabled(js: Js) -> bool {
@@ -146,66 +133,6 @@ pub(crate) fn register_defined_element(name: &str) {
     unsafe { ns_css_register_defined_element(name.as_ptr()) }
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_define(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::registry::define) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_get(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::registry::get) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_when_defined(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::registry::when_defined) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_upgrade(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::registry::upgrade) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_get_name(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::registry::get_name) }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_ce_name_valid(name: *const c_char) -> GBoolean {
     if name.is_null() {
@@ -217,34 +144,52 @@ pub unsafe extern "C" fn ns_ce_name_valid(name: *const c_char) -> GBoolean {
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_ce_define(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::registry::define(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_ce_get(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::registry::get(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_ce_when_defined(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::registry::when_defined(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_ce_upgrade(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::registry::upgrade(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_ce_get_name(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::registry::get_name(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
 pub fn nsr_ce_html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> Value {
     crate::registry::html_element_construct(scope, new_target).unwrap_or_else(Value::undefined)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_html_element_construct(
-    ctx: *mut JSContext,
-    new_target: JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let new_target = quickjs::borrow_value(scope, new_target);
-            let element = crate::registry::html_element_construct(scope, &new_target);
-            quickjs::into_raw(element.unwrap_or_else(Value::undefined))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_class_for_node(js: *const NsJs, node: *const NsNode) -> JSValue {
+pub unsafe fn nsr_ce_class_for_node(js: *const NsJs, node: *const NsNode) -> Value {
     let (js, Some(node)) = (Js::of(js), unsafe { Node::from_ptr(node) }) else {
-        return quickjs::UNDEFINED;
+        return Value::undefined();
     };
     main_scope(js, |scope| {
-        let class = crate::reactions::class_for_node(scope, js, node);
-        quickjs::into_raw(class.unwrap_or_else(Value::undefined))
+        crate::reactions::class_for_node(scope, js, node).unwrap_or_else(Value::undefined)
     })
-    .unwrap_or(quickjs::UNDEFINED)
+    .unwrap_or_else(Value::undefined)
 }
 
 #[unsafe(no_mangle)]
@@ -319,23 +264,4 @@ pub unsafe extern "C" fn ns_ce_reset(js: *const NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_ce_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
-}
-
-macro_rules! nsr_natives {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
-                $f(scope, this, args)
-            }
-        )*
-    };
-}
-
-nsr_natives! {
-    nsr_ce_define => crate::registry::define,
-    nsr_ce_get => crate::registry::get,
-    nsr_ce_when_defined => crate::registry::when_defined,
-    nsr_ce_upgrade => crate::registry::upgrade,
-    nsr_ce_get_name => crate::registry::get_name,
 }

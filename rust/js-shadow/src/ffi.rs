@@ -1,15 +1,13 @@
-//! Southstar — the C ABI of the shadow DOM and slot bindings as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the shadow DOM and slot bindings, and the calls they make into the rest of the engine.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int};
 use core::ptr;
-use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::Element;
 
@@ -22,32 +20,25 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
-    fn ns_ce_class_for_node(js: *mut NsJs, node: *const NsNode) -> JSValue;
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
     fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
-    fn ns_document_element_from_point(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_elements_from_point(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
+}
+
+unsafe extern "Rust" {
+    unsafe fn nsr_ce_class_for_node(js: *const NsJs, node: *const NsNode) -> Value;
+    safe fn nsr_document_element_from_point(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_document_elements_from_point(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
 }
 
 fn node_of(raw: *const NsNode) -> Option<Element> {
@@ -59,35 +50,24 @@ fn raw(node: Option<Element>) -> *mut NsNode {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     (!js.is_null()).then_some(Js(js))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    node_of(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn not_supported(scope: &mut Scope<'_>, message: &str) -> Value {
-    let message = CString::new(message).unwrap_or_default();
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            c"NotSupportedError".as_ptr(),
-            9,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    api::dom_exception(scope, "NotSupportedError", 9, message)
 }
 
-pub(crate) fn custom_element_class(scope: &mut Scope<'_>, js: Js, node: Element) -> Value {
-    let raw = unsafe { ns_ce_class_for_node(js.0, node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+pub(crate) fn custom_element_class(_scope: &mut Scope<'_>, js: Js, node: Element) -> Value {
+    unsafe { nsr_ce_class_for_node(js.0, node.as_ptr()) }
 }
 
 pub(crate) fn clear_children(js: Option<Js>, node: Element) {
@@ -115,67 +95,59 @@ pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, V
     [
         (
             "elementFromPoint",
-            quickjs::c_function(scope, "elementFromPoint", 2, ns_document_element_from_point),
+            scope.function("elementFromPoint", 2, nsr_document_element_from_point),
         ),
         (
             "elementsFromPoint",
-            quickjs::c_function(
-                scope,
-                "elementsFromPoint",
-                2,
-                ns_document_elements_from_point,
-            ),
+            scope.function("elementsFromPoint", 2, nsr_document_elements_from_point),
         ),
     ]
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_get_assignedSlot(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::slot::get_assigned_slot(scope, this, &[])
 }
 
-macro_rules! getters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { native(ctx, this_val, 0, ptr::null_mut(), $f) }
-            }
-        )*
-    };
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_attachShadow(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::root::attach_shadow(scope, this, args)
 }
 
-macro_rules! methods {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
-            }
-        )*
-    };
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_getRootNode(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::root::get_root_node(scope, this, args)
 }
 
-getters! {
-    ns_element_get_shadowRoot => crate::root::get_shadow_root,
-    ns_element_get_assignedSlot => crate::slot::get_assigned_slot,
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_assignedNodes(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::slot::assigned_nodes(scope, this, args)
 }
 
-methods! {
-    ns_element_attachShadow => crate::root::attach_shadow,
-    ns_element_getRootNode => crate::root::get_root_node,
-    ns_element_assignedNodes => crate::slot::assigned_nodes,
-    ns_element_assignedElements => crate::slot::assigned_elements,
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_assignedElements(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::slot::assigned_elements(scope, this, args)
 }
 
 #[unsafe(no_mangle)]

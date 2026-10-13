@@ -501,6 +501,24 @@ natives! {
     ns_document_elements_from_point => crate::hit::elements_from_point,
 }
 
+#[unsafe(no_mangle)]
+pub fn nsr_document_element_from_point(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::hit::element_from_point(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_elements_from_point(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::hit::elements_from_point(scope, this, args)
+}
+
 getters! {
     ns_element_get_offsetWidth => crate::metrics::get_offset_width,
     ns_element_get_offsetHeight => crate::metrics::get_offset_height,

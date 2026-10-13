@@ -5,8 +5,7 @@
 mod ffi;
 mod names;
 
-use southstar_js_engine::quickjs::{self, BrandMode};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{BrandMode, Scope, Value};
 
 const LENIENT: &[&str] = &["onmouseenter", "onmouseleave", "onreadystatechange"];
 
@@ -71,9 +70,9 @@ pub fn brand_node_interfaces(scope: &mut Scope<'_>, element_class: u32, attr_cla
     let global = scope.global();
     let node_proto = interface_proto(scope, &global, "Node");
     let attr_proto = interface_proto(scope, &global, "Attr");
-    let node_brand = quickjs::new_function_brand(scope, &[element_class, attr_class]);
-    let attr_brand = quickjs::new_function_brand(scope, &[attr_class]);
-    let element_brand = quickjs::new_function_brand(scope, &[element_class]);
+    let node_brand = scope.new_function_brand(&[element_class, attr_class]);
+    let attr_brand = scope.new_function_brand(&[attr_class]);
+    let element_brand = scope.new_function_brand(&[element_class]);
     let Some(node_proto) = node_proto else {
         return;
     };
@@ -154,6 +153,6 @@ fn brand_member(scope: &mut Scope<'_>, proto: &Value, key: &Value, brand: i32) {
     };
     let mode = mode_for(name.as_deref());
     for function in [&property.value, &property.getter, &property.setter] {
-        quickjs::set_function_brand(scope, function, brand, mode);
+        scope.set_function_brand(function, brand, mode);
     }
 }

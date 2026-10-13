@@ -78,11 +78,6 @@ natives! {
     ns_window_url_parse_static,
     ns_window_url_create_object,
     ns_window_url_revoke_object,
-    ns_ce_define,
-    ns_ce_get,
-    ns_ce_upgrade,
-    ns_ce_when_defined,
-    ns_ce_get_name,
     ns_static_range_ctor,
     ns_vtt_cue_ctor,
     ns_window_usp_ctor,
@@ -117,5 +112,4 @@ installers! {
 context_installers! {
     ns_usp_install_interface,
     ns_url_install_interface,
-    ns_js_name_engine_members,
 }

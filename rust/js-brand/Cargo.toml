@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-brand"
-description = "WebIDL brand checks for the native members of the DOM interfaces, through the QuickJS fork's function brands, and the WebIDL names of the engine's native members"
+description = "WebIDL brand checks for the native members of the DOM interfaces, through the engine's function brands, and the WebIDL names of the engine's native members"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,12 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs"]
+boa = ["southstar-js-engine/boa"]
 
 [lints]
 workspace = true

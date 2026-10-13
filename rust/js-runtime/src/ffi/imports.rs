@@ -32,6 +32,39 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool);
+    pub(crate) safe fn nsr_ce_define(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_ce_get(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_ce_upgrade(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_ce_when_defined(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_ce_get_name(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_name_engine_members(scope: &mut Scope<'_>);
+    pub(crate) safe fn nsr_dom_exception(
+        scope: &mut Scope<'_>,
+        name: &[u8],
+        code: i32,
+        message: &[u8],
+    ) -> Value;
+    pub(crate) safe fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value;
     pub(crate) safe fn nsr_form_indexed_control(
         scope: &mut Scope<'_>,
         form: &Value,
