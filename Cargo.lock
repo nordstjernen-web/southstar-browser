@@ -1865,6 +1865,7 @@ version = "0.9.9"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html5",
 ]
 
 [[package]]
@@ -1873,6 +1874,10 @@ version = "0.9.9"
 dependencies = [
  "southstar-glib",
 ]
+
+[[package]]
+name = "southstar-html5"
+version = "0.9.9"
 
 [[package]]
 name = "southstar-http"

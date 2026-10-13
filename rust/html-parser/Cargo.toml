@@ -1,6 +1,6 @@
 [package]
 name = "southstar-html-parser"
-description = "The lexbor-backed HTML parser: builds the engine DOM from lexbor's tree, declarative shadow roots, media metadata and inline script positions"
+description = "The HTML parser's C ABI: builds the engine DOM through rust/html5, then declarative shadow roots and media metadata"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-html5 = { path = "../html5" }
 
 [lints]
 workspace = true

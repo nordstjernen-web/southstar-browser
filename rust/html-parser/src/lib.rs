@@ -1,10 +1,10 @@
-//! Southstar — the lexbor-backed HTML parser's tree post-processing: declarative shadow roots, standard media metadata, inline script positions and XML well-formedness.
+//! Southstar — the HTML parser's tree post-processing: declarative shadow roots, standard media metadata, inter-element whitespace pruning and XML well-formedness.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
 
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use ffi::dom;
@@ -529,69 +529,5 @@ pub(crate) fn prune_html_interelement_whitespace(root: Node) {
             dom::detach(c);
             dom::free(c);
         }
-    }
-}
-
-fn collect_scripts<'a>(node: Node<'a>, out: &mut Vec<Node<'a>>, depth: i32) {
-    if depth >= MAX_DEPTH {
-        return;
-    }
-    for child in children(node) {
-        if name_is(child, "script") {
-            out.push(child);
-        }
-        collect_scripts(child, out, depth + 1);
-    }
-}
-
-fn script_positions(input: &[u8]) -> Vec<(c_int, c_int)> {
-    let mut positions = Vec::new();
-    let (mut line, mut col): (c_int, c_int) = (1, 1);
-    let mut i = 0;
-    let len = input.len();
-    while i < len {
-        if input[i] == b'<'
-            && i + 7 <= len
-            && input[i..i + 7].eq_ignore_ascii_case(b"<script")
-            && (i + 7 == len || !input[i + 7].is_ascii_alphanumeric())
-        {
-            let (mut l, mut c) = (line, col);
-            let mut j = i;
-            while j < len && input[j] != b'>' {
-                if input[j] == b'\n' {
-                    l += 1;
-                    c = 1;
-                } else {
-                    c += 1;
-                }
-                j += 1;
-            }
-            if j < len {
-                c += 1;
-                j += 1;
-                positions.push((l, c));
-                line = l;
-                col = c;
-                i = j;
-                continue;
-            }
-        }
-        if input[i] == b'\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-        i += 1;
-    }
-    positions
-}
-
-pub(crate) fn assign_script_positions(root: Node, input: &[u8]) {
-    let positions = script_positions(input);
-    let mut scripts = Vec::new();
-    collect_scripts(root, &mut scripts, 0);
-    for (script, (line, col)) in scripts.into_iter().zip(positions) {
-        script.set_source_position(line, col);
     }
 }
