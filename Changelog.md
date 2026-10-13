@@ -55,7 +55,8 @@ Southstar Browser 0.9.9:
   nsr_ entry points, and the C shims raw callers still use are confined to
   a QuickJS-only legacy.rs.
 * The event core (rust/js-events), the reflected HTML attributes
-  (rust/js-reflect) and rust/js-text no longer use raw QuickJS: they export
+  (rust/js-reflect), rust/js-text, the element bindings (rust/js-elements)
+  and the top layer (rust/js-top-layer) no longer use raw QuickJS: they export
   Rust-ABI entry points over the neutral API, keep their C symbols only for
   the callers still on QuickJS, are bound by the realm setup directly, and
   build on Boa.

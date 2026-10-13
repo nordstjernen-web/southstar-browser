@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the top layer as declared in src/js.h and src/js_internal.h, and the js.c and DOM calls it makes.
+//! Southstar — the top layer's C entry points as declared in src/js.h and src/js_internal.h, and the js.c, DOM and binding calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::{Element, JsResult};
 
@@ -22,15 +21,7 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
@@ -61,22 +52,6 @@ unsafe extern "C" {
         source: *const NsNode,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
-    fn ns_event_define_source(ctx: *mut JSContext, ev: JSValue, source: JSValue);
-    fn ns_event_adopt_interface(ctx: *mut JSContext, ev: JSValue, iface: *const c_char);
-    fn ns_services_set_timeout(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
     fn ns_js_consume_user_activation(js: *mut NsJs);
     fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
@@ -90,12 +65,37 @@ unsafe extern "C" {
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
-    fn ns_js_request_submit_form(
-        ctx: *mut JSContext,
+}
+
+unsafe extern "Rust" {
+    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
+    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
+    safe fn nsr_dom_exception(
+        scope: &mut Scope<'_>,
+        name: &[u8],
+        code: i32,
+        message: &[u8],
+    ) -> Value;
+    unsafe fn nsr_js_dispatch_built_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> (bool, bool);
+    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
+    safe fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value);
+    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
+    safe fn nsr_services_set_timeout(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    unsafe fn nsr_js_request_submit_form(
+        scope: &mut Scope<'_>,
         form: *const NsNode,
         submitter: *const NsNode,
-    ) -> JSValue;
-    fn ns_js_reset_form(ctx: *mut JSContext, form: *mut NsNode) -> JSValue;
+    );
+    unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
 }
 
 fn c_string(bytes: &[u8]) -> CString {
@@ -128,11 +128,7 @@ impl Js {
         if self.is_null() {
             return None;
         }
-        let ctx = unsafe { ns_js_main_context(self.ptr()) };
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        unsafe { ns_js_main_context(self.ptr()) }.with(f)
     }
 
     pub fn hold(self, el: Element) -> Option<Value> {
@@ -232,17 +228,8 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: Element, kind: &CStr, event: Value) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_built_event(
-                self.ptr(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                quickjs::into_raw(event),
-                &mut prevented,
-            )
-        };
-        prevented != 0
+        let kind = kind.to_string_lossy();
+        unsafe { nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind, event) }.1
     }
 
     pub fn timer_remove(self, id: i32) {
@@ -264,19 +251,18 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(quickjs::context_opaque(scope).cast())
+    Js::of(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;
     }
-    node(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    node(nsr_unwrap_element(value))
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), el.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value {
@@ -285,61 +271,34 @@ pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value 
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &CStr, code: i32, message: &str) -> Value {
     let message = c_string(message.as_bytes());
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {
-    let raw = unsafe { ns_make_event(quickjs::raw_context(scope), kind.as_ptr(), target.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    let kind = kind.to_string_lossy();
+    unsafe { nsr_make_event(scope, &kind, target.as_ptr()) }
 }
 
 pub(crate) fn define_event_source(scope: &mut Scope<'_>, event: &Value, source: Value) {
-    unsafe {
-        ns_event_define_source(
-            quickjs::raw_context(scope),
-            quickjs::raw(event),
-            quickjs::into_raw(source),
-        )
-    };
+    nsr_event_define_source(scope, event, source);
 }
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &CStr) {
-    unsafe {
-        ns_event_adopt_interface(
-            quickjs::raw_context(scope),
-            quickjs::raw(event),
-            iface.as_ptr(),
-        )
-    };
+    nsr_event_adopt_interface(scope, event, &iface.to_string_lossy());
 }
 
 pub(crate) fn set_timeout(scope: &mut Scope<'_>, callback: Value) -> JsResult<i32> {
-    let id = quickjs::call_c_function(
-        scope,
-        ns_services_set_timeout,
-        &Value::undefined(),
-        &[callback, Value::int(0)],
-    )?;
+    let id = nsr_services_set_timeout(scope, &Value::undefined(), &[callback, Value::int(0)])?;
     scope.to_int32(&id)
 }
 
 pub(crate) fn submit_or_reset(scope: &mut Scope<'_>, form: Element, submitter: Option<Element>) {
-    let ctx = quickjs::raw_context(scope);
-    let raw = match submitter {
+    match submitter {
         Some(submitter) => unsafe {
-            ns_js_request_submit_form(ctx, form.as_ptr(), submitter.as_ptr())
+            nsr_js_request_submit_form(scope, form.as_ptr(), submitter.as_ptr())
         },
-        None => unsafe { ns_js_reset_form(ctx, form.as_mut_ptr()) },
-    };
-    unsafe { quickjs::free_raw(quickjs::runtime(scope), raw) };
+        None => unsafe { nsr_js_reset_form(scope, form.as_mut_ptr()) },
+    }
 }
 
 pub(crate) fn note(el: Element) -> Element {
@@ -384,91 +343,6 @@ pub(crate) fn mark_attr_dirty(el: Element, name: &CStr, old_value: Option<&CStr>
 
 pub(crate) fn is_submit_trigger(el: Element) -> bool {
     unsafe { ns_node_is_submit_trigger(el.as_ptr()) != 0 }
-}
-
-unsafe fn method(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-unsafe fn getter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), f) }
-}
-
-unsafe fn setter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    let mut val = val;
-    unsafe { quickjs::call_native(ctx, this_val, 1, &mut val, f) }
-}
-
-macro_rules! methods {
-    ($($name:ident => $f:path),* $(,)?) => {$(
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(
-            ctx: *mut JSContext,
-            this_val: JSValue,
-            argc: c_int,
-            argv: *mut JSValue,
-        ) -> JSValue {
-            unsafe { method(ctx, this_val, argc, argv, $f) }
-        }
-    )*};
-}
-
-macro_rules! accessors {
-    ($($get:ident, $set:ident => $g:path, $s:path),* $(,)?) => {$(
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $get(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-            unsafe { getter(ctx, this_val, $g) }
-        }
-
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $set(
-            ctx: *mut JSContext,
-            this_val: JSValue,
-            val: JSValue,
-        ) -> JSValue {
-            unsafe { setter(ctx, this_val, val, $s) }
-        }
-    )*};
-}
-
-methods! {
-    ns_element_showPopover => crate::popover::show_popover,
-    ns_element_hidePopover => crate::popover::hide_popover,
-    ns_element_togglePopover => crate::popover::toggle_popover,
-    ns_element_show => crate::dialog::show,
-    ns_element_showModal => crate::dialog::show_modal_method,
-    ns_element_close => crate::dialog::close_method,
-    ns_element_requestClose => crate::dialog::request_close_method,
-}
-
-accessors! {
-    ns_element_get_popover, ns_element_set_popover
-        => crate::popover::get_popover, crate::popover::set_popover,
-    ns_element_get_popoverTargetElement, ns_element_set_popoverTargetElement
-        => crate::invoker::get_popover_target, crate::invoker::set_popover_target,
-    ns_dialog_get_returnValue, ns_dialog_set_returnValue
-        => crate::dialog::get_return_value, crate::dialog::set_return_value,
-    ns_dialog_get_closedBy, ns_dialog_set_closedBy
-        => crate::dialog::get_closed_by, crate::dialog::set_closed_by,
-    ns_button_get_command, ns_button_set_command
-        => crate::invoker::get_command, crate::invoker::set_command,
-    ns_button_get_commandForElement, ns_button_set_commandForElement
-        => crate::invoker::get_command_for, crate::invoker::set_command_for,
 }
 
 #[unsafe(no_mangle)]

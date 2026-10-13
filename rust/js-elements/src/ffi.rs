@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the element-specific bindings as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the element-specific bindings' nsr_ entry points, and the js.c and binding calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,7 @@ use core::ptr;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_image::ImageRef;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 
 use crate::{Element, JsResult};
 
@@ -24,14 +23,6 @@ pub(crate) struct Js(*mut NsJs);
 const LIVE_LABELS: c_int = 13;
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_make_live(
-        ctx: *mut JSContext,
-        owner: JSValue,
-        kind: c_int,
-        param: *const c_char,
-    ) -> JSValue;
     fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_qcache_invalidate(js: *const NsJs);
@@ -73,27 +64,43 @@ unsafe extern "C" {
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_enum_normalize(attr: *const c_char, v: *const c_char) -> *const c_char;
     fn ns_node_is_custom_element(n: *const NsNode) -> GBoolean;
-    fn ns_element_reflect_str_set(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        val: JSValue,
-        attr: *const c_char,
-    ) -> JSValue;
-    fn ns_element_int_attr_getter(ctx: *mut JSContext, this_val: JSValue, magic: c_int) -> JSValue;
-    fn ns_element_int_attr_setter(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        val: JSValue,
-        magic: c_int,
-    ) -> JSValue;
     fn ns_int_attr_index(attr: *const c_char) -> c_int;
-    fn ns_form_controls_snapshot(ctx: *mut JSContext, form: JSValue) -> JSValue;
     fn ns_js_record_character_data(js: *mut NsJs, node: *mut NsNode, old_value: *const c_char);
     fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_element_find_shadow_child(host: *const NsNode) -> *mut NsNode;
     fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
+}
+
+unsafe extern "Rust" {
+    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
+    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
+    safe fn nsr_make_live(
+        scope: &mut Scope<'_>,
+        owner: &Value,
+        kind: c_int,
+        param: Option<&[u8]>,
+        param2: Option<&[u8]>,
+    ) -> Value;
+    safe fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult;
+    safe fn nsr_element_reflect_str_set(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        value: &Value,
+        attr: &CStr,
+    ) -> JsResult<()>;
+    safe fn nsr_element_int_attr_getter(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        magic: i32,
+    ) -> JsResult;
+    safe fn nsr_element_int_attr_setter(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        value: &Value,
+        magic: i32,
+    ) -> JsResult<()>;
 }
 
 fn raw(node: Option<Element>) -> *mut NsNode {
@@ -114,34 +121,20 @@ fn owned_text(text: *mut c_char) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     (!js.is_null()).then_some(Js(js))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), Node::ptr_or_null(node)) };
-    unsafe { quickjs::take_value(scope, raw) }
-}
-
-fn checked_raw(scope: &mut Scope<'_>, raw: JSValue) -> JsResult {
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    nsr_make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn make_labels(scope: &mut Scope<'_>, owner: &Value) -> JsResult {
-    let raw = unsafe {
-        ns_make_live(
-            quickjs::raw_context(scope),
-            quickjs::raw(owner),
-            LIVE_LABELS,
-            ptr::null(),
-        )
-    };
-    checked_raw(scope, raw)
+    Ok(nsr_make_live(scope, owner, LIVE_LABELS, None, None))
 }
 
 pub(crate) fn mark_mutated(js: Js) {
@@ -218,8 +211,7 @@ pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
 }
 
 pub(crate) fn form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult {
-    let raw = unsafe { ns_form_controls_snapshot(quickjs::raw_context(scope), quickjs::raw(form)) };
-    checked_raw(scope, raw)
+    nsr_form_controls_snapshot(scope, form)
 }
 
 pub(crate) fn replace_text(node: Element, text: &[u8]) {
@@ -321,26 +313,11 @@ pub(crate) fn reflect_str_set(
     value: &Value,
     attr: &CStr,
 ) -> JsResult {
-    let raw = unsafe {
-        ns_element_reflect_str_set(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            quickjs::raw(value),
-            attr.as_ptr(),
-        )
-    };
-    checked_raw(scope, raw)
+    nsr_element_reflect_str_set(scope, this, value, attr).map(|()| Value::undefined())
 }
 
 pub(crate) fn int_attr_get(scope: &mut Scope<'_>, this: &Value, attr: &CStr) -> JsResult {
-    let raw = unsafe {
-        ns_element_int_attr_getter(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            ns_int_attr_index(attr.as_ptr()),
-        )
-    };
-    checked_raw(scope, raw)
+    nsr_element_int_attr_getter(scope, this, unsafe { ns_int_attr_index(attr.as_ptr()) })
 }
 
 pub(crate) fn int_attr_set(
@@ -349,165 +326,36 @@ pub(crate) fn int_attr_set(
     value: &Value,
     attr: &CStr,
 ) -> JsResult {
-    let raw = unsafe {
-        ns_element_int_attr_setter(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            quickjs::raw(value),
-            ns_int_attr_index(attr.as_ptr()),
-        )
-    };
-    checked_raw(scope, raw)
-}
-
-unsafe fn getter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    f: fn(&mut Scope<'_>, &Value) -> JsResult,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let result = f(scope, &this);
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-unsafe fn setter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    f: fn(&mut Scope<'_>, &Value, &Value) -> JsResult<()>,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let val = quickjs::borrow_value(scope, val);
-            let result = f(scope, &this, &val).map(|()| Value::undefined());
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-macro_rules! getters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
-            }
-        )*
-    };
-}
-
-macro_rules! setters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, $f) }
-            }
-        )*
-    };
-}
-
-macro_rules! methods {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                let f: NativeFn = $f;
-                unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-            }
-        )*
-    };
-}
-
-getters! {
-    ns_element_get_zero_int => crate::element::zero,
-    ns_element_get_null => crate::element::null,
-    ns_element_get_empty_array_prop => crate::element::empty_array,
-    ns_element_get_isContentEditable => crate::element::is_content_editable,
-    ns_element_get_labels => crate::element::labels,
-    ns_element_get_form_enctype => crate::element::form_enctype,
-    ns_element_get_hidden => crate::element::hidden,
-    ns_element_get_disabled => crate::element::disabled,
-    ns_element_get_option_index => crate::element::option_index,
-    ns_element_get_select_length => crate::element::select_length,
-    ns_element_get_text_length => crate::node_value::text_length,
-    ns_element_get_nodeValue => crate::node_value::node_value,
-    ns_element_get_data => crate::node_value::data,
-    ns_element_get_list_ref => crate::element::list,
-    ns_element_get_form => crate::element::form,
-    ns_element_img_complete => crate::image::complete,
-    ns_element_img_natural_width => crate::image::natural_width,
-    ns_element_img_natural_height => crate::image::natural_height,
-    ns_element_img_current_src => crate::image::current_src,
-    ns_element_table_rows => crate::table::rows,
-    ns_element_table_caption => crate::table::caption,
-    ns_element_table_thead => crate::table::thead,
-    ns_element_table_tfoot => crate::table::tfoot,
-    ns_element_table_tbodies => crate::table::tbodies,
-    ns_element_tr_cells => crate::table::cells,
-}
-
-setters! {
-    ns_element_noop_set => crate::element::ignore,
-    ns_element_set_form_enctype => crate::element::set_form_enctype,
-    ns_element_set_hidden => crate::element::set_hidden,
-    ns_element_set_disabled => crate::element::set_disabled,
-    ns_element_list_set => crate::element::set_list,
-    ns_element_set_content => crate::element::set_content,
-    ns_element_set_rows => crate::table::set_rows,
-    ns_element_set_nodeValue => crate::node_value::set_node_value,
-    ns_element_set_data => crate::node_value::set_data,
-}
-
-methods! {
-    ns_table_createCaption => crate::table::create_caption,
-    ns_table_createTHead => crate::table::create_thead,
-    ns_table_createTBody => crate::table::create_tbody,
-    ns_table_createTFoot => crate::table::create_tfoot,
-    ns_table_deleteCaption => crate::table::delete_caption,
-    ns_table_deleteTHead => crate::table::delete_thead,
-    ns_table_deleteTFoot => crate::table::delete_tfoot,
-    ns_table_insertRow => crate::table::insert_row,
-    ns_table_deleteRow => crate::table::delete_row,
-    ns_tr_insertCell => crate::table::insert_cell,
-    ns_tr_deleteCell => crate::table::delete_cell,
+    let index = unsafe { ns_int_attr_index(attr.as_ptr()) };
+    nsr_element_int_attr_setter(scope, this, value, index).map(|()| Value::undefined())
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_build_labels(ctx: *mut JSContext, n: *const NsNode) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let result = crate::element::build_labels(scope, Node::from_ptr(n));
-            quickjs::result_raw(scope, result)
-        })
-    }
+pub unsafe fn nsr_live_build_labels(scope: &mut Scope<'_>, node: *const NsNode) -> JsResult {
+    crate::element::build_labels(scope, unsafe { Node::from_ptr(node) })
 }
 
 #[unsafe(no_mangle)]
-pub unsafe fn nsr_live_build_labels(scope: &mut Scope<'_>, n: *const NsNode) -> JsResult {
-    crate::element::build_labels(scope, unsafe { Node::from_ptr(n) })
+pub fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
+    crate::node_value::is_rendered(scope, value)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_element_is_rendered(ctx: *mut JSContext, v: JSValue) -> GBoolean {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, v);
-            glib::boolean(crate::node_value::is_rendered(scope, &value))
-        })
-    }
+pub fn nsr_element_img_natural_width(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+    crate::image::natural_width(scope, this)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_element_img_natural_height(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+    crate::image::natural_height(scope, this)
+}
+
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_element_set_nodeValue(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+) -> JsResult<()> {
+    crate::node_value::set_node_value(scope, this, value)
 }

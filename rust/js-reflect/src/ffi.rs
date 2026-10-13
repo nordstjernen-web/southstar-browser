@@ -224,99 +224,34 @@ pub(crate) fn to_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<JsText> 
     Ok(JsText(bytes))
 }
 
-macro_rules! magic_accessors {
-    ($($get:ident, $set:ident => $g:path, $s:path);* $(;)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub fn $get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
-                $g(scope, this, magic)
-            }
-
-            #[unsafe(no_mangle)]
-            pub fn $set(
-                scope: &mut Scope<'_>,
-                this: &Value,
-                value: &Value,
-                magic: i32,
-            ) -> JsResult<()> {
-                $s(scope, this, value, magic)
-            }
-        )*
-    };
-}
-
-macro_rules! getters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[allow(non_snake_case)]
-            #[unsafe(no_mangle)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-                $f(scope, this)
-            }
-        )*
-    };
-}
-
-macro_rules! setters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[allow(non_snake_case)]
-            #[unsafe(no_mangle)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
-                $f(scope, this, value)
-            }
-        )*
-    };
-}
-
-magic_accessors! {
-    nsr_element_attr_getter, nsr_element_attr_setter => strings::attr_get, strings::attr_set;
-    nsr_element_enum_getter, nsr_element_enum_setter => strings::enum_get, strings::enum_set;
-    nsr_element_aria_string_getter, nsr_element_aria_string_setter => strings::aria_get, strings::aria_set;
-    nsr_element_int_attr_getter, nsr_element_int_attr_setter => numeric::int_get, numeric::int_set;
-    nsr_element_bool_attr_getter, nsr_element_bool_attr_setter => numeric::plain_bool_get, numeric::plain_bool_set;
-    nsr_element_boolattr_getter, nsr_element_boolattr_setter => numeric::bool_get, numeric::bool_set;
+#[unsafe(no_mangle)]
+pub fn nsr_element_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    strings::attr_get(scope, this, magic)
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_element_dimension_setter(
+pub fn nsr_element_attr_setter(
     scope: &mut Scope<'_>,
     this: &Value,
     value: &Value,
     magic: i32,
 ) -> JsResult<()> {
-    numeric::dimension_set(scope, this, value, magic)
+    strings::attr_set(scope, this, value, magic)
 }
 
-getters! {
-    nsr_element_get_autocomplete => strings::autocomplete_get,
-    nsr_element_get_dir => strings::dir_get,
-    nsr_element_get_translate => strings::translate_get,
-    nsr_element_get_type => strings::type_get,
-    nsr_element_get_autocapitalize => strings::autocapitalize_get,
-    nsr_element_get_spellcheck => strings::spellcheck_get,
-    nsr_element_get_htmlFor => strings::html_for_get,
-    nsr_element_get_draggable => strings::draggable_get,
-    nsr_element_get_contentEditable => strings::content_editable_get,
-    nsr_element_get_id => strings::id_get,
-    nsr_element_get_className => strings::class_name_get,
-    nsr_element_get_tabIndex => numeric::tab_index_get,
+#[unsafe(no_mangle)]
+pub fn nsr_element_int_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    numeric::int_get(scope, this, magic)
 }
 
-setters! {
-    nsr_element_set_autocomplete => strings::autocomplete_set,
-    nsr_element_set_dir => strings::dir_set,
-    nsr_element_set_translate => strings::translate_set,
-    nsr_element_set_autocapitalize => strings::autocapitalize_set,
-    nsr_element_set_spellcheck => strings::spellcheck_set,
-    nsr_element_set_htmlFor => strings::html_for_set,
-    nsr_element_set_draggable => strings::draggable_set,
-    nsr_element_set_contentEditable => strings::content_editable_set,
-    nsr_element_set_id => strings::id_set,
-    nsr_element_set_className => strings::class_name_set,
-    nsr_element_attr_setter_sizes => strings::sizes_set,
-    nsr_element_attr_setter_sandbox => strings::sandbox_set,
-    nsr_element_set_tabIndex => numeric::tab_index_set,
+#[unsafe(no_mangle)]
+pub fn nsr_element_int_attr_setter(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+    magic: i32,
+) -> JsResult<()> {
+    numeric::int_set(scope, this, value, magic)
 }
 
 #[unsafe(no_mangle)]
