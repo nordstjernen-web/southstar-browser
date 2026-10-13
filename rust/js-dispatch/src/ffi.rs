@@ -1400,3 +1400,16 @@ pub fn nsr_target_removeEventListener(
 ) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
     crate::target::remove(scope, this, args)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_dispatch_built_event(
+    js: *mut NsJs,
+    target: *const NsNode,
+    kind: &str,
+    event: Value,
+) -> (bool, bool) {
+    match node(target) {
+        Some(target) => crate::dispatch::dispatch_built(Js::of(js), target, kind, event),
+        None => (false, false),
+    }
+}

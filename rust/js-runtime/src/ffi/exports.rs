@@ -1076,3 +1076,16 @@ pub unsafe extern "C" fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean {
     glue::pump_iteration(js);
     1
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_make_element(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    node: *const NsNode,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::api::make_element(scope, node)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_unwrap_element(value: &southstar_js_engine::Value) -> *const NsNode {
+    Node::ptr_or_null(crate::api::unwrap_element(value))
+}

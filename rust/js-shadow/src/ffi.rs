@@ -192,3 +192,9 @@ pub unsafe extern "C" fn ns_element_find_shadow_child(host: *const NsNode) -> *m
 pub unsafe extern "C" fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode {
     raw(node_of(n).and_then(crate::slot::assigned_slot_node))
 }
+
+#[unsafe(no_mangle)]
+#[allow(non_snake_case)]
+pub fn nsr_element_get_shadowRoot(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::root::get_shadow_root(scope, this, &[])
+}

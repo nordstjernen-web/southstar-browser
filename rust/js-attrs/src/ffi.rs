@@ -636,3 +636,12 @@ pub fn nsr_tlist_set_value(
 ) -> Result<(), Value> {
     crate::token_list::set_value(scope, this, core::slice::from_ref(value)).map(drop)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_namedmap_item(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::named_map::item(scope, this, args)
+}

@@ -374,3 +374,8 @@ pub fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &s
 pub fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value) {
     crate::event::define_source(scope, event, source);
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+    crate::ctors::event_ctor(scope, this, args)
+}

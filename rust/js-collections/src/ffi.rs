@@ -504,3 +504,46 @@ pub fn nsr_live_proto(
 ) -> southstar_js_engine::Value {
     live::proto(js_of(scope), which).unwrap_or_else(southstar_js_engine::Value::undefined)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_make_live(
+    scope: &mut Scope<'_>,
+    owner: &Value,
+    kind: c_int,
+    param: Option<&[u8]>,
+    param2: Option<&[u8]>,
+) -> Value {
+    match LiveKind::from_raw(kind) {
+        Some(kind) => live::make(scope, owner, kind, param, param2),
+        None => Value::undefined(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
+    match live_of(obj) {
+        Some(back) => live::snapshot(scope, back),
+        None => obj.clone(),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_live_owner(obj: &Value) -> Value {
+    live_of(obj).map_or_else(Value::undefined, |back| back.owner().clone())
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_qcache_get(scope: &mut Scope<'_>, root: *const c_void, kind: u8, key: &[u8]) -> Value {
+    page::qcache_get(js_of(scope), root as usize, kind, key).unwrap_or_else(Value::undefined)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_qcache_put(
+    scope: &mut Scope<'_>,
+    root: *const c_void,
+    kind: u8,
+    key: &[u8],
+    value: &Value,
+) {
+    page::qcache_put(js_of(scope), root as usize, kind, key, value);
+}
