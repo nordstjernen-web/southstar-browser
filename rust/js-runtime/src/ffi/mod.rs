@@ -5,7 +5,8 @@
 pub(crate) mod exports;
 pub(crate) mod glue;
 pub(crate) mod imports;
-pub(crate) mod legacy;
+#[cfg(feature = "quickjs")]
+mod legacy;
 pub(crate) mod record;
 pub(crate) mod scopes;
 pub(crate) mod state;
@@ -21,8 +22,6 @@ use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, V
 use crate::worker;
 use crate::{Element, interrupt, page, teardown};
 use state::{DataFn, LogFn, NavigateFn, PageState};
-
-pub(crate) use legacy::{Native, c_constructor, c_constructor_or_function};
 
 pub use record::NsJs;
 

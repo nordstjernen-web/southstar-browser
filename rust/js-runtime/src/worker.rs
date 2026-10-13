@@ -8,10 +8,9 @@ use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{NativeFn, PromiseState, Scope, Value};
 
 use crate::ffi::imports;
-use crate::ffi::legacy::ns_illegal_constructor;
 use crate::ffi::{self, Js, RejectionTracker, WorkerSetup};
 use crate::interrupt;
-use crate::page::{bind_ctor, bind_url};
+use crate::page::bind_url;
 
 const DENY_OPAQUE_IDB: &str = "(function(){var f=self.indexedDB;if(!f)return;function deny(){throw new DOMException('Access to IndexedDB is denied for an opaque origin.','SecurityError');}['open','deleteDatabase','databases'].forEach(function(m){try{Object.defineProperty(f,m,{value:deny,configurable:true,writable:true});}catch(e){}});})()";
 
@@ -77,7 +76,13 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         0,
         imports::nsr_window_message_channel,
     );
-    bind_ctor(scope, &global, "MessagePort", ns_illegal_constructor, 0);
+    bind_constructor(
+        scope,
+        &global,
+        "MessagePort",
+        0,
+        crate::api::illegal_constructor,
+    );
 
     for name in ["Event", "MessageEvent", "ErrorEvent"] {
         bind_constructor(scope, &global, name, 1, ffi::imports::nsr_window_event_ctor);
@@ -136,19 +141,19 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     let _ = southstar_js_temporal::install(scope, &global);
     let _ = scope.set(&global, "crossOriginIsolated", Value::boolean(false));
     southstar_js_realm::hide_shared_array_buffer(scope, &global);
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "XMLHttpRequestEventTarget",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "XMLHttpRequestUpload",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
     bind_constructor(
         scope,
@@ -204,24 +209,24 @@ fn install_scope_members(
 ) {
     let _ = scope.set(global, "self", global.clone());
     let _ = scope.set(global, "globalThis", global.clone());
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "WorkerGlobalScope",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
     if !setup.service_worker {
-        bind_ctor(
+        bind_constructor(
             scope,
             global,
             "DedicatedWorkerGlobalScope",
-            ns_illegal_constructor,
             0,
+            crate::api::illegal_constructor,
         );
     }
     for name in WORKER_INTERFACES {
-        bind_ctor(scope, global, name, ns_illegal_constructor, 0);
+        bind_constructor(scope, global, name, 0, crate::api::illegal_constructor);
     }
     bind_native(
         scope,

@@ -4,8 +4,6 @@
 
 mod exports;
 mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;

@@ -13,8 +13,6 @@ pub(crate) mod context;
 mod draw;
 mod exports;
 mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod objects;
 pub(crate) mod pango;
 mod source;

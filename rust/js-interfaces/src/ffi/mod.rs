@@ -4,8 +4,6 @@
 
 mod adapt;
 mod installers;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod natives;
 mod tables;
 

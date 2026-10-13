@@ -5,8 +5,6 @@
 pub mod element;
 mod ffi;
 pub mod image;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub mod node_value;
 pub mod table;
 

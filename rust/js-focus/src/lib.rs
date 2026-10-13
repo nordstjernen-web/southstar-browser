@@ -7,8 +7,6 @@ pub mod click;
 mod ffi;
 pub mod focus;
 pub mod fullscreen;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

@@ -4,8 +4,6 @@
 
 mod class;
 pub mod host;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub mod natives;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};

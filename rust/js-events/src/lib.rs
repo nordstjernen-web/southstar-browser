@@ -9,8 +9,6 @@ mod event;
 mod exceptions;
 mod ffi;
 mod install;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 use southstar_dom::Node;
 use southstar_js_engine::{Attributes, Scope, Value};

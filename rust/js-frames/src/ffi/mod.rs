@@ -4,8 +4,6 @@
 
 pub(crate) mod ctx;
 mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub(crate) mod load;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

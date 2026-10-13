@@ -5,8 +5,6 @@
 mod events;
 mod ffi;
 pub mod frames;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod lifecycle;
 mod scrollend;
 

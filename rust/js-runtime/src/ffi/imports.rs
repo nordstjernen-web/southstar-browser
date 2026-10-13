@@ -271,7 +271,6 @@ unsafe extern "Rust" {
         scope: &mut Scope<'_>,
         global: &Value,
     );
-    pub(crate) safe fn nsr_live_owner_node(obj: &Value) -> *mut NsNode;
     pub(crate) safe fn nsr_live_proto(scope: &mut Scope<'_>, which: c_int) -> Value;
     pub(crate) unsafe fn nsr_make_performance_object(
         scope: &mut Scope<'_>,

@@ -3,8 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;

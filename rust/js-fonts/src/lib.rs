@@ -5,8 +5,6 @@
 mod ffi;
 mod font_face;
 pub mod font_set;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod ready;
 
 use southstar_js_engine::{NativeFn, Scope, Value};

@@ -13,8 +13,6 @@ use southstar_js_runtime::api;
 use crate::{context, history, location, message, named, navigation, page, set};
 
 mod imports;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Realm(ContextHandle);

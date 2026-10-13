@@ -5,8 +5,6 @@
 mod boxes;
 mod ffi;
 pub mod hit;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod lookup;
 pub mod metrics;
 pub mod scroll;

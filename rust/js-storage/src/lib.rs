@@ -6,8 +6,6 @@ pub mod binding;
 pub mod class;
 mod events;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod store;
 
 use std::cell::{Cell, RefCell};

@@ -4,14 +4,13 @@
 
 use southstar_js_bind::natives::{resolved_empty_array, resolved_false, resolved_undefined};
 use southstar_js_bind::{
-    attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
+    bind_constructor, bind_function, bind_int_constants, bind_native,
     bind_prototype_native_if_missing, make_constructor, prototype_of,
 };
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::imports;
-use crate::ffi::legacy::ns_illegal_constructor;
-use crate::ffi::{self, Callbacks, Class, Js, Native, NavigationTiming, RejectionTracker};
+use crate::ffi::{self, Callbacks, Class, Js, NavigationTiming, RejectionTracker};
 
 const PAGE_STACK_SIZE: usize = 5 * 1024 * 1024;
 
@@ -172,23 +171,6 @@ fn navigation_timing(given: Option<NavigationTiming>) -> NavigationTiming {
     timing
 }
 
-fn make_ctor(scope: &mut Scope<'_>, name: &str, native: Native, arity: u32) -> Value {
-    let constructor = ffi::c_constructor_or_function(scope, name, arity, native);
-    let _ = attach_prototype(scope, &constructor, name);
-    constructor
-}
-
-pub(crate) fn bind_ctor(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &str,
-    native: Native,
-    arity: u32,
-) {
-    let constructor = make_ctor(scope, name, native, arity);
-    let _ = scope.set(object, name, constructor);
-}
-
 pub(crate) fn bind_url(scope: &mut Scope<'_>, global: &Value) {
     let url = make_constructor(scope, "URL", 1, imports::nsr_window_url_ctor);
     bind_native(
@@ -280,7 +262,7 @@ fn register_classes(scope: &mut Scope<'_>) -> Value {
 
 fn register_storage_and_named(scope: &mut Scope<'_>, global: &Value) {
     let storage_proto = ffi::register_class(scope, Class::Storage);
-    let storage = ffi::c_constructor(scope, "Storage", 0, ns_illegal_constructor);
+    let storage = scope.constructor("Storage", 0, crate::api::illegal_constructor);
     let _ = scope.set_constructor(&storage, &storage_proto);
     let _ = scope.set(global, "Storage", storage);
     ffi::register_class(scope, Class::WindowNamed);
@@ -321,7 +303,13 @@ fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
     bind_native(scope, global, "fetch", 1, imports::nsr_js_fetch);
     imports::nsr_window_bind_post_message(scope, global);
 
-    bind_ctor(scope, global, "Navigator", ns_illegal_constructor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "Navigator",
+        0,
+        crate::api::illegal_constructor,
+    );
     let navigator = ffi::window_navigator(scope);
     let camera: [(&str, NativeFn, u32); 5] = [
         (
@@ -366,20 +354,26 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     if chrome_compat {
         ffi::imports::nsr_install_window_chrome(scope, global);
     }
-    bind_ctor(scope, global, "Performance", ns_illegal_constructor, 0);
-    bind_ctor(
+    bind_constructor(
+        scope,
+        global,
+        "Performance",
+        0,
+        crate::api::illegal_constructor,
+    );
+    bind_constructor(
         scope,
         global,
         "PerformanceTiming",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "PerformanceNavigation",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
     let _ = bind_int_constants(
         scope,
@@ -402,12 +396,12 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     for (name, constructor) in observer_constructors {
         bind_constructor(scope, global, name, 1, constructor);
     }
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "PerformanceObserverEntryList",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
     imports::nsr_perf_install_entry_list(scope, global);
     let observer_methods: [(&str, &str, u32, NativeFn); 13] = [
@@ -591,7 +585,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     }
 
     ffi::imports::nsr_events_install_window_base(scope, global);
-    bind_ctor(scope, global, "History", ns_illegal_constructor, 0);
+    bind_constructor(scope, global, "History", 0, crate::api::illegal_constructor);
     imports::nsr_window_install_history(scope, global);
     ffi::imports::nsr_crypto_install_window(scope, global);
 
@@ -627,7 +621,13 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
 
 fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     bind_constructor(scope, global, "Image", 2, imports::nsr_window_image_ctor);
-    bind_ctor(scope, global, "MediaError", ns_illegal_constructor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "MediaError",
+        0,
+        crate::api::illegal_constructor,
+    );
     let _ = bind_int_constants(scope, global, "MediaError", MEDIA_ERRORS);
     bind_constructor(
         scope,
@@ -673,19 +673,19 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     );
     imports::nsr_usp_install_interface(scope);
     imports::nsr_url_install_interface(scope);
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "XMLHttpRequestEventTarget",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "XMLHttpRequestUpload",
-        ns_illegal_constructor,
         0,
+        crate::api::illegal_constructor,
     );
     bind_constructor(
         scope,
@@ -925,7 +925,13 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         0,
         imports::nsr_window_message_channel,
     );
-    bind_ctor(scope, global, "MessagePort", ns_illegal_constructor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "MessagePort",
+        0,
+        crate::api::illegal_constructor,
+    );
     bind_constructor(
         scope,
         global,

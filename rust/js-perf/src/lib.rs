@@ -4,8 +4,6 @@
 
 mod entry;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod navigation;
 mod object;
 mod timeline;

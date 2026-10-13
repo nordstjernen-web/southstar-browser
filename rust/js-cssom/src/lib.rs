@@ -9,8 +9,6 @@ mod computed;
 mod css;
 pub mod declaration;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

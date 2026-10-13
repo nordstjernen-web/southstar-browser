@@ -7,8 +7,6 @@ pub mod class;
 mod dataset;
 pub mod element;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub mod named_map;
 mod token_list;
 

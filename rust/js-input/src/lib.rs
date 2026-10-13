@@ -4,8 +4,6 @@
 
 pub mod capture;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod mouse;
 mod scroll_touch;
 mod transfer;
