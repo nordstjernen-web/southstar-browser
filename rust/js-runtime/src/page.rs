@@ -573,18 +573,32 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
     );
     ffi::install(scope, ns_js_input_install_wpt, global);
-    let media_natives: [(&str, Native, u32); 8] = [
-        ("__ndUpdateBlobURL", ns_window_url_update_object, 2),
-        ("__ndMseAppend", ns_window_mse_append, 3),
-        ("__ndMseEos", ns_window_mse_eos, 1),
-        ("__ndMseBuffered", ns_window_mse_buffered, 2),
-        ("__ndMseBufferedStart", ns_window_mse_buffered_start, 2),
-        ("__ndMseRemove", ns_window_mse_remove, 4),
-        ("__ndMseBytes", ns_window_mse_bytes, 2),
-        ("__ndMseTypeSupported", ns_media_source_is_type_supported, 1),
+    bind_fn(
+        scope,
+        global,
+        "__ndUpdateBlobURL",
+        ns_window_url_update_object,
+        2,
+    );
+    let media_natives: [(&str, NativeFn, u32); 7] = [
+        ("__ndMseAppend", imports::nsr_window_mse_append, 3),
+        ("__ndMseEos", imports::nsr_window_mse_eos, 1),
+        ("__ndMseBuffered", imports::nsr_window_mse_buffered, 2),
+        (
+            "__ndMseBufferedStart",
+            imports::nsr_window_mse_buffered_start,
+            2,
+        ),
+        ("__ndMseRemove", imports::nsr_window_mse_remove, 4),
+        ("__ndMseBytes", imports::nsr_window_mse_bytes, 2),
+        (
+            "__ndMseTypeSupported",
+            imports::nsr_media_source_is_type_supported,
+            1,
+        ),
     ];
     for (name, native, arity) in media_natives {
-        bind_fn(scope, global, name, native, arity);
+        bind_native(scope, global, name, arity, native);
     }
 
     ffi::imports::nsr_events_install_window_base(scope, global);
@@ -633,7 +647,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         1,
         imports::nsr_static_range_ctor,
     );
-    bind_ctor(scope, global, "VTTCue", ns_vtt_cue_ctor, 3);
+    bind_constructor(scope, global, "VTTCue", 3, imports::nsr_vtt_cue_ctor);
     ffi::imports::nsr_services_install_clipboard_item(scope, global);
     bind_constructor(
         scope,
@@ -644,7 +658,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     );
     ffi::install_webgl(scope, global);
     bind_constructor(scope, global, "Audio", 1, imports::nsr_window_audio_ctor);
-    ffi::install(scope, ns_media_install_audio, global);
+    imports::nsr_media_install_audio(scope, global);
     bind_constructor(
         scope,
         global,

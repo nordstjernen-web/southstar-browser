@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the media bindings as declared in src/js_internal.h and src/js.h, and the js.c, video and microphone calls they make.
+//! Southstar — the C and Rust-ABI entry points of the media bindings, and the realm, event, video and microphone calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GStr};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::hooks::{self, Hook};
 use crate::{audio, element, eme, mse, support, tracks};
@@ -69,20 +69,20 @@ const FORMAT_LIBAV: c_uint = 1;
 const FORMAT_VORBIS: c_uint = 2;
 const FORMAT_OPUS: c_uint = 4;
 
+unsafe extern "Rust" {
+    #[allow(non_snake_case)]
+    safe fn nsr_target_dispatchEvent(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
+    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
+}
+
 unsafe extern "C" {
-    fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
-    fn ns_target_dispatchEvent(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_event_adopt_interface(ctx: *mut JSContext, event: JSValue, iface: *const c_char);
     fn ns_mic_fill_time_domain(out: *mut u8, n: c_int);
     fn ns_mic_fill_frequency(out: *mut u8, n: c_int);
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -91,23 +91,12 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
     fn ns_video_codec_available(codec: *const c_char) -> GBoolean;
-    fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64;
+    fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn ns_media_native_formats() -> c_uint;
-    fn ns_js_bytes_view(
-        ctx: *mut JSContext,
-        value: JSValue,
-        out_data: *mut *const u8,
-        out_len: *mut usize,
-        out_holder: *mut JSValue,
-    ) -> GBoolean;
-}
-
-fn ctx_of(scope: &Scope<'_>) -> *mut JSContext {
-    quickjs::raw_context(scope)
 }
 
 fn c_text(text: &str) -> CString {
@@ -125,23 +114,21 @@ fn node_ptr(element: Element) -> *const c_void {
 }
 
 pub(crate) fn bind_listeners(scope: &mut Scope<'_>, object: &Value) {
-    unsafe { ns_bind_event_target_listeners(ctx_of(scope), quickjs::raw(object)) };
+    api::bind_event_target_listeners(scope, object);
 }
 
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
     bind_listeners(scope, object);
-    let dispatch = quickjs::c_function(scope, "dispatchEvent", 1, ns_target_dispatchEvent);
+    let dispatch = scope.function("dispatchEvent", 1, nsr_target_dispatchEvent);
     crate::set(scope, object, "dispatchEvent", dispatch);
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_event_new(ctx_of(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_event_new(scope).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
-    let iface = c_text(iface);
-    unsafe { ns_event_adopt_interface(ctx_of(scope), quickjs::raw(event), iface.as_ptr()) };
+    nsr_event_adopt_interface(scope, event, iface);
 }
 
 fn clamp_len(bytes: &[u8]) -> c_int {
@@ -159,16 +146,15 @@ pub(crate) fn mic_frequency(bytes: &mut [u8]) {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(quickjs::context_opaque(scope).cast())
+    Js::from_ptr(scope.context_opaque().cast())
 }
 
 pub(crate) fn element(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, element: Element) -> Value {
-    let raw = unsafe { ns_make_element(ctx_of(scope), element.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, element.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dispatch(js: Js, element: Element, kind: &str) {
@@ -206,7 +192,7 @@ pub(crate) fn video_codec_available(codec: &str) -> bool {
 }
 
 pub(crate) fn perf_now(scope: &Scope<'_>) -> f64 {
-    unsafe { ns_perf_realm_now_ms(ctx_of(scope)) }
+    unsafe { ns_perf_realm_now_ms(scope.handle()) }
 }
 
 #[derive(Clone, Copy)]
@@ -230,28 +216,14 @@ pub(crate) fn with_bytes<R>(
     value: &Value,
     f: impl FnOnce(&[u8]) -> R,
 ) -> Option<R> {
-    let (mut data, mut len) = (ptr::null::<u8>(), 0usize);
-    let mut holder = quickjs::UNDEFINED;
-    let ok = unsafe {
-        ns_js_bytes_view(
-            ctx_of(scope),
-            quickjs::raw(value),
-            &mut data,
-            &mut len,
-            &mut holder,
-        )
-    };
-    let holder = unsafe { quickjs::take_value(scope, holder) };
-    if ok == 0 {
-        return None;
-    }
-    let bytes = if data.is_null() || len == 0 {
+    let view = api::bytes_view(scope, value)?;
+    let bytes = if view.data.is_null() || view.len == 0 {
         &[][..]
     } else {
-        unsafe { core::slice::from_raw_parts(data, len) }
+        unsafe { core::slice::from_raw_parts(view.data, view.len) }
     };
     let result = f(bytes);
-    drop(holder);
+    drop(view.holder);
     Some(result)
 }
 
@@ -309,25 +281,6 @@ pub(crate) fn call_mse_bytes(hook: Hook<MseBytesFn>, stream: u32, kind: u8) -> u
     unsafe { (hook.f)(stream, kind as c_char, data_ptr(hook.data)) }
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-unsafe fn getter(ctx: *mut JSContext, this_val: JSValue, f: NativeFn) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), f) }
-}
-
-unsafe fn setter(ctx: *mut JSContext, this_val: JSValue, value: JSValue, f: NativeFn) -> JSValue {
-    let mut args = [value];
-    unsafe { quickjs::call_native(ctx, this_val, 1, args.as_mut_ptr(), f) }
-}
-
 fn hook<F: Copy>(f: Option<F>, data: *mut c_void) -> Option<Hook<F>> {
     f.map(|f| Hook {
         f,
@@ -339,13 +292,9 @@ macro_rules! methods {
     ($($name:ident => $f:path;)*) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
             }
         )*
     };
@@ -355,8 +304,9 @@ macro_rules! getters {
     ($($name:ident => $f:path;)*) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+                $f(scope, this, &[])
             }
         )*
     };
@@ -366,12 +316,9 @@ macro_rules! setters {
     ($($name:ident => $f:path;)*) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                value: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, value, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> Result<(), Value> {
+                $f(scope, this, core::slice::from_ref(value)).map(drop)
             }
         )*
     };
@@ -409,53 +356,53 @@ pub fn nsr_media_capabilities_info(
 }
 
 methods! {
-    ns_eme_request_access => eme::request_access;
-    ns_media_set_media_keys => eme::set_media_keys;
-    ns_media_canPlayType => support::can_play_type;
-    ns_media_source_is_type_supported => support::is_type_supported;
-    ns_media_capabilities_info => support::decoding_info;
-    ns_media_play => element::play;
-    ns_media_pause => element::pause;
-    ns_media_load => element::load;
-    ns_media_fast_seek => element::fast_seek;
-    ns_media_get_video_playback_quality => element::video_playback_quality;
-    ns_window_mse_append => mse::append;
-    ns_window_mse_eos => mse::end_of_stream;
-    ns_window_mse_buffered => mse::buffered;
-    ns_window_mse_buffered_start => mse::buffered_start;
-    ns_window_mse_remove => mse::remove;
-    ns_window_mse_bytes => mse::bytes;
-    ns_vtt_cue_ctor => tracks::vtt_cue;
-    ns_media_addTextTrack => tracks::add_text_track;
+    nsr_eme_request_access => eme::request_access;
+    nsr_media_set_media_keys => eme::set_media_keys;
+    nsr_media_canPlayType => support::can_play_type;
+    nsr_media_source_is_type_supported => support::is_type_supported;
+    nsr_media_capabilities_info => support::decoding_info;
+    nsr_media_play => element::play;
+    nsr_media_pause => element::pause;
+    nsr_media_load => element::load;
+    nsr_media_fast_seek => element::fast_seek;
+    nsr_media_get_video_playback_quality => element::video_playback_quality;
+    nsr_window_mse_append => mse::append;
+    nsr_window_mse_eos => mse::end_of_stream;
+    nsr_window_mse_buffered => mse::buffered;
+    nsr_window_mse_buffered_start => mse::buffered_start;
+    nsr_window_mse_remove => mse::remove;
+    nsr_window_mse_bytes => mse::bytes;
+    nsr_vtt_cue_ctor => tracks::vtt_cue;
+    nsr_media_addTextTrack => tracks::add_text_track;
 }
 
 getters! {
-    ns_media_get_paused => element::paused;
-    ns_media_get_ended => element::ended;
-    ns_media_get_seeking => element::seeking;
-    ns_media_get_readyState => element::ready_state;
-    ns_media_get_networkState => element::network_state;
-    ns_media_get_current_time => element::current_time;
-    ns_media_get_duration => element::duration;
-    ns_media_get_error => element::error;
-    ns_media_get_seekable_ranges => element::seekable;
-    ns_media_get_buffered_ranges => element::buffered;
-    ns_media_get_played_ranges => element::played;
-    ns_media_get_playbackRate => element::playback_rate;
-    ns_media_get_defaultPlaybackRate => element::default_playback_rate;
-    ns_media_get_volume => element::volume;
-    ns_media_get_muted => element::muted;
-    ns_media_get_srcObject => element::src_object;
-    ns_media_get_textTracks => tracks::text_tracks;
+    nsr_media_get_paused => element::paused;
+    nsr_media_get_ended => element::ended;
+    nsr_media_get_seeking => element::seeking;
+    nsr_media_get_readyState => element::ready_state;
+    nsr_media_get_networkState => element::network_state;
+    nsr_media_get_current_time => element::current_time;
+    nsr_media_get_duration => element::duration;
+    nsr_media_get_error => element::error;
+    nsr_media_get_seekable_ranges => element::seekable;
+    nsr_media_get_buffered_ranges => element::buffered;
+    nsr_media_get_played_ranges => element::played;
+    nsr_media_get_playbackRate => element::playback_rate;
+    nsr_media_get_defaultPlaybackRate => element::default_playback_rate;
+    nsr_media_get_volume => element::volume;
+    nsr_media_get_muted => element::muted;
+    nsr_media_get_srcObject => element::src_object;
+    nsr_media_get_textTracks => tracks::text_tracks;
 }
 
 setters! {
-    ns_media_set_current_time => element::set_current_time;
-    ns_media_set_playbackRate => element::set_playback_rate;
-    ns_media_set_defaultPlaybackRate => element::set_default_playback_rate;
-    ns_media_set_volume => element::set_volume;
-    ns_media_set_muted => element::set_muted;
-    ns_media_set_srcObject => element::set_src_object;
+    nsr_media_set_current_time => element::set_current_time;
+    nsr_media_set_playbackRate => element::set_playback_rate;
+    nsr_media_set_defaultPlaybackRate => element::set_default_playback_rate;
+    nsr_media_set_volume => element::set_volume;
+    nsr_media_set_muted => element::set_muted;
+    nsr_media_set_srcObject => element::set_src_object;
 }
 
 hook_setters! {
@@ -494,24 +441,15 @@ pub unsafe extern "C" fn ns_js_video_event(
     let Some(node) = (unsafe { Node::from_ptr(node.cast()) }) else {
         return;
     };
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
+    let handle = unsafe { ns_js_main_context(js.ptr()) };
+    if handle.is_null() {
         return;
     }
     let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            element::video_event(scope, js, node, &kind, value)
-        })
-    };
+    handle.with(|scope| element::video_event(scope, js, node, &kind, value));
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_media_install_audio(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            audio::install(scope, &global);
-        })
-    }
+pub fn nsr_media_install_audio(scope: &mut Scope<'_>, global: &Value) {
+    audio::install(scope, global);
 }

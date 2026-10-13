@@ -7,6 +7,8 @@ pub mod element;
 pub mod eme;
 mod ffi;
 mod hooks;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod mse;
 pub mod support;
 pub mod tracks;
