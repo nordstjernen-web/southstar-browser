@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_bind::natives::{resolved_empty_array, resolved_false, resolved_undefined};
 use southstar_js_bind::{
     attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
     bind_prototype_function_if_missing, bind_prototype_native_if_missing, prototype_of,
@@ -719,10 +720,10 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
 
     let caches = scope.new_object();
     bind_native(scope, &caches, "open", 1, ffi::imports::nsr_cache_open);
-    bind_fn(scope, &caches, "has", ns_returns_resolved_false, 1);
-    bind_fn(scope, &caches, "delete", ns_returns_resolved_false, 1);
-    bind_fn(scope, &caches, "keys", ns_returns_resolved_empty_array, 0);
-    bind_fn(scope, &caches, "match", ns_returns_resolved_undefined, 2);
+    bind_native(scope, &caches, "has", 1, resolved_false);
+    bind_native(scope, &caches, "delete", 1, resolved_false);
+    bind_native(scope, &caches, "keys", 0, resolved_empty_array);
+    bind_native(scope, &caches, "match", 2, resolved_undefined);
     let _ = scope.get(global, "caches");
     let _ = scope.set(global, "caches", caches);
     bind_ctor(scope, global, "TextEncoder", ns_window_text_encoder_ctor, 0);

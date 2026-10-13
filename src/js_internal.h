@@ -330,7 +330,6 @@ JSValue  ns_element_hasPointerCapture(JSContext *ctx, JSValueConst this_val, int
 JSValue  ns_element_show_picker(JSContext *ctx, JSValueConst this_val, int argc,
                                 JSValueConst *argv);
 JSValue  ns_document_get_defaultView(JSContext *ctx, JSValueConst this_val);
-gboolean ns_obj_has_defined_own_prop(JSContext *ctx, JSValueConst obj, const char *name);
 void     ns_box_lookup_forget(ns_js *js);
 const ns_node *ns_js_iframe_document_node(const ns_js *js);
 JSValue  ns_array_namedItem(JSContext *ctx, JSValueConst this_val,
