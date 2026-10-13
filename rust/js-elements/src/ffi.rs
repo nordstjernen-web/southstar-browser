@@ -361,25 +361,10 @@ pub fn nsr_element_set_nodeValue(
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_element_img_natural_width(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    crate::image::natural_width(scope, this)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_img_natural_height(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    crate::image::natural_height(scope, this)
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_element_set_node_value(
     scope: &mut Scope<'_>,
     this: &Value,
     value: &Value,
 ) -> JsResult<()> {
     crate::node_value::set_node_value(scope, this, value)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
-    crate::node_value::is_rendered(scope, value)
 }

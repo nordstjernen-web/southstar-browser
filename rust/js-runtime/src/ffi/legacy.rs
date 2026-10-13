@@ -15,7 +15,6 @@ use super::{Js, NsJs, c_text};
 use crate::{api, worker};
 
 pub(crate) type Native = JSCFunction;
-pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
 type JobFn = unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
 
 #[repr(C)]
@@ -79,10 +78,6 @@ pub(crate) fn c_constructor(
     native: Native,
 ) -> Value {
     quickjs::c_constructor(scope, name, arity, native)
-}
-
-pub(crate) fn install(scope: &mut Scope<'_>, installer: Installer, target: &Value) {
-    unsafe { installer(quickjs::raw_context(scope), quickjs::raw(target)) };
 }
 
 fn handle(ctx: *mut JSContext) -> ContextHandle {

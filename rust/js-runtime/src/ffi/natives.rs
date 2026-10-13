@@ -1,4 +1,4 @@
-//! Southstar — the raw-QuickJS natives and installers the window and worker realms still bind; each moves to an nsr_ Rust declaration when its crate is converted.
+//! Southstar — the raw-QuickJS natives the window and worker realms still bind; each moves to an nsr_ Rust declaration when its crate is converted.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -21,18 +21,7 @@ macro_rules! natives {
     };
 }
 
-macro_rules! installers {
-    ($($name:ident),* $(,)?) => {
-        unsafe extern "C" {
-            $(pub(crate) fn $name(ctx: *mut JSContext, target: JSValue);)*
-        }
-    };
-}
-
 pub(crate) use super::legacy::ns_illegal_constructor;
 
 natives! {
-}
-
-installers! {
 }
