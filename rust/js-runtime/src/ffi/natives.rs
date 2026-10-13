@@ -74,13 +74,11 @@ natives! {
     ns_window_url_parse_static,
     ns_window_url_create_object,
     ns_window_url_revoke_object,
-    ns_static_range_ctor,
     ns_vtt_cue_ctor,
     ns_window_usp_ctor,
     ns_window_text_encoder_ctor,
     ns_window_text_decoder_ctor,
     ns_window_filereader_ctor,
-    ns_window_get_selection,
 }
 
 installers! {

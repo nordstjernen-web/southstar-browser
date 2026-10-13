@@ -626,7 +626,13 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     bind_constructor(scope, global, "Image", 2, imports::nsr_window_image_ctor);
     bind_ctor(scope, global, "MediaError", ns_illegal_constructor, 0);
     let _ = bind_int_constants(scope, global, "MediaError", MEDIA_ERRORS);
-    bind_ctor(scope, global, "StaticRange", ns_static_range_ctor, 1);
+    bind_constructor(
+        scope,
+        global,
+        "StaticRange",
+        1,
+        imports::nsr_static_range_ctor,
+    );
     bind_ctor(scope, global, "VTTCue", ns_vtt_cue_ctor, 3);
     ffi::imports::nsr_services_install_clipboard_item(scope, global);
     bind_constructor(
@@ -839,7 +845,13 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     for name in WINDOW_EVENT_HANDLERS {
         let _ = scope.set(global, name, Value::null());
     }
-    bind_fn(scope, global, "getSelection", ns_window_get_selection, 0);
+    bind_native(
+        scope,
+        global,
+        "getSelection",
+        0,
+        imports::nsr_window_get_selection,
+    );
     bind_native(
         scope,
         global,

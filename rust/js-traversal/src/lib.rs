@@ -4,6 +4,8 @@
 
 mod ffi;
 pub mod iterator;
+#[cfg(feature = "quickjs")]
+mod legacy;
 pub mod range;
 pub mod selection;
 mod static_range;

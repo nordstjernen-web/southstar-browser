@@ -1,16 +1,16 @@
-//! Southstar — the C ABI of Range, Selection, TreeWalker and NodeIterator as declared in src/js_internal.h, and the js.c calls it makes.
+//! Southstar — the C ABI and Rust-ABI entry points of Range, Selection, TreeWalker and NodeIterator, and the engine calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
-use crate::Element;
+use crate::{Element, JsResult};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -37,53 +37,42 @@ pub(crate) struct SelectionState {
 }
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_make_dom_rect(ctx: *mut JSContext, x: f64, y: f64, w: f64, h: f64) -> JSValue;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_selection_state(js: *const NsJs, text: *mut *const c_char, rect: *mut f64)
     -> GBoolean;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
+}
+
+unsafe extern "Rust" {
+    safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(quickjs::context_opaque(scope).cast())
+    Js::of(scope.context_opaque().cast())
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     if js.0 == 0 {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
-        return None;
-    }
-    Some(unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.ptr()) }.with(f)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;
     }
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: [f64; 4]) -> Value {
     let [x, y, w, h] = rect;
-    let raw = unsafe { ns_make_dom_rect(quickjs::raw_context(scope), x, y, w, h) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_dom_rect(scope, x, y, w, h)
 }
 
 pub(crate) fn selection_state(js: Js) -> SelectionState {
@@ -120,47 +109,17 @@ pub(crate) fn parse_html(source: &[u8]) -> Option<Element> {
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    let name = CString::new(name).unwrap_or_default();
-    let message = CString::new(message).unwrap_or_default();
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
-}
-
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+    api::dom_exception(scope, name, code, message)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_get_selection(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::selection::get_selection) }
+pub fn nsr_window_get_selection(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::selection::get_selection(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_create_range(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::range::create_range) }
+pub fn nsr_document_create_range(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::range::create_range(scope, this, args)
 }
 
 #[allow(non_snake_case)]
@@ -174,61 +133,31 @@ pub fn nsr_native_range(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_native_range(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::range::native_range) }
+pub fn nsr_static_range_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::static_range::construct(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_static_range_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::static_range::construct) }
+pub fn nsr_document_create_tree_walker(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> JsResult {
+    crate::walker::create(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_create_tree_walker(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::walker::create) }
+pub fn nsr_document_create_node_iterator(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> JsResult {
+    crate::iterator::create(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_create_node_iterator(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::iterator::create) }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_tree_walker_install_proto(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    target: &southstar_js_engine::Value,
-) {
-    crate::walker::install_proto(scope, target);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_tree_walker_install_proto(ctx: *mut JSContext, proto: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let proto = quickjs::borrow_value(scope, proto);
-            crate::walker::install_proto(scope, &proto);
-        })
-    }
+pub fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, proto: &Value) {
+    crate::walker::install_proto(scope, proto);
 }
 
 #[unsafe(no_mangle)]
@@ -241,40 +170,4 @@ pub unsafe extern "C" fn ns_node_iters_pre_remove(js: *const NsJs, removed: *con
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_traversal_teardown(js: *const NsJs) {
     crate::iterator::teardown(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_window_get_selection(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::selection::get_selection(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_create_range(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::range::create_range(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_create_tree_walker(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::walker::create(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_create_node_iterator(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::iterator::create(scope, this, args)
 }

@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::{Kind, Node};
-use southstar_js_engine::{Scope, Value, quickjs};
+use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, js_of, unwrap_node, wrap_node};
 use crate::selection::{bounding_client_rect, client_rects, clone_contents};
@@ -52,7 +52,11 @@ fn set_end(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     }
     let start = get(scope, this, "startContainer");
     let end = get(scope, this, "endContainer");
-    let same_container = quickjs::identity(&start) == quickjs::identity(&end);
+    let same_container = if start.is_object() || end.is_object() {
+        start.same_object(&end)
+    } else {
+        true
+    };
     let start_offset = int_prop(scope, this, "startOffset");
     let end_offset = int_prop(scope, this, "endOffset");
     let collapsed = same_container && start_offset == end_offset;

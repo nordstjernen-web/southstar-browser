@@ -58,6 +58,16 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_name_engine_members(scope: &mut Scope<'_>);
+    pub(crate) safe fn nsr_static_range_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_get_selection(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_window_scroll_to(
         scope: &mut Scope<'_>,
         this: &Value,
