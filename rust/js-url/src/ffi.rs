@@ -408,6 +408,11 @@ pub unsafe extern "C" fn ns_net_install_text_codecs(ctx: *mut JSContext, global:
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_net_install_file_reader(scope: &mut Scope<'_>, global: &Value) {
+    crate::file_reader::install(scope, global);
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_install_file_reader(ctx: *mut JSContext, global: JSValue) {
     unsafe { with_value(ctx, global, crate::file_reader::install) }
 }

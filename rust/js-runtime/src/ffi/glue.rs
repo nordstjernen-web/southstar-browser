@@ -556,15 +556,6 @@ pub(crate) fn blob_bytes(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
     imports::nsr_blob_bytes(scope, value)
 }
 
-pub(crate) fn g_bytes(bytes: &[u8]) -> *mut c_char {
-    let out = unsafe { glib::g_malloc(bytes.len() + 1) }.cast::<u8>();
-    unsafe {
-        ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
-        *out.add(bytes.len()) = 0;
-    }
-    out.cast()
-}
-
 pub(crate) fn names_table(names: Vec<Vec<u8>>) -> *mut GHashTable {
     let table = unsafe {
         glib::g_hash_table_new_full(

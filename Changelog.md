@@ -8,6 +8,9 @@ Southstar Browser 0.9.9:
   engine-neutral Prop tables that call the binding crates' Rust natives
   directly, and the classes, members and shapes install through the neutral
   Scope API. Scope::set_is_html_dda (document.all) is new, a no-op on Boa.
+* The networking bindings (rust/js-net: fetch, Request, Response,
+  XMLHttpRequest, AbortController, WebSocket, EventSource) run on the
+  engine-neutral JavaScript API, with no raw QuickJS code left in the crate.
 * HTML is parsed by Southstar's own HTML5 parser, rust/html5, instead of
   the vendored lexbor C library, which is removed from the tree (~68,000
   lines). The tokenizer and tree builder are written from the WHATWG HTML

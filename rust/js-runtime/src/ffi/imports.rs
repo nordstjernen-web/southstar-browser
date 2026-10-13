@@ -294,6 +294,36 @@ unsafe extern "Rust" {
         reason: &Value,
         handled: bool,
     );
+    pub(crate) safe fn nsr_js_fetch(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_xhr_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_abort_controller_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_response_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_request_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_xhr_install_interface(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_js_net_install_sockets(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_net_install_interfaces(scope: &mut Scope<'_>, global: &Value);
 }
 
 unsafe extern "Rust" {

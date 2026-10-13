@@ -183,22 +183,40 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         ns_illegal_constructor,
         0,
     );
-    bind_ctor(scope, &global, "XMLHttpRequest", ns_window_xhr_ctor, 0);
-    ffi::install(scope, ns_xhr_install_interface, &global);
-    bind_fn(scope, &global, "fetch", ns_js_fetch, 1);
-    bind_ctor(scope, &global, "Response", ns_window_response_ctor, 0);
-    bind_ctor(scope, &global, "Request", ns_window_request_ctor, 1);
-    ffi::install(scope, ns_fetch_install_interfaces, &global);
+    bind_constructor(
+        scope,
+        &global,
+        "XMLHttpRequest",
+        0,
+        imports::nsr_window_xhr_ctor,
+    );
+    imports::nsr_xhr_install_interface(scope, &global);
+    bind_native(scope, &global, "fetch", 1, imports::nsr_js_fetch);
+    bind_constructor(
+        scope,
+        &global,
+        "Response",
+        0,
+        imports::nsr_window_response_ctor,
+    );
+    bind_constructor(
+        scope,
+        &global,
+        "Request",
+        1,
+        imports::nsr_window_request_ctor,
+    );
+    imports::nsr_fetch_install_interfaces(scope, &global);
     let _ = scope.set(&global, "__ndWorkerHeadersOnly", Value::boolean(true));
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "AbortController",
-        ns_window_abort_controller_ctor,
         0,
+        imports::nsr_window_abort_controller_ctor,
     );
-    ffi::install(scope, ns_install_abort_signal_interface, &global);
-    ffi::install(scope, ns_net_install_interfaces, &global);
+    imports::nsr_install_abort_signal_interface(scope, &global);
+    imports::nsr_net_install_interfaces(scope, &global);
     ffi::install(scope, ns_idb_install, &global);
     js.eval_worker_polyfills();
     let current_global = scope.global();

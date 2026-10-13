@@ -323,7 +323,7 @@ fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
         ffi::imports::nsr_services_clear_timer,
     );
-    bind_fn(scope, global, "fetch", ns_js_fetch, 1);
+    bind_native(scope, global, "fetch", 1, imports::nsr_js_fetch);
     imports::nsr_window_bind_post_message(scope, global);
 
     bind_ctor(scope, global, "Navigator", ns_illegal_constructor, 0);
@@ -659,8 +659,14 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         ns_illegal_constructor,
         0,
     );
-    bind_ctor(scope, global, "XMLHttpRequest", ns_window_xhr_ctor, 0);
-    ffi::install(scope, ns_xhr_install_interface, global);
+    bind_constructor(
+        scope,
+        global,
+        "XMLHttpRequest",
+        0,
+        imports::nsr_window_xhr_ctor,
+    );
+    imports::nsr_xhr_install_interface(scope, global);
     bind_constructor(
         scope,
         global,
@@ -683,12 +689,12 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         0,
         imports::nsr_window_form_data_ctor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "AbortController",
-        ns_window_abort_controller_ctor,
         0,
+        imports::nsr_window_abort_controller_ctor,
     );
     bind_constructor(
         scope,
@@ -697,7 +703,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         0,
         imports::nsr_window_close_watcher_ctor,
     );
-    ffi::install(scope, ns_install_abort_signal_interface, global);
+    imports::nsr_install_abort_signal_interface(scope, global);
 
     let caches = scope.new_object();
     bind_native(scope, &caches, "open", 1, ffi::imports::nsr_cache_open);
@@ -710,9 +716,21 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     bind_ctor(scope, global, "TextEncoder", ns_window_text_encoder_ctor, 0);
     bind_ctor(scope, global, "TextDecoder", ns_window_text_decoder_ctor, 0);
     ffi::install(scope, ns_net_install_text_codecs, global);
-    bind_ctor(scope, global, "Response", ns_window_response_ctor, 0);
-    bind_ctor(scope, global, "Request", ns_window_request_ctor, 1);
-    ffi::install(scope, ns_fetch_install_interfaces, global);
+    bind_constructor(
+        scope,
+        global,
+        "Response",
+        0,
+        imports::nsr_window_response_ctor,
+    );
+    bind_constructor(
+        scope,
+        global,
+        "Request",
+        1,
+        imports::nsr_window_request_ctor,
+    );
+    imports::nsr_fetch_install_interfaces(scope, global);
     bind_ctor(scope, global, "FileReader", ns_window_filereader_ctor, 0);
 
     ffi::imports::nsr_events_install_window(scope, global);
@@ -872,7 +890,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ffi::imports::nsr_services_notification_ctor,
     );
     imports::nsr_worker_install_constructor(scope, global);
-    ffi::install(scope, ns_js_net_install_sockets, global);
+    imports::nsr_js_net_install_sockets(scope, global);
     ffi::install(scope, ns_cssom_install_css, global);
     ffi::install(scope, ns_crypto_install_window_subtle, global);
     #[cfg(feature = "wasm")]

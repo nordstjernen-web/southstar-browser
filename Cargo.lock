@@ -2245,6 +2245,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]

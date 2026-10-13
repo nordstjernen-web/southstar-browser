@@ -9,10 +9,15 @@ use std::rc::Rc;
 
 use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_js_bind::host::{self, HostKind};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_bind::{bind_constructor, bind_native};
+use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::JsResult;
+
+mod imports;
+
+use imports::*;
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -28,7 +33,7 @@ impl Js {
     }
 
     pub fn of(scope: &Scope<'_>) -> Js {
-        Js(quickjs::context_opaque(scope) as usize)
+        Js(scope.context_opaque() as usize)
     }
 
     pub fn is_null(self) -> bool {
@@ -41,15 +46,15 @@ impl Js {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Realm(*mut JSContext);
+pub(crate) struct Realm(ContextHandle);
 
 impl Realm {
     pub fn of(scope: &Scope<'_>) -> Realm {
-        Realm(quickjs::raw_context(scope))
+        Realm(scope.handle())
     }
 
-    pub fn enter<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        unsafe { quickjs::with_context(self.0, f) }
+    pub fn enter(self, f: impl FnOnce(&mut Scope<'_>)) {
+        let _ = self.0.with(f);
     }
 }
 
@@ -163,56 +168,7 @@ unsafe extern "C" {
     fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_net_enter_handler_realm(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        kind: *const c_char,
-    ) -> *mut c_void;
-    fn ns_js_net_leave_handler_realm(ctx: *mut JSContext, scope: *mut c_void);
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_event_define_cancel_bubble(ctx: *mut JSContext, ev: JSValue);
-    fn ns_event_adopt_interface(ctx: *mut JSContext, ev: JSValue, iface: *const c_char);
-    fn ns_event_prevent_default(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_stop_propagation(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_stop_immediate(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_composed_path(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_dispatchEvent(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
-    fn ns_bind_fn(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        name: *const c_char,
-        f: quickjs::JSCFunction,
-        argc: c_int,
-    );
-    fn ns_net_install_form_data(ctx: *mut JSContext, global: JSValue);
-    fn ns_net_install_ports(ctx: *mut JSContext, global: JSValue);
-    fn ns_net_install_file_reader(ctx: *mut JSContext, global: JSValue);
+    fn ns_js_net_leave_handler_realm(ctx: ContextHandle, scope: *mut c_void);
 }
 
 unsafe extern "C" {
@@ -252,11 +208,11 @@ unsafe extern "C" {
         url: *const c_char,
         page: *const c_char,
     ) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_realm_url(js: *mut NsJs, realm: *mut JSContext) -> *const c_char;
-    fn ns_js_realm_document_url(js: *mut NsJs, realm: *mut JSContext) -> *const c_char;
+    fn ns_js_realm_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char;
+    fn ns_js_realm_document_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char;
     fn ns_perf_now_ms(js: *const NsJs) -> f64;
     fn ns_js_page_time_origin_us(js: *const NsJs) -> i64;
     fn ns_perf_add_resource_timed(
@@ -293,59 +249,9 @@ unsafe extern "C" {
         body: *const u8,
         body_len: usize,
     );
-
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
-    fn ns_make_abort_error(ctx: *mut JSContext) -> JSValue;
-    fn ns_xhr_fire_progress_event(
-        ctx: *mut JSContext,
-        target: JSValue,
-        kind: *const c_char,
-        loaded: f64,
-        total: f64,
-        length_computable: GBoolean,
-    );
     fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
     fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean;
     fn ns_js_credit_pumped_time(js: *mut NsJs, pump_start_us: i64);
-    fn ns_js_body_bytes(ctx: *mut JSContext, value: JSValue, out_len: *mut usize) -> *mut c_char;
-    fn ns_js_value_is_form_data(ctx: *mut JSContext, v: JSValue) -> GBoolean;
-    fn ns_js_form_data_serialize(
-        ctx: *mut JSContext,
-        fd: JSValue,
-        out_len: *mut usize,
-        out_content_type: *mut *mut c_char,
-    ) -> *mut c_char;
-    fn ns_js_value_is_url_search_params(ctx: *mut JSContext, v: JSValue) -> GBoolean;
-    fn ns_js_usp_serialize(
-        ctx: *mut JSContext,
-        usp: JSValue,
-        out_len: *mut usize,
-        out_content_type: *mut *mut c_char,
-    ) -> *mut c_char;
-    fn ns_blob_bytes_as_string(
-        ctx: *mut JSContext,
-        blob: JSValue,
-        out_len: *mut usize,
-    ) -> *mut c_char;
-    fn ns_target_fire_event(ctx: *mut JSContext, obj: JSValue, kind: *const c_char);
-    fn ns_bind_ctor(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        name: *const c_char,
-        f: quickjs::JSCFunction,
-        argc: c_int,
-    );
-    fn ns_illegal_constructor(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -366,15 +272,6 @@ unsafe fn take_gstr(raw: *mut c_char) -> Option<Vec<u8>> {
         return None;
     }
     let bytes = unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec();
-    unsafe { glib::g_free(raw.cast()) };
-    Some(bytes)
-}
-
-unsafe fn take_gbytes(raw: *mut c_char, len: usize) -> Option<Vec<u8>> {
-    if raw.is_null() {
-        return None;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts(raw.cast::<u8>(), len) }.to_vec();
     unsafe { glib::g_free(raw.cast()) };
     Some(bytes)
 }
@@ -410,10 +307,7 @@ pub(crate) fn url_origin_from(url: Option<&[u8]>) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message: &str) -> Value {
-    let ctx = quickjs::raw_context(scope);
-    let message = cstring(message.as_bytes());
-    unsafe { ns_throw_dom_exception(ctx, name.as_ptr(), code, message.as_ptr()) };
-    quickjs::take_exception(scope)
+    nsr_dom_exception(scope, name.to_bytes(), code, message.as_bytes())
 }
 
 pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {
@@ -433,30 +327,19 @@ pub(crate) fn enter_handler_realm(
     target: &Value,
     kind: &str,
 ) -> HandlerRealm {
-    let ctx = quickjs::raw_context(scope);
-    let kind = cstring(kind.as_bytes());
-    HandlerRealm(unsafe { ns_js_net_enter_handler_realm(ctx, quickjs::raw(target), kind.as_ptr()) })
+    HandlerRealm(api::enter_handler_realm(scope, target, kind))
 }
 
 pub(crate) fn leave_handler_realm(scope: &mut Scope<'_>, entered: HandlerRealm) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_js_net_leave_handler_realm(ctx, entered.0) };
+    unsafe { ns_js_net_leave_handler_realm(scope.handle(), entered.0) };
 }
 
-fn bind_c(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &CStr,
-    f: quickjs::JSCFunction,
-    argc: c_int,
-) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_bind_fn(ctx, quickjs::raw(object), name.as_ptr(), f, argc) };
+fn bind_c(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity: u32) {
+    bind_native(scope, object, name, arity, f);
 }
 
 pub(crate) fn socket_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
-    let ctx = quickjs::raw_context(scope);
-    let event = unsafe { quickjs::take_value(scope, ns_event_new(ctx)) };
+    let event = nsr_event_new(scope).unwrap_or_else(|_| Value::undefined());
     crate::set_str(scope, &event, "type", kind.to_bytes());
     crate::set(scope, &event, "bubbles", Value::boolean(false));
     crate::set(scope, &event, "cancelable", Value::boolean(false));
@@ -464,59 +347,48 @@ pub(crate) fn socket_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
     bind_c(
         scope,
         &event,
-        c"preventDefault",
-        ns_event_prevent_default,
+        "preventDefault",
+        nsr_event_prevent_default,
         0,
     );
     bind_c(
         scope,
         &event,
-        c"stopPropagation",
-        ns_event_stop_propagation,
+        "stopPropagation",
+        nsr_event_stop_propagation,
         0,
     );
-    unsafe { ns_event_define_cancel_bubble(ctx, quickjs::raw(&event)) };
+    nsr_event_define_cancel_bubble(scope, &event);
     crate::set(scope, &event, "_is_trusted", Value::boolean(true));
     bind_c(
         scope,
         &event,
-        c"stopImmediatePropagation",
-        ns_event_stop_immediate,
+        "stopImmediatePropagation",
+        nsr_event_stop_immediate,
         0,
     );
-    bind_c(scope, &event, c"composedPath", ns_event_composed_path, 0);
+    bind_c(scope, &event, "composedPath", nsr_event_composed_path, 0);
     event
 }
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &CStr) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_event_adopt_interface(ctx, quickjs::raw(event), iface.as_ptr()) };
+    nsr_event_adopt_interface(scope, event, &iface.to_string_lossy());
 }
 
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_bind_event_target_listeners(ctx, quickjs::raw(object)) };
-    bind_c(scope, object, c"dispatchEvent", ns_target_dispatchEvent, 1);
+    api::bind_event_target_listeners(scope, object);
+    bind_c(scope, object, "dispatchEvent", nsr_target_dispatchEvent, 1);
 }
 
 pub(crate) fn bind_socket_ctors(scope: &mut Scope<'_>, global: &Value) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe {
-        ns_bind_ctor(
-            ctx,
-            quickjs::raw(global),
-            c"WebSocket".as_ptr(),
-            ns_window_websocket_ctor,
-            2,
-        );
-        ns_bind_ctor(
-            ctx,
-            quickjs::raw(global),
-            c"EventSource".as_ptr(),
-            ns_window_eventsource_ctor,
-            2,
-        );
-    }
+    bind_constructor(scope, global, "WebSocket", 2, crate::socket::websocket_ctor);
+    bind_constructor(
+        scope,
+        global,
+        "EventSource",
+        2,
+        crate::socket::event_source_ctor,
+    );
 }
 
 pub(crate) fn install_host_interfaces(scope: &mut Scope<'_>, global: &Value) {
@@ -524,13 +396,9 @@ pub(crate) fn install_host_interfaces(scope: &mut Scope<'_>, global: &Value) {
 }
 
 pub(crate) fn install_neighbours(scope: &mut Scope<'_>, global: &Value) {
-    let ctx = quickjs::raw_context(scope);
-    let raw = quickjs::raw(global);
-    unsafe {
-        ns_net_install_form_data(ctx, raw);
-        ns_net_install_ports(ctx, raw);
-        ns_net_install_file_reader(ctx, raw);
-    }
+    nsr_net_install_form_data(scope, global);
+    nsr_net_install_ports(scope, global);
+    nsr_net_install_file_reader(scope, global);
 }
 
 pub(crate) enum Transport {
@@ -738,14 +606,11 @@ impl Transport {
 }
 
 pub(crate) fn abort_error(scope: &mut Scope<'_>) -> Value {
-    let ctx = quickjs::raw_context(scope);
-    let raw = unsafe { ns_make_abort_error(ctx) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_abort_error(scope)
 }
 
 pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &CStr) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe { ns_target_fire_event(ctx, quickjs::raw(target), kind.as_ptr()) };
+    nsr_target_fire_event(scope, target, &kind.to_string_lossy());
 }
 
 pub(crate) fn fire_progress_event(
@@ -756,17 +621,14 @@ pub(crate) fn fire_progress_event(
     total: f64,
     computable: bool,
 ) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe {
-        ns_xhr_fire_progress_event(
-            ctx,
-            quickjs::raw(target),
-            kind.as_ptr(),
-            loaded,
-            total,
-            glib::boolean(computable),
-        )
-    };
+    nsr_xhr_fire_progress_event(
+        scope,
+        target,
+        &kind.to_string_lossy(),
+        loaded,
+        total,
+        computable,
+    );
 }
 
 pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: HostKind) -> Option<Value> {
@@ -774,20 +636,11 @@ pub(crate) fn host_state(scope: &mut Scope<'_>, value: &Value, kind: HostKind) -
 }
 
 pub(crate) fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    let ctx = quickjs::raw_context(scope);
-    let mut len = 0usize;
-    unsafe { take_gbytes(ns_js_body_bytes(ctx, quickjs::raw(value), &mut len), len) }
+    api::body_bytes(scope, value)
 }
 
 pub(crate) fn blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Option<Vec<u8>> {
-    let ctx = quickjs::raw_context(scope);
-    let mut len = 0usize;
-    unsafe {
-        take_gbytes(
-            ns_blob_bytes_as_string(ctx, quickjs::raw(blob), &mut len),
-            len,
-        )
-    }
+    Some(nsr_blob_bytes(scope, blob))
 }
 
 pub(crate) struct Serialized {
@@ -796,22 +649,20 @@ pub(crate) struct Serialized {
 }
 
 pub(crate) fn serialize_form_body(scope: &mut Scope<'_>, value: &Value) -> Option<Serialized> {
-    let ctx = quickjs::raw_context(scope);
-    let raw = quickjs::raw(value);
-    let mut len = 0usize;
-    let mut content_type = ptr::null_mut();
-    let body = unsafe {
-        if ns_js_value_is_form_data(ctx, raw) != 0 {
-            ns_js_form_data_serialize(ctx, raw, &mut len, &mut content_type)
-        } else if ns_js_value_is_url_search_params(ctx, raw) != 0 {
-            ns_js_usp_serialize(ctx, raw, &mut len, &mut content_type)
-        } else {
-            return None;
-        }
-    };
-    let content_type = unsafe { take_gstr(content_type) };
-    let body = unsafe { take_gbytes(body, len) }.unwrap_or_default();
-    Some(Serialized { body, content_type })
+    if host::is(value, HostKind::FormData) {
+        let (body, content_type) = nsr_js_form_data_serialize(scope, value);
+        return Some(Serialized {
+            body,
+            content_type: Some(crate::until_nul(content_type)),
+        });
+    }
+    if api::is_url_search_params(scope, value) {
+        return Some(Serialized {
+            body: api::usp_serialize(scope, value),
+            content_type: Some(b"application/x-www-form-urlencoded;charset=UTF-8".to_vec()),
+        });
+    }
+    None
 }
 
 pub(crate) fn host_construct(
@@ -831,16 +682,13 @@ pub(crate) fn host_is(value: &Value, kind: HostKind) -> bool {
 }
 
 pub(crate) fn bind_illegal_ctor(scope: &mut Scope<'_>, global: &Value, name: &CStr) {
-    let ctx = quickjs::raw_context(scope);
-    unsafe {
-        ns_bind_ctor(
-            ctx,
-            quickjs::raw(global),
-            name.as_ptr(),
-            ns_illegal_constructor,
-            0,
-        )
-    };
+    bind_constructor(
+        scope,
+        global,
+        &name.to_string_lossy(),
+        0,
+        api::illegal_constructor,
+    );
 }
 
 impl Js {
@@ -887,7 +735,7 @@ impl Js {
 
     pub fn main_context(self) -> Realm {
         if self.is_null() {
-            return Realm(ptr::null_mut());
+            return Realm(ContextHandle::NULL);
         }
         Realm(unsafe { ns_js_main_context(self.ptr()) })
     }
@@ -920,7 +768,7 @@ impl Js {
 
     pub fn add_resource_timing(self, timing: &Timing<'_>, resp: &Response) {
         let info = NsPerfResourceInfo {
-            timeline: timing.timeline.0.cast(),
+            timeline: timing.timeline.0.as_ptr().cast_const(),
             document_url: unsafe { ns_js_realm_document_url(self.ptr(), timing.timeline.0) },
             render_blocking: 0,
             cors_mode: glib::boolean(timing.cors_mode),
@@ -1235,146 +1083,64 @@ impl Drop for Response {
     }
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-unsafe fn with_global(ctx: *mut JSContext, global: JSValue, f: fn(&mut Scope<'_>, &Value)) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            f(scope, &global);
-        })
-    }
+#[unsafe(no_mangle)]
+pub fn nsr_js_fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::fetch::fetch(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_fetch(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::fetch::fetch) }
-}
-
 #[allow(non_snake_case)]
-#[unsafe(no_mangle)]
-pub fn nsr_navigator_sendBeacon(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
+pub fn nsr_navigator_sendBeacon(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::beacon::send_beacon(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_navigator_sendBeacon(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::beacon::send_beacon) }
+pub fn nsr_window_response_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::body::response_ctor(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_response_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::body::response_ctor) }
+pub fn nsr_window_request_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::body::request_ctor(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_request_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::body::request_ctor) }
+pub fn nsr_window_xhr_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    crate::xhr::construct(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_fetch_install_interfaces(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_global(ctx, global, crate::body::install) }
+pub fn nsr_window_abort_controller_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> JsResult {
+    crate::abort::controller_ctor(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_xhr_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::xhr::construct) }
+pub fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
+    crate::body::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_xhr_install_interface(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_global(ctx, global, crate::xhr::install) }
+pub fn nsr_xhr_install_interface(scope: &mut Scope<'_>, global: &Value) {
+    crate::xhr::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_websocket_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::socket::websocket_ctor) }
+pub fn nsr_js_net_install_sockets(scope: &mut Scope<'_>, global: &Value) {
+    crate::socket::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_eventsource_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::socket::event_source_ctor) }
+pub fn nsr_net_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
+    crate::install_interfaces(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_install_sockets(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_global(ctx, global, crate::socket::install) }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_net_install_interfaces(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    target: &southstar_js_engine::Value,
-) {
-    crate::install_interfaces(scope, target);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_install_interfaces(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_global(ctx, global, crate::install_interfaces) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_abort_controller_ctor(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::abort::controller_ctor) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_install_abort_signal_interface(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_global(ctx, global, crate::abort::install) }
+pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value) {
+    crate::abort::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
@@ -1532,27 +1298,4 @@ pub(crate) unsafe extern "C" fn on_abort_timeout(data: *mut c_void) -> GBoolean 
 pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::TimeoutTicket) {
     let data = Box::into_raw(Box::new(ticket)).cast();
     js.attach_timeout(ms, on_abort_timeout, data);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_window_response_ctor(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::body::response_ctor(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_window_request_ctor(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::body::request_ctor(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
-    crate::body::install(scope, global);
 }

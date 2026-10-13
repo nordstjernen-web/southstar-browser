@@ -179,57 +179,6 @@ pub unsafe extern "C" fn ns_js_bytes_view(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_body_bytes(
-    ctx: *mut JSContext,
-    value: JSValue,
-    out_len: *mut usize,
-) -> *mut c_char {
-    if !out_len.is_null() {
-        unsafe { *out_len = 0 };
-    }
-    let value = unsafe { borrowed(ctx, value) };
-    let bytes = unsafe { with_scope(ctx, |scope| api::body_bytes(scope, &value)) };
-    let Some(bytes) = bytes else {
-        return ptr::null_mut();
-    };
-    if !out_len.is_null() {
-        unsafe { *out_len = bytes.len() };
-    }
-    super::glue::g_bytes(&bytes)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_value_is_url_search_params(
-    ctx: *mut JSContext,
-    value: JSValue,
-) -> GBoolean {
-    let value = unsafe { borrowed(ctx, value) };
-    let usp = unsafe { with_scope(ctx, |scope| api::is_url_search_params(scope, &value)) };
-    glib::boolean(usp)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_usp_serialize(
-    ctx: *mut JSContext,
-    usp: JSValue,
-    out_len: *mut usize,
-    out_content_type: *mut *mut c_char,
-) -> *mut c_char {
-    if !out_content_type.is_null() {
-        unsafe {
-            *out_content_type =
-                glib::g_strdup(c"application/x-www-form-urlencoded;charset=UTF-8".as_ptr())
-        };
-    }
-    let usp = unsafe { borrowed(ctx, usp) };
-    let bytes = unsafe { with_scope(ctx, |scope| api::usp_serialize(scope, &usp)) };
-    if !out_len.is_null() {
-        unsafe { *out_len = bytes.len() };
-    }
-    super::glue::g_bytes(&bytes)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_promise_reject(
     ctx: *mut JSContext,
     resolvers: *mut JSValue,
@@ -359,21 +308,6 @@ pub unsafe extern "C" fn ns_js_iframe_document(js: *const NsJs, out: *mut JSValu
     let document = api::iframe_document(js);
     unsafe { *out = document.as_ref().map_or(quickjs::UNDEFINED, quickjs::raw) };
     glib::boolean(document.is_some())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_enter_handler_realm(
-    ctx: *mut JSContext,
-    obj: JSValue,
-    kind: *const c_char,
-) -> *mut c_void {
-    let obj = unsafe { borrowed(ctx, obj) };
-    let kind = super::glue::text(kind).map(|kind| kind.to_string_lossy().into_owned());
-    unsafe {
-        with_scope(ctx, |scope| {
-            api::enter_handler_realm(scope, &obj, kind.as_deref().unwrap_or(""))
-        })
-    }
 }
 
 #[unsafe(no_mangle)]
