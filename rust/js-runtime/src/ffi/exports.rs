@@ -1174,3 +1174,28 @@ pub unsafe fn nsr_js_frame_load_enter(
     let realm_doc = realm_doc.is_object().then(|| realm_doc.clone());
     scopes::frame_load_enter(Js(js), frame, doc, url, realm_doc)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_timer_scope_leave(
+    token: *mut c_void,
+    exception: Option<southstar_js_engine::Value>,
+) {
+    unsafe { crate::api::timer_scope_leave(token, exception) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_this_is_detached_window(
+    js: *mut NsJs,
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+) -> bool {
+    crate::api::this_is_detached_window(js, scope, this)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_new_document_object(
+    js: *mut NsJs,
+    scope: &mut southstar_js_engine::Scope<'_>,
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::api::new_document_object(js, scope)
+}

@@ -174,6 +174,91 @@ unsafe extern "Rust" {
         realm: ContextHandle,
         proto: &Value,
     ) -> Value;
+    pub(crate) safe fn nsr_services_alert(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_set_timeout(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_set_interval(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_clear_timer(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_camera_request(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_camera_release(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_mic_release(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_camera_label(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_camera_enumerate(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_confirm(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_prompt(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_match_media(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_request_idle_callback(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_queue_microtask(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_notification_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_cache_open(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_services_install_console(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_services_install_clipboard_item(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_services_install_screen(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_services_install_rtc(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_install_idle_deadline(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_services_window_navigator(scope: &mut Scope<'_>) -> Value;
     pub(crate) safe fn nsr_services_worker_navigator(scope: &mut Scope<'_>) -> Value;
     pub(crate) safe fn nsr_tag_owner_document(

@@ -444,6 +444,14 @@ pub unsafe extern "C" fn ns_perf_supported_entry_types(ctx: *mut JSContext) -> J
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_perf_install_entry_list(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    target: &southstar_js_engine::Value,
+) {
+    crate::install_entry_list(scope, target);
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_perf_install_entry_list(ctx: *mut JSContext, global: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {

@@ -96,6 +96,16 @@ unsafe fn native(
     unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
 }
 
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_window_fontface_ctor(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    font_face::construct(scope, this, args)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_fontface_ctor(
     ctx: *mut JSContext,

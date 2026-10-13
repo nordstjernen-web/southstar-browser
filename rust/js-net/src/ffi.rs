@@ -1264,6 +1264,16 @@ pub unsafe extern "C" fn ns_js_fetch(
     unsafe { native(ctx, this_val, argc, argv, crate::fetch::fetch) }
 }
 
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_navigator_sendBeacon(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::beacon::send_beacon(scope, this, args)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_navigator_sendBeacon(
     ctx: *mut JSContext,
@@ -1337,6 +1347,14 @@ pub unsafe extern "C" fn ns_window_eventsource_ctor(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_net_install_sockets(ctx: *mut JSContext, global: JSValue) {
     unsafe { with_global(ctx, global, crate::socket::install) }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_net_install_interfaces(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    target: &southstar_js_engine::Value,
+) {
+    crate::install_interfaces(scope, target);
 }
 
 #[unsafe(no_mangle)]

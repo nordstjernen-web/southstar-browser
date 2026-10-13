@@ -65,10 +65,26 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     let global = scope.global();
     imports::nsr_worker_install_console(scope, &global);
     let functions: [(&str, Binding, u32); 11] = [
-        ("setTimeout", Binding::Raw(ns_services_set_timeout), 2),
-        ("setInterval", Binding::Raw(ns_services_set_interval), 2),
-        ("clearTimeout", Binding::Raw(ns_services_clear_timer), 1),
-        ("clearInterval", Binding::Raw(ns_services_clear_timer), 1),
+        (
+            "setTimeout",
+            Binding::Rust(imports::nsr_services_set_timeout),
+            2,
+        ),
+        (
+            "setInterval",
+            Binding::Rust(imports::nsr_services_set_interval),
+            2,
+        ),
+        (
+            "clearTimeout",
+            Binding::Rust(imports::nsr_services_clear_timer),
+            1,
+        ),
+        (
+            "clearInterval",
+            Binding::Rust(imports::nsr_services_clear_timer),
+            1,
+        ),
         (
             "postMessage",
             Binding::Rust(imports::nsr_worker_global_post_message),
@@ -87,7 +103,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         ),
         (
             "queueMicrotask",
-            Binding::Raw(ns_services_queue_microtask),
+            Binding::Rust(imports::nsr_services_queue_microtask),
             1,
         ),
         ("btoa", Binding::Raw(ns_window_btoa), 1),

@@ -6,7 +6,7 @@ use southstar_js_bind::{
     attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
     bind_prototype_function_if_missing, bind_prototype_native_if_missing, prototype_of,
 };
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::imports;
 use crate::ffi::natives::*;
@@ -241,7 +241,7 @@ fn install_window(js: Js, scope: &mut Scope<'_>) {
     let element_proto = register_classes(scope);
     let global = scope.global();
     register_storage_and_named(scope, &global);
-    ffi::install(scope, ns_services_install_console, &global);
+    ffi::imports::nsr_services_install_console(scope, &global);
     install_timers_and_navigator(js, scope, &global);
     install_performance(js, scope, &global);
     install_window_members(js, scope, &global);
@@ -292,53 +292,72 @@ fn register_storage_and_named(scope: &mut Scope<'_>, global: &Value) {
 }
 
 fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
-    bind_fn(scope, global, "alert", ns_services_alert, 1);
+    bind_native(scope, global, "alert", 1, ffi::imports::nsr_services_alert);
     let engine_name = ffi::engine_name_native(scope);
     let _ = bind_function(scope, global, "__jsEngine", engine_name);
-    bind_fn(scope, global, "setTimeout", ns_services_set_timeout, 2);
-    bind_fn(scope, global, "setInterval", ns_services_set_interval, 2);
-    bind_fn(scope, global, "clearTimeout", ns_services_clear_timer, 1);
-    bind_fn(scope, global, "clearInterval", ns_services_clear_timer, 1);
+    bind_native(
+        scope,
+        global,
+        "setTimeout",
+        2,
+        ffi::imports::nsr_services_set_timeout,
+    );
+    bind_native(
+        scope,
+        global,
+        "setInterval",
+        2,
+        ffi::imports::nsr_services_set_interval,
+    );
+    bind_native(
+        scope,
+        global,
+        "clearTimeout",
+        1,
+        ffi::imports::nsr_services_clear_timer,
+    );
+    bind_native(
+        scope,
+        global,
+        "clearInterval",
+        1,
+        ffi::imports::nsr_services_clear_timer,
+    );
     bind_fn(scope, global, "fetch", ns_js_fetch, 1);
     imports::nsr_window_bind_post_message(scope, global);
 
     bind_ctor(scope, global, "Navigator", ns_illegal_constructor, 0);
     let navigator = ffi::window_navigator(scope);
-    bind_fn(
-        scope,
-        global,
-        "__nd_camera_request",
-        ns_services_camera_request,
-        2,
-    );
-    bind_fn(
-        scope,
-        global,
-        "__nd_camera_release",
-        ns_services_camera_release,
-        0,
-    );
-    bind_fn(
-        scope,
-        global,
-        "__nd_mic_release",
-        ns_services_mic_release,
-        0,
-    );
-    bind_fn(
-        scope,
-        global,
-        "__nd_camera_label",
-        ns_services_camera_label,
-        0,
-    );
-    bind_fn(
-        scope,
-        global,
-        "__nd_camera_enumerate",
-        ns_services_camera_enumerate,
-        0,
-    );
+    let camera: [(&str, NativeFn, u32); 5] = [
+        (
+            "__nd_camera_request",
+            ffi::imports::nsr_services_camera_request,
+            2,
+        ),
+        (
+            "__nd_camera_release",
+            ffi::imports::nsr_services_camera_release,
+            0,
+        ),
+        (
+            "__nd_mic_release",
+            ffi::imports::nsr_services_mic_release,
+            0,
+        ),
+        (
+            "__nd_camera_label",
+            ffi::imports::nsr_services_camera_label,
+            0,
+        ),
+        (
+            "__nd_camera_enumerate",
+            ffi::imports::nsr_services_camera_enumerate,
+            0,
+        ),
+    ];
+    for (name, native, arity) in camera {
+        bind_native(scope, global, name, arity, native);
+    }
     imports::nsr_sw_install_container(scope, &navigator);
     #[cfg(feature = "webgpu")]
     js.install_webgpu(scope, &navigator);
@@ -529,13 +548,13 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         bind_fn(scope, global, name, native, arity);
     }
     bind_native(scope, global, "open", 3, imports::nsr_window_open_method);
-    let dialog_methods: [(&str, Native, u32); 3] = [
-        ("confirm", ns_services_confirm, 1),
-        ("prompt", ns_services_prompt, 2),
-        ("matchMedia", ns_services_match_media, 1),
+    let service_methods: [(&str, NativeFn, u32); 3] = [
+        ("confirm", ffi::imports::nsr_services_confirm, 1),
+        ("prompt", ffi::imports::nsr_services_prompt, 2),
+        ("matchMedia", ffi::imports::nsr_services_match_media, 1),
     ];
-    for (name, native, arity) in dialog_methods {
-        bind_fn(scope, global, name, native, arity);
+    for (name, native, arity) in service_methods {
+        bind_native(scope, global, name, arity, native);
     }
     ffi::install(scope, ns_cssom_install_window, global);
     bind_fn(
@@ -596,7 +615,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     let _ = bind_int_constants(scope, global, "MediaError", MEDIA_ERRORS);
     bind_ctor(scope, global, "StaticRange", ns_static_range_ctor, 1);
     bind_ctor(scope, global, "VTTCue", ns_vtt_cue_ctor, 3);
-    ffi::install(scope, ns_services_install_clipboard_item, global);
+    ffi::imports::nsr_services_install_clipboard_item(scope, global);
     bind_constructor(
         scope,
         global,
@@ -681,7 +700,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     ffi::install(scope, ns_install_abort_signal_interface, global);
 
     let caches = scope.new_object();
-    bind_fn(scope, &caches, "open", ns_cache_open, 1);
+    bind_native(scope, &caches, "open", 1, ffi::imports::nsr_cache_open);
     bind_fn(scope, &caches, "has", ns_returns_resolved_false, 1);
     bind_fn(scope, &caches, "delete", ns_returns_resolved_false, 1);
     bind_fn(scope, &caches, "keys", ns_returns_resolved_empty_array, 0);
@@ -790,23 +809,23 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         let _ = scope.set(global, name, Value::null());
     }
     bind_fn(scope, global, "getSelection", ns_window_get_selection, 0);
-    bind_fn(
+    bind_native(
         scope,
         global,
         "requestIdleCallback",
-        ns_services_request_idle_callback,
         2,
+        ffi::imports::nsr_services_request_idle_callback,
     );
-    bind_fn(
+    bind_native(
         scope,
         global,
         "cancelIdleCallback",
-        ns_services_clear_timer,
         1,
+        ffi::imports::nsr_services_clear_timer,
     );
-    ffi::install(scope, ns_install_idle_deadline, global);
+    ffi::imports::nsr_install_idle_deadline(scope, global);
     js.install_window_state(scope, global);
-    ffi::install(scope, ns_services_install_screen, global);
+    ffi::imports::nsr_services_install_screen(scope, global);
 
     bind_fn(
         scope,
@@ -822,12 +841,12 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
         imports::nsr_window_report_error,
     );
-    bind_fn(
+    bind_native(
         scope,
         global,
         "queueMicrotask",
-        ns_services_queue_microtask,
         1,
+        ffi::imports::nsr_services_queue_microtask,
     );
     bind_constructor(
         scope,
@@ -844,13 +863,13 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
         imports::nsr_window_broadcast_channel,
     );
-    ffi::install(scope, ns_services_install_rtc, global);
-    bind_ctor(
+    ffi::imports::nsr_services_install_rtc(scope, global);
+    bind_constructor(
         scope,
         global,
         "Notification",
-        ns_services_notification_ctor,
         2,
+        ffi::imports::nsr_services_notification_ctor,
     );
     imports::nsr_worker_install_constructor(scope, global);
     ffi::install(scope, ns_js_net_install_sockets, global);

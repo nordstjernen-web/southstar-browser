@@ -388,6 +388,26 @@ macro_rules! hook_setters {
     };
 }
 
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_eme_request_access(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    eme::request_access(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_media_capabilities_info(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    support::decoding_info(scope, this, args)
+}
+
 methods! {
     ns_eme_request_access => eme::request_access;
     ns_media_set_media_keys => eme::set_media_keys;

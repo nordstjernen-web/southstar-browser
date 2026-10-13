@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the window services as declared in src/js_internal.h, and the js.c, network and system calls they make.
+//! Southstar — the window services' nsr_ entry points and C helpers, and the js.c, network and system calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,8 +6,7 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::screen::{self, Metrics};
 use crate::{
@@ -25,7 +24,7 @@ struct TimerScope {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Realm(*mut JSContext);
+pub(crate) struct Realm(ContextHandle);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Frame(*const c_void);
@@ -63,17 +62,11 @@ unsafe extern "C" {
     fn ns_js_timer_gate(js: *const NsJs, frame: *const c_void, idle_expired: GBoolean) -> c_int;
     fn ns_js_timer_scope_enter(
         js: *const NsJs,
-        ctx: *mut JSContext,
+        ctx: ContextHandle,
         frame: *const c_void,
     ) -> *mut TimerScope;
-    fn ns_js_timer_scope_context(scope: *const TimerScope) -> *mut JSContext;
-    fn ns_js_timer_scope_leave(scope: *mut TimerScope, threw: GBoolean, exception: JSValue);
-    fn ns_timer_this_is_detached_window(
-        js: *const NsJs,
-        ctx: *mut JSContext,
-        this_val: JSValue,
-    ) -> GBoolean;
-    fn ns_js_context_frame(js: *const NsJs, ctx: *mut JSContext) -> *const c_void;
+    fn ns_js_timer_scope_context(scope: *const TimerScope) -> ContextHandle;
+    fn ns_js_context_frame(js: *const NsJs, ctx: ContextHandle) -> *const c_void;
     fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64;
     fn ns_js_source_remove(js: *const NsJs, id: c_uint);
     fn ns_js_glib_context(js: *const NsJs) -> *mut c_void;
@@ -101,17 +94,15 @@ pub(crate) fn monotonic_us() -> i64 {
 }
 
 pub(crate) fn realm_of(scope: &Scope<'_>) -> Realm {
-    Realm(quickjs::raw_context(scope))
+    Realm(scope.handle())
 }
 
 pub(crate) fn context_frame(scope: &Scope<'_>, js: Js) -> Frame {
-    Frame(unsafe { ns_js_context_frame(js.0, quickjs::raw_context(scope)) })
+    Frame(unsafe { ns_js_context_frame(js.0, scope.handle()) })
 }
 
-pub(crate) fn this_is_detached_window(scope: &Scope<'_>, js: Js, this: &Value) -> bool {
-    unsafe {
-        ns_timer_this_is_detached_window(js.0, quickjs::raw_context(scope), quickjs::raw(this)) != 0
-    }
+pub(crate) fn this_is_detached_window(scope: &mut Scope<'_>, js: Js, this: &Value) -> bool {
+    unsafe { nsr_this_is_detached_window(js.0.cast_mut(), scope, this) }
 }
 
 pub(crate) fn idle_frame_end(js: Js, now: i64, end: i64) -> i64 {
@@ -138,13 +129,8 @@ pub(crate) fn in_timer_scope(
 ) {
     let timer_scope = unsafe { ns_js_timer_scope_enter(js.0, realm.0, frame.0) };
     let ctx = unsafe { ns_js_timer_scope_context(timer_scope) };
-    let result = unsafe { quickjs::with_context(ctx, f) };
-    let (threw, exception) = match &result {
-        Ok(_) => (glib::FALSE, quickjs::UNDEFINED),
-        Err(error) => (glib::TRUE, quickjs::raw(error)),
-    };
-    unsafe { ns_js_timer_scope_leave(timer_scope, threw, exception) };
-    drop(result);
+    let result = ctx.with(f).unwrap_or_else(|| Ok(Value::undefined()));
+    unsafe { nsr_timer_scope_leave(timer_scope.cast(), result.err()) };
 }
 
 unsafe extern "C" fn timer_source_fired(data: *mut c_void) -> GBoolean {
@@ -309,31 +295,6 @@ pub(crate) enum CMethod {
 }
 
 unsafe extern "C" {
-    fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
-    fn ns_target_dispatchEvent(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_navigator_sendBeacon(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_eme_request_access(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_media_capabilities_info(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
     fn ns_js_user_activation_state(js: *const NsJs, ever: *mut GBoolean) -> GBoolean;
     fn ns_js_clipboard_write(js: *const NsJs, text: *const c_char) -> c_int;
     fn ns_js_selection_copyable(js: *const NsJs) -> GBoolean;
@@ -349,19 +310,51 @@ unsafe extern "C" {
     fn g_get_num_processors() -> c_uint;
     fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
     fn ns_js_log_line(js: *const NsJs, line: *const c_char);
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
-    fn ns_target_fire_event(ctx: *mut JSContext, obj: JSValue, kind: *const c_char);
-    fn ns_target_make_event(ctx: *mut JSContext, target: JSValue, kind: *const c_char) -> JSValue;
-    fn ns_target_dispatch_with_event(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        kind: *const c_char,
-        event: JSValue,
-    );
-    fn ns_event_adopt_interface(ctx: *mut JSContext, event: JSValue, iface: *const c_char);
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_css_media_list_serialize(query: *const c_char) -> *mut c_char;
     fn ns_css_set_device_size(width: f64, height: f64);
+}
+
+unsafe extern "Rust" {
+    unsafe fn nsr_timer_scope_leave(token: *mut c_void, exception: Option<Value>);
+    unsafe fn nsr_this_is_detached_window(
+        js: *mut NsJs,
+        scope: &mut Scope<'_>,
+        this: &Value,
+    ) -> bool;
+    safe fn nsr_bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value);
+    #[allow(non_snake_case)]
+    safe fn nsr_target_dispatchEvent(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    #[allow(non_snake_case)]
+    safe fn nsr_navigator_sendBeacon(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_eme_request_access(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_media_capabilities_info(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str);
+    safe fn nsr_target_make_event(scope: &mut Scope<'_>, target: &Value, kind: &str) -> Value;
+    safe fn nsr_target_dispatch_with_event(
+        scope: &mut Scope<'_>,
+        obj: &Value,
+        kind: &str,
+        ev: &Value,
+    );
+    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
 }
 
 fn c_string(text: &str) -> CString {
@@ -389,45 +382,19 @@ pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) 
     if js.is_null() {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.0) };
-    if ctx.is_null() {
-        return None;
-    }
-    Some(unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.0) }.non_null()?.with(f)
 }
 
 pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &str) {
-    let kind = c_string(kind);
-    unsafe {
-        ns_target_fire_event(
-            quickjs::raw_context(scope),
-            quickjs::raw(target),
-            kind.as_ptr(),
-        )
-    };
+    nsr_target_fire_event(scope, target, kind);
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, target: &Value, kind: &str) -> Value {
-    let kind = c_string(kind);
-    let raw = unsafe {
-        ns_target_make_event(
-            quickjs::raw_context(scope),
-            quickjs::raw(target),
-            kind.as_ptr(),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_target_make_event(scope, target, kind)
 }
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
-    let iface = c_string(iface);
-    unsafe {
-        ns_event_adopt_interface(
-            quickjs::raw_context(scope),
-            quickjs::raw(event),
-            iface.as_ptr(),
-        )
-    };
+    nsr_event_adopt_interface(scope, event, iface);
 }
 
 pub(crate) fn dispatch_with_event(
@@ -436,15 +403,7 @@ pub(crate) fn dispatch_with_event(
     kind: &str,
     event: &Value,
 ) {
-    let kind = c_string(kind);
-    unsafe {
-        ns_target_dispatch_with_event(
-            quickjs::raw_context(scope),
-            quickjs::raw(target),
-            kind.as_ptr(),
-            quickjs::raw(event),
-        )
-    };
+    nsr_target_dispatch_with_event(scope, target, kind, event);
 }
 
 pub(crate) fn media_query_matches(query: Option<&str>) -> bool {
@@ -508,27 +467,27 @@ pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
-fn text(p: *const c_char) -> String {
+pub(crate) fn text(p: *const c_char) -> String {
     unsafe { glib::bytes(p) }
         .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
         .unwrap_or_default()
 }
 
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
-    unsafe { ns_bind_event_target_listeners(quickjs::raw_context(scope), quickjs::raw(object)) };
+    nsr_bind_event_target_listeners(scope, object);
 }
 
 pub(crate) fn c_method(scope: &mut Scope<'_>, name: &str, arity: u32, method: CMethod) -> Value {
-    let f: quickjs::JSCFunction = match method {
-        CMethod::DispatchEvent => ns_target_dispatchEvent,
-        CMethod::SendBeacon => ns_navigator_sendBeacon,
-        CMethod::EmeRequestAccess => ns_eme_request_access,
-        CMethod::MediaCapabilitiesInfo => ns_media_capabilities_info,
+    let f: southstar_js_engine::NativeFn = match method {
+        CMethod::DispatchEvent => nsr_target_dispatchEvent,
+        CMethod::SendBeacon => nsr_navigator_sendBeacon,
+        CMethod::EmeRequestAccess => nsr_eme_request_access,
+        CMethod::MediaCapabilitiesInfo => nsr_media_capabilities_info,
     };
-    quickjs::c_function(scope, name, arity, f)
+    scope.function(name, arity, f)
 }
 
 pub(crate) fn user_activation(js: Js) -> (bool, bool) {
@@ -679,86 +638,67 @@ pub(crate) fn physical_memory_bytes() -> Option<u64> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_window_navigator(ctx: *mut JSContext) -> JSValue {
-    unsafe { quickjs::with_context(ctx, |scope| quickjs::into_raw(navigator::window(scope))) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_worker_navigator(ctx: *mut JSContext) -> JSValue {
-    unsafe { quickjs::with_context(ctx, |scope| quickjs::into_raw(navigator::worker(scope))) }
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_services_chrome_compat() -> GBoolean {
     glib::boolean(navigator::chrome_compat())
-}
-
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
 }
 
 macro_rules! export_native {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
 export_native! {
-    ns_services_alert => console::alert,
-    ns_services_confirm => commands::confirm,
-    ns_services_prompt => commands::prompt,
-    ns_services_exec_command => commands::exec_command,
-    ns_services_query_command_supported => commands::query_command_supported,
-    ns_services_query_command_enabled => commands::query_command_enabled,
-    ns_services_queue_microtask => window::queue_microtask,
-    ns_services_notification_ctor => window::notification,
-    ns_services_match_media => media::match_media,
-    ns_services_set_timeout => timers::set_timeout,
-    ns_services_set_interval => timers::set_interval,
-    ns_services_clear_timer => timers::clear,
-    ns_element_async_method => timers::element_async,
-    ns_cache_open => caches::open,
-    ns_services_request_idle_callback => timers::request_idle_callback,
-    ns_services_camera_request => camera::request,
-    ns_services_camera_release => camera::release,
-    ns_services_mic_release => camera::mic_release,
-    ns_services_camera_label => camera::label,
-    ns_services_camera_enumerate => camera::enumerate,
+    nsr_services_alert => console::alert,
+    nsr_services_confirm => commands::confirm,
+    nsr_services_prompt => commands::prompt,
+    nsr_services_exec_command => commands::exec_command,
+    nsr_services_query_command_supported => commands::query_command_supported,
+    nsr_services_query_command_enabled => commands::query_command_enabled,
+    nsr_services_queue_microtask => window::queue_microtask,
+    nsr_services_notification_ctor => window::notification,
+    nsr_services_match_media => media::match_media,
+    nsr_services_set_timeout => timers::set_timeout,
+    nsr_services_set_interval => timers::set_interval,
+    nsr_services_clear_timer => timers::clear,
+    nsr_element_async_method => timers::element_async,
+    nsr_cache_open => caches::open,
+    nsr_services_request_idle_callback => timers::request_idle_callback,
+    nsr_services_camera_request => camera::request,
+    nsr_services_camera_release => camera::release,
+    nsr_services_mic_release => camera::mic_release,
+    nsr_services_camera_label => camera::label,
+    nsr_services_camera_enumerate => camera::enumerate,
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_element_async_method(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    timers::element_async(scope, this, args)
+pub fn nsr_install_idle_deadline(scope: &mut Scope<'_>, global: &Value) {
+    timers::install_idle_deadline_interface(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_install_idle_deadline(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            timers::install_idle_deadline_interface(scope, &global);
-        })
-    }
+pub fn nsr_services_install_console(scope: &mut Scope<'_>, global: &Value) {
+    console::install(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_install_rtc(scope: &mut Scope<'_>, global: &Value) {
+    rtc::install(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_install_clipboard_item(scope: &mut Scope<'_>, global: &Value) {
+    clipboard_item::install(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_services_install_screen(scope: &mut Scope<'_>, global: &Value) {
+    screen::install(scope, global);
 }
 
 #[unsafe(no_mangle)]
@@ -789,71 +729,6 @@ pub unsafe extern "C" fn ns_services_purge_frame_timers(js: *const NsJs, frame: 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_services_timer_remove(js: *const NsJs, id: c_int) {
     timers::remove(Js(js), id);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_install_console(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            console::install(scope, &global);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_install_rtc(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            rtc::install(scope, &global);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_install_clipboard_item(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            clipboard_item::install(scope, &global);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_install_screen(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            screen::install(scope, &global);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_console_emit(
-    js: *const NsJs,
-    prefix: *const c_char,
-    ctx: *mut JSContext,
-    argc: c_int,
-    argv: *mut JSValue,
-) {
-    let prefix = text(prefix);
-    let raw_args = if argv.is_null() || argc <= 0 {
-        &[][..]
-    } else {
-        unsafe { core::slice::from_raw_parts(argv, argc as usize) }
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let args: Vec<Value> = raw_args
-                .iter()
-                .map(|&raw| quickjs::borrow_value(scope, raw))
-                .collect();
-            console::emit(scope, Js(js), &prefix, &args);
-        })
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -903,16 +778,12 @@ pub unsafe extern "C" fn ns_services_teardown(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_services_window_navigator(
-    scope: &mut southstar_js_engine::Scope<'_>,
-) -> southstar_js_engine::Value {
+pub fn nsr_services_window_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::window(scope)
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_services_worker_navigator(
-    scope: &mut southstar_js_engine::Scope<'_>,
-) -> southstar_js_engine::Value {
+pub fn nsr_services_worker_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::worker(scope)
 }
 
@@ -924,23 +795,4 @@ pub fn nsr_services_console_emit(
     args: &[Value],
 ) {
     console::emit(scope, Js(js), prefix, args);
-}
-
-macro_rules! nsr_natives {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
-                $f(scope, this, args)
-            }
-        )*
-    };
-}
-
-nsr_natives! {
-    nsr_cache_open => caches::open,
-    nsr_services_set_timeout => timers::set_timeout,
-    nsr_services_set_interval => timers::set_interval,
-    nsr_services_clear_timer => timers::clear,
-    nsr_services_queue_microtask => window::queue_microtask,
 }

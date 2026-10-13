@@ -40,21 +40,6 @@ macro_rules! context_installers {
 }
 
 natives! {
-    ns_services_alert,
-    ns_services_set_timeout,
-    ns_services_set_interval,
-    ns_services_clear_timer,
-    ns_services_camera_request,
-    ns_services_camera_release,
-    ns_services_mic_release,
-    ns_services_camera_label,
-    ns_services_camera_enumerate,
-    ns_services_confirm,
-    ns_services_prompt,
-    ns_services_match_media,
-    ns_services_request_idle_callback,
-    ns_services_queue_microtask,
-    ns_services_notification_ctor,
     ns_js_fetch,
     ns_mutation_observer_ctor,
     ns_mutation_observer_observe,
@@ -104,7 +89,6 @@ natives! {
     ns_window_usp_ctor,
     ns_window_xhr_ctor,
     ns_window_abort_controller_ctor,
-    ns_cache_open,
     ns_returns_resolved_false,
     ns_returns_resolved_empty_array,
     ns_returns_resolved_undefined,
@@ -118,10 +102,6 @@ natives! {
 }
 
 installers! {
-    ns_services_install_console,
-    ns_services_install_clipboard_item,
-    ns_services_install_screen,
-    ns_services_install_rtc,
     ns_perf_install_entry_list,
     ns_cssom_install_window,
     ns_js_input_install_wpt,
@@ -131,7 +111,6 @@ installers! {
     ns_install_abort_signal_interface,
     ns_net_install_text_codecs,
     ns_fetch_install_interfaces,
-    ns_install_idle_deadline,
     ns_js_net_install_sockets,
     ns_cssom_install_css,
     ns_crypto_install_window_subtle,

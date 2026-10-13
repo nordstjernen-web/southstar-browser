@@ -8,6 +8,8 @@ mod clipboard_item;
 pub mod commands;
 mod console;
 mod ffi;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod media;
 mod navigator;
 mod rtc;

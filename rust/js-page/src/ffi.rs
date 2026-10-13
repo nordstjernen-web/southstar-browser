@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of page installation as declared in src/js.h, and the js.c accessors and binding installers it calls.
+//! Southstar — the C ABI of page installation as declared in src/js.h, and the realm accessors and binding installers it calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
-use southstar_js_engine::quickjs::{self, JSCFunction, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, MemoryUsage, NativeFn, Scope, Value};
 
 use crate::{Element, run, stats};
 
@@ -103,18 +102,18 @@ pub(crate) enum Native {
 }
 
 impl Native {
-    fn function(self) -> JSCFunction {
+    fn function(self) -> NativeFn {
         match self {
-            Native::IllegalConstructor => ns_illegal_constructor,
-            Native::EventConstructor => ns_window_event_ctor,
-            Native::FontFaceConstructor => ns_window_fontface_ctor,
-            Native::XmlSerializerConstructor => ns_xml_serializer_ctor,
-            Native::Range => ns_native_range,
-            Native::LiveLength => ns_live_length_get,
-            Native::DocumentOpen => ns_document_open,
-            Native::DocumentClose => ns_document_close,
-            Native::DocumentWrite => ns_document_write,
-            Native::DocumentWriteln => ns_document_writeln,
+            Native::IllegalConstructor => nsr_illegal_constructor,
+            Native::EventConstructor => nsr_window_event_ctor,
+            Native::FontFaceConstructor => nsr_window_fontface_ctor,
+            Native::XmlSerializerConstructor => nsr_xml_serializer_ctor,
+            Native::Range => nsr_native_range,
+            Native::LiveLength => nsr_live_length_get,
+            Native::DocumentOpen => nsr_document_open,
+            Native::DocumentClose => nsr_document_close,
+            Native::DocumentWrite => nsr_document_write,
+            Native::DocumentWriteln => nsr_document_writeln,
         }
     }
 }
@@ -158,22 +157,19 @@ pub(crate) enum ValueInstaller {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_set_current_url(js: *mut NsJs, url: *const c_char);
     fn ns_js_set_document(js: *mut NsJs, doc: *mut NsNode, origin: *mut c_char);
-    fn ns_js_new_document_object(js: *mut NsJs) -> JSValue;
-    fn ns_js_install_proto_table(ctx: *mut JSContext, proto: JSValue, table: c_int);
-    fn ns_js_host_class_proto(ctx: *mut JSContext, which: c_int) -> JSValue;
-    fn ns_js_brand_node_classes(ctx: *mut JSContext);
+    fn ns_js_brand_node_classes(ctx: ContextHandle);
     fn ns_js_release_pinned_wrappers(js: *mut NsJs);
     fn ns_js_free_frame_contexts(js: *mut NsJs);
     fn ns_js_frame_context_count(js: *const NsJs) -> c_uint;
     fn ns_js_eval_polyfills(js: *mut NsJs);
-    fn ns_js_link_interfaces(ctx: *mut JSContext);
+    fn ns_js_link_interfaces(ctx: ContextHandle);
     fn ns_js_snapshot_platform_globals(js: *mut NsJs);
     fn ns_js_clear_doc_ready_states(js: *mut NsJs);
     fn ns_js_set_ready_state(js: *mut NsJs, state: c_int);
@@ -217,94 +213,15 @@ unsafe extern "C" {
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
-    fn ns_document_define_doctype_getter(ctx: *mut JSContext, doc: JSValue);
-    fn ns_document_install_funcs(ctx: *mut JSContext, doc: JSValue);
-    fn ns_document_expose_legacy_named(ctx: *mut JSContext, root: *const NsNode, document: JSValue);
-    fn ns_document_lift_methods_to_proto(ctx: *mut JSContext, document: JSValue);
-    fn ns_window_make_location(ctx: *mut JSContext) -> JSValue;
-    fn ns_tree_walker_install_proto(ctx: *mut JSContext, proto: JSValue);
-    fn ns_install_event_handler_accessors(ctx: *mut JSContext, proto: JSValue);
-
-    fn ns_install_dom_hierarchy(ctx: *mut JSContext, global: JSValue);
-    fn ns_install_hasinstance(ctx: *mut JSContext, global: JSValue);
-    fn ns_install_tostringtag(ctx: *mut JSContext, global: JSValue);
-    fn ns_compression_install(ctx: *mut JSContext, global: JSValue);
-    fn ns_idb_install(ctx: *mut JSContext, global: JSValue);
-    fn ns_net_install_interfaces(ctx: *mut JSContext, global: JSValue);
-    fn ns_perf_install_entry_list(ctx: *mut JSContext, global: JSValue);
-    fn ns_live_wire_constructors(ctx: *mut JSContext, global: JSValue);
-    fn ns_install_event_attribute_getters(ctx: *mut JSContext, global: JSValue);
-
-    fn ns_install_web_api_shapes(ctx: *mut JSContext);
-    fn ns_install_navigator_shape(ctx: *mut JSContext);
-    fn ns_install_pdf_plugins(ctx: *mut JSContext);
-    fn ns_js_name_engine_members(ctx: *mut JSContext);
-    fn ns_js_shape_window_global(ctx: *mut JSContext);
-    fn ns_js_link_interface_ctors(ctx: *mut JSContext);
-    fn ns_js_lock_global_prototypes(ctx: *mut JSContext);
-    fn ns_install_node_shapes(ctx: *mut JSContext);
-    fn ns_install_element_shapes(ctx: *mut JSContext);
-
-    fn ns_illegal_constructor(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_event_ctor(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_fontface_ctor(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_xml_serializer_ctor(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_native_range(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_live_length_get(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_open(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_close(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_write(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_writeln(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
+    fn ns_install_web_api_shapes(ctx: ContextHandle);
+    fn ns_install_navigator_shape(ctx: ContextHandle);
+    fn ns_install_pdf_plugins(ctx: ContextHandle);
+    fn ns_js_name_engine_members(ctx: ContextHandle);
+    fn ns_js_shape_window_global(ctx: ContextHandle);
+    fn ns_js_link_interface_ctors(ctx: ContextHandle);
+    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
+    fn ns_install_node_shapes(ctx: ContextHandle);
+    fn ns_install_element_shapes(ctx: ContextHandle);
 
     fn ns_js_lifecycle_clear(js: *mut NsJs);
     fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
@@ -346,20 +263,89 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
 }
 
+unsafe extern "Rust" {
+    safe fn nsr_illegal_constructor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    unsafe fn nsr_new_document_object(js: *mut NsJs, scope: &mut Scope<'_>)
+    -> Result<Value, Value>;
+    safe fn nsr_window_event_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_window_fontface_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_xml_serializer_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_native_range(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_live_length_get(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_document_open(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_document_close(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_document_write(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_document_writeln(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    safe fn nsr_install_dom_hierarchy(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_install_hasinstance(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_install_tostringtag(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_compression_install(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_idb_install(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_net_install_interfaces(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_live_wire_constructors(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_document_install_funcs(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_document_lift_methods_to_proto(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, target: &Value);
+    safe fn nsr_js_install_proto_table(scope: &mut Scope<'_>, proto: &Value, table: c_int);
+    safe fn nsr_js_host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value;
+    safe fn nsr_window_make_location(scope: &mut Scope<'_>) -> Value;
+    unsafe fn nsr_document_expose_legacy_named(
+        scope: &mut Scope<'_>,
+        root: *const NsNode,
+        document: &Value,
+    );
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);
 
 impl Js {
-    fn ctx(self) -> *mut JSContext {
-        unsafe { ns_js_main_context(self.0) }
-    }
-
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let ctx = self.ctx();
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        unsafe { ns_js_main_context(self.0) }.non_null()?.with(f)
     }
 
     pub fn halted(self) -> bool {
@@ -471,7 +457,7 @@ impl Js {
     }
 
     pub fn new_document_object(self, scope: &mut Scope<'_>) -> Value {
-        unsafe { quickjs::take_value(scope, ns_js_new_document_object(self.0)) }
+        unsafe { nsr_new_document_object(self.0, scope) }.unwrap_or_else(|_| Value::undefined())
     }
 
     pub fn snapshot_platform_globals(self) {
@@ -624,7 +610,7 @@ pub(crate) fn hidden_child(node: Element) -> bool {
 }
 
 pub(crate) fn native(scope: &mut Scope<'_>, name: &str, arity: u32, native: Native) -> Value {
-    quickjs::c_function(scope, name, arity, native.function())
+    scope.function(name, arity, native.function())
 }
 
 pub(crate) fn native_constructor(
@@ -633,45 +619,34 @@ pub(crate) fn native_constructor(
     arity: u32,
     native: Native,
 ) -> Value {
-    quickjs::c_constructor_or_function(scope, name, arity, native.function())
+    scope.constructor_or_function(name, arity, native.function())
 }
 
 pub(crate) fn install_proto_table(scope: &mut Scope<'_>, proto: &Value, table: ProtoTable) {
-    unsafe {
-        ns_js_install_proto_table(
-            quickjs::raw_context(scope),
-            quickjs::raw(proto),
-            table as c_int,
-        )
-    };
+    nsr_js_install_proto_table(scope, proto, table as c_int);
 }
 
 pub(crate) fn host_class_proto(scope: &mut Scope<'_>, which: HostProto) -> Value {
-    let raw = unsafe { ns_js_host_class_proto(quickjs::raw_context(scope), which as c_int) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_js_host_class_proto(scope, which as c_int)
 }
 
 pub(crate) fn make_location(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_window_make_location(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_window_make_location(scope)
 }
 
 pub(crate) fn install_on(scope: &mut Scope<'_>, installer: Installer, global: &Value) {
-    let ctx = quickjs::raw_context(scope);
-    let global = quickjs::raw(global);
-    unsafe {
-        match installer {
-            Installer::DomHierarchy => ns_install_dom_hierarchy(ctx, global),
-            Installer::HasInstance => ns_install_hasinstance(ctx, global),
-            Installer::ToStringTag => ns_install_tostringtag(ctx, global),
-            Installer::Compression => ns_compression_install(ctx, global),
-            Installer::IndexedDb => ns_idb_install(ctx, global),
-            Installer::NetInterfaces => ns_net_install_interfaces(ctx, global),
-            Installer::PerfEntryList => ns_perf_install_entry_list(ctx, global),
-            Installer::LiveConstructors => ns_live_wire_constructors(ctx, global),
-            Installer::EventAttributeGetters => ns_install_event_attribute_getters(ctx, global),
-        }
-    }
+    let install = match installer {
+        Installer::DomHierarchy => nsr_install_dom_hierarchy,
+        Installer::HasInstance => nsr_install_hasinstance,
+        Installer::ToStringTag => nsr_install_tostringtag,
+        Installer::Compression => nsr_compression_install,
+        Installer::IndexedDb => nsr_idb_install,
+        Installer::NetInterfaces => nsr_net_install_interfaces,
+        Installer::PerfEntryList => nsr_perf_install_entry_list,
+        Installer::LiveConstructors => nsr_live_wire_constructors,
+        Installer::EventAttributeGetters => nsr_install_event_attribute_getters,
+    };
+    install(scope, global);
 }
 
 pub(crate) fn install_value(
@@ -680,22 +655,20 @@ pub(crate) fn install_value(
     value: &Value,
     root: *const NsNode,
 ) {
-    let ctx = quickjs::raw_context(scope);
-    let value = quickjs::raw(value);
-    unsafe {
-        match installer {
-            ValueInstaller::DoctypeGetter => ns_document_define_doctype_getter(ctx, value),
-            ValueInstaller::DocumentFunctions => ns_document_install_funcs(ctx, value),
-            ValueInstaller::LegacyNamed => ns_document_expose_legacy_named(ctx, root, value),
-            ValueInstaller::TreeWalkerProto => ns_tree_walker_install_proto(ctx, value),
-            ValueInstaller::EventHandlerAccessors => ns_install_event_handler_accessors(ctx, value),
-            ValueInstaller::LiftDocumentMethods => ns_document_lift_methods_to_proto(ctx, value),
-        }
+    match installer {
+        ValueInstaller::DoctypeGetter => nsr_document_define_doctype_getter(scope, value),
+        ValueInstaller::DocumentFunctions => nsr_document_install_funcs(scope, value),
+        ValueInstaller::LegacyNamed => unsafe {
+            nsr_document_expose_legacy_named(scope, root, value)
+        },
+        ValueInstaller::TreeWalkerProto => nsr_tree_walker_install_proto(scope, value),
+        ValueInstaller::EventHandlerAccessors => nsr_install_event_handler_accessors(scope, value),
+        ValueInstaller::LiftDocumentMethods => nsr_document_lift_methods_to_proto(scope, value),
     }
 }
 
 pub(crate) fn shape(scope: &mut Scope<'_>, shaper: Shaper) {
-    let ctx = quickjs::raw_context(scope);
+    let ctx = scope.handle();
     unsafe {
         match shaper {
             Shaper::WebApiShapes => ns_install_web_api_shapes(ctx),
@@ -713,8 +686,8 @@ pub(crate) fn shape(scope: &mut Scope<'_>, shaper: Shaper) {
     }
 }
 
-pub(crate) fn memory_usage(scope: &Scope<'_>) -> quickjs::MemoryUsage {
-    quickjs::memory_usage(scope)
+pub(crate) fn memory_usage(scope: &mut Scope<'_>) -> MemoryUsage {
+    scope.memory_usage()
 }
 
 unsafe fn c_text<'a>(p: *const c_char) -> Option<&'a CStr> {

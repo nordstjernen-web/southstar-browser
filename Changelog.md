@@ -71,6 +71,12 @@ Southstar Browser 0.9.9:
   dependencies and Rust-ABI entry points instead of C shims, the 2D
   context's drawing state holds an engine-neutral object identity, and all
   three build against Boa (once rust/js-runtime does).
+* The window services (rust/js-services: timers, navigator, console,
+  screen, matchMedia, camera, ClipboardItem, the WebRTC stubs) and page
+  installation (rust/js-page) no longer use raw QuickJS and build on Boa:
+  they export Rust-ABI entry points over the neutral API and call the other
+  binding crates through nsr_ twins, the services keep their C symbols only
+  for callers still on QuickJS, and the realm setup binds them directly.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

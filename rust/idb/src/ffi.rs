@@ -166,6 +166,14 @@ mod host {
     }
 }
 
+#[unsafe(no_mangle)]
+pub fn nsr_idb_install(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    target: &southstar_js_engine::Value,
+) {
+    crate::install(scope, target);
+}
+
 #[cfg(feature = "quickjs")]
 pub use host::partition;
 

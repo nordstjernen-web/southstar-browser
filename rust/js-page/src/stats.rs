@@ -8,7 +8,7 @@ use crate::ffi::{self, Js};
 
 pub(crate) fn dump(js: Js) -> String {
     let mut out = String::new();
-    if let Some(usage) = js.scope(|scope| ffi::memory_usage(scope)) {
+    if let Some(usage) = js.scope(ffi::memory_usage) {
         out.push_str("JavaScript heap\n");
         let _ = writeln!(out, "  used        {} bytes", usage.memory_used_size);
         let _ = writeln!(out, "  malloc      {} bytes", usage.malloc_size);

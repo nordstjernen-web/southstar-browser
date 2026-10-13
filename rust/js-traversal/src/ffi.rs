@@ -163,6 +163,16 @@ pub unsafe extern "C" fn ns_document_create_range(
     unsafe { native(ctx, this_val, argc, argv, crate::range::create_range) }
 }
 
+#[allow(non_snake_case)]
+#[unsafe(no_mangle)]
+pub fn nsr_native_range(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    this: &southstar_js_engine::Value,
+    args: &[southstar_js_engine::Value],
+) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
+    crate::range::native_range(scope, this, args)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_native_range(
     ctx: *mut JSContext,
@@ -201,6 +211,14 @@ pub unsafe extern "C" fn ns_document_create_node_iterator(
     argv: *mut JSValue,
 ) -> JSValue {
     unsafe { native(ctx, this_val, argc, argv, crate::iterator::create) }
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tree_walker_install_proto(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    target: &southstar_js_engine::Value,
+) {
+    crate::walker::install_proto(scope, target);
 }
 
 #[unsafe(no_mangle)]

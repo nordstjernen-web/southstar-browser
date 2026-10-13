@@ -164,6 +164,14 @@ pub(crate) fn internal_error(scope: &mut Scope<'_>, message: &str) -> Value {
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_compression_install(
+    scope: &mut southstar_js_engine::Scope<'_>,
+    target: &southstar_js_engine::Value,
+) {
+    crate::install(scope, target);
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_compression_install(ctx: *mut JSContext, global: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {
