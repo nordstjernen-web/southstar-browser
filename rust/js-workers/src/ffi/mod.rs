@@ -1,63 +1,24 @@
-//! Southstar — the C ABI of the messaging and worker bindings as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the messaging and worker bindings' exports (C for pointer-only calls, Rust ABI for natives) and the engine, network and GLib calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod imports;
+#[cfg(feature = "quickjs")]
+mod legacy;
+
 use core::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::CString;
+use std::sync::Arc;
 
 use southstar_js_bind::host::{self, HostKind};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_bind::{make_constructor, natives};
+use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 
+use self::imports::*;
+use crate::scope as worker_scope;
+use crate::service::{self, FetchRequest, FetchResult};
+use crate::worker::{self, ErrorReport, Host};
 use crate::{JsResult, broadcast, ports};
-
-type JobFunc =
-    unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
-
-unsafe extern "C" {
-    fn ns_target_handler_realm(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        kind: *const c_char,
-        listener_key: *const c_char,
-    ) -> *mut JSContext;
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_event_define_cancel_bubble(ctx: *mut JSContext, ev: JSValue);
-    fn ns_target_dispatch_with_event(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        kind: *const c_char,
-        ev: JSValue,
-    );
-    fn ns_js_budget_enter(js: *mut c_void) -> i64;
-    fn ns_js_budget_leave(js: *mut c_void, saved: i64);
-    fn ns_js_queue_message_task(
-        ctx: *mut JSContext,
-        func: JobFunc,
-        argc: c_int,
-        argv: *mut JSValue,
-    );
-    fn ns_listener_parse_options(
-        ctx: *mut JSContext,
-        opts: JSValue,
-        capture: *mut c_int,
-        once: *mut c_int,
-        passive: *mut c_int,
-        passive_set: *mut c_int,
-        signal_out: *mut JSValue,
-        strict_signal: c_int,
-    ) -> c_int;
-    fn ns_listeners_compact_dead(ctx: *mut JSContext, owner: JSValue);
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
-}
-
-fn raw_ctx(scope: &Scope<'_>) -> *mut JSContext {
-    quickjs::raw_context(scope)
-}
 
 pub(crate) fn is_message_port(value: &Value) -> bool {
     host::is(value, HostKind::MessagePort)
@@ -89,17 +50,15 @@ pub(crate) fn dom_exception(
     code: c_int,
     message: &CStr,
 ) -> Value {
-    unsafe { ns_throw_dom_exception(raw_ctx(scope), name.as_ptr(), code, message.as_ptr()) };
-    quickjs::take_exception(scope)
+    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn event_new(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_event_new(raw_ctx(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_event_new(scope).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn define_cancel_bubble(scope: &mut Scope<'_>, event: &Value) {
-    unsafe { ns_event_define_cancel_bubble(raw_ctx(scope), quickjs::raw(event)) };
+    nsr_event_define_cancel_bubble(scope, event);
 }
 
 pub(crate) fn dispatch_with_event(
@@ -108,15 +67,8 @@ pub(crate) fn dispatch_with_event(
     kind: &str,
     event: &Value,
 ) {
-    let kind = std::ffi::CString::new(kind).unwrap_or_default();
-    unsafe {
-        ns_target_dispatch_with_event(
-            raw_ctx(scope),
-            quickjs::raw(target),
-            kind.as_ptr(),
-            quickjs::raw(event),
-        )
-    };
+    let kind = kind.split('\0').next().unwrap_or_default();
+    nsr_target_dispatch_with_event(scope, target, kind, event);
 }
 
 pub(crate) struct Budget {
@@ -126,7 +78,7 @@ pub(crate) struct Budget {
 
 impl Budget {
     pub(crate) fn enter(scope: &Scope<'_>) -> Budget {
-        let js = quickjs::context_opaque(scope);
+        let js = scope.context_opaque();
         let saved = if js.is_null() {
             0
         } else {
@@ -144,46 +96,27 @@ impl Drop for Budget {
     }
 }
 
+fn port_deliver_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {
+    if let [port, data, rest @ ..] = args {
+        ports::deliver(scope, port, data, rest.first());
+    }
+    Ok(Value::undefined())
+}
+
 pub(crate) fn queue_delivery(scope: &mut Scope<'_>, args: &[Value]) {
-    let mut raw: Vec<JSValue> = args.iter().map(quickjs::raw).collect();
-    unsafe {
-        ns_js_queue_message_task(
-            raw_ctx(scope),
-            ns_port_deliver_job,
-            raw.len() as c_int,
-            raw.as_mut_ptr(),
-        )
-    };
+    let _ = nsr_queue_message_task(scope, port_deliver_job, args);
 }
 
 pub(crate) fn parse_listener_options(
     scope: &mut Scope<'_>,
     options: &Value,
 ) -> Result<(bool, Value), Value> {
-    let mut capture: c_int = 0;
-    let mut once: c_int = 0;
-    let mut signal = quickjs::into_raw(Value::null());
-    let ok = unsafe {
-        ns_listener_parse_options(
-            raw_ctx(scope),
-            quickjs::raw(options),
-            &mut capture,
-            &mut once,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            &mut signal,
-            1,
-        )
-    };
-    let signal = unsafe { quickjs::take_value(scope, signal) };
-    if ok == 0 {
-        return Err(quickjs::take_exception(scope));
-    }
-    Ok((once != 0, signal))
+    let (_, once, _, _, signal) = nsr_listener_parse_options(scope, options, true)?;
+    Ok((once, signal.unwrap_or_else(Value::null)))
 }
 
 pub(crate) fn compact_dead_listeners(scope: &mut Scope<'_>, owner: &Value) {
-    unsafe { ns_listeners_compact_dead(raw_ctx(scope), quickjs::raw(owner)) };
+    nsr_listeners_compact_dead(scope, owner);
 }
 
 pub(crate) fn with_receiving_realm<R>(
@@ -191,12 +124,11 @@ pub(crate) fn with_receiving_realm<R>(
     port: &Value,
     f: impl FnOnce(&mut Scope<'_>, &mut Scope<'_>, bool) -> R,
 ) -> R {
-    let ctx = raw_ctx(scope);
-    let realm = unsafe {
-        ns_target_handler_realm(ctx, quickjs::raw(port), c"message".as_ptr(), c"fn".as_ptr())
-    };
-    let realm = if realm.is_null() { ctx } else { realm };
-    unsafe { quickjs::with_context(realm, |realm_scope| f(scope, realm_scope, realm != ctx)) }
+    let ctx = scope.handle();
+    let realm = nsr_target_handler_realm(scope, port, "message", "fn").or(ctx);
+    realm
+        .with(|realm_scope| f(scope, realm_scope, realm != ctx))
+        .expect("a live realm")
 }
 
 pub(crate) fn with_port_realm<R>(
@@ -204,240 +136,147 @@ pub(crate) fn with_port_realm<R>(
     port: &Value,
     f: impl FnOnce(&mut Scope<'_>) -> R,
 ) -> R {
-    let ctx = raw_ctx(scope);
+    let ctx = scope.handle();
     let marker = crate::get(scope, port, "_realm");
     let realm = if scope.is_function(&marker) {
-        quickjs::function_realm(scope, &marker).unwrap_or(ctx)
+        scope
+            .function_handle(&marker)
+            .ok()
+            .and_then(ContextHandle::non_null)
+            .unwrap_or(ctx)
     } else {
         ctx
     };
     if realm == ctx {
-        f(scope)
-    } else {
-        unsafe { quickjs::with_context(realm, f) }
+        return f(scope);
+    }
+    realm.with(f).expect("a live realm")
+}
+
+pub(crate) struct AtTarget {
+    pub phase: Value,
+    pub current: Value,
+    pub nested: bool,
+}
+
+pub(crate) fn event_at_target_begin(scope: &mut Scope<'_>, ev: &Value, target: Value) -> AtTarget {
+    let dispatching = crate::get(scope, ev, "_dispatching");
+    let nested = scope.to_bool(&dispatching);
+    let phase = crate::get(scope, ev, "eventPhase");
+    let current = crate::get(scope, ev, "currentTarget");
+    crate::set(scope, ev, "currentTarget", target);
+    crate::set(scope, ev, "eventPhase", Value::int(2));
+    crate::set(scope, ev, "_dispatching", Value::boolean(true));
+    AtTarget {
+        phase,
+        current,
+        nested,
     }
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-#[repr(C)]
-pub struct EventAtTarget {
-    phase: JSValue,
-    current: JSValue,
-    nested: c_int,
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_event_at_target_begin(
-    ctx: *mut JSContext,
-    ev: JSValue,
-    target: JSValue,
-    st: *mut EventAtTarget,
-) {
-    let Some(st) = (unsafe { st.as_mut() }) else {
+pub(crate) fn event_at_target_end(scope: &mut Scope<'_>, ev: &Value, saved: AtTarget) {
+    if saved.nested {
+        crate::set(scope, ev, "eventPhase", saved.phase);
+        crate::set(scope, ev, "currentTarget", saved.current);
         return;
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let ev = quickjs::borrow_value(scope, ev);
-            let target = quickjs::borrow_value(scope, target);
-            let dispatching = crate::get(scope, &ev, "_dispatching");
-            st.nested = c_int::from(scope.to_bool(&dispatching));
-            st.phase = quickjs::into_raw(crate::get(scope, &ev, "eventPhase"));
-            st.current = quickjs::into_raw(crate::get(scope, &ev, "currentTarget"));
-            crate::set(scope, &ev, "currentTarget", target);
-            crate::set(scope, &ev, "eventPhase", Value::int(2));
-            crate::set(scope, &ev, "_dispatching", Value::boolean(true));
-        })
+    }
+    crate::set(scope, ev, "eventPhase", Value::int(0));
+    crate::set(scope, ev, "currentTarget", Value::null());
+    crate::set(scope, ev, "_dispatching", Value::boolean(false));
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_at_target_begin(scope: &mut Scope<'_>, ev: &Value, target: &Value) -> AtTarget {
+    event_at_target_begin(scope, ev, target.clone())
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_event_at_target_end(scope: &mut Scope<'_>, ev: &Value, saved: AtTarget) {
+    event_at_target_end(scope, ev, saved);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_port_new(scope: &mut Scope<'_>) -> JsResult {
+    ports::new_port(scope)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_port_bridge_id(scope: &mut Scope<'_>, port: &Value) -> u64 {
+    ports::bridge_id(scope, port)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_port_transfer_prepare(
+    scope: &mut Scope<'_>,
+    transfer: &Value,
+    source_port: &Value,
+    realm: ContextHandle,
+) -> Result<(Value, Value), Value> {
+    let realm = realm.or(scope.handle());
+    let source = source_port.is_object().then_some(source_port);
+    let moved = realm
+        .with(|realm_scope| ports::transfer_prepare(realm_scope, transfer, source))
+        .flatten();
+    match moved {
+        Some(moved) => Ok((moved.old, moved.new)),
+        None => Err(ports::transfer_error(scope)),
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_event_at_target_end(
-    ctx: *mut JSContext,
-    ev: JSValue,
-    st: *mut EventAtTarget,
-) {
-    let Some(st) = (unsafe { st.as_mut() }) else {
-        return;
+pub fn nsr_port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_ports: &Value) {
+    let moved = ports::Transfer {
+        old: old_ports.clone(),
+        new: new_ports.clone(),
     };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let ev = quickjs::borrow_value(scope, ev);
-            let phase = quickjs::take_value(scope, st.phase);
-            let current = quickjs::take_value(scope, st.current);
-            st.phase = quickjs::UNDEFINED;
-            st.current = quickjs::UNDEFINED;
-            if st.nested != 0 {
-                crate::set(scope, &ev, "eventPhase", phase);
-                crate::set(scope, &ev, "currentTarget", current);
-                return;
+    ports::transfer_commit(scope, &moved);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value) {
+    ports::install(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_worker_transfer_is_port(value: &Value) -> bool {
+    is_message_port(value)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_port_bridge_send(
+    scope: &mut Scope<'_>,
+    port: &Value,
+    id: u64,
+    data: &Value,
+) -> JsResult {
+    worker::bridge_send(scope, port, id, data)
+}
+
+macro_rules! natives {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
             }
-            crate::set(scope, &ev, "eventPhase", Value::int(0));
-            crate::set(scope, &ev, "currentTarget", Value::null());
-            crate::set(scope, &ev, "_dispatching", Value::boolean(false));
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_deliver_job(
-    ctx: *mut JSContext,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    if argc < 2 || argv.is_null() {
-        return quickjs::UNDEFINED;
-    }
-    let raw = unsafe { core::slice::from_raw_parts(argv, argc as usize) };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let port = quickjs::borrow_value(scope, raw[0]);
-            let data = quickjs::borrow_value(scope, raw[1]);
-            let ports = raw.get(2).map(|&p| quickjs::borrow_value(scope, p));
-            ports::deliver(scope, &port, &data, ports.as_ref());
-        })
+        )*
     };
-    quickjs::UNDEFINED
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_new(ctx: *mut JSContext) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let result = ports::new_port(scope);
-            quickjs::result_raw(scope, result)
-        })
-    }
+natives! {
+    nsr_window_message_channel => ports::message_channel,
+    nsr_window_broadcast_channel => broadcast::construct,
+    nsr_port_add_event_listener => ports::add_event_listener,
+    nsr_port_remove_event_listener => ports::remove_event_listener,
+    nsr_worker_ctor => worker::construct,
+    nsr_worker_global_post_message => worker::global_post_message,
+    nsr_worker_global_close => worker::global_close,
+    nsr_worker_import_scripts => worker::import_scripts,
+    nsr_worker_report_error => worker_scope::report_error,
+    nsr_worker_performance_now => worker_scope::performance_now,
+    nsr_worker_performance_entries => worker_scope::performance_entries,
+    nsr_worker_performance_clear => crate::noop,
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_bridge_id(ctx: *mut JSContext, port: JSValue) -> u64 {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let port = quickjs::borrow_value(scope, port);
-            ports::bridge_id(scope, &port)
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_transfer_prepare(
-    ctx: *mut JSContext,
-    transfer: JSValue,
-    source_port: JSValue,
-    realm: *mut JSContext,
-    old_ports: *mut JSValue,
-    new_ports: *mut JSValue,
-) -> c_int {
-    let realm = if realm.is_null() { ctx } else { realm };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let transfer = quickjs::borrow_value(scope, transfer);
-            let source = quickjs::borrow_value(scope, source_port);
-            let source = source.is_object().then_some(&source);
-            let moved = quickjs::with_context(realm, |realm_scope| {
-                ports::transfer_prepare(realm_scope, &transfer, source)
-            });
-            match moved {
-                Some(moved) => {
-                    *old_ports = quickjs::into_raw(moved.old);
-                    *new_ports = quickjs::into_raw(moved.new);
-                    0
-                }
-                None => {
-                    *old_ports = quickjs::UNDEFINED;
-                    *new_ports = quickjs::UNDEFINED;
-                    let error = ports::transfer_error(scope);
-                    quickjs::result_raw(scope, Err(error));
-                    -1
-                }
-            }
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_transfer_commit(
-    ctx: *mut JSContext,
-    old_ports: JSValue,
-    new_ports: JSValue,
-) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let moved = ports::Transfer {
-                old: quickjs::borrow_value(scope, old_ports),
-                new: quickjs::borrow_value(scope, new_ports),
-            };
-            ports::transfer_commit(scope, &moved);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_message_channel(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, ports::message_channel) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_broadcast_channel(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, broadcast::construct) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_add_event_listener(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, ports::add_event_listener) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_remove_event_listener(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, ports::remove_event_listener) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_install_ports(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            ports::install(scope, &global);
-        })
-    }
-}
-
-use std::ffi::CString;
-use std::sync::Arc;
-
-use crate::scope as worker_scope;
-use crate::service::{self, FetchRequest, FetchResult};
-use crate::worker::{self, ErrorReport, Host};
 
 #[repr(C)]
 struct GMainContext {
@@ -497,8 +336,6 @@ struct WorkerRealm {
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 type GDestroyNotify = unsafe extern "C" fn(data: *mut c_void);
-type CFunction = quickjs::JSCFunction;
-
 unsafe extern "C" {
     fn g_main_context_new() -> *mut GMainContext;
     fn g_main_context_ref(context: *mut GMainContext) -> *mut GMainContext;
@@ -521,8 +358,10 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
+    fn ns_js_budget_enter(js: *mut c_void) -> i64;
+    fn ns_js_budget_leave(js: *mut c_void, saved: i64);
     fn ns_js_worker_host(js: *mut c_void) -> *const c_void;
-    fn ns_js_main_context(js: *mut c_void) -> *mut JSContext;
+    fn ns_js_main_context(js: *mut c_void) -> ContextHandle;
     fn ns_js_current_url(js: *mut c_void) -> *const c_char;
     fn ns_js_set_current_url(js: *mut c_void, url: *const c_char);
     fn ns_js_log_line(js: *mut c_void, line: *const c_char);
@@ -531,45 +370,16 @@ unsafe extern "C" {
     fn ns_drain_mutations(js: *mut c_void);
     fn ns_js_free(js: *mut c_void);
     fn ns_worker_js_new(realm: *const WorkerRealm) -> *mut c_void;
-    fn ns_worker_js_eval(
-        js: *mut c_void,
-        src: *const c_char,
-        len: usize,
-        url: *const c_char,
-        module: c_int,
-        exception: *mut JSValue,
-    ) -> c_int;
-    fn ns_js_exception_message(ctx: *mut JSContext, ex: JSValue) -> *mut c_char;
     fn ns_js_report_error_event_in(
         js: *mut c_void,
-        ctx: *mut JSContext,
+        ctx: ContextHandle,
         message: *const c_char,
         filename: *const c_char,
         lineno: c_int,
         colno: c_int,
     );
-    fn ns_js_dispatch_engine_event(ctx: *mut JSContext, target: JSValue, ev: JSValue);
-    fn ns_target_fire_event(ctx: *mut JSContext, obj: JSValue, kind: *const c_char);
-    fn ns_bind_event_target_listeners(ctx: *mut JSContext, obj: JSValue);
-    fn ns_bind_ctor(
-        ctx: *mut JSContext,
-        obj: JSValue,
-        name: *const c_char,
-        f: CFunction,
-        argc: c_int,
-    );
-    fn ns_make_ctor(ctx: *mut JSContext, f: CFunction, name: *const c_char, argc: c_int)
-    -> JSValue;
-    fn ns_fetch_install_interfaces(ctx: *mut JSContext, global: JSValue);
-    fn ns_install_namespace_object(
-        ctx: *mut JSContext,
-        global: JSValue,
-        name: *const c_char,
-        obj: JSValue,
-        tag: *const c_char,
-    );
-    fn ns_js_link_interface_ctors(ctx: *mut JSContext);
-    fn ns_js_lock_global_prototypes(ctx: *mut JSContext);
+    fn ns_js_link_interface_ctors(ctx: ContextHandle);
+    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
     fn ns_js_blob_url_lookup(
         js: *mut c_void,
         url: *const c_char,
@@ -610,96 +420,6 @@ unsafe extern "C" {
     ) -> *mut NsResponse;
     fn ns_response_free(response: *mut NsResponse);
 
-    fn ns_event_prevent_default(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_stop_propagation(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_stop_immediate(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_composed_path(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_dispatchEvent(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_addEventListener(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_removeEventListener(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_returns_resolved_undefined(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_returns_resolved_false(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_returns_resolved_empty_array(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_cache_open(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_illegal_constructor(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_event_ctor(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_response_ctor(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_request_ctor(
-        ctx: *mut JSContext,
-        this: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -715,30 +435,25 @@ impl Js {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct Ctx(usize);
+pub(crate) type Ctx = ContextHandle;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope) as usize)
+    Js(scope.context_opaque() as usize)
 }
 
 pub(crate) fn ctx_of(scope: &Scope<'_>) -> Ctx {
-    Ctx(raw_ctx(scope) as usize)
+    scope.handle()
 }
 
-pub(crate) fn with_ctx<R>(ctx: Ctx, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-    unsafe { quickjs::with_context(ctx.0 as *mut JSContext, f) }
+pub(crate) fn with_ctx<R>(ctx: Ctx, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
+    ctx.with(f)
 }
 
 pub(crate) fn with_js<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     if js.is_null() {
         return None;
     }
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    if ctx.is_null() {
-        return None;
-    }
-    Some(unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.ptr()) }.with(f)
 }
 
 fn c_string(text: &str) -> CString {
@@ -926,7 +641,7 @@ pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
 }
 
 pub(crate) fn worker_eval(
-    scope: &mut Scope<'_>,
+    _scope: &mut Scope<'_>,
     js: Js,
     source: &str,
     url: &str,
@@ -934,33 +649,20 @@ pub(crate) fn worker_eval(
 ) -> Result<(), (bool, Value)> {
     let source = c_string(source);
     let url = c_string(url);
-    let mut exception = quickjs::UNDEFINED;
-    let status = unsafe {
-        ns_worker_js_eval(
-            js.ptr(),
-            source.as_ptr(),
+    unsafe {
+        nsr_worker_js_eval(
+            js.ptr().cast(),
+            &source,
             source.as_bytes().len(),
-            url.as_ptr(),
-            c_int::from(module),
-            &mut exception,
+            &url,
+            module,
         )
-    };
-    let exception = unsafe { quickjs::take_value(scope, exception) };
-    match status {
-        0 => Ok(()),
-        1 => Err((true, exception)),
-        _ => Err((false, exception)),
     }
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> String {
-    unsafe {
-        taken(ns_js_exception_message(
-            raw_ctx(scope),
-            quickjs::raw(exception),
-        ))
-    }
-    .unwrap_or_default()
+    let message = nsr_js_exception_message(scope, exception);
+    String::from_utf8_lossy(&message).into_owned()
 }
 
 pub(crate) fn report_error_event_in(js: Js, ctx: Ctx, report: &ErrorReport) {
@@ -969,7 +671,7 @@ pub(crate) fn report_error_event_in(js: Js, ctx: Ctx, report: &ErrorReport) {
     unsafe {
         ns_js_report_error_event_in(
             js.ptr(),
-            ctx.0 as *mut JSContext,
+            ctx,
             message.as_ptr(),
             filename.as_ptr(),
             report.lineno,
@@ -979,14 +681,12 @@ pub(crate) fn report_error_event_in(js: Js, ctx: Ctx, report: &ErrorReport) {
 }
 
 pub(crate) fn dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, event: &Value) {
-    unsafe {
-        ns_js_dispatch_engine_event(raw_ctx(scope), quickjs::raw(target), quickjs::raw(event))
-    };
+    nsr_js_dispatch_engine_event(scope, target, event);
 }
 
 pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &str) {
-    let kind = c_string(kind);
-    unsafe { ns_target_fire_event(raw_ctx(scope), quickjs::raw(target), kind.as_ptr()) };
+    let kind = kind.split('\0').next().unwrap_or_default();
+    nsr_target_fire_event(scope, target, kind);
 }
 
 #[derive(Clone, Copy)]
@@ -1005,25 +705,25 @@ pub(crate) enum CFn {
 }
 
 impl CFn {
-    fn function(self) -> CFunction {
+    fn function(self) -> NativeFn {
         match self {
-            CFn::PreventDefault => ns_event_prevent_default,
-            CFn::StopPropagation => ns_event_stop_propagation,
-            CFn::StopImmediate => ns_event_stop_immediate,
-            CFn::ComposedPath => ns_event_composed_path,
-            CFn::DispatchEvent => ns_target_dispatchEvent,
-            CFn::AddEventListener => ns_target_addEventListener,
-            CFn::RemoveEventListener => ns_target_removeEventListener,
-            CFn::ResolvedUndefined => ns_returns_resolved_undefined,
-            CFn::ResolvedFalse => ns_returns_resolved_false,
-            CFn::ResolvedEmptyArray => ns_returns_resolved_empty_array,
-            CFn::CacheOpen => ns_cache_open,
+            CFn::PreventDefault => nsr_event_prevent_default,
+            CFn::StopPropagation => nsr_event_stop_propagation,
+            CFn::StopImmediate => nsr_event_stop_immediate,
+            CFn::ComposedPath => nsr_event_composed_path,
+            CFn::DispatchEvent => nsr_target_dispatchEvent,
+            CFn::AddEventListener => nsr_target_addEventListener,
+            CFn::RemoveEventListener => nsr_target_removeEventListener,
+            CFn::ResolvedUndefined => natives::resolved_undefined,
+            CFn::ResolvedFalse => natives::resolved_false,
+            CFn::ResolvedEmptyArray => natives::resolved_empty_array,
+            CFn::CacheOpen => nsr_cache_open,
         }
     }
 }
 
 pub(crate) fn bind_c(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: CFn) {
-    let function = quickjs::c_function(scope, name, arity, f.function());
+    let function = scope.function(name, arity, f.function());
     crate::set(scope, object, name, function);
 }
 
@@ -1041,7 +741,7 @@ pub(crate) fn bind_c_if_not_callable(
 }
 
 pub(crate) fn bind_event_target_listeners(scope: &mut Scope<'_>, object: &Value) {
-    unsafe { ns_bind_event_target_listeners(raw_ctx(scope), quickjs::raw(object)) };
+    nsr_bind_event_target_listeners(scope, object);
 }
 
 #[derive(Clone, Copy)]
@@ -1059,31 +759,24 @@ pub(crate) fn bind_ctor(
     arity: u32,
     ctor: CCtor,
 ) {
-    let f: CFunction = match ctor {
-        CCtor::Illegal => ns_illegal_constructor,
-        CCtor::Event => ns_window_event_ctor,
-        CCtor::Response => ns_window_response_ctor,
-        CCtor::Request => ns_window_request_ctor,
+    let f: NativeFn = match ctor {
+        CCtor::Illegal => nsr_illegal_constructor,
+        CCtor::Event => nsr_window_event_ctor,
+        CCtor::Response => nsr_window_response_ctor,
+        CCtor::Request => nsr_window_request_ctor,
     };
     let name = c_string(name);
-    unsafe {
-        ns_bind_ctor(
-            raw_ctx(scope),
-            quickjs::raw(object),
-            name.as_ptr(),
-            f,
-            arity as c_int,
-        )
-    };
+    let name = name.to_str().unwrap_or_default();
+    let constructor = make_constructor(scope, name, arity, f);
+    crate::set(scope, object, name, constructor);
 }
 
 pub(crate) fn make_worker_ctor(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_make_ctor(raw_ctx(scope), ns_worker_ctor, c"Worker".as_ptr(), 1) };
-    unsafe { quickjs::take_value(scope, raw) }
+    make_constructor(scope, "Worker", 1, nsr_worker_ctor)
 }
 
 pub(crate) fn fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
-    unsafe { ns_fetch_install_interfaces(raw_ctx(scope), quickjs::raw(global)) };
+    nsr_fetch_install_interfaces(scope, global);
 }
 
 pub(crate) fn install_namespace_object(
@@ -1095,42 +788,32 @@ pub(crate) fn install_namespace_object(
 ) {
     let name = c_string(name);
     let tag = c_string(tag);
-    unsafe {
-        ns_install_namespace_object(
-            raw_ctx(scope),
-            quickjs::raw(global),
-            name.as_ptr(),
-            quickjs::into_raw(object),
-            tag.as_ptr(),
-        )
-    };
+    nsr_install_namespace_object(
+        scope,
+        global,
+        name.to_str().unwrap_or_default(),
+        object,
+        tag.to_str().unwrap_or_default(),
+    );
 }
 
 pub(crate) fn link_interface_ctors(scope: &mut Scope<'_>) {
-    unsafe { ns_js_link_interface_ctors(raw_ctx(scope)) };
+    unsafe { ns_js_link_interface_ctors(scope.handle()) };
 }
 
 pub(crate) fn lock_global_prototypes(scope: &mut Scope<'_>) {
-    unsafe { ns_js_lock_global_prototypes(raw_ctx(scope)) };
+    unsafe { ns_js_lock_global_prototypes(scope.handle()) };
+}
+
+fn worker_fail_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {
+    if let Some(target) = args.first().filter(|target| target.is_object()) {
+        nsr_target_fire_event(scope, target, "error");
+    }
+    Ok(Value::undefined())
 }
 
 pub(crate) fn queue_fail_job(scope: &mut Scope<'_>, object: &Value) {
-    let mut raw = [quickjs::raw(object)];
-    unsafe { ns_js_queue_message_task(raw_ctx(scope), worker_fail_job, 1, raw.as_mut_ptr()) };
-}
-
-unsafe extern "C" fn worker_fail_job(
-    ctx: *mut JSContext,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    if argc >= 1 && !argv.is_null() {
-        let target = unsafe { *argv };
-        if quickjs::raw_is_object(target) {
-            unsafe { ns_target_fire_event(ctx, target, c"error".as_ptr()) };
-        }
-    }
-    quickjs::UNDEFINED
+    let _ = nsr_queue_message_task(scope, worker_fail_job, core::slice::from_ref(object));
 }
 
 pub(crate) fn blob_url_lookup(js: Js, url: &str) -> Option<Vec<u8>> {
@@ -1313,87 +996,14 @@ pub(crate) fn net_get(url: &str, top_url: &str, header: &str) -> NetResponse {
     out
 }
 
-unsafe fn native_raw(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-macro_rules! export_native {
-    ($name:ident, $f:path) => {
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(
-            ctx: *mut JSContext,
-            this_val: JSValue,
-            argc: c_int,
-            argv: *mut JSValue,
-        ) -> JSValue {
-            unsafe { native_raw(ctx, this_val, argc, argv, $f) }
-        }
-    };
-}
-
-export_native!(ns_worker_ctor, worker::construct);
-export_native!(ns_worker_global_post_message, worker::global_post_message);
-export_native!(ns_worker_global_close, worker::global_close);
-export_native!(ns_worker_import_scripts, worker::import_scripts);
-export_native!(ns_worker_report_error, worker_scope::report_error);
-export_native!(ns_worker_performance_now, worker_scope::performance_now);
-export_native!(
-    ns_worker_performance_entries,
-    worker_scope::performance_entries
-);
-export_native!(ns_worker_performance_clear, crate::noop);
-
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_transfer_is_port(ctx: *mut JSContext, v: JSValue) -> c_int {
-    let is_port = unsafe {
-        quickjs::with_context(ctx, |scope| {
-            is_message_port(&quickjs::borrow_value(scope, v))
-        })
-    };
-    c_int::from(is_port)
+pub fn nsr_worker_install_constructor(scope: &mut Scope<'_>, global: &Value) {
+    worker::install_constructor(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_port_bridge_send(
-    ctx: *mut JSContext,
-    port: JSValue,
-    id: u64,
-    data: JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let port = quickjs::borrow_value(scope, port);
-            let data = quickjs::borrow_value(scope, data);
-            let result = worker::bridge_send(scope, &port, id, &data);
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_install_constructor(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            worker::install_constructor(scope, &global);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_sw_install_container(ctx: *mut JSContext, navigator: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let navigator = quickjs::borrow_value(scope, navigator);
-            service::install_container(scope, &navigator);
-        })
-    }
+pub fn nsr_sw_install_container(scope: &mut Scope<'_>, navigator: &Value) {
+    service::install_container(scope, navigator);
 }
 
 #[unsafe(no_mangle)]
@@ -1446,18 +1056,6 @@ pub unsafe extern "C" fn ns_sw_post_fetch_request(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_report_exception(js: *mut c_void, ex: JSValue) -> c_int {
-    let js = Js(js as usize);
-    let Some(handled) = with_js(js, |scope| {
-        let ex = unsafe { quickjs::borrow_value(scope, ex) };
-        worker::report_exception(js, &ex)
-    }) else {
-        return 0;
-    };
-    c_int::from(handled)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_worker_host_closing(host: *const c_void) -> c_int {
     match unsafe { host.cast::<Host>().as_ref() } {
         Some(host) => c_int::from(host.closing()),
@@ -1502,85 +1100,33 @@ pub unsafe extern "C" fn ns_worker_log_cb(line: *const c_char, user_data: *mut c
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_promise_rejection_tracker(
-    ctx: *mut JSContext,
-    _promise: JSValue,
-    reason: JSValue,
-    is_handled: bool,
-    _opaque: *mut c_void,
-) {
-    if is_handled {
+pub fn nsr_worker_install_console(scope: &mut Scope<'_>, global: &Value) {
+    worker_scope::install_console(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_sw_install_scope(scope: &mut Scope<'_>, global: &Value) {
+    let Some(host) = worker_host_of(js_of(scope)) else {
         return;
-    }
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let reason = quickjs::borrow_value(scope, reason);
-            worker_scope::unhandled_rejection(scope, &reason);
-        })
-    }
+    };
+    service::install_scope(scope, global, &host);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_install_console(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            worker_scope::install_console(scope, &global);
-        })
-    }
+pub unsafe extern "C" fn ns_worker_shape_global(ctx: ContextHandle, service_worker: c_int) {
+    ctx.with(|scope| worker_scope::shape_global(scope, service_worker != 0));
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_install_location(
-    ctx: *mut JSContext,
-    global: JSValue,
-    url: *const c_char,
-) {
-    let url = unsafe { borrowed(url) }.unwrap_or_default();
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            worker_scope::install_location(scope, &global, &url);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_sw_install_scope(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let Some(host) = worker_host_of(js_of(scope)) else {
-                return;
-            };
-            let global = quickjs::borrow_value(scope, global);
-            service::install_scope(scope, &global, &host);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_shape_global(ctx: *mut JSContext, service_worker: c_int) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            worker_scope::shape_global(scope, service_worker != 0);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_worker_install_location(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    global: &southstar_js_engine::Value,
-    url: &str,
-) {
+pub fn nsr_worker_install_location(scope: &mut Scope<'_>, global: &Value, url: &str) {
     worker_scope::install_location(scope, global, url);
 }
 
 #[unsafe(no_mangle)]
 pub fn nsr_worker_promise_rejection_tracker(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    _promise: &southstar_js_engine::Value,
-    reason: &southstar_js_engine::Value,
+    scope: &mut Scope<'_>,
+    _promise: &Value,
+    reason: &Value,
     handled: bool,
 ) {
     if !handled {

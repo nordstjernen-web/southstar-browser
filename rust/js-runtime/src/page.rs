@@ -339,7 +339,7 @@ fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ns_services_camera_enumerate,
         0,
     );
-    ffi::install(scope, ns_sw_install_container, &navigator);
+    imports::nsr_sw_install_container(scope, &navigator);
     #[cfg(feature = "webgpu")]
     js.install_webgpu(scope, &navigator);
     #[cfg(not(feature = "webgpu"))]
@@ -800,20 +800,20 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ns_services_queue_microtask,
         1,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "MessageChannel",
-        ns_window_message_channel,
         0,
+        imports::nsr_window_message_channel,
     );
     bind_ctor(scope, global, "MessagePort", ns_illegal_constructor, 0);
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "BroadcastChannel",
-        ns_window_broadcast_channel,
         1,
+        imports::nsr_window_broadcast_channel,
     );
     ffi::install(scope, ns_services_install_rtc, global);
     bind_ctor(
@@ -823,7 +823,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
         ns_services_notification_ctor,
         2,
     );
-    ffi::install(scope, ns_worker_install_constructor, global);
+    imports::nsr_worker_install_constructor(scope, global);
     ffi::install(scope, ns_js_net_install_sockets, global);
     ffi::install(scope, ns_cssom_install_css, global);
     ffi::install(scope, ns_crypto_install_window_subtle, global);

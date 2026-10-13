@@ -177,3 +177,55 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
 }
+
+unsafe extern "Rust" {
+    pub(crate) safe fn nsr_window_message_channel(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_broadcast_channel(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_global_post_message(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_global_close(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_import_scripts(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_report_error(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_performance_now(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_performance_entries(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_worker_performance_clear(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_sw_install_container(scope: &mut Scope<'_>, target: &Value);
+    pub(crate) safe fn nsr_worker_install_constructor(scope: &mut Scope<'_>, target: &Value);
+    pub(crate) safe fn nsr_worker_install_console(scope: &mut Scope<'_>, target: &Value);
+    pub(crate) safe fn nsr_sw_install_scope(scope: &mut Scope<'_>, target: &Value);
+}

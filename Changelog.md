@@ -28,11 +28,12 @@ Southstar Browser 0.9.9:
   record in rust/js-runtime runs on it (with a typed API other crates call
   directly), DOMTokenList's prototype comes from the first Prop table, and
   docs/rust-port.md has a conversion guide for the remaining crates.
-* The forms bindings (rust/js-forms) are off raw QuickJS: every native has
-  a Rust-ABI nsr_ entry point with Prop-table signatures, the engine and
-  DOM calls they make go through nsr_ twins, the crate builds on Boa, and
-  the C-ABI shims the unconverted crates still bind sit in a quickjs-only
-  legacy.rs.
+* The forms bindings (rust/js-forms) and the messaging and worker bindings
+  (rust/js-workers) are off raw QuickJS: every native has a Rust-ABI nsr_
+  entry point with Prop-table signatures, the engine and DOM calls they
+  make go through nsr_ twins, and the C-ABI shims the unconverted crates
+  still bind sit in a quickjs-only legacy.rs. js-forms builds on Boa;
+  js-workers waits only for rust/js-clone.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt

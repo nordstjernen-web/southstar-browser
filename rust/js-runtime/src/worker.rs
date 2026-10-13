@@ -4,8 +4,8 @@
 
 use core::ffi::CStr;
 
-use southstar_js_bind::{bind_constructor, bind_function};
-use southstar_js_engine::{PromiseState, Scope, Value};
+use southstar_js_bind::{bind_constructor, bind_function, bind_native};
+use southstar_js_engine::{NativeFn, PromiseState, Scope, Value};
 
 use crate::ffi::imports;
 use crate::ffi::natives::*;
@@ -16,6 +16,11 @@ use crate::page::{bind_ctor, bind_url};
 const DENY_OPAQUE_IDB: &str = "(function(){var f=self.indexedDB;if(!f)return;function deny(){throw new DOMException('Access to IndexedDB is denied for an opaque origin.','SecurityError');}['open','deleteDatabase','databases'].forEach(function(m){try{Object.defineProperty(f,m,{value:deny,configurable:true,writable:true});}catch(e){}});})()";
 
 const WORKER_INTERFACES: [&str; 3] = ["WorkerLocation", "WorkerNavigator", "NavigatorUAData"];
+
+enum Binding {
+    Raw(Native),
+    Rust(NativeFn),
+}
 
 pub(crate) enum EvalStatus {
     Done,
@@ -58,29 +63,48 @@ pub(crate) fn create(js: Js, setup: &WorkerSetup<'_>) -> bool {
 
 fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin_real_ms: f64) {
     let global = scope.global();
-    ffi::install(scope, ns_worker_install_console, &global);
-    let functions: [(&str, Native, u32); 11] = [
-        ("setTimeout", ns_services_set_timeout, 2),
-        ("setInterval", ns_services_set_interval, 2),
-        ("clearTimeout", ns_services_clear_timer, 1),
-        ("clearInterval", ns_services_clear_timer, 1),
-        ("postMessage", ns_worker_global_post_message, 1),
-        ("close", ns_worker_global_close, 0),
-        ("importScripts", ns_worker_import_scripts, 1),
-        ("structuredClone", ns_window_structured_clone, 1),
-        ("queueMicrotask", ns_services_queue_microtask, 1),
-        ("btoa", ns_window_btoa, 1),
-        ("atob", ns_window_atob, 1),
+    imports::nsr_worker_install_console(scope, &global);
+    let functions: [(&str, Binding, u32); 11] = [
+        ("setTimeout", Binding::Raw(ns_services_set_timeout), 2),
+        ("setInterval", Binding::Raw(ns_services_set_interval), 2),
+        ("clearTimeout", Binding::Raw(ns_services_clear_timer), 1),
+        ("clearInterval", Binding::Raw(ns_services_clear_timer), 1),
+        (
+            "postMessage",
+            Binding::Rust(imports::nsr_worker_global_post_message),
+            1,
+        ),
+        ("close", Binding::Rust(imports::nsr_worker_global_close), 0),
+        (
+            "importScripts",
+            Binding::Rust(imports::nsr_worker_import_scripts),
+            1,
+        ),
+        (
+            "structuredClone",
+            Binding::Raw(ns_window_structured_clone),
+            1,
+        ),
+        (
+            "queueMicrotask",
+            Binding::Raw(ns_services_queue_microtask),
+            1,
+        ),
+        ("btoa", Binding::Raw(ns_window_btoa), 1),
+        ("atob", Binding::Raw(ns_window_atob), 1),
     ];
-    for (name, native, arity) in functions {
-        bind_fn(scope, &global, name, native, arity);
+    for (name, binding, arity) in functions {
+        match binding {
+            Binding::Raw(native) => bind_fn(scope, &global, name, native, arity),
+            Binding::Rust(native) => bind_native(scope, &global, name, arity, native),
+        }
     }
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "MessageChannel",
-        ns_window_message_channel,
         0,
+        imports::nsr_window_message_channel,
     );
     bind_ctor(scope, &global, "MessagePort", ns_illegal_constructor, 0);
 
@@ -192,7 +216,13 @@ fn install_scope_members(
     for name in WORKER_INTERFACES {
         bind_ctor(scope, global, name, ns_illegal_constructor, 0);
     }
-    bind_fn(scope, global, "reportError", ns_worker_report_error, 1);
+    bind_native(
+        scope,
+        global,
+        "reportError",
+        1,
+        imports::nsr_worker_report_error,
+    );
     let listeners = scope.new_array();
     let _ = scope.set(global, "_listeners", listeners);
     crate::api::bind_event_target_listeners(scope, global);
@@ -205,16 +235,24 @@ fn install_scope_members(
     let _ = scope.set(global, "navigator", navigator);
 
     let performance = scope.new_object();
-    let methods: [(&str, Native, u32); 6] = [
-        ("now", ns_worker_performance_now, 0),
-        ("getEntries", ns_worker_performance_entries, 0),
-        ("getEntriesByType", ns_worker_performance_entries, 1),
-        ("getEntriesByName", ns_worker_performance_entries, 1),
-        ("clearMarks", ns_worker_performance_clear, 0),
-        ("clearMeasures", ns_worker_performance_clear, 0),
+    let methods: [(&str, NativeFn, u32); 6] = [
+        ("now", imports::nsr_worker_performance_now, 0),
+        ("getEntries", imports::nsr_worker_performance_entries, 0),
+        (
+            "getEntriesByType",
+            imports::nsr_worker_performance_entries,
+            1,
+        ),
+        (
+            "getEntriesByName",
+            imports::nsr_worker_performance_entries,
+            1,
+        ),
+        ("clearMarks", imports::nsr_worker_performance_clear, 0),
+        ("clearMeasures", imports::nsr_worker_performance_clear, 0),
     ];
     for (name, native, arity) in methods {
-        bind_fn(scope, &performance, name, native, arity);
+        bind_native(scope, &performance, name, arity, native);
     }
     let _ = scope.set(&performance, "timeOrigin", Value::number(origin_real_ms));
     let _ = scope.set(global, "performance", performance);
@@ -237,7 +275,7 @@ fn install_scope_members(
     ffi::install_worker_location(scope, global, setup.url);
 
     if setup.service_worker {
-        ffi::install(scope, ns_sw_install_scope, global);
+        imports::nsr_sw_install_scope(scope, global);
     }
     ffi::shape_worker_global(scope, setup.service_worker);
 }

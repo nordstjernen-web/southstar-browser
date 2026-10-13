@@ -132,15 +132,6 @@ natives! {
     ns_window_get_selection,
     ns_window_structured_clone,
     ns_window_report_error,
-    ns_window_message_channel,
-    ns_window_broadcast_channel,
-    ns_worker_global_post_message,
-    ns_worker_global_close,
-    ns_worker_import_scripts,
-    ns_worker_report_error,
-    ns_worker_performance_now,
-    ns_worker_performance_entries,
-    ns_worker_performance_clear,
     ns_target_dispatchEvent,
 }
 
@@ -150,7 +141,6 @@ installers! {
     ns_services_install_screen,
     ns_services_install_rtc,
     ns_window_bind_post_message,
-    ns_sw_install_container,
     ns_install_window_chrome,
     ns_perf_install_entry_list,
     ns_window_install_actions,
@@ -169,19 +159,16 @@ installers! {
     ns_js_install_event_target,
     ns_window_install_browsing_context,
     ns_install_idle_deadline,
-    ns_worker_install_constructor,
     ns_js_net_install_sockets,
     ns_cssom_install_css,
     ns_crypto_install_window_subtle,
     ns_storage_install_window,
     ns_install_window_compat,
-    ns_worker_install_console,
     ns_events_install_worker,
     ns_net_install_interfaces,
     ns_idb_install,
     ns_install_event_attribute_getters,
     ns_crypto_install_worker,
-    ns_sw_install_scope,
 }
 
 #[cfg(feature = "wasm")]
