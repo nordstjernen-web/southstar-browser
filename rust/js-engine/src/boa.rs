@@ -41,6 +41,7 @@ mod class;
 mod misc;
 mod reflect;
 mod runtime;
+mod serialize;
 mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
@@ -757,16 +758,6 @@ impl Scope<'_> {
             self.cx(),
         );
         Value(error.into())
-    }
-
-    pub fn write_object(&mut self, _value: &Value) -> Result<Vec<u8>, Option<Value>> {
-        Err(Some(self.type_error(
-            "object serialization is not available on this engine",
-        )))
-    }
-
-    pub fn read_object(&mut self, _bytes: &[u8]) -> Result<Value, Value> {
-        Err(self.type_error("object serialization is not available on this engine"))
     }
 
     pub fn detach_array_buffer(&mut self, value: &Value) -> Result<(), Value> {
