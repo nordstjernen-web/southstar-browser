@@ -165,13 +165,13 @@ ninja cargo's dependency file, so Rust rebuilds only when Rust changes. Rust
 1.99 or newer is required; `rust-toolchain.toml` pins 1.99.0 for rustup users,
 so local builds and CI compile with the minimum supported version.
 
-- A ported module is a crate under `rust/` that exports the same `ns_*`
-  functions its C header declares (`#[unsafe(no_mangle)] extern "C"`). Pointer
-  handling lives in the crate's `ffi.rs`; the logic is safe Rust. The C header
-  stays as the contract, the `.c` file is deleted in the same commit, and the
-  crate is added to `rust/southstar-ffi` (dependency plus `pub use`, and the
-  C file's name in the `PORTED` list in `rust/southstar-ffi/src/info.rs`,
-  which `about:southstar` shows).
+- A module is a crate under `rust/`. Crates reach each other through
+  `ns_*` exports (`#[unsafe(no_mangle)] extern "C"`) and `extern "C"`
+  declarations in the caller's `ffi.rs`; there are no C headers between them.
+  The one remaining header, `src/libsouthstar.h`, is the installed embedding
+  API for C embedders. Pointer handling lives in the crate's `ffi.rs`; the
+  logic is safe Rust. A new crate is added to `rust/southstar-ffi`
+  (dependency plus `pub use`).
 - `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`
   must be clean before pushing, like the C warnings.
 - A new crates.io dependency needs a reason in its commit message; keep the
@@ -201,16 +201,15 @@ finished glyph strings process-wide and caches
 Three rules when touching text code:
 
 - **The engine spells the API renamed** -- `ns_pango_*`, `NsPango*`,
-  `NS_PANGO_*`, `NS_TYPE_PANGO_*` -- and includes `"ns_pango.h"`, never a
-  pango header directly. The renaming is not cosmetic: GTK loads the system
-  Pango into the same process, and GObject aborts when a second library
-  registers a type name it already holds.
-- **`-Dns-pango=disabled` links the system Pango.** `src/ns_pango_names.h`
-  maps every renamed name back to its stock spelling for that build;
-  regenerate it with `scripts/gen-ns-pango-names.py` after using a new Pango
-  entry point. Anything the
-  fork adds and stock Pango lacks -- `ns_pango_cache_*` -- must sit behind
-  `#ifdef NS_USE_NS_PANGO`.
+  `NS_PANGO_*`, `NS_TYPE_PANGO_*`: each `extern` declaration of a Pango
+  function carries `#[cfg_attr(feature = "ns-pango", link_name =
+  "ns_pango_…")]` over its stock name. The renaming is not cosmetic: GTK
+  loads the system Pango into the same process, and GObject aborts when a
+  second library registers a type name it already holds.
+- **`-Dns-pango=disabled` links the system Pango.** meson leaves the crates'
+  `ns-pango` cargo feature off, so the declarations link the stock names.
+  Anything the fork adds and stock Pango lacks -- `ns_pango_cache_*` -- must
+  sit behind `#[cfg(feature = "ns-pango")]`.
 - **A run is cached only when its shaping cannot depend on the text around
   it**, because HarfBuzz receives the paragraph as context.
   `NS_PANGO_SHAPE_CACHE=verify` shapes both ways and warns on any
@@ -234,7 +233,7 @@ and builds through a `TreeSink` trait. `rust/html-parser` is the sink that
 writes `ns_node`s directly, with names, text and attribute values in one
 string arena per document attached as the root's `backing`; script source
 positions come from the tokenizer. The parser keeps no global state (SVG image
-threads parse concurrently). `src/html.h` is the C contract.
+threads parse concurrently).
 
 ### Image decoding: pure-Rust decoders
 

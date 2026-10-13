@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-# gen-splash.py — render the about:start splash animation and embed it as src/about_splash_gif.h.
-import base64
+# gen-splash.py — render the about:start splash animation and write it to data/about-splash.gif, which rust/net embeds.
 import math
 import os
 import re
 import shutil
 import subprocess
 import sys
-import textwrap
 import zlib
 
 import numpy as np
@@ -695,19 +693,6 @@ def assemble(frames, out_gif):
     return os.path.getsize(out_gif)
 
 
-def write_header(gif, header):
-    b64 = base64.b64encode(open(gif, "rb").read()).decode()
-    lines = textwrap.wrap(b64, 96)
-    out = ["/* about_splash_gif.h — the animated 256-colour about:start splash, embedded. */",
-           "#ifndef NS_ABOUT_SPLASH_GIF_H", "#define NS_ABOUT_SPLASH_GIF_H", "",
-           "static const char about_splash_gif_b64[] ="]
-    out += ['    "%s"%s' % (ln, ";" if i == len(lines) - 1 else "")
-            for i, ln in enumerate(lines)]
-    out += ["", "#endif", ""]
-    open(header, "w", encoding="utf-8", newline="\n").write("\n".join(out))
-    print("wrote %s (%d b64 chars)" % (header, len(b64)))
-
-
 def main():
     ver = version()
     user_fonts = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")
@@ -734,7 +719,6 @@ def main():
     gif = os.path.join(ROOT, "data", "about-splash.gif")
     size = assemble(frames, gif)
     print("assembled %s %df %dx%d (%d bytes)" % (gif, FRAMES, W, H, size))
-    write_header(gif, os.path.join(ROOT, "src", "about_splash_gif.h"))
     splash_png = os.path.join(ROOT, "data", "about-splash-%s.png" % ver)
     frames[0].save(splash_png, optimize=True)
     print("wrote %s" % splash_png)

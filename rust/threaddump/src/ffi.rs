@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of thread dumps, as declared in src/threaddump.h, and the platform calls behind it.
+//! Southstar — the C ABI of thread dumps, and the platform calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

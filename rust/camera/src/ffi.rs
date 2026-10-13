@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the camera, as declared in src/camera.h, and the V4L2 ioctls behind it.
+//! Southstar — the C ABI of the camera, and the V4L2 ioctls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

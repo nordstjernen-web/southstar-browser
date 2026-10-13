@@ -1,4 +1,4 @@
-//! Southstar — struct ns_style and struct ns_css_value as css.h lays them out, and the css.h calls over them.
+//! Southstar — struct ns_style and struct ns_css_value as the style engine lays them out, and the style-engine calls over them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

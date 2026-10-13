@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the page's scheduling, realm scopes and runtime state as declared in src/js.h and src/js_internal.h.
+//! Southstar — the C ABI of the page's scheduling, realm scopes and runtime state.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

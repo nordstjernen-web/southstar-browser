@@ -146,19 +146,3 @@ else
     "$im" "$work/raw.gif" -coalesce +dither -remap "$work/palette.png" -layers Optimize "$out"
 fi
 echo "wrote $out ($(stat -c%s "$out") bytes)"
-
-header="src/about_logo_gif.h"
-python3 - "$out" "$header" <<'PY'
-import base64, sys, textwrap
-gif, header = sys.argv[1], sys.argv[2]
-b64 = base64.b64encode(open(gif, "rb").read()).decode()
-lines = textwrap.wrap(b64, 96)
-out = ["/* about_logo_gif.h — the animated start-page/about logo, embedded. */",
-       "#ifndef NS_ABOUT_LOGO_GIF_H", "#define NS_ABOUT_LOGO_GIF_H", "",
-       "static const char about_logo_gif_b64[] ="]
-out += ['    "%s"%s' % (ln, ";" if i == len(lines) - 1 else "")
-        for i, ln in enumerate(lines)]
-out += ["", "#endif", ""]
-open(header, "w", newline="\n").write("\n".join(out))
-print("wrote %s (%d b64 chars)" % (header, len(b64)))
-PY

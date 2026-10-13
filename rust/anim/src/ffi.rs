@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/anim.h over the animation engine, with every callback made after the engine is released so script can call back in.
+//! Southstar — the C ABI of the animation engine, with every callback made after the engine is released so script can call back in.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

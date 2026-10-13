@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the ported net.h calls: error pages, about:, data:, file:, FTP listing and view-source: responses written into an ns_response, and the modules behind the rest of net.h and net_backend.h.
+//! Southstar — the C ABI of the ported network calls: error pages, about:, data:, file:, FTP listing and view-source: responses written into an ns_response, and the modules behind the rest of the network layer.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

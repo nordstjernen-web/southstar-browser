@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/engine.h: captures, dumps, fetches, style sheet collection, cascade and relayout.
+//! Southstar — the C ABI of the engine: captures, dumps, fetches, style sheet collection, cascade and relayout.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

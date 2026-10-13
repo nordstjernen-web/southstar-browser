@@ -1,0 +1,15 @@
+:root{color-scheme:light dark;--bg:#f5f7fb;--card:#ffffff;--text:#14171f;--muted:#596173;--faint:#8a92a2;--line:rgba(17,24,39,.08);--field:rgba(17,24,39,.05);--accent:#2f6fed;--accent-ink:#ffffff;--accent-soft:rgba(47,111,237,.11);--ok:#13804a;--danger:#c62f3a;--shadow:0 1px 2px rgba(16,24,40,.04),0 8px 28px rgba(16,24,40,.07);--radius:18px;--font:system-ui,-apple-system,"Segoe UI","Noto Sans",Cantarell,Ubuntu,Helvetica,Arial,sans-serif;--mono:ui-monospace,"SF Mono","Cascadia Mono","DejaVu Sans Mono",Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--card:#181c24;--text:#e8eaf0;--muted:#a4abba;--faint:#767e8e;--line:rgba(255,255,255,.08);--field:rgba(255,255,255,.06);--accent:#6c9cff;--accent-ink:#0b1020;--accent-soft:rgba(108,156,255,.16);--ok:#4cc48a;--danger:#ff6b74;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35)}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:999px;border:1px solid transparent;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;background:var(--field);color:var(--text)}
+.btn:hover{text-decoration:none;filter:brightness(.96)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.danger{background:transparent;border-color:var(--line);color:var(--danger)}
+.btn:disabled{opacity:.55;cursor:default}
+.kicker{margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.crumb{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:999px;background:var(--field);color:var(--muted);font-size:13px;font-weight:600}
+.crumb:hover{color:var(--text);text-decoration:none}

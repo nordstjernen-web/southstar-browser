@@ -1,4 +1,4 @@
-//! Southstar — the CSS properties css.h enumerates, in its order so a property's id is its discriminant, with their names, the aliases and logical properties that resolve to them, whether they inherit and whether they only repaint.
+//! Southstar — the CSS properties, in an order where a property's id is its discriminant, with their names, the aliases and logical properties that resolve to them, whether they inherit and whether they only repaint.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

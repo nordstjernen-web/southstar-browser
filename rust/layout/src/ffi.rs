@@ -1,4 +1,4 @@
-//! Southstar — struct ns_box as layout.c lays it out, the borrowed box handle over it and the layout.h calls behind it.
+//! Southstar — struct ns_box as layout.c lays it out, the borrowed box handle over it and the layout calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

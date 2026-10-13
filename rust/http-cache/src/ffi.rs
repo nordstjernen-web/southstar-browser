@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the HTTP cache, as declared in src/cache.h, and the GLib, file and ACL calls behind it.
+//! Southstar — the C ABI of the HTTP cache, and the GLib, file and ACL calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

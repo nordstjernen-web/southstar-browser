@@ -9,7 +9,11 @@ gave way to Southstar's own `rust/html5`. The project C left:
 |---|---:|---|
 | `gtk/macos_dock.m` | ~100 | `rust/shell`, over `objc_msgSend` (phase 4; needs a macOS box) |
 | `audio/minimp3_impl.c` | 4 | goes with minimp3 (phase 9) |
-| `src/*.h`, `src/gtk/*.h` | ~16,000 | the C contracts of ported modules. Fewer than ten are still included by C; the rest document the `ns_*` C ABI that Rust crates still use to call each other (and that 117 crate headers name). They go when those calls become ordinary Rust calls — a later, mechanical clean-up — except `libsouthstar.h`, the public embedding API. The about-page GIF and stylesheet headers are data the Rust build reads with `include_bytes!`/`include_str!` |
+
+The C headers between modules were deleted on 13 October: crates call each
+other through `ns_*` exports and `extern` declarations, and only
+`libsouthstar.h`, the public embedding API, remains. The about-page GIFs and
+stylesheet are plain data files the Rust build embeds.
 
 The JavaScript engine track is done (Boa is the only engine, QuickJS removed,
 §6); what remains is the vendored C libraries (pl_mpeg, minimp3; phase 9; the
@@ -333,7 +337,8 @@ point and builds whatever C remains through `build.rs` and the `cc` crate.
   `#[repr(C)]` mirrors (`rust/dom`, `rust/layout`, `rust/style`, `rust/image`,
   `rust/video`), and layouts were pinned with `static_assert`s in the C
   headers and `const` assertions in Rust. With the C callers gone, those
-  assertions now only guard the mirrors against each other.
+  assertions now only guard the mirrors against each other. The headers
+  themselves were deleted once no C included them.
 - Memory crosses the boundary in GLib's allocator: anything Rust hands to C
   that C will `g_free` is allocated with `g_malloc`/`g_strdup`, and anything C
   hands to Rust is released with `g_free`. Rust-owned values stay behind

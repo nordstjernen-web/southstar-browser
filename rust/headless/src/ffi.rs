@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/headless.h, the debug-log listener and console setup, and the main-loop runs of the driver.
+//! Southstar — the C ABI of the headless driver, the debug-log listener and console setup, and the main-loop runs of the driver.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

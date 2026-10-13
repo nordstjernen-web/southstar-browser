@@ -1,4 +1,4 @@
-//! Southstar — CSS easing functions: the keywords, linear(), steps() and cubic-bezier() parsed into the ns_css_timing css.h declares, and their canonical text.
+//! Southstar — CSS easing functions: the keywords, linear(), steps() and cubic-bezier() parsed into ns_css_timing, and their canonical text.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

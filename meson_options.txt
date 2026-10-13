@@ -13,4 +13,4 @@ option('webgpu', type: 'feature', value: 'auto',
 option('wgpu_native_root', type: 'string', value: '',
        description: 'Root of an extracted wgpu-native release (expects include/webgpu/webgpu.h and lib/libwgpu_native.{so,a}). Used only when -Dwebgpu is enabled and pkg-config cannot find wgpu_native.')
 option('ns-pango', type: 'feature', value: 'auto',
-       description: 'Shape text through the bundled ns-pango fork, which caches finished glyph strings across layouts. Disabled links the system Pango instead, with src/ns_pango_names.h mapping the renamed API back.')
+       description: 'Shape text through the bundled ns-pango fork, which caches finished glyph strings across layouts. Disabled links the system Pango instead, with the Rust crates linking its stock symbol names.')

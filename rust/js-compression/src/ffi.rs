@@ -1,4 +1,4 @@
-//! Southstar — zlib's streaming deflate and inflate, and the C ABI of the codec natives as declared in src/js_internal.h.
+//! Southstar — zlib's streaming deflate and inflate, and the C ABI of the codec natives.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of page installation as declared in src/js.h, and the realm accessors and binding installers it calls.
+//! Southstar — the C ABI of page installation, and the realm accessors and binding installers it calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

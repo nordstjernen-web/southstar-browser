@@ -1,4 +1,4 @@
-//! Southstar — the box-tree query entry points of layout.h and the length resolution and inline extents they call back into.
+//! Southstar — the box-tree query entry points and the length resolution and inline extents they call back into.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

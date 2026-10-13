@@ -1,4 +1,4 @@
-//! Southstar — the renderer connection of src/rproc_http.h as the headless driver uses it, with the page and frame replies it frees.
+//! Southstar — the renderer connection as the headless driver uses it, with the page and frame replies it frees.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

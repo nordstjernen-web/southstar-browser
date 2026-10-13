@@ -1,4 +1,4 @@
-//! Southstar — single-process mode, as declared in src/rproc_inproc.h: every tab's renderer session served on the window's main context.
+//! Southstar — single-process mode: every tab's renderer session served on the window's main context.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

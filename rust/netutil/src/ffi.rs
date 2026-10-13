@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the shared network helpers, as declared in src/net.h, and the GLib and locale calls behind them.
+//! Southstar — the C ABI of the shared network helpers, and the GLib and locale calls behind them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

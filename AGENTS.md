@@ -123,11 +123,13 @@ ninja cargo's dependency file, so Rust rebuilds only when Rust changes. Rust
 1.99 or newer is required; `rust-toolchain.toml` pins 1.99.0 for rustup users,
 so local builds and CI compile with the minimum supported version.
 
-- A ported module is a crate under `rust/` that exports the same `ns_*`
-  functions its C header declares (`#[unsafe(no_mangle)] extern "C"`). Pointer
-  handling lives in the crate's `ffi.rs`; the logic is safe Rust. The C header
-  stays as the contract, the `.c` file is deleted in the same commit, and the
-  crate is added to `rust/southstar-ffi` (dependency plus `pub use`).
+- A module is a crate under `rust/`. Crates reach each other through
+  `ns_*` exports (`#[unsafe(no_mangle)] extern "C"`) and `extern "C"`
+  declarations in the caller's `ffi.rs`; there are no C headers between them.
+  The one remaining header, `src/libsouthstar.h`, is the installed embedding
+  API for C embedders. Pointer handling lives in the crate's `ffi.rs`; the
+  logic is safe Rust. A new crate is added to `rust/southstar-ffi`
+  (dependency plus `pub use`).
 - `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`
   must be clean before pushing, like the C warnings.
 - A new crates.io dependency needs a reason in its commit message; keep the
@@ -156,7 +158,7 @@ and builds through a `TreeSink` trait. `rust/html-parser` is the sink that
 writes `ns_node`s directly, with names, text and attribute values in one
 string arena per document attached as the root's `backing`; script source
 positions come from the tokenizer. The parser keeps no global state (SVG image
-threads parse concurrently). `src/html.h` is the C contract.
+threads parse concurrently).
 
 ### Image decoding: pure-Rust decoders
 

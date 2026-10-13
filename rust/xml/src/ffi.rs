@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the XML parser, as declared in src/html.h, building nodes through the DOM functions of src/dom.h.
+//! Southstar — the C ABI of the XML parser, building nodes through the DOM functions.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the form helpers, as declared in src/forms.h, over the ns_node layout and the control functions of src/dom.h.
+//! Southstar — the C ABI of the form helpers, over the ns_node layout and the DOM's control functions.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

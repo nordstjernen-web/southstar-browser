@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the renderer protocol's framing, as declared in src/ipc_http.h, and the descriptor calls behind it.
+//! Southstar — the C ABI of the renderer protocol's framing, and the descriptor calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

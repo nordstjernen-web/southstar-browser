@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of MathML layout, as declared in src/mathml.h, over Cairo, ns-pango token layouts and GLib's Unicode tables.
+//! Southstar — the C ABI of MathML layout, over Cairo, ns-pango token layouts and GLib's Unicode tables.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

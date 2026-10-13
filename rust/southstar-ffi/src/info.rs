@@ -1,4 +1,4 @@
-//! Southstar — what the Rust side of a build reports about itself on about:southstar, as declared in src/rust_info.h.
+//! Southstar — what the Rust side of a build reports about itself on about:southstar.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

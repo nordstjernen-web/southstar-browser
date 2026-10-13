@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the extension host, as declared in src/ext.h, and the GLib, GRegex and libpsl calls behind it.
+//! Southstar — the C ABI of the extension host, and the GLib, GRegex and libpsl calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/paint.h and of the paint calls src/layout.h declares, over the cairo, ns-pango and engine bindings.
+//! Southstar — the C ABI of painting, over the cairo, ns-pango and engine bindings.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

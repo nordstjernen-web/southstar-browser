@@ -1,6 +1,6 @@
 [package]
 name = "southstar-anim"
-description = "CSS transitions and @keyframes animations of src/anim.h: observing style changes, running and sampling animations, their events and the Web Animations hooks"
+description = "CSS transitions and @keyframes animations: observing style changes, running and sampling animations, their events and the Web Animations hooks"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

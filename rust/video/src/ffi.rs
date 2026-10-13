@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/video.h and src/video_decode.h: the ns_video struct, the video cache and the decoder, over the network, textures, the camera, the DOM and the box tree.
+//! Southstar — the C ABI of video: the ns_video struct, the video cache and the decoder, over the network, textures, the camera, the DOM and the box tree.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

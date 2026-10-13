@@ -1,6 +1,6 @@
 [package]
 name = "southstar-dom"
-description = "The DOM declared in src/dom.h: nodes and attributes, document indexes, serialization and form controls"
+description = "The DOM: nodes and attributes, document indexes, serialization and form controls"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

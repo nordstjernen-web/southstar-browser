@@ -1,4 +1,4 @@
-//! Southstar — the layout.h and ns_layout_* entry points the box-tree builder implements, and the css, net, image, svg, paint and layout-crate calls it makes, behind safe wrappers.
+//! Southstar — the ns_layout_* entry points the box-tree builder implements, and the css, net, image, svg, paint and layout-crate calls it makes, behind safe wrappers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-//! Southstar — struct ns_css_value as css.h lays it out for the value kinds the Rust sections build, and building one css.c can own and free.
+//! Southstar — struct ns_css_value as the style engine lays it out for the value kinds the Rust sections build, and building one css.c can own and free.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

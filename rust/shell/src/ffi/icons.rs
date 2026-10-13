@@ -1,4 +1,4 @@
-//! Southstar — the NsIcon paintable behind icons.h: shell icons from the resource bundle, drawn by the SVG renderer.
+//! Southstar — the NsIcon paintable: shell icons from the resource bundle, drawn by the SVG renderer.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

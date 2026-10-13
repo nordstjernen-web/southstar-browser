@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of spell checking, as declared in src/spellcheck.h, and the Enchant calls behind it.
+//! Southstar — the C ABI of spell checking, and the Enchant calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

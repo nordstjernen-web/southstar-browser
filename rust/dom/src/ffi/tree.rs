@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the tree, modal and inertness helpers declared in src/dom.h.
+//! Southstar — the C ABI of the tree, modal and inertness helpers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

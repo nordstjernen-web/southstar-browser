@@ -1,4 +1,4 @@
-//! Southstar — the css.h side of the animation engine: refcounted values, declaration blocks, @keyframes rules, transition and animation lists and computed styles, as css.c lays them out.
+//! Southstar — the style-engine side of the animation engine: refcounted values, declaration blocks, @keyframes rules, transition and animation lists and computed styles, as css.c lays them out.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

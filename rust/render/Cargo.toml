@@ -1,6 +1,6 @@
 [package]
 name = "southstar-render"
-description = "The style and layout pipeline of src/render.h: cascade, web fonts on demand, zoom, container-query passes and layout"
+description = "The style and layout pipeline: cascade, web fonts on demand, zoom, container-query passes and layout"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

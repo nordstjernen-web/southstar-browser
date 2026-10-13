@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the HTML parser declared in src/html.h: a rust/html5 tree sink that writes ns_nodes directly, with their strings in one arena per document.
+//! Southstar — the C ABI of the HTML parser: a rust/html5 tree sink that writes ns_nodes directly, with their strings in one arena per document.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

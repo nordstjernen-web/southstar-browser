@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of WebSocket, as declared in src/ws.h, the connection over rust/http's HTTP/1.1 upgrade and main-loop dispatch.
+//! Southstar — the C ABI of WebSocket, the connection over rust/http's HTTP/1.1 upgrade and main-loop dispatch.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

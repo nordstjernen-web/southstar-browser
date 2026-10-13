@@ -1,4 +1,4 @@
-//! Southstar — the C entry points of pagelayers.h over the Rust page layer cache.
+//! Southstar — the C entry points of the page layers over the Rust page layer cache.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

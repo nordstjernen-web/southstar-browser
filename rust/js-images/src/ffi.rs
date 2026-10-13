@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of image readiness as declared in src/js.h and src/js_internal.h, and the js.c, image cache, layout and GLib calls it makes.
+//! Southstar — the C ABI of image readiness, and the js.c, image cache, layout and GLib calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

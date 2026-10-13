@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of text selection, as declared in src/selection.h, over the style and inline-paint calls it needs.
+//! Southstar — the C ABI of text selection, over the style and inline-paint calls it needs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

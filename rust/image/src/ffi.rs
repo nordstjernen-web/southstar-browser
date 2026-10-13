@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the image cache and decode chain, as declared in src/image.h, over GLib, GTask, the network layer and the decoders.
+//! Southstar — the C ABI of the image cache and decode chain, over GLib, GTask, the network layer and the decoders.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

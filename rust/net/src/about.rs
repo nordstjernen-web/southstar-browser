@@ -66,8 +66,8 @@ const TAGLINES: [&str; 5] = [
     "S\u{fc}dstern the unique web browser",
 ];
 
-const LOGO_HEADER: &[u8] = include_bytes!("../../../src/about_logo_gif.h");
-const SPLASH_HEADER: &[u8] = include_bytes!("../../../src/about_splash_gif.h");
+const LOGO_GIF: &[u8] = include_bytes!("../../../data/icons/hicolor/scalable/apps/southstar.gif");
+const SPLASH_GIF: &[u8] = include_bytes!("../../../data/about-splash.gif");
 
 const LOGO_PATHS: [&str; 4] = [
     "share/icons/hicolor/scalable/apps/southstar.gif",
@@ -155,28 +155,10 @@ fn read_first(rel_paths: &[&str]) -> Option<Vec<u8>> {
     })
 }
 
-fn header_literal(header: &[u8]) -> Vec<u8> {
-    let start = find(header, b"[] =", 0).map_or(header.len(), |i| i + 4);
-    let mut out = Vec::new();
-    let mut in_string = false;
-    for &b in &header[start..] {
-        match (in_string, b) {
-            (false, b';') => break,
-            (_, b'"') => in_string = !in_string,
-            (true, _) => out.push(b),
-            _ => {}
-        }
-    }
-    out
-}
-
 fn logo_data_uri() -> &'static [u8] {
     static URI: OnceLock<Vec<u8>> = OnceLock::new();
     URI.get_or_init(|| {
-        let encoded = match read_first(&LOGO_PATHS) {
-            Some(gif) => sys::base64(&gif),
-            None => header_literal(LOGO_HEADER),
-        };
+        let encoded = sys::base64(read_first(&LOGO_PATHS).as_deref().unwrap_or(LOGO_GIF));
         [&b"data:image/gif;base64,"[..], &encoded].concat()
     })
 }
@@ -192,7 +174,7 @@ fn logo_markup() -> Vec<u8> {
 
 fn splash_markup() -> Vec<u8> {
     static SPLASH: OnceLock<Vec<u8>> = OnceLock::new();
-    let encoded = SPLASH.get_or_init(|| header_literal(SPLASH_HEADER));
+    let encoded = SPLASH.get_or_init(|| sys::base64(SPLASH_GIF));
     [
         &b"<img class=\"splash\" src=\"data:image/gif;base64,"[..],
         encoded,

@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of textures, as declared in src/texture.h.
+//! Southstar — the C ABI of textures.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

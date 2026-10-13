@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of pagination, as declared in src/print.h, over the style, paint and Cairo calls it needs.
+//! Southstar — the C ABI of pagination, over the style, paint and Cairo calls it needs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

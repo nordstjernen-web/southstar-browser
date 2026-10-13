@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of startup security, as declared in src/security.h, and the system calls behind it.
+//! Southstar — the C ABI of startup security, and the system calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

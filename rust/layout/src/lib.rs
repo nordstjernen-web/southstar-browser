@@ -1,4 +1,4 @@
-//! Southstar — the box tree of src/layout.h with borrowed box handles over it, and layout.c ported by section: so far choosing the image an <img> loads from srcset, sizes and <picture> sources, and the image-map area under a point.
+//! Southstar — the box tree with borrowed box handles over it, and layout.c ported by section: so far choosing the image an <img> loads from srcset, sizes and <picture> sources, and the image-map area under a point.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

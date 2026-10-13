@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of custom elements as declared in src/js_internal.h, and the js.c calls it makes.
+//! Southstar — the C ABI of custom elements, and the js.c calls it makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

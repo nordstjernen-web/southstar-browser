@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the watchdog, as declared in src/watchdog.h, over GLib's main loop and child watches.
+//! Southstar — the C ABI of the watchdog, over GLib's main loop and child watches.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

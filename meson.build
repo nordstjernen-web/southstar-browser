@@ -166,7 +166,7 @@ cairo      = dependency('cairo')
 # Text is shaped through ns-pango, a Pango fork that caches finished glyph
 # strings across layouts; every symbol in it is renamed, because GTK loads the
 # system Pango into the same process. -Dns-pango=disabled links the system
-# Pango instead, and src/ns_pango_names.h maps the renamed API back for it.
+# Pango instead, and the Rust crates link its stock symbol names (feature ns-pango off).
 if use_ns_pango
   ns_pango_debug = ns_is_release ? 'false' : 'true'
   ns_pango_ndebug = ns_is_release ? 'true' : 'false'

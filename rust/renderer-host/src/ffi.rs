@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the renderer session, as declared in src/renderer_serve.h and src/print.h.
+//! Southstar — the C ABI of the renderer session.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

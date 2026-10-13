@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the networking bindings as declared in src/js_internal.h, and the js.c, net and GLib calls they make.
+//! Southstar — the C ABI of the networking bindings, and the js.c, net and GLib calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

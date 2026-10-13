@@ -1,4 +1,4 @@
-//! Southstar — Cairo, ns-pango, GLib and DOM calls behind SVG rendering, and the C ABI of src/svg.h.
+//! Southstar — Cairo, ns-pango, GLib and DOM calls behind SVG rendering, and its C ABI.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

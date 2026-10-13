@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the JavaScript bytecode cache, as declared in src/bytecode_cache.h, and the GLib calls behind it.
+//! Southstar — the C ABI of the JavaScript bytecode cache, and the GLib calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

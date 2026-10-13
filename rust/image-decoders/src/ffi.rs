@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the raster (PNG/GIF/BMP/JPEG), ICO and WebP decoders, as declared in src/image.h, and the texture calls they make.
+//! Southstar — the C ABI of the raster (PNG/GIF/BMP/JPEG), ICO and WebP decoders, and the texture calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

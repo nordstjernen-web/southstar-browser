@@ -1,6 +1,6 @@
 [package]
 name = "southstar-about-style"
-description = "The shared stylesheet of the built-in about: pages, read from src/about_style.h"
+description = "The shared stylesheet of the built-in about: pages, embedded from base.css"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

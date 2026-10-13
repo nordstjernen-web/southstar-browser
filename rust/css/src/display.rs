@@ -1,4 +1,4 @@
-//! Southstar — the display property: its keywords and multi-keyword forms parsed into the ns_display css.h declares, their canonical spelling, blockification, and the overflow-clip-margin value.
+//! Southstar — the display property: its keywords and multi-keyword forms parsed into ns_display, their canonical spelling, blockification, and the overflow-clip-margin value.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

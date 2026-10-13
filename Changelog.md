@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The 75 C headers that described the interfaces between modules are deleted;
+  src/libsouthstar.h, the public embedding API, is the one left. The about-page
+  logo, splash and stylesheet are embedded from plain .gif/.css files, and the
+  dead ns_pango_names.h and its generator are gone.
 * MPEG-1 playback is pure Rust: the vendored C pl_mpeg decoder
   (subprojects/plmpeg) is replaced by rust/plmpeg, an in-tree port with no
   dependencies covering the MPEG-PS demuxer, MPEG-1 video, MP2 audio, seeking

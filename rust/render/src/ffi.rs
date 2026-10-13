@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of src/render.h: the render context and profile, the relayout driver with its container-query passes, and the page rule, hover and active state a relayout records.
+//! Southstar — the C ABI of rendering: the render context and profile, the relayout driver with its container-query passes, and the page rule, hover and active state a relayout records.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

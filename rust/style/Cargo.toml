@@ -1,6 +1,6 @@
 [package]
 name = "southstar-style"
-description = "Computed styles of src/css.h read from Rust: properties by name and by id, ns_style's values with their gradients, shadows, transforms and layers, the value kinds and the css.c calls that interpret them"
+description = "Computed styles read from Rust: properties by name and by id, ns_style's values with their gradients, shadows, transforms and layers, the value kinds and the css.c calls that interpret them"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

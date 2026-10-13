@@ -1,4 +1,4 @@
-//! Southstar — the page record's handle (Js), realm creation and teardown, and their C ABI as declared in src/js.h and src/js_internal.h.
+//! Southstar — the page record's handle (Js), realm creation and teardown, and their C ABI.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

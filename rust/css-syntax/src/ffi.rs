@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the CSS Syntax parser, as declared in src/css_syntax.h.
+//! Southstar — the C ABI of the CSS Syntax parser.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-//! Southstar — the title bar row widget behind titlerow.h: a box whose custom layout places its children.
+//! Southstar — the title bar row widget: a box whose custom layout places its children.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

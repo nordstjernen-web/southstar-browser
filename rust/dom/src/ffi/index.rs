@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the document indexes, document order and the tag, id and fragment lookups declared in src/dom.h.
+//! Southstar — the C ABI of the document indexes, document order and the tag, id and fragment lookups.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
