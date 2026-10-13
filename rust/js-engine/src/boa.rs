@@ -36,6 +36,7 @@ use crate::{
     TypedArrayView, int64_modulo,
 };
 
+mod access;
 mod class;
 mod misc;
 mod reflect;
@@ -263,7 +264,9 @@ impl Scope<'_> {
     }
 
     pub fn eval_native_script(&mut self, source: &str, name: &str) -> Result<Value, Value> {
-        self.eval_script(source, name)
+        let path = format!("{}{name}", access::ENGINE_SOURCE_PREFIX);
+        let source = Source::from_bytes(source).with_path(Path::new(&path));
+        self.cx().eval(source).map(Value).map_err(|e| self.error(e))
     }
 
     pub fn eval_module(&mut self, source: &str, path: &Path) -> Result<Value, Value> {
@@ -420,9 +423,11 @@ impl Scope<'_> {
                 let this = Value(this.clone());
                 let args: Vec<Value> = args.iter().cloned().map(Value).collect();
                 let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
-                f(&mut Scope::of(ctx), &this, &args, &data)
-                    .map(|value| value.0)
-                    .map_err(|error| JsError::from_opaque(error.0))
+                access::in_native(ctx.frame_depth(), || {
+                    f(&mut Scope::of(ctx), &this, &args, &data)
+                })
+                .map(|value| value.0)
+                .map_err(|error| JsError::from_opaque(error.0))
             },
             captures,
         );
@@ -446,9 +451,11 @@ impl Scope<'_> {
                 let this = Value(this.clone());
                 let args: Vec<Value> = args.iter().cloned().map(Value).collect();
                 let data: Vec<Value> = captures.iter().cloned().map(Value).collect();
-                f(&mut Scope::of(ctx), &this, &args, &data)
-                    .map(|value| value.0)
-                    .map_err(|error| JsError::from_opaque(error.0))
+                access::in_native(ctx.frame_depth(), || {
+                    f(&mut Scope::of(ctx), &this, &args, &data)
+                })
+                .map(|value| value.0)
+                .map_err(|error| JsError::from_opaque(error.0))
             },
             captures,
         );
@@ -464,7 +471,7 @@ impl Scope<'_> {
         let native = NativeFunction::from_copy_closure(move |this, args, ctx| {
             let this = Value(this.clone());
             let args: Vec<Value> = args.iter().cloned().map(Value).collect();
-            f(&mut Scope::of(ctx), &this, &args)
+            access::in_native(ctx.frame_depth(), || f(&mut Scope::of(ctx), &this, &args))
                 .map(|value| value.0)
                 .map_err(|error| JsError::from_opaque(error.0))
         });

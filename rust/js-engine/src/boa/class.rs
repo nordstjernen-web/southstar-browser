@@ -388,11 +388,11 @@ impl Scope<'_> {
     }
 
     pub fn is_host_access(&mut self) -> bool {
-        false
+        super::access::is_host_access(self.cx())
     }
 
     pub fn is_host_caller(&mut self) -> bool {
-        false
+        super::access::is_host_caller(self.cx())
     }
 
     pub fn has_key(&mut self, object: &Value, key: &PropertyKey) -> Result<bool, Value> {

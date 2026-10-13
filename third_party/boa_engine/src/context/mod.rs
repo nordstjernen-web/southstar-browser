@@ -456,6 +456,22 @@ impl Context {
         self.instructions_remaining
     }
 
+    /// Returns how many call frames are on the VM stack; native functions push none.
+    #[inline]
+    #[must_use]
+    pub fn frame_depth(&self) -> usize {
+        self.vm.frames.len()
+    }
+
+    /// Returns the source path of the code running in the call frame at `index`.
+    #[must_use]
+    pub fn frame_source_path(&self, index: usize) -> Option<crate::vm::SourcePath> {
+        self.vm
+            .frames
+            .get(index)
+            .map(|frame| frame.code_block().path().clone())
+    }
+
     /// Returns the currently active realm.
     #[inline]
     #[must_use]

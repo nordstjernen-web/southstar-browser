@@ -5,7 +5,7 @@
 use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::{JsError, JsString, JsValue, NativeFunction};
 
-use super::{Scope, Value};
+use super::{Scope, Value, access};
 use crate::{Attributes, Prop};
 
 const ACCESSOR: Attributes = Attributes {
@@ -29,9 +29,11 @@ impl Scope<'_> {
         let native = match *prop {
             Prop::Accessor { get: Some(get), .. } => {
                 NativeFunction::from_copy_closure(move |this, _args, ctx| {
-                    get(&mut Scope::of(ctx), &Value(this.clone()))
-                        .map(|value| value.0)
-                        .map_err(|error| JsError::from_opaque(error.0))
+                    access::in_native(ctx.frame_depth(), || {
+                        get(&mut Scope::of(ctx), &Value(this.clone()))
+                    })
+                    .map(|value| value.0)
+                    .map_err(|error| JsError::from_opaque(error.0))
                 })
             }
             Prop::AccessorMagic {
@@ -39,9 +41,11 @@ impl Scope<'_> {
                 magic,
                 ..
             } => NativeFunction::from_copy_closure(move |this, _args, ctx| {
-                get(&mut Scope::of(ctx), &Value(this.clone()), i32::from(magic))
-                    .map(|value| value.0)
-                    .map_err(|error| JsError::from_opaque(error.0))
+                access::in_native(ctx.frame_depth(), || {
+                    get(&mut Scope::of(ctx), &Value(this.clone()), i32::from(magic))
+                })
+                .map(|value| value.0)
+                .map_err(|error| JsError::from_opaque(error.0))
             }),
             _ => return None,
         };
@@ -54,9 +58,11 @@ impl Scope<'_> {
             Prop::Accessor { set: Some(set), .. } => {
                 NativeFunction::from_copy_closure(move |this, args, ctx| {
                     let value = Value(args.first().cloned().unwrap_or_default());
-                    set(&mut Scope::of(ctx), &Value(this.clone()), &value)
-                        .map(|()| JsValue::undefined())
-                        .map_err(|error| JsError::from_opaque(error.0))
+                    access::in_native(ctx.frame_depth(), || {
+                        set(&mut Scope::of(ctx), &Value(this.clone()), &value)
+                    })
+                    .map(|()| JsValue::undefined())
+                    .map_err(|error| JsError::from_opaque(error.0))
                 })
             }
             Prop::AccessorMagic {
@@ -65,12 +71,14 @@ impl Scope<'_> {
                 ..
             } => NativeFunction::from_copy_closure(move |this, args, ctx| {
                 let value = Value(args.first().cloned().unwrap_or_default());
-                set(
-                    &mut Scope::of(ctx),
-                    &Value(this.clone()),
-                    &value,
-                    i32::from(magic),
-                )
+                access::in_native(ctx.frame_depth(), || {
+                    set(
+                        &mut Scope::of(ctx),
+                        &Value(this.clone()),
+                        &value,
+                        i32::from(magic),
+                    )
+                })
                 .map(|()| JsValue::undefined())
                 .map_err(|error| JsError::from_opaque(error.0))
             }),

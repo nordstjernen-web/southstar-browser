@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* Engine-created events (submit, click, input, …) keep their type,
+  cancelable flag and hidden state on Boa again: the Boa backend now answers
+  is_host_access/is_host_caller from the browser's native-call stack and
+  Boa's call frames (the fork exposes frame_depth and frame_source_path), as
+  QuickJS did. preventDefault() in onsubmit stops the submission, and Acid3
+  runs to completion (93/100) instead of navigating away at test 54.
 * MP3 decoding in the southstar-audio helper uses rust/minimp3, a pure-Rust
   port of minimp3 with bit-identical output; the vendored C minimp3 and its
   libminimp3 build target are removed. The tree has no C code of its own left.
