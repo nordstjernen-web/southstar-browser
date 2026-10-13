@@ -128,21 +128,21 @@ fn arg(args: &[Value]) -> Value {
     args.first().cloned().unwrap_or_else(Value::undefined)
 }
 
-pub(crate) fn selection_start(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selection_start(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Ok(Value::null());
     }
     Ok(Value::number(f64::from(position(scope, this, "_selStart"))))
 }
 
-pub(crate) fn selection_end(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selection_end(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Ok(Value::null());
     }
     Ok(Value::number(f64::from(position(scope, this, "_selEnd"))))
 }
 
-pub(crate) fn selection_direction(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selection_direction(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Ok(Value::null());
     }
@@ -162,7 +162,7 @@ pub(crate) fn selection_direction(scope: &mut Scope<'_>, this: &Value, _: &[Valu
     Ok(scope.string(direction))
 }
 
-pub(crate) fn set_selection_start(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_selection_start(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Err(invalid_state(scope));
     }
@@ -175,7 +175,7 @@ pub(crate) fn set_selection_start(scope: &mut Scope<'_>, this: &Value, args: &[V
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_selection_end(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_selection_end(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Err(invalid_state(scope));
     }
@@ -188,11 +188,7 @@ pub(crate) fn set_selection_end(scope: &mut Scope<'_>, this: &Value, args: &[Val
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_selection_direction(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn set_selection_direction(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Err(invalid_state(scope));
     }
@@ -203,14 +199,14 @@ pub(crate) fn set_selection_direction(
     Ok(Value::undefined())
 }
 
-pub(crate) fn text_length(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn text_length(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !ffi::element(this).is_some_and(|el| named(el, "input") || named(el, "textarea")) {
         return Ok(Value::undefined());
     }
     Ok(Value::number(f64::from(value_length(scope, this))))
 }
 
-pub(crate) fn select(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn select(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !applies_to(this) {
         return Ok(Value::undefined());
     }
@@ -220,7 +216,7 @@ pub(crate) fn select(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResu
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_selection_range(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_selection_range(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         let message = format!("2 arguments required, but only {} present", args.len());
         return Err(scope.type_error(&message));
@@ -258,7 +254,7 @@ fn slice(scope: &mut Scope<'_>, string: &Value, start: u32, end: u32) -> JsResul
     )
 }
 
-pub(crate) fn set_range_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_range_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.is_empty() {
         return Err(scope.type_error("1 argument required, but only 0 present"));
     }
@@ -370,10 +366,10 @@ pub(crate) fn step(scope: &mut Scope<'_>, this: &Value, args: &[Value], sign: i3
     }
 }
 
-pub(crate) fn step_up(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn step_up(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     step(scope, this, args, 1)
 }
 
-pub(crate) fn step_down(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn step_down(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     step(scope, this, args, -1)
 }

@@ -20,7 +20,7 @@ fn section_rows(table: Element, section: &'static [u8]) -> impl Iterator<Item = 
         .flat_map(|c| children(c).filter(|&r| named(Some(r), b"tr")))
 }
 
-pub(crate) fn rows(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn rows(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let node = ffi::unwrap_node(this);
     if reflects_rows(node) {
         return ffi::int_attr_get(scope, this, c"rows");
@@ -42,7 +42,7 @@ pub(crate) fn rows(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     wrap_all(scope, all)
 }
 
-pub(crate) fn set_rows(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_rows(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     if !reflects_rows(ffi::unwrap_node(this)) {
         return Ok(());
     }
@@ -58,26 +58,26 @@ fn section(scope: &mut Scope<'_>, this: &Value, tag: &[u8]) -> JsResult {
     }
 }
 
-pub(crate) fn caption(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn caption(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     section(scope, this, b"caption")
 }
 
-pub(crate) fn thead(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn thead(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     section(scope, this, b"thead")
 }
 
-pub(crate) fn tfoot(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn tfoot(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     section(scope, this, b"tfoot")
 }
 
-pub(crate) fn tbodies(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn tbodies(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     match ffi::unwrap_node(this) {
         Some(table) => wrap_all(scope, children(table).filter(|&c| named(Some(c), b"tbody"))),
         None => Ok(scope.new_array()),
     }
 }
 
-pub(crate) fn cells(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn cells(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     match ffi::unwrap_node(this) {
         Some(row) => wrap_all(
             scope,
@@ -118,19 +118,19 @@ fn create_section(scope: &mut Scope<'_>, this: &Value, tag: &[u8], before_body: 
     Ok(ffi::make_node(scope, Some(created)))
 }
 
-pub(crate) fn create_thead(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_thead(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     create_section(scope, this, b"thead", true)
 }
 
-pub(crate) fn create_tbody(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_tbody(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     create_section(scope, this, b"tbody", false)
 }
 
-pub(crate) fn create_tfoot(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_tfoot(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     create_section(scope, this, b"tfoot", false)
 }
 
-pub(crate) fn create_caption(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_caption(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(table) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -156,15 +156,15 @@ fn delete_section(scope: &mut Scope<'_>, this: &Value, tag: &[u8]) -> JsResult {
     Ok(Value::undefined())
 }
 
-pub(crate) fn delete_thead(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn delete_thead(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     delete_section(scope, this, b"thead")
 }
 
-pub(crate) fn delete_tfoot(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn delete_tfoot(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     delete_section(scope, this, b"tfoot")
 }
 
-pub(crate) fn delete_caption(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn delete_caption(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     delete_section(scope, this, b"caption")
 }
 
@@ -228,7 +228,7 @@ fn row_parent(table: Element, rows: &[Element]) -> Element {
     table
 }
 
-pub(crate) fn insert_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn insert_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let index = insertion_index(scope, args)?;
     let Some(table) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
@@ -249,7 +249,7 @@ pub(crate) fn insert_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     Ok(ffi::make_node(scope, Some(row)))
 }
 
-pub(crate) fn delete_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn delete_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(table), Some(index)) = (ffi::unwrap_node(this), args.first()) else {
         return Ok(Value::undefined());
     };
@@ -265,7 +265,7 @@ fn row_cells(row: Element) -> Vec<Element> {
         .collect()
 }
 
-pub(crate) fn insert_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn insert_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let index = insertion_index(scope, args)?;
     let Some(row) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
@@ -283,7 +283,7 @@ pub(crate) fn insert_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     Ok(ffi::make_node(scope, Some(cell)))
 }
 
-pub(crate) fn delete_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn delete_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(row), Some(index)) = (ffi::unwrap_node(this), args.first()) else {
         return Ok(Value::undefined());
     };

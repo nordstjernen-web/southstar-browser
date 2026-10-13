@@ -43,12 +43,12 @@ fn body_node(scope: &Scope<'_>, this: &Value) -> Option<Element> {
         .find(|c| html_element_named(*c, "body") || html_element_named(*c, "frameset"))
 }
 
-pub(crate) fn get_document_element(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_document_element(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let root = root_node(scope, this);
     Ok(ffi::wrap_node(scope, root))
 }
 
-pub(crate) fn get_body(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_body(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let body = body_node(scope, this);
     Ok(ffi::wrap_node(scope, body))
 }
@@ -80,7 +80,7 @@ fn detach_old_body(js: Js, root: Element, old_body: Element) -> Option<Element> 
     reference
 }
 
-pub(crate) fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let value = &args[0];
     let Some(new_body) = ffi::unwrap_node(value) else {
         return Err(scope.type_error("Document.body must be an Element"));
@@ -148,7 +148,7 @@ pub(crate) fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
     Ok(Value::undefined())
 }
 
-pub(crate) fn get_scrolling_element(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+pub fn get_scrolling_element(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let Some(doc) = document_for(scope, this) else {
         return Ok(Value::null());
     };
@@ -158,7 +158,7 @@ pub(crate) fn get_scrolling_element(scope: &mut Scope<'_>, this: &Value, a: &[Va
     get_document_element(scope, this, a)
 }
 
-pub(crate) fn get_head(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_head(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(doc) = document_for(scope, this) else {
         return Ok(Value::null());
     };
@@ -210,7 +210,7 @@ fn active_element_in(js: Js, doc: Element) -> Option<Element> {
     None
 }
 
-pub(crate) fn get_active_element(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_active_element(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let doc = document_for(scope, this);
     let js = ffi::js_of(scope);
     let Some(doc) = doc.filter(|_| !js.is_null()) else {
@@ -226,7 +226,7 @@ pub(crate) fn get_active_element(scope: &mut Scope<'_>, this: &Value, _: &[Value
     Ok(ffi::wrap_node(scope, active))
 }
 
-pub(crate) fn get_current_script(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_current_script(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() {
         return Ok(Value::null());
@@ -261,7 +261,7 @@ fn node_array(scope: &mut Scope<'_>, nodes: Vec<Element>) -> JsResult {
     Ok(array)
 }
 
-pub(crate) fn get_scripts(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_scripts(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(doc) = document_for(scope, this) else {
         return Ok(scope.new_array());
     };
@@ -280,7 +280,7 @@ pub(crate) fn get_scripts(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> J
     node_array(scope, scripts)
 }
 
-pub(crate) fn get_anchors(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_anchors(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(doc) = document_for(scope, this) else {
         return Ok(scope.new_array());
     };
@@ -288,6 +288,6 @@ pub(crate) fn get_anchors(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> J
     node_array(scope, anchors)
 }
 
-pub(crate) fn empty_list(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn empty_list(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(scope.new_array())
 }

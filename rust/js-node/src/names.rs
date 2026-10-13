@@ -19,7 +19,7 @@ const XHTML_NS: &[u8] = b"http://www.w3.org/1999/xhtml";
 const PREFIX_LIMIT: usize = 64;
 const INLINE: usize = 128;
 
-pub(crate) enum Text<'a> {
+pub enum Text<'a> {
     Null,
     Plain(&'a [u8]),
     Upper(&'a [u8]),
@@ -27,7 +27,7 @@ pub(crate) enum Text<'a> {
     UpperQualified(&'a [u8], &'a [u8]),
 }
 
-pub(crate) fn to_value(scope: &mut Scope<'_>, text: Text<'_>) -> Value {
+pub fn to_value(scope: &mut Scope<'_>, text: Text<'_>) -> Value {
     let (prefix, name, upper) = match text {
         Text::Null => return Value::null(),
         Text::Plain(name) => return scope.string_from_bytes(name),
@@ -106,7 +106,7 @@ pub(crate) fn local_name(node: Element) -> Option<&'static [u8]> {
     Some(split_colon(name).map_or(name, |(_, local)| local))
 }
 
-pub(crate) fn node_name(node: Option<Element>) -> Text<'static> {
+pub fn node_name(node: Option<Element>) -> Text<'static> {
     let Some(node) = node else {
         return Text::Plain(b"#text");
     };
@@ -169,7 +169,7 @@ fn namespaced_name(node: Element) -> Option<(&'static [u8], &'static [u8])> {
     split_colon(bytes(node.name())?)
 }
 
-pub(crate) fn local_name_of(node: Option<Element>) -> Text<'static> {
+pub fn local_name_of(node: Option<Element>) -> Text<'static> {
     let Some(node) = node else {
         return Text::Null;
     };
@@ -182,7 +182,7 @@ pub(crate) fn local_name_of(node: Option<Element>) -> Text<'static> {
     }
 }
 
-pub(crate) fn prefix_of(node: Option<Element>) -> Text<'static> {
+pub fn prefix_of(node: Option<Element>) -> Text<'static> {
     let Some(node) = node.filter(|n| n.name().is_some()) else {
         return Text::Null;
     };
@@ -197,7 +197,7 @@ pub(crate) fn prefix_of(node: Option<Element>) -> Text<'static> {
     }
 }
 
-pub(crate) fn namespace_uri_of(node: Option<Element>) -> Text<'static> {
+pub fn namespace_uri_of(node: Option<Element>) -> Text<'static> {
     if let Some(stored) = node
         .filter(|n| n.is_element())
         .and_then(|n| n.attr(NS_URI_ATTR))

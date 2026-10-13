@@ -22,7 +22,7 @@ pub(crate) static LIVE_CLASS: HostClass = HostClass::new(
     },
 );
 
-pub(crate) fn register(scope: &mut Scope<'_>) {
+pub fn register(scope: &mut Scope<'_>) {
     scope.register_class(&LIVE_CLASS);
     live::install_protos(scope);
     let prototype = live::proto(ffi::js_of(scope), 0).unwrap_or_else(Value::undefined);

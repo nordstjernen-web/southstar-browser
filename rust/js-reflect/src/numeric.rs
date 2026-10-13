@@ -105,7 +105,7 @@ fn missing_dimension(scope: &Scope<'_>, n: Element, attr: &[u8]) -> Option<i32> 
     raw_name_is(n, b"canvas").then_some(if is_width { 300 } else { 150 })
 }
 
-pub(crate) fn int_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn int_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let Some(def) = int_attr(magic) else {
         return Ok(Value::int(0));
     };
@@ -181,12 +181,7 @@ fn index_size_error(scope: &mut Scope<'_>, message: &CStr) -> Value {
     ffi::dom_exception(scope, c"IndexSizeError", 1, message)
 }
 
-pub(crate) fn int_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn int_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     let Some(def) = int_attr(magic) else {
         return Ok(());
     };
@@ -224,12 +219,7 @@ pub(crate) fn int_set(
     Ok(())
 }
 
-pub(crate) fn dimension_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn dimension_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     if let Some(n) = ffi::unwrap_node(this)
         .filter(|&n| raw_name(n).is_some_and(|name| tables::STRING_DIMENSION_TAGS.contains(&name)))
     {
@@ -245,7 +235,7 @@ pub(crate) fn dimension_set(
     int_set(scope, this, val, magic)
 }
 
-pub(crate) fn tab_index_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn tab_index_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(Value::int(-1));
     };
@@ -262,7 +252,7 @@ pub(crate) fn tab_index_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     )))
 }
 
-pub(crate) fn tab_index_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn tab_index_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -282,7 +272,7 @@ fn bool_name(names: &'static [&'static CStr], magic: i32) -> Option<&'static CSt
         .and_then(|i| names.get(i).copied())
 }
 
-pub(crate) fn plain_bool_get(_scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn plain_bool_get(_scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let present = ffi::unwrap_node(this)
         .zip(bool_name(tables::PLAIN_BOOLEANS, magic))
         .is_some_and(|(n, name)| ffi::attr(n, name).is_some());
@@ -298,7 +288,7 @@ fn toggle(scope: &mut Scope<'_>, n: Element, name: &CStr, on: bool) {
     }
 }
 
-pub(crate) fn plain_bool_set(
+pub fn plain_bool_set(
     scope: &mut Scope<'_>,
     this: &Value,
     val: &Value,
@@ -315,7 +305,7 @@ fn is_async_method(n: Element, name: &CStr) -> bool {
     name.to_bytes() == b"async" && !is_named(n, b"script")
 }
 
-pub(crate) fn bool_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn bool_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let Some((n, name)) = ffi::unwrap_node(this).zip(bool_name(tables::BOOLEANS, magic)) else {
         return Ok(Value::boolean(false));
     };
@@ -325,12 +315,7 @@ pub(crate) fn bool_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsRes
     Ok(Value::boolean(ffi::attr(n, name).is_some()))
 }
 
-pub(crate) fn bool_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn bool_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     let Some((n, name)) = ffi::unwrap_node(this).zip(bool_name(tables::BOOLEANS, magic)) else {
         return Ok(());
     };

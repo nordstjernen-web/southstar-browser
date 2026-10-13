@@ -4,7 +4,7 @@
 
 mod ffi;
 mod font_face;
-mod font_set;
+pub mod font_set;
 mod ready;
 
 use southstar_js_engine::{NativeFn, Scope, Value};

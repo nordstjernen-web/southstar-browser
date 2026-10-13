@@ -6,7 +6,7 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::{JsResult, ffi, ready};
 
-pub(crate) fn document_fonts(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn document_fonts(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     ffi::flush_layout(js);
     let set = scope.new_object();

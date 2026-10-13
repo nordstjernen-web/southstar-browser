@@ -180,7 +180,7 @@ pub(crate) fn element_async(
     set_timeout(scope, &Value::undefined(), &[bound, delay])
 }
 
-pub(crate) fn clear(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value> {
+pub fn clear(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value> {
     let js = ffi::js_of(scope);
     if js.is_null() || args.is_empty() {
         return Ok(Value::undefined());

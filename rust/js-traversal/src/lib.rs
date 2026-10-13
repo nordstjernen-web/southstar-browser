@@ -3,11 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod iterator;
-mod range;
-mod selection;
+pub mod iterator;
+pub mod range;
+pub mod selection;
 mod static_range;
-mod walker;
+pub mod walker;
 
 use southstar_dom::Node;
 use southstar_dom::serialize::is_embedded_doc;

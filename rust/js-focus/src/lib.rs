@@ -3,10 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod activation;
-mod click;
+pub mod click;
 mod ffi;
-mod focus;
-mod fullscreen;
+pub mod focus;
+pub mod fullscreen;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

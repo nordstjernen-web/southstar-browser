@@ -162,7 +162,7 @@ fn jar_has_name(jar: &[u8], name: &[u8]) -> bool {
     false
 }
 
-pub(crate) fn get_cookie(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_cookie(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() || ffi::is_realm_document(scope, this) {
         return Ok(scope.string(""));
@@ -170,7 +170,7 @@ pub(crate) fn get_cookie(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Js
     Ok(scope.string_from_bytes(&ffi::cookie_value(js).unwrap_or_default()))
 }
 
-pub(crate) fn set_cookie(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_cookie(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() || ffi::is_realm_document(scope, this) {
         return Ok(Value::undefined());

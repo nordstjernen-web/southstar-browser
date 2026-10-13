@@ -21,11 +21,7 @@ const STRING_DIMENSIONS: [&str; 10] = [
     "iframe", "embed", "object", "marquee", "table", "colgroup", "col", "td", "th", "hr",
 ];
 
-pub(crate) fn get_bounding_client_rect(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_bounding_client_rect(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::unwrap_node(this);
     let b = box_for_this(scope, this);
     let mut rect = Rect::default();
@@ -48,7 +44,7 @@ pub(crate) fn get_bounding_client_rect(
     Ok(ffi::dom_rect(scope, rect))
 }
 
-pub(crate) fn get_client_rects(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_client_rects(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let arr = scope.new_array();
     if box_for_this(scope, this).is_none()
         && crate::svg::client_rect(scope, ffi::unwrap_node(this)).is_none()
@@ -68,11 +64,11 @@ fn offset_size(scope: &mut Scope<'_>, this: &Value, pick: fn(Rect) -> f64) -> Js
     }
 }
 
-pub(crate) fn get_offset_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_offset_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     offset_size(scope, this, |r| r.w)
 }
 
-pub(crate) fn get_offset_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_offset_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     offset_size(scope, this, |r| r.h)
 }
 
@@ -111,11 +107,11 @@ fn client_size(scope: &mut Scope<'_>, this: &Value, horizontal: bool) -> JsResul
     Ok(round_int(size))
 }
 
-pub(crate) fn get_client_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_client_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     client_size(scope, this, true)
 }
 
-pub(crate) fn get_client_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_client_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     client_size(scope, this, false)
 }
 
@@ -144,19 +140,19 @@ fn offset_position(scope: &mut Scope<'_>, this: &Value, vertical: bool) -> JsRes
     Ok(Value::int((pos - origin + 0.5).floor() as i32))
 }
 
-pub(crate) fn get_offset_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_offset_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     offset_position(scope, this, true)
 }
 
-pub(crate) fn get_offset_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_offset_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     offset_position(scope, this, false)
 }
 
-pub(crate) fn get_client_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_client_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(box_for_this(scope, this).map_or(Value::int(0), |b| round_int(b.border().top)))
 }
 
-pub(crate) fn get_client_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_client_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(box_for_this(scope, this).map_or(Value::int(0), |b| round_int(b.border().left)))
 }
 
@@ -237,7 +233,7 @@ fn offset_parent_origin(scope: &mut Scope<'_>, this: &Value) -> (f64, f64) {
     (0.0, 0.0)
 }
 
-pub(crate) fn get_offset_parent(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_offset_parent(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     ffi::flush_layout(js);
     let Some(n) = ffi::unwrap_node(this).filter(|n| n.is_element()) else {
@@ -276,11 +272,11 @@ pub(crate) fn scroll_offset(scope: &mut Scope<'_>, this: &Value, vertical: bool)
     Some(if vertical { b.scroll_y() } else { b.scroll_x() })
 }
 
-pub(crate) fn get_scroll_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_scroll_top(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(scroll_offset(scope, this, true).map_or(Value::int(0), Value::number))
 }
 
-pub(crate) fn get_scroll_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_scroll_left(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(scroll_offset(scope, this, false).map_or(Value::int(0), Value::number))
 }
 
@@ -460,7 +456,7 @@ fn scrollable_overflow_size(b: BoxRef<'_>) -> (f64, f64) {
     )
 }
 
-pub(crate) fn get_scroll_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_scroll_height(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let is_root = is_root_name(ffi::unwrap_node(this));
     let Some(b) = box_for_this(scope, this) else {
         return Ok(if is_root {
@@ -485,7 +481,7 @@ pub(crate) fn get_scroll_height(scope: &mut Scope<'_>, this: &Value, _args: &[Va
     Ok(round_int(h))
 }
 
-pub(crate) fn get_scroll_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_scroll_width(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(b) = box_for_this(scope, this) else {
         return Ok(Value::int(0));
     };
@@ -496,7 +492,7 @@ pub(crate) fn get_scroll_width(scope: &mut Scope<'_>, this: &Value, _args: &[Val
     Ok(round_int(w))
 }
 
-pub(crate) fn dimension(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn dimension(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let width = magic == 8;
     let attr = if width { c"width" } else { c"height" };
     let node = ffi::unwrap_node(this);

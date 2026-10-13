@@ -113,11 +113,11 @@ fn assigned(scope: &mut Scope<'_>, this: &Value, args: &[Value], elements_only: 
     Ok(array)
 }
 
-pub(crate) fn assigned_nodes(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn assigned_nodes(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     assigned(scope, this, args, false)
 }
 
-pub(crate) fn assigned_elements(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn assigned_elements(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     assigned(scope, this, args, true)
 }
 
@@ -138,7 +138,7 @@ pub(crate) fn assigned_slot_node(node: Element) -> Option<Element> {
     None
 }
 
-pub(crate) fn get_assigned_slot(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_assigned_slot(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };

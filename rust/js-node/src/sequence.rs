@@ -104,7 +104,7 @@ fn finish(js: Option<Js>, parent: Element, sequence: &[Element]) {
     }
 }
 
-pub(crate) fn before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(this_node) = ffi::unwrap_node(this).filter(|n| n.parent().is_some()) else {
         return Ok(Value::undefined());
     };
@@ -126,7 +126,7 @@ pub(crate) fn before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     Ok(Value::undefined())
 }
 
-pub(crate) fn after(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn after(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(this_node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -144,7 +144,7 @@ pub(crate) fn after(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     Ok(Value::undefined())
 }
 
-pub(crate) fn replace_with(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn replace_with(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(this_node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -191,7 +191,7 @@ fn select_option_at(select: Element, index: i32) -> Option<Element> {
     None
 }
 
-pub(crate) fn remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let node = ffi::unwrap_node(this);
     let js = ffi::js_of(scope);
     if let Some(select) = node.filter(|n| n.element_name() == Some(b"select"))
@@ -218,7 +218,7 @@ pub(crate) fn remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     Ok(Value::undefined())
 }
 
-pub(crate) fn append(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn append(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -233,7 +233,7 @@ pub(crate) fn append(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     Ok(Value::undefined())
 }
 
-pub(crate) fn prepend(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn prepend(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -279,7 +279,7 @@ fn take_replacement(js: Option<Js>, parent: Element, node: Element, added: &mut 
     added.push(node);
 }
 
-pub(crate) fn replace_children(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn replace_children(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };

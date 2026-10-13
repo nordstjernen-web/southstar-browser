@@ -52,10 +52,10 @@ pub(crate) fn vtt_cue(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> J
     Ok(cue)
 }
 
-pub(crate) fn text_tracks(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn text_tracks(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(scope.new_array())
 }
 
-pub(crate) fn add_text_track(_: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn add_text_track(_: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::undefined())
 }

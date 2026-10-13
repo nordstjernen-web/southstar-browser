@@ -97,7 +97,7 @@ fn require_two(scope: &mut Scope<'_>, args: &[Value]) -> JsResult<()> {
     Ok(())
 }
 
-pub(crate) fn append_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn append_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -148,7 +148,7 @@ pub(crate) fn append_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(args[0].clone())
 }
 
-pub(crate) fn remove_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn remove_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -170,7 +170,7 @@ pub(crate) fn remove_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(args[0].clone())
 }
 
-pub(crate) fn insert_before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn insert_before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -224,7 +224,7 @@ pub(crate) fn insert_before(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     Ok(args[0].clone())
 }
 
-pub(crate) fn replace_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn replace_child(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -324,7 +324,7 @@ pub(crate) fn replace_child(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     Ok(args[1].clone())
 }
 
-pub(crate) fn move_before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn move_before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(parent) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };

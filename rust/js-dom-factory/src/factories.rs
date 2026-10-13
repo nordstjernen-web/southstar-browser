@@ -34,7 +34,7 @@ fn require(scope: &mut Scope<'_>, args: &[Value], count: usize, message: &str) -
     Ok(())
 }
 
-pub(crate) fn create_element(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_element(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_none() || args.is_empty() {
         return Ok(Value::null());
@@ -75,7 +75,7 @@ pub(crate) fn create_element(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(wrapper)
 }
 
-pub(crate) fn create_text_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_text_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if ffi::js_of(scope).is_none() || args.is_empty() {
         return Ok(Value::null());
     }
@@ -84,7 +84,7 @@ pub(crate) fn create_text_node(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     Ok(finish(scope, this, node))
 }
 
-pub(crate) fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if ffi::js_of(scope).is_none() || args.len() < 2 {
         return Ok(Value::null());
     }
@@ -117,7 +117,7 @@ pub(crate) fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Val
     Ok(finish(scope, this, el))
 }
 
-pub(crate) fn create_comment(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_comment(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if ffi::js_of(scope).is_none() || args.is_empty() {
         return Ok(Value::null());
     }
@@ -126,11 +126,7 @@ pub(crate) fn create_comment(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(finish(scope, this, node))
 }
 
-pub(crate) fn create_cdata_section(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn create_cdata_section(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
@@ -155,7 +151,7 @@ pub(crate) fn create_cdata_section(
     Ok(finish(scope, this, node))
 }
 
-pub(crate) fn create_processing_instruction(
+pub fn create_processing_instruction(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
@@ -203,7 +199,7 @@ pub(crate) fn attr_node(scope: &mut Scope<'_>, qname: AttrName<'_>) -> JsResult 
     Ok(out)
 }
 
-pub(crate) fn create_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     require(scope, args, 1, "1 argument required, but only 0 present")?;
     let raw = scope.to_bytes(&args[0])?;
     if raw.contains(&0) || !names::valid_attr_name(&raw) {
@@ -230,7 +226,7 @@ pub(crate) fn create_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     Ok(out)
 }
 
-pub(crate) fn create_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn create_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     require(scope, args, 2, "2 arguments required")?;
     let ns = optional_text(scope, &args[0])?.map(|ns| ffi::c_prefix(&ns).to_vec());
     let qname = scope.to_bytes(&args[1])?;
@@ -281,7 +277,7 @@ const EVENT_ALIASES: &[(&[u8], &str)] = &[
     (b"uievents", "UIEvent"),
 ];
 
-pub(crate) fn create_event(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn create_event(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     require(scope, args, 1, "1 argument required, but only 0 present")?;
     let lower = c_text(scope, &args[0])?.to_ascii_lowercase();
     let interface = EVENT_ALIASES
@@ -310,11 +306,7 @@ pub(crate) fn create_event(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     Ok(event)
 }
 
-pub(crate) fn create_document_fragment(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn create_document_fragment(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }

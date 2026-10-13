@@ -43,17 +43,13 @@ fn enabled(js: Js, command: Command) -> bool {
     }
 }
 
-pub(crate) fn exec_command(
-    scope: &mut Scope<'_>,
-    _: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
+pub fn exec_command(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value> {
     let js = ffi::js_of(scope);
     let ok = command_arg(scope, args).is_some_and(|command| !js.is_null() && run(js, command));
     Ok(Value::boolean(ok))
 }
 
-pub(crate) fn query_command_supported(
+pub fn query_command_supported(
     scope: &mut Scope<'_>,
     _: &Value,
     args: &[Value],
@@ -61,7 +57,7 @@ pub(crate) fn query_command_supported(
     Ok(Value::boolean(command_arg(scope, args).is_some()))
 }
 
-pub(crate) fn query_command_enabled(
+pub fn query_command_enabled(
     scope: &mut Scope<'_>,
     _: &Value,
     args: &[Value],

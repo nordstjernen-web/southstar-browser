@@ -23,7 +23,7 @@ fn valid(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn attach_internals(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn attach_internals(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let internals = scope.new_object();
     let shadow_root = ffi::shadow_root(scope, this);
     set(scope, &internals, "shadowRoot", shadow_root);
@@ -56,7 +56,7 @@ pub(crate) fn attach_internals(scope: &mut Scope<'_>, this: &Value, _args: &[Val
     Ok(internals)
 }
 
-pub(crate) fn internals(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn internals(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     attach_internals(scope, this, &[])
 }
 

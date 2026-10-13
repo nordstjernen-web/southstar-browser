@@ -200,7 +200,7 @@ fn define_getter(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn)
     let _ = scope.define_accessor(object, name, Some(&getter), None, GETTER);
 }
 
-pub(crate) fn create(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
+pub fn create(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
     let root_value = arg(args, 0);
     if !root_value.is_object() || unwrap_node(&root_value).is_none() {
         return Err(scope.type_error(

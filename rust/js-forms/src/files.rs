@@ -52,7 +52,7 @@ fn make_file(scope: &mut Scope<'_>, path: &CStr) -> JsResult<Option<Value>> {
     Ok(scope.construct(&file_ctor, &[parts, name, options]).ok())
 }
 
-pub(crate) fn get_files(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_files(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(input) = ffi::element(this).filter(|n| named(*n, "input")) else {
         return Ok(Value::null());
     };

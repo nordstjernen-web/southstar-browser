@@ -342,7 +342,7 @@ fn make_range_object(scope: &mut Scope<'_>) -> Value {
     range
 }
 
-pub(crate) fn create_range(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn create_range(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let global = scope.global();
     let factory = get(scope, &global, "__ndCreateRange");
     if scope.is_function(&factory)

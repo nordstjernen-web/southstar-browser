@@ -397,7 +397,7 @@ pub(crate) fn dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
     Ok(Value::boolean(!prevented))
 }
 
-pub(crate) fn element_dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let event = event_argument(scope, args)?;
     dispatch_guard(scope, &event)?;
     let js = ffi::js_of(scope);
@@ -445,7 +445,7 @@ fn default_false_true(scope: &mut Scope<'_>, event: &Value, key: &str) {
     }
 }
 
-pub(crate) fn document_dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_dispatch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let event = event_argument(scope, args)?;
     dispatch_guard(scope, &event)?;
     let js = ffi::js_of(scope);

@@ -45,7 +45,7 @@ pub(crate) fn control_in_document(label: Element, doc: Option<Element>) -> Optio
     by_id.or_else(|| first_labelable_descendant(label, 0))
 }
 
-pub(crate) fn control(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn control(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(label) = ffi::element(this).filter(|l| named(*l, "label")) else {
         return Ok(Value::null());
     };

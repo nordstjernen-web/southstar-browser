@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod markup;
-mod microdata;
-mod text;
+pub mod markup;
+pub mod microdata;
+pub mod text;
 
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, MAX_DEPTH, Node};
 use southstar_js_engine::Value;

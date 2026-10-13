@@ -24,11 +24,7 @@ fn is_set(value: &Value) -> bool {
     !value.is_undefined() && !value.is_null()
 }
 
-pub(crate) fn get_fullscreen_element(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_fullscreen_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let value = scope.get(this, SLOT)?;
     Ok(if value.is_undefined() {
         Value::null()
@@ -37,15 +33,11 @@ pub(crate) fn get_fullscreen_element(
     })
 }
 
-pub(crate) fn get_fullscreen_enabled(
-    _scope: &mut Scope<'_>,
-    _this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_fullscreen_enabled(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn get_is_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_is_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let value = scope.get(this, SLOT)?;
     Ok(Value::boolean(is_set(&value)))
 }
@@ -142,7 +134,7 @@ fn rejected_without_activation(scope: &mut Scope<'_>, element: &Value) -> JsResu
     Ok(promise)
 }
 
-pub(crate) fn request_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn request_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() || !js.has_transient_activation() {
         return rejected_without_activation(scope, this);
@@ -151,7 +143,7 @@ pub(crate) fn request_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[V
     transition_promise(scope)
 }
 
-pub(crate) fn exit_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn exit_fullscreen(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let current = scope.get(this, SLOT)?;
     if is_set(&current) {
         set_fullscreen_element(scope, Value::null(), c"fullscreen-exit")?;
@@ -182,11 +174,7 @@ fn pointer_lock_changed(js: Js) {
     }
 }
 
-pub(crate) fn request_pointer_lock(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn request_pointer_lock(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
@@ -199,7 +187,7 @@ pub(crate) fn request_pointer_lock(
     Ok(Value::undefined())
 }
 
-pub(crate) fn exit_pointer_lock(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn exit_pointer_lock(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if !js.is_null() && crate::peek(js, |page| page.pointer_lock) != 0 {
         crate::with(js, |page| page.pointer_lock = 0);
@@ -208,11 +196,7 @@ pub(crate) fn exit_pointer_lock(scope: &mut Scope<'_>, _this: &Value, _args: &[V
     Ok(Value::undefined())
 }
 
-pub(crate) fn get_pointer_lock_element(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_pointer_lock_element(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() {
         return Ok(Value::null());

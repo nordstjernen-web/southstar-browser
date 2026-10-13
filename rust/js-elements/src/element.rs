@@ -9,23 +9,23 @@ use crate::{Element, JsResult, ffi, named};
 
 const FLAG_SHEET_DISABLED: u32 = 1 << 20;
 
-pub(crate) fn zero(_scope: &mut Scope<'_>, _this: &Value) -> JsResult {
+pub fn zero(_scope: &mut Scope<'_>, _this: &Value) -> JsResult {
     Ok(Value::int(0))
 }
 
-pub(crate) fn null(_scope: &mut Scope<'_>, _this: &Value) -> JsResult {
+pub fn null(_scope: &mut Scope<'_>, _this: &Value) -> JsResult {
     Ok(Value::null())
 }
 
-pub(crate) fn empty_array(scope: &mut Scope<'_>, _this: &Value) -> JsResult {
+pub fn empty_array(scope: &mut Scope<'_>, _this: &Value) -> JsResult {
     Ok(scope.new_array())
 }
 
-pub(crate) fn ignore(_scope: &mut Scope<'_>, _this: &Value, _value: &Value) -> JsResult<()> {
+pub fn ignore(_scope: &mut Scope<'_>, _this: &Value, _value: &Value) -> JsResult<()> {
     Ok(())
 }
 
-pub(crate) fn is_content_editable(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn is_content_editable(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::boolean(false));
     };
@@ -47,7 +47,7 @@ pub(crate) fn is_content_editable(_scope: &mut Scope<'_>, this: &Value) -> JsRes
     Ok(Value::boolean(false))
 }
 
-pub(crate) fn labels(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn labels(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if !ffi::is_labelable(ffi::unwrap_node(this)) {
         return Ok(Value::null());
     }
@@ -73,13 +73,13 @@ pub(crate) fn build_labels(scope: &mut Scope<'_>, control: Option<Element>) -> J
     crate::wrap_all(scope, found.into_iter())
 }
 
-pub(crate) fn form_enctype(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn form_enctype(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let value = ffi::unwrap_node(this).and_then(|n| n.attr(c"enctype"));
     let normalized = ffi::enum_normalize(c"enctype", value);
     Ok(scope.string_from_bytes(normalized.to_bytes()))
 }
 
-pub(crate) fn set_form_enctype(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_form_enctype(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -88,7 +88,7 @@ pub(crate) fn set_form_enctype(scope: &mut Scope<'_>, this: &Value, value: &Valu
     Ok(())
 }
 
-pub(crate) fn hidden(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn hidden(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(value) = ffi::unwrap_node(this).and_then(|n| n.attr(c"hidden")) else {
         return Ok(Value::boolean(false));
     };
@@ -98,7 +98,7 @@ pub(crate) fn hidden(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn set_hidden(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_hidden(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -120,7 +120,7 @@ pub(crate) fn set_hidden(scope: &mut Scope<'_>, this: &Value, value: &Value) -> 
     Ok(())
 }
 
-pub(crate) fn disabled(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn disabled(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::boolean(false));
     };
@@ -130,7 +130,7 @@ pub(crate) fn disabled(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(node.attr(c"disabled").is_some()))
 }
 
-pub(crate) fn set_disabled(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_disabled(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -169,7 +169,7 @@ fn options(select: Element) -> impl Iterator<Item = Element> {
     })
 }
 
-pub(crate) fn option_index(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn option_index(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(option) = ffi::unwrap_node(this) else {
         return Ok(Value::int(-1));
     };
@@ -187,7 +187,7 @@ pub(crate) fn select_length(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::int(count))
 }
 
-pub(crate) fn set_list(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_list(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     if ffi::is_custom_element(ffi::unwrap_node(this)) {
         let attributes = Attributes {
             writable: true,
@@ -199,7 +199,7 @@ pub(crate) fn set_list(scope: &mut Scope<'_>, this: &Value, value: &Value) -> Js
     Ok(())
 }
 
-pub(crate) fn list(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn list(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -223,7 +223,7 @@ pub(crate) fn list(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     }
 }
 
-pub(crate) fn form(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn form(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let mut node = ffi::unwrap_node(this);
     if named(node, b"label") {
         node = node.and_then(ffi::label_associated_control);
@@ -234,7 +234,7 @@ pub(crate) fn form(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     }
 }
 
-pub(crate) fn set_content(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_content(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     if named(ffi::unwrap_node(this), b"template") {
         return Ok(());
     }

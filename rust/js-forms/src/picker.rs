@@ -10,7 +10,7 @@ use crate::ffi::{self, Page};
 
 const INVALID_STATE_ERR: i32 = 11;
 
-pub(crate) fn show_picker(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn show_picker(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(control) = ffi::element(this) else {
         return Err(scope.type_error("Illegal invocation"));
     };

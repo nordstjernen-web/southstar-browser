@@ -111,7 +111,7 @@ fn closed_by(js: Js, dialog: Element) -> ClosedBy {
     }
 }
 
-pub(crate) fn get_closed_by(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_closed_by(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(el) = ffi::unwrap(this) else {
         return Ok(scope.string("none"));
     };
@@ -123,7 +123,7 @@ pub(crate) fn get_closed_by(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
     Ok(scope.string(name))
 }
 
-pub(crate) fn set_closed_by(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_closed_by(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
     };
@@ -189,7 +189,7 @@ fn store_return_value(scope: &mut Scope<'_>, wrapper: &Value, rv: &[u8]) {
     let _ = scope.define(wrapper, RETURN_VALUE_KEY, rv, Attributes::METHOD);
 }
 
-pub(crate) fn get_return_value(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_return_value(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let v = scope.get(this, RETURN_VALUE_KEY)?;
     if v.is_string() {
         return Ok(v);
@@ -197,7 +197,7 @@ pub(crate) fn get_return_value(scope: &mut Scope<'_>, this: &Value, _args: &[Val
     Ok(scope.string(""))
 }
 
-pub(crate) fn set_return_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_return_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     match scope.to_string(&arg(args, 0)) {
         Ok(s) => {
             store_return_value(scope, this, s.as_bytes());
@@ -341,7 +341,7 @@ pub(crate) fn show_modal(js: Js, dialog: Element, source: Option<Element>) -> Js
     Ok(())
 }
 
-pub(crate) fn show(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn show(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());
@@ -369,7 +369,7 @@ pub(crate) fn show(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsRe
     Ok(Value::undefined())
 }
 
-pub(crate) fn show_modal_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn show_modal_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());
@@ -385,7 +385,7 @@ fn optional_string(scope: &mut Scope<'_>, args: &[Value]) -> Option<CString> {
     Some(CString::new(&s[..end]).unwrap_or_default())
 }
 
-pub(crate) fn close_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn close_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());
@@ -395,11 +395,7 @@ pub(crate) fn close_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(Value::undefined())
 }
 
-pub(crate) fn request_close_method(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn request_close_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());

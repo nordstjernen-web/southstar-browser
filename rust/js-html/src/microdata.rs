@@ -108,13 +108,13 @@ fn item_value(scope: &mut Scope<'_>, n: Option<Element>) -> Value {
     scope.string_from_bytes(&text)
 }
 
-pub(crate) fn item_scope_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_scope_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(
         ffi::unwrap_node(this).is_some_and(has_itemscope),
     ))
 }
 
-pub(crate) fn item_scope_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn item_scope_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -127,14 +127,14 @@ pub(crate) fn item_scope_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -
     Ok(())
 }
 
-pub(crate) fn item_id_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_id_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let value = ffi::unwrap_node(this)
         .and_then(|n| n.attr(c"itemid"))
         .map_or(&b""[..], CStr::to_bytes);
     Ok(scope.string_from_bytes(value))
 }
 
-pub(crate) fn item_id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn item_id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -143,23 +143,23 @@ pub(crate) fn item_id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> J
     Ok(())
 }
 
-pub(crate) fn item_type_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_type_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(ffi::token_list(scope, this, c"itemtype"))
 }
 
-pub(crate) fn item_prop_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_prop_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(ffi::token_list(scope, this, c"itemprop"))
 }
 
-pub(crate) fn item_ref_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_ref_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(ffi::token_list(scope, this, c"itemref"))
 }
 
-pub(crate) fn item_value_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn item_value_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(item_value(scope, ffi::unwrap_node(this)))
 }
 
-pub(crate) fn item_value_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn item_value_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some((n, name)) =
         ffi::unwrap_node(this).and_then(|n| n.name().map(|name| (n, name.to_bytes())))
     else {
@@ -273,7 +273,7 @@ fn property_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
     property_named(scope, this, &name[..end])
 }
 
-pub(crate) fn properties_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn properties_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let n = ffi::unwrap_node(this);
     let doc = ffi::current_document(ffi::js_of(scope));
     let mut nodes = Vec::new();
@@ -342,7 +342,7 @@ fn collect_top_items(
     Ok(())
 }
 
-pub(crate) fn get_items(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn get_items(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let array = scope.new_array();
     let Some(doc) = ffi::current_document(ffi::js_of(scope)) else {
         return Ok(ffi::nodelist_from_array(scope, array));

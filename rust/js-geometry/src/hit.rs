@@ -128,7 +128,7 @@ fn point_args(scope: &mut Scope<'_>, args: &[Value]) -> Option<(f64, f64)> {
     Some((x, y))
 }
 
-pub(crate) fn element_from_point(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_from_point(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some((x, y)) = point_args(scope, args) else {
         return Ok(Value::null());
     };
@@ -141,7 +141,7 @@ pub(crate) fn element_from_point(scope: &mut Scope<'_>, this: &Value, args: &[Va
     Ok(ffi::wrap_node(scope, area.unwrap_or(hit.node)))
 }
 
-pub(crate) fn elements_from_point(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn elements_from_point(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let arr = scope.new_array();
     let Some((x, y)) = point_args(scope, args) else {
         return Ok(arr);

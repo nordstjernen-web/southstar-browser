@@ -2,14 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod class;
+pub mod class;
 mod ffi;
-mod live;
+pub mod live;
 mod nodelist;
 mod page;
-mod query;
+pub mod query;
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_int};
 
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node};
@@ -23,6 +23,17 @@ pub(crate) const FLAG_QUIRKS: u32 = 1 << 5;
 pub(crate) const FLAG_XML_DOC: u32 = 1 << 14;
 pub(crate) const FOREIGN: u32 = FLAG_SVG_NS | FLAG_FOREIGN_NS;
 pub(crate) const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
+
+pub fn collection_kind(value: &Value) -> c_int {
+    ffi::live_of(value).map_or(-1, live::Live::collection_kind)
+}
+
+pub fn make_live(scope: &mut Scope<'_>, owner: &Value, kind: c_int, param: Option<&[u8]>) -> Value {
+    match live::LiveKind::from_raw(kind) {
+        Some(kind) => live::make(scope, owner, kind, param, None),
+        None => Value::undefined(),
+    }
+}
 
 pub(crate) fn arg(args: &[Value], index: usize) -> Value {
     args.get(index).cloned().unwrap_or_else(Value::undefined)

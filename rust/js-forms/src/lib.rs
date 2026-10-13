@@ -2,19 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod checkable;
-mod collection;
+pub mod checkable;
+pub mod collection;
 mod ffi;
-mod files;
+pub mod files;
 mod form_data;
-mod internals;
-mod labels;
-mod picker;
-mod select;
-mod selection;
-mod submit;
-mod validity;
-mod value;
+pub mod internals;
+pub mod labels;
+pub mod picker;
+pub mod select;
+pub mod selection;
+pub mod submit;
+pub mod validity;
+pub mod value;
 
 use core::ffi::CStr;
 

@@ -52,7 +52,7 @@ fn radio_value(node: Element) -> &'static [u8] {
     node.attr(c"value").map_or(b"on", |v| v.to_bytes())
 }
 
-pub(crate) fn form_elements(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn form_elements(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     ffi::make_live(scope, this, LIVE_FORM_ELEMENTS, None)
 }
 

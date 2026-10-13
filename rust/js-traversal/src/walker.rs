@@ -378,7 +378,7 @@ fn define_current(scope: &mut Scope<'_>, walker: &Value, node: &Value) {
     );
 }
 
-pub(crate) fn create(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
+pub fn create(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
     let root = crate::arg(args, 0);
     if !root.is_object() || unwrap_node(&root).is_none() {
         return Err(scope.type_error(

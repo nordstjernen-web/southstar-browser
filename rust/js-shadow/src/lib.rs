@@ -3,8 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod root;
-mod slot;
+pub mod root;
+pub mod slot;
 
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::Value;

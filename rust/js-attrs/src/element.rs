@@ -39,11 +39,11 @@ pub(crate) fn token_list(scope: &mut Scope<'_>, element: &Value, attr: &'static 
     Ok(list)
 }
 
-pub(crate) fn class_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn class_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     token_list(scope, this, c"class")
 }
 
-pub(crate) fn rel_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn rel_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -58,7 +58,7 @@ pub(crate) fn rel_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> 
     token_list(scope, this, c"rel")
 }
 
-pub(crate) fn sandbox_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn sandbox_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     match ffi::unwrap_node(this) {
         Some(node) if !foreign(node) && named(node, "iframe") => {
             token_list(scope, this, c"sandbox")
@@ -67,7 +67,7 @@ pub(crate) fn sandbox_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value])
     }
 }
 
-pub(crate) fn sizes_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn sizes_list(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|&n| !foreign(n)) else {
         return Ok(Value::undefined());
     };
@@ -90,19 +90,19 @@ fn put_forwards(scope: &mut Scope<'_>, this: &Value, args: &[Value], attr: &CStr
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_style(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_style(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     put_forwards(scope, this, args, c"style")
 }
 
-pub(crate) fn set_class_list(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_class_list(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     put_forwards(scope, this, args, c"class")
 }
 
-pub(crate) fn set_rel_list(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_rel_list(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     put_forwards(scope, this, args, c"rel")
 }
 
-pub(crate) fn attributes(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn attributes(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| n.is_element()) else {
         return Ok(scope.new_object());
     };

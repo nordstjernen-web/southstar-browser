@@ -151,23 +151,23 @@ fn attr_element_set(
     Ok(Value::undefined())
 }
 
-pub(crate) fn get_popover_target(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_popover_target(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     attr_element_get(scope, this, c"popovertarget")
 }
 
-pub(crate) fn set_popover_target(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_popover_target(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     attr_element_set(scope, this, &arg(args, 0), c"popovertarget")
 }
 
-pub(crate) fn get_command_for(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_command_for(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     attr_element_get(scope, this, c"commandfor")
 }
 
-pub(crate) fn set_command_for(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_command_for(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     attr_element_set(scope, this, &arg(args, 0), c"commandfor")
 }
 
-pub(crate) fn get_command(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_command(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let v = ffi::unwrap(this).and_then(|el| el.attr(c"command"));
     let name = match command_of(v.map(CStr::to_bytes)) {
         Command::Unknown => return Ok(scope.string("")),
@@ -180,7 +180,7 @@ pub(crate) fn get_command(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) 
     Ok(scope.string(name))
 }
 
-pub(crate) fn set_command(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_command(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
     };

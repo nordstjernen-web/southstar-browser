@@ -123,11 +123,7 @@ fn string_or_null(scope: &mut Scope<'_>, bytes: Option<&[u8]>) -> Value {
     bytes.map_or_else(Value::null, |b| scope.string_from_bytes(b))
 }
 
-pub(crate) fn lookup_namespace_uri(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn lookup_namespace_uri(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -136,7 +132,7 @@ pub(crate) fn lookup_namespace_uri(
     Ok(string_or_null(scope, result))
 }
 
-pub(crate) fn lookup_prefix(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn lookup_prefix(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -158,11 +154,7 @@ pub(crate) fn lookup_prefix(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     Ok(string_or_null(scope, result))
 }
 
-pub(crate) fn is_default_namespace(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn is_default_namespace(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::boolean(false));
     };

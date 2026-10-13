@@ -3,8 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-mod numeric;
-mod strings;
+pub mod numeric;
+pub mod strings;
 mod tables;
 
 use core::ffi::CStr;

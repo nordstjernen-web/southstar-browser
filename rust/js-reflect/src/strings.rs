@@ -50,7 +50,7 @@ fn reflected_name(magic: i32) -> Option<(usize, &'static CStr)> {
         .map(|&name| (index, name))
 }
 
-pub(crate) fn attr_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn attr_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let Some((index, name)) = reflected_name(magic) else {
         return text(scope, b"");
     };
@@ -82,12 +82,7 @@ pub(crate) fn attr_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsRes
     text(scope, v.unwrap_or_default())
 }
 
-pub(crate) fn attr_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn attr_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     let Some((index, name)) = reflected_name(magic) else {
         return Ok(());
     };
@@ -127,12 +122,7 @@ pub(crate) fn reflect_get(
     }
 }
 
-pub(crate) fn reflect_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    attr: &CStr,
-) -> JsResult<()> {
+pub fn reflect_set(scope: &mut Scope<'_>, this: &Value, val: &Value, attr: &CStr) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -199,7 +189,7 @@ fn autocomplete_tokens(n: Element, element: &[u8], tokens: &[&[u8]]) -> Option<V
     (i == tokens.len()).then(|| tokens.join(&b' '))
 }
 
-pub(crate) fn autocomplete_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn autocomplete_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some((n, element)) = ffi::unwrap_node(this).and_then(|n| raw_name(n).map(|name| (n, name)))
     else {
         return text(scope, b"");
@@ -221,24 +211,24 @@ pub(crate) fn autocomplete_get(scope: &mut Scope<'_>, this: &Value) -> JsResult 
     text(scope, &out)
 }
 
-pub(crate) fn autocomplete_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn autocomplete_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"autocomplete")
 }
 
 const DIRECTIONS: &[&CStr] = &[c"ltr", c"rtl", c"auto"];
 
-pub(crate) fn dir_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn dir_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let canonical = ffi::unwrap_node(this)
         .and_then(|n| ffi::attr(n, c"dir"))
         .and_then(|v| keyword_match(DIRECTIONS, v));
     Ok(keyword(scope, canonical.unwrap_or(c"")))
 }
 
-pub(crate) fn dir_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn dir_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"dir")
 }
 
-pub(crate) fn translate_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn translate_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(Value::boolean(true));
     };
@@ -260,7 +250,7 @@ pub(crate) fn translate_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn translate_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn translate_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     set_flag(scope, this, val, c"translate", c"yes", c"no")
 }
 
@@ -278,19 +268,14 @@ fn enumerated(magic: i32) -> Option<&'static Keywords> {
         .and_then(|i| tables::ENUMERATED.get(i))
 }
 
-pub(crate) fn enum_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn enum_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let Some(def) = enumerated(magic) else {
         return Ok(Value::null());
     };
     Ok(reflect_enum(scope, ffi::unwrap_node(this), def))
 }
 
-pub(crate) fn enum_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn enum_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     let Some(def) = enumerated(magic) else {
         return Ok(());
     };
@@ -313,18 +298,13 @@ fn aria_name(magic: i32) -> Option<&'static CStr> {
         .and_then(|i| tables::ARIA_STRINGS.get(i).copied())
 }
 
-pub(crate) fn aria_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+pub fn aria_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     let v =
         aria_name(magic).and_then(|name| ffi::unwrap_node(this).and_then(|n| ffi::attr(n, name)));
     Ok(v.map_or_else(Value::null, |v| scope.string_from_bytes(v)))
 }
 
-pub(crate) fn aria_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
+pub fn aria_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: i32) -> JsResult<()> {
     let Some(name) = aria_name(magic) else {
         return Ok(());
     };
@@ -338,7 +318,7 @@ pub(crate) fn aria_set(
     reflect_set(scope, this, val, name)
 }
 
-pub(crate) fn type_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn type_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some((n, element)) = ffi::unwrap_node(this).and_then(|n| raw_name(n).map(|name| (n, name)))
     else {
         return text(scope, b"");
@@ -381,13 +361,13 @@ fn autocapitalize_of(js: Js, n: Element) -> Option<&'static [u8]> {
     autocapitalize_canonical(ffi::attr_c(form, c"autocapitalize"))
 }
 
-pub(crate) fn autocapitalize_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn autocapitalize_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let js = ffi::js_of(scope);
     let value = ffi::unwrap_node(this).and_then(|n| autocapitalize_of(js, n));
     text(scope, value.unwrap_or_default())
 }
 
-pub(crate) fn autocapitalize_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn autocapitalize_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -396,17 +376,17 @@ pub(crate) fn autocapitalize_set(scope: &mut Scope<'_>, this: &Value, val: &Valu
     Ok(())
 }
 
-pub(crate) fn spellcheck_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn spellcheck_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(
         ffi::unwrap_node(this).is_some_and(controls::spellcheck_used),
     ))
 }
 
-pub(crate) fn spellcheck_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn spellcheck_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     set_flag(scope, this, val, c"spellcheck", c"true", c"false")
 }
 
-pub(crate) fn html_for_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn html_for_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let foreign = southstar_dom::FLAG_SVG_NS | southstar_dom::FLAG_FOREIGN_NS;
     let Some(n) = ffi::unwrap_node(this).filter(|n| n.flags() & foreign == 0) else {
         return Ok(Value::undefined());
@@ -420,7 +400,7 @@ pub(crate) fn html_for_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(reflect_get(scope, this, c"for", false))
 }
 
-pub(crate) fn html_for_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn html_for_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"for")
 }
 
@@ -434,7 +414,7 @@ fn draggable_by_default(n: Element) -> bool {
     name.eq_ignore_ascii_case(b"a") && ffi::attr_c(n, c"href").is_some_and(|href| !href.is_empty())
 }
 
-pub(crate) fn draggable_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn draggable_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let n = ffi::unwrap_node(this);
     if let Some(v) = n.and_then(|n| ffi::attr_c(n, c"draggable")) {
         let v = v.to_bytes();
@@ -448,11 +428,11 @@ pub(crate) fn draggable_get(_scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::boolean(n.is_some_and(draggable_by_default)))
 }
 
-pub(crate) fn draggable_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn draggable_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     set_flag(scope, this, val, c"draggable", c"true", c"false")
 }
 
-pub(crate) fn content_editable_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn content_editable_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let state: &[u8] = match ffi::unwrap_node(this).and_then(|n| ffi::attr_c(n, c"contenteditable"))
     {
         None => b"inherit",
@@ -472,11 +452,7 @@ pub(crate) fn content_editable_get(scope: &mut Scope<'_>, this: &Value) -> JsRes
     text(scope, state)
 }
 
-pub(crate) fn content_editable_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-) -> JsResult<()> {
+pub fn content_editable_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -502,26 +478,26 @@ pub(crate) fn content_editable_set(
     Ok(())
 }
 
-pub(crate) fn id_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn id_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(reflect_get(scope, this, c"id", true))
 }
 
-pub(crate) fn id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"id")
 }
 
-pub(crate) fn class_name_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn class_name_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(reflect_get(scope, this, c"class", true))
 }
 
-pub(crate) fn class_name_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn class_name_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"class")
 }
 
-pub(crate) fn sizes_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn sizes_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"sizes")
 }
 
-pub(crate) fn sandbox_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn sandbox_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     reflect_set(scope, this, val, c"sandbox")
 }

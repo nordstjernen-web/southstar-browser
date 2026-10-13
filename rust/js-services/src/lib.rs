@@ -5,14 +5,14 @@
 mod caches;
 mod camera;
 mod clipboard_item;
-mod commands;
+pub mod commands;
 mod console;
 mod ffi;
 mod media;
 mod navigator;
 mod rtc;
 mod screen;
-mod timers;
+pub mod timers;
 mod window;
 
 use std::cell::RefCell;

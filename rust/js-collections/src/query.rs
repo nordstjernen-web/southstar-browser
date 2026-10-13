@@ -448,32 +448,20 @@ fn query_text(
     Ok(wrap_node(scope, hit))
 }
 
-pub(crate) fn element_query_selector(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn element_query_selector(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     query(scope, unwrap_node(this), args, false, false)
 }
 
-pub(crate) fn element_query_selector_all(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn element_query_selector_all(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     query(scope, unwrap_node(this), args, true, false)
 }
 
-pub(crate) fn document_query_selector(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn document_query_selector(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let root = document_root_for(scope, this);
     query(scope, root, args, false, true)
 }
 
-pub(crate) fn document_query_selector_all(
+pub fn document_query_selector_all(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
@@ -567,7 +555,7 @@ fn simple_matches(el: Element, simple: &Simple<'_>) -> bool {
     }
 }
 
-pub(crate) fn matches(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn matches(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let el = unwrap_node(this);
     let Some(argument) = args.first() else {
         return Err(scope.type_error("1 argument required, but only 0 present"));
@@ -594,7 +582,7 @@ fn closest_chain(el: Element) -> impl Iterator<Item = Element> {
         .take(MAX_DEPTH as usize)
 }
 
-pub(crate) fn closest(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn closest(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(el), Some(argument)) = (unwrap_node(this), args.first()) else {
         return Ok(Value::null());
     };
@@ -631,19 +619,11 @@ fn get_element_by_id(scope: &mut Scope<'_>, root: Option<Element>, args: &[Value
     })
 }
 
-pub(crate) fn element_get_element_by_id(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn element_get_element_by_id(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     get_element_by_id(scope, unwrap_node(this), args)
 }
 
-pub(crate) fn document_get_element_by_id(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn document_get_element_by_id(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let root = document_root_for(scope, this);
     get_element_by_id(scope, root, args)
 }

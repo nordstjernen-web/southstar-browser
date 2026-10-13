@@ -28,12 +28,12 @@ impl Trace for StyleDecl {
     }
 }
 
-pub(crate) fn register(scope: &mut Scope<'_>, prototype: Value) {
+pub fn register(scope: &mut Scope<'_>, prototype: Value) {
     scope.register_class(&STYLE_CLASS);
     scope.set_class_prototype(&STYLE_CLASS, prototype);
 }
 
-pub(crate) fn prototype(scope: &mut Scope<'_>) -> Value {
+pub fn prototype(scope: &mut Scope<'_>) -> Value {
     scope.class_prototype(&STYLE_CLASS)
 }
 

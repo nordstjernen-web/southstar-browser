@@ -8,7 +8,7 @@ use southstar_js_engine::{Scope, Value};
 use crate::attr::{self, page_attr};
 use crate::{JsResult, NOT_FOUND_ERR, ffi, optional_string_arg, string_arg};
 
-pub(crate) fn get_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(arg) = args.first() else {
         return Ok(Value::null());
     };
@@ -26,7 +26,7 @@ pub(crate) fn get_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(Value::null())
 }
 
-pub(crate) fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(arg) = args.first() else {
         return Ok(Value::null());
     };
@@ -39,7 +39,7 @@ pub(crate) fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
     })
 }
 
-pub(crate) fn get_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let count = ffi::named_map_owner(this)
         .filter(|n| n.is_element())
         .map_or(0, |n| {
@@ -53,7 +53,7 @@ pub(crate) fn get_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) 
     Ok(Value::int(count as i32))
 }
 
-pub(crate) fn get_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Ok(Value::null());
     }
@@ -70,7 +70,7 @@ pub(crate) fn get_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Val
     attr::to_js(scope, &owner, found, true)
 }
 
-pub(crate) fn set_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::named_map_owner(this) else {
         return Err(scope.type_error("NamedNodeMap has no owner element"));
     };
@@ -78,7 +78,7 @@ pub(crate) fn set_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     attr::set_attribute_node(scope, &owner, args)
 }
 
-pub(crate) fn remove_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn remove_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(arg) = args.first() else {
         return Err(scope.type_error("1 argument required"));
     };
@@ -106,11 +106,7 @@ pub(crate) fn remove_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Val
     Ok(removed)
 }
 
-pub(crate) fn remove_named_item_ns(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn remove_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Err(scope.type_error("2 arguments required"));
     }

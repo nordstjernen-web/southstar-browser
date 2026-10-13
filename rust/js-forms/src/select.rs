@@ -74,7 +74,7 @@ pub(crate) fn value(select: Element) -> Vec<u8> {
     option.map(select::option_value).unwrap_or_default()
 }
 
-pub(crate) fn selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(n) = ffi::element(this) else {
         return Ok(Value::boolean(false));
     };
@@ -89,7 +89,7 @@ pub(crate) fn selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     Ok(Value::boolean(chosen))
 }
 
-pub(crate) fn set_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(n) = ffi::element(this) else {
         return Ok(Value::undefined());
     };
@@ -113,15 +113,11 @@ pub(crate) fn set_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(Value::undefined())
 }
 
-pub(crate) fn default_selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn default_selected(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     checkable::default_flag(this, c"selected")
 }
 
-pub(crate) fn set_default_selected(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn set_default_selected(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     checkable::set_default_flag(scope, this, args, c"selected")
 }
 
@@ -138,11 +134,11 @@ fn selected_index_of(el: Option<Element>) -> i32 {
         .map_or(-1, |i| i as i32)
 }
 
-pub(crate) fn selected_index(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selected_index(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::int(selected_index_of(ffi::element(this))))
 }
 
-pub(crate) fn set_selected_index(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_selected_index(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(sel) = ffi::element(this).filter(|e| named(*e, "select")) else {
         return Ok(Value::undefined());
     };
@@ -184,7 +180,7 @@ fn option_array(scope: &mut Scope<'_>, items: &[Element]) -> JsResult {
     Ok(array)
 }
 
-pub(crate) fn options_getter(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn options_getter(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let el = ffi::element(this);
     let items = el
         .filter(|e| named(*e, "select"))
@@ -211,7 +207,7 @@ pub(crate) fn options_getter(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -
     Ok(array)
 }
 
-pub(crate) fn selected_options(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn selected_options(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let items = match ffi::element(this).filter(|e| named(*e, "select")) {
         Some(sel) if sel.attr(c"multiple").is_none() => {
             select::chosen_option(sel).into_iter().collect()
@@ -225,7 +221,7 @@ pub(crate) fn selected_options(scope: &mut Scope<'_>, this: &Value, _: &[Value])
     option_array(scope, &items)
 }
 
-pub(crate) fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(arg) = args.first() else {
         return Ok(Value::null());
     };
@@ -239,7 +235,7 @@ pub(crate) fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
     }
 }
 
-pub(crate) fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(arg) = args.first().filter(|a| a.is_string()) else {
         return Ok(Value::null());
     };
@@ -265,7 +261,7 @@ pub(crate) fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     Ok(Value::null())
 }
 
-pub(crate) fn add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(sel), Some(opt)) = (ffi::element(this), args.first().and_then(ffi::element)) else {
         return Ok(Value::undefined());
     };

@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod element;
+pub mod element;
 mod ffi;
-mod image;
-mod node_value;
-mod table;
+pub mod image;
+pub mod node_value;
+pub mod table;
 
 use southstar_dom::{MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};

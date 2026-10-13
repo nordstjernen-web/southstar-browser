@@ -26,7 +26,7 @@ fn fully_transparent(scope: &mut Scope<'_>, el: Element) -> bool {
     ffi::computed_text(scope, el, c"opacity").is_some_and(|o| ffi::ascii_strtod_prefix(&o).0 == 0.0)
 }
 
-pub(crate) fn check_visibility(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn check_visibility(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap_node(this).filter(|_| !js.is_null()) else {
         return Ok(Value::boolean(false));

@@ -18,7 +18,7 @@ fn with_synthetic<R>(js: Js, f: impl FnOnce() -> R) -> R {
     result
 }
 
-pub(crate) fn click_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn click_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());

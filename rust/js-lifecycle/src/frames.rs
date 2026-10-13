@@ -227,7 +227,7 @@ pub(crate) fn request_animation_frame(
     )))
 }
 
-pub(crate) fn request_video_frame_callback(
+pub fn request_video_frame_callback(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
@@ -240,7 +240,7 @@ pub(crate) fn request_video_frame_callback(
     Ok(Value::int(request(scope, js, &callback, true, media)))
 }
 
-pub(crate) fn cancel_animation_frame(
+pub fn cancel_animation_frame(
     scope: &mut Scope<'_>,
     _: &Value,
     args: &[Value],

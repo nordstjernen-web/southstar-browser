@@ -53,7 +53,7 @@ fn c_string_prefix(bytes: &[u8]) -> &[u8] {
         .map_or(bytes, |end| &bytes[..end])
 }
 
-pub(crate) fn text_length(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn text_length(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::int(0));
     };
@@ -70,7 +70,7 @@ pub(crate) fn text_length(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::undefined())
 }
 
-pub(crate) fn node_value(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn node_value(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     match ffi::unwrap_node(this) {
         Some(node) if is_character_data(node) => {
             Ok(scope.string_from_bytes(node.text_with_len().unwrap_or_default()))
@@ -79,7 +79,7 @@ pub(crate) fn node_value(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     }
 }
 
-pub(crate) fn set_node_value(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_node_value(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let Some(node) = ffi::unwrap_node(this).filter(|&n| is_character_data(n)) else {
         return Ok(());
     };
@@ -97,7 +97,7 @@ pub(crate) fn set_node_value(scope: &mut Scope<'_>, this: &Value, value: &Value)
     Ok(())
 }
 
-pub(crate) fn data(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn data(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let node = ffi::unwrap_node(this);
     let Some(object) = node.filter(|&n| is_object_element(Some(n))) else {
         return node_value(scope, this);
@@ -111,7 +111,7 @@ pub(crate) fn data(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(scope.string_from_bytes(value.to_bytes()))
 }
 
-pub(crate) fn set_data(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+pub fn set_data(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let node = ffi::unwrap_node(this);
     if let Some(object) = node.filter(|&n| is_object_element(Some(n))) {
         let bytes = scope.to_bytes(value)?;

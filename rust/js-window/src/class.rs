@@ -15,7 +15,7 @@ pub(crate) static WINDOW_NAMED_CLASS: HostClass = HostClass::new(
     },
 );
 
-pub(crate) fn register(scope: &mut Scope<'_>) {
+pub fn register(scope: &mut Scope<'_>) {
     scope.register_class(&WINDOW_NAMED_CLASS);
 }
 

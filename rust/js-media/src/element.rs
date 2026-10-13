@@ -118,7 +118,7 @@ fn audio_token(scope: &mut Scope<'_>, js: Js, element: Element) -> String {
     token
 }
 
-pub(crate) fn play(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn play(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if truthy(scope, this, "_nd_playing") {
         return resolved(scope, Value::undefined());
     }
@@ -151,7 +151,7 @@ pub(crate) fn play(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     resolved(scope, Value::undefined())
 }
 
-pub(crate) fn pause(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn pause(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !truthy(scope, this, "_nd_playing") {
         return Ok(Value::undefined());
     }
@@ -167,7 +167,7 @@ pub(crate) fn pause(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResul
     Ok(Value::undefined())
 }
 
-pub(crate) fn load(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn load(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let element = ffi::element(this);
     if !is_media(element) {
         return Ok(Value::undefined());
@@ -192,35 +192,35 @@ pub(crate) fn load(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     Ok(Value::undefined())
 }
 
-pub(crate) fn paused(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn paused(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(!truthy(scope, this, "_nd_playing")))
 }
 
-pub(crate) fn ended(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn ended(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(truthy(scope, this, "_nd_ended")))
 }
 
-pub(crate) fn seeking(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn seeking(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(truthy(scope, this, "_nd_seeking")))
 }
 
-pub(crate) fn ready_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn ready_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(int_or_zero(scope, this, "_nd_readyState"))
 }
 
-pub(crate) fn network_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn network_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(int_or_zero(scope, this, "_nd_networkState"))
 }
 
-pub(crate) fn current_time(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn current_time(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(number_or(scope, this, "_nd_pos", 0.0))
 }
 
-pub(crate) fn duration(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn duration(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(number_or(scope, this, "_nd_duration", f64::NAN))
 }
 
-pub(crate) fn error(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn error(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let error = get(scope, this, "_nd_error");
     if error.is_object() {
         return Ok(error);
@@ -287,17 +287,17 @@ fn positive(scope: &mut Scope<'_>, this: &Value, key: &str) -> f64 {
     }
 }
 
-pub(crate) fn seekable(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn seekable(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let end = positive(scope, this, "_nd_duration");
     Ok(time_ranges(scope, end))
 }
 
-pub(crate) fn buffered(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn buffered(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let end = positive(scope, this, "_nd_buffered");
     Ok(time_ranges(scope, end))
 }
 
-pub(crate) fn played(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn played(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let end = positive(scope, this, "_nd_played_end");
     Ok(time_ranges(scope, end))
 }
@@ -328,31 +328,27 @@ fn set_rate(
     Ok(Value::undefined())
 }
 
-pub(crate) fn playback_rate(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn playback_rate(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(number_or(scope, this, "_nd_rate", 1.0))
 }
 
-pub(crate) fn set_playback_rate(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_playback_rate(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     set_rate(scope, this, args, "_nd_rate", "playbackRate")
 }
 
-pub(crate) fn default_playback_rate(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn default_playback_rate(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(number_or(scope, this, "_nd_default_rate", 1.0))
 }
 
-pub(crate) fn set_default_playback_rate(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn set_default_playback_rate(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     set_rate(scope, this, args, "_nd_default_rate", "defaultPlaybackRate")
 }
 
-pub(crate) fn volume(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn volume(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(number_or(scope, this, "_nd_volume", 1.0))
 }
 
-pub(crate) fn set_volume(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_volume(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let volume = match args.first() {
         Some(value) => scope.to_number(value)?,
         None => f64::NAN,
@@ -384,11 +380,11 @@ fn is_muted(scope: &mut Scope<'_>, this: &Value) -> bool {
     ffi::element(this).is_some_and(|element| element.attr(c"muted").is_some())
 }
 
-pub(crate) fn muted(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn muted(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(is_muted(scope, this)))
 }
 
-pub(crate) fn set_muted(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_muted(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let muted = args.first().is_some_and(|value| scope.to_bool(value));
     if is_muted(scope, this) == muted {
         return Ok(Value::undefined());
@@ -401,7 +397,7 @@ pub(crate) fn set_muted(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_current_time(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_current_time(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let mut seconds = match args.first() {
         Some(value) => scope.to_number(value)?,
         None => f64::NAN,
@@ -436,14 +432,14 @@ pub(crate) fn set_current_time(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     Ok(Value::undefined())
 }
 
-pub(crate) fn fast_seek(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn fast_seek(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.is_empty() {
         return Ok(Value::undefined());
     }
     set_current_time(scope, this, args)
 }
 
-pub(crate) fn video_playback_quality(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn video_playback_quality(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let position = stored_number(scope, this, "_nd_pos", 0.0);
     let quality = scope.new_object();
     let now = ffi::perf_now(scope);
@@ -459,7 +455,7 @@ pub(crate) fn video_playback_quality(scope: &mut Scope<'_>, this: &Value, _: &[V
     Ok(quality)
 }
 
-pub(crate) fn src_object(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn src_object(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let value = get(scope, this, "_nd_srcObject");
     Ok(if value.is_undefined() {
         Value::null()
@@ -468,7 +464,7 @@ pub(crate) fn src_object(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Js
     })
 }
 
-pub(crate) fn set_src_object(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_src_object(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let value = args.first().cloned().unwrap_or_else(Value::undefined);
     set(scope, this, "_nd_srcObject", value.clone());
     let camera = value.is_object() && truthy(scope, &value, "_nd_camera");

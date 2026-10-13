@@ -738,14 +738,14 @@ fn make_with_text(scope: &mut Scope<'_>, owner: &Value, kind: LiveKind, param: &
     })
 }
 
-pub(crate) fn element_by_tag(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_by_tag(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(_), Some(tag)) = (unwrap_node(this), args.first()) else {
         return Ok(nodelist::empty(scope));
     };
     make_with_text(scope, this, LiveKind::ByTag, tag)
 }
 
-pub(crate) fn document_by_tag(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_by_tag(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(_), Some(tag)) = (document_root_for(scope, this), args.first()) else {
         return Ok(nodelist::empty(scope));
     };
@@ -767,29 +767,29 @@ fn by_tag_ns(scope: &mut Scope<'_>, owner: &Value, kind: LiveKind, args: &[Value
     Ok(make(scope, owner, kind, Some(&local), namespace.as_deref()))
 }
 
-pub(crate) fn element_by_tag_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_by_tag_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     by_tag_ns(scope, this, LiveKind::ByTagNs, args)
 }
 
-pub(crate) fn document_by_tag_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_by_tag_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     by_tag_ns(scope, this, LiveKind::DocTagNs, args)
 }
 
-pub(crate) fn element_by_class(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_by_class(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(_), Some(class)) = (unwrap_node(this), args.first()) else {
         return Ok(scope.new_array());
     };
     make_with_text(scope, this, LiveKind::ByClass, class)
 }
 
-pub(crate) fn document_by_class(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_by_class(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(_), Some(class)) = (document_root_for(scope, this), args.first()) else {
         return Ok(nodelist::empty(scope));
     };
     make_with_text(scope, this, LiveKind::DocClass, class)
 }
 
-pub(crate) fn document_by_name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_by_name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(_), Some(name)) = (document_root_for(scope, this), args.first()) else {
         return Ok(nodelist::empty(scope));
     };

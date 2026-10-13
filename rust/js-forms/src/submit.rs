@@ -139,11 +139,7 @@ pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Option<Element>) {
     Page::mark_mutated(page);
 }
 
-pub(crate) fn request_submit_method(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn request_submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let form = ffi::element(this);
     let (Some(form), Some(_)) = (form, Page::of(scope)) else {
         return Ok(Value::undefined());
@@ -168,7 +164,7 @@ pub(crate) fn request_submit_method(
     Ok(Value::undefined())
 }
 
-pub(crate) fn submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(form), Some(page)) = (ffi::element(this), Page::of(scope)) else {
         return Ok(Value::undefined());
     };
@@ -182,7 +178,7 @@ pub(crate) fn submit_method(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     Ok(Value::undefined())
 }
 
-pub(crate) fn reset_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn reset_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     if let Some(form) = ffi::element(this).filter(|el| name_is(*el, "form")) {
         reset_form(scope, Some(form));
     }

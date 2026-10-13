@@ -8,12 +8,45 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-canvas = { path = "../canvas" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
-southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-js-attrs = { path = "../js-attrs" }
+southstar-js-bind = { path = "../js-bind", default-features = false }
+southstar-js-collections = { path = "../js-collections" }
+southstar-js-cssom = { path = "../js-cssom" }
+southstar-js-dispatch = { path = "../js-dispatch" }
+southstar-js-document = { path = "../js-document" }
+southstar-js-dom-factory = { path = "../js-dom-factory" }
+southstar-js-elements = { path = "../js-elements" }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-focus = { path = "../js-focus" }
+southstar-js-fonts = { path = "../js-fonts" }
+southstar-js-forms = { path = "../js-forms" }
+southstar-js-frames = { path = "../js-frames" }
+southstar-js-geometry = { path = "../js-geometry" }
+southstar-js-html = { path = "../js-html" }
+southstar-js-input = { path = "../js-input" }
 southstar-js-intl = { path = "../js-intl" }
+southstar-js-lifecycle = { path = "../js-lifecycle" }
+southstar-js-media = { path = "../js-media" }
+southstar-js-node = { path = "../js-node" }
 southstar-js-realm = { path = "../js-realm" }
+southstar-js-reflect = { path = "../js-reflect" }
+southstar-js-runtime = { path = "../js-runtime" }
+southstar-js-services = { path = "../js-services" }
+southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-storage = { path = "../js-storage" }
 southstar-js-temporal = { path = "../js-temporal" }
+southstar-js-text = { path = "../js-text" }
+southstar-js-top-layer = { path = "../js-top-layer" }
+southstar-js-traversal = { path = "../js-traversal" }
+southstar-js-window = { path = "../js-window" }
+
+[features]
+default = ["quickjs"]
+quickjs = ["southstar-js-engine/quickjs", "southstar-js-bind/quickjs"]
+boa = ["southstar-js-engine/boa", "southstar-js-bind/boa"]
 
 [lints]
 workspace = true

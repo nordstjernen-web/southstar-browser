@@ -625,7 +625,7 @@ fn method(
     scope.define(proto, name, function, Attributes::METHOD)
 }
 
-pub(crate) fn install_style_proto(scope: &mut Scope<'_>, proto: &Value) -> Result<(), Value> {
+pub fn install_style_proto(scope: &mut Scope<'_>, proto: &Value) -> Result<(), Value> {
     accessor(scope, proto, "cssText", get_css_text, Some(set_css_text))?;
     accessor(scope, proto, "length", get_length, None)?;
     accessor(scope, proto, "parentRule", get_null, None)?;
@@ -643,11 +643,7 @@ pub(crate) fn install_style_proto(scope: &mut Scope<'_>, proto: &Value) -> Resul
     )
 }
 
-pub(crate) fn element_style(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> Result<Value, Value> {
+pub fn element_style(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
     if ffi::unwrap_element(this).is_none() {
         return Ok(Value::null());
     }

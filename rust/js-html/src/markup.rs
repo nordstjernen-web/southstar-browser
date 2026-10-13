@@ -32,12 +32,12 @@ fn outer_markup(n: Element) -> Vec<u8> {
     }
 }
 
-pub(crate) fn inner_html_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn inner_html_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let html = ffi::unwrap_node(this).map_or_else(Vec::new, |n| serialize::get_html(Some(n), None));
     Ok(scope.string_from_bytes(&html))
 }
 
-pub(crate) fn outer_html_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn outer_html_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let html = ffi::unwrap_node(this).map_or_else(Vec::new, outer_markup);
     Ok(scope.string_from_bytes(&html))
 }
@@ -62,7 +62,7 @@ fn shadow_root_option(scope: &mut Scope<'_>, options: &Value) -> JsResult<Vec<El
     Ok(roots)
 }
 
-pub(crate) fn get_html(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_html(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(scope.string_from_bytes(b""));
     };
@@ -159,17 +159,17 @@ fn set_html(scope: &mut Scope<'_>, this: &Value, val: &Value, declarative: bool)
     Ok(())
 }
 
-pub(crate) fn inner_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn inner_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     set_html(scope, this, val, false)
 }
 
-pub(crate) fn set_html_unsafe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_html_unsafe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let val = args.first().cloned().unwrap_or_else(Value::undefined);
     set_html(scope, this, &val, true)?;
     Ok(Value::undefined())
 }
 
-pub(crate) fn outer_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn outer_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some((target, parent)) = ffi::unwrap_node(this).and_then(|n| n.parent().map(|p| (n, p)))
     else {
         return Ok(());
@@ -202,11 +202,7 @@ pub(crate) fn outer_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -
     Ok(())
 }
 
-pub(crate) fn insert_adjacent_html(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn insert_adjacent_html(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(target) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };

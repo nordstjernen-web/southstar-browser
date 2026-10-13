@@ -6,9 +6,9 @@ mod body_handlers;
 mod dispatch;
 mod errors;
 mod ffi;
-mod handlers;
-mod listeners;
-mod target;
+pub mod handlers;
+pub mod listeners;
+pub mod target;
 mod ui_events;
 
 use std::cell::RefCell;

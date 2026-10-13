@@ -37,7 +37,7 @@ fn captures_of(scope: &mut Scope<'_>, element: &Value) -> Value {
         .unwrap_or_else(|_| Value::undefined())
 }
 
-pub(crate) fn set(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+pub fn set(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let Some(id) = pointer_id(scope, args) else {
         return Ok(Value::undefined());
     };
@@ -53,7 +53,7 @@ pub(crate) fn set(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result
     Ok(Value::undefined())
 }
 
-pub(crate) fn has(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+pub fn has(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let Some(id) = pointer_id(scope, args) else {
         return Ok(Value::boolean(false));
     };
@@ -63,7 +63,7 @@ pub(crate) fn has(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result
     ))
 }
 
-pub(crate) fn release(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+pub fn release(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let Some(id) = pointer_id(scope, args) else {
         return Ok(Value::undefined());
     };

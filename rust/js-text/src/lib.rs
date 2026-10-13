@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod cdata;
+pub mod cdata;
 mod ffi;
 mod inner_text;
-mod rendered;
+pub mod rendered;
 
 use southstar_dom::Node;
 use southstar_js_engine::Value;

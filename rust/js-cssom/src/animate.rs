@@ -62,7 +62,7 @@ fn finish_job(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Va
     Ok(Value::undefined())
 }
 
-pub(crate) fn element_animate(
+pub fn element_animate(
     scope: &mut Scope<'_>,
     _this: &Value,
     _args: &[Value],

@@ -448,7 +448,7 @@ fn source_option(scope: &mut Scope<'_>, options: &Value) -> JsResult<Option<Elem
     Ok(n)
 }
 
-pub(crate) fn show_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn show_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());
@@ -461,7 +461,7 @@ pub(crate) fn show_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     throw(scope, result)
 }
 
-pub(crate) fn hide_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn hide_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::undefined());
@@ -470,7 +470,7 @@ pub(crate) fn hide_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value])
     throw(scope, result)
 }
 
-pub(crate) fn toggle_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn toggle_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this).filter(|_| !js.is_null()) else {
         return Ok(Value::boolean(false));
@@ -501,7 +501,7 @@ pub(crate) fn toggle_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(Value::boolean(is_showing(el)))
 }
 
-pub(crate) fn get_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(match type_of(ffi::unwrap(this)) {
         PopoverType::Auto => scope.string("auto"),
         PopoverType::Manual => scope.string("manual"),
@@ -510,7 +510,7 @@ pub(crate) fn get_popover(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) 
     })
 }
 
-pub(crate) fn set_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_popover(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
     };

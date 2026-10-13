@@ -184,7 +184,7 @@ fn targets_other_document(js: Js, this: &Value) -> bool {
         && ffi::unwrap_node(this).is_some_and(|target| Some(target) != ffi::current_document(js))
 }
 
-pub(crate) fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if targets_other_document(js, this) {
         return crate::realm::open(scope, this, args);
@@ -205,7 +205,7 @@ pub(crate) fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
     Ok(this.clone())
 }
 
-pub(crate) fn close(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn close(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if targets_other_document(js, this) {
         return crate::realm::close(scope, this, args);
@@ -279,7 +279,7 @@ fn write_common(scope: &mut Scope<'_>, args: &[Value], newline: bool) -> JsResul
     Ok(Value::undefined())
 }
 
-pub(crate) fn write(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn write(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if targets_other_document(js, this) {
         return crate::realm::write(scope, this, args);
@@ -287,7 +287,7 @@ pub(crate) fn write(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     write_common(scope, args, false)
 }
 
-pub(crate) fn writeln(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn writeln(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if targets_other_document(js, this) {
         return crate::realm::writeln(scope, this, args);

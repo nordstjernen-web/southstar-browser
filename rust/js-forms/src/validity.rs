@@ -320,14 +320,14 @@ fn collect_invalid(form: Element, scan: Element, depth: i32, out: &mut Vec<Eleme
     }
 }
 
-pub(crate) fn valid(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn valid(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let value = scope
         .get(this, "__ndValid")
         .unwrap_or_else(|_| Value::undefined());
     Ok(Value::boolean(scope.to_bool(&value)))
 }
 
-pub(crate) fn validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::element(this);
     let custom = has_custom_error(node);
     let flags = compute(node);
@@ -367,7 +367,7 @@ pub(crate) fn validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> 
     Ok(state)
 }
 
-pub(crate) fn check_validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn check_validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::element(this);
     let page = Page::of(scope);
     if let Some(form) = node.filter(|n| named(*n, "form")) {
@@ -431,7 +431,7 @@ fn message(node: Element) -> &'static str {
     }
 }
 
-pub(crate) fn validation_message(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn validation_message(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::element(this).filter(|n| will_validate(Some(*n)));
     let Some(node) = node else {
         return Ok(scope.string(""));
@@ -442,15 +442,11 @@ pub(crate) fn validation_message(scope: &mut Scope<'_>, this: &Value, _args: &[V
     Ok(scope.string(message(node)))
 }
 
-pub(crate) fn will_validate_getter(
-    _scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn will_validate_getter(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::boolean(will_validate(ffi::element(this))))
 }
 
-pub(crate) fn set_custom_validity(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_custom_validity(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::element(this) else {
         return Ok(Value::undefined());
     };

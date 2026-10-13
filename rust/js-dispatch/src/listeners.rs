@@ -207,7 +207,7 @@ fn accepts(scope: &mut Scope<'_>, request: &Request) -> bool {
     request.callback.is_object() && !signal_is_aborted(scope, request.options.signal.as_ref())
 }
 
-pub(crate) fn element_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
@@ -287,7 +287,7 @@ fn remove_listener(
     Ok(Value::undefined())
 }
 
-pub(crate) fn element_remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     match ffi::unwrap(this) {
         Some(el) => remove_listener(scope, el, args, false),
         None => Ok(Value::undefined()),
@@ -330,7 +330,7 @@ fn document_level_add(
     Ok(Value::undefined())
 }
 
-pub(crate) fn document_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let target = ffi::document_root_for(scope, this);
     document_level_add(scope, target, args, false)
 }
@@ -340,7 +340,7 @@ pub(crate) fn window_add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     document_level_add(scope, target, args, true)
 }
 
-pub(crate) fn document_remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn document_remove(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     match ffi::document_root_for(scope, this) {
         Some(target) => remove_listener(scope, target, args, false),
         None => Ok(Value::undefined()),

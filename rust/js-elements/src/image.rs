@@ -12,7 +12,7 @@ fn image_for(scope: &Scope<'_>, img: Option<Element>) -> Option<ImageRef<'static
     ffi::image_for_node(ffi::js_of(scope), img)
 }
 
-pub(crate) fn complete(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn complete(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let node = ffi::unwrap_node(this);
     let Some(img) = node.filter(|&n| named(Some(n), b"img")) else {
         return Ok(Value::boolean(true));
@@ -36,15 +36,15 @@ fn natural_dimension(scope: &Scope<'_>, this: &Value, width: bool) -> Value {
     Value::int((f64::from(natural) / ffi::chosen_density(node)) as i32)
 }
 
-pub(crate) fn natural_width(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn natural_width(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(natural_dimension(scope, this, true))
 }
 
-pub(crate) fn natural_height(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn natural_height(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(natural_dimension(scope, this, false))
 }
 
-pub(crate) fn current_src(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn current_src(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(scope.string(""));
     };

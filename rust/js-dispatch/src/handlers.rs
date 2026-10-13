@@ -463,7 +463,7 @@ pub(crate) fn fires_at_document(
     is_document(cur) && fire_window_level(js, kind, event, at_target)
 }
 
-pub(crate) fn install_props(scope: &mut Scope<'_>, target: &Value) {
+pub fn install_props(scope: &mut Scope<'_>, target: &Value) {
     for name in HANDLER_NAMES {
         if !scope.has_property(target, name).unwrap_or(false) {
             set(scope, target, name, Value::null());

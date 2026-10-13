@@ -106,7 +106,7 @@ pub(crate) fn adopt_owner_walk(scope: &mut Scope<'_>, doc: &Value, node: Element
     owner_walk(scope, doc, is_xml, node, 0);
 }
 
-pub(crate) fn adopt_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn adopt_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.is_empty() {
         return Ok(Value::null());
     }
@@ -141,7 +141,7 @@ pub(crate) fn adopt_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     Ok(args[0].clone())
 }
 
-pub(crate) fn import_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn import_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.is_empty() {
         return Ok(Value::null());
     }
@@ -204,7 +204,7 @@ fn clone_document(scope: &mut Scope<'_>, this: &Value, src: Element, deep: bool)
     Ok(wrapper)
 }
 
-pub(crate) fn clone_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn clone_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(src) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };

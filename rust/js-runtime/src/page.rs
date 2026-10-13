@@ -350,7 +350,7 @@ fn install_timers_and_navigator(js: Js, scope: &mut Scope<'_>, global: &Value) {
 fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     let chrome_compat = ffi::chrome_compat();
     if chrome_compat {
-        ffi::install(scope, ns_install_window_chrome, global);
+        ffi::imports::nsr_install_window_chrome(scope, global);
     }
     bind_ctor(scope, global, "Performance", ns_illegal_constructor, 0);
     bind_ctor(
@@ -830,7 +830,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     #[cfg(feature = "wasm")]
     ffi::install(scope, ns_wasm_install, global);
     ffi::install(scope, ns_storage_install_window, global);
-    ffi::install(scope, ns_install_window_compat, global);
+    ffi::imports::nsr_install_window_compat(scope, global);
 }
 
 fn install_navigator_interface(js: Js, scope: &mut Scope<'_>) {

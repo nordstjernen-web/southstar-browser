@@ -17,7 +17,7 @@ fn has_feature(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResu
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn of_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn of_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if this.is_object() {
         let cached = scope.get(this, "__ndImplementation")?;
         if cached.is_object() {
@@ -54,11 +54,7 @@ fn element(name: &[u8]) -> Element {
     node::new_element(glib::strdup(name))
 }
 
-pub(crate) fn create_html_document(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn create_html_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let Some(js) = ffi::js_of(scope) else {
         return Ok(Value::null());
     };
@@ -106,11 +102,7 @@ pub(crate) fn create_html_document(
     Ok(wrapper)
 }
 
-pub(crate) fn create_document_type(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn create_document_type(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(js) = ffi::js_of(scope) else {
         return Ok(Value::null());
     };
@@ -145,7 +137,7 @@ fn append_child(scope: &mut Scope<'_>, doc: &Value, child: &Value) -> JsResult<(
     Ok(())
 }
 
-pub(crate) fn create_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn create_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Err(scope.type_error("2 arguments required"));
     }

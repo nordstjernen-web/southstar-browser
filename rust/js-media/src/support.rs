@@ -123,7 +123,7 @@ pub(crate) fn type_support(media_type: &str) -> &'static str {
     }
 }
 
-pub(crate) fn can_play_type(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
+pub fn can_play_type(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
     let support = match args.first().filter(|arg| arg.is_string()) {
         Some(arg) => match scope.to_string(arg) {
             Ok(text) => type_support(&text),

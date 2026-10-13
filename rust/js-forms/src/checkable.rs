@@ -168,13 +168,13 @@ pub(crate) fn click_activate(page: Page, node: Element) -> bool {
     true
 }
 
-pub(crate) fn checked(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn checked(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(
         ffi::element(this).is_some_and(controls::is_checked),
     ))
 }
 
-pub(crate) fn set_checked(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_checked(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(el) = ffi::element(this) else {
         return Ok(Value::undefined());
     };
@@ -193,17 +193,13 @@ pub(crate) fn set_checked(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     Ok(Value::undefined())
 }
 
-pub(crate) fn indeterminate(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn indeterminate(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(
         ffi::element(this).is_some_and(is_indeterminate),
     ))
 }
 
-pub(crate) fn set_indeterminate_prop(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn set_indeterminate_prop(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if let Some(el) = ffi::element(this) {
         let on = args.first().is_some_and(|v| scope.to_bool(v));
         set_indeterminate(Page::of(scope), el, on);
@@ -234,10 +230,10 @@ pub(crate) fn set_default_flag(
     Ok(Value::undefined())
 }
 
-pub(crate) fn default_checked(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn default_checked(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     default_flag(this, c"checked")
 }
 
-pub(crate) fn set_default_checked(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_default_checked(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     set_default_flag(scope, this, args, c"checked")
 }

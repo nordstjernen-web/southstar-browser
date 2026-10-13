@@ -30,12 +30,12 @@ impl Trace for TokenList {
     }
 }
 
-pub(crate) fn register(scope: &mut Scope<'_>, prototype: Value) {
+pub fn register(scope: &mut Scope<'_>, prototype: Value) {
     scope.register_class(&TOKEN_LIST_CLASS);
     scope.set_class_prototype(&TOKEN_LIST_CLASS, prototype);
 }
 
-pub(crate) fn prototype(scope: &mut Scope<'_>) -> Value {
+pub fn prototype(scope: &mut Scope<'_>) -> Value {
     scope.class_prototype(&TOKEN_LIST_CLASS)
 }
 
@@ -105,12 +105,12 @@ impl Trace for Dataset {
     }
 }
 
-pub(crate) fn register_dataset(scope: &mut Scope<'_>, prototype: Value) {
+pub fn register_dataset(scope: &mut Scope<'_>, prototype: Value) {
     scope.register_class(&DATASET_CLASS);
     scope.set_class_prototype(&DATASET_CLASS, prototype);
 }
 
-pub(crate) fn dataset_prototype(scope: &mut Scope<'_>) -> Value {
+pub fn dataset_prototype(scope: &mut Scope<'_>) -> Value {
     scope.class_prototype(&DATASET_CLASS)
 }
 
@@ -122,7 +122,7 @@ pub(crate) fn dataset_node(value: &Value) -> Option<Element> {
         .flatten()
 }
 
-pub(crate) fn element_dataset(scope: &mut Scope<'_>, element: &Value) -> Result<Value, Value> {
+pub fn element_dataset(scope: &mut Scope<'_>, element: &Value) -> Result<Value, Value> {
     if !ffi::unwrap_node(element).is_some_and(dataset::has_dataset) {
         return Ok(Value::undefined());
     }
@@ -182,7 +182,7 @@ fn dataset_delete(scope: &mut Scope<'_>, obj: &Value, key: &PropertyKey) -> Resu
     Ok(true)
 }
 
-pub(crate) fn register_attr(scope: &mut Scope<'_>, prototype: Value) {
+pub fn register_attr(scope: &mut Scope<'_>, prototype: Value) {
     scope.register_class(&ATTR_CLASS);
     scope.set_class_prototype(&ATTR_CLASS, prototype);
 }

@@ -77,19 +77,15 @@ fn invalid_character(scope: &mut Scope<'_>, message: &str) -> Value {
     )
 }
 
-pub(crate) fn attribute_value(node: Element, raw: &CStr) -> Option<&'static [u8]> {
+pub fn attribute_value(node: Element, raw: &CStr) -> Option<&'static [u8]> {
     find_page_attr(node, &normalize(node, raw)).and_then(Attr::value_bytes)
 }
 
-pub(crate) fn has_name(node: Element, raw: &CStr) -> bool {
+pub fn has_name(node: Element, raw: &CStr) -> bool {
     find_page_attr(node, &normalize(node, raw)).is_some()
 }
 
-pub(crate) fn get_attribute_names(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_attribute_names(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let array = scope.new_array();
     let Some(node) = element(this) else {
         return Ok(array);
@@ -102,13 +98,13 @@ pub(crate) fn get_attribute_names(
     Ok(array)
 }
 
-pub(crate) fn has_attributes(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn has_attributes(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::boolean(
         element(this).is_some_and(|n| n.attrs().any(|a| page_attr(&a))),
     ))
 }
 
-pub(crate) fn toggle_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn toggle_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.is_empty() {
         return Err(scope.type_error("1 argument required, but only 0 present"));
     }
@@ -136,7 +132,7 @@ pub(crate) fn toggle_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     })?
 }
 
-pub(crate) fn get_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = element(this).filter(|_| args.len() >= 2) else {
         return Ok(Value::null());
     };
@@ -150,7 +146,7 @@ pub(crate) fn get_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     )
 }
 
-pub(crate) fn has_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn has_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = element(this).filter(|_| args.len() >= 2) else {
         return Ok(Value::boolean(false));
     };
@@ -161,7 +157,7 @@ pub(crate) fn has_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     ))
 }
 
-pub(crate) fn set_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 3 {
         return Err(scope.type_error(&format!(
             "3 arguments required, but only {} present",
@@ -197,7 +193,7 @@ pub(crate) fn set_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     Ok(Value::undefined())
 }
 
-pub(crate) fn remove_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn remove_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = element(this).filter(|_| args.len() >= 2) else {
         return Ok(Value::undefined());
     };
@@ -291,7 +287,7 @@ fn checked_name<'a>(
     Ok(raw)
 }
 
-pub(crate) fn set_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Ok(Value::undefined());
     }
@@ -310,7 +306,7 @@ pub(crate) fn set_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     })?
 }
 
-pub(crate) fn remove_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn remove_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = element(this).filter(|_| !args.is_empty()) else {
         return Ok(Value::undefined());
     };
@@ -330,7 +326,7 @@ pub(crate) fn remove_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     Ok(Value::undefined())
 }
 
-pub(crate) fn is_same_node(_scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn is_same_node(_scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     Ok(Value::boolean(
         args.first().is_some_and(|other| other.same_object(this)),
     ))

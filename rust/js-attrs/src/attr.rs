@@ -319,7 +319,7 @@ fn element_of(this: &Value) -> Option<Element> {
     ffi::unwrap_node(this).filter(|n| n.is_element())
 }
 
-pub(crate) fn get_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (Some(node), Some(arg)) = (element_of(this), args.first()) else {
         return Ok(Value::null());
     };
@@ -338,11 +338,7 @@ pub(crate) fn get_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Va
     }
 }
 
-pub(crate) fn get_attribute_node_ns(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn get_attribute_node_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = element_of(this).filter(|_| args.len() >= 2) else {
         return Ok(Value::null());
     };
@@ -368,11 +364,7 @@ fn attr_argument(
     Ok((node, shared))
 }
 
-pub(crate) fn remove_attribute_node(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn remove_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (node, shared) = attr_argument(scope, this, args)?;
     let (namespace_uri, local) = {
         let state = shared.borrow();
@@ -392,7 +384,7 @@ pub(crate) fn remove_attribute_node(
     Ok(args[0].clone())
 }
 
-pub(crate) fn set_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let (node, shared) = attr_argument(scope, this, args)?;
     let (owner, name, value) = {
         let state = shared.borrow();

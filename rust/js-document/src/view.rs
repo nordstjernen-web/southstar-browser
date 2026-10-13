@@ -24,7 +24,7 @@ fn is_frame_element(node: Element) -> bool {
             || element_named(node, "object"))
 }
 
-pub(crate) fn default_view(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn default_view(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let doc = ffi::unwrap_node(this).filter(|n| n.kind() == Kind::Document);
     let Some(doc) = doc.filter(|&d| !js.is_null() && Some(d) != ffi::current_document(js)) else {

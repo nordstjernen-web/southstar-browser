@@ -120,7 +120,7 @@ fn always_false(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(false))
 }
 
-pub(crate) fn get_selection(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_selection(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let has = has_range(scope);
     let selection = scope.new_object();
     put(scope, &selection, "anchorNode", Value::null());

@@ -153,7 +153,7 @@ pub(crate) fn content_document_of(
     build_content_document(scope, node)
 }
 
-pub(crate) fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_element(this).filter(|node| is_frame_owner(*node)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
@@ -167,7 +167,7 @@ pub(crate) fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult 
     content_document_of(scope, this, node)
 }
 
-pub(crate) fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_element(this).filter(|node| is_frame_owner(*node)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
@@ -187,7 +187,7 @@ pub(crate) fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(realm::cross_origin_window(ctx, window))
 }
 
-pub(crate) fn svg_document(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn svg_document(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_element(this) else {
         return Ok(Value::null());
     };

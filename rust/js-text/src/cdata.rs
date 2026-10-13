@@ -115,7 +115,7 @@ fn record(scope: &Scope<'_>, node: Element, old: &[u8]) {
     ffi::record_character_data(js, node, old);
 }
 
-pub(crate) fn substring_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn substring_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(scope.string(""));
     };
@@ -131,7 +131,7 @@ pub(crate) fn substring_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(scope.string_from_bytes(&cur[start..end.max(start)]))
 }
 
-pub(crate) fn append_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn append_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -145,7 +145,7 @@ pub(crate) fn append_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     Ok(Value::undefined())
 }
 
-pub(crate) fn delete_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn delete_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -160,7 +160,7 @@ pub(crate) fn delete_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     Ok(Value::undefined())
 }
 
-pub(crate) fn insert_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn insert_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -175,7 +175,7 @@ pub(crate) fn insert_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     Ok(Value::undefined())
 }
 
-pub(crate) fn replace_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn replace_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };
@@ -191,7 +191,7 @@ pub(crate) fn replace_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     Ok(Value::undefined())
 }
 
-pub(crate) fn split_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn split_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| n.is_text() && n.text().is_some()) else {
         return Ok(Value::null());
     };
@@ -226,7 +226,7 @@ pub(crate) fn split_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     Ok(ffi::wrap_node(scope, tail))
 }
 
-pub(crate) fn replace_whole_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn replace_whole_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| n.is_text()) else {
         return Ok(Value::null());
     };

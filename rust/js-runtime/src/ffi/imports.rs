@@ -84,6 +84,8 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_js_register_class(scope: &mut Scope<'_>, which: c_int) -> Value;
+    pub(crate) safe fn nsr_install_window_chrome(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_install_window_compat(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_js_install_proto_table(
         scope: &mut Scope<'_>,
         proto: &Value,

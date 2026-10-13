@@ -369,6 +369,7 @@ unsafe extern "C" {
     fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
     fn JS_SetPrototype(ctx: *mut JSContext, obj: JSValue, proto: JSValue) -> c_int;
     fn JS_SetImmutablePrototype(ctx: *mut JSContext, obj: JSValue);
+    fn JS_SetIsHTMLDDA(ctx: *mut JSContext, obj: JSValue);
     fn JS_MarkValue(rt: *mut JSRuntime, val: JSValue, mark_func: *const c_void);
     fn JS_JSONStringify(
         ctx: *mut JSContext,
@@ -2661,6 +2662,12 @@ impl Scope<'_> {
     pub fn set_immutable_prototype(&mut self, object: &Value) {
         if object.is_object() {
             unsafe { JS_SetImmutablePrototype(self.ctx, object.raw) };
+        }
+    }
+
+    pub fn set_is_html_dda(&mut self, object: &Value) {
+        if object.is_object() {
+            unsafe { JS_SetIsHTMLDDA(self.ctx, object.raw) };
         }
     }
 

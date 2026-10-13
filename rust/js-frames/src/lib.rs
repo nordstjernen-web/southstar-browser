@@ -9,7 +9,7 @@ mod ffi;
 mod globals;
 mod load;
 mod origin;
-mod owner;
+pub mod owner;
 mod page;
 mod queue;
 mod realm;

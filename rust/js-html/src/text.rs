@@ -19,7 +19,7 @@ const DATA_PROPERTY: Attributes = Attributes {
     configurable: true,
 };
 
-pub(crate) fn text_content_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn text_content_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -39,7 +39,7 @@ pub(crate) fn text_content_get(scope: &mut Scope<'_>, this: &Value) -> JsResult 
     Ok(scope.string_from_bytes(&text))
 }
 
-pub(crate) fn text_content_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn text_content_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
@@ -77,7 +77,7 @@ fn name_is(n: Element, names: &[&[u8]]) -> bool {
     })
 }
 
-pub(crate) fn text_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn text_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(n) =
         ffi::unwrap_node(this).filter(|n| n.kind() == Kind::Element && n.name().is_some())
     else {
@@ -105,7 +105,7 @@ pub(crate) fn text_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::undefined())
 }
 
-pub(crate) fn text_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
+pub fn text_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
     let Some(n) =
         ffi::unwrap_node(this).filter(|n| n.kind() == Kind::Element && n.name().is_some())
     else {
@@ -233,11 +233,7 @@ fn record_inserted(js: Js, parent: Element, node: Element) {
     ffi::mark_mutated(js);
 }
 
-pub(crate) fn insert_adjacent_element(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn insert_adjacent_element(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(target) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -266,11 +262,7 @@ pub(crate) fn insert_adjacent_element(
     Ok(ffi::wrap_node(scope, child))
 }
 
-pub(crate) fn insert_adjacent_text(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> JsResult {
+pub fn insert_adjacent_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(target) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());
     };

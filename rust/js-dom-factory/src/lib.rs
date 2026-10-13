@@ -2,14 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod adopt;
+pub mod adopt;
 mod constructors;
-mod factories;
+pub mod factories;
 mod ffi;
-mod hyperlink;
-mod implementation;
+pub mod hyperlink;
+pub mod implementation;
 mod names;
-mod namespaces;
+pub mod namespaces;
 
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Attributes, Scope, Value};

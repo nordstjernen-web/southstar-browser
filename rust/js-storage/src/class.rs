@@ -41,7 +41,7 @@ pub(crate) fn new_storage(scope: &mut Scope<'_>, area: i32) -> JsResult {
     scope.new_instance_with(&STORAGE_CLASS, None, area)
 }
 
-pub(crate) fn register(scope: &mut Scope<'_>, prototype: Value) {
+pub fn register(scope: &mut Scope<'_>, prototype: Value) {
     scope.register_class(&STORAGE_CLASS);
     scope.set_class_prototype(&STORAGE_CLASS, prototype);
 }

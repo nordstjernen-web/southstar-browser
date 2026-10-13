@@ -2,13 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod attributes;
-mod child;
+pub mod attributes;
+pub mod child;
 mod ffi;
-mod names;
-mod owner;
-mod sequence;
-mod tree;
+pub mod names;
+pub mod owner;
+pub mod sequence;
+pub mod tree;
 mod validity;
 
 use core::ffi::CStr;
@@ -18,7 +18,7 @@ use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::Js;
 
-pub(crate) type Element = Node<'static>;
+pub type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const FLAG_FRAGMENT: u32 = 1 << 2;

@@ -12,7 +12,7 @@ use crate::{Element, FLAG_QUIRKS, JsResult, document_for, until_nul};
 
 const READY_STATES: [&str; 3] = ["loading", "interactive", "complete"];
 
-pub(crate) fn get_title(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_title(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let title = document_for(scope, this).and_then(|doc| find_first_element(doc, c"title"));
     let text = title.map(|t| southstar_dom::serialize::collect_text(Some(t)));
     Ok(scope.string_from_bytes(until_nul(&text.unwrap_or_default())))
@@ -33,7 +33,7 @@ fn title_element(scope: &Scope<'_>, this: &Value) -> Option<Element> {
     Some(title)
 }
 
-pub(crate) fn set_title(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_title(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let text = scope.to_bytes(&args[0])?;
     if let Some(title) = title_element(scope, this) {
         let js = ffi::js_of(scope);
@@ -61,12 +61,12 @@ fn canonical_dir(value: Option<&[u8]>) -> &'static str {
         .unwrap_or("")
 }
 
-pub(crate) fn get_dir(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_dir(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let value = root_element_named(scope, c"html").and_then(|h| ffi::attr_bytes(h, c"dir"));
     Ok(scope.string(canonical_dir(value)))
 }
 
-pub(crate) fn set_dir(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
+pub fn set_dir(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
     if let Some(html) = root_element_named(scope, c"html") {
         let value = scope.to_bytes(&args[0])?;
         ffi::set_attr_recorded(ffi::js_of(scope), html, c"dir", &value);
@@ -85,13 +85,13 @@ fn color_attr(magic: i32) -> &'static CStr {
     }
 }
 
-pub(crate) fn get_color(scope: &mut Scope<'_>, magic: i32) -> JsResult {
+pub fn get_color(scope: &mut Scope<'_>, magic: i32) -> JsResult {
     let value =
         root_element_named(scope, c"body").and_then(|b| ffi::attr_bytes(b, color_attr(magic)));
     Ok(scope.string_from_bytes(value.unwrap_or_default()))
 }
 
-pub(crate) fn set_color(scope: &mut Scope<'_>, value: &Value, magic: i32) -> JsResult {
+pub fn set_color(scope: &mut Scope<'_>, value: &Value, magic: i32) -> JsResult {
     let Some(body) = root_element_named(scope, c"body") else {
         return Ok(Value::undefined());
     };
@@ -104,7 +104,7 @@ pub(crate) fn set_color(scope: &mut Scope<'_>, value: &Value, magic: i32) -> JsR
     Ok(Value::undefined())
 }
 
-pub(crate) fn get_referrer(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_referrer(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() {
         return Ok(scope.string(""));
@@ -116,7 +116,7 @@ pub(crate) fn get_referrer(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> 
     Ok(scope.string_from_bytes(&referrer.unwrap_or_default()))
 }
 
-pub(crate) fn get_ready_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_ready_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() {
         return Ok(scope.string(READY_STATES[0]));
@@ -129,28 +129,28 @@ pub(crate) fn get_ready_state(scope: &mut Scope<'_>, this: &Value, _: &[Value]) 
     Ok(scope.string(name))
 }
 
-pub(crate) fn get_design_mode(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_design_mode(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(scope.string("off"))
 }
 
-pub(crate) fn get_last_modified(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_last_modified(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let text = ffi::local_now_formatted(c"%m/%d/%Y %H:%M:%S").unwrap_or_default();
     Ok(scope.string_from_bytes(&text))
 }
 
-pub(crate) fn get_xml_version(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_xml_version(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(scope.string("1.0"))
 }
 
-pub(crate) fn get_hidden(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_hidden(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(Value::boolean(false))
 }
 
-pub(crate) fn get_visibility_state(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_visibility_state(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     Ok(scope.string("visible"))
 }
 
-pub(crate) fn get_compat_mode(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
+pub fn get_compat_mode(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let quirks =
         ffi::current_document(ffi::js_of(scope)).is_some_and(|d| d.flags() & FLAG_QUIRKS != 0);
     Ok(scope.string(if quirks { "BackCompat" } else { "CSS1Compat" }))

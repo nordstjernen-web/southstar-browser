@@ -5,7 +5,7 @@
 mod api;
 mod bitmap;
 mod color;
-mod context;
+pub mod context;
 mod ctxmisc;
 mod ctxpath;
 mod draw;

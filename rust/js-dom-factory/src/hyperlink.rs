@@ -46,7 +46,7 @@ pub(crate) fn resolved_href(node: Element, js: Option<Js>) -> Option<Vec<u8>> {
     anchor_url(node, js).or_else(|| ffi::attr(node, c"href").map(|raw| ffi::c_prefix(raw).to_vec()))
 }
 
-pub(crate) fn part_get(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
+pub fn part_get(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
     let node = ffi::unwrap_node(this);
     let js = ffi::js_of(scope);
     let Some(node) = node.filter(|_| is_url_element(node)) else {
@@ -90,12 +90,7 @@ fn component(magic: c_int) -> Option<&'static CStr> {
     })
 }
 
-pub(crate) fn part_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: c_int,
-) -> JsResult<()> {
+pub fn part_set(scope: &mut Scope<'_>, this: &Value, val: &Value, magic: c_int) -> JsResult<()> {
     let Some(name) = component(magic) else {
         return Ok(());
     };

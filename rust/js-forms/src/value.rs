@@ -432,7 +432,7 @@ fn arg(args: &[Value]) -> Value {
     args.first().cloned().unwrap_or_else(Value::undefined)
 }
 
-pub(crate) fn range_number(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
+pub fn range_number(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
     let Some(el) = ffi::element(this).filter(|e| e.name().is_some()) else {
         return Ok(scope.string(""));
     };
@@ -459,7 +459,7 @@ pub(crate) fn range_number(scope: &mut Scope<'_>, this: &Value, magic: c_int) ->
     }
 }
 
-pub(crate) fn set_range_number(
+pub fn set_range_number(
     scope: &mut Scope<'_>,
     this: &Value,
     value: &Value,
@@ -480,7 +480,7 @@ pub(crate) fn set_range_number(
     reflect_set(scope, el, value, attr)
 }
 
-pub(crate) fn progress_position(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn progress_position(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     match ffi::element(this).filter(|e| name_is(*e, "progress")) {
         Some(el) => Ok(Value::number(progress_state(el).position)),
         None => Ok(Value::undefined()),
@@ -514,7 +514,7 @@ fn parse_html_int(s: &[u8]) -> Option<i64> {
     Some(sign * value)
 }
 
-pub(crate) fn get_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(el) = ffi::element(this) else {
         return Ok(scope.string(""));
     };
@@ -562,7 +562,7 @@ fn set_output(page: Option<Page>, el: Element, text: &[u8]) {
     Page::mark_mutated(page);
 }
 
-pub(crate) fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let value = arg(args);
     let Some(el) = ffi::element(this) else {
         return Ok(Value::undefined());
@@ -643,7 +643,7 @@ pub(crate) fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
     Ok(Value::undefined())
 }
 
-pub(crate) fn default_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn default_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let el = ffi::element(this);
     let text = match el {
         Some(n) if named(n, "output") => {
@@ -661,7 +661,7 @@ pub(crate) fn default_value(scope: &mut Scope<'_>, this: &Value, _: &[Value]) ->
     Ok(scope.string_from_bytes(&text))
 }
 
-pub(crate) fn set_default_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_default_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let value = arg(args);
     let Some(el) = ffi::element(this) else {
         return Ok(Value::undefined());
@@ -690,14 +690,14 @@ pub(crate) fn set_default_value(scope: &mut Scope<'_>, this: &Value, args: &[Val
     Ok(Value::undefined())
 }
 
-pub(crate) fn value_as_number(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn value_as_number(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let number = ffi::element(this)
         .and_then(|n| value_to_ms(kind_of(n), used_value(n), false))
         .unwrap_or(f64::NAN);
     Ok(Value::number(number))
 }
 
-pub(crate) fn set_value_as_number(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_value_as_number(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(n) = ffi::element(this) else {
         return Ok(Value::undefined());
     };
@@ -730,7 +730,7 @@ fn date_kind(kind: InputKind) -> bool {
     )
 }
 
-pub(crate) fn value_as_date(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn value_as_date(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(n) = ffi::element(this) else {
         return Ok(Value::null());
     };
@@ -746,7 +746,7 @@ pub(crate) fn value_as_date(scope: &mut Scope<'_>, this: &Value, _: &[Value]) ->
     scope.construct(&date, &[Value::number(ms)])
 }
 
-pub(crate) fn set_value_as_date(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_value_as_date(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(n) = ffi::element(this) else {
         return Ok(Value::undefined());
     };
@@ -796,7 +796,7 @@ pub(crate) fn set_value_as_date(scope: &mut Scope<'_>, this: &Value, args: &[Val
     Ok(Value::undefined())
 }
 
-pub(crate) fn label(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn label(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     let Some(el) = ffi::element(this).filter(|e| e.element_name().is_some()) else {
         return Ok(Value::undefined());
     };
@@ -810,7 +810,7 @@ pub(crate) fn label(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResul
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_label(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_label(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(el) = ffi::element(this).filter(|e| e.element_name().is_some()) else {
         return Ok(Value::undefined());
     };

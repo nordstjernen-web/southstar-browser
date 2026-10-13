@@ -96,7 +96,7 @@ fn write_flags(root: Element, flags: Flags) {
     }
 }
 
-pub(crate) fn attach_shadow(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn attach_shadow(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(host) = ffi::unwrap_node(this).filter(|n| n.kind() == Kind::Element) else {
         return Err(scope.type_error("attachShadow requires an Element host"));
     };
@@ -254,7 +254,7 @@ fn define_props(scope: &mut Scope<'_>, wrapper: &Value) -> JsResult<()> {
     Ok(())
 }
 
-pub(crate) fn get_shadow_root(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
+pub fn get_shadow_root(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     match ffi::unwrap_node(this).and_then(crate::shadow_child) {
         Some(root) if !crate::is_closed(root) => wrap_shadow_root(scope, root),
         _ => Ok(Value::null()),
@@ -283,7 +283,7 @@ fn root_of_non_node(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(Value::null())
 }
 
-pub(crate) fn get_root_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_root_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return root_of_non_node(scope, this);
     };

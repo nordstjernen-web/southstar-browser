@@ -57,13 +57,13 @@ fn set_scroll(scope: &mut Scope<'_>, this: &Value, v: f64, vertical: bool) {
     ffi::observer_schedule_tick(js);
 }
 
-pub(crate) fn set_scroll_top(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_scroll_top(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let v = scope.to_number(&arg(args, 0))?;
     set_scroll(scope, this, v, true);
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_scroll_left(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_scroll_left(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let v = scope.to_number(&arg(args, 0))?;
     set_scroll(scope, this, v, false);
     Ok(Value::undefined())
@@ -112,11 +112,11 @@ fn element_scroll(scope: &mut Scope<'_>, this: &Value, args: &[Value], relative:
     Ok(Value::undefined())
 }
 
-pub(crate) fn element_scroll_to(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_scroll_to(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     element_scroll(scope, this, args, false)
 }
 
-pub(crate) fn element_scroll_by(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn element_scroll_by(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     element_scroll(scope, this, args, true)
 }
 
@@ -295,7 +295,7 @@ fn in_fixed_box(target: BoxRef<'static>) -> bool {
         .any(|p| ffi::box_style(p).and_then(|s| s.keyword_of(PropId::Position)) == Some(c"fixed"))
 }
 
-pub(crate) fn scroll_into_view(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn scroll_into_view(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap_node(this) else {
         return Ok(Value::undefined());

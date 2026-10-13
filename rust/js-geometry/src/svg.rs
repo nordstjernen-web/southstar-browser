@@ -152,7 +152,7 @@ pub(crate) fn client_rect(scope: &mut Scope<'_>, node: Option<Element>) -> Optio
     Some(mapped_bounds(&geometry, &to_page))
 }
 
-pub(crate) fn get_bbox(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_bbox(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let (_, geometry) = measure_node(scope, ffi::unwrap_node(this));
     if geometry.found != 0 {
         let r = Rect {
@@ -171,7 +171,7 @@ fn matrix_parts(m: &Matrix) -> [f64; 6] {
     [m.xx, m.yx, m.xy, m.yy, m.x0, m.y0]
 }
 
-pub(crate) fn get_screen_ctm(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_screen_ctm(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let node = ffi::unwrap_node(this);
     let (svg_box, geometry) = measure_node(scope, node);
     let mut m = geometry.to_root;
@@ -182,16 +182,12 @@ pub(crate) fn get_screen_ctm(scope: &mut Scope<'_>, this: &Value, _args: &[Value
     Ok(ffi::dom_matrix(scope, matrix_parts(&m)))
 }
 
-pub(crate) fn get_ctm(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_ctm(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let (_, geometry) = measure_node(scope, ffi::unwrap_node(this));
     Ok(ffi::dom_matrix(scope, matrix_parts(&geometry.to_viewport)))
 }
 
-pub(crate) fn get_owner_svg_element(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn get_owner_svg_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(n) = ffi::unwrap_node(this).filter(|n| n.flags() & FLAG_SVG_NS != 0) else {
         return Ok(Value::undefined());
     };
@@ -497,7 +493,7 @@ fn path_of(this: &Value) -> Vec<Pt> {
     flatten_path(ffi::unwrap_node(this).and_then(|n| n.attr(c"d")))
 }
 
-pub(crate) fn get_total_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_total_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::number(path_length(&path_of(this), None).0))
 }
 
@@ -508,7 +504,7 @@ fn point_object(scope: &mut Scope<'_>, x: f64, y: f64) -> JsResult {
     Ok(pt)
 }
 
-pub(crate) fn get_point_at_length(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn get_point_at_length(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let pts = path_of(this);
     let at = match args.first() {
         Some(v) => scope.to_number(v)?,
@@ -544,13 +540,13 @@ fn matrix_transform(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     Ok(out)
 }
 
-pub(crate) fn create_svg_point(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_svg_point(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let p = point_object(scope, 0.0, 0.0)?;
     with_matrix_transform(scope, &p)?;
     Ok(p)
 }
 
-pub(crate) fn create_svg_rect(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_svg_rect(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let r = scope.new_object();
     for key in ["x", "y", "width", "height"] {
         scope.set(&r, key, Value::number(0.0))?;
@@ -560,7 +556,7 @@ pub(crate) fn create_svg_rect(scope: &mut Scope<'_>, _this: &Value, _args: &[Val
 
 const IDENTITY_PARTS: [f64; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
-pub(crate) fn create_svg_matrix(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn create_svg_matrix(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(ffi::dom_matrix(scope, IDENTITY_PARTS))
 }
 
@@ -568,11 +564,7 @@ fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::undefined())
 }
 
-pub(crate) fn create_svg_transform(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    _args: &[Value],
-) -> JsResult {
+pub fn create_svg_transform(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let t = scope.new_object();
     scope.set(&t, "type", Value::int(0))?;
     scope.set(&t, "angle", Value::number(0.0))?;
@@ -592,7 +584,7 @@ pub(crate) fn create_svg_transform(
     Ok(t)
 }
 
-pub(crate) fn begin_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn begin_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(n) = ffi::unwrap_node(this).filter(|n| n.flags() & FLAG_SVG_NS != 0) else {
         return Ok(Value::undefined());
     };
@@ -609,7 +601,7 @@ pub(crate) fn begin_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_current_time(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+pub fn set_current_time(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::undefined())
 }
 

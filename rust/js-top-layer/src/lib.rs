@@ -3,11 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod details;
-mod dialog;
+pub mod dialog;
 mod ffi;
 mod focus;
-mod invoker;
-mod popover;
+pub mod invoker;
+pub mod popover;
 
 use core::ffi::CStr;
 use std::cell::RefCell;

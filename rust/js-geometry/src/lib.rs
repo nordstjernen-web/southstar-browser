@@ -4,12 +4,12 @@
 
 mod boxes;
 mod ffi;
-mod hit;
+pub mod hit;
 mod lookup;
-mod metrics;
-mod scroll;
-mod svg;
-mod visibility;
+pub mod metrics;
+pub mod scroll;
+pub mod svg;
+pub mod visibility;
 
 use southstar_dom::Node;
 use southstar_js_engine::Value;

@@ -167,7 +167,7 @@ fn get_context(
     get_by_type(scope, st, el, canvas, offscreen, kind, options)
 }
 
-pub(crate) fn element_get_context(
+pub fn element_get_context(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
@@ -293,7 +293,7 @@ fn png_bytes_object(scope: &mut Scope<'_>, png: &[u8]) -> Result<Value, Value> {
     Ok(blob)
 }
 
-pub(crate) fn element_to_blob(
+pub fn element_to_blob(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
@@ -328,7 +328,7 @@ pub(crate) fn element_to_blob(
     Ok(Value::undefined())
 }
 
-pub(crate) fn element_to_data_url(
+pub fn element_to_data_url(
     scope: &mut Scope<'_>,
     this: &Value,
     _: &[Value],

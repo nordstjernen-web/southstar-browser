@@ -27,7 +27,7 @@ fn is_frame_host(node: Element) -> bool {
     matches!(node.element_name(), Some(b"iframe" | b"object"))
 }
 
-pub(crate) fn owner_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn owner_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(js) = ffi::js_of(scope) else {
         return Ok(Value::null());
     };
@@ -67,7 +67,7 @@ pub(crate) fn owner_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(ffi::make_node(scope, current))
 }
 
-pub(crate) fn tag_name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn tag_name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let node = ffi::unwrap_node(this);
     let text = names::tag_name(node, || {
         owner_document(scope, this).is_ok_and(|doc| doc.is_object() && ffi::doc_is_xml(scope, &doc))
@@ -75,7 +75,7 @@ pub(crate) fn tag_name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     Ok(names::to_value(scope, text))
 }
 
-pub(crate) fn base_uri(scope: &mut Scope<'_>, _this: &Value) -> JsResult {
+pub fn base_uri(scope: &mut Scope<'_>, _this: &Value) -> JsResult {
     let base = ffi::js_of(scope).and_then(ffi::doc_base_url);
     let base = base
         .as_deref()
@@ -84,7 +84,7 @@ pub(crate) fn base_uri(scope: &mut Scope<'_>, _this: &Value) -> JsResult {
     Ok(scope.string_from_bytes(base))
 }
 
-pub(crate) fn template_content(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn template_content(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(scope.string(""));
     };
@@ -109,14 +109,14 @@ pub(crate) fn template_content(scope: &mut Scope<'_>, this: &Value) -> JsResult 
     Ok(wrapped)
 }
 
-pub(crate) fn children(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn children(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if ffi::unwrap_node(this).is_none() {
         return Ok(scope.new_array());
     }
     ffi::make_live(scope, this, LIVE_CHILDREN)
 }
 
-pub(crate) fn child_nodes(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+pub fn child_nodes(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if ffi::unwrap_node(this).is_none() {
         return Ok(scope.new_array());
     }

@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod attr;
-mod class;
+pub mod attr;
+pub mod class;
 mod dataset;
-mod element;
+pub mod element;
 mod ffi;
-mod named_map;
+pub mod named_map;
 mod token_list;
 
 use std::ffi::CString;

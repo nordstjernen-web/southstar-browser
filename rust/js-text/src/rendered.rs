@@ -11,7 +11,7 @@ use crate::{
 
 const NO_MODIFICATION_ALLOWED_ERR: i32 = 7;
 
-pub(crate) fn get_inner_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_inner_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this) else {
         return Ok(Value::null());
     };
@@ -65,7 +65,7 @@ fn setter_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<Vec<u8>> {
     scope.to_bytes(value)
 }
 
-pub(crate) fn set_inner_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_inner_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| !unsupported(Some(*n))) else {
         return Ok(Value::undefined());
     };
@@ -79,7 +79,7 @@ pub(crate) fn set_inner_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     Ok(Value::undefined())
 }
 
-pub(crate) fn set_outer_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+pub fn set_outer_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| !unsupported(Some(*n))) else {
         return Ok(Value::undefined());
     };
@@ -154,7 +154,7 @@ fn merge_with_next(js: Js, node: Element) {
     ffi::orphan_node(js, next);
 }
 
-pub(crate) fn get_whole_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn get_whole_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let Some(node) = ffi::unwrap_node(this).filter(|n| n.is_text()) else {
         return Ok(Value::undefined());
     };
@@ -207,7 +207,7 @@ fn normalize_walk(js: Js, node: Element, depth: i32) {
     }
 }
 
-pub(crate) fn normalize(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn normalize(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     if let Some(node) = ffi::unwrap_node(this) {
         let js = ffi::js_of(scope);
         normalize_walk(js, node, 0);

@@ -60,72 +60,72 @@ fn find_element(
     None
 }
 
-pub(crate) fn parent_element(node: Option<Element>) -> Option<Element> {
+pub fn parent_element(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| n.kind() != Kind::Document && !is_shadow_root(n))?;
     node.parent().filter(|&p| is_child_element(p))
 }
 
-pub(crate) fn parent_node(node: Option<Element>) -> Option<Element> {
+pub fn parent_node(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| n.kind() != Kind::Document && !is_shadow_root(n))?;
     node.parent()
 }
 
-pub(crate) fn first_child(node: Option<Element>) -> Option<Element> {
+pub fn first_child(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| !is_template(n))?;
     skip_hidden(node.first_child(), Element::next_sibling)
 }
 
-pub(crate) fn last_child(node: Option<Element>) -> Option<Element> {
+pub fn last_child(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| !is_template(n))?;
     skip_hidden(node.last_child(), Element::prev_sibling)
 }
 
-pub(crate) fn next_sibling(node: Option<Element>) -> Option<Element> {
+pub fn next_sibling(node: Option<Element>) -> Option<Element> {
     skip_hidden(node?.next_sibling(), Element::next_sibling)
 }
 
-pub(crate) fn previous_sibling(node: Option<Element>) -> Option<Element> {
+pub fn previous_sibling(node: Option<Element>) -> Option<Element> {
     skip_hidden(node?.prev_sibling(), Element::prev_sibling)
 }
 
-pub(crate) fn first_element_child(node: Option<Element>) -> Option<Element> {
+pub fn first_element_child(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| !is_template(n))?;
     find_element(node.first_child(), Element::next_sibling)
 }
 
-pub(crate) fn last_element_child(node: Option<Element>) -> Option<Element> {
+pub fn last_element_child(node: Option<Element>) -> Option<Element> {
     let node = node.filter(|&n| !is_template(n))?;
     find_element(node.last_child(), Element::prev_sibling)
 }
 
-pub(crate) fn next_element_sibling(node: Option<Element>) -> Option<Element> {
+pub fn next_element_sibling(node: Option<Element>) -> Option<Element> {
     find_element(node?.next_sibling(), Element::next_sibling)
 }
 
-pub(crate) fn previous_element_sibling(node: Option<Element>) -> Option<Element> {
+pub fn previous_element_sibling(node: Option<Element>) -> Option<Element> {
     find_element(node?.prev_sibling(), Element::prev_sibling)
 }
 
-pub(crate) fn child_element_count(node: Option<Element>) -> i32 {
+pub fn child_element_count(node: Option<Element>) -> i32 {
     match node.filter(|&n| !is_template(n)) {
         Some(n) => children(n).filter(|&c| is_child_element(c)).count() as i32,
         None => 0,
     }
 }
 
-pub(crate) fn has_child_nodes(node: Option<Element>) -> bool {
+pub fn has_child_nodes(node: Option<Element>) -> bool {
     node.filter(|&n| !is_template(n))
         .is_some_and(|n| children(n).any(|c| !hidden_child(c)))
 }
 
-pub(crate) fn contains(node: Option<Element>, other: Option<Element>) -> bool {
+pub fn contains(node: Option<Element>, other: Option<Element>) -> bool {
     let (Some(node), Some(other)) = (node, other) else {
         return false;
     };
     core::iter::successors(Some(other), |&n| tree_parent(n)).any(|n| n == node)
 }
 
-pub(crate) fn is_connected(node: Option<Element>) -> bool {
+pub fn is_connected(node: Option<Element>) -> bool {
     let Some(mut root) = node else {
         return false;
     };
@@ -143,7 +143,7 @@ fn tree_ancestor(node: Element, other: Element) -> bool {
     core::iter::successors(tree_parent(node), |&n| tree_parent(n)).any(|n| n == other)
 }
 
-pub(crate) fn compare_document_position(a: Element, b: Option<Element>) -> i32 {
+pub fn compare_document_position(a: Element, b: Option<Element>) -> i32 {
     let Some(b) = b else {
         return DISCONNECTED;
     };
@@ -231,7 +231,7 @@ fn names_equal(a: Element, b: Element) -> bool {
     }
 }
 
-pub(crate) fn equal(a: Element, b: Element, depth: i32) -> bool {
+pub fn equal(a: Element, b: Element, depth: i32) -> bool {
     if a == b {
         return true;
     }
@@ -252,7 +252,7 @@ pub(crate) fn equal(a: Element, b: Element, depth: i32) -> bool {
     ca.is_none() && cb.is_none()
 }
 
-pub(crate) fn node_type(node: Option<Element>) -> i32 {
+pub fn node_type(node: Option<Element>) -> i32 {
     let Some(node) = node else {
         return 0;
     };

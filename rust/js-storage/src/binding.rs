@@ -173,7 +173,7 @@ fn length(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::int(i32::try_from(len).unwrap_or(i32::MAX)))
 }
 
-pub(crate) fn install_proto(scope: &mut Scope<'_>, proto: &Value) {
+pub fn install_proto(scope: &mut Scope<'_>, proto: &Value) {
     let methods: [(&str, u32, southstar_js_engine::NativeFn); 5] = [
         ("getItem", 1, get_item),
         ("setItem", 2, set_item),

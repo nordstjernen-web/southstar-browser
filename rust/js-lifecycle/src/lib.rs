@@ -4,7 +4,7 @@
 
 mod events;
 mod ffi;
-mod frames;
+pub mod frames;
 mod lifecycle;
 mod scrollend;
 

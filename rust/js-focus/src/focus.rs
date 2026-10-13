@@ -368,7 +368,7 @@ pub(crate) fn sequential_target(js: Js, backward: bool) -> Option<Element> {
     Some(cands[next].node)
 }
 
-pub(crate) fn focus_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn focus_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
@@ -383,7 +383,7 @@ pub(crate) fn focus_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value])
     Ok(Value::undefined())
 }
 
-pub(crate) fn blur_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn blur_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
@@ -395,7 +395,7 @@ pub(crate) fn blur_method(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) 
     Ok(Value::undefined())
 }
 
-pub(crate) fn has_focus(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+pub fn has_focus(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
     if js.is_null() {
         return Ok(Value::boolean(false));
