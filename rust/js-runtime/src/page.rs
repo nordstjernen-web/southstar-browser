@@ -966,7 +966,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     ffi::imports::nsr_crypto_install_window_subtle(scope, global);
     #[cfg(feature = "wasm")]
     ffi::imports::nsr_wasm_install(scope, global);
-    ffi::install(scope, ns_storage_install_window, global);
+    imports::nsr_storage_install_window(scope, global);
     ffi::imports::nsr_install_window_compat(scope, global);
 }
 

@@ -50,7 +50,7 @@ pub(crate) fn fire(
     };
     let source = scope.global();
     let url = source_url(scope, &source, js);
-    let event = ffi::in_page_context(js, |scope| {
+    let Some(event) = ffi::in_page_context(js, |scope| {
         let event = ffi::make_event(scope, "storage");
         let fields = [
             ("bubbles", Value::boolean(false)),
@@ -65,7 +65,9 @@ pub(crate) fn fire(
             let _ = scope.set(&event, name, value);
         }
         event
-    });
+    }) else {
+        return;
+    };
     page.events
         .borrow_mut()
         .push_back(PendingEvent { event, source });
@@ -126,7 +128,7 @@ fn deliver_to_frames(
     if node.kind() == Kind::Document
         && let Some(frame) = node.parent()
     {
-        let window = ffi::frame_realm_window(scope, js, frame);
+        let window = ffi::frame_realm_window(js, frame);
         let is_source = window.is_object() && window.same_object(&pending.source);
         if !is_source {
             let body = index::find_first_element(node, c"body");

@@ -600,6 +600,7 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value);
 }
 
 unsafe extern "Rust" {

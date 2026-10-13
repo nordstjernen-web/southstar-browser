@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of Web Storage as declared in src/js_internal.h, the js.c and GLib calls it makes, and the on-disk local area.
+//! Southstar — the C ABI and Rust-ABI entry points of Web Storage, the realm, event and GLib calls it makes, and the on-disk local area.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::store::{Area, Items, Snapshot};
 use crate::{Page, binding, class, events};
@@ -52,21 +52,12 @@ unsafe extern "C" {
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
     fn ns_js_in_main_realm(js: *mut NsJs, f: MainRealmFn, data: *mut c_void);
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> JSValue;
     fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean;
-    fn ns_js_fire_element_handlers(
-        js: *mut NsJs,
-        element: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-    );
-    fn ns_js_dispatch_document_window_event(js: *mut NsJs, kind: *const c_char, event: JSValue);
     fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
     fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
 
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
@@ -118,6 +109,17 @@ unsafe extern "C" {
     );
 }
 
+unsafe extern "Rust" {
+    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
+    unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> Value;
+    unsafe fn nsr_js_fire_element_handlers(
+        js: *mut NsJs,
+        element: *const NsNode,
+        kind: &str,
+        event: &Value,
+    );
+}
+
 fn c_text(text: &str) -> CString {
     let bytes = text.as_bytes();
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -137,7 +139,7 @@ fn taken(text: *mut c_char) -> Option<String> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(quickjs::context_opaque(scope).cast())
+    Js::from_ptr(scope.context_opaque().cast())
 }
 
 pub(crate) fn area_of(value: &Value) -> Option<Area> {
@@ -164,20 +166,16 @@ pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
     unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
 }
 
-pub(crate) fn in_page_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-    let ctx = unsafe { ns_js_main_context(js.ptr()) };
-    unsafe { quickjs::with_context(ctx, f) }
+pub(crate) fn in_page_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
+    unsafe { ns_js_main_context(js.ptr()) }.with(f)
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
-    let kind = c_text(kind);
-    let raw = unsafe { ns_make_event(quickjs::raw_context(scope), kind.as_ptr(), ptr::null()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    unsafe { nsr_make_event(scope, kind, ptr::null()) }
 }
 
-pub(crate) fn frame_realm_window(scope: &mut Scope<'_>, js: Js, frame: Node<'_>) -> Value {
-    let raw = unsafe { ns_js_frame_realm_window(js.ptr(), frame.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+pub(crate) fn frame_realm_window(js: Js, frame: Node<'_>) -> Value {
+    unsafe { nsr_js_frame_realm_window(js.ptr(), frame.as_ptr()) }
 }
 
 pub(crate) fn inline_handlers_allowed(js: Js) -> bool {
@@ -191,21 +189,11 @@ pub(crate) fn fire_element_handlers(
     kind: &str,
     event: &Value,
 ) {
-    let kind = c_text(kind);
-    unsafe {
-        ns_js_fire_element_handlers(
-            js.ptr(),
-            element.as_ptr(),
-            kind.as_ptr(),
-            quickjs::raw(event),
-        )
-    };
+    unsafe { nsr_js_fire_element_handlers(js.ptr(), element.as_ptr(), kind, event) };
 }
 
 pub(crate) fn dispatch_window_event(_scope: &mut Scope<'_>, js: Js, kind: &str, event: &Value) {
-    let kind = c_text(kind);
-    let event = quickjs::into_raw(event.clone());
-    unsafe { ns_js_dispatch_document_window_event(js.ptr(), kind.as_ptr(), event) };
+    api::dispatch_document_window_event(js.ptr().cast(), kind, event.clone());
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
@@ -415,19 +403,6 @@ fn load_local(page: &Rc<Page>, url: Option<String>) {
     page.storage.borrow_mut().adopt_origin(origin);
 }
 
-unsafe fn with_value<R>(
-    ctx: *mut JSContext,
-    value: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value) -> R,
-) -> R {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let value = quickjs::borrow_value(scope, value);
-            f(scope, &value)
-        })
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_storage_init(js: *mut NsJs) {
     crate::init(Js::from_ptr(js));
@@ -487,43 +462,28 @@ pub unsafe extern "C" fn ns_storage_load_local(js: *mut NsJs, url: *const c_char
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_install_proto(ctx: *mut JSContext, proto: JSValue) {
-    unsafe { with_value(ctx, proto, binding::install_proto) }
+pub fn nsr_storage_install_proto(scope: &mut Scope<'_>, proto: &Value) {
+    binding::install_proto(scope, proto);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_install_window(ctx: *mut JSContext, global: JSValue) {
-    unsafe { with_value(ctx, global, binding::install_window) }
+pub fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value) {
+    binding::install_window(scope, global);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_register_class(ctx: *mut JSContext, proto: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let proto = quickjs::take_value(scope, proto);
-            class::register(scope, proto);
-        })
-    }
+pub fn nsr_storage_register_class(scope: &mut Scope<'_>, proto: Value) {
+    class::register(scope, proto);
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_js_storage_class_id() -> u32 {
-    quickjs::class_id(&class::STORAGE_CLASS)
+pub fn nsr_storage_area_of(value: &Value) -> c_int {
+    class::area_tag(value)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_area_of(obj: JSValue) -> c_int {
-    unsafe { quickjs::with_raw(obj, class::area_tag) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_new(ctx: *mut JSContext, area: c_int) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let storage = class::new_storage(scope, area);
-            quickjs::result_raw(scope, storage)
-        })
-    }
+pub fn nsr_storage_new(scope: &mut Scope<'_>, area: c_int) -> Result<Value, Value> {
+    class::new_storage(scope, area)
 }
 
 #[unsafe(no_mangle)]
