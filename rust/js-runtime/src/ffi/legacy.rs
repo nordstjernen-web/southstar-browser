@@ -16,7 +16,6 @@ use crate::{api, worker};
 
 pub(crate) type Native = JSCFunction;
 pub(crate) type Installer = unsafe extern "C" fn(ctx: *mut JSContext, target: JSValue);
-pub(crate) type ContextInstaller = unsafe extern "C" fn(ctx: *mut JSContext);
 type JobFn = unsafe extern "C" fn(ctx: *mut JSContext, argc: c_int, argv: *mut JSValue) -> JSValue;
 
 #[repr(C)]
@@ -84,10 +83,6 @@ pub(crate) fn c_constructor(
 
 pub(crate) fn install(scope: &mut Scope<'_>, installer: Installer, target: &Value) {
     unsafe { installer(quickjs::raw_context(scope), quickjs::raw(target)) };
-}
-
-pub(crate) fn install_context(scope: &mut Scope<'_>, installer: ContextInstaller) {
-    unsafe { installer(quickjs::raw_context(scope)) };
 }
 
 fn handle(ctx: *mut JSContext) -> ContextHandle {

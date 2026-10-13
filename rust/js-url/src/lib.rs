@@ -6,6 +6,8 @@ mod base64;
 mod blob;
 mod ffi;
 mod file_reader;
+#[cfg(feature = "quickjs")]
+mod legacy;
 mod registry;
 mod search_params;
 mod text_codec;

@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::quickjs;
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::ffi::{self, HO_TEXT_DECODER, HO_TEXT_ENCODER};
@@ -166,12 +165,12 @@ fn encode_into_target(scope: &mut Scope<'_>, view: &Value) -> (Target, Option<Va
     if scope.typed_array_element(view) != Some(ElementType::Uint8) {
         return (Target::NotUint8, None);
     }
-    match quickjs::typed_array_parts(scope, view) {
-        Ok(parts) => (
-            Target::Bytes(parts.byte_offset, parts.byte_length),
-            Some(parts.buffer),
+    match scope.typed_array_view(view) {
+        Ok(Some(view)) => (
+            Target::Bytes(view.byte_offset, view.length),
+            Some(view.buffer),
         ),
-        Err(_) => (Target::Empty, None),
+        _ => (Target::Empty, None),
     }
 }
 

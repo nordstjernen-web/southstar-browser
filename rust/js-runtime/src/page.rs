@@ -5,7 +5,8 @@
 use southstar_js_bind::natives::{resolved_empty_array, resolved_false, resolved_undefined};
 use southstar_js_bind::{
     attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
-    bind_prototype_function_if_missing, bind_prototype_native_if_missing, prototype_of,
+    bind_prototype_function_if_missing, bind_prototype_native_if_missing, make_constructor,
+    prototype_of,
 };
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
@@ -208,22 +209,34 @@ fn bind_proto_fn(
 }
 
 pub(crate) fn bind_url(scope: &mut Scope<'_>, global: &Value) {
-    let url = make_ctor(scope, "URL", ns_window_url_ctor, 1);
-    bind_fn(scope, &url, "canParse", ns_window_url_can_parse, 1);
-    bind_fn(scope, &url, "parse", ns_window_url_parse_static, 1);
-    bind_fn(
+    let url = make_constructor(scope, "URL", 1, imports::nsr_window_url_ctor);
+    bind_native(
+        scope,
+        &url,
+        "canParse",
+        1,
+        imports::nsr_window_url_can_parse,
+    );
+    bind_native(
+        scope,
+        &url,
+        "parse",
+        1,
+        imports::nsr_window_url_parse_static,
+    );
+    bind_native(
         scope,
         &url,
         "createObjectURL",
-        ns_window_url_create_object,
         1,
+        imports::nsr_window_url_create_object,
     );
-    bind_fn(
+    bind_native(
         scope,
         &url,
         "revokeObjectURL",
-        ns_window_url_revoke_object,
         1,
+        imports::nsr_window_url_revoke_object,
     );
     let _ = scope.set(global, "URL", url);
 }
@@ -568,12 +581,12 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         1,
     );
     ffi::install(scope, ns_js_input_install_wpt, global);
-    bind_fn(
+    bind_native(
         scope,
         global,
         "__ndUpdateBlobURL",
-        ns_window_url_update_object,
         2,
+        imports::nsr_window_url_update_object,
     );
     let media_natives: [(&str, NativeFn, u32); 7] = [
         ("__ndMseAppend", imports::nsr_window_mse_append, 3),
@@ -601,8 +614,8 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     imports::nsr_window_install_history(scope, global);
     ffi::imports::nsr_crypto_install_window(scope, global);
 
-    bind_fn(scope, global, "btoa", ns_window_btoa, 1);
-    bind_fn(scope, global, "atob", ns_window_atob, 1);
+    bind_native(scope, global, "btoa", 1, imports::nsr_window_btoa);
+    bind_native(scope, global, "atob", 1, imports::nsr_window_atob);
     bind_url(scope, global);
     let custom_elements = scope.new_object();
     bind_native(scope, &custom_elements, "define", 3, imports::nsr_ce_define);
@@ -670,9 +683,15 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         imports::nsr_window_comment_ctor,
     );
     bind_constructor(scope, global, "Option", 4, imports::nsr_window_option_ctor);
-    bind_ctor(scope, global, "URLSearchParams", ns_window_usp_ctor, 0);
-    ffi::install_context(scope, ns_usp_install_interface);
-    ffi::install_context(scope, ns_url_install_interface);
+    bind_constructor(
+        scope,
+        global,
+        "URLSearchParams",
+        0,
+        imports::nsr_window_usp_ctor,
+    );
+    imports::nsr_usp_install_interface(scope);
+    imports::nsr_url_install_interface(scope);
     bind_ctor(
         scope,
         global,
@@ -741,9 +760,21 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     bind_native(scope, &caches, "match", 2, resolved_undefined);
     let _ = scope.get(global, "caches");
     let _ = scope.set(global, "caches", caches);
-    bind_ctor(scope, global, "TextEncoder", ns_window_text_encoder_ctor, 0);
-    bind_ctor(scope, global, "TextDecoder", ns_window_text_decoder_ctor, 0);
-    ffi::install(scope, ns_net_install_text_codecs, global);
+    bind_constructor(
+        scope,
+        global,
+        "TextEncoder",
+        0,
+        imports::nsr_window_text_encoder_ctor,
+    );
+    bind_constructor(
+        scope,
+        global,
+        "TextDecoder",
+        0,
+        imports::nsr_window_text_decoder_ctor,
+    );
+    imports::nsr_net_install_text_codecs(scope, global);
     bind_constructor(
         scope,
         global,
@@ -759,7 +790,13 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         imports::nsr_window_request_ctor,
     );
     imports::nsr_fetch_install_interfaces(scope, global);
-    bind_ctor(scope, global, "FileReader", ns_window_filereader_ctor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "FileReader",
+        0,
+        imports::nsr_window_filereader_ctor,
+    );
 
     ffi::imports::nsr_events_install_window(scope, global);
     for name in EVENT_BASE_CONSTRUCTORS {

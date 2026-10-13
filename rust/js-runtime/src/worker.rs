@@ -106,8 +106,8 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
             Binding::Rust(imports::nsr_services_queue_microtask),
             1,
         ),
-        ("btoa", Binding::Raw(ns_window_btoa), 1),
-        ("atob", Binding::Raw(ns_window_atob), 1),
+        ("btoa", Binding::Rust(imports::nsr_window_btoa), 1),
+        ("atob", Binding::Rust(imports::nsr_window_atob), 1),
     ];
     for (name, binding, arity) in functions {
         match binding {
@@ -135,23 +135,29 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         0,
         ffi::imports::nsr_window_event_ctor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "TextEncoder",
-        ns_window_text_encoder_ctor,
         0,
+        imports::nsr_window_text_encoder_ctor,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         &global,
         "TextDecoder",
-        ns_window_text_decoder_ctor,
         0,
+        imports::nsr_window_text_decoder_ctor,
     );
-    ffi::install(scope, ns_net_install_text_codecs, &global);
-    bind_ctor(scope, &global, "URLSearchParams", ns_window_usp_ctor, 0);
-    ffi::install_context(scope, ns_usp_install_interface);
+    imports::nsr_net_install_text_codecs(scope, &global);
+    bind_constructor(
+        scope,
+        &global,
+        "URLSearchParams",
+        0,
+        imports::nsr_window_usp_ctor,
+    );
+    imports::nsr_usp_install_interface(scope);
     bind_constructor(
         scope,
         &global,
@@ -159,9 +165,15 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
         0,
         imports::nsr_window_form_data_ctor,
     );
-    bind_ctor(scope, &global, "FileReader", ns_window_filereader_ctor, 0);
+    bind_constructor(
+        scope,
+        &global,
+        "FileReader",
+        0,
+        imports::nsr_window_filereader_ctor,
+    );
     bind_url(scope, &global);
-    ffi::install_context(scope, ns_url_install_interface);
+    imports::nsr_url_install_interface(scope);
 
     #[cfg(feature = "wasm")]
     ffi::imports::nsr_wasm_install(scope, &global);

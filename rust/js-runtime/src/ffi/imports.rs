@@ -527,6 +527,69 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_js_net_install_sockets(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_net_install_interfaces(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_btoa(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_atob(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_can_parse(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_parse_static(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_create_object(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_update_object(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_url_revoke_object(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_usp_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_text_encoder_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_text_decoder_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_filereader_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_url_install_interface(scope: &mut Scope<'_>);
+    pub(crate) safe fn nsr_usp_install_interface(scope: &mut Scope<'_>);
+    pub(crate) safe fn nsr_net_install_text_codecs(scope: &mut Scope<'_>, global: &Value);
 }
 
 unsafe extern "Rust" {

@@ -23,9 +23,7 @@ use crate::worker;
 use crate::{Element, interrupt, page, teardown};
 use state::{DataFn, LogFn, NavigateFn, PageState};
 
-pub(crate) use legacy::{
-    Native, c_constructor, c_constructor_or_function, c_function, install, install_context,
-};
+pub(crate) use legacy::{Native, c_constructor, c_constructor_or_function, c_function, install};
 
 pub use record::NsJs;
 
