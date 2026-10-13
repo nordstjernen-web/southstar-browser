@@ -20,7 +20,8 @@ pub unsafe extern "C" fn ns_js_is_host_object(value: JSValue) -> c_int {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_value_is_form_data(_ctx: *mut JSContext, value: JSValue) -> c_int {
-    let form_data = unsafe { quickjs::with_raw(value, |value| host::is(value, HostKind::FormData)) };
+    let form_data =
+        unsafe { quickjs::with_raw(value, |value| host::is(value, HostKind::FormData)) };
     c_int::from(form_data)
 }
 

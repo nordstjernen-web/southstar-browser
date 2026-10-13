@@ -874,6 +874,81 @@ straight at its `ns_node` and the node's `js_wrapper` points back at the
 object's identity (`object_identity`, `object_from_identity`). On Boa the
 pointer is kept but the finalizer does not run.
 
+##### Converting a crate off raw QuickJS
+
+Removing QuickJS means every `rust/js-*` crate, `rust/canvas`,
+`rust/webgl` and `rust/webgpu` stops using `southstar_js_engine::quickjs`
+and raw `JS_*` declarations. `rust/js-bind` and `rust/js-runtime` are the
+worked examples. A converted crate uses only the neutral API; the one
+exception is an optional `legacy.rs` of C-ABI shims kept for callers that
+are not converted yet, deleted entry by entry as its last caller moves.
+
+Contexts and runtimes. `ContextHandle` (one realm: a JSContext on QuickJS,
+a realm of the runtime's single `Context` on Boa) and `RuntimeHandle` are
+Copy, pointer-sized and `repr(transparent)`; they replace `*mut JSContext`
+and the runtime pointer in records and signatures. On QuickJS a
+`ContextHandle` *is* the JSContext pointer, so an `extern "C"` function
+whose only engine type is a context can switch its declaration to
+`ContextHandle` on either side independently.
+
+| Raw idiom | Neutral replacement |
+|---|---|
+| `quickjs::with_context(ctx, f)` | `handle.with(f)` (`None` for a null or freed handle); re-entrant, enters the handle's realm if another is current |
+| `quickjs::raw_context(scope)`, `caller_realm`, `function_realm` | `scope.handle()`, `scope.caller_handle()`, `scope.function_handle(&f)` |
+| `context_opaque(scope)`, `opaque_of(ctx)` | `scope.context_opaque()`, `handle.opaque()` |
+| `new_runtime`, `free_runtime`, `set_runtime_opaque`, `runtime(scope)` | `RuntimeHandle::new(&RuntimeOptions { memory_limit, stack_size, interrupt, rejection_tracker, module_normalize, module_load, .. })`, `rt.free()`, `rt.set_opaque`, `scope.runtime()` |
+| `new_context`, `free_context` | `rt.new_context(opaque)`, `handle.free()` |
+| `JS_ExecutePendingJob`, `JS_GetPendingJobRealm`, `JS_IsJobPending` | `rt.run_pending_job()` → `JobOutcome::{Idle, Ran(h), Failed(h, exception)}`, `rt.pending_job_context()`, `rt.has_pending_jobs()` |
+| `JS_RunGC`, `memory_usage` | `rt.gc()` / `scope.gc()`, `scope.memory_usage()` |
+| `JS_IsRunningScript`, `JS_EnqueueJob` | `scope.is_running_script()`, `scope.enqueue_job(job)` / `scope.enqueue_call(&f, &args)` |
+| `extern "C" fn f(ctx, this, argc, argv) -> JSValue` + `call_native` | a `NativeFn`: `fn f(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value>` |
+| `c_function`, `c_constructor`, `c_constructor_or_function`, `ns_bind_fn`, `ns_bind_ctor` | `scope.function`, `scope.constructor`, `scope.constructor_or_function`, `southstar_js_bind::{bind_native, bind_constructor, make_constructor}` |
+| `call_c_function(scope, f, this, args)` | call the `NativeFn` directly |
+| `borrow_value`, `take_value`, `into_raw`, `raw`, `with_raw`, `result_raw`, `checked`, `UNDEFINED`, `take_exception`, `JS_Throw*` | gone: take `&Value`, return `Result<Value, Value>`, throw with `Err(scope.type_error(..))` (`range_error`, `syntax_error`, `dom_exception`) |
+| `FunctionListEntry` tables: `cfunc`, `getset`, `getset_magic`, `set_function_list` | `static T: [Prop; N] = [method(..), getter(..), accessor(..), accessor_magic(..)]` with `GetterFn`/`SetterFn`/`GetterMagicFn`/`SetterMagicFn`, installed by `scope.install_props(&proto, &T)` (lazy on QuickJS) |
+| atoms, `get_by_key`, `set_by_key`, `define_by_key[_with]`, `delete_by_key`, `own_slot`, `own_enumerable_string_keys` | `scope.get_key`, `set_key`, `define_entry` / `define_with_key`, `delete_key`, `own_property`, `own_enumerable_keys`; inside class hooks `PropertyKey` |
+| `is_array_buffer`, `is_date`, …, `boxed_kind`, `typed_array_type`, `typed_array_parts` | `scope.object_kind(&v)`, `typed_array_element`, `typed_array_view` |
+| `array_buffer_copy`, `array_buffer_bytes`, `fill_array_buffer`, `array_buffer_data`, `new_typed_array(kind)`, `to_index` | `scope.new_array_buffer`, `array_buffer_bytes`, `with_buffer_bytes_mut`, `new_typed_array(ElementType, bytes)`, `to_index` |
+| `object_from_identity`, `identity_raw`, `set_identity_opaque`, pinning by `mem::forget(v.clone())` / `JS_FreeValue(identity_raw(..))` | `scope.object_from_identity`, `value.object_identity()`, `scope.clear_identity_instance`, `scope.retain_identity(&v)` / `scope.release_identity(id)` |
+| `with_host`, `raw_instance`, `class_id` | `value.with_host`, `value.with_instance(&CLASS, ..)`, `value.raw_instance(&CLASS)`; classes are `HostClass` statics |
+| `add_engine_private_name`, `is_engine_function`, `new_function_brand`, `set_function_brand` | the same names on `Scope`; `BrandMode` is at the crate root (no-ops on Boa) |
+| `write_bytecode`, `read_bytecode`, `eval_function`, `is_module`, `module_name`, `import_meta` | `scope.write_bytecode` (`None` on Boa), `read_bytecode`, `evaluate`, `is_module`, `module_name`, `import_meta` |
+
+Calls between crates. The binding crates call each other through symbols
+resolved at link time, because the crate graph is cyclic. Pick, in order:
+
+1. A Cargo dependency, when the callee does not (even indirectly) depend on
+   the caller: then call the Rust function with its real types.
+   `rust/js-bind` and `rust/js-runtime` sit low in the graph, so every
+   binding crate may depend on them; `rust/js-runtime` must therefore never
+   gain a Cargo dependency on a binding crate.
+2. A link-time Rust-ABI call. The callee exports
+   `#[unsafe(no_mangle)] pub fn nsr_name(scope: &mut Scope<'_>, x: &Value) -> Result<Value, Value>`;
+   the caller declares it in
+   `unsafe extern "Rust" { safe fn nsr_name(scope: &mut Scope<'_>, x: &Value) -> Result<Value, Value>; }`.
+   The `nsr_` prefix marks a Rust-ABI symbol and the `ns_` prefix a C one,
+   so a C declaration can never silently bind a Rust definition: rename,
+   don't reuse, a symbol whose ABI changes. Nothing checks the two
+   signatures against each other, so copy them exactly.
+3. An `extern "C"` function whose arguments are already engine-neutral
+   (`ContextHandle`, `*mut NsJs`, node pointers, integers) stays as it is.
+
+While a callee is still raw, its `nsr_` entry point is a thin wrapper next
+to its `ns_` one (`quickjs::raw_context(scope)` in, `take_value` out), so the
+converted caller is done and the wrapper disappears when the callee is
+converted. A converted callee keeps the old `ns_` C symbol in `legacy.rs`
+while raw callers remain.
+
+Order of work for one crate: convert its natives to `NativeFn` and its
+tables to `Prop`; switch records holding `*mut JSContext` to
+`ContextHandle`; replace each import by option 1, 2 or 3 above; move the
+exports raw crates still call into `legacy.rs`; in `rust/js-runtime`'s
+`ffi/natives.rs` and the installers in `page.rs` and `worker.rs`, switch
+this crate's natives and installers from the `ns_` C declarations to `nsr_`
+Rust ones (`bind_native` instead of `bind_fn`). Check with
+`cargo clippy -p <crate> -- -D warnings`, build, and load a page that
+exercises the crate.
+
 ### Phase 8 — Remaining web platform features
 
 Scope (16.4k lines): `webgl.c` (5k), `webgpu.c` (2.9k), `wasm.c` (2.5k),

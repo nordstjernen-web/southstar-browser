@@ -328,9 +328,9 @@ impl Value {
     }
 
     pub fn object_identity(&self) -> *mut core::ffi::c_void {
-        self.0.as_object().map_or(core::ptr::null_mut(), |object| {
-            core::ptr::from_ref(object.as_ref()).cast_mut().cast()
-        })
+        self.0
+            .as_object()
+            .map_or(core::ptr::null_mut(), |object| object.identity())
     }
 
     pub fn is_instance_of_class(&self, class: &HostClass) -> bool {

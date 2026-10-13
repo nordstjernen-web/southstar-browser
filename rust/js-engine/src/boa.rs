@@ -36,6 +36,7 @@ use crate::{
 };
 
 mod class;
+mod misc;
 mod runtime;
 mod table;
 

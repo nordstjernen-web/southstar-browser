@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The engine-neutral JavaScript layer (rust/js-engine) gained what the
+  bindings still took from QuickJS directly, each with a QuickJS and a Boa
+  implementation: context and runtime handles that replace raw JSContext
+  pointers in records and cross-crate calls and re-enter a realm from
+  anywhere, runtime creation with interrupt, rejection-tracker and module
+  hooks, one-at-a-time job execution, declarative property tables (Prop)
+  in place of QuickJS function lists, object identities and pins, brands,
+  bytecode and module records. rust/js-bind is the first crate fully on the
+  neutral API, and docs/rust-port.md has a conversion guide for the rest.
 * The audio helper southstar-audio is now Rust (rust/audio-helper): the
   same decoders (pl_mpeg, minimp3, libav, vorbisfile, opusfile), mixing and
   resampling to 44.1 kHz stereo through SDL2 or the silent fallback, the

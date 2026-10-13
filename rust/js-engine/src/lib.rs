@@ -81,6 +81,14 @@ impl ClassHooks {
 
 pub type RawFinalize = fn(*mut core::ffi::c_void);
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(C)]
+pub enum BrandMode {
+    Throw,
+    Reject,
+    Ignore,
+}
+
 pub struct HostClass {
     pub name: &'static core::ffi::CStr,
     pub hooks: ClassHooks,

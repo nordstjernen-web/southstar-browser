@@ -20,6 +20,7 @@ use crate::{
 
 mod class;
 mod function_list;
+mod misc;
 mod runtime;
 mod table;
 
@@ -1674,13 +1675,7 @@ pub mod quickjs {
         }
     }
 
-    #[derive(Clone, Copy)]
-    #[repr(C)]
-    pub enum BrandMode {
-        Throw,
-        Reject,
-        Ignore,
-    }
+    pub use crate::BrandMode;
 
     unsafe extern "C" {
         fn JS_NewCFunctionBrand(
