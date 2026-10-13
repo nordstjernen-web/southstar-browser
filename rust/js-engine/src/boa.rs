@@ -704,6 +704,11 @@ impl Scope<'_> {
         Value(error.into_opaque(self.cx()).into())
     }
 
+    pub fn internal_error(&mut self, message: &str) -> Value {
+        let error = JsNativeError::error().with_message(message.to_owned());
+        Value(error.into_opaque(self.cx()).into())
+    }
+
     pub fn freeze(&mut self, object: &Value) -> Result<(), Value> {
         let object = self.object(object)?;
         object
