@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* <script type="module"> works on Boa: modules get import.meta (url, main,
+  resolve()), share one instance per URL and realm, and support cycles,
+  dynamic import() and top-level await.
+* Worker and MessagePort messages, structuredClone, window.postMessage and
+  IndexedDB values serialize on Boa (objects, arrays, Map/Set, Date, RegExp,
+  typed arrays, errors, shared references and cycles); handlers such as
+  IDBRequest.onsuccess and MessagePort.onmessage work again.
+* WebAssembly memories expose their ArrayBuffer on Boa, Float16Array is
+  available, and Date.parse accepts the common non-ISO formats (toString
+  output, "Jan 2, 2024", "01/02/2024", "2024-01-02 03:04:05").
 * A frame document rewritten with document.open()/write()/close() stays:
   the frame no longer re-navigates to its src attribute afterwards (the
   written document replaced the src navigation, as the HTML spec says), and
