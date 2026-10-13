@@ -11,13 +11,28 @@ publish.workspace = true
 southstar-config = { path = "../config" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
-southstar-js-bind = { path = "../js-bind" }
-southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
-southstar-js-intl = { path = "../js-intl" }
-southstar-js-realm = { path = "../js-realm" }
-southstar-js-temporal = { path = "../js-temporal" }
+southstar-js-bind = { path = "../js-bind", default-features = false }
+southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-intl = { path = "../js-intl", default-features = false }
+southstar-js-realm = { path = "../js-realm", default-features = false }
+southstar-js-temporal = { path = "../js-temporal", default-features = false }
 
 [features]
+default = ["quickjs"]
+quickjs = [
+    "southstar-js-bind/quickjs",
+    "southstar-js-engine/quickjs",
+    "southstar-js-intl/quickjs",
+    "southstar-js-realm/quickjs",
+    "southstar-js-temporal/quickjs",
+]
+boa = [
+    "southstar-js-bind/boa",
+    "southstar-js-engine/boa",
+    "southstar-js-intl/boa",
+    "southstar-js-realm/boa",
+    "southstar-js-temporal/boa",
+]
 wasm = []
 webgpu = []
 libav = []

@@ -392,7 +392,7 @@ pub fn html_for_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
         return Ok(Value::undefined());
     };
     if is_named(n, b"output") {
-        return Ok(ffi::token_list(scope, this, c"for"));
+        return ffi::token_list(scope, this, c"for");
     }
     if !is_named(n, b"label") && !is_named(n, b"script") {
         return Ok(Value::undefined());

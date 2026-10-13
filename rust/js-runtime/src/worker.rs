@@ -109,10 +109,16 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     bind_ctor(scope, &global, "MessagePort", ns_illegal_constructor, 0);
 
     for name in ["Event", "MessageEvent", "ErrorEvent"] {
-        bind_ctor(scope, &global, name, ns_window_event_ctor, 1);
+        bind_constructor(scope, &global, name, 1, ffi::imports::nsr_window_event_ctor);
     }
-    ffi::install(scope, ns_events_install_worker, &global);
-    bind_ctor(scope, &global, "EventTarget", ns_window_event_ctor, 0);
+    ffi::imports::nsr_events_install_worker(scope, &global);
+    bind_constructor(
+        scope,
+        &global,
+        "EventTarget",
+        0,
+        ffi::imports::nsr_window_event_ctor,
+    );
     bind_ctor(
         scope,
         &global,
@@ -180,7 +186,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     ffi::install(scope, ns_idb_install, &global);
     js.eval_worker_polyfills();
     let current_global = scope.global();
-    ffi::install(scope, ns_install_event_attribute_getters, &current_global);
+    ffi::imports::nsr_install_event_attribute_getters(scope, &current_global);
     ffi::install_context(scope, ns_js_name_engine_members);
     ffi::install(scope, ns_crypto_install_worker, &global);
     ffi::install(scope, ns_webgl_install, &global);

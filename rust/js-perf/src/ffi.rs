@@ -256,6 +256,11 @@ pub unsafe extern "C" fn ns_js_time_origin_real_ms(js: *const NsJs, realm: *cons
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64 {
+    crate::realm_now_ms(js_of(scope), realm_of(scope))
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_perf_realm_now_ms(ctx: *mut JSContext) -> f64 {
     if ctx.is_null() {
         return crate::realm_now_ms(Js(0), 0);

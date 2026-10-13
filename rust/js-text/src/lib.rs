@@ -5,6 +5,8 @@
 pub mod cdata;
 mod ffi;
 mod inner_text;
+#[cfg(feature = "quickjs")]
+mod legacy;
 pub mod rendered;
 
 use southstar_dom::Node;

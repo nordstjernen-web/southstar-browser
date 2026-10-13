@@ -217,6 +217,11 @@ pub unsafe extern "C" fn ns_ce_name_valid(name: *const c_char) -> GBoolean {
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_ce_html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> Value {
+    crate::registry::html_element_construct(scope, new_target).unwrap_or_else(Value::undefined)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_ce_html_element_construct(
     ctx: *mut JSContext,
     new_target: JSValue,

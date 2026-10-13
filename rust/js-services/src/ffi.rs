@@ -743,6 +743,15 @@ export_native! {
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_element_async_method(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    timers::element_async(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_install_idle_deadline(ctx: *mut JSContext, global: JSValue) {
     unsafe {
         quickjs::with_context(ctx, |scope| {

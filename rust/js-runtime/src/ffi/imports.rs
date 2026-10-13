@@ -17,6 +17,15 @@ unsafe extern "Rust" {
         include_base: bool,
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8>;
+    pub(crate) safe fn nsr_events_install_window_base(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_events_install_window(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_events_install_worker(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_event_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool);
     pub(crate) safe fn nsr_form_indexed_control(
         scope: &mut Scope<'_>,

@@ -567,7 +567,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         bind_fn(scope, global, name, native, arity);
     }
 
-    ffi::install(scope, ns_events_install_window_base, global);
+    ffi::imports::nsr_events_install_window_base(scope, global);
     bind_ctor(scope, global, "History", ns_illegal_constructor, 0);
     imports::nsr_window_install_history(scope, global);
     ffi::install(scope, ns_crypto_install_window, global);
@@ -684,9 +684,9 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     ffi::install(scope, ns_fetch_install_interfaces, global);
     bind_ctor(scope, global, "FileReader", ns_window_filereader_ctor, 0);
 
-    ffi::install(scope, ns_events_install_window, global);
+    ffi::imports::nsr_events_install_window(scope, global);
     for name in EVENT_BASE_CONSTRUCTORS {
-        bind_ctor(scope, global, name, ns_window_event_ctor, 0);
+        bind_constructor(scope, global, name, 0, ffi::imports::nsr_window_event_ctor);
     }
     ffi::install_canvas(scope, global, true);
     bind_ctor(scope, global, "Document", ns_document_ctor, 0);

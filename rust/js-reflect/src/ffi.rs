@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the reflected attribute accessors as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the reflected attribute accessors' nsr_ entry points and C helpers, and the js.c calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,7 +7,6 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::{Element, JsResult, numeric, strings};
@@ -21,14 +20,6 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn JS_ToCStringLen2(
-        ctx: *mut JSContext,
-        plen: *mut usize,
-        val: JSValue,
-        cesu8: c_int,
-    ) -> *const c_char;
-    fn JS_FreeCString(ctx: *mut JSContext, ptr: *const c_char);
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
     fn ns_element_get_attr_len(
         node: *const NsNode,
         name: *const c_char,
@@ -59,30 +50,37 @@ unsafe extern "C" {
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
-    fn ns_make_token_list(ctx: *mut JSContext, element: JSValue, attr: *const c_char) -> JSValue;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
-    fn ns_element_async_method(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
+}
+
+unsafe extern "Rust" {
+    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
+    safe fn nsr_dom_exception(
+        scope: &mut Scope<'_>,
+        name: &[u8],
+        code: i32,
+        message: &[u8],
+    ) -> Value;
+    safe fn nsr_make_token_list(
+        scope: &mut Scope<'_>,
+        element: &Value,
+        attr: &'static CStr,
+    ) -> Result<Value, Value>;
+    safe fn nsr_element_async_method(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {
@@ -121,7 +119,8 @@ pub(crate) fn remove_attr(js: Js, node: Element, name: &CStr) {
 }
 
 pub(crate) fn set_src(js: Js, node: Element, value: &JsText) {
-    unsafe { ns_js_set_src_recorded(js.0, node.as_mut_ptr(), value.ptr, value.len) };
+    let bytes = value.bytes();
+    unsafe { ns_js_set_src_recorded(js.0, node.as_mut_ptr(), bytes.as_ptr().cast(), bytes.len()) };
 }
 
 pub(crate) fn image_natural_size(js: Js, node: Element) -> Option<(i32, i32)> {
@@ -169,15 +168,7 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_submit_trigger(node: Element) -> bool {
@@ -188,15 +179,8 @@ pub(crate) fn form_owner(js: Js, node: Element) -> Option<Element> {
     unsafe { Node::from_ptr(ns_form_owner(node.as_ptr(), current_document(js))) }
 }
 
-pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &'static CStr) -> Value {
-    let raw = unsafe {
-        ns_make_token_list(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            attr.as_ptr(),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &'static CStr) -> JsResult {
+    nsr_make_token_list(scope, this, attr)
 }
 
 pub(crate) fn details_toggle_open(js: Js, node: Element, open: bool) {
@@ -204,7 +188,7 @@ pub(crate) fn details_toggle_open(js: Js, node: Element, open: bool) {
 }
 
 pub(crate) fn async_method(scope: &mut Scope<'_>) -> Value {
-    quickjs::c_function(scope, "async", 2, ns_element_async_method)
+    scope.function("async", 2, nsr_element_async_method)
 }
 
 pub(crate) fn define_own(
@@ -222,74 +206,52 @@ pub(crate) fn define_own(
     );
 }
 
-pub(crate) struct JsText {
-    ctx: *mut JSContext,
-    ptr: *const c_char,
-    len: usize,
-}
+pub(crate) struct JsText(Vec<u8>);
 
 impl JsText {
     pub fn bytes(&self) -> &[u8] {
-        unsafe { core::slice::from_raw_parts(self.ptr.cast::<u8>(), self.len) }
+        &self.0[..self.0.len() - 1]
     }
 
     pub fn c_str(&self) -> &CStr {
-        unsafe { CStr::from_ptr(self.ptr) }
-    }
-}
-
-impl Drop for JsText {
-    fn drop(&mut self) {
-        unsafe { JS_FreeCString(self.ctx, self.ptr) };
+        CStr::from_bytes_until_nul(&self.0).unwrap_or(c"")
     }
 }
 
 pub(crate) fn to_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<JsText> {
-    let ctx = quickjs::raw_context(scope);
-    let mut len = 0usize;
-    let ptr = unsafe { JS_ToCStringLen2(ctx, &mut len, quickjs::raw(value), 0) };
-    if ptr.is_null() {
-        return Err(quickjs::take_exception(scope));
-    }
-    Ok(JsText { ctx, ptr, len })
+    let mut bytes = scope.to_bytes(value)?;
+    bytes.push(0);
+    Ok(JsText(bytes))
 }
 
-unsafe fn getter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value) -> JsResult,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let result = f(scope, &this);
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
+macro_rules! magic_accessors {
+    ($($get:ident, $set:ident => $g:path, $s:path);* $(;)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub fn $get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+                $g(scope, this, magic)
+            }
 
-unsafe fn setter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value, &Value) -> JsResult<()>,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let val = quickjs::borrow_value(scope, val);
-            let result = f(scope, &this, &val).map(|()| Value::undefined());
-            quickjs::result_raw(scope, result)
-        })
-    }
+            #[unsafe(no_mangle)]
+            pub fn $set(
+                scope: &mut Scope<'_>,
+                this: &Value,
+                value: &Value,
+                magic: i32,
+            ) -> JsResult<()> {
+                $s(scope, this, value, magic)
+            }
+        )*
+    };
 }
 
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
+            #[allow(non_snake_case)]
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
+            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+                $f(scope, this)
             }
         )*
     };
@@ -298,134 +260,87 @@ macro_rules! getters {
 macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
+            #[allow(non_snake_case)]
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, $f) }
-            }
-        )*
-    };
-}
-
-macro_rules! magic_accessors {
-    ($($get:ident, $set:ident => $g:path, $s:path);* $(;)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $get(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                magic: c_int,
-            ) -> JSValue {
-                unsafe { getter(ctx, this_val, |scope, this| $g(scope, this, magic)) }
-            }
-
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $set(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-                magic: c_int,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, |scope, this, val| $s(scope, this, val, magic)) }
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+                $f(scope, this, value)
             }
         )*
     };
 }
 
 magic_accessors! {
-    ns_element_attr_getter, ns_element_attr_setter => strings::attr_get, strings::attr_set;
-    ns_element_enum_getter, ns_element_enum_setter => strings::enum_get, strings::enum_set;
-    ns_element_aria_string_getter, ns_element_aria_string_setter => strings::aria_get, strings::aria_set;
-    ns_element_int_attr_getter, ns_element_int_attr_setter => numeric::int_get, numeric::int_set;
-    ns_element_bool_attr_getter, ns_element_bool_attr_setter => numeric::plain_bool_get, numeric::plain_bool_set;
-    ns_element_boolattr_getter, ns_element_boolattr_setter => numeric::bool_get, numeric::bool_set;
+    nsr_element_attr_getter, nsr_element_attr_setter => strings::attr_get, strings::attr_set;
+    nsr_element_enum_getter, nsr_element_enum_setter => strings::enum_get, strings::enum_set;
+    nsr_element_aria_string_getter, nsr_element_aria_string_setter => strings::aria_get, strings::aria_set;
+    nsr_element_int_attr_getter, nsr_element_int_attr_setter => numeric::int_get, numeric::int_set;
+    nsr_element_bool_attr_getter, nsr_element_bool_attr_setter => numeric::plain_bool_get, numeric::plain_bool_set;
+    nsr_element_boolattr_getter, nsr_element_boolattr_setter => numeric::bool_get, numeric::bool_set;
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_dimension_setter(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    unsafe {
-        setter(ctx, this_val, val, |scope, this, val| {
-            numeric::dimension_set(scope, this, val, magic)
-        })
-    }
+pub fn nsr_element_dimension_setter(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+    magic: i32,
+) -> JsResult<()> {
+    numeric::dimension_set(scope, this, value, magic)
 }
 
 getters! {
-    ns_element_get_autocomplete => strings::autocomplete_get,
-    ns_element_get_dir => strings::dir_get,
-    ns_element_get_translate => strings::translate_get,
-    ns_element_get_type => strings::type_get,
-    ns_element_get_autocapitalize => strings::autocapitalize_get,
-    ns_element_get_spellcheck => strings::spellcheck_get,
-    ns_element_get_htmlFor => strings::html_for_get,
-    ns_element_get_draggable => strings::draggable_get,
-    ns_element_get_contentEditable => strings::content_editable_get,
-    ns_element_get_id => strings::id_get,
-    ns_element_get_className => strings::class_name_get,
-    ns_element_get_tabIndex => numeric::tab_index_get,
+    nsr_element_get_autocomplete => strings::autocomplete_get,
+    nsr_element_get_dir => strings::dir_get,
+    nsr_element_get_translate => strings::translate_get,
+    nsr_element_get_type => strings::type_get,
+    nsr_element_get_autocapitalize => strings::autocapitalize_get,
+    nsr_element_get_spellcheck => strings::spellcheck_get,
+    nsr_element_get_htmlFor => strings::html_for_get,
+    nsr_element_get_draggable => strings::draggable_get,
+    nsr_element_get_contentEditable => strings::content_editable_get,
+    nsr_element_get_id => strings::id_get,
+    nsr_element_get_className => strings::class_name_get,
+    nsr_element_get_tabIndex => numeric::tab_index_get,
 }
 
 setters! {
-    ns_element_set_autocomplete => strings::autocomplete_set,
-    ns_element_set_dir => strings::dir_set,
-    ns_element_set_translate => strings::translate_set,
-    ns_element_set_autocapitalize => strings::autocapitalize_set,
-    ns_element_set_spellcheck => strings::spellcheck_set,
-    ns_element_set_htmlFor => strings::html_for_set,
-    ns_element_set_draggable => strings::draggable_set,
-    ns_element_set_contentEditable => strings::content_editable_set,
-    ns_element_set_id => strings::id_set,
-    ns_element_set_className => strings::class_name_set,
-    ns_element_attr_setter_sizes => strings::sizes_set,
-    ns_element_attr_setter_sandbox => strings::sandbox_set,
-    ns_element_set_tabIndex => numeric::tab_index_set,
+    nsr_element_set_autocomplete => strings::autocomplete_set,
+    nsr_element_set_dir => strings::dir_set,
+    nsr_element_set_translate => strings::translate_set,
+    nsr_element_set_autocapitalize => strings::autocapitalize_set,
+    nsr_element_set_spellcheck => strings::spellcheck_set,
+    nsr_element_set_htmlFor => strings::html_for_set,
+    nsr_element_set_draggable => strings::draggable_set,
+    nsr_element_set_contentEditable => strings::content_editable_set,
+    nsr_element_set_id => strings::id_set,
+    nsr_element_set_className => strings::class_name_set,
+    nsr_element_attr_setter_sizes => strings::sizes_set,
+    nsr_element_attr_setter_sandbox => strings::sandbox_set,
+    nsr_element_set_tabIndex => numeric::tab_index_set,
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
+#[unsafe(no_mangle)]
+pub fn nsr_element_reflect_str_get(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    attr: &CStr,
+    null_if_absent: bool,
+) -> JsResult {
+    Ok(strings::reflect_get(scope, this, attr, null_if_absent))
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_element_reflect_str_set(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+    attr: &CStr,
+) -> JsResult<()> {
+    strings::reflect_set(scope, this, value, attr)
+}
+
+pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_reflect_str_get(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    attr: *const c_char,
-    null_if_absent: GBoolean,
-) -> JSValue {
-    let attr = c_str(attr).unwrap_or(c"");
-    unsafe {
-        getter(ctx, this_val, |scope, this| {
-            Ok(strings::reflect_get(
-                scope,
-                this,
-                attr,
-                null_if_absent != glib::FALSE,
-            ))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_reflect_str_set(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    attr: *const c_char,
-) -> JSValue {
-    let attr = c_str(attr).unwrap_or(c"");
-    unsafe {
-        setter(ctx, this_val, val, |scope, this, val| {
-            strings::reflect_set(scope, this, val, attr)
-        })
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -454,19 +369,4 @@ pub unsafe extern "C" fn ns_html_parse_int(s: *const c_char, out: *mut i64) -> G
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_int_attr_index(attr: *const c_char) -> c_int {
     c_str(attr).map_or(-1, |attr| numeric::int_attr_index(attr.to_bytes()))
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
-    strings::attr_get(scope, this, magic)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_attr_setter(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    value: &Value,
-    magic: i32,
-) -> JsResult<()> {
-    strings::attr_set(scope, this, value, magic)
 }

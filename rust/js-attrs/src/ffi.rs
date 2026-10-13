@@ -554,6 +554,15 @@ pub unsafe fn nsr_attr_to_js(
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_make_token_list(
+    scope: &mut Scope<'_>,
+    element: &Value,
+    attr: &'static CStr,
+) -> Result<Value, Value> {
+    crate::element::token_list(scope, element, attr)
+}
+
+#[unsafe(no_mangle)]
 pub fn nsr_tlist_contains(
     scope: &mut Scope<'_>,
     this: &Value,

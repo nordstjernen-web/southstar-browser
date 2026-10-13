@@ -2,14 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_style::StyleTable;
 
 use crate::Element;
@@ -29,14 +28,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
     fn ns_js_style_table(js: *const NsJs) -> *mut GHashTable;
     fn ns_js_flush_layout(js: *mut NsJs);
     fn ns_js_mark_mutated(js: *mut NsJs);
@@ -60,35 +51,35 @@ unsafe extern "C" {
     fn g_unichar_isspace(c: u32) -> GBoolean;
 }
 
+unsafe extern "Rust" {
+    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
+    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
+    safe fn nsr_dom_exception(
+        scope: &mut Scope<'_>,
+        name: &[u8],
+        code: i32,
+        message: &[u8],
+    ) -> Value;
+}
+
 fn raw(node: Option<Element>) -> *mut NsNode {
     node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    let name = CString::new(name).unwrap_or_default();
-    let message = CString::new(message).unwrap_or_default();
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    nsr_dom_exception(scope, name.as_bytes(), code, message.as_bytes())
 }
 
 pub(crate) fn style_table(js: Js) -> StyleTable {
@@ -200,135 +191,57 @@ pub(crate) fn unichar_is_space(c: char) -> bool {
     unsafe { g_unichar_isspace(c as u32) != 0 }
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
+macro_rules! natives {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[allow(non_snake_case)]
+            #[unsafe(no_mangle)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
+            }
+        )*
+    };
 }
 
-unsafe fn getter(ctx: *mut JSContext, this_val: JSValue, f: NativeFn) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), f) }
+natives! {
+    nsr_element_normalize => crate::rendered::normalize,
+    nsr_element_substring_data => crate::cdata::substring_data,
+    nsr_element_append_data => crate::cdata::append_data,
+    nsr_element_delete_data => crate::cdata::delete_data,
+    nsr_element_insert_data => crate::cdata::insert_data,
+    nsr_element_replace_data => crate::cdata::replace_data,
+    nsr_element_split_text => crate::cdata::split_text,
+    nsr_text_replaceWholeText => crate::cdata::replace_whole_text,
 }
 
-unsafe fn setter(ctx: *mut JSContext, this_val: JSValue, val: JSValue, f: NativeFn) -> JSValue {
-    let mut argv = [val];
-    unsafe { quickjs::call_native(ctx, this_val, 1, argv.as_mut_ptr(), f) }
-}
-
+#[allow(non_snake_case)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_get_innerText(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-) -> JSValue {
-    unsafe { getter(ctx, this_val, crate::rendered::get_inner_text) }
+pub fn nsr_element_get_innerText(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::rendered::get_inner_text(scope, this, &[])
 }
 
+#[allow(non_snake_case)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_set_innerText(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-) -> JSValue {
-    unsafe { setter(ctx, this_val, val, crate::rendered::set_inner_text) }
+pub fn nsr_element_set_innerText(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+) -> Result<(), Value> {
+    crate::rendered::set_inner_text(scope, this, core::slice::from_ref(value)).map(drop)
 }
 
+#[allow(non_snake_case)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_set_outerText(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-) -> JSValue {
-    unsafe { setter(ctx, this_val, val, crate::rendered::set_outer_text) }
+pub fn nsr_element_set_outerText(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    value: &Value,
+) -> Result<(), Value> {
+    crate::rendered::set_outer_text(scope, this, core::slice::from_ref(value)).map(drop)
 }
 
+#[allow(non_snake_case)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_get_wholeText(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-) -> JSValue {
-    unsafe { getter(ctx, this_val, crate::rendered::get_whole_text) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_normalize(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::rendered::normalize) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_substring_data(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::substring_data) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_append_data(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::append_data) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_delete_data(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::delete_data) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_insert_data(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::insert_data) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_replace_data(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::replace_data) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_split_text(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::split_text) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_text_replaceWholeText(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { native(ctx, this_val, argc, argv, crate::cdata::replace_whole_text) }
+pub fn nsr_element_get_wholeText(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
+    crate::rendered::get_whole_text(scope, this, &[])
 }

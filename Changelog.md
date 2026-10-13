@@ -54,6 +54,11 @@ Southstar Browser 0.9.9:
   realms are context handles, the page realm binds them through Rust-ABI
   nsr_ entry points, and the C shims raw callers still use are confined to
   a QuickJS-only legacy.rs.
+* The event core (rust/js-events), the reflected HTML attributes
+  (rust/js-reflect) and rust/js-text no longer use raw QuickJS: they export
+  Rust-ABI entry points over the neutral API, keep their C symbols only for
+  the callers still on QuickJS, are bound by the realm setup directly, and
+  build on Boa.
 * The Boa fork gained the embedder hooks host classes need: host exotic
   internal methods (named and indexed access on Storage, DOMTokenList, form
   controls and the other hooked classes now work on Boa), an interrupt
