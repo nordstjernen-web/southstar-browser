@@ -912,3 +912,8 @@ pub unsafe fn nsr_window_install_state(js: *const NsJs, scope: &mut Scope<'_>, g
 pub fn nsr_is_window_named(value: &Value) -> bool {
     value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value {
+    crate::window_events::make_window_event(scope, kind)
+}

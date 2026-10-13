@@ -7,8 +7,8 @@ use std::ffi::CString;
 use southstar_dom::ancestors;
 use southstar_js_engine::Scope;
 
+use crate::Element;
 use crate::ffi::{self, Js};
-use crate::{Element, JsResult};
 
 const JAVASCRIPT_SCHEME: &[u8] = b"javascript:";
 
@@ -155,43 +155,38 @@ fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
     js.navigate(&href);
 }
 
-pub(crate) fn activation_behavior(
-    scope: &mut Scope<'_>,
-    act: Element,
-    target: Element,
-) -> JsResult<()> {
+pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: Element) {
     let js = ffi::js_of(scope);
     if js.is_null() {
-        return Ok(());
+        return;
     }
     if named(act, "summary") {
         js.activate_summary(act);
-        return Ok(());
+        return;
     }
     if named(act, "label") {
         activate_label(js, act, target);
-        return Ok(());
+        return;
     }
     if named_any(act, &["a", "area"]) {
         activate_link(scope, js, act);
-        return Ok(());
+        return;
     }
     if ffi::is_disabled_form_control(act) {
-        return Ok(());
+        return;
     }
     if named(act, "button") {
         js.button_activation(act, target);
-        return Ok(());
+        return;
     }
     if ffi::is_submit_trigger(act) {
         if let Some(form) = js.form_owner_for(act) {
-            ffi::request_submit_form(scope, form, act)?;
+            ffi::request_submit_form(scope, form, act);
         }
     } else if ffi::is_reset_trigger(act)
         && let Some(form) = js.form_owner_for(act)
     {
-        ffi::reset_form(scope, form)?;
+        ffi::reset_form(scope, form);
     }
     js.popover_target_activation(act, target);
-    Ok(())
 }

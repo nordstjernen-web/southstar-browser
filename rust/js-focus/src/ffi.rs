@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of focus, click, fullscreen and pointer lock as declared in src/js.h and src/js_internal.h, and the js.c calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of focus, click, fullscreen and pointer lock, and the realm, event and form calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
@@ -29,48 +29,29 @@ pub(crate) struct CheckableState {
 }
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
     fn ns_event_type_init_flags(
         kind: *const c_char,
         at_document: GBoolean,
         bubbles: *mut GBoolean,
         cancelable: *mut GBoolean,
     );
-    fn ns_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_make_window_event(ctx: *mut JSContext, kind: *const c_char) -> JSValue;
-    fn ns_js_event_window_for_document(js: *mut NsJs, doc: *const NsNode) -> JSValue;
-    fn ns_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    );
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> *mut JSContext;
-    fn ns_js_main_realm_context(js: *const NsJs) -> *mut JSContext;
-    fn ns_js_realm_scope_push(js: *mut NsJs, realm: *mut JSContext, buf: *mut c_void);
+    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
+    fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle;
+    fn ns_js_realm_scope_push(js: *mut NsJs, realm: ContextHandle, buf: *mut c_void);
     fn ns_js_frame_scope_push(
         js: *mut NsJs,
-        realm: *mut JSContext,
+        realm: ContextHandle,
         frame: *mut NsNode,
         buf: *mut c_void,
     );
     fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_active_modal(js: *const NsJs) -> *const NsNode;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
@@ -88,12 +69,6 @@ unsafe extern "C" {
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_node_is_reset_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_js_request_submit_form(
-        ctx: *mut JSContext,
-        form: *const NsNode,
-        submitter: *const NsNode,
-    ) -> JSValue;
-    fn ns_js_reset_form(ctx: *mut JSContext, form: *mut NsNode) -> JSValue;
     fn ns_js_activate_summary(js: *const NsJs, el: *const NsNode) -> GBoolean;
     fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
@@ -126,6 +101,34 @@ unsafe extern "C" {
     fn ns_node_is_button(el: *const NsNode) -> GBoolean;
 }
 
+unsafe extern "Rust" {
+    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
+    safe fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value;
+    unsafe fn nsr_js_dispatch_built_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> (bool, bool);
+    unsafe fn nsr_js_dispatch_window_only_event(
+        js: *mut NsJs,
+        target_doc: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> bool;
+    unsafe fn nsr_js_event_window_for_document(
+        js: *mut NsJs,
+        scope: &mut Scope<'_>,
+        doc: *const NsNode,
+    ) -> Value;
+    unsafe fn nsr_js_request_submit_form(
+        scope: &mut Scope<'_>,
+        form: *const NsNode,
+        submitter: *const NsNode,
+    );
+    unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
+}
+
 #[repr(C, align(16))]
 struct ScopeBuffer([u8; 128]);
 
@@ -150,11 +153,7 @@ impl Js {
         if self.is_null() {
             return None;
         }
-        let ctx = unsafe { ns_js_main_context(self.ptr()) };
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        unsafe { ns_js_main_context(self.ptr()) }.with(f)
     }
 
     pub fn has_context(self) -> bool {
@@ -208,17 +207,10 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: Element, kind: &CStr, event: Value) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_built_event(
-                self.ptr(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                quickjs::into_raw(event),
-                &mut prevented,
-            )
+        let (_, prevented) = unsafe {
+            nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind.to_string_lossy(), event)
         };
-        prevented != 0
+        prevented
     }
 
     pub fn in_document_realm(self, doc: Element, f: impl FnOnce()) {
@@ -254,19 +246,20 @@ impl Js {
 
     pub fn dispatch_window_only(self, doc: Element, kind: &CStr, event: Value) {
         unsafe {
-            ns_js_dispatch_window_only_event(
+            nsr_js_dispatch_window_only_event(
                 self.ptr(),
                 doc.as_ptr(),
-                kind.as_ptr(),
-                quickjs::into_raw(event),
-                ptr::null_mut(),
+                &kind.to_string_lossy(),
+                event,
             )
         };
     }
 
-    pub fn event_window_for_document(self, scope: &mut Scope<'_>, doc: Element) -> Value {
-        let raw = unsafe { ns_js_event_window_for_document(self.ptr(), doc.as_ptr()) };
-        unsafe { quickjs::take_value(scope, raw) }
+    pub fn event_window_for_document(self, doc: Element) -> Value {
+        self.scope(|scope| unsafe {
+            nsr_js_event_window_for_document(self.ptr(), scope, doc.as_ptr())
+        })
+        .unwrap_or_else(Value::undefined)
     }
 
     pub fn checkable_pre_click(self, el: Element, kind: i32) -> CheckableState {
@@ -336,19 +329,18 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(quickjs::context_opaque(scope).cast())
+    Js::of(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;
     }
-    node(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), el.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value {
@@ -356,13 +348,11 @@ pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value 
 }
 
 pub(crate) fn make_window_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
-    let raw = unsafe { ns_make_window_event(quickjs::raw_context(scope), kind.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    nsr_make_window_event(scope, &kind.to_string_lossy())
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {
-    let raw = unsafe { ns_make_event(quickjs::raw_context(scope), kind.as_ptr(), target.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    unsafe { nsr_make_event(scope, &kind.to_string_lossy(), target.as_ptr()) }
 }
 
 pub(crate) fn event_flags(kind: &CStr) -> (bool, bool) {
@@ -386,35 +376,15 @@ fn owned_text(text: *mut c_char) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: Element) {
-    if let Err(error) = crate::activation::activation_behavior(scope, act, target) {
-        let raw = quickjs::result_raw(scope, Err(error));
-        unsafe { quickjs::free_raw(quickjs::runtime(scope), raw) };
-    }
+    crate::activation::activation_behavior(scope, act, target);
 }
 
-fn pending_on_exception(scope: &mut Scope<'_>, raw: JSValue) -> JsResult<()> {
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value).map(drop)
+pub(crate) fn request_submit_form(scope: &mut Scope<'_>, form: Element, submitter: Element) {
+    unsafe { nsr_js_request_submit_form(scope, form.as_ptr(), submitter.as_ptr()) };
 }
 
-pub(crate) fn request_submit_form(
-    scope: &mut Scope<'_>,
-    form: Element,
-    submitter: Element,
-) -> JsResult<()> {
-    let raw = unsafe {
-        ns_js_request_submit_form(
-            quickjs::raw_context(scope),
-            form.as_ptr(),
-            submitter.as_ptr(),
-        )
-    };
-    pending_on_exception(scope, raw)
-}
-
-pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Element) -> JsResult<()> {
-    let raw = unsafe { ns_js_reset_form(quickjs::raw_context(scope), form.as_mut_ptr()) };
-    pending_on_exception(scope, raw)
+pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Element) {
+    unsafe { nsr_js_reset_form(scope, form.as_mut_ptr()) };
 }
 
 pub(crate) fn is_labelable(el: Element) -> bool {
@@ -474,55 +444,42 @@ pub(crate) fn is_button(el: Element) -> bool {
     unsafe { ns_node_is_button(el.as_ptr()) != 0 }
 }
 
-unsafe fn method(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: fn(&mut Scope<'_>, &Value, &[Value]) -> JsResult,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
 macro_rules! methods {
     ($($name:ident => $f:path),* $(,)?) => {$(
+        #[allow(non_snake_case)]
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(
-            ctx: *mut JSContext,
-            this_val: JSValue,
-            argc: c_int,
-            argv: *mut JSValue,
-        ) -> JSValue {
-            unsafe { method(ctx, this_val, argc, argv, $f) }
+        pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+            $f(scope, this, args)
         }
     )*};
 }
 
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {$(
+        #[allow(non_snake_case)]
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-            unsafe { method(ctx, this_val, 0, ptr::null_mut(), $f) }
+        pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+            $f(scope, this, &[])
         }
     )*};
 }
 
 methods! {
-    ns_element_focus => crate::focus::focus_method,
-    ns_element_blur => crate::focus::blur_method,
-    ns_document_has_focus => crate::focus::has_focus,
-    ns_element_click => crate::click::click_method,
-    ns_element_request_fullscreen => crate::fullscreen::request_fullscreen,
-    ns_document_exit_fullscreen => crate::fullscreen::exit_fullscreen,
-    ns_element_requestPointerLock => crate::fullscreen::request_pointer_lock,
-    ns_document_exitPointerLock => crate::fullscreen::exit_pointer_lock,
+    nsr_element_focus => crate::focus::focus_method,
+    nsr_element_blur => crate::focus::blur_method,
+    nsr_document_has_focus => crate::focus::has_focus,
+    nsr_element_click => crate::click::click_method,
+    nsr_element_request_fullscreen => crate::fullscreen::request_fullscreen,
+    nsr_document_exit_fullscreen => crate::fullscreen::exit_fullscreen,
+    nsr_element_requestPointerLock => crate::fullscreen::request_pointer_lock,
+    nsr_document_exitPointerLock => crate::fullscreen::exit_pointer_lock,
 }
 
 getters! {
-    ns_document_get_fullscreen_element => crate::fullscreen::get_fullscreen_element,
-    ns_document_get_fullscreen_enabled => crate::fullscreen::get_fullscreen_enabled,
-    ns_document_get_is_fullscreen => crate::fullscreen::get_is_fullscreen,
-    ns_document_get_pointerLockElement => crate::fullscreen::get_pointer_lock_element,
+    nsr_document_get_fullscreen_element => crate::fullscreen::get_fullscreen_element,
+    nsr_document_get_fullscreen_enabled => crate::fullscreen::get_fullscreen_enabled,
+    nsr_document_get_is_fullscreen => crate::fullscreen::get_is_fullscreen,
+    nsr_document_get_pointerLockElement => crate::fullscreen::get_pointer_lock_element,
 }
 
 #[unsafe(no_mangle)]

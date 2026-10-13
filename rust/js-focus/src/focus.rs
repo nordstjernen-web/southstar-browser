@@ -120,7 +120,7 @@ fn fire_window_focus_event(js: Js, doc: Element, kind: &CStr) {
     js.in_document_realm(doc, || {
         js.scope(|scope| {
             let event = ffi::make_window_event(scope, kind);
-            let window = js.event_window_for_document(scope, doc);
+            let window = js.event_window_for_document(doc);
             let _ = scope.set(&event, "target", window);
             let _ = scope.set(&event, "relatedTarget", Value::null());
             js.dispatch_window_only(doc, kind, event);
