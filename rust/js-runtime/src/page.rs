@@ -3,11 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_bind::{
-    attach_prototype, bind_function, bind_int_constants, bind_prototype_function_if_missing,
-    prototype_of,
+    attach_prototype, bind_constructor, bind_function, bind_int_constants,
+    bind_prototype_function_if_missing, prototype_of,
 };
 use southstar_js_engine::{Attributes, Scope, Value};
 
+use crate::ffi::imports;
 use crate::ffi::natives::*;
 use crate::ffi::{self, Callbacks, Class, Js, Native, NavigationTiming, RejectionTracker};
 
@@ -269,8 +270,8 @@ fn register_classes(scope: &mut Scope<'_>) -> Value {
     }
     ffi::register_class(scope, Class::Live);
     let radio_node_list = ffi::live_proto(scope, 2);
-    let getter = ffi::c_function(scope, "get value", 0, ns_radio_node_list_get_value);
-    let setter = ffi::c_function(scope, "set value", 1, ns_radio_node_list_set_value);
+    let getter = scope.function("get value", 0, imports::nsr_radio_node_list_get_value);
+    let setter = scope.function("set value", 1, imports::nsr_radio_node_list_set_value);
     let _ = scope.define_accessor(
         &radio_node_list,
         "value",
@@ -585,7 +586,13 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     bind_ctor(scope, global, "StaticRange", ns_static_range_ctor, 1);
     bind_ctor(scope, global, "VTTCue", ns_vtt_cue_ctor, 3);
     ffi::install(scope, ns_services_install_clipboard_item, global);
-    bind_ctor(scope, global, "CustomStateSet", ns_custom_state_set_ctor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "CustomStateSet",
+        0,
+        imports::nsr_custom_state_set_ctor,
+    );
     ffi::install(scope, ns_webgl_install, global);
     bind_ctor(scope, global, "Audio", ns_window_audio_ctor, 1);
     ffi::install(scope, ns_media_install_audio, global);
@@ -627,7 +634,13 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         ns_dom_parser_parseFromString,
         2,
     );
-    bind_ctor(scope, global, "FormData", ns_window_form_data_ctor, 0);
+    bind_constructor(
+        scope,
+        global,
+        "FormData",
+        0,
+        imports::nsr_window_form_data_ctor,
+    );
     bind_ctor(
         scope,
         global,

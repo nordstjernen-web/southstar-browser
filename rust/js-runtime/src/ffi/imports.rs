@@ -154,3 +154,26 @@ unsafe extern "Rust" {
         handled: bool,
     );
 }
+
+unsafe extern "Rust" {
+    pub(crate) safe fn nsr_window_form_data_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_custom_state_set_ctor(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_radio_node_list_get_value(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_radio_node_list_set_value(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+}

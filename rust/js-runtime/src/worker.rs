@@ -4,9 +4,10 @@
 
 use core::ffi::CStr;
 
-use southstar_js_bind::bind_function;
+use southstar_js_bind::{bind_constructor, bind_function};
 use southstar_js_engine::{PromiseState, Scope, Value};
 
+use crate::ffi::imports;
 use crate::ffi::natives::*;
 use crate::ffi::{self, Js, Native, RejectionTracker, WorkerSetup};
 use crate::interrupt;
@@ -105,7 +106,13 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     ffi::install(scope, ns_net_install_text_codecs, &global);
     bind_ctor(scope, &global, "URLSearchParams", ns_window_usp_ctor, 0);
     ffi::install_context(scope, ns_usp_install_interface);
-    bind_ctor(scope, &global, "FormData", ns_window_form_data_ctor, 0);
+    bind_constructor(
+        scope,
+        &global,
+        "FormData",
+        0,
+        imports::nsr_window_form_data_ctor,
+    );
     bind_ctor(scope, &global, "FileReader", ns_window_filereader_ctor, 0);
     bind_url(scope, &global);
     ffi::install_context(scope, ns_url_install_interface);
