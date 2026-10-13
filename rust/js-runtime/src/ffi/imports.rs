@@ -284,3 +284,31 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_worker_install_console(scope: &mut Scope<'_>, target: &Value);
     pub(crate) safe fn nsr_sw_install_scope(scope: &mut Scope<'_>, target: &Value);
 }
+
+macro_rules! rust_natives {
+    ($($name:ident),* $(,)?) => {
+        unsafe extern "Rust" {
+            $(
+                #[allow(non_snake_case)]
+                pub(crate) safe fn $name(
+                    scope: &mut Scope<'_>,
+                    this: &Value,
+                    args: &[Value],
+                ) -> Result<Value, Value>;
+            )*
+        }
+    };
+}
+
+rust_natives! {
+    nsr_window_image_ctor,
+    nsr_window_audio_ctor,
+    nsr_window_document_fragment_ctor,
+    nsr_window_text_ctor,
+    nsr_window_comment_ctor,
+    nsr_window_option_ctor,
+    nsr_window_dom_parser_ctor,
+    nsr_dom_parser_parseFromString,
+    nsr_window_close_watcher_ctor,
+    nsr_document_ctor,
+}

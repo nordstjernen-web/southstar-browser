@@ -1058,3 +1058,14 @@ pub unsafe fn nsr_window_child_frame_window(
     let doc = unsafe { Node::from_ptr(doc) };
     owner::child_frame_window(scope, doc, index, name, raw)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_iframe_realm_window(
+    scope: &mut Scope<'_>,
+    element: &Value,
+    node: *mut NsNode,
+) -> Value {
+    let ctx = quickjs::raw_context(scope);
+    let raw = unsafe { ns_iframe_realm_window(ctx, quickjs::raw(element), node) };
+    unsafe { quickjs::take_value(scope, raw) }
+}

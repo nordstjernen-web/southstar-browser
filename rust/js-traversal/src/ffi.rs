@@ -224,3 +224,39 @@ pub unsafe extern "C" fn ns_node_iters_pre_remove(js: *const NsJs, removed: *con
 pub unsafe extern "C" fn ns_traversal_teardown(js: *const NsJs) {
     crate::iterator::teardown(Js::of(js));
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_get_selection(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::selection::get_selection(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_create_range(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::range::create_range(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_create_tree_walker(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::walker::create(scope, this, args)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_create_node_iterator(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    crate::iterator::create(scope, this, args)
+}

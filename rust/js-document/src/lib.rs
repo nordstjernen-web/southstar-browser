@@ -6,6 +6,8 @@ mod base_url;
 pub mod cookie;
 pub mod elements;
 mod ffi;
+#[cfg(feature = "quickjs")]
+mod legacy;
 pub mod props;
 mod realm;
 pub mod view;

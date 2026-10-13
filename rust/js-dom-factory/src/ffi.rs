@@ -1,25 +1,24 @@
-//! Southstar — the C ABI of the document factories, namespace lookups and hyperlink accessors as declared in src/js_internal.h, and the js.c calls they make.
+//! Southstar — the document factories' calls into the page record, the parsers and the other binding crates, and the entry points those call back.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+mod imports;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsAttr, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::names::{self, NameError};
 use crate::{
     Element, JsResult, adopt, constructors, factories, hyperlink, implementation, namespaces,
 };
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -51,13 +50,6 @@ struct UrlParts {
     password: *mut c_char,
 }
 
-type JsCFunction = unsafe extern "C" fn(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue;
-
 pub(crate) enum TargetMethod {
     AddEventListener,
     RemoveEventListener,
@@ -65,26 +57,6 @@ pub(crate) enum TargetMethod {
 }
 
 unsafe extern "C" {
-    fn ns_target_addEventListener(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_removeEventListener(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_target_dispatchEvent(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        argc: c_int,
-        argv: *mut JSValue,
-    ) -> JSValue;
-    fn ns_event_new(ctx: *mut JSContext) -> JSValue;
-    fn ns_tag_caller_document(ctx: *mut JSContext, node_val: JSValue);
     fn ns_xml_parse_reporting(
         input: *const c_char,
         len: isize,
@@ -105,17 +77,6 @@ unsafe extern "C" {
     ) -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
     fn ns_mark_scripts_already_started(root: *mut NsNode);
-}
-
-unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_mark_mutated(js: *mut NsJs);
@@ -136,22 +97,6 @@ unsafe extern "C" {
         name: *const c_char,
         len: *mut usize,
     ) -> *const c_char;
-    fn ns_attr_to_js(
-        ctx: *mut JSContext,
-        owner: JSValue,
-        attr: *const RawAttr,
-        include_base: GBoolean,
-    ) -> JSValue;
-    fn ns_make_realm_document(
-        ctx: *mut JSContext,
-        doc: *mut NsNode,
-        url: *const c_char,
-        charset: *const c_char,
-        content_type: *const c_char,
-        is_xml: GBoolean,
-        inert: GBoolean,
-    ) -> JSValue;
-    fn ns_make_synth_xml_document(ctx: *mut JSContext) -> JSValue;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_url_resolve_len(base: *const c_char, href: *const c_char, len: usize) -> *mut c_char;
     fn ns_url_parts_new(url: *const c_char) -> *mut UrlParts;
@@ -168,18 +113,6 @@ unsafe extern "C" {
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_element_reflect_str_get(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        attr: *const c_char,
-        null_if_absent: GBoolean,
-    ) -> JSValue;
-    fn ns_element_reflect_str_set(
-        ctx: *mut JSContext,
-        this_val: JSValue,
-        val: JSValue,
-        attr: *const c_char,
-    ) -> JSValue;
 }
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
@@ -191,17 +124,16 @@ fn raw(node: Option<Element>) -> *mut NsNode {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = quickjs::context_opaque(scope).cast();
+    let js: *mut NsJs = scope.context_opaque().cast();
     (!js.is_null()).then_some(Js(js))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_unwrap_element(quickjs::raw(value))) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Element) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node.as_ptr()) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn dom_exception(
@@ -210,15 +142,7 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    imports::nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn name_error(scope: &mut Scope<'_>, error: NameError) -> Value {
@@ -314,16 +238,8 @@ pub(crate) fn attr_object(scope: &mut Scope<'_>, qname: AttrName<'_>) -> JsResul
         value_len: 0,
         flags: 0,
     };
-    let raw = unsafe {
-        ns_attr_to_js(
-            quickjs::raw_context(scope),
-            quickjs::raw(&Value::null()),
-            &attr,
-            glib::TRUE,
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    let attr: *const RawAttr = &attr;
+    unsafe { imports::nsr_attr_to_js(scope, &Value::null(), attr.cast::<NsAttr>(), true) }
 }
 
 pub(crate) struct RealmDocument<'a> {
@@ -338,27 +254,21 @@ pub(crate) fn realm_document(
     doc: Element,
     info: RealmDocument<'_>,
 ) -> Value {
-    let url = info.url.map(cstring);
-    let charset = info.charset.map(cstring);
-    let content_type = info.content_type.map(cstring);
-    let p = |s: &Option<CString>| s.as_ref().map_or(ptr::null(), |s| s.as_ptr());
-    let raw = unsafe {
-        ns_make_realm_document(
-            quickjs::raw_context(scope),
+    unsafe {
+        imports::nsr_make_realm_document(
+            scope,
             doc.as_mut_ptr(),
-            p(&url),
-            p(&charset),
-            p(&content_type),
-            glib::boolean(info.is_xml),
-            glib::TRUE,
+            info.url.map(c_prefix),
+            info.charset.map(c_prefix),
+            info.content_type.map(c_prefix),
+            info.is_xml,
+            true,
         )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    }
 }
 
 pub(crate) fn synth_xml_document(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_make_synth_xml_document(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_make_synth_xml_document(scope)
 }
 
 fn take_gstring(p: *mut c_char) -> Option<Vec<u8>> {
@@ -435,38 +345,19 @@ pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, valu
 }
 
 pub(crate) fn reflect_href_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    let raw = unsafe {
-        ns_element_reflect_str_get(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            c"href".as_ptr(),
-            glib::FALSE,
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value)
+    imports::nsr_element_reflect_str_get(scope, this, c"href", false)
 }
 
 pub(crate) fn reflect_href_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
-    let raw = unsafe {
-        ns_element_reflect_str_set(
-            quickjs::raw_context(scope),
-            quickjs::raw(this),
-            quickjs::raw(val),
-            c"href".as_ptr(),
-        )
-    };
-    let value = unsafe { quickjs::take_value(scope, raw) };
-    quickjs::checked(scope, value).map(|_| ())
+    imports::nsr_element_reflect_str_set(scope, this, val, c"href")
 }
 
 pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node: &Value) {
-    unsafe { ns_tag_caller_document(quickjs::raw_context(scope), quickjs::raw(node)) };
+    api::tag_caller_document(scope, node);
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
-    let raw = unsafe { ns_event_new(quickjs::raw_context(scope)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_event_new(scope).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn target_method(
@@ -475,12 +366,12 @@ pub(crate) fn target_method(
     arity: u32,
     method: TargetMethod,
 ) -> Value {
-    let f: JsCFunction = match method {
-        TargetMethod::AddEventListener => ns_target_addEventListener,
-        TargetMethod::RemoveEventListener => ns_target_removeEventListener,
-        TargetMethod::DispatchEvent => ns_target_dispatchEvent,
+    let f: NativeFn = match method {
+        TargetMethod::AddEventListener => imports::nsr_target_addEventListener,
+        TargetMethod::RemoveEventListener => imports::nsr_target_removeEventListener,
+        TargetMethod::DispatchEvent => imports::nsr_target_dispatchEvent,
     };
-    quickjs::c_function(scope, name, arity, f)
+    scope.function(name, arity, f)
 }
 
 pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Element>, c_int, c_int) {
@@ -526,137 +417,97 @@ pub(crate) fn mark_scripts_already_started(root: Element) {
     unsafe { ns_mark_scripts_already_started(root.as_mut_ptr()) };
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-macro_rules! methods {
+macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
-methods! {
-    ns_document_createElement => factories::create_element,
-    ns_document_createElementNS => factories::create_element_ns,
-    ns_document_createTextNode => factories::create_text_node,
-    ns_document_createComment => factories::create_comment,
-    ns_document_createCDATASection => factories::create_cdata_section,
-    ns_document_createProcessingInstruction => factories::create_processing_instruction,
-    ns_document_createAttribute => factories::create_attribute,
-    ns_document_createAttributeNS => factories::create_attribute_ns,
-    ns_document_createEvent => factories::create_event,
-    ns_document_createDocumentFragment => factories::create_document_fragment,
-    ns_document_import_node => adopt::import_node,
-    ns_document_adopt_node => adopt::adopt_node,
-    ns_element_cloneNode => adopt::clone_node,
-    ns_attr_cloneNode => adopt::clone_attr,
-    ns_element_lookupNamespaceURI => namespaces::lookup_namespace_uri,
-    ns_element_lookupPrefix => namespaces::lookup_prefix,
-    ns_element_isDefaultNamespace => namespaces::is_default_namespace,
-    ns_impl_create_html_document => implementation::create_html_document,
-    ns_impl_create_document => implementation::create_document,
-    ns_impl_create_document_type => implementation::create_document_type,
-    ns_window_document_fragment_ctor => constructors::document_fragment,
-    ns_window_text_ctor => constructors::text,
-    ns_window_comment_ctor => constructors::comment,
-    ns_window_image_ctor => constructors::image,
-    ns_window_audio_ctor => constructors::audio,
-    ns_window_option_ctor => constructors::option,
-    ns_window_dom_parser_ctor => constructors::dom_parser,
-    ns_dom_parser_parseFromString => constructors::parse_from_string,
-    ns_window_close_watcher_ctor => constructors::close_watcher,
-}
-
-unsafe fn with_this(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value) -> JsResult,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let result = f(scope, &this);
-            quickjs::result_raw(scope, result)
-        })
-    }
-}
-
-unsafe fn with_this_val(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    f: impl FnOnce(&mut Scope<'_>, &Value, &Value) -> JsResult<()>,
-) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let this = quickjs::borrow_value(scope, this_val);
-            let val = quickjs::borrow_value(scope, val);
-            let result = f(scope, &this, &val).map(|()| Value::undefined());
-            quickjs::result_raw(scope, result)
-        })
-    }
+rust_methods! {
+    nsr_document_createElement => factories::create_element,
+    nsr_document_createElementNS => factories::create_element_ns,
+    nsr_document_createTextNode => factories::create_text_node,
+    nsr_document_createComment => factories::create_comment,
+    nsr_document_createCDATASection => factories::create_cdata_section,
+    nsr_document_createProcessingInstruction => factories::create_processing_instruction,
+    nsr_document_createAttribute => factories::create_attribute,
+    nsr_document_createAttributeNS => factories::create_attribute_ns,
+    nsr_document_createEvent => factories::create_event,
+    nsr_document_createDocumentFragment => factories::create_document_fragment,
+    nsr_document_import_node => adopt::import_node,
+    nsr_document_adopt_node => adopt::adopt_node,
+    nsr_element_cloneNode => adopt::clone_node,
+    nsr_attr_cloneNode => adopt::clone_attr,
+    nsr_element_lookupNamespaceURI => namespaces::lookup_namespace_uri,
+    nsr_element_lookupPrefix => namespaces::lookup_prefix,
+    nsr_element_isDefaultNamespace => namespaces::is_default_namespace,
+    nsr_impl_create_html_document => implementation::create_html_document,
+    nsr_impl_create_document => implementation::create_document,
+    nsr_impl_create_document_type => implementation::create_document_type,
+    nsr_window_document_fragment_ctor => constructors::document_fragment,
+    nsr_window_text_ctor => constructors::text,
+    nsr_window_comment_ctor => constructors::comment,
+    nsr_window_image_ctor => constructors::image,
+    nsr_window_audio_ctor => constructors::audio,
+    nsr_window_option_ctor => constructors::option,
+    nsr_window_dom_parser_ctor => constructors::dom_parser,
+    nsr_dom_parser_parseFromString => constructors::parse_from_string,
+    nsr_window_close_watcher_ctor => constructors::close_watcher,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_implementation(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-) -> JSValue {
-    unsafe { with_this(ctx, this_val, implementation::of_document) }
+pub fn nsr_document_implementation(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+    implementation::of_document(scope, this)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_anchor_part_get(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    unsafe {
-        with_this(ctx, this_val, |scope, this| {
-            hyperlink::part_get(scope, this, magic)
-        })
-    }
+pub fn nsr_element_anchor_part_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
+    hyperlink::part_get(scope, this, magic)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_anchor_href_set(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    _magic: c_int,
-) -> JSValue {
-    unsafe { with_this_val(ctx, this_val, val, reflect_href_set) }
+pub fn nsr_element_anchor_href_set(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    val: &Value,
+    _magic: i32,
+) -> JsResult<()> {
+    reflect_href_set(scope, this, val)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_url_part_set(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    unsafe {
-        with_this_val(ctx, this_val, val, |scope, this, val| {
-            hyperlink::part_set(scope, this, val, magic)
-        })
-    }
+pub fn nsr_element_url_part_set(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    val: &Value,
+    magic: i32,
+) -> JsResult<()> {
+    hyperlink::part_set(scope, this, val, magic)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_doc_wrapper_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
+    adopt::doc_is_xml(scope, doc)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_validate_attr_ns(
+    scope: &mut Scope<'_>,
+    namespace: Option<&[u8]>,
+    qname: &[u8],
+) -> JsResult<()> {
+    names::validate_attr_ns(namespace, qname).map_err(|error| name_error(scope, error))
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_tag_owner_document(scope: &mut Scope<'_>, document: &Value, node: &Value) {
+    adopt::tag_owner_document(scope, document, node);
 }
 
 #[unsafe(no_mangle)]
@@ -682,76 +533,4 @@ pub unsafe extern "C" fn ns_valid_element_local_name(s: *const c_char) -> GBoole
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_valid_attr_name(s: *const c_char) -> GBoolean {
     glib::boolean(c_bytes(s).is_some_and(names::valid_attr_name))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_validate_attr_ns(
-    ctx: *mut JSContext,
-    ns_uri: *const c_char,
-    qname: *const c_char,
-) -> JSValue {
-    match names::validate_attr_ns(c_bytes(ns_uri), c_bytes(qname).unwrap_or_default()) {
-        Ok(()) => quickjs::UNDEFINED,
-        Err(error) => unsafe {
-            ns_throw_dom_exception(ctx, error.name.as_ptr(), error.code, error.message.as_ptr())
-        },
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_doc_wrapper_is_xml(ctx: *mut JSContext, doc_val: JSValue) -> GBoolean {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let doc = quickjs::borrow_value(scope, doc_val);
-            glib::boolean(adopt::doc_is_xml(scope, &doc))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_tag_owner_document(
-    ctx: *mut JSContext,
-    doc_val: JSValue,
-    node_val: JSValue,
-) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let doc = quickjs::borrow_value(scope, doc_val);
-            let node = quickjs::borrow_value(scope, node_val);
-            adopt::tag_owner_document(scope, &doc, &node);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_doc_wrapper_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
-    adopt::doc_is_xml(scope, doc)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_validate_attr_ns(
-    scope: &mut Scope<'_>,
-    namespace: Option<&[u8]>,
-    qname: &[u8],
-) -> JsResult<()> {
-    names::validate_attr_ns(namespace, qname).map_err(|error| name_error(scope, error))
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_tag_owner_document(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    document: &southstar_js_engine::Value,
-    node: &southstar_js_engine::Value,
-) {
-    adopt::tag_owner_document(scope, document, node);
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_attr_cloneNode(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    this: &southstar_js_engine::Value,
-    args: &[southstar_js_engine::Value],
-) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
-    adopt::clone_attr(scope, this, args)
 }

@@ -4,7 +4,7 @@
 
 use southstar_js_bind::{
     attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
-    bind_prototype_function_if_missing, prototype_of,
+    bind_prototype_function_if_missing, bind_prototype_native_if_missing, prototype_of,
 };
 use southstar_js_engine::{Attributes, Scope, Value};
 
@@ -591,7 +591,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
 }
 
 fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
-    bind_ctor(scope, global, "Image", ns_window_image_ctor, 2);
+    bind_constructor(scope, global, "Image", 2, imports::nsr_window_image_ctor);
     bind_ctor(scope, global, "MediaError", ns_illegal_constructor, 0);
     let _ = bind_int_constants(scope, global, "MediaError", MEDIA_ERRORS);
     bind_ctor(scope, global, "StaticRange", ns_static_range_ctor, 1);
@@ -605,18 +605,24 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         imports::nsr_custom_state_set_ctor,
     );
     ffi::install(scope, ns_webgl_install, global);
-    bind_ctor(scope, global, "Audio", ns_window_audio_ctor, 1);
+    bind_constructor(scope, global, "Audio", 1, imports::nsr_window_audio_ctor);
     ffi::install(scope, ns_media_install_audio, global);
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "DocumentFragment",
-        ns_window_document_fragment_ctor,
         0,
+        imports::nsr_window_document_fragment_ctor,
     );
-    bind_ctor(scope, global, "Text", ns_window_text_ctor, 1);
-    bind_ctor(scope, global, "Comment", ns_window_comment_ctor, 1);
-    bind_ctor(scope, global, "Option", ns_window_option_ctor, 4);
+    bind_constructor(scope, global, "Text", 1, imports::nsr_window_text_ctor);
+    bind_constructor(
+        scope,
+        global,
+        "Comment",
+        1,
+        imports::nsr_window_comment_ctor,
+    );
+    bind_constructor(scope, global, "Option", 4, imports::nsr_window_option_ctor);
     bind_ctor(scope, global, "URLSearchParams", ns_window_usp_ctor, 0);
     ffi::install_context(scope, ns_usp_install_interface);
     ffi::install_context(scope, ns_url_install_interface);
@@ -636,14 +642,20 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     );
     bind_ctor(scope, global, "XMLHttpRequest", ns_window_xhr_ctor, 0);
     ffi::install(scope, ns_xhr_install_interface, global);
-    bind_ctor(scope, global, "DOMParser", ns_window_dom_parser_ctor, 0);
-    bind_proto_fn(
+    bind_constructor(
+        scope,
+        global,
+        "DOMParser",
+        0,
+        imports::nsr_window_dom_parser_ctor,
+    );
+    bind_prototype_native_if_missing(
         scope,
         global,
         "DOMParser",
         "parseFromString",
-        ns_dom_parser_parseFromString,
         2,
+        imports::nsr_dom_parser_parseFromString,
     );
     bind_constructor(
         scope,
@@ -659,12 +671,12 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         ns_window_abort_controller_ctor,
         0,
     );
-    bind_ctor(
+    bind_constructor(
         scope,
         global,
         "CloseWatcher",
-        ns_window_close_watcher_ctor,
         0,
+        imports::nsr_window_close_watcher_ctor,
     );
     ffi::install(scope, ns_install_abort_signal_interface, global);
 
@@ -689,7 +701,7 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
         bind_constructor(scope, global, name, 0, ffi::imports::nsr_window_event_ctor);
     }
     ffi::install_canvas(scope, global, true);
-    bind_ctor(scope, global, "Document", ns_document_ctor, 0);
+    bind_constructor(scope, global, "Document", 0, imports::nsr_document_ctor);
 }
 
 fn link_document_prototypes(js: Js, scope: &mut Scope<'_>, global: &Value) {

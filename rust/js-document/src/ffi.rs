@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the document bindings as declared in src/js_internal.h, and the js.c, net and GLib calls they make.
+//! Southstar — the document bindings' calls into the page record, net, GLib and the other binding crates, and the entry points those call back.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,15 +8,14 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+mod imports;
+
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -32,14 +31,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_unwrap_element(v: JSValue) -> *const NsNode;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_throw_dom_exception(
-        ctx: *mut JSContext,
-        name: *const c_char,
-        code: c_int,
-        message: *const c_char,
-    ) -> JSValue;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
@@ -51,8 +42,6 @@ unsafe extern "C" {
         document_url: *const c_char,
     ) -> GBoolean;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_iframe_realm_window(ctx: *mut JSContext, this_val: JSValue, node: *mut NsNode)
-    -> JSValue;
     fn ns_js_cookie_value(js: *const NsJs) -> *const c_char;
     fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char);
     fn ns_js_partition_key(js: *const NsJs) -> *const c_char;
@@ -124,30 +113,20 @@ fn c_bytes(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    node_of(unsafe { ns_unwrap_element(quickjs::raw(value)) })
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), raw(node)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, raw(node)).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    let name = CString::new(name).unwrap_or_default();
-    let message = CString::new(message).unwrap_or_default();
-    unsafe {
-        ns_throw_dom_exception(
-            quickjs::raw_context(scope),
-            name.as_ptr(),
-            code,
-            message.as_ptr(),
-        )
-    };
-    quickjs::take_exception(scope)
+    let message = c_bytes(message.as_bytes());
+    imports::nsr_dom_exception(scope, name.as_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_realm_document(scope: &mut Scope<'_>, doc: &Value) -> bool {
@@ -193,14 +172,7 @@ pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) 
 }
 
 pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame: Element) -> Value {
-    let raw = unsafe {
-        ns_iframe_realm_window(
-            quickjs::raw_context(scope),
-            quickjs::raw(element),
-            frame.as_mut_ptr(),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    unsafe { imports::nsr_iframe_realm_window(scope, element, frame.as_mut_ptr()) }
 }
 
 fn glib_bytes(bytes: Option<Vec<u8>>) -> *mut c_char {
@@ -218,14 +190,6 @@ pub unsafe extern "C" fn ns_js_node_document_base_url(
     node: *const NsNode,
 ) -> *mut c_char {
     glib_bytes(crate::base_url::node_base_url(Js(js), node_of(node)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_get_defaultView(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), crate::view::default_view) }
 }
 
 pub(crate) fn current_url(js: Js) -> Option<Vec<u8>> {
@@ -403,99 +367,96 @@ pub(crate) fn local_now_formatted(format: &CStr) -> Option<Vec<u8>> {
     Some(text.unwrap_or_default())
 }
 
-unsafe fn getter(ctx: *mut JSContext, this_val: JSValue, f: NativeFn) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), f) }
-}
-
-unsafe fn setter(ctx: *mut JSContext, this_val: JSValue, val: JSValue, f: NativeFn) -> JSValue {
-    let mut argv = [val];
-    unsafe { quickjs::call_native(ctx, this_val, 1, argv.as_mut_ptr(), f) }
-}
-
-macro_rules! getters {
+macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(ctx: *mut JSContext, this_val: JSValue) -> JSValue {
-                unsafe { getter(ctx, this_val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+                $f(scope, this, args)
             }
         )*
     };
 }
 
-macro_rules! setters {
+macro_rules! rust_getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                val: JSValue,
-            ) -> JSValue {
-                unsafe { setter(ctx, this_val, val, $f) }
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+                $f(scope, this, &[])
             }
         )*
     };
 }
 
-getters! {
-    ns_document_get_documentElement => crate::elements::get_document_element,
-    ns_document_get_body => crate::elements::get_body,
-    ns_document_get_head => crate::elements::get_head,
-    ns_document_get_scrollingElement => crate::elements::get_scrolling_element,
-    ns_document_get_activeElement => crate::elements::get_active_element,
-    ns_document_get_currentScript => crate::elements::get_current_script,
-    ns_document_get_scripts => crate::elements::get_scripts,
-    ns_document_get_anchors => crate::elements::get_anchors,
-    ns_document_get_embeds => crate::elements::empty_list,
-    ns_document_get_plugins => crate::elements::empty_list,
-    ns_document_get_applets => crate::elements::empty_list,
-    ns_document_get_title => crate::props::get_title,
-    ns_document_get_dir => crate::props::get_dir,
-    ns_document_get_cookie => crate::cookie::get_cookie,
-    ns_document_get_referrer => crate::props::get_referrer,
-    ns_document_get_readyState => crate::props::get_ready_state,
-    ns_document_get_designMode => crate::props::get_design_mode,
-    ns_document_get_lastModified => crate::props::get_last_modified,
-    ns_document_get_xmlVersion => crate::props::get_xml_version,
-    ns_document_get_hidden => crate::props::get_hidden,
-    ns_document_get_visibilityState => crate::props::get_visibility_state,
-    ns_document_get_compatMode => crate::props::get_compat_mode,
+macro_rules! rust_setters {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            #[allow(non_snake_case)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
+                $f(scope, this, core::slice::from_ref(value)).map(drop)
+            }
+        )*
+    };
 }
 
-setters! {
-    ns_document_set_body => crate::elements::set_body,
-    ns_document_set_title => crate::props::set_title,
-    ns_document_set_dir => crate::props::set_dir,
-    ns_document_set_cookie => crate::cookie::set_cookie,
+rust_getters! {
+    nsr_document_get_documentElement => crate::elements::get_document_element,
+    nsr_document_get_body => crate::elements::get_body,
+    nsr_document_get_head => crate::elements::get_head,
+    nsr_document_get_scrollingElement => crate::elements::get_scrolling_element,
+    nsr_document_get_activeElement => crate::elements::get_active_element,
+    nsr_document_get_currentScript => crate::elements::get_current_script,
+    nsr_document_get_scripts => crate::elements::get_scripts,
+    nsr_document_get_anchors => crate::elements::get_anchors,
+    nsr_document_get_embeds => crate::elements::empty_list,
+    nsr_document_get_plugins => crate::elements::empty_list,
+    nsr_document_get_applets => crate::elements::empty_list,
+    nsr_document_get_title => crate::props::get_title,
+    nsr_document_get_dir => crate::props::get_dir,
+    nsr_document_get_cookie => crate::cookie::get_cookie,
+    nsr_document_get_referrer => crate::props::get_referrer,
+    nsr_document_get_readyState => crate::props::get_ready_state,
+    nsr_document_get_designMode => crate::props::get_design_mode,
+    nsr_document_get_lastModified => crate::props::get_last_modified,
+    nsr_document_get_xmlVersion => crate::props::get_xml_version,
+    nsr_document_get_hidden => crate::props::get_hidden,
+    nsr_document_get_visibilityState => crate::props::get_visibility_state,
+    nsr_document_get_compatMode => crate::props::get_compat_mode,
+    nsr_document_get_defaultView => crate::view::default_view,
+}
+
+rust_setters! {
+    nsr_document_set_body => crate::elements::set_body,
+    nsr_document_set_title => crate::props::set_title,
+    nsr_document_set_dir => crate::props::set_dir,
+    nsr_document_set_cookie => crate::cookie::set_cookie,
+}
+
+rust_methods! {
+    nsr_document_open => crate::write::open,
+    nsr_document_close => crate::write::close,
+    nsr_document_write => crate::write::write,
+    nsr_document_writeln => crate::write::writeln,
+    nsr_document_ctor => crate::realm::document_ctor,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_get_color(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    unsafe {
-        quickjs::call_native(ctx, this_val, 0, ptr::null_mut(), |scope, _, _| {
-            crate::props::get_color(scope, magic)
-        })
-    }
+pub fn nsr_document_get_color(scope: &mut Scope<'_>, _this: &Value, magic: i32) -> JsResult {
+    crate::props::get_color(scope, magic)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_set_color(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    val: JSValue,
-    magic: c_int,
-) -> JSValue {
-    let mut argv = [val];
-    unsafe {
-        quickjs::call_native(ctx, this_val, 1, argv.as_mut_ptr(), |scope, _, args| {
-            crate::props::set_color(scope, &args[0], magic)
-        })
-    }
+pub fn nsr_document_set_color(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    value: &Value,
+    magic: i32,
+) -> JsResult<()> {
+    crate::props::set_color(scope, value, magic).map(drop)
 }
 
 #[unsafe(no_mangle)]
@@ -505,10 +466,8 @@ pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
     }
 }
 
-type JSCFunction = quickjs::JSCFunction;
-
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_orphan_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_ignore_destructive_writes(js: *const NsJs) -> c_int;
@@ -521,7 +480,6 @@ unsafe extern "C" {
     fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
-    fn ns_document_expose_legacy_named(ctx: *mut JSContext, root: *const NsNode, document: JSValue);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
     fn ns_node_new_document() -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
@@ -534,158 +492,65 @@ unsafe extern "C" {
         scripting: GBoolean,
     ) -> *mut NsNode;
     fn ns_url_host_from(url: *const c_char) -> *mut c_char;
-    fn ns_make_live(
-        ctx: *mut JSContext,
-        owner: JSValue,
-        kind: c_int,
-        param: *const c_char,
-    ) -> JSValue;
-    fn ns_document_implementation(ctx: *mut JSContext, this_val: JSValue) -> JSValue;
-    fn ns_document_install_funcs(ctx: *mut JSContext, doc: JSValue);
-    fn ns_window_open_method(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue) -> JSValue;
-    fn ns_document_createElement(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createElementNS(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createTextNode(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createComment(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createDocumentFragment(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createCDATASection(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createProcessingInstruction(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createAttribute(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createAttributeNS(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_create_range(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_createEvent(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue)
-    -> JSValue;
-    fn ns_document_import_node(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue)
-    -> JSValue;
-    fn ns_document_adopt_node(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue) -> JSValue;
-    fn ns_element_querySelector(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_element_querySelectorAll(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_element_getElementsByTagName(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_element_getElementsByClassName(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_create_tree_walker(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_document_create_node_iterator(
-        c: *mut JSContext,
-        t: JSValue,
-        n: c_int,
-        a: *mut JSValue,
-    ) -> JSValue;
-    fn ns_window_get_selection(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue)
-    -> JSValue;
-    fn ns_document_has_focus(c: *mut JSContext, t: JSValue, n: c_int, a: *mut JSValue) -> JSValue;
 }
 
-pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, JSCFunction); 13] = [
-    ("createElement", 1, ns_document_createElement),
-    ("createElementNS", 2, ns_document_createElementNS),
-    ("createTextNode", 1, ns_document_createTextNode),
-    ("createComment", 1, ns_document_createComment),
+pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
+    ("createElement", 1, imports::nsr_document_createElement),
+    ("createElementNS", 2, imports::nsr_document_createElementNS),
+    ("createTextNode", 1, imports::nsr_document_createTextNode),
+    ("createComment", 1, imports::nsr_document_createComment),
     (
         "createDocumentFragment",
         0,
-        ns_document_createDocumentFragment,
+        imports::nsr_document_createDocumentFragment,
     ),
-    ("createCDATASection", 1, ns_document_createCDATASection),
+    (
+        "createCDATASection",
+        1,
+        imports::nsr_document_createCDATASection,
+    ),
     (
         "createProcessingInstruction",
         2,
-        ns_document_createProcessingInstruction,
+        imports::nsr_document_createProcessingInstruction,
     ),
-    ("createAttribute", 1, ns_document_createAttribute),
-    ("createAttributeNS", 2, ns_document_createAttributeNS),
-    ("createRange", 0, ns_document_create_range),
-    ("createEvent", 1, ns_document_createEvent),
-    ("importNode", 2, ns_document_import_node),
-    ("adoptNode", 1, ns_document_adopt_node),
+    ("createAttribute", 1, imports::nsr_document_createAttribute),
+    (
+        "createAttributeNS",
+        2,
+        imports::nsr_document_createAttributeNS,
+    ),
+    ("createRange", 0, imports::nsr_document_create_range),
+    ("createEvent", 1, imports::nsr_document_createEvent),
+    ("importNode", 2, imports::nsr_document_import_node),
+    ("adoptNode", 1, imports::nsr_document_adopt_node),
 ];
 
-pub(crate) const REALM_QUERY_METHODS: [(&str, u32, JSCFunction); 8] = [
-    ("querySelector", 1, ns_element_querySelector),
-    ("querySelectorAll", 1, ns_element_querySelectorAll),
-    ("getElementsByTagName", 1, ns_element_getElementsByTagName),
+pub(crate) const REALM_QUERY_METHODS: [(&str, u32, NativeFn); 8] = [
+    ("querySelector", 1, imports::nsr_element_querySelector),
+    ("querySelectorAll", 1, imports::nsr_element_querySelectorAll),
+    (
+        "getElementsByTagName",
+        1,
+        imports::nsr_element_getElementsByTagName,
+    ),
     (
         "getElementsByClassName",
         1,
-        ns_element_getElementsByClassName,
+        imports::nsr_element_getElementsByClassName,
     ),
-    ("createTreeWalker", 3, ns_document_create_tree_walker),
-    ("createNodeIterator", 3, ns_document_create_node_iterator),
-    ("getSelection", 0, ns_window_get_selection),
-    ("hasFocus", 0, ns_document_has_focus),
+    (
+        "createTreeWalker",
+        3,
+        imports::nsr_document_create_tree_walker,
+    ),
+    (
+        "createNodeIterator",
+        3,
+        imports::nsr_document_create_node_iterator,
+    ),
+    ("getSelection", 0, imports::nsr_window_get_selection),
+    ("hasFocus", 0, imports::nsr_document_has_focus),
 ];
 
 pub(crate) fn bind_c_function(
@@ -693,15 +558,14 @@ pub(crate) fn bind_c_function(
     object: &Value,
     name: &str,
     arity: u32,
-    f: JSCFunction,
+    f: NativeFn,
 ) {
-    let function = quickjs::c_function(scope, name, arity, f);
+    let function = scope.function(name, arity, f);
     let _ = scope.set(object, name, function);
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    let ctx = unsafe { ns_js_main_context(js.0) };
-    (!ctx.is_null()).then(|| unsafe { quickjs::with_context(ctx, f) })
+    unsafe { ns_js_main_context(js.0) }.with(f)
 }
 
 pub(crate) fn orphan_children(js: Js, node: Element) {
@@ -739,14 +603,8 @@ pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
     unsafe { ns_ce_upgrade_subtree_all(js.0, root.as_mut_ptr()) };
 }
 
-pub(crate) fn expose_legacy_named(scope: &Scope<'_>, root: Element, document: &Value) {
-    unsafe {
-        ns_document_expose_legacy_named(
-            quickjs::raw_context(scope),
-            root.as_ptr(),
-            quickjs::raw(document),
-        )
-    };
+pub(crate) fn expose_legacy_named(scope: &mut Scope<'_>, root: Element, document: &Value) {
+    unsafe { imports::nsr_document_expose_legacy_named(scope, root.as_ptr(), document) };
 }
 
 pub(crate) fn arm_js_invalidate(node: Element) {
@@ -795,160 +653,23 @@ pub(crate) fn url_host(url: &[u8]) -> Option<Vec<u8>> {
 const LIVE_DOC_TAG: c_int = 3;
 
 pub(crate) fn live_doc_tag(scope: &mut Scope<'_>, owner: &Value, tag: &CStr) -> Value {
-    let raw = unsafe {
-        ns_make_live(
-            quickjs::raw_context(scope),
-            quickjs::raw(owner),
-            LIVE_DOC_TAG,
-            tag.as_ptr(),
-        )
-    };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_make_live(scope, owner, LIVE_DOC_TAG, Some(tag.to_bytes()), None)
 }
 
 pub(crate) fn implementation(scope: &mut Scope<'_>, this: &Value) -> Value {
-    let raw =
-        unsafe { ns_document_implementation(quickjs::raw_context(scope), quickjs::raw(this)) };
-    unsafe { quickjs::take_value(scope, raw) }
+    imports::nsr_document_implementation(scope, this).unwrap_or_else(|_| Value::undefined())
 }
 
-pub(crate) fn install_document_funcs(scope: &Scope<'_>, doc: &Value) {
-    unsafe { ns_document_install_funcs(quickjs::raw_context(scope), quickjs::raw(doc)) };
+pub(crate) fn install_document_funcs(scope: &mut Scope<'_>, doc: &Value) {
+    imports::nsr_document_install_funcs(scope, doc);
 }
 
 pub(crate) fn window_open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
-    quickjs::call_c_function(scope, ns_window_open_method, this, args)
+    imports::nsr_window_open_method(scope, this, args)
 }
 
-unsafe fn native(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-    f: NativeFn,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, f) }
-}
-
-macro_rules! methods {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(
-                ctx: *mut JSContext,
-                this_val: JSValue,
-                argc: c_int,
-                argv: *mut JSValue,
-            ) -> JSValue {
-                unsafe { native(ctx, this_val, argc, argv, $f) }
-            }
-        )*
-    };
-}
-
-methods! {
-    ns_document_open => crate::write::open,
-    ns_document_close => crate::write::close,
-    ns_document_write => crate::write::write,
-    ns_document_writeln => crate::write::writeln,
-    ns_document_ctor => crate::realm::document_ctor,
-}
-
-fn text_arg(text: *const c_char) -> Option<&'static [u8]> {
-    (!text.is_null())
-        .then(|| unsafe { CStr::from_ptr(text) }.to_bytes())
-        .filter(|t| !t.is_empty())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_make_realm_document(
-    ctx: *mut JSContext,
-    doc_node: *mut NsNode,
-    url: *const c_char,
-    charset: *const c_char,
-    content_type: *const c_char,
-    is_xml: GBoolean,
-    inert: GBoolean,
-) -> JSValue {
-    let Some(doc) = node_of(doc_node) else {
-        return quickjs::into_raw(Value::null());
-    };
-    let options = crate::realm::RealmDocument {
-        url: text_arg(url).unwrap_or(b"about:blank"),
-        charset: text_arg(charset).unwrap_or(b"UTF-8"),
-        content_type: text_arg(content_type),
-        is_xml: is_xml != 0,
-        inert: inert != 0,
-    };
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            quickjs::into_raw(crate::realm::make(scope, doc, &options))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_make_synth_xml_document(ctx: *mut JSContext) -> JSValue {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            quickjs::into_raw(crate::realm::synth_xml(scope))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_realmdoc_deny_cookie(ctx: *mut JSContext, doc: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let doc = quickjs::borrow_value(scope, doc);
-            crate::realm::deny_cookie(scope, &doc);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_is_realm_document(
-    ctx: *mut JSContext,
-    doc: JSValue,
-) -> GBoolean {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let doc = quickjs::borrow_value(scope, doc);
-            glib::boolean(crate::realm::is_realm_document(scope, &doc))
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_lift_methods_to_proto(ctx: *mut JSContext, document: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let document = quickjs::borrow_value(scope, document);
-            crate::realm::lift_methods_to_proto(scope, &document);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_define_doctype_getter(ctx: *mut JSContext, document: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let document = quickjs::borrow_value(scope, document);
-            crate::realm::define_getter(scope, &document, "doctype", crate::realm::get_doctype);
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_flush_document_write(js: *mut NsJs) {
-    if !js.is_null() {
-        crate::write::flush(Js(js));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_write_teardown(js: *mut NsJs) {
-    crate::write::teardown(Js(js));
+fn text_arg(text: Option<&[u8]>) -> Option<&[u8]> {
+    text.filter(|t| !t.is_empty())
 }
 
 #[unsafe(no_mangle)]
@@ -965,9 +686,9 @@ pub unsafe fn nsr_make_realm_document(
         return Value::null();
     };
     let options = crate::realm::RealmDocument {
-        url: url.unwrap_or(b"about:blank"),
-        charset: charset.unwrap_or(b"UTF-8"),
-        content_type,
+        url: text_arg(url).unwrap_or(b"about:blank"),
+        charset: text_arg(charset).unwrap_or(b"UTF-8"),
+        content_type: text_arg(content_type),
         is_xml,
         inert,
     };
@@ -975,6 +696,38 @@ pub unsafe fn nsr_make_realm_document(
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_make_synth_xml_document(scope: &mut Scope<'_>) -> Value {
+    crate::realm::synth_xml(scope)
+}
+
+#[unsafe(no_mangle)]
 pub fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value) {
     crate::realm::deny_cookie(scope, doc);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_is_realm_document(scope: &mut Scope<'_>, doc: &Value) -> bool {
+    crate::realm::is_realm_document(scope, doc)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_lift_methods_to_proto(scope: &mut Scope<'_>, document: &Value) {
+    crate::realm::lift_methods_to_proto(scope, document);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, document: &Value) {
+    crate::realm::define_getter(scope, document, "doctype", crate::realm::get_doctype);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_flush_document_write(js: *mut NsJs) {
+    if !js.is_null() {
+        crate::write::flush(Js(js));
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_document_write_teardown(js: *mut NsJs) {
+    crate::write::teardown(Js(js));
 }
