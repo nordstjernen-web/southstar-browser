@@ -1142,3 +1142,35 @@ pub fn nsr_illegal_constructor(
 ) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
     crate::api::illegal_constructor(scope, this, args)
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_navigator_brand(js: *const NsJs) -> southstar_js_engine::Value {
+    unsafe { crate::api::navigator_brand(js) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_pristine_promise(js: *const NsJs) -> southstar_js_engine::Value {
+    unsafe { crate::api::pristine_promise(js) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_frame_realm_finish(
+    js: *mut NsJs,
+    frame: ContextHandle,
+    frame_global: &southstar_js_engine::Value,
+    parent_global: &southstar_js_engine::Value,
+) {
+    unsafe { super::record::frame_realm_finish(js, frame, frame_global, parent_global) };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_js_frame_load_enter(
+    js: *mut NsJs,
+    frame: *mut NsNode,
+    doc: *mut NsNode,
+    url: *const c_char,
+    realm_doc: &southstar_js_engine::Value,
+) -> *mut c_void {
+    let realm_doc = realm_doc.is_object().then(|| realm_doc.clone());
+    scopes::frame_load_enter(Js(js), frame, doc, url, realm_doc)
+}

@@ -7,9 +7,9 @@ use std::ffi::CString;
 
 use super::{
     ATOM_NULL, GPN_STRING_MASK, GPN_SYMBOL_MASK, JS_AtomToValue, JS_FreeAtom, JS_FreePropertyEnum,
-    JS_GetOwnPropertyNames, JS_ValueToAtom, JSAtom, JSContext, JSPropertyEnum, JSValue,
-    PROP_CONFIGURABLE, PROP_ENUMERABLE, PROP_HAS_GET, PROP_HAS_SET, PROP_HAS_VALUE, PROP_WRITABLE,
-    Scope, TAG_OBJECT, UNDEFINED, Value,
+    JS_GetOwnPropertyNames, JS_IsRegisteredClass, JS_ValueToAtom, JSAtom, JSContext,
+    JSPropertyEnum, JSValue, PROP_CONFIGURABLE, PROP_ENUMERABLE, PROP_HAS_GET, PROP_HAS_SET,
+    PROP_HAS_VALUE, PROP_WRITABLE, Scope, TAG_OBJECT, UNDEFINED, Value,
 };
 use crate::{HostClass, PropertyDescriptor};
 
@@ -113,7 +113,14 @@ impl Scope<'_> {
     }
 
     pub fn registered_classes(&self) -> Vec<&'static HostClass> {
+        let rt = self.rt();
         super::class::registered()
+            .into_iter()
+            .filter(|class| {
+                let id = class.assigned_id();
+                id != 0 && unsafe { JS_IsRegisteredClass(rt, id) }
+            })
+            .collect()
     }
 
     pub fn is_plain_object(&self, value: &Value) -> bool {

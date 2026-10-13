@@ -950,3 +950,31 @@ pub unsafe extern "C" fn ns_js_flush_document_write(js: *mut NsJs) {
 pub unsafe extern "C" fn ns_document_write_teardown(js: *mut NsJs) {
     crate::write::teardown(Js(js));
 }
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_make_realm_document(
+    scope: &mut Scope<'_>,
+    doc_node: *mut NsNode,
+    url: Option<&[u8]>,
+    charset: Option<&[u8]>,
+    content_type: Option<&[u8]>,
+    is_xml: bool,
+    inert: bool,
+) -> Value {
+    let Some(doc) = node_of(doc_node) else {
+        return Value::null();
+    };
+    let options = crate::realm::RealmDocument {
+        url: url.unwrap_or(b"about:blank"),
+        charset: charset.unwrap_or(b"UTF-8"),
+        content_type,
+        is_xml,
+        inert,
+    };
+    crate::realm::make(scope, doc, &options)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value) {
+    crate::realm::deny_cookie(scope, doc);
+}

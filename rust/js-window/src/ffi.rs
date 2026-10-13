@@ -1220,3 +1220,32 @@ pub unsafe fn nsr_window_install_state(
 pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
     Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value) {
+    message::bind_post_message(scope, global);
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value) -> Value {
+    message::make_post_message(scope, window)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe fn nsr_window_link_outward(js: *const NsJs, outward: &Value, realm_window: &Value) {
+    let js = Js::of(js);
+    let Some(realm) = current_realm(js) else {
+        return;
+    };
+    realm.enter(|_| message::link_outward(js, outward, realm_window));
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_window_current_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
+    Node::ptr_or_null(crate::documents::current_document_for(scope, window)).cast_mut()
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_is_window_named(value: &Value) -> bool {
+    value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
+}

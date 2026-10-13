@@ -315,3 +315,22 @@ pub unsafe extern "C" fn ns_ce_reset(js: *const NsJs) {
 pub unsafe extern "C" fn ns_ce_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
 }
+
+macro_rules! nsr_natives {
+    ($($name:ident => $f:path),* $(,)?) => {
+        $(
+            #[unsafe(no_mangle)]
+            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
+                $f(scope, this, args)
+            }
+        )*
+    };
+}
+
+nsr_natives! {
+    nsr_ce_define => crate::registry::define,
+    nsr_ce_get => crate::registry::get,
+    nsr_ce_when_defined => crate::registry::when_defined,
+    nsr_ce_upgrade => crate::registry::upgrade,
+    nsr_ce_get_name => crate::registry::get_name,
+}

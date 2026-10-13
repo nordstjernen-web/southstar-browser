@@ -525,3 +525,15 @@ pub unsafe extern "C" fn ns_storage_new(ctx: *mut JSContext, area: c_int) -> JSV
         })
     }
 }
+
+#[unsafe(no_mangle)]
+pub fn nsr_storage_area_of(value: &Value) -> Option<i32> {
+    value
+        .is_instance_of_class(&class::STORAGE_CLASS)
+        .then(|| class::area_tag(value))
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_storage_new(scope: &mut Scope<'_>, area: i32) -> Result<Value, Value> {
+    class::new_storage(scope, area)
+}
