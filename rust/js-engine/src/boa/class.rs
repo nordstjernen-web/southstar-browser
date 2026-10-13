@@ -277,8 +277,9 @@ impl HostExoticHooks for ExoticHooks {
 }
 
 impl Scope<'_> {
-    pub fn register_class(&mut self, _class: &'static HostClass) {
+    pub fn register_class(&mut self, class: &'static HostClass) {
         set_host_exotic_hooks(&EXOTIC_HOOKS);
+        super::reflect::remember_class(class);
     }
 
     pub fn set_class_prototype(&mut self, class: &HostClass, prototype: Value) {

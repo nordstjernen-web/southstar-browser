@@ -256,6 +256,13 @@ impl PropertyDefinition {
     }
 }
 
+pub(super) fn registered() -> Vec<&'static HostClass> {
+    CLASSES
+        .iter()
+        .filter_map(|slot| unsafe { slot.load(Ordering::Acquire).as_ref() })
+        .collect()
+}
+
 fn class_of(obj: JSValue) -> Option<&'static HostClass> {
     if obj.tag != TAG_OBJECT {
         return None;

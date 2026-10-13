@@ -264,6 +264,9 @@ pub struct PropertyDescriptor {
     pub getter: Value,
     pub setter: Value,
     pub accessor: bool,
+    pub configurable: bool,
+    pub enumerable: bool,
+    pub writable: bool,
 }
 
 pub enum PromiseState {

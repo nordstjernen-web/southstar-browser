@@ -21,6 +21,7 @@ use crate::{
 mod class;
 mod function_list;
 mod misc;
+mod reflect;
 mod runtime;
 mod table;
 
@@ -2550,6 +2551,9 @@ impl Scope<'_> {
             getter: Value::own(self.ctx, desc.getter),
             setter: Value::own(self.ctx, desc.setter),
             accessor: desc.flags & PROP_GETSET != 0,
+            configurable: desc.flags & PROP_CONFIGURABLE != 0,
+            enumerable: desc.flags & PROP_ENUMERABLE != 0,
+            writable: desc.flags & PROP_WRITABLE != 0,
         }))
     }
 

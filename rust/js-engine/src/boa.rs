@@ -38,6 +38,7 @@ use crate::{
 
 mod class;
 mod misc;
+mod reflect;
 mod runtime;
 mod table;
 
@@ -935,6 +936,9 @@ impl Scope<'_> {
             getter: self.get(&descriptor, "get")?,
             setter: self.get(&descriptor, "set")?,
             accessor: self.has_property(&descriptor, "get")?,
+            configurable: self.descriptor_flag(&descriptor, "configurable")?,
+            enumerable: self.descriptor_flag(&descriptor, "enumerable")?,
+            writable: self.descriptor_flag(&descriptor, "writable")?,
         }))
     }
 

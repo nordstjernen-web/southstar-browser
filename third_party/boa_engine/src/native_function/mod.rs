@@ -92,6 +92,26 @@ unsafe impl Trace for NativeFunctionObject {
     });
 }
 
+impl NativeFunctionObject {
+    /// The Rust function this object calls.
+    #[must_use]
+    pub fn function(&self) -> &NativeFunction {
+        &self.f
+    }
+
+    /// The JavaScript name of the function.
+    #[must_use]
+    pub fn name(&self) -> &JsString {
+        &self.name
+    }
+
+    /// Whether the function can be called as a constructor.
+    #[must_use]
+    pub fn is_constructor(&self) -> bool {
+        self.constructor.is_some()
+    }
+}
+
 impl JsData for NativeFunctionObject {
     fn internal_methods(&self) -> &'static InternalObjectMethods {
         static FUNCTION: InternalObjectMethods = InternalObjectMethods {
