@@ -670,8 +670,3 @@ pub unsafe extern "C" fn ns_node_has_activation_behavior(el: *const NsNode) -> G
 pub unsafe extern "C" fn ns_click_activation_target(el: *const NsNode) -> *const NsNode {
     Node::ptr_or_null(node(el).and_then(crate::activation::click_activation_target))
 }
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_has_focus(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
-    crate::focus::has_focus(scope, this, &[])
-}

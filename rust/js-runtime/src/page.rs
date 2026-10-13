@@ -5,8 +5,7 @@
 use southstar_js_bind::natives::{resolved_empty_array, resolved_false, resolved_undefined};
 use southstar_js_bind::{
     attach_prototype, bind_constructor, bind_function, bind_int_constants, bind_native,
-    bind_prototype_function_if_missing, bind_prototype_native_if_missing, make_constructor,
-    prototype_of,
+    bind_prototype_native_if_missing, make_constructor, prototype_of,
 };
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
@@ -193,19 +192,6 @@ pub(crate) fn bind_ctor(
 ) {
     let constructor = make_ctor(scope, name, native, arity);
     let _ = scope.set(object, name, constructor);
-}
-
-fn bind_proto_fn(
-    scope: &mut Scope<'_>,
-    global: &Value,
-    constructor: &str,
-    name: &str,
-    native: Native,
-    arity: u32,
-) {
-    let _ = bind_prototype_function_if_missing(scope, global, constructor, name, |scope| {
-        ffi::c_function(scope, name, arity, native)
-    });
 }
 
 pub(crate) fn bind_url(scope: &mut Scope<'_>, global: &Value) {

@@ -716,22 +716,6 @@ pub unsafe extern "C" fn ns_js_commit_change(js: *mut NsJs, el: *const NsNode) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Value {
-    let map = match (Js::of(js), unsafe { node(owner) }) {
-        (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
-        _ => None,
-    };
-    map.unwrap_or_else(Value::undefined)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, map: &Value) {
-    if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
-        attribute_maps::remember(js, owner, map.clone());
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Option<Value> {
     match (Js::of(js), unsafe { node(owner) }) {
         (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
