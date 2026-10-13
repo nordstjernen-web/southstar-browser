@@ -590,7 +590,7 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     ffi::imports::nsr_events_install_window_base(scope, global);
     bind_ctor(scope, global, "History", ns_illegal_constructor, 0);
     imports::nsr_window_install_history(scope, global);
-    ffi::install(scope, ns_crypto_install_window, global);
+    ffi::imports::nsr_crypto_install_window(scope, global);
 
     bind_fn(scope, global, "btoa", ns_window_btoa, 1);
     bind_fn(scope, global, "atob", ns_window_atob, 1);
@@ -917,7 +917,7 @@ fn install_window_tail(js: Js, scope: &mut Scope<'_>, global: &Value) {
     imports::nsr_worker_install_constructor(scope, global);
     imports::nsr_js_net_install_sockets(scope, global);
     ffi::install(scope, ns_cssom_install_css, global);
-    ffi::install(scope, ns_crypto_install_window_subtle, global);
+    ffi::imports::nsr_crypto_install_window_subtle(scope, global);
     #[cfg(feature = "wasm")]
     ffi::install(scope, ns_wasm_install, global);
     ffi::install(scope, ns_storage_install_window, global);

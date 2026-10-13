@@ -85,14 +85,11 @@ installers! {
     ns_perf_install_entry_list,
     ns_cssom_install_window,
     ns_js_input_install_wpt,
-    ns_crypto_install_window,
     ns_media_install_audio,
     ns_net_install_text_codecs,
     ns_cssom_install_css,
-    ns_crypto_install_window_subtle,
     ns_storage_install_window,
     ns_idb_install,
-    ns_crypto_install_worker,
 }
 
 #[cfg(feature = "wasm")]
