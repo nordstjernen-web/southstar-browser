@@ -2,9 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-#[cfg(feature = "quickjs")]
-mod ffi;
-
 use core::ffi::{c_int, c_long};
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -4,6 +4,7 @@
 
 mod class;
 pub mod host;
+#[cfg(feature = "quickjs")]
 mod legacy;
 pub mod natives;
 

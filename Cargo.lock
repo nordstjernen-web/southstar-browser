@@ -2145,6 +2145,9 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-intl",
+ "southstar-js-realm",
+ "southstar-js-temporal",
 ]
 
 [[package]]
@@ -2266,6 +2269,9 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-intl",
+ "southstar-js-realm",
+ "southstar-js-temporal",
 ]
 
 [[package]]

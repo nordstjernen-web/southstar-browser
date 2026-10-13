@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of Intl for the QuickJS engine, as declared in src/js_intl.h, and the GLib, C library and Pango calls behind it.
+//! Southstar — the GLib, C library and Pango calls behind Intl.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,8 +7,6 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib as glib;
-#[cfg(feature = "quickjs")]
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
 
 const G_NORMALIZE_ALL: c_int = 2;
 const G_UNICODE_SPACING_MARK: c_int = 10;
@@ -347,16 +345,5 @@ pub(crate) mod windows {
         let mut locale = [0u16; LOCALE_NAME_MAX_LENGTH];
         unsafe { GetUserDefaultLocaleName(locale.as_mut_ptr(), LOCALE_NAME_MAX_LENGTH as i32) };
         Some((key, utf8(&locale)))
-    }
-}
-
-#[cfg(feature = "quickjs")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_intl_install(ctx: *mut JSContext, global: JSValue) {
-    unsafe {
-        quickjs::with_context(ctx, |scope| {
-            let global = quickjs::borrow_value(scope, global);
-            crate::install(scope, &global);
-        });
     }
 }

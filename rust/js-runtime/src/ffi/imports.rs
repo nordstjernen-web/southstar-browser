@@ -29,7 +29,6 @@ unsafe extern "Rust" {
         name: &[u8],
     ) -> Result<Value, Value>;
     pub(crate) unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
-    pub(crate) safe fn nsr_hide_shared_array_buffer(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_install_body_reflected_handlers(scope: &mut Scope<'_>, wrapper: &Value);
     pub(crate) unsafe fn nsr_js_dispatch_window_only_event(
         js: *mut NsJs,

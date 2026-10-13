@@ -1054,7 +1054,7 @@ pub unsafe extern "C" fn ns_js_new_frame_context(js: *mut NsJs) -> ContextHandle
     }
     fctx.with(|scope| {
         let global = scope.global();
-        imports::nsr_hide_shared_array_buffer(scope, &global);
+        southstar_js_realm::hide_shared_array_buffer(scope, &global);
     });
     if let Some(frames) = unsafe { (*rec(js)).frame_ctxs.as_mut() } {
         frames.push(fctx);

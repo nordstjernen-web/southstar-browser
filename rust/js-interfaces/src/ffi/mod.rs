@@ -84,10 +84,6 @@ unsafe extern "C" {
     fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
     fn ns_js_navigator_brand(js: *const NsJs) -> JSValue;
     fn ns_install_event_handler_props(ctx: *mut JSContext, target: JSValue);
-    fn ns_hide_shared_array_buffer(ctx: *mut JSContext, global: JSValue);
-    fn ns_js_intl_install(ctx: *mut JSContext, global: JSValue);
-    fn ns_js_temporal_install(ctx: *mut JSContext, global: JSValue);
-    fn ns_js_realm_install(ctx: *mut JSContext, global: JSValue);
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
@@ -175,19 +171,19 @@ pub(crate) fn install_event_handler_props(scope: &mut Scope<'_>, global: &Value)
 }
 
 pub(crate) fn hide_shared_array_buffer(scope: &mut Scope<'_>, global: &Value) {
-    run_installer(scope, global, ns_hide_shared_array_buffer);
+    southstar_js_realm::hide_shared_array_buffer(scope, global);
 }
 
 pub(crate) fn install_intl(scope: &mut Scope<'_>, global: &Value) {
-    run_installer(scope, global, ns_js_intl_install);
+    southstar_js_intl::install(scope, global);
 }
 
 pub(crate) fn install_temporal(scope: &mut Scope<'_>, global: &Value) {
-    run_installer(scope, global, ns_js_temporal_install);
+    let _ = southstar_js_temporal::install(scope, global);
 }
 
 pub(crate) fn install_realm(scope: &mut Scope<'_>, global: &Value) {
-    run_installer(scope, global, ns_js_realm_install);
+    southstar_js_realm::install(scope, global);
 }
 
 unsafe fn with_scope(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>)) {

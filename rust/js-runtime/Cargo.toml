@@ -13,6 +13,9 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-bind = { path = "../js-bind" }
 southstar-js-engine = { path = "../js-engine", default-features = false, features = ["quickjs"] }
+southstar-js-intl = { path = "../js-intl" }
+southstar-js-realm = { path = "../js-realm" }
+southstar-js-temporal = { path = "../js-temporal" }
 
 [features]
 wasm = []

@@ -112,10 +112,10 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
 
     #[cfg(feature = "wasm")]
     ffi::install(scope, ns_wasm_install, &global);
-    ffi::install(scope, ns_js_intl_install, &global);
-    ffi::install(scope, ns_js_temporal_install, &global);
+    southstar_js_intl::install(scope, &global);
+    let _ = southstar_js_temporal::install(scope, &global);
     let _ = scope.set(&global, "crossOriginIsolated", Value::boolean(false));
-    ffi::install(scope, ns_hide_shared_array_buffer, &global);
+    southstar_js_realm::hide_shared_array_buffer(scope, &global);
     bind_ctor(
         scope,
         &global,
