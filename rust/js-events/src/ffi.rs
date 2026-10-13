@@ -311,6 +311,16 @@ pub unsafe extern "C" fn ns_throw_dom_exception(
 }
 
 #[unsafe(no_mangle)]
+pub fn nsr_dom_exception(scope: &mut Scope<'_>, name: &[u8], code: i32, message: &[u8]) -> Value {
+    crate::exceptions::dom_exception(scope, name, code, message)
+}
+
+#[unsafe(no_mangle)]
+pub fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value {
+    crate::exceptions::abort_error(scope)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_make_abort_error(ctx: *mut JSContext) -> JSValue {
     unsafe {
         quickjs::with_context(ctx, |scope| {
