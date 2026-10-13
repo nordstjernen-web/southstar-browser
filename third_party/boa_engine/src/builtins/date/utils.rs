@@ -797,7 +797,241 @@ pub(super) fn parse_date(date: &JsString, hooks: &dyn HostHooks) -> Option<i64> 
         return Some(t.unix_timestamp() * 1000 + i64::from(t.millisecond()));
     }
 
-    None
+    LegacyDateParser::default().parse(&date, hooks)
+}
+
+/// The implementation-specific fallback formats of [`Date.parse`][spec], following the
+/// heuristics browsers share: month and weekday names, `/`, `-`, `,` and space separated
+/// dates (`M/D/Y`, `Y/M/D`, `D Month Y`, `Month D, Y`), 12 and 24 hour times with an optional
+/// `AM`/`PM`, the `UTC`/`GMT`/`Z` zone names, numeric `+hhmm`/`+hh:mm` offsets and
+/// parenthesized comments such as the zone name `toString` appends. A date without a zone is
+/// local time.
+///
+/// [spec]: https://tc39.es/ecma262/#sec-date.parse
+#[derive(Default)]
+struct LegacyDateParser {
+    numbers: Vec<(u32, usize)>,
+    month: Option<u32>,
+    time: Option<(u32, u32, u32, u32)>,
+    pm: Option<bool>,
+    offset: Option<i64>,
+    seen_number: bool,
+}
+
+const MONTH_NAMES: [&str; 12] = [
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+];
+
+const WEEKDAY_NAMES: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+fn take_digits(bytes: &[u8], at: &mut usize) -> Option<(u32, usize)> {
+    let start = *at;
+    while *at < bytes.len() && bytes[*at].is_ascii_digit() {
+        *at += 1;
+    }
+    let len = *at - start;
+    if len == 0 || len > 9 {
+        return None;
+    }
+    let value = bytes[start..*at]
+        .iter()
+        .fold(0u32, |n, d| n * 10 + u32::from(d - b'0'));
+    Some((value, len))
+}
+
+impl LegacyDateParser {
+    fn parse(mut self, date: &str, hooks: &dyn HostHooks) -> Option<i64> {
+        let bytes = date.to_ascii_lowercase().into_bytes();
+        let mut at = 0;
+        while at < bytes.len() {
+            let c = bytes[at];
+            if c == b'(' {
+                let mut depth = 0;
+                while at < bytes.len() {
+                    match bytes[at] {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                    at += 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+            } else if c.is_ascii_digit() {
+                let number = take_digits(&bytes, &mut at)?;
+                if bytes.get(at) == Some(&b':') && self.time.is_none() {
+                    self.time = Some(Self::time(number.0, &bytes, &mut at)?);
+                } else {
+                    self.numbers.push(number);
+                }
+                self.seen_number = true;
+            } else if c.is_ascii_alphabetic() {
+                let start = at;
+                while at < bytes.len() && bytes[at].is_ascii_alphabetic() {
+                    at += 1;
+                }
+                self.word(&bytes[start..at])?;
+            } else if (c == b'+' || c == b'-') && (self.time.is_some() || self.offset.is_some()) {
+                at += 1;
+                let offset = Self::offset(&bytes, &mut at)?;
+                self.offset = Some(if c == b'-' { -offset } else { offset });
+            } else if matches!(c, b' ' | b',' | b'/' | b'-' | b'.' | b'\t') {
+                at += 1;
+            } else {
+                return None;
+            }
+        }
+        self.finish(hooks)
+    }
+
+    fn word(&mut self, word: &[u8]) -> Option<()> {
+        let word = str::from_utf8(word).ok()?;
+        match word {
+            "am" | "pm" => {
+                self.pm = Some(word == "pm");
+                return Some(());
+            }
+            "utc" | "gmt" | "ut" | "z" => {
+                self.offset = Some(0);
+                return Some(());
+            }
+            "edt" | "est" | "cdt" | "cst" | "mdt" | "mst" | "pdt" | "pst" => {
+                let hours = match word {
+                    "edt" => -4,
+                    "est" | "cdt" => -5,
+                    "cst" | "mdt" => -6,
+                    "mst" | "pdt" => -7,
+                    _ => -8,
+                };
+                self.offset = Some(hours * 60);
+                return Some(());
+            }
+            "t" if self.seen_number => return Some(()),
+            _ => {}
+        }
+        if word.len() >= 3 {
+            if let Some(month) = MONTH_NAMES.iter().position(|m| word.starts_with(m)) {
+                if self.month.is_some() {
+                    return None;
+                }
+                self.month = Some(month as u32 + 1);
+                return Some(());
+            }
+            if WEEKDAY_NAMES.iter().any(|d| word.starts_with(d)) {
+                return Some(());
+            }
+        }
+        if self.seen_number { None } else { Some(()) }
+    }
+
+    fn time(hour: u32, bytes: &[u8], at: &mut usize) -> Option<(u32, u32, u32, u32)> {
+        *at += 1;
+        let (minute, _) = take_digits(bytes, at)?;
+        let mut second = 0;
+        let mut millisecond = 0;
+        if bytes.get(*at) == Some(&b':') {
+            *at += 1;
+            second = take_digits(bytes, at)?.0;
+            if bytes.get(*at) == Some(&b'.') && bytes.get(*at + 1).is_some_and(u8::is_ascii_digit) {
+                *at += 1;
+                let start = *at;
+                while *at < bytes.len() && bytes[*at].is_ascii_digit() {
+                    *at += 1;
+                }
+                let digits = &bytes[start..*at];
+                millisecond = (0..3).fold(0, |ms, i| {
+                    ms * 10 + digits.get(i).map_or(0, |d| u32::from(d - b'0'))
+                });
+            }
+        }
+        Some((hour, minute, second, millisecond))
+    }
+
+    fn offset(bytes: &[u8], at: &mut usize) -> Option<i64> {
+        let (value, len) = take_digits(bytes, at)?;
+        let minutes = if bytes.get(*at) == Some(&b':') {
+            *at += 1;
+            let (minute, _) = take_digits(bytes, at)?;
+            i64::from(value) * 60 + i64::from(minute)
+        } else if len <= 2 {
+            i64::from(value) * 60
+        } else {
+            i64::from(value / 100) * 60 + i64::from(value % 100)
+        };
+        (minutes < 24 * 60).then_some(minutes)
+    }
+
+    fn full_year(year: (u32, usize)) -> i64 {
+        let (value, len) = year;
+        let value = i64::from(value);
+        if len <= 2 {
+            if value < 50 {
+                2000 + value
+            } else {
+                1900 + value
+            }
+        } else {
+            value
+        }
+    }
+
+    fn finish(self, hooks: &dyn HostHooks) -> Option<i64> {
+        if !self.seen_number {
+            return None;
+        }
+        let numbers = &self.numbers;
+        let (year, month, day) = match (self.month, numbers.as_slice()) {
+            (Some(month), [day, year]) if day.0 <= 31 && day.1 <= 2 => {
+                (Self::full_year(*year), month, day.0)
+            }
+            (Some(month), [year, day]) => (Self::full_year(*year), month, day.0),
+            (Some(month), [day]) if day.0 <= 31 => (2001, month, day.0),
+            (None, [year, month, day]) if year.1 >= 3 || year.0 > 31 => {
+                (Self::full_year(*year), month.0, day.0)
+            }
+            (None, [month, day, year]) => (Self::full_year(*year), month.0, day.0),
+            (None, [month, day]) => (2001, month.0, day.0),
+            _ => return None,
+        };
+        if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+            return None;
+        }
+        let (mut hour, minute, second, millisecond) = self.time.unwrap_or((0, 0, 0, 0));
+        if let Some(pm) = self.pm {
+            if hour == 0 || hour > 12 {
+                return None;
+            }
+            hour = match (pm, hour) {
+                (false, 12) => 0,
+                (true, 12) => 12,
+                (true, h) => h + 12,
+                (false, h) => h,
+            };
+        }
+        if hour > 24
+            || minute > 59
+            || second > 59
+            || (hour == 24 && (minute | second | millisecond) != 0)
+        {
+            return None;
+        }
+        let date = make_date(
+            make_day(year as f64, f64::from(month - 1), f64::from(day)),
+            make_time(
+                f64::from(hour),
+                f64::from(minute),
+                f64::from(second),
+                f64::from(millisecond),
+            ),
+        );
+        let date = match self.offset {
+            Some(offset) => date - (offset as f64) * MS_PER_MINUTE,
+            None => utc_t(date, hooks),
+        };
+        let t = time_clip(date);
+        if t.is_finite() { Some(t as i64) } else { None }
+    }
 }
 
 /// Parses a date string according to the [`Date Time String Format`][spec].
@@ -1034,6 +1268,9 @@ impl<'a> DateParser<'a> {
             }
         };
         self.millisecond = self.parse_n_ascii_digits::<3>()? as u32;
+        while self.input.peek().is_some_and(|c| c.is_ascii_digit()) {
+            self.input.next();
+        }
         if self.input.peek().is_some() {
             self.parse_timezone()?;
             self.finish()
