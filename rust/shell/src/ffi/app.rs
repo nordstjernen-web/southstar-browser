@@ -17,8 +17,6 @@ unsafe extern "C" {
     fn ns_proc_video_helper_available() -> GBoolean;
     fn ns_history_init();
     fn ns_history_shutdown();
-    #[cfg(target_os = "macos")]
-    fn ns_macos_set_dock_icon();
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -57,7 +55,7 @@ unsafe extern "C" fn on_activate(app: *mut c_void, data: *mut c_void) {
         window::install_icon_search_paths();
         super::icons::ns_icon_install_window_icon(c"southstar".as_ptr());
         #[cfg(target_os = "macos")]
-        ns_macos_set_dock_icon();
+        super::macos_dock::set_dock_icon();
         window::install_chrome_css();
         let pw = window::proc_window_new(app, initial_size());
         *pw.session_path.borrow_mut() = ctx.session_path.clone();

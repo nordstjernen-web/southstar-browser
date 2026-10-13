@@ -442,7 +442,7 @@ entry after bundling; if you rework the packaging, keep that step (and re-sign
   backend does **not** map `gtk_window_set_default_icon_name()` to the Dock
   tile. The `.app` carries an `.icns`; an unbundled binary additionally renders
   the embedded SVG and calls `[NSApp setApplicationIconImage:]`
-  (`src/gtk/macos_dock.m`). The icon is otherwise generic.
+  (`rust/shell/src/ffi/macos_dock.rs`). The icon is otherwise generic.
 - **Sandbox is a Seatbelt write-confinement** (`sandbox_init`,
   `security.c` `__APPLE__` arm), not Landlock+seccomp — filesystem writes
   only, no syscall/network filter, fails open. If a new feature needs to
@@ -466,7 +466,7 @@ entry after bundling; if you rework the packaging, keep that step (and re-sign
 | Every HTTPS page fails | a TLS/curl option the linked backend rejects | `src/net.c` `ns_net_apply_curl_tls` |
 | `.dmg` app won't launch (`duplicate LC_RPATH`) | dylibbundler rpath duplication | `scripts/pack-macos.sh` |
 | App launches but no page loads on a clean Mac | missing/!vendored CA bundle, or system-curl SecureTransport ignoring `CAINFO` | `pack-macos.sh` CA step + curl linkage |
-| Generic Dock icon | running the unbundled binary, or the SVG/`.icns` path broke | `src/gtk/macos_dock.m`, `pack-macos.sh` icon step |
+| Generic Dock icon | running the unbundled binary, or the SVG/`.icns` path broke | `rust/shell/src/ffi/macos_dock.rs`, `pack-macos.sh` icon step |
 | `glib`/`gtk4` schema or pixbuf-loader abort at runtime | bundle missing compiled schemas / `loaders.cache` | `pack-macos.sh` schema + pixbuf steps |
 
 ## Definition of done on macOS

@@ -8,6 +8,8 @@ mod downloads;
 pub mod gdk;
 mod gtk;
 mod icons;
+#[cfg(target_os = "macos")]
+mod macos_dock;
 mod pagelayers;
 mod procview_chrome;
 mod procview_draw;

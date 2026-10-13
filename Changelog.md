@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.9:
 ======
+* The macOS Dock icon setter (macos_dock.m) is Rust, in rust/shell over the
+  Objective-C runtime; the tree has no Objective-C left and meson no longer
+  enables the objc language.
 * The C-ABI QuickJS shims (legacy.rs) are gone from the binding crates:
   their last callers had moved to the Rust-ABI nsr_ entry points. The window
   and worker realms bind their illegal constructors through the neutral API.

@@ -5,12 +5,9 @@ if host_machine.system() != 'windows'
   southstar_gtk_deps += [cc.find_library('rt', required: false)]
 endif
 
-southstar_gtk_platform_sources = []
 southstar_gtk_platform_link_args = []
 if host_machine.system() == 'darwin'
-  add_languages('objc', native: false)
-  southstar_gtk_platform_sources += files('macos_dock.m')
-  southstar_gtk_platform_link_args += ['-framework', 'AppKit']
+  southstar_gtk_platform_link_args += ['-framework', 'AppKit', '-lobjc']
 endif
 
 gnome = import('gnome')
@@ -24,7 +21,7 @@ southstar_icon_resources = gnome.compile_resources(
 executable(
   'southstar',
   southstar_engine_sources +
-    southstar_gtk_sources + southstar_gtk_platform_sources +
+    southstar_gtk_sources +
     southstar_icon_resources +
     southstar_win_resources,
   dependencies: southstar_gtk_deps,
