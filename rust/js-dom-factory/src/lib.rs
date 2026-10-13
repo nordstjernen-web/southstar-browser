@@ -8,8 +8,6 @@ pub mod factories;
 mod ffi;
 pub mod hyperlink;
 pub mod implementation;
-#[cfg(feature = "quickjs")]
-mod legacy;
 mod names;
 pub mod namespaces;
 

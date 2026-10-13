@@ -263,39 +263,16 @@ rust_methods! {
     nsr_tlist_item => crate::token_list::item,
     nsr_tlist_supports => crate::token_list::supports,
     nsr_tlist_toString => crate::token_list::get_value,
-    nsr_namedmap_getNamedItem => crate::named_map::get_named_item,
-    nsr_namedmap_getNamedItemNS => crate::named_map::get_named_item_ns,
-    nsr_namedmap_setNamedItem => crate::named_map::set_named_item,
-    nsr_namedmap_removeNamedItem => crate::named_map::remove_named_item,
-    nsr_namedmap_removeNamedItemNS => crate::named_map::remove_named_item_ns,
     nsr_namedmap_item => crate::named_map::item,
-    nsr_element_getAttributeNode => crate::attr::get_attribute_node,
-    nsr_element_getAttributeNodeNS => crate::attr::get_attribute_node_ns,
-    nsr_element_setAttributeNode => crate::attr::set_attribute_node,
-    nsr_element_removeAttributeNode => crate::attr::remove_attribute_node,
 }
 
 rust_getters! {
     nsr_tlist_get_length => crate::token_list::get_length,
     nsr_tlist_get_value => crate::token_list::get_value,
-    nsr_namedmap_get_length => crate::named_map::get_length,
-    nsr_element_get_classList => crate::element::class_list,
-    nsr_element_get_relList => crate::element::rel_list,
-    nsr_element_get_sandbox_list => crate::element::sandbox_list,
-    nsr_element_get_sizes_list => crate::element::sizes_list,
-    nsr_element_get_attributes => crate::element::attributes,
 }
 
 rust_setters! {
     nsr_tlist_set_value => crate::token_list::set_value,
-    nsr_element_set_style => crate::element::set_style,
-    nsr_element_set_classList => crate::element::set_class_list,
-    nsr_element_set_relList => crate::element::set_rel_list,
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_get_dataset(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-    crate::class::element_dataset(scope, this)
 }
 
 #[unsafe(no_mangle)]
@@ -305,31 +282,6 @@ pub fn nsr_make_token_list(
     attr: &'static CStr,
 ) -> Result<Value, Value> {
     crate::element::token_list(scope, element, attr)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_token_list_register_class(scope: &mut Scope<'_>, proto: Value) {
-    crate::class::register(scope, proto);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_token_list_class_proto(scope: &mut Scope<'_>) -> Value {
-    crate::class::prototype(scope)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_dataset_register_class(scope: &mut Scope<'_>, proto: Value) {
-    crate::class::register_dataset(scope, proto);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_dataset_class_proto(scope: &mut Scope<'_>) -> Value {
-    crate::class::dataset_prototype(scope)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_attr_register_class(scope: &mut Scope<'_>, proto: Value) {
-    crate::class::register_attr(scope, proto);
 }
 
 #[unsafe(no_mangle)]

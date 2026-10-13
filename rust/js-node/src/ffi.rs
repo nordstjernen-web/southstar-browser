@@ -221,32 +221,3 @@ pub(crate) fn insert_before_single(
         )
     };
 }
-
-macro_rules! rust_methods {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            #[allow(non_snake_case)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
-                $f(scope, this, args)
-            }
-        )*
-    };
-}
-
-pub(crate) use rust_methods;
-
-rust_methods! {
-    nsr_element_appendChild => crate::child::append_child,
-    nsr_element_removeChild => crate::child::remove_child,
-    nsr_element_insertBefore => crate::child::insert_before,
-    nsr_element_replaceChild => crate::child::replace_child,
-    nsr_element_moveBefore => crate::child::move_before,
-    nsr_element_before => crate::sequence::before,
-    nsr_element_after => crate::sequence::after,
-    nsr_element_replaceWith => crate::sequence::replace_with,
-    nsr_element_remove_self => crate::sequence::remove,
-    nsr_element_append => crate::sequence::append,
-    nsr_element_prepend => crate::sequence::prepend,
-    nsr_element_replaceChildren => crate::sequence::replace_children,
-}

@@ -14,9 +14,7 @@ use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::names::{self, NameError};
-use crate::{
-    Element, JsResult, adopt, constructors, factories, hyperlink, implementation, namespaces,
-};
+use crate::{Element, JsResult, adopt, constructors, factories, hyperlink, implementation};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
 
@@ -348,10 +346,6 @@ pub(crate) fn reflect_href_get(scope: &mut Scope<'_>, this: &Value) -> JsResult 
     imports::nsr_element_reflect_str_get(scope, this, c"href", false)
 }
 
-pub(crate) fn reflect_href_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
-    imports::nsr_element_reflect_str_set(scope, this, val, c"href")
-}
-
 pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node: &Value) {
     api::tag_caller_document(scope, node);
 }
@@ -442,14 +436,7 @@ rust_methods! {
     nsr_document_createDocumentFragment => factories::create_document_fragment,
     nsr_document_import_node => adopt::import_node,
     nsr_document_adopt_node => adopt::adopt_node,
-    nsr_element_cloneNode => adopt::clone_node,
     nsr_attr_cloneNode => adopt::clone_attr,
-    nsr_element_lookupNamespaceURI => namespaces::lookup_namespace_uri,
-    nsr_element_lookupPrefix => namespaces::lookup_prefix,
-    nsr_element_isDefaultNamespace => namespaces::is_default_namespace,
-    nsr_impl_create_html_document => implementation::create_html_document,
-    nsr_impl_create_document => implementation::create_document,
-    nsr_impl_create_document_type => implementation::create_document_type,
     nsr_window_document_fragment_ctor => constructors::document_fragment,
     nsr_window_text_ctor => constructors::text,
     nsr_window_comment_ctor => constructors::comment,
@@ -464,31 +451,6 @@ rust_methods! {
 #[unsafe(no_mangle)]
 pub fn nsr_document_implementation(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     implementation::of_document(scope, this)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_anchor_part_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
-    hyperlink::part_get(scope, this, magic)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_anchor_href_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    _magic: i32,
-) -> JsResult<()> {
-    reflect_href_set(scope, this, val)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_url_part_set(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    val: &Value,
-    magic: i32,
-) -> JsResult<()> {
-    hyperlink::part_set(scope, this, val, magic)
 }
 
 #[unsafe(no_mangle)]

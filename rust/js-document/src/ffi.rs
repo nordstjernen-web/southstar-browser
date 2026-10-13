@@ -379,84 +379,12 @@ macro_rules! rust_methods {
     };
 }
 
-macro_rules! rust_getters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            #[allow(non_snake_case)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-                $f(scope, this, &[])
-            }
-        )*
-    };
-}
-
-macro_rules! rust_setters {
-    ($($name:ident => $f:path),* $(,)?) => {
-        $(
-            #[unsafe(no_mangle)]
-            #[allow(non_snake_case)]
-            pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
-                $f(scope, this, core::slice::from_ref(value)).map(drop)
-            }
-        )*
-    };
-}
-
-rust_getters! {
-    nsr_document_get_documentElement => crate::elements::get_document_element,
-    nsr_document_get_body => crate::elements::get_body,
-    nsr_document_get_head => crate::elements::get_head,
-    nsr_document_get_scrollingElement => crate::elements::get_scrolling_element,
-    nsr_document_get_activeElement => crate::elements::get_active_element,
-    nsr_document_get_currentScript => crate::elements::get_current_script,
-    nsr_document_get_scripts => crate::elements::get_scripts,
-    nsr_document_get_anchors => crate::elements::get_anchors,
-    nsr_document_get_embeds => crate::elements::empty_list,
-    nsr_document_get_plugins => crate::elements::empty_list,
-    nsr_document_get_applets => crate::elements::empty_list,
-    nsr_document_get_title => crate::props::get_title,
-    nsr_document_get_dir => crate::props::get_dir,
-    nsr_document_get_cookie => crate::cookie::get_cookie,
-    nsr_document_get_referrer => crate::props::get_referrer,
-    nsr_document_get_readyState => crate::props::get_ready_state,
-    nsr_document_get_designMode => crate::props::get_design_mode,
-    nsr_document_get_lastModified => crate::props::get_last_modified,
-    nsr_document_get_xmlVersion => crate::props::get_xml_version,
-    nsr_document_get_hidden => crate::props::get_hidden,
-    nsr_document_get_visibilityState => crate::props::get_visibility_state,
-    nsr_document_get_compatMode => crate::props::get_compat_mode,
-    nsr_document_get_defaultView => crate::view::default_view,
-}
-
-rust_setters! {
-    nsr_document_set_body => crate::elements::set_body,
-    nsr_document_set_title => crate::props::set_title,
-    nsr_document_set_dir => crate::props::set_dir,
-    nsr_document_set_cookie => crate::cookie::set_cookie,
-}
-
 rust_methods! {
     nsr_document_open => crate::write::open,
     nsr_document_close => crate::write::close,
     nsr_document_write => crate::write::write,
     nsr_document_writeln => crate::write::writeln,
     nsr_document_ctor => crate::realm::document_ctor,
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_get_color(scope: &mut Scope<'_>, _this: &Value, magic: i32) -> JsResult {
-    crate::props::get_color(scope, magic)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_set_color(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    value: &Value,
-    magic: i32,
-) -> JsResult<()> {
-    crate::props::set_color(scope, value, magic).map(drop)
 }
 
 #[unsafe(no_mangle)]
@@ -703,11 +631,6 @@ pub fn nsr_make_synth_xml_document(scope: &mut Scope<'_>) -> Value {
 #[unsafe(no_mangle)]
 pub fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value) {
     crate::realm::deny_cookie(scope, doc);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_document_is_realm_document(scope: &mut Scope<'_>, doc: &Value) -> bool {
-    crate::realm::is_realm_document(scope, doc)
 }
 
 #[unsafe(no_mangle)]

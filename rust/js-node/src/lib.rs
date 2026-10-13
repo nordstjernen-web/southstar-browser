@@ -5,8 +5,6 @@
 pub mod attributes;
 pub mod child;
 mod ffi;
-#[cfg(feature = "quickjs")]
-mod legacy;
 pub mod names;
 pub mod owner;
 pub mod sequence;

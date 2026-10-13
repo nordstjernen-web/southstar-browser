@@ -36,12 +36,6 @@ unsafe extern "Rust" {
         attr: &CStr,
         null_if_absent: bool,
     ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_element_reflect_str_set(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        val: &Value,
-        attr: &CStr,
-    ) -> Result<(), Value>;
     pub(crate) safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
     #[allow(non_snake_case)]
     pub(crate) safe fn nsr_target_addEventListener(

@@ -49,21 +49,6 @@ macro_rules! natives {
 }
 
 natives! {
-    ns_element_querySelector => ffi::nsr_element_querySelector,
-    ns_element_querySelectorAll => ffi::nsr_element_querySelectorAll,
-    ns_document_querySelector => ffi::nsr_document_querySelector,
-    ns_document_querySelectorAll => ffi::nsr_document_querySelectorAll,
-    ns_element_matches => ffi::nsr_element_matches,
-    ns_element_closest => ffi::nsr_element_closest,
-    ns_element_getElementById => ffi::nsr_element_getElementById,
-    ns_document_getElementById => ffi::nsr_document_getElementById,
-    ns_element_getElementsByTagName => ffi::nsr_element_getElementsByTagName,
-    ns_document_getElementsByTagName => ffi::nsr_document_getElementsByTagName,
-    ns_element_getElementsByTagNameNS => ffi::nsr_element_getElementsByTagNameNS,
-    ns_document_getElementsByTagNameNS => ffi::nsr_document_getElementsByTagNameNS,
-    ns_element_getElementsByClassName => ffi::nsr_element_getElementsByClassName,
-    ns_document_getElementsByClassName => ffi::nsr_document_getElementsByClassName,
-    ns_document_getElementsByName => ffi::nsr_document_getElementsByName,
     ns_live_length_get => ffi::nsr_live_length_get,
 }
 
@@ -99,11 +84,6 @@ pub unsafe extern "C" fn ns_make_live(
             ))
         })
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_live_collection_kind(obj: JSValue) -> c_int {
-    unsafe { quickjs::with_raw(obj, ffi::nsr_live_collection_kind) }
 }
 
 #[unsafe(no_mangle)]

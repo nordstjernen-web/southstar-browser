@@ -193,19 +193,8 @@ macro_rules! rust_methods {
 rust_methods! {
     nsr_element_querySelector => query::element_query_selector,
     nsr_element_querySelectorAll => query::element_query_selector_all,
-    nsr_document_querySelector => query::document_query_selector,
-    nsr_document_querySelectorAll => query::document_query_selector_all,
-    nsr_element_matches => query::matches,
-    nsr_element_closest => query::closest,
-    nsr_element_getElementById => query::element_get_element_by_id,
-    nsr_document_getElementById => query::document_get_element_by_id,
     nsr_element_getElementsByTagName => live::element_by_tag,
-    nsr_document_getElementsByTagName => live::document_by_tag,
-    nsr_element_getElementsByTagNameNS => live::element_by_tag_ns,
-    nsr_document_getElementsByTagNameNS => live::document_by_tag_ns,
     nsr_element_getElementsByClassName => live::element_by_class,
-    nsr_document_getElementsByClassName => live::document_by_class,
-    nsr_document_getElementsByName => live::document_by_name,
     nsr_live_length_get => live_length,
 }
 
@@ -229,11 +218,6 @@ pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
         Some(back) => live::snapshot(scope, back),
         None => obj.clone(),
     }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_live_collection_kind(obj: &Value) -> c_int {
-    live_of(obj).map_or(-1, Live::collection_kind)
 }
 
 #[unsafe(no_mangle)]
