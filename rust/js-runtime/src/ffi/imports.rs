@@ -590,6 +590,16 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_url_install_interface(scope: &mut Scope<'_>);
     pub(crate) safe fn nsr_usp_install_interface(scope: &mut Scope<'_>);
     pub(crate) safe fn nsr_net_install_text_codecs(scope: &mut Scope<'_>, global: &Value);
+    pub(crate) safe fn nsr_window_requestAnimationFrame(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
+    pub(crate) safe fn nsr_window_cancelAnimationFrame(
+        scope: &mut Scope<'_>,
+        this: &Value,
+        args: &[Value],
+    ) -> Result<Value, Value>;
 }
 
 unsafe extern "Rust" {

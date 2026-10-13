@@ -566,19 +566,19 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
         bind_native(scope, global, name, arity, native);
     }
     imports::nsr_cssom_install_window(scope, global);
-    bind_fn(
+    bind_native(
         scope,
         global,
         "requestAnimationFrame",
-        ns_window_requestAnimationFrame,
         1,
+        imports::nsr_window_requestAnimationFrame,
     );
-    bind_fn(
+    bind_native(
         scope,
         global,
         "cancelAnimationFrame",
-        ns_window_cancelAnimationFrame,
         1,
+        imports::nsr_window_cancelAnimationFrame,
     );
     ffi::install(scope, ns_js_input_install_wpt, global);
     bind_native(

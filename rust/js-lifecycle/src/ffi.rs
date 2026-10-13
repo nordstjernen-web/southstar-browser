@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the animation-frame and lifecycle ticks as declared in src/js.h and src/js_internal.h, and the js.c calls they make.
+//! Southstar — the C ABI and Rust-ABI entry points of the animation-frame and lifecycle ticks, and the realm, event and dispatch calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,8 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean};
-use southstar_js_engine::quickjs::{self, JSContext, JSValue};
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::{events, frames, lifecycle, scrollend};
@@ -68,7 +68,7 @@ impl Js {
         unsafe { ns_js_is_worker(self.0) != 0 }
     }
 
-    pub fn ctx(self) -> *mut JSContext {
+    pub fn ctx(self) -> ContextHandle {
         unsafe { ns_js_main_context(self.0) }
     }
 
@@ -85,11 +85,7 @@ impl Js {
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        let ctx = self.ctx();
-        if ctx.is_null() {
-            return None;
-        }
-        Some(unsafe { quickjs::with_context(ctx, f) })
+        self.ctx().with(f)
     }
 
     pub fn log(self, line: &str) {
@@ -99,7 +95,7 @@ impl Js {
     }
 
     pub fn context_frame(self, scope: &Scope<'_>) -> *mut NsNode {
-        unsafe { ns_js_context_frame(self.0, quickjs::raw_context(scope)) }
+        unsafe { ns_js_context_frame(self.0, scope.handle()) }
     }
 
     pub fn budget_enter(self) -> i64 {
@@ -147,26 +143,12 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
-        unsafe {
-            ns_js_dispatch_built_event(
-                self.0,
-                target,
-                kind.as_ptr(),
-                quickjs::into_raw(event),
-                ptr::null_mut(),
-            )
-        };
+        unsafe { nsr_js_dispatch_built_event(self.0, target, &kind.to_string_lossy(), event) };
     }
 
     pub fn dispatch_window_only(self, document: *const NsNode, kind: &CStr, event: Value) {
         unsafe {
-            ns_js_dispatch_window_only_event(
-                self.0,
-                document,
-                kind.as_ptr(),
-                quickjs::into_raw(event),
-                ptr::null_mut(),
-            )
+            nsr_js_dispatch_window_only_event(self.0, document, &kind.to_string_lossy(), event)
         };
     }
 
@@ -178,8 +160,8 @@ impl Js {
         unsafe { ns_js_fire_img_load_once(self.0, node, glib::boolean(failed)) };
     }
 
-    pub fn time_origin_ms(self, realm: *mut JSContext, now_us: i64) -> f64 {
-        unsafe { ns_perf_relative_ms(now_us, ns_js_time_origin_us(self.0, realm.cast())) }
+    pub fn time_origin_ms(self, realm: ContextHandle, now_us: i64) -> f64 {
+        unsafe { ns_perf_relative_ms(now_us, ns_js_time_origin_us(self.0, realm.as_ptr())) }
     }
 
     pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
@@ -282,11 +264,11 @@ unsafe extern "C" {
     fn ns_js_dispatch_depth(js: *const NsJs) -> c_int;
     fn ns_js_iframe_load_depth(js: *const NsJs) -> c_int;
     fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> *mut JSContext;
+    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_mutated(js: *const NsJs) -> GBoolean;
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_context_frame(js: *mut NsJs, ctx: *mut JSContext) -> *mut NsNode;
+    fn ns_js_context_frame(js: *mut NsJs, ctx: ContextHandle) -> *mut NsNode;
     fn ns_js_budget_enter(js: *mut NsJs) -> i64;
     fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
     fn ns_js_callback_depth_add(js: *mut NsJs, delta: c_int);
@@ -300,30 +282,13 @@ unsafe extern "C" {
     fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_raf_scope_enter(
         js: *mut NsJs,
-        ctx: *mut JSContext,
+        ctx: ContextHandle,
         frame: *mut NsNode,
     ) -> *mut RafScope;
-    fn ns_js_raf_scope_context(scope: *const RafScope) -> *mut JSContext;
+    fn ns_js_raf_scope_context(scope: *const RafScope) -> ContextHandle;
     fn ns_js_raf_scope_leave(scope: *mut RafScope);
     fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_void) -> i64;
     fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
-    fn ns_make_event(ctx: *mut JSContext, kind: *const c_char, target: *const NsNode) -> JSValue;
-    fn ns_make_element(ctx: *mut JSContext, node: *const NsNode) -> JSValue;
-    fn ns_unwrap_element(value: JSValue) -> *const NsNode;
-    fn ns_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: *const c_char,
-        event: JSValue,
-        default_prevented: *mut GBoolean,
-    );
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -377,6 +342,22 @@ unsafe extern "C" {
     fn ns_js_message_tasks_pending(js: *const NsJs) -> GBoolean;
 }
 
+unsafe extern "Rust" {
+    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
+    unsafe fn nsr_js_dispatch_built_event(
+        js: *mut NsJs,
+        target: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> (bool, bool);
+    unsafe fn nsr_js_dispatch_window_only_event(
+        js: *mut NsJs,
+        target_doc: *const NsNode,
+        kind: &str,
+        event: Value,
+    ) -> bool;
+}
+
 pub(crate) type AnimEventCb = unsafe extern "C" fn(
     node: *const NsNode,
     kind: *const c_char,
@@ -407,26 +388,20 @@ pub(crate) fn array_free(tasks: *mut GArray) {
     }
 }
 
-pub(crate) fn with_context<R>(ctx: *mut JSContext, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-    unsafe { quickjs::with_context(ctx, f) }
-}
-
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(quickjs::context_opaque(scope).cast())
+    Js(scope.context_opaque().cast())
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: *const NsNode) -> Value {
-    let raw = unsafe { ns_make_event(quickjs::raw_context(scope), kind.as_ptr(), target) };
-    unsafe { quickjs::take_value(scope, raw) }
+    unsafe { nsr_make_event(scope, &kind.to_string_lossy(), target) }
 }
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
-    let raw = unsafe { ns_make_element(quickjs::raw_context(scope), node) };
-    unsafe { quickjs::take_value(scope, raw) }
+    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
-    unsafe { ns_unwrap_element(quickjs::raw(value)) }.cast_mut()
+    Node::ptr_or_null(api::unwrap_element(value)).cast_mut()
 }
 
 pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
@@ -457,17 +432,17 @@ pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
 pub(crate) struct CallbackScope(*mut RafScope);
 
 impl CallbackScope {
-    pub fn enter(js: Js, realm: *mut JSContext, frame: *mut NsNode) -> Option<CallbackScope> {
+    pub fn enter(js: Js, realm: ContextHandle, frame: *mut NsNode) -> Option<CallbackScope> {
         let scope = unsafe { ns_js_raf_scope_enter(js.0, realm, frame) };
         (!scope.is_null()).then_some(CallbackScope(scope))
     }
 
-    pub fn context(&self) -> *mut JSContext {
+    pub fn context(&self) -> ContextHandle {
         unsafe { ns_js_raf_scope_context(self.0) }
     }
 
-    pub fn run<R>(&self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        unsafe { quickjs::with_context(self.context(), f) }
+    pub fn run<R>(&self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
+        self.context().with(f)
     }
 
     pub fn leave(self) {
@@ -476,41 +451,32 @@ impl CallbackScope {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_requestAnimationFrame(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, frames::request_animation_frame) }
+#[allow(non_snake_case)]
+pub fn nsr_window_requestAnimationFrame(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    frames::request_animation_frame(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_cancelAnimationFrame(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe { quickjs::call_native(ctx, this_val, argc, argv, frames::cancel_animation_frame) }
+#[allow(non_snake_case)]
+pub fn nsr_window_cancelAnimationFrame(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    frames::cancel_animation_frame(scope, this, args)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_media_request_video_frame_callback(
-    ctx: *mut JSContext,
-    this_val: JSValue,
-    argc: c_int,
-    argv: *mut JSValue,
-) -> JSValue {
-    unsafe {
-        quickjs::call_native(
-            ctx,
-            this_val,
-            argc,
-            argv,
-            frames::request_video_frame_callback,
-        )
-    }
+pub fn nsr_media_request_video_frame_callback(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    frames::request_video_frame_callback(scope, this, args)
 }
 
 #[unsafe(no_mangle)]

@@ -6,8 +6,7 @@ use core::ffi::{c_uint, c_void};
 
 use southstar_dom::NsNode;
 use southstar_glib::GBoolean;
-use southstar_js_engine::quickjs::JSContext;
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::ffi::{self, CallbackScope, Js, SOURCE_CONTINUE, SOURCE_REMOVE};
 use crate::{Page, page, page_or_new, scrollend};
@@ -18,7 +17,7 @@ const FRAME_US: i64 = 16667;
 
 struct Request {
     id: i32,
-    realm: *mut JSContext,
+    realm: ContextHandle,
     callback: Value,
     video_frame: bool,
     frame: *mut NsNode,
@@ -181,7 +180,7 @@ fn request(
 ) -> i32 {
     let page = page_or_new(js);
     let frame = js.context_frame(scope);
-    let realm = southstar_js_engine::quickjs::raw_context(scope);
+    let realm = scope.handle();
     let id = {
         let mut frames = page.frames.borrow_mut();
         frames.next_id = frames.next_id.wrapping_add(1);
@@ -327,7 +326,7 @@ fn run_one(js: Js, request: Request, now_us: i64) {
             Err(exception) => scope.to_string(&exception).ok(),
         }
     });
-    if let Some(message) = message {
+    if let Some(message) = message.flatten() {
         js.log(&format!("JS error in requestAnimationFrame: {message}"));
     }
     drop(request);

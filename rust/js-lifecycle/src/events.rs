@@ -105,24 +105,26 @@ unsafe extern "C" fn anim_event(
     let name = ffi::text(name);
     let kind_bytes = kind.to_bytes();
     if kind_bytes.starts_with(b"__ns") {
-        ffi::with_context(ctx, |scope| {
-            script_event_hook(scope, node, kind_bytes, name)
-        });
+        ctx.with(|scope| script_event_hook(scope, node, kind_bytes, name));
         return;
     }
-    let event = ffi::with_context(ctx, |scope| {
-        animation_event(scope, node, kind, kind_bytes, name, elapsed_ms)
-    });
+    let Some(event) =
+        ctx.with(|scope| animation_event(scope, node, kind, kind_bytes, name, elapsed_ms))
+    else {
+        return;
+    };
     js.dispatch_built(node, kind, event);
     let Some(legacy) = legacy_name(kind_bytes) else {
         return;
     };
-    let event = ffi::with_context(ctx, |scope| {
+    let Some(event) = ctx.with(|scope| {
         let event = animation_event(scope, node, legacy, kind_bytes, name, elapsed_ms);
         let base = scope.string(&kind.to_string_lossy());
         let _ = scope.set(&event, "__ns_alias_base", base);
         event
-    });
+    }) else {
+        return;
+    };
     js.dispatch_built(node, legacy, event);
 }
 

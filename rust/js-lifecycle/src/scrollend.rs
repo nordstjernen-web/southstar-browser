@@ -63,32 +63,38 @@ pub(crate) fn flush(js: Js) {
         if !js.node_in_page(el) {
             continue;
         }
-        let event = ffi::with_context(ctx, |scope| {
+        let Some(event) = ctx.with(|scope| {
             let event = ffi::make_event(scope, c"scrollend", el);
             let _ = scope.set(&event, "bubbles", Value::boolean(false));
             not_cancelable(scope, &event);
             event
-        });
+        }) else {
+            continue;
+        };
         js.dispatch_built(el, c"scrollend", event);
     }
     if !document {
         return;
     }
-    let event = ffi::with_context(ctx, |scope| {
+    let Some(event) = ctx.with(|scope| {
         let global = scope.global();
         let event = ffi::make_event(scope, c"scrollend", core::ptr::null());
         not_cancelable(scope, &event);
         let _ = scope.set(&event, "target", global);
         event
-    });
+    }) else {
+        return;
+    };
     js.dispatch_window_only(js.current_document(), c"scrollend", event);
     let doc = js.current_document();
     if !doc.is_null() {
-        let event = ffi::with_context(ctx, |scope| {
+        let Some(event) = ctx.with(|scope| {
             let event = ffi::make_event(scope, c"scrollend", doc);
             not_cancelable(scope, &event);
             event
-        });
+        }) else {
+            return;
+        };
         js.dispatch_built(doc, c"scrollend", event);
     }
 }

@@ -32,8 +32,6 @@ macro_rules! installers {
 pub(crate) use super::legacy::ns_illegal_constructor;
 
 natives! {
-    ns_window_requestAnimationFrame,
-    ns_window_cancelAnimationFrame,
 }
 
 installers! {
