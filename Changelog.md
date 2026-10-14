@@ -11,6 +11,11 @@ Southstar Browser 0.9.11-dev:
   CI runs it on every push and pull request, publishes the changed crates in
   the job summary and fails when a count rises above its budget, or falls
   without the budget being lowered with it.
+* Clippy's undocumented_unsafe_blocks, multiple_unsafe_ops_per_block and
+  missing_safety_doc lints are on (8144, 1126 and 76 hits), counted per crate
+  in the unsafe budget so each number can only fall; ptr_as_ptr and
+  transmute_ptr_to_ptr have no hits and are denied. Rust lints run in their
+  own CI job through scripts/unsafe-budget.py --clippy.
 
 Southstar Browser 0.9.10:
 ======

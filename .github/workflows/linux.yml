@@ -23,10 +23,10 @@ permissions:
   contents: read
 
 jobs:
-  unsafe-budget:
-    name: unsafe budget
+  rust-lints:
+    name: rust format, lints and unsafe budget
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -34,7 +34,22 @@ jobs:
         with:
           fetch-depth: 100
 
-      - name: Count unsafe per crate against rust/unsafe-budget.tsv
+      - name: Install Rust
+        shell: bash
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+            --profile minimal --component clippy,rustfmt
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo clippy and the per-crate unsafe budget
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -44,7 +59,7 @@ jobs:
               && git fetch --no-tags --depth=100 origin "$BASE_SHA"; then
             baseline=(--baseline "$BASE_SHA")
           fi
-          python3 scripts/unsafe-budget.py "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
+          python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
 
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
@@ -87,11 +102,6 @@ jobs:
             --profile minimal --component clippy,rustfmt
           rustc --version
           cargo --version
-
-      - name: Rust format and lints
-        run: |
-          cargo fmt --check
-          cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Restore ccache
         uses: actions/cache@v6

@@ -15,7 +15,10 @@ unsafe_op_in_unsafe_fn = "deny"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]
-missing_safety_doc = "allow"
+undocumented_unsafe_blocks = "warn"
+multiple_unsafe_ops_per_block = "warn"
+ptr_as_ptr = "deny"
+transmute_ptr_to_ptr = "deny"
 
 [profile.release]
 lto = true

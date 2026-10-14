@@ -2,6 +2,7 @@
 """Southstar — count unsafe code, FFI declarations and static mut per Rust crate and hold each crate to a budget that may only go down."""
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -9,7 +10,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGET = ROOT / "rust" / "unsafe-budget.tsv"
-METRICS = ("unsafe", "ffi_imports", "ffi_exports", "static_mut")
+SOURCE_METRICS = ("unsafe", "ffi_imports", "ffi_exports", "static_mut")
+LINTS = {
+    "clippy::undocumented_unsafe_blocks": "undocumented_unsafe",
+    "clippy::multiple_unsafe_ops_per_block": "multi_op_unsafe",
+    "clippy::missing_safety_doc": "missing_safety_doc",
+}
+METRICS = SOURCE_METRICS + tuple(LINTS.values())
+CLIPPY = ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--message-format=json"]
 ABI_NAMES = {"C", "C-unwind", "system", "system-unwind", "Rust"}
 RAW_STRING = re.compile(r'(?:b|c)?r(#*)"')
 EXTERN_BLOCK = re.compile(r'\bextern\s*(?:"[^"]*"\s*)?\{')
@@ -108,7 +116,7 @@ def measure():
     counts = {}
     for manifest in sorted((ROOT / "rust").glob("*/Cargo.toml")):
         crate = manifest.parent.name
-        totals = dict.fromkeys(METRICS, 0)
+        totals = dict.fromkeys(SOURCE_METRICS, 0)
         for source in sorted(manifest.parent.rglob("*.rs")):
             if "target" in source.relative_to(manifest.parent).parts:
                 continue
@@ -118,13 +126,54 @@ def measure():
     return counts
 
 
+def package_crate(package_id):
+    match = re.search(r"/rust/([^/#]+)#", package_id)
+    return match.group(1) if match else None
+
+
+def run_clippy(counts):
+    result = subprocess.run(CLIPPY, cwd=ROOT, stdout=subprocess.PIPE, text=True)
+    for totals in counts.values():
+        totals.update(dict.fromkeys(LINTS.values(), 0))
+    failures = []
+    seen = set()
+    for line in result.stdout.splitlines():
+        message = json.loads(line) if line.startswith("{") else {}
+        if message.get("reason") != "compiler-message":
+            continue
+        diagnostic = message["message"]
+        code = (diagnostic.get("code") or {}).get("code")
+        level = diagnostic["level"]
+        spans = [s for s in diagnostic["spans"] if s["is_primary"]]
+        if level not in ("warning", "error") or (level == "warning" and not spans):
+            continue
+        span = spans[0] if spans else {}
+        key = (message["package_id"], span.get("file_name"), span.get("line_start"), span.get("column_start"), code,
+               diagnostic["rendered"] if code not in LINTS else None)
+        if key in seen:
+            continue
+        seen.add(key)
+        crate = package_crate(message["package_id"])
+        if code in LINTS and level == "warning" and crate in counts:
+            counts[crate][LINTS[code]] += 1
+        else:
+            failures.append(diagnostic["rendered"].rstrip())
+    if result.returncode and not failures:
+        failures.append(f"cargo clippy exited with status {result.returncode}")
+    return failures
+
+
 def parse_budget(text):
     budget = {}
+    columns = METRICS
     for line in text.splitlines():
-        if not line or line.startswith("#") or line.startswith("crate\t"):
-            continue
         fields = line.split("\t")
-        budget[fields[0]] = dict(zip(METRICS, (int(f) for f in fields[1:])))
+        if not line or line.startswith("#"):
+            continue
+        if fields[0] == "crate":
+            columns = fields[1:]
+            continue
+        budget[fields[0]] = dict(zip(columns, (int(f) for f in fields[1:])))
     return budget
 
 
@@ -132,7 +181,7 @@ def format_budget(counts):
     lines = ["# Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.",
              "crate\t" + "\t".join(METRICS)]
     for crate, totals in sorted(counts.items()):
-        lines.append(crate + "\t" + "\t".join(str(totals[m]) for m in METRICS))
+        lines.append(crate + "\t" + "\t".join(str(totals.get(m, 0)) for m in METRICS))
     return "\n".join(lines) + "\n"
 
 
@@ -143,49 +192,51 @@ def baseline_budget(ref):
 
 
 def total(counts, metric):
-    return sum(t[metric] for t in counts.values())
+    return sum(t.get(metric, 0) for t in counts.values())
 
 
-def summary_table(counts, reference):
-    rows = ["| crate | " + " | ".join(METRICS) + " |", "|---" * (len(METRICS) + 1) + "|"]
+def summary_table(counts, reference, metrics):
+    rows = ["| crate | " + " | ".join(metrics) + " |", "|---" * (len(metrics) + 1) + "|"]
 
     def cell(value, before):
         delta = value - before
         return f"{value} ({delta:+d})" if delta else str(value)
 
-    zero = dict.fromkeys(METRICS, 0)
-    changed = [c for c in sorted(counts) if counts[c] != reference.get(c, zero)]
-    for crate in changed + ["**total**"]:
+    def differs(crate):
+        before = reference.get(crate, {})
+        return any(counts[crate][m] != before.get(m, 0) for m in metrics)
+
+    for crate in [c for c in sorted(counts) if differs(c)] + ["**total**"]:
         if crate == "**total**":
-            values = {m: total(counts, m) for m in METRICS}
-            before = {m: total(reference, m) for m in METRICS}
+            values = {m: total(counts, m) for m in metrics}
+            before = {m: total(reference, m) for m in metrics}
         else:
             values = counts[crate]
-            before = reference.get(crate, zero)
-        rows.append(f"| {crate} | " + " | ".join(cell(values[m], before[m]) for m in METRICS) + " |")
+            before = reference.get(crate, {})
+        rows.append(f"| {crate} | " + " | ".join(cell(values[m], before.get(m, 0)) for m in metrics) + " |")
     return "\n".join(rows) + "\n"
 
 
-def check(counts, budget, baseline, increase_allowed):
+def check(counts, budget, baseline, increase_allowed, metrics):
     failures = []
-    zero = dict.fromkeys(METRICS, 0)
     for crate in sorted(set(counts) | set(budget)):
-        have = counts.get(crate, zero)
+        have = counts.get(crate, {})
         allowed = budget.get(crate)
         if allowed is None:
             failures.append(f"{crate}: not in rust/unsafe-budget.tsv; run scripts/unsafe-budget.py --update")
             continue
-        for metric in METRICS:
-            if have[metric] > allowed[metric]:
-                failures.append(f"{crate}: {metric} is {have[metric]}, over its budget of {allowed[metric]}")
-            elif have[metric] < allowed[metric]:
-                failures.append(f"{crate}: {metric} fell to {have[metric]} from {allowed[metric]}; "
+        for metric in metrics:
+            value, limit = have.get(metric, 0), allowed.get(metric, 0)
+            if value > limit:
+                failures.append(f"{crate}: {metric} is {value}, over its budget of {limit}")
+            elif value < limit:
+                failures.append(f"{crate}: {metric} fell to {value} from {limit}; "
                                 "lower the budget with scripts/unsafe-budget.py --update")
     if baseline is not None and not increase_allowed:
         for crate, allowed in sorted(budget.items()):
-            before = baseline.get(crate, zero)
+            before = baseline.get(crate, {})
             for metric in METRICS:
-                if allowed[metric] > before[metric]:
+                if metric in before and allowed.get(metric, 0) > before[metric]:
                     failures.append(f"{crate}: the {metric} budget rose from {before[metric]} to {allowed[metric]}; "
                                     "an increase needs an Unsafe-Budget-Increase: trailer in the commit message")
     return failures
@@ -199,27 +250,39 @@ def increase_trailer(ref):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--clippy", action="store_true",
+                        help="also run cargo clippy: count the unsafe lints and fail on any other warning")
     parser.add_argument("--update", action="store_true", help="rewrite rust/unsafe-budget.tsv with the current counts")
     parser.add_argument("--baseline", metavar="REF", help="also fail when the budget rose since this git revision")
     parser.add_argument("--summary", metavar="FILE", help="append a markdown table of the changed crates to FILE")
     args = parser.parse_args()
 
+    budget = parse_budget(BUDGET.read_text()) if BUDGET.exists() else {}
     counts = measure()
+    metrics = METRICS if args.clippy else SOURCE_METRICS
+    failures = run_clippy(counts) if args.clippy else []
+    for crate, totals in counts.items():
+        for metric in METRICS:
+            totals.setdefault(metric, budget.get(crate, {}).get(metric, 0))
+
     if args.update:
+        if failures:
+            print("\n\n".join(failures), file=sys.stderr)
+            return 1
         BUDGET.write_text(format_budget(counts))
-        print(f"wrote {BUDGET.relative_to(ROOT)}: " + ", ".join(f"{m} {total(counts, m)}" for m in METRICS))
+        print(f"wrote {BUDGET.relative_to(ROOT)}: " + ", ".join(f"{m} {total(counts, m)}" for m in metrics))
         return 0
 
-    budget = parse_budget(BUDGET.read_text()) if BUDGET.exists() else {}
     baseline = baseline_budget(args.baseline) if args.baseline else None
-    failures = check(counts, budget, baseline, args.baseline is not None and increase_trailer(args.baseline))
-    table = summary_table(counts, baseline if baseline is not None else budget)
+    increase_allowed = baseline is not None and increase_trailer(args.baseline)
+    failures += check(counts, budget, baseline, increase_allowed, metrics)
     if args.summary:
         with open(args.summary, "a", encoding="utf-8") as summary:
-            summary.write("## Unsafe budget\n\n" + table + "\n")
-    print(", ".join(f"{m} {total(counts, m)}" for m in METRICS))
+            reference = baseline if baseline is not None else budget
+            summary.write("## Unsafe budget\n\n" + summary_table(counts, reference, metrics) + "\n")
+    print(", ".join(f"{m} {total(counts, m)}" for m in metrics))
     for failure in failures:
-        print("unsafe-budget: " + failure, file=sys.stderr)
+        print(failure if "\n" in failure else "unsafe-budget: " + failure, file=sys.stderr)
     return 1 if failures else 0
 
 

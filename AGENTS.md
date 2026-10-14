@@ -59,8 +59,13 @@ nothing imported.
   Group code by file or function instead.
 - No `TODO`/`FIXME`/`XXX` markers — file a real task instead.
 - Rust files follow the same rule: one `//!` header block (the file and one
-  sentence, then the copyright and SPDX lines), nothing else — including no
-  `// SAFETY:` comments; keep `unsafe` in small `ffi` modules instead.
+  sentence, then the copyright and SPDX lines), nothing else — with one
+  exception: every `unsafe` block carries a `// SAFETY:` comment saying why
+  its single unsafe operation is sound, and every `unsafe fn` a `# Safety`
+  doc section stating the caller's obligations (clippy's
+  `undocumented_unsafe_blocks`, `multiple_unsafe_ops_per_block` and
+  `missing_safety_doc`). Prefer removing the `unsafe` to documenting it; keep
+  what remains in small `ffi` modules.
 - Bundled external projects are exempt from this comments policy.
   In particular, do not reformat or strip comments from `third_party/`
   or `subprojects/` just to satisfy Southstar style.
@@ -130,8 +135,15 @@ so local builds and CI compile with the minimum supported version.
   API for C embedders. Pointer handling lives in the crate's `ffi.rs`; the
   logic is safe Rust. A new crate is added to `rust/southstar-ffi`
   (dependency plus `pub use`).
-- `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings`
-  must be clean before pushing, like the C warnings.
+- `cargo fmt --check` and `python3 scripts/unsafe-budget.py --clippy` must be
+  clean before pushing. The script runs `cargo clippy --workspace
+  --all-targets`, fails on any warning except the three unsafe-documentation
+  lints, and holds each crate to its line in `rust/unsafe-budget.tsv`:
+  `unsafe` keywords, FFI imports and exports, `static mut`, and those three
+  lints' hits. A number may only go down — when it drops, lower the budget in
+  the same commit with `--update`; raising one needs an
+  `Unsafe-Budget-Increase:` trailer explaining why. A crate with no unsafe
+  code carries `#![forbid(unsafe_code)]`.
 - A new crates.io dependency needs a reason in its commit message; keep the
   dependency tree small. Crates from Servo or Firefox (`html5ever`,
   `cssparser`, `selectors`, `url`, `encoding_rs`, …) count as upstream browser
