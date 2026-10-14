@@ -7,14 +7,11 @@ mod decode;
 mod doh;
 mod fetch;
 mod ffi;
-mod frame;
 pub mod ftp;
-mod h1;
-mod h2;
-mod hpack;
-mod hpack_tables;
 mod proxy;
 mod transfer;
+
+use southstar_http_wire::{frame, h1, h2};
 
 pub use client::{
     Outcome, Received, Request, Upgraded, Version, perform, preconnect, shutdown, upgrade,

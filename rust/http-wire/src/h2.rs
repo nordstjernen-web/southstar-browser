@@ -59,6 +59,12 @@ pub struct Connection {
 #[derive(Debug)]
 pub struct ConnectionError;
 
+impl Default for Connection {
+    fn default() -> Connection {
+        Connection::new()
+    }
+}
+
 impl Connection {
     pub fn new() -> Connection {
         let mut output = frame::PREFACE.to_vec();

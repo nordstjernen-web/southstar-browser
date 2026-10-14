@@ -28,6 +28,10 @@ Southstar Browser 0.9.11-dev:
   rust/raster and WebVTT cue parsing from rust/video into rust/webvtt; both
   new crates forbid unsafe code, so the decoders of untrusted image and
   subtitle bytes are checked by the compiler to be memory-safe.
+* The HTTP wire formats — HTTP/1.1 heads and chunked bodies, HTTP/2 frames,
+  HPACK and the sans-I/O HTTP/2 client connection — move from rust/http into
+  rust/http-wire, which forbids unsafe code; rust/http keeps the sockets, TLS,
+  content decoding and pooling.
 
 Southstar Browser 0.9.10:
 ======

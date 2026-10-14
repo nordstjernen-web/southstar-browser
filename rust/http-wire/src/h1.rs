@@ -92,6 +92,12 @@ pub struct Chunked {
 #[derive(Debug)]
 pub struct ChunkError;
 
+impl Default for Chunked {
+    fn default() -> Chunked {
+        Chunked::new()
+    }
+}
+
 impl Chunked {
     pub fn new() -> Chunked {
         Chunked {

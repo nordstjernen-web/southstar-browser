@@ -294,7 +294,9 @@ All networking goes through `rust/http` (`southstar-http`), an HTTP client
 written from scratch in Rust with no crates.io dependency; libcurl and
 libnghttp2 are not used. It speaks HTTP/1.1 and HTTP/2 with its own framing,
 flow control and HPACK (the static table and Huffman code are generated from
-RFC 7541), FTP (`ftp.rs`), HTTP CONNECT and SOCKS4/4a/5/5h proxies with
+RFC 7541); those wire formats — HTTP/1.1 heads and chunked bodies, HTTP/2
+frames, HPACK and the sans-I/O `h2::Connection` — live in `rust/http-wire`,
+which forbids unsafe code and does no I/O. `rust/http` adds FTP (`ftp.rs`), HTTP CONNECT and SOCKS4/4a/5/5h proxies with
 no-proxy matching (`proxy.rs`), redirect-following fetches for callers outside
 the page fetch path (`fetch.rs`) and the HTTP/1.1 upgrade WebSocket uses.
 TLS is OpenSSL's libssl behind `rust/http/src/ffi/tls.rs` (ALPN, per-host

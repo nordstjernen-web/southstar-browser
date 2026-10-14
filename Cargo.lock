@@ -1885,6 +1885,9 @@ version = "0.9.11-dev"
 [[package]]
 name = "southstar-http"
 version = "0.9.11-dev"
+dependencies = [
+ "southstar-http-wire",
+]
 
 [[package]]
 name = "southstar-http-cache"
@@ -1894,6 +1897,10 @@ dependencies = [
  "southstar-glib",
  "southstar-sqlite",
 ]
+
+[[package]]
+name = "southstar-http-wire"
+version = "0.9.11-dev"
 
 [[package]]
 name = "southstar-i18n"

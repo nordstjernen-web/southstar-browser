@@ -1,0 +1,11 @@
+[package]
+name = "southstar-http-wire"
+description = "The HTTP wire formats without I/O: HTTP/1.1 heads and chunked bodies, HTTP/2 frames, HPACK and a sans-I/O HTTP/2 client connection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
