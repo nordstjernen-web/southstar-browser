@@ -177,13 +177,65 @@ fn defaults_the_cookie_path_to_the_request_directory() {
 #[test]
 fn hsts_list_lookup() {
     let hosts = hsts::parse_list(b"# comment\n.example.com \"20300101 00:00:00\"\nexact.test \"20300101 00:00:00\"\nbroken\n");
-    assert_eq!(hosts.get(&b"example.com"[..]), Some(&Scope::WithSubdomains));
-    assert!(hsts::lookup(&hosts, b"example.com"));
-    assert!(hsts::lookup(&hosts, b"deep.www.example.com"));
-    assert!(hsts::lookup(&hosts, b"exact.test"));
-    assert!(!hsts::lookup(&hosts, b"sub.exact.test"));
-    assert!(!hsts::lookup(&hosts, b"notexample.com"));
+    assert_eq!(
+        hosts.get(&b"example.com"[..]).map(|e| e.scope),
+        Some(Scope::WithSubdomains)
+    );
+    assert!(hsts::lookup(&hosts, b"example.com", NOW));
+    assert!(hsts::lookup(&hosts, b"deep.www.example.com", NOW));
+    assert!(hsts::lookup(&hosts, b"exact.test", NOW));
+    assert!(!hsts::lookup(&hosts, b"sub.exact.test", NOW));
+    assert!(!hsts::lookup(&hosts, b"notexample.com", NOW));
     assert_eq!(hsts::normalize_host(b"Example.COM.."), b"example.com");
+}
+
+#[test]
+fn hsts_entries_expire() {
+    let hosts = hsts::parse_list(
+        b".old.test \"20200101 00:00:00\"\nforever.test unlimited\nbad.test \"2030-01-01\"\n.new.test \"20300101 00:00:00\"\n",
+    );
+    assert!(!hsts::lookup(&hosts, b"old.test", NOW));
+    assert!(!hsts::lookup(&hosts, b"www.old.test", NOW));
+    assert!(hsts::lookup(&hosts, b"old.test", 1_500_000_000));
+    assert!(hsts::lookup(&hosts, b"forever.test", i64::MAX));
+    assert!(!hsts::lookup(&hosts, b"bad.test", NOW));
+    let new_expiry = hsts::parse_expiry(b"\"20300101 00:00:00\"");
+    assert_eq!(new_expiry, Some(1_893_456_000));
+    assert!(hsts::lookup(&hosts, b"www.new.test", 1_893_455_999));
+    assert!(!hsts::lookup(&hosts, b"www.new.test", 1_893_456_000));
+    for at in [0, 951_782_400, NOW, 4_102_444_799] {
+        assert_eq!(hsts::parse_expiry(&hsts::expiry_text(at)), Some(at));
+    }
+    assert_eq!(hsts::parse_expiry(b"\"20301301 00:00:00\""), None);
+    assert_eq!(hsts::parse_expiry(b"20300101 00:00:00"), None);
+    let pruned = hsts::record(
+        b"old.test \"20200101 00:00:00\"\nkeep.test unlimited\n",
+        b"example.com",
+        &Policy {
+            max_age: Some(60),
+            subdomains: false,
+        },
+        60,
+        NOW,
+    );
+    assert!(!pruned.windows(8).any(|w| w == b"old.test"));
+    assert!(pruned.starts_with(b"keep.test unlimited\n"));
+    let forever = hsts::record(
+        b"",
+        b"example.com",
+        &Policy {
+            max_age: Some(i64::MAX),
+            subdomains: false,
+        },
+        i64::MAX,
+        NOW,
+    );
+    assert_eq!(forever, b"example.com \"99991231 23:59:59\"\n");
+    assert!(hsts::lookup(
+        &hsts::parse_list(&forever),
+        b"example.com",
+        NOW
+    ));
 }
 
 #[test]

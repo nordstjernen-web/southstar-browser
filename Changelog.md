@@ -91,6 +91,10 @@ Southstar Browser 0.9.11-dev:
   rotate, scale and transform, border-image sources and parameters, font
   family, weight and stretch, direction and CSS escapes; eleven C exports
   and paint's GString round trip for unescaping are gone.
+* HSTS entries expire: a host whose Strict-Transport-Security max-age has
+  run out is no longer upgraded to https://, an expired line is dropped the
+  next time the list is rewritten, and a max-age past the year 9999 is
+  stored as the last representable date instead of an unreadable one.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

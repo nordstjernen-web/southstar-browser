@@ -1,4 +1,4 @@
-//! Southstar — the HSTS host list in curl's file format: recording Strict-Transport-Security headers and deciding, from a cache reread when the file changes, which http:// URLs go to https:// first.
+//! Southstar — the HSTS host list in curl's file format: recording Strict-Transport-Security headers and deciding, from a cache reread when the file changes, which http:// URLs go to https:// first until their entries expire.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -49,7 +49,7 @@ pub fn should_upgrade(host: &[u8]) -> bool {
     let host = rules::normalize_host(host);
     cache
         .as_ref()
-        .is_some_and(|c| rules::lookup(&c.hosts, &host))
+        .is_some_and(|c| rules::lookup(&c.hosts, &host, sys::now_seconds()))
 }
 
 pub fn upgrade(target: &[u8]) -> Option<Vec<u8>> {

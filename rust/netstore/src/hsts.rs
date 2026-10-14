@@ -1,4 +1,4 @@
-//! Southstar — the HSTS host list's rules over bytes: curl's file format, host lookup with includeSubDomains, Strict-Transport-Security parsing and rewriting the list.
+//! Southstar — the HSTS host list's rules over bytes: curl's file format, host lookup with includeSubDomains and expiry, Strict-Transport-Security parsing and rewriting the list.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -12,7 +12,16 @@ pub enum Scope {
     WithSubdomains,
 }
 
-pub type Hosts = HashMap<Vec<u8>, Scope>;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Entry {
+    pub scope: Scope,
+    pub expires: Option<i64>,
+}
+
+pub type Hosts = HashMap<Vec<u8>, Entry>;
+
+const UNLIMITED: &[u8] = b"unlimited";
+const LAST_EXPIRY: i64 = 253_402_300_799;
 
 pub fn parse_list(content: &[u8]) -> Hosts {
     let mut hosts = HashMap::new();
@@ -33,8 +42,17 @@ pub fn parse_list(content: &[u8]) -> Hosts {
             Some(host) => (host, Scope::WithSubdomains),
             None => (entry, Scope::Host),
         };
+        let expiry = strip(&line[space + 1..]);
+        let expires = if expiry == UNLIMITED {
+            None
+        } else {
+            let Some(at) = parse_expiry(expiry) else {
+                continue;
+            };
+            Some(at)
+        };
         if !host.is_empty() {
-            hosts.insert(host.to_ascii_lowercase(), scope);
+            hosts.insert(host.to_ascii_lowercase(), Entry { scope, expires });
         }
     }
     hosts
@@ -48,14 +66,47 @@ pub fn normalize_host(host: &[u8]) -> Vec<u8> {
     lower
 }
 
-pub fn lookup(hosts: &Hosts, host: &[u8]) -> bool {
-    if hosts.contains_key(host) {
+pub fn lookup(hosts: &Hosts, host: &[u8], now: i64) -> bool {
+    let live = |name: &[u8]| {
+        hosts
+            .get(name)
+            .filter(|e| e.expires.is_none_or(|at| at > now))
+    };
+    if live(host).is_some() {
         return true;
     }
     host.iter()
         .enumerate()
         .filter(|&(_, &c)| c == b'.')
-        .any(|(dot, _)| hosts.get(&host[dot + 1..]) == Some(&Scope::WithSubdomains))
+        .any(|(dot, _)| live(&host[dot + 1..]).is_some_and(|e| e.scope == Scope::WithSubdomains))
+}
+
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+pub fn parse_expiry(text: &[u8]) -> Option<i64> {
+    let text = text.strip_prefix(b"\"")?.strip_suffix(b"\"")?;
+    let (date, time) = (text.get(..8)?, text.get(9..)?);
+    if text[8] != b' ' || time.len() != 8 || time[2] != b':' || time[5] != b':' {
+        return None;
+    }
+    let num = |digits: &[u8]| -> Option<i64> {
+        digits.iter().try_fold(0i64, |n, &d| {
+            d.is_ascii_digit().then(|| n * 10 + i64::from(d - b'0'))
+        })
+    };
+    let (y, m, d) = (num(&date[..4])?, num(&date[4..6])?, num(&date[6..])?);
+    let (hh, mm, ss) = (num(&time[..2])?, num(&time[3..5])?, num(&time[6..])?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
+    Some(days_from_civil(y, m, d) * 86_400 + hh * 3600 + mm * 60 + ss)
 }
 
 fn civil(days: i64) -> (i64, i64, i64) {
@@ -128,9 +179,14 @@ pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: 
         if trimmed.is_empty() {
             continue;
         }
-        let entry = trimmed.split(|&c| c == b' ').next().unwrap_or_default();
+        let mut fields = trimmed.splitn(2, |&c| c == b' ');
+        let entry = fields.next().unwrap_or_default();
         let entry = entry.strip_prefix(b".").unwrap_or(entry);
-        if trimmed[0] != b'#' && entry.eq_ignore_ascii_case(host) {
+        let expired = fields
+            .next()
+            .and_then(|at| parse_expiry(strip(at)))
+            .is_some_and(|at| at <= now);
+        if trimmed[0] != b'#' && (expired || entry.eq_ignore_ascii_case(host)) {
             continue;
         }
         out.extend_from_slice(trimmed);
@@ -142,7 +198,7 @@ pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: 
         }
         out.extend_from_slice(host);
         out.push(b' ');
-        out.extend_from_slice(&expiry_text(now.saturating_add(max_age)));
+        out.extend_from_slice(&expiry_text(now.saturating_add(max_age).min(LAST_EXPIRY)));
         out.push(b'\n');
     }
     out
