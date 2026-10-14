@@ -151,6 +151,12 @@ Southstar Browser 0.9.11-dev:
   -delay) and font-feature-settings/font-variation-settings serialize with
   ", " between items in style rules and element.style, as other browsers
   do: "500ms,1.5s" now reads back as "500ms, 1.5s".
+* Web Animations validate and canonicalize easing: an effect's and a
+  keyframe's easing go through the CSS easing parser, so getTiming().easing
+  reads "cubic-bezier(0.25, 0.1, 0.25, 1)" or "steps(1, start)" instead of
+  the string passed in, and an invalid easing ("bogus", a cubic-bezier x
+  outside [0, 1], a list) throws a TypeError as the standard requires
+  instead of being accepted.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

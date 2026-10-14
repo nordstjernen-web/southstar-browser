@@ -52,6 +52,7 @@ pub(crate) fn install_window(scope: &mut Scope<'_>, global: &Value) -> Result<()
         1,
     )?;
     hidden(scope, global, "__ns_css_supported", supported_property, 1)?;
+    hidden(scope, global, "__ns_easing_canonical", easing_canonical, 1)?;
     hidden(scope, global, "__ns_linked_css", linked_css_text, 1)?;
     hidden(scope, global, "__ns_anim_list", animations::list, 1)?;
     hidden(scope, global, "__ns_anim_query", animations::query, 2)?;
@@ -239,6 +240,14 @@ fn escape(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value,
         }
     }
     Ok(scope.string_from_bytes(&out))
+}
+
+fn easing_canonical(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value, Value> {
+    let canonical = args
+        .first()
+        .and_then(|text| optional_string(scope, text))
+        .and_then(|text| ffi::easing_canonical(&text));
+    Ok(canonical.map_or_else(Value::null, |text| scope.string(&text)))
 }
 
 fn supported_property(

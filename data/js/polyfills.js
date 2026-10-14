@@ -10695,6 +10695,12 @@
             if (name === 'cssOffset') return 'offset';
             return name.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); });
         }
+        function easingCanonical(text) {
+            if (typeof global.__ns_easing_canonical !== 'function') return text;
+            var canonical = global.__ns_easing_canonical(text);
+            if (canonical === null) throw new TypeError("Invalid easing '" + text + "'");
+            return canonical;
+        }
         function normalizeKeyframes(input) {
             var frames = [];
             if (input === null || input === undefined) return frames;
@@ -10714,7 +10720,7 @@
                                 if (!(o >= 0 && o <= 1)) throw new TypeError('Keyframe offset out of range');
                                 frame.offset = o;
                             }
-                        } else if (k === 'easing') frame.easing = String(kf.easing);
+                        } else if (k === 'easing') frame.easing = easingCanonical(String(kf.easing));
                         else if (k === 'composite') frame.composite = String(kf.composite);
                         else frame.__props[kebab(k)] = String(kf[k]);
                     }
@@ -10745,9 +10751,10 @@
                         byOffset[off][kebab(p)] = String(vals[i]);
                     }
                 });
+                var indexedEasing = input.easing === undefined ? 'linear' : easingCanonical(String(input.easing));
                 Object.keys(byOffset).map(Number).sort(function (a, b) { return a - b; })
                     .forEach(function (off) {
-                        frames.push({ offset: off, easing: typeof input.easing === 'string' ? input.easing : 'linear',
+                        frames.push({ offset: off, easing: indexedEasing,
                                       composite: 'auto', __props: byOffset[off] });
                     });
             }
@@ -10788,7 +10795,9 @@
             }
             this.__target = target || null;
             this.__frames = normalizeKeyframes(keyframes);
-            this.__options = typeof options === 'number' ? { duration: options } : (options || {});
+            this.__options = typeof options === 'number' ? { duration: options } : Object.assign({}, options || {});
+            if (this.__options.easing !== undefined)
+                this.__options.easing = easingCanonical(String(this.__options.easing));
         }
         KeyframeEffect.prototype = Object.create(AnimationEffect.prototype);
         KeyframeEffect.prototype.constructor = KeyframeEffect;

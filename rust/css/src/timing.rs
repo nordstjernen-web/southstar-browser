@@ -170,6 +170,15 @@ pub fn parse(text: &[u8]) -> Option<Timing> {
     item_parse(strip(text))
 }
 
+pub fn easing_canonical(text: &[u8]) -> Option<Vec<u8>> {
+    let item = strip(text);
+    let timing = item_parse(item)?;
+    if timing.kind == LINEAR && starts_with_ci(item, b"linear(") {
+        return Some(item.to_vec());
+    }
+    Some(serialize(Some(&timing)))
+}
+
 fn canonical(text: &[u8]) -> Vec<u8> {
     serialize(Some(&parse(text).unwrap_or(Timing::of(EASE))))
 }

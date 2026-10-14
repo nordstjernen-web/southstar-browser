@@ -100,8 +100,8 @@ pub use shadow::{Shadow, ShadowList};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
 pub use time::list_serialize as time_list_serialize;
 pub use timing::{
-    Timing as TimingFunction, list_canonical as timing_list_canonical, parse as timing_parse,
-    serialize as timing_serialize,
+    Timing as TimingFunction, easing_canonical, list_canonical as timing_list_canonical,
+    parse as timing_parse, serialize as timing_serialize,
 };
 pub use transform::{
     Op as TransformOp, Transform, effective as effective_transform, individual_property_serialize,

@@ -768,6 +768,10 @@ pub(crate) fn anim_entry_name(entry: &AnimEntry) -> Option<String> {
     })
 }
 
+pub(crate) fn easing_canonical(text: &str) -> Option<String> {
+    css_engine::easing_canonical(until_nul(text)).map(|text| lossy(&text))
+}
+
 pub(crate) fn timing_list_canonical(text: &str) -> String {
     lossy(&css_engine::timing_list_canonical(until_nul(text)))
 }
