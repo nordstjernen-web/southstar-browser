@@ -128,12 +128,32 @@ endif
 
 southstar_embed_sources = southstar_engine_sources
 
+# The engine is Rust, so nothing in southstar_embed_sources references it: link
+# the whole static library and export exactly what libsouthstar.h declares.
+libsouthstar_map = custom_target(
+  'libsouthstar-map',
+  input: 'libsouthstar.h',
+  output: 'libsouthstar.map',
+  command: [
+    python,
+    meson.project_source_root() / 'scripts' / 'gen-libsouthstar-map.py',
+    '@INPUT@',
+    '@OUTPUT@',
+  ],
+)
+libsouthstar_api_link_args = []
+if cc.has_link_argument('-Wl,--version-script=' + meson.current_source_dir() / 'exe-local.map')
+  libsouthstar_api_link_args += ['-Wl,--version-script=' + libsouthstar_map.full_path()]
+endif
+
 libsouthstar_lib = library(
   'southstar',
   southstar_embed_sources,
   dependencies: southstar_deps + ns_sdl_deps,
   c_args: ns_lib_c_args,
-  link_args: southstar_link_args,
+  link_whole: southstar_rust_lib,
+  link_args: southstar_link_args + libsouthstar_api_link_args,
+  link_depends: libsouthstar_map,
   install: true,
 )
 

@@ -168,6 +168,13 @@ Southstar Browser 0.9.11-dev:
   canvas, the shell's procview helpers, IPC framing, the HTTP cache and
   the JS bindings' old entry points), with the helpers, imports and five
   css ffi modules only they used: 2,650 lines, 704 unsafe keywords.
+* libsouthstar.so carries the engine again. It was linked from the engine's
+  C sources, and once those were all ported to Rust nothing pulled the Rust
+  static library in, so the installed embedding library exported nothing.
+  It now links the whole library and exports exactly the 80 functions
+  src/libsouthstar.h declares, through a version script that
+  scripts/gen-libsouthstar-map.py generates from the header; a C program
+  built against it opens a page and renders its text.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is
