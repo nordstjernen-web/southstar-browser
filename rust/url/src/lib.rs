@@ -6,6 +6,7 @@
 
 use std::borrow::Cow;
 
+pub mod bytes;
 mod host;
 mod idna;
 mod nfc;
