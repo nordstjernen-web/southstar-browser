@@ -23,6 +23,29 @@ permissions:
   contents: read
 
 jobs:
+  unsafe-budget:
+    name: unsafe budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
+
+      - name: Count unsafe per crate against rust/unsafe-budget.tsv
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          baseline=()
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != 0000000000000000000000000000000000000000 ] \
+              && git fetch --no-tags --depth=100 origin "$BASE_SHA"; then
+            baseline=(--baseline "$BASE_SHA")
+          fi
+          python3 scripts/unsafe-budget.py "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
+
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
     runs-on: ubuntu-${{ matrix.ubuntu }}

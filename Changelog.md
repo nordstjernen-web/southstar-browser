@@ -6,6 +6,11 @@ Southstar Browser 0.9.11-dev:
 * The eleven crates that hold no unsafe code (html5, url, plmpeg, minimp3,
   js-temporal, js-bind, js-realm, webaudio, media-shm, about-style and
   jsshell) carry #![forbid(unsafe_code)], so they stay that way.
+* scripts/unsafe-budget.py counts unsafe keywords, FFI imports, no_mangle
+  exports and static mut per crate against rust/unsafe-budget.tsv. The Linux
+  CI runs it on every push and pull request, publishes the changed crates in
+  the job summary and fails when a count rises above its budget, or falls
+  without the budget being lowered with it.
 
 Southstar Browser 0.9.10:
 ======
