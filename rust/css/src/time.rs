@@ -410,7 +410,7 @@ pub(crate) fn starts_math_fn(s: &[u8]) -> bool {
     .any(|f| s.len() >= f.len() && s[..f.len()].eq_ignore_ascii_case(f))
 }
 
-pub(crate) fn list_serialize(value: &[u8], computed: bool) -> Option<Vec<u8>> {
+pub fn list_serialize(value: &[u8], computed: bool) -> Option<Vec<u8>> {
     let text = c_text(value);
     let b = text.to_bytes();
     let mut out = Vec::new();

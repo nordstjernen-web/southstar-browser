@@ -11,6 +11,7 @@ use crate::calc::{self, Parsed};
 use crate::ffi;
 use crate::math;
 use crate::position;
+use crate::prop::Prop;
 use crate::scan::{is_ws, scan_until, skip_ws, split_ws_limit, starts_with_ci};
 use crate::text::{add_leading_zeros, normalize_negative_zero, split_top_level_commas};
 use crate::units::{self, NUMBER, PERCENT};
@@ -753,6 +754,16 @@ fn append_translate_length(out: &mut Vec<u8>, op: &Op, axis: usize) {
         first = false;
     }
     out.push(b')');
+}
+
+pub fn individual_property_serialize(tf: &Transform, prop: Prop) -> Option<Vec<u8>> {
+    let which = match prop {
+        Prop::Translate => Individual::Translate,
+        Prop::Rotate => Individual::Rotate,
+        Prop::Scale => Individual::Scale,
+        _ => return None,
+    };
+    individual_serialize(tf, which)
 }
 
 pub(crate) fn individual_serialize(tf: &Transform, prop: Individual) -> Option<Vec<u8>> {

@@ -23,7 +23,7 @@ pub(crate) const JUMP_BOTH: i32 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, PartialEq)]
-pub(crate) struct Timing {
+pub struct Timing {
     pub kind: i32,
     pub steps: i32,
     pub step_pos: i32,
@@ -165,11 +165,15 @@ pub(crate) fn item_parse(item: &[u8]) -> Option<Timing> {
     }
 }
 
-pub(crate) fn parse(text: &[u8]) -> Option<Timing> {
+pub fn parse(text: &[u8]) -> Option<Timing> {
     item_parse(strip(text))
 }
 
-pub(crate) fn serialize(t: Option<&Timing>) -> Vec<u8> {
+pub fn canonical(text: &[u8]) -> Vec<u8> {
+    serialize(Some(&parse(text).unwrap_or(Timing::of(EASE))))
+}
+
+pub fn serialize(t: Option<&Timing>) -> Vec<u8> {
     let Some(t) = t else {
         return b"ease".to_vec();
     };

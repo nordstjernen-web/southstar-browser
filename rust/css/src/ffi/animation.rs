@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of time values, easing functions and the animation and transition lists.
+//! Southstar — the C ABI of time values and the animation and transition lists.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -11,7 +11,7 @@ use southstar_glib::{self as glib, GBoolean};
 use super::value::{self, NsCssValue};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
 use crate::time;
-use crate::timing::{self, Timing};
+use crate::timing::Timing;
 
 unsafe extern "C" {
     fn ns_css_prop_id(name: *const c_char) -> c_int;
@@ -160,23 +160,6 @@ unsafe fn longhand_value<'a>(style: *const c_void, lh: Longhand) -> Option<&'a N
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_timing_parse(text: *const c_char, out: *mut Timing) -> GBoolean {
-    if out.is_null() {
-        return 0;
-    }
-    let Some(t) = unsafe { bytes(text) }.and_then(timing::parse) else {
-        return 0;
-    };
-    unsafe { *out = t };
-    1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_timing_serialize(t: *const Timing) -> *mut c_char {
-    glib::strdup(&timing::serialize(unsafe { t.as_ref() }))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_anim_list_clear(list: *mut RawList) {
     let Some(list) = (unsafe { list.as_mut() }) else {
         return;
@@ -265,19 +248,4 @@ pub unsafe extern "C" fn ns_css_animation_shorthand_canonical(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_time_specified(value: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(value) }.and_then(|v| time::list_serialize(v, false)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_time_computed(value: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(value) }.and_then(|v| time::list_serialize(v, true)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_animation_range_serialize(
-    start_list: *const c_char,
-    end_list: *const c_char,
-) -> *mut c_char {
-    let start = unsafe { bytes(start_list) }.unwrap_or(b"normal");
-    let end = unsafe { bytes(end_list) }.unwrap_or(b"normal");
-    glib::strdup(&animation::range_serialize(start, end))
 }

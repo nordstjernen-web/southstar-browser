@@ -932,7 +932,7 @@ pub(crate) fn range_shorthand_expand(text: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> 
     Some((starts, ends))
 }
 
-pub(crate) fn range_serialize(start_list: &[u8], end_list: &[u8]) -> Vec<u8> {
+pub fn range_serialize(start_list: &[u8], end_list: &[u8]) -> Vec<u8> {
     let starts = list_split(start_list);
     let ends = list_split(end_list);
     let mut out = Vec::new();

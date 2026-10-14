@@ -749,7 +749,7 @@ fn memo_keep(style: &[u8], prop: &[u8], value: Option<Vec<u8>>) -> Option<Vec<u8
     value
 }
 
-pub(crate) fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
+pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
     if let Some(hit) = memo_get(style, prop) {
         return hit;
     }
@@ -981,7 +981,7 @@ fn emit(out: &mut Vec<u8>, name: &[u8], value: &[u8], important: bool) {
     out.push(b';');
 }
 
-pub(crate) fn serialize(style: &[u8]) -> Vec<u8> {
+pub fn serialize(style: &[u8]) -> Vec<u8> {
     if let Some(hit) = serialize_memo_hit(style) {
         return hit;
     }
@@ -1172,7 +1172,7 @@ fn members_expanded(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
     (!out.is_empty()).then_some(out)
 }
 
-pub(crate) fn set(style: Option<&[u8]>, prop: &[u8], value: Option<&[u8]>) -> Vec<u8> {
+pub fn set(style: Option<&[u8]>, prop: &[u8], value: Option<&[u8]>) -> Vec<u8> {
     let value = value.filter(|v| !v.is_empty());
     let members = member_ids(prop);
     if style.is_none_or(<[u8]>::is_empty) {
@@ -1237,7 +1237,7 @@ pub(crate) fn set(style: Option<&[u8]>, prop: &[u8], value: Option<&[u8]>) -> Ve
     out
 }
 
-pub(crate) fn background_position_zip(xs: &[u8], ys: &[u8]) -> Option<Vec<u8>> {
+pub fn background_position_zip(xs: &[u8], ys: &[u8]) -> Option<Vec<u8>> {
     let (x, x_important) = strip_important(xs);
     let (y, y_important) = strip_important(ys);
     if x_important != y_important {

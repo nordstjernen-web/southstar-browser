@@ -1,9 +1,8 @@
-//! Southstar — the C ABI of the inline style text, and the declarations it reads back out of parsed style sheets.
+//! Southstar — the declarations inline style text reads back out of parsed style sheets.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray};
@@ -13,7 +12,6 @@ use super::property::prop_of;
 use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
 use super::shorthand::RawDecl;
 use super::values::text_of;
-use crate::inline;
 use crate::prop::Prop;
 
 unsafe fn parse_sheet(text: &CStr) -> *mut RawSheet {
@@ -97,53 +95,4 @@ pub(crate) fn first_rule_declares(css: &[u8]) -> bool {
     };
     unsafe { ns_css_stylesheet_free(sheet) };
     declares
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-fn owned(text: Option<Vec<u8>>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), |text| glib::strdup(&text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_style_get(
-    style: *const c_char,
-    prop: *const c_char,
-) -> *mut c_char {
-    let (Some(style), Some(prop)) = (unsafe { bytes(style) }, unsafe { bytes(prop) }) else {
-        return ptr::null_mut();
-    };
-    owned(inline::get(style, prop))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_style_set(
-    style: *const c_char,
-    prop: *const c_char,
-    value: *const c_char,
-) -> *mut c_char {
-    let style = unsafe { bytes(style) };
-    let Some(prop) = (unsafe { bytes(prop) }) else {
-        return glib::strdup(style.unwrap_or_default());
-    };
-    glib::strdup(&inline::set(style, prop, unsafe { bytes(value) }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_style_serialize(style: *const c_char) -> *mut c_char {
-    glib::strdup(&inline::serialize(
-        unsafe { bytes(style) }.unwrap_or_default(),
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_background_position_join(
-    xs: *const c_char,
-    ys: *const c_char,
-) -> *mut c_char {
-    let xs = unsafe { bytes(xs) }.unwrap_or_default();
-    let ys = unsafe { bytes(ys) }.unwrap_or_default();
-    owned(inline::background_position_zip(xs, ys))
 }

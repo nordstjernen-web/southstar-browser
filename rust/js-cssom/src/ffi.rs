@@ -39,23 +39,13 @@ impl Js {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub(crate) struct Timing {
-    kind: c_int,
-    steps: c_int,
-    step_pos: c_int,
-    jump_keyword: c_int,
-    cb: [f64; 4],
-}
-
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct AnimEntry {
     pub target: c_int,
     pub name: *mut c_char,
     pub duration_ms: f64,
     pub delay_ms: f64,
-    pub timing: Timing,
+    pub timing: css_engine::TimingFunction,
     pub iter_count: c_int,
     pub iterations: f64,
     pub direction: c_int,
@@ -106,7 +96,7 @@ impl Drop for AnimList {
 }
 
 pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
-    take_text(unsafe { ns_css_timing_serialize(&entry.timing) }).unwrap_or_default()
+    lossy(&css_engine::timing_serialize(Some(&entry.timing)))
 }
 
 #[repr(C)]
@@ -214,29 +204,12 @@ unsafe extern "C" {
     fn ns_css_declarations_free(decls: *mut GArray);
     fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
     fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-    fn ns_css_background_position_join(xs: *const c_char, ys: *const c_char) -> *mut c_char;
-    fn ns_css_grid_placement_compose(values: *const *mut c_char, area: GBoolean) -> *mut c_char;
-    fn ns_css_grid_shorthand_compose(values: *const *mut c_char, full: GBoolean) -> *mut c_char;
     fn ns_css_tracks_computed_serialize(
         s: *const Style,
         root: *const Style,
         prop: c_int,
     ) -> *mut c_char;
-    fn ns_css_list_style_serialize(
-        kind: *const c_char,
-        position: *const c_char,
-        image: *const c_char,
-    ) -> *mut c_char;
     fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
-    fn ns_css_individual_transform_serialize(v: *const NsCssValue, prop: c_int) -> *mut c_char;
-    fn ns_css_media_list_serialize(query: *const c_char) -> *mut c_char;
-    fn ns_inline_style_get(style: *const c_char, prop: *const c_char) -> *mut c_char;
-    fn ns_inline_style_set(
-        style: *const c_char,
-        prop: *const c_char,
-        value: *const c_char,
-    ) -> *mut c_char;
-    fn ns_inline_style_serialize(style: *const c_char) -> *mut c_char;
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);
     fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
@@ -260,10 +233,6 @@ unsafe extern "C" {
         list: *const RawAnimList,
         is_animation: GBoolean,
     ) -> *mut c_char;
-    fn ns_css_timing_serialize(t: *const Timing) -> *mut c_char;
-    fn ns_css_timing_parse(text: *const c_char, out: *mut Timing) -> GBoolean;
-    fn ns_css_animation_range_serialize(start: *const c_char, end: *const c_char) -> *mut c_char;
-    fn ns_css_time_computed(value: *const c_char) -> *mut c_char;
 
     fn ns_anim_visit(a: *mut c_void, node: *const NsNode, cb: AnimVisitCb, user: *mut c_void);
     fn ns_anim_info_for(
@@ -591,32 +560,37 @@ pub(crate) fn with_sheet_declarations<R>(text: &str, f: impl FnOnce(&[Vec<Decl>]
 }
 
 pub(crate) fn background_position_join(x: &str, y: &str) -> Option<String> {
-    let (x, y) = (c_string(x.as_bytes()), c_string(y.as_bytes()));
-    take_text(unsafe { ns_css_background_position_join(x.as_ptr(), y.as_ptr()) })
+    css_engine::background_position_join(until_nul(x), until_nul(y)).map(|text| lossy(&text))
 }
 
-fn compose(
-    values: &[Option<String>],
-    f: impl FnOnce(*const *mut c_char) -> *mut c_char,
-) -> Option<String> {
-    let owned: Vec<Option<CString>> = values
-        .iter()
-        .map(|v| v.as_ref().map(|v| c_string(v.as_bytes())))
-        .collect();
-    let ptrs: Vec<*mut c_char> = owned.iter().map(|v| opt_ptr(v).cast_mut()).collect();
-    take_text(f(ptrs.as_ptr()))
+fn all_present<const N: usize>(values: &[Option<String>]) -> Option<[&[u8]; N]> {
+    let mut out = [&b""[..]; N];
+    for (slot, value) in out.iter_mut().zip(values) {
+        *slot = until_nul(value.as_deref()?);
+    }
+    (values.len() >= N).then_some(out)
 }
 
 pub(crate) fn grid_placement_compose(values: &[Option<String>; 4], area: bool) -> Option<String> {
-    compose(values, |p| unsafe {
-        ns_css_grid_placement_compose(p, glib::boolean(area))
-    })
+    let text = if area {
+        all_present::<4>(values).map(|v| css_engine::grid_placement_compose(&v, true))
+    } else {
+        all_present::<2>(values).map(|v| css_engine::grid_placement_compose(&v, false))
+    };
+    Some(lossy(&text.unwrap_or_default()))
 }
 
 pub(crate) fn grid_shorthand_compose(values: &[Option<String>; 6], full: bool) -> Option<String> {
-    compose(values, |p| unsafe {
-        ns_css_grid_shorthand_compose(p, glib::boolean(full))
-    })
+    let text = if full {
+        all_present::<6>(values)
+            .filter(|v| v.iter().all(|part| !part.is_empty()))
+            .map(|v| css_engine::grid_shorthand_compose(&v))
+    } else {
+        all_present::<3>(values)
+            .filter(|v| v.iter().all(|part| !part.is_empty()))
+            .map(|[rows, cols, areas]| css_engine::grid_template_compose(rows, cols, areas))
+    };
+    Some(lossy(&text.unwrap_or_default()))
 }
 
 pub(crate) fn tracks_computed_serialize(
@@ -636,12 +610,11 @@ pub(crate) fn node_dir(node: Node<'_>) -> String {
 }
 
 pub(crate) fn list_style_serialize(kind: &str, position: &str, image: &str) -> Option<String> {
-    let (k, p, i) = (
-        c_string(kind.as_bytes()),
-        c_string(position.as_bytes()),
-        c_string(image.as_bytes()),
-    );
-    take_text(unsafe { ns_css_list_style_serialize(k.as_ptr(), p.as_ptr(), i.as_ptr()) })
+    Some(lossy(&css_engine::list_style_serialize(
+        Some(until_nul(kind)),
+        Some(until_nul(position)),
+        Some(until_nul(image)),
+    )))
 }
 
 pub(crate) fn overflow_keyword(style: StyleRef<'_>, axis: usize) -> String {
@@ -651,7 +624,11 @@ pub(crate) fn overflow_keyword(style: StyleRef<'_>, axis: usize) -> String {
 }
 
 pub(crate) fn individual_transform_serialize(v: ValueRef<'_>, prop: usize) -> Option<String> {
-    take_text(unsafe { ns_css_individual_transform_serialize(v.as_ptr(), prop as c_int) })
+    if let Some(keyword) = v.keyword_text() {
+        return Some(keyword.to_string_lossy().into_owned());
+    }
+    let text = css_engine::individual_property_serialize(v.transform()?, Prop::from_id(prop)?)?;
+    Some(lossy(&text))
 }
 
 pub(crate) fn container_condition_canonical(text: &str) -> Option<String> {
@@ -659,8 +636,9 @@ pub(crate) fn container_condition_canonical(text: &str) -> Option<String> {
 }
 
 pub(crate) fn media_list_serialize(query: Option<&str>) -> String {
-    let query = query.map(|q| c_string(q.as_bytes()));
-    take_text(unsafe { ns_css_media_list_serialize(opt_ptr(&query)) }).unwrap_or_default()
+    lossy(&southstar_css_media::list_serialize(
+        query.map(until_nul).unwrap_or_default(),
+    ))
 }
 
 pub(crate) fn named_property_supported(name: &str) -> bool {
@@ -677,21 +655,21 @@ pub(crate) fn specified_canonical(prop: &str, value: &str) -> Option<String> {
 }
 
 pub(crate) fn inline_style_get(style: Option<&CStr>, prop: &str) -> Option<String> {
-    let prop = c_string(prop.as_bytes());
-    let style = style.map_or(core::ptr::null(), CStr::as_ptr);
-    take_text(unsafe { ns_inline_style_get(style, prop.as_ptr()) })
+    css_engine::inline_style_get(style?.to_bytes(), until_nul(prop)).map(|text| lossy(&text))
 }
 
 pub(crate) fn inline_style_set(style: Option<&CStr>, prop: &str, value: &str) -> Vec<u8> {
-    let (p, v) = (c_string(prop.as_bytes()), c_string(value.as_bytes()));
-    let style = style.map_or(core::ptr::null(), CStr::as_ptr);
-    let out = unsafe { ns_inline_style_set(style, p.as_ptr(), v.as_ptr()) };
-    take_text(out).unwrap_or_default().into_bytes()
+    css_engine::inline_style_set(
+        style.map(CStr::to_bytes),
+        until_nul(prop),
+        Some(until_nul(value)),
+    )
 }
 
 pub(crate) fn inline_style_serialize(style: Option<&CStr>) -> String {
-    let style = style.map_or(core::ptr::null(), CStr::as_ptr);
-    take_text(unsafe { ns_inline_style_serialize(style) }).unwrap_or_default()
+    lossy(&css_engine::inline_style_serialize(
+        style.map_or(&b""[..], CStr::to_bytes),
+    ))
 }
 
 pub(crate) fn strip_important(value: &mut String) -> bool {
@@ -796,26 +774,18 @@ pub(crate) fn anim_entry_name(entry: &AnimEntry) -> Option<String> {
 }
 
 pub(crate) fn timing_text_canonical(text: &str) -> String {
-    let mut timing = Timing {
-        kind: TIMING_EASE,
-        ..Timing::default()
-    };
-    let text = c_string(text.as_bytes());
-    unsafe { ns_css_timing_parse(text.as_ptr(), &mut timing) };
-    take_text(unsafe { ns_css_timing_serialize(&timing) }).unwrap_or_default()
+    lossy(&css_engine::timing_canonical(until_nul(text)))
 }
 
-const TIMING_EASE: c_int = 1;
-
 pub(crate) fn animation_range_serialize(start: Option<&str>, end: Option<&str>) -> Option<String> {
-    let start = start.map(|s| c_string(s.as_bytes()));
-    let end = end.map(|e| c_string(e.as_bytes()));
-    take_text(unsafe { ns_css_animation_range_serialize(opt_ptr(&start), opt_ptr(&end)) })
+    Some(lossy(&css_engine::animation_range_serialize(
+        start.map_or(&b"normal"[..], until_nul),
+        end.map_or(&b"normal"[..], until_nul),
+    )))
 }
 
 pub(crate) fn time_computed(text: &str) -> Option<String> {
-    let text = c_string(text.as_bytes());
-    take_text(unsafe { ns_css_time_computed(text.as_ptr()) })
+    css_engine::time_list_serialize(until_nul(text), true).map(|text| lossy(&text))
 }
 
 pub(crate) struct AnimRecord {

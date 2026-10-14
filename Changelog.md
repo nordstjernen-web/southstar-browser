@@ -91,6 +91,12 @@ Southstar Browser 0.9.11-dev:
   rotate, scale and transform, border-image sources and parameters, font
   family, weight and stretch, direction and CSS escapes; eleven C exports
   and paint's GString round trip for unescaping are gone.
+* The CSSOM bindings and the animation engine call rust/css's Rust functions
+  for inline style text, background-position, grid placement and grid
+  shorthand composition, list-style, the translate/rotate/scale properties,
+  easing functions, animation-range and time lists, and rust/css-media's for
+  media lists, instead of passing C strings through twelve C exports that
+  are now gone.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

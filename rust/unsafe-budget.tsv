@@ -1,7 +1,7 @@
 # Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
-anim	132	26	22	0	84	8	0
+anim	130	24	22	0	82	7	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
@@ -11,7 +11,7 @@ camera	63	12	17	0	30	4	0
 canvas	232	136	20	0	180	22	0
 config	37	18	9	0	23	6	0
 csp	31	0	7	0	15	2	0
-css	1267	54	225	0	778	85	0
+css	1211	53	213	0	750	82	0
 css-media	20	4	11	0	6	1	0
 css-prop-syntax	24	2	6	0	11	3	0
 css-syntax	0	0	0	0	0	0	0
@@ -47,7 +47,7 @@ js-clone	7	8	6	0	0	0	0
 js-collections	26	8	13	0	8	1	0
 js-compression	5	7	1	0	3	3	0
 js-crypto	5	1	3	0	1	0	0
-js-cssom	108	57	11	0	86	6	0
+js-cssom	94	44	11	0	72	6	0
 js-custom-elements	46	9	17	0	17	1	0
 js-dispatch	113	49	39	0	45	1	0
 js-document	78	53	11	0	55	0	0

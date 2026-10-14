@@ -2,9 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_int;
+use core::ffi::{CStr, c_int};
 
 use southstar_glib::GBoolean;
+use southstar_style::{TimingFunction, timing_parse, timing_serialize};
 
 const KIND_LINEAR: c_int = 0;
 const KIND_EASE_IN: c_int = 2;
@@ -37,6 +38,30 @@ const _: () =
     assert!(core::mem::size_of::<Timing>() == 48 && core::mem::offset_of!(Timing, cb) == 16);
 
 impl Timing {
+    pub fn parse_into(&mut self, text: &CStr) -> bool {
+        let Some(t) = timing_parse(text.to_bytes()) else {
+            return false;
+        };
+        *self = Timing {
+            kind: t.kind,
+            steps: t.steps,
+            step_pos: t.step_pos,
+            jump_keyword: t.jump_keyword,
+            cb: t.cb,
+        };
+        true
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        timing_serialize(Some(&TimingFunction {
+            kind: self.kind,
+            steps: self.steps,
+            step_pos: self.step_pos,
+            jump_keyword: self.jump_keyword,
+            cb: self.cb,
+        }))
+    }
+
     pub fn linear() -> Timing {
         Timing {
             kind: KIND_LINEAR,

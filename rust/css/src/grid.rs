@@ -1486,7 +1486,7 @@ pub(crate) fn auto_flow_canonical(text: &[u8]) -> Option<Vec<u8>> {
     )
 }
 
-pub(crate) fn template_compose(rows: &[u8], cols: &[u8], areas: &[u8]) -> Vec<u8> {
+pub fn template_compose(rows: &[u8], cols: &[u8], areas: &[u8]) -> Vec<u8> {
     if areas == b"none" {
         if rows == b"none" && cols == b"none" {
             return b"none".to_vec();
@@ -1530,7 +1530,7 @@ pub(crate) fn template_compose(rows: &[u8], cols: &[u8], areas: &[u8]) -> Vec<u8
     out
 }
 
-pub(crate) fn grid_compose(v: &[&[u8]; 6]) -> Vec<u8> {
+pub fn grid_compose(v: &[&[u8]; 6]) -> Vec<u8> {
     let [rows, cols, areas, flow, auto_rows, auto_cols] = *v;
     let dense = flow.windows(5).any(|w| w == b"dense");
     let column = flow.windows(6).any(|w| w == b"column");
@@ -1568,7 +1568,7 @@ pub(crate) fn grid_compose(v: &[&[u8]; 6]) -> Vec<u8> {
     Vec::new()
 }
 
-pub(crate) fn placement_compose(values: &[&[u8]], area: bool) -> Vec<u8> {
+pub fn placement_compose(values: &[&[u8]], area: bool) -> Vec<u8> {
     let n = if area { 4 } else { 2 };
     if values.len() < n || values[..n].iter().any(|v| v.is_empty()) {
         return Vec::new();

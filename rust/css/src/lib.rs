@@ -59,11 +59,13 @@ mod units;
 mod values;
 mod vars;
 
+pub use animation::range_serialize as animation_range_serialize;
 pub use border_image::{Params as BorderImageParams, params as border_image_params};
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::unit_dims as container_unit_dims;
 pub use content::append_unescaped;
+pub use counter::list_style_serialize;
 pub use declarations::{named_declaration_valid, named_property_supported};
 pub use element_state::node_dir;
 pub use ffi::viewport::get as viewport;
@@ -83,13 +85,26 @@ pub use grid::{
     TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT, TRACK_PX, TRACKS_MAX,
     Track as GridTrack, Tracks as GridTracks,
 };
+pub use grid::{
+    grid_compose as grid_shorthand_compose, placement_compose as grid_placement_compose,
+    template_compose as grid_template_compose,
+};
 pub use initial::initial_value;
+pub use inline::{
+    background_position_zip as background_position_join, get as inline_style_get,
+    serialize as inline_style_serialize, set as inline_style_set,
+};
 pub use prop::Prop;
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
+pub use time::list_serialize as time_list_serialize;
+pub use timing::{
+    Timing as TimingFunction, canonical as timing_canonical, parse as timing_parse,
+    serialize as timing_serialize,
+};
 pub use transform::{
-    Op as TransformOp, Transform, effective as effective_transform, is_3d as transform_is_3d,
-    to_mat4 as transform_to_mat4,
+    Op as TransformOp, Transform, effective as effective_transform, individual_property_serialize,
+    is_3d as transform_is_3d, to_mat4 as transform_to_mat4,
 };
 pub use values::specified_canonical;

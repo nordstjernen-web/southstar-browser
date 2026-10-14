@@ -987,9 +987,7 @@ pub struct Info {
 }
 
 fn easing_text(timing: &Timing) -> Vec<u8> {
-    timing
-        .serialize()
-        .map_or_else(Vec::new, |s| s.to_bytes().to_vec())
+    timing.serialize()
 }
 
 fn chan_info(node: NodePtr, ch: &Chan, now_us: i64) -> Info {

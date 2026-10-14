@@ -126,7 +126,7 @@ pub(crate) fn list_style_type_canonical(text: &[u8]) -> Option<Vec<u8>> {
     (ident_valid(tok) && !wide_keyword_or_default(tok)).then(|| tok.to_vec())
 }
 
-pub(crate) fn list_style_serialize(
+pub fn list_style_serialize(
     type_: Option<&[u8]>,
     position: Option<&[u8]>,
     image: Option<&[u8]>,

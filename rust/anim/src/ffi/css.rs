@@ -36,8 +36,6 @@ unsafe extern "C" {
     fn ns_css_initial_value_text(name: *const c_char) -> *const c_char;
     fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
     fn ns_css_declarations_free(decls: *mut GArray);
-    fn ns_css_timing_parse(text: *const c_char, out: *mut Timing) -> GBoolean;
-    fn ns_css_timing_serialize(t: *const Timing) -> *mut c_char;
     fn ns_css_anim_effective(style: *const Style, is_animation: GBoolean, out: *mut NsAnimList);
     fn ns_css_anim_list_clear(list: *mut NsAnimList);
     fn ns_css_style_may_animate(style: *const Style) -> GBoolean;
@@ -282,16 +280,6 @@ pub fn initial_value(prop: i32) -> Option<Val> {
     decl.push(0);
     let decls = Decls::parse_bytes(&decl)?;
     decls.take_first(prop)
-}
-
-impl Timing {
-    pub fn parse_into(&mut self, text: &CStr) -> bool {
-        unsafe { ns_css_timing_parse(text.as_ptr(), self) != 0 }
-    }
-
-    pub fn serialize(&self) -> Option<glib::GStr> {
-        unsafe { glib::GStr::take(ns_css_timing_serialize(self)) }
-    }
 }
 
 pub struct Decls(NonNull<GArray>);
