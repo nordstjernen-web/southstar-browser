@@ -27,6 +27,23 @@ const TARGET_COLOR: i32 = 4;
 const TARGET_BG_COLOR: i32 = 5;
 const TARGET_OTHER: i32 = 6;
 
+const CURRENTCOLOR_INITIAL: &[&str] = &[
+    "border-top-color",
+    "border-right-color",
+    "border-bottom-color",
+    "border-left-color",
+    "border-block-start-color",
+    "border-block-end-color",
+    "border-inline-start-color",
+    "border-inline-end-color",
+    "outline-color",
+    "column-rule-color",
+    "text-decoration-color",
+    "text-emphasis-color",
+    "-webkit-text-fill-color",
+    "-webkit-text-stroke-color",
+];
+
 pub(crate) const COMPUTED_PROPS: &[&str] = &[
     "-webkit-text-fill-color",
     "accent-color",
@@ -394,6 +411,36 @@ fn box_shorthand(js: Js, n: Node<'_>, sides: [&str; 4]) -> Option<String> {
     } else {
         format!("{t} {r} {b} {l}")
     })
+}
+
+fn pair_shorthand(js: Js, n: Node<'_>, first: &str, second: &str) -> Option<String> {
+    let (a, b) = (lookup(js, n, first)?, lookup(js, n, second)?);
+    Some(if a == b { a } else { format!("{a} {b}") })
+}
+
+fn joined_shorthand(js: Js, n: Node<'_>, names: &[&str]) -> Option<String> {
+    let parts: Option<Vec<String>> = names.iter().map(|name| lookup(js, n, name)).collect();
+    Some(parts?.join(" "))
+}
+
+fn border_side(js: Js, n: Node<'_>, side: &str) -> Option<String> {
+    joined_shorthand(
+        js,
+        n,
+        &[
+            &format!("border-{side}-width"),
+            &format!("border-{side}-style"),
+            &format!("border-{side}-color"),
+        ],
+    )
+}
+
+fn border_sides(js: Js, n: Node<'_>, sides: &[&str]) -> String {
+    let values: Vec<Option<String>> = sides.iter().map(|side| border_side(js, n, side)).collect();
+    match values.first() {
+        Some(Some(first)) if values.iter().all(|v| v.as_ref() == Some(first)) => first.clone(),
+        _ => String::new(),
+    }
 }
 
 fn box_edge_px(b: BoxRef<'_>, name: &str) -> Option<String> {
@@ -1034,6 +1081,47 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
         "border-color" => four(sides("border-", "-color")),
         "border-style" => four(sides("border-", "-style")),
         "inset" => box_shorthand(js, n, ["top", "right", "bottom", "left"]),
+        "scroll-margin" => four(sides("scroll-margin-", "")),
+        "scroll-padding" => four(sides("scroll-padding-", "")),
+        "flex" => joined_shorthand(js, n, &["flex-grow", "flex-shrink", "flex-basis"]),
+        "flex-flow" => joined_shorthand(js, n, &["flex-direction", "flex-wrap"]),
+        "place-items" => pair_shorthand(js, n, "align-items", "justify-items"),
+        "place-content" => pair_shorthand(js, n, "align-content", "justify-content"),
+        "place-self" => pair_shorthand(js, n, "align-self", "justify-self"),
+        "border" => Some(border_sides(js, n, &["top", "right", "bottom", "left"])),
+        "border-block" => Some(border_sides(js, n, &["block-start", "block-end"])),
+        "border-inline" => Some(border_sides(js, n, &["inline-start", "inline-end"])),
+        "border-top"
+        | "border-right"
+        | "border-bottom"
+        | "border-left"
+        | "border-block-start"
+        | "border-block-end"
+        | "border-inline-start"
+        | "border-inline-end" => border_side(js, n, &name["border-".len()..]),
+        "outline" => joined_shorthand(js, n, &["outline-color", "outline-style", "outline-width"]),
+        "columns" => joined_shorthand(js, n, &["column-width", "column-count"]),
+        "column-rule" => joined_shorthand(
+            js,
+            n,
+            &[
+                "column-rule-width",
+                "column-rule-style",
+                "column-rule-color",
+            ],
+        ),
+        "margin-block"
+        | "margin-inline"
+        | "padding-block"
+        | "padding-inline"
+        | "inset-block"
+        | "inset-inline"
+        | "scroll-margin-block"
+        | "scroll-margin-inline"
+        | "scroll-padding-block"
+        | "scroll-padding-inline" => {
+            pair_shorthand(js, n, &format!("{name}-start"), &format!("{name}-end"))
+        }
         "border-image" => {
             let part = |name, fallback: &'static str| {
                 lookup(js, n, name)
@@ -1391,6 +1479,13 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             return Some(r);
         }
         return Some("none".into());
+    }
+    if CURRENTCOLOR_INITIAL.contains(&name) && ffi::has_style_table(js) {
+        let own = pid
+            .and_then(|id| ffi::style_of(js, n).and_then(|s| s.value_at(id)))
+            .and_then(ffi::serialize)
+            .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("currentcolor"));
+        return own.or_else(|| lookup(js, n, "color"));
     }
     let canonical = match pid {
         Some(id) => ffi::prop_name(id).unwrap_or(name),

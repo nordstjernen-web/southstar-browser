@@ -250,7 +250,7 @@ fn supported_property(
         return Ok(Value::boolean(false));
     };
     Ok(Value::boolean(
-        name.starts_with("--") || ffi::prop_id(&name).is_some(),
+        name.starts_with("--") || ffi::named_property_supported(&name),
     ))
 }
 
