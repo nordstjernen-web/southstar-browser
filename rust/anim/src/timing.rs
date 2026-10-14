@@ -1,11 +1,11 @@
-//! Southstar — timing functions: linear, the ease keywords, cubic-bezier() and steps().
+//! Southstar — timing functions: linear and linear() with stops, the ease keywords, cubic-bezier() and steps().
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
 
 use southstar_glib::GBoolean;
-use southstar_style::{TimingFunction, timing_parse, timing_serialize};
+use southstar_style::{TimingFunction, timing_linear_eval, timing_parse, timing_serialize};
 
 const KIND_LINEAR: c_int = 0;
 const KIND_EASE_IN: c_int = 2;
@@ -53,13 +53,7 @@ impl Timing {
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        timing_serialize(Some(&TimingFunction {
-            kind: self.kind,
-            steps: self.steps,
-            step_pos: self.step_pos,
-            jump_keyword: self.jump_keyword,
-            cb: self.cb,
-        }))
+        timing_serialize(Some(&self.function()))
     }
 
     pub fn linear() -> Timing {
@@ -69,9 +63,24 @@ impl Timing {
         }
     }
 
+    fn function(&self) -> TimingFunction {
+        TimingFunction {
+            kind: self.kind,
+            steps: self.steps,
+            step_pos: self.step_pos,
+            jump_keyword: self.jump_keyword,
+            cb: self.cb,
+        }
+    }
+
     pub fn apply(&self, x: f64) -> f64 {
         if self.kind == KIND_STEPS {
             return steps(self.steps, self.step_pos, x);
+        }
+        if self.kind == KIND_LINEAR
+            && let Some(y) = timing_linear_eval(&self.function(), x)
+        {
+            return y;
         }
         if x <= 0.0 {
             return 0.0;

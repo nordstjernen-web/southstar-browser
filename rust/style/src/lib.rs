@@ -13,8 +13,8 @@ pub use ffi::{
 pub use southstar_css::{
     BorderImageParams, Gradient, GradientStop, GridAreaRect, GridAreas, GridLineName, GridTrack,
     GridTracks, Prop as PropId, Shadow, ShadowList, TimingFunction, Transform, TransformOp,
-    gradient_angle, gradient_radii, parse_color, timing_parse, timing_serialize, transform_is_3d,
-    transform_to_mat4,
+    gradient_angle, gradient_radii, parse_color, timing_linear_eval, timing_parse,
+    timing_serialize, transform_is_3d, transform_to_mat4,
 };
 
 pub const UNIT_PERCENT: u32 = 3;

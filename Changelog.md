@@ -256,6 +256,14 @@ Southstar Browser 0.9.11-dev:
   were written. Each write was inserted right after the script element, so
   a loop writing paragraphs 0 to 59 showed them as 59 down to 0; a write
   now goes after what the same script wrote before it.
+* CSS linear() easing works with its stops. linear(0, 0.25 75%, 1) and the
+  other forms of CSS Easing 2 -- outputs outside 0..1, one or two input
+  percentages per stop, calc() percentages, inputs filled in evenly and
+  kept in order -- drive CSS animations, transitions and Web Animations
+  (they all ran as plain linear before), extrapolate past the first and last
+  stops, and serialize as written in the style rule and fully expanded in
+  getComputedStyle ("linear(0 0%, 0.25 75%, 1 100%)"). Malformed linear()
+  values such as linear(0) or linear(0 calc(50px - 50%)) are now rejected.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

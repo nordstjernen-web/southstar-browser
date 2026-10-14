@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::CString;
+use std::sync::{Arc, Mutex};
 
 use crate::ffi;
 use crate::scan::{starts_with_ci, strip, strtol10};
@@ -82,6 +83,260 @@ fn keyword(kw: &[u8]) -> Timing {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct LinearPoint {
+    pub output: f64,
+    pub input: f64,
+}
+
+static LINEAR_FUNCTIONS: Mutex<Vec<Arc<[LinearPoint]>>> = Mutex::new(Vec::new());
+
+fn intern_linear(points: Vec<LinearPoint>) -> i32 {
+    let mut functions = LINEAR_FUNCTIONS.lock().unwrap_or_else(|e| e.into_inner());
+    let index = match functions.iter().position(|f| **f == *points) {
+        Some(index) => index,
+        None => {
+            functions.push(points.into());
+            functions.len() - 1
+        }
+    };
+    i32::try_from(index + 1).unwrap_or(0)
+}
+
+pub fn linear_points(t: &Timing) -> Option<Arc<[LinearPoint]>> {
+    if t.kind != LINEAR || t.steps <= 0 {
+        return None;
+    }
+    let functions = LINEAR_FUNCTIONS.lock().unwrap_or_else(|e| e.into_inner());
+    functions.get(usize::try_from(t.steps - 1).ok()?).cloned()
+}
+
+pub fn linear_eval(t: &Timing, progress: f64) -> Option<f64> {
+    let points = linear_points(t)?;
+    Some(linear_output(&points, progress))
+}
+
+pub(crate) fn linear_output(points: &[LinearPoint], progress: f64) -> f64 {
+    if points.len() < 2 {
+        return progress;
+    }
+    let mut a = points
+        .iter()
+        .rposition(|p| p.input <= progress)
+        .unwrap_or(0);
+    if a == points.len() - 1 {
+        a -= 1;
+    }
+    let (from, to) = (points[a], points[a + 1]);
+    if from.input == to.input {
+        return to.output;
+    }
+    let fraction = (progress - from.input) / (to.input - from.input);
+    from.output + fraction * (to.output - from.output)
+}
+
+struct LinearStop {
+    output: f64,
+    inputs: Vec<f64>,
+    text: Vec<u8>,
+}
+
+fn split_spaces(text: &[u8]) -> Vec<&[u8]> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut start = None;
+    for (i, &c) in text.iter().enumerate() {
+        match c {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if depth == 0 && c.is_ascii_whitespace() {
+            if let Some(s) = start.take() {
+                out.push(&text[s..i]);
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    if let Some(s) = start {
+        out.push(&text[s..]);
+    }
+    out
+}
+
+fn plain_number(token: &[u8]) -> Option<f64> {
+    let first = *token.first()?;
+    if !(first.is_ascii_digit() || matches!(first, b'-' | b'+' | b'.')) {
+        return None;
+    }
+    let text = CString::new(token).ok()?;
+    let (v, end) = ffi::strtod(&text, 0);
+    (end == token.len() && v.is_finite()).then_some(v)
+}
+
+fn percentage(token: &[u8]) -> Option<(f64, Vec<u8>)> {
+    if let Some(number) = token.strip_suffix(b"%") {
+        let v = plain_number(number)?;
+        let mut text = number_text(v);
+        text.push(b'%');
+        return Some((v, text));
+    }
+    let math = [&b"calc("[..], b"min(", b"max(", b"clamp("];
+    if !math.iter().any(|f| starts_with_ci(token, f)) || token.last() != Some(&b')') {
+        return None;
+    }
+    let (ok, resolved) = crate::calc::resolve_to_px_pct(token, false);
+    if !ok || resolved.px != 0.0 || resolved.em != 0.0 || resolved.rem != 0.0 {
+        return None;
+    }
+    let v = resolved.pct;
+    if !v.is_finite() {
+        return None;
+    }
+    let mut text = b"calc(".to_vec();
+    text.extend_from_slice(&number_text(v));
+    text.extend_from_slice(b"%)");
+    Some((v, text))
+}
+
+fn linear_stop(entry: &[u8]) -> Option<LinearStop> {
+    let tokens = split_spaces(strip(entry));
+    let (number_at, output) = tokens
+        .iter()
+        .enumerate()
+        .find_map(|(i, tok)| plain_number(tok).map(|v| (i, v)))?;
+    let rest: Vec<&[u8]> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != number_at)
+        .map(|(_, tok)| *tok)
+        .collect();
+    if rest.len() > 2 || (number_at != 0 && number_at != tokens.len() - 1) {
+        return None;
+    }
+    let mut text = number_text(output);
+    let mut inputs = Vec::new();
+    for tok in rest {
+        let (v, written) = percentage(tok)?;
+        inputs.push(v);
+        text.push(b' ');
+        text.extend_from_slice(&written);
+    }
+    Some(LinearStop {
+        output,
+        inputs,
+        text,
+    })
+}
+
+fn linear_stops(item: &[u8]) -> Option<Vec<LinearStop>> {
+    let body = &item[b"linear(".len()..item.len() - 1];
+    let entries = split_top_level_commas(body);
+    if entries.len() < 2 {
+        return None;
+    }
+    entries.iter().map(|e| linear_stop(e)).collect()
+}
+
+fn linear_points_of(stops: &[LinearStop]) -> Vec<LinearPoint> {
+    let mut points: Vec<(f64, Option<f64>)> = Vec::new();
+    for stop in stops {
+        if stop.inputs.is_empty() {
+            points.push((stop.output, None));
+        }
+        for &input in &stop.inputs {
+            points.push((stop.output, Some(input)));
+        }
+    }
+    if let Some(first) = points.first_mut()
+        && first.1.is_none()
+    {
+        first.1 = Some(0.0);
+    }
+    if let Some(last) = points.last_mut()
+        && last.1.is_none()
+    {
+        last.1 = Some(100.0);
+    }
+    let mut largest = f64::NEG_INFINITY;
+    for point in &mut points {
+        if let Some(input) = point.1.as_mut() {
+            if *input < largest {
+                *input = largest;
+            } else {
+                largest = *input;
+            }
+        }
+    }
+    let mut i = 0;
+    while i < points.len() {
+        if points[i].1.is_some() {
+            i += 1;
+            continue;
+        }
+        let start = i - 1;
+        let end = (i..points.len())
+            .find(|&j| points[j].1.is_some())
+            .unwrap_or(points.len() - 1);
+        let (from, to) = (
+            points[start].1.unwrap_or(0.0),
+            points[end].1.unwrap_or(100.0),
+        );
+        let gaps = (end - start) as f64;
+        for (k, point) in points[start + 1..end].iter_mut().enumerate() {
+            point.1 = Some(from + (to - from) * (k + 1) as f64 / gaps);
+        }
+        i = end;
+    }
+    points
+        .into_iter()
+        .map(|(output, input)| LinearPoint {
+            output,
+            input: input.unwrap_or(0.0) / 100.0,
+        })
+        .collect()
+}
+
+fn linear(item: &[u8]) -> Option<Timing> {
+    let stops = linear_stops(item)?;
+    Some(Timing {
+        steps: intern_linear(linear_points_of(&stops)),
+        ..Timing::of(LINEAR)
+    })
+}
+
+fn linear_specified(item: &[u8]) -> Option<Vec<u8>> {
+    let stops = linear_stops(item)?;
+    let parts: Vec<Vec<u8>> = stops.into_iter().map(|s| s.text).collect();
+    let mut out = b"linear(".to_vec();
+    out.extend_from_slice(&parts.join(&b", "[..]));
+    out.push(b')');
+    Some(out)
+}
+
+fn fixed6(v: f64) -> String {
+    let text = southstar_numfmt::fixed(v, 6);
+    let text = if text.contains('.') {
+        text.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        text
+    };
+    if text == "-0" {
+        String::from("0")
+    } else {
+        text
+    }
+}
+
+fn linear_computed(points: &[LinearPoint]) -> Vec<u8> {
+    let parts: Vec<String> = points
+        .iter()
+        .map(|p| format!("{} {}%", fixed6(p.output), fixed6(p.input * 100.0)))
+        .collect();
+    format!("linear({})", parts.join(", ")).into_bytes()
+}
+
 fn split_commas(body: &[u8]) -> Vec<&[u8]> {
     if body.is_empty() {
         return Vec::new();
@@ -150,7 +405,7 @@ pub(crate) fn item_parse(item: &[u8]) -> Option<Timing> {
         return Some(keyword(item));
     }
     if starts_with_ci(item, b"linear(") && last == b')' {
-        return Some(Timing::of(LINEAR));
+        return linear(item);
     }
     let is_steps = starts_with_ci(item, b"steps(");
     let is_cubic = starts_with_ci(item, b"cubic-bezier(");
@@ -173,10 +428,17 @@ pub fn parse(text: &[u8]) -> Option<Timing> {
 pub fn easing_canonical(text: &[u8]) -> Option<Vec<u8>> {
     let item = strip(text);
     let timing = item_parse(item)?;
-    if timing.kind == LINEAR && starts_with_ci(item, b"linear(") {
-        return Some(item.to_vec());
+    if starts_with_ci(item, b"linear(") {
+        return linear_specified(item);
     }
     Some(serialize(Some(&timing)))
+}
+
+pub(crate) fn item_specified(item: &[u8]) -> Vec<u8> {
+    if starts_with_ci(item, b"linear(") && item.last() == Some(&b')') {
+        return linear_specified(item).unwrap_or_else(|| item.to_ascii_lowercase());
+    }
+    item.to_ascii_lowercase()
 }
 
 fn canonical(text: &[u8]) -> Vec<u8> {
@@ -196,7 +458,7 @@ pub fn serialize(t: Option<&Timing>) -> Vec<u8> {
         return b"ease".to_vec();
     };
     match t.kind {
-        LINEAR => b"linear".to_vec(),
+        LINEAR => linear_points(t).map_or_else(|| b"linear".to_vec(), |p| linear_computed(&p)),
         EASE_IN => b"ease-in".to_vec(),
         EASE_OUT => b"ease-out".to_vec(),
         EASE_IN_OUT => b"ease-in-out".to_vec(),

@@ -375,6 +375,11 @@ pub(crate) fn longhand_canonical(prop: Longhand, t: &[u8]) -> Option<Vec<u8>> {
                 let ident = ident_decode(item);
                 canon.extend_from_slice(&ident_serialize(ident.as_deref().unwrap_or(item)));
             }
+        } else if matches!(
+            prop,
+            Longhand::AnimationTimingFunction | Longhand::TransitionTimingFunction
+        ) {
+            canon.extend_from_slice(&timing::item_specified(item));
         } else if lower {
             canon.extend_from_slice(&item.to_ascii_lowercase());
         } else {
