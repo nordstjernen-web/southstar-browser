@@ -45,8 +45,8 @@ and again when it is vacated, so a live slot's generation is odd.
   hovered, pressed and scroll-anchor nodes and open `<select>` in
   `rust/browser`, and the script runtime's orphan set, NamedNodeMap cache
   and pending change event. A wrapper whose node was freed unwraps to
-  nothing, and a freed node simply
-  stops matching; nothing has to be told that it went away.
+  nothing, and a freed node simply stops matching; nothing has to be told
+  that it went away.
 - `Node::from_ptr`, the way back from the `*const NsNode` pointers of the
   remaining C ABI, returns `None` for a vacant slot.
 
@@ -90,8 +90,9 @@ no parent is owned by exactly one `Tree` value (`rust/dom/src/owned.rs`):
   free a node that is still in someone else's tree.
 - `Tree::into_root()` gives ownership away explicitly: to a parent, to a
   template's contents or to the script runtime's orphan set, which keeps a
-  detached subtree alive while script can still reach it.
-  `into_raw`/`from_raw` carry ownership across the remaining C ABI.
+  detached subtree alive while script can still reach it. `into_raw` hands
+  it across the remaining C ABI, and `Tree::adopt(node)` takes a returned
+  pointer back after `Node::from_ptr`.
 - The HTML parser returns documents and fragments as `Tree`s
   (`southstar_html_parser::parse_document`, `parse_fragment`,
   `parse_fragment_for_tag`), and so does the XML parser
