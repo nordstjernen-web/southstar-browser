@@ -648,13 +648,11 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
             ns_net_set_log_fetches(1);
         }
         ns_cache_init();
-    }
-    southstar_bytecode_cache::init();
-    unsafe {
         ns_history_init();
         ns_font_init();
         ns_spell_init();
     }
+    southstar_bytecode_cache::init();
     let file_url = if opts.url.is_null() {
         None
     } else {

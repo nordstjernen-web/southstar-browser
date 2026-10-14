@@ -557,13 +557,11 @@ pub fn init_subsystems() {
         ns_net_init();
         ns_net_set_allow_file_urls(1);
         ns_cache_init();
-    }
-    southstar_bytecode_cache::init();
-    unsafe {
         ns_history_init();
         ns_font_init();
         ns_spell_init();
     }
+    southstar_bytecode_cache::init();
 }
 
 pub unsafe fn sandbox(self_exe: *const c_char) {
@@ -575,9 +573,9 @@ pub unsafe fn sandbox(self_exe: *const c_char) {
 }
 
 pub fn shutdown() {
-    unsafe { ns_font_shutdown() };
     southstar_bytecode_cache::shutdown();
     unsafe {
+        ns_font_shutdown();
         ns_history_shutdown();
         ns_cache_shutdown();
         ns_net_shutdown();
