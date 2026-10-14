@@ -88,6 +88,14 @@ unsafe extern "C" {
     ) -> f64;
     fn ns_css_viewport_w() -> f64;
     fn ns_css_viewport_h() -> f64;
+    fn ns_box_inline_rect_for_dom(
+        root: *const NsBox,
+        target: *const NsNode,
+        x: *mut f64,
+        y: *mut f64,
+        w: *mut f64,
+        h: *mut f64,
+    ) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -273,6 +281,26 @@ pub fn build_abs_box<'a>(e: Entry<'_>, styles: StyleTable) -> Option<BoxRef<'a>>
             styles.as_ptr(),
         ))
     }
+}
+
+pub fn inline_containing_block(root: BoxRef<'_>, target: Node<'_>) -> Option<Area> {
+    let mut a = Area {
+        x: 0.0,
+        y: 0.0,
+        w: 0.0,
+        h: 0.0,
+    };
+    let found = unsafe {
+        ns_box_inline_rect_for_dom(
+            root.as_ptr(),
+            target.as_ptr(),
+            &mut a.x,
+            &mut a.y,
+            &mut a.w,
+            &mut a.h,
+        )
+    };
+    (found != 0).then_some(a)
 }
 
 pub fn grid_abs_containing_block(cb: BoxRef<'_>, st: *const Style) -> Option<Area> {

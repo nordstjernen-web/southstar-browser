@@ -11,10 +11,10 @@ use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef};
 use crate::ffi::{
     self, Area, Entry, box_clips_children, build_abs_box, edges_from_style, estimate_natural_width,
     flat_parent, flex_box_is_border_box, grid_abs_containing_block, grid_static_align_offset,
-    grid_static_position, height_keyword_stretches, layout_box, length_resolve,
-    measure_natural_width, min_width_of, prop, resolve_height_with_basis, shift_box_tree,
-    size_keyword_is_intrinsic, static_run, style_creates_fixed_cb, style_of, value_is_percent,
-    viewport_h, viewport_w,
+    grid_static_position, height_keyword_stretches, inline_containing_block, layout_box,
+    length_resolve, measure_natural_width, min_width_of, prop, resolve_height_with_basis,
+    shift_box_tree, size_keyword_is_intrinsic, static_run, style_creates_fixed_cb, style_of,
+    value_is_percent, viewport_h, viewport_w,
 };
 use crate::relative::{apply_position_offsets, length_is_auto};
 use crate::static_pos::{
@@ -326,11 +326,14 @@ fn depth_exceeds(b: BoxRef<'_>) -> bool {
 fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
     let styles = ctx.styles;
     let mut cb_dom = positioned_entry_cb_dom(e, styles);
+    let mut inline_cb = None;
     let cb = match cb_dom.map(|d| ctx.map.get(d)) {
         Some(Some(b)) => b,
         Some(None) => {
             if e.fixed {
                 cb_dom = None;
+            } else {
+                inline_cb = cb_dom.and_then(|d| inline_containing_block(ctx.root, d));
             }
             ctx.root
         }
@@ -363,7 +366,9 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
     };
     let mut cb_h = if cb_is_icb { viewport_h() } else { cb_pad_h };
     let cs: *const Style = cb.style();
-    let grid = if !cb_is_icb && e.pseudo.is_none() {
+    let grid = if inline_cb.is_some() {
+        inline_cb
+    } else if !cb_is_icb && e.pseudo.is_none() {
         grid_abs_containing_block(cb, abox.style())
     } else {
         None
