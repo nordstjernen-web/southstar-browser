@@ -100,10 +100,9 @@ pub(crate) fn option(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Js
         let value = c_text(scope, value)?;
         ffi::set_attr(el, c"value", &value);
     }
-    if args.get(2).is_some_and(|v| scope.to_bool(v)) {
-        ffi::set_attr(el, c"defaultSelected", b"");
-    }
-    if args.get(3).is_some_and(|v| scope.to_bool(v)) {
+    let default_selected = args.get(2).is_some_and(|v| scope.to_bool(v));
+    let selected = args.get(3).is_some_and(|v| scope.to_bool(v));
+    if default_selected || selected {
         ffi::set_attr(el, c"selected", b"");
     }
     Ok(orphan(scope, el))

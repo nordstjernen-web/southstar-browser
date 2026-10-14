@@ -78,6 +78,9 @@ Southstar Browser 0.9.11-dev:
   parsing, element-name checks and subtree walks are also called through
   rust/dom's Rust API; six of its C exports were left without callers and
   are gone.
+* new Option(text, value, defaultSelected, selected) sets the selected
+  attribute for defaultSelected instead of adding a bogus defaultSelected
+  attribute that showed up in the option's outerHTML.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/
