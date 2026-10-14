@@ -20,6 +20,10 @@ Southstar Browser 0.9.11-dev:
   -Doverflow_checks=true meson option turns them on in a release build; the
   Linux CI builds and smoke-tests with it, so an overflow aborts with its
   location instead of wrapping silently.
+* docs/unsafe-policy.md sets where unsafe may appear (system-library FFI, the
+  embedding API, the JS/GC binding layer, OS primitives, SIMD) and where it
+  may not (parsers, engine logic, calls between Southstar's own crates). The
+  agent guides describe the all-Rust tree instead of the C one it replaced.
 
 Southstar Browser 0.9.10:
 ======

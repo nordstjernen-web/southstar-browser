@@ -1,10 +1,11 @@
 # Southstar — Claude operating guide
 
-Southstar ("Southstar Browser") is a web
-browser written from scratch in **C**, now being ported to **Rust**
-module by module (`docs/rust-port.md`), using **GTK 4** for the UI and
-an in-tree Rust HTTP client for networking (see "HTTP client" below). Targets Linux,
-macOS, and Windows.
+Southstar ("Southstar Browser") is a web browser written from scratch in
+**Rust**, using **GTK 4** for the UI and an in-tree Rust HTTP client for
+networking (see "HTTP client" below). Targets Linux, macOS, and Windows. It
+began in C and was ported to Rust module by module (`docs/rust-port.md`);
+the port is complete and the tree holds no C code of its own — the one C
+file left is `src/libsouthstar.h`, the embedding API's header.
 
 See `README.md` for the product vision. Southstar is a fresh
 implementation — there is no upstream browser engine, no fork,
@@ -19,7 +20,7 @@ Update Changelog.md
 - HTML5 + modern CSS + modern JavaScript, supported pragmatically as
   far as is feasible without bloat.
 - **No** AI-style web APIs. WebGL **is** supported: a working, minimalist
-  WebGL 1 / 2 over OpenGL ES (`src/webgl.c`). It is
+  WebGL 1 / 2 over OpenGL ES (`rust/webgl`). It is
   enabled by default, can be disabled globally in Settings, and reports
   active use in the browser status bar. The `WebGLRenderingContext` /
   `WebGL2RenderingContext` interface objects also carry the GL enum
@@ -53,7 +54,7 @@ Update Changelog.md
   (WASAPI/CoreAudio/ALSA), mixing and resampling the streams itself. The
   renderer emits `open`/`play`/`pause`/`seek`/`stop`/`loop`/`volume`
   commands that ride the render-response `X-Audio` side-channel to the
-  shell, which spawns and pumps the helper (`src/gtk/procview.c`).
+  shell, which spawns and pumps the helper (`rust/shell/src/procview/media.rs`).
   MSE video frames decode in a third process, `southstar-video`
   (`rust/video-helper`, built when libav is present): the renderer
   materializes the growing stream to `~/.cache/southstar/msvideo/`
@@ -65,7 +66,7 @@ Update Changelog.md
   vendor further single-file codecs. **WebM is the one FFmpeg-backed
   extension**, over `libav\*` (`libavformat`/`libavcodec`/`libavutil`/
   `libswscale`/`libswresample`, system packages — never vendored): the
-  `libav` build path (`-DNS_HAVE_LIBAV`) adds inline
+  `libav` build path (the crates' `libav` cargo feature) adds inline
   **VP9/VP8 video** (libav demux+decode → swscale → texture, in
   `rust/video/src/decode.rs`) and **Opus/Vorbis audio** (decoded in the helper,
   `rust/audio-helper`) for `.webm`/`.opus`/`.ogg` sources. It is **required on
@@ -83,7 +84,7 @@ Update Changelog.md
   (`ns_browser_media_at`) and reports it over the renderer protocol for
   embedders — the GTK shell does not launch an external player.
 - UI strings are English-source and translated to the operating-system
-  language at startup through the in-tree catalogue lookup (`src/i18n.c`,
+  language at startup through the in-tree catalogue lookup (`rust/i18n`,
   `data/i18n/*.lang`); English is the fallback for any string a catalogue
   does not cover. No gettext dependency.
 - Does not phone home, does not telemeter the user.
@@ -110,6 +111,9 @@ Update Changelog.md
   `undocumented_unsafe_blocks`, `multiple_unsafe_ops_per_block` and
   `missing_safety_doc`). Prefer removing the `unsafe` to documenting it; keep
   what remains in small `ffi` modules.
+- Bundled external projects are exempt from this comments policy.
+  In particular, do not reformat or strip comments from `third_party/`
+  or `subprojects/` just to satisfy Southstar style.
 
 ## Autonomous mode — read this every session
 
@@ -134,7 +138,7 @@ This repo is driven by Claude in long uninterrupted sessions.
   external blockers. When stopping: one line on what's blocked.
 - **Never ask the user to run the build.** Run it yourself.
 - **Local machine is the build *and* run oracle.** The repo can be
-  driven from either a Linux box (GTK 4 / libcurl / meson / clang +
+  driven from either a Linux box (GTK 4 / meson / Rust +
   an X session at `DISPLAY=:0`) or a Windows 11 box via MSYS2
   MINGW64 (same toolchain, same meson/ninja invocation; the binary
   is `./builddir/src/gtk/southstar.exe`). Every commit must pass
@@ -160,23 +164,31 @@ meson compile -C builddir
 ./builddir/src/gtk/southstar
 ```
 
-### Rust: the port in progress
+### Rust: the workspace
 
-Southstar is being ported from C to Rust in place, module by module
-(`docs/rust-port.md`). The Cargo workspace (`Cargo.toml`, `rust/`) is built
-by meson: `rust/meson.build` runs `scripts/cargo-build.py`, which builds
-`rust/southstar-ffi` — the one static library every C target links — and hands
-ninja cargo's dependency file, so Rust rebuilds only when Rust changes. Rust
-1.99 or newer is required; `rust-toolchain.toml` pins 1.99.0 for rustup users,
-so local builds and CI compile with the minimum supported version.
+All of Southstar is the Cargo workspace (`Cargo.toml`, one crate per
+directory under `rust/`). meson builds it: `rust/meson.build` runs
+`scripts/cargo-build.py`, which builds the static libraries the executables
+link (`rust/static` with everything in `rust/southstar-ffi`, plus the shell,
+helper and launcher libraries) and hands ninja cargo's dependency file, so
+Rust rebuilds only when Rust changes. Rust 1.99 or newer is required;
+`rust-toolchain.toml` pins 1.99.0 for rustup users, so local builds and CI
+compile with the minimum supported version.
 
-- A module is a crate under `rust/`. Crates reach each other through
-  `ns_*` exports (`#[unsafe(no_mangle)] extern "C"`) and `extern "C"`
-  declarations in the caller's `ffi.rs`; there are no C headers between them.
-  The one remaining header, `src/libsouthstar.h`, is the installed embedding
-  API for C embedders. Pointer handling lives in the crate's `ffi.rs`; the
-  logic is safe Rust. A new crate is added to `rust/southstar-ffi`
+- The crates mirror the C files they were ported from, and many still reach
+  each other through the port's scaffolding: `ns_*`/`nsr_*` exports
+  (`#[unsafe(no_mangle)]`) and `extern` declarations in the caller's
+  `ffi.rs`. That internal C ABI is being removed. New code calls another
+  crate through an ordinary Rust API (a Cargo dependency, typed arguments,
+  `String`/`Vec`/`Box` rather than `*mut c_char` and `g_malloc`) wherever the
+  dependency graph allows, and keeps `extern "C"` for the real boundaries:
+  `src/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
+  the other system libraries. A new crate is added to `rust/southstar-ffi`
   (dependency plus `pub use`).
+- `unsafe` follows `docs/unsafe-policy.md`: only for system FFI, the
+  embedding API, the JS/GC binding layer, OS primitives and SIMD; never in
+  parsers or engine logic; one operation per block with a `// SAFETY:`
+  comment; no `static mut`.
 - `cargo fmt --check` and `python3 scripts/unsafe-budget.py --clippy` must be
   clean before pushing. The script runs `cargo clippy --workspace
   --all-targets`, fails on any warning except the three unsafe-documentation
@@ -260,7 +272,7 @@ from Wuffs by a few levels of IDCT rounding. No orientation is applied
 from EXIF. `ns_image_decode_bytes` (`rust/image`) is the whole chain:
 ICO (`rust/image-decoders`), then `ns_image_decode_raster`, then WebP
 (`rust/image-decoders`, libwebp), then AVIF when built, then SVG in-engine
-(`src/svg.c`). Nothing follows — gdk-pixbuf no longer decodes page
+(`rust/svg`). Nothing follows — gdk-pixbuf no longer decodes page
 images, so an unsupported format simply fails to decode rather than
 reaching a loader plugin installed on the user's machine.
 
@@ -304,6 +316,14 @@ settings and the proxy; the media helpers download through `rust/helper-ffi`.
 Extend `rust/http`; don't reintroduce libcurl. Not supported: HTTP/3, DNS over
 HTTPS, TLS Encrypted Client Hello.
 
+### WebAssembly: wasmi
+
+The `WebAssembly` JS API (`compile`, `instantiate`, `Memory`,
+`Table`, `Global`, externref) is implemented in `rust/js-wasm` over
+[wasmi](https://github.com/wasmi-labs/wasmi), a pure-Rust interpreter
+from crates.io with no JIT. It runs wasm-bindgen bundles. `-Dwasm=disabled`
+drops the crate and the `WebAssembly` global.
+
 ### Charset detection: uchardet
 
 Required dependency (Debian/Ubuntu `libuchardet-dev`,
@@ -322,7 +342,7 @@ MSYS2 `mingw-w64-x86_64-libwebp`, Homebrew `webp`). WebP —
 lossy VP8 (the dominant variant served by the BBC, Wikipedia
 thumbnails, and most modern CDNs), lossless VP8L, and **animated
 WebP** (via libwebpdemux's `WebPAnimDecoder`, playing like animated
-GIFs) — is decoded in-tree by `src/image_webp.c`, tried right after
+GIFs) — is decoded by `rust/image-decoders/src/ffi/libwebp.rs`, tried right after
 the PNG/GIF/BMP/JPEG decoders. No gdk-pixbuf loader, no
 `loaders.cache` registration, and no sandbox interaction is
 involved; the old `webp-pixbuf-loader` runtime dependency is gone.
@@ -331,20 +351,19 @@ involved; the old `webp-pixbuf-loader` runtime dependency is gone.
 
 Required dependency (Debian/Ubuntu `libssl-dev`, Fedora/RHEL
 `openssl-devel`, openSUSE `libopenssl-devel`). `crypto.subtle` (the
-WebCrypto SubtleCrypto surface) is implemented in `src/webcrypto.c`
+WebCrypto SubtleCrypto surface) is implemented in `rust/webcrypto`
 directly over OpenSSL's EVP/`OSSL_PARAM` APIs — hashing, HMAC, AES
 (GCM/CBC/CTR/KW), RSA (PKCS1/PSS/OAEP), ECDSA/ECDH (P-256/384/521),
 Ed25519/X25519, PBKDF2 and HKDF. The `CryptoKey` class and `subtle.*` argument
-marshalling live in `src/js.c`. OpenSSL is already linked transitively
-through libcurl's TLS backend on Linux and Windows/MSYS2; `meson`
-depends on `libcrypto` explicitly so the headers resolve.
+marshalling live in `rust/js-crypto`. The same OpenSSL provides `rust/http`'s
+TLS (libssl); `meson` depends on `libcrypto` explicitly.
 
 System packages required on Debian/Ubuntu:
 
 ```sh
 sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
-    libgtk-4-dev libepoxy-dev libcurl4-openssl-dev libssl-dev libuchardet-dev \
-    libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
+    libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
@@ -365,8 +384,8 @@ external-player path. FFmpeg 6.0 or newer is required.
 On Fedora/RHEL:
 
 ```sh
-sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel libcurl-devel \
-    openssl-devel uchardet-devel libpsl-devel sqlite-devel \
+sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel \
+    openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel \
     libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
 ```
 
@@ -375,8 +394,8 @@ sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-de
 On openSUSE:
 
 ```sh
-sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel libcurl-devel \
-    libopenssl-devel libuchardet-devel libpsl-devel sqlite3-devel \
+sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel \
+    libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel \
     libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
 ```
 
@@ -390,18 +409,16 @@ selects 1.99.0.
 `libseccomp` is required on Linux — `meson setup` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.
 
-### Fast iteration (recommended for AI/Claude loops)
+### Fast iteration (recommended for agent loops)
 
-`ccache` is the single biggest build-time win and meson picks it up
-automatically. With `ccache` installed, a clean `meson setup builddir
-&& meson compile -C builddir` drops from ~35s to ~1s once the cache
-is warm — in-tree libraries hit the cache
-and re-link in negligible time. Install once:
-
-```sh
-sudo apt install ccache       # Debian/Ubuntu
-sudo dnf install ccache       # Fedora/RHEL
-```
+The default meson build is a release build with fat LTO and one codegen
+unit, so a clean build takes many minutes and every Rust change relinks the
+whole static library. For the edit-check loop use `cargo check -p <crate>`
+or `cargo clippy -p <crate>`, which take seconds; build the browser with
+meson to run it. A `meson setup build-debug -Dbuildtype=debug` tree builds
+the dev profile — no LTO, integer overflow checks on — which compiles much
+faster and runs slower. `-Doverflow_checks=true` turns the overflow checks on
+in a release build too (CI does).
 
 Optionally use the `lld` linker for faster final links
 (`CC_LD=lld meson setup builddir`). Not required.
@@ -426,8 +443,8 @@ list is stale), and re-cluster the list when the scores move.
 
 A change is done when:
 
-1. It compiles cleanly (no new warnings) with the configured GCC and
-   Clang flags, and `cargo fmt --check` and `cargo clippy` are clean.
+1. It compiles cleanly (no new warnings), and `cargo fmt --check` and
+   `python3 scripts/unsafe-budget.py --clippy` are clean.
 2. The browser launches and the affected UI path works manually.
 3. The change is committed and pushed to `origin/main`.
 
@@ -452,7 +469,7 @@ don't add `meson test` targets.
   `rust/html-parser` is the pattern; the deleted YouTube scraper was the
   anti-pattern.
 - Don't add AI-style web-API surface area, even as stubs. WebGL is a
-  deliberate exception — extend `src/webgl.c`, don't re-architect it.
+  deliberate exception — extend `rust/webgl`, don't re-architect it.
 - WebGPU is an experimental exception layered over external wgpu-native
   (`rust/webgpu`). The `webgpu` feature is `auto`: built
   only when wgpu-native is actually present, so a machine without it still
@@ -462,7 +479,7 @@ don't add `meson test` targets.
   (headers only) — a stock `meson setup builddir` on a clean machine must
   still produce a WebGPU-free binary.
 - Don't add telemetry, crash reporters, update pingers, or "studies"
-  infrastructure. UI translation goes through `src/i18n.c` and the
+  infrastructure. UI translation goes through `rust/i18n` and the
   `data/i18n/*.lang` catalogues — don't introduce gettext or `.po`
   tooling.
 - Don't write planning docs unless asked.

@@ -19,8 +19,9 @@ trusted.
 
 **In scope**
 
-- Memory-safety bugs in our C code: out-of-bounds reads/writes,
-  use-after-free, integer overflow, format-string.
+- Memory-safety bugs in our `unsafe` Rust (see `docs/unsafe-policy.md`
+  for where it is allowed): out-of-bounds reads/writes, use-after-free,
+  data races; integer overflow; and panics reachable from web content.
 - Linux sandbox escapes — both layers: the Landlock filesystem
   allow-list and the seccomp-bpf syscall allow-list.
 - Windows process-mitigation bypass — the policies set via
