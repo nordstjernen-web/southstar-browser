@@ -22,6 +22,7 @@
 #   --base=URL        server base URL (default http://web-platform.test:8000)
 #   --no-serve        assume a WPT server is already running at --base
 #   --timeout-ms=N    per-test timeout in ms (default 15000)
+#   --jobs=N          run N browser processes at once (default 1)
 #   --results=FILE    append one JSON line per test to FILE
 #   --list            print the enumerated test URLs and exit
 #
@@ -36,6 +37,7 @@ export NS_ALLOW_ROOT=${NS_ALLOW_ROOT:-1}
 WPT_ROOT=${NS_WPT_ROOT:-}
 BASE="http://web-platform.test:8000"
 SERVE=1
+JOBS=1
 TIMEOUT_MS=15000
 RESULTS=""
 LIST=0
@@ -46,6 +48,7 @@ for arg in "$@"; do
         --wpt-root=*)   WPT_ROOT=${arg#*=} ;;
         --base=*)       BASE=${arg#*=} ;;
         --no-serve)     SERVE=0 ;;
+        --jobs=*)       JOBS=${arg#*=} ;;
         --timeout-ms=*) TIMEOUT_MS=${arg#*=} ;;
         --results=*)    RESULTS=${arg#*=} ;;
         --list)         LIST=1 ;;
@@ -190,16 +193,28 @@ fi
 total_files=0; ok_files=0; fail_files=0; timeout_files=0
 total_sub=0; pass_sub=0; fail_sub=0; timeout_sub=0; notrun_sub=0; pf_sub=0
 
-for rel in "${TESTS[@]}"; do
-  while IFS= read -r url; do
-    [ -n "$url" ] || continue
-    total_files=$((total_files + 1))
-    set +e
+OUTDIR=$(mktemp -d)
+trap 'cleanup; rm -rf "$OUTDIR"' EXIT
+for rel in "${TESTS[@]}"; do urls_for "$rel"; done | grep -v '^$' > "$OUTDIR/urls"
+N_URLS=$(wc -l < "$OUTDIR/urls")
+
+run_one() {
+    local index=$1 url out rc
+    url=$(sed -n "$((index + 1))p" "$OUTDIR/urls")
+    rc=0
     out=$(timeout -k 5 "$(( TIMEOUT_MS / 1000 + 10 ))" \
-          "$BIN" --wpt --wpt-timeout-ms="$TIMEOUT_MS" "$BASE$url" 2>/dev/null)
-    rc=$?
-    set -e
+          "$BIN" --wpt --wpt-timeout-ms="$TIMEOUT_MS" "$BASE$url" 2>/dev/null) || rc=$?
     if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then rc=2; fi
+    printf '%s\n' "$out" > "$OUTDIR/$index.out"
+    printf '%s\n' "$rc" > "$OUTDIR/$index.rc"
+}
+
+report() {
+    local index=$1 url out rc summary json status kv n
+    url=$(sed -n "$((index + 1))p" "$OUTDIR/urls")
+    out=$(cat "$OUTDIR/$index.out")
+    rc=$(cat "$OUTDIR/$index.rc")
+    total_files=$((total_files + 1))
     summary=$(printf '%s\n' "$out" | sed -n 's/^WPT SUMMARY //p' | head -1)
     json=$(printf '%s\n' "$out" | sed -n 's/^WPT JSON //p' | head -1)
     case "$rc" in
@@ -227,8 +242,21 @@ for rel in "${TESTS[@]}"; do
         printf '{"test":"%s","exit":%d,"result":%s}\n' \
                "$url" "$rc" "${json:-null}" >> "$RESULTS"
     fi
-  done < <(urls_for "$rel")
-done
+}
+
+if [ "$JOBS" -le 1 ]; then
+    for ((i = 0; i < N_URLS; i++)); do
+        run_one "$i"
+        report "$i"
+    done
+else
+    export -f run_one
+    export OUTDIR BIN BASE TIMEOUT_MS
+    seq 0 $((N_URLS - 1)) | xargs -P "$JOBS" -n 1 bash -c 'run_one "$1"' _
+    for ((i = 0; i < N_URLS; i++)); do
+        report "$i"
+    done
+fi
 
 echo
 echo "files: $total_files total, $ok_files ok, $fail_files fail, $timeout_files timeout"

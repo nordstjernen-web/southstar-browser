@@ -26,7 +26,7 @@ jobs:
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
     runs-on: ubuntu-${{ matrix.ubuntu }}
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
@@ -191,6 +191,43 @@ jobs:
       - name: Headless baseline smoke (./scripts/dev.sh smoke)
         if: hashFiles('builddir/src/gtk/southstar') != ''
         run: ./scripts/dev.sh smoke
+
+      - name: Fetch web-platform-tests
+        id: wpt-fetch
+        if: hashFiles('builddir/src/gtk/southstar') != ''
+        continue-on-error: true
+        env:
+          WPT_REV: ac7ff49df82aaf9630eeabb1f0f562279527cf10
+        run: |
+          git init -q "$RUNNER_TEMP/wpt"
+          cd "$RUNNER_TEMP/wpt"
+          git remote add origin https://github.com/web-platform-tests/wpt
+          git sparse-checkout set --no-cone '/*' '!/*/' /tools/ /resources/ /common/ \
+            /docs/commands.json /interfaces/ /fonts/ /images/ /media/ \
+            /fullscreen/trusted-click.js /trusted-types/support/ \
+            /visual-viewport/viewport_support.js \
+            /dom/ /url/ /console/ /hr-time/ /html/ /WebCryptoAPI/ /xhr/ /domparsing/
+          git fetch -q --depth 1 --filter=blob:none origin "$WPT_REV"
+          git checkout -q FETCH_HEAD
+          ./wpt make-hosts-file | sudo tee -a /etc/hosts > /dev/null
+
+      - name: Web platform tests (the slice tracked in docs/wpt-scores.md)
+        if: steps.wpt-fetch.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          scripts/wpt-score.sh --wpt-root="$RUNNER_TEMP/wpt" --jobs=4 \
+              --summary="$GITHUB_STEP_SUMMARY"
+          mkdir -p wpt-results
+          cp docs/wpt-runs/*-"$(git rev-parse --short HEAD)".tsv docs/wpt-subtests.tsv wpt-results/
+
+      - name: Upload WPT results
+        if: hashFiles('wpt-results/*.tsv') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: wpt-results
+          path: wpt-results/
+          retention-days: 30
 
       - name: Upload build log
         if: always() && hashFiles('build.log') != ''

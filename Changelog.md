@@ -233,6 +233,14 @@ Southstar Browser 0.9.11-dev:
   -- is posted with its body. The renderer took the navigation from the
   page-open reply without keeping the POST body that went with it, so the
   shell loaded the action URL as a plain GET.
+* The Linux CI runs the 19-area web-platform-tests slice tracked in
+  docs/wpt-scores.md on every push, against a pinned WPT revision, and
+  publishes the files-passing and subtests-passing counts per area in the
+  job summary, with the per-file results as a download. scripts/wpt-run.sh
+  takes --jobs=N to run tests in parallel (the slice takes about nine
+  minutes with four instead of about half an hour one at a time), and
+  scripts/wpt-score.sh runs the whole slice with one server and writes a
+  Markdown summary with --summary=FILE.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

@@ -12,7 +12,9 @@
 #   PATH is a tracked area or a sub-path of one (e.g. "dom/nodes" or
 #   "url/url-tojson.any.js"). No PATHs means a full run.
 # Options are passed through to wpt-run.sh (--base, --no-serve,
-# --timeout-ms). Build the browser first (scripts/dev.sh build).
+# --timeout-ms, --jobs), except --summary=FILE, which appends the run's
+# history row and per-area table to FILE as Markdown (CI points it at the
+# job summary). Build the browser first (scripts/dev.sh build).
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -40,11 +42,13 @@ SLICES=(
 )
 
 WPT_ROOT=${NS_WPT_ROOT:-}
+SUMMARY=""
 OPTS=()
 PATHS=()
 for arg in "$@"; do
     case "$arg" in
         --wpt-root=*) WPT_ROOT=${arg#*=}; OPTS+=("$arg") ;;
+        --summary=*)  SUMMARY=${arg#*=} ;;
         --*)          OPTS+=("$arg") ;;
         *)            PATHS+=("${arg%/}") ;;
     esac
@@ -86,19 +90,16 @@ for p in "${PATHS[@]}"; do
     [ -d "$WPT_ROOT/$p" ] && prefixes="$prefixes,/$p/"
 done
 
-for p in "${PATHS[@]}"; do
-    "$ROOT/scripts/wpt-run.sh" --results="$jsonl" "${OPTS[@]}" "$p" >&2 || true
-    echo "done: $p" >&2
-done
+"$ROOT/scripts/wpt-run.sh" --results="$jsonl" "${OPTS[@]}" "${PATHS[@]}" >&2 || true
 
 mkdir -p "$ROOT/docs/wpt-runs"
 python3 - "$ROOT/docs/wpt-subtests.tsv" "$jsonl" \
     "$ROOT/docs/wpt-runs/$date-$ns_rev.tsv" "$ROOT/docs/wpt-scores.md" \
-    "$date" "$ns_rev" "$wpt_rev" "$note" "${prefixes#,}" "${SLICES[@]}" <<'EOF'
+    "$date" "$ns_rev" "$wpt_rev" "$note" "${prefixes#,}" "$SUMMARY" "${SLICES[@]}" <<'EOF'
 import json, os, sys
 
-subtsv, jsonl, filetsv, doc, date, ns_rev, wpt_rev, note, prefixes = sys.argv[1:10]
-areas = sys.argv[10:]
+subtsv, jsonl, filetsv, doc, date, ns_rev, wpt_rev, note, prefixes, summary = sys.argv[1:11]
+areas = sys.argv[11:]
 prefixes = [p for p in prefixes.split(',') if p]
 
 def read_doc(path):
@@ -270,6 +271,17 @@ else:
 
 with open(doc, 'w', encoding='utf-8') as f:
     f.write('\n'.join(lines) + '\n')
+
+if summary:
+    with open(summary, 'a', encoding='utf-8') as f:
+        f.write('\n'.join([
+            "## Web platform tests",
+            "",
+            "| Date | Southstar | WPT | Files ok | Subtests passing | Notes |",
+            "|------|-----------|-----|----------|------------------|-------|",
+            hist_row,
+            "",
+        ] + section[4:]) + '\n')
 
 print(hist_row)
 print("updated: %s" % doc)

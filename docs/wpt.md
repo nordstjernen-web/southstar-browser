@@ -48,13 +48,23 @@ The runner starts `./wpt serve` itself (and stops it on exit) unless a
 server is already reachable; pass `--no-serve` to require an external
 server. Other options: `--base=URL` (default
 `http://web-platform.test:8000`), `--timeout-ms=N` per test (default
-15000), and `--results=FILE` to append one JSON line per test:
+15000), `--jobs=N` to run N browser processes at once (results are still
+reported in test order), and `--results=FILE` to append one JSON line per
+test:
 
 ```json
 {"test":"/url/url-tojson.any.html","exit":0,"result":{"harness":"OK","message":null,"subtests":[...]}}
 ```
 
 The runner exits 0 only when every test file ran without failures.
+
+The Linux CI job runs the slice tracked in `docs/wpt-scores.md` on every
+push and pull request: it checks out the WPT revision pinned in
+`.github/workflows/linux.yml` (only the directories the slice needs),
+runs `scripts/wpt-score.sh --jobs=4 --summary=...`, puts the history row
+and per-area table in the job summary and uploads the per-file and
+per-subtest results as the `wpt-results` artifact. The step reports;
+it does not fail the build.
 
 ## Running a single test by hand
 
