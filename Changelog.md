@@ -203,7 +203,7 @@ Southstar Browser 0.9.11-dev:
   A bundle outside /etc and /usr could not be opened once Landlock was on
   (the renderer inherits the shell's restrictions), so every HTTPS page
   failed with an untrusted-issuer error.
-* TLS is rustls over ring instead of OpenSSL's libssl, so every handshake,
+* TLS is rustls (0.23.46 or newer) over ring instead of OpenSSL's libssl, so every handshake,
   record and server certificate the browser receives is parsed and verified
   by memory-safe Rust. Key exchange still prefers the post-quantum hybrid
   X25519MLKEM768 -- now on every platform, not only with OpenSSL 3.5 or

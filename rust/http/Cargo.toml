@@ -11,7 +11,7 @@ publish.workspace = true
 southstar-http-wire = { path = "../http-wire" }
 ml-kem = { version = "0.3.2", default-features = false, features = ["zeroize"] }
 ring = { version = "0.17.14", default-features = false }
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 zeroize = { version = "1.8", default-features = false }
 
 [features]
