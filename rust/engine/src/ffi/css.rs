@@ -51,7 +51,6 @@ unsafe extern "C" {
     fn ns_css_stylesheet_from_style_element_cached(style: *mut NsNode) -> *mut c_void;
     fn ns_css_style_element_text(style: *mut NsNode) -> *mut c_char;
     fn ns_css_shadow_adopted_css(root: *mut NsNode) -> *mut c_char;
-    fn ns_css_syntax_is_self_contained(text: *const c_char, len: usize) -> GBoolean;
     fn ns_css_style_element_cache_begin();
     fn ns_css_style_element_cache_end();
     fn ns_css_media_viewport_push(w: f64, h: f64);
@@ -84,11 +83,6 @@ pub fn c_str_ptr<'a>(p: *const c_char) -> Option<&'a CStr> {
 
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-fn c_input(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 fn take_text(p: *mut c_char) -> Option<Vec<u8>> {
@@ -227,8 +221,8 @@ pub fn shadow_adopted_css(root: Node) -> Option<Vec<u8>> {
 }
 
 pub fn is_self_contained(css: &[u8]) -> bool {
-    let c = c_input(css);
-    unsafe { ns_css_syntax_is_self_contained(c.as_ptr(), c.as_bytes().len()) != 0 }
+    let end = css.iter().position(|&b| b == 0).unwrap_or(css.len());
+    southstar_css_syntax::is_self_contained(&css[..end])
 }
 
 pub fn style_element_cache_end() {

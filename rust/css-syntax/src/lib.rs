@@ -2,9 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 use core::ops::Range;
 
-mod ffi;
+#[cfg(test)]
+mod tests;
 
 const MAX_NESTING: u32 = 128;
 const MAX_BRACKET_DEPTH: usize = 128;
@@ -247,7 +250,10 @@ impl Parser<'_> {
             (Kind::Number, number_end)
         };
         let mut component = Component::new(kind, start, end);
-        component.number = southstar_glib::ascii_strtod(&input[start..number_end]);
+        component.number = core::str::from_utf8(&input[start..number_end])
+            .ok()
+            .and_then(|text| text.parse().ok())
+            .unwrap_or(0.0);
         component.value = Some(number_end..end);
         self.offset = end;
         component

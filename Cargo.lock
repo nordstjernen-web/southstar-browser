@@ -1626,9 +1626,6 @@ dependencies = [
 [[package]]
 name = "southstar-css-syntax"
 version = "0.9.11-dev"
-dependencies = [
- "southstar-glib",
-]
 
 [[package]]
 name = "southstar-datetime"
@@ -1654,6 +1651,7 @@ dependencies = [
 name = "southstar-engine"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-syntax",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -1694,7 +1692,6 @@ dependencies = [
  "southstar-css",
  "southstar-css-media",
  "southstar-css-prop-syntax",
- "southstar-css-syntax",
  "southstar-datetime",
  "southstar-debuglog",
  "southstar-engine",

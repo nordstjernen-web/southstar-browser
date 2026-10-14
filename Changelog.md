@@ -41,6 +41,9 @@ Southstar Browser 0.9.11-dev:
 * Seeking in an MPEG-1 stream no longer overflows when the demuxer's byte-rate
   estimate is huge, and no longer computes a negative position in a file
   under 256 bytes; the new plmpeg fuzz target found both.
+* rust/css-syntax has no C ABI left and forbids unsafe code: four of its five
+  exports had no caller, the engine calls is_self_contained directly, and CSS
+  numbers parse with Rust's float parser instead of GLib's g_ascii_strtod.
 
 Southstar Browser 0.9.10:
 ======
