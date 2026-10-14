@@ -993,7 +993,7 @@ fn font_shorthand(js: Js, n: Node<'_>) -> String {
         get("font-style"),
         get("font-variant"),
         get("font-weight"),
-        get("font-stretch"),
+        lookup_value(js, n, "font-stretch"),
     );
     let (fsize, flh, ffamily) = (get("font-size"), get("line-height"), get("font-family"));
     let mut out = String::new();
@@ -1147,7 +1147,30 @@ fn str_of(c: Option<&core::ffi::CStr>) -> Option<&str> {
     c.and_then(|c| c.to_str().ok())
 }
 
+fn stretch_percentage(value: String) -> String {
+    let percent = match value.as_str() {
+        "ultra-condensed" => "50%",
+        "extra-condensed" => "62.5%",
+        "condensed" => "75%",
+        "semi-condensed" => "87.5%",
+        "normal" => "100%",
+        "semi-expanded" => "112.5%",
+        "expanded" => "125%",
+        "extra-expanded" => "150%",
+        "ultra-expanded" => "200%",
+        _ => return value,
+    };
+    percent.to_string()
+}
+
 pub(crate) fn lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
+    if name == "font-stretch" || name == "font-width" {
+        return lookup_value(js, n, "font-stretch").map(stretch_percentage);
+    }
+    lookup_value(js, n, name)
+}
+
+fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     let name = if name == "css-float" || name == "cssFloat" {
         "float"
     } else {

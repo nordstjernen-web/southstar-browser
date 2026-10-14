@@ -846,8 +846,9 @@ impl Prop {
     }
 }
 
-const ALIASES: [(&[u8], Prop); 16] = [
+const ALIASES: [(&[u8], Prop); 17] = [
     (b"word-wrap", Prop::OverflowWrap),
+    (b"font-width", Prop::FontStretch),
     (b"text-decoration-line", Prop::TextDecoration),
     (b"line-clamp", Prop::LineClamp),
     (b"text-wrap", Prop::WhiteSpace),
