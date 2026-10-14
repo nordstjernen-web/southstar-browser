@@ -207,7 +207,7 @@ impl<'a> Flow<'a> {
             }
         }
         let avail = horizontal_outer(c, cw_for_float);
-        let mut float_y = self.cursor_y;
+        let mut float_y = self.cursor_y + self.prev_margin_bottom;
         if clr == 0 && self.inline_line_top >= 0.0 && self.inline_line_top < self.cursor_y {
             float_y = self.inline_line_top;
         }
