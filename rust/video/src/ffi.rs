@@ -12,7 +12,7 @@ use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::decode::Decoder;
-use crate::vtt::Cue;
+use southstar_webvtt::Cue;
 use crate::{Cache, FetchKind, Sink};
 
 #[repr(transparent)]
@@ -983,7 +983,7 @@ pub unsafe extern "C" fn ns_video_active_cue_text(v: *const NsVideo) -> *const c
     };
     v.cues
         .as_ref()
-        .and_then(|cues| crate::vtt::active(&cues.0, v.cur_time))
+        .and_then(|cues| southstar_webvtt::active(&cues.0, v.cur_time))
         .map_or(ptr::null(), |c| c.text.as_ptr())
 }
 

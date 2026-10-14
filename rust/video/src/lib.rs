@@ -6,7 +6,6 @@ mod decode;
 mod ffi;
 mod media;
 mod mse;
-mod vtt;
 
 use core::ffi::{CStr, c_void};
 use std::collections::{HashMap, HashSet};
@@ -398,7 +397,7 @@ pub fn fetched(cache: &mut Cache, v: &mut NsVideo, kind: FetchKind, resp: &Respo
         }
         FetchKind::Track => {
             if let Some(body) = bounded {
-                v.cues = Some(Box::new(Cues(vtt::parse(body))));
+                v.cues = Some(Box::new(Cues(southstar_webvtt::parse(body))));
             }
         }
     }

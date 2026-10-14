@@ -24,6 +24,10 @@ Southstar Browser 0.9.11-dev:
   embedding API, the JS/GC binding layer, OS primitives, SIMD) and where it
   may not (parsers, engine logic, calls between Southstar's own crates). The
   agent guides describe the all-Rust tree instead of the C one it replaced.
+* The PNG/GIF/JPEG/BMP decoders move from rust/image-decoders into
+  rust/raster and WebVTT cue parsing from rust/video into rust/webvtt; both
+  new crates forbid unsafe code, so the decoders of untrusted image and
+  subtitle bytes are checked by the compiler to be memory-safe.
 
 Southstar Browser 0.9.10:
 ======

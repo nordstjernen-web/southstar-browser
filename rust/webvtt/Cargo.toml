@@ -1,0 +1,11 @@
+[package]
+name = "southstar-webvtt"
+description = "WebVTT cue parsing: timestamps, cue text with tags stripped and the common entities decoded"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

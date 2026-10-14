@@ -1924,11 +1924,9 @@ dependencies = [
 name = "southstar-image-decoders"
 version = "0.9.11-dev"
 dependencies = [
- "gif",
- "png",
  "southstar-av",
  "southstar-glib",
- "zune-jpeg",
+ "southstar-raster",
 ]
 
 [[package]]
@@ -2677,6 +2675,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-raster"
+version = "0.9.11-dev"
+dependencies = [
+ "gif",
+ "png",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "southstar-render"
 version = "0.9.11-dev"
 dependencies = [
@@ -2802,6 +2809,7 @@ dependencies = [
  "southstar-layout",
  "southstar-plmpeg",
  "southstar-style",
+ "southstar-webvtt",
 ]
 
 [[package]]
@@ -2859,6 +2867,10 @@ dependencies = [
  "southstar-http",
  "southstar-net",
 ]
+
+[[package]]
+name = "southstar-webvtt"
+version = "0.9.11-dev"
 
 [[package]]
 name = "southstar-woff2"

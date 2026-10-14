@@ -114,6 +114,7 @@ paint	483	157	39	0	382	21	45
 pdf	31	21	1	0	6	2	0
 plmpeg	0	0	0	0	0	0	0
 print	25	10	5	0	13	3	0
+raster	0	0	0	0	0	0	0
 render	71	32	5	0	60	9	2
 renderer-client	309	57	52	0	163	20	0
 renderer-host	170	140	8	0	128	7	0
@@ -138,5 +139,6 @@ webcrypto	124	122	0	0	119	13	0
 webgl	104	21	5	0	92	8	0
 webgpu	90	81	3	0	74	0	1
 websocket	53	4	7	0	29	1	0
+webvtt	0	0	0	0	0	0	0
 woff2	9	1	2	0	4	1	0
 xml	21	11	2	0	16	2	0
