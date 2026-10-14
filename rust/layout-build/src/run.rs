@@ -11,7 +11,7 @@ use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::collect::{
-    Collector, WS_COLLAPSE, WS_PRE_LINE, WS_PRESERVE, contains, white_space_mode,
+    Collector, LINE_SEPARATOR, WS_COLLAPSE, WS_PRE_LINE, WS_PRESERVE, contains, white_space_mode,
 };
 use crate::ffi::{self, RawLink, RunParts};
 use southstar_layout_content::text_input::utf8_skip;
@@ -27,8 +27,19 @@ fn collapse(c: &Collector<'_>, run_ws_mode: i32) -> Collapsed {
     let mut map = vec![0; buf.len() + 1];
     let mut prev_ws = run_ws_mode != WS_PRESERVE;
     let mut trailing_preserved = false;
+    let mut ends_in_collapsed_space = false;
+    let mut separator_bytes_left = 0;
     let mut ri = 0;
     for (i, &ch) in buf.iter().enumerate() {
+        if separator_bytes_left > 0 {
+            separator_bytes_left -= 1;
+            map[i] = text.len();
+            text.push(ch);
+            if separator_bytes_left == 0 {
+                prev_ws = true;
+            }
+            continue;
+        }
         while ri < c.ws_ranges.len() && c.ws_ranges[ri].end <= i {
             ri += 1;
         }
@@ -37,25 +48,40 @@ fn collapse(c: &Collector<'_>, run_ws_mode: i32) -> Collapsed {
             ws_mode = c.ws_ranges[ri].mode;
         }
         trailing_preserved = ws_mode == WS_PRESERVE;
+        let forced_break = (ws_mode == WS_PRE_LINE && ch == b'\n')
+            || (ws_mode != WS_PRESERVE && buf[i..].starts_with(LINE_SEPARATOR));
+        if forced_break && ends_in_collapsed_space {
+            text.pop();
+        }
         map[i] = text.len();
         if ws_mode == WS_PRESERVE {
             text.push(ch);
             prev_ws = ch == b'\n';
+            ends_in_collapsed_space = false;
             continue;
         }
         if ws_mode == WS_PRE_LINE && ch == b'\n' {
             text.push(b'\n');
             prev_ws = true;
+            ends_in_collapsed_space = false;
+            continue;
+        }
+        if forced_break {
+            text.push(ch);
+            separator_bytes_left = LINE_SEPARATOR.len() - 1;
+            ends_in_collapsed_space = false;
             continue;
         }
         if matches!(ch, b' ' | b'\t' | b'\n' | b'\r' | 0x0c) {
             if !prev_ws {
                 text.push(b' ');
+                ends_in_collapsed_space = true;
             }
             prev_ws = true;
         } else {
             text.push(ch);
             prev_ws = false;
+            ends_in_collapsed_space = false;
         }
     }
     map[buf.len()] = text.len();

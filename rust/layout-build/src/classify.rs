@@ -180,6 +180,9 @@ pub fn is_inline_dom(n: Option<Node<'_>>, styles: StyleTable) -> bool {
     if style_is_none(s) {
         return false;
     }
+    if name == Some(b"br") {
+        return ffi::clear_kind_of(s) == 0;
+    }
     if style_is_absolute_or_fixed(s) {
         return abs_joins_inline_run(n, styles);
     }
@@ -189,9 +192,6 @@ pub fn is_inline_dom(n: Option<Node<'_>>, styles: StyleTable) -> bool {
     }
     if (inner_is(d, INNER_FLEX) || inner_is(d, INNER_GRID)) && d.outer == OUTER_INLINE {
         return true;
-    }
-    if name == Some(b"br") && ffi::clear_kind_of(s) != 0 {
-        return false;
     }
     if !style_is_block(s) && contains_block_media(Some(n), styles) {
         return false;
