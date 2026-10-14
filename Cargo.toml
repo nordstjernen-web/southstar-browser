@@ -28,7 +28,6 @@ debug = false
 
 [profile.dev]
 panic = "abort"
-overflow-checks = false
 
 [patch.crates-io]
 boa_engine = { path = "third_party/boa_engine" }

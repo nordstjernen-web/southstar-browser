@@ -18,6 +18,9 @@ southstar_rust_env = {
   'NS_VERSION': meson.project_version(),
   'NS_BUILD_DATE': build_date,
 }
+if get_option('overflow_checks')
+  southstar_rust_env += {'CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS': 'true'}
+endif
 rust_cc = meson.get_compiler('c')
 if have_libav
   av_layout_prefix = '''#include <stddef.h>

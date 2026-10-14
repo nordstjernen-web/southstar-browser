@@ -14,3 +14,5 @@ option('wgpu_native_root', type: 'string', value: '',
        description: 'Root of an extracted wgpu-native release (expects include/webgpu/webgpu.h and lib/libwgpu_native.{so,a}). Used only when -Dwebgpu is enabled and pkg-config cannot find wgpu_native.')
 option('ns-pango', type: 'feature', value: 'auto',
        description: 'Shape text through the bundled ns-pango fork, which caches finished glyph strings across layouts. Disabled links the system Pango instead, with the Rust crates linking its stock symbol names.')
+option('overflow_checks', type: 'boolean', value: false,
+       description: 'Compile the Rust code of a release build with integer overflow checks, so an overflow aborts with its location instead of wrapping silently. Debug builds always check; CI turns this on.')

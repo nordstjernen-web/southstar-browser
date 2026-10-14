@@ -141,7 +141,7 @@ jobs:
         run: |
           set -o pipefail
           if [ -f meson.build ]; then
-            meson setup builddir --werror
+            meson setup builddir --werror -Doverflow_checks=true
             meson compile -C builddir 2>&1 | tee build.log
           elif [ -f Makefile ]; then
             make 2>&1 | tee build.log

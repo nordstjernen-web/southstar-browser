@@ -16,6 +16,10 @@ Southstar Browser 0.9.11-dev:
   in the unsafe budget so each number can only fall; ptr_as_ptr and
   transmute_ptr_to_ptr have no hits and are denied. Rust lints run in their
   own CI job through scripts/unsafe-budget.py --clippy.
+* Integer overflow checks are back on in the dev profile, and the new
+  -Doverflow_checks=true meson option turns them on in a release build; the
+  Linux CI builds and smoke-tests with it, so an overflow aborts with its
+  location instead of wrapping silently.
 
 Southstar Browser 0.9.10:
 ======
