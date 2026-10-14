@@ -138,6 +138,15 @@ Southstar Browser 0.9.11-dev:
   preloader resolve against the document's base URL instead of its own URL.
   A page under /sub/ with <base href="/sub/dir/"> used to request /sub/x.css
   and /sub/i.png, get 404s and render unstyled with a broken image.
+* getComputedStyle reports the common shorthands from their computed
+  longhands -- flex ("0 1 auto"), flex-flow, place-items/content/self,
+  border and its sides and logical pairs, outline, columns, column-rule,
+  scroll-margin/padding and the -block/-inline pairs -- instead of
+  undefined, an empty string or the authored text. Every shorthand the
+  engine supports is now a string property of the computed declaration, and
+  border, outline, column-rule, text-decoration and -webkit-text-fill
+  colours left at their initial currentcolor report the element's color
+  rather than "".
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is
