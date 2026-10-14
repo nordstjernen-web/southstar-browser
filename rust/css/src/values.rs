@@ -20,6 +20,7 @@ use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
 use crate::shadow::{self, ShadowList};
 use crate::shorthand::border_radius_canonical;
+use crate::text::split_top_level_commas;
 use crate::time;
 use crate::transform::{
     self, Individual, MATRIX, MATRIX3D, Op, ROTATE, ROTATE3D, SCALE, SKEW, TRANSLATE, Transform,
@@ -725,6 +726,11 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
         b"transition-delay" | b"transition-duration" | b"animation-delay" | b"animation-duration"
     ) {
         return time::list_serialize(value, false);
+    }
+    if matches!(prop, b"font-feature-settings" | b"font-variation-settings") {
+        let items = split_top_level_commas(c_text(value).to_bytes());
+        let joined = items.join(&b", "[..]);
+        return (joined != c_text(value).to_bytes()).then_some(joined);
     }
     math_canonical(&c_text(value))
 }

@@ -147,6 +147,10 @@ Southstar Browser 0.9.11-dev:
   border, outline, column-rule, text-decoration and -webkit-text-fill
   colours left at their initial currentcolor report the element's color
   rather than "".
+* Authored time lists (transition-duration/-delay, animation-duration/
+  -delay) and font-feature-settings/font-variation-settings serialize with
+  ", " between items in style rules and element.style, as other browsers
+  do: "500ms,1.5s" now reads back as "500ms, 1.5s".
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

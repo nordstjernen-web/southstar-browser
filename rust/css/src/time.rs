@@ -458,7 +458,7 @@ pub fn list_serialize(value: &[u8], computed: bool) -> Option<Vec<u8>> {
             out.extend_from_slice(&b[is..ie]);
         }
     }
-    changed.then_some(out)
+    (changed || out != b).then_some(out)
 }
 
 pub(crate) fn time_text(ms: f64) -> Vec<u8> {
