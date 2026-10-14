@@ -62,7 +62,10 @@ jobs:
           python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: cargo test
-        run: ./scripts/rust-tests.sh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev
+          ./scripts/rust-tests.sh
 
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
