@@ -201,7 +201,10 @@ compile with the minimum supported version.
 - A new crates.io dependency needs a reason in its commit message; keep the
   dependency tree small. Crates from Servo or Firefox (`html5ever`,
   `cssparser`, `selectors`, `url`, `encoding_rs`, …) count as upstream browser
-  engine code and stay out.
+  engine code and stay out. `deny.toml` enforces that list, RustSec
+  advisories, licences compatible with NSL-1.0 OR GPL-3.0-or-later and
+  crates.io as the only source: `cargo deny check` must pass (CI runs it on
+  every change to a manifest or `Cargo.lock`, and `cargo audit` nightly).
 - Unit tests live next to the code: `#[cfg(test)] mod tests;` in the crate
   root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
   crate that has them (CI runs it too). A test binary links only the crate and

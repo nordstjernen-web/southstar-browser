@@ -46,6 +46,12 @@ Southstar Browser 0.9.11-dev:
   HPACK against RFC 7541's examples, chunked bodies split at every byte,
   HTTP/1.1 lines and an HTTP/2 exchange, hand-built BMP and GIF images, and
   WebVTT cues.
+* deny.toml and a supply-chain workflow check the dependency tree: cargo-deny
+  on every change to a manifest or Cargo.lock (RustSec advisories, yanked
+  crates, licences compatible with NSL-1.0 OR GPL-3.0-or-later, crates.io as
+  the only source, and a ban on Servo/Firefox engine crates and libcurl),
+  and cargo-audit every night so a new advisory against an unchanged
+  Cargo.lock still turns red.
 
 Southstar Browser 0.9.10:
 ======

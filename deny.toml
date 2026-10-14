@@ -1,0 +1,51 @@
+# Southstar — cargo-deny policy: RustSec advisories, licences compatible with NSL-1.0 OR GPL-3.0-or-later, banned engine crates and crates.io as the only source.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    { crate = "html5ever", reason = "upstream browser engine code (Servo); rust/html5 is the parser" },
+    { crate = "markup5ever", reason = "upstream browser engine code (Servo)" },
+    { crate = "xml5ever", reason = "upstream browser engine code (Servo)" },
+    { crate = "cssparser", reason = "upstream browser engine code (Servo); rust/css-syntax is the tokenizer" },
+    { crate = "selectors", reason = "upstream browser engine code (Servo)" },
+    { crate = "servo_arc", reason = "upstream browser engine code (Servo)" },
+    { crate = "stylo", reason = "upstream browser engine code (Servo/Firefox)" },
+    { crate = "string_cache", reason = "upstream browser engine code (Servo)" },
+    { crate = "webrender", reason = "upstream browser engine code (Firefox)" },
+    { crate = "mozjs", reason = "upstream browser engine code (Firefox); Boa is the JavaScript engine" },
+    { crate = "url", reason = "upstream browser engine code (Servo); rust/url is the URL parser" },
+    { crate = "idna", reason = "upstream browser engine code (Servo); rust/url implements UTS #46" },
+    { crate = "encoding_rs", reason = "upstream browser engine code (Firefox); uchardet and GLib convert charsets" },
+    { crate = "curl", reason = "rust/http replaced libcurl" },
+    { crate = "curl-sys", reason = "rust/http replaced libcurl" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
