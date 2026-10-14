@@ -3,6 +3,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT
 
+#![forbid(unsafe_code)]
+
 mod audio;
 mod audio_tables;
 mod buffer;

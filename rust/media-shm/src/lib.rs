@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 use core::sync::atomic::AtomicU32;
 
 pub const AUDIO_CLOCK_MAGIC: u32 = 0x4e53_4143;

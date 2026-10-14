@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The eleven crates that hold no unsafe code (html5, url, plmpeg, minimp3,
+  js-temporal, js-bind, js-realm, webaudio, media-shm, about-style and
+  jsshell) carry #![forbid(unsafe_code)], so they stay that way.
 
 Southstar Browser 0.9.10:
 ======
