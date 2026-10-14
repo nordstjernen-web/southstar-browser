@@ -8,9 +8,7 @@ use std::ffi::CString;
 
 use southstar_gtk_ffi::{self as gtk, GCallback, GtkWidget};
 
-unsafe extern "C" {
-    fn ns_i18n(text: *const c_char) -> *const c_char;
-}
+unsafe extern "C" {}
 
 macro_rules! handler {
     ($f:expr) => {
@@ -32,13 +30,8 @@ pub unsafe fn connect<T>(
     unsafe { gtk::g_signal_connect_data(instance.cast(), signal.as_ptr(), handler, data, None, 0) }
 }
 
-pub fn tr(text: &CStr) -> &'static CStr {
-    let out = unsafe { ns_i18n(text.as_ptr()) };
-    if out.is_null() {
-        c""
-    } else {
-        unsafe { CStr::from_ptr(out) }
-    }
+pub fn tr(text: &CStr) -> &CStr {
+    southstar_i18n::translate(text).unwrap_or(text)
 }
 
 pub fn tr_string(text: &CStr) -> String {

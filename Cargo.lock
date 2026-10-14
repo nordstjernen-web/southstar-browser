@@ -1551,6 +1551,7 @@ dependencies = [
 name = "southstar-browser"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-bytecode-cache",
  "southstar-config",
  "southstar-css-media",
  "southstar-dom",
@@ -2810,10 +2811,12 @@ dependencies = [
 name = "southstar-shell"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-bytecode-cache",
  "southstar-config",
  "southstar-ffi",
  "southstar-glib",
  "southstar-gtk-ffi",
+ "southstar-i18n",
  "southstar-media-shm",
  "southstar-url",
 ]

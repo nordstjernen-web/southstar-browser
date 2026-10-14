@@ -157,6 +157,11 @@ Southstar Browser 0.9.11-dev:
   the string passed in, and an invalid easing ("bogus", a cubic-bezier x
   outside [0, 1], a list) throws a TypeError as the standard requires
   instead of being accepted.
+* rust/mat4, rust/datetime and rust/helper-ffi lose their C exports, none of
+  which had a caller, and now forbid unsafe code. The shell and the browser
+  call rust/i18n and rust/bytecode-cache directly instead of through
+  ns_i18n*/ns_bytecode_cache_* exports; the shell's tr() no longer hands a
+  caller's string back as &'static when it has no translation.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

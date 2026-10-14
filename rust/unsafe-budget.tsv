@@ -5,8 +5,8 @@ anim	129	23	22	0	81	7	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
-browser	724	295	88	0	486	47	0
-bytecode-cache	13	0	4	0	7	3	0
+browser	726	293	88	0	488	48	0
+bytecode-cache	2	0	0	0	2	2	0
 camera	59	11	17	0	27	3	0
 canvas	231	135	20	0	179	21	0
 config	37	18	9	0	23	6	0
@@ -15,7 +15,7 @@ css	1195	45	209	0	739	79	0
 css-media	0	0	0	0	0	0	0
 css-prop-syntax	23	1	6	0	10	2	0
 css-syntax	0	0	0	0	0	0	0
-datetime	22	0	9	0	8	4	0
+datetime	0	0	0	0	0	0	0
 debuglog	22	5	6	0	13	3	0
 dom	375	3	89	0	189	31	2
 engine	260	69	24	0	185	22	0
@@ -27,7 +27,7 @@ glctx	81	55	4	0	3	0	0
 glib	24	63	0	0	11	1	4
 gtk-ffi	29	374	0	0	0	0	0
 headless	270	164	2	0	219	26	0
-helper-ffi	5	0	2	0	2	0	0
+helper-ffi	0	0	0	0	0	0	0
 history	31	18	5	0	22	6	0
 html-parser	60	16	7	0	41	1	0
 html-util	54	10	10	0	31	2	0
@@ -35,7 +35,7 @@ html5	0	0	0	0	0	0	0
 http	63	55	0	0	33	6	0
 http-cache	63	25	8	0	37	10	0
 http-wire	0	0	0	0	0	0	0
-i18n	20	0	3	0	13	4	0
+i18n	13	0	0	0	11	4	0
 idb	17	12	1	0	15	6	0
 image	153	43	18	0	95	22	1
 image-decoders	88	28	12	0	44	5	0
@@ -104,7 +104,7 @@ layout-query	44	2	15	0	14	0	0
 layout-sizing	56	27	10	0	35	1	0
 layout-table	21	12	2	0	16	0	0
 layout-tree	43	13	13	0	18	0	0
-mat4	31	0	10	0	11	2	0
+mat4	0	0	0	0	0	0	0
 mathml	21	24	2	0	16	2	0
 media-shm	0	0	0	0	0	0	0
 mic	20	5	5	0	3	0	0
@@ -124,7 +124,7 @@ renderer-host	169	139	8	0	127	7	0
 safebrowsing	38	6	3	0	18	6	0
 sandbox	105	49	10	0	28	9	0
 selection	57	5	11	0	31	4	0
-shell	1377	305	135	0	841	264	0
+shell	1375	300	135	0	839	265	0
 southstar-ffi	5	0	5	0	0	0	0
 spellcheck	17	6	3	0	3	0	0
 sqlite	29	23	0	0	27	6	0

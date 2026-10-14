@@ -81,7 +81,6 @@ unsafe extern "C" {
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn free(p: *mut c_void);
 
-    fn ns_i18n(text: *const c_char) -> *const c_char;
     fn ns_layer_update_free(u: *mut c_void);
 }
 
@@ -94,7 +93,7 @@ fn media(v: *mut NsProcView) -> *mut Media {
 }
 
 fn tr(text: &CStr) -> *const c_char {
-    unsafe { ns_i18n(text.as_ptr()) }
+    southstar_i18n::translate(text).unwrap_or(text).as_ptr()
 }
 
 fn nonempty(s: *const c_char) -> bool {

@@ -2,9 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_long};
+#![forbid(unsafe_code)]
 
-mod ffi;
+use core::ffi::{c_int, c_long};
 
 pub const MAX_YEAR: c_int = 275_760;
 

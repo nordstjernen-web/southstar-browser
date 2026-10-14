@@ -12,10 +12,12 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }
+southstar-i18n = { path = "../i18n" }
 southstar-media-shm = { path = "../media-shm" }
 southstar-url = { path = "../url" }
 

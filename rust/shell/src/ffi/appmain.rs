@@ -93,7 +93,6 @@ unsafe extern "C" {
     fn ns_security_add_exec_dir(dir: *const c_char);
     fn ns_security_seccomp_init();
     fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
-    fn ns_i18n_init(self_exe: *const c_char);
     fn ns_config_init();
     fn ns_config_shutdown();
     fn ns_config_get() -> *const NsConfig;
@@ -140,8 +139,6 @@ unsafe extern "C" {
     fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
     fn ns_cache_init();
     fn ns_cache_shutdown();
-    fn ns_bytecode_cache_init();
-    fn ns_bytecode_cache_shutdown();
     fn ns_history_init();
     fn ns_history_shutdown();
     fn ns_font_init();
@@ -651,7 +648,9 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
             ns_net_set_log_fetches(1);
         }
         ns_cache_init();
-        ns_bytecode_cache_init();
+    }
+    southstar_bytecode_cache::init();
+    unsafe {
         ns_history_init();
         ns_font_init();
         ns_spell_init();
@@ -669,8 +668,8 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
         print_perf();
     }
     drop(file_url);
+    southstar_bytecode_cache::shutdown();
     unsafe {
-        ns_bytecode_cache_shutdown();
         ns_history_shutdown();
         ns_cache_shutdown();
         ns_net_shutdown();
@@ -785,7 +784,8 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         return 77;
     }
     init_self_exe(args.first().copied());
-    unsafe { ns_i18n_init(self_exe()) };
+    let exe = self_exe();
+    southstar_i18n::init((!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) }));
     if appmain::flag_given(&args, b"--private") {
         setenv(c"NS_PRIVATE", c"1");
     }

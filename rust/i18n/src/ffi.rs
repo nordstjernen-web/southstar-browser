@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of UI string translation, as declared in src/i18n.h, and the GLib calls behind it.
+//! Southstar — the GLib calls behind UI string translation: environment, language names and reading catalogue files.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -60,22 +60,4 @@ pub(crate) fn file_text(path: &CStr) -> Option<Vec<u8>> {
         )
     };
     (loaded != glib::FALSE).then(|| unsafe { take(contents) }.into_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_i18n_init(self_exe: *const c_char) {
-    crate::init(unsafe { borrow(self_exe) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_i18n(text: *const c_char) -> *const c_char {
-    match unsafe { borrow(text) }.and_then(crate::translate) {
-        Some(hit) => hit.as_ptr(),
-        None => text,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_i18n_language() -> *const c_char {
-    crate::language().map_or(ptr::null(), CStr::as_ptr)
 }

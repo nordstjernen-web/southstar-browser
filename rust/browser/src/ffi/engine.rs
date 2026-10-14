@@ -196,8 +196,6 @@ unsafe extern "C" {
     fn ns_net_set_allow_file_urls(allow: GBoolean);
     fn ns_cache_init();
     fn ns_cache_shutdown();
-    fn ns_bytecode_cache_init();
-    fn ns_bytecode_cache_shutdown();
     fn ns_history_init();
     fn ns_history_shutdown();
     fn ns_font_init();
@@ -559,7 +557,9 @@ pub fn init_subsystems() {
         ns_net_init();
         ns_net_set_allow_file_urls(1);
         ns_cache_init();
-        ns_bytecode_cache_init();
+    }
+    southstar_bytecode_cache::init();
+    unsafe {
         ns_history_init();
         ns_font_init();
         ns_spell_init();
@@ -575,9 +575,9 @@ pub unsafe fn sandbox(self_exe: *const c_char) {
 }
 
 pub fn shutdown() {
+    unsafe { ns_font_shutdown() };
+    southstar_bytecode_cache::shutdown();
     unsafe {
-        ns_font_shutdown();
-        ns_bytecode_cache_shutdown();
         ns_history_shutdown();
         ns_cache_shutdown();
         ns_net_shutdown();
