@@ -18,6 +18,7 @@ const INVALID_STATE_ERR: i32 = 11;
 struct Page {
     buffer: Option<Vec<u8>>,
     script: usize,
+    last_written: Vec<(usize, usize)>,
     parser_open: bool,
     dynamic_markup: i32,
 }
@@ -69,13 +70,33 @@ fn script_addr(node: Option<Element>) -> usize {
     node.map_or(0, |n| n.as_ptr() as usize)
 }
 
-fn write_parent(js: Js) -> Option<(Element, Option<Element>)> {
+fn last_written(js: Js, script: usize, parent: Element) -> Option<Element> {
+    let written = with_page(js, |page| {
+        page.last_written
+            .iter()
+            .find(|(owner, _)| *owner == script)
+            .map(|(_, node)| *node)
+    })?;
+    southstar_dom::children(parent).find(|child| child.as_ptr() as usize == written)
+}
+
+fn note_written(js: Js, script: usize, node: Element) {
+    let node = node.as_ptr() as usize;
+    with_page(js, |page| {
+        match page.last_written.iter_mut().find(|(owner, _)| *owner == script) {
+            Some(entry) => entry.1 = node,
+            None => page.last_written.push((script, node)),
+        }
+    });
+}
+
+fn write_parent(js: Js, script_addr: usize) -> Option<(Element, Option<Element>)> {
     let doc = ffi::current_document(js)?;
-    let script = node_at(with_page(js, |page| page.script));
-    if let Some(script) = script
+    if let Some(script) = node_at(script_addr)
         && let Some(parent) = script.parent()
     {
-        return Some((parent, Some(script)));
+        let after = last_written(js, script_addr, parent).unwrap_or(script);
+        return Some((parent, Some(after)));
     }
     let body = southstar_dom::index::find_first_element(doc, c"body")?;
     Some((body, body.last_child()))
@@ -93,7 +114,8 @@ pub(crate) fn flush(js: Js) {
     if pending.is_none() {
         return;
     }
-    let target = write_parent(js);
+    let script = with_page(js, |page| page.script);
+    let target = write_parent(js, script);
     let html = with_page(js, |page| {
         page.script = 0;
         page.buffer
@@ -135,9 +157,12 @@ pub(crate) fn flush(js: Js) {
         inserted.push(c);
     }
     ffi::free_node(fragment);
-    if inserted.is_empty() {
+    let Some(&last) = inserted.last() else {
         adjust_dynamic_markup(js, -1);
         return;
+    };
+    if script != 0 {
+        note_written(js, script, last);
     }
     ffi::with_main_context(js, |scope| {
         let global = scope.global();
@@ -173,6 +198,7 @@ fn open_current(js: Js) {
             buffer.clear();
         }
         page.script = 0;
+        page.last_written.clear();
         page.parser_open = true;
     });
     ffi::mark_mutated(js);
