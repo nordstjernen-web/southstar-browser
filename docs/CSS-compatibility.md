@@ -67,6 +67,7 @@ carry forward from the 1.0.21 pass.
 | `box-sizing` | ✅ | `content-box`/`border-box` |
 | margins / padding / borders / `border-radius` | ✅ | incl. per-corner radii; margin collapsing for adjacent block margins; a side whose `border-style` is `none`/`hidden` contributes zero used border width per Backgrounds 3. `getComputedStyle` returns the CSSOM **resolved (used) value** in px for `margin-*`/`padding-*`/`border-*-width` and for `top`/`right`/`bottom`/`left` on positioned boxes (percentages resolved against the containing block), and `line-height`/`font-weight` resolve to used px / the numeric weight (`ns_computed_lookup` in `src/js.c`) |
 | `min/max-width`, `min/max-height` | ✅ | |
+| Floats (`float`, `clear`) | ✅ | a float starts below the previous block's bottom margin; floats whose percentage widths overrun the line by less than 1/64 px (grid systems summing to 100.00002%) still fit; floats paint above the backgrounds of in-flow siblings and below positioned boxes (CSS 2.1 Appendix E) |
 | Intrinsic `min-content` / `max-content` / `fit-content` | ✅ | shrink-to-fit via content measurement |
 | `aspect-ratio` | ✅ | verified: width-driven height from ratio |
 | `overflow` / `overflow-x` / `overflow-y` (`visible`/`hidden`/`clip`/`auto`/`scroll`) | ✅ | scrollable boxes get working scrollbars + hit-testing |
@@ -85,6 +86,7 @@ carry forward from the 1.0.21 pass.
 | `position: static / relative / absolute / fixed` | ✅ | |
 | `position: sticky` | ✅ | verified: header pins within its scroll container |
 | `top`/`right`/`bottom`/`left`, `inset` shorthand | ✅ | |
+| Inline element as containing block | ✅ | an absolutely positioned box whose nearest positioned ancestor is inline (a relative `<a>`/`<span>` with a badge) is placed against the union of that element's fragments, as `getBoundingClientRect` reports it |
 | `z-index` & stacking contexts | ✅ | opacity/transform/filter establish contexts |
 | Top layer (`dialog` modal, `::backdrop`) | 🟡 | modal `<dialog>` painted in the top layer; popover top-layer limited |
 
@@ -100,6 +102,7 @@ carry forward from the 1.0.21 pass.
 | `align-content` for wrapped lines | ✅ | verified: center/flex-end/space-*/stretch pack the cross-axis line group when the container has spare cross size (`layout_flex_row_wrap` in `src/layout.c`) |
 | `gap` / `row-gap` / `column-gap` | ✅ | |
 | `order` | ✅ | |
+| Auto margins on flex items | ✅ | absorb free space on both axes, including replaced items (`<img>`/`<video>`/`<svg>`), whose own layout does not resolve `auto` margins |
 
 ## Grid (Grid 1/2)
 
@@ -154,7 +157,7 @@ carry forward from the 1.0.21 pass.
 
 | Topic | Status | Notes |
 |-------|:--:|------|
-| `content` on `::before`/`::after` (strings, `attr()`, counters) | ✅ | see Selectors |
+| `content` on `::before`/`::after` (strings, `attr()`, counters) | ✅ | see Selectors; generated text inside an inline element takes the pseudo-element's own `color`, `visibility`, `font-size`, `font-weight`, `font-style` and `font-family` (icon fonts), and an absolutely positioned `::before`/`::after` on an inline host is laid out out of flow |
 | `quotes` + `open-quote`/`close-quote`/`no-open-quote`/`no-close-quote` | ✅ | author quote pairs (with CSS string escapes like `"\00AB"`) drive both `<q>` rendering — nesting depth picks the pair, the last pair repeating — and `open-quote`/`close-quote` in pseudo-element `content`; `quotes: none` suppresses the marks; the default pairs are `“ ” ‘ ’` (`quotes_string_for` in `src/layout.c`) |
 
 ## User interface (UI 4)
@@ -176,7 +179,7 @@ carry forward from the 1.0.21 pass.
 | `text-transform` (uppercase/lowercase/capitalize) | ✅ | |
 | `text-indent` (incl. negative sprite-hiding) | ✅ | |
 | `letter-spacing` / `word-spacing` / `tab-size` | ✅ | |
-| `white-space` (`normal`/`nowrap`/`pre`/`pre-wrap`/`pre-line`/`break-spaces`) | ✅ | |
+| `white-space` (`normal`/`nowrap`/`pre`/`pre-wrap`/`pre-line`/`break-spaces`) | ✅ | collapsible spaces around a forced break (`<br>`, a `pre-line` newline) are removed, so the next line does not start indented; `<br>` breaks the line whatever its `display` except `none` |
 | `word-break` / `overflow-wrap` / `text-wrap`(`-mode`) / `hyphens` | ✅ | wrapping keywords mapped; `hyphens:auto` enables Pango inserted hyphens using the element language, while `manual`/`none` keep automatic insertion disabled |
 | `font-variant: small-caps`, `font-variant-ligatures`, `font-feature-settings`, `font-variation-settings` | ✅ | common/discretionary/historical/contextual ligature keywords, quoted four-character feature tags, and variable-font axes map to Pango OpenType settings |
 | `direction` / `unicode-bidi`, `:dir()` | 🟡 | base direction drives Pango + `text-align:start/end`; full bidi override partial |
@@ -274,7 +277,7 @@ same task.
 | `CSSRule` / `CSSStyleRule` types | ✅ | proper prototype chain (`CSSStyleRule` → `CSSRule`) and `type` constants (`STYLE_RULE`=1, `MEDIA_RULE`=4, …); read-only `type` / `parentRule` / `parentStyleSheet` |
 | `CSSStyleRule.style` | ✅ | a live `CSSStyleDeclaration` (`[SameObject]`, `[PutForwards=cssText]`); `cssText` serializes the declaration block canonically |
 | `CSSStyleRule.selectorText` | 🟡 | getter + validating setter (invalid selectors rejected, re-cascades on change); the selector text is kept largely verbatim |
-| `insertRule` / `deleteRule` (sheet + grouping) | ✅ | index validation (`IndexSizeError`), parse errors (`SyntaxError`), `@import`/`@namespace` constraints; mutates the live `CSSRuleList` in place |
+| `insertRule` / `deleteRule` (sheet + grouping) | ✅ | index validation (`IndexSizeError`), parse errors (`SyntaxError`), `@import`/`@namespace` constraints; mutates the live `CSSRuleList` in place. Linear in the number of rules: the list is synced from the changed index, and once a burst of mutations has re-serialized 512 rules, further sheet rebuilds wait for the end of the microtask or the next `getComputedStyle` (CSS-in-JS libraries insert thousands of rules one at a time) |
 | `CSSGroupingRule` / `CSSMediaRule` / `CSSSupportsRule` | ✅ | nested `cssRules`; `CSSMediaRule` serializes its media query list (lower-cased types/features, leading `all and` dropped) |
 | `CSSStyleDeclaration` (`el.style`) | ✅ | `getPropertyValue` / `setProperty` / `removeProperty` / `getPropertyPriority`, indexed `item()` + `length`, `Symbol.iterator`, `cssText` round-trip |
 | `new CSSStyleSheet()` + `adoptedStyleSheets` | 🟡 | `replace` / `replaceSync` apply styles and `adoptedStyleSheets` works on documents and shadow roots; rule introspection on a *constructed* sheet is limited |

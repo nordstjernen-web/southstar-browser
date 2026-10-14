@@ -75,6 +75,33 @@ Southstar Browser 0.9.11-dev:
   attrs::remove_attribute, Node::append, Node::detach) instead of its C
   exports, removing each crate's copy of those extern declarations.
 
+* Element.setHTML() and the HTML Standard's positional parsing methods —
+  appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/
+  replaceWithHTML on elements and character data, each with an Unsafe
+  variant — parse in the right context, attach declarative shadow roots,
+  honour runScripts and a sanitizer option, and a Sanitizer class holds its
+  configuration. WPT domparsing/positional-methods.html 7 -> 480/480.
+* blob: URLs take the origin of the URL they wrap, so a page can reach into
+  an iframe it navigated to one of its own blobs (html5lib_url WPT tests:
+  +2144 subtests).
+* insertRule and other CSSOM rule mutations no longer re-serialize the whole
+  sheet each time: CSS-in-JS sites that insert thousands of rules (bbc.com)
+  finish hydrating instead of hitting the 60 s script limit.
+* A <br> breaks the line whatever its display (rust-lang.org's tagline), and
+  spaces around a forced break no longer indent the next line.
+* ::before/::after text in inline elements takes its own colour,
+  visibility, size, weight, style and font family (MDN's hidden heading
+  anchors, icon fonts), and positioned ones leave the flow.
+* An absolutely positioned box inside an inline positioned element (a
+  relative link or span) is placed against that element, not the page.
+* Floats start below the previous block's bottom margin (archlinux.org's
+  news list), fit when percentage widths overrun the line by under 1/64 px
+  (python.org's four-column rows), and paint above in-flow backgrounds.
+* Auto margins centre images and other replaced flex items (go.dev's logo
+  grid).
+* hwb() and hsl() channels that land on an exact half round up, as in other
+  engines.
+
 Southstar Browser 0.9.10:
 ======
 * <script type="module"> works on Boa: modules get import.meta (url, main,
