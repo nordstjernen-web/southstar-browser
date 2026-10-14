@@ -20,7 +20,7 @@ use ffi::{
     PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout, Texture,
 };
 use parse::{eq_ci, is_ws};
-use southstar_dom::{Kind, Node, children};
+use southstar_dom::{Kind, Node, Tree, children};
 use southstar_glib::boolean;
 use southstar_style::{Prop, StyleRef, StyleTable, Value, parse_color};
 use state::{
@@ -1313,11 +1313,11 @@ pub fn looks_like_svg(data: &[u8]) -> bool {
         .any(|i| data[i] == b'<' && data[i..i + 4].eq_ignore_ascii_case(b"<svg"))
 }
 
-fn parse_svg(data: &[u8]) -> Option<ffi::Document> {
+fn parse_svg(data: &[u8]) -> Option<Tree> {
     if data.is_empty() || data.len() > MAX_INPUT_BYTES || !looks_like_svg(data) {
         return None;
     }
-    ffi::Document::parse(data)
+    Some(southstar_html_parser::parse_document(data, true))
 }
 
 pub fn render_bytes(cr: Canvas, data: &[u8], width: f64, height: f64) -> bool {
@@ -1330,7 +1330,7 @@ pub fn render_bytes(cr: Canvas, data: &[u8], width: f64, height: f64) -> bool {
     let Some(doc) = parse_svg(data) else {
         return false;
     };
-    let Some(root) = find_root(doc.node()) else {
+    let Some(root) = find_root(doc.root()) else {
         return false;
     };
     render_node(cr, root, width, height, StyleTable::none(), None);
@@ -1339,7 +1339,7 @@ pub fn render_bytes(cr: Canvas, data: &[u8], width: f64, height: f64) -> bool {
 
 pub fn decode_bytes(data: &[u8]) -> Option<(*mut Texture, i32, i32)> {
     let doc = parse_svg(data)?;
-    let root = find_root(doc.node())?;
+    let root = find_root(doc.root())?;
     let size = intrinsic_size(Some(root));
     let mut w = if size.has_width != 0 {
         size.width

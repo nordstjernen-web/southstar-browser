@@ -476,18 +476,16 @@ pub(crate) fn writeln(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
 }
 
 fn replace_children(js: Js, doc: Element, markup: &[u8]) {
-    let Some(parsed) = ffi::parse_html(markup) else {
-        return;
-    };
+    let parsed = ffi::parse_html(markup);
     ffi::orphan_children(js, doc);
-    let mut child = parsed.first_child();
+    let mut child = parsed.root().first_child();
     while let Some(c) = child {
         child = c.next_sibling();
         ffi::remove_node(c);
         ffi::append_child(doc, c);
         ffi::index_child_change(js, doc, c);
     }
-    ffi::free_node(parsed);
+    drop(parsed);
     ffi::mark_mutated(js);
 }
 

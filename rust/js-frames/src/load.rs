@@ -380,12 +380,10 @@ fn plaintext_document(iframe: Node<'_>, text: &CStr) -> Built<'static> {
 }
 
 fn xml_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
-    let doc = load::xml_parse(decoded)?;
-    let Some(root) = southstar_dom::children(doc).find(|child| child.kind() == Kind::Element)
-    else {
-        load::free_node(doc);
-        return None;
-    };
+    let parsed = load::xml_parse(decoded)?;
+    let root =
+        southstar_dom::children(parsed.root()).find(|child| child.kind() == Kind::Element)?;
+    let doc = parsed.into_root();
     attach(iframe, doc);
     Some(Built {
         root,
@@ -395,11 +393,9 @@ fn xml_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
 }
 
 fn html_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
-    let doc = load::html_parse(decoded)?;
-    let Some(root) = southstar_dom::index::find_first_element(doc, c"html") else {
-        load::free_node(doc);
-        return None;
-    };
+    let parsed = load::html_parse(decoded);
+    let root = southstar_dom::index::find_first_element(parsed.root(), c"html")?;
+    let doc = parsed.into_root();
     attach(iframe, doc);
     Some(Built {
         root,

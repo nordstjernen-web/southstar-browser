@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter, GPtrArray};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -62,19 +62,6 @@ unsafe extern "C" {
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_node_is_shadow_root(node: *const NsNode) -> GBoolean;
     fn ns_node_is_embedded_doc(node: *const NsNode) -> GBoolean;
-    fn ns_html_parse_fragment_with_scripting(
-        context_tag: *const c_char,
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
-    fn ns_html_parse_fragment_in_context(
-        context: *const NsNode,
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
-    fn ns_html_convert_declarative_shadow(root: *mut NsNode);
     fn g_str_hash(v: *const c_void) -> c_uint;
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
@@ -296,38 +283,16 @@ pub(crate) fn hidden_child(node: Element) -> bool {
     }
 }
 
-pub(crate) fn parse_fragment_for_tag(
-    tag: &CStr,
-    markup: &[u8],
-    scripting: bool,
-) -> Option<Element> {
-    node(unsafe {
-        ns_html_parse_fragment_with_scripting(
-            tag.as_ptr(),
-            markup.as_ptr().cast(),
-            markup.len() as isize,
-            glib::boolean(scripting),
-        )
-    })
+pub(crate) fn parse_fragment_for_tag(tag: &CStr, markup: &[u8], scripting: bool) -> Tree {
+    southstar_html_parser::parse_fragment_for_tag(tag, markup, scripting)
 }
 
-pub(crate) fn parse_fragment_in_context(
-    context: Element,
-    markup: &[u8],
-    scripting: bool,
-) -> Option<Element> {
-    node(unsafe {
-        ns_html_parse_fragment_in_context(
-            context.as_ptr(),
-            markup.as_ptr().cast(),
-            markup.len() as isize,
-            glib::boolean(scripting),
-        )
-    })
+pub(crate) fn parse_fragment_in_context(context: Element, markup: &[u8], scripting: bool) -> Tree {
+    southstar_html_parser::parse_fragment(Some(context), markup, scripting)
 }
 
 pub(crate) fn convert_declarative_shadow(root: Element) {
-    unsafe { ns_html_convert_declarative_shadow(root.as_mut_ptr()) };
+    southstar_html_parser::attach_declarative_shadow_roots(root);
 }
 
 pub(crate) struct NameSet(*mut GHashTable);

@@ -219,8 +219,6 @@ unsafe extern "C" {
     fn g_object_unref(object: *mut c_void);
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_net_navigator_languages() -> *mut *mut c_char;
     fn ns_texture_new(
         width: c_int,
@@ -735,25 +733,6 @@ pub fn navigator_languages() -> Vec<Vec<u8>> {
     }
     unsafe { g_strfreev(list) };
     out
-}
-
-pub struct Document(*mut NsNode);
-
-impl Document {
-    pub fn parse(data: &[u8]) -> Option<Document> {
-        let doc = unsafe { ns_html_parse(data.as_ptr().cast(), data.len() as isize) };
-        (!doc.is_null()).then_some(Document(doc))
-    }
-
-    pub fn node(&self) -> Node<'_> {
-        unsafe { Node::from_ptr(self.0) }.expect("parsed document")
-    }
-}
-
-impl Drop for Document {
-    fn drop(&mut self) {
-        unsafe { ns_node_free(self.0) };
-    }
 }
 
 #[unsafe(no_mangle)]

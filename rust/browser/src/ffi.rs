@@ -17,7 +17,7 @@ use core::mem::offset_of;
 use core::ptr;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{GBoolean, GHashTable, GPtrArray, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -127,7 +127,7 @@ struct RawSelection {
 }
 
 pub struct NsBrowser {
-    doc: Cell<*mut NsNode>,
+    doc: RefCell<Option<Tree>>,
     layout: Cell<*mut NsBox>,
     styles: Cell<*mut GHashTable>,
     js: Cell<*mut c_void>,
@@ -241,7 +241,12 @@ impl NsBrowser {
             .cast::<RefCell<Option<Vec<u8>>>>();
         // SAFETY: `body` is the aligned address of the POST body field inside the allocation.
         unsafe { body.write(RefCell::new(None)) };
-        // SAFETY: the Text and POST body fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
+        let doc = raw
+            .wrapping_byte_add(offset_of!(NsBrowser, doc))
+            .cast::<RefCell<Option<Tree>>>();
+        // SAFETY: `doc` is the aligned address of the document field inside the allocation.
+        unsafe { doc.write(RefCell::new(None)) };
+        // SAFETY: the Text, POST body and document fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
         Page::adopt(unsafe { slot.assume_init() })
     }
 
@@ -250,7 +255,11 @@ impl NsBrowser {
     }
 
     pub fn doc(&self) -> Option<Node<'_>> {
-        unsafe { Node::from_ptr(self.doc.get()) }
+        self.doc.borrow().as_ref().map(Tree::root)
+    }
+
+    pub(crate) fn doc_ptr(&self) -> *mut NsNode {
+        Node::ptr_or_null(self.doc()).cast_mut()
     }
 
     pub fn layout(&self) -> Option<BoxRef<'_>> {
@@ -383,10 +392,7 @@ impl NsBrowser {
         if let Some(js) = self.js() {
             js.free();
         }
-        let doc = self.doc.replace(ptr::null_mut());
-        if !doc.is_null() {
-            unsafe { node_free(doc) };
-        }
+        drop(self.doc.borrow_mut().take());
         if let Some(videos) = self.videos() {
             videos.free();
         }
@@ -500,7 +506,7 @@ pub struct Created<'a> {
 pub fn create_browser(c: Created<'_>) -> Page {
     let page = NsBrowser::allocate();
     let b = page.browser();
-    b.doc.set(c.doc.0);
+    b.doc.replace(c.doc.0);
     b.base_url.adopt(c.base);
     b.doc_charset.adopt(c.doc_charset);
     b.doc_language.adopt(c.doc_language);

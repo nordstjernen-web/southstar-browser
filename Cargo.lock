@@ -1748,6 +1748,7 @@ dependencies = [
  "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-layout",
  "southstar-url",
 ]
@@ -2049,6 +2050,7 @@ dependencies = [
  "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-layout",
  "southstar-numfmt",
  "southstar-url",
@@ -2256,6 +2258,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-url",
@@ -2267,6 +2270,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-url",
@@ -2339,6 +2343,7 @@ dependencies = [
  "southstar-css",
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-js-bind",
  "southstar-js-engine",
  "southstar-layout",
@@ -2366,6 +2371,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-url",
@@ -2637,6 +2643,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-js-engine",
  "southstar-js-runtime",
 ]
@@ -3055,6 +3062,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
  "southstar-layout",
  "southstar-style",
 ]

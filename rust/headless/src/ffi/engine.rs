@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr::{self, NonNull};
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -190,13 +190,6 @@ unsafe extern "C" {
         content_type: *const c_char,
         charset_out: *mut *mut c_char,
     ) -> *mut c_char;
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_html_parse_with_scripting(
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
@@ -476,33 +469,26 @@ pub fn suffix_before_ext(path: Option<&CStr>, suffix: &CStr) -> Option<GStr> {
     }
 }
 
-pub struct Document(NonNull<NsNode>);
+pub struct Document(Tree);
 
 impl Document {
     pub fn parse(html: Option<&CStr>, scripting: bool) -> Option<Document> {
-        let (input, len) = html.map_or((c"".as_ptr(), 0), |h| {
-            (h.as_ptr(), h.to_bytes().len() as isize)
-        });
-        let doc = unsafe {
-            if scripting {
-                ns_html_parse(input, len)
-            } else {
-                ns_html_parse_with_scripting(input, len, glib::FALSE)
-            }
-        };
-        NonNull::new(doc).map(Document)
+        let html = html.map_or(&b""[..], CStr::to_bytes);
+        Some(Document(southstar_html_parser::parse_document(
+            html, scripting,
+        )))
     }
 
-    pub fn node(&self) -> Node<'_> {
-        unsafe { Node::from_ptr(self.0.as_ptr()) }.expect("document node")
+    pub fn node(&self) -> Node<'static> {
+        self.0.root()
     }
 
     pub fn as_ptr(&self) -> *mut NsNode {
-        self.0.as_ptr()
+        self.0.root().as_mut_ptr()
     }
 
     pub fn free(self) {
-        unsafe { ns_node_free(self.0.as_ptr()) };
+        drop(self.0);
     }
 }
 

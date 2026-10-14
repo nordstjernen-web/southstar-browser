@@ -3,9 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char};
-use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
@@ -41,7 +40,6 @@ unsafe extern "C" {
     fn ns_js_selection_state(js: *const NsJs, text: *mut *const c_char, rect: *mut f64)
     -> GBoolean;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
 }
 
 unsafe extern "Rust" {
@@ -96,16 +94,9 @@ pub(crate) fn track_orphan(js: Js, node: Element) {
     unsafe { ns_js_track_orphan(js.ptr(), node.as_mut_ptr()) }
 }
 
-pub(crate) fn parse_html(source: &[u8]) -> Option<Element> {
-    let source = CString::new(
-        source
-            .iter()
-            .copied()
-            .take_while(|&c| c != 0)
-            .collect::<Vec<u8>>(),
-    )
-    .unwrap_or_default();
-    unsafe { Node::from_ptr(ns_html_parse(source.as_ptr(), -1)) }
+pub(crate) fn parse_html(source: &[u8]) -> Tree {
+    let end = source.iter().position(|&c| c == 0).unwrap_or(source.len());
+    southstar_html_parser::parse_document(&source[..end], true)
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {

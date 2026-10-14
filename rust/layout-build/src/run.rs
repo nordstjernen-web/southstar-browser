@@ -97,7 +97,7 @@ fn remap(start: usize, len: usize, buf_len: usize, c: &Collapsed) -> Option<(usi
     let end = (start + len).min(buf_len);
     let ns = c.map[start];
     let ne = c.map[end].min(c.text.len());
-    (ne > ns).then_some((ns, ne - ns))
+    (ne > ns).then(|| (ns, ne - ns))
 }
 
 fn decoration_attrs(ps: StyleRef<'_>, len: usize, out: &mut Vec<InlineAttr>) {

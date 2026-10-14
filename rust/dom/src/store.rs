@@ -150,6 +150,10 @@ impl WeakNode {
         }
     }
 
+    pub(crate) fn node(self) -> Node<'static> {
+        Node::of(self.slot)
+    }
+
     pub fn get(self) -> Option<Node<'static>> {
         (self.slot.generation.get() == self.generation).then(|| Node::of(self.slot))
     }

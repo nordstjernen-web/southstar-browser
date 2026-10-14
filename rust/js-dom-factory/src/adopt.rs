@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::{Kind, MAX_DEPTH, children, node};
+use southstar_dom::{Kind, MAX_DEPTH, Tree, children, node};
 use southstar_js_engine::{Scope, Value};
 
 use crate::factories::attr_node;
@@ -156,7 +156,7 @@ pub fn import_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
         return Ok(Value::null());
     };
     let deep = args.len() >= 2 && scope.to_bool(&args[1]);
-    let Some(copy) = node::clone(src, deep, 0) else {
+    let Some(copy) = node::clone(src, deep, 0).map(Tree::into_root) else {
         return Ok(Value::null());
     };
     adopt_owner_walk(scope, this, copy);
@@ -172,7 +172,7 @@ fn text_or_null(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
 }
 
 fn clone_document(scope: &mut Scope<'_>, this: &Value, src: Element, deep: bool) -> JsResult {
-    let Some(copy) = node::clone(src, deep, 0) else {
+    let Some(copy) = node::clone(src, deep, 0).map(Tree::into_root) else {
         return Ok(Value::null());
     };
     ffi::track_orphan(ffi::js_of(scope), copy);
@@ -212,7 +212,7 @@ pub fn clone_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
     if is_document(src) {
         return clone_document(scope, this, src, deep);
     }
-    let Some(copy) = node::clone(src, deep, 0) else {
+    let Some(copy) = node::clone(src, deep, 0).map(Tree::into_root) else {
         return Ok(Value::null());
     };
     if let Some(js) = ffi::js_of(scope) {

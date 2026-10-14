@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::NonNull;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GArray, GBoolean, GError};
 use southstar_js_engine::{ContextHandle, Value};
 
@@ -121,11 +121,9 @@ unsafe extern "C" {
         len: usize,
         content_type: *const c_char,
     ) -> *mut c_char;
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_node_remove(node: *mut NsNode);
     fn ns_net_referer_for(
         url: *const c_char,
@@ -447,14 +445,16 @@ pub(crate) fn declared_charset(body: &[u8], content_type: Option<&CStr>) -> Opti
     })
 }
 
-pub(crate) fn html_parse(input: &CStr) -> Option<Node<'static>> {
-    let len = input.to_bytes().len() as isize;
-    unsafe { Node::from_ptr(ns_html_parse(input.as_ptr(), len)) }
+pub(crate) fn html_parse(input: &CStr) -> Tree {
+    southstar_html_parser::parse_document(input.to_bytes(), true)
 }
 
-pub(crate) fn xml_parse(input: &CStr) -> Option<Node<'static>> {
+pub(crate) fn xml_parse(input: &CStr) -> Option<Tree> {
     let len = input.to_bytes().len() as isize;
-    unsafe { Node::from_ptr(ns_xml_parse(input.as_ptr(), len)) }
+    // SAFETY: the input is a NUL-terminated string that outlives the call.
+    let doc = unsafe { ns_xml_parse(input.as_ptr(), len) };
+    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
+    unsafe { Node::from_ptr(doc) }.map(Tree::adopt)
 }
 
 pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
@@ -466,10 +466,6 @@ pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
 pub(crate) fn new_text(text: &CStr) -> Node<'static> {
     let text = unsafe { glib::g_strdup(text.as_ptr()) };
     unsafe { Node::from_ptr(ns_node_new_text(text)) }.expect("text node allocation")
-}
-
-pub(crate) fn free_node(node: Node<'_>) {
-    unsafe { ns_node_free(node.as_mut_ptr()) };
 }
 
 pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr) {

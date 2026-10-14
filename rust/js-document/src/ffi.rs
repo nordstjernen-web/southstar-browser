@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -403,14 +403,6 @@ unsafe extern "C" {
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
     fn ns_node_new_document() -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_html_parse_fragment_with_scripting(
-        context_tag: *const c_char,
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
 }
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
@@ -534,34 +526,17 @@ pub(crate) fn new_document() -> Option<Element> {
     node_of(unsafe { ns_node_new_document() })
 }
 
-pub(crate) fn free_node(node: Element) {
-    unsafe { ns_node_free(node.as_mut_ptr()) };
-}
-
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &CStr) {
     southstar_dom::attrs::set_attribute(node, name, Some(value.to_bytes()));
 }
 
-pub(crate) fn parse_html(markup: &[u8]) -> Option<Element> {
-    let markup = c_bytes(markup);
-    node_of(unsafe { ns_html_parse(markup.as_ptr(), -1) })
+pub(crate) fn parse_html(markup: &[u8]) -> Tree {
+    southstar_html_parser::parse_document(crate::until_nul(markup), true)
 }
 
-pub(crate) fn parse_fragment(
-    context: Option<&CStr>,
-    markup: &[u8],
-    scripting: bool,
-) -> Option<Element> {
-    let markup = c_bytes(markup);
-    let context = context.map_or(ptr::null(), CStr::as_ptr);
-    node_of(unsafe {
-        ns_html_parse_fragment_with_scripting(
-            context,
-            markup.as_ptr(),
-            -1,
-            glib::boolean(scripting),
-        )
-    })
+pub(crate) fn parse_fragment(context: Option<&CStr>, markup: &[u8], scripting: bool) -> Tree {
+    let context = context.unwrap_or(c"");
+    southstar_html_parser::parse_fragment_for_tag(context, crate::until_nul(markup), scripting)
 }
 
 pub(crate) fn url_host(url: &[u8]) -> Option<Vec<u8>> {

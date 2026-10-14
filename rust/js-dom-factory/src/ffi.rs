@@ -8,7 +8,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{AttrView, Node, NsNode};
+use southstar_dom::{AttrView, Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -36,18 +36,6 @@ unsafe extern "C" {
         error_column: *mut c_int,
     ) -> *mut NsNode;
     fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_html_parse_with_scripting(
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
-    fn ns_html_parse_fragment_with_scripting(
-        context_tag: *const c_char,
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
@@ -301,43 +289,29 @@ pub(crate) fn target_method(
     scope.function(name, arity, f)
 }
 
-pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Element>, c_int, c_int) {
+pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Tree>, c_int, c_int) {
     let source = cstring(source);
     let (mut line, mut column) = (1, 1);
     let doc = unsafe { ns_xml_parse_reporting(source.as_ptr(), -1, &mut line, &mut column) };
-    (unsafe { Node::from_ptr(doc) }, line, column)
+    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
+    let doc = unsafe { Node::from_ptr(doc) }.map(Tree::adopt);
+    (doc, line, column)
 }
 
-pub(crate) fn parse_xml(source: &[u8]) -> Option<Element> {
+pub(crate) fn parse_xml(source: &[u8]) -> Option<Tree> {
     let source = cstring(source);
-    unsafe { Node::from_ptr(ns_xml_parse(source.as_ptr(), -1)) }
+    // SAFETY: the input is a NUL-terminated string that outlives the call.
+    let doc = unsafe { ns_xml_parse(source.as_ptr(), -1) };
+    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
+    unsafe { Node::from_ptr(doc) }.map(Tree::adopt)
 }
 
-pub(crate) fn parse_html(source: &[u8]) -> Option<Element> {
-    let source = cstring(source);
-    unsafe {
-        Node::from_ptr(ns_html_parse_with_scripting(
-            source.as_ptr(),
-            -1,
-            glib::FALSE,
-        ))
-    }
+pub(crate) fn parse_html(source: &[u8]) -> Tree {
+    southstar_html_parser::parse_document(c_prefix(source), false)
 }
 
-pub(crate) fn parse_html_fragment(source: &[u8]) -> Option<Element> {
-    let source = cstring(source);
-    unsafe {
-        Node::from_ptr(ns_html_parse_fragment_with_scripting(
-            ptr::null(),
-            source.as_ptr(),
-            -1,
-            glib::FALSE,
-        ))
-    }
-}
-
-pub(crate) fn free_node(node: Element) {
-    unsafe { ns_node_free(node.as_mut_ptr()) };
+pub(crate) fn parse_html_fragment(source: &[u8]) -> Tree {
+    southstar_html_parser::parse_fragment_for_tag(c"", c_prefix(source), false)
 }
 
 pub(crate) fn mark_scripts_already_started(root: Element) {

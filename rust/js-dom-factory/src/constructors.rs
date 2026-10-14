@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::node;
-use southstar_dom::{Kind, Node};
+use southstar_dom::{Kind, Node, Tree};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::factories::text_node;
@@ -145,18 +145,15 @@ fn has_root_element(doc: Element) -> bool {
     southstar_dom::children(doc).any(|child| child.is_element())
 }
 
-fn parse_xml(source: &[u8]) -> Option<Element> {
+fn parse_xml(source: &[u8]) -> Tree {
     let (doc, line, column) = ffi::parse_xml_reporting(source);
-    if let Some(doc) = doc {
-        if has_root_element(doc) {
-            return Some(doc);
-        }
-        ffi::free_node(doc);
+    if let Some(doc) = doc.filter(|doc| has_root_element(doc.root())) {
+        return doc;
     }
     let report = format!(
         "<parsererror xmlns=\"http://www.mozilla.org/newlayout/xml/parsererror.xml\">error on line {line} at column {column}: XML parsing error</parsererror>"
     );
-    ffi::parse_xml(report.as_bytes()).or_else(|| ffi::parse_html_fragment(source))
+    ffi::parse_xml(report.as_bytes()).unwrap_or_else(|| ffi::parse_html_fragment(source))
 }
 
 pub(crate) fn parse_from_string(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
@@ -175,10 +172,8 @@ pub(crate) fn parse_from_string(scope: &mut Scope<'_>, this: &Value, args: &[Val
         parse_xml(&source)
     } else {
         ffi::parse_html(&source)
-    };
-    let Some(doc) = doc else {
-        return Ok(Value::null());
-    };
+    }
+    .into_root();
     ffi::mark_scripts_already_started(doc);
     ffi::track_orphan(ffi::js_of(scope), doc);
     let creator_url = scope

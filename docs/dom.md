@@ -73,6 +73,30 @@ A string or attribute borrowed from a node (`name()`, `text()`, `attr()`,
 `Attr::value()`) stays good until that same field of that node is replaced
 or the node is freed: don't hold one across a call that edits the node.
 
+## Owning a subtree
+
+A parent owns its children, and a template owns its contents. A subtree with
+no parent is owned by exactly one `Tree` value (`rust/dom/src/owned.rs`):
+
+- `Tree::new(kind)` makes a new parentless node, and `Tree::adopt(node)`
+  detaches a node and takes ownership of it.
+- Dropping a `Tree` frees its subtree, unless the root was given a parent in
+  the meantime, in which case the parent owns it now; a `Tree` can never
+  free a node that is still in someone else's tree.
+- `Tree::into_root()` gives ownership away explicitly: to a parent, to a
+  template's contents or to the script runtime's orphan set, which keeps a
+  detached subtree alive while script can still reach it.
+  `into_raw`/`from_raw` carry ownership across the remaining C ABI.
+- The HTML parser returns documents and fragments as `Tree`s
+  (`southstar_html_parser::parse_document`, `parse_fragment`,
+  `parse_fragment_for_tag`), `Node::take_tpl_content` hands over a
+  template's contents, and `node::clone` returns the copy as a `Tree`.
+
+So a fragment parsed for `innerHTML` or `document.write`, a frame document
+that fails to load, the page document in `rust/browser`, the headless
+engine's and the SVG renderer's documents are freed by going out of scope
+instead of by a `free` call that every early return must remember.
+
 ## Freeing
 
 `Node::free_tree` unlinks the node from its parent and vacates it and its

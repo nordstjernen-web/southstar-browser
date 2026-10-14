@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SCRIPTING_DISABLED, Kind};
+use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SCRIPTING_DISABLED, Kind, Tree};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -154,7 +154,7 @@ fn read_options(scope: &mut Scope<'_>, args: &[Value], safe: bool) -> JsResult<O
     Ok(options)
 }
 
-fn parse(target: &Target, markup: &[u8], scripting: bool) -> Option<Element> {
+fn parse(target: &Target, markup: &[u8], scripting: bool) -> Tree {
     match target.context {
         Context::Element(el) => ffi::parse_fragment_in_context(el, markup, scripting),
         Context::Template => ffi::parse_fragment_for_tag(c"template", markup, scripting),
@@ -282,15 +282,13 @@ fn insert_html(
         || ffi::in_template_content(target.container)
         || target.container.flags() & FLAG_SCRIPTING_DISABLED != 0;
     let run_scripts = options.run_scripts && !in_template;
-    let Some(fragment) = parse(&target, &markup, scripting_enabled(node)) else {
-        return Ok(Value::undefined());
-    };
-    ffi::convert_declarative_shadow(fragment);
-    sanitize::sanitize(fragment, &options.config, safe);
-    let kids = take_children(fragment, run_scripts);
+    let fragment = parse(&target, &markup, scripting_enabled(node));
+    ffi::convert_declarative_shadow(fragment.root());
+    sanitize::sanitize(fragment.root(), &options.config, safe);
+    let kids = take_children(fragment.root(), run_scripts);
     let js = ffi::js_of(scope);
     place_children(js, node, target.container, &kids, place);
-    fragment.free_tree();
+    drop(fragment);
     if let Some(js) = js {
         ffi::mark_mutated(js);
         if !in_template {

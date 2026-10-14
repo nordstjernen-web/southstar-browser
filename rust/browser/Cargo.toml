@@ -12,6 +12,7 @@ southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
+southstar-html-parser = { path = "../html-parser" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
 southstar-url = { path = "../url" }

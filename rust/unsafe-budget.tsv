@@ -5,7 +5,7 @@ anim	125	23	20	0	80	7	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
-browser	710	290	88	0	452	45	0
+browser	705	287	88	0	447	45	0
 bytecode-cache	2	0	0	0	2	2	0
 camera	59	11	17	0	27	3	0
 canvas	190	124	8	0	162	18	0
@@ -26,7 +26,7 @@ forms	19	5	4	0	10	2	0
 glctx	81	55	4	0	3	0	0
 glib	24	63	0	0	11	1	4
 gtk-ffi	29	374	0	0	0	0	0
-headless	270	164	2	0	219	26	0
+headless	267	161	2	0	216	25	0
 helper-ffi	0	0	0	0	0	0	0
 history	31	18	5	0	22	6	0
 html-parser	25	0	6	0	4	0	0
@@ -50,17 +50,17 @@ js-crypto	5	1	3	0	1	0	0
 js-cssom	80	43	4	0	67	6	0
 js-custom-elements	46	9	17	0	17	1	0
 js-dispatch	112	49	38	0	45	1	0
-js-document	76	51	11	0	53	0	0
-js-dom-factory	37	25	8	0	23	4	0
+js-document	73	48	11	0	50	0	0
+js-dom-factory	35	22	8	0	18	1	0
 js-elements	39	31	5	0	31	3	0
 js-engine	39	0	0	0	32	0	7
 js-events	21	6	13	0	5	0	0
 js-focus	110	47	24	0	56	0	0
 js-fonts	13	7	2	0	7	0	0
 js-forms	103	45	28	0	52	2	0
-js-frames	206	94	33	0	129	14	0
+js-frames	205	92	33	0	126	12	0
 js-geometry	54	25	12	0	34	6	0
-js-html	39	30	3	0	34	3	0
+js-html	36	27	3	0	31	3	0
 js-images	61	26	10	0	35	5	0
 js-input	58	28	10	0	36	4	0
 js-interfaces	28	17	20	0	5	0	0
@@ -83,7 +83,7 @@ js-storage	64	26	11	0	36	3	0
 js-temporal	0	0	0	0	0	0	0
 js-text	19	17	0	0	17	1	0
 js-top-layer	67	35	15	0	31	0	0
-js-traversal	19	5	9	0	6	1	0
+js-traversal	18	4	9	0	5	0	0
 js-url	51	13	13	0	23	2	0
 js-wasm	3	0	1	0	2	0	0
 js-window	120	57	28	0	68	8	0
@@ -130,7 +130,7 @@ spellcheck	17	6	3	0	3	0	0
 sqlite	29	23	0	0	27	6	0
 static	1	0	1	0	0	0	0
 style	56	7	0	0	50	7	5
-svg	115	89	6	0	98	10	0
+svg	112	87	6	0	95	10	0
 texture	34	1	8	0	16	0	0
 threaddump	29	13	2	0	14	2	0
 url	0	0	0	0	0	0	0

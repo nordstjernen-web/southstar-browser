@@ -135,12 +135,10 @@ pub(crate) fn flush(js: Js) {
         .flatten()
         .map(CStr::to_owned);
     let scripting = parent.root().flags() & FLAG_SCRIPTING_DISABLED == 0;
-    let Some(fragment) = ffi::parse_fragment(context.as_deref(), &html, scripting) else {
-        return;
-    };
+    let fragment = ffi::parse_fragment(context.as_deref(), &html, scripting);
     let mut inserted = Vec::new();
     adjust_dynamic_markup(js, 1);
-    let mut child = fragment.first_child();
+    let mut child = fragment.root().first_child();
     while let Some(c) = child {
         child = c.next_sibling();
         ffi::remove_node(c);
@@ -159,7 +157,7 @@ pub(crate) fn flush(js: Js) {
         reference = Some(c);
         inserted.push(c);
     }
-    ffi::free_node(fragment);
+    drop(fragment);
     let Some(&last) = inserted.last() else {
         adjust_dynamic_markup(js, -1);
         return;

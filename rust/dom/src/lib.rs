@@ -11,6 +11,7 @@ mod handle;
 pub mod image_map;
 pub mod index;
 pub mod node;
+mod owned;
 pub mod select;
 pub mod serialize;
 pub mod store;
@@ -21,6 +22,7 @@ pub mod tree;
 pub use data::{Invalidator, Kind, NsNode};
 pub use handle::{Attr, AttrView, Node};
 pub use index::NodeArray;
+pub use owned::Tree;
 pub use store::WeakNode;
 
 pub const MAX_DEPTH: i32 = 512;

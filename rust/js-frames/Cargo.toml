@@ -12,6 +12,7 @@ southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-html-parser = { path = "../html-parser" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-layout = { path = "../layout" }

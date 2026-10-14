@@ -158,7 +158,7 @@ fn deep_clone_copies_names_text_and_attributes() {
     let el = node::new_element(b"div");
     attrs::set_attribute(el, c"data-x", Some(b"1"));
     el.append(node::new_text(Kind::Text, b"hi"));
-    let copy = node::clone(el, true, 0).expect("clone");
+    let copy = node::clone(el, true, 0).expect("clone").into_root();
     assert_ne!(copy, el);
     assert_eq!(copy.element_name(), Some(&b"div"[..]));
     assert_eq!(copy.attr(c"data-x"), Some(c"1"));
@@ -267,4 +267,41 @@ fn namespaced_attributes_keep_their_parts() {
     let found = attrs::find_ns(el, Some(c"http://www.w3.org/1999/xlink"), c"href");
     assert_eq!(found.and_then(|a| a.value()), Some(c"#a"));
     el.free_tree();
+}
+
+#[test]
+fn a_tree_frees_its_subtree_unless_it_was_given_a_parent() {
+    let before = store::live_nodes();
+    {
+        let tree = crate::Tree::new(Kind::Document);
+        tree.root().append(node::new_element(b"p"));
+        assert_eq!(store::live_nodes(), before + 2);
+    }
+    assert_eq!(store::live_nodes(), before);
+    let host = node::new_element(b"div");
+    {
+        let tree = crate::Tree::adopt(node::new_element(b"span"));
+        host.append(tree.root());
+    }
+    assert_eq!(
+        host.first_child().and_then(|c| c.element_name()),
+        Some(&b"span"[..])
+    );
+    let given_away = crate::Tree::adopt(node::new_element(b"b")).into_root();
+    assert_eq!(store::live_nodes(), before + 3);
+    drop(crate::Tree::adopt(given_away));
+    host.free_tree();
+    assert_eq!(store::live_nodes(), before);
+}
+
+#[test]
+fn taking_template_contents_hands_over_ownership() {
+    let template = node::new_element(b"template");
+    node::template_content(template).append(node::new_element(b"i"));
+    let content = template.take_tpl_content().expect("contents");
+    let weak = content.root().downgrade();
+    assert!(template.tpl_content().is_none());
+    drop(content);
+    assert!(weak.get().is_none());
+    template.free_tree();
 }

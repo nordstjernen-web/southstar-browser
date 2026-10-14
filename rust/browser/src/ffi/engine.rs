@@ -214,7 +214,7 @@ impl NsBrowser {
         let base = self.base_url.get();
         let styles = unsafe {
             ns_engine_relayout(
-                self.doc.get(),
+                self.doc_ptr(),
                 opt(base.as_deref()),
                 self.vw.get(),
                 self.vh.get(),
@@ -236,7 +236,7 @@ impl NsBrowser {
         let base = self.base_url.get();
         let styles = unsafe {
             ns_engine_compute_cascade(
-                self.doc.get(),
+                self.doc_ptr(),
                 opt(base.as_deref()),
                 self.css_cache.get(),
                 ptr::null_mut(),
@@ -250,7 +250,7 @@ impl NsBrowser {
         unsafe {
             ns_engine_load_keyframes(
                 anim.raw(),
-                self.doc.get(),
+                self.doc_ptr(),
                 opt(base.as_deref()),
                 self.css_cache.get(),
             )
@@ -260,7 +260,7 @@ impl NsBrowser {
 
     pub fn speculative_preload(&self) {
         let base = self.base_url.get();
-        unsafe { ns_engine_speculative_preload(self.doc.get(), opt(base.as_deref()), 0) };
+        unsafe { ns_engine_speculative_preload(self.doc_ptr(), opt(base.as_deref()), 0) };
     }
 
     pub fn styles_raw(&self) -> *mut GHashTable {

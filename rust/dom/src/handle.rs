@@ -9,6 +9,7 @@ use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ptr;
 
+use crate::Tree;
 use crate::data::{
     AttrSlot, Invalidator, Kind, Name, Namespaced, NewAttr, NodeSlot, NsNode, NulString,
 };
@@ -201,8 +202,8 @@ impl<'a> Node<'a> {
         self.slot.template_content.set(content.map(Node::slot));
     }
 
-    pub fn take_tpl_content(self) -> Option<Self> {
-        Self::link(self.slot.template_content.take())
+    pub fn take_tpl_content(self) -> Option<Tree> {
+        Self::link(self.slot.template_content.take()).map(Tree::adopt)
     }
 
     pub fn attr(self, name: &CStr) -> Option<&'a CStr> {

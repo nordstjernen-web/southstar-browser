@@ -15,6 +15,7 @@ southstar-config = { path = "../config" }
 southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-html-parser = { path = "../html-parser" }
 southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-url = { path = "../url" }

@@ -294,15 +294,12 @@ fn create_contextual_fragment(scope: &mut Scope<'_>, _: &Value, args: &[Value]) 
     fragment.add_flags(FLAG_FRAGMENT);
     if let Some(parsed) = source
         .filter(|s| !s.is_empty() && s[0] != 0)
-        .and_then(|s| ffi::parse_html(&s))
+        .map(|s| ffi::parse_html(&s))
+        && let Some(body) = body_of(parsed.root())
     {
-        if let Some(body) = body_of(parsed) {
-            while let Some(child) = body.first_child() {
-                child.detach();
-                fragment.append(child);
-            }
+        while let Some(child) = body.first_child() {
+            fragment.append(child);
         }
-        parsed.free_tree();
     }
     ffi::track_orphan(js, fragment);
     Ok(wrap_node(scope, fragment))

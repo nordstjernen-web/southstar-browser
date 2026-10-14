@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
-use southstar_dom::NsNode;
+use southstar_dom::Tree;
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
 
 #[repr(C)]
@@ -102,12 +102,6 @@ unsafe extern "C" {
     fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
     fn ns_safebrowsing_allow_host(host: *const c_char);
     fn ns_safebrowsing_interstitial(url: *const c_char, host: *const c_char) -> *mut c_char;
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_html_parse_with_scripting(
-        input: *const c_char,
-        len: isize,
-        scripting: GBoolean,
-    ) -> *mut NsNode;
     fn ns_html_escape_text(s: *const c_char) -> *mut c_char;
     fn ns_html_decode_body_full(
         body: *const c_char,
@@ -366,17 +360,10 @@ pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<GStr> {
     take(unsafe { ns_safebrowsing_interstitial(url.as_ptr(), host.as_ptr()) })
 }
 
-pub struct ParsedDoc(pub(super) *mut NsNode);
+pub struct ParsedDoc(pub(super) Option<Tree>);
 
 pub fn html_parse(input: Option<&CStr>, scripting: bool) -> ParsedDoc {
-    let (p, len) = input.map_or((ptr::null(), 0), |s| {
-        (s.as_ptr(), s.to_bytes().len() as isize)
-    });
-    ParsedDoc(if scripting {
-        unsafe { ns_html_parse(p, len) }
-    } else {
-        unsafe { ns_html_parse_with_scripting(p, len, 0) }
-    })
+    ParsedDoc(input.map(|html| southstar_html_parser::parse_document(html.to_bytes(), scripting)))
 }
 
 pub fn html_escape_text(s: &CStr) -> Option<GStr> {

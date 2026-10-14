@@ -3,12 +3,19 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+mod sink;
 
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use ffi::dom;
+use sink::dom;
 use southstar_dom::{Node, children};
+
+pub use sink::{parse_document, parse_fragment, parse_fragment_for_tag};
+
+pub fn attach_declarative_shadow_roots(root: Node) {
+    convert_declarative_shadow(Some(root), 0);
+}
 
 const MAX_DEPTH: i32 = 512;
 const SCRIPT_TEXT_DEPTH: i32 = 64;
@@ -65,13 +72,9 @@ fn adopt_template_content(template: Node) {
     let Some(fragment) = template.take_tpl_content() else {
         return;
     };
-    let mut child = fragment.first_child();
-    while let Some(c) = child {
-        child = c.next_sibling();
-        dom::detach(c);
-        dom::append_child(template, c);
+    while let Some(c) = fragment.root().first_child() {
+        template.append(c);
     }
-    dom::free(fragment);
 }
 
 fn attach_declarative_shadow(template: Node, mode: &CStr) {
@@ -526,8 +529,7 @@ pub(crate) fn prune_html_interelement_whitespace(root: Node) {
     while let Some(c) = child {
         child = c.next_sibling();
         if c.is_text() && c.text().is_none_or(is_html_whitespace) {
-            dom::detach(c);
-            dom::free(c);
+            c.free_tree();
         }
     }
 }

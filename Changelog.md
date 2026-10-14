@@ -286,6 +286,17 @@ Southstar Browser 0.9.11-dev:
   it from its parent first. docs/dom.md describes the model; rust/dom goes
   from 212 unsafe blocks to about 100 (none of them undocumented) and from 3
   FFI imports to none, and html-parser from 16 FFI imports to none.
+* A parentless DOM subtree has one owner, a Tree, which frees it when
+  dropped unless it was given a parent first. The HTML parser returns its
+  documents and fragments as Trees through a Rust API, so innerHTML,
+  outerHTML, insertAdjacentHTML, the positional HTML methods,
+  document.write, document.open, createContextualFragment, DOMParser,
+  frame loading, the SVG renderer, the headless engine and the page
+  document stop calling ns_html_parse and ns_node_free by hand; taking a
+  template's contents and cloning a node hand back a Tree too.
+* Laying out a text run whose collapsed start lies past its end no longer
+  aborts on an integer underflow (the length was computed before the check
+  that guarded it).
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

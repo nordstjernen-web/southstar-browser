@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_uint};
 
 use crate::attrs::{self, NsName};
 use crate::serialize::is_embedded_doc;
-use crate::{Kind, MAX_DEPTH, Node, children};
+use crate::{Kind, MAX_DEPTH, Node, Tree, children};
 
 pub const KIND_DOCUMENT: c_uint = 0;
 pub const KIND_DOCTYPE: c_uint = 1;
@@ -99,19 +99,20 @@ fn clone_shallow(src: Node) -> Option<Node<'static>> {
     Some(out)
 }
 
-pub fn clone(src: Node, deep: bool, depth: i32) -> Option<Node<'static>> {
+pub fn clone(src: Node, deep: bool, depth: i32) -> Option<Tree> {
     if depth >= MAX_DEPTH {
         return None;
     }
-    let out = clone_shallow(src)?;
+    let out = Tree::adopt(clone_shallow(src)?);
     if deep {
         for child in children(src).filter(|c| !is_embedded_doc(*c)) {
             if let Some(copy) = clone(child, true, depth + 1) {
-                out.append(copy);
+                out.root().append(copy.into_root());
             }
         }
         if let Some(content) = src.tpl_content() {
-            out.set_tpl_content(clone(content, true, depth + 1));
+            out.root()
+                .set_tpl_content(clone(content, true, depth + 1).map(Tree::into_root));
         }
     }
     Some(out)

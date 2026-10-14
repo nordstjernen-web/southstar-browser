@@ -102,20 +102,18 @@ fn clear_children_collect(js: Option<Js>, n: Element) -> Vec<Element> {
 fn set_template_html(js: Option<Js>, template: Element, markup: &[u8], declarative: bool) {
     let content = southstar_dom::node::template_content(template);
     content.add_flags(FLAG_SCRIPTING_DISABLED);
-    let Some(fragment) = ffi::parse_fragment_for_tag(c"template", markup, false) else {
-        return;
-    };
+    let fragment = ffi::parse_fragment_for_tag(c"template", markup, false);
     if declarative {
-        ffi::convert_declarative_shadow(fragment);
+        ffi::convert_declarative_shadow(fragment.root());
     }
     while let Some(child) = content.first_child() {
         child.detach();
         ffi::orphan_node(js, child);
     }
-    for kid in adopt_children(fragment) {
+    for kid in adopt_children(fragment.root()) {
         content.append(kid);
     }
-    fragment.free_tree();
+    drop(fragment);
     if let Some(js) = js {
         ffi::mark_mutated(js);
     }
@@ -131,19 +129,20 @@ fn set_html(scope: &mut Scope<'_>, this: &Value, val: &Value, declarative: bool)
         set_template_html(js, n, &markup, declarative);
         return Ok(());
     }
-    if let Some(fragment) = ffi::parse_fragment_in_context(n, &markup, scripting_enabled(n)) {
+    {
+        let fragment = ffi::parse_fragment_in_context(n, &markup, scripting_enabled(n));
         if declarative {
-            ffi::convert_declarative_shadow(fragment);
+            ffi::convert_declarative_shadow(fragment.root());
         }
         let removed = clear_children_collect(js, n);
-        let added = adopt_children(fragment);
+        let added = adopt_children(fragment.root());
         for &kid in &added {
             n.append(kid);
         }
         if let Some(js) = js {
             ffi::record_child_changes(js, n, &added, &removed, None, None);
         }
-        fragment.free_tree();
+        drop(fragment);
     }
     if let Some(js) = js {
         ffi::mark_mutated(js);
@@ -171,18 +170,15 @@ pub fn outer_html_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsRes
         return Ok(());
     };
     let markup = markup_arg(scope, val)?;
-    let Some(fragment) = ffi::parse_fragment_in_context(parent, &markup, scripting_enabled(target))
-    else {
-        return Ok(());
-    };
+    let fragment = ffi::parse_fragment_in_context(parent, &markup, scripting_enabled(target));
     let previous = target.prev_sibling();
     let next = target.next_sibling();
-    let kids = adopt_children(fragment);
+    let kids = adopt_children(fragment.root());
     for &kid in &kids {
         kid.detach();
         ffi::insert_sibling_before(target, kid);
     }
-    fragment.free_tree();
+    drop(fragment);
     let js = ffi::js_of(scope);
     if let Some(js) = js {
         ffi::ce_disconnect_subtree(js, target);
@@ -232,11 +228,8 @@ pub fn insert_adjacent_html(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     } else {
         ffi::parse_fragment_in_context(context, &markup, scripting)
     };
-    let Some(fragment) = fragment else {
-        return Ok(Value::undefined());
-    };
     let js = ffi::js_of(scope);
-    let kids = adopt_children(fragment);
+    let kids = adopt_children(fragment.root());
     let record = |parent: Element, kid: Element| {
         if let Some(js) = js {
             ffi::record_child_change(
@@ -281,7 +274,7 @@ pub fn insert_adjacent_html(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     } else {
         Some(target)
     };
-    fragment.free_tree();
+    drop(fragment);
     if let Some(js) = js {
         ffi::mark_mutated(js);
         if let Some(root) = upgrade_root {

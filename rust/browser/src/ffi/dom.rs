@@ -11,7 +11,6 @@ use southstar_glib::{GBoolean, GStr};
 use super::glib::{GString, StrBufOwned, gstr_from};
 
 unsafe extern "C" {
-    pub fn ns_node_free(n: *mut NsNode);
     fn ns_form_first_invalid(
         form: *const NsNode,
         n: *const NsNode,
@@ -78,10 +77,6 @@ pub fn collect_text(n: Node<'_>) -> Vec<u8> {
 
 pub fn node_dump(doc: Node<'_>) -> Vec<u8> {
     dom::serialize::dump(Some(doc))
-}
-
-pub unsafe fn node_free(n: *mut NsNode) {
-    unsafe { ns_node_free(n) };
 }
 
 pub fn editable_value(n: Node<'_>) -> Option<&CStr> {
