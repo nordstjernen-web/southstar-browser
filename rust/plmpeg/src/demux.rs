@@ -218,12 +218,7 @@ impl Demux {
             let mut first_packet_time = INVALID_TS;
             let cur_pos = self.buffer.tell() as i64;
             let offset = ((seek_time - cur_time - scan_span) * byterate as f64) as i64;
-            let mut seek_pos = cur_pos + offset;
-            if seek_pos < 0 {
-                seek_pos = 0;
-            } else if seek_pos > file_size - 256 {
-                seek_pos = file_size - 256;
-            }
+            let seek_pos = cur_pos.saturating_add(offset).clamp(0, (file_size - 256).max(0));
             self.buffer_seek(seek_pos as usize);
 
             while self.buffer.find_start_code(kind) != -1 {

@@ -38,6 +38,9 @@ Southstar Browser 0.9.11-dev:
   PNG/GIF/JPEG/BMP, MPEG-1, MP3, WebVTT and the renderer protocol's message
   heads and JSON. CI runs each under AddressSanitizer for a minute on every
   push that touches Rust and for twenty minutes nightly, keeping the corpora.
+* Seeking in an MPEG-1 stream no longer overflows when the demuxer's byte-rate
+  estimate is huge, and no longer computes a negative position in a file
+  under 256 bytes; the new plmpeg fuzz target found both.
 
 Southstar Browser 0.9.10:
 ======
