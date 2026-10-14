@@ -108,7 +108,7 @@ def count_source(text):
         "unsafe": len(re.findall(r"\bunsafe\b", code)),
         "ffi_imports": imports,
         "ffi_exports": len(re.findall(r"\b(?:no_mangle|export_name)\b", code)),
-        "static_mut": len(re.findall(r"\bstatic\s+mut\b", code)),
+        "static_mut": len(re.findall(r"(?<!')\bstatic\s+mut\b", code)),
     }
 
 

@@ -8,8 +8,8 @@ bookmarks	34	4	7	0	18	4	0
 browser	753	320	88	0	513	54	0
 bytecode-cache	13	0	4	0	7	3	0
 camera	63	12	17	0	30	4	0
-canvas	233	137	20	3	181	22	0
-config	37	18	9	2	23	6	0
+canvas	233	137	20	0	181	22	0
+config	37	18	9	0	23	6	0
 csp	36	3	7	0	19	3	0
 css	1359	57	248	0	823	90	0
 css-media	22	6	11	0	8	1	0
@@ -122,7 +122,7 @@ renderer-host	170	140	8	0	128	7	0
 safebrowsing	38	6	3	0	18	6	0
 sandbox	105	49	10	0	28	9	0
 selection	57	5	11	0	31	4	0
-shell	1378	306	135	1	842	265	0
+shell	1378	306	135	0	842	265	0
 southstar-ffi	5	0	5	0	0	0	0
 spellcheck	17	6	3	0	3	0	0
 sqlite	29	23	0	0	27	6	0
