@@ -1,0 +1,105 @@
+[package]
+name = "southstar-fuzz"
+description = "cargo-fuzz targets for the parsers that read untrusted input"
+version = "0.0.0"
+edition = "2024"
+license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+southstar-css-syntax = { path = "../rust/css-syntax" }
+southstar-html5 = { path = "../rust/html5" }
+southstar-http-wire = { path = "../rust/http-wire" }
+southstar-ipc = { path = "../rust/ipc" }
+southstar-minimp3 = { path = "../rust/minimp3" }
+southstar-plmpeg = { path = "../rust/plmpeg" }
+southstar-raster = { path = "../rust/raster" }
+southstar-url = { path = "../rust/url" }
+southstar-webvtt = { path = "../rust/webvtt" }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "css_syntax"
+path = "fuzz_targets/css_syntax.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html5"
+path = "fuzz_targets/html5.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "http_h1_response"
+path = "fuzz_targets/http_h1_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "http_h2_connection"
+path = "fuzz_targets/http_h2_connection.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "http_hpack_decode"
+path = "fuzz_targets/http_hpack_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ipc"
+path = "fuzz_targets/ipc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "minimp3"
+path = "fuzz_targets/minimp3.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plmpeg"
+path = "fuzz_targets/plmpeg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "raster"
+path = "fuzz_targets/raster.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "url"
+path = "fuzz_targets/url.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "webvtt"
+path = "fuzz_targets/webvtt.rs"
+test = false
+doc = false
+bench = false

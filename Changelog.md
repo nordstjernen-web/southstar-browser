@@ -32,6 +32,12 @@ Southstar Browser 0.9.11-dev:
   HPACK and the sans-I/O HTTP/2 client connection — move from rust/http into
   rust/http-wire, which forbids unsafe code; rust/http keeps the sockets, TLS,
   content decoding and pooling.
+* fuzz/ holds cargo-fuzz targets for the parsers that read untrusted input:
+  HTML (documents and fragments), CSS syntax, URLs and their setters,
+  HTTP/1.1 heads and chunked bodies, the HTTP/2 client connection, HPACK,
+  PNG/GIF/JPEG/BMP, MPEG-1, MP3, WebVTT and the renderer protocol's message
+  heads and JSON. CI runs each under AddressSanitizer for a minute on every
+  push that touches Rust and for twenty minutes nightly, keeping the corpora.
 
 Southstar Browser 0.9.10:
 ======
