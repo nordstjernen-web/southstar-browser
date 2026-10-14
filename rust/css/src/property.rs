@@ -1178,6 +1178,38 @@ fn font_variant(t: &[u8]) -> Option<Value> {
     Some(Value::keyword(canonical.join(&b' ')))
 }
 
+fn white_space(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    let collapse_of = |w: &[u8]| {
+        ["collapse", "preserve", "preserve-breaks", "break-spaces"]
+            .iter()
+            .position(|k| eq(k.as_bytes(), w))
+    };
+    let wrap_of = |w: &[u8]| ["wrap", "nowrap"].iter().position(|k| eq(k.as_bytes(), w));
+    let (collapse, nowrap) = match words.as_slice() {
+        [w] if word_is_one_of(w, "normal nowrap pre pre-wrap pre-line break-spaces") => {
+            return Some(Value::keyword(lower(w)));
+        }
+        [w] => (collapse_of(w)?, false),
+        [a, b] => match (collapse_of(a), wrap_of(b), collapse_of(b), wrap_of(a)) {
+            (Some(c), Some(w), _, _) | (_, _, Some(c), Some(w)) => (c, w == 1),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let legacy: &[u8] = match (collapse, nowrap) {
+        (0, false) => b"normal",
+        (0, true) => b"nowrap",
+        (1, false) => b"pre-wrap",
+        (1, true) => b"pre",
+        (2, false) => b"pre-line",
+        (2, true) => b"preserve-breaks nowrap",
+        (_, false) => b"break-spaces",
+        _ => return None,
+    };
+    Some(Value::keyword(legacy.to_vec()))
+}
+
 fn font_synthesis(t: &[u8]) -> Option<Value> {
     let words = split_gspace_words(t);
     if words.len() == 1 && eq(words[0], b"none") {
@@ -1643,17 +1675,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::FontVariationSettings => settings_prop(t, font::variation_settings_valid),
         P::TabSize => tab_size(t),
         P::BorderSpacing => border_spacing(t),
-        P::WhiteSpace => keyword_in(
-            t,
-            &[
-                b"normal",
-                b"nowrap",
-                b"pre",
-                b"pre-wrap",
-                b"pre-line",
-                b"break-spaces",
-            ],
-        ),
+        P::WhiteSpace => white_space(t),
         P::BreakBefore | P::BreakAfter => keyword_choice(
             t,
             "auto avoid avoid-page avoid-column avoid-region page column region left right recto verso always all",

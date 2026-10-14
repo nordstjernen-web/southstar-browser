@@ -592,7 +592,8 @@ const COLOR_PROPS: [&[u8]; 22] = [
     b"border-inline-end-color",
 ];
 
-const KEYWORD_CANONICAL_PROPS: [&[u8]; 15] = [
+const KEYWORD_CANONICAL_PROPS: [&[u8]; 16] = [
+    b"white-space",
     b"font-variant",
     b"font-synthesis",
     b"font-size-adjust",
