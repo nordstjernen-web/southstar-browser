@@ -7545,10 +7545,56 @@
                 ? d['initial-value'] : null;
         });
 
+        var dirtySheets = [];
+        var sheetFlushQueued = false;
+        var eagerSheetUpdates = 0;
+        function flushSheets() {
+            sheetFlushQueued = false;
+            eagerSheetUpdates = 0;
+            var sheets = dirtySheets;
+            dirtySheets = [];
+            for (var i = 0; i < sheets.length; i++) {
+                sheets[i].__ndDirty = false;
+                try { sheets[i].__notify(); } catch (e) {}
+            }
+        }
         function notify(owner) {
             var s = owner;
             while (s && typeof s.__notify !== 'function') s = s.__parentStyleSheet;
-            if (s && typeof s.__notify === 'function') s.__notify();
+            if (!s || typeof s.__notify !== 'function' || s.__ndDirty) return;
+            if (!sheetFlushQueued) {
+                sheetFlushQueued = true;
+                ndMediaTask(flushSheets);
+            }
+            var cost = 1;
+            try { cost += s.cssRules.length; } catch (e) {}
+            if (eagerSheetUpdates + cost <= 512) {
+                eagerSheetUpdates += cost;
+                s.__notify();
+                return;
+            }
+            try {
+                Object.defineProperty(s, '__ndDirty', {
+                    value: true, writable: true, configurable: true, enumerable: false
+                });
+            } catch (e) { s.__notify(); return; }
+            dirtySheets.push(s);
+        }
+        var nativeComputedStyle = global.getComputedStyle;
+        if (typeof nativeComputedStyle === 'function') {
+            var flushingComputedStyle = {
+                getComputedStyle: function (element, pseudo) {
+                    if (dirtySheets.length) flushSheets();
+                    return nativeComputedStyle.apply(this, arguments);
+                }
+            }.getComputedStyle;
+            try {
+                Object.defineProperty(flushingComputedStyle, 'length', { value: 1 });
+                Object.defineProperty(global, 'getComputedStyle', {
+                    value: nativeize(flushingComputedStyle),
+                    writable: true, configurable: true, enumerable: true
+                });
+            } catch (e) {}
         }
 
         var styleDeclarationProto = global.CSSStyleDeclaration &&
@@ -8039,8 +8085,8 @@
             } catch (e) {}
             return list;
         }
-        function syncList(list, rules) {
-            for (var i = 0; i < rules.length; i++) list[i] = rules[i];
+        function syncList(list, rules, from) {
+            for (var i = from || 0; i < rules.length; i++) list[i] = rules[i];
             list.length = rules.length;
         }
 
@@ -8555,7 +8601,7 @@
                 throw domError('HierarchyRequestError',
                     '@' + rule.__at + ' not allowed here');
             rules.splice(index, 0, rule);
-            syncList(list, rules);
+            syncList(list, rules, index);
             notify(owner);
             return index;
         }
@@ -8568,7 +8614,7 @@
             rules.splice(index, 1);
             removed.__parentStyleSheet = null;
             removed.__parentRule = null;
-            syncList(list, rules);
+            syncList(list, rules, index);
             notify(owner);
         }
 
@@ -8712,6 +8758,7 @@
                 syncList(list, rules);
             }
             function rebuild() {
+                if (rules === null || sourceText() !== lastText) return;
                 try {
                     var t = rules.map(function (r) {
                         return r.cssText;
