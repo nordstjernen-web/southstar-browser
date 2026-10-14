@@ -11,6 +11,7 @@ use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 
+use crate::clip_shape::clip_to_shape;
 use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
 use crate::ffi::cairo::{self, Cr, Surface, SurfaceRef};
 use crate::ffi::engine::{self, Texture, Video};
@@ -120,122 +121,10 @@ pub fn apply_box_content_clip(cr: Cr, b: BoxRef<'_>) -> bool {
     if cp.is_empty() || cp == b"none" {
         return clipped;
     }
-    let w = b.content_width();
-    let h = b.content_height();
-    let cx = b.x() + w / 2.0;
-    let cy = b.y() + h / 2.0;
-    let starts =
-        |prefix: &[u8]| cp.len() >= prefix.len() && cp[..prefix.len()].eq_ignore_ascii_case(prefix);
-    let min_wh = if w < h { w } else { h };
-    if starts(b"circle") {
-        let mut r = min_wh / 2.0;
-        if let Some(paren) = cp.iter().position(|&c| c == b'(') {
-            let mut p = paren + 1;
-            while p < cp.len() && (cp[p] == b' ' || cp[p] == b'\t') {
-                p += 1;
-            }
-            if p < cp.len()
-                && cp[p] != b')'
-                && let Some((rv, end)) = strtod(cp, p)
-                && rv > 0.0
-            {
-                r = if cp.get(end) == Some(&b'%') {
-                    rv / 100.0 * (min_wh / 2.0)
-                } else {
-                    rv
-                };
-            }
-        }
-        cr.new_sub_path();
-        cr.arc(cx, cy, r, 0.0, 2.0 * PI);
-        cr.clip();
-        clipped = true;
-    } else if starts(b"ellipse") {
-        cr.save();
-        cr.translate(cx, cy);
-        cr.scale(w / 2.0, h / 2.0);
-        cr.arc(0.0, 0.0, 1.0, 0.0, 2.0 * PI);
-        cr.restore();
-        cr.clip();
-        clipped = true;
-    } else if starts(b"polygon") {
-        let Some(paren) = cp.iter().position(|&c| c == b'(') else {
-            return clipped;
-        };
-        let rest = &cp[paren + 1..];
-        let Some(end) = rest.iter().rposition(|&c| c == b')') else {
-            return clipped;
-        };
-        let body = &rest[..end];
-        let mut first = true;
-        cr.new_sub_path();
-        for vert in body.split(|&c| c == b',') {
-            let coords = strip(vert);
-            if coords.is_empty() {
-                continue;
-            }
-            let Some((xv, mut e1)) = strtod(coords, 0) else {
-                continue;
-            };
-            let xpct = coords.get(e1) == Some(&b'%');
-            if xpct {
-                e1 += 1;
-            }
-            while e1 < coords.len() && (coords[e1] == b' ' || coords[e1] == b'\t') {
-                e1 += 1;
-            }
-            let Some((yv, e2)) = strtod(coords, e1) else {
-                continue;
-            };
-            let ypct = coords.get(e2) == Some(&b'%');
-            let px = if xpct {
-                b.x() + xv / 100.0 * w
-            } else {
-                b.x() + xv
-            };
-            let py = if ypct {
-                b.y() + yv / 100.0 * h
-            } else {
-                b.y() + yv
-            };
-            if first {
-                cr.move_to(px, py);
-                first = false;
-            } else {
-                cr.line_to(px, py);
-            }
-        }
-        if !first {
-            cr.close_path();
-            cr.clip();
-            clipped = true;
-        }
-    } else if starts(b"inset")
-        && let Some(paren) = cp.iter().position(|&c| c == b'(')
-        && let Some((pv, end)) = strtod(cp, paren + 1)
-    {
-        let pad = if cp.get(end) == Some(&b'%') {
-            pv / 100.0 * min_wh
-        } else {
-            pv
-        };
-        cr.rectangle(b.x() + pad, b.y() + pad, w - 2.0 * pad, h - 2.0 * pad);
-        cr.clip();
-        clipped = true;
-    }
-    clipped
-}
-
-fn strip(token: &[u8]) -> &[u8] {
-    let start = token
-        .iter()
-        .position(|&c| !crate::util::is_space(c))
-        .unwrap_or(token.len());
-    let end = token
-        .iter()
-        .rposition(|&c| !crate::util::is_space(c))
-        .map_or(start, |e| e + 1);
-    &token[start..end.max(start)]
+    let font_size = get(st, P::FontSize)
+        .and_then(ValueRef::length)
+        .map_or(16.0, |(v, _)| v);
+    clip_to_shape(cr, b, cp, font_size) || clipped
 }
 
 fn object_position_offset(
