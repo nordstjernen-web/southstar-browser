@@ -69,6 +69,7 @@ pub struct GError {
     pub message: *mut c_char,
 }
 
+#[link(name = "glib-2.0")]
 unsafe extern "C" {
     pub fn g_malloc(n_bytes: usize) -> *mut c_void;
     pub fn g_malloc0(n_bytes: usize) -> *mut c_void;
