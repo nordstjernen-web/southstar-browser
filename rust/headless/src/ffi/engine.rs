@@ -197,7 +197,6 @@ unsafe extern "C" {
         scripting: GBoolean,
     ) -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
-    fn ns_node_dump(node: *const NsNode) -> *mut GString;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
@@ -510,7 +509,7 @@ impl Document {
 }
 
 pub fn node_dump(node: Node) -> Vec<u8> {
-    gstring_take(unsafe { ns_node_dump(node.as_ptr()) })
+    southstar_dom::serialize::dump(Some(node))
 }
 
 fn gstring_take(s: *mut GString) -> Vec<u8> {

@@ -52,11 +52,6 @@ pub unsafe extern "C" fn ns_form_control_readonly_bars_validation(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_control_length_limits_apply(control: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(control) }.is_some_and(controls::length_limits_apply))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_form_control_supports_required(control: *const NsNode) -> GBoolean {
     glib::boolean(unsafe { node(control) }.is_some_and(controls::supports_required))
 }
@@ -165,21 +160,6 @@ pub unsafe extern "C" fn ns_ce_attr_enables(contenteditable: *const c_char) -> G
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_text_input(n: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(n) }.is_some_and(controls::is_text_input))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_contenteditable_host(n: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(n) }.is_some_and(controls::is_contenteditable_host))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_editable(n: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(n) }.is_some_and(controls::is_editable))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_spellcheck_used(n: *const NsNode) -> GBoolean {
     glib::boolean(unsafe { node(n) }.is_none_or(controls::spellcheck_used))
 }
@@ -207,50 +187,6 @@ pub unsafe extern "C" fn ns_textarea_default_value_dup(n: *const NsNode) -> *mut
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_textarea_value_dup(n: *const NsNode) -> *mut c_char {
     glib::strdup(&controls::textarea_value(unsafe { node(n) }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_input_is_checked(n: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(n) }.is_some_and(controls::is_checked))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_editable_value(n: *const NsNode) -> *const c_char {
-    unsafe { node(n) }
-        .map_or(c"", controls::editable_value)
-        .as_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_set_editable_value(n: *mut NsNode, value: *const c_char) {
-    if let Some(n) = unsafe { node(n) } {
-        controls::set_editable_value(n, c_str(value).unwrap_or(c""));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_flatten_editable(n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        controls::flatten_editable(n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_numeric_input(control: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(control) }.is_some_and(controls::is_numeric_input))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_numeric_filter_insert(
-    insert: *const c_char,
-    len: usize,
-    out_len: *mut usize,
-) -> *mut c_char {
-    let filtered = controls::numeric_filter(unsafe { glib::slice(insert.cast(), len) });
-    if !out_len.is_null() {
-        unsafe { *out_len = filtered.len() };
-    }
-    glib::strdup(&filtered)
 }
 
 #[unsafe(no_mangle)]

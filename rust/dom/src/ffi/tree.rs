@@ -26,21 +26,3 @@ pub extern "C" fn ns_dom_active_modal() -> *const NsNode {
 pub unsafe extern "C" fn ns_element_effectively_inert(el: *const NsNode) -> GBoolean {
     glib::boolean(unsafe { Node::from_ptr(el) }.is_some_and(tree::effectively_inert))
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_hidden_until_found(el: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { Node::from_ptr(el) }.is_some_and(tree::hidden_until_found))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_details_fragment_needs_open(
-    details: *const NsNode,
-    target: *const NsNode,
-) -> GBoolean {
-    let (Some(details), Some(target)) = (unsafe { Node::from_ptr(details) }, unsafe {
-        Node::from_ptr(target)
-    }) else {
-        return glib::FALSE;
-    };
-    glib::boolean(tree::details_fragment_needs_open(details, target))
-}

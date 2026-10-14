@@ -229,10 +229,10 @@ pub fn set_focused_editable_selection(b: &NsBrowser, caret: usize, anchor: usize
 
 pub fn title(b: &NsBrowser) -> Option<Vec<u8>> {
     let title = ffi::find_first_element(b.doc()?, c"title")?;
-    let raw = ffi::collect_text(title)?;
+    let raw = ffi::collect_text(title);
     let mut out = Vec::new();
     let mut prev_ws = true;
-    for &c in raw.to_bytes() {
+    for &c in &raw {
         if matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c) {
             if !prev_ws {
                 out.push(b' ');

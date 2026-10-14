@@ -298,10 +298,10 @@ fn path_vertices(cr: Canvas) -> Option<Vec<Vertex>> {
 }
 
 fn collapsed_text(n: Node<'_>) -> Option<Vec<u8>> {
-    let text = ffi::collect_text(n)?;
-    let mut flat = Vec::with_capacity(text.to_bytes().len());
+    let text = ffi::collect_text(n);
+    let mut flat = Vec::with_capacity(text.len());
     let mut prev_ws = true;
-    for &c in text.to_bytes() {
+    for &c in &text {
         if is_ws(c) {
             if !prev_ws {
                 flat.push(b' ');

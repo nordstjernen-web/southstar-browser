@@ -219,7 +219,6 @@ unsafe extern "C" {
     fn g_object_unref(object: *mut c_void);
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
-    fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
     fn ns_net_navigator_languages() -> *mut *mut c_char;
@@ -709,8 +708,10 @@ impl TextLayout {
     }
 }
 
-pub fn collect_text(n: Node<'_>) -> Option<GStr> {
-    unsafe { GStr::take(ns_node_collect_text(n.as_ptr())) }
+pub fn collect_text(n: Node<'_>) -> Vec<u8> {
+    let mut text = southstar_dom::serialize::collect_text(Some(n));
+    text.truncate(text.iter().position(|&b| b == 0).unwrap_or(text.len()));
+    text
 }
 
 pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>, descend: bool) -> Option<Node<'a>> {

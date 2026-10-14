@@ -5,7 +5,7 @@ anim	132	26	22	0	84	8	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
-browser	745	313	88	0	505	51	0
+browser	732	303	88	0	494	49	0
 bytecode-cache	13	0	4	0	7	3	0
 camera	63	12	17	0	30	4	0
 canvas	232	136	20	0	180	22	0
@@ -17,7 +17,7 @@ css-prop-syntax	24	2	6	0	11	3	0
 css-syntax	0	0	0	0	0	0	0
 datetime	22	0	9	0	8	4	0
 debuglog	22	5	6	0	13	3	0
-dom	433	4	106	0	212	31	2
+dom	375	3	89	0	189	31	2
 engine	267	76	24	0	192	25	0
 eventsource	27	2	3	0	14	1	0
 extensions	33	14	2	0	29	6	0
@@ -26,10 +26,10 @@ forms	20	6	4	0	11	2	0
 glctx	81	55	4	0	3	0	0
 glib	25	64	0	0	12	2	4
 gtk-ffi	29	374	0	0	0	0	0
-headless	292	183	2	0	241	30	0
+headless	273	167	2	0	222	27	0
 helper-ffi	5	0	2	0	2	0	0
 history	31	18	5	0	22	6	0
-html-parser	61	17	7	0	42	2	0
+html-parser	60	16	7	0	41	1	0
 html-util	54	10	10	0	31	2	0
 html5	0	0	0	0	0	0	0
 http	63	55	0	0	33	6	0
@@ -129,7 +129,7 @@ spellcheck	17	6	3	0	3	0	0
 sqlite	29	23	0	0	27	6	0
 static	1	0	1	0	0	0	0
 style	59	10	0	0	53	8	5
-svg	125	90	8	0	104	11	0
+svg	124	89	8	0	103	10	0
 texture	38	1	9	0	18	0	0
 threaddump	32	13	3	0	15	2	0
 url	0	0	0	0	0	0	0

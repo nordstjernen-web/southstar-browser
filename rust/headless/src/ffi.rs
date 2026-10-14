@@ -22,7 +22,7 @@ pub use css::{Selectors, StyleRef, StyleTable, Value, box_dom, box_style, hit_te
 pub use dom_api::{
     c_atoi, c_atol, collect_inputs, details_fragment_needs_open, editable_value,
     effectively_disabled, find_by_id, first_element, first_invalid, flatten_editable, form_owner,
-    fragment_target, has_editable_value, hidden_until_found, image_map_resolve, input_is_checked,
+    fragment_target, hidden_until_found, image_map_resolve, input_is_checked,
     is_contenteditable_host, is_editable, is_named, is_numeric_input, is_submit_trigger,
     length_limits_apply, numeric_filter_insert, remove_attr, root, set_attr, set_editable_value,
     set_submission_charset, utf8_strlen,

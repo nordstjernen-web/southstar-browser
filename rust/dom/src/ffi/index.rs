@@ -14,33 +14,10 @@ unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(n) }
 }
 
-fn mut_ptr(found: Option<Node>) -> *mut NsNode {
-    found.map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
 unsafe fn with_doc_and_root(doc: *mut NsNode, root: *mut NsNode, f: fn(Node, Node)) {
     if let (Some(doc), Some(root)) = (unsafe { node(doc) }, unsafe { node(root) }) {
         f(doc, root);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode {
-    let (Some(root), Some(id)) = (unsafe { node(root) }, c_str(id)) else {
-        return ptr::null_mut();
-    };
-    mut_ptr(index::find_by_id(root, id))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_find_fragment_target(
-    root: *const NsNode,
-    frag: *const c_char,
-) -> *mut NsNode {
-    let (Some(root), Some(frag)) = (unsafe { node(root) }, c_str(frag)) else {
-        return ptr::null_mut();
-    };
-    mut_ptr(index::find_fragment_target(root, frag))
 }
 
 #[unsafe(no_mangle)]

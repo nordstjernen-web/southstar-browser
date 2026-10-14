@@ -216,11 +216,7 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
             js.dispatch(focused, c"blur");
         }
         fc.set_focused(Some(editable));
-        let caret = if ffi::has_editable_value(editable) {
-            ffi::editable_value(editable).len()
-        } else {
-            0
-        };
+        let caret = ffi::editable_value(editable).len();
         fc.caret.set(caret);
         fc.anchor.set(caret);
         if let Some(js) = fc.js {
@@ -483,11 +479,7 @@ fn key(fc: &Ctx, nav: &NavCapture, name: &[u8]) {
             }
             fc.set_focused(Some(next));
             js.set_focused_node(next);
-            let caret = if ffi::has_editable_value(next) {
-                ffi::editable_value(next).len()
-            } else {
-                0
-            };
+            let caret = ffi::editable_value(next).len();
             fc.caret.set(caret);
             fc.anchor.set(caret);
             ffi::consume_mutated(Some(js));

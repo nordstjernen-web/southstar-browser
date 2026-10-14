@@ -81,6 +81,10 @@ Southstar Browser 0.9.11-dev:
 * new Option(text, value, defaultSelected, selected) sets the selected
   attribute for defaultSelected instead of adding a bogus defaultSelected
   attribute that showed up in the option's outerHTML.
+* The headless and desktop engines, the SVG renderer and the HTML parser use
+  rust/dom's Rust API for editing, form controls, fragment targets, details,
+  image maps, text collection and the DOM dump; seventeen more of its C
+  exports are gone.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

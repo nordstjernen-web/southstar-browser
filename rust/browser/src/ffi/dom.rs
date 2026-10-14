@@ -5,19 +5,13 @@
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{self as dom, Node, NsNode};
 use southstar_glib::{GBoolean, GStr};
 
 use super::glib::{GString, StrBufOwned};
 
 unsafe extern "C" {
-    fn ns_element_hidden_until_found(el: *const NsNode) -> GBoolean;
-    fn ns_details_fragment_needs_open(details: *const NsNode, child: *const NsNode) -> GBoolean;
-    fn ns_node_find_fragment_target(root: *const NsNode, frag: *const c_char) -> *mut NsNode;
-    fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
-    fn ns_node_dump(n: *const NsNode) -> *mut GString;
     pub fn ns_node_free(n: *mut NsNode);
-    fn ns_node_is_text_input(n: *const NsNode) -> GBoolean;
     fn ns_form_first_invalid(
         form: *const NsNode,
         n: *const NsNode,
@@ -55,7 +49,7 @@ pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
 }
 
 pub fn hidden_until_found(n: Node<'_>) -> bool {
-    unsafe { ns_element_hidden_until_found(n.as_ptr()) != 0 }
+    dom::tree::hidden_until_found(n)
 }
 
 pub fn remove_attr(n: Node<'_>, name: &CStr) {
@@ -67,39 +61,25 @@ pub fn set_attr(n: Node<'_>, name: &CStr, value: &CStr) {
 }
 
 pub fn details_fragment_needs_open(details: Node<'_>, child: Node<'_>) -> bool {
-    unsafe { ns_details_fragment_needs_open(details.as_ptr(), child.as_ptr()) != 0 }
+    dom::tree::details_fragment_needs_open(details, child)
 }
 
 pub fn find_fragment_target<'a>(doc: Option<Node<'a>>, frag: &CStr) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_node_find_fragment_target(
-            Node::ptr_or_null(doc),
-            frag.as_ptr(),
-        ))
-    }
+    doc.and_then(|doc| dom::index::find_fragment_target(doc, frag))
 }
 
 pub fn find_first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
     southstar_dom::index::find_first_element(root, tag)
 }
 
-pub fn collect_text(n: Node<'_>) -> Option<GStr> {
-    unsafe { GStr::take(ns_node_collect_text(n.as_ptr())) }
+pub fn collect_text(n: Node<'_>) -> Vec<u8> {
+    let mut text = dom::serialize::collect_text(Some(n));
+    text.truncate(text.iter().position(|&b| b == 0).unwrap_or(text.len()));
+    text
 }
 
 pub fn node_dump(doc: Node<'_>) -> *mut c_char {
-    let out = unsafe { ns_node_dump(doc.as_ptr()) };
-    if out.is_null() {
-        return ptr::null_mut();
-    }
-    unsafe { g_string_free_keep(out) }
-}
-
-unsafe fn g_string_free_keep(s: *mut GString) -> *mut c_char {
-    unsafe extern "C" {
-        fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    }
-    unsafe { g_string_free(s, 0) }
+    southstar_glib::strdup(&dom::serialize::dump(Some(doc)))
 }
 
 pub unsafe fn node_free(n: *mut NsNode) {
@@ -111,7 +91,7 @@ pub fn editable_value(n: Node<'_>) -> Option<&CStr> {
 }
 
 pub fn is_text_input(n: Node<'_>) -> bool {
-    unsafe { ns_node_is_text_input(n.as_ptr()) != 0 }
+    dom::controls::is_text_input(n)
 }
 
 pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {

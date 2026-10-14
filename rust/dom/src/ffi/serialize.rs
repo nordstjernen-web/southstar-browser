@@ -2,13 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_int};
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::{Node, NsNode, c_str};
-use crate::image_map;
+use super::{Node, NsNode};
 use crate::serialize::{self, Options};
 
 #[repr(C)]
@@ -18,17 +16,8 @@ pub struct NsHtmlSerOpts {
     n_roots: c_int,
 }
 
-unsafe extern "C" {
-    fn g_string_new_len(init: *const c_char, len: isize) -> *mut c_void;
-}
-
 unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(n) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_collect_text(root: *const NsNode) -> *mut c_char {
-    glib::strdup(&serialize::collect_text(unsafe { node(root) }))
 }
 
 #[unsafe(no_mangle)]
@@ -88,35 +77,4 @@ pub unsafe extern "C" fn ns_node_outer_html(n: *const NsNode) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_xml_outer_html(n: *const NsNode) -> *mut c_char {
     glib::strdup(&serialize::xml_outer_html(unsafe { node(n) }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_dump(n: *const NsNode) -> *mut c_void {
-    let text = serialize::dump(unsafe { node(n) });
-    unsafe { g_string_new_len(text.as_ptr().cast(), text.len() as isize) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_map_resolve(
-    doc: *const NsNode,
-    usemap: *const c_char,
-    lx: f64,
-    ly: f64,
-    iw: f64,
-    ih: f64,
-    out_target: *mut *const c_char,
-) -> *mut c_char {
-    if !out_target.is_null() {
-        unsafe { *out_target = ptr::null() };
-    }
-    let (Some(doc), Some(usemap)) = (unsafe { node(doc) }, c_str(usemap)) else {
-        return ptr::null_mut();
-    };
-    let Some((href, target)) = image_map::resolve(doc, usemap, (lx, ly), (iw, ih)) else {
-        return ptr::null_mut();
-    };
-    if !out_target.is_null() {
-        unsafe { *out_target = target.map_or(ptr::null(), |t| t.as_ptr()) };
-    }
-    unsafe { glib::g_strdup(href.as_ptr()) }
 }

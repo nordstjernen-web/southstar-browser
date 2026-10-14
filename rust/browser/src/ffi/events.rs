@@ -182,10 +182,7 @@ unsafe extern "C" {
         x: f64,
         y: f64,
     ) -> GBoolean;
-    fn ns_node_is_contenteditable_host(n: *const NsNode) -> GBoolean;
-    fn ns_node_is_editable(n: *const NsNode) -> GBoolean;
     fn ns_node_is_focusable(n: *const NsNode) -> GBoolean;
-    fn ns_node_set_editable_value(n: *mut NsNode, value: *const c_char);
     fn ns_option_label_dup(option: *const NsNode) -> *mut c_char;
     fn ns_element_effectively_inert(el: *const NsNode) -> GBoolean;
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
@@ -549,11 +546,11 @@ pub fn selection_text_at(layout: BoxRef<'_>, x: f64, y: f64) -> bool {
 }
 
 pub fn is_contenteditable_host(n: Node<'_>) -> bool {
-    unsafe { ns_node_is_contenteditable_host(n.as_ptr()) != 0 }
+    southstar_dom::controls::is_contenteditable_host(n)
 }
 
 pub fn is_editable(n: Option<Node<'_>>) -> bool {
-    unsafe { ns_node_is_editable(Node::ptr_or_null(n)) != 0 }
+    n.is_some_and(southstar_dom::controls::is_editable)
 }
 
 pub fn is_focusable(n: Node<'_>) -> bool {
@@ -561,7 +558,7 @@ pub fn is_focusable(n: Node<'_>) -> bool {
 }
 
 pub fn set_editable_value(n: Node<'_>, value: &CStr) {
-    unsafe { ns_node_set_editable_value(n.as_mut_ptr(), value.as_ptr()) };
+    southstar_dom::controls::set_editable_value(n, value);
 }
 
 pub fn option_label(option: Node<'_>) -> Option<GStr> {
