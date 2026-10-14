@@ -218,7 +218,8 @@ compile with the minimum supported version.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
   (patched in through `[patch.crates-io]`). QuickJS-ng was removed in October
   2026. Bindings use the `rust/js-engine` API (`Scope`, `Value`, `HostClass`);
-  engine hooks the bindings need go into the Boa fork.
+  engine hooks the bindings need go into the Boa fork, and are listed in
+  `docs/boa-fork.md` (`scripts/boa-fork-diff.py` shows the fork's patch).
 - `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on the same
   engine layer.
 

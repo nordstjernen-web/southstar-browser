@@ -192,6 +192,12 @@ Southstar Browser 0.9.11-dev:
   versions in Cargo.lock, so any new crate or version bump needs an audit or
   a deliberate exemption. The in-tree Boa fork is first-party code and is not
   vetted as a crates.io crate. The Linux CI runs cargo vet --locked.
+* docs/boa-fork.md records what the in-tree Boa fork changes against the
+  boa_engine 0.22.0 release it copies -- 783 added lines in 17 files: each
+  embedder hook, what the bindings use it for and whether it can go
+  upstream -- and how to take a new Boa release or security fix.
+  scripts/boa-fork-diff.py downloads the release, checks it against the
+  crates.io checksum and prints the fork's patch.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/
