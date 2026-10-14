@@ -228,6 +228,11 @@ Southstar Browser 0.9.11-dev:
   calls now keep the string alive for their whole duration. The POST body,
   stored as a C string beside a separate length, is a byte vector. The page
   object is no longer created by zero-filling a struct that holds them.
+* A form submitted with method=post while a page is still loading -- by a
+  script calling form.submit() or requestSubmit() during the first second
+  -- is posted with its body. The renderer took the navigation from the
+  page-open reply without keeping the POST body that went with it, so the
+  shell loaded the action URL as a plain GET.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

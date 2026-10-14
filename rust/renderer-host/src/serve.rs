@@ -583,6 +583,9 @@ impl<F: Framebuffer> Session<F> {
             nav = cur.take_pending_nav();
             (security, ip) = cur.security();
         }
+        if nav.is_some() {
+            self.stash_post(nav.as_deref());
+        }
         let shown_url = final_url.or_else(|| url.map(|u| u.into_bytes()));
         json_reply(
             self.ctrl_w,
