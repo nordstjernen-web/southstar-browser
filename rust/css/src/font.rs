@@ -195,7 +195,7 @@ fn family_resolve(css_family: &[u8]) -> Vec<u8> {
     fallback.unwrap_or(b"sans-serif").to_vec()
 }
 
-pub(crate) fn family_for_pango(css_family: &[u8]) -> Vec<u8> {
+pub fn family_for_pango(css_family: &[u8]) -> Vec<u8> {
     if css_family.is_empty() {
         return b"sans-serif".to_vec();
     }
@@ -240,7 +240,7 @@ pub(crate) fn weight_relative(parent: i32, bolder: bool) -> i32 {
     }
 }
 
-pub(crate) fn weight_number(keyword: Option<&[u8]>, fallback: i32) -> i32 {
+pub fn weight_number(keyword: Option<&[u8]>, fallback: i32) -> i32 {
     let Some(kw) = keyword else {
         return fallback;
     };
@@ -254,7 +254,7 @@ pub(crate) fn weight_number(keyword: Option<&[u8]>, fallback: i32) -> i32 {
     }
 }
 
-pub(crate) fn stretch_rank(keyword: Option<&[u8]>, percent: Option<f64>) -> i32 {
+pub fn stretch_rank(keyword: Option<&[u8]>, percent: Option<f64>) -> i32 {
     if let Some(kw) = keyword {
         let rank = [
             &b"ultra-condensed"[..],

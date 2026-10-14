@@ -1,13 +1,12 @@
-//! Southstar — the C ABI of transforms, the translate, rotate and scale properties, and the math-function check.
+//! Southstar — the C ABI of serializing transforms and the translate, rotate and scale properties, and the math-function check.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::sync::OnceLock;
 
 use southstar_glib::{self as glib, GBoolean};
-use southstar_mat4::Mat4;
 
 use super::value::{self, NsCssValue};
 use crate::transform::{self, Individual, Transform};
@@ -80,25 +79,6 @@ pub unsafe extern "C" fn ns_css_individual_transform_serialize(
     }
     let tf = unsafe { &v.u.transform };
     owned(individual(prop).and_then(|prop| transform::individual_serialize(tf, prop)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_transform_is_3d(tf: *const Transform) -> GBoolean {
-    glib::boolean(unsafe { tf.as_ref() }.is_some_and(transform::is_3d))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_transform_to_mat4(
-    tf: *const Transform,
-    bw: c_double,
-    bh: c_double,
-    out: *mut Mat4,
-) {
-    let matrix = match unsafe { tf.as_ref() } {
-        Some(tf) => transform::to_mat4(tf, bw, bh),
-        None => Mat4::IDENTITY,
-    };
-    unsafe { *out = matrix };
 }
 
 #[unsafe(no_mangle)]

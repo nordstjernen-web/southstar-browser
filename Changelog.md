@@ -85,6 +85,12 @@ Southstar Browser 0.9.11-dev:
   rust/dom's Rust API for editing, form controls, fragment targets, details,
   image maps, text collection and the DOM dump; seventeen more of its C
   exports are gone.
+* Paint, layout, hit testing, SVG text and the geometry and CSSOM bindings
+  call rust/css's Rust functions for gradient angles and radii, transform
+  matrices and their 3D test, the effective transform built from translate,
+  rotate, scale and transform, border-image sources and parameters, font
+  family, weight and stretch, direction and CSS escapes; eleven C exports
+  and paint's GString round trip for unescaping are gone.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

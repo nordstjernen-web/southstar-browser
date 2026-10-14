@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of computed-style queries: css.c's ns_style read through the style mirror for layout, paint and script — writing mode, lengths in px, columns, keywords, the effective transform and currentcolor flags.
+//! Southstar — the C ABI of computed-style queries: css.c's ns_style read through the style mirror for layout, paint and script — writing mode, lengths in px, columns, keywords and currentcolor flags.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,12 +8,11 @@ use core::ptr;
 use southstar_glib::{self as glib, GBoolean};
 
 use super::computed_units::{RawStyle, StyleView, slot};
-use super::value::{KIND_GRADIENT, KIND_KEYWORD, KIND_TRANSFORM, KIND_URL, NsCssValue};
+use super::value::{KIND_KEYWORD, NsCssValue};
 use crate::cascade::CURRENTCOLOR_PROPS;
 use crate::display::Display;
 use crate::prop::Prop;
 use crate::style_query;
-use crate::transform::{OPS_MAX, Transform};
 
 unsafe fn view<'a>(style: *const RawStyle) -> Option<StyleView<'a>> {
     unsafe { style.as_ref() }.map(StyleView)
@@ -92,53 +91,6 @@ pub unsafe extern "C" fn ns_css_keyword_is(v: *const NsCssValue, kw: *const c_ch
     glib::boolean(unsafe { CStr::from_ptr(keyword) == CStr::from_ptr(kw) })
 }
 
-fn transform_of(v: &NsCssValue) -> Option<&Transform> {
-    if v.kind == KIND_TRANSFORM {
-        Some(unsafe { &v.u.transform })
-    } else {
-        None
-    }
-}
-
-unsafe fn push_op(out: &mut Transform, op: &crate::transform::Op) {
-    let at = out.n_ops as usize;
-    unsafe { ptr::copy_nonoverlapping(op, &raw mut out.ops[at], 1) };
-    out.n_ops += 1;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_style_effective_transform(
-    style: *const RawStyle,
-    transform_override: *const Transform,
-    out: *mut Transform,
-) {
-    let Some(out) = (unsafe { out.as_mut() }) else {
-        return;
-    };
-    unsafe { ptr::write_bytes(&raw mut *out, 0, 1) };
-    let style = unsafe { style.as_ref() };
-    let value = |prop: Prop| style.and_then(|s| unsafe { s.value(prop.id()).as_ref() });
-    for prop in [Prop::Translate, Prop::Rotate, Prop::Scale] {
-        if let Some(tf) = value(prop).and_then(transform_of)
-            && tf.n_ops > 0
-            && (out.n_ops as usize) < OPS_MAX
-        {
-            unsafe { push_op(out, &tf.ops[0]) };
-        }
-    }
-    let tf = unsafe { transform_override.as_ref() }
-        .or_else(|| value(Prop::Transform).and_then(transform_of));
-    if let Some(tf) = tf {
-        let n = usize::try_from(tf.n_ops).unwrap_or(0).min(OPS_MAX);
-        for op in &tf.ops[..n] {
-            if out.n_ops as usize >= OPS_MAX {
-                break;
-            }
-            unsafe { push_op(out, op) };
-        }
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_display_of(style: *const RawStyle) -> Display {
     unsafe { style.as_ref() }.map_or_else(Display::default, |s| s.display)
@@ -150,18 +102,6 @@ pub unsafe extern "C" fn ns_css_alignment_base(kw: *const c_char) -> *const c_ch
         return ptr::null();
     }
     style_query::alignment_base(unsafe { CStr::from_ptr(kw) }).as_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_border_image_source(style: *const RawStyle) -> *const NsCssValue {
-    let Some(style) = (unsafe { style.as_ref() }) else {
-        return ptr::null();
-    };
-    let v = style.value(Prop::BorderImageSource.id());
-    match unsafe { v.as_ref() } {
-        Some(value) if value.kind == KIND_URL || value.kind == KIND_GRADIENT => v,
-        _ => ptr::null(),
-    }
 }
 
 #[unsafe(no_mangle)]

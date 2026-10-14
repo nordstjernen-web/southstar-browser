@@ -5,9 +5,12 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
+use std::ffi::CString;
 use std::sync::OnceLock;
 
-use southstar_css::{Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList, Transform};
+use southstar_css::{
+    BorderImageParams, Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList, Transform,
+};
 use southstar_dom::Node;
 use southstar_glib::{
     GBoolean, GHashTable, GPtrArray, GStr, g_hash_table_lookup, g_ptr_array_unref,
@@ -209,19 +212,10 @@ unsafe extern "C" {
     fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
-    fn ns_css_font_weight_number(v: *const NsCssValue, fallback: c_int) -> c_int;
     fn ns_css_resolve_style_vars(text: *const c_char, style: *const Style) -> *mut c_char;
-    fn ns_css_font_family_for_pango(css_family: *const c_char) -> *mut c_char;
     fn ns_css_display_of(style: *const Style) -> Display;
     fn ns_var_map_names(map: *const VarMap) -> *mut GPtrArray;
     fn ns_var_map_lookup(map: *const VarMap, name: *const c_char) -> *const c_char;
-    fn ns_css_parse_color(
-        s: *const c_char,
-        r: *mut u8,
-        g: *mut u8,
-        b: *mut u8,
-        a: *mut u8,
-    ) -> GBoolean;
 }
 
 pub struct Prop {
@@ -484,7 +478,15 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn font_weight_or(self, fallback: i32) -> i32 {
-        unsafe { ns_css_font_weight_number(self.0.as_ptr(), fallback) }
+        southstar_css::font_weight_number(self.keyword_text().map(CStr::to_bytes), fallback)
+    }
+
+    pub fn font_stretch_rank(self) -> i32 {
+        let percent = self
+            .length()
+            .filter(|&(_, unit)| unit == crate::UNIT_PERCENT)
+            .map(|(v, _)| v);
+        southstar_css::font_stretch_rank(self.keyword_text().map(CStr::to_bytes), percent)
     }
 }
 
@@ -769,13 +771,51 @@ pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
         .all(|(x, y)| styles_equal(pseudo(x), pseudo(y)))
 }
 
-pub fn parse_color(text: &CStr) -> Option<[u8; 4]> {
-    let mut c = [0u8; 4];
-    let [r, g, b, a] = &mut c;
-    let ok = unsafe { ns_css_parse_color(text.as_ptr(), r, g, b, a) };
-    (ok != 0).then_some(c)
+pub fn font_family_for_pango(family: &CStr) -> CString {
+    CString::new(southstar_css::font_family_for_pango(family.to_bytes())).unwrap_or_default()
 }
 
-pub fn font_family_for_pango(family: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(ns_css_font_family_for_pango(family.as_ptr())) }
+pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> i32 {
+    v.map_or_else(
+        || southstar_css::font_stretch_rank(None, None),
+        ValueRef::font_stretch_rank,
+    )
+}
+
+pub fn effective_transform<'a>(
+    style: Option<StyleRef<'a>>,
+    transform_override: Option<&'a Transform>,
+) -> Transform {
+    let tf = |prop| {
+        style
+            .and_then(|s| s.get(prop))
+            .and_then(ValueRef::transform)
+    };
+    southstar_css::effective_transform(
+        [tf(PropId::Translate), tf(PropId::Rotate), tf(PropId::Scale)],
+        transform_override.or_else(|| tf(PropId::Transform)),
+    )
+}
+
+pub fn border_image_source(style: Option<StyleRef<'_>>) -> Option<ValueRef<'_>> {
+    style
+        .and_then(|s| s.get(PropId::BorderImageSource))
+        .filter(|v| matches!(v.kind(), Kind::Url | Kind::Gradient))
+}
+
+pub fn border_image_params(style: StyleRef<'_>) -> BorderImageParams {
+    let text = |prop, fallback: &'static [u8]| {
+        style
+            .get(prop)
+            .and_then(ValueRef::keyword_text)
+            .map(CStr::to_bytes)
+            .filter(|t| !t.is_empty())
+            .unwrap_or(fallback)
+    };
+    southstar_css::border_image_params(
+        text(PropId::BorderImageSlice, b"100%"),
+        text(PropId::BorderImageWidth, b"1"),
+        text(PropId::BorderImageOutset, b"0"),
+        text(PropId::BorderImageRepeat, b"stretch"),
+    )
 }

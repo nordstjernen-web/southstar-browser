@@ -913,7 +913,34 @@ pub(crate) fn serialize(tf: &Transform) -> Vec<u8> {
     out
 }
 
-pub(crate) fn is_3d(tf: &Transform) -> bool {
+pub fn effective(individual: [Option<&Transform>; 3], transform: Option<&Transform>) -> Transform {
+    let mut out = Transform::default();
+    let mut push = |op: &Op| {
+        let at = usize::try_from(out.n_ops).unwrap_or(OPS_MAX);
+        let Some(slot) = out.ops.get_mut(at) else {
+            return false;
+        };
+        *slot = *op;
+        out.n_ops += 1;
+        true
+    };
+    for tf in individual.into_iter().flatten() {
+        if tf.n_ops > 0 {
+            push(&tf.ops[0]);
+        }
+    }
+    if let Some(tf) = transform {
+        let n = usize::try_from(tf.n_ops).unwrap_or(0).min(OPS_MAX);
+        for op in &tf.ops[..n] {
+            if !push(op) {
+                break;
+            }
+        }
+    }
+    out
+}
+
+pub fn is_3d(tf: &Transform) -> bool {
     tf.ops
         .iter()
         .take((tf.n_ops.max(0) as usize).min(OPS_MAX))
@@ -926,7 +953,7 @@ pub(crate) fn is_3d(tf: &Transform) -> bool {
         })
 }
 
-pub(crate) fn to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
+pub fn to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
     let mut out = Mat4::IDENTITY;
     for i in 0..(tf.n_ops.max(0) as usize).min(OPS_MAX) {
         let mut op = tf.ops[i];

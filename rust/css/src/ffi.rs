@@ -4,7 +4,6 @@
 
 mod animation;
 mod attr_fn;
-mod border_image;
 mod cascade;
 mod compute;
 mod computed_units;

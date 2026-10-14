@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of element state: the pseudo-class test css.c's matcher delegates, an element's directionality, the target fragment, visited links and the document language, with the GLib Unicode, regex and URL calls they make.
+//! Southstar — the C ABI of element state: the pseudo-class test css.c's matcher delegates, the target fragment, visited links and the document language, with the GLib Unicode, regex and URL calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -87,13 +87,6 @@ pub unsafe extern "C" fn ns_css_element_state_matches(
         return glib::FALSE;
     };
     glib::boolean(element_state::matches(el, kind, unsafe { bytes(arg) }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_node_dir(el: *const NsNode) -> *const c_char {
-    unsafe { Node::from_ptr(el) }
-        .map_or(c"ltr", element_state::node_dir)
-        .as_ptr()
 }
 
 #[unsafe(no_mangle)]

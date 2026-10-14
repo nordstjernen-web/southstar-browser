@@ -30,12 +30,6 @@ unsafe extern "C" {
     ) -> *const NsNode;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_layout_style_creates_fixed_cb(s: *const Style) -> GBoolean;
-    fn ns_css_style_effective_transform(
-        style: *const Style,
-        transform_override: *const Transform,
-        out: *mut Transform,
-    );
-    fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
     fn ns_box_sticky_offset(
         b: *const NsBox,
         vp_x0: f64,
@@ -95,15 +89,11 @@ pub fn style_creates_fixed_cb(s: *const Style) -> bool {
 }
 
 pub fn effective_transform(s: StyleRef<'_>) -> Transform {
-    let mut eff = Transform::default();
-    unsafe { ns_css_style_effective_transform(s.as_ptr(), ptr::null(), &mut eff) };
-    eff
+    southstar_style::effective_transform(Some(s), None)
 }
 
 pub fn transform_to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
-    let mut out = Mat4::IDENTITY;
-    unsafe { ns_css_transform_to_mat4(tf, bw, bh, &mut out) };
-    out
+    southstar_style::transform_to_mat4(tf, bw, bh)
 }
 
 pub fn invert_affine(m: [f64; 6]) -> Option<[f64; 6]> {

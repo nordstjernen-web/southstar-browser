@@ -1052,7 +1052,8 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let mut has_transform = eff_tf.n_ops > 0;
     if with(|w| w.tex_root.get()) == b.as_ptr() {
         has_transform = false;
-    } else if three_d::box_establishes_3d(b) || (has_transform && engine::transform_is_3d(&eff_tf))
+    } else if three_d::box_establishes_3d(b)
+        || (has_transform && southstar_style::transform_is_3d(&eff_tf))
     {
         let u = if debug_on() {
             cr.clip_extents()
@@ -1095,7 +1096,7 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
         cr.save();
         let (bx, by, bw, bh) = three_d::box_border_rect(b);
         let (ox, oy, _oz) = three_d::box_transform_origin(b, (bx, by, bw, bh), P::TransformOrigin);
-        let m = engine::transform_to_mat4(&eff_tf, bw, bh).m;
+        let m = southstar_style::transform_to_mat4(&eff_tf, bw, bh).m;
         let cm = Matrix::new(m[0], m[4], m[1], m[5], m[3], m[7]);
         if m[0].is_nan()
             || m[4].is_nan()

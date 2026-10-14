@@ -10,7 +10,7 @@ use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, la
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
 use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface};
-use crate::ffi::engine::{self, BorderImage, Texture};
+use crate::ffi::engine::{self, Texture};
 use crate::media::texture_surface_cached;
 use crate::radii::{
     CornerRadii, box_border_radii, fill_outer_shadow, rounded_rect_path, style_border_radii,
@@ -548,10 +548,10 @@ pub fn gradient_pattern(
     let mut r_outer_y = 1.0;
     let mut line_len;
     if gr.radial != 0 {
-        (r_outer, r_outer_y) = engine::gradient_radii(gr, bw, bh, cx - bx, cy - by);
+        (r_outer, r_outer_y) = southstar_style::gradient_radii(gr, bw, bh, cx - bx, cy - by);
         line_len = r_outer;
     } else {
-        let rad = engine::gradient_angle(gr, bw, bh) * PI / 180.0;
+        let rad = southstar_style::gradient_angle(gr, bw, bh) * PI / 180.0;
         let dx = rad.sin();
         let dy = -rad.cos();
         let half = (dx.abs() * bw + dy.abs() * bh) / 2.0;
@@ -778,11 +778,11 @@ fn border_image_stretch(dest: f64) -> BorderImageRun {
     }
 }
 
-const TILE_STRETCH: i32 = 0;
-const TILE_ROUND: i32 = 2;
-const TILE_SPACE: i32 = 3;
+const TILE_STRETCH: u32 = 0;
+const TILE_ROUND: u32 = 2;
+const TILE_SPACE: u32 = 3;
 
-fn border_image_tiling(dest: f64, natural: f64, tile: i32) -> BorderImageRun {
+fn border_image_tiling(dest: f64, natural: f64, tile: u32) -> BorderImageRun {
     let mut r = border_image_stretch(dest);
     if dest <= 0.0 || natural <= 0.0 || tile == TILE_STRETCH {
         return r;
@@ -874,20 +874,14 @@ fn paint_border_image(
     let Some(src) = engine::border_image_source(s) else {
         return false;
     };
-    let bi: BorderImage = engine::border_image_params(s);
+    let bi = southstar_style::border_image_params(s);
     let (border_x, border_y, border_w, border_h) = border;
     let font_size = length_or(s.get(P::FontSize), 16.0);
     let bd = b.border();
     let side = [bd.top, bd.right, bd.bottom, bd.left];
     let mut outset = [0.0; 4];
     for i in 0..4 {
-        outset[i] = border_image_edge_px(
-            bi.outset[i],
-            bi.outset_unit[i] as u32,
-            side[i],
-            0.0,
-            font_size,
-        );
+        outset[i] = border_image_edge_px(bi.outset[i], bi.outset_unit[i], side[i], 0.0, font_size);
     }
     let area_x = border_x - outset[3];
     let area_y = border_y - outset[0];
@@ -967,13 +961,7 @@ fn paint_border_image(
         width[i] = if bi.width_auto[i] != 0 {
             slice[i]
         } else {
-            border_image_edge_px(
-                bi.width[i],
-                bi.width_unit[i] as u32,
-                side[i],
-                pct_basis,
-                font_size,
-            )
+            border_image_edge_px(bi.width[i], bi.width_unit[i], side[i], pct_basis, font_size)
         };
         if width[i] < 0.0 {
             width[i] = 0.0;

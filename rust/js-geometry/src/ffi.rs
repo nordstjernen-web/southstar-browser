@@ -10,9 +10,9 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
-use southstar_style::{StyleRef, StyleTable, Transform};
+use southstar_style::{StyleRef, StyleTable};
 
 use crate::{Element, JsResult, Rect};
 
@@ -80,12 +80,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
     fn ns_box_scroll_snap(b: *mut NsBox);
-    fn ns_css_style_effective_transform(
-        style: *const Style,
-        transform_override: *const Transform,
-        out: *mut Transform,
-    );
-    fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
     fn ns_active_js() -> *mut NsJs;
     fn ns_js_computed_text(
@@ -283,14 +277,8 @@ pub(crate) fn scroll_snap(b: BoxRef<'_>) {
 }
 
 pub(crate) fn effective_transform_matrix(style: StyleRef<'_>, bw: f64, bh: f64) -> Option<Mat4> {
-    let mut eff = Transform::default();
-    unsafe { ns_css_style_effective_transform(style.as_ptr().cast(), ptr::null(), &mut eff) };
-    if eff.n_ops <= 0 {
-        return None;
-    }
-    let mut out = Mat4::IDENTITY;
-    unsafe { ns_css_transform_to_mat4(&eff, bw, bh, &mut out) };
-    Some(out)
+    let eff = southstar_style::effective_transform(Some(style), None);
+    (eff.n_ops > 0).then(|| southstar_style::transform_to_mat4(&eff, bw, bh))
 }
 
 pub(crate) fn viewport_w() -> f64 {

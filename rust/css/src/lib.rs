@@ -58,6 +58,7 @@ mod units;
 mod values;
 mod vars;
 
+pub use border_image::{Params as BorderImageParams, params as border_image_params};
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::unit_dims as container_unit_dims;
@@ -69,7 +70,13 @@ pub use ffi::{
     MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
     Selector, SelectorList,
 };
-pub use gradient::{Gradient, Stop as GradientStop};
+pub use font::{
+    family_for_pango as font_family_for_pango, stretch_rank as font_stretch_rank,
+    weight_number as font_weight_number,
+};
+pub use gradient::{
+    Gradient, Stop as GradientStop, angle as gradient_angle, radii as gradient_radii,
+};
 pub use grid::{
     AUTO_REPEAT_FIT, AUTO_REPEAT_NONE, LINE_NAMES_MAX, LineName as GridLineName, TRACK_AUTO,
     TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT, TRACK_PX, TRACKS_MAX,
@@ -80,5 +87,8 @@ pub use prop::Prop;
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
-pub use transform::{Op as TransformOp, Transform};
+pub use transform::{
+    Op as TransformOp, Transform, effective as effective_transform, is_3d as transform_is_3d,
+    to_mat4 as transform_to_mat4,
+};
 pub use values::specified_canonical;

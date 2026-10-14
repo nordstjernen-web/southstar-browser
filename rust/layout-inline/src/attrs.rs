@@ -111,7 +111,7 @@ pub(crate) fn apply_layout_attrs(list: &AttrList, b: BoxRef<'_>) {
             ))),
             k::FONT_FAMILY => r
                 .family()
-                .and_then(font_family_for_pango)
+                .map(font_family_for_pango)
                 .map(|f| Attribute::family(&f)),
             k::SUPERSCRIPT => {
                 insert(list, Some(Attribute::rise(4000)), r.start, r.len);

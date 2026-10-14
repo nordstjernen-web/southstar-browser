@@ -14,7 +14,7 @@ pub(crate) const TILE_SPACE: u32 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Params {
+pub struct Params {
     pub slice: [f64; 4],
     pub slice_percent: [i32; 4],
     pub fill: i32,
@@ -193,7 +193,7 @@ fn copy_from(i: usize, count: usize) -> usize {
     if i == 3 && count >= 2 { 1 } else { 0 }
 }
 
-pub(crate) fn params(slice: &[u8], width: &[u8], outset: &[u8], repeat: &[u8]) -> Params {
+pub fn params(slice: &[u8], width: &[u8], outset: &[u8], repeat: &[u8]) -> Params {
     let mut out = Params::default();
     let mut count = 0;
     for tok in split_ws_limit(slice, 5) {

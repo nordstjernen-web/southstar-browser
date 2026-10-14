@@ -208,7 +208,6 @@ unsafe extern "C" {
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
-    fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
     fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_char;
     fn ns_css_dimension_px(v: *const NsCssValue, font_size: f64, basis: f64) -> f64;
     fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
@@ -525,9 +524,7 @@ pub(crate) fn viewport() -> (f64, f64) {
 }
 
 pub(crate) fn transform_matrix(t: &Transform, bw: f64, bh: f64) -> Mat4 {
-    let mut m = Mat4::IDENTITY;
-    unsafe { ns_css_transform_to_mat4(t, bw, bh, &mut m) };
-    m
+    southstar_style::transform_to_mat4(t, bw, bh)
 }
 
 pub(crate) fn serialize(v: ValueRef<'_>) -> Option<String> {

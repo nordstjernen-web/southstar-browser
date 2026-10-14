@@ -10,10 +10,8 @@ use std::sync::{Mutex, PoisonError};
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::value::{KIND_KEYWORD, KIND_LENGTH, NsCssValue};
 use crate::font;
 use crate::scan::split_ws_paren;
-use crate::units::PERCENT;
 
 type AvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
 type GenerationFn = unsafe extern "C" fn() -> u64;
@@ -73,14 +71,6 @@ fn owned(text: Option<Vec<u8>>) -> *mut c_char {
     text.map_or(ptr::null_mut(), |text| glib::strdup(&text))
 }
 
-unsafe fn keyword<'a>(v: *const NsCssValue) -> Option<&'a [u8]> {
-    let v = unsafe { v.as_ref() }?;
-    if v.kind != KIND_KEYWORD {
-        return None;
-    }
-    unsafe { bytes(v.u.keyword) }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_font_available_cb(cb: Option<AvailableFn>) {
     store(&AVAILABLE, cb);
@@ -133,28 +123,8 @@ pub unsafe extern "C" fn ns_css_font_relative_unit_px(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_family_for_pango(css_family: *const c_char) -> *mut c_char {
-    glib::strdup(&font::family_for_pango(
-        unsafe { bytes(css_family) }.unwrap_or_default(),
-    ))
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_font_weight_relative(parent: c_int, bolder: GBoolean) -> c_int {
     font::weight_relative(parent, bolder != 0)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_weight_number(v: *const NsCssValue, fallback: c_int) -> c_int {
-    font::weight_number(unsafe { keyword(v) }, fallback)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_stretch_rank(v: *const NsCssValue) -> c_int {
-    let percent = unsafe { v.as_ref() }
-        .filter(|v| v.kind == KIND_LENGTH && unsafe { v.u.length.unit } == PERCENT)
-        .map(|v| unsafe { v.u.length.v });
-    font::stretch_rank(unsafe { keyword(v) }, percent)
 }
 
 #[unsafe(no_mangle)]

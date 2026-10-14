@@ -673,7 +673,7 @@ impl Canvas {
         unsafe {
             let layout = TextLayout(pango_cairo_create_layout(self.0));
             let desc = pango_font_description_new();
-            let family = font.family.and_then(southstar_style::font_family_for_pango);
+            let family = font.family.map(southstar_style::font_family_for_pango);
             let family = family.as_deref().unwrap_or(c"sans-serif");
             pango_font_description_set_family(desc, family.as_ptr());
             pango_font_description_set_absolute_size(

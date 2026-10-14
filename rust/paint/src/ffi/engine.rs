@@ -10,8 +10,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
-use southstar_mat4::Mat4;
-use southstar_style::{Gradient, NsCssValue, PropId, StyleRef, Transform, ValueRef};
+use southstar_style::{StyleRef, Transform, ValueRef};
 
 use super::cairo::{Cr, SurfaceRef};
 use super::pango::{AttrList, Layout};
@@ -29,13 +28,6 @@ pub struct FontMetrics {
     pub descent_px: c_double,
 }
 
-#[repr(C)]
-struct GString {
-    text: *mut c_char,
-    len: usize,
-    allocated_len: usize,
-}
-
 pub type FontAvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
 pub type FontGenerationFn = unsafe extern "C" fn() -> u64;
 pub type FontMetricsFn = unsafe extern "C" fn(
@@ -47,11 +39,6 @@ pub type FontMetricsFn = unsafe extern "C" fn(
 );
 
 unsafe extern "C" {
-    fn ns_css_font_family_for_pango(css_family: *const c_char) -> *mut c_char;
-    fn ns_css_font_weight_number(v: *const c_void, fallback: c_int) -> c_int;
-    fn ns_css_font_stretch_rank(v: *const c_void) -> c_int;
-    fn ns_css_node_dir(el: *const NsNode) -> *const c_char;
-    fn ns_css_append_unescaped(out: *mut GString, pp: *mut *const c_char);
     fn ns_css_set_font_available_cb(cb: Option<FontAvailableFn>);
     fn ns_css_set_font_generation_cb(cb: Option<FontGenerationFn>);
     fn ns_css_set_font_metrics_cb(cb: Option<FontMetricsFn>);
@@ -59,8 +46,6 @@ unsafe extern "C" {
     fn ns_font_generation() -> c_uint;
     fn ns_texture_get_width(texture: *mut c_void) -> c_int;
     fn ns_texture_get_height(texture: *mut c_void) -> c_int;
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_ascii_formatd(
         buffer: *mut c_char,
         len: c_int,
@@ -69,24 +54,16 @@ unsafe extern "C" {
     ) -> *mut c_char;
 }
 
-fn value_ptr(v: Option<ValueRef<'_>>) -> *const c_void {
-    v.map_or(ptr::null(), |v| v.as_ptr().cast())
-}
-
-pub fn font_family_for_pango(family: Option<&CStr>) -> GStr {
-    let raw = unsafe { ns_css_font_family_for_pango(family.map_or(ptr::null(), CStr::as_ptr)) };
-    unsafe { GStr::take(raw) }.unwrap_or_else(|| {
-        let empty = southstar_glib::strdup(b"");
-        unsafe { GStr::take(empty) }.expect("g_malloc never returns NULL")
-    })
+pub fn font_family_for_pango(family: Option<&CStr>) -> CString {
+    southstar_style::font_family_for_pango(family.unwrap_or_default())
 }
 
 pub fn font_weight_number(v: Option<ValueRef<'_>>, fallback: i32) -> i32 {
-    unsafe { ns_css_font_weight_number(value_ptr(v), fallback) }
+    v.map_or(fallback, |v| v.font_weight_or(fallback))
 }
 
 pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> i32 {
-    unsafe { ns_css_font_stretch_rank(value_ptr(v)) }
+    southstar_style::font_stretch_rank(v)
 }
 
 pub fn viewport_w() -> f64 {
@@ -106,23 +83,17 @@ pub fn container_h() -> f64 {
 }
 
 pub fn node_dir_is_rtl(node: Option<Node<'_>>) -> bool {
-    let dir = unsafe { ns_css_node_dir(Node::ptr_or_null(node)) };
-    !dir.is_null() && unsafe { CStr::from_ptr(dir) } == c"rtl"
+    node.is_some_and(|n| southstar_css::node_dir(n) == c"rtl")
 }
 
 pub fn css_unescape(text: &[u8]) -> Vec<u8> {
-    let raw = CString::new(text.split(|&c| c == 0).next().unwrap_or_default()).unwrap_or_default();
-    let out = unsafe { g_string_new(ptr::null()) };
-    let mut at = raw.as_ptr();
-    while unsafe { *at } != 0 {
-        unsafe { ns_css_append_unescaped(out, &mut at) };
+    let text = text.split(|&c| c == 0).next().unwrap_or_default();
+    let mut out = Vec::with_capacity(text.len());
+    let mut pos = 0;
+    while pos < text.len() {
+        southstar_css::append_unescaped(&mut out, text, &mut pos);
     }
-    let bytes = unsafe {
-        let s = &*out;
-        southstar_glib::slice(s.text.cast(), s.len).to_vec()
-    };
-    unsafe { g_string_free(out, 1) };
-    bytes
+    out
 }
 
 pub fn set_font_oracle(
@@ -181,24 +152,6 @@ impl Texture {
 pub fn style_ptr(s: Option<StyleRef<'_>>) -> *const c_void {
     s.map_or(ptr::null(), |s| s.as_ptr().cast())
 }
-
-#[repr(C)]
-#[derive(Default)]
-pub struct BorderImage {
-    pub slice: [f64; 4],
-    pub slice_percent: [GBoolean; 4],
-    pub fill: GBoolean,
-    pub width: [f64; 4],
-    pub width_unit: [c_int; 4],
-    pub width_auto: [GBoolean; 4],
-    pub outset: [f64; 4],
-    pub outset_unit: [c_int; 4],
-    pub tile: [c_int; 2],
-}
-
-const _: () = assert!(
-    core::mem::size_of::<BorderImage>() == 176 && core::mem::offset_of!(BorderImage, width) == 56
-);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -282,18 +235,6 @@ unsafe extern "C" {
         which: c_int,
         out: *mut u8,
     ) -> GBoolean;
-    fn ns_css_gradient_angle(gr: *const Gradient, w: c_double, h: c_double) -> c_double;
-    fn ns_css_gradient_radii(
-        gr: *const Gradient,
-        w: c_double,
-        h: c_double,
-        cx: c_double,
-        cy: c_double,
-        rx: *mut c_double,
-        ry: *mut c_double,
-    );
-    fn ns_css_border_image_source(s: *const Style) -> *const NsCssValue;
-    fn ns_css_border_image_params(s: *const Style, out: *mut BorderImage);
     fn ns_box_fieldset_legend_gap(
         b: *const NsBox,
         inset: *mut c_double,
@@ -427,24 +368,8 @@ pub fn anim_color(b: BoxRef<'_>, which: i32) -> Option<[u8; 4]> {
     (unsafe { ns_anim_get_color(anim, dom, which, c.as_mut_ptr()) } != 0).then_some(c)
 }
 
-pub fn gradient_angle(gr: &Gradient, w: f64, h: f64) -> f64 {
-    unsafe { ns_css_gradient_angle(gr, w, h) }
-}
-
-pub fn gradient_radii(gr: &Gradient, w: f64, h: f64, cx: f64, cy: f64) -> (f64, f64) {
-    let (mut rx, mut ry) = (1.0, 1.0);
-    unsafe { ns_css_gradient_radii(gr, w, h, cx, cy, &mut rx, &mut ry) };
-    (rx, ry)
-}
-
 pub fn border_image_source(s: StyleRef<'_>) -> Option<ValueRef<'_>> {
-    unsafe { ValueRef::from_ptr(ns_css_border_image_source(s.as_ptr())) }
-}
-
-pub fn border_image_params(s: StyleRef<'_>) -> BorderImage {
-    let mut bi = BorderImage::default();
-    unsafe { ns_css_border_image_params(s.as_ptr(), &mut bi) };
-    bi
+    southstar_style::border_image_source(Some(s))
 }
 
 pub fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64, f64)> {
@@ -508,13 +433,6 @@ pub fn math_paint(cr: Cr, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) 
 unsafe extern "C" {
     fn ns_anim_get_opacity(anim: *mut c_void, dom: *const c_void, out: *mut c_double) -> GBoolean;
     fn ns_anim_get_transform(anim: *mut c_void, dom: *const c_void) -> *const Transform;
-    fn ns_css_style_effective_transform(
-        st: *const Style,
-        over: *const Transform,
-        out: *mut Transform,
-    );
-    fn ns_css_transform_to_mat4(tf: *const Transform, bw: c_double, bh: c_double, out: *mut Mat4);
-    fn ns_css_transform_is_3d(tf: *const Transform) -> GBoolean;
     fn ns_css_used_column_count(
         s: *const Style,
         avail_w: c_double,
@@ -549,32 +467,11 @@ pub fn anim_opacity(b: BoxRef<'_>) -> Option<f64> {
 pub fn effective_transform(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Transform {
     let anim = crate::state::anim();
     let anim_tf = if anim.is_null() {
-        ptr::null()
+        None
     } else {
-        unsafe { ns_anim_get_transform(anim, b.dom_ptr()) }
+        unsafe { ns_anim_get_transform(anim, b.dom_ptr()).as_ref() }
     };
-    let mut eff = Transform::default();
-    let has_style = s.is_some_and(|s| {
-        s.get(PropId::Transform).is_some()
-            || s.get(PropId::Translate).is_some()
-            || s.get(PropId::Rotate).is_some()
-            || s.get(PropId::Scale).is_some()
-    });
-    if !anim_tf.is_null() || has_style {
-        let st = s.map_or(ptr::null(), StyleRef::as_ptr);
-        unsafe { ns_css_style_effective_transform(st, anim_tf, &mut eff) };
-    }
-    eff
-}
-
-pub fn transform_to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
-    let mut m = Mat4::IDENTITY;
-    unsafe { ns_css_transform_to_mat4(tf, bw, bh, &mut m) };
-    m
-}
-
-pub fn transform_is_3d(tf: &Transform) -> bool {
-    unsafe { ns_css_transform_is_3d(tf) != 0 }
+    southstar_style::effective_transform(s, anim_tf)
 }
 
 pub fn used_column_count(s: StyleRef<'_>, avail_w: f64, gap: &mut f64) -> i32 {

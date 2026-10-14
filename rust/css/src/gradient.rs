@@ -1117,7 +1117,7 @@ pub(crate) fn specified_with_end(layer: &[u8]) -> Option<(Vec<u8>, usize)> {
     Some((serialize_specified(&gp), end))
 }
 
-pub(crate) fn angle(gr: &Gradient, w: f64, h: f64) -> f64 {
+pub fn angle(gr: &Gradient, w: f64, h: f64) -> f64 {
     if gr.has_angle != 0 {
         return gr.angle_deg;
     }
@@ -1160,7 +1160,7 @@ fn gmax(a: f64, b: f64) -> f64 {
     if a > b { a } else { b }
 }
 
-pub(crate) fn radii(gr: &Gradient, w: f64, h: f64, cx: f64, cy: f64) -> (f64, f64) {
+pub fn radii(gr: &Gradient, w: f64, h: f64, cx: f64, cy: f64) -> (f64, f64) {
     let dl = cx.abs();
     let dr = (w - cx).abs();
     let dt = cy.abs();

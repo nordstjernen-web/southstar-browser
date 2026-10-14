@@ -179,7 +179,7 @@ fn collect_3d_quads(b: BoxRef<'_>, pm: &Mat4, quads: &mut Vec<Quad3>) {
     let eff = engine::effective_transform(b, style_of(b));
     if eff.n_ops > 0 {
         let (ox, oy, oz) = box_transform_origin(b, rect, P::TransformOrigin);
-        let tm = engine::transform_to_mat4(&eff, bw, bh);
+        let tm = southstar_style::transform_to_mat4(&eff, bw, bh);
         m.translate(ox, oy, oz);
         m = m.multiply(&tm);
         m.translate(-ox, -oy, -oz);

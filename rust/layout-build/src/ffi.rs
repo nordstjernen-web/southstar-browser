@@ -51,8 +51,6 @@ unsafe extern "C" {
     fn ns_css_calc_math_fn_px(v: *const NsCssValue, basis: f64) -> f64;
     fn ns_css_writing_mode(s: *const Style) -> c_int;
     fn ns_css_alignment_base(keyword: *const c_char) -> *const c_char;
-    fn ns_css_border_image_source(s: *const Style) -> *const NsCssValue;
-    fn ns_css_font_stretch_rank(v: *const NsCssValue) -> c_int;
     fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_layout_clear_kind_of(s: *const Style) -> c_int;
     fn ns_layout_float_side_of(s: *const Style) -> c_int;
@@ -192,11 +190,11 @@ pub fn alignment_base(kw: &CStr) -> &CStr {
 }
 
 pub fn border_image_source<'a>(s: Option<StyleRef<'a>>) -> Option<ValueRef<'a>> {
-    value(unsafe { ns_css_border_image_source(style_ptr(s)) })
+    southstar_style::border_image_source(s)
 }
 
 pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> c_int {
-    unsafe { ns_css_font_stretch_rank(v.map_or(ptr::null(), ValueRef::as_ptr)) }
+    southstar_style::font_stretch_rank(v)
 }
 
 pub fn set_container_dims(inline_px: f64, block_px: f64) {
