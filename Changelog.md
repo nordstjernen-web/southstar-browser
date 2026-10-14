@@ -186,6 +186,12 @@ Southstar Browser 0.9.11-dev:
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is
   stored as the last representable date instead of an unreadable one.
+* cargo vet records the supply-chain review of every crates.io dependency in
+  supply-chain/: audits imported from the Bytecode Alliance, Google, ISRG,
+  Mozilla and Zcash cover 31 crates and the other 163 are exempted at the
+  versions in Cargo.lock, so any new crate or version bump needs an audit or
+  a deliberate exemption. The in-tree Boa fork is first-party code and is not
+  vetted as a crates.io crate. The Linux CI runs cargo vet --locked.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

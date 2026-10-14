@@ -204,7 +204,10 @@ compile with the minimum supported version.
   engine code and stay out. `deny.toml` enforces that list, RustSec
   advisories, licences compatible with NSL-1.0 OR GPL-3.0-or-later and
   crates.io as the only source: `cargo deny check` must pass (the Linux CI
-  build runs it on every push).
+  build runs it on every push). `supply-chain/` holds the `cargo vet` record:
+  a new or updated crate is either covered by an imported audit, audited with
+  `cargo vet certify`, or added as an exemption with its reason in the commit
+  message; `cargo vet --locked` must pass (CI runs it too).
 - Unit tests live next to the code: `#[cfg(test)] mod tests;` in the crate
   root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
   crate that has them (CI runs it too). A test binary links only the crate and

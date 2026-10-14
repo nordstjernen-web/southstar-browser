@@ -99,6 +99,20 @@ jobs:
       - name: cargo deny
         run: cargo deny --locked check --hide-inclusion-graph
 
+      - name: Restore cargo-vet
+        id: cargo-vet-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-vet
+          key: cargo-vet-0.10.2-${{ runner.os }}
+
+      - name: Install cargo-vet
+        if: steps.cargo-vet-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-vet@0.10.2
+
+      - name: cargo vet
+        run: cargo vet --locked
+
       - name: Restore ccache
         uses: actions/cache@v6
         with:
