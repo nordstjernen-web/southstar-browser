@@ -32,15 +32,9 @@ Southstar Browser 0.9.11-dev:
   HPACK and the sans-I/O HTTP/2 client connection — move from rust/http into
   rust/http-wire, which forbids unsafe code; rust/http keeps the sockets, TLS,
   content decoding and pooling.
-* fuzz/ holds cargo-fuzz targets for the parsers that read untrusted input:
-  HTML (documents and fragments), CSS syntax, URLs and their setters,
-  HTTP/1.1 heads and chunked bodies, the HTTP/2 client connection, HPACK,
-  PNG/GIF/JPEG/BMP, MPEG-1, MP3, WebVTT and the renderer protocol's message
-  heads and JSON. CI runs each under AddressSanitizer for a minute on every
-  push that touches Rust and for twenty minutes nightly, keeping the corpora.
 * Seeking in an MPEG-1 stream no longer overflows when the demuxer's byte-rate
   estimate is huge, and no longer computes a negative position in a file
-  under 256 bytes; the new plmpeg fuzz target found both.
+  under 256 bytes; fuzzing the demuxer found both.
 * rust/css-syntax has no C ABI left and forbids unsafe code: four of its five
   exports had no caller, the engine calls is_self_contained directly, and CSS
   numbers parse with Rust's float parser instead of GLib's g_ascii_strtod.

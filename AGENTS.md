@@ -455,15 +455,9 @@ A change is done when:
 2. The browser launches and the affected UI path works manually.
 3. The change is committed and pushed to `origin/main`.
 
-Fuzzing: `fuzz/` holds a cargo-fuzz target for every parser that reads
-untrusted input — HTML, CSS syntax, URLs, HTTP/1.1 heads and chunked
-bodies, the HTTP/2 connection, HPACK, PNG/GIF/JPEG/BMP, MPEG-1, MP3, WebVTT
-and the renderer protocol. `cargo +nightly fuzz run <target>` runs one under
-AddressSanitizer; CI runs each for a minute on every push that touches Rust
-and for twenty minutes nightly (`.github/workflows/fuzz.yml`). A new parser
-of untrusted input gets a target, and a crash the fuzzer finds is fixed at
-its cause. Otherwise verify behavior by running the browser; don't add a
-`tests/` directory or `meson test` targets.
+Unit tests (`scripts/rust-tests.sh`) cover the parsers; otherwise verify
+behavior by running the browser. Don't add a `tests/` directory or
+`meson test` targets.
 
 ## Don't
 
