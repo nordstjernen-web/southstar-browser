@@ -1111,6 +1111,70 @@ fn border_spacing(t: &[u8]) -> Option<Value> {
     })))
 }
 
+fn font_synthesis(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    if words.len() == 1 && eq(words[0], b"none") {
+        return Some(Value::keyword(b"none".to_vec()));
+    }
+    const ORDER: [&[u8]; 5] = [
+        b"weight",
+        b"style",
+        b"oblique-only",
+        b"small-caps",
+        b"position",
+    ];
+    let mut seen = [false; 5];
+    for w in &words {
+        let i = ORDER.iter().position(|o| eq(o, w))?;
+        if seen[i] {
+            return None;
+        }
+        seen[i] = true;
+    }
+    if words.is_empty() || (seen[1] && seen[2]) {
+        return None;
+    }
+    let canonical: Vec<&[u8]> = ORDER
+        .iter()
+        .zip(seen)
+        .filter_map(|(o, on)| on.then_some(*o))
+        .collect();
+    Some(Value::keyword(canonical.join(&b' ')))
+}
+
+fn font_size_adjust(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    const BASES: [&[u8]; 5] = [
+        b"ex-height",
+        b"cap-height",
+        b"ch-width",
+        b"ic-width",
+        b"ic-height",
+    ];
+    let amount = |w: &[u8]| {
+        eq(w, b"from-font")
+            || (w.first().is_some_and(|c| c.is_ascii_digit() || *c == b'.')
+                && core::str::from_utf8(w)
+                    .ok()
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .is_some_and(|v| v >= 0.0))
+    };
+    let canonical = match words.as_slice() {
+        [w] if eq(w, b"none") => b"none".to_vec(),
+        [w] if amount(w) => lower(w),
+        [basis, w] if amount(w) => {
+            let basis = BASES.iter().find(|b| eq(b, basis))?;
+            if *basis == b"ex-height" {
+                lower(w)
+            } else {
+                [*basis, &lower(w)[..]].join(&b' ')
+            }
+        }
+        _ => return None,
+    };
+    Some(Value::keyword(canonical))
+}
+
 fn keyword_in(t: &[u8], words: &[&[u8]]) -> Option<Value> {
     let kw = lower(t);
     words.contains(&kw.as_slice()).then(|| Value::keyword(kw))
@@ -1502,6 +1566,8 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::ContainerName => keyword_text(container::name_canonical(t)),
         P::FontStretch => font_stretch(t),
         P::FontKerning => keyword_in(t, &[b"auto", b"normal", b"none"]),
+        P::FontSynthesis => font_synthesis(t),
+        P::FontSizeAdjust => font_size_adjust(t),
         P::FontVariantLigatures => {
             let kw = lower(t);
             font::ligatures_valid(&kw).then(|| Value::keyword(kw))

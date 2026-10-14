@@ -38,10 +38,10 @@ pub(crate) struct RawStyle {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    size_of::<RawStyle>() == 2056
-        && offset_of!(RawStyle, pseudo_styles) == 1944
-        && offset_of!(RawStyle, share_id) == 2032
-        && offset_of!(RawStyle, vars) == 2048
+    size_of::<RawStyle>() == 2072
+        && offset_of!(RawStyle, pseudo_styles) == 1960
+        && offset_of!(RawStyle, share_id) == 2048
+        && offset_of!(RawStyle, vars) == 2064
 );
 
 impl RawStyle {

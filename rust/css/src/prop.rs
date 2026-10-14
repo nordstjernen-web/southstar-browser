@@ -250,10 +250,12 @@ pub enum Prop {
     WebkitBoxOrient,
     MaskClip,
     MaskComposite,
+    FontSynthesis,
+    FontSizeAdjust,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 242] = [
+    pub(crate) const ALL: [Prop; 244] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -496,6 +498,8 @@ impl Prop {
         Prop::WebkitBoxOrient,
         Prop::MaskClip,
         Prop::MaskComposite,
+        Prop::FontSynthesis,
+        Prop::FontSizeAdjust,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -523,6 +527,8 @@ impl Prop {
                 | Prop::FontStyle
                 | Prop::FontStretch
                 | Prop::FontKerning
+                | Prop::FontSynthesis
+                | Prop::FontSizeAdjust
                 | Prop::FontVariantLigatures
                 | Prop::FontFeatureSettings
                 | Prop::FontVariationSettings
@@ -842,6 +848,8 @@ impl Prop {
             Prop::WebkitBoxOrient => c"-webkit-box-orient",
             Prop::MaskClip => c"mask-clip",
             Prop::MaskComposite => c"mask-composite",
+            Prop::FontSynthesis => c"font-synthesis",
+            Prop::FontSizeAdjust => c"font-size-adjust",
         }
     }
 }
