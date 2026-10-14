@@ -14,6 +14,8 @@ mod percent;
 mod punycode;
 mod setters;
 mod tables;
+#[cfg(test)]
+mod tests;
 
 pub use host::Host;
 pub use idna::domain_to_ascii;

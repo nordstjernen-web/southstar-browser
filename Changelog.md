@@ -44,6 +44,14 @@ Southstar Browser 0.9.11-dev:
 * rust/css-syntax has no C ABI left and forbids unsafe code: four of its five
   exports had no caller, the engine calls is_self_contained directly, and CSS
   numbers parse with Rust's float parser instead of GLib's g_ascii_strtod.
+* The parsers have unit tests next to their code, run by
+  scripts/rust-tests.sh and in CI: the URL parser (normalization, relative
+  resolution, hosts, percent-encoding, setters, reparse idempotence), the HTML
+  tree builder (implied elements, character references, the adoption agency,
+  foster parenting, templates, foreign content, raw text, quirks, fragments),
+  HPACK against RFC 7541's examples, chunked bodies split at every byte,
+  HTTP/1.1 lines and an HTTP/2 exchange, hand-built BMP and GIF images, and
+  WebVTT cues.
 
 Southstar Browser 0.9.10:
 ======

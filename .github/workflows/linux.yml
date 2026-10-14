@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   rust-lints:
-    name: rust format, lints and unsafe budget
+    name: rust format, lints, unsafe budget and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -60,6 +60,9 @@ jobs:
             baseline=(--baseline "$BASE_SHA")
           fi
           python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: cargo test
+        run: ./scripts/rust-tests.sh
 
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}

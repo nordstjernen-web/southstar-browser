@@ -202,8 +202,13 @@ compile with the minimum supported version.
   dependency tree small. Crates from Servo or Firefox (`html5ever`,
   `cssparser`, `selectors`, `url`, `encoding_rs`, …) count as upstream browser
   engine code and stay out.
-- No `#[test]`s. Check a port against the C it replaces with a throwaway
-  differential harness, then in the browser itself.
+- Unit tests live next to the code: `#[cfg(test)] mod tests;` in the crate
+  root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
+  crate that has them (CI runs it too). A test binary links only the crate and
+  its Cargo dependencies, so tests work for crates whose code needs no
+  meson-supplied library — one more reason to keep parsers and engine logic
+  free of FFI. Test parsers, URL handling, cookies and HSTS, CSP and the
+  cascade first; check a behavior change in the browser itself as well.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
   (patched in through `[patch.crates-io]`). QuickJS-ng was removed in October
   2026. Bindings use the `rust/js-engine` API (`Scope`, `Value`, `HostClass`);

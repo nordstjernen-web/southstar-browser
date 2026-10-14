@@ -9,6 +9,8 @@ mod gif;
 mod jpeg;
 mod pixel;
 mod png;
+#[cfg(test)]
+mod tests;
 
 pub use pixel::{Canvas, premultiply_bgra};
 
