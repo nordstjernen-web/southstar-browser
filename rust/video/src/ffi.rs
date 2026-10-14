@@ -12,8 +12,8 @@ use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::decode::Decoder;
-use southstar_webvtt::Cue;
 use crate::{Cache, FetchKind, Sink};
+use southstar_webvtt::Cue;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

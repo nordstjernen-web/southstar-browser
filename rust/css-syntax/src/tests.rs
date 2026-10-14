@@ -5,7 +5,11 @@
 use crate::{Component, Kind, is_self_contained, parse, scan, value_valid};
 
 fn kinds(components: &[Component]) -> Vec<Kind> {
-    components.iter().filter(|c| c.kind != Kind::Whitespace).map(|c| c.kind).collect()
+    components
+        .iter()
+        .filter(|c| c.kind != Kind::Whitespace)
+        .map(|c| c.kind)
+        .collect()
 }
 
 fn value<'a>(input: &'a [u8], component: &Component) -> &'a [u8] {
@@ -17,8 +21,20 @@ fn tokenizes_numbers_dimensions_and_percentages() {
     let input = b"12px -3.5e2 50% +.25 1e3em";
     let (components, valid) = parse(input);
     assert!(valid);
-    let parts: Vec<&Component> = components.iter().filter(|c| c.kind != Kind::Whitespace).collect();
-    assert_eq!(kinds(&components), [Kind::Dimension, Kind::Number, Kind::Percentage, Kind::Number, Kind::Dimension]);
+    let parts: Vec<&Component> = components
+        .iter()
+        .filter(|c| c.kind != Kind::Whitespace)
+        .collect();
+    assert_eq!(
+        kinds(&components),
+        [
+            Kind::Dimension,
+            Kind::Number,
+            Kind::Percentage,
+            Kind::Number,
+            Kind::Dimension
+        ]
+    );
     assert_eq!(parts[0].number, 12.0);
     assert_eq!(value(input, parts[0]), b"px");
     assert_eq!(parts[1].number, -350.0);
@@ -36,9 +52,18 @@ fn nests_functions_and_blocks() {
     assert_eq!(kinds(&components), [Kind::Function]);
     assert_eq!(value(input, &components[0]), b"calc");
     let inner = components[0].children.as_ref().expect("function arguments");
-    let var = inner.iter().find(|c| c.kind == Kind::Function).expect("nested var()");
+    let var = inner
+        .iter()
+        .find(|c| c.kind == Kind::Function)
+        .expect("nested var()");
     assert_eq!(value(input, var), b"var");
-    let blocks = var.children.as_ref().expect("var arguments").iter().filter(|c| c.kind == Kind::Block).count();
+    let blocks = var
+        .children
+        .as_ref()
+        .expect("var arguments")
+        .iter()
+        .filter(|c| c.kind == Kind::Block)
+        .count();
     assert_eq!(blocks, 2);
 }
 
@@ -48,7 +73,14 @@ fn reads_strings_hashes_and_at_keywords() {
     let (components, _) = parse(input);
     assert_eq!(
         kinds(&components),
-        [Kind::String, Kind::String, Kind::Hash, Kind::Hash, Kind::AtKeyword, Kind::Ident]
+        [
+            Kind::String,
+            Kind::String,
+            Kind::Hash,
+            Kind::Hash,
+            Kind::AtKeyword,
+            Kind::Ident
+        ]
     );
 }
 
@@ -71,7 +103,9 @@ fn scans_to_a_top_level_terminator() {
 
 #[test]
 fn recognizes_self_contained_sheets() {
-    assert!(is_self_contained(b"a { color: red } @media print { b { x: y } }"));
+    assert!(is_self_contained(
+        b"a { color: red } @media print { b { x: y } }"
+    ));
     assert!(!is_self_contained(b"a { color: red"));
     assert!(!is_self_contained(b"a { b: '}' "));
 }
