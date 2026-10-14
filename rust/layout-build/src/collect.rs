@@ -348,7 +348,11 @@ impl<'a> Collector<'a> {
         }
         let content = ps.get(PropId::Content);
         if style_is_absolute_or_fixed(ps) {
-            pseudo::append_content(&mut self.out, content, Some(host), Some(ps));
+            if state::with(|st| st.abs_pending.is_some()) {
+                crate::generated::register_abs_pseudo(Some(host), Some(ps));
+            } else {
+                self.pseudo_text(ps, content, host);
+            }
             return;
         }
         if is_atomic_inline_display(ps) {
@@ -362,9 +366,53 @@ impl<'a> Collector<'a> {
         let side = |p| length_or(ps.get(p), 0.0);
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::MarginLeft));
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::PaddingLeft));
-        pseudo::append_content(&mut self.out, content, Some(host), Some(ps));
+        self.pseudo_text(ps, content, host);
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::PaddingRight));
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::MarginRight));
+    }
+
+    fn pseudo_text(&mut self, ps: StyleRef<'_>, content: Option<ValueRef<'_>>, host: Node<'_>) {
+        let start = self.out.len();
+        pseudo::append_content(&mut self.out, content, Some(host), Some(ps));
+        let end = self.out.len();
+        if end == start {
+            return;
+        }
+        let attrs = &mut self.attrs;
+        if let Some((px, 0)) = ps.get(PropId::FontSize).and_then(ValueRef::length)
+            && px > 0.0
+        {
+            emit_font_size(attrs, start, end, px);
+        }
+        let mut color = ps.get(PropId::Color).and_then(ValueRef::color);
+        if ps
+            .keyword_of(PropId::Visibility)
+            .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
+        {
+            let mut c = color.unwrap_or([0, 0, 0, 0]);
+            c[3] = 0;
+            color = Some(c);
+        }
+        if let Some(c) = color {
+            emit_color(attrs, start, end, c);
+        }
+        if let Some(f) = ps
+            .get(PropId::FontFamily)
+            .filter(|v| v.kind() == southstar_style::Kind::Keyword)
+            .and_then(ValueRef::keyword_text)
+        {
+            emit_font_family(attrs, start, end, f.as_ptr());
+        }
+        let weight = ps
+            .get(PropId::FontWeight)
+            .map_or(-1, |v| v.font_weight_or(-1));
+        if weight > 0 {
+            emit_font_weight(attrs, start, end, weight);
+        }
+        let fst = ps.get(PropId::FontStyle);
+        if keyword_is(fst, c"italic") || keyword_is(fst, c"oblique") {
+            emit_attr(attrs, inline_kind::ITALIC, start, end);
+        }
     }
 
     fn element(&mut self, n: Node<'a>, s: Option<StyleRef<'a>>, name: &CStr, depth: i32) {
