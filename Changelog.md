@@ -198,6 +198,11 @@ Southstar Browser 0.9.11-dev:
   upstream -- and how to take a new Boa release or security fix.
   scripts/boa-fork-diff.py downloads the release, checks it against the
   crates.io checksum and prints the fork's patch.
+* The Linux sandbox lets the browser read the CA bundle named by
+  CURL_CA_BUNDLE or SSL_CERT_FILE and the directory named by SSL_CERT_DIR.
+  A bundle outside /etc and /usr could not be opened once Landlock was on
+  (the renderer inherits the shell's restrictions), so every HTTPS page
+  failed with an untrusted-issuer error.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

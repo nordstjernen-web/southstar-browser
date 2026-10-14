@@ -354,6 +354,18 @@ mod linux {
         if let Some(xauth) = getenv(c"XAUTHORITY").filter(|xauth| !xauth.is_empty()) {
             rules.allow(fs_read, &dirname(xauth));
         }
+        for name in [c"CURL_CA_BUNDLE", c"SSL_CERT_FILE"] {
+            if let Some(bundle) =
+                getenv(name).filter(|path| file_test(path, glib::FILE_TEST_IS_REGULAR))
+            {
+                rules.allow(landlock::READ_FILE, bundle);
+            }
+        }
+        if let Some(dir) =
+            getenv(c"SSL_CERT_DIR").filter(|path| file_test(path, glib::FILE_TEST_IS_DIR))
+        {
+            rules.allow(fs_read, dir);
+        }
 
         let home = glib_dir(super::g_get_home_dir);
         let config = glib_dir(glib::g_get_user_config_dir);
