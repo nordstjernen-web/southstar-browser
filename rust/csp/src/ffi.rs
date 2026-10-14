@@ -10,32 +10,7 @@ use southstar_glib::{
     g_checksum_get_digest, g_checksum_new, g_checksum_update, g_free, slice,
 };
 
-use crate::{Csp, UrlParts};
-
-#[repr(C)]
-struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
-unsafe extern "C" {
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
-    fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
-    fn ns_url_parts_free(parts: *mut NsUrlParts);
-}
-
-fn optional_ptr(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
+use crate::Csp;
 
 unsafe fn cstr<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
@@ -43,27 +18,6 @@ unsafe fn cstr<'a>(p: *const c_char) -> Option<&'a CStr> {
 
 unsafe fn owned(p: *const c_char) -> Option<Vec<u8>> {
     unsafe { bytes(p) }.map(<[u8]>::to_vec)
-}
-
-pub(crate) fn same_origin(a: &CStr, b: Option<&CStr>) -> bool {
-    unsafe { ns_url_same_origin(a.as_ptr(), optional_ptr(b)) != FALSE }
-}
-
-pub(crate) fn url_parts(url: &CStr) -> Option<UrlParts> {
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    if parts.is_null() {
-        return None;
-    }
-    let copy = unsafe {
-        UrlParts {
-            protocol: owned((*parts).protocol).unwrap_or_default(),
-            hostname: owned((*parts).hostname),
-            port: owned((*parts).port).unwrap_or_default(),
-            pathname: owned((*parts).pathname).unwrap_or_default(),
-        }
-    };
-    unsafe { ns_url_parts_free(parts) };
-    Some(copy)
 }
 
 pub(crate) fn base64_digest(checksum_type: GChecksumType, data: &[u8]) -> Vec<u8> {

@@ -5,8 +5,11 @@
 use core::ffi::CStr;
 
 use southstar_glib::{G_CHECKSUM_SHA256, G_CHECKSUM_SHA384, G_CHECKSUM_SHA512};
+use southstar_url::bytes::{parts as url_parts, same_origin};
 
 mod ffi;
+#[cfg(test)]
+mod tests;
 
 pub const DEFAULT: usize = 0;
 pub const SCRIPT: usize = 1;
@@ -46,13 +49,6 @@ const NETWORK_SCHEMES: [&[u8]; 5] = [b"http:", b"https:", b"ws:", b"wss:", b"ftp
 const STRICT_DYNAMIC: &[u8] = b"'strict-dynamic'";
 const UNSAFE_INLINE: &[u8] = b"'unsafe-inline'";
 const NONCE_PREFIX: &[u8] = b"'nonce-";
-
-pub(crate) struct UrlParts {
-    pub protocol: Vec<u8>,
-    pub hostname: Option<Vec<u8>>,
-    pub port: Vec<u8>,
-    pub pathname: Vec<u8>,
-}
 
 #[derive(Default)]
 struct Policy {
@@ -171,7 +167,7 @@ fn document_scheme_allows(
     resource: &[u8],
 ) -> bool {
     let document_scheme = document_url
-        .and_then(ffi::url_parts)
+        .and_then(|url| url_parts(url.to_bytes()))
         .map(|parts| parts.protocol)
         .filter(|scheme| !scheme.is_empty());
     match document_scheme {
@@ -193,7 +189,9 @@ fn source_matches(source: &[u8], resource_url: &CStr, document_url: Option<&CStr
             return false;
         }
         b"*" => return is_network_scheme_url(resource),
-        b"'self'" => return ffi::same_origin(resource_url, document_url),
+        b"'self'" => {
+            return document_url.is_some_and(|document| same_origin(resource, document.to_bytes()));
+        }
         _ => {}
     }
     if SCHEME_SOURCES
@@ -214,12 +212,10 @@ fn source_matches(source: &[u8], resource_url: &CStr, document_url: Option<&CStr
         None => source,
     };
 
-    let Some(parts) = ffi::url_parts(resource_url) else {
+    let Some(parts) = url_parts(resource) else {
         return false;
     };
-    let Some(hostname) = parts.hostname else {
-        return false;
-    };
+    let hostname = parts.hostname;
     if scheme_end.is_none() && !document_scheme_allows(&parts.protocol, document_url, resource) {
         return false;
     }

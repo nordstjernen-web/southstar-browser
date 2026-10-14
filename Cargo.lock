@@ -1596,6 +1596,7 @@ name = "southstar-csp"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-glib",
+ "southstar-url",
 ]
 
 [[package]]

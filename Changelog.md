@@ -52,6 +52,11 @@ Southstar Browser 0.9.11-dev:
   the only source, and a ban on Servo/Firefox engine crates and libcurl),
   and cargo-audit every night so a new advisory against an unchanged
   Cargo.lock still turns red.
+* The CSP checks parse URLs through rust/url directly instead of a C round
+  trip into rust/net's ns_url_* exports, and have unit tests: 'self',
+  default-src fallback, wildcards, ports and paths, the http-to-https
+  upgrade, policy lists, nonces, hashes, 'unsafe-inline', 'strict-dynamic'
+  and frame-ancestors.
 
 Southstar Browser 0.9.10:
 ======
