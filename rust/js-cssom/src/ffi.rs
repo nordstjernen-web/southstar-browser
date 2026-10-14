@@ -773,8 +773,8 @@ pub(crate) fn anim_entry_name(entry: &AnimEntry) -> Option<String> {
     })
 }
 
-pub(crate) fn timing_text_canonical(text: &str) -> String {
-    lossy(&css_engine::timing_canonical(until_nul(text)))
+pub(crate) fn timing_list_canonical(text: &str) -> String {
+    lossy(&css_engine::timing_list_canonical(until_nul(text)))
 }
 
 pub(crate) fn animation_range_serialize(start: Option<&str>, end: Option<&str>) -> Option<String> {

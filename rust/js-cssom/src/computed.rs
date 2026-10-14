@@ -885,12 +885,7 @@ fn anim_keyword_value(
     if key == "timing" {
         let list = ffi::anim_effective(s, is_anim);
         if list.entries().is_empty() {
-            let parts: Vec<String> = keyword
-                .split(',')
-                .take(8)
-                .map(ffi::timing_text_canonical)
-                .collect();
-            return Some(parts.join(", "));
+            return Some(ffi::timing_list_canonical(keyword));
         }
         if let Some(r) = anim_longhand(&list, key) {
             return Some(r);

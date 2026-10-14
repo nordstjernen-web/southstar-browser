@@ -97,6 +97,10 @@ Southstar Browser 0.9.11-dev:
   easing functions, animation-range and time lists, and rust/css-media's for
   media lists, instead of passing C strings through twelve C exports that
   are now gone.
+* getComputedStyle reports animation-timing-function and
+  transition-timing-function lists item by item when no animation or
+  transition runs, instead of splitting at the commas inside
+  cubic-bezier(), steps() and linear() and reporting "ease" for every piece.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

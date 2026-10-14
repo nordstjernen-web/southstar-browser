@@ -6,6 +6,7 @@ use std::ffi::CString;
 
 use crate::ffi;
 use crate::scan::{starts_with_ci, strip, strtol10};
+use crate::text::split_top_level_commas;
 use crate::units::number_text;
 
 pub(crate) const LINEAR: i32 = 0;
@@ -169,8 +170,16 @@ pub fn parse(text: &[u8]) -> Option<Timing> {
     item_parse(strip(text))
 }
 
-pub fn canonical(text: &[u8]) -> Vec<u8> {
+fn canonical(text: &[u8]) -> Vec<u8> {
     serialize(Some(&parse(text).unwrap_or(Timing::of(EASE))))
+}
+
+pub fn list_canonical(text: &[u8]) -> Vec<u8> {
+    let items: Vec<Vec<u8>> = split_top_level_commas(text)
+        .iter()
+        .map(|item| canonical(item))
+        .collect();
+    items.join(&b", "[..])
 }
 
 pub fn serialize(t: Option<&Timing>) -> Vec<u8> {
