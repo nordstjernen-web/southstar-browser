@@ -50,10 +50,6 @@ unsafe extern "C" {
     fn ns_css_font_family_for_pango(css_family: *const c_char) -> *mut c_char;
     fn ns_css_font_weight_number(v: *const c_void, fallback: c_int) -> c_int;
     fn ns_css_font_stretch_rank(v: *const c_void) -> c_int;
-    fn ns_css_viewport_w() -> c_double;
-    fn ns_css_viewport_h() -> c_double;
-    fn ns_css_container_w() -> c_double;
-    fn ns_css_container_h() -> c_double;
     fn ns_css_node_dir(el: *const NsNode) -> *const c_char;
     fn ns_css_append_unescaped(out: *mut GString, pp: *mut *const c_char);
     fn ns_css_set_font_available_cb(cb: Option<FontAvailableFn>);
@@ -95,19 +91,19 @@ pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> i32 {
 }
 
 pub fn viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub fn viewport_h() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub fn container_w() -> f64 {
-    unsafe { ns_css_container_w() }
+    southstar_css::container_unit_dims().0
 }
 
 pub fn container_h() -> f64 {
-    unsafe { ns_css_container_h() }
+    southstar_css::container_unit_dims().1
 }
 
 pub fn node_dir_is_rtl(node: Option<Node<'_>>) -> bool {

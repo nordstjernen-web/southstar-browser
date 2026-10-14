@@ -49,10 +49,6 @@ pub struct SvgSize {
 unsafe extern "C" {
     fn ns_css_calc_is_math_fn(v: *const NsCssValue) -> GBoolean;
     fn ns_css_calc_math_fn_px(v: *const NsCssValue, basis: f64) -> f64;
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
-    fn ns_css_container_w() -> f64;
-    fn ns_css_container_h() -> f64;
     fn ns_css_writing_mode(s: *const Style) -> c_int;
     fn ns_css_alignment_base(keyword: *const c_char) -> *const c_char;
     fn ns_css_border_image_source(s: *const Style) -> *const NsCssValue;
@@ -171,19 +167,19 @@ pub fn calc_math_fn_px(v: ValueRef<'_>, basis: f64) -> f64 {
 }
 
 pub fn viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub fn viewport_h() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub fn container_w() -> f64 {
-    unsafe { ns_css_container_w() }
+    southstar_css::container_unit_dims().0
 }
 
 pub fn container_h() -> f64 {
-    unsafe { ns_css_container_h() }
+    southstar_css::container_unit_dims().1
 }
 
 pub fn writing_mode(s: Option<StyleRef<'_>>) -> c_int {

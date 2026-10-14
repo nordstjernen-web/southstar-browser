@@ -566,8 +566,6 @@ pub unsafe extern "C" fn ns_window_history_teardown(js: *const NsJs) {
 
 unsafe extern "C" {
     fn ns_js_window_action(js: *mut NsJs, action: *const c_char);
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn ns_css_device_pixel_ratio() -> f64;
     fn ns_services_screen_metrics(
         width: *mut c_int,
@@ -622,11 +620,11 @@ pub(crate) fn window_action(js: Js, action: &str) {
 }
 
 pub(crate) fn viewport_width() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub(crate) fn viewport_height() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub(crate) fn device_pixel_ratio() -> f64 {

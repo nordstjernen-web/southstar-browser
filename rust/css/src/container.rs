@@ -27,7 +27,7 @@ pub(crate) fn set_unit_dims(inline_px: f64, block_px: f64) {
     UNIT_DIMS.with(|dims| dims.set((inline_px, block_px)));
 }
 
-pub(crate) fn unit_dims() -> (f64, f64) {
+pub fn unit_dims() -> (f64, f64) {
     UNIT_DIMS.with(Cell::get)
 }
 

@@ -60,6 +60,7 @@ mod vars;
 
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
+pub use container::unit_dims as container_unit_dims;
 pub use content::append_unescaped;
 pub use declarations::{named_declaration_valid, named_property_supported};
 pub use element_state::node_dir;

@@ -64,8 +64,6 @@ unsafe extern "C" {
     ) -> f64;
     fn ns_layout_image_dimension_attr(n: *const NsNode, name: *const c_char) -> f64;
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize);
-    fn ns_css_container_w() -> f64;
-    fn ns_css_viewport_w() -> f64;
     fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
     fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
 }
@@ -236,11 +234,11 @@ pub fn svg_intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
 }
 
 pub fn container_w() -> f64 {
-    unsafe { ns_css_container_w() }
+    southstar_css::container_unit_dims().0
 }
 
 pub fn viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {

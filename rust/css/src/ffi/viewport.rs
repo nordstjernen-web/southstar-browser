@@ -44,16 +44,6 @@ pub extern "C" fn ns_css_set_viewport(vw_px: f64, vh_px: f64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_viewport_w() -> f64 {
-    get().0
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_viewport_h() -> f64 {
-    get().1
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_frame_viewport_cb(cb: Option<FrameViewport>) {
     *FRAME_VIEWPORT
         .lock()

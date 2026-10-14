@@ -67,6 +67,9 @@ Southstar Browser 0.9.11-dev:
   direction, container conditions, canonical values and !important,
   instead of round-tripping C strings through rust/css's C exports; seven
   of those exports had no other caller and are gone.
+* Layout, paint, media queries, geometry and the window bindings read the
+  viewport and container sizes from rust/css directly instead of through its
+  ns_css_viewport_* and ns_css_container_* C exports.
 
 Southstar Browser 0.9.10:
 ======

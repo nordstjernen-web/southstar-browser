@@ -72,7 +72,6 @@ unsafe extern "C" {
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_css_viewport_h() -> f64;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
     fn ns_js_mark_mutated(js: *mut NsJs);
@@ -385,7 +384,7 @@ pub(crate) fn find_box(root: BoxRef<'_>, node: Node<'_>) -> Option<BoxRef<'stati
 }
 
 pub(crate) fn viewport_height() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub(crate) fn halted(js: Js) -> bool {

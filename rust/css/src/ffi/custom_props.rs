@@ -11,7 +11,6 @@ use std::ffi::CString;
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 
 use super::computed_units::{RawStyle, StyleView};
-use super::container::{ns_css_container_h, ns_css_container_w};
 use super::font::relative_unit_px;
 use super::sheet::RawPropertyRule;
 use super::values::ns_css_value_serialize;
@@ -247,8 +246,8 @@ fn syntax_ctx(style: &StyleView<'_>, root_px: f64) -> SyntaxCtx {
         root_ic_px: relative(IC, b.root_px, &plain),
         viewport_w: units::viewport_resolve(100.0, VW),
         viewport_h: units::viewport_resolve(100.0, VH),
-        container_w: ns_css_container_w(),
-        container_h: ns_css_container_h(),
+        container_w: crate::container::unit_dims().0,
+        container_h: crate::container::unit_dims().1,
         current_color: ptr::null(),
     }
 }

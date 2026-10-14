@@ -86,8 +86,6 @@ unsafe extern "C" {
         free_space: f64,
         flip: GBoolean,
     ) -> f64;
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn ns_box_inline_rect_for_dom(
         root: *const NsBox,
         target: *const NsNode,
@@ -342,11 +340,11 @@ pub fn grid_static_align_offset(align: &CStr, free_space: f64) -> f64 {
 }
 
 pub fn viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub fn viewport_h() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 #[unsafe(no_mangle)]

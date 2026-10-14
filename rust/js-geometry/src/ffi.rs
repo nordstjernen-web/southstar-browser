@@ -86,8 +86,6 @@ unsafe extern "C" {
         out: *mut Transform,
     );
     fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
     fn ns_active_js() -> *mut NsJs;
     fn ns_js_computed_text(
@@ -296,11 +294,11 @@ pub(crate) fn effective_transform_matrix(style: StyleRef<'_>, bw: f64, bh: f64) 
 }
 
 pub(crate) fn viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub(crate) fn viewport_h() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub(crate) fn ascii_strtod(text: &CStr, at: usize) -> Option<(f64, usize)> {

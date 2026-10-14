@@ -9,8 +9,6 @@ const COLOR_SCHEME_DARK: c_int = 1;
 const REDUCED_MOTION_REDUCE: c_int = 1;
 
 unsafe extern "C" {
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn ns_css_stylesheet_cache_drop();
     fn ns_css_get_color_scheme() -> c_int;
     fn ns_css_get_reduced_motion() -> c_int;
@@ -18,11 +16,11 @@ unsafe extern "C" {
 }
 
 pub(crate) fn css_viewport_w() -> f64 {
-    unsafe { ns_css_viewport_w() }
+    southstar_css::viewport().0
 }
 
 pub(crate) fn css_viewport_h() -> f64 {
-    unsafe { ns_css_viewport_h() }
+    southstar_css::viewport().1
 }
 
 pub(crate) fn stylesheet_cache_drop() {

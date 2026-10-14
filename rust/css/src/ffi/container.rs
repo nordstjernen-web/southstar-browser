@@ -64,16 +64,6 @@ pub extern "C" fn ns_css_set_container_dims(inline_px: c_double, block_px: c_dou
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_w() -> c_double {
-    container::unit_dims().0
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_h() -> c_double {
-    container::unit_dims().1
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_container_features_begin() {
     container::features_begin();
 }

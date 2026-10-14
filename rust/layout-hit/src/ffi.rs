@@ -36,8 +36,6 @@ unsafe extern "C" {
         out: *mut Transform,
     );
     fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn ns_box_sticky_offset(
         b: *const NsBox,
         vp_x0: f64,
@@ -122,7 +120,7 @@ pub fn invert_affine(m: [f64; 6]) -> Option<[f64; 6]> {
 }
 
 pub fn viewport_size() -> (f64, f64) {
-    unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
+    southstar_css::viewport()
 }
 
 pub fn sticky_offset(b: BoxRef<'_>, x0: f64, y0: f64, x1: f64, y1: f64) -> (f64, f64) {

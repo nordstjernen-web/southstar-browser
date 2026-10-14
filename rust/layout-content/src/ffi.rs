@@ -31,10 +31,6 @@ unsafe extern "C" {
         border: *mut Edges,
     );
     fn ns_layout_peek_image(src: *const c_char) -> *mut c_void;
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
-    fn ns_css_container_w() -> f64;
-    fn ns_css_container_h() -> f64;
 }
 
 pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
@@ -52,11 +48,11 @@ pub fn peek_image(src: &CStr) -> *mut c_void {
 }
 
 pub fn viewport() -> (f64, f64) {
-    unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
+    southstar_css::viewport()
 }
 
 pub fn container() -> (f64, f64) {
-    unsafe { (ns_css_container_w(), ns_css_container_h()) }
+    southstar_css::container_unit_dims()
 }
 
 fn take_gstr(p: *mut c_char) -> Vec<u8> {
