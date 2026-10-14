@@ -106,8 +106,6 @@ unsafe extern "C" {
     fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_node_remove(child: *mut NsNode);
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
@@ -274,11 +272,11 @@ pub(crate) fn hidden_child(n: Node) -> bool {
 }
 
 pub(crate) fn node_remove(n: Node) {
-    unsafe { ns_node_remove(n.as_mut_ptr()) }
+    n.detach()
 }
 
 pub(crate) fn append_child(parent: Node, child: Node) {
-    unsafe { ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) }
+    parent.append(child)
 }
 
 pub(crate) fn arm_invalidate(n: Option<Node>) {

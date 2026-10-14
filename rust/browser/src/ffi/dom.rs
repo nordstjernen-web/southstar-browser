@@ -18,8 +18,6 @@ unsafe extern "C" {
         descend: GBoolean,
     ) -> *mut NsNode;
     fn ns_element_hidden_until_found(el: *const NsNode) -> GBoolean;
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_details_fragment_needs_open(details: *const NsNode, child: *const NsNode) -> GBoolean;
     fn ns_node_find_fragment_target(root: *const NsNode, frag: *const c_char) -> *mut NsNode;
     fn ns_node_find_first_element(root: *const NsNode, tag: *const c_char) -> *mut NsNode;
@@ -70,11 +68,11 @@ pub fn hidden_until_found(n: Node<'_>) -> bool {
 }
 
 pub fn remove_attr(n: Node<'_>, name: &CStr) {
-    unsafe { ns_element_remove_attr(n.as_mut_ptr(), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(n, name);
 }
 
 pub fn set_attr(n: Node<'_>, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(n.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(n, name, Some(value.to_bytes()));
 }
 
 pub fn details_fragment_needs_open(details: Node<'_>, child: Node<'_>) -> bool {

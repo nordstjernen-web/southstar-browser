@@ -148,6 +148,18 @@ pub fn append_borrowed(el: Node, name: &CStr, value: Option<&CStr>) {
     });
 }
 
+pub fn set_attribute(el: Node, name: &CStr, value: Option<&[u8]>) {
+    if el.is_element() {
+        set_len(el, name, value, value.map_or(0, <[u8]>::len));
+    }
+}
+
+pub fn remove_attribute(el: Node, name: &CStr) {
+    if el.is_element() {
+        remove(el, name);
+    }
+}
+
 pub fn remove(el: Node, name: &CStr) {
     if el.has_class_set() && name.to_bytes().eq_ignore_ascii_case(b"class") {
         el.clear_class_set();

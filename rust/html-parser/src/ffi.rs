@@ -30,8 +30,6 @@ unsafe extern "C" {
     fn ns_node_set_name_borrow(node: *mut NsNode, name: *const c_char);
     fn ns_node_set_text_borrow(node: *mut NsNode, text: *const c_char);
     fn ns_node_mark_doctype(node: *mut NsNode);
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
-    fn ns_node_remove(child: *mut NsNode);
     fn ns_node_free(node: *mut NsNode);
     fn ns_node_attach_backing(
         root: *mut NsNode,
@@ -52,7 +50,6 @@ unsafe extern "C" {
     );
     fn ns_element_append_attr_borrow(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
     fn ns_attr_name_is_internal(name: *const c_char) -> GBoolean;
 }
 
@@ -62,11 +59,11 @@ pub mod dom {
     use southstar_dom::Node;
 
     pub fn set_attr(node: Node, name: &CStr, value: &CStr) {
-        unsafe { super::ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+        southstar_dom::attrs::set_attribute(node, name, Some(value.to_bytes()));
     }
 
     pub fn remove_attr(node: Node, name: &CStr) {
-        unsafe { super::ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+        southstar_dom::attrs::remove_attribute(node, name);
     }
 
     pub fn rename_static(node: Node, name: &'static CStr) {
@@ -74,11 +71,11 @@ pub mod dom {
     }
 
     pub fn detach(node: Node) {
-        unsafe { super::ns_node_remove(node.as_mut_ptr()) };
+        node.detach();
     }
 
     pub fn append_child(parent: Node, child: Node) {
-        unsafe { super::ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) };
+        parent.append(child);
     }
 
     pub fn free(node: Node) {

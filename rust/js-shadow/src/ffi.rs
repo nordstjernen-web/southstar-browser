@@ -22,7 +22,6 @@ pub(crate) struct Js(*mut NsJs);
 unsafe extern "C" {
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
 }
@@ -76,7 +75,7 @@ pub(crate) fn clear_children(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
-    unsafe { ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) };
+    parent.append(child);
 }
 
 pub(crate) fn arm_js_invalidate(node: Element) {

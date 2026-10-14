@@ -70,6 +70,10 @@ Southstar Browser 0.9.11-dev:
 * Layout, paint, media queries, geometry and the window bindings read the
   viewport and container sizes from rust/css directly instead of through its
   ns_css_viewport_* and ns_css_container_* C exports.
+* The DOM's attribute and tree edits made by the HTML parser, the shells and
+  the JavaScript bindings go through rust/dom's Rust API (attrs::set_attribute,
+  attrs::remove_attribute, Node::append, Node::detach) instead of its C
+  exports, removing each crate's copy of those extern declarations.
 
 Southstar Browser 0.9.10:
 ======

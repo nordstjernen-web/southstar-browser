@@ -66,7 +66,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_element_set_attr_len(
         el: *mut NsNode,
         name: *const c_char,
@@ -81,7 +80,6 @@ unsafe extern "C" {
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
     fn ns_element_remove_attr_ns(
         el: *mut NsNode,
         namespace_uri: *const c_char,
@@ -305,7 +303,7 @@ pub(crate) fn attr_detach_matching(
 }
 
 pub(crate) fn set_attr(el: Element, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(el.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(el, name, Some(value.to_bytes()));
 }
 
 pub(crate) fn set_attr_len(el: Element, name: &CStr, value: &[u8]) {
@@ -338,7 +336,7 @@ pub(crate) fn set_attr_ns(el: Element, qname: &QualifiedName, value: &CStr) {
 }
 
 pub(crate) fn remove_attr(el: Element, name: &CStr) {
-    unsafe { ns_element_remove_attr(el.as_mut_ptr(), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(el, name);
 }
 
 pub(crate) fn remove_attr_ns(el: Element, namespace_uri: Option<&CStr>, local_name: &CStr) {

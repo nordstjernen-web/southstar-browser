@@ -80,8 +80,6 @@ unsafe extern "C" {
         value: *const c_char,
         len: isize,
     );
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
-    fn ns_node_remove(child: *mut NsNode);
     fn ns_net_cookies_for_js(url: *const c_char) -> *mut c_char;
     fn ns_net_cookie_store_from_js(url: *const c_char, cookie: *const c_char);
     fn ns_net_http_date(date: *const c_char) -> i64;
@@ -313,11 +311,11 @@ pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &CStr, value: &[u8]
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
-    unsafe { ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) };
+    parent.append(child);
 }
 
 pub(crate) fn remove_node(node: Element) {
-    unsafe { ns_node_remove(node.as_mut_ptr()) };
+    node.detach();
 }
 
 pub(crate) fn new_element(name: &[u8]) -> Element {
@@ -411,7 +409,6 @@ unsafe extern "C" {
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
     fn ns_node_new_document() -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_html_parse_fragment_with_scripting(
         context_tag: *const c_char,
@@ -548,7 +545,7 @@ pub(crate) fn free_node(node: Element) {
 }
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(node, name, Some(value.to_bytes()));
 }
 
 pub(crate) fn parse_html(markup: &[u8]) -> Option<Element> {

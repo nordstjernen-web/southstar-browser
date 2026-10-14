@@ -45,8 +45,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
     fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean;
@@ -81,7 +79,6 @@ unsafe extern "C" {
         b: *mut u8,
         a: *mut u8,
     ) -> GBoolean;
-    fn ns_node_remove(child: *mut NsNode);
     fn ns_element_insert_before_single(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -188,11 +185,11 @@ pub(crate) fn utf8_casefold(text: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn node_remove(node: Element) {
-    unsafe { ns_node_remove(mut_ptr(node)) };
+    node.detach();
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
-    unsafe { ns_node_append_child(mut_ptr(parent), mut_ptr(child)) };
+    parent.append(child);
 }
 
 pub(crate) fn insert_before_single(
@@ -343,11 +340,11 @@ pub(crate) fn sandbox_blocks_forms(node: Element) -> bool {
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &[u8]) {
     let value = cstring(value);
-    unsafe { ns_element_set_attr(mut_ptr(node), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(node, name, Some(value.to_bytes()));
 }
 
 pub(crate) fn remove_attr(node: Element, name: &CStr) {
-    unsafe { ns_element_remove_attr(mut_ptr(node), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(node, name);
 }
 
 pub(crate) fn append_text(parent: Element, text: &[u8]) {

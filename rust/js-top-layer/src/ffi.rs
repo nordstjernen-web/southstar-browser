@@ -63,8 +63,6 @@ unsafe extern "C" {
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
 }
 
 unsafe extern "Rust" {
@@ -307,11 +305,11 @@ pub(crate) fn note(el: Element) -> Element {
 }
 
 pub(crate) fn set_attr(el: Element, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(el.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(el, name, Some(value.to_bytes()));
 }
 
 pub(crate) fn remove_attr(el: Element, name: &CStr) {
-    unsafe { ns_element_remove_attr(el.as_mut_ptr(), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(el, name);
 }
 
 pub(crate) fn effectively_disabled(el: Element) -> bool {

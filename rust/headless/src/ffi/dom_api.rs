@@ -16,8 +16,6 @@ unsafe extern "C" {
     fn ns_element_hidden_until_found(el: *const NsNode) -> GBoolean;
     fn ns_details_fragment_needs_open(details: *const NsNode, target: *const NsNode) -> GBoolean;
     fn ns_node_root(n: *const NsNode) -> *const NsNode;
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_form_set_submission_charset(charset: *const c_char);
     fn ns_form_collect_inputs(
         form: *const NsNode,
@@ -87,11 +85,11 @@ pub fn root(n: Node<'_>) -> Option<Node<'_>> {
 }
 
 pub fn remove_attr(el: Node, name: &CStr) {
-    unsafe { ns_element_remove_attr(el.as_mut_ptr(), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(el, name);
 }
 
 pub fn set_attr(el: Node, name: &CStr, value: &CStr) {
-    unsafe { ns_element_set_attr(el.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(el, name, Some(value.to_bytes()));
 }
 
 pub fn set_submission_charset(charset: Option<&CStr>) {

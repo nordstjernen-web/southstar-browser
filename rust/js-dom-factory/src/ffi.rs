@@ -89,7 +89,6 @@ unsafe extern "C" {
     fn ns_ce_upgrade_element(js: *mut NsJs, node: *mut NsNode);
     fn ns_ce_upgrade_subtree_detached(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_in_template_content(node: *const NsNode) -> GBoolean;
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
     fn ns_element_get_attr_len(
         node: *const NsNode,
         name: *const c_char,
@@ -205,7 +204,7 @@ pub(crate) fn c_prefix(bytes: &[u8]) -> &[u8] {
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &[u8]) {
     let value = cstring(value);
-    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    southstar_dom::attrs::set_attribute(node, name, Some(value.to_bytes()));
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {

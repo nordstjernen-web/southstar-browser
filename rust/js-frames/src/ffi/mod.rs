@@ -63,9 +63,6 @@ unsafe extern "C" {
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
     fn ns_node_new_document() -> *mut NsNode;
     fn ns_node_new_element(name: *mut c_char) -> *mut NsNode;
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
-    fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char);
     fn ns_css_mark_visited(abs_url: *const c_char);
     fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
@@ -338,7 +335,7 @@ pub(crate) fn new_element(name: &CStr) -> Node<'static> {
 }
 
 pub(crate) fn append_child(parent: Node<'_>, child: Node<'_>) {
-    unsafe { ns_node_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) };
+    parent.append(child);
 }
 
 fn owned_text(text: *mut c_char) -> Option<CString> {
@@ -351,11 +348,11 @@ fn owned_text(text: *mut c_char) -> Option<CString> {
 }
 
 pub(crate) fn set_attr(node: Node<'_>, name: &CStr, value: Option<&CStr>) {
-    unsafe { ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), opt_ptr(value)) };
+    southstar_dom::attrs::set_attribute(node, name, value.map(CStr::to_bytes));
 }
 
 pub(crate) fn remove_attr(node: Node<'_>, name: &CStr) {
-    unsafe { ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+    southstar_dom::attrs::remove_attribute(node, name);
 }
 
 pub(crate) fn mark_visited(url: &CStr) {
