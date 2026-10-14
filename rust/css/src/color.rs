@@ -14,6 +14,7 @@ pub(crate) type Channels = [Option<u8>; 4];
 
 const MAX_CALC_DEPTH: i32 = 64;
 const MAX_COLOR_DEPTH: i32 = 32;
+const ROUNDING_SLACK: f64 = 1e-6;
 
 const NAMED: &[(&str, [u8; 3])] = &[
     ("aliceblue", [240, 248, 255]),
@@ -234,7 +235,7 @@ fn channel(value: f64) -> u8 {
 
 fn set_rgb(out: &mut Channels, rgb: [f64; 3]) {
     for (slot, value) in out.iter_mut().zip(rgb) {
-        *slot = Some(channel(value * 255.0));
+        *slot = Some(channel(value * 255.0 + ROUNDING_SLACK));
     }
 }
 
