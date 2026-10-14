@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_uint};
 
 use southstar_glib::{self as glib, GArray, GBoolean};
 use southstar_layout::{BoxRef, Edges, NsBox, Style};
@@ -44,12 +44,6 @@ unsafe extern "C" {
     fn ns_layout_self_start_is_far_side(s: *const Style, horizontal_axis: GBoolean) -> GBoolean;
     fn ns_css_alignment_base(kw: *const c_char) -> *const c_char;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        buf_len: c_int,
-        format: *const c_char,
-        d: f64,
-    ) -> *mut c_char;
 }
 
 fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
@@ -150,19 +144,6 @@ pub(crate) fn track_edges<'a>(a: *mut GArray) -> Option<&'a [TrackEdges]> {
         return Some(&[]);
     }
     Some(unsafe { core::slice::from_raw_parts(a.data.cast::<TrackEdges>(), a.len as usize) })
-}
-
-pub(crate) fn format_g(value: f64, out: &mut Vec<u8>) {
-    let mut buffer = [0 as c_char; 39];
-    unsafe {
-        g_ascii_formatd(
-            buffer.as_mut_ptr(),
-            buffer.len() as c_int,
-            c"%g".as_ptr(),
-            value,
-        );
-        out.extend_from_slice(CStr::from_ptr(buffer.as_ptr()).to_bytes());
-    }
 }
 
 #[unsafe(no_mangle)]

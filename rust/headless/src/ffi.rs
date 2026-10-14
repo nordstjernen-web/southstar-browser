@@ -43,7 +43,7 @@ pub use js::{
 };
 pub use rproc::{Renderer, single_process_enable};
 pub use stdio::{
-    err, flush, fmt_g, out, scan_drag, scan_hold, scan_pair, scan_point, scan_select, scan_size,
+    err, flush, out, scan_drag, scan_hold, scan_pair, scan_point, scan_select, scan_size,
 };
 pub use util::{
     MainLoop, ascii_strtoll, base64, dlog_level_name, file_contents, monotonic_us, strcompress,

@@ -433,7 +433,7 @@ fn read_variation_value(text: &[u8], pos: &mut usize) -> Option<Vec<u8>> {
         return None;
     }
     *pos = skip_spaces(text, p + n);
-    Some(engine::format_g8(v))
+    Some(southstar_numfmt::general(v, 8).into_bytes())
 }
 
 pub fn variations_from_css(settings: Option<&CStr>) -> Option<Vec<u8>> {

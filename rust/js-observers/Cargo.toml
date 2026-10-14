@@ -13,6 +13,7 @@ southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }
+southstar-numfmt = { path = "../numfmt" }
 
 [lints]
 workspace = true

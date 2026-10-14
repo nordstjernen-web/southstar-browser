@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 use southstar_glib::{self as glib, FALSE, GBoolean, TRUE};
 
 const COLOR_SCHEME_DARK: c_int = 1;
@@ -12,7 +12,6 @@ unsafe extern "C" {
     fn ns_css_stylesheet_cache_drop();
     fn ns_css_get_color_scheme() -> c_int;
     fn ns_css_get_reduced_motion() -> c_int;
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
 }
 
 pub(crate) fn css_viewport_w() -> f64 {
@@ -37,15 +36,6 @@ pub(crate) fn prefers_reduced_motion() -> bool {
 
 pub(crate) fn ascii_strtod(text: &[u8]) -> (f64, usize) {
     glib::ascii_strtod_prefix(text)
-}
-
-pub(crate) fn format_g(value: f64) -> Vec<u8> {
-    unsafe {
-        let text = g_strdup_printf(c"%g".as_ptr(), value);
-        let bytes = CStr::from_ptr(text).to_bytes().to_vec();
-        glib::g_free(text.cast());
-        bytes
-    }
 }
 
 #[unsafe(no_mangle)]

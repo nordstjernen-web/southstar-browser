@@ -113,7 +113,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn g_utf8_get_char(p: *const c_char) -> u32;
     fn g_unichar_isalnum(c: u32) -> GBoolean;
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
 }
 
 pub fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
@@ -407,11 +406,6 @@ pub fn utf8_get_char(s: &[u8], at: usize) -> u32 {
 
 pub fn unichar_isalnum(c: u32) -> bool {
     unsafe { g_unichar_isalnum(c) != 0 }
-}
-
-pub fn format_g(v: f64) -> Vec<u8> {
-    let p = unsafe { g_strdup_printf(c"%g".as_ptr(), v) };
-    take_cstring(p).map_or_else(Vec::new, CString::into_bytes)
 }
 
 pub struct RawLink {

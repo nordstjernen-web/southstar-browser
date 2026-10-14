@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-datetime = { path = "../datetime" }
 southstar-glib = { path = "../glib" }
 southstar-html-util = { path = "../html-util" }
+southstar-numfmt = { path = "../numfmt" }
 
 [lints]
 workspace = true

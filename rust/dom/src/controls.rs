@@ -343,7 +343,9 @@ fn number_to_value(kind: InputKind, v: f64) -> Option<Vec<u8>> {
     let mut out = String::new();
     match kind {
         InputKind::Number | InputKind::Range => {
-            return Some(southstar_glib::ascii_dtostr(if v == 0.0 { 0.0 } else { v }));
+            return Some(
+                southstar_numfmt::general(if v == 0.0 { 0.0 } else { v }, 17).into_bytes(),
+            );
         }
         InputKind::Date => {
             let days = (v / DAY_MS + 0.5).floor();

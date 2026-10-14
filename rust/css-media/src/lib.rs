@@ -1254,18 +1254,20 @@ pub fn query_matches(query: &[u8]) -> bool {
 fn serialize_value(out: &mut Vec<u8>, v: &Value, kind: FeatureType) {
     match kind {
         FeatureType::Discrete => out.extend_from_slice(v.ident.as_bytes()),
-        FeatureType::Integer | FeatureType::Number => out.extend_from_slice(&ffi::format_g(v.num)),
+        FeatureType::Integer | FeatureType::Number => {
+            out.extend_from_slice(southstar_numfmt::g(v.num).as_bytes())
+        }
         FeatureType::Ratio => {
-            out.extend_from_slice(&ffi::format_g(v.num));
+            out.extend_from_slice(southstar_numfmt::g(v.num).as_bytes());
             out.extend_from_slice(b" / ");
-            out.extend_from_slice(&ffi::format_g(v.denom));
+            out.extend_from_slice(southstar_numfmt::g(v.denom).as_bytes());
         }
         FeatureType::Resolution => {
-            out.extend_from_slice(&ffi::format_g(v.num));
+            out.extend_from_slice(southstar_numfmt::g(v.num).as_bytes());
             out.extend_from_slice(b"dppx");
         }
         FeatureType::Length => {
-            out.extend_from_slice(&ffi::format_g(v.num));
+            out.extend_from_slice(southstar_numfmt::g(v.num).as_bytes());
             out.extend_from_slice(b"px");
         }
     }

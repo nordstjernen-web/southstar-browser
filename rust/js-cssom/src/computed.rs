@@ -6,7 +6,7 @@ use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef, ValueRef, display_of};
 
-use crate::ffi::{self, AnimList, Js, fmt_g};
+use crate::ffi::{self, AnimList, Js};
 
 const UNIT_PX: u32 = 0;
 const UNIT_EM: u32 = 1;
@@ -416,7 +416,7 @@ fn box_edge_px(b: BoxRef<'_>, name: &str) -> Option<String> {
         "left" => edges.left,
         _ => return None,
     };
-    Some(format!("{}px", fmt_g(v)))
+    Some(format!("{}px", southstar_numfmt::g(v)))
 }
 
 fn transform_matrix(s: Option<StyleRef<'_>>, b: Option<BoxRef<'_>>) -> String {
@@ -439,16 +439,16 @@ fn transform_matrix(s: Option<StyleRef<'_>>, b: Option<BoxRef<'_>>) -> String {
     if affine {
         return format!(
             "matrix({}, {}, {}, {}, {}, {})",
-            fmt_g(m[0]),
-            fmt_g(m[4]),
-            fmt_g(m[1]),
-            fmt_g(m[5]),
-            fmt_g(m[3]),
-            fmt_g(m[7])
+            southstar_numfmt::g(m[0]),
+            southstar_numfmt::g(m[4]),
+            southstar_numfmt::g(m[1]),
+            southstar_numfmt::g(m[5]),
+            southstar_numfmt::g(m[3]),
+            southstar_numfmt::g(m[7])
         );
     }
     const ORDER: [usize; 16] = [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
-    let parts: Vec<String> = ORDER.iter().map(|&k| fmt_g(m[k])).collect();
+    let parts: Vec<String> = ORDER.iter().map(|&k| southstar_numfmt::g(m[k])).collect();
     format!("matrix3d({})", parts.join(", "))
 }
 
@@ -589,7 +589,7 @@ fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Optio
 }
 
 fn px(v: f64) -> String {
-    format!("{}px", fmt_g(v))
+    format!("{}px", southstar_numfmt::g(v))
 }
 
 fn inset_px(js: Js, n: Node<'_>, b: BoxRef<'static>, name: &str) -> Option<String> {
@@ -727,10 +727,10 @@ fn anim_longhand(list: &AnimList, sub: &str) -> Option<String> {
                 if e.duration_auto != 0 {
                     out.push_str("auto");
                 } else {
-                    out.push_str(&format!("{}s", fmt_g(e.duration_ms / 1000.0)));
+                    out.push_str(&format!("{}s", southstar_numfmt::g(e.duration_ms / 1000.0)));
                 }
             }
-            "delay" => out.push_str(&format!("{}s", fmt_g(e.delay_ms / 1000.0))),
+            "delay" => out.push_str(&format!("{}s", southstar_numfmt::g(e.delay_ms / 1000.0))),
             "property" => {
                 let name = ffi::anim_entry_name(e);
                 if e.target == TARGET_OTHER && name.is_some() {
@@ -748,7 +748,7 @@ fn anim_longhand(list: &AnimList, sub: &str) -> Option<String> {
             "timing" => out.push_str(&ffi::anim_entry_timing(e)),
             "iteration" => {
                 if e.iterations.is_finite() {
-                    out.push_str(&fmt_g(e.iterations));
+                    out.push_str(&southstar_numfmt::g(e.iterations));
                 } else {
                     out.push_str("infinite");
                 }
@@ -1380,7 +1380,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         } else {
             o.min(1.0)
         };
-        return Some(fmt_g(o));
+        return Some(southstar_numfmt::g(o));
     }
     if let Some(id) =
         pid.filter(|_| is(PropId::Scale) || is(PropId::Rotate) || is(PropId::Translate))

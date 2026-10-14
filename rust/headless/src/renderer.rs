@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use crate::ffi::{self, Renderer, err, fmt_g, out};
+use crate::ffi::{self, Renderer, err, out};
 use crate::text::strip;
 use crate::{Dump, Opts, nonempty};
 
@@ -136,7 +136,12 @@ fn run_actions(r: &Renderer, spec: &[u8], mut vw: c_int, mut vh: c_int, settle_m
             let Some((x, y)) = ffi::scan_point(rest) else {
                 continue;
             };
-            err(format!("[headless] click {},{}\n", fmt_g(x), fmt_g(y)).as_bytes());
+            err(format!(
+                "[headless] click {},{}\n",
+                southstar_numfmt::g(x),
+                southstar_numfmt::g(y)
+            )
+            .as_bytes());
             drop(r.click(x as c_int, y as c_int));
             if let Some(href) = r.release_full().filter(|href| !href.is_empty()) {
                 follow_nav(r, Some(href.as_bytes().to_vec()), vw, vh, settle_ms);
@@ -157,8 +162,8 @@ fn run_actions(r: &Renderer, spec: &[u8], mut vw: c_int, mut vh: c_int, settle_m
             let (prevented, edit) = r.contextmenu(x as c_int, y as c_int);
             err(format!(
                 "[headless] rightclick {},{} prevented={prevented} edit={edit}\n",
-                fmt_g(x),
-                fmt_g(y)
+                southstar_numfmt::g(x),
+                southstar_numfmt::g(y)
             )
             .as_bytes());
         } else if let Some(text) = a.strip_prefix(b"type ") {

@@ -46,7 +46,7 @@ mod values;
 mod vars;
 pub(crate) mod viewport;
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_double, c_uint};
 
 use southstar_glib::{self as glib, GBoolean};
 
@@ -77,16 +77,6 @@ pub(crate) use shorthand::prop_named;
 pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, RawAreaRect, RawAreas};
 
-unsafe extern "C" {
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        buf_len: c_int,
-        format: *const c_char,
-        d: c_double,
-    ) -> *mut c_char;
-}
-
 pub(crate) fn prefers_dark() -> bool {
     preferences::ns_css_get_color_scheme() == preferences::COLOR_SCHEME_DARK
 }
@@ -102,33 +92,6 @@ pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {
     glib::ascii_strtod_at(text, pos)
-}
-
-pub(crate) fn dtostr(value: f64) -> Vec<u8> {
-    glib::ascii_dtostr(value)
-}
-
-pub(crate) fn format_double(format: &'static CStr, value: f64) -> Vec<u8> {
-    let text = unsafe { glib::GStr::take(g_strdup_printf(format.as_ptr(), value)) };
-    text.map(|text| text.to_bytes().to_vec())
-        .unwrap_or_default()
-}
-
-pub(crate) fn formatd(format: &'static CStr, value: f64) -> Vec<u8> {
-    let mut buffer = [0 as c_char; 64];
-    unsafe {
-        g_ascii_formatd(
-            buffer.as_mut_ptr(),
-            buffer.len() as c_int,
-            format.as_ptr(),
-            value,
-        );
-        CStr::from_ptr(buffer.as_ptr()).to_bytes().to_vec()
-    }
-}
-
-pub(crate) fn format_g6(value: f64) -> Vec<u8> {
-    format_double(c"%.6g", value)
 }
 
 unsafe fn text<'a>(s: *const c_char) -> Option<&'a CStr> {

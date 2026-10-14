@@ -1076,7 +1076,7 @@ fn append_number(out: &mut Vec<u8>, mut n: f64) {
     if n == 0.0 {
         n = 0.0;
     }
-    let mut text = ffi::format_fixed6(n);
+    let mut text = southstar_numfmt::fixed(n, 6).into_bytes();
     if let Some(dot) = text.iter().position(|&b| b == b'.') {
         let mut end = text.len();
         while end > dot && text[end - 1] == b'0' {

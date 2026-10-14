@@ -14,6 +14,7 @@ southstar-image = { path = "../image" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
+southstar-numfmt = { path = "../numfmt" }
 
 [features]
 ns-pango = []

@@ -29,12 +29,6 @@ pub(crate) use objects::{
 };
 
 unsafe extern "C" {
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        buf_len: c_int,
-        format: *const c_char,
-        d: c_double,
-    ) -> *mut c_char;
     fn ns_css_parse_color(
         s: *const c_char,
         r: *mut u8,
@@ -145,19 +139,6 @@ pub(crate) fn strtod_prefix(text: &[u8]) -> (f64, usize) {
 
 pub(crate) fn strtod(text: &[u8]) -> f64 {
     glib::ascii_strtod(text)
-}
-
-pub(crate) fn format_g(value: f64) -> Vec<u8> {
-    let mut buffer = [0 as c_char; 39];
-    unsafe {
-        g_ascii_formatd(
-            buffer.as_mut_ptr(),
-            buffer.len() as c_int,
-            c"%g".as_ptr(),
-            value,
-        );
-        CStr::from_ptr(buffer.as_ptr()).to_bytes().to_vec()
-    }
 }
 
 pub(crate) fn css_parse_color(s: &[u8]) -> Option<[u8; 4]> {

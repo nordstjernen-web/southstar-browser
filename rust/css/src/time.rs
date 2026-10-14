@@ -351,7 +351,7 @@ fn strip_units(text: &CStr, s: usize, e: usize) -> Vec<u8> {
             let unit = &b[num_end.min(u)..u];
             if unit.eq_ignore_ascii_case(b"ms") {
                 out.push(b'(');
-                out.extend_from_slice(&ffi::format_double(c"%.17g", num));
+                out.extend_from_slice(&southstar_numfmt::general(num, 17).into_bytes());
                 out.extend_from_slice(b"*0.001)");
             } else if unit.eq_ignore_ascii_case(b"s") {
                 out.extend_from_slice(&b[p..num_end]);

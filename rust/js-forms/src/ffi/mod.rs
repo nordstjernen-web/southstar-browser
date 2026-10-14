@@ -98,12 +98,6 @@ unsafe extern "C" {
         result_uncertain: *mut GBoolean,
     ) -> *mut c_char;
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        buf_len: c_int,
-        format: *const c_char,
-        d: f64,
-    ) -> *mut c_char;
     fn g_utf8_casefold(s: *const c_char, len: isize) -> *mut c_char;
 }
 
@@ -161,19 +155,6 @@ pub(crate) fn parse_color(text: &[u8]) -> Option<(u8, u8, u8, u8)> {
     let (mut r, mut g, mut b, mut a) = (0u8, 0u8, 0u8, 0u8);
     let ok = unsafe { ns_css_parse_color(text.as_ptr(), &mut r, &mut g, &mut b, &mut a) };
     (ok != 0).then_some((r, g, b, a))
-}
-
-pub(crate) fn format_double(format: &CStr, value: f64) -> Vec<u8> {
-    let mut buffer = [0 as c_char; 64];
-    unsafe {
-        g_ascii_formatd(
-            buffer.as_mut_ptr(),
-            buffer.len() as c_int,
-            format.as_ptr(),
-            value,
-        );
-        CStr::from_ptr(buffer.as_ptr()).to_bytes().to_vec()
-    }
 }
 
 pub(crate) fn utf8_casefold(text: &[u8]) -> Vec<u8> {

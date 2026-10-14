@@ -15,7 +15,6 @@ use southstar_layout_content::{pseudo, select, text_input};
 use southstar_style::{PropId, StyleRef};
 
 use crate::collect::{Collector, LINE_SEPARATOR, NBSP, same};
-use crate::ffi;
 
 const BULLET: &[u8] = "\u{2022}".as_bytes();
 
@@ -198,7 +197,7 @@ impl<'a> Collector<'a> {
                 self.push(if i == knob_at { "\u{25CF}" } else { "\u{2500}" }.as_bytes());
             }
             self.push(b" ");
-            self.push(&ffi::format_g(vv));
+            self.push(southstar_numfmt::g(vv).as_bytes());
             self.push(NBSP);
             self.form_attr(inline_kind::INPUT_FIELD, start, n);
         } else if type_is(

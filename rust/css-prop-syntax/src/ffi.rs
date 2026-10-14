@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_char;
 use core::ptr;
 use southstar_glib::{self as glib, GBoolean};
 
@@ -29,15 +29,7 @@ pub struct SyntaxCtx {
     current_color: *const c_char,
 }
 
-const DTOSTR_BUF_SIZE: usize = 29 + 10;
-
 unsafe extern "C" {
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        buf_len: c_int,
-        format: *const c_char,
-        d: f64,
-    ) -> *mut c_char;
     fn ns_css_parse_color(
         s: *const c_char,
         r: *mut u8,
@@ -45,19 +37,6 @@ unsafe extern "C" {
         b: *mut u8,
         a: *mut u8,
     ) -> GBoolean;
-}
-
-pub(crate) fn format_fixed6(n: f64) -> Vec<u8> {
-    let mut buf = [0 as c_char; DTOSTR_BUF_SIZE];
-    unsafe {
-        g_ascii_formatd(
-            buf.as_mut_ptr(),
-            DTOSTR_BUF_SIZE as c_int,
-            c"%.6f".as_ptr(),
-            n,
-        );
-        CStr::from_ptr(buf.as_ptr()).to_bytes().to_vec()
-    }
 }
 
 pub(crate) fn parse_color(text: &[u8]) -> Option<[u8; 4]> {

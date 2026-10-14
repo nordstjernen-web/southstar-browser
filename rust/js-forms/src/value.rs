@@ -128,15 +128,14 @@ pub(crate) fn value_to_ms(kind: InputKind, v: Option<&[u8]>, as_date: bool) -> O
 }
 
 fn number_to_string(d: f64) -> Vec<u8> {
-    let mut text = Vec::new();
+    let mut text = String::new();
     for precision in 1..=17 {
-        let format = cstring(format!("%.{precision}g").as_bytes());
-        text = ffi::format_double(&format, d);
-        if southstar_glib::ascii_strtod(&text) == d {
+        text = southstar_numfmt::general(d, precision);
+        if text.parse::<f64>().ok() == Some(d) {
             break;
         }
     }
-    text
+    text.into_bytes()
 }
 
 fn append_time(out: &mut String, ms_of_day: c_long) {
@@ -276,7 +275,7 @@ fn sanitize_range(el: Element, value: &[u8]) -> Vec<u8> {
         Some(v) if v > hi => hi,
         Some(v) => v,
     };
-    ffi::format_double(c"%g", v)
+    southstar_numfmt::g(v).into_bytes()
 }
 
 pub(crate) fn sanitize(el: Element, value: &[u8]) -> Vec<u8> {

@@ -306,7 +306,7 @@ fn unit_value(unit: &[u8], num: f64) -> Option<Term> {
             ..Term::default()
         });
     }
-    let mut text = ffi::dtostr(num);
+    let mut text = southstar_numfmt::general(num, 17).into_bytes();
     text.extend_from_slice(unit);
     let (v, u) = units::parse_length(&c_text(text))?;
     Some(term_from_length(v, u))

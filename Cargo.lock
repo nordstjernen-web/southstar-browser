@@ -1582,6 +1582,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -1607,6 +1608,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-mat4",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -1615,6 +1617,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
  "southstar-glib",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -1623,6 +1626,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-css-syntax",
  "southstar-glib",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -1647,6 +1651,7 @@ dependencies = [
  "southstar-datetime",
  "southstar-glib",
  "southstar-html-util",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -1842,6 +1847,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -2010,6 +2016,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-mat4",
+ "southstar-numfmt",
  "southstar-style",
 ]
 
@@ -2108,6 +2115,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -2289,6 +2297,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-numfmt",
 ]
 
 [[package]]
@@ -2488,6 +2497,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-content",
  "southstar-layout-tree",
+ "southstar-numfmt",
  "southstar-paint",
  "southstar-style",
 ]
@@ -2532,6 +2542,7 @@ dependencies = [
  "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-numfmt",
  "southstar-style",
 ]
 
@@ -2666,6 +2677,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-numfmt"
+version = "0.9.11-dev"
+
+[[package]]
 name = "southstar-paint"
 version = "0.9.11-dev"
 dependencies = [
@@ -2675,6 +2690,7 @@ dependencies = [
  "southstar-image",
  "southstar-layout",
  "southstar-mat4",
+ "southstar-numfmt",
  "southstar-style",
 ]
 

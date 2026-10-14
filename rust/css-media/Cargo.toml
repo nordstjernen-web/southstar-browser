@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-css = { path = "../css" }
 southstar-glib = { path = "../glib" }
+southstar-numfmt = { path = "../numfmt" }
 
 [lints]
 workspace = true

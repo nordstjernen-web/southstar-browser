@@ -884,7 +884,7 @@ pub(crate) fn parse(text: &[u8], keep_texts: bool) -> Option<(GradientParse, usi
 }
 
 fn append_number(out: &mut Vec<u8>, v: f64, suffix: &[u8]) {
-    out.extend_from_slice(&ffi::format_double(c"%g", v));
+    out.extend_from_slice(&southstar_numfmt::g(v).into_bytes());
     out.extend_from_slice(suffix);
 }
 

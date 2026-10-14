@@ -257,7 +257,7 @@ fn res_sum(text: &CString, pos: &mut usize, end: usize, depth: i32) -> Option<Re
 }
 
 fn number_with(v: f64, suffix: &[u8]) -> Vec<u8> {
-    let mut out = ffi::format_double(c"%g", v);
+    let mut out = southstar_numfmt::g(v).into_bytes();
     out.extend_from_slice(suffix);
     out
 }

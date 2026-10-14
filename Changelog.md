@@ -101,6 +101,13 @@ Southstar Browser 0.9.11-dev:
   transition-timing-function lists item by item when no animation or
   transition runs, instead of splitting at the commas inside
   cubic-bezier(), steps() and linear() and reporting "ease" for every piece.
+* Numbers are formatted by rust/numfmt, a new crate without unsafe code
+  that reproduces C's %g, %.Pg and %.Pf byte for byte (checked against
+  glibc's snprintf on 72 million values), instead of GLib's g_ascii_formatd,
+  g_ascii_dtostr and the locale-dependent g_strdup_printf. CSS serialization,
+  media queries, canvas colours and fonts, form values, layout text, grid
+  inspection and the headless dumps all share it; eight private %g helpers
+  are gone.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

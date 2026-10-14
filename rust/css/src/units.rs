@@ -168,7 +168,7 @@ pub(crate) fn number_text(n: f64) -> Vec<u8> {
             b"infinity".to_vec()
         }
     } else {
-        ffi::format_double(c"%g", n)
+        southstar_numfmt::g(n).into_bytes()
     }
 }
 
@@ -236,7 +236,7 @@ pub(crate) fn angle_expr_rewrite(text: &CStr, to_radians: bool) -> Vec<u8> {
         match degrees {
             Some(deg) => {
                 let value = if to_radians { deg * PI / 180.0 } else { deg };
-                out.extend_from_slice(&ffi::format_double(c"%.17g", value));
+                out.extend_from_slice(&southstar_numfmt::general(value, 17).into_bytes());
             }
             None => out.extend_from_slice(&s[p..u]),
         }

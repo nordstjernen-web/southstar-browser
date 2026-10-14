@@ -1,0 +1,11 @@
+[package]
+name = "southstar-numfmt"
+description = "C printf's %g and %f number formatting in safe Rust, independent of the locale"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

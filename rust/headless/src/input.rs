@@ -9,7 +9,7 @@ use std::ffi::CString;
 use southstar_dom::{Node, ancestors_and_self, children};
 use southstar_glib::GBoolean;
 
-use crate::ffi::{self, Js, err, fmt_g, out};
+use crate::ffi::{self, Js, err, out};
 use crate::inproc::{Ctx, NavCapture, relayout, settle};
 use crate::text::strip;
 
@@ -568,7 +568,7 @@ fn step_number(fc: &Ctx, t: Node, cur: &[u8], up: bool) {
     {
         val = max;
     }
-    let buf = fmt_g(val);
+    let buf = southstar_numfmt::g(val);
     ffi::set_editable_value(t, buf.as_bytes());
     fc.caret.set(buf.len());
     fc.anchor.set(buf.len());
@@ -594,15 +594,20 @@ fn rightclick(fc: &Ctx, x: f64, y: f64) {
     js.dispatch_mouse(dom, c"contextmenu", (x, y), (2, 0), &mut prevented);
     err(format!(
         "[headless] rightclick {},{} prevented={prevented}\n",
-        fmt_g(x),
-        fmt_g(y)
+        southstar_numfmt::g(x),
+        southstar_numfmt::g(y)
     )
     .as_bytes());
     relayout(fc);
 }
 
 fn hold(fc: &Ctx, x: f64, y: f64, ms: core::ffi::c_long) {
-    err(format!("[headless] hold {},{} {ms}ms\n", fmt_g(x), fmt_g(y)).as_bytes());
+    err(format!(
+        "[headless] hold {},{} {ms}ms\n",
+        southstar_numfmt::g(x),
+        southstar_numfmt::g(y)
+    )
+    .as_bytes());
     let dom = fc
         .layout()
         .and_then(|l| ffi::hit_test(Some(l), x, y))
@@ -642,7 +647,12 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
         }
         if let Some(rest) = a.strip_prefix(b"click ") {
             if let Some((x, y)) = ffi::scan_point(rest) {
-                err(format!("[headless] click {},{}\n", fmt_g(x), fmt_g(y)).as_bytes());
+                err(format!(
+                    "[headless] click {},{}\n",
+                    southstar_numfmt::g(x),
+                    southstar_numfmt::g(y)
+                )
+                .as_bytes());
                 click(fc, nav, x, y);
             }
         } else if let Some(rest) = a.strip_prefix(b"rightclick ") {
@@ -657,10 +667,10 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
             if let Some([x0, y0, x1, y1]) = ffi::scan_drag(rest) {
                 err(format!(
                     "[headless] mousedrag {},{} -> {},{}\n",
-                    fmt_g(x0),
-                    fmt_g(y0),
-                    fmt_g(x1),
-                    fmt_g(y1)
+                    southstar_numfmt::g(x0),
+                    southstar_numfmt::g(y0),
+                    southstar_numfmt::g(x1),
+                    southstar_numfmt::g(y1)
                 )
                 .as_bytes());
                 mouse_drag(fc, (x0, y0), (x1, y1));
@@ -669,10 +679,10 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
             if let Some([x0, y0, x1, y1]) = ffi::scan_drag(rest) {
                 err(format!(
                     "[headless] drag {},{} -> {},{}\n",
-                    fmt_g(x0),
-                    fmt_g(y0),
-                    fmt_g(x1),
-                    fmt_g(y1)
+                    southstar_numfmt::g(x0),
+                    southstar_numfmt::g(y0),
+                    southstar_numfmt::g(x1),
+                    southstar_numfmt::g(y1)
                 )
                 .as_bytes());
                 drag(fc, (x0, y0), (x1, y1));
@@ -694,7 +704,12 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
             }
         } else if let Some(rest) = a.strip_prefix(b"scroll ") {
             if let Some((x, y)) = ffi::scan_point(rest).or_else(|| ffi::scan_pair(rest)) {
-                err(format!("[headless] scroll {},{}\n", fmt_g(x), fmt_g(y)).as_bytes());
+                err(format!(
+                    "[headless] scroll {},{}\n",
+                    southstar_numfmt::g(x),
+                    southstar_numfmt::g(y)
+                )
+                .as_bytes());
                 ffi::note_viewport_scroll(fc.js, x, y);
                 ffi::consume_mutated(fc.js);
             }

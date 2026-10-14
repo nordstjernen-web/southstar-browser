@@ -35,7 +35,7 @@ fn from_edge(edge: &[u8], offset: Option<&[u8]>) -> Vec<u8> {
     let text = CString::new(offset).unwrap_or_default();
     let (v, end) = ffi::strtod(&text, 0);
     if &offset[end..] == b"%" {
-        let mut out = ffi::format_double(c"%g", 100.0 - v);
+        let mut out = southstar_numfmt::g(100.0 - v).into_bytes();
         out.push(b'%');
         return out;
     }

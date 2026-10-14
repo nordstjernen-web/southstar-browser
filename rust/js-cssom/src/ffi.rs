@@ -268,7 +268,6 @@ unsafe extern "C" {
         out_generation: *mut c_uint,
     ) -> GBoolean;
 
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
 
@@ -305,10 +304,6 @@ fn static_text(p: *const c_char) -> Option<&'static str> {
         return None;
     }
     unsafe { CStr::from_ptr(p) }.to_str().ok()
-}
-
-pub(crate) fn fmt_g(value: f64) -> String {
-    take_text(unsafe { g_strdup_printf(c"%g".as_ptr(), value) }).unwrap_or_default()
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {

@@ -1449,7 +1449,7 @@ fn flex(out: &mut Out, text: &[u8]) {
                 match numerics {
                     0 => grow = num,
                     1 => shrink = num,
-                    2 => basis = Some(ffi::format_double(c"%g", num)),
+                    2 => basis = Some(southstar_numfmt::g(num).into_bytes()),
                     _ => {}
                 }
                 numerics += 1;
@@ -1463,8 +1463,8 @@ fn flex(out: &mut Out, text: &[u8]) {
     if numerics == 0 && basis.is_some() && !keyword_set {
         grow = 1.0;
     }
-    out.emit(Prop::FlexGrow, &ffi::format_double(c"%g", grow));
-    out.emit(Prop::FlexShrink, &ffi::format_double(c"%g", shrink));
+    out.emit(Prop::FlexGrow, &southstar_numfmt::g(grow).into_bytes());
+    out.emit(Prop::FlexShrink, &southstar_numfmt::g(shrink).into_bytes());
     if let Some(basis) = basis {
         out.emit(Prop::FlexBasis, &basis);
     }

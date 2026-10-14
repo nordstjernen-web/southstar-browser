@@ -27,7 +27,7 @@ use crate::transform::{
 use crate::units::{self, EM, NUMBER, PERCENT, PX};
 
 fn g(v: f64) -> Vec<u8> {
-    ffi::format_double(c"%g", v)
+    southstar_numfmt::g(v).into_bytes()
 }
 
 fn g_unit(v: f64, unit: u32) -> Vec<u8> {

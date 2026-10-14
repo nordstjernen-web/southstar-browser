@@ -162,7 +162,7 @@ pub(crate) fn canonical(canon: &[u8]) -> Vec<u8> {
         }
         match size_px(size) {
             Some(px) => {
-                out.extend_from_slice(&ffi::format_g(px));
+                out.extend_from_slice(southstar_numfmt::g(px).as_bytes());
                 out.extend_from_slice(b"px");
             }
             None => out.extend_from_slice(size),

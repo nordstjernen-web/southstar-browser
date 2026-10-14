@@ -1468,7 +1468,7 @@ fn font_weight(t: &[u8]) -> Option<Value> {
         }
     };
     let num = num.filter(|n| n.is_finite() && (1.0..=1000.0).contains(n))?;
-    Some(Value::keyword(ffi::format_double(c"%g", num)))
+    Some(Value::keyword(southstar_numfmt::g(num).into_bytes()))
 }
 
 fn keyword_text(text: Option<Vec<u8>>) -> Option<Value> {

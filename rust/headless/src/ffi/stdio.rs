@@ -6,14 +6,11 @@ use core::ffi::{c_char, c_int, c_long, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::GStr;
-
 unsafe extern "C" {
     fn printf(format: *const c_char, ...) -> c_int;
     fn putchar(c: c_int) -> c_int;
     fn fflush(stream: *mut c_void) -> c_int;
     fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
 }
 
 pub fn out(bytes: &[u8]) {
@@ -35,13 +32,6 @@ pub fn flush() {
 
 pub fn err(bytes: &[u8]) {
     southstar_glib::stderr_write(bytes);
-}
-
-pub fn fmt_g(value: f64) -> String {
-    let s = unsafe { GStr::take(g_strdup_printf(c"%g".as_ptr(), value)) };
-    s.map_or_else(String::new, |s| {
-        String::from_utf8_lossy(s.to_bytes()).into_owned()
-    })
 }
 
 fn c_input(s: &[u8]) -> CString {

@@ -46,12 +46,6 @@ unsafe extern "C" {
     fn ns_font_generation() -> c_uint;
     fn ns_texture_get_width(texture: *mut c_void) -> c_int;
     fn ns_texture_get_height(texture: *mut c_void) -> c_int;
-    fn g_ascii_formatd(
-        buffer: *mut c_char,
-        len: c_int,
-        format: *const c_char,
-        d: c_double,
-    ) -> *mut c_char;
 }
 
 pub fn font_family_for_pango(family: Option<&CStr>) -> CString {
@@ -121,11 +115,7 @@ pub fn parse_int(text: &CStr, dflt: i32, min: i32, max: i32) -> i32 {
 }
 
 pub fn format_g8(value: f64) -> Vec<u8> {
-    let mut buf = [0 as c_char; 32];
-    unsafe {
-        g_ascii_formatd(buf.as_mut_ptr(), 32, c"%.8g".as_ptr(), value);
-        CStr::from_ptr(buf.as_ptr()).to_bytes().to_vec()
-    }
+    southstar_numfmt::general(value, 8).into_bytes()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -828,7 +828,7 @@ pub(crate) fn individual_serialize(tf: &Transform, prop: Individual) -> Option<V
 }
 
 fn g(v: f64) -> Vec<u8> {
-    ffi::format_double(c"%g", v)
+    southstar_numfmt::g(v).into_bytes()
 }
 
 pub(crate) fn serialize(tf: &Transform) -> Vec<u8> {

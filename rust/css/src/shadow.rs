@@ -6,7 +6,6 @@ use std::ffi::CString;
 
 use crate::calc::{self, Parsed};
 use crate::color::{color_text, parse_color};
-use crate::ffi;
 use crate::math;
 use crate::scan::{is_ws, scan_until, split_ws_limit, trim_range};
 use crate::text::{add_leading_zeros, normalize_negative_zero};
@@ -303,7 +302,7 @@ pub(crate) fn serialize(list: &ShadowList) -> Vec<u8> {
         }
         for v in values {
             out.push(b' ');
-            out.extend_from_slice(&ffi::format_double(c"%g", v));
+            out.extend_from_slice(&southstar_numfmt::g(v).into_bytes());
             out.extend_from_slice(b"px");
         }
         if sh.inset != 0 {

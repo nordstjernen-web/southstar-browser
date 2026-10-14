@@ -7,7 +7,7 @@ use core::ffi::CStr;
 use southstar_dom::{Node, children};
 use southstar_layout::BoxRef;
 
-use crate::ffi::{self, Selectors, StyleTable, Value, fmt_g};
+use crate::ffi::{self, Selectors, StyleTable, Value};
 use crate::nonempty;
 use crate::text::truncated;
 
@@ -89,8 +89,13 @@ fn unit_name(unit: u32) -> &'static [u8] {
 fn value_str(v: Value, cap: usize) -> Vec<u8> {
     let s = match v {
         Value::Keyword(k) => k.map_or(b"?".to_vec(), |k| k.to_bytes().to_vec()),
-        Value::Length(v, unit) => [fmt_g(v).as_bytes(), unit_name(unit)].concat(),
-        Value::Calc(pct, px) => format!("calc({}% + {}px)", fmt_g(pct), fmt_g(px)).into_bytes(),
+        Value::Length(v, unit) => [southstar_numfmt::g(v).as_bytes(), unit_name(unit)].concat(),
+        Value::Calc(pct, px) => format!(
+            "calc({}% + {}px)",
+            southstar_numfmt::g(pct),
+            southstar_numfmt::g(px)
+        )
+        .into_bytes(),
         Value::Color([r, g, b, a]) => format!("rgba({r}, {g}, {b}, {a})").into_bytes(),
         Value::Url(u) => [&b"url("[..], u.map_or(&b""[..], CStr::to_bytes), b")"].concat(),
         Value::Other => b"(set)".to_vec(),
@@ -152,10 +157,10 @@ fn edges_line(out: &mut Vec<u8>, title: &str, e: southstar_layout::Edges) {
     out.extend_from_slice(
         format!(
             "    {title:<15} T{} R{} B{} L{}\n",
-            fmt_g(e.top),
-            fmt_g(e.right),
-            fmt_g(e.bottom),
-            fmt_g(e.left)
+            southstar_numfmt::g(e.top),
+            southstar_numfmt::g(e.right),
+            southstar_numfmt::g(e.bottom),
+            southstar_numfmt::g(e.left)
         )
         .as_bytes(),
     );
@@ -175,20 +180,20 @@ fn print_box(b: BoxRef, out: &mut Vec<u8>) {
     out.extend_from_slice(
         format!(
             "    content         {} x {}  (at {},{})\n",
-            fmt_g(b.content_width()),
-            fmt_g(b.content_height()),
-            fmt_g(b.x()),
-            fmt_g(b.y())
+            southstar_numfmt::g(b.content_width()),
+            southstar_numfmt::g(b.content_height()),
+            southstar_numfmt::g(b.x()),
+            southstar_numfmt::g(b.y())
         )
         .as_bytes(),
     );
     out.extend_from_slice(
         format!(
             "    border-box      {} x {}  (at {},{})\n",
-            fmt_g(bw),
-            fmt_g(bh),
-            fmt_g(bx),
-            fmt_g(by)
+            southstar_numfmt::g(bw),
+            southstar_numfmt::g(bh),
+            southstar_numfmt::g(bx),
+            southstar_numfmt::g(by)
         )
         .as_bytes(),
     );
@@ -215,10 +220,10 @@ fn print_box(b: BoxRef, out: &mut Vec<u8>) {
             out.extend_from_slice(
                 format!(
                     "      [{idx}] at {},{}  {} x {}  <",
-                    fmt_g(c.x()),
-                    fmt_g(c.y()),
-                    fmt_g(c.content_width()),
-                    fmt_g(c.content_height())
+                    southstar_numfmt::g(c.x()),
+                    southstar_numfmt::g(c.y()),
+                    southstar_numfmt::g(c.content_width()),
+                    southstar_numfmt::g(c.content_height())
                 )
                 .as_bytes(),
             );
@@ -296,7 +301,14 @@ fn inspect(
 
 fn inspect_at(layout: Option<BoxRef>, x: f64, y: f64, out: &mut Vec<u8>) {
     let hit = ffi::hit_test(layout, x, y);
-    out.extend_from_slice(format!("inspect-at: {},{}\n", fmt_g(x), fmt_g(y)).as_bytes());
+    out.extend_from_slice(
+        format!(
+            "inspect-at: {},{}\n",
+            southstar_numfmt::g(x),
+            southstar_numfmt::g(y)
+        )
+        .as_bytes(),
+    );
     let Some(hit) = hit.filter(|h| ffi::box_dom(*h).is_some()) else {
         out.extend_from_slice(b"  (no element at point)\n");
         return;
@@ -308,10 +320,10 @@ fn inspect_at(layout: Option<BoxRef>, x: f64, y: f64, out: &mut Vec<u8>) {
         out.extend_from_slice(
             format!(
                 ">  at {},{}  {} x {}\n",
-                fmt_g(p.x()),
-                fmt_g(p.y()),
-                fmt_g(p.content_width()),
-                fmt_g(p.content_height())
+                southstar_numfmt::g(p.x()),
+                southstar_numfmt::g(p.y()),
+                southstar_numfmt::g(p.content_width()),
+                southstar_numfmt::g(p.content_height())
             )
             .as_bytes(),
         );

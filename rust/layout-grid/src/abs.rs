@@ -259,7 +259,7 @@ pub(crate) fn resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<Vec<u8>> {
         }
         let size = e.end - e.start;
         let size = if size < 0.0 { 0.0 } else { size };
-        ffi::format_g((size * 100.0).round() / 100.0, &mut s);
+        s.extend_from_slice(southstar_numfmt::g((size * 100.0).round() / 100.0).as_bytes());
         s.extend_from_slice(b"px");
     }
     append_line_names(&mut s, tk, tr.len() as i32 + 1);

@@ -923,7 +923,7 @@ fn resolve_calcs(text: &CStr) -> Option<Vec<u8>> {
             if !calc_sum(text, &mut q, close, &mut term, 0) {
                 return None;
             }
-            flat.extend_from_slice(&ffi::format_g6(term.value));
+            flat.extend_from_slice(&southstar_numfmt::general(term.value, 6).into_bytes());
             flat.extend_from_slice(&term.unit);
             p = close + 1;
         } else {
@@ -1028,8 +1028,8 @@ fn parse_depth(text: &CStr, out: &mut Channels, depth: i32) -> bool {
 fn alpha_text(a: u8) -> Vec<u8> {
     let f = f64::from(a) / 255.0;
     let mut text = Vec::new();
-    for format in [c"%.1f", c"%.2f", c"%.3f", c"%.4f", c"%.5f"] {
-        text = ffi::formatd(format, f);
+    for decimals in 1..=5 {
+        text = southstar_numfmt::fixed(f, decimals).into_bytes();
         let back = CString::new(text.clone()).unwrap_or_default();
         if (ffi::strtod(&back, 0).0 * 255.0 + 0.5) as i32 == i32::from(a) {
             break;

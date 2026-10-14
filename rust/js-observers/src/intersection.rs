@@ -288,28 +288,6 @@ fn parse_margin_token(token: &[u8]) -> Option<Margin> {
     })
 }
 
-fn format_g(value: f64) -> String {
-    if value == 0.0 {
-        return if value.is_sign_negative() { "-0" } else { "0" }.to_owned();
-    }
-    let scientific = format!("{value:.5e}");
-    let (mantissa, exp) = scientific.split_once('e').unwrap_or((&scientific, "0"));
-    let exp: i32 = exp.parse().unwrap_or(0);
-    let trim = |text: &str| -> String {
-        if text.contains('.') {
-            text.trim_end_matches('0').trim_end_matches('.').to_owned()
-        } else {
-            text.to_owned()
-        }
-    };
-    if !(-4..6).contains(&exp) {
-        let sign = if exp < 0 { '-' } else { '+' };
-        format!("{}e{}{:02}", trim(mantissa), sign, exp.unsigned_abs())
-    } else {
-        trim(&format!("{:.*}", (5 - exp) as usize, value))
-    }
-}
-
 fn parse_root_margin(text: &[u8]) -> Option<([Margin; 4], String)> {
     let parts: Vec<&[u8]> = text
         .split(|c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | 0x0c))
@@ -347,7 +325,7 @@ fn parse_root_margin(text: &[u8]) -> Option<([Margin; 4], String)> {
         .iter()
         .map(|m| {
             let unit = if m.percentage { "%" } else { "px" };
-            format!("{}{unit}", format_g(m.value))
+            format!("{}{unit}", southstar_numfmt::g(m.value))
         })
         .collect::<Vec<_>>()
         .join(" ");

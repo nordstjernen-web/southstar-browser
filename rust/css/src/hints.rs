@@ -154,7 +154,7 @@ fn attr_color(value: &[u8]) -> Option<[u8; 4]> {
 
 fn rgba(out: &mut Vec<u8>, prop: &str, [r, g, b, a]: [u8; 4]) {
     out.extend_from_slice(format!("{prop}: rgba({r},{g},{b},").as_bytes());
-    out.extend_from_slice(&ffi::format_double(c"%g", f64::from(a) / 255.0));
+    out.extend_from_slice(&southstar_numfmt::g(f64::from(a) / 255.0).into_bytes());
     out.extend_from_slice(b");");
 }
 
@@ -185,7 +185,7 @@ fn html_dimension(value: Option<&[u8]>, ignore_zero: bool) -> Option<(f64, bool)
 }
 
 fn length_g(v: f64) -> Vec<u8> {
-    ffi::format_double(c"%.10g", v)
+    southstar_numfmt::general(v, 10).into_bytes()
 }
 
 fn append_dimension(out: &mut Vec<u8>, value: Option<&[u8]>, ignore_zero: bool, props: &[&str]) {

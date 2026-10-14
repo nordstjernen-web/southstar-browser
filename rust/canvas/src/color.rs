@@ -134,7 +134,7 @@ fn serialize(r: u8, g: u8, b: u8, a: u8) -> Vec<u8> {
         alpha = (f64::from(a) / 255.0 * 1000.0).round() / 1000.0;
     }
     let mut out = format!("rgba({r}, {g}, {b}, ").into_bytes();
-    out.extend_from_slice(&ffi::format_g(alpha));
+    out.extend_from_slice(southstar_numfmt::g(alpha).as_bytes());
     out.push(b')');
     out
 }
@@ -190,7 +190,7 @@ fn function_string(css: &[u8]) -> Option<Vec<u8>> {
         }
         if function >= 1 && first && token.ends_with(b"%") {
             let scale = if function >= 3 { 0.01 } else { 1.0 };
-            out.extend_from_slice(&ffi::format_g(percent_scaled(&token, scale)));
+            out.extend_from_slice(southstar_numfmt::g(percent_scaled(&token, scale)).as_bytes());
         } else {
             out.extend_from_slice(&token);
         }
@@ -201,7 +201,7 @@ fn function_string(css: &[u8]) -> Option<Vec<u8>> {
         let v = percent_scaled(&alpha, scale);
         if v < 1.0 {
             out.extend_from_slice(b" / ");
-            out.extend_from_slice(&ffi::format_g(if v < 0.0 { 0.0 } else { v }));
+            out.extend_from_slice(southstar_numfmt::g(if v < 0.0 { 0.0 } else { v }).as_bytes());
         }
     }
     out.push(b')');
