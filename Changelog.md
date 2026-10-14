@@ -14,8 +14,8 @@ Southstar Browser 0.9.11-dev:
 * Clippy's undocumented_unsafe_blocks, multiple_unsafe_ops_per_block and
   missing_safety_doc lints are on (8144, 1126 and 76 hits), counted per crate
   in the unsafe budget so each number can only fall; ptr_as_ptr and
-  transmute_ptr_to_ptr have no hits and are denied. Rust lints run in their
-  own CI job through scripts/unsafe-budget.py --clippy.
+  transmute_ptr_to_ptr have no hits and are denied. CI runs the lints through
+  scripts/unsafe-budget.py --clippy.
 * Integer overflow checks are back on in the dev profile, and the new
   -Doverflow_checks=true meson option turns them on in a release build; the
   Linux CI builds and smoke-tests with it, so an overflow aborts with its
@@ -46,12 +46,10 @@ Southstar Browser 0.9.11-dev:
   HPACK against RFC 7541's examples, chunked bodies split at every byte,
   HTTP/1.1 lines and an HTTP/2 exchange, hand-built BMP and GIF images, and
   WebVTT cues.
-* deny.toml and a supply-chain workflow check the dependency tree: cargo-deny
-  on every change to a manifest or Cargo.lock (RustSec advisories, yanked
-  crates, licences compatible with NSL-1.0 OR GPL-3.0-or-later, crates.io as
-  the only source, and a ban on Servo/Firefox engine crates and libcurl),
-  and cargo-audit every night so a new advisory against an unchanged
-  Cargo.lock still turns red.
+* deny.toml states the dependency policy and the Linux CI build checks it
+  with cargo-deny on every push: RustSec advisories, yanked crates, licences
+  compatible with NSL-1.0 OR GPL-3.0-or-later, crates.io as the only source,
+  and a ban on Servo/Firefox engine crates and libcurl.
 * The CSP checks parse URLs through rust/url directly instead of a C round
   trip into rust/net's ns_url_* exports, and have unit tests: 'self',
   default-src fallback, wildcards, ports and paths, the http-to-https

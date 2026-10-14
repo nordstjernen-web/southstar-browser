@@ -23,50 +23,6 @@ permissions:
   contents: read
 
 jobs:
-  rust-lints:
-    name: rust format, lints, unsafe budget and unit tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 100
-
-      - name: Install Rust
-        shell: bash
-        run: |
-          if ! command -v rustup >/dev/null; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain none
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-            export PATH="$HOME/.cargo/bin:$PATH"
-          fi
-          rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
-            --profile minimal --component clippy,rustfmt
-
-      - name: cargo fmt
-        run: cargo fmt --check
-
-      - name: cargo clippy and the per-crate unsafe budget
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          baseline=()
-          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != 0000000000000000000000000000000000000000 ] \
-              && git fetch --no-tags --depth=100 origin "$BASE_SHA"; then
-            baseline=(--baseline "$BASE_SHA")
-          fi
-          python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
-
-      - name: cargo test
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglib2.0-dev
-          ./scripts/rust-tests.sh
-
   build:
     name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
     runs-on: ubuntu-${{ matrix.ubuntu }}
@@ -84,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 100
 
       - name: Install build dependencies
         run: |
@@ -108,6 +66,38 @@ jobs:
             --profile minimal --component clippy,rustfmt
           rustc --version
           cargo --version
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo clippy and the per-crate unsafe budget
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          baseline=()
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != 0000000000000000000000000000000000000000 ] \
+              && git fetch --no-tags --depth=100 origin "$BASE_SHA"; then
+            baseline=(--baseline "$BASE_SHA")
+          fi
+          python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: cargo test
+        run: ./scripts/rust-tests.sh
+
+      - name: Restore cargo-deny
+        id: cargo-deny-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: cargo-deny-0.20.2-${{ runner.os }}
+
+      - name: Install cargo-deny
+        if: steps.cargo-deny-cache.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-deny@0.20.2
+
+      - name: cargo deny
+        run: cargo deny --locked check --hide-inclusion-graph
 
       - name: Restore ccache
         uses: actions/cache@v6
