@@ -1156,6 +1156,111 @@ fn font_variant_slot(token: &[u8]) -> Option<usize> {
         .position(|s| !s.ends_with('(') && word_is_one_of(token, s))
 }
 
+fn font_variant_longhand(t: &[u8], slots: core::ops::RangeInclusive<usize>) -> Option<Value> {
+    let words = split_gspace_words(t);
+    if let [w] = words.as_slice()
+        && eq(w, b"normal")
+    {
+        return Some(Value::keyword(b"normal".to_vec()));
+    }
+    let mut chosen: [Option<Vec<u8>>; 22] = Default::default();
+    for w in &words {
+        let i = font_variant_slot(w).filter(|i| slots.contains(i))?;
+        if chosen[i].is_some() {
+            return None;
+        }
+        chosen[i] = Some(lower(w));
+    }
+    if words.is_empty() {
+        return None;
+    }
+    let canonical: Vec<Vec<u8>> = chosen.into_iter().flatten().collect();
+    Some(Value::keyword(canonical.join(&b' ')))
+}
+
+fn font_language_override(t: &[u8]) -> Option<Value> {
+    if eq(t, b"normal") {
+        return Some(Value::keyword(b"normal".to_vec()));
+    }
+    let quote = *t.first()?;
+    if !matches!(quote, b'"' | b'\'') || t.len() < 2 || t[t.len() - 1] != quote {
+        return None;
+    }
+    let mut inner = &t[1..t.len() - 1];
+    if !(1..=4).contains(&inner.len()) || !inner.iter().all(|c| (b' '..=b'~').contains(c)) {
+        return None;
+    }
+    if inner.contains(&quote) || inner.contains(&b'\\') {
+        return None;
+    }
+    while let Some(rest) = inner.strip_suffix(b" ") {
+        inner = rest;
+    }
+    let mut out = vec![b'"'];
+    out.extend_from_slice(inner);
+    out.push(b'"');
+    Some(Value::keyword(out))
+}
+
+fn hanging_punctuation(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    if let [w] = words.as_slice()
+        && eq(w, b"none")
+    {
+        return Some(Value::keyword(b"none".to_vec()));
+    }
+    let (mut first, mut last, mut end) = (false, false, false);
+    for w in &words {
+        let seen = if eq(w, b"first") {
+            &mut first
+        } else if eq(w, b"last") {
+            &mut last
+        } else if eq(w, b"force-end") || eq(w, b"allow-end") {
+            &mut end
+        } else {
+            return None;
+        };
+        if *seen {
+            return None;
+        }
+        *seen = true;
+    }
+    (!words.is_empty()).then(|| Value::keyword(lower(&words.join(&b' '))))
+}
+
+fn text_autospace(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    if let [w] = words.as_slice()
+        && word_is_one_of(w, "normal auto no-autospace")
+    {
+        return Some(Value::keyword(lower(w)));
+    }
+    const ORDER: [&[u8]; 5] = [
+        b"ideograph-alpha",
+        b"ideograph-numeric",
+        b"punctuation",
+        b"insert",
+        b"replace",
+    ];
+    let mut seen = [false; 5];
+    for w in &words {
+        let i = ORDER.iter().position(|o| eq(o, w))?;
+        if seen[i] {
+            return None;
+        }
+        seen[i] = true;
+    }
+    if !(seen[0] || seen[1] || seen[2]) || (seen[3] && seen[4]) {
+        return None;
+    }
+    let canonical: Vec<&[u8]> = ORDER
+        .iter()
+        .zip(seen)
+        .filter_map(|(o, on)| on.then_some(*o))
+        .collect();
+    Some(Value::keyword(canonical.join(&b' ')))
+}
+
 fn font_variant(t: &[u8]) -> Option<Value> {
     let words = split_gspace_words(t);
     if let [w] = words.as_slice()
@@ -1667,9 +1772,21 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::FontKerning => keyword_in(t, &[b"auto", b"normal", b"none"]),
         P::FontSynthesis => font_synthesis(t),
         P::FontSizeAdjust => font_size_adjust(t),
+        P::FontVariantCaps => font_variant_longhand(t, 4..=4),
+        P::FontVariantNumeric => font_variant_longhand(t, 12..=16),
+        P::FontVariantEastAsian => font_variant_longhand(t, 17..=19),
+        P::FontVariantPosition => font_variant_longhand(t, 20..=20),
+        P::FontVariantEmoji => font_variant_longhand(t, 21..=21),
+        P::FontOpticalSizing => keyword_in(t, &[b"auto", b"none"]),
+        P::FontLanguageOverride => font_language_override(t),
+        P::HangingPunctuation => hanging_punctuation(t),
+        P::TextAutospace => text_autospace(t),
         P::FontVariantLigatures => {
-            let kw = lower(t);
-            font::ligatures_valid(&kw).then(|| Value::keyword(kw))
+            if eq(t.trim_ascii(), b"none") {
+                Some(Value::keyword(b"none".to_vec()))
+            } else {
+                font_variant_longhand(t, 0..=3)
+            }
         }
         P::FontFeatureSettings => settings_prop(t, font::feature_settings_valid),
         P::FontVariationSettings => settings_prop(t, font::variation_settings_valid),

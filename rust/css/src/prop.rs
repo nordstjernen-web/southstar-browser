@@ -252,10 +252,19 @@ pub enum Prop {
     MaskComposite,
     FontSynthesis,
     FontSizeAdjust,
+    FontVariantCaps,
+    FontVariantNumeric,
+    FontVariantEastAsian,
+    FontVariantPosition,
+    FontVariantEmoji,
+    FontOpticalSizing,
+    FontLanguageOverride,
+    HangingPunctuation,
+    TextAutospace,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 244] = [
+    pub(crate) const ALL: [Prop; 253] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -500,6 +509,15 @@ impl Prop {
         Prop::MaskComposite,
         Prop::FontSynthesis,
         Prop::FontSizeAdjust,
+        Prop::FontVariantCaps,
+        Prop::FontVariantNumeric,
+        Prop::FontVariantEastAsian,
+        Prop::FontVariantPosition,
+        Prop::FontVariantEmoji,
+        Prop::FontOpticalSizing,
+        Prop::FontLanguageOverride,
+        Prop::HangingPunctuation,
+        Prop::TextAutospace,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -529,6 +547,15 @@ impl Prop {
                 | Prop::FontKerning
                 | Prop::FontSynthesis
                 | Prop::FontSizeAdjust
+                | Prop::FontVariantCaps
+                | Prop::FontVariantNumeric
+                | Prop::FontVariantEastAsian
+                | Prop::FontVariantPosition
+                | Prop::FontVariantEmoji
+                | Prop::FontOpticalSizing
+                | Prop::FontLanguageOverride
+                | Prop::HangingPunctuation
+                | Prop::TextAutospace
                 | Prop::FontVariantLigatures
                 | Prop::FontFeatureSettings
                 | Prop::FontVariationSettings
@@ -850,6 +877,15 @@ impl Prop {
             Prop::MaskComposite => c"mask-composite",
             Prop::FontSynthesis => c"font-synthesis",
             Prop::FontSizeAdjust => c"font-size-adjust",
+            Prop::FontVariantCaps => c"font-variant-caps",
+            Prop::FontVariantNumeric => c"font-variant-numeric",
+            Prop::FontVariantEastAsian => c"font-variant-east-asian",
+            Prop::FontVariantPosition => c"font-variant-position",
+            Prop::FontVariantEmoji => c"font-variant-emoji",
+            Prop::FontOpticalSizing => c"font-optical-sizing",
+            Prop::FontLanguageOverride => c"font-language-override",
+            Prop::HangingPunctuation => c"hanging-punctuation",
+            Prop::TextAutospace => c"text-autospace",
         }
     }
 }

@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 251] = [
+const INITIALS: [(&[u8], &CStr); 260] = [
     (b"padding-top", c"0px"),
     (b"scroll-margin-top", c"0px"),
     (b"scroll-margin-right", c"0px"),
@@ -69,6 +69,15 @@ const INITIALS: [(&[u8], &CStr); 251] = [
     (b"font-kerning", c"auto"),
     (b"font-synthesis", c"weight style small-caps position"),
     (b"font-size-adjust", c"none"),
+    (b"font-variant-caps", c"normal"),
+    (b"font-variant-numeric", c"normal"),
+    (b"font-variant-east-asian", c"normal"),
+    (b"font-variant-position", c"normal"),
+    (b"font-variant-emoji", c"normal"),
+    (b"font-optical-sizing", c"auto"),
+    (b"font-language-override", c"normal"),
+    (b"hanging-punctuation", c"none"),
+    (b"text-autospace", c"normal"),
     (b"font-variant-ligatures", c"normal"),
     (b"font-feature-settings", c"normal"),
     (b"font-variation-settings", c"normal"),

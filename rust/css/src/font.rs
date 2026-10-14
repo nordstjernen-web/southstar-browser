@@ -775,36 +775,6 @@ pub(crate) fn family_canonical(text: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-pub(crate) fn ligatures_valid(s: &[u8]) -> bool {
-    if s.is_empty() {
-        return false;
-    }
-    if s == b"normal" || s == b"none" {
-        return true;
-    }
-    let mut any = false;
-    for tok in s.split(|&c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | 0x0c)) {
-        if tok.is_empty() {
-            continue;
-        }
-        any = true;
-        if !matches!(
-            tok,
-            b"common-ligatures"
-                | b"no-common-ligatures"
-                | b"discretionary-ligatures"
-                | b"no-discretionary-ligatures"
-                | b"historical-ligatures"
-                | b"no-historical-ligatures"
-                | b"contextual"
-                | b"no-contextual"
-        ) {
-            return false;
-        }
-    }
-    any
-}
-
 fn feature_skip_ws(s: &[u8], mut p: usize) -> usize {
     while p < s.len() && is_gspace(s[p]) {
         p += 1;
