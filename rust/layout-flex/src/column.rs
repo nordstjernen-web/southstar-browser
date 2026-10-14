@@ -498,9 +498,27 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_height: f64) -> f64 {
                 _ => !centered && cross_start_right,
             };
             if (stretches || ml_auto || mr_auto) && (outer_width(c) - ln.cross).abs() > 0.01 {
+                let main_margins = c.margin();
                 c.set_x(inner_x);
                 c.set_y(inner_y);
                 layout_item(c, ln.cross, false, child_inherited);
+                let mut m = c.margin();
+                m.top = main_margins.top;
+                m.bottom = main_margins.bottom;
+                c.set_margin(m);
+            }
+            let cross_free = ln.cross - outer_width(c);
+            if (ml_auto || mr_auto) && cross_free > 0.01 {
+                let mut m = c.margin();
+                match (ml_auto, mr_auto) {
+                    (true, true) => {
+                        m.left += cross_free / 2.0;
+                        m.right += cross_free / 2.0;
+                    }
+                    (true, false) => m.left += cross_free,
+                    _ => m.right += cross_free,
+                }
+                c.set_margin(m);
             }
             let item_outer_w = outer_width(c);
             let cx = if ml_auto || mr_auto {

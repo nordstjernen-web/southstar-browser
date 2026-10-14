@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::BoxRef;
+use southstar_layout::{BoxRef, Edges};
 use southstar_style::PropId;
 
 use crate::Frame;
@@ -114,17 +114,11 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
         auto_margins += i32::from(has_auto(it.b, PropId::MarginLeft));
         auto_margins += i32::from(has_auto(it.b, PropId::MarginRight));
     }
+    let mut main_share = 0.0;
     if auto_margins > 0 && free_main > 0.0 {
-        let share = free_main / f64::from(auto_margins);
+        main_share = free_main / f64::from(auto_margins);
         for it in &list {
-            let mut m = it.b.margin();
-            if has_auto(it.b, PropId::MarginLeft) {
-                m.left += share;
-            }
-            if has_auto(it.b, PropId::MarginRight) {
-                m.right += share;
-            }
-            it.b.set_margin(m);
+            add_auto_main_share(it.b, main_share);
         }
         free_main = 0.0;
     }
@@ -143,7 +137,11 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
         c.set_y(inner_y);
         c.set_flex_main(a);
         c.set_definite_height_before_flex(c.definite_height());
+        let margins = c.margin();
         layout_box(c, layout_width(c, a), child_inherited);
+        if main_share > 0.0 {
+            keep_main_margins(c, margins);
+        }
         c.set_flex_pass(c.x(), c.y());
         let item_h = outer_height(c);
         it.extra = item_h;
@@ -238,7 +236,11 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
             c.set_y(py);
             shift_box_tree(c, cursor_x - inner_x, cy - inner_y);
         } else {
+            let margins = c.margin();
             layout_box(c, item_layout_width, child_inherited);
+            if main_share > 0.0 {
+                keep_main_margins(c, margins);
+            }
         }
         if !stretches {
             fit_line_keyword_limits(c, cross_size, cw);
@@ -260,4 +262,25 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
         }
     }
     inner_y + cross_size
+}
+
+fn add_auto_main_share(c: BoxRef<'_>, share: f64) {
+    let mut m = c.margin();
+    if has_auto(c, PropId::MarginLeft) {
+        m.left += share;
+    }
+    if has_auto(c, PropId::MarginRight) {
+        m.right += share;
+    }
+    c.set_margin(m);
+}
+
+fn keep_main_margins(c: BoxRef<'_>, before: Edges) {
+    if !has_auto(c, PropId::MarginLeft) && !has_auto(c, PropId::MarginRight) {
+        return;
+    }
+    let mut m = c.margin();
+    m.left = before.left;
+    m.right = before.right;
+    c.set_margin(m);
 }
