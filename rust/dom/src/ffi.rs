@@ -339,11 +339,11 @@ impl<'a> Attr<'a> {
 }
 
 pub fn set_attr(node: Node, name: &CStr, value: &CStr) {
-    unsafe { attrs::ns_element_set_attr(node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    crate::attrs::set_attribute(node, name, Some(value.to_bytes()));
 }
 
 pub fn remove_attr(node: Node, name: &CStr) {
-    unsafe { attrs::ns_element_remove_attr(node.as_mut_ptr(), name.as_ptr()) };
+    crate::attrs::remove_attribute(node, name);
 }
 
 pub fn detach(node: Node) {

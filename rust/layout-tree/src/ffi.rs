@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -36,7 +36,6 @@ unsafe extern "C" {
     fn ns_layout_is_inline_dom(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
     fn ns_layout_continues_inline_run(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
     fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean;
-    fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
 }
 
 #[derive(Clone, Copy)]
@@ -133,8 +132,7 @@ pub fn style_is_absolute_or_fixed(s: Option<StyleRef<'_>>) -> bool {
 }
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {
-    let s = s.map_or(ptr::null(), CStr::as_ptr);
-    unsafe { ns_parse_int(s, dflt, min_v, max_v) }
+    southstar_dom::controls::parse_int(s, dflt, min_v, max_v)
 }
 
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {

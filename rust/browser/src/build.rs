@@ -231,7 +231,7 @@ pub fn submit_form(b: &NsBrowser, clicked: Option<Node<'_>>) {
     let form = if from_form {
         Some(clicked)
     } else {
-        ffi::form_owner(clicked, doc)
+        ffi::form_owner(clicked)
     };
     let Some(form) = form else {
         return;

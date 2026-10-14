@@ -57,7 +57,6 @@ unsafe extern "C" {
     fn ns_css_set_font_metrics_cb(cb: Option<FontMetricsFn>);
     fn ns_font_family_loaded(family: *const c_char) -> GBoolean;
     fn ns_font_generation() -> c_uint;
-    fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
     fn ns_texture_get_width(texture: *mut c_void) -> c_int;
     fn ns_texture_get_height(texture: *mut c_void) -> c_int;
     fn g_string_new(init: *const c_char) -> *mut GString;
@@ -147,7 +146,7 @@ pub fn font_generation() -> u32 {
 }
 
 pub fn parse_int(text: &CStr, dflt: i32, min: i32, max: i32) -> i32 {
-    unsafe { ns_parse_int(text.as_ptr(), dflt, min, max) }
+    southstar_dom::controls::parse_int(Some(text), dflt, min, max)
 }
 
 pub fn format_g8(value: f64) -> Vec<u8> {

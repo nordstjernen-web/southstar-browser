@@ -74,6 +74,10 @@ Southstar Browser 0.9.11-dev:
   the JavaScript bindings go through rust/dom's Rust API (attrs::set_attribute,
   attrs::remove_attribute, Node::append, Node::detach) instead of its C
   exports, removing each crate's copy of those extern declarations.
+* Form owners, effective disabled state, editable values, integer attribute
+  parsing, element-name checks and subtree walks are also called through
+  rust/dom's Rust API; six of its C exports were left without callers and
+  are gone.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

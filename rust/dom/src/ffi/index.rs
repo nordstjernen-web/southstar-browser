@@ -25,17 +25,6 @@ unsafe fn with_doc_and_root(doc: *mut NsNode, root: *mut NsNode, f: fn(Node, Nod
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_find_first_element(
-    root: *const NsNode,
-    tag: *const c_char,
-) -> *mut NsNode {
-    let (Some(root), Some(tag)) = (unsafe { node(root) }, c_str(tag)) else {
-        return ptr::null_mut();
-    };
-    mut_ptr(index::find_first_element(root, tag))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode {
     let (Some(root), Some(id)) = (unsafe { node(root) }, c_str(id)) else {
         return ptr::null_mut();

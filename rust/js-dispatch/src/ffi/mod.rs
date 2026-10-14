@@ -80,7 +80,6 @@ unsafe extern "C" {
     fn ns_window_named_suspend();
     fn ns_window_named_resume();
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
-    fn ns_node_find_first_element(root: *const NsNode, tag: *const c_char) -> *mut NsNode;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -412,7 +411,7 @@ pub(crate) fn arm_invalidate(el: Element) {
 }
 
 pub(crate) fn first_element(root: Element, tag: &CStr) -> Option<Element> {
-    node(unsafe { ns_node_find_first_element(root.as_ptr(), tag.as_ptr()) })
+    southstar_dom::index::find_first_element(root, tag)
 }
 
 pub(crate) fn is_shadow_root(n: Element) -> bool {

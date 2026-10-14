@@ -101,7 +101,7 @@ pub fn submit_form_from(fc: &Ctx, nav: &NavCapture, trigger: Node) {
         return;
     }
     let doc = fc.doc().or_else(|| ffi::root(trigger));
-    let Some(form) = ffi::form_owner(trigger, doc) else {
+    let Some(form) = ffi::form_owner(trigger) else {
         return;
     };
     let root = doc.unwrap_or(form);

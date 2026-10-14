@@ -102,13 +102,6 @@ pub unsafe extern "C" fn ns_element_set_attr_ns(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_remove_attr(el: *mut NsNode, name: *const c_char) {
-    if let (Some(el), Some(name)) = (element(el), c_str(name)) {
-        attrs::remove(el, name);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_element_remove_attr_ns(
     el: *mut NsNode,
     namespace_uri: *const c_char,

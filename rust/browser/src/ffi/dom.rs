@@ -11,22 +11,13 @@ use southstar_glib::{GBoolean, GStr};
 use super::glib::{GString, StrBufOwned};
 
 unsafe extern "C" {
-    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
-    fn ns_node_next_in_subtree(
-        n: *const NsNode,
-        root: *const NsNode,
-        descend: GBoolean,
-    ) -> *mut NsNode;
     fn ns_element_hidden_until_found(el: *const NsNode) -> GBoolean;
     fn ns_details_fragment_needs_open(details: *const NsNode, child: *const NsNode) -> GBoolean;
     fn ns_node_find_fragment_target(root: *const NsNode, frag: *const c_char) -> *mut NsNode;
-    fn ns_node_find_first_element(root: *const NsNode, tag: *const c_char) -> *mut NsNode;
     fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
     fn ns_node_dump(n: *const NsNode) -> *mut GString;
     pub fn ns_node_free(n: *mut NsNode);
-    fn ns_node_editable_value(n: *const NsNode) -> *const c_char;
     fn ns_node_is_text_input(n: *const NsNode) -> GBoolean;
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_form_first_invalid(
         form: *const NsNode,
         n: *const NsNode,
@@ -56,11 +47,11 @@ fn opt(s: Option<&CStr>) -> *const c_char {
 }
 
 pub fn is_named(n: Node<'_>, tag: &CStr) -> bool {
-    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
+    n.element_name() == Some(tag.to_bytes())
 }
 
 pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_node_next_in_subtree(n.as_ptr(), root.as_ptr(), 1)) }
+    southstar_dom::index::next_in_subtree(n, Some(root), true)
 }
 
 pub fn hidden_until_found(n: Node<'_>) -> bool {
@@ -89,7 +80,7 @@ pub fn find_fragment_target<'a>(doc: Option<Node<'a>>, frag: &CStr) -> Option<No
 }
 
 pub fn find_first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_node_find_first_element(root.as_ptr(), tag.as_ptr())) }
+    southstar_dom::index::find_first_element(root, tag)
 }
 
 pub fn collect_text(n: Node<'_>) -> Option<GStr> {
@@ -116,16 +107,15 @@ pub unsafe fn node_free(n: *mut NsNode) {
 }
 
 pub fn editable_value(n: Node<'_>) -> Option<&CStr> {
-    let v = unsafe { ns_node_editable_value(n.as_ptr()) };
-    (!v.is_null()).then(|| unsafe { CStr::from_ptr(v) })
+    Some(southstar_dom::controls::editable_value(n))
 }
 
 pub fn is_text_input(n: Node<'_>) -> bool {
     unsafe { ns_node_is_text_input(n.as_ptr()) != 0 }
 }
 
-pub fn form_owner<'a>(control: Node<'a>, doc: Node<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_form_owner(control.as_ptr(), doc.as_ptr())) }
+pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
+    southstar_dom::controls::form_owner(control)
 }
 
 pub fn form_first_invalid<'a>(form: Node<'a>, doc: Node<'a>) -> Option<Node<'a>> {

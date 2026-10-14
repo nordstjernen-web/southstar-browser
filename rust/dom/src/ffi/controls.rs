@@ -30,16 +30,6 @@ unsafe fn set_flag(out: *mut GBoolean, value: bool) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_parse_int(
-    s: *const c_char,
-    dflt: c_int,
-    min_v: c_int,
-    max_v: c_int,
-) -> c_int {
-    controls::parse_int(c_str(s), dflt, min_v, max_v)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_input_type_has_number_value(ty: *const c_char) -> GBoolean {
     glib::boolean(controls::type_has_number_value(c_str(ty)))
 }
@@ -269,14 +259,6 @@ pub unsafe extern "C" fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_owner(
-    control: *const NsNode,
-    _doc: *const NsNode,
-) -> *const NsNode {
-    Node::ptr_or_null(unsafe { node(control) }.and_then(controls::form_owner))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_form_reset_owned_controls(
     form: *mut NsNode,
     root: *mut NsNode,
@@ -290,9 +272,4 @@ pub unsafe extern "C" fn ns_form_reset_owned_controls(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_element_supports_disabled(el: *const NsNode) -> GBoolean {
     glib::boolean(unsafe { node(el) }.is_some_and(controls::supports_disabled))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { node(el) }.is_some_and(controls::effectively_disabled))
 }

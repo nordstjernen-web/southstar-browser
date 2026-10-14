@@ -282,7 +282,6 @@ fn fieldset_listed(scan: Element, depth: i32, visit: &mut dyn FnMut(Element)) {
 fn radio_nodes(
     form: Element,
     scan: Element,
-    doc: Element,
     name: &[u8],
     depth: i32,
     visit: &mut dyn FnMut(Element),
@@ -294,14 +293,14 @@ fn radio_nodes(
         if hidden_child(child) {
             continue;
         }
-        if name_in(child, RADIO_CONTROLS) && form_owner(child, doc) == Some(form) {
+        if name_in(child, RADIO_CONTROLS) && form_owner(child) == Some(form) {
             let id = child.attr(c"id").map(CStr::to_bytes);
             let nm = child.attr(c"name").map(CStr::to_bytes);
             if id == Some(name) || nm == Some(name) {
                 visit(child);
             }
         }
-        radio_nodes(form, child, doc, name, depth + 1, visit);
+        radio_nodes(form, child, name, depth + 1, visit);
     }
 }
 
@@ -412,7 +411,7 @@ fn build(scope: &mut Scope<'_>, back: &Live) -> (Value, u32) {
         LiveKind::RadioNodeList => {
             if is_named(root, b"form") {
                 let doc = root.root();
-                radio_nodes(root, doc, doc, back.param(), 0, &mut |n| add(scope, n));
+                radio_nodes(root, doc, back.param(), 0, &mut |n| add(scope, n));
             }
         }
         LiveKind::Links => links(root, 0, &mut |n| add(scope, n)),

@@ -104,7 +104,6 @@ unsafe extern "C" {
         page_bottom: f64,
     );
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
-    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
     fn g_array_free(array: *mut GArray, free_segment: glib::GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
@@ -116,7 +115,7 @@ pub fn err(bytes: &[u8]) {
 }
 
 pub fn is_named(n: Node, tag: &CStr) -> bool {
-    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
+    n.element_name() == Some(tag.to_bytes())
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {

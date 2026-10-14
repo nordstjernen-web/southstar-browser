@@ -81,7 +81,6 @@ pub use value::{NsCssValue, RawAreaRect, RawAreas};
 
 unsafe extern "C" {
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
-    fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
     fn g_ascii_formatd(
         buffer: *mut c_char,
         buf_len: c_int,
@@ -100,7 +99,7 @@ pub(crate) fn viewport() -> (f64, f64) {
 
 pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
     let text = std::ffi::CString::new(text).unwrap_or_default();
-    unsafe { ns_parse_int(text.as_ptr(), default, min, max) }
+    southstar_dom::controls::parse_int(Some(&text), default, min, max)
 }
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {

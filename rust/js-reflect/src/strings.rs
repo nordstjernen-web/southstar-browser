@@ -7,7 +7,7 @@ use core::ffi::CStr;
 use southstar_dom::{Kind, controls};
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, Js};
+use crate::ffi;
 use crate::tables::{self, Keywords};
 use crate::{
     Element, JsResult, is_custom_element, is_named, keyword_match, name_is_any_of, normalize,
@@ -350,20 +350,19 @@ fn autocapitalize_canonical(raw: Option<&CStr>) -> Option<&'static [u8]> {
     }
 }
 
-fn autocapitalize_of(js: Js, n: Element) -> Option<&'static [u8]> {
+fn autocapitalize_of(n: Element) -> Option<&'static [u8]> {
     if let Some(own) = autocapitalize_canonical(ffi::attr_c(n, c"autocapitalize")) {
         return Some(own);
     }
     if !name_is_any_of(n, tables::AUTOCAPITALIZE_INHERITING) {
         return None;
     }
-    let form = ffi::form_owner(js, n)?;
+    let form = ffi::form_owner(n)?;
     autocapitalize_canonical(ffi::attr_c(form, c"autocapitalize"))
 }
 
 pub fn autocapitalize_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    let js = ffi::js_of(scope);
-    let value = ffi::unwrap_node(this).and_then(|n| autocapitalize_of(js, n));
+    let value = ffi::unwrap_node(this).and_then(autocapitalize_of);
     text(scope, value.unwrap_or_default())
 }
 

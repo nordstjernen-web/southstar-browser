@@ -338,11 +338,6 @@ unsafe extern "C" {
     );
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_node_next_in_subtree(
-        n: *const NsNode,
-        root: *const NsNode,
-        descend: GBoolean,
-    ) -> *mut NsNode;
     fn ns_layout_collect_videos(root: *const NsBox, out: *mut GPtrArray);
     fn g_get_monotonic_time() -> i64;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
@@ -512,13 +507,7 @@ pub fn node<'a>(p: *const c_void) -> Option<Node<'a>> {
 }
 
 pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_node_next_in_subtree(
-            n.as_ptr(),
-            root.as_ptr(),
-            glib::TRUE,
-        ))
-    }
+    southstar_dom::index::next_in_subtree(n, Some(root), true)
 }
 
 pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {

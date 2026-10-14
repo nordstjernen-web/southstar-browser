@@ -47,11 +47,9 @@ unsafe extern "C" {
         height: *mut c_int,
     ) -> GBoolean;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
 
@@ -133,14 +131,6 @@ pub(crate) fn current_url(js: Js) -> &'static [u8] {
     unsafe { CStr::from_ptr(ns_js_current_url(js.0)) }.to_bytes()
 }
 
-pub(crate) fn current_document(js: Js) -> *const NsNode {
-    if js.0.is_null() {
-        ptr::null()
-    } else {
-        unsafe { ns_js_current_document(js.0) }
-    }
-}
-
 pub(crate) fn resolved_url(scope: &mut Scope<'_>, js: Js, href: &'static [u8]) -> Value {
     let base = unsafe { ns_js_doc_base_url(js.0) };
     let mut out = None;
@@ -175,8 +165,8 @@ pub(crate) fn is_submit_trigger(node: Element) -> bool {
     unsafe { ns_node_is_submit_trigger(node.as_ptr()) != glib::FALSE }
 }
 
-pub(crate) fn form_owner(js: Js, node: Element) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_form_owner(node.as_ptr(), current_document(js))) }
+pub(crate) fn form_owner(node: Element) -> Option<Element> {
+    southstar_dom::controls::form_owner(node)
 }
 
 pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &'static CStr) -> JsResult {

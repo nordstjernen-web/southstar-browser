@@ -42,7 +42,6 @@ unsafe extern "C" {
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_form_listed_controls(form: *const NsNode, include_image: GBoolean, out: *mut GPtrArray);
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn g_ptr_array_new() -> *mut GPtrArray;
 }
 
@@ -144,8 +143,8 @@ pub(crate) fn form_listed_controls(form: Element, mut visit: impl FnMut(Element)
     }
 }
 
-pub(crate) fn form_owner(control: Element, doc: Element) -> Option<Element> {
-    node(unsafe { ns_form_owner(control.as_ptr(), doc.as_ptr()) })
+pub(crate) fn form_owner(control: Element) -> Option<Element> {
+    southstar_dom::controls::form_owner(control)
 }
 
 pub(crate) fn with_text<R>(

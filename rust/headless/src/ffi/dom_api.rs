@@ -34,14 +34,11 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn ns_form_control_length_limits_apply(n: *const NsNode) -> GBoolean;
     fn ns_node_set_editable_value(n: *mut NsNode, value: *const c_char);
-    fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean;
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_form_first_invalid(
         form: *const NsNode,
         n: *const NsNode,
         doc: *const NsNode,
     ) -> *const NsNode;
-    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode;
     fn ns_node_is_editable(n: *const NsNode) -> GBoolean;
     fn ns_node_flatten_editable(n: *mut NsNode);
@@ -56,7 +53,6 @@ unsafe extern "C" {
         out_target: *mut *const c_char,
     ) -> *mut c_char;
     fn ns_input_is_checked(n: *const NsNode) -> GBoolean;
-    fn ns_node_find_first_element(root: *const NsNode, tag: *const c_char) -> *mut NsNode;
     fn ns_node_is_contenteditable_host(n: *const NsNode) -> GBoolean;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn atol(s: *const c_char) -> c_long;
@@ -111,11 +107,9 @@ pub fn collect_inputs(form: Node, root: Node, submitter: Option<Node>) -> Vec<u8
 }
 
 pub fn editable_value(n: Node) -> Vec<u8> {
-    let v = unsafe { ns_node_editable_value(n.as_ptr()) };
-    if v.is_null() {
-        return Vec::new();
-    }
-    unsafe { CStr::from_ptr(v) }.to_bytes().to_vec()
+    southstar_dom::controls::editable_value(n)
+        .to_bytes()
+        .to_vec()
 }
 
 pub fn has_editable_value(n: Node) -> bool {
@@ -148,11 +142,11 @@ pub fn set_editable_value(n: Node, value: &[u8]) {
 }
 
 pub fn effectively_disabled(el: Node) -> bool {
-    unsafe { ns_element_effectively_disabled(el.as_ptr()) != 0 }
+    southstar_dom::controls::effectively_disabled(el)
 }
 
-pub fn form_owner<'a>(control: Node<'a>, doc: Option<Node<'a>>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_form_owner(control.as_ptr(), Node::ptr_or_null(doc))) }
+pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
+    southstar_dom::controls::form_owner(control)
 }
 
 pub fn first_invalid<'a>(form: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
@@ -166,7 +160,7 @@ pub fn first_invalid<'a>(form: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
 }
 
 pub fn is_named(n: Node, tag: &CStr) -> bool {
-    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
+    n.element_name() == Some(tag.to_bytes())
 }
 
 pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
@@ -210,7 +204,7 @@ pub fn input_is_checked(n: Node) -> bool {
 }
 
 pub fn first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_node_find_first_element(root.as_ptr(), tag.as_ptr())) }
+    southstar_dom::index::find_first_element(root, tag)
 }
 
 pub fn is_contenteditable_host(n: Node) -> bool {

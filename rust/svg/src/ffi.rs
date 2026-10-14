@@ -220,11 +220,6 @@ unsafe extern "C" {
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     fn ns_node_collect_text(root: *const NsNode) -> *mut c_char;
-    fn ns_node_next_in_subtree(
-        node: *const NsNode,
-        root: *const NsNode,
-        descend: GBoolean,
-    ) -> *mut NsNode;
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
     fn ns_net_navigator_languages() -> *mut *mut c_char;
@@ -719,13 +714,7 @@ pub fn collect_text(n: Node<'_>) -> Option<GStr> {
 }
 
 pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>, descend: bool) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_node_next_in_subtree(
-            n.as_ptr(),
-            root.as_ptr(),
-            boolean(descend),
-        ))
-    }
+    southstar_dom::index::next_in_subtree(n, Some(root), descend)
 }
 
 pub fn navigator_languages() -> Vec<Vec<u8>> {

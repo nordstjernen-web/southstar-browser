@@ -249,7 +249,6 @@ unsafe extern "C" {
     );
     fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
-    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_csp_allows(
         csp: *const NsCsp,
@@ -278,7 +277,6 @@ unsafe extern "C" {
     fn ns_intersection_observers_tick(js: *mut NsJs);
     fn ns_resize_observers_tick(js: *mut NsJs);
     fn ns_attr_name_is_internal(name: *const c_char) -> GBoolean;
-    fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean;
     fn ns_js_frame_context(js: *mut NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_install_pdf_plugins(ctx: ContextHandle);
     fn ns_js_link_interface_ctors(ctx: ContextHandle);
@@ -316,7 +314,7 @@ fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
 }
 
 fn is_named(n: Node<'_>, tag: &CStr) -> bool {
-    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
+    n.element_name() == Some(tag.to_bytes())
 }
 
 fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
@@ -989,7 +987,7 @@ pub unsafe extern "C" fn ns_node_is_disabled_form_control(el: *const NsNode) -> 
                     .iter()
                     .any(|control| name.to_bytes().eq_ignore_ascii_case(control.to_bytes()))
             })
-            && unsafe { ns_element_effectively_disabled(el.as_ptr()) } != 0
+            && southstar_dom::controls::effectively_disabled(el)
     });
     glib::boolean(disabled)
 }

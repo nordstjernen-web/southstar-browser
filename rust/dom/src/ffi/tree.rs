@@ -2,27 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
-
 use southstar_glib::{self as glib, GBoolean};
 
-use super::{Node, NsNode, c_str};
+use super::{Node, NsNode};
 use crate::tree;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_root(n: *const NsNode) -> *const NsNode {
     Node::ptr_or_null(unsafe { Node::from_ptr(n) }.map(tree::root))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_element_named(
-    n: *const NsNode,
-    tag: *const c_char,
-) -> GBoolean {
-    let (Some(n), Some(tag)) = (unsafe { Node::from_ptr(n) }, c_str(tag)) else {
-        return glib::FALSE;
-    };
-    glib::boolean(n.element_name() == Some(tag.to_bytes()))
 }
 
 #[unsafe(no_mangle)]

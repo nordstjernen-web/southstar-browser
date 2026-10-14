@@ -103,7 +103,6 @@ const FETCH_DEST_SCRIPT: c_int = 1;
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_node_is_element_named(n: *const NsNode, tag: *const c_char) -> GBoolean;
     fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
@@ -264,7 +263,7 @@ unsafe fn cstr<'a>(p: *const c_char) -> Option<&'a CStr> {
 }
 
 pub(crate) fn is_named(n: Node, tag: &CStr) -> bool {
-    unsafe { ns_node_is_element_named(n.as_ptr(), tag.as_ptr()) != 0 }
+    n.element_name() == Some(tag.to_bytes())
 }
 
 pub(crate) fn hidden_child(n: Node) -> bool {

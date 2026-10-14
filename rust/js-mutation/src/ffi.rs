@@ -90,7 +90,6 @@ unsafe extern "C" {
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
     fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode);
-    fn ns_node_editable_value(n: *const NsNode) -> *const c_char;
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -366,7 +365,7 @@ pub(crate) fn focus_forget_subtree(js: Js, root: Element) {
 }
 
 pub(crate) fn editable_value<'a>(el: Element) -> Option<&'a CStr> {
-    unsafe { c_str(ns_node_editable_value(el.as_ptr())) }
+    Some(southstar_dom::controls::editable_value(el))
 }
 
 pub(crate) fn dispatch_event(js: Js, target: Element, kind: &CStr) {

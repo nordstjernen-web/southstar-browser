@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -65,7 +65,6 @@ unsafe extern "C" {
     fn ns_layout_image_dimension_attr(n: *const NsNode, name: *const c_char) -> f64;
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize);
     fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
-    fn ns_parse_int(s: *const c_char, dflt: c_int, min_v: c_int, max_v: c_int) -> c_int;
 }
 
 #[repr(C)]
@@ -246,7 +245,7 @@ pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
 }
 
 pub fn parse_int(s: &CStr, dflt: i32, min_v: i32, max_v: i32) -> i32 {
-    unsafe { ns_parse_int(s.as_ptr(), dflt, min_v, max_v) }
+    southstar_dom::controls::parse_int(Some(s), dflt, min_v, max_v)
 }
 
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {

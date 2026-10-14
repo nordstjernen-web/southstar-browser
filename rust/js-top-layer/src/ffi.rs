@@ -55,13 +55,11 @@ unsafe extern "C" {
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
     fn ns_js_consume_user_activation(js: *mut NsJs);
     fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
-    fn ns_element_effectively_disabled(el: *const NsNode) -> GBoolean;
     fn ns_node_is_focusable(el: *const NsNode) -> GBoolean;
     fn ns_node_tabindex(el: *const NsNode, out: *mut c_int) -> GBoolean;
     fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
     fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_form_owner(control: *const NsNode, doc: *const NsNode) -> *const NsNode;
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
 }
 
@@ -243,8 +241,7 @@ impl Js {
     }
 
     pub fn form_owner(self, el: Element) -> Option<Element> {
-        let doc = self.current_document().unwrap_or_else(|| el.root());
-        node(unsafe { ns_form_owner(el.as_ptr(), doc.as_ptr()) })
+        southstar_dom::controls::form_owner(el)
     }
 }
 
@@ -313,7 +310,7 @@ pub(crate) fn remove_attr(el: Element, name: &CStr) {
 }
 
 pub(crate) fn effectively_disabled(el: Element) -> bool {
-    unsafe { ns_element_effectively_disabled(el.as_ptr()) != 0 }
+    southstar_dom::controls::effectively_disabled(el)
 }
 
 pub(crate) fn is_focusable(el: Element) -> bool {

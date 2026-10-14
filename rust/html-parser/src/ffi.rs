@@ -36,7 +36,6 @@ unsafe extern "C" {
         backing: *mut c_void,
         destroy: Option<unsafe extern "C" fn(*mut c_void)>,
     );
-    fn ns_node_find_first_element(root: *const NsNode, tag: *const c_char) -> *mut NsNode;
     fn ns_node_find_by_id(root: *const NsNode, id: *const c_char) -> *mut NsNode;
     fn ns_template_content_get(template: *mut NsNode) -> *mut NsNode;
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
@@ -83,12 +82,7 @@ pub mod dom {
     }
 
     pub fn find_first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
-        unsafe {
-            Node::from_ptr(super::ns_node_find_first_element(
-                root.as_ptr(),
-                tag.as_ptr(),
-            ))
-        }
+        southstar_dom::index::find_first_element(root, tag)
     }
 
     pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
