@@ -1,4 +1,4 @@
-//! Southstar — C printf's %.Pg and %.Pf for doubles, byte for byte, with '.' as the decimal point whatever the locale.
+//! Southstar — C printf's %.Pg and %.Pf for doubles, byte for byte and whatever the locale, and ECMAScript's Number::toString.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -56,4 +56,36 @@ pub fn general(value: f64, precision: usize) -> String {
 
 pub fn g(value: f64) -> String {
     general(value, 6)
+}
+
+pub fn js(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value == 0.0 {
+        return "0".to_owned();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity" } else { "Infinity" }.to_owned();
+    }
+    let sign = if value < 0.0 { "-" } else { "" };
+    let shortest = format!("{:e}", value.abs());
+    let (mantissa, exponent) = shortest.split_once('e').unwrap_or((&shortest, "0"));
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let k = digits.len() as i64;
+    let n = exponent.parse::<i64>().unwrap_or(0) + 1;
+    let body = if k <= n && n <= 21 {
+        format!("{digits}{}", "0".repeat((n - k) as usize))
+    } else if 0 < n && n <= 21 {
+        let (int, frac) = digits.split_at(n as usize);
+        format!("{int}.{frac}")
+    } else if -6 < n && n <= 0 {
+        format!("0.{}{digits}", "0".repeat((-n) as usize))
+    } else {
+        let exp_sign = if n - 1 < 0 { '-' } else { '+' };
+        let (first, rest) = digits.split_at(1);
+        let dot = if rest.is_empty() { "" } else { "." };
+        format!("{first}{dot}{rest}e{exp_sign}{}", (n - 1).unsigned_abs())
+    };
+    format!("{sign}{body}")
 }

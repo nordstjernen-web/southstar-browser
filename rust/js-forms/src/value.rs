@@ -127,17 +127,6 @@ pub(crate) fn value_to_ms(kind: InputKind, v: Option<&[u8]>, as_date: bool) -> O
     }
 }
 
-fn number_to_string(d: f64) -> Vec<u8> {
-    let mut text = String::new();
-    for precision in 1..=17 {
-        text = southstar_numfmt::general(d, precision);
-        if text.parse::<f64>().ok() == Some(d) {
-            break;
-        }
-    }
-    text.into_bytes()
-}
-
 fn append_time(out: &mut String, ms_of_day: c_long) {
     let mut ms = dt::floormod(ms_of_day, 86_400_000);
     let h = ms / 3_600_000;
@@ -170,7 +159,7 @@ pub(crate) fn ms_to_value(kind: InputKind, v: f64) -> Option<Vec<u8>> {
     }
     let mut out = String::new();
     match kind {
-        InputKind::Number | InputKind::Range => return Some(number_to_string(v)),
+        InputKind::Number | InputKind::Range => return Some(southstar_numfmt::js(v).into_bytes()),
         InputKind::Date => {
             let (y, m, d) = dt::civil_from_days((v / DAY_MS).floor() as c_long);
             out.push_str(&format!("{y:04}-{m:02}-{d:02}"));
@@ -261,23 +250,6 @@ fn number_of(ty: &CStr, value: &[u8]) -> Option<f64> {
     controls::value_to_number(Some(ty), Some(&value))
 }
 
-fn sanitize_range(el: Element, value: &[u8]) -> Vec<u8> {
-    let lo = attr_bytes(el, c"min")
-        .and_then(|m| number_of(c"range", m))
-        .unwrap_or(0.0);
-    let hi = attr_bytes(el, c"max")
-        .and_then(|m| number_of(c"range", m))
-        .unwrap_or(100.0)
-        .max(lo);
-    let v = match number_of(c"range", value) {
-        None => lo + (hi - lo) / 2.0,
-        Some(v) if v < lo => lo,
-        Some(v) if v > hi => hi,
-        Some(v) => v,
-    };
-    southstar_numfmt::g(v).into_bytes()
-}
-
 pub(crate) fn sanitize(el: Element, value: &[u8]) -> Vec<u8> {
     if !named(el, "input") {
         return value.to_vec();
@@ -293,7 +265,7 @@ pub(crate) fn sanitize(el: Element, value: &[u8]) -> Vec<u8> {
                 Vec::new()
             }
         }
-        b"range" => sanitize_range(el, value),
+        b"range" => controls::sanitize_range(el, Some(&cstring(value))),
         b"color" => sanitize_color(value),
         b"date" | b"month" | b"week" | b"time" | b"datetime-local" => {
             if value_to_ms(kind_of(el), Some(value), false).is_some() {

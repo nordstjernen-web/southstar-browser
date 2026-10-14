@@ -343,9 +343,7 @@ fn number_to_value(kind: InputKind, v: f64) -> Option<Vec<u8>> {
     let mut out = String::new();
     match kind {
         InputKind::Number | InputKind::Range => {
-            return Some(
-                southstar_numfmt::general(if v == 0.0 { 0.0 } else { v }, 17).into_bytes(),
-            );
+            return Some(southstar_numfmt::js(v).into_bytes());
         }
         InputKind::Date => {
             let days = (v / DAY_MS + 0.5).floor();
@@ -420,6 +418,61 @@ fn step_size(kind: InputKind, step_attr: Option<&CStr>) -> f64 {
     value * step_scale(kind)
 }
 
+fn fraction_digits(v: f64) -> usize {
+    let text = southstar_numfmt::js(v);
+    let (mantissa, exponent) = text.split_once('e').unwrap_or((&text, "0"));
+    let fraction = mantissa.split_once('.').map_or(0, |(_, f)| f.len());
+    let exponent: i64 = exponent.parse().unwrap_or(0);
+    usize::try_from(fraction as i64 - exponent).unwrap_or(0)
+}
+
+fn round_to_decimals_of(value: f64, operands: &[f64]) -> f64 {
+    let digits = operands
+        .iter()
+        .map(|&v| fraction_digits(v))
+        .max()
+        .unwrap_or(0);
+    if digits > 15 || !value.is_finite() {
+        return value;
+    }
+    format!("{value:.digits$}").parse().unwrap_or(value)
+}
+
+pub fn sanitize_range(input: Node, value: Option<&CStr>) -> Vec<u8> {
+    southstar_numfmt::js(range_value(input, value)).into_bytes()
+}
+
+fn range_value(input: Node, value: Option<&CStr>) -> f64 {
+    let ty = Some(c"range");
+    let min = value_to_number(ty, input.attr(c"min")).unwrap_or(0.0);
+    let max = value_to_number(ty, input.attr(c"max")).unwrap_or(100.0);
+    let default = if max < min {
+        min
+    } else {
+        min + (max - min) / 2.0
+    };
+    let mut v = value_to_number(ty, value).unwrap_or(default);
+    if v < min {
+        v = min;
+    } else if max >= min && v > max {
+        v = max;
+    }
+    let step_attr = input.attr(c"step");
+    let step = step_size(InputKind::Range, step_attr);
+    if !step_attr.is_some_and(|s| ieq(s, "any")) && step > 0.0 && step.is_finite() {
+        let base = step_base(InputKind::Range, ty, input);
+        let mut k = ((v - base) / step + 0.5).floor();
+        if max >= min && base + k * step > max {
+            k = ((max - base) / step).floor();
+        }
+        if base + k * step < min {
+            k = ((min - base) / step).ceil();
+        }
+        v = round_to_decimals_of(base + k * step, &[base, step]);
+    }
+    v
+}
+
 pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
     if !named(input, b"input") {
         return Step::NotApplicable;
@@ -444,7 +497,11 @@ pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
     {
         return Step::Unchanged;
     }
-    let mut value = value_to_number(ty, used_value(input)).unwrap_or(0.0);
+    let mut value = if kind == InputKind::Range {
+        range_value(input, used_value(input))
+    } else {
+        value_to_number(ty, used_value(input)).unwrap_or(0.0)
+    };
     let before = value;
     let base = step_base(kind, ty, input);
     let q = (value - base) / step;
@@ -467,6 +524,9 @@ pub fn step_apply(input: Node, sign: c_int, n: f64, buffer_len: usize) -> Step {
     }
     if (sign > 0 && value < before) || (sign < 0 && value > before) {
         return Step::Unchanged;
+    }
+    if matches!(kind, InputKind::Number | InputKind::Range) {
+        value = round_to_decimals_of(value, &[before, base, step]);
     }
     match number_to_value(kind, value).filter(|text| text.len() < buffer_len) {
         Some(text) => Step::Applied(text),

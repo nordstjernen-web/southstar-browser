@@ -1,8 +1,8 @@
-//! Southstar — unit tests for the %g and %f formatters against values glibc's printf prints.
+//! Southstar — unit tests for the %g and %f formatters against glibc's printf, and Number::toString against V8.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use crate::{fixed, g, general};
+use crate::{fixed, g, general, js};
 
 #[test]
 fn general_matches_printf() {
@@ -60,4 +60,29 @@ fn fixed_matches_printf() {
         assert_eq!(fixed(value, precision), want, "%.{precision}f of {value:e}");
     }
     assert_eq!(fixed(f64::NAN, 3), "nan");
+}
+
+#[test]
+fn js_matches_number_to_string() {
+    let cases: &[(f64, &str)] = &[
+        (0.0, "0"),
+        (-0.0, "0"),
+        (0.4, "0.4"),
+        (0.1 + 0.2, "0.30000000000000004"),
+        (1e-7, "1e-7"),
+        (1.5e-7, "1.5e-7"),
+        (0.000001, "0.000001"),
+        (123.456, "123.456"),
+        (-42.0, "-42"),
+        (1e21, "1e+21"),
+        (1e20, "100000000000000000000"),
+        (123456789012345680000.0, "123456789012345680000"),
+        (1.7976931348623157e308, "1.7976931348623157e+308"),
+        (5e-324, "5e-324"),
+        (f64::NAN, "NaN"),
+        (f64::NEG_INFINITY, "-Infinity"),
+    ];
+    for &(value, want) in cases {
+        assert_eq!(js(value), want, "Number::toString of {value:e}");
+    }
 }

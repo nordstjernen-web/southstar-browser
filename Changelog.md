@@ -108,6 +108,15 @@ Southstar Browser 0.9.11-dev:
   media queries, canvas colours and fonts, form values, layout text, grid
   inspection and the headless dumps all share it; eight private %g helpers
   are gone.
+* <input type=number> and <input type=range> values are the HTML
+  Standard's "best representation" of the number, i.e. JavaScript's
+  Number::toString (rust/numfmt's js(), checked against V8 on two million
+  values): stepUp() on 0.2 with step 0.1 gives "0.3" instead of
+  "0.30000000000000004", and valueAsNumber = 1e-7 gives "1e-7", not "1e-07".
+  Range values are now sanitized as the standard says -- clamped, then
+  rounded to the nearest allowed step within min and max, ties upward --
+  so min=0 max=5 defaults to 3, step=0.001 turns 1/3 into 0.333, and
+  stepUp() starts from that sanitized value.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is
