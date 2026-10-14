@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_glib::{self as glib, GArray};
 
 use super::declarations::RawRule;
 use super::property::prop_of;
@@ -136,18 +136,6 @@ pub unsafe extern "C" fn ns_inline_style_serialize(style: *const c_char) -> *mut
     glib::strdup(&inline::serialize(
         unsafe { bytes(style) }.unwrap_or_default(),
     ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_value_strip_important(value: *mut c_char) -> GBoolean {
-    let Some(text) = (unsafe { bytes(value) }) else {
-        return glib::FALSE;
-    };
-    let (kept, important) = crate::scan::strip_important(text);
-    if important {
-        unsafe { *value.add(kept.len()) = 0 };
-    }
-    glib::boolean(important)
 }
 
 #[unsafe(no_mangle)]

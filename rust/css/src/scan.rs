@@ -124,7 +124,7 @@ pub(crate) fn skip_to_block_end(s: &[u8], mut p: usize, end: usize) -> usize {
     end
 }
 
-pub(crate) fn strip_important(text: &[u8]) -> (&[u8], bool) {
+pub fn strip_important(text: &[u8]) -> (&[u8], bool) {
     let end = text.len();
     let mut p = 0;
     let mut bang = None;

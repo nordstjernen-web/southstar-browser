@@ -15,7 +15,7 @@ thread_local! {
     static PARSE_DEPTH: Cell<i32> = const { Cell::new(0) };
 }
 
-pub(crate) fn declaration(property: &[u8], value: &[u8]) -> bool {
+pub fn declaration(property: &[u8], value: &[u8]) -> bool {
     if PARSE_DEPTH.get() >= MAX_AT_NESTING {
         return false;
     }
@@ -146,7 +146,7 @@ fn expr(s: &[u8], pp: &mut usize, depth: i32) -> bool {
     acc
 }
 
-pub(crate) fn condition(condition: &[u8], allow_bare_declaration: bool) -> bool {
+pub fn condition(condition: &[u8], allow_bare_declaration: bool) -> bool {
     let query = strip(condition);
     if allow_bare_declaration {
         let (colon, term) = scan_until(query, 0, query.len(), b":");

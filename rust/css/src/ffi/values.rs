@@ -130,15 +130,3 @@ pub unsafe extern "C" fn ns_css_value_equal(
     };
     glib::boolean(values::serialize(&a, false) == values::serialize(&b, false))
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_specified_canonical(
-    prop: *const c_char,
-    value: *const c_char,
-) -> *mut c_char {
-    let Some(value) = (unsafe { bytes(value) }) else {
-        return ptr::null_mut();
-    };
-    values::specified_canonical(unsafe { bytes(prop) }, value)
-        .map_or(ptr::null_mut(), |text| glib::strdup(&text))
-}

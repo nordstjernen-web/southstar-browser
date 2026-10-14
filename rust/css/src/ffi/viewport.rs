@@ -13,7 +13,7 @@ static WIDTH: AtomicU64 = AtomicU64::new(1000f64.to_bits());
 static HEIGHT: AtomicU64 = AtomicU64::new(800f64.to_bits());
 static FRAME_VIEWPORT: Mutex<Option<FrameViewport>> = Mutex::new(None);
 
-pub(crate) fn get() -> (f64, f64) {
+pub fn get() -> (f64, f64) {
     (
         f64::from_bits(WIDTH.load(Ordering::Relaxed)),
         f64::from_bits(HEIGHT.load(Ordering::Relaxed)),

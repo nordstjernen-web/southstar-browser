@@ -257,22 +257,6 @@ pub unsafe extern "C" fn ns_css_declarations_free(decls: *mut GArray) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_named_property_supported(name: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(name) }.is_some_and(declarations::named_property_supported))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_named_declaration_valid(
-    name: *const c_char,
-    text: *const c_char,
-) -> GBoolean {
-    let (Some(name), Some(text)) = (unsafe { bytes(name) }, unsafe { bytes(text) }) else {
-        return glib::TRUE;
-    };
-    glib::boolean(declarations::named_declaration_valid(name, text))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_declaration_valid(prop: c_int, text: *const c_char) -> GBoolean {
     let Some(text) = (unsafe { bytes(text) }) else {
         return glib::TRUE;

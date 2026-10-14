@@ -375,7 +375,7 @@ pub(crate) fn expands(name: &[u8], text: &[u8]) -> bool {
     !shorthand::expand(name, text).is_empty()
 }
 
-pub(crate) fn named_property_supported(name: &[u8]) -> bool {
+pub fn named_property_supported(name: &[u8]) -> bool {
     if name.is_empty() {
         return false;
     }
@@ -412,7 +412,7 @@ pub(crate) fn declaration_valid(prop: Option<Prop>, text: &[u8]) -> bool {
     property::parse_for(prop, text).is_some()
 }
 
-pub(crate) fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
+pub fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
     if text.is_empty() {
         return true;
     }

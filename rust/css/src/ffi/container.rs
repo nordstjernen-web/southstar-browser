@@ -295,11 +295,6 @@ pub unsafe extern "C" fn ns_css_container_shorthand_canonical(s: *const c_char) 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_condition_canonical(s: *const c_char) -> *mut c_char {
-    owned(unsafe { text(s) }.and_then(|s| container::condition_canonical(s.to_bytes())))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_container_rule_matches(
     condition: *const c_char,
     cache: *mut *mut c_void,

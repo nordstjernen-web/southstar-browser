@@ -59,7 +59,11 @@ mod values;
 mod vars;
 
 pub use color::parse_color;
+pub use container::condition_canonical as container_condition_canonical;
 pub use content::append_unescaped;
+pub use declarations::{named_declaration_valid, named_property_supported};
+pub use element_state::node_dir;
+pub use ffi::viewport::get as viewport;
 pub use ffi::{
     MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
     Selector, SelectorList,
@@ -70,6 +74,10 @@ pub use grid::{
     TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT, TRACK_PX, TRACKS_MAX,
     Track as GridTrack, Tracks as GridTracks,
 };
+pub use initial::initial_value;
 pub use prop::Prop;
+pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
+pub use supports::{condition as supports_condition, declaration as supports_declaration};
 pub use transform::{Op as TransformOp, Transform};
+pub use values::specified_canonical;

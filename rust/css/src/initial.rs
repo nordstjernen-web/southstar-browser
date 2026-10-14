@@ -256,6 +256,6 @@ const INITIALS: [(&[u8], &CStr); 249] = [
     (b"scroll-behavior", c"auto"),
 ];
 
-pub(crate) fn initial_value(name: &[u8]) -> Option<&'static CStr> {
+pub fn initial_value(name: &[u8]) -> Option<&'static CStr> {
     INITIALS.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
 }

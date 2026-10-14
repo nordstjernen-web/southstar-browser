@@ -579,7 +579,7 @@ fn dir_auto_resolve(n: Node<'_>) -> &'static CStr {
     .unwrap_or(c"ltr")
 }
 
-pub(crate) fn node_dir(el: Node<'_>) -> &'static CStr {
+pub fn node_dir(el: Node<'_>) -> &'static CStr {
     let mut node = Some(el);
     while let Some(n) = node {
         node = n.parent();

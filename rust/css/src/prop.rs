@@ -502,15 +502,15 @@ impl Prop {
         self.c_name().to_bytes()
     }
 
-    pub(crate) fn id(self) -> usize {
+    pub fn id(self) -> usize {
         self as usize
     }
 
-    pub(crate) fn from_id(id: usize) -> Option<Prop> {
+    pub fn from_id(id: usize) -> Option<Prop> {
         Prop::ALL.get(id).copied()
     }
 
-    pub(crate) fn from_name(name: &[u8]) -> Option<Prop> {
+    pub fn from_name(name: &[u8]) -> Option<Prop> {
         names().get(name.to_ascii_lowercase().as_slice()).copied()
     }
 
@@ -598,7 +598,7 @@ impl Prop {
         )
     }
 
-    pub(crate) fn c_name(self) -> &'static CStr {
+    pub fn c_name(self) -> &'static CStr {
         match self {
             Prop::Display => c"display",
             Prop::Color => c"color",

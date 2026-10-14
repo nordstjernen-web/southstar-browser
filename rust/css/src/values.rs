@@ -635,7 +635,7 @@ fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
     parse_color(&text).map(color_text)
 }
 
-pub(crate) fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>> {
+pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>> {
     let Some(prop) = prop else {
         return math_canonical(&c_text(value));
     };

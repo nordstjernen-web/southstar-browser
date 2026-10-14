@@ -64,6 +64,11 @@ Southstar Browser 0.9.11-dev:
   Security parsing, and the HTTP date parser. rust/net keeps the files.
   GLib's g_ascii_strtoll gives way to a Rust strtoll that matched it on two
   million random inputs. Unit tests cover all of it.
+* The CSSOM bindings call the style engine's Rust functions directly for
+  CSS.supports(), property names and ids, initial values, the viewport,
+  direction, container conditions, canonical values and !important,
+  instead of round-tripping C strings through rust/css's C exports; seven
+  of those exports had no other caller and are gone.
 
 Southstar Browser 0.9.10:
 ======

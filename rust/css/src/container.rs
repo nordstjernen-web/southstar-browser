@@ -756,7 +756,7 @@ pub(crate) fn shorthand_canonical(text: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
-pub(crate) fn condition_canonical(cond: &[u8]) -> Option<Vec<u8>> {
+pub fn condition_canonical(cond: &[u8]) -> Option<Vec<u8>> {
     let parts = split_commas(cond);
     if parts.is_empty() {
         return None;

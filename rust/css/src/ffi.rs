@@ -41,13 +41,12 @@ mod shorthand;
 mod style_alloc;
 mod style_query;
 mod style_share;
-mod supports;
 mod transform;
 mod ua;
 mod value;
 mod values;
 mod vars;
-mod viewport;
+pub(crate) mod viewport;
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
 

@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
+use southstar_css::{self as css_engine, Prop};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -207,11 +208,6 @@ unsafe extern "C" {
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
-    fn ns_css_prop_name(prop: c_int) -> *const c_char;
-    fn ns_css_initial_value_text(name: *const c_char) -> *const c_char;
-    fn ns_css_viewport_w() -> f64;
-    fn ns_css_viewport_h() -> f64;
     fn ns_css_transform_to_mat4(tf: *const Transform, bw: f64, bh: f64, out: *mut Mat4);
     fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_char;
     fn ns_css_dimension_px(v: *const NsCssValue, font_size: f64, basis: f64) -> f64;
@@ -227,7 +223,6 @@ unsafe extern "C" {
         root: *const Style,
         prop: c_int,
     ) -> *mut c_char;
-    fn ns_css_node_dir(el: *const NsNode) -> *const c_char;
     fn ns_css_list_style_serialize(
         kind: *const c_char,
         position: *const c_char,
@@ -235,11 +230,7 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
     fn ns_css_individual_transform_serialize(v: *const NsCssValue, prop: c_int) -> *mut c_char;
-    fn ns_css_container_condition_canonical(cond: *const c_char) -> *mut c_char;
     fn ns_css_media_list_serialize(query: *const c_char) -> *mut c_char;
-    fn ns_css_named_property_supported(name: *const c_char) -> GBoolean;
-    fn ns_css_named_declaration_valid(name: *const c_char, text: *const c_char) -> GBoolean;
-    fn ns_css_specified_canonical(prop: *const c_char, value: *const c_char) -> *mut c_char;
     fn ns_inline_style_get(style: *const c_char, prop: *const c_char) -> *mut c_char;
     fn ns_inline_style_set(
         style: *const c_char,
@@ -247,9 +238,6 @@ unsafe extern "C" {
         value: *const c_char,
     ) -> *mut c_char;
     fn ns_inline_style_serialize(style: *const c_char) -> *mut c_char;
-    fn ns_inline_value_strip_important(value: *mut c_char) -> GBoolean;
-    fn ns_css_supports_declaration(property: *const c_char, value: *const c_char) -> GBoolean;
-    fn ns_css_supports_condition(condition: *const c_char, allow_bare: GBoolean) -> GBoolean;
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);
     fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
@@ -314,6 +302,15 @@ unsafe extern "C" {
 
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
+}
+
+fn until_nul(text: &str) -> &[u8] {
+    let text = text.as_bytes();
+    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
+}
+
+fn lossy(text: &[u8]) -> String {
+    String::from_utf8_lossy(text).into_owned()
 }
 
 pub(crate) fn c_string(text: &[u8]) -> CString {
@@ -512,21 +509,19 @@ pub(crate) fn linked_css_text(url: &str) -> Option<String> {
 }
 
 pub(crate) fn prop_id(name: &str) -> Option<usize> {
-    let name = c_string(name.as_bytes());
-    usize::try_from(unsafe { ns_css_prop_id(name.as_ptr()) }).ok()
+    Prop::from_name(until_nul(name)).map(Prop::id)
 }
 
 pub(crate) fn prop_name(prop: usize) -> Option<&'static str> {
-    static_text(unsafe { ns_css_prop_name(prop as c_int) })
+    Prop::from_id(prop).and_then(|p| p.c_name().to_str().ok())
 }
 
 pub(crate) fn initial_value(name: &str) -> Option<&'static str> {
-    let name = c_string(name.as_bytes());
-    static_text(unsafe { ns_css_initial_value_text(name.as_ptr()) })
+    css_engine::initial_value(until_nul(name)).and_then(|text| text.to_str().ok())
 }
 
 pub(crate) fn viewport() -> (f64, f64) {
-    unsafe { (ns_css_viewport_w(), ns_css_viewport_h()) }
+    css_engine::viewport()
 }
 
 pub(crate) fn transform_matrix(t: &Transform, bw: f64, bh: f64) -> Mat4 {
@@ -637,7 +632,8 @@ pub(crate) fn tracks_computed_serialize(
 }
 
 pub(crate) fn node_dir(node: Node<'_>) -> String {
-    static_text(unsafe { ns_css_node_dir(node.as_ptr()) })
+    css_engine::node_dir(node)
+        .to_str()
         .unwrap_or("")
         .to_string()
 }
@@ -662,8 +658,7 @@ pub(crate) fn individual_transform_serialize(v: ValueRef<'_>, prop: usize) -> Op
 }
 
 pub(crate) fn container_condition_canonical(text: &str) -> Option<String> {
-    let text = c_string(text.as_bytes());
-    take_text(unsafe { ns_css_container_condition_canonical(text.as_ptr()) })
+    css_engine::container_condition_canonical(until_nul(text)).map(|text| lossy(&text))
 }
 
 pub(crate) fn media_list_serialize(query: Option<&str>) -> String {
@@ -672,18 +667,16 @@ pub(crate) fn media_list_serialize(query: Option<&str>) -> String {
 }
 
 pub(crate) fn named_property_supported(name: &str) -> bool {
-    let name = c_string(name.as_bytes());
-    unsafe { ns_css_named_property_supported(name.as_ptr()) != 0 }
+    css_engine::named_property_supported(until_nul(name))
 }
 
 pub(crate) fn named_declaration_valid(name: &str, value: &str) -> bool {
-    let (n, v) = (c_string(name.as_bytes()), c_string(value.as_bytes()));
-    unsafe { ns_css_named_declaration_valid(n.as_ptr(), v.as_ptr()) != 0 }
+    css_engine::named_declaration_valid(until_nul(name), until_nul(value))
 }
 
 pub(crate) fn specified_canonical(prop: &str, value: &str) -> Option<String> {
-    let (p, v) = (c_string(prop.as_bytes()), c_string(value.as_bytes()));
-    take_text(unsafe { ns_css_specified_canonical(p.as_ptr(), v.as_ptr()) })
+    css_engine::specified_canonical(Some(until_nul(prop)), until_nul(value))
+        .map(|text| lossy(&text))
 }
 
 pub(crate) fn inline_style_get(style: Option<&CStr>, prop: &str) -> Option<String> {
@@ -705,23 +698,23 @@ pub(crate) fn inline_style_serialize(style: Option<&CStr>) -> String {
 }
 
 pub(crate) fn strip_important(value: &mut String) -> bool {
-    let c = c_string(value.as_bytes());
-    let raw = c.into_raw();
-    let important = unsafe { ns_inline_value_strip_important(raw) } != 0;
-    let c = unsafe { CString::from_raw(raw) };
-    *value = c.to_string_lossy().into_owned();
+    let text = until_nul(value);
+    let (kept, important) = css_engine::strip_important(text);
+    *value = lossy(if important { kept } else { text });
     important
 }
 
 pub(crate) fn supports_declaration(prop: Option<&str>, value: Option<&str>) -> bool {
-    let prop = prop.map(|p| c_string(p.as_bytes()));
-    let value = value.map(|v| c_string(v.as_bytes()));
-    unsafe { ns_css_supports_declaration(opt_ptr(&prop), opt_ptr(&value)) != 0 }
+    match (prop, value) {
+        (Some(prop), Some(value)) => {
+            css_engine::supports_declaration(until_nul(prop), until_nul(value))
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn supports_condition(condition: &str) -> bool {
-    let condition = c_string(condition.as_bytes());
-    unsafe { ns_css_supports_condition(condition.as_ptr(), glib::TRUE) != 0 }
+    css_engine::supports_condition(until_nul(condition), true)
 }
 
 pub(crate) fn property_rule_valid(
