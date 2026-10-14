@@ -114,7 +114,7 @@ pub(crate) static TLIST_PROTO: [Prop; 10] = [
 pub(crate) static VALIDITY_PROTO_FUNCS: [Prop; 1] =
     [accessor("valid", Some(adapt::validity_get_valid), None)];
 
-pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 497] = [
+pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 508] = [
     method("getNumberOfChars", 0, natives::element_get_number_of_chars),
     method("getSVGDocument", 0, frames::owner::svg_document),
     accessor(
@@ -725,6 +725,25 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 497] = [
     method("insertAdjacentHTML", 2, html::markup::insert_adjacent_html),
     method("getHTML", 0, html::markup::get_html),
     method("setHTMLUnsafe", 1, html::markup::set_html_unsafe),
+    method("setHTML", 1, html::positional::set_html),
+    method("appendHTML", 1, html::positional::append_html),
+    method("appendHTMLUnsafe", 1, html::positional::append_html_unsafe),
+    method("prependHTML", 1, html::positional::prepend_html),
+    method(
+        "prependHTMLUnsafe",
+        1,
+        html::positional::prepend_html_unsafe,
+    ),
+    method("beforeHTML", 1, html::positional::before_html),
+    method("beforeHTMLUnsafe", 1, html::positional::before_html_unsafe),
+    method("afterHTML", 1, html::positional::after_html),
+    method("afterHTMLUnsafe", 1, html::positional::after_html_unsafe),
+    method("replaceWithHTML", 1, html::positional::replace_with_html),
+    method(
+        "replaceWithHTMLUnsafe",
+        1,
+        html::positional::replace_with_html_unsafe,
+    ),
     method(
         "insertAdjacentElement",
         2,

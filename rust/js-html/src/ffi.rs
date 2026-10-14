@@ -293,6 +293,10 @@ pub(crate) fn mark_scripts_already_started(root: Element) {
     unsafe { ns_mark_scripts_already_started(root.as_mut_ptr()) };
 }
 
+pub(crate) fn is_shadow_root(node: Element) -> bool {
+    unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+}
+
 pub(crate) fn hidden_child(node: Element) -> bool {
     unsafe {
         ns_node_is_embedded_doc(node.as_ptr()) != 0 || ns_node_is_shadow_root(node.as_ptr()) != 0

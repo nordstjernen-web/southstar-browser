@@ -784,6 +784,96 @@
     });
     defineCtor('File', File);
 
+    var sanitizerConfigs = new WeakMap();
+    var sanitizerLists = ['elements', 'removeElements', 'replaceWithChildrenElements',
+        'attributes', 'removeAttributes'];
+
+    function sanitizerName(entry, element) {
+        if (entry !== null && typeof entry === 'object') {
+            return { name: String(entry.name), namespace: entry.namespace === undefined
+                ? (element ? 'http://www.w3.org/1999/xhtml' : null) : entry.namespace };
+        }
+        return { name: String(entry), namespace: element ? 'http://www.w3.org/1999/xhtml' : null };
+    }
+
+    function sanitizerConfig(self) {
+        var c = sanitizerConfigs.get(self);
+        if (!c) throw new TypeError('Illegal invocation');
+        return c;
+    }
+
+    function sanitizerEdit(self, add, drop, entry, element) {
+        var c = sanitizerConfig(self), item = sanitizerName(entry, element);
+        drop.forEach(function (k) {
+            if (c[k]) c[k] = c[k].filter(function (e) { return e.name !== item.name; });
+        });
+        if (add === 'elements' || add === 'attributes') {
+            if (!c[add]) return true;
+        } else if (!c[add]) {
+            c[add] = [];
+        }
+        if (!c[add].some(function (e) { return e.name === item.name; })) c[add].push(item);
+        return true;
+    }
+
+    class Sanitizer {
+        constructor(config) {
+            var src = config === undefined || config === 'default' ? {} : config;
+            if (src === null || typeof src !== 'object') {
+                throw new TypeError("Failed to construct 'Sanitizer': invalid configuration");
+            }
+            var c = {};
+            sanitizerLists.forEach(function (k) {
+                if (src[k] !== undefined) {
+                    var element = k.indexOf('ttributes') < 0;
+                    c[k] = Array.prototype.map.call(src[k], function (e) {
+                        return sanitizerName(e, element);
+                    });
+                }
+            });
+            c.comments = src.comments === undefined ? true : !!src.comments;
+            c.dataAttributes = src.dataAttributes === undefined ? true : !!src.dataAttributes;
+            sanitizerConfigs.set(this, c);
+        }
+        get() {
+            var c = sanitizerConfig(this), out = {};
+            Object.keys(c).forEach(function (k) {
+                out[k] = Array.isArray(c[k]) ? c[k].map(function (e) {
+                    return { name: e.name, namespace: e.namespace };
+                }) : c[k];
+            });
+            return out;
+        }
+        allowElement(e) {
+            return sanitizerEdit(this, 'elements',
+                ['removeElements', 'replaceWithChildrenElements'], e, true);
+        }
+        removeElement(e) {
+            return sanitizerEdit(this, 'removeElements',
+                ['elements', 'replaceWithChildrenElements'], e, true);
+        }
+        replaceElementWithChildren(e) {
+            return sanitizerEdit(this, 'replaceWithChildrenElements',
+                ['elements', 'removeElements'], e, true);
+        }
+        allowAttribute(a) {
+            return sanitizerEdit(this, 'attributes', ['removeAttributes'], a, false);
+        }
+        removeAttribute(a) {
+            return sanitizerEdit(this, 'removeAttributes', ['attributes'], a, false);
+        }
+        setComments(allow) { sanitizerConfig(this).comments = !!allow; return true; }
+        setDataAttributes(allow) { sanitizerConfig(this).dataAttributes = !!allow; return true; }
+        removeUnsafe() {
+            var self = this;
+            ['script', 'frame', 'iframe', 'object', 'embed'].forEach(function (n) {
+                self.removeElement(n);
+            });
+            return true;
+        }
+    }
+    if (!ndWorkerScope) defineCtor('Sanitizer', Sanitizer);
+
     if (typeof global.queueMicrotask !== 'function') {
         defineCtor('queueMicrotask', function (cb) {
             Promise.resolve().then(cb);

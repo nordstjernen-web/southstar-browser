@@ -1,10 +1,12 @@
-//! Southstar — HTML fragment parsing and serialization bindings: innerHTML, outerHTML, getHTML, setHTMLUnsafe, insertAdjacent*, textContent and microdata.
+//! Southstar — HTML fragment parsing and serialization bindings: innerHTML, outerHTML, getHTML, setHTMLUnsafe, insertAdjacent*, setHTML, the positional HTML insertion methods, textContent and microdata.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
 pub mod markup;
 pub mod microdata;
+pub mod positional;
+mod sanitize;
 pub mod text;
 
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, MAX_DEPTH, Node};

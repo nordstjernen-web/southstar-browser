@@ -23,9 +23,10 @@ pub(crate) const NODE_SHAPES_MEMBERS: &[(&str, &str)] = &[
     (
         "CharacterData",
         concat!(
-            "after appendData before data deleteData insertData length ",
-            "nextElementSibling previousElementSibling remove replaceData replaceWith ",
-            "substringData",
+            "after afterHTML afterHTMLUnsafe appendData before beforeHTML ",
+            "beforeHTMLUnsafe data deleteData insertData length nextElementSibling ",
+            "previousElementSibling remove replaceData replaceWith replaceWithHTML ",
+            "replaceWithHTMLUnsafe substringData",
         ),
     ),
     ("Text", "assignedSlot splitText wholeText"),
@@ -112,10 +113,12 @@ pub(crate) const NODE_SHAPES_MEMBERS: &[(&str, &str)] = &[
     (
         "ShadowRoot",
         concat!(
-            "activeElement adoptedStyleSheets clonable customElementRegistry ",
+            "activeElement adoptedStyleSheets appendHTML appendHTMLUnsafe clonable ",
+            "customElementRegistry ",
             "delegatesFocus elementFromPoint elementsFromPoint fullscreenElement ",
             "getAnimations getHTML getSelection host innerHTML mode onslotchange ",
-            "pictureInPictureElement pointerLockElement referenceTarget serializable ",
+            "pictureInPictureElement pointerLockElement prependHTML prependHTMLUnsafe ",
+            "referenceTarget serializable ",
             "setHTML setHTMLUnsafe slotAssignment styleSheets",
         ),
     ),
@@ -195,7 +198,9 @@ pub(crate) const ELEMENT_SHAPES_MEMBERS: &[(&str, &str)] = &[
             "setAttribute setAttributeNS setAttributeNode setAttributeNodeNS setHTML ",
             "setHTMLUnsafe setPointerCapture shadowRoot slot startViewTransition ",
             "tagName toggleAttribute webkitMatchesSelector webkitRequestFullScreen ",
-            "webkitRequestFullscreen",
+            "webkitRequestFullscreen afterHTML afterHTMLUnsafe appendHTML ",
+            "appendHTMLUnsafe beforeHTML beforeHTMLUnsafe prependHTML prependHTMLUnsafe ",
+            "replaceWithHTML replaceWithHTMLUnsafe",
         ),
     ),
     (
