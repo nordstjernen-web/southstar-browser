@@ -129,7 +129,12 @@ fn origin(url: &[u8], default_port: bool) -> Option<Vec<u8>> {
     Some(out)
 }
 
+fn blob_inner(url: &[u8]) -> Option<&[u8]> {
+    (url.len() > 5 && url[..5].eq_ignore_ascii_case(b"blob:")).then(|| &url[5..])
+}
+
 pub fn origin_from(url: &[u8]) -> Option<Vec<u8>> {
+    let url = blob_inner(url).unwrap_or(url);
     if url.is_empty() || !is_http_or_https(url) {
         return None;
     }
