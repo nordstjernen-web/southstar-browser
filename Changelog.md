@@ -252,6 +252,10 @@ Southstar Browser 0.9.11-dev:
   in src/libsouthstar.h are unchanged for C embedders and now forward to the
   same internals. renderer-host goes from 160 unsafe blocks to 85 and from
   139 FFI declarations to 55.
+* Successive document.write calls from one script appear in the order they
+  were written. Each write was inserted right after the script element, so
+  a loop writing paragraphs 0 to 59 showed them as 59 down to 0; a write
+  now goes after what the same script wrote before it.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

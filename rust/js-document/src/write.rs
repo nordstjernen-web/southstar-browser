@@ -83,7 +83,11 @@ fn last_written(js: Js, script: usize, parent: Element) -> Option<Element> {
 fn note_written(js: Js, script: usize, node: Element) {
     let node = node.as_ptr() as usize;
     with_page(js, |page| {
-        match page.last_written.iter_mut().find(|(owner, _)| *owner == script) {
+        match page
+            .last_written
+            .iter_mut()
+            .find(|(owner, _)| *owner == script)
+        {
             Some(entry) => entry.1 = node,
             None => page.last_written.push((script, node)),
         }
