@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -367,10 +367,11 @@ pub fn add_media_events_timeout(b: &NsBrowser) -> c_uint {
 
 pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, bool) {
     let mut deferred: GBoolean = 0;
+    let base = b.base_url.get();
     let session = unsafe {
         ns_engine_fetch_images_start(
             b.layout.get(),
-            b.base_url.ptr(),
+            base.as_deref().map_or(ptr::null(), CStr::as_ptr),
             b.images.get(),
             b.img_requested.get(),
             b.cur_scroll_y.get(),

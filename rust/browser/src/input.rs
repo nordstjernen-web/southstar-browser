@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use std::rc::Rc;
 
 use southstar_dom::{Kind, Node, ancestors_and_self, children};
-use southstar_glib::GStr;
 use southstar_layout::BoxRef;
 
 use crate::ffi::{self, NsBrowser, Pointer};
@@ -398,7 +398,7 @@ pub fn contextmenu(b: &NsBrowser, x: c_int, y: c_int) -> (c_int, c_int) {
     (c_int::from(prevented), edit_state)
 }
 
-pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<GStr> {
+pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<Rc<CStr>> {
     ffi::note_pointer_input(b.js(), true);
     page::damp_reset(b);
     b.pending_nav.clear();
@@ -604,7 +604,7 @@ fn activate(b: &NsBrowser, node: Node<'_>, x: c_int, y: c_int) {
     }
 }
 
-pub fn release_click(b: &NsBrowser) -> (Option<GStr>, bool) {
+pub fn release_click(b: &NsBrowser) -> (Option<Rc<CStr>>, bool) {
     page::damp_reset(b);
     b.pending_nav.clear();
     page::prune_cached_nodes(b);
@@ -820,7 +820,7 @@ fn keydown_default(b: &NsBrowser, ev: &KeyEvent<'_>, prevented_out: &mut bool) {
     }
 }
 
-pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<GStr>, bool) {
+pub fn key(b: &NsBrowser, ev: &KeyEvent<'_>) -> (Option<Rc<CStr>>, bool) {
     let mut prevented_out = false;
     let Some(js) = b.js() else {
         return (None, false);

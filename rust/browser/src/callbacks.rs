@@ -34,7 +34,7 @@ pub fn allows_navigation_url(b: &NsBrowser, url: Option<&CStr>) -> bool {
 }
 
 pub fn resolve_navigation(b: &NsBrowser, href: &CStr) -> Option<GStr> {
-    let abs = ffi::url_resolve(b.base_url.get(), href);
+    let abs = ffi::url_resolve(b.base_url.get().as_deref(), href);
     if !allows_navigation_url(b, abs.as_deref()) {
         return None;
     }
@@ -54,7 +54,7 @@ pub fn js_download(b: &NsBrowser, url: &CStr, filename: Option<&CStr>) {
     if url.is_empty() {
         return;
     }
-    let abs = ffi::url_resolve(b.base_url.get(), url);
+    let abs = ffi::url_resolve(b.base_url.get().as_deref(), url);
     let target = abs.as_deref().unwrap_or(url);
     if !allows_navigation_url(b, Some(target)) {
         return;

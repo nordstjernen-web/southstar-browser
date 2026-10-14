@@ -213,10 +213,11 @@ fn opt(s: Option<&CStr>) -> *const c_char {
 
 impl NsBrowser {
     pub fn engine_relayout(&self, focused: Option<Node<'_>>) {
+        let base = self.base_url.get();
         let styles = unsafe {
             ns_engine_relayout(
                 self.doc.get(),
-                self.base_url.ptr(),
+                opt(base.as_deref()),
                 self.vw.get(),
                 self.vh.get(),
                 self.images.get(),
@@ -234,10 +235,11 @@ impl NsBrowser {
     }
 
     pub fn compute_cascade(&self) {
+        let base = self.base_url.get();
         let styles = unsafe {
             ns_engine_compute_cascade(
                 self.doc.get(),
-                self.base_url.ptr(),
+                opt(base.as_deref()),
                 self.css_cache.get(),
                 ptr::null_mut(),
             )
@@ -246,11 +248,12 @@ impl NsBrowser {
     }
 
     pub fn load_keyframes(&self, anim: Anim) {
+        let base = self.base_url.get();
         unsafe {
             ns_engine_load_keyframes(
                 anim.raw(),
                 self.doc.get(),
-                self.base_url.ptr(),
+                opt(base.as_deref()),
                 self.css_cache.get(),
             )
         };
@@ -258,7 +261,8 @@ impl NsBrowser {
     }
 
     pub fn speculative_preload(&self) {
-        unsafe { ns_engine_speculative_preload(self.doc.get(), self.base_url.ptr(), 0) };
+        let base = self.base_url.get();
+        unsafe { ns_engine_speculative_preload(self.doc.get(), opt(base.as_deref()), 0) };
     }
 
     pub fn styles_raw(&self) -> *mut GHashTable {

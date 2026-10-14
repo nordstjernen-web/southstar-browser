@@ -72,9 +72,9 @@ pub fn dump_performance(b: &NsBrowser) -> StrBufOwned {
     let text = |t: Option<&CStr>| t.map_or(&b""[..], CStr::to_bytes).to_vec();
     out.append(b"Document\n");
     out.append(b"  url         ");
-    out.append(&text(b.base_url.get()));
+    out.append(&text(b.base_url.get().as_deref()));
     out.append(b"\n  charset     ");
-    out.append(&text(b.doc_charset.get()));
+    out.append(&text(b.doc_charset.get().as_deref()));
     out.append(b"\n");
     out.append(format!("  DOM nodes   {}\n", node_count(b.doc(), 0)).as_bytes());
     out.append(format!("  layout boxes {}\n", box_count(b.layout())).as_bytes());
@@ -283,7 +283,13 @@ fn collect_links(
 pub fn links(b: &NsBrowser) -> Option<Vec<u8>> {
     let doc = b.doc()?;
     let mut out = Vec::new();
-    collect_links(doc, b.base_url.get(), &mut out, &mut HashSet::new(), 0);
+    collect_links(
+        doc,
+        b.base_url.get().as_deref(),
+        &mut out,
+        &mut HashSet::new(),
+        0,
+    );
     (!out.is_empty()).then_some(out)
 }
 
@@ -315,11 +321,12 @@ fn find_icon_href(node: Node<'_>, depth: c_int) -> Option<&CStr> {
 
 pub fn favicon_url(b: &NsBrowser) -> Option<Vec<u8>> {
     let doc = b.doc()?;
-    let abs = find_icon_href(doc, 0).and_then(|href| ffi::url_resolve(b.base_url.get(), href));
+    let abs =
+        find_icon_href(doc, 0).and_then(|href| ffi::url_resolve(b.base_url.get().as_deref(), href));
     if let Some(abs) = abs.filter(|a| !a.is_empty()) {
         return Some(abs.to_bytes().to_vec());
     }
-    let mut out = ffi::url_origin_from(b.base_url.get()).filter(|o| !o.is_empty())?;
+    let mut out = ffi::url_origin_from(b.base_url.get().as_deref()).filter(|o| !o.is_empty())?;
     out.extend_from_slice(b"/favicon.ico");
     Some(out)
 }

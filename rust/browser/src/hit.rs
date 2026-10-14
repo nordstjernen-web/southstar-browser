@@ -214,7 +214,7 @@ pub fn media_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<MediaHit> {
         msrc = dom.attr(MEDIA_SRC_ATTR);
     }
     let mut abs = match msrc {
-        Some(src) if !force_stream => ffi::url_resolve(b.base_url.get(), src),
+        Some(src) if !force_stream => ffi::url_resolve(b.base_url.get().as_deref(), src),
         _ => None,
     };
     let stream = force_stream
@@ -225,7 +225,7 @@ pub fn media_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<MediaHit> {
         return None;
     }
     if stream {
-        abs = b.base_url.get().and_then(ffi::dup_text);
+        abs = b.base_url.get().as_deref().and_then(ffi::dup_text);
     }
     let abs = abs?;
     if abs.to_bytes().starts_with(b"file://")
@@ -268,7 +268,7 @@ pub fn find(
         b.search_case.set(case_sensitive);
         return Some(found);
     };
-    if b.search_query.get() != Some(query) || b.search_case.get() != case_sensitive {
+    if b.search_query.get().as_deref() != Some(query) || b.search_case.get() != case_sensitive {
         b.search_query.set(Some(query));
         b.search_active.set(None);
     }

@@ -146,7 +146,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
         && ffi::monotonic_us() >= b.refresh_due_us.get()
     {
         b.refresh_due_us.set(0);
-        b.pending_nav.adopt(b.refresh_url.take());
+        b.pending_nav.put(b.refresh_url.take());
     }
     let deadline = ffi::monotonic_us() + i64::from(budget_ms) * 1000;
     let mut changed = false;

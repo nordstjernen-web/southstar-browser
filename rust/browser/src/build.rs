@@ -60,7 +60,7 @@ fn arm_declarative_refresh(b: &NsBrowser, header: Option<&CStr>) {
                 return;
             }
         }
-        None => b.refresh_url.set(b.base_url.get()),
+        None => b.refresh_url.set(b.base_url.get().as_deref()),
     }
     b.refresh_due_us
         .set(ffi::monotonic_us() + (seconds * 1e6) as i64);
@@ -110,14 +110,14 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
     }
     b.pending_scroll_x.set(-1);
     b.dppx.set(ffi::css_device_pixel_ratio());
-    ffi::css_set_doc_language(b.doc_language.get());
+    ffi::css_set_doc_language(b.doc_language.get().as_deref());
     b.vw.set(vw);
     b.vh.set(vh);
     b.bfcache_ok.set(setup.bfcache_ok);
     b.caret_paint_visible.set(true);
     ffi::attach_caches(b);
     if let Some(videos) = b.videos() {
-        videos.set_base(b.base_url.get());
+        videos.set_base(b.base_url.get().as_deref());
     }
     b.compute_cascade();
     if let Some(anim) = ffi::Anim::create() {
@@ -133,7 +133,7 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
             apply_meta_csp(js, doc, 0);
         }
         if southstar_config::get().is_none_or(|c| c.javascript_enabled != 0) {
-            js.run_scripts_in_doc(b.doc(), b.base_url.ptr());
+            js.run_scripts_in_doc(b.doc(), b.base_url.get().as_deref());
         }
     }
     drop(setup.csp_header);
@@ -178,8 +178,8 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
     let is_post = method.is_some_and(|m| m.to_bytes().eq_ignore_ascii_case(b"post"));
     let action = submitter_attr(clicked, from_text, c"formaction").or_else(|| form.attr(c"action"));
     let abs_action = match action.filter(|a| !a.is_empty()) {
-        Some(action) => ffi::url_resolve(b.base_url.get(), action),
-        None => b.base_url.get().and_then(ffi::dup_text),
+        Some(action) => ffi::url_resolve(b.base_url.get().as_deref(), action),
+        None => b.base_url.get().as_deref().and_then(ffi::dup_text),
     };
     let Some(abs_action) = abs_action else {
         return;
@@ -193,7 +193,8 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
         return;
     }
     let accept_charset = form.attr(c"accept-charset").filter(|c| !c.is_empty());
-    ffi::set_submission_charset(accept_charset.or_else(|| b.doc_charset.get()));
+    let doc_charset = b.doc_charset.get();
+    ffi::set_submission_charset(accept_charset.or(doc_charset.as_deref()));
     let body = StrBufOwned::new();
     ffi::form_collect_inputs(form, doc, &body, clicked);
     ffi::set_submission_charset(None);

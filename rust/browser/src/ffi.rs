@@ -11,9 +11,11 @@ mod net;
 mod paint;
 mod trampolines;
 
-use core::cell::{Cell, UnsafeCell};
+use core::cell::{Cell, RefCell, UnsafeCell};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::mem::offset_of;
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GPtrArray, GStr};
@@ -42,50 +44,45 @@ impl Flag {
     }
 }
 
-#[repr(transparent)]
-pub struct Text(Cell<*mut c_char>);
+#[derive(Default)]
+pub struct Text(RefCell<Option<Rc<CStr>>>);
 
 impl Text {
-    pub fn get(&self) -> Option<&CStr> {
-        c_str(self.0.get())
+    pub fn get(&self) -> Option<Rc<CStr>> {
+        self.0.borrow().clone()
     }
 
     pub fn ptr(&self) -> *const c_char {
-        self.0.get()
+        self.0.borrow().as_deref().map_or(ptr::null(), CStr::as_ptr)
     }
 
     pub fn is_set(&self) -> bool {
-        !self.0.get().is_null()
+        self.0.borrow().is_some()
+    }
+
+    pub fn put(&self, value: Option<Rc<CStr>>) {
+        drop(self.0.replace(value));
     }
 
     pub fn adopt(&self, value: Option<GStr>) {
-        let new = value.map_or(ptr::null_mut(), |s| {
-            let raw = s.as_ptr().cast_mut();
-            core::mem::forget(s);
-            raw
-        });
-        let old = self.0.replace(new);
-        unsafe { southstar_glib::g_free(old.cast()) };
+        self.set(value.as_deref());
     }
 
     pub fn set(&self, value: Option<&CStr>) {
-        let new = value.map_or(ptr::null_mut(), |v| unsafe {
-            southstar_glib::g_strdup(v.as_ptr())
-        });
-        let old = self.0.replace(new);
-        unsafe { southstar_glib::g_free(old.cast()) };
+        self.put(value.map(Rc::from));
     }
 
-    pub fn take(&self) -> Option<GStr> {
-        unsafe { GStr::take(self.0.replace(ptr::null_mut())) }
+    pub fn take(&self) -> Option<Rc<CStr>> {
+        self.0.take()
     }
 
-    fn take_raw(&self) -> *mut c_char {
-        self.0.replace(ptr::null_mut())
+    pub fn take_malloc(&self) -> *mut c_char {
+        self.take()
+            .map_or(ptr::null_mut(), |text| malloc_dup(text.to_bytes()))
     }
 
     pub fn clear(&self) {
-        self.adopt(None);
+        self.put(None);
     }
 }
 
@@ -124,7 +121,6 @@ struct RawSelection {
     active: GBoolean,
 }
 
-#[repr(C)]
 pub struct NsBrowser {
     doc: Cell<*mut NsNode>,
     layout: Cell<*mut NsBox>,
@@ -171,8 +167,7 @@ pub struct NsBrowser {
     pub pending_audio: StrBuf,
     pub refresh_url: Text,
     pub refresh_due_us: Cell<i64>,
-    pending_post_body: Text,
-    pending_post_len: Cell<usize>,
+    pending_post_body: RefCell<Option<Vec<u8>>>,
     pending_post_ct: Text,
     pub caret_byte: Cell<usize>,
     pub sel_anchor_byte: Cell<usize>,
@@ -213,57 +208,36 @@ pub struct NsBrowser {
     pub remote_ip: Text,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = {
-    use core::mem::offset_of;
-    assert!(core::mem::size_of::<NsBrowser>() == 656);
-    assert!(offset_of!(NsBrowser, base_url) == 64 && offset_of!(NsBrowser, vh) == 96);
-    assert!(
-        offset_of!(NsBrowser, bfcache_ok) == 112 && offset_of!(NsBrowser, cur_viewport_h) == 160
-    );
-    assert!(
-        offset_of!(NsBrowser, pending_scroll) == 176
-            && offset_of!(NsBrowser, scroll_anchor_y) == 192
-    );
-    assert!(offset_of!(NsBrowser, media_events_source) == 212);
-    assert!(
-        offset_of!(NsBrowser, load_delay_deadline_us) == 224 && offset_of!(NsBrowser, dirty) == 240
-    );
-    assert!(
-        offset_of!(NsBrowser, relaying) == 260 && offset_of!(NsBrowser, soft_nav_pushed) == 272
-    );
-    assert!(
-        offset_of!(NsBrowser, pending_audio) == 304 && offset_of!(NsBrowser, refresh_due_us) == 320
-    );
-    assert!(
-        offset_of!(NsBrowser, pending_post_ct) == 344
-            && offset_of!(NsBrowser, caret_blink_node) == 368
-    );
-    assert!(
-        offset_of!(NsBrowser, caret_paint_visible) == 404
-            && offset_of!(NsBrowser, selection) == 408
-    );
-    assert!(
-        offset_of!(NsBrowser, selection_dragged) == 448
-            && offset_of!(NsBrowser, datalist_suppressed) == 472
-    );
-    assert!(
-        offset_of!(NsBrowser, press_mods) == 496 && offset_of!(NsBrowser, keydown_prevented) == 504
-    );
-    assert!(offset_of!(NsBrowser, search_case) == 520 && offset_of!(NsBrowser, layout_sig) == 544);
-    assert!(offset_of!(NsBrowser, layout_osc) == 560 && offset_of!(NsBrowser, damp_logged) == 584);
-    assert!(
-        offset_of!(NsBrowser, hover_restyle_pending) == 608
-            && offset_of!(NsBrowser, sb_grab) == 632
-    );
-    assert!(offset_of!(NsBrowser, sb_dragging) == 640 && offset_of!(NsBrowser, security) == 644);
-    assert!(offset_of!(NsBrowser, remote_ip) == 648);
-};
+const TEXT_FIELDS: [usize; 11] = [
+    offset_of!(NsBrowser, base_url),
+    offset_of!(NsBrowser, doc_charset),
+    offset_of!(NsBrowser, doc_language),
+    offset_of!(NsBrowser, pending_nav),
+    offset_of!(NsBrowser, pending_download),
+    offset_of!(NsBrowser, pending_clipboard),
+    offset_of!(NsBrowser, pending_window_action),
+    offset_of!(NsBrowser, refresh_url),
+    offset_of!(NsBrowser, pending_post_ct),
+    offset_of!(NsBrowser, search_query),
+    offset_of!(NsBrowser, remote_ip),
+];
 
 impl NsBrowser {
     fn allocate() -> &'static NsBrowser {
-        let zeroed: NsBrowser = unsafe { core::mem::zeroed() };
-        unsafe { &*Box::into_raw(Box::new(zeroed)) }
+        let mut slot = Box::<NsBrowser>::new_zeroed();
+        let raw = slot.as_mut_ptr();
+        for offset in TEXT_FIELDS {
+            let field = raw.wrapping_byte_add(offset).cast::<Text>();
+            // SAFETY: `field` is the aligned address of one of the Text fields inside the allocation.
+            unsafe { field.write(Text::default()) };
+        }
+        let body = raw
+            .wrapping_byte_add(offset_of!(NsBrowser, pending_post_body))
+            .cast::<RefCell<Option<Vec<u8>>>>();
+        // SAFETY: `body` is the aligned address of the POST body field inside the allocation.
+        unsafe { body.write(RefCell::new(None)) };
+        // SAFETY: the Text and POST body fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
+        Box::leak(unsafe { slot.assume_init() })
     }
 
     pub fn as_ptr(&self) -> *mut NsBrowser {
@@ -363,11 +337,7 @@ impl NsBrowser {
     }
 
     pub fn set_post(&self, body: StrBufOwned, content_type: &CStr) {
-        self.pending_post_body.clear();
-        self.pending_post_ct.clear();
-        let (raw, len) = body.into_raw();
-        self.pending_post_len.set(len);
-        self.pending_post_body.0.set(raw);
+        self.pending_post_body.replace(Some(body.bytes().to_vec()));
         self.pending_post_ct.set(Some(content_type));
     }
 
@@ -427,13 +397,13 @@ impl NsBrowser {
         self.pending_audio.free();
         for text in [
             &self.refresh_url,
-            &self.pending_post_body,
             &self.pending_post_ct,
             &self.search_query,
             &self.remote_ip,
         ] {
             text.clear();
         }
+        self.pending_post_body.take();
         self.console_buf.free();
     }
 }
@@ -490,6 +460,10 @@ unsafe fn browser<'a>(b: *mut NsBrowser) -> Option<&'a NsBrowser> {
 
 fn bool_int(value: bool) -> c_int {
     c_int::from(value)
+}
+
+fn malloc_or_null(s: Option<Rc<CStr>>) -> *mut c_char {
+    s.map_or(ptr::null_mut(), |s| malloc_dup(s.to_bytes()))
 }
 
 fn take_or_null(s: Option<GStr>) -> *mut c_char {
@@ -758,19 +732,20 @@ pub unsafe extern "C" fn ns_browser_take_post(
             *out = ptr::null_mut();
         }
     }
-    let Some(b) = (unsafe { browser(b) }).filter(|b| b.pending_post_body.is_set()) else {
+    let Some(b) = (unsafe { browser(b) }) else {
         return ptr::null_mut();
     };
-    let body = b.pending_post_body.take_raw();
+    let Some(body) = b.pending_post_body.take() else {
+        return ptr::null_mut();
+    };
     if let Some(out) = unsafe { out_len.as_mut() } {
-        *out = b.pending_post_len.get();
+        *out = body.len();
     }
-    b.pending_post_len.set(0);
     match unsafe { out_ct.as_mut() } {
-        Some(out) => *out = b.pending_post_ct.take_raw(),
+        Some(out) => *out = b.pending_post_ct.take_malloc(),
         None => b.pending_post_ct.clear(),
     }
-    body
+    malloc_dup(&body)
 }
 
 #[unsafe(no_mangle)]
@@ -923,17 +898,17 @@ pub unsafe extern "C" fn ns_browser_has_pending_clipboard(b: *mut NsBrowser) -> 
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_take_pending_clipboard(b: *mut NsBrowser) -> *mut c_char {
-    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_clipboard.take_raw())
+    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_clipboard.take_malloc())
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_take_pending_download(b: *mut NsBrowser) -> *mut c_char {
-    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_download.take_raw())
+    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_download.take_malloc())
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_take_pending_window_action(b: *mut NsBrowser) -> *mut c_char {
-    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_window_action.take_raw())
+    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| b.pending_window_action.take_malloc())
 }
 
 #[unsafe(no_mangle)]
@@ -1591,7 +1566,7 @@ pub unsafe extern "C" fn ns_browser_press(
     mods: c_int,
 ) -> *mut c_char {
     match unsafe { browser(b) } {
-        Some(b) if b.layout().is_some() => take_or_null(input::press(b, x, y, mods)),
+        Some(b) if b.layout().is_some() => malloc_or_null(input::press(b, x, y, mods)),
         _ => ptr::null_mut(),
     }
 }
@@ -1614,15 +1589,15 @@ pub unsafe extern "C" fn ns_browser_release_click(
     if changed && let Some(out) = unsafe { out_changed.as_mut() } {
         *out = 1;
     }
-    take_or_null(nav)
+    malloc_or_null(nav)
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_release(b: *mut NsBrowser) -> c_int {
-    let mut changed = 0;
-    let nav = unsafe { ns_browser_release_click(b, &mut changed) };
-    unsafe { southstar_glib::g_free(nav.cast()) };
-    changed
+    match unsafe { browser(b) } {
+        Some(b) => bool_int(input::release_click(b).1),
+        None => -1,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1678,7 +1653,7 @@ pub unsafe extern "C" fn ns_browser_key_full(
     if prevented && let Some(out) = unsafe { out_prevented.as_mut() } {
         *out = 1;
     }
-    take_or_null(nav)
+    malloc_or_null(nav)
 }
 
 #[unsafe(no_mangle)]

@@ -142,7 +142,7 @@ pub fn relayout(b: &NsBrowser) {
     let mut scroll_save = HashMap::new();
     collect_scroll(b.layout(), &mut scroll_save);
     ffi::css_set_viewport(f64::from(b.vw.get()), b.vh.get());
-    ffi::css_set_doc_language(b.doc_language.get());
+    ffi::css_set_doc_language(b.doc_language.get().as_deref());
     if let Some(js) = b.js() {
         js.sync_window_metrics();
     }

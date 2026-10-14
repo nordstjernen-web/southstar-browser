@@ -274,11 +274,13 @@ impl Cairo {
 
     pub fn paint(&self, b: &NsBrowser, layout: BoxRef<'_>) {
         let sel = b.selection_if_range();
+        let query = b.search_query.get();
+        let query = query.as_deref().map_or(ptr::null(), CStr::as_ptr);
         unsafe {
             if sel.is_null() {
-                ns_paint(self.raw(), layout.as_ptr(), b.search_query.ptr());
+                ns_paint(self.raw(), layout.as_ptr(), query);
             } else {
-                ns_paint_with_selection(self.raw(), layout.as_ptr(), b.search_query.ptr(), sel);
+                ns_paint_with_selection(self.raw(), layout.as_ptr(), query, sel);
             }
         }
     }
@@ -295,6 +297,7 @@ impl Cairo {
         vp_x: f64,
         vp_y: f64,
     ) {
+        let query = b.search_query.get();
         unsafe {
             ns_paint_vp_layer(
                 self.raw(),
@@ -302,7 +305,7 @@ impl Cairo {
                 cap,
                 vp_x,
                 vp_y,
-                b.search_query.ptr(),
+                query.as_deref().map_or(ptr::null(), CStr::as_ptr),
                 b.selection_if_range(),
             )
         };
@@ -451,13 +454,14 @@ pub fn render_doc_tile(
     };
     tile.transform(&cr);
     begin();
+    let query = b.search_query.get();
     let ok = unsafe {
         ns_paint_doc_layers(
             cr.raw(),
             doc_tile_upper,
             ptr::from_mut(&mut tile).cast(),
             layout.as_ptr(),
-            b.search_query.ptr(),
+            query.as_deref().map_or(ptr::null(), CStr::as_ptr),
             b.selection_if_range(),
             plan.raw(),
         )

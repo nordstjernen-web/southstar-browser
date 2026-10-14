@@ -143,7 +143,8 @@ impl Js {
         unsafe { ns_js_add_csp_header(self.raw(), header.map_or(ptr::null(), CStr::as_ptr)) };
     }
 
-    pub fn run_scripts_in_doc(self, doc: Option<Node<'_>>, base: *const c_char) {
+    pub fn run_scripts_in_doc(self, doc: Option<Node<'_>>, base: Option<&CStr>) {
+        let base = base.map_or(ptr::null(), CStr::as_ptr);
         unsafe { ns_js_run_scripts_in_doc(self.raw(), Node::ptr_or_null(doc).cast_mut(), base) };
     }
 

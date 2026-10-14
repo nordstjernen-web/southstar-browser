@@ -218,6 +218,16 @@ Southstar Browser 0.9.11-dev:
   key exchange no longer connects. libssl is no longer linked; libcrypto
   remains for crypto.subtle. about:diagnostics lists TLS and Web
   Cryptography separately.
+* The page object's text slots (base URL, document charset and language,
+  pending navigation, download, clipboard text and window action, refresh
+  URL, POST content type, find-in-page query, server address) hold
+  reference-counted owned strings instead of raw C pointers. Reading one no
+  longer returns a borrow that the next assignment frees: a script calling
+  history.pushState while the page's scripts ran with the old base URL could
+  have left that call reading freed memory, and the style, image and paint
+  calls now keep the string alive for their whole duration. The POST body,
+  stored as a C string beside a separate length, is a byte vector. The page
+  object is no longer created by zero-filling a struct that holds them.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

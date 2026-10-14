@@ -137,11 +137,6 @@ impl StrBufOwned {
         core::mem::forget(self);
         unsafe { g_string_free(s, glib::FALSE) }
     }
-
-    pub fn into_raw(self) -> (*mut c_char, usize) {
-        let len = self.len();
-        (self.into_text(), len)
-    }
 }
 
 impl Drop for StrBufOwned {
