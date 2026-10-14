@@ -1,4 +1,4 @@
-//! Southstar — advancing a page: the settle loop after load, the per-frame tick and whether anything is still animating.
+//! Southstar — advancing a page: the settle loop after load, the per-frame tick, whether anything is still animating and whether the page is busy.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -223,6 +223,10 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
         changed = true;
     }
     changed
+}
+
+pub fn busy(b: &NsBrowser) -> bool {
+    ffi::engine_in_blocking_fetch() || b.js().is_some_and(ffi::Js::in_pump)
 }
 
 pub fn animating(b: &NsBrowser) -> bool {

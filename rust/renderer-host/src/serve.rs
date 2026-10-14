@@ -9,7 +9,7 @@ use southstar_ipc::{
     atol, json_double, json_escape, json_string, json_value, response_head, write_message,
 };
 
-use crate::engine::{self, Browser, Plan, Post, PrintPages, PrintSetup};
+use crate::engine::{self, Page, Post, PrintPages, PrintSetup};
 use crate::tiles::{self, Tiles, View};
 
 const BFCACHE_MAX: usize = 4;
@@ -33,8 +33,8 @@ pub struct Session<F> {
     max_w: c_int,
     max_h: c_int,
     shm_mode: bool,
-    cur: Option<Browser>,
-    bf: Vec<Browser>,
+    cur: Option<Page>,
+    bf: Vec<Page>,
     scroll_until_us: i64,
     last_tick_us: i64,
     tick_cost_us: i64,
@@ -46,7 +46,7 @@ pub struct Session<F> {
     frame_h: c_int,
     frame_scale: f64,
     post: Option<StashedPost>,
-    tiles: Tiles<Plan>,
+    tiles: Tiles,
 }
 
 #[derive(Default)]
@@ -189,28 +189,30 @@ impl<F: Framebuffer> Session<F> {
             frame_h: 0,
             frame_scale: 1.0,
             post: None,
-            tiles: Tiles::new(Plan::new()),
+            tiles: Tiles::new(),
         }
     }
 
     pub fn busy(&mut self) -> bool {
-        self.cur.as_mut().is_some_and(Browser::busy)
+        self.cur.as_ref().is_some_and(Page::busy)
     }
 
     pub fn print(&mut self, setup: &mut PrintSetup) -> Option<PrintPages> {
-        let cur = self.cur.as_mut()?;
+        let cur = self.cur.as_ref()?;
         self.frame_valid = false;
-        cur.print_pages(setup)
+        let (pages, used) = cur.print_pages()?;
+        *setup = used;
+        Some(pages)
     }
 
     fn apply_device_pixel_ratio(&mut self, body: &[u8]) {
         let dpr = request_device_pixel_ratio(body);
-        if dpr > 0.0 && engine::set_device_pixel_ratio(self.cur.as_mut(), dpr) > 0 {
+        if dpr > 0.0 && engine::set_device_pixel_ratio(self.cur.as_ref(), dpr) {
             self.frame_valid = false;
         }
     }
 
-    fn bfcache_park_or_close(&mut self, mut b: Browser) {
+    fn bfcache_park_or_close(&mut self, b: Page) {
         if !b.bfcache_eligible() {
             return;
         }
@@ -221,7 +223,7 @@ impl<F: Framebuffer> Session<F> {
         self.bf.push(b);
     }
 
-    fn bfcache_take(&mut self, url: &CStr) -> Option<Browser> {
+    fn bfcache_take(&mut self, url: &CStr) -> Option<Page> {
         let index = (0..self.bf.len())
             .rev()
             .find(|&i| self.bf[i].url().is_some_and(|u| u == url.to_bytes()))?;
@@ -229,7 +231,7 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn stash_post(&mut self, href: Option<&[u8]>) {
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let Some(post) = cur.take_post() else {
@@ -253,10 +255,10 @@ impl<F: Framebuffer> Session<F> {
             self.tick_deferred = true;
             return 0;
         }
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return 0;
         };
-        let changed = cur.tick(TICK_BUDGET_MS);
+        let changed = c_int::from(cur.tick(TICK_BUDGET_MS));
         self.last_tick_us = engine::monotonic_us();
         self.tick_cost_us = self.last_tick_us - now;
         self.tick_deferred = false;
@@ -264,7 +266,7 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn animating(&mut self) -> bool {
-        self.cur.as_mut().is_some_and(Browser::animating) || self.tick_deferred
+        self.cur.as_ref().is_some_and(Page::animating) || self.tick_deferred
     }
 
     fn note_scroll(&mut self, sx: c_long, sy: c_long, wheel: bool) {
@@ -300,9 +302,15 @@ impl<F: Framebuffer> Session<F> {
         }
     }
 
-    fn apply_pending_scroll(cur: &mut Browser, rv: &mut RenderView) {
-        cur.take_pending_scroll(&mut rv.requested_x, &mut rv.requested_y);
-        cur.page_size(&mut rv.page_w, &mut rv.page_h);
+    fn apply_pending_scroll(cur: &Page, rv: &mut RenderView) {
+        if let Some((x, y)) = cur.take_pending_scroll() {
+            rv.requested_x = x;
+            rv.requested_y = y;
+        }
+        if let Some((w, h)) = cur.page_size() {
+            rv.page_w = w;
+            rv.page_h = h;
+        }
         if rv.requested_y >= 0 {
             rv.requested_y = rv.requested_y.min(max_scroll(rv.page_h, rv.vh, rv.scale));
             rv.sy = c_long::from(rv.requested_y);
@@ -320,18 +328,16 @@ impl<F: Framebuffer> Session<F> {
         let wheel_x = long(body, "wheel_x");
         let wheel_y = long(body, "wheel_y");
         let viewport = long(body, "wheel_viewport");
-        if let Some(cur) = self.cur.as_mut()
-            && viewport == 0
-            && cur.scroll_at_full(
-                wheel_x as c_int,
-                wheel_y as c_int,
-                dx as c_int,
-                dy as c_int,
-                &mut rv.wheel_snapped,
-            )
+        if viewport == 0
+            && let Some(cur) = self.cur.as_ref()
         {
-            self.frame_valid = false;
-            return;
+            let (consumed, snapped) =
+                cur.scroll_at(wheel_x as c_int, wheel_y as c_int, dx as c_int, dy as c_int);
+            rv.wheel_snapped = c_int::from(snapped);
+            if consumed {
+                self.frame_valid = false;
+                return;
+            }
         }
         let max_x = max_scroll(rv.page_w, rv.vw, rv.scale);
         let max_y = max_scroll(rv.page_h, rv.vh, rv.scale);
@@ -348,16 +354,15 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn apply_snap(&mut self, rv: &mut RenderView, wheeled: bool) {
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
-        let (mut x, mut y) = (rv.sx as c_int, rv.sy as c_int);
         let previous = (self.frame_sx as c_int, self.frame_sy as c_int);
-        let vw = f64::from(rv.vw) / rv.scale;
-        let vh = f64::from(rv.vh) / rv.scale;
-        if !cur.snap_document(vw, vh, previous, &mut x, &mut y) {
+        let viewport = (f64::from(rv.vw) / rv.scale, f64::from(rv.vh) / rv.scale);
+        let scroll = (rv.sx as c_int, rv.sy as c_int);
+        let Some((x, y)) = cur.snap_document(viewport, previous, scroll) else {
             return;
-        }
+        };
         if x != rv.sx as c_int {
             rv.sx = c_long::from(x);
             rv.requested_x = x;
@@ -383,7 +388,7 @@ impl<F: Framebuffer> Session<F> {
         if rv.unchanged {
             return;
         }
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let fb = self.fb.bytes();
@@ -399,14 +404,14 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn render_reply(&mut self, rv: &RenderView, tiles: Option<&[u8]>) {
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let nav = flatten_line(cur.take_pending_nav(), false);
         if nav.is_some() {
             self.stash_post(nav.as_deref());
         }
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let webgl = flatten_line(cur.take_pending_webgl(), false);
@@ -415,7 +420,7 @@ impl<F: Framebuffer> Session<F> {
         let audio = flatten_line(cur.take_pending_audio(), true);
         let window_action = flatten_line(cur.take_pending_window_action(), false);
         let mut animating = c_int::from(self.animating());
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         if cur.caret_blinking() {
@@ -474,7 +479,7 @@ impl<F: Framebuffer> Session<F> {
         };
         let invalid = !self.frame_valid || rv.ticked != 0 || rv.caret_changed != 0;
         let mut desc = Vec::with_capacity(4096);
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return false;
         };
         let size = (self.max_w as usize * self.max_h as usize * 4).min(self.fb.bytes().len());
@@ -510,13 +515,13 @@ impl<F: Framebuffer> Session<F> {
         } else {
             0
         };
-        if let Some(cur) = self.cur.as_mut() {
+        if let Some(cur) = self.cur.as_ref() {
             Self::apply_pending_scroll(cur, &mut rv);
         }
         self.apply_wheel(body, &mut rv, dx, dy);
         self.apply_snap(&mut rv, wheeled);
-        if let Some(cur) = self.cur.as_mut() {
-            rv.caret_changed = cur.set_caret_blink_active(rv.caret);
+        if let Some(cur) = self.cur.as_ref() {
+            rv.caret_changed = c_int::from(cur.set_caret_blink_active(rv.caret));
         }
         if self.shm_mode && tiles::tiles_requested(body) && self.render_tiles(body, &rv) {
             return;
@@ -543,7 +548,7 @@ impl<F: Framebuffer> Session<F> {
         let referrer = if history {
             None
         } else {
-            self.cur.as_mut().and_then(Browser::url)
+            self.cur.as_ref().and_then(Page::url)
         };
         if let Some(cur) = self.cur.take() {
             self.bfcache_park_or_close(cur);
@@ -551,33 +556,35 @@ impl<F: Framebuffer> Session<F> {
         if let (Some(referrer), None, Some(url)) = (&referrer, &restored, &url) {
             let referrer = engine::cstring(referrer);
             if engine::same_origin(&referrer, url) {
-                engine::set_next_referrer(&referrer);
+                engine::set_next_referrer(Some(&referrer));
             }
         }
         engine::set_next_user_activated(user_activated);
         self.frame_valid = false;
         engine::net_log_clear();
         let posted = self.post.take();
-        self.cur = if let Some(mut page) = restored {
+        self.cur = if let Some(page) = restored {
             page.bfcache_restore(vw, f64::from(vh));
             if dpr > 0.0 {
-                engine::set_device_pixel_ratio(Some(&mut page), dpr);
+                engine::set_device_pixel_ratio(Some(&page), dpr);
             }
             Some(page)
         } else if let Some(url) = &url {
-            match posted.filter(|p| p.url.as_deref() == Some(url.as_c_str())) {
-                Some(stashed) => {
-                    Browser::open_post_viewport(url, vw, f64::from(vh), settle, &stashed.post)
-                }
-                None => Browser::open_viewport(url, vw, f64::from(vh), settle),
-            }
+            let stashed = posted.filter(|p| p.url.as_deref() == Some(url.as_c_str()));
+            Page::open(
+                url,
+                vw,
+                f64::from(vh),
+                settle,
+                stashed.as_ref().map(|stashed| &stashed.post),
+            )
         } else {
             None
         };
         let (mut pw, mut ph) = (0, 0);
         let (mut title, mut final_url, mut nav, mut security, mut ip) = (None, None, None, 0, None);
-        if let Some(cur) = self.cur.as_mut() {
-            cur.page_size(&mut pw, &mut ph);
+        if let Some(cur) = self.cur.as_ref() {
+            (pw, ph) = cur.page_size().unwrap_or_default();
             title = cur.title();
             final_url = cur.url();
             nav = cur.take_pending_nav();
@@ -610,14 +617,14 @@ impl<F: Framebuffer> Session<F> {
         if changed != 0 {
             self.frame_valid = false;
         }
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let nav = flatten_line(cur.take_pending_nav(), false);
         if nav.is_some() {
             self.stash_post(nav.as_deref());
         }
-        let Some(cur) = self.cur.as_mut() else {
+        let Some(cur) = self.cur.as_ref() else {
             return;
         };
         let webgl = cur.take_pending_webgl();
@@ -627,9 +634,8 @@ impl<F: Framebuffer> Session<F> {
         let window_action = cur.take_pending_window_action();
         let title = cur.title();
         let page_url = cur.url();
-        let url_pushed = cur.take_soft_nav_pushed();
-        let (mut page_w, mut page_h) = (0, 0);
-        cur.page_size(&mut page_w, &mut page_h);
+        let url_pushed = c_int::from(cur.take_soft_nav_pushed());
+        let (page_w, page_h) = cur.page_size().unwrap_or_default();
         let animating = c_int::from(self.animating());
         json_reply(
             self.ctrl_w,
@@ -654,8 +660,8 @@ impl<F: Framebuffer> Session<F> {
     fn favicon(&mut self) {
         let icon = self
             .cur
-            .as_mut()
-            .and_then(Browser::favicon_url)
+            .as_ref()
+            .and_then(Page::favicon_url)
             .filter(|url| !url.is_empty())
             .and_then(|url| engine::fetch_favicon(&engine::cstring(&url)));
         match icon {
@@ -705,7 +711,7 @@ impl<F: Framebuffer> Session<F> {
                 if written == i && w > 0 && h > 0 {
                     let mut path = prefix.as_bytes().to_vec();
                     path.extend_from_slice(format!("-{i}.png").as_bytes());
-                    if pages.write_png(i, w, h, scale, &engine::cstring(&path)) {
+                    if engine::write_png(&pages, i, w, h, scale, &engine::cstring(&path)) {
                         written = i + 1;
                     }
                 }
@@ -730,13 +736,13 @@ impl<F: Framebuffer> Session<F> {
         let kind = text(body, "kind");
         let kind = kind.as_ref().map(|k| k.to_bytes());
         let mut result = None;
-        if let (Some(cur), Some(kind)) = (self.cur.as_mut(), kind) {
+        if let (Some(cur), Some(kind)) = (self.cur.as_ref(), kind) {
             result = match kind {
                 b"dom" => cur.dump_dom(),
                 b"layout" => cur.dump_layout(),
                 b"text" => cur.render_text(),
                 b"links" => cur.links(),
-                b"performance" => cur.dump_performance(),
+                b"performance" => Some(cur.dump_performance()),
                 _ => None,
             };
         }
@@ -756,8 +762,8 @@ impl<F: Framebuffer> Session<F> {
             }
             b"/webgl" | b"/camera" => {
                 let origin = text(body, "origin");
-                let allow = long(body, "allow") as c_int;
-                if let (Some(cur), Some(origin)) = (self.cur.as_mut(), &origin) {
+                let allow = long(body, "allow") as c_int != 0;
+                if let (Some(cur), Some(origin)) = (self.cur.as_ref(), &origin) {
                     if path == b"/webgl" {
                         cur.resolve_webgl(origin, allow);
                     } else {
@@ -768,7 +774,7 @@ impl<F: Framebuffer> Session<F> {
                 empty_ok(fd);
             }
             b"/colorscheme" => {
-                engine::set_color_scheme(long(body, "dark") as c_int);
+                engine::set_color_scheme(long(body, "dark") as c_int != 0);
                 self.frame_valid = false;
                 empty_ok(fd);
             }
@@ -778,7 +784,7 @@ impl<F: Framebuffer> Session<F> {
             b"/favicon" => self.favicon(),
             b"/link" => {
                 let (x, y) = xy(body);
-                match self.cur.as_mut() {
+                match self.cur.as_ref() {
                     Some(cur) => {
                         let href = cur.link_at(x, y);
                         let cursor = cur.cursor_at(x, y);
@@ -800,7 +806,7 @@ impl<F: Framebuffer> Session<F> {
             b"/click" | b"/select" => {
                 let (x, y) = xy(body);
                 self.frame_valid = false;
-                let href = match self.cur.as_mut() {
+                let href = match self.cur.as_ref() {
                     Some(cur) if path == b"/click" => {
                         let href = cur.press(x, y, long(body, "mods") as c_int);
                         self.stash_post(href.as_deref());
@@ -818,23 +824,21 @@ impl<F: Framebuffer> Session<F> {
                 let key = text(body, "key").unwrap_or_default();
                 let code = text(body, "code").unwrap_or_default();
                 self.frame_valid = false;
-                let mut prevented = 0;
-                let href = self
-                    .cur
-                    .as_mut()
-                    .and_then(|cur| cur.key_full(kind, &key, &code, keycode, mods, &mut prevented));
+                let (href, prevented) = self.cur.as_ref().map_or((None, false), |cur| {
+                    cur.key(kind, &key, &code, keycode, mods)
+                });
                 self.stash_post(href.as_deref());
                 json_reply(
                     fd,
                     &format!(
                         "{{\"href\":\"{}\",\"prevented\":{}}}",
                         escaped(href.as_deref()),
-                        c_int::from(prevented != 0)
+                        c_int::from(prevented)
                     ),
                 );
             }
             b"/clipboard" => {
-                let clip = self.cur.as_mut().and_then(Browser::take_pending_clipboard);
+                let clip = self.cur.as_ref().and_then(Page::take_pending_clipboard);
                 respond(
                     fd,
                     200,
@@ -845,26 +849,22 @@ impl<F: Framebuffer> Session<F> {
             }
             b"/release" => {
                 self.frame_valid = false;
-                let mut changed = 0;
-                let href = self
-                    .cur
-                    .as_mut()
-                    .and_then(|cur| cur.release_click(&mut changed));
+                let (href, changed) = self.cur.as_ref().map_or((None, false), Page::release_click);
                 self.stash_post(href.as_deref());
                 json_reply(
                     fd,
                     &format!(
                         "{{\"href\":\"{}\",\"changed\":{}}}",
                         escaped(href.as_deref()),
-                        c_int::from(changed > 0)
+                        c_int::from(changed)
                     ),
                 );
             }
             b"/dropfiles" => {
                 let (x, y) = xy(body);
                 let paths = text(body, "paths");
-                let mut changed = 0;
-                if let (Some(cur), Some(paths)) = (self.cur.as_mut(), &paths)
+                let mut changed = false;
+                if let (Some(cur), Some(paths)) = (self.cur.as_ref(), &paths)
                     && !paths.as_bytes().is_empty()
                 {
                     let list: Vec<CString> = paths
@@ -872,26 +872,27 @@ impl<F: Framebuffer> Session<F> {
                         .split(|&b| b == b'\n')
                         .map(engine::cstring)
                         .collect();
+                    let list: Vec<&CStr> = list.iter().map(CString::as_c_str).collect();
                     changed = cur.drop_files(x, y, &list);
                 }
-                if changed > 0 {
+                if changed {
                     self.frame_valid = false;
                 }
-                json_reply(fd, &format!("{{\"changed\":{}}}", c_int::from(changed > 0)));
+                json_reply(fd, &format!("{{\"changed\":{}}}", c_int::from(changed)));
             }
             b"/hover" => {
                 let (x, y) = xy(body);
-                let changed = self.cur.as_mut().map_or(0, |cur| cur.hover(x, y));
-                if changed > 0 {
+                let changed = self.cur.as_ref().is_some_and(|cur| cur.hover(x, y));
+                if changed {
                     self.frame_valid = false;
                 }
-                let href = self.cur.as_mut().and_then(|cur| cur.link_under(x, y));
-                let cursor = self.cur.as_mut().and_then(|cur| cur.cursor_at(x, y));
+                let href = self.cur.as_ref().and_then(|cur| cur.link_under(x, y));
+                let cursor = self.cur.as_ref().and_then(|cur| cur.cursor_at(x, y));
                 json_reply(
                     fd,
                     &format!(
                         "{{\"changed\":{},\"href\":\"{}\",\"cursor\":\"{}\"}}",
-                        c_int::from(changed > 0),
+                        c_int::from(changed),
                         escaped(href.as_deref()),
                         escaped(cursor.as_deref())
                     ),
@@ -902,44 +903,41 @@ impl<F: Framebuffer> Session<F> {
                 let (dx, dy) = (long(body, "dx") as c_int, long(body, "dy") as c_int);
                 let consumed = self
                     .cur
-                    .as_mut()
-                    .map_or(0, |cur| cur.scroll_at(x, y, dx, dy));
-                if consumed != 0 {
+                    .as_ref()
+                    .is_some_and(|cur| cur.scroll_at(x, y, dx, dy).0);
+                if consumed {
                     self.frame_valid = false;
                 }
-                json_reply(
-                    fd,
-                    &format!("{{\"consumed\":{}}}", c_int::from(consumed != 0)),
-                );
+                json_reply(fd, &format!("{{\"consumed\":{}}}", c_int::from(consumed)));
             }
             b"/scrollbar-press" | b"/scrollbar-drag" => {
                 let (x, y) = xy(body);
-                let hit = match self.cur.as_mut() {
+                let hit = match self.cur.as_ref() {
                     Some(cur) if path == b"/scrollbar-press" => cur.scrollbar_press(x, y),
-                    Some(cur) => cur.scrollbar_drag(x, y),
-                    None => 0,
+                    Some(cur) => cur.scrollbar_drag(y),
+                    None => false,
                 };
-                if hit != 0 {
+                if hit {
                     self.frame_valid = false;
                 }
-                json_reply(fd, &format!("{{\"hit\":{}}}", c_int::from(hit != 0)));
+                json_reply(fd, &format!("{{\"hit\":{}}}", c_int::from(hit)));
             }
             b"/scrollbar-release" => {
-                if let Some(cur) = self.cur.as_mut() {
+                if let Some(cur) = self.cur.as_ref() {
                     cur.scrollbar_release();
                 }
                 json_reply(fd, "{\"ok\":1}");
             }
             b"/focused-editable" => {
-                let active = self.cur.as_mut().map_or(0, Browser::focused_editable);
-                json_reply(fd, &format!("{{\"active\":{active}}}"));
+                let active = self.cur.as_ref().is_some_and(Page::focused_editable);
+                json_reply(fd, &format!("{{\"active\":{}}}", c_int::from(active)));
             }
             b"/focused-editable-state" => {
-                let (mut caret, mut anchor) = (0usize, 0usize);
-                let value = self
-                    .cur
-                    .as_mut()
-                    .and_then(|cur| cur.focused_editable_value(&mut caret, &mut anchor));
+                let state = self.cur.as_ref().and_then(Page::focused_editable_value);
+                let (caret, anchor) = state
+                    .as_ref()
+                    .map_or((0, 0), |&(_, caret, anchor)| (caret, anchor));
+                let value = state.map(|(value, _, _)| value);
                 json_reply(
                     fd,
                     &format!(
@@ -954,25 +952,24 @@ impl<F: Framebuffer> Session<F> {
                 let anchor = long(body, "anchor").max(0) as usize;
                 let ok = self
                     .cur
-                    .as_mut()
-                    .map_or(0, |cur| cur.set_focused_editable_selection(caret, anchor));
-                if ok != 0 {
+                    .as_ref()
+                    .is_some_and(|cur| cur.set_focused_editable_selection(caret, anchor));
+                if ok {
                     self.frame_valid = false;
                 }
-                json_reply(fd, &format!("{{\"ok\":{}}}", c_int::from(ok != 0)));
+                json_reply(fd, &format!("{{\"ok\":{}}}", c_int::from(ok)));
             }
             b"/find" => {
-                let options = (
-                    long(body, "case_sensitive") as c_int,
-                    long(body, "direction") as c_int,
-                    long(body, "from_y") as c_int,
-                );
+                let case_sensitive = long(body, "case_sensitive") as c_int != 0;
+                let direction = long(body, "direction") as c_int;
+                let from_y = long(body, "from_y") as c_int;
                 let query = text(body, "query").unwrap_or_default();
-                let (mut total, mut current, mut scroll_y) = (0, 0, 0);
                 self.frame_valid = false;
-                if let Some(cur) = self.cur.as_mut() {
-                    cur.find(&query, options, (&mut total, &mut current, &mut scroll_y));
-                }
+                let (total, current, scroll_y) = self
+                    .cur
+                    .as_ref()
+                    .and_then(|cur| cur.find(&query, case_sensitive, direction, from_y))
+                    .map_or((0, 0, 0), |found| (found.total, found.current, found.y));
                 json_reply(
                     fd,
                     &format!("{{\"total\":{total},\"current\":{current},\"scroll_y\":{scroll_y}}}"),
@@ -984,11 +981,11 @@ impl<F: Framebuffer> Session<F> {
                 let (mut pw, mut ph, mut ok) = (0, 0, 0);
                 self.frame_valid = false;
                 self.apply_device_pixel_ratio(body);
-                if let Some(cur) = self.cur.as_mut()
-                    && cur.set_viewport(vw, f64::from(vh)) == 0
+                if let Some(cur) = self.cur.as_ref()
+                    && cur.set_viewport(vw, f64::from(vh))
                 {
                     cur.window_action_applied();
-                    cur.page_size(&mut pw, &mut ph);
+                    (pw, ph) = cur.page_size().unwrap_or_default();
                     ok = 1;
                 }
                 json_reply(
@@ -999,57 +996,61 @@ impl<F: Framebuffer> Session<F> {
             b"/eval" => {
                 let src = text(body, "src").unwrap_or_default();
                 self.frame_valid = false;
-                let result = self.cur.as_mut().and_then(|cur| cur.eval(&src));
+                let result = self.cur.as_ref().and_then(|cur| cur.eval(&src));
                 reply_str(fd, "text", result.as_deref());
             }
             b"/video-event" => {
                 let token = text(body, "token");
                 let kind = text(body, "kind");
-                let ok = self.cur.as_mut().is_some_and(|cur| {
-                    cur.video_helper_event(token.as_deref(), kind.as_deref()) != 0
-                });
+                let ok = match (self.cur.as_ref(), kind.as_deref()) {
+                    (Some(cur), Some(kind)) => cur.video_helper_event(token.as_deref(), kind),
+                    _ => false,
+                };
                 self.frame_valid = false;
                 json_reply(fd, &format!("{{\"ok\":{}}}", c_int::from(ok)));
             }
             b"/dump" => self.dump(body),
             b"/console" => {
-                let log = self.cur.as_mut().and_then(Browser::console_drain);
+                let log = self.cur.as_ref().and_then(Page::console_drain);
                 reply_str(fd, "text", log.as_deref());
             }
             b"/media" => {
                 let (x, y) = xy(body);
-                let (mut is_video, mut stream) = (0, 0);
-                let url = self
-                    .cur
-                    .as_mut()
-                    .and_then(|cur| cur.media_at(x, y, &mut is_video, &mut stream));
+                let media = self.cur.as_ref().and_then(|cur| cur.media_at(x, y));
+                let (is_video, stream) = media
+                    .as_ref()
+                    .map_or((false, false), |media| (media.is_video, media.stream));
                 json_reply(
                     fd,
                     &format!(
-                        "{{\"url\":\"{}\",\"is_video\":{is_video},\"stream\":{stream}}}",
-                        escaped(url.as_deref())
+                        "{{\"url\":\"{}\",\"is_video\":{},\"stream\":{}}}",
+                        escaped(media.as_ref().map(|media| media.url.as_slice())),
+                        c_int::from(is_video),
+                        c_int::from(stream)
                     ),
                 );
             }
             b"/contextmenu" => {
                 let (x, y) = xy(body);
-                let mut edit = 0;
-                let prevented = self
+                let (prevented, edit) = self
                     .cur
-                    .as_mut()
-                    .map_or(0, |cur| cur.contextmenu_full(x, y, &mut edit));
+                    .as_ref()
+                    .map_or((false, 0), |cur| cur.contextmenu(x, y));
                 if edit != 0 {
                     self.frame_valid = false;
                 }
                 json_reply(
                     fd,
-                    &format!("{{\"prevented\":{prevented},\"edit\":{edit}}}"),
+                    &format!(
+                        "{{\"prevented\":{},\"edit\":{edit}}}",
+                        c_int::from(prevented)
+                    ),
                 );
             }
             b"/export" => {
                 let path = text(body, "path");
                 self.frame_valid = false;
-                let rc = match (self.cur.as_mut(), &path) {
+                let rc = match (self.cur.as_ref(), &path) {
                     (Some(cur), Some(path)) => cur.render_image(path),
                     _ => -1,
                 };

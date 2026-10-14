@@ -76,8 +76,8 @@ pub fn collect_text(n: Node<'_>) -> Vec<u8> {
     text
 }
 
-pub fn node_dump(doc: Node<'_>) -> *mut c_char {
-    southstar_glib::strdup(&dom::serialize::dump(Some(doc)))
+pub fn node_dump(doc: Node<'_>) -> Vec<u8> {
+    dom::serialize::dump(Some(doc))
 }
 
 pub unsafe fn node_free(n: *mut NsNode) {

@@ -1,4 +1,4 @@
-//! Southstar — relayout of a page: saved scroll offsets, the oscillation damper, mutation-driven relayout, the viewport and the page size.
+//! Southstar — relayout of a page: saved scroll offsets, the oscillation damper, mutation-driven relayout, the viewport, the page size and parking in the back-forward cache.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -313,6 +313,21 @@ pub fn set_viewport(b: &NsBrowser, css_width: c_int, css_height: f64) -> c_int {
     damp_reset(b);
     relayout(b);
     0
+}
+
+pub fn bfcache_park(b: &NsBrowser) {
+    if let Some(js) = b.js() {
+        js.fire_page_transition(c"pagehide", true);
+    }
+}
+
+pub fn bfcache_restore(b: &NsBrowser, width: c_int, height: f64) {
+    if width > 0 && height > 0.0 {
+        set_viewport(b, width, height);
+    }
+    if let Some(js) = b.js() {
+        js.fire_page_transition(c"pageshow", true);
+    }
 }
 
 pub fn set_device_pixel_ratio(b: Option<&NsBrowser>, dppx: f64) -> c_int {

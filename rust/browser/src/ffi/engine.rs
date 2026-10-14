@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{GBoolean, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox, Style};
 
 use super::glib::{GString, StrBufOwned};
@@ -90,14 +90,12 @@ unsafe extern "C" {
     fn ns_engine_write_pdf(root: *const NsBox, path: *const c_char) -> c_int;
     fn ns_engine_dump_text(root: *const NsBox, out: *mut GString);
     fn ns_engine_dump_layout(root: *const NsBox, indent: c_int, out: *mut GString);
-    fn ns_engine_print_recordings(root: *const NsBox, setup: *const PrintSetup) -> *mut GPtrArray;
     fn ns_render_page_rule() -> *const c_void;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const c_void);
     fn ns_css_set_viewport(vw: f64, vh: f64);
     fn ns_css_set_doc_language(lang: *const c_char);
     fn ns_css_set_target_fragment(fragment: *const c_char);
-    fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode;
     fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_layout_set_open_select(select: *const NsNode);
@@ -272,10 +270,6 @@ impl NsBrowser {
     pub fn set_open_select_for_layout(&self) {
         unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
     }
-
-    pub fn print_recordings(&self, setup: &PrintSetup) -> *mut GPtrArray {
-        unsafe { ns_engine_print_recordings(self.layout.get(), setup) }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -414,8 +408,9 @@ impl Videos {
         unsafe { ns_video_cache_set_node_volume(self.raw(), node, volume) };
     }
 
-    pub unsafe fn helper_event(self, token: *const c_char, kind: *const c_char) -> bool {
-        unsafe { ns_video_cache_helper_event(self.raw(), token, kind) != 0 }
+    pub fn helper_event(self, token: Option<&CStr>, kind: &CStr) -> bool {
+        // SAFETY: the cache is live and both strings are null or NUL-terminated for the call.
+        unsafe { ns_video_cache_helper_event(self.raw(), opt(token), kind.as_ptr()) != 0 }
     }
 }
 
@@ -500,7 +495,7 @@ pub fn css_set_print_media(printing: bool) {
 }
 
 pub fn css_set_active_node(node: Option<Node<'_>>) {
-    unsafe { ns_css_set_active_node(Node::ptr_or_null(node)) };
+    super::set_active_node(node);
 }
 
 pub fn css_prop_id(name: &CStr) -> c_int {
@@ -568,10 +563,10 @@ pub fn init_subsystems() {
     southstar_bytecode_cache::init();
 }
 
-pub unsafe fn sandbox(self_exe: *const c_char) {
+pub fn sandbox(self_exe: Option<&CStr>) {
     unsafe {
         ns_security_win32_mitigations_init(0);
-        ns_security_sandbox_init(self_exe);
+        ns_security_sandbox_init(opt(self_exe));
         ns_security_seccomp_init();
     }
 }
@@ -587,18 +582,26 @@ pub fn shutdown() {
     }
 }
 
-pub fn webgl_take_pending_origin() -> *mut c_char {
-    unsafe { ns_webgl_take_pending_origin() }
+pub fn webgl_take_pending_origin() -> Option<GStr> {
+    // SAFETY: the call has no preconditions and returns a newly allocated string or null.
+    let origin = unsafe { ns_webgl_take_pending_origin() };
+    // SAFETY: the string is g_malloc'd and owned by nothing else.
+    unsafe { GStr::take(origin) }
 }
 
-pub unsafe fn webgl_set_decision(origin: *const c_char, allow: c_int) {
-    unsafe { ns_webgl_set_decision(origin, allow) };
+pub fn webgl_set_decision(origin: &CStr, allow: bool) {
+    // SAFETY: `origin` is NUL-terminated for the call.
+    unsafe { ns_webgl_set_decision(origin.as_ptr(), c_int::from(allow)) };
 }
 
-pub fn camera_take_pending_origin() -> *mut c_char {
-    unsafe { ns_camera_take_pending_origin() }
+pub fn camera_take_pending_origin() -> Option<GStr> {
+    // SAFETY: the call has no preconditions and returns a newly allocated string or null.
+    let origin = unsafe { ns_camera_take_pending_origin() };
+    // SAFETY: the string is g_malloc'd and owned by nothing else.
+    unsafe { GStr::take(origin) }
 }
 
-pub unsafe fn camera_set_decision(origin: *const c_char, allow: c_int) {
-    unsafe { ns_camera_set_decision(origin, allow) };
+pub fn camera_set_decision(origin: &CStr, allow: bool) {
+    // SAFETY: `origin` is NUL-terminated for the call.
+    unsafe { ns_camera_set_decision(origin.as_ptr(), c_int::from(allow)) };
 }

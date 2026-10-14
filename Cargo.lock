@@ -2975,6 +2975,7 @@ dependencies = [
 name = "southstar-renderer-host"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-browser",
  "southstar-glib",
  "southstar-ipc",
  "southstar-renderer-client",

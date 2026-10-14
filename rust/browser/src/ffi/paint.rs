@@ -3,12 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
 use core::ptr::{self, NonNull};
 
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox, Style};
 
-use super::NsBrowser;
+use super::{NsBrowser, PrintSetup};
 
 const FORMAT_ARGB32: c_int = 0;
 const STATUS_SUCCESS: c_int = 0;
@@ -35,12 +37,12 @@ const _: () = assert!(core::mem::size_of::<VpCapture>() == 64);
 #[repr(C)]
 #[derive(Default)]
 pub struct StickyY {
-    has_top: GBoolean,
-    has_bottom: GBoolean,
-    top_start: f64,
-    top_cap: f64,
-    bottom_start: f64,
-    bottom_cap: f64,
+    pub has_top: GBoolean,
+    pub has_bottom: GBoolean,
+    pub top_start: f64,
+    pub top_cap: f64,
+    pub bottom_start: f64,
+    pub bottom_cap: f64,
 }
 
 #[repr(C)]
@@ -50,7 +52,7 @@ pub struct VpLayerInfo {
     pub top: f64,
     pub bottom: f64,
     pub x_offset: f64,
-    sticky: StickyY,
+    pub sticky: StickyY,
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -140,8 +142,9 @@ unsafe extern "C" {
         x: *mut f64,
         y: *mut f64,
     ) -> GBoolean;
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
-    fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
+    fn ns_paint_layer_plan_init(plan: *mut LayerPlan);
+    fn ns_paint_layer_plan_clear(plan: *mut LayerPlan);
+    fn ns_engine_print_recordings(root: *const NsBox, setup: *const PrintSetup) -> *mut GPtrArray;
 }
 
 pub struct Surface(NonNull<c_void>);
@@ -285,8 +288,8 @@ impl Cairo {
         }
     }
 
-    pub fn plan_layers(&self, layout: BoxRef<'_>, plan: &Plan<'_>) {
-        unsafe { ns_paint_plan_layers(self.raw(), layout.as_ptr(), plan.0) };
+    pub fn plan_layers(&self, layout: BoxRef<'_>, plan: &mut LayerPlan) {
+        unsafe { ns_paint_plan_layers(self.raw(), layout.as_ptr(), plan) };
     }
 
     pub fn vp_layer(
@@ -312,22 +315,44 @@ impl Cairo {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct PixelBuf {
+pub struct PixelBuf<'a> {
     data: *mut u8,
     pub width: c_int,
     pub height: c_int,
     pub stride: c_int,
+    _pixels: PhantomData<&'a mut [u8]>,
 }
 
-impl PixelBuf {
-    pub unsafe fn new(data: *mut u8, width: c_int, height: c_int, stride: c_int) -> PixelBuf {
+impl<'a> PixelBuf<'a> {
+    pub unsafe fn new(data: *mut u8, width: c_int, height: c_int, stride: c_int) -> PixelBuf<'a> {
         PixelBuf {
             data,
             width,
             height,
             stride,
+            _pixels: PhantomData,
         }
+    }
+
+    pub fn from_slice(
+        pixels: &'a mut [u8],
+        width: c_int,
+        height: c_int,
+        stride: c_int,
+    ) -> Option<PixelBuf<'a>> {
+        let row_bytes = usize::try_from(stride).ok()?;
+        let width_bytes = usize::try_from(width).ok()?.checked_mul(4)?;
+        let needed = usize::try_from(height).ok()?.checked_mul(row_bytes)?;
+        if width_bytes > row_bytes || needed > pixels.len() {
+            return None;
+        }
+        Some(PixelBuf {
+            data: pixels.as_mut_ptr(),
+            width,
+            height,
+            stride,
+            _pixels: PhantomData,
+        })
     }
 
     pub fn clear(&self) {
@@ -335,28 +360,94 @@ impl PixelBuf {
     }
 }
 
-pub struct Plan<'a>(*mut LayerPlan, core::marker::PhantomData<&'a LayerPlan>);
-
-impl<'a> Plan<'a> {
-    pub unsafe fn from_ptr(p: *const LayerPlan) -> Option<Plan<'a>> {
-        (!p.is_null()).then(|| Plan(p.cast_mut(), core::marker::PhantomData))
+impl LayerPlan {
+    pub fn new() -> LayerPlan {
+        let mut plan = LayerPlan {
+            dynamic: 0,
+            _kinds: ptr::null_mut(),
+            vp: ptr::null_mut(),
+        };
+        // SAFETY: `plan` is a live, writable plan whose tables the paint layer creates here.
+        unsafe { ns_paint_layer_plan_init(&mut plan) };
+        plan
     }
 
-    pub fn dynamic(&self) -> bool {
-        unsafe { (*self.0).dynamic != 0 }
+    pub fn viewport_layers(&self) -> usize {
+        // SAFETY: a plan's layer array is null or the GArray its init created, alive until it is cleared.
+        unsafe { self.vp.as_ref() }.map_or(0, |vp| vp.len as usize)
+    }
+
+    pub(crate) fn dynamic(&self) -> bool {
+        self.dynamic != 0
+    }
+
+    pub(crate) fn capture(&self, index: c_int) -> Option<&VpCapture> {
+        let index = usize::try_from(index)
+            .ok()
+            .filter(|&i| i < self.viewport_layers())?;
+        // SAFETY: `index` is below the layer array's length and its elements are VpCapture records.
+        Some(unsafe { &*(*self.vp).data.cast::<VpCapture>().add(index) })
+    }
+}
+
+impl Default for LayerPlan {
+    fn default() -> LayerPlan {
+        LayerPlan::new()
+    }
+}
+
+impl Drop for LayerPlan {
+    fn drop(&mut self) {
+        // SAFETY: only plans made by LayerPlan::new are owned by Rust, and this frees their tables once.
+        unsafe { ns_paint_layer_plan_clear(self) };
+    }
+}
+
+pub struct PrintPages(Option<NonNull<GPtrArray>>);
+
+impl PrintPages {
+    fn sheets(&self) -> &[*mut c_void] {
+        let Some(array) = self.0 else {
+            return &[];
+        };
+        // SAFETY: the array came from ns_engine_print_recordings and lives until this value drops.
+        let array = unsafe { array.as_ref() };
+        if array.len == 0 {
+            return &[];
+        }
+        // SAFETY: a non-empty pointer array holds `len` sheet pointers at `pdata`.
+        unsafe { core::slice::from_raw_parts(array.pdata, array.len as usize) }
     }
 
     pub fn len(&self) -> usize {
-        unsafe { (*(*self.0).vp).len as usize }
+        self.sheets().len()
     }
 
-    pub fn capture(&self, index: c_int) -> Option<&'a VpCapture> {
-        let index = usize::try_from(index).ok().filter(|&i| i < self.len())?;
-        Some(unsafe { &*(*(*self.0).vp).data.cast::<VpCapture>().add(index) })
+    pub fn is_empty(&self) -> bool {
+        self.sheets().is_empty()
     }
 
-    pub fn raw(&self) -> *const LayerPlan {
-        self.0
+    pub fn sheet(&self, index: usize) -> Option<NonNull<c_void>> {
+        self.sheets().get(index).copied().and_then(NonNull::new)
+    }
+
+    pub fn into_raw(self) -> *mut GPtrArray {
+        ManuallyDrop::new(self)
+            .0
+            .map_or(ptr::null_mut(), NonNull::as_ptr)
+    }
+}
+
+impl Drop for PrintPages {
+    fn drop(&mut self) {
+        for &sheet in self.sheets() {
+            // SAFETY: each sheet is a cairo recording surface whose one reference this array holds.
+            unsafe { cairo_surface_destroy(sheet) };
+        }
+        if let Some(array) = self.0 {
+            // SAFETY: the array is owned here and freed once, after the sheets it held.
+            unsafe { glib::g_ptr_array_free(array.as_ptr(), glib::TRUE) };
+        }
     }
 }
 
@@ -422,12 +513,12 @@ pub struct TileTarget {
 pub fn render_doc_tile(
     b: &NsBrowser,
     layout: BoxRef<'_>,
-    plan: &Plan<'_>,
+    plan: &LayerPlan,
     target: &TileTarget,
     begin: impl Fn(),
     end: impl Fn(),
 ) -> c_int {
-    let n_upper = plan.len();
+    let n_upper = plan.viewport_layers();
     let mut tile = DocTile {
         bufs: target.bufs,
         upper: (0..n_upper.max(1)).map(|_| None).collect(),
@@ -463,7 +554,7 @@ pub fn render_doc_tile(
             layout.as_ptr(),
             query.as_deref().map_or(ptr::null(), CStr::as_ptr),
             b.selection_if_range(),
-            plan.raw(),
+            plan,
         )
     };
     end();
@@ -540,12 +631,18 @@ pub fn scroll_snap_viewport(
 
 pub fn snap_type_is_set(style: *const Style) -> bool {
     static PROP: std::sync::OnceLock<c_int> = std::sync::OnceLock::new();
-    let prop = *PROP.get_or_init(|| unsafe { ns_css_prop_id(c"scroll-snap-type".as_ptr()) });
-    let kw = unsafe { ns_style_keyword(style, prop) };
-    !kw.is_null() && unsafe { CStr::from_ptr(kw) }.to_bytes() != b"none"
+    let prop = *PROP.get_or_init(|| super::css_prop_id(c"scroll-snap-type"));
+    super::style_keyword_raw(style, prop).is_some_and(|kw| kw.to_bytes() != b"none")
 }
 
 impl NsBrowser {
+    pub fn print_recordings(&self, setup: &PrintSetup) -> PrintPages {
+        // SAFETY: the layout root is null or this page's live box tree, and `setup` is a valid page setup.
+        PrintPages(NonNull::new(unsafe {
+            ns_engine_print_recordings(self.layout.get(), setup)
+        }))
+    }
+
     pub fn selection_if_range(&self) -> *const c_void {
         if self.selection_has_range() {
             self.selection.get().cast_const().cast()

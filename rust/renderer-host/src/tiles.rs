@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 
 use southstar_ipc::{atol, json_string, json_value, strtol};
 
+use crate::engine::{LayerPlan, LayerTarget, Page, TileTarget, VpLayerInfo};
+
 const PREFETCH_MAX: i32 = 4;
 const PREFETCH_BUDGET: Duration = Duration::from_micros(8000);
 const LIST_MAX: usize = 128;
@@ -22,76 +24,6 @@ pub struct View {
     pub vh: c_int,
     pub scale: f64,
     pub page_h: c_int,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct Sticky {
-    pub has_top: bool,
-    pub has_bottom: bool,
-    pub top_start: f64,
-    pub top_cap: f64,
-    pub bottom_start: f64,
-    pub bottom_cap: f64,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct VpLayer {
-    pub kind: c_int,
-    pub top: f64,
-    pub bottom: f64,
-    pub x_offset: f64,
-    pub sticky: Sticky,
-}
-
-pub trait LayerPlan {
-    fn vp_count(&self) -> usize;
-}
-
-pub struct TileTarget<'a, 'b> {
-    pub sx: c_int,
-    pub tile_y: c_int,
-    pub width: c_int,
-    pub height: c_int,
-    pub scale: f64,
-    pub bufs: &'a mut [&'b mut [u8]],
-    pub stride: c_int,
-    pub upper_used: &'a mut [c_int],
-}
-
-pub struct LayerTarget<'a> {
-    pub sx: c_int,
-    pub sy: c_int,
-    pub origin_y: c_int,
-    pub width: c_int,
-    pub height: c_int,
-    pub scale: f64,
-    pub out: &'a mut [u8],
-    pub stride: c_int,
-}
-
-pub trait Page {
-    type Plan: LayerPlan;
-    fn note_viewport(&mut self, sx: c_int, sy: c_int, height: c_int, scale: f64);
-    fn prepare_layers(
-        &mut self,
-        plan: &mut Self::Plan,
-        sx: c_int,
-        sy: c_int,
-        width: c_int,
-        height: c_int,
-        scale: f64,
-    ) -> c_int;
-    fn vp_layer(&mut self, plan: &Self::Plan, index: usize) -> Option<VpLayer>;
-    fn render_doc_tile(&mut self, plan: &Self::Plan, target: TileTarget<'_, '_>) -> c_int;
-    fn render_vp_layer(
-        &mut self,
-        plan: &Self::Plan,
-        index: usize,
-        target: LayerTarget<'_>,
-    ) -> c_int;
-    fn canvas_color(&mut self, rgba: &mut [f64; 4]);
-    fn scroller_rects(&mut self, out: &mut Vec<u8>, max_rects: c_int);
-    fn flush_video_rects(&mut self);
 }
 
 struct Request {
@@ -272,21 +204,21 @@ impl Out<'_> {
     }
 }
 
-fn sticky_desc(info: &VpLayer) -> String {
+fn sticky_desc(info: &VpLayerInfo) -> String {
     let m = &info.sticky;
     format!(
         " {:.3} {} {:.3} {:.3} {} {:.3} {:.3}\n",
         info.x_offset,
-        c_int::from(m.has_top),
+        c_int::from(m.has_top != 0),
         m.top_start,
         m.top_cap,
-        c_int::from(m.has_bottom),
+        c_int::from(m.has_bottom != 0),
         m.bottom_start,
         m.bottom_cap
     )
 }
 
-pub struct Tiles<Plan> {
+pub struct Tiles {
     state: c_int,
     generation: c_int,
     width: c_int,
@@ -294,13 +226,13 @@ pub struct Tiles<Plan> {
     tile_h: c_int,
     sx: c_long,
     scale: f64,
-    plan: Plan,
+    plan: LayerPlan,
     sent: HashMap<c_long, u64>,
     vp_sent: Vec<u64>,
 }
 
-impl<Plan: LayerPlan> Tiles<Plan> {
-    pub fn new(plan: Plan) -> Tiles<Plan> {
+impl Tiles {
+    pub fn new() -> Tiles {
         Tiles {
             state: 0,
             generation: 0,
@@ -309,7 +241,7 @@ impl<Plan: LayerPlan> Tiles<Plan> {
             tile_h: 0,
             sx: 0,
             scale: 0.0,
-            plan,
+            plan: LayerPlan::new(),
             sent: HashMap::new(),
             vp_sent: Vec::new(),
         }
@@ -323,30 +255,24 @@ impl<Plan: LayerPlan> Tiles<Plan> {
             || self.scale != v.scale
     }
 
-    fn plan_usable<P: Page<Plan = Plan>>(&self, page: &mut P) -> bool {
-        (0..self.plan.vp_count()).all(|j| page.vp_layer(&self.plan, j).is_some())
+    fn plan_usable(&self, page: &Page) -> bool {
+        (0..self.plan.viewport_layers()).all(|j| page.vp_layer(&self.plan, j).is_some())
     }
 
-    fn prepare<P: Page<Plan = Plan>>(
-        &mut self,
-        page: &mut P,
-        v: &View,
-        r: &Request,
-        invalid: bool,
-    ) {
+    fn prepare(&mut self, page: &Page, v: &View, r: &Request, invalid: bool) {
         let geometry = self.geometry_changed(v, r);
         if self.state != 0 && !invalid && !geometry {
             page.note_viewport(v.sx as c_int, v.sy as c_int, v.vh, v.scale);
             return;
         }
-        let old_vp = self.plan.vp_count();
+        let old_vp = self.plan.viewport_layers();
         self.generation = self.generation.wrapping_add(1);
         self.width = v.vw;
         self.vh = v.vh;
         self.tile_h = r.tile_h as c_int;
         self.sx = v.sx;
         self.scale = v.scale;
-        let rc = page.prepare_layers(
+        let prepared = page.prepare_layers(
             &mut self.plan,
             v.sx as c_int,
             v.sy as c_int,
@@ -354,26 +280,19 @@ impl<Plan: LayerPlan> Tiles<Plan> {
             v.vh,
             v.scale,
         );
-        self.state = if rc == 0 && self.plan_usable(page) {
+        self.state = if prepared && self.plan_usable(page) {
             1
         } else {
             -1
         };
-        if geometry || old_vp != self.plan.vp_count() {
+        if geometry || old_vp != self.plan.viewport_layers() {
             self.sent.clear();
             self.vp_sent.clear();
         }
-        self.vp_sent.resize(self.plan.vp_count(), 0);
+        self.vp_sent.resize(self.plan.viewport_layers(), 0);
     }
 
-    fn write_vp_layer<P: Page<Plan = Plan>>(
-        &mut self,
-        page: &mut P,
-        v: &View,
-        r: &Request,
-        o: &mut Out<'_>,
-        j: usize,
-    ) {
+    fn write_vp_layer(&mut self, page: &Page, v: &View, r: &Request, o: &mut Out<'_>, j: usize) {
         let info = page.vp_layer(&self.plan, j).unwrap_or_default();
         let origin = (info.top * v.scale).floor() as c_int;
         let rows = ((info.bottom * v.scale).ceil() as c_int).wrapping_sub(origin);
@@ -382,8 +301,8 @@ impl<Plan: LayerPlan> Tiles<Plan> {
         if rows > 0 && o.fits(rows as usize) {
             let end = src + rows as usize * o.row_bytes;
             let target = LayerTarget {
-                sx: v.sx as c_int,
-                sy: v.sy as c_int,
+                scroll_x: v.sx as c_int,
+                scroll_y: v.sy as c_int,
                 origin_y: origin,
                 width: v.vw,
                 height: rows,
@@ -397,7 +316,7 @@ impl<Plan: LayerPlan> Tiles<Plan> {
         }
         let mut digest = 0x51ed27;
         let at = o.pack(src, rect, &mut digest);
-        let keep = r.vp_held == self.plan.vp_count() as c_long && self.vp_sent[j] == digest;
+        let keep = r.vp_held == self.plan.viewport_layers() as c_long && self.vp_sent[j] == digest;
         if keep {
             o.off = src;
         }
@@ -430,15 +349,15 @@ impl<Plan: LayerPlan> Tiles<Plan> {
         ));
     }
 
-    fn paint_one<P: Page<Plan = Plan>>(
+    fn paint_one(
         &mut self,
-        page: &mut P,
+        page: &Page,
         v: &View,
         r: &Request,
         o: &mut Out<'_>,
         k: c_long,
     ) -> bool {
-        let n_upper = self.plan.vp_count();
+        let n_upper = self.plan.viewport_layers();
         let th = self.tile_h;
         let th_rows = usize::try_from(th).unwrap_or(0);
         if !th_rows
@@ -459,7 +378,7 @@ impl<Plan: LayerPlan> Tiles<Plan> {
                 rest = tail;
             }
             let target = TileTarget {
-                sx: v.sx as c_int,
+                scroll_x: v.sx as c_int,
                 tile_y: k.wrapping_mul(c_long::from(th)) as c_int,
                 width: v.vw,
                 height: th,
@@ -507,14 +426,7 @@ impl<Plan: LayerPlan> Tiles<Plan> {
         rc == 0
     }
 
-    fn write_doc<P: Page<Plan = Plan>>(
-        &mut self,
-        page: &mut P,
-        v: &View,
-        r: &Request,
-        fresh: bool,
-        o: &mut Out<'_>,
-    ) {
+    fn write_doc(&mut self, page: &Page, v: &View, r: &Request, fresh: bool, o: &mut Out<'_>) {
         let th = c_long::from(self.tile_h);
         let thf = th as f64;
         let last = ((f64::from(v.page_h) * v.scale / thf).ceil() as c_long - 1).max(0);
@@ -554,15 +466,8 @@ impl<Plan: LayerPlan> Tiles<Plan> {
         }
     }
 
-    fn write_header<P: Page<Plan = Plan>>(
-        &self,
-        page: &mut P,
-        v: &View,
-        fresh: bool,
-        desc: &mut Vec<u8>,
-    ) {
-        let mut bg = [1.0; 4];
-        page.canvas_color(&mut bg);
+    fn write_header(&self, page: &Page, v: &View, fresh: bool, desc: &mut Vec<u8>) {
+        let bg = page.canvas_color().unwrap_or([1.0; 4]);
         let channel = |c: f64| (c * 255.0).round() as c_long as c_int;
         let _ = writeln!(
             desc,
@@ -573,16 +478,16 @@ impl<Plan: LayerPlan> Tiles<Plan> {
             v.scale,
             v.sx,
             c_int::from(fresh),
-            self.plan.vp_count(),
+            self.plan.viewport_layers(),
             channel(bg[0]),
             channel(bg[1]),
             channel(bg[2])
         );
     }
 
-    pub fn render<P: Page<Plan = Plan>>(
+    pub fn render(
         &mut self,
-        page: &mut P,
+        page: &Page,
         body: &[u8],
         v: &View,
         invalid: bool,
@@ -607,10 +512,12 @@ impl<Plan: LayerPlan> Tiles<Plan> {
             width: v.vw,
         };
         if fresh {
-            for j in 0..self.plan.vp_count() {
+            for j in 0..self.plan.viewport_layers() {
                 self.write_vp_layer(page, v, &r, &mut o, j);
             }
-            page.scroller_rects(o.desc, SCROLLERS_MAX);
+            if let Some(rects) = page.scroller_rects(SCROLLERS_MAX) {
+                o.desc.extend_from_slice(&rects);
+            }
         }
         self.write_doc(page, v, &r, fresh, &mut o);
         if self.state < 0 {

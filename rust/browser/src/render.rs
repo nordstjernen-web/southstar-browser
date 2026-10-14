@@ -7,7 +7,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 use southstar_layout::{BoxRef, children};
 
-use crate::ffi::{self, Cairo, NsBrowser, PixelBuf, Plan, Surface, TileTarget, VpLayerInfo};
+use crate::ffi::{self, Cairo, LayerPlan, NsBrowser, PixelBuf, Surface, TileTarget, VpLayerInfo};
 use crate::{images, page};
 
 const VP_LAYER_PAD: f64 = 24.0;
@@ -23,7 +23,7 @@ fn valid_scale(scale: f64) -> f64 {
     if scale > 0.0 { scale } else { 1.0 }
 }
 
-fn target_ok(buf: &PixelBuf) -> bool {
+fn target_ok(buf: &PixelBuf<'_>) -> bool {
     buf.width > 0 && buf.height > 0 && buf.stride >= buf.width * 4
 }
 
@@ -56,6 +56,26 @@ pub fn note_viewport(b: &NsBrowser, scroll_x: c_int, scroll_y: c_int, height: c_
     note_videos(b);
 }
 
+pub fn note_composited_viewport(
+    b: &NsBrowser,
+    scroll_x: c_int,
+    scroll_y: c_int,
+    height: c_int,
+    scale: f64,
+) {
+    if b.layout().is_none() {
+        return;
+    }
+    b.set_video_page_coords(true);
+    note_viewport(b, scroll_x, scroll_y, height, valid_scale(scale));
+}
+
+pub fn flush_video_rects(b: &NsBrowser) {
+    if b.videos().is_some() {
+        b.flush_video_composites(ffi::monotonic_us());
+    }
+}
+
 fn paint_begin(b: &NsBrowser) {
     ffi::paint_set_js(b.js());
     ffi::paint_set_anim(b.anim());
@@ -75,7 +95,7 @@ pub fn render_rgba(
     scroll_x: c_int,
     scroll_y: c_int,
     scale: f64,
-    out: &PixelBuf,
+    out: &PixelBuf<'_>,
 ) -> c_int {
     if b.layout().is_none() || !target_ok(out) {
         return -1;
@@ -125,7 +145,7 @@ pub fn render_argb32(
     scroll_x: c_int,
     scroll_y: c_int,
     scale: f64,
-    out: &PixelBuf,
+    out: &PixelBuf<'_>,
 ) -> c_int {
     if b.layout().is_none() || !target_ok(out) {
         return -1;
@@ -188,13 +208,18 @@ pub fn layers_prepare(
     width: c_int,
     height: c_int,
     scale: f64,
-    plan: &Plan<'_>,
+    plan: &mut LayerPlan,
 ) -> c_int {
+    if b.layout().is_none() || width <= 0 || height <= 0 {
+        return -1;
+    }
     let scale = valid_scale(scale);
     b.set_video_page_coords(true);
     note_viewport(b, scroll_x, scroll_y, height, scale);
     let mut row = vec![0u8; width as usize * 4];
-    let buf = unsafe { PixelBuf::new(row.as_mut_ptr(), width, 1, width * 4) };
+    let Some(buf) = PixelBuf::from_slice(&mut row, width, 1, width * 4) else {
+        return -1;
+    };
     let Some(cr) = Cairo::on_buffer(&buf, scale) else {
         return -1;
     };
@@ -210,11 +235,15 @@ pub fn layers_prepare(
     if plan.dynamic() { -1 } else { 0 }
 }
 
-pub fn render_doc_tile(b: &NsBrowser, plan: &Plan<'_>, target: &TileTarget) -> c_int {
+pub fn render_doc_tile(b: &NsBrowser, plan: &LayerPlan, mut target: TileTarget) -> c_int {
     let Some(layout) = b.layout() else {
         return -1;
     };
-    ffi::render_doc_tile(b, layout, plan, target, || paint_begin(b), paint_end)
+    if target.width <= 0 || target.height <= 0 || target.stride < target.width * 4 {
+        return -1;
+    }
+    target.scale = valid_scale(target.scale);
+    ffi::render_doc_tile(b, layout, plan, &target, || paint_begin(b), paint_end)
 }
 
 fn viewport_css_h(b: &NsBrowser) -> f64 {
@@ -266,7 +295,7 @@ fn sticky_layer_info(b: &NsBrowser, layer: BoxRef<'_>, vh: f64, out: &mut VpLaye
 
 pub fn vp_layer_info(
     b: &NsBrowser,
-    plan: Option<&Plan<'_>>,
+    plan: Option<&LayerPlan>,
     index: c_int,
     out: &mut VpLayerInfo,
 ) -> c_int {
@@ -296,7 +325,7 @@ pub struct VpRender {
     pub scale: f64,
 }
 
-pub fn render_vp_layer(b: &NsBrowser, plan: &Plan<'_>, r: &VpRender, out: &PixelBuf) -> c_int {
+pub fn render_vp_layer(b: &NsBrowser, plan: &LayerPlan, r: &VpRender, out: &PixelBuf<'_>) -> c_int {
     let Some(cap) = plan.capture(r.index) else {
         return -1;
     };

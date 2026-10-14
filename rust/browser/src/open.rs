@@ -9,7 +9,8 @@ use std::sync::Mutex;
 
 use southstar_glib::GStr;
 
-use crate::ffi::{self, NsBrowser, Post, Response};
+use crate::api::Page;
+use crate::ffi::{self, Post, Response};
 
 const UNSAFE_CONTINUE_SCHEME: &[u8] = b"southstar-unsafe-continue:";
 const SEC_NONE: c_int = 0;
@@ -147,7 +148,7 @@ fn resolve_local_path(url: &CStr) -> Option<GStr> {
     ffi::local_file_uri(url)
 }
 
-fn show_interstitial(url: &CStr, host: &CStr, view: &Viewport) -> &'static NsBrowser {
+fn show_interstitial(url: &CStr, host: &CStr, view: &Viewport) -> Page {
     let html = ffi::safebrowsing_interstitial(url, host);
     let doc = ffi::html_parse(html.as_deref(), true);
     drop(html);
@@ -201,7 +202,7 @@ fn security_of(resp: &Response, fetch_url: &CStr) -> c_int {
     }
 }
 
-pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<&'static NsBrowser> {
+pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page> {
     if url.is_empty() {
         return None;
     }
@@ -295,7 +296,7 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<&'st
     let timing = resp.timing();
     drop(resp);
 
-    let b = ffi::create_browser(ffi::Created {
+    let page = ffi::create_browser(ffi::Created {
         doc,
         base,
         view,
@@ -307,7 +308,7 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<&'st
         url: Some(url),
         timing: Some(&timing),
     });
-    b.security.set(security);
-    b.remote_ip.adopt(remote_ip);
-    Some(b)
+    page.browser().security.set(security);
+    page.browser().remote_ip.adopt(remote_ip);
+    Some(page)
 }

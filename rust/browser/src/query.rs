@@ -1,4 +1,4 @@
-//! Southstar — what an embedder reads from a page: the performance report, captures and print sheets, the focused field and caret blink, the title, links and favicon.
+//! Southstar — what an embedder reads from a page: the text, DOM, layout and performance dumps, captures and print sheets, the focused field and caret blink, the title, links and favicon.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,10 +6,9 @@ use core::ffi::{CStr, c_int};
 use std::collections::HashSet;
 
 use southstar_dom::{Node, children};
-use southstar_glib::GPtrArray;
 use southstar_layout::BoxRef;
 
-use crate::ffi::{self, NsBrowser, PrintSetup, StrBufOwned};
+use crate::ffi::{self, NsBrowser, PrintPages, PrintSetup, StrBufOwned};
 use crate::{images, page};
 
 const MAX_DEPTH: c_int = 1024;
@@ -66,6 +65,24 @@ fn dump_threads(out: &StrBufOwned) {
     }
 }
 
+pub fn dump_text(b: &NsBrowser) -> Option<StrBufOwned> {
+    let layout = b.layout()?;
+    let text = StrBufOwned::new();
+    ffi::dump_text(layout, &text);
+    Some(text)
+}
+
+pub fn dump_dom(b: &NsBrowser) -> Option<Vec<u8>> {
+    b.doc().map(ffi::node_dump)
+}
+
+pub fn dump_layout(b: &NsBrowser) -> Option<StrBufOwned> {
+    let layout = b.layout()?;
+    let out = StrBufOwned::new();
+    ffi::dump_layout(layout, &out);
+    Some(out)
+}
+
 pub fn dump_performance(b: &NsBrowser) -> StrBufOwned {
     let out = StrBufOwned::new();
     let (pw, ph) = page::page_size(b).unwrap_or((0, 0));
@@ -97,6 +114,9 @@ pub fn dump_performance(b: &NsBrowser) -> StrBufOwned {
 }
 
 pub fn render_image(b: &NsBrowser, path: &CStr) -> c_int {
+    if b.layout().is_none() {
+        return -1;
+    }
     images::wait_images(b);
     ffi::paint_set_js(b.js());
     ffi::paint_set_anim(b.anim());
@@ -119,7 +139,8 @@ fn content_box(setup: &PrintSetup) -> (c_int, f64) {
     )
 }
 
-pub fn print_pages(b: &NsBrowser) -> (*mut GPtrArray, PrintSetup) {
+pub fn print_pages(b: &NsBrowser) -> Option<(PrintPages, PrintSetup)> {
+    b.doc()?;
     images::wait_images(b);
     let mut setup = ffi::print_setup_default();
     let saved = (b.vw.get(), b.vh.get());
@@ -145,7 +166,7 @@ pub fn print_pages(b: &NsBrowser) -> (*mut GPtrArray, PrintSetup) {
     b.vw.set(saved.0);
     b.vh.set(saved.1);
     page::relayout(b);
-    (pages, setup)
+    Some((pages, setup))
 }
 
 pub fn utf8_boundary(s: &[u8], off: usize) -> usize {

@@ -1,4 +1,4 @@
-//! Southstar — fragment targets and scroll requests: revealing a target, queuing the scroll to it, keeping it anchored and the script engine's scroll and navigation hooks.
+//! Southstar — fragment targets and scroll requests: revealing a target, queuing the scroll to it and handing it to the embedder, keeping it anchored and the script engine's scroll and navigation hooks.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -102,6 +102,16 @@ pub fn queue_scroll_to(b: &NsBrowser, target: Node<'_>, reveal: bool) {
         b.scroll_anchor.set(Some(target));
         b.scroll_anchor_y.set(y);
     }
+}
+
+pub fn take_pending(b: &NsBrowser) -> Option<(c_int, c_int)> {
+    if !b.pending_scroll.get() {
+        return None;
+    }
+    let target = (b.pending_scroll_x.get(), b.pending_scroll_y.get());
+    b.pending_scroll_x.set(-1);
+    b.pending_scroll.set(false);
+    Some(target)
 }
 
 pub fn follow_scroll_anchor(b: &NsBrowser) {

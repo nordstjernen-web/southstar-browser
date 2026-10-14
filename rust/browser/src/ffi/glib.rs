@@ -86,14 +86,23 @@ impl StrBuf {
         unsafe { g_string_erase(self.ensure(), 0, n as isize) };
     }
 
-    pub fn take_text(&self) -> *mut c_char {
+    pub fn take_bytes(&self) -> Option<Vec<u8>> {
         let s = self.0.get();
         if s.is_null() || self.len() == 0 {
-            return ptr::null_mut();
+            return None;
         }
-        let out = unsafe { glib::g_strdup((*s).str_) };
+        // SAFETY: a non-null buffer is the GString this slot owns.
+        let text = unsafe { &*s };
+        // SAFETY: the GString holds `len` bytes at `str`.
+        let bytes = unsafe { glib::slice(text.str_.cast(), text.len) }.to_vec();
+        // SAFETY: the GString is live and owned by this slot.
         unsafe { g_string_truncate(s, 0) };
-        out
+        Some(bytes)
+    }
+
+    pub fn take_text(&self) -> *mut c_char {
+        self.take_bytes()
+            .map_or(ptr::null_mut(), |bytes| glib::strdup(&bytes))
     }
 
     pub fn free(&self) {

@@ -1,4 +1,4 @@
-//! Southstar — what a page's script engine and media ask of the embedder: console lines, navigations, downloads, window actions, the clipboard, selection commands, audio and media control.
+//! Southstar — what a page's script engine and media ask of the embedder, and its camera answer: console lines, navigations, downloads, window actions, the clipboard, selection commands, audio and media control.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -167,5 +167,19 @@ pub fn media_volume(b: &NsBrowser, node: *const c_void, volume: f64) {
     videos.set_node_volume(node, volume);
     if let Some(js) = b.js() {
         js.request_repaint();
+    }
+}
+
+pub fn resolve_camera(b: Option<&NsBrowser>, origin: Option<&CStr>, allow: bool) {
+    if let Some(origin) = origin {
+        ffi::camera_set_decision(origin, allow);
+    }
+    if let Some(js) = b.and_then(NsBrowser::js) {
+        let src = if allow {
+            c"__nd_camera_resolve_pending(true)"
+        } else {
+            c"__nd_camera_resolve_pending(false)"
+        };
+        drop(js.eval(src, c"camera-resolve"));
     }
 }

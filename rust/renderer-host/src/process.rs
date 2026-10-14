@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use southstar_ipc::{Conn, Head, set_bufsize, until_nul};
 
-use crate::engine::{self, Browser};
+use crate::engine::{self, Page};
 use crate::ffi::new_session;
 use crate::frame::FrameMemory;
 
@@ -29,10 +29,8 @@ fn env(name: &CStr) -> Option<&'static [u8]> {
 }
 
 fn selftest(url: &[u8]) -> c_int {
-    if engine::init() != 0 {
-        return 1;
-    }
-    let Some(mut page) = Browser::open_viewport(&engine::cstring(url), 1280, 720.0, 25000) else {
+    engine::init();
+    let Some(page) = Page::open(&engine::cstring(url), 1280, 720.0, 25000, None) else {
         return 1;
     };
     let mut fb = vec![0u8; 1280 * 4 * 720];
@@ -91,11 +89,9 @@ pub fn run(args: &[&[u8]]) -> c_int {
     if args[3..].iter().any(|a| *a == b"private") {
         unsafe { g_setenv(c"NS_PRIVATE".as_ptr(), c"1".as_ptr(), 1) };
     }
-    if engine::init() != 0 {
-        return 2;
-    }
+    engine::init();
     if let Some(scheme) = env(c"NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {
-        engine::set_color_scheme(c_int::from(scheme == b"dark"));
+        engine::set_color_scheme(scheme == b"dark");
     }
     let self_exe = engine::cstring(args[0]);
     engine::sandbox(Some(&self_exe));

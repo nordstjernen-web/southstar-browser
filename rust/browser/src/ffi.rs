@@ -29,7 +29,8 @@ pub use js::{Js, NavigationTiming};
 pub use net::*;
 pub use paint::*;
 
-use crate::{build, hit, input, open, page, query, render, settle};
+use crate::api::Page;
+use crate::{build, callbacks, hit, input, open, page, query, render, scroll, settle};
 
 #[repr(transparent)]
 pub struct Flag(Cell<GBoolean>);
@@ -41,6 +42,10 @@ impl Flag {
 
     pub fn set(&self, value: bool) {
         self.0.set(southstar_glib::boolean(value));
+    }
+
+    pub fn take(&self) -> bool {
+        self.0.replace(southstar_glib::FALSE) != 0
     }
 }
 
@@ -223,7 +228,7 @@ const TEXT_FIELDS: [usize; 11] = [
 ];
 
 impl NsBrowser {
-    fn allocate() -> &'static NsBrowser {
+    fn allocate() -> Page {
         let mut slot = Box::<NsBrowser>::new_zeroed();
         let raw = slot.as_mut_ptr();
         for offset in TEXT_FIELDS {
@@ -237,7 +242,7 @@ impl NsBrowser {
         // SAFETY: `body` is the aligned address of the POST body field inside the allocation.
         unsafe { body.write(RefCell::new(None)) };
         // SAFETY: the Text and POST body fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
-        Box::leak(unsafe { slot.assume_init() })
+        Page::adopt(unsafe { slot.assume_init() })
     }
 
     pub fn as_ptr(&self) -> *mut NsBrowser {
@@ -341,7 +346,12 @@ impl NsBrowser {
         self.pending_post_ct.set(Some(content_type));
     }
 
-    fn release(&self) {
+    pub fn take_post(&self) -> Option<(Vec<u8>, Option<Rc<CStr>>)> {
+        let body = self.pending_post_body.take()?;
+        Some((body, self.pending_post_ct.take()))
+    }
+
+    pub fn release(&self) {
         let source = self.media_events_source.get();
         if source != 0 {
             source_remove(source);
@@ -487,8 +497,9 @@ pub struct Created<'a> {
     pub timing: Option<&'a NavigationTimingData>,
 }
 
-pub fn create_browser(c: Created<'_>) -> &'static NsBrowser {
-    let b = NsBrowser::allocate();
+pub fn create_browser(c: Created<'_>) -> Page {
+    let page = NsBrowser::allocate();
+    let b = page.browser();
     b.doc.set(c.doc.0);
     b.base_url.adopt(c.base);
     b.doc_charset.adopt(c.doc_charset);
@@ -504,7 +515,7 @@ pub fn create_browser(c: Created<'_>) -> &'static NsBrowser {
         navigation_timing: c.timing.map_or(ptr::null(), |t| ptr::from_ref(t).cast()),
     };
     build::build(b, setup);
-    b
+    page
 }
 
 pub fn attach_js(b: &NsBrowser, navigation_timing: *const NavigationTiming) -> Option<Js> {
@@ -563,10 +574,10 @@ pub unsafe extern "C" fn ns_browser_video_helper_event(
     let Some(videos) = (unsafe { browser(b) }).and_then(NsBrowser::videos) else {
         return 0;
     };
-    if kind.is_null() {
+    let Some(kind) = c_str(kind) else {
         return 0;
-    }
-    bool_int(unsafe { videos.helper_event(token, kind) })
+    };
+    bool_int(videos.helper_event(c_str(token), kind))
 }
 
 #[unsafe(no_mangle)]
@@ -577,7 +588,7 @@ pub extern "C" fn ns_browser_init() -> c_int {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_sandbox(self_exe: *const c_char) {
-    unsafe { sandbox(self_exe) };
+    sandbox(c_str(self_exe));
 }
 
 #[unsafe(no_mangle)]
@@ -587,30 +598,25 @@ pub extern "C" fn ns_browser_shutdown() {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_render_text(b: *mut NsBrowser) -> *mut c_char {
-    let Some(layout) = (unsafe { browser(b) }).and_then(NsBrowser::layout) else {
-        return ptr::null_mut();
-    };
-    let text = StrBufOwned::new();
-    dump_text(layout, &text);
-    malloc_dup(text.bytes())
+    match (unsafe { browser(b) }).and_then(query::dump_text) {
+        Some(text) => malloc_dup(text.bytes()),
+        None => ptr::null_mut(),
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_dump_dom(b: *mut NsBrowser) -> *mut c_char {
-    match (unsafe { browser(b) }).and_then(NsBrowser::doc) {
-        Some(doc) => node_dump(doc),
+    match (unsafe { browser(b) }).and_then(query::dump_dom) {
+        Some(dom) => southstar_glib::strdup(&dom),
         None => ptr::null_mut(),
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_dump_layout(b: *mut NsBrowser) -> *mut c_char {
-    let Some(layout) = (unsafe { browser(b) }).and_then(NsBrowser::layout) else {
-        return ptr::null_mut();
-    };
-    let out = StrBufOwned::new();
-    dump_layout(layout, &out);
-    out.into_text()
+    (unsafe { browser(b) })
+        .and_then(query::dump_layout)
+        .map_or(ptr::null_mut(), StrBufOwned::into_text)
 }
 
 #[unsafe(no_mangle)]
@@ -624,7 +630,7 @@ pub unsafe extern "C" fn ns_browser_dump_performance(b: *mut NsBrowser) -> *mut 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_render_image(b: *mut NsBrowser, path: *const c_char) -> c_int {
     match (unsafe { browser(b) }, c_str(path)) {
-        (Some(b), Some(path)) if b.layout().is_some() => query::render_image(b, path),
+        (Some(b), Some(path)) => query::render_image(b, path),
         _ => -1,
     }
 }
@@ -637,12 +643,11 @@ pub unsafe extern "C" fn ns_browser_print_pages(
     let (Some(b), Some(out)) = (unsafe { browser(b) }, unsafe { out_setup.as_mut() }) else {
         return ptr::null_mut();
     };
-    if b.doc().is_none() {
+    let Some((pages, setup)) = query::print_pages(b) else {
         return ptr::null_mut();
-    }
-    let (pages, setup) = query::print_pages(b);
+    };
     *out = setup;
-    pages
+    pages.into_raw()
 }
 
 #[unsafe(no_mangle)]
@@ -732,18 +737,14 @@ pub unsafe extern "C" fn ns_browser_take_post(
             *out = ptr::null_mut();
         }
     }
-    let Some(b) = (unsafe { browser(b) }) else {
-        return ptr::null_mut();
-    };
-    let Some(body) = b.pending_post_body.take() else {
+    let Some((body, content_type)) = (unsafe { browser(b) }).and_then(NsBrowser::take_post) else {
         return ptr::null_mut();
     };
     if let Some(out) = unsafe { out_len.as_mut() } {
         *out = body.len();
     }
-    match unsafe { out_ct.as_mut() } {
-        Some(out) => *out = b.pending_post_ct.take_malloc(),
-        None => b.pending_post_ct.clear(),
+    if let Some(out) = unsafe { out_ct.as_mut() } {
+        *out = malloc_or_null(content_type);
     }
     malloc_dup(&body)
 }
@@ -847,13 +848,7 @@ pub unsafe extern "C" fn ns_browser_take_pending_nav(b: *mut NsBrowser) -> *mut 
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_take_soft_nav_pushed(b: *mut NsBrowser) -> c_int {
-    match unsafe { browser(b) } {
-        Some(b) if b.soft_nav_pushed.get() => {
-            b.soft_nav_pushed.set(false);
-            1
-        }
-        _ => 0,
-    }
+    unsafe { browser(b) }.map_or(0, |b| bool_int(b.soft_nav_pushed.take()))
 }
 
 #[unsafe(no_mangle)]
@@ -862,19 +857,17 @@ pub unsafe extern "C" fn ns_browser_take_pending_scroll(
     out_scroll_x: *mut c_int,
     out_scroll_y: *mut c_int,
 ) -> c_int {
-    let Some(b) = (unsafe { browser(b) }).filter(|b| b.pending_scroll.get()) else {
+    let Some((x, y)) = (unsafe { browser(b) }).and_then(scroll::take_pending) else {
         return 0;
     };
     unsafe {
         if let Some(out) = out_scroll_x.as_mut() {
-            *out = b.pending_scroll_x.get();
+            *out = x;
         }
         if let Some(out) = out_scroll_y.as_mut() {
-            *out = b.pending_scroll_y.get();
+            *out = y;
         }
     }
-    b.pending_scroll_x.set(-1);
-    b.pending_scroll.set(false);
     1
 }
 
@@ -888,7 +881,7 @@ pub unsafe extern "C" fn ns_browser_take_pending_scroll_y(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_browser_take_pending_webgl(_b: *mut NsBrowser) -> *mut c_char {
-    webgl_take_pending_origin()
+    take_or_null(webgl_take_pending_origin())
 }
 
 #[unsafe(no_mangle)]
@@ -917,12 +910,14 @@ pub unsafe extern "C" fn ns_browser_resolve_webgl(
     origin: *const c_char,
     allow: c_int,
 ) {
-    unsafe { webgl_set_decision(origin, allow) };
+    if let Some(origin) = c_str(origin) {
+        webgl_set_decision(origin, allow != 0);
+    }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_browser_take_pending_camera(_b: *mut NsBrowser) -> *mut c_char {
-    camera_take_pending_origin()
+    take_or_null(camera_take_pending_origin())
 }
 
 #[unsafe(no_mangle)]
@@ -931,15 +926,7 @@ pub unsafe extern "C" fn ns_browser_resolve_camera(
     origin: *const c_char,
     allow: c_int,
 ) {
-    unsafe { camera_set_decision(origin, allow) };
-    if let Some(js) = (unsafe { browser(b) }).and_then(NsBrowser::js) {
-        let src = if allow != 0 {
-            c"__nd_camera_resolve_pending(true)"
-        } else {
-            c"__nd_camera_resolve_pending(false)"
-        };
-        drop(js.eval(src, c"camera-resolve"));
-    }
+    callbacks::resolve_camera(unsafe { browser(b) }, c_str(origin), allow != 0);
 }
 
 #[unsafe(no_mangle)]
@@ -965,8 +952,8 @@ pub unsafe extern "C" fn ns_browser_bfcache_eligible(b: *mut NsBrowser) -> c_int
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_bfcache_park(b: *mut NsBrowser) {
-    if let Some(js) = (unsafe { browser(b) }).and_then(NsBrowser::js) {
-        js.fire_page_transition(c"pagehide", true);
+    if let Some(b) = unsafe { browser(b) } {
+        page::bfcache_park(b);
     }
 }
 
@@ -976,35 +963,20 @@ pub unsafe extern "C" fn ns_browser_bfcache_restore(
     viewport_width: c_int,
     viewport_height: f64,
 ) {
-    let Some(browser_ref) = (unsafe { browser(b) }) else {
-        return;
-    };
-    if viewport_width > 0 && viewport_height > 0.0 {
-        page::set_viewport(browser_ref, viewport_width, viewport_height);
-    }
-    if let Some(js) = browser_ref.js() {
-        js.fire_page_transition(c"pageshow", true);
+    if let Some(b) = unsafe { browser(b) } {
+        page::bfcache_restore(b, viewport_width, viewport_height);
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_busy(b: *const NsBrowser) -> c_int {
-    let Some(b) = (unsafe { b.as_ref() }) else {
-        return 0;
-    };
-    if engine_in_blocking_fetch() {
-        return 1;
-    }
-    bool_int(b.js().is_some_and(Js::in_pump))
+    unsafe { b.as_ref() }.map_or(0, |b| bool_int(settle::busy(b)))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_close(b: *mut NsBrowser) {
-    let Some(browser_ref) = (unsafe { b.as_ref() }) else {
-        return;
-    };
-    browser_ref.release();
-    drop(unsafe { Box::from_raw(b) });
+    // SAFETY: the embedder hands back a page an ns_browser_open call returned, which it no longer uses.
+    drop(unsafe { Page::from_raw(b) });
 }
 
 pub fn browser_for(ud: *mut c_void) -> Option<&'static NsBrowser> {
@@ -1019,14 +991,9 @@ fn view(width: c_int, height: f64, settle_ms: c_int) -> open::Viewport {
     }
 }
 
-unsafe fn open_with(
-    url: *const c_char,
-    view: open::Viewport,
-    post: Option<&Post<'_>>,
-) -> *mut NsBrowser {
-    c_str(url)
-        .and_then(|url| open::open(url, &view, post))
-        .map_or(ptr::null_mut(), NsBrowser::as_ptr)
+fn open_with(url: Option<&CStr>, view: open::Viewport, post: Option<&Post<'_>>) -> *mut NsBrowser {
+    url.and_then(|url| open::open(url, &view, post))
+        .map_or(ptr::null_mut(), Page::into_raw)
 }
 
 #[unsafe(no_mangle)]
@@ -1055,7 +1022,7 @@ pub unsafe extern "C" fn ns_browser_open(
     viewport_width: c_int,
     settle_ms: c_int,
 ) -> *mut NsBrowser {
-    unsafe { open_with(url, view(viewport_width, 0.0, settle_ms), None) }
+    open_with(c_str(url), view(viewport_width, 0.0, settle_ms), None)
 }
 
 #[unsafe(no_mangle)]
@@ -1065,7 +1032,11 @@ pub unsafe extern "C" fn ns_browser_open_viewport(
     viewport_height: f64,
     settle_ms: c_int,
 ) -> *mut NsBrowser {
-    unsafe { open_with(url, view(viewport_width, viewport_height, settle_ms), None) }
+    open_with(
+        c_str(url),
+        view(viewport_width, viewport_height, settle_ms),
+        None,
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -1105,13 +1076,11 @@ pub unsafe extern "C" fn ns_browser_open_post_viewport(
         len: body_len,
         content_type: c_str(content_type),
     });
-    unsafe {
-        open_with(
-            url,
-            view(viewport_width, viewport_height, settle_ms),
-            post.as_ref(),
-        )
-    }
+    open_with(
+        c_str(url),
+        view(viewport_width, viewport_height, settle_ms),
+        post.as_ref(),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -1187,23 +1156,15 @@ pub unsafe extern "C" fn ns_browser_note_viewport(
     height: c_int,
     scale: f64,
 ) {
-    let Some(b) = (unsafe { browser(b) }).filter(|b| b.layout().is_some()) else {
-        return;
-    };
-    b.set_video_page_coords(true);
-    render::note_viewport(
-        b,
-        scroll_x,
-        scroll_y,
-        height,
-        if scale > 0.0 { scale } else { 1.0 },
-    );
+    if let Some(b) = unsafe { browser(b) } {
+        render::note_composited_viewport(b, scroll_x, scroll_y, height, scale);
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_flush_video_rects(b: *mut NsBrowser) {
-    if let Some(b) = (unsafe { browser(b) }).filter(|b| b.videos().is_some()) {
-        b.flush_video_composites(monotonic_us());
+    if let Some(b) = unsafe { browser(b) } {
+        render::flush_video_rects(b);
     }
 }
 
@@ -1217,9 +1178,9 @@ pub unsafe extern "C" fn ns_browser_layers_prepare(
     scale: f64,
     plan: *mut LayerPlan,
 ) -> c_int {
-    match (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) {
-        (Some(b), Some(plan)) if b.layout().is_some() && width > 0 && height > 0 => {
-            render::layers_prepare(b, scroll_x, scroll_y, width, height, scale, &plan)
+    match (unsafe { browser(b) }, unsafe { plan.as_mut() }) {
+        (Some(b), Some(plan)) => {
+            render::layers_prepare(b, scroll_x, scroll_y, width, height, scale, plan)
         }
         _ => -1,
     }
@@ -1238,10 +1199,10 @@ pub unsafe extern "C" fn ns_browser_render_doc_tile(
     stride: c_int,
     upper_used: *mut GBoolean,
 ) -> c_int {
-    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) else {
+    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { plan.as_ref() }) else {
         return -1;
     };
-    if bufs.is_null() || b.layout().is_none() || width <= 0 || height <= 0 || stride < width * 4 {
+    if bufs.is_null() {
         return -1;
     }
     let target = TileTarget {
@@ -1252,9 +1213,9 @@ pub unsafe extern "C" fn ns_browser_render_doc_tile(
         stride,
         scroll_x,
         tile_y,
-        scale: if scale > 0.0 { scale } else { 1.0 },
+        scale,
     };
-    render::render_doc_tile(b, &plan, &target)
+    render::render_doc_tile(b, plan, target)
 }
 
 #[unsafe(no_mangle)]
@@ -1267,7 +1228,7 @@ pub unsafe extern "C" fn ns_browser_vp_layer_info(
     let out = unsafe { &mut *out };
     *out = VpLayerInfo::default();
     match unsafe { browser(b) } {
-        Some(b) => render::vp_layer_info(b, unsafe { Plan::from_ptr(plan) }.as_ref(), index, out),
+        Some(b) => render::vp_layer_info(b, unsafe { plan.as_ref() }, index, out),
         None => -1,
     }
 }
@@ -1286,7 +1247,7 @@ pub unsafe extern "C" fn ns_browser_render_vp_layer(
     out: *mut u8,
     stride: c_int,
 ) -> c_int {
-    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { Plan::from_ptr(plan) }) else {
+    let (Some(b), Some(plan)) = (unsafe { browser(b) }, unsafe { plan.as_ref() }) else {
         return -1;
     };
     if out.is_null() {
@@ -1299,7 +1260,7 @@ pub unsafe extern "C" fn ns_browser_render_vp_layer(
         origin_y,
         scale,
     };
-    render::render_vp_layer(b, &plan, &r, &unsafe {
+    render::render_vp_layer(b, plan, &r, &unsafe {
         PixelBuf::new(out, width, height, stride)
     })
 }
@@ -1379,10 +1340,7 @@ pub unsafe extern "C" fn ns_browser_select(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_hover(b: *mut NsBrowser, x: c_int, y: c_int) -> c_int {
-    match unsafe { browser(b) } {
-        Some(b) if b.layout().is_some() => input::hover(b, x, y),
-        _ => -1,
-    }
+    unsafe { browser(b) }.map_or(-1, |b| input::hover(b, x, y))
 }
 
 #[unsafe(no_mangle)]
@@ -1468,7 +1426,7 @@ pub unsafe extern "C" fn ns_browser_drop_files(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_eval(b: *mut NsBrowser, src: *const c_char) -> *mut c_char {
     match (unsafe { browser(b) }, c_str(src)) {
-        (Some(b), Some(src)) => input::eval(b, src),
+        (Some(b), Some(src)) => take_or_null(input::eval(b, src)),
         _ => ptr::null_mut(),
     }
 }
@@ -1483,7 +1441,7 @@ pub unsafe extern "C" fn ns_browser_contextmenu_full(
     if let Some(out) = unsafe { out_edit.as_mut() } {
         *out = 0;
     }
-    let Some(b) = (unsafe { browser(b) }).filter(|b| b.layout().is_some()) else {
+    let Some(b) = (unsafe { browser(b) }) else {
         return 0;
     };
     let (prevented, edit_state) = input::contextmenu(b, x, y);
@@ -1565,10 +1523,9 @@ pub unsafe extern "C" fn ns_browser_press(
     y: c_int,
     mods: c_int,
 ) -> *mut c_char {
-    match unsafe { browser(b) } {
-        Some(b) if b.layout().is_some() => malloc_or_null(input::press(b, x, y, mods)),
-        _ => ptr::null_mut(),
-    }
+    unsafe { browser(b) }.map_or(ptr::null_mut(), |b| {
+        malloc_or_null(input::press(b, x, y, mods))
+    })
 }
 
 #[unsafe(no_mangle)]

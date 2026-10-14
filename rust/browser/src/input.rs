@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 
 use southstar_dom::{Kind, Node, ancestors_and_self, children};
+use southstar_glib::GStr;
 use southstar_layout::BoxRef;
 
 use crate::ffi::{self, NsBrowser, Pointer};
@@ -116,6 +117,9 @@ fn hover_dispatch(
 }
 
 pub fn hover(b: &NsBrowser, x: c_int, y: c_int) -> c_int {
+    if b.layout().is_none() {
+        return -1;
+    }
     let node = hit::hit_node(b, x, y);
     page::prune_cached_nodes(b);
     let prev = b.hover_node.get();
@@ -351,10 +355,8 @@ pub fn drop_files(b: &NsBrowser, x: c_int, y: c_int, paths: &[&CStr]) -> c_int {
     0
 }
 
-pub fn eval(b: &NsBrowser, src: &CStr) -> *mut core::ffi::c_char {
-    let Some(js) = b.js() else {
-        return core::ptr::null_mut();
-    };
+pub fn eval(b: &NsBrowser, src: &CStr) -> Option<GStr> {
+    let js = b.js()?;
     page::damp_reset(b);
     let res = js.eval_console(src);
     if js.run_animation_frame() {
@@ -374,6 +376,9 @@ fn note_mutation(b: &NsBrowser) {
 }
 
 pub fn contextmenu(b: &NsBrowser, x: c_int, y: c_int) -> (c_int, c_int) {
+    if b.layout().is_none() {
+        return (0, 0);
+    }
     let Some(js) = b.js() else {
         return (0, 0);
     };
@@ -399,6 +404,7 @@ pub fn contextmenu(b: &NsBrowser, x: c_int, y: c_int) -> (c_int, c_int) {
 }
 
 pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<Rc<CStr>> {
+    b.layout()?;
     ffi::note_pointer_input(b.js(), true);
     page::damp_reset(b);
     b.pending_nav.clear();

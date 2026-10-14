@@ -98,12 +98,6 @@ unsafe extern "C" {
         text: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_dispatch_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_set_focus(js: *mut c_void, el: *const NsNode);
     fn ns_js_focus_from_pointer(js: *mut c_void, target: *const NsNode);
     fn ns_js_note_pointer_input(js: *mut c_void, pointer: GBoolean);
@@ -129,8 +123,6 @@ unsafe extern "C" {
     fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
     fn ns_js_activate_element(js: *mut c_void, el: *const NsNode);
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
-    fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
-    -> *mut c_char;
     fn ns_box_hit_link(root: *const NsBox, x: f64, y: f64) -> *const c_char;
     fn ns_box_hit_node(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
     fn ns_box_hit_form_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
@@ -324,14 +316,7 @@ impl Js {
     }
 
     pub fn dispatch_scroll(self, target: Node<'_>) {
-        unsafe {
-            ns_js_dispatch_event(
-                self.raw(),
-                target.as_ptr(),
-                c"scroll".as_ptr(),
-                ptr::null_mut(),
-            )
-        };
+        self.dispatch_event(target, c"scroll");
     }
 
     pub fn drop_files(self, target: Node<'_>, paths: &[&CStr], x: c_int, y: c_int) -> bool {
@@ -453,8 +438,8 @@ impl Js {
         unsafe { ns_js_node_has_click_handler(self.raw(), node.as_ptr()) != 0 }
     }
 
-    pub fn eval_console(self, src: &CStr) -> *mut c_char {
-        unsafe { ns_js_eval_source(self.raw(), src.as_ptr(), c"devtools-console".as_ptr()) }
+    pub fn eval_console(self, src: &CStr) -> Option<GStr> {
+        self.eval(src, c"devtools-console")
     }
 }
 

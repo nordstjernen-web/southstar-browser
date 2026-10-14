@@ -241,6 +241,17 @@ Southstar Browser 0.9.11-dev:
   minutes with four instead of about half an hour one at a time), and
   scripts/wpt-score.sh runs the whole slice with one server and writes a
   Markdown summary with --summary=FILE.
+* The renderer host drives pages through a Rust API instead of the C one:
+  rust/browser's api::Page owns a page and has methods for opening,
+  painting tiles and layers, input, find, printing and the pending
+  navigations, downloads and permission requests, taking and returning
+  Rust strings, slices and tuples. The 78 hand-copied ns_browser_*
+  declarations in renderer-host, and the C structs it re-declared to talk
+  to them, are gone, so the compiler checks every call; the tile and layer
+  painters check their buffer sizes before drawing. The ns_browser_* exports
+  in src/libsouthstar.h are unchanged for C embedders and now forward to the
+  same internals. renderer-host goes from 160 unsafe blocks to 85 and from
+  139 FFI declarations to 55.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/
