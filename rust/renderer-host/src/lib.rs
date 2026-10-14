@@ -4,6 +4,7 @@
 
 mod engine;
 mod ffi;
+mod frame;
 mod inproc;
 mod process;
 mod serve;

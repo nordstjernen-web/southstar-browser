@@ -11,6 +11,7 @@ use southstar_ipc::{Conn, Head, set_bufsize, until_nul};
 
 use crate::engine::{self, Browser};
 use crate::ffi::new_session;
+use crate::frame::FrameMemory;
 
 unsafe extern "C" {
     fn g_getenv(variable: *const c_char) -> *const c_char;
@@ -51,24 +52,10 @@ fn dimension(arg: &[u8]) -> Option<c_int> {
     (1..=32768).contains(&value).then_some(value)
 }
 
-enum Pixels {
-    Owned(Vec<u8>),
-    Shared(*mut u8),
-}
-
-impl Pixels {
-    fn pointer(&mut self) -> *mut u8 {
-        match self {
-            Pixels::Owned(v) => v.as_mut_ptr(),
-            Pixels::Shared(p) => *p,
-        }
-    }
-}
-
 struct Channel {
     ctrl_r: c_int,
     ctrl_w: c_int,
-    pixels: Pixels,
+    pixels: FrameMemory,
 }
 
 pub fn run(args: &[&[u8]]) -> c_int {
@@ -98,14 +85,13 @@ pub fn run(args: &[&[u8]]) -> c_int {
     } else {
         sys::control_channel(args, shm, size)
     };
-    let Some(mut channel) = channel else {
+    let Some(channel) = channel else {
         return 2;
     };
     if args[3..].iter().any(|a| *a == b"private") {
         unsafe { g_setenv(c"NS_PRIVATE".as_ptr(), c"1".as_ptr(), 1) };
     }
     if engine::init() != 0 {
-        sys::release(channel.pixels, size);
         return 2;
     }
     if let Some(scheme) = env(c"NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {
@@ -116,9 +102,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
     let bufsz = (size + 65536).min(0x7fff_ffff) as c_int;
     set_bufsize(channel.ctrl_r, bufsz);
     set_bufsize(channel.ctrl_w, bufsz);
-    let Some(mut session) =
-        new_session(channel.ctrl_w, channel.pixels.pointer(), max_w, max_h, shm)
-    else {
+    let Some(mut session) = new_session(channel.ctrl_w, channel.pixels, max_w, max_h, shm) else {
         return 2;
     };
     let mut conn = Conn::boxed(channel.ctrl_r);
@@ -141,7 +125,6 @@ pub fn run(args: &[&[u8]]) -> c_int {
             _exit(0)
         };
     }
-    sys::release(channel.pixels, size);
     0
 }
 
@@ -160,7 +143,8 @@ mod sys {
     use core::ffi::{c_int, c_void};
     use core::ptr;
 
-    use super::{Channel, Pixels};
+    use super::Channel;
+    use crate::frame::FrameMemory;
 
     const SIGPIPE: c_int = 13;
     const SIG_IGN: usize = 1;
@@ -222,7 +206,7 @@ mod sys {
         Some(Channel {
             ctrl_r: 0,
             ctrl_w: 1,
-            pixels: Pixels::Owned(vec![0u8; size]),
+            pixels: FrameMemory::owned(size),
         })
     }
 
@@ -238,9 +222,10 @@ mod sys {
             if map as isize == -1 {
                 return None;
             }
-            Pixels::Shared(map.cast())
+            // SAFETY: the mapping spans `size` writable bytes and unmap_frame unmaps it once on drop.
+            unsafe { FrameMemory::foreign(map.cast(), size, unmap_frame) }?
         } else {
-            Pixels::Owned(vec![0u8; size])
+            FrameMemory::owned(size)
         };
         Some(Channel {
             ctrl_r: 3,
@@ -249,10 +234,12 @@ mod sys {
         })
     }
 
-    pub fn release(pixels: Pixels, size: usize) {
-        if let Pixels::Shared(map) = pixels {
-            unsafe { munmap(map.cast(), size) };
-        }
+    /// # Safety
+    ///
+    /// `pixels` must be a live mapping of `len` bytes from this module's mmap.
+    unsafe fn unmap_frame(pixels: core::ptr::NonNull<u8>, len: usize) {
+        // SAFETY: the caller passes the mapping and length mmap returned.
+        unsafe { munmap(pixels.as_ptr().cast(), len) };
     }
 }
 
@@ -261,7 +248,8 @@ mod sys {
     use core::ffi::{c_char, c_int, c_void};
     use core::ptr;
 
-    use super::{Channel, Pixels};
+    use super::Channel;
+    use crate::frame::FrameMemory;
 
     type Handle = *mut c_void;
 
@@ -365,7 +353,7 @@ mod sys {
         Some(Channel {
             ctrl_r: 0,
             ctrl_w: 1,
-            pixels: Pixels::Owned(vec![0u8; size]),
+            pixels: FrameMemory::owned(size),
         })
     }
 
@@ -436,9 +424,10 @@ mod sys {
             if view.is_null() {
                 return None;
             }
-            Pixels::Shared(view.cast())
+            // SAFETY: the view spans `size` writable bytes and unmap_frame unmaps it once on drop.
+            unsafe { FrameMemory::foreign(view.cast(), size, unmap_frame) }?
         } else {
-            Pixels::Owned(vec![0u8; size])
+            FrameMemory::owned(size)
         };
         Some(Channel {
             ctrl_r,
@@ -447,9 +436,11 @@ mod sys {
         })
     }
 
-    pub fn release(pixels: Pixels, _size: usize) {
-        if let Pixels::Shared(view) = pixels {
-            unsafe { UnmapViewOfFile(view.cast()) };
-        }
+    /// # Safety
+    ///
+    /// `pixels` must be a live view this module's MapViewOfFile returned.
+    unsafe fn unmap_frame(pixels: core::ptr::NonNull<u8>, _len: usize) {
+        // SAFETY: the caller passes the view MapViewOfFile returned.
+        unsafe { UnmapViewOfFile(pixels.as_ptr().cast()) };
     }
 }

@@ -175,6 +175,13 @@ Southstar Browser 0.9.11-dev:
   src/libsouthstar.h declares, through a version script that
   scripts/gen-libsouthstar-map.py generates from the header; a C program
   built against it opens a page and renders its text.
+* The renderer's framebuffer is a FrameMemory that owns its pixels: its own
+  buffer, the shared mapping the shell sent (unmapped when the session
+  ends) or, in single-process mode, a reference to the shell's buffer
+  (released when the session ends). Its constructor for shared memory is the
+  one unsafe entry point and states its contract; new_session, which turned
+  any raw pointer into a slice from safe code, now takes a FrameMemory and
+  refuses one smaller than max_w x max_h x 4 bytes.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

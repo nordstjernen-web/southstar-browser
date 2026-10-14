@@ -1,37 +1,34 @@
-//! Southstar — a renderer session over the shared framebuffer the shell maps.
+//! Southstar — a renderer session over the framebuffer memory it paints into.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_int;
 
+use crate::frame::FrameMemory;
 use crate::serve::{Framebuffer, Session};
 
-pub struct SharedFramebuffer {
-    pixels: *mut u8,
-    len: usize,
-}
-
-impl Framebuffer for SharedFramebuffer {
+impl Framebuffer for FrameMemory {
     fn bytes(&mut self) -> &mut [u8] {
-        unsafe { core::slice::from_raw_parts_mut(self.pixels, self.len) }
+        FrameMemory::bytes(self)
     }
 }
 
-pub type RendererSession = Session<SharedFramebuffer>;
+pub type RendererSession = Session<FrameMemory>;
 
 pub fn new_session(
     ctrl_w: c_int,
-    fb: *mut u8,
+    fb: FrameMemory,
     max_w: c_int,
     max_h: c_int,
     shm_mode: bool,
 ) -> Option<RendererSession> {
-    if fb.is_null() || max_w <= 0 || max_h <= 0 {
+    let needed = usize::try_from(max_w)
+        .ok()
+        .zip(usize::try_from(max_h).ok())
+        .filter(|&(w, h)| w > 0 && h > 0)
+        .and_then(|(w, h)| w.checked_mul(h)?.checked_mul(4))?;
+    if fb.len() < needed {
         return None;
     }
-    let framebuffer = SharedFramebuffer {
-        pixels: fb,
-        len: max_w as usize * max_h as usize * 4,
-    };
-    Some(Session::new(ctrl_w, framebuffer, max_w, max_h, shm_mode))
+    Some(Session::new(ctrl_w, fb, max_w, max_h, shm_mode))
 }

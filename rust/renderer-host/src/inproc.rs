@@ -14,6 +14,7 @@ use southstar_ipc::{Conn, Head, until_nul};
 
 use crate::engine::{self, PrintSetup};
 use crate::ffi::{RendererSession, new_session};
+use crate::frame::FrameMemory;
 
 #[repr(C)]
 struct GSource {
@@ -45,7 +46,6 @@ unsafe extern "C" {
 struct Connection {
     ctrl_r: c_int,
     ctrl_w: c_int,
-    fb: *mut u8,
     session: RendererSession,
 }
 
@@ -97,11 +97,9 @@ fn close_connection(conn: *mut Connection) {
     let Connection {
         ctrl_r,
         ctrl_w,
-        fb,
         session,
     } = *conn;
     drop(session);
-    unsafe { g_atomic_rc_box_release(fb.cast()) };
     close_fd(ctrl_r);
     if cfg!(windows) {
         close_fd(ctrl_w);
@@ -224,6 +222,19 @@ fn read_requests(conn: ConnPtr, ctrl_r: c_int) {
     });
 }
 
+fn frame_len(max_w: c_int, max_h: c_int) -> Option<usize> {
+    let (w, h) = (usize::try_from(max_w).ok()?, usize::try_from(max_h).ok()?);
+    w.checked_mul(h)?.checked_mul(4)
+}
+
+/// # Safety
+///
+/// `pixels` must hold a reference to a GLib atomic ref-counted box that nothing else releases.
+unsafe fn release_frame(pixels: core::ptr::NonNull<u8>, _len: usize) {
+    // SAFETY: the caller hands over the one reference attach acquired.
+    unsafe { g_atomic_rc_box_release(pixels.as_ptr().cast()) };
+}
+
 unsafe extern "C" fn attach(
     ctrl_r: c_int,
     ctrl_w: c_int,
@@ -231,13 +242,24 @@ unsafe extern "C" fn attach(
     max_w: c_int,
     max_h: c_int,
 ) -> *mut c_void {
-    let Some(session) = new_session(ctrl_w, fb, max_w, max_h, true) else {
+    let Some(len) = frame_len(max_w, max_h) else {
+        return ptr::null_mut();
+    };
+    if fb.is_null() {
+        return ptr::null_mut();
+    }
+    // SAFETY: the shell passes a live ref-counted frame buffer; this takes one more reference to it.
+    let retained = unsafe { g_atomic_rc_box_acquire(fb.cast()) }.cast::<u8>();
+    // SAFETY: the shell's buffer holds max_w * max_h * 4 bytes and stays alive while this reference does; release_frame drops the reference once.
+    let Some(memory) = (unsafe { FrameMemory::foreign(retained, len, release_frame) }) else {
+        return ptr::null_mut();
+    };
+    let Some(session) = new_session(ctrl_w, memory, max_w, max_h, true) else {
         return ptr::null_mut();
     };
     let conn = Box::into_raw(Box::new(Connection {
         ctrl_r,
         ctrl_w,
-        fb: unsafe { g_atomic_rc_box_acquire(fb.cast()) }.cast(),
         session,
     }));
     let shared = ConnPtr(conn);
@@ -245,8 +267,8 @@ unsafe extern "C" fn attach(
         .name("ns-inproc-read".to_owned())
         .spawn(move || read_requests(shared, ctrl_r));
     if spawned.is_err() {
-        let conn = unsafe { Box::from_raw(conn) };
-        unsafe { g_atomic_rc_box_release(conn.fb.cast()) };
+        // SAFETY: conn came from Box::into_raw above and no thread received it.
+        drop(unsafe { Box::from_raw(conn) });
         return ptr::null_mut();
     }
     conn.cast()
