@@ -471,15 +471,6 @@ pub fn nsr_window_cancelAnimationFrame(
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_media_request_video_frame_callback(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    frames::request_video_frame_callback(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_run_animation_frame(js: *mut NsJs) -> GBoolean {
     let js = Js(js);
     if js.is_null() {

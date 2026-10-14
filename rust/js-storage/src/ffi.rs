@@ -461,18 +461,8 @@ pub unsafe extern "C" fn ns_storage_load_local(js: *mut NsJs, url: *const c_char
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_storage_install_proto(scope: &mut Scope<'_>, proto: &Value) {
-    binding::install_proto(scope, proto);
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value) {
     binding::install_window(scope, global);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_storage_register_class(scope: &mut Scope<'_>, proto: Value) {
-    class::register(scope, proto);
 }
 
 #[unsafe(no_mangle)]

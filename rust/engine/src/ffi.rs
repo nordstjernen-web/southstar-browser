@@ -385,27 +385,6 @@ pub unsafe extern "C" fn ns_engine_load_keyframes(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_collect_stylesheets(
-    doc: *mut NsNode,
-    base_url: *const c_char,
-    out: *mut GPtrArray,
-    out_docs: *mut GPtrArray,
-    css_cache: *mut GHashTable,
-) {
-    let Some(out) = (unsafe { SheetList::from_ptr(out) }) else {
-        return;
-    };
-    let docs = unsafe { SheetList::from_ptr(out_docs) };
-    crate::styles::collect_stylesheets(
-        unsafe { Node::from_ptr(doc) },
-        c_str(base_url),
-        &out,
-        docs.as_ref(),
-        unsafe { CssCache::from_ptr(css_cache) },
-    );
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_engine_compute_cascade(
     doc: *mut NsNode,
     base_url: *const c_char,

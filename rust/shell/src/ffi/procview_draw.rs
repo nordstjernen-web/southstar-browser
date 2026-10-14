@@ -1127,23 +1127,8 @@ pub unsafe extern "C" fn ns_pv_stage_fill(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_set_busy_cursor(v: *mut NsProcView) {
-    set_busy_cursor(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_clear_busy_cursor(v: *mut NsProcView) {
-    clear_busy_cursor(v);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_set_named_cursor(widget: *mut GtkWidget, name: *const c_char) {
     set_named_cursor(widget, unsafe { glib::bytes(name) }.unwrap_or_default());
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_configure_adjustments(v: *mut NsProcView) {
-    configure_adjustments(v);
 }
 
 #[unsafe(no_mangle)]
@@ -1159,21 +1144,6 @@ pub unsafe extern "C" fn ns_pv_tiles_leave(v: *mut NsProcView) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_request_tick(v: *mut NsProcView) {
-    request_tick(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_request_render(v: *mut NsProcView) {
-    request_render(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_render(v: *mut NsProcView) {
-    start_render(v);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
     let state = view(v);
     state.wheel_left_x = 0.0;
@@ -1182,11 +1152,6 @@ pub unsafe extern "C" fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
     state.wheel_pend_y = 0.0;
     state.fling_vx = 0.0;
     state.fling_vy = 0.0;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_wheel_scrolling(v: *mut NsProcView) -> GBoolean {
-    flag(wheel_scrolling(v))
 }
 
 #[unsafe(no_mangle)]

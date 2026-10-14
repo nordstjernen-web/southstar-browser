@@ -99,16 +99,6 @@ pub fn nsr_event_new(scope: &mut Scope<'_>) -> JsResult {
     crate::class::new_event(scope, None)
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_event_new_proto(scope: &mut Scope<'_>, proto: &Value) -> JsResult {
-    crate::class::new_event(scope, Some(proto))
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_event_state(value: &Value) -> Option<Value> {
-    crate::class::state_of(value)
-}
-
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(

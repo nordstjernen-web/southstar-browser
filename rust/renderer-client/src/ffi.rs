@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use southstar_glib::{self as glib, GPtrArray};
 
 use crate::client::{Frame, Page, Renderer, Tick, TilesRequest, View, Wheel};
-use crate::os::{self, AttachFn};
+use crate::os::{self};
 
 #[repr(C)]
 pub struct CPage {
@@ -226,15 +226,6 @@ unsafe fn spawn(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_spawn(
-    path: *const c_char,
-    max_w: c_int,
-    max_h: c_int,
-) -> *mut Renderer {
-    unsafe { spawn(path, max_w, max_h, false, false) }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_rproc_http_spawn_shm(
     path: *const c_char,
     max_w: c_int,
@@ -251,11 +242,6 @@ pub unsafe extern "C" fn ns_rproc_http_spawn_shm_ex(
     private_mode: c_int,
 ) -> *mut Renderer {
     unsafe { spawn(path, max_w, max_h, true, private_mode != 0) }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_http_set_inproc(attach: Option<AttachFn>) {
-    os::set_attach(attach);
 }
 
 #[unsafe(no_mangle)]
@@ -633,52 +619,6 @@ pub unsafe extern "C" fn ns_rproc_http_release_full(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_focused_editable(r: *mut Renderer) -> c_int {
-    unsafe { renderer(r) }.map_or(0, |r| c_int::from(r.focused_editable()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_focused_editable_value(
-    r: *mut Renderer,
-    out_caret: *mut usize,
-    out_anchor: *mut usize,
-) -> *mut c_char {
-    unsafe {
-        if !out_caret.is_null() {
-            *out_caret = 0;
-        }
-        if !out_anchor.is_null() {
-            *out_anchor = 0;
-        }
-    }
-    let Some((value, caret, anchor)) =
-        (unsafe { renderer(r) }).and_then(Renderer::focused_editable_value)
-    else {
-        return ptr::null_mut();
-    };
-    unsafe {
-        if !out_caret.is_null() && caret > 0 {
-            *out_caret = caret;
-        }
-        if !out_anchor.is_null() && anchor > 0 {
-            *out_anchor = anchor;
-        }
-    }
-    owned(value)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_set_focused_editable_selection(
-    r: *mut Renderer,
-    caret: usize,
-    anchor: usize,
-) -> c_int {
-    unsafe { renderer(r) }.map_or(0, |r| {
-        c_int::from(r.set_focused_editable_selection(caret, anchor))
-    })
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_rproc_http_hover_full(
     r: *mut Renderer,
     x: c_int,
@@ -706,18 +646,6 @@ pub unsafe extern "C" fn ns_rproc_http_hover_full(
         }
     }
     c_int::from(changed)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_scroll(
-    r: *mut Renderer,
-    x: c_int,
-    y: c_int,
-    dx: c_int,
-    dy: c_int,
-) -> c_int {
-    let json = format!("{{\"x\":{x},\"y\":{y},\"dx\":{dx},\"dy\":{dy}}}");
-    unsafe { renderer(r) }.map_or(0, |r| c_int::from(r.flag("/scroll", &json, "consumed")))
 }
 
 #[unsafe(no_mangle)]

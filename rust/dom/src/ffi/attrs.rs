@@ -7,8 +7,8 @@ use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::memory::{return_if_fail, value_dup};
-use super::{Attr, Node, NsAttr, NsNode, c_str};
+use super::memory::return_if_fail;
+use super::{Attr, Node, NsNode, c_str};
 use crate::attrs::{self, NsName};
 use crate::node::KIND_ELEMENT;
 
@@ -20,23 +20,9 @@ fn element<'a>(n: *const NsNode) -> Option<Node<'a>> {
     unsafe { node(n) }.filter(|n| n.is_element())
 }
 
-fn attr_ptr(attr: Option<Attr>) -> *const NsAttr {
-    attr.map_or(ptr::null(), |a| a.attr.as_ptr())
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_attr_name_is_internal(name: *const c_char) -> GBoolean {
     glib::boolean(c_str(name).is_some_and(|n| attrs::is_internal(n.to_bytes())))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_local_name(attr: *const NsAttr) -> *const c_char {
-    Attr::link(attr).map_or(c"", attrs::local_name).as_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_value_dup_len(value: *const c_char, len: usize) -> *mut c_char {
-    value_dup(value, len)
 }
 
 #[unsafe(no_mangle)]
@@ -124,37 +110,6 @@ pub unsafe extern "C" fn ns_element_append_attr_borrow(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_has_class(
-    el: *const NsNode,
-    name: *const c_char,
-    len: usize,
-) -> GBoolean {
-    let name = unsafe { glib::slice(name.cast(), len) };
-    glib::boolean(unsafe { node(el) }.is_some_and(|el| attrs::has_class(el, name)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_name_bloom_bit(name: *const c_char) -> u64 {
-    attrs::name_bloom_bit(c_str(name).map_or(&[][..], |n| n.to_bytes()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_attr_bloom(el: *const NsNode) -> u64 {
-    unsafe { node(el) }.map_or(0, attrs::bloom)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_find_attr(
-    el: *const NsNode,
-    name: *const c_char,
-) -> *const NsAttr {
-    let (Some(el), Some(name)) = (unsafe { node(el) }, c_str(name)) else {
-        return ptr::null();
-    };
-    attr_ptr(attrs::find(el, name))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_element_get_attr(
     el: *const NsNode,
     name: *const c_char,
@@ -179,16 +134,4 @@ pub unsafe extern "C" fn ns_element_get_attr_len(
         unsafe { *out_len = found.map_or(0, |a| a.value_len() as usize) };
     }
     found.map_or(ptr::null(), Attr::value_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_find_attr_ns(
-    el: *const NsNode,
-    namespace_uri: *const c_char,
-    local_name: *const c_char,
-) -> *const NsAttr {
-    let (Some(el), Some(local_name)) = (unsafe { node(el) }, c_str(local_name)) else {
-        return ptr::null();
-    };
-    attr_ptr(attrs::find_ns(el, c_str(namespace_uri), local_name))
 }

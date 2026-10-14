@@ -437,15 +437,6 @@ pub unsafe extern "C" fn ns_html_parse_fragment_with_scripting(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_parse_fragment_in(
-    context_tag: *const c_char,
-    input: *const c_char,
-    len: isize,
-) -> *mut NsNode {
-    unsafe { ns_html_parse_fragment_with_scripting(context_tag, input, len, glib::TRUE) }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_html_parse_fragment_in_context(
     context: *const NsNode,
     input: *const c_char,

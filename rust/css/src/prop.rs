@@ -612,25 +612,6 @@ impl Prop {
         )
     }
 
-    pub(crate) fn affects_layout(self) -> bool {
-        !matches!(
-            self,
-            Prop::Opacity
-                | Prop::Color
-                | Prop::BackgroundColor
-                | Prop::Transform
-                | Prop::Visibility
-                | Prop::BoxShadow
-                | Prop::TextShadow
-                | Prop::Filter
-                | Prop::BorderTopColor
-                | Prop::BorderRightColor
-                | Prop::BorderBottomColor
-                | Prop::BorderLeftColor
-                | Prop::OutlineColor
-        )
-    }
-
     pub fn c_name(self) -> &'static CStr {
         match self {
             Prop::Display => c"display",

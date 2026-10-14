@@ -101,11 +101,6 @@ pub unsafe extern "C" fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_serialize_specified(v: *const NsCssValue) -> *mut c_char {
-    glib::strdup(&unsafe { text_of(v, true) })
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_value_interpolate(
     a: *const NsCssValue,
     b: *const NsCssValue,

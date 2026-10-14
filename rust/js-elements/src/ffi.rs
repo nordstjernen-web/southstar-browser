@@ -346,16 +346,6 @@ pub fn nsr_element_img_natural_height(scope: &mut Scope<'_>, this: &Value) -> Js
     crate::image::natural_height(scope, this)
 }
 
-#[allow(non_snake_case)]
-#[unsafe(no_mangle)]
-pub fn nsr_element_set_nodeValue(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    value: &Value,
-) -> JsResult<()> {
-    crate::node_value::set_node_value(scope, this, value)
-}
-
 #[unsafe(no_mangle)]
 pub fn nsr_element_set_node_value(
     scope: &mut Scope<'_>,

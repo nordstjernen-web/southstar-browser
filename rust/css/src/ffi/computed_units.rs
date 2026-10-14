@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::mem::{offset_of, size_of};
 use core::ptr;
 
@@ -165,27 +165,6 @@ pub(super) unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
         style.values[prop] = copy;
         copy
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_cow(style: *mut RawStyle, prop: c_int) -> *mut NsCssValue {
-    match (unsafe { style.as_mut() }, usize::try_from(prop)) {
-        (Some(style), Ok(prop)) => unsafe { cow(style, prop) },
-        _ => ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_resolve_em_units(
-    out: *mut RawStyle,
-    parent_style: *const RawStyle,
-    root_px: c_double,
-) {
-    let Some(out) = (unsafe { out.as_mut() }) else {
-        return;
-    };
-    let parent = unsafe { parent_style.as_ref() }.map(StyleView);
-    computed_units::resolve(&mut ComputedStyle(out), parent.as_ref(), root_px);
 }
 
 #[unsafe(no_mangle)]

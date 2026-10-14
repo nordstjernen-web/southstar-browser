@@ -660,13 +660,6 @@ pub unsafe extern "C" fn ns_js_mutation_teardown(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_clear_children(n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        tree::clear_children(n);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_insert_sibling_before(reference: *mut NsNode, n: *mut NsNode) {
     if let (Some(reference), Some(n)) = (unsafe { node(reference) }, unsafe { node(n) }) {
         tree::insert_sibling_before(reference, n);

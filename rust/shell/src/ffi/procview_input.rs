@@ -807,11 +807,6 @@ pub unsafe extern "C" fn ns_pv_push_req(v: *mut NsProcView, req: *mut Req) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_request_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
-    request_link(v, x, y, action);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
     start_link(v, x, y, action);
 }
@@ -832,17 +827,6 @@ pub unsafe extern "C" fn ns_pv_start_select(v: *mut NsProcView, kind: c_int, x: 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_key_text(
-    v: *mut NsProcView,
-    kind: c_int,
-    text: *const c_char,
-) {
-    if let Some(text) = unsafe { glib::bytes(text) } {
-        start_key_text(v, kind, text);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_run_edit_op(v: *mut NsProcView, op: c_int) {
     run_edit_op(v, EditOp::from_raw(op));
 }
@@ -850,31 +834,6 @@ pub unsafe extern "C" fn ns_pv_run_edit_op(v: *mut NsProcView, op: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_maybe_update_viewport(v: *mut NsProcView) -> GBoolean {
     GBoolean::from(maybe_update_viewport(v))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_viewport_w(v: *mut NsProcView) -> c_int {
-    viewport_w(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_viewport_h(v: *mut NsProcView) -> c_int {
-    viewport_h(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_cur_scale(v: *mut NsProcView) -> c_double {
-    cur_scale(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_raster_scale(v: *mut NsProcView) -> c_double {
-    raster_scale(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_page_dpr(v: *mut NsProcView) -> c_double {
-    page_dpr(v)
 }
 
 #[unsafe(no_mangle)]

@@ -917,25 +917,6 @@ pub unsafe extern "C" fn ns_video_cache_toggle(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_toggle(v: *mut NsVideo, now_us: i64) -> GBoolean {
-    glib::boolean(video_mut(v).is_some_and(|v| v.toggle(now_us)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_play(v: *mut NsVideo, now_us: i64) {
-    if let Some(v) = video_mut(v) {
-        v.play(now_us);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_pause(v: *mut NsVideo, now_us: i64) {
-    if let Some(v) = video_mut(v) {
-        v.pause(now_us);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_video_note_paint_rect(
     v: *mut NsVideo,
     x: f64,

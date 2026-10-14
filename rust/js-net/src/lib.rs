@@ -57,10 +57,6 @@ pub(crate) fn existing_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> Option
         .flatten()
 }
 
-pub(crate) fn page_init(js: Js) {
-    with_page(js, |_| ());
-}
-
 pub(crate) fn page_reset(js: Js) {
     let dropped = existing_page(js, |page| {
         (

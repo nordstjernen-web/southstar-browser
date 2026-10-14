@@ -563,25 +563,6 @@ setters! {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_element_range_number_getter(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    magic: i32,
-) -> JsResult {
-    crate::value::range_number(scope, this, magic)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_range_number_setter(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    value: &Value,
-    magic: i32,
-) -> JsResult<()> {
-    crate::value::set_range_number(scope, this, value, magic).map(drop)
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_form_data(scope: &mut Scope<'_>, global: &Value) {
     crate::form_data::install(scope, global);
 }
@@ -744,13 +725,6 @@ pub unsafe extern "C" fn ns_checkable_post_click(
         checked_radio: node(state.checked_radio),
     };
     crate::checkable::post_click(page_of(js), el, kind, &state, prevented != 0);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_checkedness(js: *mut NsJs, n: *mut NsNode, checked: GBoolean) {
-    if let Some(n) = node(n) {
-        crate::checkable::set_checkedness(page_of(js), n, checked != 0);
-    }
 }
 
 #[unsafe(no_mangle)]

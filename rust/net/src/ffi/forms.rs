@@ -83,16 +83,6 @@ pub unsafe extern "C" fn ns_form_urlencoded_append_pair(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_multipart_quote_field(out: *mut GString, s: *const c_char) {
-    let (false, Some(text)) = (out.is_null(), unsafe { glib::bytes(s) }) else {
-        return;
-    };
-    let mut quoted = Vec::with_capacity(text.len());
-    forms::quote_field(&mut quoted, text);
-    append(out, &quoted);
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_multipart_boundary() -> *mut c_char {
     let mut words = [0u32; 4];
     let filled = unsafe {

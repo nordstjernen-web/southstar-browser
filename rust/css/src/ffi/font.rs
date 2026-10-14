@@ -11,7 +11,6 @@ use std::sync::{Mutex, PoisonError};
 use southstar_glib::{self as glib, GBoolean};
 
 use crate::font;
-use crate::scan::split_ws_paren;
 
 type AvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
 type GenerationFn = unsafe extern "C" fn() -> u64;
@@ -123,32 +122,6 @@ pub unsafe extern "C" fn ns_css_font_relative_unit_px(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_font_weight_relative(parent: c_int, bolder: GBoolean) -> c_int {
-    font::weight_relative(parent, bolder != 0)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_split_ws_paren(
-    text: *const c_char,
-    out: *mut *mut c_char,
-    max: c_int,
-) -> c_int {
-    let Some(text) = (unsafe { bytes(text) }) else {
-        return 0;
-    };
-    let tokens = split_ws_paren(text, usize::try_from(max).unwrap_or(0));
-    for (i, tok) in tokens.iter().enumerate() {
-        unsafe { *out.add(i) = glib::strdup(tok) };
-    }
-    tokens.len() as c_int
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_font_shorthand_canonical(text: *const c_char) -> *mut c_char {
     owned(unsafe { bytes(text) }.and_then(font::shorthand_canonical))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_family_canonical(text: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(text) }.and_then(font::family_canonical))
 }

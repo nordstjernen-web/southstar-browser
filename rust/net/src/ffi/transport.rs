@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -22,7 +22,6 @@ static RNG_WARMUP: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 unsafe extern "C" {
     fn OpenSSL_version(kind: c_int) -> *const c_char;
-    fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
     fn RAND_bytes(buf: *mut u8, num: c_int) -> c_int;
 }
 
@@ -46,42 +45,6 @@ pub extern "C" fn ns_net_aborting() -> GBoolean {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_begin_abort() {
     ABORTING.store(true, Ordering::SeqCst);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_host_recently_dead(origin: *const c_char) -> GBoolean {
-    glib::boolean(text(origin).is_some_and(transport::host_recently_dead))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_host_mark_dead(origin: *const c_char) {
-    if let Some(origin) = text(origin) {
-        transport::mark_host_dead(origin);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_host_mark_alive(origin: *const c_char) {
-    if let Some(origin) = text(origin) {
-        transport::mark_host_alive(origin);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_acquire_origin_slot(
-    origin: *const c_char,
-    cancellable: *mut c_void,
-) -> GBoolean {
-    let cancelled =
-        || !cancellable.is_null() && unsafe { g_cancellable_is_cancelled(cancellable) } != 0;
-    glib::boolean(text(origin).is_some_and(|o| transport::acquire_origin_slot(o, cancelled)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_release_origin_slot(origin: *const c_char) {
-    if let Some(origin) = text(origin) {
-        transport::release_origin_slot(origin);
-    }
 }
 
 fn resolve_ca_bundle() {
@@ -162,11 +125,6 @@ pub extern "C" fn ns_net_transport_shutdown() {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_net_accept_encoding() -> *const c_char {
-    slot_ptr(&ACCEPT_ENCODING)
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_net_ca_bundle_path() -> *const c_char {
     slot_ptr(&CA_BUNDLE)
 }
@@ -178,9 +136,4 @@ pub extern "C" fn ns_net_ec_curves() -> *const c_char {
     } else {
         c"X25519:P-256:P-384".as_ptr()
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_response_budget() -> u64 {
-    transport::response_budget()
 }

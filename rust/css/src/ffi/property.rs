@@ -13,7 +13,7 @@ use super::value::{
 };
 use crate::calc::Parsed;
 use crate::prop::Prop;
-use crate::property::{self, Body, Value};
+use crate::property::{Body, Value};
 
 pub(crate) fn id_of(prop: Prop) -> c_int {
     prop.id() as c_int
@@ -38,11 +38,6 @@ pub extern "C" fn ns_css_prop_name(prop: c_int) -> *const c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_prop_inherits(prop: c_int) -> GBoolean {
     glib::boolean(prop_of(prop).is_some_and(Prop::inherits))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_prop_affects_layout(prop: c_int) -> GBoolean {
-    glib::boolean(prop_of(prop).is_none_or(Prop::affects_layout))
 }
 
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
@@ -106,17 +101,6 @@ pub(crate) fn to_c(v: Value) -> *mut NsCssValue {
         (*raw).next_layer = v.next_layer.map_or(ptr::null_mut(), |next| to_c(*next));
     }
     raw
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_value_for(
-    prop: c_int,
-    text: *const c_char,
-) -> *mut NsCssValue {
-    let Some(text) = (unsafe { bytes(text) }) else {
-        return ptr::null_mut();
-    };
-    property::parse_for(prop_of(prop), text).map_or(ptr::null_mut(), to_c)
 }
 
 #[unsafe(no_mangle)]

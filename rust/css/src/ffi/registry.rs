@@ -150,11 +150,6 @@ pub(super) fn pass_registered() -> *mut GHashTable {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_registered_props() -> *mut GHashTable {
-    PASS.get()
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_registered_props_end() {
     let table = PASS.replace(ptr::null_mut());
     if !table.is_null() {

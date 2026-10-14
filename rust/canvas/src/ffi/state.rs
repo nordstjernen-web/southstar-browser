@@ -273,18 +273,6 @@ pub(crate) fn transfer_to_image_bitmap(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_state_for(js: *mut NsJs, el: *const NsNode) -> *mut CanvasState {
-    crate::state::state_for(Js(js), Node(el)).unwrap_or(ptr::null_mut())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_state_adopt_node(js: *mut NsJs, el: *mut NsNode) {
-    if let Some(st) = crate::state::state_for(Js(js), Node(el)) {
-        unsafe { (*st).owned_node = el.cast() };
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_canvas_states_teardown(js: *mut NsJs) {
     crate::state::teardown(Js(js));
 }
@@ -292,16 +280,6 @@ pub unsafe extern "C" fn ns_canvas_states_teardown(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_canvas_surface(js: *mut NsJs, el: *const NsNode) -> *mut c_void {
     canvas_surface(Js(js), Node(el))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_dim_from_attr(
-    el: *const NsNode,
-    name: *const c_char,
-    defv: c_int,
-) -> c_int {
-    let name = unsafe { CStr::from_ptr(name) }.to_str().unwrap_or_default();
-    crate::state::dimension(Node(el), name, defv)
 }
 
 pub(crate) fn clear_patterns(st: &mut CanvasState) {

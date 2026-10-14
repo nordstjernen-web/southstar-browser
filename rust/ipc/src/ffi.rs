@@ -2,11 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::io;
-
-use crate::{Conn, Head};
 
 unsafe extern "C" {
     fn malloc(size: usize) -> *mut c_void;
@@ -300,14 +298,6 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-unsafe fn body<'a>(data: *const c_void, n: usize) -> &'a [u8] {
-    if data.is_null() || n == 0 {
-        &[]
-    } else {
-        unsafe { core::slice::from_raw_parts(data.cast(), n) }
-    }
-}
-
 fn malloc_string(text: &[u8]) -> *mut c_char {
     let out = unsafe { malloc(text.len() + 1) }.cast::<u8>();
     if !out.is_null() {
@@ -320,171 +310,10 @@ fn malloc_string(text: &[u8]) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_conn_init(c: *mut Conn, fd: c_int) {
-    if c.is_null() {
-        return;
-    }
-    unsafe {
-        (&raw mut (*c).fd).write(fd);
-        (&raw mut (*c).start).write(0);
-        (&raw mut (*c).len).write(0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn http_set_bufsize(fd: c_int, bytes: c_int) {
-    set_bufsize(fd, bytes);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn http_set_read_timeout(fd: c_int, seconds: c_int) {
-    set_read_timeout(fd, seconds);
-}
-
-#[cfg(unix)]
-#[unsafe(no_mangle)]
-pub extern "C" fn http_send_fd(sock: c_int, fd: c_int) -> c_int {
-    if send_fd(sock, fd) { 0 } else { -1 }
-}
-
-#[cfg(unix)]
-#[unsafe(no_mangle)]
-pub extern "C" fn http_recv_fd(sock: c_int) -> c_int {
-    recv_fd(sock)
-}
-
-unsafe fn conn<'a>(c: *mut Conn) -> Option<&'a mut Conn> {
-    unsafe { c.as_mut() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_read_head(c: *mut Conn, out: *mut Head) -> c_int {
-    let Some(c) = (unsafe { conn(c) }) else {
-        return -1;
-    };
-    if out.is_null() {
-        return -1;
-    }
-    unsafe { ptr::write_bytes(out, 0, 1) };
-    let out = unsafe { &mut *out };
-    if c.read_head(out) { 0 } else { -1 }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_read_body(c: *mut Conn, n: c_long, dst: *mut c_void) -> c_int {
-    let Some(c) = (unsafe { conn(c) }) else {
-        return -1;
-    };
-    if n < 0 || (n > 0 && dst.is_null()) {
-        return -1;
-    }
-    if n == 0 {
-        return 0;
-    }
-    let dst = unsafe { core::slice::from_raw_parts_mut(dst.cast::<u8>(), n as usize) };
-    if c.read_body(dst) { 0 } else { -1 }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_skip_body(c: *mut Conn, n: c_long) -> c_int {
-    let Some(c) = (unsafe { conn(c) }) else {
-        return -1;
-    };
-    match u64::try_from(n) {
-        Ok(n) if c.skip_body(n) => 0,
-        _ => -1,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_write_request(
-    fd: c_int,
-    method: *const c_char,
-    path: *const c_char,
-    content_type: *const c_char,
-    data: *const c_void,
-    n: usize,
-) -> c_int {
-    let method = unsafe { bytes(method) }.unwrap_or_default();
-    let path = unsafe { bytes(path) }.unwrap_or_default();
-    let content_type = unsafe { bytes(content_type) }.unwrap_or(b"text/plain");
-    let Some(head) = crate::request_head(method, path, content_type, n) else {
-        return -1;
-    };
-    if crate::write_message(fd, &head, unsafe { body(data, n) }) {
-        0
-    } else {
-        -1
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn http_write_response(
-    fd: c_int,
-    status: c_int,
-    content_type: *const c_char,
-    extra_headers: *const c_char,
-    data: *const c_void,
-    n: usize,
-) -> c_int {
-    let content_type = unsafe { bytes(content_type) }.unwrap_or(b"text/plain");
-    let extra_headers = unsafe { bytes(extra_headers) }.unwrap_or_default();
-    let head = crate::response_head(status, content_type, extra_headers, n);
-    if crate::write_message(fd, &head, unsafe { body(data, n) }) {
-        0
-    } else {
-        -1
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn json_escape(s: *const c_char) -> *mut c_char {
     let s = unsafe { bytes(s) }.unwrap_or_default();
     if s.len() > (usize::MAX - 1) / 6 {
         return ptr::null_mut();
     }
     malloc_string(&crate::json_escape(s))
-}
-
-unsafe fn json_value<'a>(body: *const c_char, key: *const c_char) -> Option<&'a [u8]> {
-    let body = unsafe { bytes(body) }?;
-    let key = unsafe { bytes(key) }?;
-    crate::json_value(body, key)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn json_get_long(
-    body: *const c_char,
-    key: *const c_char,
-    out: *mut c_long,
-) -> c_int {
-    let Some(value) = (unsafe { json_value(body, key) }) else {
-        return -1;
-    };
-    if let Some(out) = unsafe { out.as_mut() } {
-        *out = crate::atol(value);
-    }
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn json_get_double(
-    body: *const c_char,
-    key: *const c_char,
-    out: *mut f64,
-) -> c_int {
-    let Some(value) = (unsafe { json_value(body, key) }) else {
-        return -1;
-    };
-    if let Some(out) = unsafe { out.as_mut() } {
-        *out = crate::json_double(value);
-    }
-    0
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn json_get_str(body: *const c_char, key: *const c_char) -> *mut c_char {
-    unsafe { json_value(body, key) }
-        .and_then(crate::json_string)
-        .map_or(ptr::null_mut(), |text| malloc_string(&text))
 }

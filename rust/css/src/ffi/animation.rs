@@ -10,7 +10,6 @@ use southstar_glib::{self as glib, GBoolean};
 
 use super::value::{self, NsCssValue};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
-use crate::time;
 use crate::timing::Timing;
 
 unsafe extern "C" {
@@ -141,10 +140,6 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-fn owned(text: Option<Vec<u8>>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), |text| glib::strdup(&text))
-}
-
 fn prop_ids() -> &'static [c_int; 17] {
     static IDS: OnceLock<[c_int; 17]> = OnceLock::new();
     IDS.get_or_init(|| Longhand::ALL.map(|lh| unsafe { ns_css_prop_id(lh.name().as_ptr()) }))
@@ -235,17 +230,4 @@ pub unsafe extern "C" fn ns_css_anim_shorthand_serialize(
         .map(|l| unsafe { l.entries() })
         .unwrap_or_default();
     glib::strdup(&animation::shorthand_serialize(&entries, is_animation != 0))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_animation_shorthand_canonical(
-    text: *const c_char,
-    is_animation: GBoolean,
-) -> *mut c_char {
-    owned(unsafe { bytes(text) }.and_then(|t| animation::shorthand_canonical(t, is_animation != 0)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_time_specified(value: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(value) }.and_then(|v| time::list_serialize(v, false)))
 }

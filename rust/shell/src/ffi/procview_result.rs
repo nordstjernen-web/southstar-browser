@@ -998,11 +998,6 @@ pub unsafe extern "C" fn ns_pv_perm_resolve(v: *mut NsProcView, allow: GBoolean)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_post_emit(v: *mut NsProcView, evt: c_int, text: *const c_char) {
-    post_emit(v, evt, text);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_proc_view_stop(v: *mut NsProcView) {
     if v.is_null() {
         return;

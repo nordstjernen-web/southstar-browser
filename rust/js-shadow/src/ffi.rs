@@ -104,52 +104,6 @@ pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, V
 }
 
 #[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_get_assignedSlot(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-    crate::slot::get_assigned_slot(scope, this, &[])
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_attachShadow(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::root::attach_shadow(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_getRootNode(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::root::get_root_node(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_assignedNodes(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::slot::assigned_nodes(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_assignedElements(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::slot::assigned_elements(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean {
     GBoolean::from(crate::is_shadow_root(node_of(n)))
 }

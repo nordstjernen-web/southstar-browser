@@ -412,17 +412,6 @@ pub(crate) fn dispatch_hashchange(js: Js, old_url: &[u8], new_url: &[u8]) {
     crate::window_events::dispatch_hashchange(js, old_url.as_bytes(), new_url.as_bytes());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_hashchange(
-    js: *mut NsJs,
-    old_url: *const c_char,
-    new_url: *const c_char,
-) {
-    let old_url = unsafe { borrowed(old_url) };
-    let new_url = unsafe { borrowed(new_url) };
-    crate::window_events::dispatch_hashchange(Js::of(js), &old_url, &new_url);
-}
-
 #[repr(C, align(16))]
 struct ScopeBuffer([u8; 128]);
 
@@ -608,16 +597,6 @@ pub fn nsr_window_install_actions(scope: &mut Scope<'_>, global: &Value) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
     with_main_context(Js::of(js), context::sync_metrics);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_window_named_register_class(ctx: ContextHandle) {
-    ctx.with(crate::class::register);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_window_named_class_id() -> u32 {
-    crate::class::WINDOW_NAMED_CLASS.id()
 }
 
 #[unsafe(no_mangle)]

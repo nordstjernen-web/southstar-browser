@@ -10,15 +10,7 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::Decoded;
 
-#[repr(C)]
-pub struct GString {
-    str_: *mut c_char,
-    len: usize,
-    allocated_len: usize,
-}
-
 unsafe extern "C" {
-    fn g_string_append_len(string: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
     fn g_utf8_make_valid(str_: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_validate(str_: *const c_char, max_len: isize, end: *mut *const c_char) -> GBoolean;
@@ -122,45 +114,6 @@ pub(crate) fn detect_charset(sample: &[u8]) -> Option<Vec<u8>> {
 
 unsafe fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_parse_float(s: *const c_char, out: *mut f64) -> GBoolean {
-    let Some(s) = (unsafe { text(s) }) else {
-        return 0;
-    };
-    match crate::parse_float(s) {
-        Some(v) => {
-            unsafe { *out = v };
-            1
-        }
-        None => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_is_void(tag: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { text(tag) }.is_some_and(crate::is_void))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_is_raw_text(tag: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { text(tag) }.is_some_and(crate::is_raw_text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_escape_append(
-    out: *mut GString,
-    s: *const c_char,
-    escape_quotes: GBoolean,
-) {
-    let mut escaped = Vec::new();
-    crate::escape_append(
-        &mut escaped,
-        unsafe { text(s) }.unwrap_or_default(),
-        escape_quotes != 0,
-    );
-    unsafe { g_string_append_len(out, escaped.as_ptr().cast(), escaped.len() as isize) };
 }
 
 #[unsafe(no_mangle)]

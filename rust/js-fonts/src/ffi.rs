@@ -6,7 +6,7 @@ use core::ffi::{c_uint, c_void};
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use crate::{font_face, font_set, ready};
+use crate::{font_face, ready};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -87,12 +87,6 @@ pub fn nsr_window_fontface_ctor(
     args: &[Value],
 ) -> Result<Value, Value> {
     font_face::construct(scope, this, args)
-}
-
-#[allow(non_snake_case)]
-#[unsafe(no_mangle)]
-pub fn nsr_document_get_fonts(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-    font_set::document_fonts(scope, this, &[])
 }
 
 #[unsafe(no_mangle)]

@@ -8,10 +8,7 @@ use core::ptr;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
 
-use crate::selector::{
-    self, AttrPred, Compound, FLAGS, PseudoPred, Selector, anb_int_strict, attr_value_hash,
-    identifier_hash,
-};
+use crate::selector::{self, AttrPred, Compound, FLAGS, PseudoPred, Selector};
 
 #[repr(C)]
 pub(super) struct RawSelector {
@@ -249,13 +246,6 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-unsafe fn range<'a>(p: *const c_char, len: usize) -> &'a [u8] {
-    if p.is_null() || len == 0 {
-        return &[];
-    }
-    unsafe { core::slice::from_raw_parts(p.cast(), len) }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_selector_free(sel: *mut c_void) {
     let raw = sel.cast::<RawSelector>();
@@ -296,35 +286,4 @@ pub unsafe extern "C" fn ns_css_parse_selector_list_checked(
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_selector_attr_ancestor_hashes() -> GBoolean {
     glib::boolean(selector::get(&FLAGS.attr_ancestor_hashes))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_identifier_hash(
-    kind: c_char,
-    name: *const c_char,
-    len: usize,
-) -> u32 {
-    identifier_hash(kind as u8, unsafe { range(name, len) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_attr_value_hash(
-    name: *const c_char,
-    value: *const c_char,
-    value_len: usize,
-) -> u32 {
-    attr_value_hash(unsafe { bytes(name) }.unwrap_or_default(), unsafe {
-        range(value, value_len)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anb_int_strict(text: *const c_char, out: *mut c_int) -> GBoolean {
-    match unsafe { bytes(text) }.and_then(anb_int_strict) {
-        Some(value) => {
-            unsafe { *out = value };
-            glib::TRUE
-        }
-        None => glib::FALSE,
-    }
 }

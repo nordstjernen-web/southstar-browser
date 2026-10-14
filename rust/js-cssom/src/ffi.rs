@@ -14,7 +14,7 @@ use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
-use crate::{computed, css, declaration};
+use crate::{computed, css};
 
 #[repr(C)]
 pub(crate) struct NsJs {
@@ -432,16 +432,6 @@ pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
 pub(crate) fn write_ignored(scope: &Scope<'_>, node: Node<'_>) -> bool {
     let js = scope.context_opaque();
     unsafe { ns_js_node_unpinned(js, node.as_ptr()) != 0 }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_cssom_register_style_class(scope: &mut Scope<'_>, proto: Value) {
-    crate::class::register(scope, proto);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_style_class_proto(scope: &mut Scope<'_>) -> Value {
-    style_decl_proto(scope)
 }
 
 pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
@@ -992,11 +982,6 @@ pub fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value) {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_cssom_install_style_proto(scope: &mut Scope<'_>, proto: &Value) {
-    declaration::install_style_proto(scope, proto).ok();
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_computed_text(
     ctx: ContextHandle,
     node: *const NsNode,
@@ -1011,53 +996,6 @@ pub unsafe extern "C" fn ns_js_computed_text(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_style_own_value(
-    node: *const NsNode,
-    name: *const c_char,
-    writable: *mut GBoolean,
-) -> *mut c_char {
-    let (Some(node), false) = (unsafe { Node::from_ptr(node) }, name.is_null()) else {
-        return core::ptr::null_mut();
-    };
-    let name = unsafe { CStr::from_ptr(name) }.to_string_lossy();
-    match declaration::own_value(node, &name) {
-        Some((value, is_writable)) => {
-            if let Some(w) = unsafe { writable.as_mut() } {
-                *w = glib::boolean(is_writable);
-            }
-            glib::strdup(value.as_bytes())
-        }
-        None => core::ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_cssom_style_set(
-    scope: &mut Scope<'_>,
-    node: *mut NsNode,
-    name: &str,
-    value: &Value,
-) {
-    if let Some(node) = unsafe { Node::from_ptr(node) } {
-        declaration::set_named(scope, node, name, value);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_cssom_teardown(js: *const NsJs) {
     crate::teardown(Js(js as usize));
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_animate(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::animate::element_animate(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_element_get_style(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-    crate::declaration::element_style(scope, this, &[])
 }

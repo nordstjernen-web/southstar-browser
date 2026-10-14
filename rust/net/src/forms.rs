@@ -56,17 +56,6 @@ pub fn urlencode(out: &mut Vec<u8>, text: &[u8]) {
     }
 }
 
-pub fn quote_field(out: &mut Vec<u8>, text: &[u8]) {
-    for &c in text {
-        match c {
-            b'"' => out.extend_from_slice(b"%22"),
-            b'\r' => out.extend_from_slice(b"%0D"),
-            b'\n' => out.extend_from_slice(b"%0A"),
-            _ => out.push(c),
-        }
-    }
-}
-
 pub fn boundary(words: [u32; 4]) -> Vec<u8> {
     format!(
         "----SouthstarFormBoundary{:08x}{:08x}{:08x}{:08x}",

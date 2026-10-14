@@ -151,58 +151,6 @@ pub(crate) fn with_port_realm<R>(
     realm.with(f).expect("a live realm")
 }
 
-pub(crate) struct AtTarget {
-    pub phase: Value,
-    pub current: Value,
-    pub nested: bool,
-}
-
-pub(crate) fn event_at_target_begin(scope: &mut Scope<'_>, ev: &Value, target: Value) -> AtTarget {
-    let dispatching = crate::get(scope, ev, "_dispatching");
-    let nested = scope.to_bool(&dispatching);
-    let phase = crate::get(scope, ev, "eventPhase");
-    let current = crate::get(scope, ev, "currentTarget");
-    crate::set(scope, ev, "currentTarget", target);
-    crate::set(scope, ev, "eventPhase", Value::int(2));
-    crate::set(scope, ev, "_dispatching", Value::boolean(true));
-    AtTarget {
-        phase,
-        current,
-        nested,
-    }
-}
-
-pub(crate) fn event_at_target_end(scope: &mut Scope<'_>, ev: &Value, saved: AtTarget) {
-    if saved.nested {
-        crate::set(scope, ev, "eventPhase", saved.phase);
-        crate::set(scope, ev, "currentTarget", saved.current);
-        return;
-    }
-    crate::set(scope, ev, "eventPhase", Value::int(0));
-    crate::set(scope, ev, "currentTarget", Value::null());
-    crate::set(scope, ev, "_dispatching", Value::boolean(false));
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_event_at_target_begin(scope: &mut Scope<'_>, ev: &Value, target: &Value) -> AtTarget {
-    event_at_target_begin(scope, ev, target.clone())
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_event_at_target_end(scope: &mut Scope<'_>, ev: &Value, saved: AtTarget) {
-    event_at_target_end(scope, ev, saved);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_port_new(scope: &mut Scope<'_>) -> JsResult {
-    ports::new_port(scope)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_port_bridge_id(scope: &mut Scope<'_>, port: &Value) -> u64 {
-    ports::bridge_id(scope, port)
-}
-
 #[unsafe(no_mangle)]
 pub fn nsr_port_transfer_prepare(
     scope: &mut Scope<'_>,
@@ -233,21 +181,6 @@ pub fn nsr_port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_po
 #[unsafe(no_mangle)]
 pub fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value) {
     ports::install(scope, global);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_worker_transfer_is_port(value: &Value) -> bool {
-    is_message_port(value)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_port_bridge_send(
-    scope: &mut Scope<'_>,
-    port: &Value,
-    id: u64,
-    data: &Value,
-) -> JsResult {
-    worker::bridge_send(scope, port, id, data)
 }
 
 macro_rules! natives {

@@ -405,14 +405,6 @@ pub unsafe extern "C" fn ns_js_dialog_light_dismiss(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_refresh_top_layer(js: *const NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::dialog::refresh_top_layer(js);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_process_close_request(js: *const NsJs) -> GBoolean {
     let js = Js::of(js);
     if js.is_null() || js.halted() {

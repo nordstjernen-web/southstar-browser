@@ -377,12 +377,6 @@ pub extern "C" fn ns_css_relayout_leave() {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_stylesheet_cache_drop() {
-    let dropped = with(Caches::take_sheets);
-    drop(dropped);
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_style_element_cache_begin() {
     with(|caches| {
         if caches.nested_relayout() {

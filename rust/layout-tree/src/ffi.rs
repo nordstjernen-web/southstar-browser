@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GArray, GBoolean, GHashTable, boolean};
+use southstar_glib::{GBoolean, GHashTable, boolean};
 use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 use southstar_style::{StyleRef, StyleTable};
 
@@ -148,16 +148,6 @@ fn raw(b: Option<BoxRef<'_>>) -> *mut NsBox {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_box_new(kind: c_uint) -> *mut NsBox {
-    BoxPool::new_box(kind).as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_box_new_inline() -> *mut NsBox {
-    BoxPool::new_inline().as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_free(b: *mut NsBox) {
     BoxPool::free_tree(box_ref(b));
 }
@@ -175,11 +165,6 @@ pub unsafe extern "C" fn ns_layout_inline_merge_prefix(
     suffix: *mut NsBox,
 ) -> *mut NsBox {
     raw(runs::merge_prefix(box_ref(prefix), box_ref(suffix)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_links_ensure(b: *mut NsBox) -> *mut GArray {
-    box_ref(b).map_or(ptr::null_mut(), BoxRef::ensure_links_array)
 }
 
 #[unsafe(no_mangle)]

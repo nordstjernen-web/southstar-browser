@@ -757,11 +757,6 @@ impl Drop for Document {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_node_is_root(n: *const NsNode) -> GBoolean {
-    boolean(unsafe { Node::from_ptr(n) }.is_some_and(crate::is_root))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_svg_document_root(doc: *const NsNode) -> *const NsNode {
     Node::ptr_or_null(unsafe { Node::from_ptr(doc) }.and_then(crate::find_root))
 }
@@ -796,30 +791,6 @@ pub unsafe extern "C" fn ns_svg_render_node(
     }
     let (styles, inherited) = unsafe { inputs(styles, inherited) };
     crate::render_node(Canvas(cr), svg, width, height, styles, inherited);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_node_geometry(
-    svg: *const NsNode,
-    target: *const NsNode,
-    width: f64,
-    height: f64,
-    styles: *mut GHashTable,
-    inherited: *const Style,
-    out: *mut SvgGeometry,
-) -> GBoolean {
-    let (styles, inherited) = unsafe { inputs(styles, inherited) };
-    let geometry = crate::measure::node_geometry(
-        unsafe { Node::from_ptr(svg) },
-        unsafe { Node::from_ptr(target) },
-        width,
-        height,
-        styles,
-        inherited,
-    );
-    let found = geometry.found;
-    unsafe { out.write(geometry) };
-    found
 }
 
 unsafe fn input<'a>(data: *const u8, len: usize) -> &'a [u8] {

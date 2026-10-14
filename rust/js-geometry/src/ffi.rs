@@ -457,11 +457,6 @@ setters! {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_element_dimension_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
-    crate::metrics::dimension(scope, this, magic)
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value {
     crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
 }

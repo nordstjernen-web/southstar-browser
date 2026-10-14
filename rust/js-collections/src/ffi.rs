@@ -10,7 +10,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::live::{self, Live, LiveKind};
@@ -260,11 +260,6 @@ pub fn nsr_qcache_put(
     value: &Value,
 ) {
     page::qcache_put(js_of(scope), root as usize, kind, key, value);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_live_register_class(ctx: ContextHandle) {
-    let _ = ctx.with(crate::class::register);
 }
 
 #[unsafe(no_mangle)]

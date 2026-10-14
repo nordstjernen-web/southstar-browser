@@ -7,7 +7,6 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{Scope, Value};
 
 #[cfg(windows)]
 pub(crate) const DIR_SEPARATOR: u8 = b'\\';
@@ -223,16 +222,6 @@ pub(crate) fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     }
     let host = cstring(host);
     unsafe { glib::bytes(psl_registrable_domain(psl, host.as_ptr())) }.map(<[u8]>::to_vec)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_ext_content_scripts_for_url(
-    scope: &mut Scope<'_>,
-    global: &Value,
-    url: Option<&[u8]>,
-    at_start: bool,
-) -> Option<Vec<u8>> {
-    crate::content_scripts_for_url(scope, global, url, at_start)
 }
 
 #[unsafe(no_mangle)]

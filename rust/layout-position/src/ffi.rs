@@ -374,25 +374,6 @@ pub unsafe extern "C" fn ns_layout_process_absolute_boxes(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_sticky_offset_in(
-    b: *const NsBox,
-    sp_x0: f64,
-    sp_y0: f64,
-    sp_x1: f64,
-    sp_y1: f64,
-    out_dx: *mut f64,
-    out_dy: *mut f64,
-) {
-    let (dx, dy) = unsafe { BoxRef::from_ptr(b) }.map_or((0.0, 0.0), |b| {
-        sticky::offset_in(b, sp_x0, sp_y0, sp_x1, sp_y1)
-    });
-    unsafe {
-        *out_dx = dx;
-        *out_dy = dy;
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_sticky_offset(
     b: *const NsBox,
     vp_x0: f64,
@@ -429,9 +410,4 @@ pub unsafe extern "C" fn ns_box_sticky_y_model(
     };
     unsafe { *out = model };
     glib::boolean(ok)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_sticky_y_offset(m: *const StickyY, scroll_y: f64) -> f64 {
-    sticky::y_offset(unsafe { &*m }, scroll_y)
 }

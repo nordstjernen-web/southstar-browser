@@ -1139,11 +1139,6 @@ pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_init(js: *mut NsJs) {
-    crate::page_init(Js::of_ptr(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_net_reset(js: *mut NsJs) {
     crate::page_reset(Js::of_ptr(js));
 }
@@ -1210,11 +1205,6 @@ pub unsafe extern "C" fn ns_cors_allows(
         borrowed(resp_url).as_deref(),
         borrowed(cors_header).as_deref(),
     ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_header_value_is_safe(value: *const c_char) -> GBoolean {
-    glib::boolean(borrowed(value).is_some_and(|v| crate::headers::value_is_safe(&v)))
 }
 
 pub(crate) unsafe extern "C" fn on_beacon_done(

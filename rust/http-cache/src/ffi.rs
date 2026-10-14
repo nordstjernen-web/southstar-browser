@@ -2,33 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 use std::ffi::CString;
 use std::path::PathBuf;
 
 use southstar_glib::{self as glib, GBoolean};
-
-use crate::{Entry, Response};
-
-#[repr(C)]
-pub struct CacheEntry {
-    final_url: *mut c_char,
-    status: c_long,
-    content_type: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    etag: *mut c_char,
-    last_modified: *mut c_char,
-    expires_at: i64,
-    fetched_at: i64,
-    body: *mut GByteArray,
-}
-
-#[repr(C)]
-pub struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
 
 #[repr(C)]
 struct GDateTime {
@@ -84,10 +63,6 @@ unsafe extern "C" {
         error: *mut *mut GError,
     ) -> GBoolean;
     fn g_error_free(error: *mut GError);
-    fn g_byte_array_new() -> *mut GByteArray;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
-    fn g_byte_array_unref(array: *mut GByteArray);
     fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
 }
 
@@ -483,57 +458,6 @@ pub(crate) fn parse_http_date(text: &[u8]) -> i64 {
     }
 }
 
-fn widen<T: Into<i64>>(value: T) -> i64 {
-    value.into()
-}
-
-unsafe fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
-}
-
-unsafe fn headers<'a>(list: *const *const c_char) -> Vec<&'a [u8]> {
-    let mut out = Vec::new();
-    if list.is_null() {
-        return out;
-    }
-    let mut i = 0;
-    loop {
-        let item = unsafe { *list.add(i) };
-        if item.is_null() {
-            break;
-        }
-        out.push(unsafe { CStr::from_ptr(item) }.to_bytes());
-        i += 1;
-    }
-    out
-}
-
-fn strdup(bytes: Option<Vec<u8>>) -> *mut c_char {
-    bytes.map_or(ptr::null_mut(), |b| glib::strdup(&b))
-}
-
-fn into_c(entry: Entry) -> *mut CacheEntry {
-    let body = unsafe { g_byte_array_new() };
-    if !entry.body.is_empty() {
-        unsafe { g_byte_array_append(body, entry.body.as_ptr(), entry.body.len() as c_uint) };
-    }
-    let out = unsafe { glib::g_malloc0(size_of::<CacheEntry>()) }.cast::<CacheEntry>();
-    unsafe {
-        out.write(CacheEntry {
-            final_url: strdup(entry.final_url),
-            status: entry.status as c_long,
-            content_type: strdup(entry.content_type),
-            cors_allow_origin: strdup(entry.cors_allow_origin),
-            etag: strdup(entry.etag),
-            last_modified: strdup(entry.last_modified),
-            expires_at: entry.expires_at,
-            fetched_at: entry.fetched_at,
-            body,
-        })
-    };
-    out
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_cache_init() {
     crate::init();
@@ -547,111 +471,4 @@ pub extern "C" fn ns_cache_shutdown() {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_cache_clear() {
     crate::clear();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cache_get(
-    url: *const c_char,
-    partition: *const c_char,
-    request_headers: *const *const c_char,
-) -> *mut CacheEntry {
-    let Some(url) = (unsafe { text(url) }) else {
-        return ptr::null_mut();
-    };
-    let headers = unsafe { headers(request_headers) };
-    crate::get(url, unsafe { text(partition) }, &headers).map_or(ptr::null_mut(), into_c)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cache_is_fresh(e: *const CacheEntry) -> GBoolean {
-    match unsafe { e.as_ref() } {
-        Some(e) => glib::boolean(crate::is_fresh(e.expires_at)),
-        None => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cache_entry_free(e: *mut CacheEntry) {
-    let Some(entry) = (unsafe { e.as_mut() }) else {
-        return;
-    };
-    unsafe {
-        for p in [
-            entry.final_url,
-            entry.content_type,
-            entry.cors_allow_origin,
-            entry.etag,
-            entry.last_modified,
-        ] {
-            glib::g_free(p.cast());
-        }
-        if !entry.body.is_null() {
-            g_byte_array_unref(entry.body);
-        }
-        glib::g_free(e.cast());
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cache_put(
-    url: *const c_char,
-    partition: *const c_char,
-    final_url: *const c_char,
-    status: c_long,
-    content_type: *const c_char,
-    cors_allow_origin: *const c_char,
-    etag: *const c_char,
-    last_modified: *const c_char,
-    cache_control: *const c_char,
-    expires_header: *const c_char,
-    vary: *const c_char,
-    request_headers: *const *const c_char,
-    body: *const c_void,
-    body_len: usize,
-) {
-    let Some(url) = (unsafe { text(url) }) else {
-        return;
-    };
-    let response = unsafe {
-        Response {
-            final_url: text(final_url),
-            status: widen(status),
-            content_type: text(content_type),
-            cors_allow_origin: text(cors_allow_origin),
-            etag: text(etag),
-            last_modified: text(last_modified),
-            cache_control: text(cache_control),
-            expires_header: text(expires_header),
-            vary: text(vary),
-            body: glib::slice(body.cast(), body_len),
-        }
-    };
-    if body.is_null() && body_len > 0 {
-        return;
-    }
-    let headers = unsafe { headers(request_headers) };
-    crate::put(url, unsafe { text(partition) }, &response, &headers);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cache_promote_304(
-    url: *const c_char,
-    partition: *const c_char,
-    request_headers: *const *const c_char,
-    cache_control: *const c_char,
-    expires_header: *const c_char,
-) {
-    let Some(url) = (unsafe { text(url) }) else {
-        return;
-    };
-    let headers = unsafe { headers(request_headers) };
-    unsafe {
-        crate::promote_304(
-            url,
-            text(partition),
-            &headers,
-            text(cache_control),
-            text(expires_header),
-        )
-    };
 }

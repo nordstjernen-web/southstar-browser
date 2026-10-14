@@ -168,12 +168,6 @@ pub unsafe extern "C" fn ns_thread_dump_text(pid: c_int, label: *const c_char) -
     out.cast()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_thread_dump_to_stderr(pid: c_int, label: *const c_char) {
-    let label = (!label.is_null()).then(|| unsafe { CStr::from_ptr(label) }.to_bytes());
-    to_stderr(pid, label);
-}
-
 #[cfg(unix)]
 mod signal {
     use core::ffi::{c_int, c_void};

@@ -284,15 +284,6 @@ pub unsafe extern "C" fn ns_node_is_custom_element(n: *const NsNode) -> GBoolean
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_parse_int(s: *const c_char, out: *mut i64) -> GBoolean {
-    let Some(v) = c_str(s).and_then(|s| numeric::parse_int(s.to_bytes())) else {
-        return glib::FALSE;
-    };
-    unsafe { *out = v };
-    glib::TRUE
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_int_attr_index(attr: *const c_char) -> c_int {
     c_str(attr).map_or(-1, |attr| numeric::int_attr_index(attr.to_bytes()))
 }

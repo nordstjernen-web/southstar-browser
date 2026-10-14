@@ -168,13 +168,6 @@ pub unsafe extern "C" fn ns_anim_observe_all(a: *mut Anim, styles: *mut GHashTab
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_apply(a: *mut Anim, styles: *mut GHashTable) {
-    if let (Some(a), Some(styles)) = (engine(a), StylesTable::new(styles)) {
-        a.apply(styles);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_anim_tick(a: *mut Anim, now_us: i64) -> GBoolean {
     glib::boolean(engine(a).is_some_and(|a| a.tick(now_us)))
 }
@@ -393,13 +386,6 @@ pub unsafe extern "C" fn ns_anim_script_start(
         }
     }
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_prune(a: *mut Anim, live: *mut GHashTable) {
-    if let (Some(a), Some(live)) = (engine(a), StylesTable::new(live)) {
-        a.prune(live);
-    }
 }
 
 #[unsafe(no_mangle)]

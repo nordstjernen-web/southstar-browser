@@ -148,11 +148,6 @@ pub unsafe extern "C" fn ns_control_css_extra_w(dom: *const NsNode, s: *const St
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_control_css_extra_h(dom: *const NsNode, s: *const Style) -> f64 {
-    controls::css_extra(node(dom), style(s), true)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_inline_attr_control_width(
     r: *const InlineAttr,
     b: *const NsBox,

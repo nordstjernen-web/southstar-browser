@@ -156,11 +156,6 @@ pub unsafe extern "C" fn ns_var_map_lookup(
         .map_or(ptr::null(), |v| v.as_ptr().cast())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_custom_value_wide_kind(text_value: *const c_char) -> c_int {
-    unsafe { text(text_value) }.map_or(0, |t| vars::wide_kind(t) as c_int)
-}
-
 unsafe extern "C" fn name_cmp(a: *const c_void, b: *const c_void) -> c_int {
     let (a, b) = unsafe { (*a.cast::<*const c_char>(), *b.cast::<*const c_char>()) };
     unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) as c_int }

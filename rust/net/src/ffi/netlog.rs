@@ -29,11 +29,6 @@ pub extern "C" fn ns_net_set_log_fetches(on: GBoolean) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_net_log_fetches_enabled() -> GBoolean {
-    glib::boolean(netlog::logging())
-}
-
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn ns_net_log_record(
     method: *const c_char,

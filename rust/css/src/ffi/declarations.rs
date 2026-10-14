@@ -9,7 +9,6 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
-use super::property::prop_of;
 use super::shorthand::{RawDecl, append_expanded};
 use super::value::ns_css_value_free;
 use crate::declarations::{self, Sink};
@@ -210,26 +209,6 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_declaration_block(
-    p: *const c_char,
-    end: *const c_char,
-    decls_out: *mut GArray,
-    capture: *mut c_void,
-) -> *const c_char {
-    if p.is_null() || end <= p {
-        return p;
-    }
-    let len = unsafe { end.offset_from(p) } as usize;
-    let s = unsafe { core::slice::from_raw_parts(p.cast::<u8>(), len) };
-    let mut sink = RuleSink {
-        decls: decls_out,
-        rule: capture.cast(),
-    };
-    let stop = declarations::parse_block(s, 0, &mut sink);
-    unsafe { p.add(stop) }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray {
     let decls =
         unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, size_of::<RawDecl>() as c_uint) };
@@ -252,29 +231,6 @@ pub unsafe extern "C" fn ns_css_declarations_free(decls: *mut GArray) {
         unsafe { ns_css_value_free((*array.data.cast::<RawDecl>().add(i)).value) };
     }
     unsafe { g_array_free(decls, glib::TRUE) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_declaration_valid(prop: c_int, text: *const c_char) -> GBoolean {
-    let Some(text) = (unsafe { bytes(text) }) else {
-        return glib::TRUE;
-    };
-    if prop < 0 {
-        return glib::TRUE;
-    }
-    glib::boolean(declarations::declaration_valid(prop_of(prop), text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_declaration_value_syntax_valid(text: *const c_char) -> GBoolean {
-    glib::boolean(declarations::value_syntax_valid(
-        unsafe { bytes(text) }.unwrap_or_default(),
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_attr_unit_ident_valid(unit: *const c_char) -> GBoolean {
-    glib::boolean(unsafe { bytes(unit) }.is_some_and(declarations::attr_unit_ident_valid))
 }
 
 #[unsafe(no_mangle)]

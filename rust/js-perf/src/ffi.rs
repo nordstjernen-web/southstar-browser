@@ -238,11 +238,6 @@ pub unsafe extern "C" fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_v
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_time_origin_real_ms(js: *const NsJs, realm: *const c_void) -> f64 {
-    timeline::time_origin_real_ms(Js::of(js), realm as usize)
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64 {
     crate::realm_now_ms(js_of(scope), realm_of(scope))
 }

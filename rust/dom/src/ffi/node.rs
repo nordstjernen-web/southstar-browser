@@ -26,18 +26,8 @@ pub extern "C" fn ns_node_new_element(name: *mut c_char) -> *mut NsNode {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_node_new_text_len(text: *mut c_char, len: u32) -> *mut NsNode {
-    node::new_text(KIND_TEXT, text, len).as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_node_new_text(text: *mut c_char) -> *mut NsNode {
     node::new_text(KIND_TEXT, text, c_strlen(text)).as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_node_new_comment_len(text: *mut c_char, len: u32) -> *mut NsNode {
-    node::new_text(KIND_COMMENT, text, len).as_mut_ptr()
 }
 
 #[unsafe(no_mangle)]
@@ -91,11 +81,6 @@ pub unsafe extern "C" fn ns_node_replace_text_len_owned(
         Some(n) => n.set_text(text, len, true),
         None => free_string(text),
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_replace_text_owned(n: *mut NsNode, text: *mut c_char) {
-    unsafe { ns_node_replace_text_len_owned(n, text, c_strlen(text)) };
 }
 
 #[unsafe(no_mangle)]
@@ -156,13 +141,6 @@ pub unsafe extern "C" fn ns_node_next_in_subtree(
         return ptr::null_mut();
     };
     crate::index::next_in_subtree(n, unsafe { node(root) }, descend != 0)
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_clone(src: *const NsNode, deep: GBoolean) -> *mut NsNode {
-    unsafe { node(src) }
-        .and_then(|src| node::clone(src, deep != 0, 0))
         .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 

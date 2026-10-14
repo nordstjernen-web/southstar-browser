@@ -192,11 +192,6 @@ pub fn nsr_install_window_compat(scope: &mut Scope<'_>, global: &Value) {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_define_element_unscopables(scope: &mut Scope<'_>, proto: &Value) {
-    crate::define_element_unscopables(scope, proto);
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_install_namespace_object(
     scope: &mut Scope<'_>,
     global: &Value,

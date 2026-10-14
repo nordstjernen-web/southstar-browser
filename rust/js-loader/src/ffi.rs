@@ -767,13 +767,6 @@ pub unsafe extern "C" fn ns_script_skipped_by_nomodule(n: *const NsNode) -> GBoo
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_forget_script_roots_in(js: *mut NsJs, root: *const NsNode) {
-    if !js.is_null() && !root.is_null() {
-        page::forget_roots_in(Js(js), root as usize);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_content_type_is_javascript(ct: *const c_char) -> GBoolean {
     let ct = unsafe { glib::bytes(ct) };
     glib::boolean(ct.is_some_and(crate::content_type_is_javascript))
@@ -944,26 +937,6 @@ pub(crate) fn monotonic_us() -> i64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_js_profile_begin() -> i64 {
-    compile::profile_begin()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_profile_eval(
-    start_us: i64,
-    len: usize,
-    cached: GBoolean,
-    origin: *const c_char,
-) {
-    compile::profile_eval(start_us, len, cached != 0, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_profile_module(start_us: i64, len: usize, origin: *const c_char) {
-    compile::profile_module(start_us, len, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_eval(
     js: *mut NsJs,
     src: *const c_char,
@@ -972,28 +945,6 @@ pub unsafe extern "C" fn ns_js_eval(
 ) {
     let src = unsafe { bytes(src, len) };
     eval::eval(Js(js), src, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval_script_source(
-    js: *mut NsJs,
-    script: *mut NsNode,
-    source: *const c_char,
-    length: usize,
-    origin: *const c_char,
-    is_module: GBoolean,
-) {
-    let source = unsafe { bytes(source, length) };
-    let origin = unsafe { cstr(origin) };
-    match node(script) {
-        Some(script) => eval::eval_script_source(Js(js), script, source, origin, is_module != 0),
-        None if is_module != 0 => eval::eval_module(Js(js), source, origin),
-        None => {
-            let previous = Js(js).swap_current_script(None);
-            eval::eval(Js(js), source, origin);
-            Js(js).swap_current_script(previous);
-        }
-    }
 }
 
 #[unsafe(no_mangle)]

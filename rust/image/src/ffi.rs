@@ -1048,12 +1048,6 @@ fn retry_state(img: &NsImage) -> RetryState {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_should_retry(img: *const NsImage, now_us: i64) -> GBoolean {
-    let img = unsafe { img.as_ref() };
-    glib::boolean(img.is_some_and(|img| crate::should_retry(&retry_state(img), now_us)))
-}
-
 unsafe fn start_request(
     cache: *mut Cache,
     img: *mut NsImage,

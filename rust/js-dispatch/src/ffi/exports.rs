@@ -162,11 +162,6 @@ pub unsafe fn nsr_js_fire_element_handlers(
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_install_event_handler_props(scope: &mut Scope<'_>, target: &Value) {
-    crate::handlers::install_props(scope, target);
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, proto: &Value) {
     crate::handlers::install_accessors(scope, proto);
 }

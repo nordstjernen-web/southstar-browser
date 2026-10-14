@@ -49,10 +49,6 @@ unsafe fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
 
-fn owned(bytes: Option<Vec<u8>>) -> *mut c_char {
-    bytes.map_or(ptr::null_mut(), |bytes| glib::strdup(&bytes))
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_container_map(map: *mut GHashTable) {
     MAP.with(|current| current.set(map));
@@ -76,11 +72,6 @@ pub extern "C" fn ns_css_container_features_used() -> GBoolean {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_container_features_note() {
     container::note_features();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_unit_resolve(v: c_double, unit: c_uint) -> c_double {
-    container::unit_resolve(v, unit)
 }
 
 unsafe extern "C" fn container_free(data: *mut c_void) {
@@ -272,16 +263,6 @@ pub unsafe extern "C" fn ns_css_container_stack_copy(out: *mut u8, max_bytes: us
         }
         bytes
     })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_name_canonical(s: *const c_char) -> *mut c_char {
-    owned(unsafe { text(s) }.and_then(|s| container::name_canonical(s.to_bytes())))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_shorthand_canonical(s: *const c_char) -> *mut c_char {
-    owned(unsafe { text(s) }.and_then(|s| container::shorthand_canonical(s.to_bytes())))
 }
 
 #[unsafe(no_mangle)]

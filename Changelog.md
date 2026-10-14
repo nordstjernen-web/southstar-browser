@@ -162,6 +162,12 @@ Southstar Browser 0.9.11-dev:
   call rust/i18n and rust/bytecode-cache directly instead of through
   ns_i18n*/ns_bytecode_cache_* exports; the shell's tr() no longer hands a
   caller's string back as &'static when it has no translation.
+* 258 C exports that nothing referenced -- no import in any crate, no
+  mention in meson or the embedding header -- are deleted across 40 crates
+  (DOM indexes and attributes, the style engine's string helpers, net,
+  canvas, the shell's procview helpers, IPC framing, the HTTP cache and
+  the JS bindings' old entry points), with the helpers, imports and five
+  css ffi modules only they used: 2,650 lines, 704 unsafe keywords.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

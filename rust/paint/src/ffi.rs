@@ -147,17 +147,6 @@ pub unsafe extern "C" fn ns_paint_start_align_overflow(l: *mut c_void) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_inline_y_offset_for_layout(
-    b: *const NsBox,
-    l: *mut c_void,
-) -> c_double {
-    match (unsafe { BoxRef::from_ptr(b) }, layout(l)) {
-        (Some(b), Some(l)) => text::inline_y_offset_for_layout(b, &l),
-        _ => 0.0,
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_paint_li_is_inside(s: *const Style) -> GBoolean {
     boolean(marker::li_is_inside(style(s)))
 }

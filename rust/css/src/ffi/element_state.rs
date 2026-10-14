@@ -6,8 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::GBoolean;
 
 use crate::element_state;
 
@@ -75,18 +74,6 @@ pub(crate) fn regex_matches_whole(pattern: Option<&[u8]>, value: &[u8]) -> bool 
     let matched = unsafe { g_regex_match(regex, value.as_ptr(), 0, ptr::null_mut()) != 0 };
     unsafe { g_regex_unref(regex) };
     matched
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_element_state_matches(
-    el: *const NsNode,
-    kind: c_uint,
-    arg: *const c_char,
-) -> GBoolean {
-    let Some(el) = (unsafe { Node::from_ptr(el) }) else {
-        return glib::FALSE;
-    };
-    glib::boolean(element_state::matches(el, kind, unsafe { bytes(arg) }))
 }
 
 #[unsafe(no_mangle)]

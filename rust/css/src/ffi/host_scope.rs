@@ -1,12 +1,9 @@
-//! Southstar — the C ABI of host scoping: a shadow tree's or framed document's style text flattened and scoped to its host, remembered per host and text.
+//! Southstar — host scoping: a shadow tree's or framed document's style text flattened and scoped to its host, remembered per host and text.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
 use std::collections::HashMap;
 use std::sync::Mutex;
-
-use southstar_glib::{self as glib, GBoolean};
 
 use crate::{host_scope, nesting};
 
@@ -39,19 +36,4 @@ pub(crate) fn scoped(css: &[u8], host_id: &[u8], frame_scope: bool) -> Vec<u8> {
     }
     cache.insert(key, out.clone());
     out
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_scoped_css(
-    css: *const c_char,
-    len: usize,
-    host_id: *const c_char,
-    frame_scope: GBoolean,
-) -> *mut c_char {
-    if css.is_null() || host_id.is_null() {
-        return glib::strdup(b"");
-    }
-    let css = unsafe { core::slice::from_raw_parts(css.cast::<u8>(), len) };
-    let host_id = unsafe { CStr::from_ptr(host_id) }.to_bytes();
-    glib::strdup(&scoped(css, host_id, frame_scope != 0))
 }

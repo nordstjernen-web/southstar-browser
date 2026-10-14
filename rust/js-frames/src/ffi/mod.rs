@@ -474,24 +474,6 @@ pub unsafe fn nsr_window_frame_node(js: *mut NsJs, window: &Value) -> *mut NsNod
 }
 
 #[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_get_contentDocument(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    owner::content_document(scope, this)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_get_contentWindow(scope: &mut Scope<'_>, this: &Value) -> JsResult {
-    owner::content_window(scope, this)
-}
-
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-pub fn nsr_element_getSVGDocument(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
-    owner::svg_document(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe fn nsr_window_child_frame_window(
     scope: &mut Scope<'_>,
     doc: *mut NsNode,
@@ -596,26 +578,6 @@ pub unsafe extern "C" fn ns_js_frame_referrer_for(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_set_source(
-    js: *mut NsJs,
-    frame: *const NsNode,
-    url: *const c_char,
-    referrer: *const c_char,
-) {
-    let js = Js::of(js);
-    if js.is_null() || frame.is_null() {
-        return;
-    }
-    let url = unsafe { c_bytes(url) }.map(|url| CString::new(url).unwrap_or_default());
-    let referrer =
-        unsafe { c_bytes(referrer) }.map(|referrer| CString::new(referrer).unwrap_or_default());
-    page::update_frame(js, frame_key(frame), |entry| {
-        entry.url = url;
-        entry.referrer = referrer;
-    });
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_frames_forget_node(js: *mut NsJs, node: *const NsNode) {
     let js = Js::of(js);
     if js.is_null() {
@@ -699,22 +661,6 @@ pub unsafe extern "C" fn ns_js_pending_iframe_remove_first(js: *mut NsJs) {
     let js = Js::of(js);
     if !js.is_null() {
         queue::remove_first_pending(js);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_deferred_iframe_add(js: *mut NsJs, frame: *mut NsNode) {
-    let js = Js::of(js);
-    if !js.is_null() && !frame.is_null() {
-        queue::add_deferred(js, frame_key(frame));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_deferred_iframe_remove(js: *mut NsJs, frame: *mut NsNode) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        queue::remove_deferred(js, frame_key(frame));
     }
 }
 

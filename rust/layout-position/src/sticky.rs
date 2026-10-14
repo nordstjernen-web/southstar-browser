@@ -179,14 +179,3 @@ pub fn y_model(b: BoxRef<'_>, viewport_h: f64) -> (StickyY, bool) {
         && out.bottom_cap.is_finite();
     (out, ok)
 }
-
-pub fn y_offset(m: &StickyY, scroll_y: f64) -> f64 {
-    let mut dy = 0.0;
-    if m.has_top != 0 && scroll_y > m.top_start {
-        dy = c_min(scroll_y - m.top_start, m.top_cap);
-    }
-    if m.has_bottom != 0 && dy == 0.0 && scroll_y < m.bottom_start {
-        dy = c_max(scroll_y - m.bottom_start, m.bottom_cap);
-    }
-    dy
-}

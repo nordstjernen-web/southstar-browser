@@ -88,10 +88,6 @@ fn take_text(p: *mut c_char) -> Option<Vec<u8>> {
 pub struct SheetList(NonNull<GPtrArray>);
 
 impl SheetList {
-    pub unsafe fn from_ptr(array: *mut GPtrArray) -> Option<SheetList> {
-        NonNull::new(array).map(SheetList)
-    }
-
     pub fn new() -> SheetList {
         SheetList(NonNull::new(unsafe { glib::g_ptr_array_new() }).expect("g_ptr_array_new"))
     }

@@ -172,11 +172,6 @@ pub extern "C" fn ns_mic_release() {
     sdl::release();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_mic_active() -> c_int {
-    c_int::from(sdl::active())
-}
-
 unsafe fn out<'a>(out: *mut u8, n: c_int) -> Option<&'a mut [u8]> {
     (!out.is_null() && n > 0).then(|| unsafe { core::slice::from_raw_parts_mut(out, n as usize) })
 }

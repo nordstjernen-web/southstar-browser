@@ -100,16 +100,6 @@ pub(crate) fn hidden_get(scope: &mut Scope<'_>, value: &Value, key: &core::ffi::
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_sc_fail(scope: &mut Scope<'_>) -> Value {
-    data_clone_error(scope)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_sc_buffer_detached(scope: &mut Scope<'_>, buffer: &Value) -> bool {
-    crate::buffer_detached(scope, buffer)
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_structured_clone_transfer(
     scope: &mut Scope<'_>,
     value: &Value,
@@ -118,24 +108,6 @@ pub fn nsr_structured_clone_transfer(
     seed_to: &Value,
 ) -> Result<Value, Value> {
     crate::clone_transfer(scope, value, transfer, (seed_from, seed_to))
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_wire_encode_value(
-    scope: &mut Scope<'_>,
-    value: &Value,
-    ports: &Value,
-) -> Result<Value, Value> {
-    crate::wire::encode_value(scope, value, ports)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_wire_decode_value(
-    scope: &mut Scope<'_>,
-    wire: &Value,
-    ports: &Value,
-) -> Result<Value, Value> {
-    crate::wire::decode_value(scope, wire, ports)
 }
 
 #[unsafe(no_mangle)]

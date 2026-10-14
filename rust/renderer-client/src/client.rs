@@ -557,27 +557,6 @@ impl Renderer {
         Some((text(&body, "href"), long(&body, "changed") != 0))
     }
 
-    pub fn focused_editable(&mut self) -> bool {
-        self.request("/focused-editable", "{}")
-            .is_some_and(|body| long(&body, "active") != 0)
-    }
-
-    pub fn focused_editable_value(&mut self) -> Option<(Option<Vec<u8>>, usize, usize)> {
-        let body = self.request("/focused-editable-state", "{}")?;
-        let caret = long(&body, "caret").max(0) as usize;
-        let anchor = long(&body, "anchor").max(0) as usize;
-        let value = (long(&body, "active") != 0).then(|| text(&body, "value").unwrap_or_default());
-        Some((value, caret, anchor))
-    }
-
-    pub fn set_focused_editable_selection(&mut self, caret: usize, anchor: usize) -> bool {
-        self.request(
-            "/focused-editable-selection",
-            &format!("{{\"caret\":{caret},\"anchor\":{anchor}}}"),
-        )
-        .is_some_and(|body| long(&body, "ok") != 0)
-    }
-
     pub fn hover(&mut self, x: c_int, y: c_int) -> Option<(bool, Text, Text)> {
         let body = self.request("/hover", &format!("{{\"x\":{x},\"y\":{y}}}"))?;
         Some((

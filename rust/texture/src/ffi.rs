@@ -93,16 +93,6 @@ pub unsafe extern "C" fn ns_texture_unref(texture: *mut Texture) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_clear(texture: *mut *mut Texture) {
-    if let Some(slot) = unsafe { texture.as_mut() }
-        && !slot.is_null()
-    {
-        unsafe { ns_texture_unref(*slot) };
-        *slot = ptr::null_mut();
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_texture_get_width(texture: *mut Texture) -> c_int {
     unsafe { borrow(texture) }.map_or(0, |t| t.pixels.width)
 }

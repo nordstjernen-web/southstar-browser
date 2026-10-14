@@ -3,25 +3,21 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod animation;
-mod attr_fn;
 mod cascade;
 mod compute;
 mod computed_units;
 mod container;
 mod custom_props;
 mod declarations;
-mod display;
 mod element_state;
 mod fixups;
 mod font;
 mod gather;
 mod hints;
 mod host_scope;
-mod image;
 mod inline;
 mod keyframes;
 mod layers;
-mod lex;
 mod matcher;
 mod nesting;
 mod pending;
@@ -38,18 +34,17 @@ mod shorthand;
 mod style_alloc;
 mod style_query;
 mod style_share;
-mod transform;
 mod ua;
 mod value;
 mod values;
 mod vars;
 pub(crate) mod viewport;
 
-use core::ffi::{CStr, c_char, c_double, c_uint};
+use core::ffi::{CStr, c_char, c_double};
 
 use southstar_glib::{self as glib, GBoolean};
 
-use crate::{calc, color, math, units};
+use crate::{calc, color, units};
 
 pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
 pub(crate) use container::{Container, container_map};
@@ -119,48 +114,6 @@ pub unsafe extern "C" fn ns_css_parse_color(
         }
     }
     glib::boolean(ok)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_length(
-    s: *const c_char,
-    out_v: *mut c_double,
-    out_unit: *mut c_uint,
-) -> GBoolean {
-    let Some((v, unit)) = unsafe { text(s) }.and_then(units::parse_length) else {
-        return glib::FALSE;
-    };
-    unsafe {
-        *out_v = v;
-        *out_unit = unit;
-    }
-    glib::TRUE
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_calc(s: *const c_char) -> *mut NsCssValue {
-    match unsafe { text(s) }.and_then(calc::parse_calc) {
-        Some(parsed) => value::new_value(&parsed),
-        None => core::ptr::null_mut(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_viewport_resolve(v: c_double, unit: c_uint) -> c_double {
-    units::viewport_resolve(v, unit)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_number_str(n: c_double) -> *mut c_char {
-    glib::strdup(&units::number_text(n))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_math_canonical(s: *const c_char) -> *mut c_char {
-    match unsafe { text(s) }.and_then(math::math_canonical) {
-        Some(canonical) => glib::strdup(&canonical),
-        None => core::ptr::null_mut(),
-    }
 }
 
 #[unsafe(no_mangle)]

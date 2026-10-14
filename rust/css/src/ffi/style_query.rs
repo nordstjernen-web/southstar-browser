@@ -40,24 +40,6 @@ pub unsafe extern "C" fn ns_css_value_layer_count(head: *const NsCssValue) -> c_
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_layer(
-    head: *const NsCssValue,
-    index: c_int,
-) -> *const NsCssValue {
-    let n = unsafe { ns_css_value_layer_count(head) };
-    if n == 0 {
-        return ptr::null();
-    }
-    let mut index = index % n;
-    let mut layer = head;
-    while index > 0 {
-        layer = unsafe { (*layer).next_layer };
-        index -= 1;
-    }
-    layer
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_dimension_px(
     v: *const NsCssValue,
     font_size: c_double,

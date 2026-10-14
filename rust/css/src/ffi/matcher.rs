@@ -2,14 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 
-use super::selector_view::{RuleRef, SelectorRef};
+use super::selector_view::SelectorRef;
 use crate::matcher;
 
 static MATCH_SCOPE: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
@@ -58,11 +58,6 @@ pub(crate) fn fullscreen_node<'a>() -> Option<Node<'a>> {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_match_scope(scope: *const NsNode) -> *const NsNode {
     swap(&MATCH_SCOPE, scope)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_match_scope() -> *const NsNode {
-    MATCH_SCOPE.load(Ordering::Relaxed)
 }
 
 #[unsafe(no_mangle)]
@@ -165,26 +160,4 @@ pub unsafe extern "C" fn ns_css_selector_matches(
         return glib::FALSE;
     };
     glib::boolean(matcher::matches(sel, el))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_rule_selector_matches(
-    rule: *const c_void,
-    sel: *const c_void,
-    el: *const NsNode,
-    pe: c_uint,
-    scope_order: *mut c_int,
-) -> GBoolean {
-    let order = unsafe { Node::from_ptr(el) }.and_then(|el| {
-        matcher::rule_matches(
-            unsafe { RuleRef::from_ptr(rule) },
-            unsafe { SelectorRef::from_ptr(sel) },
-            el,
-            pe,
-        )
-    });
-    if !scope_order.is_null() {
-        unsafe { *scope_order = order.unwrap_or(0) };
-    }
-    glib::boolean(order.is_some())
 }
