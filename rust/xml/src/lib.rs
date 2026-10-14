@@ -2,7 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
+
+mod sink;
+
+pub use sink::parse_document;
 
 const NS_XML: &[u8] = b"http://www.w3.org/XML/1998/namespace";
 const NS_XMLNS: &[u8] = b"http://www.w3.org/2000/xmlns/";

@@ -2,10 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_void};
 use core::ptr;
 
-use southstar_dom::{Kind, Node, NsNode};
+use southstar_dom::{Kind, Node, NsNode, WeakNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{
     Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
@@ -32,7 +33,7 @@ unsafe extern "C" {
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
 }
 
-pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new_raw(
+pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new(
     c"Element",
     ClassHooks {
         get_own_property: Some(named_get_own),
@@ -40,18 +41,39 @@ pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new_raw(
         define_own_property: Some(named_define),
         ..ClassHooks::NONE
     },
-    finalize_element,
 );
+
+pub(crate) struct ElementData {
+    node: Cell<Option<WeakNode>>,
+}
+
+impl ElementData {
+    fn new(node: Option<Node<'_>>) -> ElementData {
+        ElementData {
+            node: Cell::new(node.map(Node::downgrade)),
+        }
+    }
+
+    pub(crate) fn node(&self) -> Option<Node<'static>> {
+        self.node.get().and_then(WeakNode::get)
+    }
+
+    pub(crate) fn unbind(&self) {
+        self.node.set(None);
+    }
+}
+
+impl Drop for ElementData {
+    fn drop(&mut self) {
+        if let Some(n) = self.node() {
+            n.set_js_wrapper(ptr::null_mut());
+            n.set_js_invalidate(None);
+        }
+    }
+}
 
 fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(p) }
-}
-
-fn finalize_element(data: *mut c_void) {
-    if let Some(n) = node(data.cast()) {
-        n.set_js_wrapper(ptr::null_mut());
-        n.set_js_invalidate(None);
-    }
 }
 
 pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
@@ -60,7 +82,9 @@ pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Node<'static>> {
-    node(value.raw_instance(&ELEMENT_CLASS).cast())
+    value
+        .with_instance(&ELEMENT_CLASS, ElementData::node)
+        .flatten()
 }
 
 fn form_of(value: &Value) -> bool {
@@ -224,7 +248,7 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     if !wrapper.is_null() {
         return Ok(scope.object_from_identity(wrapper));
     }
-    let obj = unsafe { scope.new_raw_instance(&ELEMENT_CLASS, None, n.as_mut_ptr().cast()) }?;
+    let obj = scope.new_instance_with(&ELEMENT_CLASS, None, ElementData::new(Some(n)))?;
     n.set_js_wrapper(obj.object_identity());
     n.set_js_invalidate(Some(invalidate_wrapper));
     let proto = kind_proto(scope, js, n);
@@ -267,7 +291,6 @@ fn invalidate_wrapper(target: Node<'static>) {
     }
     let wrapper = target.js_wrapper();
     if !wrapper.is_null() {
-        unsafe { southstar_js_engine::clear_identity_instance(wrapper) };
         target.set_js_wrapper(ptr::null_mut());
         if let Some(page) = Js::of(js) {
             let ctx = page.ctx();
@@ -308,5 +331,5 @@ pub unsafe extern "C" fn ns_node_arm_js_invalidate(n: *mut NsNode) {
 
 pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
     let current_doc = unsafe { *page.st().slots.current_doc };
-    unsafe { scope.new_raw_instance(&ELEMENT_CLASS, None, current_doc.cast()) }
+    scope.new_instance_with(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))
 }

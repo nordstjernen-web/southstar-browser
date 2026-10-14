@@ -9,7 +9,7 @@ use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use southstar_dom::{Node, NsNode, ancestors_and_self};
+use southstar_dom::{Node, NsNode, WeakNode, ancestors_and_self};
 use southstar_glib::{GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -118,7 +118,7 @@ pub struct Ctx {
     pub css_cache: *mut GHashTable,
     pub styles: Cell<*mut GHashTable>,
     pub layout: Cell<*mut NsBox>,
-    pub focused: Cell<*const NsNode>,
+    pub focused: Cell<Option<WeakNode>>,
     pub caret: Cell<usize>,
     pub anchor: Cell<usize>,
     relaying: Cell<bool>,
@@ -134,11 +134,11 @@ impl Ctx {
     }
 
     pub fn focused(&self) -> Option<Node<'_>> {
-        ffi::node_from_ptr(self.focused.get())
+        self.focused.get().and_then(WeakNode::get)
     }
 
     pub fn set_focused(&self, n: Option<Node>) {
-        self.focused.set(Node::ptr_or_null(n));
+        self.focused.set(n.map(Node::downgrade));
     }
 
     fn focus_for_layout(&self) -> *const NsNode {
@@ -687,7 +687,7 @@ pub fn run_one(
         css_cache,
         styles: Cell::new(styles),
         layout: Cell::new(ptr::null_mut()),
-        focused: Cell::new(ptr::null()),
+        focused: Cell::new(None),
         caret: Cell::new(0),
         anchor: Cell::new(0),
         relaying: Cell::new(false),

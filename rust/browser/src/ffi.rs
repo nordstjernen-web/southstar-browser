@@ -17,7 +17,7 @@ use core::mem::offset_of;
 use core::ptr;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode, Tree};
+use southstar_dom::{Node, NsNode, Tree, WeakNode};
 use southstar_glib::{GBoolean, GHashTable, GPtrArray, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -91,20 +91,20 @@ impl Text {
     }
 }
 
-#[repr(transparent)]
-pub struct NodeSlot(Cell<*const NsNode>);
+#[derive(Default)]
+pub struct NodeSlot(Cell<Option<WeakNode>>);
 
 impl NodeSlot {
     pub fn get(&self) -> Option<Node<'_>> {
-        unsafe { Node::from_ptr(self.0.get()) }
+        self.0.get().and_then(WeakNode::get)
     }
 
     pub fn set(&self, node: Option<Node<'_>>) {
-        self.0.set(Node::ptr_or_null(node));
+        self.0.set(node.map(Node::downgrade));
     }
 
     pub fn is(&self, node: Option<Node<'_>>) -> bool {
-        ptr::eq(self.0.get(), Node::ptr_or_null(node))
+        self.get() == node
     }
 }
 
@@ -227,6 +227,15 @@ const TEXT_FIELDS: [usize; 11] = [
     offset_of!(NsBrowser, remote_ip),
 ];
 
+const NODE_FIELDS: [usize; 6] = [
+    offset_of!(NsBrowser, scroll_anchor),
+    offset_of!(NsBrowser, caret_blink_node),
+    offset_of!(NsBrowser, hover_node),
+    offset_of!(NsBrowser, open_select),
+    offset_of!(NsBrowser, press_node),
+    offset_of!(NsBrowser, sb_node),
+];
+
 impl NsBrowser {
     fn allocate() -> Page {
         let mut slot = Box::<NsBrowser>::new_zeroed();
@@ -235,6 +244,11 @@ impl NsBrowser {
             let field = raw.wrapping_byte_add(offset).cast::<Text>();
             // SAFETY: `field` is the aligned address of one of the Text fields inside the allocation.
             unsafe { field.write(Text::default()) };
+        }
+        for offset in NODE_FIELDS {
+            let field = raw.wrapping_byte_add(offset).cast::<NodeSlot>();
+            // SAFETY: `field` is the aligned address of one of the NodeSlot fields inside the allocation.
+            unsafe { field.write(NodeSlot::default()) };
         }
         let body = raw
             .wrapping_byte_add(offset_of!(NsBrowser, pending_post_body))
@@ -246,7 +260,7 @@ impl NsBrowser {
             .cast::<RefCell<Option<Tree>>>();
         // SAFETY: `doc` is the aligned address of the document field inside the allocation.
         unsafe { doc.write(RefCell::new(None)) };
-        // SAFETY: the Text, POST body and document fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
+        // SAFETY: the Text, NodeSlot, POST body and document fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
         Page::adopt(unsafe { slot.assume_init() })
     }
 

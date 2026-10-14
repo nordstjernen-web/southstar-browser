@@ -294,6 +294,18 @@ Southstar Browser 0.9.11-dev:
   frame loading, the SVG renderer, the headless engine and the page
   document stop calling ns_html_parse and ns_node_free by hand; taking a
   template's contents and cloning a node hand back a Tree too.
+* A script's element wrappers hold their node as a WeakNode in typed
+  instance data instead of a raw pointer with a raw finalizer, so a wrapper
+  whose node was freed unwraps to null instead of reaching whatever reused
+  the memory, and creating one needs no unsafe code.
+* The XML parser builds DOM nodes through the Rust API and returns an owned
+  Tree (southstar_xml::parse_document) instead of void pointers through
+  ns_node_* exports, so rust/xml has no unsafe code left and carries
+  #![forbid(unsafe_code)]; DOMParser and XML frame documents call it
+  directly. Frames, form controls, offscreen canvases and the script
+  runtime create nodes through the Rust API as well, and the ns_node_new_*,
+  ns_node_set_name_owned, ns_node_add_flags, ns_node_mark_doctype and
+  ns_node_append_child exports are gone.
 * Laying out a text run whose collapsed start lies past its end no longer
   aborts on an integer underflow (the length was computed before the check
   that guarded it).

@@ -44,7 +44,7 @@ mod serialize;
 mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
-pub use misc::clear_identity_instance;
+pub use misc::identity_value;
 
 pub const ENGINE_NAME: &str = "boa";
 

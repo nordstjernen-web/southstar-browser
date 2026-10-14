@@ -10,11 +10,15 @@ use boa_engine::{JsError, JsObject, JsString};
 use super::{Compiled, Scope, Value};
 use crate::{BrandMode, MemoryUsage, TaskFn};
 
-pub unsafe fn clear_identity_instance(identity: *mut c_void) {
-    if !identity.is_null() {
-        let object = Value(unsafe { JsObject::from_identity(identity) }.into());
-        unsafe { object.set_raw_instance(core::ptr::null_mut()) };
+/// # Safety
+///
+/// `identity` is null or the identity of an object that is still alive.
+pub unsafe fn identity_value(identity: *mut c_void) -> Value {
+    if identity.is_null() {
+        return Value::undefined();
     }
+    // SAFETY: guaranteed by the caller.
+    Value(unsafe { JsObject::from_identity(identity) }.into())
 }
 
 impl Scope<'_> {

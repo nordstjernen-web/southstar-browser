@@ -61,8 +61,6 @@ unsafe extern "C" {
     fn ns_js_set_doc_ready_state(js: *mut NsJs, doc: *const NsNode, state: c_int);
     fn ns_js_platform_globals(js: *mut NsJs) -> *mut glib::GHashTable;
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
-    fn ns_node_new_document() -> *mut NsNode;
-    fn ns_node_new_element(name: *mut c_char) -> *mut NsNode;
     fn ns_css_mark_visited(abs_url: *const c_char);
     fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
@@ -325,12 +323,11 @@ pub(crate) fn window_child_frame(
 }
 
 pub(crate) fn new_document() -> Node<'static> {
-    unsafe { Node::from_ptr(ns_node_new_document()) }.expect("document allocation")
+    Node::alloc(southstar_dom::Kind::Document)
 }
 
 pub(crate) fn new_element(name: &CStr) -> Node<'static> {
-    let name = unsafe { glib::g_strdup(name.as_ptr()) };
-    unsafe { Node::from_ptr(ns_node_new_element(name)) }.expect("element allocation")
+    southstar_dom::node::new_element(name.to_bytes())
 }
 
 pub(crate) fn append_child(parent: Node<'_>, child: Node<'_>) {

@@ -29,13 +29,6 @@ pub(crate) enum TargetMethod {
 }
 
 unsafe extern "C" {
-    fn ns_xml_parse_reporting(
-        input: *const c_char,
-        len: isize,
-        error_line: *mut c_int,
-        error_column: *mut c_int,
-    ) -> *mut NsNode;
-    fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
@@ -290,20 +283,14 @@ pub(crate) fn target_method(
 }
 
 pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Tree>, c_int, c_int) {
-    let source = cstring(source);
-    let (mut line, mut column) = (1, 1);
-    let doc = unsafe { ns_xml_parse_reporting(source.as_ptr(), -1, &mut line, &mut column) };
-    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
-    let doc = unsafe { Node::from_ptr(doc) }.map(Tree::adopt);
-    (doc, line, column)
+    match southstar_xml::parse_document(c_prefix(source)) {
+        Ok(doc) => (Some(doc), 1, 1),
+        Err((line, column)) => (None, line, column),
+    }
 }
 
 pub(crate) fn parse_xml(source: &[u8]) -> Option<Tree> {
-    let source = cstring(source);
-    // SAFETY: the input is a NUL-terminated string that outlives the call.
-    let doc = unsafe { ns_xml_parse(source.as_ptr(), -1) };
-    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
-    unsafe { Node::from_ptr(doc) }.map(Tree::adopt)
+    southstar_xml::parse_document(c_prefix(source)).ok()
 }
 
 pub(crate) fn parse_html(source: &[u8]) -> Tree {

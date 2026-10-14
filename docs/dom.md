@@ -39,9 +39,14 @@ and again when it is vacated, so a live slot's generation is odd.
   `WeakNode::get()` returns the node while it is the same node, and `None`
   once it has been freed, even if the slot already holds another node.
 - Anything that remembers a node beyond the current call keeps a `WeakNode`,
-  not a `Node` or a raw pointer: the stylesheet matcher's hover, active,
-  focus and fullscreen elements, and the active modal dialog. A freed node
-  simply stops matching; nothing has to be told that it went away.
+  not a `Node` or a raw pointer: a script's element wrappers (the Element
+  host class's instance data), the stylesheet matcher's hover, active,
+  focus and fullscreen elements, the active modal dialog, the page's
+  hovered, pressed and scroll-anchor nodes and open `<select>` in
+  `rust/browser`, and the script runtime's orphan set, NamedNodeMap cache
+  and pending change event. A wrapper whose node was freed unwraps to
+  nothing, and a freed node simply
+  stops matching; nothing has to be told that it went away.
 - `Node::from_ptr`, the way back from the `*const NsNode` pointers of the
   remaining C ABI, returns `None` for a vacant slot.
 
@@ -89,7 +94,8 @@ no parent is owned by exactly one `Tree` value (`rust/dom/src/owned.rs`):
   `into_raw`/`from_raw` carry ownership across the remaining C ABI.
 - The HTML parser returns documents and fragments as `Tree`s
   (`southstar_html_parser::parse_document`, `parse_fragment`,
-  `parse_fragment_for_tag`), `Node::take_tpl_content` hands over a
+  `parse_fragment_for_tag`), and so does the XML parser
+  (`southstar_xml::parse_document`); `Node::take_tpl_content` hands over a
   template's contents, and `node::clone` returns the copy as a `Tree`.
 
 So a fragment parsed for `innerHTML` or `document.write`, a frame document
@@ -108,10 +114,12 @@ pointer no longer resolves.
 
 ## The C ABI
 
-`NsNode` and `NsAttr` are opaque `#[repr(C)]` types used only as the pointee
-of the `*const NsNode` and `*const NsAttr` pointers the remaining `ns_*`
-exports pass around; `Node::as_ptr` and `Node::from_ptr` convert. Crates move
-off those exports onto the Rust API as they are rewritten.
+`NsNode` is an opaque `#[repr(C)]` type used only as the pointee of the
+`*const NsNode` pointers the remaining `ns_*` exports pass around;
+`Node::as_ptr` and `Node::from_ptr` convert, and `Tree::into_raw` hands
+ownership over. Attributes cross no C ABI: code that needs an attribute's
+parts as plain data takes an `AttrView`. Crates move off the `ns_*`
+exports onto the Rust API as they are rewritten.
 
 ## Tests
 

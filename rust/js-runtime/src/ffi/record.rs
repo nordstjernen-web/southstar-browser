@@ -281,7 +281,6 @@ unsafe extern "C" {
     fn ns_js_lock_global_prototypes(ctx: ContextHandle);
     fn ns_js_brand_node_interfaces(ctx: ContextHandle, element_cid: u32, attr_cid: u32);
     fn ns_attr_class_id() -> u32;
-    fn ns_node_new_element(name: *mut c_char) -> *mut NsNode;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_update_focus_visible(js: *const NsJs);
@@ -484,7 +483,12 @@ pub(crate) unsafe fn detach_wrapper(js: *mut NsJs, n: *mut NsNode, release: bool
     if wrapper.is_null() {
         return;
     }
-    unsafe { southstar_js_engine::clear_identity_instance(wrapper) };
+    // SAFETY: a node's wrapper identity is cleared when the wrapper is collected, so it names a live object.
+    let object = unsafe { southstar_js_engine::identity_value(wrapper) };
+    object.with_instance(
+        &super::wrapper::ELEMENT_CLASS,
+        super::wrapper::ElementData::unbind,
+    );
     n.set_js_wrapper(ptr::null_mut());
     n.set_js_invalidate(None);
     if release {
@@ -1124,10 +1128,8 @@ pub unsafe extern "C" fn ns_js_wrapper_pinned(js: *const NsJs, n: *const NsNode)
 pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<Value, Value> {
     let js = page_of(scope);
     let name = cstring(name);
-    let n = unsafe { ns_node_new_element(glib::g_strdup(name.as_ptr())) };
-    let Some(element_node) = node(n) else {
-        return Ok(Value::undefined());
-    };
+    let element_node = southstar_dom::node::new_element(name.to_bytes());
+    let n = element_node.as_mut_ptr();
     unsafe {
         super::wrapper::ns_node_arm_js_invalidate(n);
         ns_js_track_orphan(js, n);

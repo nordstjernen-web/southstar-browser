@@ -402,7 +402,6 @@ unsafe extern "C" {
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_arm_js_invalidate(node: *mut NsNode);
-    fn ns_node_new_document() -> *mut NsNode;
 }
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
@@ -523,7 +522,7 @@ pub(crate) fn arm_js_invalidate(node: Element) {
 }
 
 pub(crate) fn new_document() -> Option<Element> {
-    node_of(unsafe { ns_node_new_document() })
+    Some(Node::alloc(southstar_dom::Kind::Document))
 }
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &CStr) {

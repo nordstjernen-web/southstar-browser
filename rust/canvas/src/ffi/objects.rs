@@ -41,7 +41,6 @@ unsafe extern "C" {
         node: *const NsNode,
         name: *const c_char,
     ) -> *mut c_char;
-    fn ns_node_new_element(name: *mut c_char) -> *mut NsNode;
     fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
 }
@@ -226,7 +225,9 @@ pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
 }
 
 pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
-    let el = unsafe { ns_node_new_element(glib::strdup(b"canvas")) };
+    let el = southstar_dom::node::new_element(b"canvas")
+        .as_mut_ptr()
+        .cast::<NsNode>();
     let js = super::state::js_of(scope);
     if let Some(st) = crate::state::state_for(js, super::state::Node::from_addr(el as usize)) {
         unsafe { (*st).owned_node = el.cast() };

@@ -276,11 +276,17 @@ Nodes live in a per-thread store of slots that are never deallocated
 (`rust/dom/src/store.rs`), so `Node<'a>` is a plain `&'static` reference, its
 tree links are `Cell`s and walking or relinking the tree is safe code. A node
 owns its name, text, attributes and indexes (no string arena, no borrowed
-strings). Anything that remembers a node beyond the current call keeps a
-`WeakNode` (`Node::downgrade`), which returns `None` once the node is freed
-even if its slot is reused, instead of a raw pointer plus a "forget" hook.
-`NsNode`/`NsAttr` are opaque handle types for the remaining C ABI only.
-`docs/dom.md` has the details, including how long a borrowed string stays good.
+strings). A subtree with no parent is owned by one `Tree`, which frees it on
+drop unless it was given a parent; the parsers' Rust APIs
+(`southstar_html_parser::parse_document`, `parse_fragment`,
+`southstar_xml::parse_document`) return `Tree`s, and nodes are created
+through `southstar_dom::node`, never through C exports.
+Anything that remembers a node beyond the current call keeps a `WeakNode`
+(`Node::downgrade`), which returns `None` once the node is freed even if its
+slot is reused, instead of a raw pointer plus a "forget" hook; script element
+wrappers hold one too. `NsNode` is an opaque handle type for the remaining C
+ABI only. `docs/dom.md` has the details, including how long a borrowed string
+stays good.
 
 ### Image decoding: pure-Rust decoders
 

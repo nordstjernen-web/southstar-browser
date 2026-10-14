@@ -2274,6 +2274,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-url",
+ "southstar-xml",
 ]
 
 [[package]]
@@ -2348,6 +2349,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-layout",
  "southstar-url",
+ "southstar-xml",
 ]
 
 [[package]]
@@ -3168,7 +3170,7 @@ dependencies = [
 name = "southstar-xml"
 version = "0.9.11-dev"
 dependencies = [
- "southstar-glib",
+ "southstar-dom",
 ]
 
 [[package]]

@@ -121,9 +121,7 @@ unsafe extern "C" {
         len: usize,
         content_type: *const c_char,
     ) -> *mut c_char;
-    fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
-    fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
     fn ns_node_remove(node: *mut NsNode);
     fn ns_net_referer_for(
         url: *const c_char,
@@ -450,11 +448,7 @@ pub(crate) fn html_parse(input: &CStr) -> Tree {
 }
 
 pub(crate) fn xml_parse(input: &CStr) -> Option<Tree> {
-    let len = input.to_bytes().len() as isize;
-    // SAFETY: the input is a NUL-terminated string that outlives the call.
-    let doc = unsafe { ns_xml_parse(input.as_ptr(), len) };
-    // SAFETY: the XML parser returns null or a new document of this thread's store, which the caller now owns.
-    unsafe { Node::from_ptr(doc) }.map(Tree::adopt)
+    southstar_xml::parse_document(input.to_bytes()).ok()
 }
 
 pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
@@ -464,8 +458,7 @@ pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
 }
 
 pub(crate) fn new_text(text: &CStr) -> Node<'static> {
-    let text = unsafe { glib::g_strdup(text.as_ptr()) };
-    unsafe { Node::from_ptr(ns_node_new_text(text)) }.expect("text node allocation")
+    southstar_dom::node::new_text(southstar_dom::Kind::Text, text.to_bytes())
 }
 
 pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr) {

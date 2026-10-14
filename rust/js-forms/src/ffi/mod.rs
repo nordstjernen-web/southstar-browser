@@ -45,8 +45,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
-    fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_uint,
@@ -328,8 +326,10 @@ pub(crate) fn remove_attr(node: Element, name: &CStr) {
 
 pub(crate) fn append_text(parent: Element, text: &[u8]) {
     let text = cstring(text);
-    let child = unsafe { ns_node_new_text(glib::g_strdup(text.as_ptr())) };
-    unsafe { ns_node_append_child(mut_ptr(parent), child) };
+    parent.append(southstar_dom::node::new_text(
+        southstar_dom::Kind::Text,
+        text.to_bytes(),
+    ));
 }
 
 pub(crate) fn event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
