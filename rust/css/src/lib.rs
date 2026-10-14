@@ -7,6 +7,7 @@ mod attr_fn;
 mod border_image;
 mod calc;
 mod cascade;
+mod clip_path;
 mod color;
 mod computed_units;
 mod container;

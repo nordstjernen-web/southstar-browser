@@ -7,6 +7,7 @@ use std::ffi::CString;
 use crate::animation::{self, Entry, Longhand};
 use crate::border_image;
 use crate::calc::{self, Calc, Parsed};
+use crate::clip_path;
 use crate::color::parse_color;
 use crate::container;
 use crate::content::content_canonical;
@@ -97,6 +98,25 @@ pub(crate) fn c_text(bytes: &[u8]) -> CString {
 
 pub(crate) fn lower(t: &[u8]) -> Vec<u8> {
     t.to_ascii_lowercase()
+}
+
+fn lower_outside_strings(t: &[u8]) -> Vec<u8> {
+    let mut quote = 0u8;
+    t.iter()
+        .map(|&c| {
+            if quote != 0 {
+                if c == quote {
+                    quote = 0;
+                }
+                c
+            } else {
+                if c == b'"' || c == b'\'' {
+                    quote = c;
+                }
+                c.to_ascii_lowercase()
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn eq(a: &[u8], b: &[u8]) -> bool {
@@ -1842,6 +1862,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::GridRowStart | P::GridRowEnd | P::GridColumnStart | P::GridColumnEnd => {
             keyword_text(grid::line_canonical(t).map(|(text, _)| text))
         }
+        P::ClipPath => clip_path::valid(t).then(|| Value::keyword(lower_outside_strings(t))),
         _ => match longhand(prop) {
             Some(lh) => keyword_text(animation::longhand_canonical(lh, t)),
             None => Some(Value::keyword(lower(t))),
