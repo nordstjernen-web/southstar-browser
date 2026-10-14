@@ -14,7 +14,6 @@ pub use southstar_canvas;
 pub use southstar_config;
 pub use southstar_csp;
 pub use southstar_css;
-pub use southstar_css_media;
 pub use southstar_css_prop_syntax;
 pub use southstar_datetime;
 pub use southstar_debuglog;

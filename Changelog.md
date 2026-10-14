@@ -117,6 +117,14 @@ Southstar Browser 0.9.11-dev:
   rounded to the nearest allowed step within min and max, ties upward --
   so min=0 max=5 defaults to 3, step=0.001 turns 1/3 into 0.333, and
   stepUp() starts from that sanitized value.
+* rust/css-media no longer depends on rust/css and has no C ABI or unsafe
+  code left (#![forbid(unsafe_code)]). It owns the media state -- the
+  viewport, device size and pixel ratio, print mode and the colour-scheme
+  and reduced-motion preferences -- and counts its changes; rust/css depends
+  on it and drops its cached style sheets when the count moves, instead of
+  the two crates calling each other through C. The engines, layout, the
+  window and matchMedia bindings and the animation engine call it directly;
+  fifteen C exports are gone.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

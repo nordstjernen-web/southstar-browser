@@ -12,9 +12,7 @@ use southstar_glib::{self as glib, GBoolean};
 use crate::image_source::{Chosen, Environment};
 
 unsafe extern "C" {
-    fn ns_css_device_pixel_ratio() -> f64;
     fn ns_css_sizes_resolve(sizes: *const c_char) -> f64;
-    fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_image_supports_mime(mime: *const c_char) -> GBoolean;
 }
 
@@ -27,12 +25,11 @@ fn choose(node: Node<'_>) -> Chosen<'_> {
         let sizes = sizes.map(c_string);
         unsafe { ns_css_sizes_resolve(sizes.as_ref().map_or(ptr::null(), |s| s.as_ptr())) }
     };
-    let media_matches =
-        |query: &[u8]| unsafe { ns_css_media_query_matches(c_string(query).as_ptr()) != 0 };
+    let media_matches = |query: &[u8]| southstar_css_media::query_matches(query);
     let supports_type =
         |mime: &[u8]| unsafe { ns_image_supports_mime(c_string(mime).as_ptr()) != 0 };
     Environment {
-        device_pixel_ratio: unsafe { ns_css_device_pixel_ratio() },
+        device_pixel_ratio: southstar_css_media::device_pixel_ratio(),
         resolve_sizes: &resolve_sizes,
         media_matches: &media_matches,
         supports_type: &supports_type,

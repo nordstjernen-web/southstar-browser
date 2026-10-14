@@ -21,8 +21,6 @@ const MERGED_TRIM_TO: usize = 48;
 const URL_SHEETS_MAX: usize = 256;
 
 unsafe extern "C" {
-    fn ns_css_media_viewport_current_w() -> f64;
-    fn ns_css_media_viewport_current_h() -> f64;
     fn g_bytes_ref(bytes: *mut c_void) -> *mut c_void;
     fn g_bytes_unref(bytes: *mut c_void);
     fn g_bytes_equal(a: *const c_void, b: *const c_void) -> GBoolean;
@@ -76,12 +74,10 @@ impl Drop for Bytes {
 }
 
 fn viewport() -> (f64, f64) {
-    unsafe {
-        (
-            ns_css_media_viewport_current_w(),
-            ns_css_media_viewport_current_h(),
-        )
-    }
+    (
+        southstar_css_media::viewport_w(),
+        southstar_css_media::viewport_h(),
+    )
 }
 
 fn viewport_rounded() -> (u64, u64) {
@@ -128,9 +124,26 @@ struct Caches {
     links: HashMap<UrlKey, Sheet>,
     imports: HashMap<UrlKey, ImportSheet>,
     relayout_depth: u32,
+    media_generation: u64,
 }
 
+type Dropped = (
+    HashMap<usize, StyleElementSheet>,
+    HashMap<MergedKey, MergedSheet>,
+    HashMap<UrlKey, Sheet>,
+    HashMap<UrlKey, ImportSheet>,
+);
+
 impl Caches {
+    fn take_sheets(&mut self) -> Dropped {
+        (
+            core::mem::take(&mut self.style_elements),
+            core::mem::take(&mut self.merged),
+            core::mem::take(&mut self.links),
+            core::mem::take(&mut self.imports),
+        )
+    }
+
     fn tick(&mut self) -> u64 {
         self.clock += 1;
         self.clock
@@ -162,8 +175,21 @@ impl Caches {
 
 static CACHES: LazyLock<Mutex<Caches>> = LazyLock::new(Mutex::default);
 
+fn lock() -> std::sync::MutexGuard<'static, Caches> {
+    CACHES.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 fn with<R>(f: impl FnOnce(&mut Caches) -> R) -> R {
-    f(&mut CACHES.lock().unwrap_or_else(PoisonError::into_inner))
+    let generation = southstar_css_media::generation();
+    let stale = {
+        let mut caches = lock();
+        (caches.media_generation != generation).then(|| {
+            caches.media_generation = generation;
+            caches.take_sheets()
+        })
+    };
+    drop(stale);
+    f(&mut lock())
 }
 
 unsafe fn parse(css: *const c_char, len: isize) -> *mut c_void {
@@ -352,14 +378,7 @@ pub extern "C" fn ns_css_relayout_leave() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_stylesheet_cache_drop() {
-    let dropped = with(|caches| {
-        (
-            core::mem::take(&mut caches.style_elements),
-            core::mem::take(&mut caches.merged),
-            core::mem::take(&mut caches.links),
-            core::mem::take(&mut caches.imports),
-        )
-    });
+    let dropped = with(Caches::take_sheets);
     drop(dropped);
 }
 

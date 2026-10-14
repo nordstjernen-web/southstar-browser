@@ -97,9 +97,6 @@ unsafe extern "C" {
     fn ns_css_set_viewport(vw: f64, vh: f64);
     fn ns_css_set_doc_language(lang: *const c_char);
     fn ns_css_set_target_fragment(fragment: *const c_char);
-    fn ns_css_device_pixel_ratio() -> f64;
-    fn ns_css_set_device_pixel_ratio(dppx: f64);
-    fn ns_css_set_print_media(printing: GBoolean);
     fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode;
     fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
@@ -489,15 +486,15 @@ pub fn css_set_target_fragment(fragment: Option<&CStr>) {
 }
 
 pub fn css_device_pixel_ratio() -> f64 {
-    unsafe { ns_css_device_pixel_ratio() }
+    southstar_css_media::device_pixel_ratio()
 }
 
 pub fn css_set_device_pixel_ratio(dppx: f64) {
-    unsafe { ns_css_set_device_pixel_ratio(dppx) };
+    southstar_css_media::set_device_pixel_ratio(dppx);
 }
 
 pub fn css_set_print_media(printing: bool) {
-    unsafe { ns_css_set_print_media(southstar_glib::boolean(printing)) };
+    southstar_css_media::set_print_media(printing);
 }
 
 pub fn css_set_active_node(node: Option<Node<'_>>) {

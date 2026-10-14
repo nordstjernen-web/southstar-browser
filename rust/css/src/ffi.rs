@@ -25,7 +25,6 @@ mod lex;
 mod matcher;
 mod nesting;
 mod pending;
-mod preferences;
 mod property;
 mod query;
 mod registry;
@@ -78,7 +77,7 @@ pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, RawAreaRect, RawAreas};
 
 pub(crate) fn prefers_dark() -> bool {
-    preferences::ns_css_get_color_scheme() == preferences::COLOR_SCHEME_DARK
+    southstar_css_media::prefers_dark()
 }
 
 pub(crate) fn viewport() -> (f64, f64) {

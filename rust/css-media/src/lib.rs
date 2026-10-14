@@ -1,8 +1,8 @@
-//! Southstar — Media Queries Level 4 parser, evaluator and serializer.
+//! Southstar — Media Queries Level 4 parser, evaluator and serializer, and the viewport, device and user preferences they evaluate against.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
 
 use std::sync::Mutex;
 
@@ -11,22 +11,77 @@ const VIEWPORT_STACK: usize = 16;
 
 struct State {
     stack: Vec<(f64, f64)>,
+    viewport: (f64, f64),
     device_w: f64,
     device_h: f64,
     dppx: f64,
     print: bool,
+    dark: bool,
+    reduced_motion: bool,
+    generation: u64,
 }
 
 static STATE: Mutex<State> = Mutex::new(State {
     stack: Vec::new(),
+    viewport: (1000.0, 800.0),
     device_w: 1920.0,
     device_h: 1080.0,
     dppx: 1.0,
     print: false,
+    dark: false,
+    reduced_motion: false,
+    generation: 0,
 });
 
 fn state<T>(f: impl FnOnce(&mut State) -> T) -> T {
     f(&mut STATE.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+fn change(f: impl FnOnce(&mut State) -> bool) {
+    state(|s| {
+        if f(s) {
+            s.generation += 1;
+        }
+    });
+}
+
+pub fn generation() -> u64 {
+    state(|s| s.generation)
+}
+
+pub fn base_viewport() -> (f64, f64) {
+    state(|s| s.viewport)
+}
+
+pub fn set_base_viewport(w: f64, h: f64) {
+    state(|s| {
+        if w > 0.0 {
+            s.viewport.0 = w;
+        }
+        if h > 0.0 {
+            s.viewport.1 = h;
+        }
+    });
+}
+
+pub fn replace_base_viewport(w: f64, h: f64) -> (f64, f64) {
+    state(|s| core::mem::replace(&mut s.viewport, (w, h)))
+}
+
+pub fn set_prefers_dark(dark: bool) {
+    change(|s| core::mem::replace(&mut s.dark, dark) != dark);
+}
+
+pub fn prefers_dark() -> bool {
+    state(|s| s.dark)
+}
+
+pub fn set_prefers_reduced_motion(reduce: bool) {
+    change(|s| core::mem::replace(&mut s.reduced_motion, reduce) != reduce);
+}
+
+pub fn prefers_reduced_motion() -> bool {
+    state(|s| s.reduced_motion)
 }
 
 pub fn set_device_size(w: f64, h: f64) {
@@ -41,16 +96,13 @@ pub fn set_device_size(w: f64, h: f64) {
 }
 
 pub fn set_device_pixel_ratio(dppx: f64) {
-    let changed = state(|s| {
+    change(|s| {
         if !(dppx > 0.0 && dppx.is_finite()) || dppx == s.dppx {
             return false;
         }
         s.dppx = dppx;
         true
     });
-    if changed {
-        ffi::stylesheet_cache_drop();
-    }
 }
 
 pub fn device_pixel_ratio() -> f64 {
@@ -75,24 +127,15 @@ pub fn viewport_pop() {
 }
 
 pub fn viewport_w() -> f64 {
-    state(|s| s.stack.last().map(|v| v.0)).unwrap_or_else(ffi::css_viewport_w)
+    state(|s| s.stack.last().unwrap_or(&s.viewport).0)
 }
 
 pub fn viewport_h() -> f64 {
-    state(|s| s.stack.last().map(|v| v.1)).unwrap_or_else(ffi::css_viewport_h)
+    state(|s| s.stack.last().unwrap_or(&s.viewport).1)
 }
 
 pub fn set_print_media(printing: bool) {
-    let changed = state(|s| {
-        if s.print == printing {
-            return false;
-        }
-        s.print = printing;
-        true
-    });
-    if changed {
-        ffi::stylesheet_cache_drop();
-    }
+    change(|s| core::mem::replace(&mut s.print, printing) != printing);
 }
 
 pub fn print_media() -> bool {
@@ -417,7 +460,8 @@ impl Text<'_> {
     }
 
     fn strtod(&self, p: usize) -> (f64, usize) {
-        let (value, consumed) = ffi::ascii_strtod(self.bytes.get(p..).unwrap_or_default());
+        let (value, consumed) =
+            southstar_glib::ascii_strtod_prefix(self.bytes.get(p..).unwrap_or_default());
         (value, p + consumed)
     }
 
@@ -1036,14 +1080,14 @@ fn discrete_current(f: &FeatureDef) -> Option<&'static str> {
         "color-gamut" => "srgb",
         "dynamic-range" | "video-dynamic-range" => "standard",
         "prefers-color-scheme" => {
-            if ffi::prefers_dark() {
+            if prefers_dark() {
                 "dark"
             } else {
                 "light"
             }
         }
         "prefers-reduced-motion" => {
-            if ffi::prefers_reduced_motion() {
+            if prefers_reduced_motion() {
                 "reduce"
             } else {
                 "no-preference"

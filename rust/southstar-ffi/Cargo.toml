@@ -18,7 +18,6 @@ southstar-canvas = { path = "../canvas" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
 southstar-css = { path = "../css" }
-southstar-css-media = { path = "../css-media" }
 southstar-css-prop-syntax = { path = "../css-prop-syntax" }
 southstar-datetime = { path = "../datetime" }
 southstar-debuglog = { path = "../debuglog" }

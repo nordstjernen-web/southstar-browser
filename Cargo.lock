@@ -1517,6 +1517,7 @@ version = "0.9.11-dev"
 name = "southstar-anim"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -1551,6 +1552,7 @@ name = "southstar-browser"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -1604,6 +1606,7 @@ dependencies = [
 name = "southstar-css"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-media",
  "southstar-css-syntax",
  "southstar-dom",
  "southstar-glib",
@@ -1615,7 +1618,6 @@ dependencies = [
 name = "southstar-css-media"
 version = "0.9.11-dev"
 dependencies = [
- "southstar-css",
  "southstar-glib",
  "southstar-numfmt",
 ]
@@ -1658,6 +1660,7 @@ dependencies = [
 name = "southstar-engine"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-media",
  "southstar-css-syntax",
  "southstar-dom",
  "southstar-glib",
@@ -1697,7 +1700,6 @@ dependencies = [
  "southstar-config",
  "southstar-csp",
  "southstar-css",
- "southstar-css-media",
  "southstar-css-prop-syntax",
  "southstar-datetime",
  "southstar-debuglog",
@@ -1844,6 +1846,7 @@ name = "southstar-headless"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -2353,6 +2356,7 @@ name = "southstar-js-services"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-css-media",
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
@@ -2440,6 +2444,7 @@ name = "southstar-js-window"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2472,6 +2477,7 @@ version = "0.9.11-dev"
 name = "southstar-layout"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
 ]

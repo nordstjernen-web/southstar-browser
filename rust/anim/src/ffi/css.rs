@@ -19,7 +19,6 @@ const KIND_LENGTH: c_uint = 1;
 const KIND_COLOR: c_uint = 3;
 const KIND_TRANSFORM: c_uint = 9;
 const UNIT_PERCENT: c_uint = 3;
-const REDUCED_MOTION_REDUCE: c_int = 1;
 
 unsafe extern "C" {
     fn ns_css_value_dup(v: *const NsCssValue) -> *mut NsCssValue;
@@ -42,7 +41,6 @@ unsafe extern "C" {
     fn ns_css_style_before_change(node: *const c_void) -> *const Style;
     fn ns_style_prop_from_currentcolor(style: *const Style, prop: c_int) -> GBoolean;
     fn ns_style_free(style: *mut Style);
-    fn ns_css_get_reduced_motion() -> c_int;
     fn ns_css_incremental_exclude(node: *const c_void, exclude: GBoolean);
     fn ns_css_keyframes_resolve(kf: *const NsKeyframes, vars: *const c_void) -> *mut NsKeyframes;
     fn ns_css_keyframes_resolved_free(kf: *mut NsKeyframes);
@@ -264,7 +262,7 @@ pub fn prop_inherits(prop: i32) -> bool {
 }
 
 pub fn reduced_motion() -> bool {
-    unsafe { ns_css_get_reduced_motion() == REDUCED_MOTION_REDUCE }
+    southstar_css_media::prefers_reduced_motion()
 }
 
 pub fn intern(name: &CStr) -> *const c_char {

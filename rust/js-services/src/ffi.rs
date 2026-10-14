@@ -311,9 +311,6 @@ unsafe extern "C" {
     fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
     fn ns_js_log_line(js: *const NsJs, line: *const c_char);
     fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
-    fn ns_css_media_list_serialize(query: *const c_char) -> *mut c_char;
-    fn ns_css_set_device_size(width: f64, height: f64);
 }
 
 unsafe extern "Rust" {
@@ -361,11 +358,6 @@ fn c_string(text: &str) -> CString {
     CString::new(text.replace('\0', "")).unwrap_or_default()
 }
 
-fn c_ptr(text: &Option<CString>) -> *const c_char {
-    text.as_ref()
-        .map_or(core::ptr::null(), |text| text.as_ptr())
-}
-
 pub(crate) fn log_enabled(js: Js) -> bool {
     !js.is_null() && unsafe { ns_js_log_enabled(js.0) } != 0
 }
@@ -406,23 +398,22 @@ pub(crate) fn dispatch_with_event(
     nsr_target_dispatch_with_event(scope, target, kind, event);
 }
 
+fn until_nul(text: &str) -> &[u8] {
+    let text = text.as_bytes();
+    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
+}
+
 pub(crate) fn media_query_matches(query: Option<&str>) -> bool {
-    let query = query.map(c_string);
-    unsafe { ns_css_media_query_matches(c_ptr(&query)) != 0 }
+    query.is_none_or(|q| southstar_css_media::query_matches(until_nul(q)))
 }
 
 pub(crate) fn media_list_serialize(query: Option<&str>) -> String {
-    let query = query.map(c_string);
-    let serialized = unsafe { ns_css_media_list_serialize(c_ptr(&query)) };
-    let out = text(serialized);
-    if !serialized.is_null() {
-        unsafe { glib::g_free(serialized.cast()) };
-    }
-    out
+    let query = query.map(until_nul).unwrap_or_default();
+    String::from_utf8_lossy(&southstar_css_media::list_serialize(query)).into_owned()
 }
 
 pub(crate) fn set_device_size(width: i32, height: i32) {
-    unsafe { ns_css_set_device_size(f64::from(width), f64::from(height)) };
+    southstar_css_media::set_device_size(f64::from(width), f64::from(height));
 }
 
 #[cfg(windows)]

@@ -119,8 +119,6 @@ unsafe extern "C" {
     fn ns_html_json_document(url: *const c_char, json: *const c_char, len: usize) -> *mut c_char;
     fn ns_html_xml_document(url: *const c_char, xml: *const c_char, len: usize) -> *mut c_char;
     fn ns_pdf_document_html(data: *const u8, len: usize, url: *const c_char) -> *mut c_char;
-    fn ns_css_set_color_scheme(scheme: c_int);
-    fn ns_css_set_reduced_motion(motion: c_int);
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
@@ -400,11 +398,11 @@ pub fn xml_document(url: &CStr, xml: Option<&CStr>) -> Option<GStr> {
 }
 
 pub fn css_set_color_scheme(dark: bool) {
-    unsafe { ns_css_set_color_scheme(c_int::from(dark)) };
+    southstar_css_media::set_prefers_dark(dark);
 }
 
 pub fn css_set_reduced_motion(reduce: bool) {
-    unsafe { ns_css_set_reduced_motion(c_int::from(reduce)) };
+    southstar_css_media::set_prefers_reduced_motion(reduce);
 }
 
 pub fn file_exists(path: &CStr) -> bool {

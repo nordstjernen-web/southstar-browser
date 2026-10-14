@@ -30,7 +30,6 @@ pub use southstar_render::{RenderCtx, RenderProfile};
 type FrameViewportCb = unsafe extern "C" fn(frame: *const NsNode, w: *mut f64, h: *mut f64);
 
 unsafe extern "C" {
-    fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_css_stylesheet_parse_import_cached(
         url: *const c_char,
@@ -53,8 +52,6 @@ unsafe extern "C" {
     fn ns_css_shadow_adopted_css(root: *mut NsNode) -> *mut c_char;
     fn ns_css_style_element_cache_begin();
     fn ns_css_style_element_cache_end();
-    fn ns_css_media_viewport_push(w: f64, h: f64);
-    fn ns_css_media_viewport_pop();
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
     fn ns_css_set_frame_viewport_cb(cb: FrameViewportCb);
     fn ns_css_relayout_enter();
@@ -176,7 +173,7 @@ impl Stylesheet {
 }
 
 pub fn media_query_matches(query: &CStr) -> bool {
-    unsafe { ns_css_media_query_matches(query.as_ptr()) != 0 }
+    southstar_css_media::query_matches(query.to_bytes())
 }
 
 pub fn url_resolve_opt(base: Option<&CStr>, href: &CStr) -> Option<CString> {
@@ -230,11 +227,11 @@ pub fn style_element_cache_end() {
 }
 
 pub fn media_viewport_push(w: f64, h: f64) {
-    unsafe { ns_css_media_viewport_push(w, h) };
+    southstar_css_media::viewport_push(w, h);
 }
 
 pub fn media_viewport_pop() {
-    unsafe { ns_css_media_viewport_pop() };
+    southstar_css_media::viewport_pop();
 }
 
 pub fn layout_frame_viewport_raw(frame: usize) -> Option<(f64, f64)> {

@@ -201,7 +201,6 @@ unsafe extern "C" {
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
-    fn ns_css_set_print_media(printing: GBoolean);
     fn ns_css_set_viewport(vw: f64, vh: f64);
     fn ns_css_set_target_fragment(fragment: *const c_char);
     fn ns_css_set_doc_language(lang: *const c_char);
@@ -550,7 +549,7 @@ pub fn apply_render_page_rule(setup: &mut PrintSetup) {
 }
 
 pub fn css_set_print_media(printing: bool) {
-    unsafe { ns_css_set_print_media(glib::boolean(printing)) };
+    southstar_css_media::set_print_media(printing);
 }
 
 pub fn css_set_viewport(vw: f64, vh: f64) {

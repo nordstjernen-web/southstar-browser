@@ -48,7 +48,6 @@ const _: () = assert!(
 unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_css_media_query_matches(query: *const c_char) -> GBoolean;
     fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
     fn ns_css_syntax_def_free(syntax: *mut c_void);
 }
@@ -58,8 +57,7 @@ fn c_string(text: &[u8]) -> CString {
 }
 
 pub(crate) fn media_query_matches(query: &[u8]) -> bool {
-    let query = c_string(query);
-    unsafe { ns_css_media_query_matches(query.as_ptr()) != 0 }
+    southstar_css_media::query_matches(query)
 }
 
 pub(crate) fn syntax_def_valid(text: &[u8]) -> bool {
