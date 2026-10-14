@@ -57,6 +57,13 @@ Southstar Browser 0.9.11-dev:
   default-src fallback, wildcards, ports and paths, the http-to-https
   upgrade, policy lists, nonces, hashes, 'unsafe-inline', 'strict-dynamic'
   and frame-ancestors.
+* Cookie and HSTS rules move into rust/netstore, which forbids unsafe code and
+  does no I/O: the jar's Netscape lines, Set-Cookie parsing with the
+  __Secure-/__Host- prefixes and public-suffix check, domain/path/expiry
+  matching, the Cookie header, the HSTS host list and Strict-Transport-
+  Security parsing, and the HTTP date parser. rust/net keeps the files.
+  GLib's g_ascii_strtoll gives way to a Rust strtoll that matched it on two
+  million random inputs. Unit tests cover all of it.
 
 Southstar Browser 0.9.10:
 ======

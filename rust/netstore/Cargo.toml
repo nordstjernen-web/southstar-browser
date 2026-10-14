@@ -1,0 +1,14 @@
+[package]
+name = "southstar-netstore"
+description = "The rules behind the network stack's stored state, without I/O: the cookie jar's Netscape format and RFC 6265 matching, the HSTS host list, Strict-Transport-Security and HTTP dates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-url = { path = "../url" }
+
+[lints]
+workspace = true

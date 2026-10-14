@@ -42,7 +42,9 @@ fn config_flag(flag: impl Fn(&southstar_config::NsConfig) -> GBoolean) -> bool {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_http_date(date: *const c_char) -> i64 {
-    text(date).and_then(crate::http_date::parse).unwrap_or(-1)
+    text(date)
+        .and_then(southstar_netstore::http_date::parse)
+        .unwrap_or(-1)
 }
 
 #[unsafe(no_mangle)]

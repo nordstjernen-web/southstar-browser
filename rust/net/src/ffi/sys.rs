@@ -65,7 +65,6 @@ unsafe extern "C" {
     fn ferror(stream: *mut File) -> c_int;
     fn fclose(stream: *mut File) -> c_int;
     fn g_strerror(errnum: c_int) -> *const c_char;
-    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
     fn g_get_tmp_dir() -> *const c_char;
     fn g_dir_make_tmp(tmpl: *const c_char, error: *mut *mut GError) -> *mut c_char;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
@@ -313,18 +312,6 @@ impl Drop for CFile {
     }
 }
 
-pub fn ascii_strtoll(text: &[u8]) -> (i64, usize) {
-    let text = c(text);
-    let mut end: *mut c_char = ptr::null_mut();
-    let value = unsafe { g_ascii_strtoll(text.as_ptr(), &mut end, 10) };
-    let consumed = if end.is_null() {
-        0
-    } else {
-        (end as usize).wrapping_sub(text.as_ptr() as usize)
-    };
-    (value, consumed)
-}
-
 pub fn tmp_dir() -> Vec<u8> {
     unsafe { glib::bytes(g_get_tmp_dir()) }
         .map(<[u8]>::to_vec)
@@ -442,10 +429,6 @@ pub fn sha256_hex(text: &[u8]) -> Vec<u8> {
     let text = c(text);
     take(unsafe { g_compute_checksum_for_string(CHECKSUM_SHA256, text.as_ptr(), -1) })
         .unwrap_or_default()
-}
-
-pub fn http_date(text: &[u8]) -> Option<i64> {
-    crate::http_date::parse(text)
 }
 
 pub fn is_public_suffix(domain: &[u8]) -> bool {

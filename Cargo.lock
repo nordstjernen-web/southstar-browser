@@ -2637,6 +2637,14 @@ dependencies = [
  "southstar-html-util",
  "southstar-http",
  "southstar-http-cache",
+ "southstar-netstore",
+ "southstar-url",
+]
+
+[[package]]
+name = "southstar-netstore"
+version = "0.9.11-dev"
+dependencies = [
  "southstar-url",
 ]
 
