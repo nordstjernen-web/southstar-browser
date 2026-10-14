@@ -1111,6 +1111,73 @@ fn border_spacing(t: &[u8]) -> Option<Value> {
     })))
 }
 
+const FONT_VARIANT_SLOTS: [&str; 22] = [
+    "common-ligatures no-common-ligatures",
+    "discretionary-ligatures no-discretionary-ligatures",
+    "historical-ligatures no-historical-ligatures",
+    "contextual no-contextual",
+    "small-caps all-small-caps petite-caps all-petite-caps unicase titling-caps",
+    "stylistic(",
+    "historical-forms",
+    "styleset(",
+    "character-variant(",
+    "swash(",
+    "ornaments(",
+    "annotation(",
+    "lining-nums oldstyle-nums",
+    "proportional-nums tabular-nums",
+    "diagonal-fractions stacked-fractions",
+    "ordinal",
+    "slashed-zero",
+    "jis78 jis83 jis90 jis04 simplified traditional",
+    "full-width proportional-width",
+    "ruby",
+    "sub super",
+    "text emoji unicode",
+];
+
+fn font_variant_slot(token: &[u8]) -> Option<usize> {
+    if let Some(open) = token.iter().position(|&c| c == b'(') {
+        let inner = token.strip_suffix(b")")?.get(open + 1..)?;
+        if inner.is_empty()
+            || !inner
+                .iter()
+                .all(|c| c.is_ascii_alphanumeric() || *c == b'-')
+        {
+            return None;
+        }
+        let head = &token[..=open];
+        return FONT_VARIANT_SLOTS
+            .iter()
+            .position(|s| eq(s.as_bytes(), head));
+    }
+    FONT_VARIANT_SLOTS
+        .iter()
+        .position(|s| !s.ends_with('(') && word_is_one_of(token, s))
+}
+
+fn font_variant(t: &[u8]) -> Option<Value> {
+    let words = split_gspace_words(t);
+    if let [w] = words.as_slice()
+        && (eq(w, b"normal") || eq(w, b"none"))
+    {
+        return Some(Value::keyword(lower(w)));
+    }
+    let mut slots: [Option<Vec<u8>>; 22] = Default::default();
+    for w in &words {
+        let i = font_variant_slot(w)?;
+        if slots[i].is_some() {
+            return None;
+        }
+        slots[i] = Some(w.to_vec());
+    }
+    if words.is_empty() {
+        return None;
+    }
+    let canonical: Vec<Vec<u8>> = slots.into_iter().flatten().collect();
+    Some(Value::keyword(canonical.join(&b' ')))
+}
+
 fn font_synthesis(t: &[u8]) -> Option<Value> {
     let words = split_gspace_words(t);
     if words.len() == 1 && eq(words[0], b"none") {
@@ -1343,7 +1410,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             "normal embed isolate bidi-override isolate-override plaintext",
         ),
         P::FontStyle => keyword_choice(t, "normal italic oblique"),
-        P::FontVariant => keyword_choice(t, "normal small-caps"),
+        P::FontVariant => font_variant(t),
         P::TextAlign => keyword_choice(t, "start end left right center justify match-parent"),
         P::TextTransform => keyword_choice(t, "none capitalize uppercase lowercase"),
         P::JustifyContent => alignment_keyword(

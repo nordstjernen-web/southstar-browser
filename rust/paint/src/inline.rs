@@ -175,7 +175,11 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
         let pf = engine::font_family_for_pango(Some(ff));
         attrs.insert_range(Some(Attribute::family(&pf)), start_u, len);
     }
-    if keyword_is(fl.get(P::FontVariant), c"small-caps") {
+    if fl
+        .get(P::FontVariant)
+        .and_then(ValueRef::keyword_text)
+        .is_some_and(|kw| has_small_caps(kw.to_bytes()))
+    {
         attrs.insert_range(
             Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
             start_u,
@@ -1978,4 +1982,10 @@ pub fn inline_range_extents(
     });
     let (x0, y0, x1, y1) = u?;
     Some((x0, y0 - b.y(), x1 - x0, y1 - y0))
+}
+
+fn has_small_caps(variant: &[u8]) -> bool {
+    variant
+        .split(|&c| c == b' ')
+        .any(|w| w == b"small-caps" || w == b"all-small-caps")
 }

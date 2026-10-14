@@ -560,7 +560,9 @@ impl<'a> Collector<'a> {
         let sup = name.to_bytes() == b"sup";
         let sub = name.to_bytes() == b"sub";
         let rise_start = self.out.len();
-        let small_caps = keyword_is(get(PropId::FontVariant), c"small-caps");
+        let small_caps = get(PropId::FontVariant)
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|kw| has_small_caps(kw.to_bytes()));
         let sc_start = self.out.len();
 
         let font_size_self = match get(PropId::FontSize).and_then(ValueRef::length) {
@@ -726,4 +728,10 @@ fn inline_box_side_px(
         }
     }
     side
+}
+
+fn has_small_caps(variant: &[u8]) -> bool {
+    variant
+        .split(|&c| c == b' ')
+        .any(|w| w == b"small-caps" || w == b"all-small-caps")
 }
