@@ -47,7 +47,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
     fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode);
-    fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean;
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_uint,
@@ -311,8 +310,7 @@ pub(crate) fn regex_matches(pattern: &[u8], value: &[u8]) -> Option<bool> {
 }
 
 pub(crate) fn url_is_valid_absolute(url: &[u8]) -> bool {
-    let url = cstring(url);
-    unsafe { ns_url_is_valid_absolute(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_valid_absolute(&crate::until_nul(url.to_vec()))
 }
 
 pub(crate) fn sandbox_blocks_forms(node: Element) -> bool {

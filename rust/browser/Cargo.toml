@@ -13,6 +13,7 @@ southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

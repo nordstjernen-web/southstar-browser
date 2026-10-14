@@ -307,21 +307,6 @@ struct NsResponse {
 }
 
 #[repr(C)]
-struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
-#[repr(C)]
 struct WorkerRealm {
     host: *const c_void,
     context: *mut GMainContext,
@@ -399,12 +384,6 @@ unsafe extern "C" {
     );
     fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
     fn ns_js_page_time_origin_us(js: *mut c_void) -> i64;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> c_int;
-    fn ns_url_is_http_or_https(url: *const c_char) -> c_int;
-    fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
-    fn ns_url_parts_free(parts: *mut NsUrlParts);
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -456,6 +435,14 @@ pub(crate) fn with_js<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<
 
 fn c_string(text: &str) -> CString {
     CString::new(text.replace('\0', "")).unwrap_or_default()
+}
+
+fn without_nul(text: &str) -> String {
+    text.replace('\0', "")
+}
+
+fn lossy(bytes: Vec<u8>) -> String {
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 unsafe fn borrowed(p: *const c_char) -> Option<String> {
@@ -879,30 +866,21 @@ pub(crate) fn worker_now_ms(js: Js) -> f64 {
 }
 
 pub(crate) fn url_resolve(base: Option<&str>, href: &str) -> Option<String> {
-    let base = base.map(c_string);
-    let href = c_string(href);
-    unsafe {
-        taken(ns_url_resolve(
-            base.as_ref().map_or(core::ptr::null(), |b| b.as_ptr()),
-            href.as_ptr(),
-        ))
-    }
+    let base = base.map(without_nul);
+    let href = without_nul(href);
+    southstar_url::bytes::resolve(base.as_deref().map(str::as_bytes), href.as_bytes()).map(lossy)
 }
 
 pub(crate) fn url_origin_from(url: &str) -> Option<String> {
-    let url = c_string(url);
-    unsafe { taken(ns_url_origin_from(url.as_ptr())) }
+    southstar_url::bytes::origin_from(without_nul(url).as_bytes()).map(lossy)
 }
 
 pub(crate) fn url_same_origin(a: &str, b: &str) -> bool {
-    let a = c_string(a);
-    let b = c_string(b);
-    unsafe { ns_url_same_origin(a.as_ptr(), b.as_ptr()) != 0 }
+    southstar_url::bytes::same_origin(without_nul(a).as_bytes(), without_nul(b).as_bytes())
 }
 
 pub(crate) fn url_is_http_or_https(url: &str) -> bool {
-    let url = c_string(url);
-    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_http_or_https(without_nul(url).as_bytes())
 }
 
 #[derive(Default)]
@@ -918,24 +896,19 @@ pub(crate) struct UrlParts {
 }
 
 pub(crate) fn url_parts(url: &str) -> UrlParts {
-    let url = c_string(url);
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    let Some(p) = (unsafe { parts.as_ref() }) else {
+    let Some(p) = southstar_url::bytes::parts(without_nul(url).as_bytes()) else {
         return UrlParts::default();
     };
-    let field = |s: *mut c_char| unsafe { borrowed(s) }.unwrap_or_default();
-    let out = UrlParts {
-        origin: field(p.origin),
-        protocol: field(p.protocol),
-        host: field(p.host),
-        hostname: field(p.hostname),
-        port: field(p.port),
-        pathname: field(p.pathname),
-        search: field(p.search),
-        hash: field(p.hash),
-    };
-    unsafe { ns_url_parts_free(parts) };
-    out
+    UrlParts {
+        origin: lossy(p.origin),
+        protocol: lossy(p.protocol),
+        host: lossy(p.host),
+        hostname: lossy(p.hostname),
+        port: lossy(p.port),
+        pathname: lossy(p.pathname),
+        search: lossy(p.search),
+        hash: lossy(p.hash),
+    }
 }
 
 pub(crate) struct NetResponse {

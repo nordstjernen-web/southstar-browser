@@ -3,8 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub use southstar_url::bytes::{
-    Parts, host_from, is_http_or_https, is_valid_absolute, origin_from, origin_from_any, parts,
-    resolve, same_origin, set_component, to_ascii,
+    Parts, host_from, is_http_or_https, origin_from, origin_from_any, parts, resolve, same_origin,
+    to_ascii,
 };
 
 use crate::ffi::host;

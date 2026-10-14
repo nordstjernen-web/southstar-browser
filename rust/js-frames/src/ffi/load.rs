@@ -12,7 +12,7 @@ use southstar_js_engine::{ContextHandle, Value};
 
 use super::ctx::Ctx;
 use super::imports::{nsr_js_frame_load_enter, nsr_realmdoc_deny_cookie, nsr_window_link_outward};
-use super::{Js, NsJs, opt_ptr, owned_text};
+use super::{Js, NsJs, c_string, opt_ptr, owned_text};
 
 #[repr(C)]
 pub(crate) struct NsResponse {
@@ -128,9 +128,6 @@ unsafe extern "C" {
     fn ns_node_own_strings_deep(node: *mut NsNode);
     fn ns_node_free(node: *mut NsNode);
     fn ns_node_remove(node: *mut NsNode);
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn ns_net_referer_for(
         url: *const c_char,
         referrer_url: *const c_char,
@@ -272,20 +269,21 @@ pub(crate) fn node_doc_base_ptr(js: Js, node: Node<'_>) -> *const c_char {
     unsafe { ns_js_node_doc_base(js.ptr(), node.as_ptr()) }
 }
 
-pub(crate) fn same_origin_ptr(a: *const c_char, b: *const c_char) -> bool {
-    unsafe { ns_url_same_origin(a, b) != 0 }
+pub(crate) fn same_origin_ptr(a: &CStr, b: *const c_char) -> bool {
+    unsafe { c_str(b) }.is_some_and(|b| same_origin(a, b))
 }
 
 pub(crate) fn same_origin(a: &CStr, b: &CStr) -> bool {
-    same_origin_ptr(a.as_ptr(), b.as_ptr())
+    southstar_url::bytes::same_origin(a.to_bytes(), b.to_bytes())
 }
 
 pub(crate) fn is_http_or_https(url: Option<&CStr>) -> bool {
-    unsafe { ns_url_is_http_or_https(opt_ptr(url)) != 0 }
+    url.is_some_and(|url| southstar_url::bytes::is_http_or_https(url.to_bytes()))
 }
 
 pub(crate) fn origin_from(url: Option<&CStr>) -> Option<CString> {
-    owned_text(unsafe { ns_url_origin_from(opt_ptr(url)) })
+    url.and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
+        .map(c_string)
 }
 
 pub(crate) fn referer_for(

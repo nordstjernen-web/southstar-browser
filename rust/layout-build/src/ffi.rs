@@ -54,7 +54,6 @@ unsafe extern "C" {
     fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_layout_clear_kind_of(s: *const Style) -> c_int;
     fn ns_layout_float_side_of(s: *const Style) -> c_int;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
     fn ns_image_cache_insert_encoded(
         cache: *mut c_void,
@@ -208,17 +207,10 @@ pub fn float_side_of(s: Option<StyleRef<'_>>) -> c_int {
     unsafe { ns_layout_float_side_of(style_ptr(s)) }
 }
 
-fn take_cstring(p: *mut c_char) -> Option<CString> {
-    let s = c_str(p)?.to_owned();
-    unsafe { g_free(p.cast()) };
-    Some(s)
-}
-
 pub fn url_resolve(base: *const c_char, href: &CStr) -> Option<CString> {
-    if base.is_null() {
-        return None;
-    }
-    take_cstring(unsafe { ns_url_resolve(base, href.as_ptr()) })
+    let base = c_str(base)?;
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
+        .and_then(|abs| CString::new(abs).ok())
 }
 
 pub fn image_cache_peek(cache: *mut c_void, url: &CStr) -> *mut c_void {

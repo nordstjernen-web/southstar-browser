@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 southstar-sqlite = { path = "../sqlite" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

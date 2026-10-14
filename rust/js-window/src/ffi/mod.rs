@@ -200,21 +200,6 @@ pub(crate) struct NsJs {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
@@ -245,16 +230,6 @@ unsafe extern "C" {
     fn ns_js_soft_navigate(js: *mut NsJs, url: *const c_char, replace: GBoolean);
     fn ns_js_navigate(js: *mut NsJs, url: *const c_char, reload: GBoolean) -> GBoolean;
     fn ns_js_window_events_blocked(js: *const NsJs) -> GBoolean;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
-    fn ns_url_parts_free(parts: *mut NsUrlParts);
-    fn ns_url_set_component_len(
-        href: *const c_char,
-        component: *const c_char,
-        value: *const c_char,
-        value_len: usize,
-    ) -> *mut c_char;
     fn ns_js_top_url(js: *mut NsJs) -> *const c_char;
     fn ns_js_set_top_url(js: *mut NsJs, url: *const c_char);
     fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
@@ -276,6 +251,10 @@ unsafe extern "C" {
 
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(bytes).unwrap_or_default()
+}
+
+fn c_text(bytes: &[u8]) -> &[u8] {
+    if bytes.contains(&0) { &[] } else { bytes }
 }
 
 unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
@@ -363,20 +342,11 @@ pub fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value {
 }
 
 pub(crate) fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    let base = base.map(c_string);
-    let href = c_string(href);
-    unsafe {
-        taken(ns_url_resolve(
-            base.as_ref()
-                .map_or(core::ptr::null(), |base| base.as_ptr()),
-            href.as_ptr(),
-        ))
-    }
+    southstar_url::bytes::resolve(base.map(c_text), c_text(href))
 }
 
 pub(crate) fn url_origin(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c_string(url);
-    unsafe { taken(ns_url_origin_from(url.as_ptr())) }
+    southstar_url::bytes::origin_from(c_text(url))
 }
 
 #[derive(Clone, Copy)]
@@ -392,10 +362,8 @@ pub(crate) enum UrlField {
 }
 
 pub(crate) fn url_field(url: &[u8], field: UrlField) -> Option<Vec<u8>> {
-    let url = c_string(url);
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    let p = unsafe { parts.as_ref() }?;
-    let value = match field {
+    let p = southstar_url::bytes::parts(c_text(url))?;
+    Some(match field {
         UrlField::Protocol => p.protocol,
         UrlField::Origin => p.origin,
         UrlField::Host => p.host,
@@ -404,23 +372,11 @@ pub(crate) fn url_field(url: &[u8], field: UrlField) -> Option<Vec<u8>> {
         UrlField::Pathname => p.pathname,
         UrlField::Search => p.search,
         UrlField::Hash => p.hash,
-    };
-    let value = (!value.is_null()).then(|| unsafe { borrowed(value) });
-    unsafe { ns_url_parts_free(parts) };
-    value
+    })
 }
 
 pub(crate) fn url_set_component(href: &[u8], component: &str, value: &[u8]) -> Option<Vec<u8>> {
-    let href = c_string(href);
-    let component = c_string(component.as_bytes());
-    unsafe {
-        taken(ns_url_set_component_len(
-            href.as_ptr(),
-            component.as_ptr(),
-            value.as_ptr().cast(),
-            value.len(),
-        ))
-    }
+    southstar_url::bytes::set_component(c_text(href), c_text(component.as_bytes()), value)
 }
 
 pub(crate) fn top_url(js: Js) -> Vec<u8> {
@@ -523,18 +479,12 @@ pub(crate) fn consume_user_activation(js: Js) {
 }
 
 pub(crate) fn url_parts(url: &[u8]) -> Option<UrlOrigin> {
-    let url = c_string(url);
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    let p = unsafe { parts.as_ref() }?;
-    let origin = unsafe {
-        UrlOrigin {
-            protocol: borrowed(p.protocol),
-            hostname: borrowed(p.hostname),
-            port: borrowed(p.port),
-        }
-    };
-    unsafe { ns_url_parts_free(parts) };
-    Some(origin)
+    let p = southstar_url::bytes::parts(c_text(url))?;
+    Some(UrlOrigin {
+        protocol: p.protocol,
+        hostname: p.hostname,
+        port: p.port,
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -719,8 +669,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_observer_schedule_tick(js: *mut NsJs);
     fn ns_services_reeval_media_queries(js: *mut NsJs);
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
     fn ns_cors_allows(
         doc_url: *const c_char,
         resp_url: *const c_char,
@@ -785,14 +733,11 @@ pub(crate) fn reeval_media_queries(js: Js) {
 }
 
 pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
-    let url = c_string(url);
-    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_http_or_https(c_text(url))
 }
 
 pub(crate) fn url_same_origin(a: &[u8], b: &[u8]) -> bool {
-    let a = c_string(a);
-    let b = c_string(b);
-    unsafe { ns_url_same_origin(a.as_ptr(), b.as_ptr()) != 0 }
+    southstar_url::bytes::same_origin(c_text(a), c_text(b))
 }
 
 pub(crate) fn cors_allows(doc_url: Option<&[u8]>, url: &[u8], allow: &[u8]) -> bool {

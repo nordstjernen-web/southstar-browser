@@ -17,13 +17,6 @@ pub struct CameraInfo {
 unsafe extern "C" {
     fn g_ptr_array_new() -> *mut GPtrArray;
     fn ns_js_current_url(js: *const c_void) -> *const c_char;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-}
-
-unsafe fn take_string(text: *mut c_char) -> Option<Vec<u8>> {
-    let bytes = unsafe { glib::bytes(text) }.map(<[u8]>::to_vec);
-    unsafe { glib::g_free(text.cast()) };
-    bytes
 }
 
 #[cfg(target_os = "linux")]
@@ -425,8 +418,9 @@ pub unsafe extern "C" fn ns_camera_set_decision(origin: *const c_char, allow: c_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_camera_permission(js: *const c_void) -> c_int {
     let url = unsafe { ns_js_current_url(js) };
-    let origin = unsafe { take_string(ns_url_origin_from(url)) };
-    crate::permission(unsafe { glib::bytes(url) }, origin)
+    let url = unsafe { glib::bytes(url) };
+    let origin = url.and_then(southstar_url::bytes::origin_from);
+    crate::permission(url, origin)
 }
 
 #[unsafe(no_mangle)]

@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 southstar-glib = { path = "../glib" }
+southstar-url = { path = "../url" }
 southstar-woff2 = { path = "../woff2", optional = true }
 
 [features]

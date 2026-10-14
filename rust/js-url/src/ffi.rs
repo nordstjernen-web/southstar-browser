@@ -10,6 +10,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_url::bytes::Parts;
 
 use crate::JsResult;
 
@@ -73,47 +74,7 @@ type BlobResolver = Option<
     ) -> *mut GBytes,
 >;
 
-#[repr(C)]
-struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
-pub(crate) struct UrlParts {
-    pub href: Vec<u8>,
-    pub protocol: Vec<u8>,
-    pub origin: Vec<u8>,
-    pub host: Vec<u8>,
-    pub hostname: Vec<u8>,
-    pub port: Vec<u8>,
-    pub pathname: Vec<u8>,
-    pub search: Vec<u8>,
-    pub hash: Vec<u8>,
-    pub username: Vec<u8>,
-    pub password: Vec<u8>,
-}
-
 unsafe extern "C" {
-    fn ns_url_resolve_len(base: *const c_char, href: *const c_char, href_len: usize)
-    -> *mut c_char;
-    fn ns_url_set_component_len(
-        href: *const c_char,
-        component: *const c_char,
-        value: *const c_char,
-        value_len: usize,
-    ) -> *mut c_char;
-    fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts;
-    fn ns_url_parts_free(parts: *mut NsUrlParts);
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
@@ -145,8 +106,12 @@ unsafe extern "Rust" {
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
+    CString::new(until_nul(bytes)).unwrap_or_default()
+}
+
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
 }
 
 unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
@@ -167,65 +132,23 @@ unsafe fn take_gstr(p: *mut c_char) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    let base = base.map(cstring);
-    let base_ptr = base.as_ref().map_or(ptr::null(), |b| b.as_ptr());
-    unsafe {
-        take_gstr(ns_url_resolve_len(
-            base_ptr,
-            href.as_ptr().cast(),
-            href.len(),
-        ))
-    }
+    southstar_url::bytes::resolve(base.map(until_nul), href)
 }
 
 pub(crate) fn url_set_component(href: &[u8], component: &[u8], value: &[u8]) -> Option<Vec<u8>> {
-    let href = cstring(href);
-    let component = cstring(component);
-    unsafe {
-        take_gstr(ns_url_set_component_len(
-            href.as_ptr(),
-            component.as_ptr(),
-            value.as_ptr().cast(),
-            value.len(),
-        ))
-    }
+    southstar_url::bytes::set_component(until_nul(href), until_nul(component), value)
 }
 
-pub(crate) fn url_parts(url: &[u8]) -> Option<UrlParts> {
-    let url = cstring(url);
-    let parts = unsafe { ns_url_parts_new(url.as_ptr()) };
-    if parts.is_null() {
-        return None;
-    }
-    let copy = unsafe {
-        let p = &*parts;
-        UrlParts {
-            href: borrowed(p.href),
-            protocol: borrowed(p.protocol),
-            origin: borrowed(p.origin),
-            host: borrowed(p.host),
-            hostname: borrowed(p.hostname),
-            port: borrowed(p.port),
-            pathname: borrowed(p.pathname),
-            search: borrowed(p.search),
-            hash: borrowed(p.hash),
-            username: borrowed(p.username),
-            password: borrowed(p.password),
-        }
-    };
-    unsafe { ns_url_parts_free(parts) };
-    Some(copy)
+pub(crate) fn url_parts(url: &[u8]) -> Option<Parts> {
+    southstar_url::bytes::parts(until_nul(url))
 }
 
 pub(crate) fn page_origin(js: Js) -> Option<Vec<u8>> {
     if js.is_null() {
         return None;
     }
-    let url = unsafe { ns_js_current_url(js.ptr()) };
-    if url.is_null() {
-        return None;
-    }
-    unsafe { take_gstr(ns_url_origin_from(url)) }
+    let url = unsafe { glib::bytes(ns_js_current_url(js.ptr())) }?;
+    southstar_url::bytes::origin_from(url)
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {

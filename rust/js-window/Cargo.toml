@@ -14,6 +14,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

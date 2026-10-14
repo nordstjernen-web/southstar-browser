@@ -17,6 +17,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

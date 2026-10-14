@@ -209,8 +209,6 @@ unsafe extern "C" {
         body_len: usize,
         nonce: *const c_char,
     ) -> GBoolean;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
     fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_response_free(resp: *mut NsResponse);
@@ -283,11 +281,15 @@ pub(crate) fn arm_invalidate(n: Option<Node>) {
 }
 
 pub(crate) fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
-    owned(unsafe { ns_url_resolve(opt_ptr(base), href.as_ptr()) })
+    let mut resolved = southstar_url::bytes::resolve(base.map(CStr::to_bytes), href.to_bytes())?;
+    if let Some(nul) = resolved.iter().position(|&b| b == 0) {
+        resolved.truncate(nul);
+    }
+    Some(CString::new(resolved).unwrap_or_default())
 }
 
 pub(crate) fn url_is_http_or_https(url: &CStr) -> bool {
-    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_http_or_https(url.to_bytes())
 }
 
 pub(crate) fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {

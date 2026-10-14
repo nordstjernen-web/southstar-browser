@@ -24,7 +24,6 @@ pub(crate) struct Js(*mut NsJs);
 unsafe extern "C" {
     fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
@@ -156,16 +155,14 @@ pub(crate) fn current_document(js: Option<Js>) -> Option<Element> {
 
 pub(crate) fn resolve_against_page(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
     let base = unsafe { ns_js_current_url(raw_js(js)) };
-    if base.is_null() || unsafe { *base } == 0 {
+    if base.is_null() {
         return None;
     }
-    let resolved = unsafe { ns_url_resolve(base, href.as_ptr()) };
-    if resolved.is_null() {
+    let base = unsafe { CStr::from_ptr(base) }.to_bytes();
+    if base.is_empty() {
         return None;
     }
-    let bytes = unsafe { CStr::from_ptr(resolved) }.to_bytes().to_vec();
-    unsafe { glib::g_free(resolved.cast()) };
-    Some(bytes)
+    southstar_url::bytes::resolve(Some(base), href.to_bytes())
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {

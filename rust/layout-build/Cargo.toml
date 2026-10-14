@@ -17,6 +17,7 @@ southstar-layout-tree = { path = "../layout-tree" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

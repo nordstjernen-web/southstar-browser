@@ -197,7 +197,6 @@ unsafe extern "C" {
         scripting: GBoolean,
     ) -> *mut NsNode;
     fn ns_node_free(node: *mut NsNode);
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
@@ -465,7 +464,7 @@ pub fn decode_body_text(body: &[u8], content_type: Option<&CStr>) -> Option<GStr
 }
 
 pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
-    take_string(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) })
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
 pub fn suffix_before_ext(path: Option<&CStr>, suffix: &CStr) -> Option<GStr> {

@@ -455,7 +455,7 @@ fn freshness(cache_control: Option<&[u8]>, expires_header: Option<&[u8]>) -> i64
 }
 
 fn url_should_cache(url: &[u8]) -> bool {
-    ffi::url_is_http_or_https(url) && !url.iter().any(|&c| c < 0x20 || c == 0x7f)
+    southstar_url::bytes::is_http_or_https(url) && !url.iter().any(|&c| c < 0x20 || c == 0x7f)
 }
 
 pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, headers: &[&[u8]]) {

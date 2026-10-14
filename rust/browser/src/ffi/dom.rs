@@ -8,7 +8,7 @@ use core::ptr;
 use southstar_dom::{self as dom, Node, NsNode};
 use southstar_glib::{GBoolean, GStr};
 
-use super::glib::{GString, StrBufOwned};
+use super::glib::{GString, StrBufOwned, gstr_from};
 
 unsafe extern "C" {
     pub fn ns_node_free(n: *mut NsNode);
@@ -27,8 +27,6 @@ unsafe extern "C" {
         submitter: *const NsNode,
     );
     fn ns_form_set_submission_charset(charset: *const c_char);
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn ns_net_parse_refresh(
         input: *const c_char,
         time_out: *mut f64,
@@ -136,11 +134,12 @@ pub fn set_submission_charset(charset: Option<&CStr>) {
 }
 
 pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(ns_url_resolve(opt(base), href.as_ptr())) }
+    southstar_url::bytes::resolve(base.map(CStr::to_bytes), href.to_bytes())
+        .and_then(|abs| gstr_from(&abs))
 }
 
-pub fn url_origin_from(url: Option<&CStr>) -> Option<GStr> {
-    unsafe { GStr::take(ns_url_origin_from(opt(url))) }
+pub fn url_origin_from(url: Option<&CStr>) -> Option<Vec<u8>> {
+    url.and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
 }
 
 pub fn parse_refresh(input: &CStr) -> Option<(f64, Option<GStr>)> {

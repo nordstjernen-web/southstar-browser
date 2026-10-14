@@ -319,8 +319,7 @@ pub fn favicon_url(b: &NsBrowser) -> Option<Vec<u8>> {
     if let Some(abs) = abs.filter(|a| !a.is_empty()) {
         return Some(abs.to_bytes().to_vec());
     }
-    let origin = ffi::url_origin_from(b.base_url.get()).filter(|o| !o.is_empty())?;
-    let mut out = origin.to_bytes().to_vec();
+    let mut out = ffi::url_origin_from(b.base_url.get()).filter(|o| !o.is_empty())?;
     out.extend_from_slice(b"/favicon.ico");
     Some(out)
 }

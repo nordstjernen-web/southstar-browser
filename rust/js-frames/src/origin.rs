@@ -45,7 +45,7 @@ pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
             embedder = origin;
         }
     }
-    embedder.is_null() || !load::same_origin_ptr(frame_url.as_ptr(), embedder)
+    embedder.is_null() || !load::same_origin_ptr(frame_url, embedder)
 }
 
 fn holder_url(js: Js, iframe: Node<'_>) -> Option<CString> {

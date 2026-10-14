@@ -1,10 +1,11 @@
-//! Southstar — the URL interface: construction through the ns_url_* helpers over rust/url, canParse, parse and the prototype accessors.
+//! Southstar — the URL interface: construction through rust/url, canParse, parse and the prototype accessors.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_url::bytes::Parts;
 
-use crate::ffi::{self, Js, UrlParts};
+use crate::ffi::{self, Js};
 use crate::{JsResult, arg, is_nullish, set, set_str, with_page};
 
 const HELPER_SOURCE: &str = include_str!("url_helper.js");
@@ -15,7 +16,7 @@ const INTERFACE_SOURCE: &str = "(function(){\
  try { Object.defineProperty(URL, 'prototype', { writable: false }); } catch(e) {}\
 })()";
 
-fn set_parts(scope: &mut Scope<'_>, object: &Value, parts: &UrlParts) {
+fn set_parts(scope: &mut Scope<'_>, object: &Value, parts: &Parts) {
     set_str(scope, object, "href", &parts.href);
     set_str(scope, object, "protocol", &parts.protocol);
     set_str(scope, object, "host", &parts.host);

@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::{self, NonNull};
+use std::ffi::CString;
 
 use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
@@ -96,7 +97,6 @@ unsafe extern "C" {
         status: c_long,
         transport_error: *const c_char,
     ) -> *mut c_char;
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn ns_url_strip_tracking_params(url: *const c_char) -> *mut c_char;
     fn ns_net_https_first_upgrade(url: *const c_char) -> *mut c_char;
     fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
@@ -342,8 +342,8 @@ pub fn build_error_page(
     take(unsafe { ns_build_error_page(url.as_ptr(), status, opt(transport_error)) })
 }
 
-pub fn url_host_from(url: &CStr) -> Option<GStr> {
-    take(unsafe { ns_url_host_from(url.as_ptr()) })
+pub fn url_host_from(url: &CStr) -> Option<CString> {
+    southstar_url::bytes::host_from(url.to_bytes()).and_then(|host| CString::new(host).ok())
 }
 
 pub fn url_strip_tracking_params(url: &CStr) -> Option<GStr> {

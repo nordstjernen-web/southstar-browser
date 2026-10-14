@@ -34,7 +34,6 @@ unsafe extern "C" {
         value: *mut *mut c_void,
     ) -> GBoolean;
     fn atoi(text: *const c_char) -> c_int;
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
     fn ns_config_lock();
@@ -80,9 +79,13 @@ struct GHashTableIter {
     _dummy: [*mut c_void; 6],
 }
 
-fn c(bytes: &[u8]) -> CString {
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
+}
+
+fn c(bytes: &[u8]) -> CString {
+    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 fn owned(p: *mut c_char) -> Option<Vec<u8>> {
@@ -151,8 +154,7 @@ pub fn processors() -> u32 {
 }
 
 pub fn url_host(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c(url);
-    owned(unsafe { ns_url_host_from(url.as_ptr()) })
+    crate::url::host_from(until_nul(url))
 }
 
 pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {

@@ -59,7 +59,6 @@ unsafe extern "C" {
     fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char;
     fn ns_img_chosen_density(n: *const NsNode) -> f64;
     fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_enum_normalize(attr: *const c_char, v: *const c_char) -> *const c_char;
@@ -229,17 +228,11 @@ pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn resolve_against_document_base(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
-    let base = unsafe { ns_js_doc_base_url(raw_js(js)) };
-    if base.is_null() {
+    let base = owned_text(unsafe { ns_js_doc_base_url(raw_js(js)) })?;
+    if base.is_empty() {
         return None;
     }
-    let resolved = if unsafe { *base } != 0 {
-        owned_text(unsafe { ns_url_resolve(base, href.as_ptr()) })
-    } else {
-        None
-    };
-    unsafe { glib::g_free(base.cast()) };
-    resolved
+    southstar_url::bytes::resolve(Some(&base), href.to_bytes())
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {
@@ -280,9 +273,9 @@ pub(crate) fn resolve_against_doc_base(
     if base.is_null() {
         return None;
     }
-    let mut href = href.to_vec();
-    href.push(0);
-    owned_text(unsafe { ns_url_resolve(base, href.as_ptr().cast()) })
+    let base = unsafe { CStr::from_ptr(base) }.to_bytes();
+    let href = href.split(|&b| b == 0).next().unwrap_or_default();
+    southstar_url::bytes::resolve(Some(base), href)
 }
 
 pub(crate) fn label_associated_control(label: Element) -> Option<Element> {

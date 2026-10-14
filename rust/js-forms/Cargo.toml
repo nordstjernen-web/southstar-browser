@@ -15,6 +15,7 @@ southstar-html-util = { path = "../html-util" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-numfmt = { path = "../numfmt" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

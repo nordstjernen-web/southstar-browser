@@ -328,7 +328,6 @@ unsafe extern "C" {
         out_w: *mut c_int,
         out_h: *mut c_int,
     ) -> *mut c_void;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_net_fetch_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -357,9 +356,13 @@ pub fn env_set(name: &CStr) -> bool {
     !unsafe { glib::g_getenv(name.as_ptr()) }.is_null()
 }
 
-fn cstring(bytes: &[u8]) -> CString {
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
+}
+
+fn cstring(bytes: &[u8]) -> CString {
+    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 fn take_gstr(p: *mut c_char) -> Option<Vec<u8>> {
@@ -368,14 +371,7 @@ fn take_gstr(p: *mut c_char) -> Option<Vec<u8>> {
 }
 
 pub fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    let base = base.map(cstring);
-    let href = cstring(href);
-    take_gstr(unsafe {
-        ns_url_resolve(
-            base.as_ref().map_or(ptr::null(), |b| b.as_ptr()),
-            href.as_ptr(),
-        )
-    })
+    southstar_url::bytes::resolve(base.map(until_nul), until_nul(href))
 }
 
 const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;

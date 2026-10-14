@@ -41,7 +41,6 @@ unsafe extern "C" {
         resource_url: *const c_char,
         document_url: *const c_char,
     ) -> GBoolean;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_js_cookie_value(js: *const NsJs) -> *const c_char;
     fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char);
     fn ns_js_partition_key(js: *const NsJs) -> *const c_char;
@@ -153,7 +152,7 @@ pub(crate) fn node_doc_base(js: Js, node: Option<Element>) -> Option<&'static CS
 }
 
 pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
-    take_glib_string(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) })
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
 pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) -> bool {
@@ -416,7 +415,6 @@ unsafe extern "C" {
         len: isize,
         scripting: GBoolean,
     ) -> *mut NsNode;
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
 }
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
@@ -571,8 +569,7 @@ pub(crate) fn parse_fragment(
 }
 
 pub(crate) fn url_host(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c_bytes(url);
-    take_glib_string(unsafe { ns_url_host_from(url.as_ptr()) })
+    southstar_url::bytes::host_from(crate::until_nul(url))
 }
 
 const LIVE_DOC_TAG: c_int = 3;

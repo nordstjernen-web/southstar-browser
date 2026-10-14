@@ -66,7 +66,6 @@ unsafe extern "C" {
     fn ns_css_mark_visited(abs_url: *const c_char);
     fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
@@ -368,8 +367,15 @@ pub(crate) fn current_url(js: Js) -> Option<CString> {
     (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }.to_owned())
 }
 
+fn c_string(mut bytes: Vec<u8>) -> CString {
+    if let Some(nul) = bytes.iter().position(|&b| b == 0) {
+        bytes.truncate(nul);
+    }
+    CString::new(bytes).unwrap_or_default()
+}
+
 pub(crate) fn resolve_url(base: &CStr, href: &CStr) -> Option<CString> {
-    owned_text(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) })
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes()).map(c_string)
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {

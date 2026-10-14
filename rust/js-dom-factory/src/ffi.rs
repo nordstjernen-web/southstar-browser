@@ -33,21 +33,6 @@ struct RawAttr {
     flags: u8,
 }
 
-#[repr(C)]
-struct UrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
-
 pub(crate) enum TargetMethod {
     AddEventListener,
     RemoveEventListener,
@@ -95,15 +80,6 @@ unsafe extern "C" {
         len: *mut usize,
     ) -> *const c_char;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_url_resolve_len(base: *const c_char, href: *const c_char, len: usize) -> *mut c_char;
-    fn ns_url_parts_new(url: *const c_char) -> *mut UrlParts;
-    fn ns_url_parts_free(parts: *mut UrlParts);
-    fn ns_url_set_component_len(
-        href: *const c_char,
-        component: *const c_char,
-        value: *const c_char,
-        len: usize,
-    ) -> *mut c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
@@ -283,24 +259,12 @@ pub(crate) fn doc_base_url(js: Option<Js>) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    let base = base.map(cstring);
-    take_gstring(unsafe {
-        ns_url_resolve_len(
-            base.as_ref().map_or(ptr::null(), |b| b.as_ptr()),
-            href.as_ptr().cast(),
-            href.len(),
-        )
-    })
+    southstar_url::bytes::resolve(base.map(c_prefix), href)
 }
 
 pub(crate) fn url_part(href: &[u8], magic: c_int) -> Option<Vec<u8>> {
-    let href = cstring(href);
-    let parts = unsafe { ns_url_parts_new(href.as_ptr()) };
-    if parts.is_null() {
-        return None;
-    }
-    let p = unsafe { &*parts };
-    let field = match magic {
+    let p = southstar_url::bytes::parts(c_prefix(href))?;
+    Some(match magic {
         hyperlink::PROTOCOL => p.protocol,
         hyperlink::HOST => p.host,
         hyperlink::HOSTNAME => p.hostname,
@@ -311,27 +275,12 @@ pub(crate) fn url_part(href: &[u8], magic: c_int) -> Option<Vec<u8>> {
         hyperlink::ORIGIN => p.origin,
         hyperlink::USERNAME => p.username,
         hyperlink::PASSWORD => p.password,
-        _ => ptr::null_mut(),
-    };
-    let out = if field.is_null() {
-        Vec::new()
-    } else {
-        unsafe { CStr::from_ptr(field) }.to_bytes().to_vec()
-    };
-    unsafe { ns_url_parts_free(parts) };
-    Some(out)
+        _ => Vec::new(),
+    })
 }
 
 pub(crate) fn set_url_component(href: &[u8], component: &CStr, value: &[u8]) -> Option<Vec<u8>> {
-    let href = cstring(href);
-    take_gstring(unsafe {
-        ns_url_set_component_len(
-            href.as_ptr(),
-            component.as_ptr(),
-            value.as_ptr().cast(),
-            value.len(),
-        )
-    })
+    southstar_url::bytes::set_component(c_prefix(href), component.to_bytes(), value)
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &[u8]) {

@@ -157,7 +157,6 @@ unsafe extern "C" {
         base_url: *const c_char,
         descriptors: FontDescriptors,
     );
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
     fn ns_layout_build(
         doc: *const NsNode,
@@ -321,7 +320,9 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
             }
             let abs = match c.resolve_url {
                 Some(resolve) => unsafe { resolve(face.src_url, c.cb_ud) },
-                None => unsafe { ns_url_resolve(c.base_url, face.src_url) },
+                None => text(face.src_url)
+                    .and_then(|src| southstar_url::bytes::resolve(text(c.base_url), src))
+                    .map_or(ptr::null_mut(), |abs| glib::strdup(&abs)),
             };
             let Some(abs) = (unsafe { GStr::take(abs) }) else {
                 continue;

@@ -207,7 +207,6 @@ unsafe extern "C" {
     fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
     fn ns_css_syntax_def_initial_valid(syntax: *const c_void, value: *const c_char) -> GBoolean;
     fn ns_css_syntax_def_matches(syntax: *const c_void, value: *const c_char) -> GBoolean;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
 }
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
@@ -697,10 +696,8 @@ fn url_should_resolve(url: &[u8]) -> bool {
     !url.is_empty() && url[0] != b'#' && !local
 }
 
-fn url_resolve(base: &CStr, rel: &[u8]) -> Option<*mut c_char> {
-    let rel = c_string(rel);
-    let resolved = unsafe { ns_url_resolve(base.as_ptr(), rel.as_ptr()) };
-    (!resolved.is_null()).then_some(resolved)
+fn url_resolve(base: &CStr, rel: &[u8]) -> Option<Vec<u8>> {
+    southstar_url::bytes::resolve(Some(base.to_bytes()), rel)
 }
 
 fn is_gspace(c: u8) -> bool {
@@ -743,15 +740,11 @@ fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
             }
         }
         let rel = &text[s..e];
-        let resolved = if url_should_resolve(rel) {
+        let abs = if url_should_resolve(rel) {
             url_resolve(base, rel)
         } else {
             None
         };
-        let abs = resolved.map(|ptr| {
-            let owned = unsafe { glib::GStr::take(ptr) };
-            owned.map(|abs| abs.to_bytes().to_vec()).unwrap_or_default()
-        });
         match abs.filter(|abs| abs.as_slice() != rel) {
             Some(abs) => {
                 out.extend_from_slice(b"url(\"");
@@ -770,13 +763,13 @@ unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
     while let Some(value) = unsafe { v.as_mut() } {
         if value.kind == KIND_URL {
             let url = unsafe { value.u.url };
-            if unsafe { bytes(url) }.is_some_and(url_should_resolve) {
-                let resolved = unsafe { ns_url_resolve(base.as_ptr(), url) };
-                if !resolved.is_null() {
-                    unsafe {
-                        glib::g_free(url.cast());
-                        value.u.url = resolved;
-                    }
+            if let Some(resolved) = unsafe { bytes(url) }
+                .filter(|url| url_should_resolve(url))
+                .and_then(|url| url_resolve(base, url))
+            {
+                unsafe {
+                    glib::g_free(url.cast());
+                    value.u.url = glib::strdup(&resolved);
                 }
             }
         }
@@ -830,15 +823,14 @@ pub unsafe extern "C" fn ns_css_stylesheet_resolve_urls(
         }
     }
     for face in unsafe { elements::<RawFontFace>(sheet.font_faces) } {
-        if !unsafe { bytes(face.src_url) }.is_some_and(url_should_resolve) {
+        let Some(resolved) = unsafe { bytes(face.src_url) }
+            .filter(|url| url_should_resolve(url))
+            .and_then(|url| url_resolve(base, url))
+        else {
             continue;
-        }
-        let resolved = unsafe { ns_url_resolve(base.as_ptr(), face.src_url) };
-        if resolved.is_null() {
-            continue;
-        }
+        };
         unsafe { glib::g_free(face.src_url.cast()) };
-        face.src_url = resolved;
+        face.src_url = glib::strdup(&resolved);
     }
 }
 

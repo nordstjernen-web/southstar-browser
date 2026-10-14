@@ -48,7 +48,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
@@ -133,16 +132,18 @@ pub(crate) fn current_url(js: Js) -> &'static [u8] {
 
 pub(crate) fn resolved_url(scope: &mut Scope<'_>, js: Js, href: &'static [u8]) -> Value {
     let base = unsafe { ns_js_doc_base_url(js.0) };
-    let mut out = None;
-    if !base.is_null() && unsafe { *base } != 0 {
-        let resolved = unsafe { ns_url_resolve(base, href.as_ptr().cast()) };
-        if !resolved.is_null() {
-            out = Some(scope.string_from_bytes(unsafe { CStr::from_ptr(resolved) }.to_bytes()));
-            unsafe { glib::g_free(resolved.cast::<c_void>()) };
+    let mut resolved = None;
+    if !base.is_null() {
+        let base_url = unsafe { CStr::from_ptr(base) }.to_bytes();
+        if !base_url.is_empty() {
+            resolved = southstar_url::bytes::resolve(Some(base_url), c_prefix(href));
         }
     }
     unsafe { glib::g_free(base.cast::<c_void>()) };
-    out.unwrap_or_else(|| scope.string_from_bytes(c_prefix(href)))
+    match resolved {
+        Some(url) => scope.string_from_bytes(&url),
+        None => scope.string_from_bytes(c_prefix(href)),
+    }
 }
 
 fn c_prefix(bytes: &[u8]) -> &[u8] {

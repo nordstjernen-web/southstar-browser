@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-glib = { path = "../glib" }
 southstar-ipc = { path = "../ipc" }
 southstar-renderer-client = { path = "../renderer-client" }
+southstar-url = { path = "../url" }
 
 [features]
 sdl = []

@@ -9,7 +9,6 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError};
 
 unsafe extern "C" {
-    fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean;
     fn ns_form_urlencoded_append_pair(
         out: *mut c_void,
         first: *mut GBoolean,
@@ -47,10 +46,6 @@ impl Query {
             ns_form_urlencoded_append_pair(self.out, self.first, name.as_ptr(), opt_ptr(value))
         };
     }
-}
-
-pub fn url_is_valid_absolute(url: &CStr) -> bool {
-    unsafe { ns_url_is_valid_absolute(url.as_ptr()) != 0 }
 }
 
 pub fn utf8_strlen(s: &CStr) -> c_long {

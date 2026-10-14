@@ -37,7 +37,6 @@ type ReadyCallback =
 type IdleCallback = unsafe extern "C" fn(user_data: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_net_request_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -136,7 +135,8 @@ pub fn register_font_oracle() {
 
 pub fn resolve_url(base: Option<&CStr>, href: &CStr) -> Option<CString> {
     match base {
-        Some(base) => take_gstring(unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) }),
+        Some(base) => southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
+            .and_then(|abs| CString::new(abs).ok()),
         None => Some(href.to_owned()),
     }
 }

@@ -30,7 +30,6 @@ pub use southstar_render::{RenderCtx, RenderProfile};
 type FrameViewportCb = unsafe extern "C" fn(frame: *const NsNode, w: *mut f64, h: *mut f64);
 
 unsafe extern "C" {
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_css_stylesheet_parse_import_cached(
         url: *const c_char,
         layer: *const c_char,
@@ -177,7 +176,8 @@ pub fn media_query_matches(query: &CStr) -> bool {
 }
 
 pub fn url_resolve_opt(base: Option<&CStr>, href: &CStr) -> Option<CString> {
-    unsafe { GStr::take(ns_url_resolve(ptr_or_null(base), href.as_ptr())) }.map(|s| s.to_owned())
+    southstar_url::bytes::resolve(base.map(CStr::to_bytes), href.to_bytes())
+        .and_then(|abs| CString::new(abs).ok())
 }
 
 pub fn parse_import_cached(url: &CStr, layer: Option<&CStr>, bytes: &Bytes) -> Option<Stylesheet> {

@@ -98,9 +98,6 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn ns_net_preload_expect(key: *const c_char);
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
     fn g_main_loop_run(main_loop: *mut GMainLoop);
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
@@ -454,21 +451,24 @@ pub fn take_resource_timings(top_url: Option<&CStr>) -> *mut GPtrArray {
 }
 
 pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
-    unsafe { GStr::take(ns_url_resolve(base.as_ptr(), href.as_ptr())) }
-        .map(|s| s.to_bytes().to_vec())
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
+}
+
+fn until_nul(bytes: &[u8]) -> &[u8] {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    &bytes[..end]
 }
 
 fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 pub fn url_is_http_or_https(url: &[u8]) -> bool {
-    unsafe { ns_url_is_http_or_https(cstring(url).as_ptr()) != 0 }
+    southstar_url::bytes::is_http_or_https(until_nul(url))
 }
 
 pub fn url_origin(url: &[u8]) -> Option<Vec<u8>> {
-    unsafe { GStr::take(ns_url_origin_from(cstring(url).as_ptr())) }.map(|s| s.to_bytes().to_vec())
+    southstar_url::bytes::origin_from(until_nul(url))
 }
 
 pub fn preload_clear() {

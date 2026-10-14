@@ -165,7 +165,6 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn ns_es_close(es: *mut c_void);
     fn ns_es_free(es: *mut c_void);
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
     fn ns_js_net_leave_handler_realm(ctx: ContextHandle, scope: *mut c_void);
@@ -183,10 +182,6 @@ unsafe extern "C" {
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
 
-    fn ns_url_resolve(base: *const c_char, url: *const c_char) -> *mut c_char;
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
     fn ns_net_request_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -284,26 +279,27 @@ pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
+fn before_nul(bytes: &[u8]) -> &[u8] {
+    bytes.split(|&b| b == 0).next().unwrap_or_default()
+}
+
 pub(crate) fn url_resolve(base: Option<&[u8]>, url: &[u8]) -> Option<Vec<u8>> {
-    let base = base.map(cstring);
-    let url = cstring(url);
-    unsafe { take_gstr(ns_url_resolve(opt_ptr(base.as_ref()), url.as_ptr())) }
+    southstar_url::bytes::resolve(base.map(before_nul), before_nul(url))
 }
 
 pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
-    let url = cstring(url);
-    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_http_or_https(before_nul(url))
 }
 
 pub(crate) fn url_same_origin(a: Option<&[u8]>, b: Option<&[u8]>) -> bool {
-    let a = a.map(cstring);
-    let b = b.map(cstring);
-    unsafe { ns_url_same_origin(opt_ptr(a.as_ref()), opt_ptr(b.as_ref())) != 0 }
+    match (a, b) {
+        (Some(a), Some(b)) => southstar_url::bytes::same_origin(before_nul(a), before_nul(b)),
+        _ => false,
+    }
 }
 
 pub(crate) fn url_origin_from(url: Option<&[u8]>) -> Option<Vec<u8>> {
-    let url = url.map(cstring);
-    unsafe { take_gstr(ns_url_origin_from(opt_ptr(url.as_ref()))) }
+    url.and_then(|url| southstar_url::bytes::origin_from(before_nul(url)))
 }
 
 pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message: &str) -> Value {
@@ -311,8 +307,7 @@ pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message
 }
 
 pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {
-    let url = cstring(url);
-    unsafe { take_gstr(ns_url_host_from(url.as_ptr())) }
+    southstar_url::bytes::host_from(before_nul(url))
 }
 
 pub(crate) fn hsts_should_upgrade(host: &[u8]) -> bool {

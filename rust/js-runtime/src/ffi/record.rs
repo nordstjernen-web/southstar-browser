@@ -219,8 +219,6 @@ struct Record {
 }
 
 unsafe extern "C" {
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_storage_switch_session(
         js: *mut NsJs,
         old_partition: *const c_char,
@@ -604,9 +602,10 @@ pub(crate) unsafe fn worker_compile(
 }
 
 fn partition_apply(js: *mut NsJs, new_url: *const c_char) {
-    let origin = unsafe { GStr::take(ns_url_origin_from(new_url)) }
+    let origin = unsafe { glib::bytes(new_url) }
+        .and_then(southstar_url::bytes::origin_from)
         .filter(|origin| !origin.is_empty())
-        .map(|origin| CString::from(&*origin));
+        .map(|origin| cstring(&origin));
     let new_key = origin.unwrap_or_else(|| {
         let counter = unsafe {
             (*rec(js)).opaque_counter += 1;
@@ -853,10 +852,10 @@ pub unsafe extern "C" fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> 
     let base = unsafe { GStr::take(ns_js_doc_base_url(js)) };
     let base = base
         .as_deref()
-        .filter(|base| !base.is_empty())
-        .map_or(ptr::null(), CStr::as_ptr);
-    let resolved = unsafe { GStr::take(ns_url_resolve(base, url)) };
-    glib::boolean(resolved.is_some())
+        .map(CStr::to_bytes)
+        .filter(|base| !base.is_empty());
+    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
+    glib::boolean(southstar_url::bytes::resolve(base, url).is_some())
 }
 
 #[unsafe(no_mangle)]

@@ -87,7 +87,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_image_cache_get(
         cache: *mut c_void,
         url: *const c_char,
@@ -100,7 +99,6 @@ unsafe extern "C" {
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
-    fn g_free(mem: *mut c_void);
 }
 
 pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
@@ -124,12 +122,11 @@ pub(crate) fn doc_base(js: Js, el: Element) -> Option<&'static CStr> {
 }
 
 pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
-    let raw = unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) };
-    let out = c_str(raw).map(CStr::to_owned);
-    if !raw.is_null() {
-        unsafe { g_free(raw.cast()) };
+    let mut resolved = southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())?;
+    if let Some(nul) = resolved.iter().position(|&b| b == 0) {
+        resolved.truncate(nul);
     }
-    out
+    Some(CString::new(resolved).unwrap_or_default())
 }
 
 fn image_cache(js: Js) -> *mut c_void {

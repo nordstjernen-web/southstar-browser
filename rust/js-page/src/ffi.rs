@@ -208,8 +208,6 @@ unsafe extern "C" {
     fn ns_doc_id_index_build(doc: *mut NsNode);
     fn ns_doc_class_index_build(doc: *mut NsNode);
     fn ns_doc_tag_index_build(doc: *mut NsNode);
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
@@ -377,7 +375,8 @@ impl Js {
         let origin = if url.is_empty() {
             ptr::null_mut()
         } else {
-            unsafe { ns_url_origin_from(url.as_ptr()) }
+            southstar_url::bytes::origin_from(url.to_bytes())
+                .map_or(ptr::null_mut(), |origin| glib::strdup(&origin))
         };
         unsafe {
             ns_js_set_document(self.0, Node::ptr_or_null(doc).cast_mut(), origin);
@@ -587,20 +586,11 @@ pub(crate) fn monotonic_us() -> i64 {
 }
 
 pub(crate) fn url_host(url: &CStr) -> Option<Vec<u8>> {
-    take_string(unsafe { ns_url_host_from(url.as_ptr()) })
+    southstar_url::bytes::host_from(url.to_bytes())
 }
 
 pub(crate) fn url_origin(url: &CStr) -> Option<Vec<u8>> {
-    take_string(unsafe { ns_url_origin_from(url.as_ptr()) })
-}
-
-fn take_string(raw: *mut c_char) -> Option<Vec<u8>> {
-    if raw.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec();
-    unsafe { glib::g_free(raw.cast()) };
-    Some(bytes)
+    southstar_url::bytes::origin_from(url.to_bytes())
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {

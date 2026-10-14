@@ -216,7 +216,7 @@ fn type_matches(node: Node, value: &CStr, ty: Option<&CStr>) -> bool {
         return controls::email_value_valid(Some(node), Some(value));
     }
     if type_is(Some(ty), "url") {
-        return ffi::url_is_valid_absolute(value);
+        return southstar_url::bytes::is_valid_absolute(value.to_bytes());
     }
     if controls::type_has_number_value(Some(ty)) {
         return controls::value_to_number(Some(ty), Some(value)).is_some();

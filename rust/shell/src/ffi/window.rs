@@ -46,7 +46,6 @@ unsafe extern "C" {
     fn ns_url_from_local_path(path: *const c_char) -> *mut c_char;
     fn ns_address_is_search(s: *const c_char) -> GBoolean;
     fn ns_search_url_for(query: *const c_char) -> *mut c_char;
-    fn ns_url_host_from(url: *const c_char) -> *mut c_char;
     fn ns_browser_set_color_scheme(dark: c_int);
     fn ns_history_record(url: *const c_char, title: *const c_char);
     fn ns_cache_clear();
@@ -314,11 +313,11 @@ impl ProcWindow {
             gtk::gtk_entry_set_icon_activatable(entry, gtk::ENTRY_ICON_PRIMARY, 0);
             let mut tip = label.to_bytes().to_vec();
             let url = url.unwrap_or_default();
-            if let Some(host) = take_gstring(ns_url_host_from(url.as_ptr()))
+            if let Some(host) = southstar_url::bytes::host_from(url.to_bytes())
                 && !host.is_empty()
             {
                 tip.push(b'\n');
-                tip.extend_from_slice(host.to_bytes());
+                tip.extend_from_slice(&host);
             }
             if let Some(ip) = v.and_then(View::remote_ip).filter(|ip| !ip.is_empty()) {
                 tip.push(b'\n');
@@ -496,7 +495,9 @@ impl ProcWindow {
 
     fn show_fullscreen_notice(&self, v: Option<View>) {
         let url = v.and_then(View::url);
-        let host = url.and_then(|u| unsafe { take_gstring(ns_url_host_from(u.as_ptr())) });
+        let host = url
+            .and_then(|u| southstar_url::bytes::host_from(u.to_bytes()))
+            .and_then(|host| CString::new(host).ok());
         let site = host
             .filter(|h| !h.is_empty())
             .unwrap_or_else(|| tr(c"This page").to_owned());

@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GStr};
+use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -92,17 +92,19 @@ unsafe extern "C" {
     fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
     fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
     fn ns_video_codec_available(codec: *const c_char) -> GBoolean;
     fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn ns_media_native_formats() -> c_uint;
 }
 
-fn c_text(text: &str) -> CString {
-    let bytes = text.as_bytes();
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
+}
+
+fn c_text(text: &str) -> CString {
+    CString::new(until_nul(text.as_bytes())).unwrap_or_default()
 }
 
 fn data_ptr(data: usize) -> *mut c_void {
@@ -176,9 +178,11 @@ pub(crate) fn current_url(js: Js) -> Option<String> {
 }
 
 pub(crate) fn url_resolve(base: &str, href: &str) -> Option<String> {
-    let (base, href) = (c_text(base), c_text(href));
-    let resolved = unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) };
-    unsafe { GStr::take(resolved) }.map(|url| url.to_string_lossy().into_owned())
+    let resolved = southstar_url::bytes::resolve(
+        Some(until_nul(base.as_bytes())),
+        until_nul(href.as_bytes()),
+    )?;
+    Some(String::from_utf8_lossy(until_nul(&resolved)).into_owned())
 }
 
 pub(crate) fn video_url_is_inline(url: &str) -> bool {

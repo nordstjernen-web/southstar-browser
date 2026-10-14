@@ -89,7 +89,6 @@ unsafe extern "C" {
     -> *mut GByteArray;
     fn g_byte_array_unref(array: *mut GByteArray);
     fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
-    fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean;
 }
 
 pub(crate) fn warn(message: &[u8]) {
@@ -368,11 +367,6 @@ pub(crate) fn now_seconds() -> i64 {
 pub(crate) fn ascii_strtoll(text: &[u8]) -> i64 {
     let text = crate::cstring(text);
     unsafe { g_ascii_strtoll(text.as_ptr(), ptr::null_mut(), 10) }
-}
-
-pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
-    let url = crate::cstring(url);
-    unsafe { ns_url_is_http_or_https(url.as_ptr()) != 0 }
 }
 
 fn month_from_name(m: &[u8]) -> c_int {

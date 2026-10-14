@@ -58,7 +58,6 @@ unsafe extern "C" {
     fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean;
     fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
 
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(tag: c_uint) -> GBoolean;
@@ -238,8 +237,8 @@ fn warn(message: &str) {
 }
 
 fn url_origin(url: &str) -> Option<String> {
-    let url = c_text(url);
-    taken(unsafe { ns_url_origin_from(url.as_ptr()) })
+    southstar_url::bytes::origin_from(c_text(url).as_bytes())
+        .map(|origin| String::from_utf8_lossy(&origin).into_owned())
 }
 
 pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {

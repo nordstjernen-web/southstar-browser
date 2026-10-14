@@ -30,12 +30,14 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn g_regex_unref(regex: *mut c_void);
     fn g_clear_error(error: *mut *mut c_void);
-    fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char;
-    fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean;
 }
 
 fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
+}
+
+fn nul_free_or_empty(text: &[u8]) -> &[u8] {
+    if text.contains(&0) { b"" } else { text }
 }
 
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
@@ -51,13 +53,11 @@ pub(crate) fn unichar_is_alpha(c: u32) -> bool {
 }
 
 pub(crate) fn url_resolve(base: &[u8], href: &[u8]) -> Option<Vec<u8>> {
-    let (base, href) = (c_string(base), c_string(href));
-    let resolved = unsafe { ns_url_resolve(base.as_ptr(), href.as_ptr()) };
-    unsafe { glib::GStr::take(resolved) }.map(|abs| abs.to_bytes().to_vec())
+    southstar_url::bytes::resolve(Some(nul_free_or_empty(base)), nul_free_or_empty(href))
 }
 
 pub(crate) fn url_is_valid_absolute(url: &CStr) -> bool {
-    unsafe { ns_url_is_valid_absolute(url.as_ptr()) != 0 }
+    southstar_url::bytes::is_valid_absolute(url.to_bytes())
 }
 
 pub(crate) fn regex_matches_whole(pattern: Option<&[u8]>, value: &[u8]) -> bool {

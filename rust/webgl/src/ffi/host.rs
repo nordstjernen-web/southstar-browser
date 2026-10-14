@@ -22,7 +22,6 @@ unsafe extern "C" {
     fn ns_gl_context_destroy(c: *mut c_void);
     fn ns_js_current_url(js: *const c_void) -> *const c_char;
     fn ns_js_request_repaint(js: *mut c_void);
-    fn ns_url_origin_from(url: *const c_char) -> *mut c_char;
     fn cairo_image_surface_create(format: c_int, w: c_int, h: c_int) -> *mut c_void;
     fn cairo_surface_status(s: *mut c_void) -> c_int;
     fn cairo_surface_destroy(s: *mut c_void);
@@ -111,11 +110,9 @@ pub(crate) fn request_repaint(js: usize) {
 
 pub(crate) fn page_url_and_origin(js: usize) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
     let url = unsafe { ns_js_current_url(js as *const c_void) };
-    let origin = unsafe { ns_url_origin_from(url) };
-    let origin_bytes = unsafe { glib::bytes(origin) }.map(<[u8]>::to_vec);
-    unsafe { glib::g_free(origin.cast()) };
-    let url_bytes = unsafe { glib::bytes(url) }.map(<[u8]>::to_vec);
-    (url_bytes, origin_bytes)
+    let url = unsafe { glib::bytes(url) };
+    let origin = url.and_then(southstar_url::bytes::origin_from);
+    (url.map(<[u8]>::to_vec), origin)
 }
 
 pub(crate) fn api_proto(scope: &mut Scope<'_>, canvas: usize, iface: &str) -> Value {

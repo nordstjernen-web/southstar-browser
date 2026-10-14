@@ -125,6 +125,13 @@ Southstar Browser 0.9.11-dev:
   the two crates calling each other through C. The engines, layout, the
   window and matchMedia bindings and the animation engine call it directly;
   fifteen C exports are gone.
+* Thirty crates -- the engines, layout, paint's font loader, the shells, the
+  HTTP cache, camera, WebGL, video and the JavaScript bindings for elements,
+  frames, loaders, fetch, workers, the window, storage and the URL API --
+  resolve URLs and read origins, hosts and URL parts through rust/url's
+  Rust API instead of rust/net's ns_url_* C exports, which copied every
+  answer into a g_malloc'd C string. The fourteen exports and the C mirror
+  of a URL's parts are gone; page dumps and render tests are unchanged.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

@@ -286,9 +286,10 @@ reaching a loader plugin installed on the user's machine.
 
 ### URL parsing: `rust/url`
 
-The `ns_url_*` helpers (`rust/net/src/url.rs`) route URL resolution,
-origin extraction, host extraction and the URL setters through
-`rust/url` (`southstar-url`), a WHATWG URL parser written from the URL
+URL resolution, origin and host extraction, the URL API's parts and setters
+and the absolute-URL check are `southstar_url::bytes` in
+`rust/url` (`southstar-url`), which every crate calls directly; it is a
+WHATWG URL parser written from the URL
 Standard with no crates.io dependency: the basic URL parser, the host
 parser with UTS #46 IDNA, Punycode and NFC, the serializer and the URL
 API setters. Its Unicode tables (`rust/url/src/tables.rs`) are generated

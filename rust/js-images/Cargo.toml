@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

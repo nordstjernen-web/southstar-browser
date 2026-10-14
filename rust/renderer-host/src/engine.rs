@@ -326,7 +326,6 @@ unsafe extern "C" {
     fn ns_response_free(resp: *mut ResponseHead);
     fn ns_net_log_clear();
     fn ns_net_log_dump() -> *mut c_char;
-    fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean;
     fn ns_image_decode_bytes(
         data: *const u8,
         len: usize,
@@ -406,7 +405,7 @@ pub fn net_log_dump() -> Option<Vec<u8>> {
 }
 
 pub fn same_origin(a: &CStr, b: &CStr) -> bool {
-    unsafe { ns_url_same_origin(a.as_ptr(), b.as_ptr()) != 0 }
+    southstar_url::bytes::same_origin(a.to_bytes(), b.to_bytes())
 }
 
 pub fn set_device_pixel_ratio(page: Option<&mut Browser>, dppx: f64) -> c_int {

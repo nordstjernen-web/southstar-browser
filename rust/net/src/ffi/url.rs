@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the URL helpers and user agent strings, plus the origin, site and ASCII forms the fetch path in net.c uses.
+//! Southstar — the C ABI of the network helpers still called through C: tracking-parameter stripping, refresh and HTTP-date parsing, referers, header values, HTTPS-First and the user agent strings.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,21 +8,6 @@ use core::ptr;
 use southstar_glib::{self as glib, GBoolean};
 
 use crate::url;
-
-#[repr(C)]
-pub struct NsUrlParts {
-    href: *mut c_char,
-    protocol: *mut c_char,
-    origin: *mut c_char,
-    host: *mut c_char,
-    hostname: *mut c_char,
-    port: *mut c_char,
-    pathname: *mut c_char,
-    search: *mut c_char,
-    hash: *mut c_char,
-    username: *mut c_char,
-    password: *mut c_char,
-}
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
@@ -45,11 +30,6 @@ pub unsafe extern "C" fn ns_net_http_date(date: *const c_char) -> i64 {
     text(date)
         .and_then(southstar_netstore::http_date::parse)
         .unwrap_or(-1)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_is_http_or_https(url: *const c_char) -> GBoolean {
-    glib::boolean(text(url).is_some_and(url::is_http_or_https))
 }
 
 #[unsafe(no_mangle)]
@@ -92,136 +72,12 @@ pub unsafe extern "C" fn ns_net_parse_refresh(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_resolve_len(
-    base: *const c_char,
-    href: *const c_char,
-    href_len: usize,
-) -> *mut c_char {
-    if href.is_null() {
-        return ptr::null_mut();
-    }
-    let href = unsafe { glib::slice(href.cast(), href_len) };
-    dup(url::resolve(text(base), href))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_resolve(base: *const c_char, href: *const c_char) -> *mut c_char {
-    let Some(href) = text(href) else {
-        return ptr::null_mut();
-    };
-    dup(url::resolve(text(base), href))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_set_component_len(
-    href: *const c_char,
-    component: *const c_char,
-    value: *const c_char,
-    value_len: usize,
-) -> *mut c_char {
-    let (Some(href), Some(component)) = (text(href), text(component)) else {
-        return ptr::null_mut();
-    };
-    if value.is_null() {
-        return ptr::null_mut();
-    }
-    let value = unsafe { glib::slice(value.cast(), value_len) };
-    dup(url::set_component(href, component, value))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_to_ascii(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(url::to_ascii))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_origin_from(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(url::origin_from))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_origin_from_any(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(url::origin_from_any))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_host_from(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(url::host_from))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_same_origin(a: *const c_char, b: *const c_char) -> GBoolean {
-    let same = match (text(a), text(b)) {
-        (Some(a), Some(b)) => url::same_origin(a, b),
-        _ => false,
-    };
-    glib::boolean(same)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_referer_for(
     url: *const c_char,
     top_url: *const c_char,
     policy: c_int,
 ) -> *mut c_char {
     dup(url::referer_for(text(url), text(top_url), policy))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_site_from(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(url::site_from))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_is_same_site(a: *const c_char, b: *const c_char) -> GBoolean {
-    let same = match (text(a), text(b)) {
-        (Some(a), Some(b)) => url::is_same_site(a, b),
-        _ => false,
-    };
-    glib::boolean(same)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_parts_free(parts: *mut NsUrlParts) {
-    let Some(p) = (unsafe { parts.as_mut() }) else {
-        return;
-    };
-    for field in [
-        p.href, p.protocol, p.origin, p.host, p.hostname, p.port, p.pathname, p.search, p.hash,
-        p.username, p.password,
-    ] {
-        unsafe { glib::g_free(field.cast()) };
-    }
-    unsafe { glib::g_free(parts.cast()) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_parts_new(url: *const c_char) -> *mut NsUrlParts {
-    let Some(p) = text(url).and_then(url::parts) else {
-        return ptr::null_mut();
-    };
-    let out = unsafe { glib::g_malloc0(core::mem::size_of::<NsUrlParts>()) }.cast::<NsUrlParts>();
-    unsafe {
-        out.write(NsUrlParts {
-            href: glib::strdup(&p.href),
-            protocol: glib::strdup(&p.protocol),
-            origin: glib::strdup(&p.origin),
-            host: glib::strdup(&p.host),
-            hostname: glib::strdup(&p.hostname),
-            port: glib::strdup(&p.port),
-            pathname: glib::strdup(&p.pathname),
-            search: glib::strdup(&p.search),
-            hash: glib::strdup(&p.hash),
-            username: glib::strdup(&p.username),
-            password: glib::strdup(&p.password),
-        });
-    }
-    out
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_is_valid_absolute(url: *const c_char) -> GBoolean {
-    glib::boolean(text(url).is_some_and(url::is_valid_absolute))
 }
 
 #[unsafe(no_mangle)]
