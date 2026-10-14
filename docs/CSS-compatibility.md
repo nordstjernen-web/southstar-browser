@@ -179,9 +179,10 @@ carry forward from the 1.0.21 pass.
 | `text-transform` (uppercase/lowercase/capitalize) | ✅ | |
 | `text-indent` (incl. negative sprite-hiding) | ✅ | |
 | `letter-spacing` / `word-spacing` / `tab-size` | ✅ | |
-| `white-space` (`normal`/`nowrap`/`pre`/`pre-wrap`/`pre-line`/`break-spaces`) | ✅ | collapsible spaces around a forced break (`<br>`, a `pre-line` newline) are removed, so the next line does not start indented; `<br>` breaks the line whatever its `display` except `none` |
+| `white-space` (`normal`/`nowrap`/`pre`/`pre-wrap`/`pre-line`/`break-spaces`, and the Text 4 `collapse`/`preserve`/`preserve-breaks` with `wrap`/`nowrap`, serialized as the equivalent legacy keyword) | ✅ | `hanging-punctuation` and `text-autospace` parse and serialize but do not affect layout; collapsible spaces around a forced break (`<br>`, a `pre-line` newline) are removed, so the next line does not start indented; `<br>` breaks the line whatever its `display` except `none` |
 | `word-break` / `overflow-wrap` / `text-wrap`(`-mode`) / `hyphens` | ✅ | wrapping keywords mapped; `hyphens:auto` enables Pango inserted hyphens using the element language, while `manual`/`none` keep automatic insertion disabled |
 | `font-variant: small-caps`, `font-variant-ligatures`, `font-feature-settings`, `font-variation-settings` | ✅ | common/discretionary/historical/contextual ligature keywords, quoted four-character feature tags, and variable-font axes map to Pango OpenType settings |
+| `font-variant` shorthand and longhands (`-caps`, `-numeric`, `-east-asian`, `-position`, `-emoji`), `font-synthesis`, `font-size-adjust`, `font-optical-sizing`, `font-language-override`, `font-width` | 🟡 | parsed, inherited and serialized canonically (the `font-variant` shorthand takes the full Fonts 4 grammar; `font-width` aliases `font-stretch`, whose computed value is a percentage); rendering applies small caps — synthesized as reduced capitals when the font has no small-cap glyphs — and the OpenType features already reachable through `font-feature-settings`, but not the other variant values or `font-size-adjust` |
 | `direction` / `unicode-bidi`, `:dir()` | 🟡 | base direction drives Pango + `text-align:start/end`; full bidi override partial |
 | `writing-mode` (vertical-rl/lr, sideways) | 🟡 | vertical inline runs are measured and painted in right-to-left or left-to-right columns; `text-orientation:upright` stacks glyphs and `mixed`/`sideways` rotate the run. Orthogonal-flow box layout and full vertical line breaking remain limited; invalid values are rejected |
 | Ruby (`display:ruby`) | 🟡 | parsed; no ruby positioning |
@@ -223,7 +224,7 @@ carry forward from the 1.0.21 pass.
 | `opacity` | ✅ | |
 | `filter` (grayscale/sepia/invert/brightness/contrast/saturate/blur/drop-shadow) | ✅ | on images; `blur()` is a separable box blur; `drop-shadow()` uses the image alpha mask, CSS lengths, and parsed colors/currentColor |
 | `mix-blend-mode` | ✅ | |
-| `clip-path` (basic shapes) | ✅ | |
+| `clip-path` (basic shapes) | 🟡 | values are validated against the grammar; `inset()` (with `round`), `circle()`, `ellipse()` (radii, `closest-side`/`farthest-side`, `at <position>`), `polygon()` (fill rule), `xywh()` and `rect()` are drawn against the border box or the named geometry box; `path()` and `shape()` are accepted but not drawn, and specified values are not canonicalized |
 | `mask-image` (`url()` + linear/radial gradient) | ✅ | gradient masks composite the whole element through the gradient's alpha (fade effects); `mask`/`-webkit-mask` aliased; conic masks skipped |
 | `image-rendering` (`pixelated`/`crisp-edges`) | ✅ | nearest-neighbour upscaling for raster `<img>` |
 | `-webkit-line-clamp` | ✅ | |
@@ -240,6 +241,7 @@ carry forward from the 1.0.21 pass.
 | Forms `:checked`/`:default`/`:indeterminate`/`:disabled`/`:enabled`/`:required`/`:optional`/`:valid`/`:invalid`/`:in-range`/`:out-of-range`/`:read-only`/`:read-write`/`:placeholder-shown`/`:blank` | ✅ | `:checked` matches an `option` by its live selectedness — including the implicitly selected first option of a non-`multiple` select — not just the `selected` content attribute |
 | `:lang()` / `:dir()` / `:defined` / `:open` / `:popover-open` / `:modal` / `:scope` | ✅ |
 | Pseudo-elements `::before`/`::after`/`::first-letter`/`::first-line`/`::marker`/`::placeholder`/`::selection`/`::backdrop` | ✅ (`::backdrop` partial) |
+| `::view-transition`, `::view-transition-group/-image-pair/-old/-new()` | 🟡 | parsed by their grammar (name or `*` with `.class` parts; only `:only-child` may follow the functional forms; invalid in `:not()`/`:has()`) and reported by `CSS.supports()`, but match nothing: there is no view-transition pseudo-element tree |
 
 ## At-rules & queries (Conditional 3/4, MQ 4/5, Containment 3, `@scope`)
 

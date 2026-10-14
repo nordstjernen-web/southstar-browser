@@ -168,33 +168,74 @@ file.
 | `html/webappapis/atob` | 0 | 0 | - | 0 | 0 |
 | `html/syntax/parsing-html-fragments` | 0 | 0 | - | 0 | 0 |
 
-## Top 10 improvements — 2026-07-13
+## Windows compliance slice — 2026-10-14
 
-Root-cause clusters mined from the 2026-07-13 runs, ranked by expected
-subtest gain inside the tracked slice. Unlike the tables above, this list
-is analysis, not arithmetic — the scripts do not regenerate it. Refresh it
-(re-cluster the failing subtests) whenever the scores move materially, and
-date the heading.
+Measured on Windows 11 / MSYS2 against upstream WPT `be405ad7` with a
+static test server (no `.py` handlers), over `html/syntax`, `domparsing`,
+`css/selectors`, `css/css-cascade`, `css/css-variables`, `css/cssom` and
+every `css/*/parsing` directory, expanding `<meta name=variant>` and
+`// META: variant=` so each html5lib file counts once per `.dat` file.
+Unlike the tables above, these numbers come from that runner, not from
+`scripts/wpt-score.sh`, so compare them only with each other. The gains
+are those measured for each change in isolation, before and after, at
+the same settings (whole-slice totals mix in timeouts under load).
 
-NOTE on layering: `NodeIterator`/`TreeWalker`/`Range`/`NodeFilter` and
-much of the DOM are implemented in **`data/js/polyfills.js`**, which
-OVERRIDES the C in `src/js.c`. Fix the polyfill, not the dead C path —
-grep `polyfills.js` first.
+| Change | Area | Before → after |
+|--------|------|----------------|
+| `blob:` URLs take their creator's origin | `html/syntax/parsing/html5lib_url.html?file=*` | +2144 subtests |
+| `setHTML` and the positional HTML methods | `domparsing/positional-methods.html` | 7 → 480/480 |
+| | `domparsing/positional-html-into-script-safe.html` | 1 → 91/91 |
+| | `domparsing/positional-template-child.html` | 0 → 6/6 |
+| View-transition pseudo-element grammar | `css/css-view-transitions/parsing` | 0 → 1055/1055 |
+| font-variant longhands, `font-optical-sizing`, `font-language-override`, `hanging-punctuation`, `text-autospace` | `css/css-fonts/parsing`, `css/css-text/parsing` | +217 |
+| `font-variant` shorthand grammar | `font-variant-valid.html` | 2 → 46/46 |
+| `font-synthesis`, `font-size-adjust` | their parsing files | 70 → 134/152 |
+| `font-width`, percentage `font-stretch` | `font-width-*.html` | +29 |
+| `white-space` shorthand values | `white-space-shorthand.html` | 9 → 43/45 |
+| clip-path validation | `css/css-masking/parsing/clip-path-*` | +53 |
+| hwb()/hsl() rounding | `css/css-color/parsing/color-*-hwb.html` | +15 |
+
+Not visible in WPT but found on live sites and fixed in the same pass:
+`<br>` with `display:block` and spaces at forced breaks (rust-lang.org),
+inline `::before/::after` styling and positioning (MDN), inline
+containing blocks for absolute boxes, float placement after margins,
+float paint order and percentage-width float fit (archlinux.org,
+python.org), auto margins on replaced flex items (go.dev), quadratic
+`insertRule` rebuilds that halted CSS-in-JS hydration at the 60 s script
+limit (bbc.com), small-caps synthesis, and clip-path shapes drawn against
+the border box with all their arguments.
+
+## Top 10 improvements — 2026-10-14
+
+Re-clustered from the 2026-10-14 Windows slice. The 2026-07-13 list's
+open items (scroll/scrollend events, `moveBefore` animation continuity,
+small `dom/events` clusters) still stand below the CSS items here; the
+URL long tail, single activation target, prefixed animation events,
+processing-instruction attributes and the `moveBefore` NodeIterator
+freeze landed then.
+
+NOTE on layering: `NodeIterator`/`TreeWalker`/`Range`/`NodeFilter`, the
+CSSOM rule model and much of the DOM are implemented in
+**`data/js/polyfills.js`**, which overrides the Rust bindings. Fix the
+polyfill, not a dead binding — grep `polyfills.js` first.
 
 | # | Improvement | Evidence | Est. gain |
 |---|-------------|----------|-----------|
-| 1 | **`dom/events/scrolling` + `scrollend`** — ~26 files need real scroll + `scrollend` infrastructure (programmatic scroll, scroll-snap, `scrollIntoView`, arrow-key scroll, iframe windows). Each waits on a scroll/scrollend event the engine does not generate, so they time out. | `scrolling/scrollend-*` | ~90 |
-| 2 | ~~**URL long tail**~~ — **landed (2026-10-12).** The vendored URL parser was replaced by `rust/url` (the current URL Standard: IDNA over Unicode 18 tables, the setters, opaque-path spaces, lone surrogates). Residue: query percent-encoding in the document's legacy charset (`percent-encoding` 8), URLs that must throw in `sendBeacon`/`window.open`/… (`failure` 10), `urlencoded-parser` BOM handling (6), `javascript-urls` (4); the 2 `IdnaTestV2` failures expect Unicode 17 for U+3E8AC, which Unicode 18 assigns. | `url` 8502→**8646/8679** | landed (~144) |
-| 3 | **`moveBefore` CSS animation/transition continuity** — `moveBefore/continue-css-*` and `css-transition-*` keep a running animation/transition alive across a move; they need animation-state preservation through reparenting and currently time out as harness-broken files. | `moveBefore/{continue,css}-*` | ~10 files |
-| 4 | **dom/events small clusters** — `relatedTarget.window.html` (6), `EventListener-handleEvent-cross-realm` (5), `event-global-extra.window.html` (5), `AddEventListenerOptions-passive.any.html` (4), `Event-dispatch-detached-input-and-change` (4). | dom/events | ~24 |
-| 5 | ~~**Single activation target**~~ — **landed (2026-07-13).** Click activation resolves the spec's activation target (nearest inclusive ancestor, bubbles-gated for dispatchEvent), label forwarding, summary self-only toggle, fragment navigation + hashchange, submit/reset form-boundary propagation stop, javascript: hrefs. | `Event-dispatch-single-activation-behavior` 85→**132/132** (Edge: 120); `Event-dispatch-click` 26→**33/33** | landed (~90) |
-| 6 | ~~**Prefixed animation/transition event files**~~ — **landed (2026-07-13).** Generic event-only transition channels for arbitrary properties (`NS_CSS_ANIM_TARGET_OTHER`), `ontransition*` window handler props, and the headless settle-loop mutation-flag fix (relayouts every 200 ms instead of eating mutations behind a 2 s + rAF gate). | `webkit-{animation,transition}-*-event` 22→**52/52** | landed (~30) |
-| 7 | ~~**Processing-instruction attributes**~~ — **landed (2026-07-13).** WICG declarative-partial-updates: PI `get/set/has/remove/toggleAttribute` over `data` in polyfills.js; the HTML parser tokenizes `<?target data?>` as a real PI node (real `<!--?...?-->` comments untouched). | `processing-instruction-attributes` 52→**140/140** (Edge: 124) | landed (~88) |
-| 8 | ~~**moveBefore-nodeiterator page freeze**~~ — **landed (2026-07-13).** NodeIterator pre-remove steps now run on all four insertion-move paths, and the traversal's detached-ref retry is capped — previously an unbreakable C-side infinite loop that also froze real pages. | `moveBefore-nodeiterator` TIMEOUT→pass | landed |
-| 9 | **`WebCryptoAPI/digest` tentative vectors** — 371 non-passing subtests are `tentative` SHA-3 / cSHAKE / KangarooTwelve / TurboSHAKE vectors for not-yet-standardized algorithms OpenSSL does not provide; the mandatory `digest.https.any.html` surface passes fully. | `digest` tentative vectors | non-goal |
-| 10 | **`dom/ranges/tentative/OpaqueRange-*`** — ~170 subtests for a tentative, not-yet-standardized API; the non-tentative dom/ranges residue is small (shadow-tree edge cases). | `tentative/OpaqueRange-*` | non-goal |
+| 1 | ~~**HTML parsing methods**~~ — **landed.** `setHTML`, `append/prepend/before/after/replaceWithHTML` (+`Unsafe`), sanitizer and `runScripts` options, a `Sanitizer` class. Residue: Trusted Types parser options. | `domparsing/positional-*` | landed (~650) |
+| 2 | ~~**`blob:` URL origins**~~ — **landed.** Blob documents in iframes are same-origin with their creator, so the html5lib URL runner works. | `html5lib_url.html?file=*` | landed (+2144) |
+| 3 | ~~**CSSOM `insertRule` cost**~~ — **landed.** Rule lists sync from the changed index and sheet rebuilds batch per microtask; bbc.com hydrates. Residue: each insert still parses its rule in `polyfills.js` (~1–4 ms on Boa). | real sites | landed |
+| 4 | **CSS Color 4/5 colour spaces** — computed colours collapse to 8-bit sRGB, so `lab()`/`lch()`/`oklab()`/`oklch()`/`color()` serialize as `rgb()`, `none` components are lost, and relative colour syntax (`rgb(from …)`), `color-mix()` serialization, powerless hues, `alpha()`, `contrast-color()` and `color-layers()` are missing. Needs a colour value that keeps its space and components. | `color-valid-relative-color` 1136, `color-valid-color-mix-function` 627, `color-computed-powerless` 570, `color-valid-color-function` 340, `color-*-lab` 234, `rgb/hsl none` ~150 | ~3000 |
+| 5 | **Trusted Types** — no `trustedTypes`/`TrustedHTML`/policies, so the `createParserOptions` and policy-injected sanitizer cases fail. | `domparsing/positional-methods-with-*trusted-types*` | ~450 |
+| 6 | **Scroll-padding / scroll-margin logical longhands** — `scroll-padding-block-start` and friends are unknown; `scroll-padding: auto` and `%` handling. | `css-scroll-snap/parsing` | ~150 |
+| 7 | **mask shorthand and `mask-*` longhands** — `mask`, `mask-position`, `mask-repeat`, `mask-size` are missing or not serialized. | `css-masking/parsing/mask-*` | ~130 |
+| 8 | **`place-*` computed shorthands** — `getComputedStyle().placeContent/Items/Self` are undefined. | `css-align/parsing/place-*-computed` | ~64 |
+| 9 | **clip-path `path()`/`shape()` painting and serialization** — validated now, but `path()` is not drawn and shapes are not canonicalized (`inset(0 1px)` → `inset(0px 1px)`). | `clip-path-valid`, `clip-path-shape-parsing` | ~40 + visual |
+| 10 | **`dom/events` scrolling + `scrollend`** (carried over) — real scroll and `scrollend` infrastructure. | `scrolling/scrollend-*` | ~90 |
 
-Not listed by design: the `navigator.*` device APIs are project non-goals.
+Also seen on live sites but not in WPT: npr.org's scripts still run into
+the 60 s script limit (the hot path is not yet identified), and flex row
+items that are images with a percentage `width` attribute get the wrong
+flex base size.
 
 ## Whole-suite score
 

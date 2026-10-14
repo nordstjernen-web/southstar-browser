@@ -123,6 +123,22 @@ Southstar Browser 0.9.11-dev:
 * hwb() and hsl() channels that land on an exact half round up, as in other
   engines.
 
+* font-variant takes the full CSS Fonts 4 grammar, and font-variant-caps,
+  -numeric, -east-asian, -position, -emoji, font-synthesis,
+  font-size-adjust, font-optical-sizing, font-language-override, font-width,
+  hanging-punctuation and text-autospace parse and serialize; computed
+  font-stretch is a percentage. Small caps are synthesized when the font has
+  no small-cap glyphs.
+* white-space accepts the CSS Text 4 collapse/preserve/preserve-breaks and
+  wrap/nowrap values.
+* clip-path values are validated, and circle(), ellipse(), inset(),
+  polygon(), xywh() and rect() are drawn against the border box with their
+  full arguments (circle(50%) avatars on padded boxes were too small).
+* The ::view-transition pseudo-elements parse by their grammar (WPT
+  css-view-transitions/parsing 0 -> 1055/1055); they match nothing yet.
+* docs/wpt-scores.md has a 2026-10-14 compliance slice and a refreshed
+  top-10 list; CSS Color 4/5 colour spaces lead it.
+
 Southstar Browser 0.9.10:
 ======
 * <script type="module"> works on Boa: modules get import.meta (url, main,
