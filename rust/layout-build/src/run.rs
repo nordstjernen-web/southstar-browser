@@ -11,7 +11,8 @@ use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::collect::{
-    Collector, LINE_SEPARATOR, WS_COLLAPSE, WS_PRE_LINE, WS_PRESERVE, contains, white_space_mode,
+    Collector, LINE_SEPARATOR, WS_COLLAPSE, WS_PRE_LINE, WS_PRESERVE, contains, has_small_caps,
+    white_space_mode,
 };
 use crate::ffi::{self, RawLink, RunParts};
 use southstar_layout_content::text_input::utf8_skip;
@@ -227,10 +228,21 @@ pub fn build_inline_run(
         c.push(&marker);
     }
     let depth = c.state.inline_collect_depth;
+    let body_start = c.out.len();
     let mut n = first;
     while let Some(node) = n.filter(|node| !ptr::eq(node.as_ptr(), last_excl)) {
         n = node.next_sibling();
         c.walk(node, depth);
+    }
+    if let Some(ps) = parent_style
+        && ps
+            .get(PropId::FontVariant)
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|kw| has_small_caps(kw.to_bytes()))
+        && let Some((size, 0)) = ps.get(PropId::FontSize).and_then(ValueRef::length)
+    {
+        let end = c.out.len();
+        c.synthesize_small_caps(body_start, end, size);
     }
 
     let run_ws_mode = first.map_or(WS_COLLAPSE, |f| white_space_mode(f, styles));

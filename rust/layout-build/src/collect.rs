@@ -23,6 +23,8 @@ pub const LINE_SEPARATOR: &[u8] = "\u{2028}".as_bytes();
 pub const NBSP: &[u8] = "\u{a0}".as_bytes();
 pub const OBJECT_REPLACEMENT: &[u8] = "\u{FFFC}".as_bytes();
 
+const SMALL_CAPS_SCALE: f64 = 0.7;
+
 pub const WS_COLLAPSE: i32 = 0;
 pub const WS_PRESERVE: i32 = 1;
 pub const WS_PRE_LINE: i32 = 2;
@@ -371,6 +373,22 @@ impl<'a> Collector<'a> {
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::MarginRight));
     }
 
+    pub(crate) fn synthesize_small_caps(&mut self, start: usize, end: usize, font_size: f64) {
+        if font_size <= 0.0 {
+            return;
+        }
+        let mut run_start = None;
+        for i in start..=end {
+            let lower = i < end && self.out[i].is_ascii_lowercase();
+            if lower {
+                self.out[i] = self.out[i].to_ascii_uppercase();
+                run_start.get_or_insert(i);
+            } else if let Some(s) = run_start.take() {
+                emit_font_size(&mut self.attrs, s, i, font_size * SMALL_CAPS_SCALE);
+            }
+        }
+    }
+
     fn pseudo_text(&mut self, ps: StyleRef<'_>, content: Option<ValueRef<'_>>, host: Node<'_>) {
         let start = self.out.len();
         pseudo::append_content(&mut self.out, content, Some(host), Some(ps));
@@ -677,6 +695,7 @@ impl<'a> Collector<'a> {
         }
         if small_caps && end > sc_start {
             emit_attr(attrs, inline_kind::SMALL_CAPS, sc_start, end);
+            self.synthesize_small_caps(sc_start, end, font_size_self);
         }
         if bidi_override {
             self.push("\u{202C}".as_bytes());
@@ -730,7 +749,7 @@ fn inline_box_side_px(
     side
 }
 
-fn has_small_caps(variant: &[u8]) -> bool {
+pub(crate) fn has_small_caps(variant: &[u8]) -> bool {
     variant
         .split(|&c| c == b' ')
         .any(|w| w == b"small-caps" || w == b"all-small-caps")
