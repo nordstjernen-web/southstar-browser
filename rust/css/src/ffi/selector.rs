@@ -186,7 +186,7 @@ fn simple_to_c(c: &Compound) -> *mut RawSimple {
             matches_any: groups_to_c(c.matches_any.as_ref()),
             matches_none: groups_to_c(c.matches_none.as_ref()),
             has_groups: groups_to_c(c.has_groups.as_ref()),
-            never_match: glib::boolean(c.never_match),
+            never_match: glib::boolean(c.never_match || c.inert),
             ns_none: glib::boolean(c.ns_none),
         });
         raw

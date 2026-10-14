@@ -265,6 +265,7 @@ pub(crate) struct Compound {
     pub matches_none: Option<Vec<Vec<Selector>>>,
     pub has_groups: Option<Vec<Vec<Selector>>>,
     pub never_match: bool,
+    pub inert: bool,
     pub ns_none: bool,
 }
 
@@ -273,6 +274,7 @@ pub(crate) struct Selector {
     pub compounds: Vec<Compound>,
     pub combinators: Vec<u32>,
     pub pseudo_element: u32,
+    pub terminal_pseudo: u8,
     pub spec: [i32; 3],
     pub ancestor_hashes: Vec<u32>,
     pub n_ancestor_attr_hashes: u32,
@@ -612,6 +614,82 @@ fn pseudo_element(name: &[u8]) -> Option<u32> {
         .map(|&(_, pe)| pe)
 }
 
+const TERMINAL_PLAIN: u8 = 1;
+const TERMINAL_FUNCTIONAL: u8 = 2;
+const VIEW_TRANSITION_FUNCTIONS: [&[u8]; 4] = [
+    b"view-transition-group",
+    b"view-transition-image-pair",
+    b"view-transition-old",
+    b"view-transition-new",
+];
+const EXCLUDED_IDENTS: [&[u8]; 7] = [
+    b"default",
+    b"initial",
+    b"inherit",
+    b"unset",
+    b"revert",
+    b"revert-layer",
+    b"none",
+];
+
+fn view_transition_argument(arg: &[u8]) -> bool {
+    let arg = arg.trim_ascii();
+    let end = arg.len();
+    let mut p = 0;
+    if arg.first() == Some(&b'*') {
+        p = 1;
+    } else if arg.first() != Some(&b'.') {
+        let name = read_ident(arg, &mut p, end);
+        if name.is_empty() || EXCLUDED_IDENTS.iter().any(|k| eq_ci(&name, k)) {
+            return false;
+        }
+    }
+    let mut classes = 0;
+    while p < end {
+        if arg[p] != b'.' {
+            return false;
+        }
+        p += 1;
+        if read_ident(arg, &mut p, end).is_empty() {
+            return false;
+        }
+        classes += 1;
+    }
+    p == end && (arg.first() != Some(&b'.') || classes > 0)
+}
+
+fn view_transition_pseudo(
+    name: &[u8],
+    arg: Option<&[u8]>,
+    sel: &mut Selector,
+    cmp: &mut Compound,
+    depth: i32,
+) -> bool {
+    let functional = VIEW_TRANSITION_FUNCTIONS.iter().any(|k| eq_ci(name, k));
+    if !functional && !eq_ci(name, b"view-transition") {
+        return false;
+    }
+    let valid = depth == 0
+        && sel.terminal_pseudo == 0
+        && match arg {
+            None => !functional,
+            Some(a) => functional && view_transition_argument(a),
+        };
+    if valid {
+        cmp.inert = true;
+        sel.spec[2] += 1;
+        sel.terminal_pseudo = if functional {
+            TERMINAL_FUNCTIONAL
+        } else {
+            TERMINAL_PLAIN
+        };
+    } else {
+        error();
+        cmp.never_match = true;
+    }
+    true
+}
+
 fn parse_pseudo(s: &[u8], p: &mut usize, sel: &mut Selector, cmp: &mut Compound, depth: i32) {
     let end = s.len();
     *p += 1;
@@ -636,6 +714,20 @@ fn parse_pseudo(s: &[u8], p: &mut usize, sel: &mut Selector, cmp: &mut Compound,
     let legacy_element = [&b"before"[..], b"after", b"first-line", b"first-letter"]
         .iter()
         .any(|known| eq_ci(&name, known));
+    if sel.terminal_pseudo != 0 {
+        if !(sel.terminal_pseudo == TERMINAL_FUNCTIONAL
+            && !is_element
+            && arg.is_none()
+            && eq_ci(&name, b"only-child"))
+        {
+            error();
+            cmp.never_match = true;
+        }
+        return;
+    }
+    if is_element && view_transition_pseudo(&name, arg, sel, cmp, depth) {
+        return;
+    }
     if is_element || legacy_element {
         match pseudo_element(&name) {
             Some(pe) => {
@@ -810,6 +902,10 @@ fn parse_compound(s: &[u8], p: &mut usize, sel: &mut Selector, depth: i32) -> Op
     while *p < end {
         let tok_start = *p;
         let cc = s[*p];
+        if sel.terminal_pseudo != 0 && cc != b':' {
+            error();
+            cmp.never_match = true;
+        }
         if cc == b'*' || (cc == b'|' && !not_equals_follows(s, *p)) {
             if any {
                 error();
@@ -927,6 +1023,9 @@ pub(crate) fn parse_one(s: &[u8], p: &mut usize, depth: i32, relative: bool) -> 
         let c = s[*p];
         if c == b',' || c == b'{' {
             break;
+        }
+        if sel.terminal_pseudo != 0 {
+            error();
         }
         if c == b'>' || c == b'+' || c == b'~' {
             if relative && sel.compounds.is_empty() && !leading_comb_used {
