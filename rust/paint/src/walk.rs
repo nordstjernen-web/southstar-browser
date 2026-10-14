@@ -277,6 +277,12 @@ fn position_keyword(b: BoxRef<'_>) -> Option<&[u8]> {
         .map(CStr::to_bytes)
 }
 
+fn box_is_float(b: BoxRef<'_>) -> bool {
+    get(style_of(b), P::Float)
+        .and_then(ValueRef::keyword_text)
+        .is_some_and(|kw| kw != c"none")
+}
+
 fn box_is_positioned(b: BoxRef<'_>) -> bool {
     matches!(
         position_keyword(b),
@@ -1194,28 +1200,40 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
         paint_canvas_element(cr, b);
     }
 
-    let mut entries: Vec<(i32, u32, BoxRef<'_>)> = Vec::new();
-    let mut any_z = false;
+    let mut entries: Vec<(i32, u8, u32, BoxRef<'_>)> = Vec::new();
+    let mut reorder = false;
     if !skip_contents {
         let mut c = b.first_child();
         let mut order = 0u32;
         while let Some(child) = c {
-            let key = if box_is_positioned(child) {
+            let positioned = box_is_positioned(child);
+            let key = if positioned {
                 let z = box_z_index(child);
                 if z != 0 {
-                    any_z = true;
+                    reorder = true;
                 }
                 z
             } else {
                 0
             };
-            entries.push((key, order, child));
+            let floated = !positioned && box_is_float(child) && !box_is_flex_or_grid_item(child);
+            if floated && child.next_sibling().is_some() {
+                reorder = true;
+            }
+            let tier = if floated {
+                1
+            } else if positioned {
+                2
+            } else {
+                0
+            };
+            entries.push((key, tier, order, child));
             order += 1;
             c = child.next_sibling();
         }
     }
-    if any_z {
-        entries.sort_by_key(|&(key, order, _)| (key, order));
+    if reorder {
+        entries.sort_by_key(|&(key, tier, order, _)| (key, tier, order));
     }
     let mut ovx = style_keyword(style, P::OverflowX);
     let mut ovy = style_keyword(style, P::OverflowY);
@@ -1331,7 +1349,7 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if bump_cull {
         with(|w| w.no_cull.set(w.no_cull.get() + 1));
     }
-    for &(_, _, child) in &entries {
+    for &(_, _, _, child) in &entries {
         paint_walk(cr, child, highlight);
     }
     if bump_cull {
