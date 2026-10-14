@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::collections::{HashMap, HashSet};
 
@@ -72,7 +72,7 @@ pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
         st.caret_byte = input.caret_byte;
         st.anchor_byte = input.anchor_byte;
         st.image_cache = input.image_cache;
-        st.base_url = input.base_url;
+        st.base_url = ffi::c_str(input.base_url).map(CStr::to_owned);
     });
     ffi::image_cache_begin_generation(input.image_cache);
     counters_build(input.doc, input.styles);
@@ -90,7 +90,7 @@ pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
         st.caret_byte = 0;
         st.anchor_byte = 0;
         st.image_cache = ptr::null_mut();
-        st.base_url = ptr::null();
+        st.base_url = None;
     });
     counters_clear();
     ffi::record_frame_viewports(root);

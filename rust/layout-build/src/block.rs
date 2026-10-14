@@ -4,6 +4,7 @@
 
 use core::ffi::CStr;
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, NsNode, children};
 use southstar_layout::{BoxPool, BoxRef};
@@ -445,10 +446,12 @@ fn build_document(n: Node<'_>, styles: StyleTable) -> BoxRef<'static> {
         .and_then(|p| p.attr(c"data-nd-frame-url"))
         .filter(|u| !u.is_empty());
     let saved_base = state::with(|st| {
-        let saved = st.base_url;
-        if let Some(fu) = frame_url {
-            st.base_url = fu.as_ptr();
-        }
+        let saved = st.base_url.take();
+        let fallback = frame_url.map(CStr::to_owned).or_else(|| saved.clone());
+        let doc_base =
+            southstar_dom::base_url::document_base(n, fallback.as_deref().map(CStr::to_bytes))
+                .and_then(|base| CString::new(base).ok());
+        st.base_url = doc_base.or(fallback);
         saved
     });
     let root = BoxPool::new_box(KIND_BLOCK);

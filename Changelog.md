@@ -132,6 +132,12 @@ Southstar Browser 0.9.11-dev:
   Rust API instead of rust/net's ns_url_* C exports, which copied every
   answer into a g_malloc'd C string. The fourteen exports and the C mirror
   of a URL's parts are gone; page dumps and render tests are unchanged.
+* <base href> now applies to style sheets and images, not only to what
+  script sees: <link rel=stylesheet>, @import and url() in <style> elements,
+  <img> loads, img.currentSrc, layout's image lookups and the speculative
+  preloader resolve against the document's base URL instead of its own URL.
+  A page under /sub/ with <base href="/sub/dir/"> used to request /sub/x.css
+  and /sub/i.png, get 404s and render unstyled with a broken image.
 * HSTS entries expire: a host whose Strict-Transport-Security max-age has
   run out is no longer upgraded to https://, an expired line is dropped the
   next time the list is rewritten, and a max-age past the year 9999 is

@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::c_char;
 use core::ptr;
 use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
 use southstar_dom::NsNode;
@@ -30,7 +30,7 @@ pub struct State {
     pub caret_byte: usize,
     pub anchor_byte: usize,
     pub image_cache: *mut core::ffi::c_void,
-    pub base_url: *const c_char,
+    pub base_url: Option<CString>,
     pub abs_pending: Option<Vec<AbsEntry>>,
     pub abs_force_build: bool,
     pub abs_seen: Option<HashSet<usize>>,
@@ -56,7 +56,7 @@ impl State {
             caret_byte: 0,
             anchor_byte: 0,
             image_cache: ptr::null_mut(),
-            base_url: ptr::null(),
+            base_url: None,
             abs_pending: None,
             abs_force_build: false,
             abs_seen: None,

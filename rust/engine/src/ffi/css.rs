@@ -73,7 +73,7 @@ unsafe extern "C" {
     fn g_ptr_array_set_size(array: *mut GPtrArray, length: c_int);
 }
 
-pub fn c_str_ptr<'a>(p: *const c_char) -> Option<&'a CStr> {
+fn c_str_ptr<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 

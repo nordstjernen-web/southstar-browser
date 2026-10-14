@@ -12,6 +12,7 @@ southstar-datetime = { path = "../datetime" }
 southstar-glib = { path = "../glib" }
 southstar-html-util = { path = "../html-util" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

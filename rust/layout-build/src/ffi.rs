@@ -207,8 +207,8 @@ pub fn float_side_of(s: Option<StyleRef<'_>>) -> c_int {
     unsafe { ns_layout_float_side_of(style_ptr(s)) }
 }
 
-pub fn url_resolve(base: *const c_char, href: &CStr) -> Option<CString> {
-    let base = c_str(base)?;
+pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
+    let base = base?;
     southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
         .and_then(|abs| CString::new(abs).ok())
 }

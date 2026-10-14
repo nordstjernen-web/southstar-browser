@@ -273,9 +273,12 @@ pub(crate) fn resolve_against_doc_base(
     if base.is_null() {
         return None;
     }
-    let base = unsafe { CStr::from_ptr(base) }.to_bytes();
+    let document_url = unsafe { CStr::from_ptr(base) }.to_bytes();
+    let base = southstar_dom::base_url::owning_document(node)
+        .and_then(|doc| southstar_dom::base_url::document_base(doc, Some(document_url)))
+        .unwrap_or_else(|| document_url.to_vec());
     let href = href.split(|&b| b == 0).next().unwrap_or_default();
-    southstar_url::bytes::resolve(Some(base), href)
+    southstar_url::bytes::resolve(Some(&base), href)
 }
 
 pub(crate) fn label_associated_control(label: Element) -> Option<Element> {

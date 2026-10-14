@@ -221,7 +221,8 @@ pub fn speculative_preload(doc: Node, base: &CStr, include_images: bool) {
     if !ffi::url_is_http_or_https(base.to_bytes()) {
         return;
     }
-    let mut preloads = Preloads::new(base, include_images);
+    let doc_base = crate::styles::document_base(doc, Some(base));
+    let mut preloads = Preloads::new(doc_base.as_deref().unwrap_or(base), include_images);
     preloads.collect(doc, 0);
     ffi::preload_clear();
     for origin in &preloads.connects {
@@ -268,6 +269,7 @@ pub fn collect_wanted_images(
     viewport_h: f64,
 ) -> WantedImages {
     let wanted = Wanted::new();
+    let mut doc_bases: HashMap<*const southstar_dom::NsNode, Option<CString>> = HashMap::new();
     let mut deferred_any = false;
     let lazy_limit = if viewport_h > 0.0 {
         scroll_y + viewport_h + LAZY_IMAGE_MARGIN_PX
@@ -292,7 +294,17 @@ pub fn collect_wanted_images(
         }
         srcs.extend(media.marker_image_src());
         srcs.extend(media.border_image_src());
-        let box_base = frame_base(crate::ffi::box_dom(b), base);
+        let dom = crate::ffi::box_dom(b);
+        let fallback = frame_base(dom, base);
+        let box_base = dom
+            .and_then(southstar_dom::base_url::owning_document)
+            .and_then(|doc| {
+                doc_bases
+                    .entry(doc.as_ptr())
+                    .or_insert_with(|| crate::styles::document_base(doc, Some(fallback)))
+                    .as_deref()
+            })
+            .unwrap_or(fallback);
         for src in srcs {
             if src.to_bytes().starts_with(b"nd-inline-svg:") {
                 continue;

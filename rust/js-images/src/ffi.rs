@@ -121,6 +121,16 @@ pub(crate) fn doc_base(js: Js, el: Element) -> Option<&'static CStr> {
     c_str(unsafe { ns_js_node_doc_base(js.0, el.as_ptr()) })
 }
 
+pub(crate) fn base_url(js: Js, el: Element) -> Option<CString> {
+    let document_url = doc_base(js, el);
+    southstar_dom::base_url::owning_document(el)
+        .and_then(|doc| {
+            southstar_dom::base_url::document_base(doc, document_url.map(CStr::to_bytes))
+        })
+        .and_then(|base| CString::new(base).ok())
+        .or_else(|| document_url.map(CStr::to_owned))
+}
+
 pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
     let mut resolved = southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())?;
     if let Some(nul) = resolved.iter().position(|&b| b == 0) {

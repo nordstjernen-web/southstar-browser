@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub mod attrs;
+pub mod base_url;
 pub mod controls;
 mod ffi;
 pub mod image_map;

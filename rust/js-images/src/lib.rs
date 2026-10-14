@@ -133,8 +133,7 @@ pub(crate) fn start_image_load(js: Js, el: Element, src: Option<&CStr>) {
         remove(js, el);
         return;
     };
-    let base = ffi::doc_base(js, el);
-    let Some(abs_url) = resolve_or_copy(base, src) else {
+    let Some(abs_url) = resolve_or_copy(ffi::base_url(js, el).as_deref(), src) else {
         remove(js, el);
         return;
     };
@@ -154,7 +153,7 @@ pub(crate) fn start_image_load(js: Js, el: Element, src: Option<&CStr>) {
     });
     let old = with_page(js, |page| page.loads.insert(key(el), load.clone()));
     drop(old);
-    let top_url = base.unwrap_or(&load.requested_url);
+    let top_url = ffi::doc_base(js, el).unwrap_or(&load.requested_url);
     let img = ffi::cache_get(js, &load.requested_url, top_url, &load);
     load.img.set(img);
     if img.is_some_and(settled) {
@@ -197,8 +196,8 @@ pub(crate) fn ready_idle(load: Rc<Load>) {
     }
     let el = load.el;
     let cur_src = el.attr(c"src");
-    let abs_url = match (nonempty(cur_src), ffi::doc_base(js, el)) {
-        (Some(src), Some(base)) => ffi::url_resolve(base, src),
+    let abs_url = match (nonempty(cur_src), ffi::base_url(js, el)) {
+        (Some(src), Some(base)) => ffi::url_resolve(&base, src),
         _ => cur_src.map(CStr::to_owned),
     };
     if abs_url.as_deref() != Some(load.requested_url.as_c_str()) {
@@ -246,7 +245,7 @@ pub(crate) fn image_for_node(js: Js, el: Element) -> Option<ImageRef<'static>> {
     if ffi::has_image_cache(js)
         && is_img(el)
         && let Some(src) = nonempty(el.attr(c"src"))
-        && let Some(abs_url) = resolve_or_copy(ffi::doc_base(js, el), src)
+        && let Some(abs_url) = resolve_or_copy(ffi::base_url(js, el).as_deref(), src)
         && let Some(img) = ffi::cache_peek(js, &abs_url)
     {
         return Some(img);
@@ -296,7 +295,7 @@ fn rescan_subtree(js: Js, root: Element, depth: usize) {
     if root.element_name() == Some(b"img")
         && let Some(src) = nonempty(root.attr(c"src"))
         && let Some(load) = lookup(js, root)
-        && let Some(abs_url) = ffi::doc_base(js, root).and_then(|base| ffi::url_resolve(base, src))
+        && let Some(abs_url) = ffi::base_url(js, root).and_then(|base| ffi::url_resolve(&base, src))
         && abs_url != load.requested_url
     {
         root.remove_flags(IMG_LOAD_FIRED);

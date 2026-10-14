@@ -16,7 +16,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArr
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
-    CssScope, SheetList, Stylesheet, c_str_ptr, is_self_contained, layout_frame_viewport,
+    CssScope, SheetList, Stylesheet, is_self_contained, layout_frame_viewport,
     layout_frame_viewport_raw, media_query_matches, media_viewport_pop, media_viewport_push,
     merged_styles_cached, parse_import_cached, parse_url_cached, shadow_adopted_css,
     style_element_cache_end, style_element_text, stylesheet_from_style_element_cached,

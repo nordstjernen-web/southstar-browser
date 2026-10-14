@@ -24,11 +24,11 @@ pub fn peek_image(src: Option<&CStr>) -> *mut c_void {
     let Some(src) = src else {
         return ptr::null_mut();
     };
-    let (cache, base) = state::with(|st| (st.image_cache, st.base_url));
+    let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
     if cache.is_null() {
         return ptr::null_mut();
     }
-    match ffi::url_resolve(base, src) {
+    match ffi::url_resolve(base.as_deref(), src) {
         Some(abs) => ffi::image_cache_peek(cache, &abs),
         None => ffi::image_cache_peek(cache, src),
     }
@@ -125,9 +125,9 @@ pub fn build_image_box(n: Node<'_>) -> BoxRef<'static> {
     let declared = b.content_width() > 0.0 && b.content_height() > 0.0;
     m.set_declared_image_size(declared);
     let mut image = ptr::null_mut();
-    let (cache, base) = state::with(|st| (st.image_cache, st.base_url));
+    let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
     if !cache.is_null() {
-        let abs = url.and_then(|u| ffi::url_resolve(base, u));
+        let abs = url.and_then(|u| ffi::url_resolve(base.as_deref(), u));
         let key = abs.as_deref().or(url);
         if let (Some(u), Some(k)) = (url, key) {
             image = decode_data_image(u, k);

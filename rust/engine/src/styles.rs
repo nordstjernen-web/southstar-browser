@@ -5,6 +5,7 @@
 use core::cell::RefCell;
 use core::ffi::CStr;
 use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
@@ -283,15 +284,16 @@ struct Collect<'a> {
     cache: Option<CssCache>,
     run: Vec<u8>,
     run_chunks: Vec<Vec<u8>>,
-    run_base: Option<*const core::ffi::c_char>,
+    run_base: Option<Option<CString>>,
     top_url: Option<&'a CStr>,
     strict_css_mime: bool,
     media_seen: bool,
     frame_depth: i32,
 }
 
-fn base_ptr(base: Option<&CStr>) -> *const core::ffi::c_char {
-    base.map_or(core::ptr::null(), CStr::as_ptr)
+pub fn document_base(doc: Node, url: Option<&CStr>) -> Option<CString> {
+    southstar_dom::base_url::document_base(doc, url.map(CStr::to_bytes))
+        .and_then(|base| CString::new(base).ok())
 }
 
 impl Collect<'_> {
@@ -299,12 +301,11 @@ impl Collect<'_> {
         self.run.extend_from_slice(css);
         self.run.push(b'\n');
         self.run_chunks.push(css.to_vec());
-        self.run_base = Some(base_ptr(base));
+        self.run_base = Some(base.map(CStr::to_owned));
     }
 
     fn run_base_differs(&self, base: Option<&CStr>) -> bool {
-        self.run_base
-            .is_some_and(|rb| !rb.is_null() && rb != base_ptr(base))
+        matches!(&self.run_base, Some(Some(rb)) if Some(rb.as_c_str()) != base)
     }
 
     fn drop_repeats(&mut self) {
@@ -345,7 +346,8 @@ impl Collect<'_> {
         }
         self.drop_repeats();
         self.run_chunks.clear();
-        let base = self.run_base.and_then(ffi::c_str_ptr);
+        let run_base = self.run_base.take().flatten();
+        let base = run_base.as_deref();
         if let Some(sh) = ffi::merged_styles_cached(&self.run, base) {
             let x = Expand {
                 top_url: self.top_url,
@@ -356,7 +358,6 @@ impl Collect<'_> {
             append_expanded(self.out, sh, base, &x, &mut HashSet::new(), 0);
         }
         self.run.clear();
-        self.run_base = None;
     }
 
     fn docs_sync(&mut self) {
@@ -368,7 +369,7 @@ impl Collect<'_> {
         }
     }
 
-    fn frame_children<'n>(&mut self, frame: Node<'n>, base: Option<&'n CStr>, depth: u32) {
+    fn frame_children(&mut self, frame: Node, base: Option<&CStr>, depth: u32) {
         for c in children(frame) {
             if c.kind() != Kind::Document {
                 self.walk(c, base, depth + 1);
@@ -403,10 +404,14 @@ impl Collect<'_> {
         }
     }
 
-    fn walk<'n>(&mut self, n: Node<'n>, mut base: Option<&'n CStr>, depth: u32) {
+    fn walk(&mut self, n: Node, base: Option<&CStr>, depth: u32) {
         if depth >= MAX_DEPTH || ffi::is_named(n, c"noscript") {
             return;
         }
+        let doc_base = (n.kind() == Kind::Document)
+            .then(|| document_base(n, base))
+            .flatten();
+        let mut base = doc_base.as_deref().or(base);
         if is_frame(n) {
             self.flush();
             if let Some(frame_url) = n.attr(c"data-nd-frame-url").filter(|u| !u.is_empty()) {
