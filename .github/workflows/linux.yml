@@ -138,7 +138,7 @@ jobs:
           meson --version
           ninja --version
           pkg-config --modversion gtk4
-          pkg-config --modversion libssl
+          pkg-config --modversion libcrypto
           pkg-config --modversion libavcodec
 
       # Build step is wired up the moment a meson.build (or Makefile)

@@ -91,8 +91,8 @@ practical. Runtime requirements:
 - glibc 2.31+ (Ubuntu 20.04 / Fedora 34 / Debian 11 era and later)
 - GTK 4.6+ with gio, gobject, pango, cairo
 - libepoxy (usually pulled in by GTK 4; WebGL dispatch)
-- OpenSSL 3 (libssl, libcrypto) and zlib; libbrotlidec and libzstd when
-  the build found them
+- OpenSSL 3's libcrypto (Web Cryptography; TLS is rustls, built in) and
+  zlib; libbrotlidec and libzstd when the build found them
 - libuchardet
 - fontconfig + a font set, harfbuzz, freetype, libstdc++
 - An X11 or Wayland session
@@ -119,7 +119,7 @@ Output:
     dist/southstar-<version>-1.x86_64.rpm           # ~1.3 MB
 
 The spec uses `AutoReqProv: yes` so `rpmbuild` extracts the actual
-SONAME dependencies (`libgtk-4.so.1`, `libssl.so.3`,
+SONAME dependencies (`libgtk-4.so.1`, `libcrypto.so.3`,
 `libuchardet.so.0`, the GLib stack, etc.) directly
 from the binary's ELF dynamic section. The same RPM file therefore
 installs on Fedora, RHEL, and openSUSE without per-distro tweaks —

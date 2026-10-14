@@ -1,4 +1,4 @@
-//! Southstar — transport bookkeeping: origins that recently refused connections, the six-connection limit per origin, the CA bundle search, the encodings and TLS curves curl supports, and the memory budget for a response.
+//! Southstar — transport bookkeeping: origins that recently refused connections, the six-connection limit per origin, the CA bundle search, the memory budget for a response and the header serialization.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -146,26 +146,6 @@ pub fn ca_bundle_candidates() -> Vec<Vec<u8>> {
     };
     out.extend(system.iter().map(|p| p.as_bytes().to_vec()));
     out
-}
-
-fn leading_number(text: &[u8]) -> Option<(u32, &[u8])> {
-    let digits = text.iter().take_while(|c| c.is_ascii_digit()).count();
-    if digits == 0 {
-        return None;
-    }
-    let value = text[..digits].iter().fold(0u32, |n, &d| {
-        n.wrapping_mul(10).wrapping_add(u32::from(d - b'0'))
-    });
-    Some((value, &text[digits..]))
-}
-
-pub fn post_quantum_curves(ssl_version: &[u8]) -> bool {
-    let parsed = ssl_version.strip_prefix(b"OpenSSL/").and_then(|rest| {
-        let (major, rest) = leading_number(rest)?;
-        let (minor, _) = leading_number(rest.strip_prefix(b".")?)?;
-        Some((major, minor))
-    });
-    parsed.is_some_and(|(major, minor)| major > 3 || (major == 3 && minor >= 5))
 }
 
 pub fn response_budget() -> u64 {

@@ -75,6 +75,40 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <https://unlicense.org>
 
+### rustls, rustls-webpki and ring — ISC License, Apache License 2.0
+
+> TLS for the in-tree HTTP client: rustls (used under its ISC option),
+> rustls-webpki for certificate verification, and ring for the
+> cryptographic primitives. ring carries code from BoringSSL under the
+> Apache License 2.0 (see the OpenSSL entry below for where to read it)
+> and under the ISC License; each such file names its license at the top.
+> <https://github.com/rustls/rustls>, <https://github.com/rustls/webpki>,
+> <https://github.com/briansmith/ring>
+>
+> Copyright (c) 2016, Joseph Birr-Pixton; Copyright 2015 Brian Smith;
+> Copyright 2015-2025 Brian Smith.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+### RustCrypto ml-kem — MIT License
+
+> ML-KEM-768 (FIPS 203) for the X25519MLKEM768 post-quantum TLS key
+> exchange, with the RustCrypto crates it builds on (sha3, keccak, digest,
+> hybrid-array, module-lattice, kem). Used under the MIT License above.
+> <https://github.com/RustCrypto/KEMs>
+>
+> Copyright (c) 2024-2026 RustCrypto Developers.
+
 ### pl_mpeg — MIT License
 
 > Single-file MPEG-1 video and MP2 audio decoder and MPEG-PS demuxer.
@@ -178,10 +212,9 @@ authorization of the copyright holder.
 
 ## Dynamically linked
 
-### OpenSSL (libssl, libcrypto) — Apache License 2.0
+### OpenSSL (libcrypto) — Apache License 2.0
 
-> TLS for the in-tree HTTP client and Web Cryptography (`crypto.subtle`)
-> primitives.
+> Web Cryptography (`crypto.subtle`) primitives.
 > <https://www.openssl.org>
 >
 > Copyright (c) 1998-2026 The OpenSSL Project Authors. All Rights Reserved.

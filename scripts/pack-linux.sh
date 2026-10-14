@@ -86,7 +86,7 @@ fi
 
 if [ "$LIBC" = musl ]; then
     LIBC_REQ='- musl libc (Alpine 3.19+ era and later)'
-    RUNTIME_INSTALL='    sudo apk add gtk4.0 libssl3 zlib brotli-libs zstd-libs uchardet poppler-glib libavif libwebp \
+    RUNTIME_INSTALL='    sudo apk add gtk4.0 libcrypto3 zlib brotli-libs zstd-libs uchardet poppler-glib libavif libwebp \
         libseccomp libpsl sqlite-libs ca-certificates font-dejavu sdl2 # Alpine (musl)'
 else
     # Don't guess the glibc floor — read it from the binary we just built.
@@ -196,7 +196,7 @@ against the other C library — pick the matching download.
 ${LIBC_REQ}
 - GTK 4.6+, with gio, gobject, pango, cairo, gdk-pixbuf
 - libepoxy (usually pulled in by GTK 4; WebGL dispatch)
-- OpenSSL 3 (libssl, libcrypto) and zlib; libbrotlidec and libzstd when the build found them
+- OpenSSL 3's libcrypto (Web Cryptography) and zlib; libbrotlidec and libzstd when the build found them
 - libuchardet
 - libpoppler-glib (PDF rendering)
 - libavif 16 (AVIF images — only in recent distro releases)

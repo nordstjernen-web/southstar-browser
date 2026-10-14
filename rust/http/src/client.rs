@@ -11,11 +11,11 @@ use std::time::{Duration, Instant};
 
 use crate::doh::{self, Lookup};
 use crate::ffi::socket::{self, ConnectError, PollFd, Wake};
-use crate::ffi::tls::{self, Handshake, Io, Settings, Tls};
 use crate::frame;
 use crate::h1;
 use crate::h2::{Connection, Event};
 use crate::proxy::{self, Kind, Proxy};
+use crate::tls::{self, Handshake, Io, Settings, Tls};
 use crate::transfer::{Handler, Transfer};
 
 const MAX_CONCURRENT: usize = 64;
@@ -223,13 +223,14 @@ pub(crate) fn resolve_host(host: &str) -> &str {
 
 pub enum Stream {
     Plain(TcpStream),
-    Tls(Tls, TcpStream),
+    Tls(Box<Tls>),
 }
 
 impl Stream {
     fn raw(&self) -> socket::Raw {
         match self {
-            Stream::Plain(s) | Stream::Tls(_, s) => socket::raw(s),
+            Stream::Plain(s) => socket::raw(s),
+            Stream::Tls(t) => socket::raw(t.tcp()),
         }
     }
 
@@ -241,7 +242,7 @@ impl Stream {
                     Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => {}
                     Err(_) => return None,
                 },
-                Stream::Tls(t, _) => match t.read(buf) {
+                Stream::Tls(t) => match t.read(buf) {
                     Io::Done(n) => return Some(n),
                     Io::Closed => return Some(0),
                     Io::WouldBlock => {}
@@ -264,7 +265,7 @@ impl Stream {
                     Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => 0,
                     Err(_) => return false,
                 },
-                Stream::Tls(t, _) => match t.write(buf) {
+                Stream::Tls(t) => match t.write(buf) {
                     Io::Done(n) => n,
                     Io::WouldBlock => 0,
                     _ => return false,
@@ -278,7 +279,22 @@ impl Stream {
             }
             buf = &buf[n..];
         }
-        true
+        self.flush(abort)
+    }
+
+    fn flush(&mut self, abort: &dyn Fn() -> bool) -> bool {
+        let Stream::Tls(t) = self else {
+            return true;
+        };
+        loop {
+            match t.flush() {
+                Io::Done(_) => return true,
+                Io::WouldBlock if !abort() => {
+                    socket::wait(socket::raw(t.tcp()), socket::POLLOUT, 250);
+                }
+                _ => return false,
+            }
+        }
     }
 }
 
@@ -396,20 +412,12 @@ fn open(
     let mut tcp = tcp;
     let mut verify = true;
     loop {
-        match Tls::handshake(
-            socket::raw(&tcp),
-            req.host,
-            req.port,
-            verify,
-            allow_h2,
-            &req.tls,
-            &abort,
-        ) {
+        match Tls::handshake(tcp, req.host, verify, allow_h2, &req.tls, &abort) {
             Ok(session) => {
                 out.appconnect_ms = t.ms_since_start();
                 let h2 = session.alpn_h2();
                 return Some(Connected {
-                    stream: Stream::Tls(session, tcp),
+                    stream: Stream::Tls(Box::new(session)),
                     remote,
                     h2,
                 });
@@ -418,17 +426,17 @@ fn open(
                 out.cancelled = true;
                 return None;
             }
-            Err(Handshake::Failed { verify_result }) => {
+            Err(Handshake::Failed { certificate }) => {
                 if t.handler.should_abort() {
                     out.cancelled = true;
                     return None;
                 }
-                let verify_failed = verify_result != tls::X509_V_OK;
-                if verify_failed && verify && req.allow_insecure {
-                    out.tls_warning = Some(format!(
-                        "Insecure: TLS certificate not trusted ({})",
-                        tls::verify_error_text(verify_result)
-                    ));
+                if let Some(problem) = certificate
+                    .as_deref()
+                    .filter(|_| verify && req.allow_insecure)
+                {
+                    out.tls_warning =
+                        Some(format!("Insecure: TLS certificate not trusted ({problem})"));
                     match tcp_connect(req, connect_deadline, &cancelled) {
                         Ok((s, _)) => tcp = s,
                         Err(_) => {
@@ -440,14 +448,10 @@ fn open(
                     verify = false;
                     continue;
                 }
-                out.tls_verify_failed = verify_failed;
-                out.error = Some(if verify_failed {
-                    format!(
-                        "TLS certificate problem: {}",
-                        tls::verify_error_text(verify_result)
-                    )
-                } else {
-                    String::from("TLS handshake failed")
+                out.tls_verify_failed = certificate.is_some();
+                out.error = Some(match certificate {
+                    Some(problem) => format!("TLS certificate problem: {problem}"),
+                    None => String::from("TLS handshake failed"),
                 });
                 return None;
             }
@@ -759,7 +763,7 @@ fn io_thread(conn: Arc<Conn>, mut stream: Stream) {
         let mut write_failed = false;
         while !outbuf.is_empty() {
             let r = match &mut stream {
-                Stream::Tls(t, _) => t.write(&outbuf),
+                Stream::Tls(t) => t.write(&outbuf),
                 Stream::Plain(_) => Io::Failed,
             };
             match r {
@@ -773,11 +777,21 @@ fn io_thread(conn: Arc<Conn>, mut stream: Stream) {
                 }
             }
         }
+        if outbuf.is_empty()
+            && let Stream::Tls(t) = &mut stream
+            && matches!(t.flush(), Io::Failed)
+        {
+            write_failed = true;
+        }
         if write_failed {
             lock(&conn).io_failed = true;
             continue;
         }
-        let pending_tls = matches!(&stream, Stream::Tls(t, _) if t.pending());
+        let pending_tls = match &mut stream {
+            Stream::Tls(t) => t.pending(),
+            Stream::Plain(_) => false,
+        };
+        let writing = !outbuf.is_empty() || matches!(&stream, Stream::Tls(t) if t.wants_write());
         let mut fds = [
             PollFd {
                 fd: conn.wake.raw(),
@@ -786,12 +800,7 @@ fn io_thread(conn: Arc<Conn>, mut stream: Stream) {
             },
             PollFd {
                 fd: stream.raw(),
-                events: socket::POLLIN
-                    | if outbuf.is_empty() {
-                        0
-                    } else {
-                        socket::POLLOUT
-                    },
+                events: socket::POLLIN | if writing { socket::POLLOUT } else { 0 },
                 revents: 0,
             },
         ];
@@ -812,7 +821,7 @@ fn io_thread(conn: Arc<Conn>, mut stream: Stream) {
         }
         loop {
             let r = match &mut stream {
-                Stream::Tls(t, _) => t.read(&mut rbuf),
+                Stream::Tls(t) => t.read(&mut rbuf),
                 Stream::Plain(_) => Io::Failed,
             };
             match r {
@@ -981,8 +990,8 @@ pub fn shutdown() {
 
 fn start_h2(stream: Stream, remote: SocketAddr) -> Option<Arc<Conn>> {
     let wake = Wake::new()?;
-    if let Stream::Tls(_, tcp) = &stream {
-        tcp.set_nonblocking(true).ok()?;
+    if let Stream::Tls(t) = &stream {
+        t.tcp().set_nonblocking(true).ok()?;
     }
     let conn = Arc::new(Conn {
         shared: Mutex::new(Shared {
@@ -1294,7 +1303,7 @@ impl Upgraded {
                 Err(e) if socket::retryable(e.raw_os_error().unwrap_or(0)) => Received::Idle,
                 Err(_) => Received::Failed,
             },
-            Stream::Tls(t, _) => match t.read(buf) {
+            Stream::Tls(t) => match t.read(buf) {
                 Io::Done(n) => Received::Data(n),
                 Io::Closed => Received::Closed,
                 Io::WouldBlock => Received::Idle,

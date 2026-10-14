@@ -17,20 +17,14 @@ use crate::transport;
 static ABORTING: AtomicBool = AtomicBool::new(false);
 static CA_BUNDLE: Slot = Slot::new();
 static ACCEPT_ENCODING: Slot = Slot::new();
-static POST_QUANTUM: AtomicBool = AtomicBool::new(false);
 static RNG_WARMUP: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 unsafe extern "C" {
-    fn OpenSSL_version(kind: c_int) -> *const c_char;
     fn RAND_bytes(buf: *mut u8, num: c_int) -> c_int;
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
 }
 
 fn slot_ptr(slot: &Slot) -> *const c_char {
@@ -95,21 +89,11 @@ pub extern "C" fn ns_net_join_rng() {
     }
 }
 
-fn openssl_version() -> Vec<u8> {
-    let text = text(unsafe { OpenSSL_version(0) }).unwrap_or_default();
-    let mut words = text.split(|&c| c == b' ');
-    let name = words.next().unwrap_or_default();
-    let version = words.next().unwrap_or_default();
-    [name, b"/", version].concat()
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_init() {
     resolve_ca_bundle();
     southstar_http::init();
-    if transport::post_quantum_curves(&openssl_version()) {
-        POST_QUANTUM.store(true, Ordering::SeqCst);
-    }
+    CA_BUNDLE.with_ptr(|path| southstar_http::preload_trust_roots(path.map(|p| p.as_bytes())));
     ACCEPT_ENCODING.set(Some(southstar_http::accept_encoding().to_vec()));
     warm_rng();
     storage::hsts_path();
@@ -131,9 +115,5 @@ pub extern "C" fn ns_net_ca_bundle_path() -> *const c_char {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_ec_curves() -> *const c_char {
-    if POST_QUANTUM.load(Ordering::SeqCst) {
-        c"X25519MLKEM768:X25519:P-256:P-384".as_ptr()
-    } else {
-        c"X25519:P-256:P-384".as_ptr()
-    }
+    c"X25519MLKEM768:X25519:P-256:P-384".as_ptr()
 }

@@ -9,7 +9,11 @@ mod fetch;
 mod ffi;
 pub mod ftp;
 mod proxy;
+#[cfg(test)]
+mod tests;
+mod tls;
 mod transfer;
+mod x25519_mlkem768;
 
 use southstar_http_wire::{frame, h1, h2};
 
@@ -26,16 +30,19 @@ pub fn description() -> &'static [u8] {
     }
 }
 
+pub fn tls_description() -> &'static [u8] {
+    b"rustls with ring (TLS 1.3 and 1.2; X25519MLKEM768, X25519, P-256, P-384)"
+}
+
 pub fn set_dns_over_https(url: Option<&[u8]>, tls: TlsSettings) {
     doh::configure(url, tls);
 }
 
 pub fn init() {
-    ffi::tls::init();
     ffi::socket::init();
 }
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
-pub use ffi::tls::Settings as TlsSettings;
 pub use proxy::{Proxy, bypassed as proxy_bypassed, parse as parse_proxy};
+pub use tls::{Settings as TlsSettings, preload_trust_roots};
 pub use transfer::Handler;

@@ -32,7 +32,7 @@ history	31	18	5	0	22	6	0
 html-parser	57	16	6	0	40	1	0
 html-util	40	9	6	0	25	2	0
 html5	0	0	0	0	0	0	0
-http	63	55	0	0	33	6	0
+http	34	22	0	0	8	1	0
 http-cache	31	22	3	0	17	6	0
 http-wire	0	0	0	0	0	0	0
 i18n	13	0	0	0	11	4	0
@@ -109,7 +109,7 @@ mathml	21	24	2	0	16	2	0
 media-shm	0	0	0	0	0	0	0
 mic	19	5	4	0	3	0	0
 minimp3	0	0	0	0	0	0	0
-net	390	127	67	0	250	25	0
+net	388	126	67	0	248	25	0
 netstore	0	0	0	0	0	0	0
 netutil	32	4	7	0	17	5	0
 numfmt	0	0	0	0	0	0	0

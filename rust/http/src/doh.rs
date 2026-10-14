@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::client::{Request, perform};
 use crate::fetch::parse_target;
-use crate::ffi::tls::Settings;
+use crate::tls::Settings;
 use crate::transfer::Handler;
 
 const TYPE_A: u16 = 1;

@@ -61,7 +61,6 @@ BuildRequires:  cargo >= 1.99
 BuildRequires:  rust >= 1.99
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(epoxy)
-BuildRequires:  pkgconfig(libssl)
 BuildRequires:  pkgconfig(libcrypto)
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(libbrotlidec)

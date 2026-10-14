@@ -5,9 +5,9 @@
 use std::time::Duration;
 
 use crate::client::{Outcome, Request, perform};
-use crate::ffi::tls::Settings;
 use crate::h1;
 use crate::proxy::Proxy;
+use crate::tls::Settings;
 use crate::transfer::Handler;
 
 pub struct Target {

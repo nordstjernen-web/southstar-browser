@@ -586,8 +586,8 @@ Exit: both backends fetch byte-identically, as they do today.
 Done (October 2026) by a different route (D7): `net.c` and its siblings were
 translated into `rust/net`, then libcurl and libnghttp2 were replaced
 outright by `rust/http`, an HTTP/1.1, HTTP/2, FTP and proxy client written in
-Rust on threads, with TLS through OpenSSL's libssl. There is one backend, and
-HTTP/3 was dropped.
+Rust on threads, with TLS through OpenSSL's libssl, since replaced by rustls.
+There is one backend, and HTTP/3 was dropped.
 
 ### Phase 6 — Engine core: DOM, style, layout, paint
 
@@ -1165,7 +1165,7 @@ the existing ones, not a test suite.
 | ns-pango | hand-written FFI over the renamed API | `rustybuzz` + `swash` (a text-stack redesign) |
 | libcurl | replaced by `rust/http` (done) | — |
 | libnghttp2, ngtcp2, nghttp3, gnutls | replaced by `rust/http`'s own HTTP/2; HTTP/3 dropped (D7, done) | — |
-| OpenSSL (TLS, WebCrypto) | hand-written FFI (`rust/http`, `rust/webcrypto`) | — |
+| OpenSSL (TLS, WebCrypto) | hand-written FFI (`rust/webcrypto`) | TLS replaced by rustls over ring (done); WebCrypto stays on libcrypto |
 | the vendored HTML/URL library | — | replaced by `rust/url` and `rust/html5` (done) |
 | QuickJS-ng fork | own `quickjs-sys`, behind `js-engine` | Boa (`boa_engine`) or Nova (`nova_vm`) as the backend (D12) |
 | Wuffs (done), libwebp | `png`, `gif`, `zune-jpeg` (in use), `image-webp` | — |

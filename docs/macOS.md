@@ -287,9 +287,8 @@ Updates ship only through the store — no self-update.
 
 ## Platform notes
 
-- **CA bundle.** The in-tree HTTP client verifies TLS through OpenSSL, which
-  has no built-in trust store and — unlike the deprecated SecureTransport
-  backend — no bridge to the macOS Keychain. For a *developer* build
+- **CA bundle.** The in-tree HTTP client verifies TLS with rustls against a
+  PEM CA bundle; it has no bridge to the macOS Keychain. For a *developer* build
   Southstar probes the standard Homebrew and system paths at startup
   (`/opt/homebrew/etc/ca-certificates/cert.pem`,
   `/usr/local/etc/ca-certificates/cert.pem`, `/etc/ssl/cert.pem`,
@@ -377,30 +376,26 @@ when CI runs or someone builds the `.dmg`. The platform differs in ways that a
 Linux/Windows change can silently break, so this section collects the failure
 modes that have actually bitten the macOS build and how to stay ahead of them.
 
-### TLS goes through Homebrew's OpenSSL
+### WebCrypto goes through Homebrew's OpenSSL
 
-The HTTP client (`rust/http`) links OpenSSL's `libssl`/`libcrypto`. The macOS
+TLS is rustls, compiled into the binary, so it behaves the same on every Mac.
+`crypto.subtle` (`rust/webcrypto`) still links OpenSSL's `libcrypto`. The macOS
 SDK ships no OpenSSL headers or `.pc` files, so `pkg-config` has to find
 Homebrew's `openssl@3`. `scripts/pack-macos.sh` and
 `.github/workflows/macos.yml` put its `pkgconfig` directory first on
-`PKG_CONFIG_PATH`; do the same if `meson setup` cannot find `libssl`:
+`PKG_CONFIG_PATH`; do the same if `meson setup` cannot find `libcrypto`:
 
 ```sh
 PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" \
     meson setup builddir
-otool -L builddir/src/gtk/southstar | grep -E 'ssl|crypto'   # expect .../opt/openssl@3/...
+otool -L builddir/src/gtk/southstar | grep crypto   # expect .../opt/openssl@3/...
 ```
 
-**The wider lesson — any TLS option must degrade on the oldest OpenSSL a Mac
-might link.** Group (curve) lists and cipher lists are rejected **wholesale**
-if the library doesn't recognise *one* entry. A post-quantum group
-(`X25519MLKEM768`) hard-pinned in the TLS setup once broke **every HTTPS
-connection** on a Mac with an older TLS library — it failed the whole list, not
-just that group. `rust/net` now reads the OpenSSL version at startup and only
-requests the post-quantum group when the library supports it
-(`ns_net_ec_curves`). When you touch TLS setup in `rust/http` or `rust/net`,
-assume the runtime OpenSSL may be older than your Linux box, and gate
-accordingly.
+A post-quantum group (`X25519MLKEM768`) hard-pinned in the OpenSSL TLS setup
+once broke **every HTTPS connection** on a Mac with an older OpenSSL, which
+rejected the whole group list over one unknown entry. With rustls the group
+list (`ns_net_ec_curves`) is matched against the groups compiled in, and
+unknown names are skipped rather than fatal.
 
 ### Test the *bundled* binary, not just the build-tree one
 
@@ -409,7 +404,7 @@ CI's macOS smoke test runs `--headless --dump=text about:start` on the
 (no HTTPS is fetched) nor anything **bundle-specific**. Two whole classes of bug
 sail past it:
 
-- HTTPS regressions (the curve bug above) — `about:start` never hits the
+- HTTPS regressions (like the curve bug above) — `about:start` never hits the
   network.
 - Bundle-only failures — the build-tree binary uses Homebrew rpaths and runs
   fine, while the relocated `.app` does not.

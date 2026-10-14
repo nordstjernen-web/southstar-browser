@@ -87,7 +87,7 @@ jobs:
           meson --version
           ninja --version
           pkg-config --modversion gtk4
-          pkg-config --modversion libssl
+          pkg-config --modversion libcrypto
 
       - name: Cache LGPL FFmpeg
         id: ffcache

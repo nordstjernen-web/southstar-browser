@@ -153,7 +153,10 @@ Southstar is an independent engine — no upstream browser code.
 **Vendored in-tree**, built from the main tree with no submodules:
 [Boa](https://github.com/boa-dev/boa)
 (fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
-(memory-safe image decoding), [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
+(memory-safe image decoding), [rustls](https://github.com/rustls/rustls) with
+[ring](https://github.com/briansmith/ring) and RustCrypto's
+[ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
+[pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
 (MP3, ported to Rust). The only setup-time download is
 [ns-pango](https://github.com/nordstjernen-web/ns-pango), the text-shaping
@@ -166,7 +169,7 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 | GTK 4 | **≥ 4.22.1 on Windows** (MSYS2 stock), ≥ 4.14 elsewhere (≥ 4.22 preferred) | UI toolkit, GSK renderer |
 | GLib / GModule, Pango | (ship with GTK) | core types, dynamic module loading, text shaping |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
-| OpenSSL (libssl, libcrypto) | — | TLS for the HTTP client, WebCrypto (`crypto.subtle`) |
+| OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
 | zlib | — | gzip/deflate content decoding |
 | uchardet | — | charset detection |
 | libpsl | — | public-suffix list for cookie scoping |

@@ -304,17 +304,21 @@ Servo's `url` and `idna` crates stay out (D1).
 ### HTTP client: `rust/http`
 
 All networking goes through `rust/http` (`southstar-http`), an HTTP client
-written from scratch in Rust with no crates.io dependency; libcurl and
-libnghttp2 are not used. It speaks HTTP/1.1 and HTTP/2 with its own framing,
+written from scratch in Rust; libcurl and libnghttp2 are not used, and its
+only crates.io dependencies are the TLS stack below. It speaks HTTP/1.1 and HTTP/2 with its own framing,
 flow control and HPACK (the static table and Huffman code are generated from
 RFC 7541); those wire formats — HTTP/1.1 heads and chunked bodies, HTTP/2
 frames, HPACK and the sans-I/O `h2::Connection` — live in `rust/http-wire`,
 which forbids unsafe code and does no I/O. `rust/http` adds FTP (`ftp.rs`), HTTP CONNECT and SOCKS4/4a/5/5h proxies with
 no-proxy matching (`proxy.rs`), redirect-following fetches for callers outside
 the page fetch path (`fetch.rs`) and the HTTP/1.1 upgrade WebSocket uses.
-TLS is OpenSSL's libssl behind `rust/http/src/ffi/tls.rs` (ALPN, per-host
-session resumption, the insecure-certificate override, the Windows root store
-when no CA bundle is found); gzip/deflate go through zlib and br/zstd through
+TLS is [rustls](https://github.com/rustls/rustls) over ring in
+`rust/http/src/tls.rs` (TLS 1.3 and 1.2, ALPN, session resumption, the
+insecure-certificate override, the CA bundle or else the Windows root store
+or `SSL_CERT_DIR`), so handshakes and certificate parsing are memory-safe Rust;
+key exchange prefers the hybrid post-quantum X25519MLKEM768, built from
+RustCrypto's `ml-kem` and ring's X25519 in `x25519_mlkem768.rs`. Don't bring
+libssl back. gzip/deflate go through zlib and br/zstd through
 libbrotlidec/libzstd when present (`rust/http/src/ffi/codec.rs`). HTTP/2
 connections are pooled per `scheme://host:port` and **multiplex concurrent
 requests over one connection**: an I/O thread per connection drives the
@@ -370,8 +374,8 @@ WebCrypto SubtleCrypto surface) is implemented in `rust/webcrypto`
 directly over OpenSSL's EVP/`OSSL_PARAM` APIs — hashing, HMAC, AES
 (GCM/CBC/CTR/KW), RSA (PKCS1/PSS/OAEP), ECDSA/ECDH (P-256/384/521),
 Ed25519/X25519, PBKDF2 and HKDF. The `CryptoKey` class and `subtle.*` argument
-marshalling live in `rust/js-crypto`. The same OpenSSL provides `rust/http`'s
-TLS (libssl); `meson` depends on `libcrypto` explicitly.
+marshalling live in `rust/js-crypto`. Only libcrypto is linked: TLS is
+rustls (see "HTTP client" above), not libssl.
 
 System packages required on Debian/Ubuntu:
 

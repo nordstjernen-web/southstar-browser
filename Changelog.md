@@ -203,6 +203,21 @@ Southstar Browser 0.9.11-dev:
   A bundle outside /etc and /usr could not be opened once Landlock was on
   (the renderer inherits the shell's restrictions), so every HTTPS page
   failed with an untrusted-issuer error.
+* TLS is rustls over ring instead of OpenSSL's libssl, so every handshake,
+  record and server certificate the browser receives is parsed and verified
+  by memory-safe Rust. Key exchange still prefers the post-quantum hybrid
+  X25519MLKEM768 -- now on every platform, not only with OpenSSL 3.5 or
+  newer -- built from RustCrypto's ml-kem and ring's X25519 and offered
+  alongside a plain X25519 share, so servers without it need no extra round
+  trip. Certificate errors read "certificate has expired", "certificate is
+  not valid for this host name" or "certificate issuer is unknown or
+  self-signed"; TLS 1.3 and 1.2 sessions resume; ALPN, the insecure override,
+  the CA bundle and the Windows root store work as before, and the trust
+  roots are parsed once when networking starts. TLS 1.2 is limited
+  to ECDHE with AES-GCM or ChaCha20, so a server that offers only CBC or RSA
+  key exchange no longer connects. libssl is no longer linked; libcrypto
+  remains for crypto.subtle. about:diagnostics lists TLS and Web
+  Cryptography separately.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

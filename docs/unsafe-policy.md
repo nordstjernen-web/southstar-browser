@@ -8,7 +8,7 @@ leave safe Rust, and the amount of it may only go down.
 ## Where `unsafe` is allowed
 
 1. **System-library FFI.** Calls into the C libraries the browser links:
-   GLib/GTK/Cairo/Pango, OpenSSL (TLS and WebCrypto), FFmpeg's libav\*,
+   GLib/GTK/Cairo/Pango, OpenSSL's libcrypto (WebCrypto), FFmpeg's libav\*,
    SDL2, zlib/brotli/zstd, libwebp/libavif, SQLite, libseccomp,
    epoxy/OpenGL, wgpu-native, uchardet, libpsl and enchant. The
    declarations and the calls live in the crate's `ffi.rs` or `ffi/`

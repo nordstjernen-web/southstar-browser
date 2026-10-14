@@ -218,13 +218,13 @@ if gtk_feature.allowed()
 endif
 gmodule = dependency('gmodule-2.0')
 libcrypto = dependency('libcrypto')
-libssl = dependency('libssl')
 libm = cc.find_library('m', required: false)
 
-# The HTTP client is rust/http: OpenSSL for TLS, zlib for gzip/deflate, and
-# libbrotlidec and libzstd for br and zstd when they are present. On Windows
-# crypt32 lets it trust the system root store when there is no CA bundle.
-http_backend_deps = [libssl, libcrypto, dependency('zlib')]
+# The HTTP client is rust/http: rustls (built by cargo) for TLS, zlib for
+# gzip/deflate, and libbrotlidec and libzstd for br and zstd when they are
+# present. On Windows crypt32 lets it trust the system root store when there
+# is no CA bundle.
+http_backend_deps = [dependency('zlib')]
 libbrotlidec_http = dependency('libbrotlidec', required: false)
 libzstd_http = dependency('libzstd', required: false)
 have_http_brotli = libbrotlidec_http.found()

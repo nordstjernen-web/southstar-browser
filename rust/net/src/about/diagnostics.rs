@@ -117,7 +117,8 @@ pub fn html() -> Vec<u8> {
     if cfg!(feature = "libav") {
         kv(&mut s, "Video (FFmpeg libav*)", v.libav.as_deref());
     }
-    kv(&mut s, "TLS / crypto", v.openssl.as_deref());
+    kv(&mut s, "TLS", Some(southstar_http::tls_description()));
+    kv(&mut s, "Web Cryptography", v.openssl.as_deref());
     kv(&mut s, "Networking", Some(&v.networking));
 
     let rust = sys::rust_info();
