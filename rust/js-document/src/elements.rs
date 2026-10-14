@@ -265,7 +265,7 @@ pub fn get_scripts(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     let Some(doc) = document_for(scope, this) else {
         return Ok(scope.new_array());
     };
-    let scripts = if doc.tag_table().is_some() {
+    let scripts = if southstar_dom::index::has_tag_index(doc) {
         southstar_dom::index::tag_lookup(doc, c"script", |list| {
             (0..list.len()).map(|i| list.get(i)).collect()
         })

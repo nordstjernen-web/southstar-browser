@@ -318,15 +318,11 @@ pub(crate) fn remove_node(node: Element) {
 }
 
 pub(crate) fn new_element(name: &[u8]) -> Element {
-    southstar_dom::node::new_element(glib::strdup(name))
+    southstar_dom::node::new_element(name)
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
-    southstar_dom::node::new_text(
-        southstar_dom::node::KIND_TEXT,
-        glib::strdup(text),
-        text.len() as u32,
-    )
+    southstar_dom::node::new_text(southstar_dom::Kind::Text, text)
 }
 
 pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {

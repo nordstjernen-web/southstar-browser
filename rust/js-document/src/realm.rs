@@ -483,7 +483,6 @@ fn replace_children(js: Js, doc: Element, markup: &[u8]) {
     let mut child = parsed.first_child();
     while let Some(c) = child {
         child = c.next_sibling();
-        southstar_dom::node::own_strings_deep(c);
         ffi::remove_node(c);
         ffi::append_child(doc, c);
         ffi::index_child_change(js, doc, c);

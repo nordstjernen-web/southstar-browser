@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::node::{self, KIND_DOCTYPE, KIND_DOCUMENT, KIND_TEXT};
-use southstar_dom::{FLAG_SCRIPTING_DISABLED, Node};
-use southstar_glib as glib;
+use southstar_dom::node;
+use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::adopt::{adopt_owner_walk, doctype_arg, tag_owner_document};
@@ -51,7 +50,7 @@ pub fn of_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
 }
 
 fn element(name: &[u8]) -> Element {
-    node::new_element(glib::strdup(name))
+    node::new_element(name)
 }
 
 pub fn create_html_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
@@ -62,12 +61,12 @@ pub fn create_html_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]
         Some(title) => Some(c_text(scope, title)?),
         None => None,
     };
-    let doc = Node::alloc(KIND_DOCUMENT);
+    let doc = Node::alloc(Kind::Document);
     doc.add_flags(FLAG_SCRIPTING_DISABLED);
     let doctype = element(b"html");
     ffi::set_attr(doctype, c"publicId", b"");
     ffi::set_attr(doctype, c"systemId", b"");
-    doctype.set_kind(KIND_DOCTYPE);
+    doctype.set_kind(Kind::Doctype);
     let html = element(b"html");
     let head = element(b"head");
     let body = element(b"body");
@@ -76,11 +75,7 @@ pub fn create_html_document(scope: &mut Scope<'_>, _this: &Value, args: &[Value]
     html.append(head);
     if let Some(title) = title {
         let title_el = element(b"title");
-        title_el.append(node::new_text(
-            KIND_TEXT,
-            glib::strdup(&title),
-            title.len() as u32,
-        ));
+        title_el.append(node::new_text(Kind::Text, &title));
         head.append(title_el);
     }
     html.append(body);
@@ -121,7 +116,7 @@ pub fn create_document_type(scope: &mut Scope<'_>, this: &Value, args: &[Value])
     let doctype = element(&name);
     ffi::set_attr(doctype, c"publicId", &public_id);
     ffi::set_attr(doctype, c"systemId", &system_id);
-    doctype.set_kind(KIND_DOCTYPE);
+    doctype.set_kind(Kind::Doctype);
     ffi::track_orphan(Some(js), doctype);
     let wrapper = ffi::wrap(scope, doctype);
     let owner = scope.get(this, "__ndDocument")?;

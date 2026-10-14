@@ -91,7 +91,7 @@ pub(crate) fn child_frame<'a>(doc: Node<'a>, index: u32, name: Option<&CStr>) ->
     if name.is_some_and(CStr::is_empty) {
         return None;
     }
-    if doc.tag_table().is_some() && index::find_first_element(doc, c"frame").is_none() {
+    if index::has_tag_index(doc) && index::find_first_element(doc, c"frame").is_none() {
         return indexed_iframe(doc, index, name);
     }
     let mut index = index;

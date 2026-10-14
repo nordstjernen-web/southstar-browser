@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use southstar_dom::{NsAttr, NsNode};
+use southstar_dom::{AttrView, NsNode};
 use southstar_js_engine::{Scope, Value};
 
 unsafe extern "Rust" {
@@ -14,10 +14,10 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-    pub(crate) unsafe fn nsr_attr_to_js(
+    pub(crate) safe fn nsr_attr_to_js(
         scope: &mut Scope<'_>,
         owner: &Value,
-        attr: *const NsAttr,
+        attr: AttrView<'_>,
         include_base: bool,
     ) -> Result<Value, Value>;
     pub(crate) unsafe fn nsr_make_realm_document(

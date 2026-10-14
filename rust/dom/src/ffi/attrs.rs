@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of attribute lookup, setting, removal, bloom bits and class tokens.
+//! Southstar — the C ABI of attribute lookup, setting and removal.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,16 +7,16 @@ use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::memory::return_if_fail;
-use super::{Attr, Node, NsNode, c_str};
+use super::{c_str, node};
+use crate::NsNode;
 use crate::attrs::{self, NsName};
-use crate::node::KIND_ELEMENT;
+use crate::{Attr, Node};
 
-unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
-
-fn element<'a>(n: *const NsNode) -> Option<Node<'a>> {
+/// # Safety
+///
+/// `n` is null or a node pointer this thread's store handed out.
+unsafe fn element<'a>(n: *const NsNode) -> Option<Node<'a>> {
+    // SAFETY: guaranteed by the caller.
     unsafe { node(n) }.filter(|n| n.is_element())
 }
 
@@ -32,22 +32,18 @@ pub unsafe extern "C" fn ns_element_set_attr_len(
     value: *const c_char,
     len: isize,
 ) {
-    let function = c"ns_element_set_attr_len";
-    let Some(el) = (unsafe { node(el) }) else {
-        return return_if_fail(function, c"el != NULL");
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    let (Some(el), Some(name)) = (unsafe { element(el) }, c_str(name)) else {
+        return;
     };
-    if el.kind_raw() != KIND_ELEMENT {
-        return return_if_fail(function, c"el->kind == NS_NODE_ELEMENT");
-    }
-    let Some(name) = c_str(name) else {
-        return return_if_fail(function, c"name != NULL");
+    let value = match usize::try_from(len) {
+        Ok(len) if !value.is_null() => {
+            // SAFETY: the C callers pass a value of at least `len` bytes.
+            Some(unsafe { glib::slice(value.cast(), len) })
+        }
+        _ => c_str(value).map(|v| v.to_bytes()),
     };
-    let len = match usize::try_from(len) {
-        Ok(len) => len,
-        Err(_) => c_str(value).map_or(0, |v| v.to_bytes().len()),
-    };
-    let value = (!value.is_null()).then(|| unsafe { glib::slice(value.cast(), len) });
-    attrs::set_len(el, name, value, len);
+    attrs::set_attribute(el, name, Some(value.unwrap_or_default()));
 }
 
 #[unsafe(no_mangle)]
@@ -56,7 +52,14 @@ pub unsafe extern "C" fn ns_element_set_attr(
     name: *const c_char,
     value: *const c_char,
 ) {
-    unsafe { ns_element_set_attr_len(el, name, value, -1) };
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    if let (Some(el), Some(name)) = (unsafe { element(el) }, c_str(name)) {
+        attrs::set_attribute(
+            el,
+            name,
+            Some(c_str(value).map_or(&[][..], |v| v.to_bytes())),
+        );
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -68,15 +71,9 @@ pub unsafe extern "C" fn ns_element_set_attr_ns(
     name: *const c_char,
     value: *const c_char,
 ) {
-    let function = c"ns_element_set_attr_ns";
-    let Some(el) = (unsafe { node(el) }) else {
-        return return_if_fail(function, c"el != NULL");
-    };
-    if el.kind_raw() != KIND_ELEMENT {
-        return return_if_fail(function, c"el->kind == NS_NODE_ELEMENT");
-    }
-    let Some(local_name) = c_str(local_name) else {
-        return return_if_fail(function, c"local_name != NULL");
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    let (Some(el), Some(local_name)) = (unsafe { element(el) }, c_str(local_name)) else {
+        return;
     };
     let qname = NsName {
         namespace_uri: c_str(namespace_uri),
@@ -93,19 +90,9 @@ pub unsafe extern "C" fn ns_element_remove_attr_ns(
     namespace_uri: *const c_char,
     local_name: *const c_char,
 ) {
-    if let (Some(el), Some(local_name)) = (element(el), c_str(local_name)) {
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    if let (Some(el), Some(local_name)) = (unsafe { element(el) }, c_str(local_name)) {
         attrs::remove_ns(el, c_str(namespace_uri), local_name);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_append_attr_borrow(
-    el: *mut NsNode,
-    name: *const c_char,
-    value: *const c_char,
-) {
-    if let (Some(el), Some(name)) = (element(el), c_str(name)) {
-        attrs::append_borrowed(el, name, c_str(value));
     }
 }
 
@@ -114,6 +101,7 @@ pub unsafe extern "C" fn ns_element_get_attr(
     el: *const NsNode,
     name: *const c_char,
 ) -> *const c_char {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     let (Some(el), Some(name)) = (unsafe { node(el) }, c_str(name)) else {
         return ptr::null();
     };
@@ -126,11 +114,13 @@ pub unsafe extern "C" fn ns_element_get_attr_len(
     name: *const c_char,
     out_len: *mut usize,
 ) -> *const c_char {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     let found = match (unsafe { node(el) }, c_str(name)) {
         (Some(el), Some(name)) => attrs::find(el, name),
         _ => None,
     };
     if !out_len.is_null() {
+        // SAFETY: the C callers pass null or a writable length.
         unsafe { *out_len = found.map_or(0, |a| a.value_len() as usize) };
     }
     found.map_or(ptr::null(), Attr::value_ptr)

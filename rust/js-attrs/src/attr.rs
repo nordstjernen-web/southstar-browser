@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Attr, FLAG_FOREIGN_NS, FLAG_SVG_NS, attrs};
+use southstar_dom::{Attr, AttrView, FLAG_FOREIGN_NS, FLAG_SVG_NS, attrs};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Js, QualifiedName, Shared};
@@ -280,14 +280,14 @@ fn define_tree_fields(scope: &mut Scope<'_>, entry: &Value, value: &[u8]) -> JsR
 pub(crate) fn to_js(
     scope: &mut Scope<'_>,
     owner: &Value,
-    attr: Attr<'_>,
+    attr: AttrView<'_>,
     include_base: bool,
 ) -> JsResult {
-    let local = attrs::local_name(attr);
+    let local = attr.local_name.unwrap_or(attr.name);
     let owner_node = ffi::unwrap_node(owner);
     let js = ffi::js_of(scope);
     if let Some(owner_node) = owner_node
-        && let Some(cached) = find(js, owner_node, attr.namespace_uri(), local)
+        && let Some(cached) = find(js, owner_node, attr.namespace_uri, local)
         && let Some(pinned) = cached.borrow().pinned.clone()
     {
         return Ok(pinned);
@@ -295,11 +295,11 @@ pub(crate) fn to_js(
     let shared: Shared = Rc::new(RefCell::new(AttrState {
         js,
         owner: None,
-        namespace_uri: attr.namespace_uri().map(CStr::to_owned),
-        prefix: attr.prefix().map(CStr::to_owned),
+        namespace_uri: attr.namespace_uri.map(CStr::to_owned),
+        prefix: attr.prefix.map(CStr::to_owned),
         local_name: local.to_owned(),
-        name: attr.name().unwrap_or(c"").to_owned(),
-        value: attr.value().unwrap_or(c"").to_owned(),
+        name: attr.name.to_owned(),
+        value: attr.value.to_owned(),
         pinned: None,
     }));
     let entry = ffi::new_attr_object(scope, shared.clone())?;
@@ -333,7 +333,7 @@ pub fn get_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
         .attrs()
         .find(|a| a.name().is_some_and(|name| name.to_bytes() == lowered));
     match found {
-        Some(found) if not_internal(&found) => to_js(scope, this, found, true),
+        Some(found) if not_internal(&found) => to_js(scope, this, found.view(), true),
         _ => Ok(Value::null()),
     }
 }
@@ -345,7 +345,7 @@ pub fn get_attribute_node_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     let namespace_uri = optional_string_arg(scope, &args[0])?.filter(|ns| !ns.is_empty());
     let local = string_arg(scope, &args[1])?;
     match page_attr(node, namespace_uri.as_deref(), &local) {
-        Some(found) => to_js(scope, this, found, true),
+        Some(found) => to_js(scope, this, found.view(), true),
         None => Ok(Value::null()),
     }
 }
@@ -409,7 +409,7 @@ pub fn set_attribute_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     }
     let mut old = Value::null();
     if let Some(previous) = previous {
-        old = to_js(scope, this, previous, true)?;
+        old = to_js(scope, this, previous.view(), true)?;
         if let Some(previous_state) = ffi::state_of(&old) {
             detach(&previous_state);
         }

@@ -143,7 +143,6 @@ pub(crate) fn flush(js: Js) {
     let mut child = fragment.first_child();
     while let Some(c) = child {
         child = c.next_sibling();
-        southstar_dom::node::own_strings_deep(c);
         ffi::remove_node(c);
         match reference.filter(|r| r.parent() == Some(parent)) {
             Some(r) => r.insert_after(c),

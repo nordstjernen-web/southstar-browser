@@ -39,7 +39,7 @@ fn scope_id(owner: Node) -> Vec<u8> {
         .to_string()
         .into_bytes();
     if owner.is_element() {
-        attrs::set_len(owner, HOST_SCOPE_ATTR, Some(&id), id.len());
+        attrs::set_len(owner, HOST_SCOPE_ATTR, Some(&id));
     }
     id
 }

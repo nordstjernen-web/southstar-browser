@@ -188,11 +188,7 @@ pub(crate) fn script_needs_prepare(js: Js, node: Element) {
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
-    southstar_dom::node::new_text(
-        southstar_dom::node::KIND_TEXT,
-        glib::strdup(text),
-        text.len() as u32,
-    )
+    southstar_dom::node::new_text(southstar_dom::Kind::Text, text)
 }
 
 pub(crate) fn mark_mutated(js: Js) {

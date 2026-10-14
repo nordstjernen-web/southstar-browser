@@ -264,6 +264,28 @@ Southstar Browser 0.9.11-dev:
   stops, and serialize as written in the style rule and fully expanded in
   getComputedStyle ("linear(0 0%, 0.25 75%, 1 100%)"). Malformed linear()
   values such as linear(0) or linear(0 calc(50px - 50%)) are now rejected.
+* The DOM's nodes are Rust values instead of C structs. Each thread keeps a
+  store of node slots that are never handed back to the allocator, so the
+  node handle is a plain reference and its tree links are Cells: walking
+  and relinking the tree is safe code. A slot carries a generation, and a
+  WeakNode -- what the stylesheet matcher now keeps for the hover, active,
+  focus and fullscreen elements, and the DOM for the active modal dialog --
+  returns nothing once its node is freed, even after the slot is reused, so
+  nothing has to be told when a node goes away. Names, text, attributes,
+  the id/class/tag indexes and the class tokens are owned by the node (Box,
+  Vec, HashMap) instead of GLib allocations that were either owned or
+  borrowed from a per-document string arena, so a node moved into another
+  document can no longer point into the one it left; the arena,
+  own_strings_deep, the borrowed-string setters and the GLib hash tables are
+  gone. Attributes are slots in a store of their own, so an Attr handle is a
+  plain reference and document.createAttribute no longer builds a fake C
+  attribute struct. The HTML parser's tree sink builds nodes through the
+  Rust API; the ~220 most common element and attribute names and short
+  values and text are stored without an allocation, which keeps parsing
+  within a few percent of the arena it replaces. Freeing a subtree unlinks
+  it from its parent first. docs/dom.md describes the model; rust/dom goes
+  from 212 unsafe blocks to about 100 (none of them undocumented) and from 3
+  FFI imports to none, and html-parser from 16 FFI imports to none.
 
 * Element.setHTML() and the HTML Standard's positional parsing methods —
   appendHTML/prependHTML on elements and shadow roots, beforeHTML/afterHTML/

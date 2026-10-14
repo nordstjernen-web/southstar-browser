@@ -967,7 +967,7 @@ pub(crate) fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
                 .is_some_and(|name| unsafe { ns_attr_name_is_internal(name.as_ptr()) } == 0)
         })
         .map(|a| {
-            unsafe { imports::nsr_attr_to_js(scope, owner, a.as_ptr(), false) }
+            imports::nsr_attr_to_js(scope, owner, a.view(), false)
                 .unwrap_or_else(|_| Value::undefined())
         })
         .collect();

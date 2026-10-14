@@ -357,7 +357,6 @@ struct Built<'a> {
 }
 
 fn attach(iframe: Node<'_>, doc: Node<'_>) {
-    load::own_strings_deep(doc);
     ffi::append_child(iframe, doc);
 }
 

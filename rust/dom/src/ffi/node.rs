@@ -1,57 +1,62 @@
-//! Southstar — the C ABI of node creation, naming, text, ownership, linking, freeing and cloning.
+//! Southstar — the C ABI of node creation, naming, flags, linking, freeing and template contents.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 use core::ptr;
 
-use southstar_glib::GBoolean;
+use southstar_glib::{GBoolean, GStr};
 
-use super::memory::{c_strlen, free_string, return_if_fail};
-use super::{BackingFree, Node, NsNode};
-use crate::node::{self, KIND_COMMENT, KIND_DOCTYPE, KIND_DOCUMENT, KIND_TEXT};
+use super::node;
+use crate::NsNode;
+use crate::{Kind, Node};
 
-unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
+fn taken_bytes(s: *mut c_char) -> Vec<u8> {
+    // SAFETY: the C callers hand over null or a NUL-terminated string from g_malloc, which `GStr` frees.
+    unsafe { GStr::take(s) }.map_or_else(Vec::new, |s| s.to_bytes().to_vec())
+}
+
+fn new_node(kind: Kind, text: Option<&[u8]>) -> *mut NsNode {
+    let node = Node::alloc(kind);
+    if let Some(text) = text {
+        node.set_text(text);
+    }
+    node.as_mut_ptr()
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_node_new_document() -> *mut NsNode {
-    Node::alloc(KIND_DOCUMENT).as_mut_ptr()
+    new_node(Kind::Document, None)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_node_new_element(name: *mut c_char) -> *mut NsNode {
-    node::new_element(name).as_mut_ptr()
+    let element = crate::node::new_element(&taken_bytes(name));
+    element.as_mut_ptr()
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_node_new_text(text: *mut c_char) -> *mut NsNode {
-    node::new_text(KIND_TEXT, text, c_strlen(text)).as_mut_ptr()
+    new_node(Kind::Text, Some(&taken_bytes(text)))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_node_new_comment(text: *mut c_char) -> *mut NsNode {
-    node::new_text(KIND_COMMENT, text, c_strlen(text)).as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_set_name_borrow(n: *mut NsNode, name: *const c_char) {
-    if let Some(n) = unsafe { node(n) } {
-        n.set_name(name.cast_mut(), false);
-    }
+    new_node(Kind::Comment, Some(&taken_bytes(text)))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_set_name_owned(n: *mut NsNode, name: *mut c_char) {
-    match unsafe { node(n) } {
-        Some(n) => n.set_name(name, true),
-        None => free_string(name),
+    let name = taken_bytes(name);
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    if let Some(n) = unsafe { node(n) } {
+        n.set_name(&name);
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_add_flags(n: *mut NsNode, flags: u32) {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     if let Some(n) = unsafe { node(n) } {
         n.add_flags(flags);
     }
@@ -59,55 +64,15 @@ pub unsafe extern "C" fn ns_node_add_flags(n: *mut NsNode, flags: u32) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_mark_doctype(n: *mut NsNode) {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     if let Some(n) = unsafe { node(n) } {
-        n.set_kind(KIND_DOCTYPE);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_set_text_borrow(n: *mut NsNode, text: *const c_char) {
-    if let Some(n) = unsafe { node(n) } {
-        n.set_text(text.cast_mut(), c_strlen(text), false);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_replace_text_len_owned(
-    n: *mut NsNode,
-    text: *mut c_char,
-    len: u32,
-) {
-    match unsafe { node(n) } {
-        Some(n) => n.set_text(text, len, true),
-        None => free_string(text),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_own_strings_deep(n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        node::own_strings_deep(n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_attach_backing(
-    root: *mut NsNode,
-    backing: *mut c_void,
-    destroy: BackingFree,
-) {
-    match unsafe { node(root) } {
-        Some(root) => root.attach_backing(backing, destroy),
-        None => {
-            if let (false, Some(destroy)) = (backing.is_null(), destroy) {
-                unsafe { destroy(backing) };
-            }
-        }
+        n.set_kind(Kind::Doctype);
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_free(n: *mut NsNode) {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     if let Some(n) = unsafe { node(n) } {
         n.free_tree();
     }
@@ -115,17 +80,15 @@ pub unsafe extern "C" fn ns_node_free(n: *mut NsNode) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_append_child(parent: *mut NsNode, child: *mut NsNode) {
-    let Some(parent) = (unsafe { node(parent) }) else {
-        return return_if_fail(c"ns_node_append_child", c"parent != NULL");
-    };
-    let Some(child) = (unsafe { node(child) }) else {
-        return return_if_fail(c"ns_node_append_child", c"child != NULL");
-    };
-    parent.append(child);
+    // SAFETY: the C callers pass null or nodes of this thread's store.
+    if let (Some(parent), Some(child)) = (unsafe { node(parent) }, unsafe { node(child) }) {
+        parent.append(child);
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_remove(child: *mut NsNode) {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     if let Some(child) = unsafe { node(child) } {
         child.detach();
     }
@@ -137,16 +100,19 @@ pub unsafe extern "C" fn ns_node_next_in_subtree(
     root: *const NsNode,
     descend: GBoolean,
 ) -> *mut NsNode {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     let Some(n) = (unsafe { node(n) }) else {
         return ptr::null_mut();
     };
-    crate::index::next_in_subtree(n, unsafe { node(root) }, descend != 0)
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
+    // SAFETY: as above, for the subtree root.
+    let root = unsafe { node(root) };
+    crate::index::next_in_subtree(n, root, descend != 0).map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_template_content_get(tpl: *mut NsNode) -> *mut NsNode {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     unsafe { node(tpl) }.map_or(ptr::null_mut(), |tpl| {
-        node::template_content(tpl).as_mut_ptr()
+        crate::node::template_content(tpl).as_mut_ptr()
     })
 }

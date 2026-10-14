@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use crate::ffi::Node;
+use crate::Node;
 use crate::{MAX_DEPTH, children};
 
 fn text_skipping_scripts(node: Node, out: &mut Vec<u8>, depth: i32) {

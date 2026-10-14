@@ -4,14 +4,12 @@
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::{Node, NsNode};
+use super::node;
+use crate::NsNode;
 use crate::serialize::{self};
-
-unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     glib::boolean(unsafe { node(n) }.is_some_and(serialize::is_embedded_doc))
 }

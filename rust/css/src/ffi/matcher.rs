@@ -2,29 +2,40 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_void};
-use core::ptr;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::thread::LocalKey;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, WeakNode};
 use southstar_glib::{self as glib, GBoolean};
 
 use super::selector_view::SelectorRef;
 use crate::matcher;
 
-static MATCH_SCOPE: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-static FOCUS: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-static FOCUS_VISIBLE: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-static HOVER: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-static ACTIVE: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-static FULLSCREEN: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
-
-fn load<'a>(slot: &AtomicPtr<NsNode>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(slot.load(Ordering::Relaxed)) }
+thread_local! {
+    static MATCH_SCOPE: Cell<Option<WeakNode>> = const { Cell::new(None) };
+    static FOCUS: Cell<Option<WeakNode>> = const { Cell::new(None) };
+    static FOCUS_VISIBLE: Cell<Option<WeakNode>> = const { Cell::new(None) };
+    static HOVER: Cell<Option<WeakNode>> = const { Cell::new(None) };
+    static ACTIVE: Cell<Option<WeakNode>> = const { Cell::new(None) };
+    static FULLSCREEN: Cell<Option<WeakNode>> = const { Cell::new(None) };
 }
 
-fn swap(slot: &AtomicPtr<NsNode>, node: *const NsNode) -> *const NsNode {
-    slot.swap(node.cast_mut(), Ordering::Relaxed)
+type Slot = LocalKey<Cell<Option<WeakNode>>>;
+
+fn load<'a>(slot: &'static Slot) -> Option<Node<'a>> {
+    slot.get().and_then(WeakNode::get)
+}
+
+fn store(slot: &'static Slot, node: Option<Node<'_>>) -> *const NsNode {
+    let previous = load(slot);
+    slot.set(node.map(Node::downgrade));
+    Node::ptr_or_null(previous)
+}
+
+fn node_at<'a>(node: *const NsNode) -> Option<Node<'a>> {
+    // SAFETY: the C callers pass null or a node of this thread's store.
+    unsafe { Node::from_ptr(node) }
 }
 
 pub(crate) fn match_scope<'a>() -> Option<Node<'a>> {
@@ -32,7 +43,7 @@ pub(crate) fn match_scope<'a>() -> Option<Node<'a>> {
 }
 
 pub(crate) fn set_match_scope(scope: Option<Node<'_>>) {
-    MATCH_SCOPE.store(Node::ptr_or_null(scope).cast_mut(), Ordering::Relaxed);
+    store(&MATCH_SCOPE, scope);
 }
 
 pub(crate) fn focus_node<'a>() -> Option<Node<'a>> {
@@ -57,64 +68,52 @@ pub(crate) fn fullscreen_node<'a>() -> Option<Node<'a>> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_match_scope(scope: *const NsNode) -> *const NsNode {
-    swap(&MATCH_SCOPE, scope)
+    store(&MATCH_SCOPE, node_at(scope))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_focus_node(node: *const NsNode) -> *const NsNode {
-    swap(&FOCUS, node)
+    store(&FOCUS, node_at(node))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_focus_visible_node(node: *const NsNode) {
-    swap(&FOCUS_VISIBLE, node);
+    store(&FOCUS_VISIBLE, node_at(node));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_hover_node(node: *const NsNode) -> *const NsNode {
-    swap(&HOVER, node)
+    store(&HOVER, node_at(node))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode {
-    swap(&ACTIVE, node)
+    store(&ACTIVE, node_at(node))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_fullscreen_node(node: *const NsNode) -> *const NsNode {
-    swap(&FULLSCREEN, node)
+    store(&FULLSCREEN, node_at(node))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_focus_node() -> *const NsNode {
-    FOCUS.load(Ordering::Relaxed)
+    Node::ptr_or_null(focus_node())
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_hover_node() -> *const NsNode {
-    HOVER.load(Ordering::Relaxed)
+    Node::ptr_or_null(hover_node())
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_active_node() -> *const NsNode {
-    ACTIVE.load(Ordering::Relaxed)
+    Node::ptr_or_null(active_node())
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_fullscreen_node() -> *const NsNode {
-    FULLSCREEN.load(Ordering::Relaxed)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_forget_node(node: *const NsNode) {
-    for slot in [&FOCUS, &FOCUS_VISIBLE, &HOVER, &ACTIVE, &FULLSCREEN] {
-        let _ = slot.compare_exchange(
-            node.cast_mut(),
-            ptr::null_mut(),
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        );
-    }
+    Node::ptr_or_null(fullscreen_node())
 }
 
 #[unsafe(no_mangle)]

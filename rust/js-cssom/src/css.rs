@@ -303,7 +303,7 @@ fn adopt_css(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Val
     if css.is_empty() {
         attrs::remove(root, c"data-nd-adopted-css");
     } else {
-        attrs::set_len(root, c"data-nd-adopted-css", Some(&css), css.len());
+        attrs::set_len(root, c"data-nd-adopted-css", Some(&css));
     }
     ffi::mark_mutated(ffi::js_of(scope));
     Ok(Value::undefined())

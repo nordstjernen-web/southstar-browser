@@ -471,7 +471,7 @@ pub fn set_src_object(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
     let js = ffi::js_of(scope);
     if let Some(element) = ffi::element(this) {
         let marker: &[u8] = if camera { b"camera" } else { b"" };
-        southstar_dom::attrs::set_len(element, MEDIA_STREAM_ATTR, Some(marker), marker.len());
+        southstar_dom::attrs::set_len(element, MEDIA_STREAM_ATTR, Some(marker));
         ffi::mark_mutated(js);
         if camera && !js.is_null() {
             ffi::dispatch(js, element, "loadedmetadata");

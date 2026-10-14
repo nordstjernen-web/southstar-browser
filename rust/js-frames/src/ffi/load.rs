@@ -125,7 +125,6 @@ unsafe extern "C" {
     fn ns_xml_parse(input: *const c_char, len: isize) -> *mut NsNode;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
     fn ns_node_new_text(text: *mut c_char) -> *mut NsNode;
-    fn ns_node_own_strings_deep(node: *mut NsNode);
     fn ns_node_free(node: *mut NsNode);
     fn ns_node_remove(node: *mut NsNode);
     fn ns_net_referer_for(
@@ -467,10 +466,6 @@ pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
 pub(crate) fn new_text(text: &CStr) -> Node<'static> {
     let text = unsafe { glib::g_strdup(text.as_ptr()) };
     unsafe { Node::from_ptr(ns_node_new_text(text)) }.expect("text node allocation")
-}
-
-pub(crate) fn own_strings_deep(node: Node<'_>) {
-    unsafe { ns_node_own_strings_deep(node.as_mut_ptr()) };
 }
 
 pub(crate) fn free_node(node: Node<'_>) {

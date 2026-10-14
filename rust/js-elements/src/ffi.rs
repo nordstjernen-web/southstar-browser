@@ -214,7 +214,7 @@ pub(crate) fn form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsR
 }
 
 pub(crate) fn replace_text(node: Element, text: &[u8]) {
-    node.set_text(glib::strdup(text), text.len() as u32, true);
+    node.set_text(text);
 }
 
 pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {

@@ -226,7 +226,7 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     }
     let obj = unsafe { scope.new_raw_instance(&ELEMENT_CLASS, None, n.as_mut_ptr().cast()) }?;
     n.set_js_wrapper(obj.object_identity());
-    n.set_js_invalidate(Some(ns_invalidate_wrapper));
+    n.set_js_invalidate(Some(invalidate_wrapper));
     let proto = kind_proto(scope, js, n);
     if proto.is_object() {
         let _ = scope.set_prototype(&obj, &proto);
@@ -257,11 +257,8 @@ pub(crate) fn make_element(scope: &mut Scope<'_>, cnode: *const NsNode) -> Resul
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_invalidate_wrapper(n: *mut NsNode) {
-    let Some(target) = node(n) else {
-        return;
-    };
+fn invalidate_wrapper(target: Node<'static>) {
+    let n = target.as_mut_ptr();
     let js = super::record::ns_active_js();
     unsafe {
         ns_mut_scrub_node(js, n);
@@ -305,7 +302,7 @@ pub unsafe extern "C" fn ns_node_arm_js_invalidate(n: *mut NsNode) {
     if let Some(target) = node(n)
         && target.js_invalidate().is_none()
     {
-        target.set_js_invalidate(Some(ns_invalidate_wrapper));
+        target.set_js_invalidate(Some(invalidate_wrapper));
     }
 }
 

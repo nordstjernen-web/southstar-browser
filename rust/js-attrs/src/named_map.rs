@@ -67,7 +67,7 @@ pub fn get_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
         return Ok(Value::null());
     };
     let owner = ffi::wrap_node(scope, node);
-    attr::to_js(scope, &owner, found, true)
+    attr::to_js(scope, &owner, found.view(), true)
 }
 
 pub fn set_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
@@ -101,7 +101,7 @@ pub fn remove_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
         ));
     };
     let owner = ffi::wrap_node(scope, node);
-    let removed = attr::to_js(scope, &owner, found, false)?;
+    let removed = attr::to_js(scope, &owner, found.view(), false)?;
     ffi::remove_attr(ffi::js_of(scope), node, &name);
     Ok(removed)
 }
@@ -123,7 +123,7 @@ pub fn remove_named_item_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value])
         ));
     };
     let owner = ffi::wrap_node(scope, node);
-    let removed = attr::to_js(scope, &owner, found, false)?;
+    let removed = attr::to_js(scope, &owner, found.view(), false)?;
     ffi::remove_attr_ns(ffi::js_of(scope), node, namespace_uri.as_deref(), &local);
     Ok(removed)
 }

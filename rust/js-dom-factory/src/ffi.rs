@@ -4,11 +4,11 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsAttr, NsNode};
+use southstar_dom::{AttrView, Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -22,17 +22,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 #[repr(C)]
-struct RawAttr {
-    name: *const c_char,
-    value: *const c_char,
-    namespace_uri: *const c_char,
-    prefix: *const c_char,
-    local_name: *const c_char,
-    next: *mut RawAttr,
-    value_len: c_uint,
-    flags: u8,
-}
-
 pub(crate) enum TargetMethod {
     AddEventListener,
     RemoveEventListener,
@@ -201,18 +190,14 @@ pub(crate) fn attr_object(scope: &mut Scope<'_>, qname: AttrName<'_>) -> JsResul
     let local = cstring(qname.local_name);
     let namespace_uri = qname.namespace_uri.map(cstring);
     let prefix = qname.prefix.map(cstring);
-    let attr = RawAttr {
-        name: name.as_ptr(),
-        value: c"".as_ptr(),
-        namespace_uri: namespace_uri.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-        prefix: prefix.as_ref().map_or(ptr::null(), |s| s.as_ptr()),
-        local_name: local.as_ptr(),
-        next: ptr::null_mut(),
-        value_len: 0,
-        flags: 0,
+    let attr = AttrView {
+        name: &name,
+        value: c"",
+        namespace_uri: namespace_uri.as_deref(),
+        prefix: prefix.as_deref(),
+        local_name: Some(&local),
     };
-    let attr: *const RawAttr = &attr;
-    unsafe { imports::nsr_attr_to_js(scope, &Value::null(), attr.cast::<NsAttr>(), true) }
+    imports::nsr_attr_to_js(scope, &Value::null(), attr, true)
 }
 
 pub(crate) struct RealmDocument<'a> {

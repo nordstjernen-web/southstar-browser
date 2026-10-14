@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::node::{self, KIND_COMMENT, KIND_DOCUMENT, KIND_TEXT};
-use southstar_dom::{FLAG_FOREIGN_NS, FLAG_PI, FLAG_SVG_NS, Node};
-use southstar_glib as glib;
+use southstar_dom::node;
+use southstar_dom::{FLAG_FOREIGN_NS, FLAG_PI, FLAG_SVG_NS, Kind, Node};
 use southstar_js_engine::{Scope, Value};
 
 use crate::adopt::{doc_is_xhtml, doc_is_xml, tag_owner_document};
@@ -23,8 +22,8 @@ fn finish(scope: &mut Scope<'_>, this: &Value, node: Element) -> Value {
     wrapper
 }
 
-pub(crate) fn text_node(kind: core::ffi::c_uint, text: &[u8]) -> Element {
-    node::new_text(kind, glib::strdup(text), text.len() as u32)
+pub(crate) fn text_node(kind: Kind, text: &[u8]) -> Element {
+    node::new_text(kind, text)
 }
 
 fn require(scope: &mut Scope<'_>, args: &[Value], count: usize, message: &str) -> JsResult<()> {
@@ -53,7 +52,7 @@ pub fn create_element(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
     } else {
         name.to_ascii_lowercase()
     };
-    let el = node::new_element(glib::strdup(&stored));
+    let el = node::new_element(&stored);
     el.add_flags(FLAG_NOT_PARSER_INSERTED);
     if is_xml {
         el.add_flags(FLAG_KEEP_CASE);
@@ -80,7 +79,7 @@ pub fn create_text_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
         return Ok(Value::null());
     }
     let text = c_text(scope, &args[0])?;
-    let node = text_node(KIND_TEXT, &text);
+    let node = text_node(Kind::Text, &text);
     Ok(finish(scope, this, node))
 }
 
@@ -98,7 +97,7 @@ pub fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let (prefix, local) = split_prefix(&name);
     let is_svg = ns.as_deref() == Some(SVG_NS);
     let is_html = ns.as_deref() == Some(HTML_NS);
-    let el = node::new_element(glib::strdup(if is_html { local } else { &name }));
+    let el = node::new_element(if is_html { local } else { &name });
     el.add_flags(FLAG_NOT_PARSER_INSERTED);
     if is_svg {
         el.add_flags(FLAG_SVG_NS);
@@ -122,7 +121,7 @@ pub fn create_comment(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
         return Ok(Value::null());
     }
     let text = c_text(scope, &args[0])?;
-    let node = text_node(KIND_COMMENT, &text);
+    let node = text_node(Kind::Comment, &text);
     Ok(finish(scope, this, node))
 }
 
@@ -146,7 +145,7 @@ pub fn create_cdata_section(scope: &mut Scope<'_>, this: &Value, args: &[Value])
             names::invalid_character(c"CDATA section data must not contain ']]>'"),
         ));
     }
-    let node = text_node(KIND_TEXT, &data);
+    let node = text_node(Kind::Text, &data);
     node.add_flags(FLAG_CDATA);
     Ok(finish(scope, this, node))
 }
@@ -174,8 +173,8 @@ pub fn create_processing_instruction(
             names::invalid_character(c"processing instruction data must not contain '?>'"),
         ));
     }
-    let node = text_node(KIND_COMMENT, &data);
-    node.adopt_name(glib::strdup(&target));
+    let node = text_node(Kind::Comment, &data);
+    node.set_name(&target);
     node.add_flags(FLAG_PI);
     ffi::track_orphan(ffi::js_of(scope), node);
     let wrapper = ffi::wrap(scope, node);
@@ -310,7 +309,7 @@ pub fn create_document_fragment(scope: &mut Scope<'_>, this: &Value, _args: &[Va
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
-    let fragment = Node::alloc(KIND_DOCUMENT);
+    let fragment = Node::alloc(Kind::Document);
     fragment.add_flags(FLAG_FRAGMENT);
     Ok(finish(scope, this, fragment))
 }

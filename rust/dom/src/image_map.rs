@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use crate::ffi::Node;
+use crate::Node;
 use crate::{MAX_DEPTH, children};
 
 const MAX_COORDS: usize = 64;

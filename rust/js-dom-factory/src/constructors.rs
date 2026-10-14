@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::Node;
-use southstar_dom::node::{self, KIND_COMMENT, KIND_DOCUMENT, KIND_TEXT};
-use southstar_glib as glib;
+use southstar_dom::node;
+use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::factories::text_node;
@@ -20,12 +19,12 @@ pub(crate) fn document_fragment(scope: &mut Scope<'_>, _this: &Value, _args: &[V
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
-    let fragment = Node::alloc(KIND_DOCUMENT);
+    let fragment = Node::alloc(Kind::Document);
     fragment.add_flags(FLAG_FRAGMENT);
     Ok(orphan(scope, fragment))
 }
 
-fn character_data(scope: &mut Scope<'_>, args: &[Value], kind: core::ffi::c_uint) -> JsResult {
+fn character_data(scope: &mut Scope<'_>, args: &[Value], kind: Kind) -> JsResult {
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
@@ -41,11 +40,11 @@ fn character_data(scope: &mut Scope<'_>, args: &[Value], kind: core::ffi::c_uint
 }
 
 pub(crate) fn text(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
-    character_data(scope, args, KIND_TEXT)
+    character_data(scope, args, Kind::Text)
 }
 
 pub(crate) fn comment(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
-    character_data(scope, args, KIND_COMMENT)
+    character_data(scope, args, Kind::Comment)
 }
 
 fn set_dimension(
@@ -65,7 +64,7 @@ pub(crate) fn image(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsR
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
-    let el = node::new_element(glib::strdup(b"img"));
+    let el = node::new_element(b"img");
     if let Some(width) = args.first() {
         set_dimension(scope, el, c"width", width)?;
     }
@@ -79,7 +78,7 @@ pub(crate) fn audio(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsR
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
-    let el = node::new_element(glib::strdup(b"audio"));
+    let el = node::new_element(b"audio");
     if let Some(src) = args.first() {
         let src = c_text(scope, src)?;
         ffi::set_attr(el, c"src", &src);
@@ -91,10 +90,10 @@ pub(crate) fn option(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Js
     if ffi::js_of(scope).is_none() {
         return Ok(Value::null());
     }
-    let el = node::new_element(glib::strdup(b"option"));
+    let el = node::new_element(b"option");
     if let Some(text) = args.first() {
         let text = c_text(scope, text)?;
-        el.append(text_node(KIND_TEXT, &text));
+        el.append(text_node(Kind::Text, &text));
     }
     if let Some(value) = args.get(1) {
         let value = c_text(scope, value)?;

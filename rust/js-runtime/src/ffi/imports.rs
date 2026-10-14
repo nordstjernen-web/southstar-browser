@@ -4,16 +4,16 @@
 
 use core::ffi::c_int;
 
-use southstar_dom::{NsAttr, NsNode};
+use southstar_dom::{AttrView, NsNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::NsJs;
 
 unsafe extern "Rust" {
-    pub(crate) unsafe fn nsr_attr_to_js(
+    pub(crate) safe fn nsr_attr_to_js(
         scope: &mut Scope<'_>,
         owner: &Value,
-        attr: *const NsAttr,
+        attr: AttrView<'_>,
         include_base: bool,
     ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8>;

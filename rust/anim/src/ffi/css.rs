@@ -703,22 +703,23 @@ impl NodePtr {
         self.0
     }
 
-    fn node(self) -> Node<'static> {
-        unsafe { Node::from_ptr(self.0) }.expect("a live node")
+    fn node(self) -> Option<Node<'static>> {
+        // SAFETY: a NodePtr is made from a node of this thread's store, and `from_ptr` returns None once that node is freed.
+        unsafe { Node::from_ptr(self.0) }
     }
 
     pub fn parent(self) -> Option<NodePtr> {
-        self.node().parent().and_then(|p| NodePtr::new(p.as_ptr()))
+        self.node()?.parent().and_then(|p| NodePtr::new(p.as_ptr()))
     }
 
     pub fn first_child(self) -> Option<NodePtr> {
-        self.node()
+        self.node()?
             .first_child()
             .and_then(|c| NodePtr::new(c.as_ptr()))
     }
 
     pub fn next_in_subtree(self, root: NodePtr, descend: bool) -> Option<NodePtr> {
-        southstar_dom::index::next_in_subtree(self.node(), Some(root.node()), descend)
+        southstar_dom::index::next_in_subtree(self.node()?, root.node(), descend)
             .and_then(|n| NodePtr::new(n.as_ptr()))
     }
 
@@ -735,7 +736,7 @@ impl NodePtr {
     }
 
     pub fn style_before_change(self) -> Option<StyleRef<'static>> {
-        style_before_change(self.node())
+        style_before_change(self.node()?)
     }
 
     pub fn exclude_from_incremental(self, exclude: bool) {

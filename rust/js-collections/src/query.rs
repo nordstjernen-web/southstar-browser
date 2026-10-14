@@ -6,7 +6,9 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_css::{MatchContext, SelectorList};
-use southstar_dom::index::{class_lookup, find_by_id, tag_lookup};
+use southstar_dom::index::{
+    class_lookup, find_by_id, has_class_index, has_id_index, has_tag_index, tag_lookup,
+};
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{Kind, MAX_DEPTH, NodeArray};
 use southstar_js_engine::{Scope, Value};
@@ -145,7 +147,7 @@ fn by_id(
     include_self: bool,
 ) -> Value {
     let doc = current_document(js_of(scope));
-    let mut hit = match doc.filter(|&doc| doc.id_table().is_some() && uses_doc_index(root, doc)) {
+    let mut hit = match doc.filter(|&doc| has_id_index(doc) && uses_doc_index(root, doc)) {
         Some(doc) => find_by_id(doc, id)
             .filter(|&n| is_ancestor_or_self(n, root))
             .or_else(|| find_by_id(root, id)),
@@ -180,7 +182,7 @@ fn by_class(
     include_self: bool,
 ) -> Value {
     let doc = current_document(js_of(scope));
-    if let Some(doc) = doc.filter(|&doc| doc.class_table().is_some() && uses_doc_index(root, doc)) {
+    if let Some(doc) = doc.filter(|&doc| has_class_index(doc) && uses_doc_index(root, doc)) {
         let found = class_lookup(doc, class, |list| {
             indexed_lookup(
                 scope,
@@ -228,7 +230,7 @@ fn by_tag(
     include_self: bool,
 ) -> Value {
     let doc = current_document(js_of(scope));
-    if let Some(doc) = doc.filter(|&doc| uses_doc_index(root, doc) && doc.tag_table().is_some()) {
+    if let Some(doc) = doc.filter(|&doc| uses_doc_index(root, doc) && has_tag_index(doc)) {
         let found = tag_lookup(doc, tag, |list| {
             indexed_lookup(
                 scope,
@@ -304,7 +306,7 @@ fn key_index(
         return None;
     }
     let key = selector.key()?;
-    if let Some(id) = key.id.filter(|_| doc.id_table().is_some()) {
+    if let Some(id) = key.id.filter(|_| has_id_index(doc)) {
         let Some(single) = find_by_id(doc, id) else {
             return Some(no_match(scope, want_all));
         };
@@ -334,10 +336,10 @@ fn key_index(
         }
         out.finish(scope)
     };
-    let found = if let Some(class) = key.class.filter(|_| doc.class_table().is_some()) {
+    let found = if let Some(class) = key.class.filter(|_| has_class_index(doc)) {
         class_lookup(doc, class, |list| candidates(scope, list))
     } else {
-        let tag = key.type_name.filter(|_| doc.tag_table().is_some())?;
+        let tag = key.type_name.filter(|_| has_tag_index(doc))?;
         tag_lookup(doc, tag, |list| candidates(scope, list))
     };
     Some(found.unwrap_or_else(|| no_match(scope, want_all)))

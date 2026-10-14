@@ -2,13 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ptr;
-use core::sync::atomic::{AtomicPtr, Ordering};
 
-use crate::ffi::{Node, NsNode};
-use crate::{MAX_DEPTH, ancestors_and_self, children};
+use crate::{MAX_DEPTH, Node, NsNode, WeakNode, ancestors_and_self, children};
 
-static ACTIVE_MODAL: AtomicPtr<NsNode> = AtomicPtr::new(ptr::null_mut());
+thread_local! {
+    static ACTIVE_MODAL: Cell<Option<WeakNode>> = const { Cell::new(None) };
+}
 
 pub fn root(node: Node<'_>) -> Node<'_> {
     let mut root = node;
@@ -27,12 +28,12 @@ pub fn contains(ancestor: *const NsNode, node: Node) -> bool {
     ancestors_and_self(node).any(|n| ptr::eq(n.as_ptr(), ancestor))
 }
 
-pub fn set_active_modal(modal: *const NsNode) {
-    ACTIVE_MODAL.store(modal.cast_mut(), Ordering::Relaxed);
+pub fn set_active_modal(modal: Option<Node>) {
+    ACTIVE_MODAL.set(modal.map(Node::downgrade));
 }
 
-pub fn active_modal() -> *const NsNode {
-    ACTIVE_MODAL.load(Ordering::Relaxed)
+pub fn active_modal() -> Option<Node<'static>> {
+    ACTIVE_MODAL.get().and_then(WeakNode::get)
 }
 
 pub fn effectively_inert(el: Node) -> bool {
@@ -42,8 +43,7 @@ pub fn effectively_inert(el: Node) -> bool {
     if ancestors_and_self(el).any(|n| n.is_element() && n.attr(c"inert").is_some()) {
         return true;
     }
-    let modal = active_modal();
-    !modal.is_null() && !ptr::eq(el.as_ptr(), modal) && !contains(modal, el)
+    active_modal().is_some_and(|modal| modal != el && !contains(modal.as_ptr(), el))
 }
 
 pub fn hidden_until_found(el: Node) -> bool {

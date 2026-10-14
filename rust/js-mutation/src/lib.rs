@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::Value;
 
 use crate::ffi::Js;
@@ -23,21 +23,17 @@ pub(crate) type Element = Node<'static>;
 
 #[derive(Default)]
 pub(crate) struct Page {
-    pub orphans: Option<HashSet<usize>>,
-    pub attribute_maps: Option<HashMap<usize, Value>>,
-    pub change: Option<(usize, CString)>,
+    pub orphans: Option<HashSet<WeakNode>>,
+    pub attribute_maps: Option<HashMap<WeakNode, Value>>,
+    pub change: Option<(WeakNode, CString)>,
 }
 
 thread_local! {
     static PAGES: RefCell<HashMap<Js, Page>> = RefCell::new(HashMap::new());
 }
 
-pub(crate) fn key(node: Element) -> usize {
-    node.as_ptr() as usize
-}
-
-pub(crate) fn node_at(key: usize) -> Element {
-    unsafe { Node::from_ptr(key as *const southstar_dom::NsNode) }.expect("tracked node")
+pub(crate) fn key(node: Element) -> WeakNode {
+    node.downgrade()
 }
 
 pub(crate) fn with_page<R: Default>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {

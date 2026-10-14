@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_int, c_long};
 
 use southstar_datetime::{MAX_YEAR, civil_from_days, floormod};
 
-use crate::ffi::{self, Node};
+use crate::{Kind, Node, attrs};
 use crate::{MAX_DEPTH, ancestors, ancestors_and_self, children, index, tree};
 
 const DAY_MS: f64 = 86_400_000.0;
@@ -795,30 +795,29 @@ pub fn editable_value(node: Node<'_>) -> &CStr {
 
 pub fn set_editable_value(node: Node, value: &CStr) {
     if raw_name_is(node, b"textarea") {
-        let normalized =
-            std::ffi::CString::new(textarea_normalized(value.to_bytes())).unwrap_or_default();
-        ffi::set_attr(node, c"data-nd-value", &normalized);
-        ffi::set_attr(node, c"data-nd-vdirty", c"1");
-        ffi::set_attr(node, c"data-nd-user-edited", c"1");
+        let normalized = textarea_normalized(value.to_bytes());
+        attrs::set_attribute(node, c"data-nd-value", Some(&normalized));
+        attrs::set_attribute(node, c"data-nd-vdirty", Some(c"1".to_bytes()));
+        attrs::set_attribute(node, c"data-nd-user-edited", Some(c"1".to_bytes()));
     } else if is_contenteditable_host(node) {
         let doc = ancestors_and_self(node).last().unwrap_or(node);
         let mut child = node.first_child();
         while let Some(c) = child {
             child = c.next_sibling();
-            ffi::detach(c);
+            c.detach();
             if doc != c {
                 index::id_subtree_removed(doc, c);
                 index::class_subtree_removed(doc, c);
                 index::tag_subtree_removed(doc, c);
             }
-            ffi::free(c);
+            c.free_tree();
         }
-        ffi::append_text(node, value);
+        node.append(crate::node::new_text(Kind::Text, value.to_bytes()));
     } else if value_is_dirty_mode(node) {
-        ffi::set_attr(node, c"data-nd-value", value);
-        ffi::set_attr(node, c"data-nd-user-edited", c"1");
+        attrs::set_attribute(node, c"data-nd-value", Some(value.to_bytes()));
+        attrs::set_attribute(node, c"data-nd-user-edited", Some(c"1".to_bytes()));
     } else {
-        ffi::set_attr(node, c"value", value);
+        attrs::set_attribute(node, c"value", Some(value.to_bytes()));
     }
 }
 
@@ -898,16 +897,16 @@ fn reset_control(node: Node) {
     match node.element_name() {
         Some(b"input" | b"textarea") => {
             if type_in(node.attr(c"type"), &["checkbox", "radio"]) {
-                ffi::remove_attr(node, c"data-nd-checked");
+                attrs::remove_attribute(node, c"data-nd-checked");
             }
-            ffi::remove_attr(node, c"data-nd-value");
-            ffi::remove_attr(node, c"data-nd-vdirty");
-            ffi::remove_attr(node, c"data-nd-user-edited");
+            attrs::remove_attribute(node, c"data-nd-value");
+            attrs::remove_attribute(node, c"data-nd-vdirty");
+            attrs::remove_attribute(node, c"data-nd-user-edited");
         }
         Some(b"select") => {
-            ffi::remove_attr(node, c"data-nd-noselect");
+            attrs::remove_attribute(node, c"data-nd-noselect");
             for option in children(node).filter(|o| named(*o, b"option")) {
-                ffi::remove_attr(option, c"selected");
+                attrs::remove_attribute(option, c"selected");
             }
         }
         _ => {}

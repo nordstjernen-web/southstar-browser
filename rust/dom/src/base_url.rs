@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use crate::ffi::{Kind, Node};
+use crate::{Kind, Node};
 use crate::{MAX_DEPTH, ancestors_and_self, children};
 
 fn first_base_href<'n>(n: Node<'n>, depth: i32) -> Option<&'n CStr> {

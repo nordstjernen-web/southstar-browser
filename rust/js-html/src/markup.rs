@@ -81,11 +81,7 @@ pub fn get_html(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult
 
 fn adopt_children(fragment: Element) -> Vec<Element> {
     ffi::mark_scripts_already_started(fragment);
-    let kids = children(fragment);
-    for &kid in &kids {
-        southstar_dom::node::own_strings_deep(kid);
-    }
-    kids
+    children(fragment)
 }
 
 fn clear_children_collect(js: Option<Js>, n: Element) -> Vec<Element> {

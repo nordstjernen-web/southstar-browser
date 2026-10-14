@@ -290,7 +290,7 @@ fn create_contextual_fragment(scope: &mut Scope<'_>, _: &Value, args: &[Value]) 
         Some(value) => scope.to_bytes(value).ok(),
         None => None,
     };
-    let fragment = Node::alloc(southstar_dom::node::KIND_DOCUMENT);
+    let fragment = Node::alloc(southstar_dom::Kind::Document);
     fragment.add_flags(FLAG_FRAGMENT);
     if let Some(parsed) = source
         .filter(|s| !s.is_empty() && s[0] != 0)
@@ -299,7 +299,6 @@ fn create_contextual_fragment(scope: &mut Scope<'_>, _: &Value, args: &[Value]) 
         if let Some(body) = body_of(parsed) {
             while let Some(child) = body.first_child() {
                 child.detach();
-                southstar_dom::node::own_strings_deep(child);
                 fragment.append(child);
             }
         }

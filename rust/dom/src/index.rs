@@ -3,15 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{HashMap, HashSet};
 
-use crate::ffi::{BucketTable, IdTable, Kind, Node, NodeArray, NodeSet};
-use crate::{MAX_DEPTH, children, tree};
+use crate::{Kind, MAX_DEPTH, Node, children, tree};
 
 const SCAN_MAX: usize = 64;
-const KEY_STACK: usize = 96;
-
-static BUILDING: AtomicBool = AtomicBool::new(false);
 
 pub fn scope_boundary(node: Node) -> bool {
     (node.kind() == Kind::Document && node.parent().is_some())
@@ -127,56 +123,83 @@ pub fn document_order_cmp(a: Option<Node>, b: Option<Node>) -> c_int {
     }
 }
 
-pub struct Bucket {
-    nodes: NodeArray,
-    members: Option<NodeSet>,
+pub struct NodeArray {
+    nodes: Vec<Node<'static>>,
+}
+
+impl NodeArray {
+    fn new(nodes: Vec<Node<'static>>) -> Self {
+        NodeArray { nodes }
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub fn get(&self, index: usize) -> Node<'static> {
+        self.nodes[index]
+    }
+
+    pub fn last(&self) -> Option<Node<'static>> {
+        self.nodes.last().copied()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Node<'static>> + '_ {
+        self.nodes.iter().copied()
+    }
+}
+
+fn sort_in_document_order(nodes: &mut [Node<'static>]) {
+    nodes.sort_by(|a, b| document_order_cmp(Some(*a), Some(*b)).cmp(&0));
+}
+
+struct Bucket {
+    nodes: Vec<Node<'static>>,
+    members: Option<HashSet<Node<'static>>>,
     unsorted: bool,
 }
 
 impl Bucket {
-    fn with_node(node: Node) -> Bucket {
-        let nodes = NodeArray::empty();
-        nodes.push(node);
+    fn with_node(node: Node<'static>) -> Bucket {
         Bucket {
-            nodes,
+            nodes: vec![node],
             members: None,
             unsorted: false,
         }
     }
 
-    fn track_members(&mut self) -> &NodeSet {
+    fn track_members(&mut self) -> &mut HashSet<Node<'static>> {
         let nodes = &self.nodes;
-        self.members.get_or_insert_with(|| {
-            let set = NodeSet::empty();
-            for i in 0..nodes.len() {
-                set.add(nodes.get(i));
-            }
-            set
-        })
+        self.members
+            .get_or_insert_with(|| nodes.iter().copied().collect())
     }
 
-    fn note_member(&self, node: Node) {
-        if let Some(members) = &self.members {
-            members.add(node);
+    fn note_member(&mut self, node: Node<'static>) {
+        if let Some(members) = &mut self.members {
+            members.insert(node);
         }
     }
 
-    fn forget_member(&self, node: Node) {
-        if let Some(members) = &self.members {
-            members.remove(node);
+    fn forget_member(&mut self, node: Node<'static>) {
+        if let Some(members) = &mut self.members {
+            members.remove(&node);
         }
     }
 
-    fn add(&mut self, node: Node) {
-        if BUILDING.load(Ordering::Relaxed) {
-            if self.nodes.last() != Some(node) {
+    fn add(&mut self, node: Node<'static>, building: bool) {
+        if building {
+            if self.nodes.last() != Some(&node) {
                 self.nodes.push(node);
                 self.note_member(node);
             }
             return;
         }
         if self.unsorted {
-            if self.members.as_ref().is_some_and(|m| m.add(node)) {
+            if self.members.as_mut().is_some_and(|m| m.insert(node)) {
                 self.nodes.push(node);
             }
             return;
@@ -185,14 +208,14 @@ impl Bucket {
         if self
             .nodes
             .last()
-            .is_none_or(|last| document_order_cmp(Some(node), Some(last)) > 0)
+            .is_none_or(|last| document_order_cmp(Some(node), Some(*last)) > 0)
         {
             self.nodes.push(node);
             self.note_member(node);
             return;
         }
         if len > SCAN_MAX {
-            if self.track_members().add(node) {
+            if self.track_members().insert(node) {
                 self.nodes.push(node);
                 self.unsorted = true;
             }
@@ -201,7 +224,7 @@ impl Bucket {
         let (mut lo, mut hi) = (0, len);
         while lo < hi {
             let mid = (lo + hi) / 2;
-            match document_order_cmp(Some(node), Some(self.nodes.get(mid))) {
+            match document_order_cmp(Some(node), Some(self.nodes[mid])) {
                 0 => return,
                 c if c < 0 => hi = mid,
                 _ => lo = mid + 1,
@@ -211,21 +234,21 @@ impl Bucket {
         self.note_member(node);
     }
 
-    fn remove(&mut self, node: Node) {
+    fn remove(&mut self, node: Node<'static>) {
         let len = self.nodes.len();
-        if !self.unsorted && self.nodes.last() == Some(node) {
+        if !self.unsorted && self.nodes.last() == Some(&node) {
             self.nodes.truncate(len - 1);
             self.forget_member(node);
             return;
         }
         if !self.unsorted && len <= SCAN_MAX {
-            if let Some(k) = (0..len).find(|&k| self.nodes.get(k) == node) {
+            if let Some(k) = self.nodes.iter().position(|&n| n == node) {
                 self.nodes.remove(k);
                 self.forget_member(node);
             }
             return;
         }
-        if self.track_members().remove(node) {
+        if self.track_members().remove(&node) {
             self.unsorted = true;
         }
     }
@@ -238,8 +261,8 @@ impl Bucket {
             if self.nodes.len() >= want {
                 break;
             }
-            if members.contains(n) {
-                self.nodes.push(n);
+            if let Some(&member) = members.get(&Node::of(n.slot())) {
+                self.nodes.push(member);
             }
             if let Some(child) = n.first_child() {
                 cur = Some(child);
@@ -257,31 +280,25 @@ impl Bucket {
         if self.nodes.len() == want {
             return;
         }
-        let seen = NodeSet::empty();
-        for i in 0..self.nodes.len() {
-            seen.add(self.nodes.get(i));
-        }
-        let rest = NodeArray::empty();
-        for node in members.nodes().into_iter().filter(|n| !seen.contains(*n)) {
-            rest.push(node);
-        }
-        rest.sort_in_document_order();
-        for i in 0..rest.len() {
-            self.nodes.push(rest.get(i));
-        }
+        let seen: HashSet<Node<'static>> = self.nodes.iter().copied().collect();
+        let mut rest: Vec<Node<'static>> = members
+            .iter()
+            .copied()
+            .filter(|n| !seen.contains(n))
+            .collect();
+        sort_in_document_order(&mut rest);
+        self.nodes.extend(rest);
     }
 
-    fn ordered(&mut self, doc: Node) -> &NodeArray {
+    fn ordered(&mut self, doc: Node) -> &[Node<'static>] {
         if self.unsorted {
-            self.nodes.truncate(0);
-            let members = self.members.as_ref().map_or(0, NodeSet::len);
+            self.nodes.clear();
+            let members = self.members.as_ref().map_or(0, HashSet::len);
             if members <= SCAN_MAX {
                 if let Some(set) = &self.members {
-                    for node in set.nodes() {
-                        self.nodes.push(node);
-                    }
+                    self.nodes.extend(set.iter().copied());
                 }
-                self.nodes.sort_in_document_order();
+                sort_in_document_order(&mut self.nodes);
             } else {
                 self.collect_in_order(doc);
             }
@@ -291,81 +308,118 @@ impl Bucket {
     }
 }
 
-fn with_key<R>(token: &[u8], f: impl FnOnce(&CStr) -> R) -> R {
-    if token.len() < KEY_STACK {
-        let mut stack = [0u8; KEY_STACK];
-        stack[..token.len()].copy_from_slice(token);
-        f(CStr::from_bytes_until_nul(&stack).unwrap_or_default())
-    } else {
-        let mut owned = token.to_vec();
-        owned.push(0);
-        f(CStr::from_bytes_until_nul(&owned).unwrap_or_default())
+#[derive(Default)]
+pub(crate) struct Indexes {
+    ids: Option<HashMap<Box<[u8]>, Node<'static>>>,
+    classes: Option<HashMap<Box<[u8]>, Bucket>>,
+    tags: Option<HashMap<Box<[u8]>, Bucket>>,
+}
+
+fn with_indexes<R>(doc: Node, f: impl FnOnce(&mut Indexes) -> R) -> R {
+    let mut indexes = doc.indexes().borrow_mut();
+    f(indexes.get_or_insert_with(Box::default))
+}
+
+fn has_index(doc: Node, which: impl FnOnce(&Indexes) -> bool) -> bool {
+    doc.indexes().borrow().as_deref().is_some_and(which)
+}
+
+pub fn has_id_index(doc: Node) -> bool {
+    has_index(doc, |ix| ix.ids.is_some())
+}
+
+pub fn has_class_index(doc: Node) -> bool {
+    has_index(doc, |ix| ix.classes.is_some())
+}
+
+pub fn has_tag_index(doc: Node) -> bool {
+    has_index(doc, |ix| ix.tags.is_some())
+}
+
+fn static_node(node: Node) -> Node<'static> {
+    Node::of(node.slot())
+}
+
+fn id_add(ids: &mut HashMap<Box<[u8]>, Node<'static>>, node: Node) {
+    if !node.is_element() {
+        return;
+    }
+    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty()) {
+        ids.entry(Box::from(id.to_bytes()))
+            .or_insert_with(|| static_node(node));
     }
 }
 
-fn id_add(table: IdTable, node: Node) {
+fn id_remove(ids: &mut HashMap<Box<[u8]>, Node<'static>>, node: Node) {
     if !node.is_element() {
         return;
     }
     if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty())
-        && !table.contains(id)
+        && ids.get(id.to_bytes()) == Some(&static_node(node))
     {
-        table.insert(id, node);
-    }
-}
-
-fn id_remove(table: IdTable, node: Node) {
-    if !node.is_element() {
-        return;
-    }
-    if let Some(id) = node.attr(c"id").filter(|id| !id.is_empty())
-        && table.lookup(id) == Some(node)
-    {
-        table.remove(id);
+        ids.remove(id.to_bytes());
     }
 }
 
 pub fn id_build(doc: Node) {
-    let table = match doc.id_table() {
-        Some(table) => {
-            table.clear();
-            table
-        }
-        None => {
-            let table = IdTable::empty();
-            doc.set_id_table(table);
-            table
-        }
-    };
-    walk(doc, doc, true, |n| id_add(table, n));
+    let mut ids = HashMap::new();
+    walk(doc, doc, true, |n| id_add(&mut ids, n));
+    with_indexes(doc, |ix| ix.ids = Some(ids));
 }
 
 pub fn id_register(doc: Node, id: &CStr, node: Node) {
-    if let Some(table) = doc.id_table().filter(|_| !id.is_empty())
-        && !table.contains(id)
-    {
-        table.insert(id, node);
+    if id.is_empty() {
+        return;
     }
+    with_indexes(doc, |ix| {
+        if let Some(ids) = &mut ix.ids {
+            ids.entry(Box::from(id.to_bytes()))
+                .or_insert_with(|| static_node(node));
+        }
+    });
 }
 
 pub fn id_unregister(doc: Node, id: &CStr, node: Option<Node>) {
-    if let Some(table) = doc.id_table().filter(|_| !id.is_empty())
-        && table.lookup(id) == node
-    {
-        table.remove(id);
+    if id.is_empty() {
+        return;
     }
+    with_indexes(doc, |ix| {
+        if let Some(ids) = &mut ix.ids
+            && ids.get(id.to_bytes()).copied() == node.map(static_node)
+        {
+            ids.remove(id.to_bytes());
+        }
+    });
+}
+
+fn subtree_nodes(doc: Node, root: Node, scoped: bool) -> Vec<Node<'static>> {
+    let mut nodes = Vec::new();
+    walk(doc, root, scoped, |n| nodes.push(static_node(n)));
+    nodes
 }
 
 pub fn id_subtree_added(doc: Node, root: Node) {
-    if let Some(table) = doc.id_table() {
-        walk(doc, root, true, |n| id_add(table, n));
+    if !has_id_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, true);
+    with_indexes(doc, |ix| {
+        if let Some(ids) = &mut ix.ids {
+            nodes.into_iter().for_each(|n| id_add(ids, n));
+        }
+    });
 }
 
 pub fn id_subtree_removed(doc: Node, root: Node) {
-    if let Some(table) = doc.id_table() {
-        walk(doc, root, false, |n| id_remove(table, n));
+    if !has_id_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, false);
+    with_indexes(doc, |ix| {
+        if let Some(ids) = &mut ix.ids {
+            nodes.into_iter().for_each(|n| id_remove(ids, n));
+        }
+    });
 }
 
 fn class_space(c: &u8) -> bool {
@@ -379,135 +433,170 @@ fn class_tokens(class_attr: &CStr) -> impl Iterator<Item = &[u8]> {
         .filter(|token| !token.is_empty())
 }
 
-fn bucket_add(table: BucketTable, key: &CStr, node: Node) {
-    if table.with_bucket(key, |bucket| bucket.add(node)).is_none() {
-        table.insert(key, Bucket::with_node(node));
-    }
-}
-
-fn bucket_remove(table: BucketTable, key: &CStr, node: Node) {
-    table.with_bucket(key, |bucket| bucket.remove(node));
-}
-
-fn new_or_cleared(existing: Option<BucketTable>, install: impl FnOnce(BucketTable)) -> BucketTable {
-    match existing {
-        Some(table) => {
-            table.clear();
-            table
-        }
+fn bucket_add(table: &mut HashMap<Box<[u8]>, Bucket>, key: &[u8], node: Node, building: bool) {
+    let node = static_node(node);
+    match table.get_mut(key) {
+        Some(bucket) => bucket.add(node, building),
         None => {
-            let table = BucketTable::empty();
-            install(table);
-            table
+            table.insert(Box::from(key), Bucket::with_node(node));
         }
     }
+}
+
+fn bucket_remove(table: &mut HashMap<Box<[u8]>, Bucket>, key: &[u8], node: Node) {
+    if let Some(bucket) = table.get_mut(key) {
+        bucket.remove(static_node(node));
+    }
+}
+
+fn class_entries(node: Node<'_>) -> Option<(Node<'static>, &CStr)> {
+    if !node.is_element() {
+        return None;
+    }
+    let class_attr = node.attr(c"class").filter(|c| !c.is_empty())?;
+    Some((static_node(node), class_attr))
 }
 
 pub fn class_register(doc: Node, class_attr: &CStr, node: Node) {
-    let Some(table) = doc.class_table() else {
-        return;
-    };
-    for token in class_tokens(class_attr) {
-        with_key(token, |key| bucket_add(table, key, node));
-    }
+    with_indexes(doc, |ix| {
+        if let Some(classes) = &mut ix.classes {
+            for token in class_tokens(class_attr) {
+                bucket_add(classes, token, node, false);
+            }
+        }
+    });
 }
 
 pub fn class_unregister(doc: Node, class_attr: &CStr, node: Node) {
-    let Some(table) = doc.class_table() else {
-        return;
-    };
-    for token in class_tokens(class_attr) {
-        with_key(token, |key| bucket_remove(table, key, node));
-    }
+    with_indexes(doc, |ix| {
+        if let Some(classes) = &mut ix.classes {
+            for token in class_tokens(class_attr) {
+                bucket_remove(classes, token, node);
+            }
+        }
+    });
 }
 
-fn class_add_node(doc: Node, node: Node) {
-    if !node.is_element() {
-        return;
-    }
-    if let Some(class_attr) = node.attr(c"class").filter(|c| !c.is_empty()) {
-        class_register(doc, class_attr, node);
-    }
-}
-
-fn class_remove_node(doc: Node, node: Node) {
-    if !node.is_element() {
-        return;
-    }
-    if let Some(class_attr) = node.attr(c"class").filter(|c| !c.is_empty()) {
-        class_unregister(doc, class_attr, node);
+fn add_classes(classes: &mut HashMap<Box<[u8]>, Bucket>, nodes: &[Node<'static>], building: bool) {
+    for (node, class_attr) in nodes.iter().filter_map(|n| class_entries(*n)) {
+        for token in class_tokens(class_attr) {
+            bucket_add(classes, token, node, building);
+        }
     }
 }
 
 pub fn class_build(doc: Node) {
-    new_or_cleared(doc.class_table(), |table| doc.set_class_table(table));
-    BUILDING.store(true, Ordering::Relaxed);
-    walk(doc, doc, true, |n| class_add_node(doc, n));
-    BUILDING.store(false, Ordering::Relaxed);
+    let nodes = subtree_nodes(doc, doc, true);
+    let mut classes = HashMap::new();
+    add_classes(&mut classes, &nodes, true);
+    with_indexes(doc, |ix| ix.classes = Some(classes));
 }
 
 pub fn class_subtree_added(doc: Node, root: Node) {
-    if doc.class_table().is_some() {
-        walk(doc, root, true, |n| class_add_node(doc, n));
+    if !has_class_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, true);
+    with_indexes(doc, |ix| {
+        if let Some(classes) = &mut ix.classes {
+            add_classes(classes, &nodes, false);
+        }
+    });
 }
 
 pub fn class_subtree_removed(doc: Node, root: Node) {
-    if doc.class_table().is_some() {
-        walk(doc, root, false, |n| class_remove_node(doc, n));
+    if !has_class_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, false);
+    with_indexes(doc, |ix| {
+        if let Some(classes) = &mut ix.classes {
+            for (node, class_attr) in nodes.iter().filter_map(|n| class_entries(*n)) {
+                for token in class_tokens(class_attr) {
+                    bucket_remove(classes, token, node);
+                }
+            }
+        }
+    });
+}
+
+fn ordered_snapshot(
+    doc: Node,
+    key: &[u8],
+    table: impl FnOnce(&mut Indexes) -> Option<&mut HashMap<Box<[u8]>, Bucket>>,
+) -> Option<NodeArray> {
+    let mut indexes = doc.indexes().borrow_mut();
+    let bucket = table(indexes.as_deref_mut()?)?.get_mut(key)?;
+    Some(NodeArray::new(bucket.ordered(doc).to_vec()))
 }
 
 pub fn class_lookup<R>(doc: Node, class: &CStr, f: impl FnOnce(&NodeArray) -> R) -> Option<R> {
-    let table = doc.class_table().filter(|_| !class.is_empty())?;
-    table.with_bucket(class, |bucket| f(bucket.ordered(doc)))
+    if class.is_empty() {
+        return None;
+    }
+    let list = ordered_snapshot(doc, class.to_bytes(), |ix| ix.classes.as_mut())?;
+    Some(f(&list))
 }
 
-fn with_tag_key<R>(tag: &CStr, f: impl FnOnce(&CStr) -> R) -> R {
-    let bytes = tag.to_bytes();
-    if bytes.iter().any(u8::is_ascii_uppercase) {
-        with_key(&bytes.to_ascii_lowercase(), f)
+fn tag_key(tag: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    if tag.iter().any(u8::is_ascii_uppercase) {
+        std::borrow::Cow::Owned(tag.to_ascii_lowercase())
     } else {
-        f(tag)
+        std::borrow::Cow::Borrowed(tag)
     }
 }
 
-fn tag_add_node(table: BucketTable, node: Node) {
-    if let Some(tag) = node.name().filter(|t| node.is_element() && !t.is_empty()) {
-        with_tag_key(tag, |key| bucket_add(table, key, node));
-    }
+fn tag_entry(node: Node<'_>) -> Option<(Node<'static>, &[u8])> {
+    node.name()
+        .filter(|t| node.is_element() && !t.is_empty())
+        .map(|tag| (static_node(node), tag.to_bytes()))
 }
 
-fn tag_remove_node(table: BucketTable, node: Node) {
-    if let Some(tag) = node.name().filter(|t| node.is_element() && !t.is_empty()) {
-        with_tag_key(tag, |key| bucket_remove(table, key, node));
+fn add_tags(tags: &mut HashMap<Box<[u8]>, Bucket>, nodes: &[Node<'static>], building: bool) {
+    for (node, tag) in nodes.iter().filter_map(|n| tag_entry(*n)) {
+        bucket_add(tags, &tag_key(tag), node, building);
     }
 }
 
 pub fn tag_build(doc: Node) {
-    let table = new_or_cleared(doc.tag_table(), |table| doc.set_tag_table(table));
-    BUILDING.store(true, Ordering::Relaxed);
-    walk(doc, doc, true, |n| tag_add_node(table, n));
-    BUILDING.store(false, Ordering::Relaxed);
+    let nodes = subtree_nodes(doc, doc, true);
+    let mut tags = HashMap::new();
+    add_tags(&mut tags, &nodes, true);
+    with_indexes(doc, |ix| ix.tags = Some(tags));
 }
 
 pub fn tag_subtree_added(doc: Node, root: Node) {
-    if let Some(table) = doc.tag_table() {
-        walk(doc, root, true, |n| tag_add_node(table, n));
+    if !has_tag_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, true);
+    with_indexes(doc, |ix| {
+        if let Some(tags) = &mut ix.tags {
+            add_tags(tags, &nodes, false);
+        }
+    });
 }
 
 pub fn tag_subtree_removed(doc: Node, root: Node) {
-    if let Some(table) = doc.tag_table() {
-        walk(doc, root, false, |n| tag_remove_node(table, n));
+    if !has_tag_index(doc) {
+        return;
     }
+    let nodes = subtree_nodes(doc, root, false);
+    with_indexes(doc, |ix| {
+        if let Some(tags) = &mut ix.tags {
+            for (node, tag) in nodes.iter().filter_map(|n| tag_entry(*n)) {
+                bucket_remove(tags, &tag_key(tag), node);
+            }
+        }
+    });
 }
 
 pub fn tag_lookup<R>(doc: Node, tag: &CStr, f: impl FnOnce(&NodeArray) -> R) -> Option<R> {
-    let table = doc.tag_table().filter(|_| !tag.is_empty())?;
-    with_tag_key(tag, |key| {
-        table.with_bucket(key, |bucket| f(bucket.ordered(doc)))
-    })
+    if tag.is_empty() {
+        return None;
+    }
+    let list = ordered_snapshot(doc, &tag_key(tag.to_bytes()), |ix| ix.tags.as_mut())?;
+    Some(f(&list))
 }
 
 fn first_element_walk<'a>(root: Node<'a>, tag: &[u8], depth: i32) -> Option<Node<'a>> {
@@ -523,7 +612,7 @@ fn first_element_walk<'a>(root: Node<'a>, tag: &[u8], depth: i32) -> Option<Node
 }
 
 pub fn find_first_element<'a>(root: Node<'a>, tag: &CStr) -> Option<Node<'a>> {
-    if !tag.is_empty() && root.tag_table().is_some() {
+    if !tag.is_empty() && has_tag_index(root) {
         return tag_lookup(root, tag, |list| (!list.is_empty()).then(|| list.get(0))).flatten();
     }
     first_element_walk(root, tag.to_bytes(), 0)
@@ -544,24 +633,44 @@ fn by_id_walk<'a>(root: Node<'a>, id: &CStr, depth: i32) -> Option<Node<'a>> {
         .find_map(|c| by_id_walk(c, id, depth + 1))
 }
 
-fn indexed_hit<'a>(table: IdTable, root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
-    let hit = table.lookup(id)?;
-    (hit.attr(c"id") == Some(id) && tree::contains(root.as_ptr(), hit)).then_some(hit)
+fn indexed_hit<'a>(doc: Node, root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
+    let hit = doc
+        .indexes()
+        .borrow()
+        .as_deref()?
+        .ids
+        .as_ref()?
+        .get(id.to_bytes())
+        .copied()?;
+    (hit.attr(c"id") == Some(id) && tree::contains(root.as_ptr(), hit))
+        .then(|| Node::of(hit.slot()))
+}
+
+fn index_id(doc: Node, id: &CStr, found: Option<Node>, replace_missing: bool) {
+    with_indexes(doc, |ix| {
+        let Some(ids) = &mut ix.ids else { return };
+        match found {
+            Some(found) => {
+                ids.insert(Box::from(id.to_bytes()), static_node(found));
+            }
+            None if replace_missing => {
+                ids.remove(id.to_bytes());
+            }
+            None => {}
+        }
+    });
 }
 
 pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
     if id.is_empty() {
         return None;
     }
-    if let Some(table) = root.id_table() {
-        if let Some(hit) = indexed_hit(table, root, id) {
+    if has_id_index(root) {
+        if let Some(hit) = indexed_hit(root, root, id) {
             return Some(hit);
         }
         let found = by_id_walk(root, id, 0);
-        match found {
-            Some(found) => table.replace(id, found),
-            None => table.remove(id),
-        }
+        index_id(root, id, found, true);
         return found;
     }
     let mut doc = root;
@@ -571,16 +680,13 @@ pub fn find_by_id<'a>(root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
         }
         doc = parent;
     }
-    if doc != root
-        && doc.kind() == Kind::Document
-        && let Some(table) = doc.id_table()
-    {
-        if let Some(hit) = indexed_hit(table, root, id) {
+    if doc != root && doc.kind() == Kind::Document && has_id_index(doc) {
+        if let Some(hit) = indexed_hit(doc, root, id) {
             return Some(hit);
         }
         let found = by_id_walk(root, id, 0);
-        if let Some(found) = found {
-            table.replace(id, found);
+        if found.is_some() {
+            index_id(doc, id, found, false);
         }
         return found;
     }

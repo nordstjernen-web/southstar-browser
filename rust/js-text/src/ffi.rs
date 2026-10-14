@@ -151,19 +151,15 @@ pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
-    southstar_dom::node::new_text(
-        southstar_dom::node::KIND_TEXT,
-        glib::strdup(text),
-        text.len() as u32,
-    )
+    southstar_dom::node::new_text(southstar_dom::Kind::Text, text)
 }
 
 pub(crate) fn new_element(name: &[u8]) -> Element {
-    southstar_dom::node::new_element(glib::strdup(name))
+    southstar_dom::node::new_element(name)
 }
 
 pub(crate) fn replace_text(node: Element, text: &[u8]) {
-    node.set_text(glib::strdup(text), text.len() as u32, true);
+    node.set_text(text);
 }
 
 fn take_glib_string(text: *mut c_char) -> Vec<u8> {

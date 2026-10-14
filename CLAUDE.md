@@ -266,10 +266,21 @@ rather than editing it). The tree builder covers every insertion mode, the
 adoption agency, foster parenting, templates, foreign content, quirks,
 fragment parsing with a context element and the relaxed `<select>` parsing,
 and builds through a `TreeSink` trait. `rust/html-parser` is the sink that
-writes `ns_node`s directly, with names, text and attribute values in one
-string arena per document attached as the root's `backing`; script source
-positions come from the tokenizer. The parser keeps no global state (SVG image
-threads parse concurrently).
+builds DOM nodes through `rust/dom`'s Rust API; script source positions come
+from the tokenizer. The parser keeps no global state (SVG image threads parse
+concurrently).
+
+### The DOM: `rust/dom`
+
+Nodes live in a per-thread store of slots that are never deallocated
+(`rust/dom/src/store.rs`), so `Node<'a>` is a plain `&'static` reference, its
+tree links are `Cell`s and walking or relinking the tree is safe code. A node
+owns its name, text, attributes and indexes (no string arena, no borrowed
+strings). Anything that remembers a node beyond the current call keeps a
+`WeakNode` (`Node::downgrade`), which returns `None` once the node is freed
+even if its slot is reused, instead of a raw pointer plus a "forget" hook.
+`NsNode`/`NsAttr` are opaque handle types for the remaining C ABI only.
+`docs/dom.md` has the details, including how long a borrowed string stays good.
 
 ### Image decoding: pure-Rust decoders
 

@@ -1,7 +1,7 @@
 # Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
-anim	125	23	20	0	81	7	0
+anim	125	23	20	0	80	7	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
@@ -11,13 +11,13 @@ camera	59	11	17	0	27	3	0
 canvas	190	124	8	0	162	18	0
 config	37	18	9	0	23	6	0
 csp	31	0	7	0	15	2	0
-css	1034	45	157	0	676	77	0
+css	1033	45	156	0	675	77	0
 css-media	0	0	0	0	0	0	0
 css-prop-syntax	23	1	6	0	10	2	0
 css-syntax	0	0	0	0	0	0	0
 datetime	0	0	0	0	0	0	0
 debuglog	22	5	6	0	13	3	0
-dom	212	3	37	0	130	28	2
+dom	108	0	31	0	0	0	0
 engine	253	69	23	0	181	22	0
 eventsource	27	2	3	0	14	1	0
 extensions	32	14	1	0	29	6	0
@@ -29,7 +29,7 @@ gtk-ffi	29	374	0	0	0	0	0
 headless	270	164	2	0	219	26	0
 helper-ffi	0	0	0	0	0	0	0
 history	31	18	5	0	22	6	0
-html-parser	57	16	6	0	40	1	0
+html-parser	25	0	6	0	4	0	0
 html-util	40	9	6	0	25	2	0
 html5	0	0	0	0	0	0	0
 http	34	22	0	0	8	1	0
@@ -40,7 +40,7 @@ idb	17	12	1	0	15	6	0
 image	150	43	17	0	94	22	1
 image-decoders	88	28	12	0	44	5	0
 ipc	19	9	1	0	11	1	0
-js-attrs	34	13	10	0	16	0	0
+js-attrs	32	13	10	0	15	0	0
 js-bind	0	0	0	0	0	0	0
 js-brand	3	0	3	0	0	0	0
 js-clone	3	8	2	0	0	0	0
@@ -51,14 +51,14 @@ js-cssom	80	43	4	0	67	6	0
 js-custom-elements	46	9	17	0	17	1	0
 js-dispatch	112	49	38	0	45	1	0
 js-document	76	51	11	0	53	0	0
-js-dom-factory	39	25	8	0	24	4	0
+js-dom-factory	37	25	8	0	23	4	0
 js-elements	39	31	5	0	31	3	0
 js-engine	39	0	0	0	32	0	7
 js-events	21	6	13	0	5	0	0
 js-focus	110	47	24	0	56	0	0
 js-fonts	13	7	2	0	7	0	0
 js-forms	103	45	28	0	52	2	0
-js-frames	207	95	33	0	130	14	0
+js-frames	206	94	33	0	129	14	0
 js-geometry	54	25	12	0	34	6	0
 js-html	39	30	3	0	34	3	0
 js-images	61	26	10	0	35	5	0
@@ -68,7 +68,7 @@ js-intl	34	20	0	0	22	8	0
 js-lifecycle	105	67	20	0	57	4	0
 js-loader	161	65	31	0	95	10	0
 js-media	44	13	8	0	22	0	0
-js-mutation	156	25	36	0	80	7	0
+js-mutation	155	25	36	0	79	7	0
 js-net	142	63	18	0	83	3	0
 js-node	42	38	1	0	38	1	0
 js-observers	44	14	9	0	22	3	0
@@ -76,7 +76,7 @@ js-page	57	112	2	0	48	12	0
 js-perf	62	9	24	0	22	4	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	32	15	9	0	18	1	0
-js-runtime	798	338	199	0	328	57	5
+js-runtime	794	338	198	0	327	57	5
 js-services	93	53	19	0	49	4	0
 js-shadow	16	7	4	0	6	0	0
 js-storage	64	26	11	0	36	3	0

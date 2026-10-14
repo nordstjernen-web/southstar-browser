@@ -2,24 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_uint};
-use core::ptr;
+use core::ffi::CStr;
 
-use crate::FLAG_SVG_NS;
-use crate::ffi::{
-    ATTR_NAME_LOWER, ATTR_OWN_NAME, ATTR_OWN_VALUE, Attr, NewAttr, Node, dup, value_dup,
-};
+use crate::data::NewAttr;
+use crate::{Attr, FLAG_SVG_NS, Node};
 
 pub fn is_ascii_lower(s: &[u8]) -> bool {
     !s.iter().any(u8::is_ascii_uppercase)
-}
-
-fn name_flags(name: &[u8]) -> u8 {
-    if is_ascii_lower(name) {
-        ATTR_NAME_LOWER
-    } else {
-        0
-    }
 }
 
 fn caseless_eq(attr_name: Option<&CStr>, name: &[u8]) -> bool {
@@ -54,7 +43,7 @@ pub fn find<'a>(el: Node<'a>, name: &CStr) -> Option<Attr<'a>> {
         let first = wanted.first().copied().unwrap_or(0);
         return el.attrs().find(|a| match a.name_first_byte() {
             None => false,
-            Some(_) if a.flags() & ATTR_NAME_LOWER != 0 => {
+            Some(_) if a.name_is_lowercase() => {
                 a.name_first_byte() == Some(first) && a.name() == Some(name)
             }
             Some(_) => caseless_eq(a.name(), wanted),
@@ -75,24 +64,22 @@ pub fn find_ns<'a>(el: Node<'a>, namespace_uri: Option<&CStr>, local: &CStr) -> 
     el.attrs().find(|a| matches_ns(*a, ns, local))
 }
 
-pub fn set_len(el: Node, name: &CStr, value: Option<&[u8]>, len: usize) {
+pub fn set_len(el: Node, name: &CStr, value: Option<&[u8]>) {
     if el.has_class_set() && name.to_bytes().eq_ignore_ascii_case(b"class") {
         el.clear_class_set();
     }
     el.attrs_changed();
-    let value_ptr = value.map_or(ptr::null(), |v| v.as_ptr().cast());
+    let value = value.unwrap_or_default();
     if let Some(attr) = el.attrs().find(|a| caseless_eq(a.name(), name.to_bytes())) {
-        attr.set_value(value_dup(value_ptr, len), len as c_uint);
+        attr.set_value(value);
         return;
     }
     el.push_attr(NewAttr {
-        name: dup(name),
-        value: value_dup(value_ptr, len),
-        value_len: len as c_uint,
-        namespace_uri: ptr::null_mut(),
-        prefix: ptr::null_mut(),
-        local_name: ptr::null_mut(),
-        flags: ATTR_OWN_NAME | ATTR_OWN_VALUE | name_flags(name.to_bytes()),
+        name: name.to_bytes(),
+        value,
+        namespace_uri: None,
+        prefix: None,
+        local_name: None,
     });
 }
 
@@ -115,42 +102,35 @@ pub fn set_ns(el: Node, qname: NsName, value: Option<&CStr>) {
     el.attrs_changed();
     let value = value.map_or(&[][..], CStr::to_bytes);
     if let Some(attr) = el.attrs().find(|a| matches_ns(*a, ns, local)) {
-        attr.set_value(
-            value_dup(value.as_ptr().cast(), value.len()),
-            value.len() as c_uint,
-        );
+        attr.set_value(value);
         return;
     }
     el.push_attr(NewAttr {
-        name: dup(qualified),
-        value: value_dup(value.as_ptr().cast(), value.len()),
-        value_len: value.len() as c_uint,
-        namespace_uri: ns.map_or(ptr::null_mut(), dup),
-        prefix: prefix.map_or(ptr::null_mut(), dup),
-        local_name: dup(local),
-        flags: ATTR_OWN_NAME | ATTR_OWN_VALUE | name_flags(qualified.to_bytes()),
+        name: qualified.to_bytes(),
+        value,
+        namespace_uri: ns.map(CStr::to_bytes),
+        prefix: prefix.map(CStr::to_bytes),
+        local_name: Some(local.to_bytes()),
     });
 }
 
-pub fn append_borrowed(el: Node, name: &CStr, value: Option<&CStr>) {
+pub fn append(el: Node, name: &[u8], value: &[u8]) {
     if el.has_class_set() {
         el.clear_class_set();
     }
     el.attrs_changed();
     el.push_attr(NewAttr {
-        name: name.as_ptr().cast_mut(),
-        value: value.unwrap_or(c"").as_ptr().cast_mut(),
-        value_len: value.map_or(0, |v| v.to_bytes().len() as c_uint),
-        namespace_uri: ptr::null_mut(),
-        prefix: ptr::null_mut(),
-        local_name: ptr::null_mut(),
-        flags: name_flags(name.to_bytes()),
+        name,
+        value,
+        namespace_uri: None,
+        prefix: None,
+        local_name: None,
     });
 }
 
 pub fn set_attribute(el: Node, name: &CStr, value: Option<&[u8]>) {
     if el.is_element() {
-        set_len(el, name, value, value.map_or(0, <[u8]>::len));
+        set_len(el, name, value);
     }
 }
 

@@ -165,11 +165,7 @@ fn take_children(fragment: Element, run_scripts: bool) -> Vec<Element> {
     if !run_scripts {
         ffi::mark_scripts_already_started(fragment);
     }
-    let kids = children(fragment);
-    for &kid in &kids {
-        southstar_dom::node::own_strings_deep(kid);
-    }
-    kids
+    children(fragment)
 }
 
 fn record(js: Option<Js>, parent: Element, kid: Element) {

@@ -5,9 +5,8 @@
 use core::ffi::{CStr, c_uint};
 
 use crate::attrs::{self, NsName};
-use crate::ffi::{Kind, Node, dup, dup_bytes, dup_with_len};
 use crate::serialize::is_embedded_doc;
-use crate::{MAX_DEPTH, children};
+use crate::{Kind, MAX_DEPTH, Node, children};
 
 pub const KIND_DOCUMENT: c_uint = 0;
 pub const KIND_DOCTYPE: c_uint = 1;
@@ -24,45 +23,36 @@ const FLAG_PI: u32 = 1 << 11;
 const FLAG_KEEP_CASE: u32 = 1 << 12;
 const FLAG_INPUT_INDETERMINATE: u32 = 1 << 18;
 
-pub fn new_element(name: *mut core::ffi::c_char) -> Node<'static> {
-    let node = Node::alloc(KIND_ELEMENT);
-    node.adopt_name(name);
+pub fn new_element(name: &[u8]) -> Node<'static> {
+    let node = Node::alloc(Kind::Element);
+    node.set_name(name);
     node
 }
 
-pub fn new_text(kind: c_uint, text: *mut core::ffi::c_char, len: u32) -> Node<'static> {
+pub fn new_text(kind: Kind, text: &[u8]) -> Node<'static> {
     let node = Node::alloc(kind);
-    node.adopt_text(text, len);
+    node.set_text(text);
     node
-}
-
-pub fn own_strings_deep(root: Node) {
-    let mut stack = vec![root];
-    while let Some(cur) = stack.pop() {
-        cur.clear_class_set();
-        cur.own_node_strings();
-        if let Some(content) = cur.tpl_content() {
-            stack.push(content);
-        }
-        stack.extend(children(cur));
-    }
 }
 
 pub fn template_content(tpl: Node) -> Node {
     if let Some(content) = tpl.tpl_content() {
         return content;
     }
-    let content = Node::alloc(KIND_DOCUMENT);
+    let content = Node::alloc(Kind::Document);
     content.add_flags(FLAG_FRAGMENT | FLAG_TEMPLATE_CONTENT);
     tpl.set_tpl_content(Some(content));
     content
 }
 
-fn name_or_empty(src: Node) -> *mut core::ffi::c_char {
-    dup(src.name().unwrap_or(c""))
+fn name_or_empty(src: Node<'_>) -> &[u8] {
+    src.name().map_or(b"", CStr::to_bytes)
 }
 
-fn copy_attrs(src: Node, out: Node, function: &CStr) {
+fn copy_attrs(src: Node, out: Node) {
+    if !out.is_element() {
+        return;
+    }
     for attr in src.attrs() {
         let qname = NsName {
             namespace_uri: attr.namespace_uri(),
@@ -70,11 +60,7 @@ fn copy_attrs(src: Node, out: Node, function: &CStr) {
             local_name: attrs::local_name(attr),
             name: attr.name(),
         };
-        if out.is_element() {
-            attrs::set_ns(out, qname, Some(attr.value().unwrap_or(c"")));
-        } else {
-            crate::ffi::return_if_fail(function, c"el->kind == NS_NODE_ELEMENT");
-        }
+        attrs::set_ns(out, qname, Some(attr.value().unwrap_or(c"")));
     }
 }
 
@@ -86,36 +72,25 @@ fn clone_shallow(src: Node) -> Option<Node<'static>> {
                 src.flags()
                     & (FLAG_SVG_NS | FLAG_FOREIGN_NS | FLAG_KEEP_CASE | FLAG_INPUT_INDETERMINATE),
             );
-            copy_attrs(src, out, c"ns_element_set_attr_ns");
+            copy_attrs(src, out);
             out
         }
-        Kind::Text if src.text_ptr().is_null() => {
-            new_text(KIND_TEXT, dup_bytes(b""), src.text_len())
-        }
-        Kind::Text => new_text(
-            KIND_TEXT,
-            dup_with_len(src.text_ptr(), src.text_len()),
-            src.text_len(),
-        ),
+        Kind::Text => new_text(Kind::Text, src.text_with_len().unwrap_or(b"")),
         Kind::Doctype => {
             let out = new_element(name_or_empty(src));
-            copy_attrs(src, out, c"ns_element_set_attr_ns");
-            out.set_kind(KIND_DOCTYPE);
+            copy_attrs(src, out);
+            out.set_kind(Kind::Doctype);
             out
         }
         Kind::Document | Kind::Comment => {
-            let out = Node::alloc(if src.kind() == Kind::Document {
-                KIND_DOCUMENT
-            } else {
-                KIND_COMMENT
-            });
-            if !src.text_ptr().is_null() {
-                out.adopt_text(dup_with_len(src.text_ptr(), src.text_len()), src.text_len());
+            let out = Node::alloc(src.kind());
+            if let Some(text) = src.text_with_len() {
+                out.set_text(text);
             }
             if let Some(name) = src.name() {
-                out.adopt_name(dup(name));
+                out.set_name(name.to_bytes());
             }
-            copy_attrs(src, out, c"ns_element_set_attr_ns");
+            copy_attrs(src, out);
             out
         }
         Kind::Other => return None,

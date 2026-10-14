@@ -257,7 +257,7 @@ fn apply_set(scope: &mut Scope<'_>, node: Element, name: &CStr, value: &[u8], va
     let js = ffi::js_of(scope);
     let paint_only = changed && is(name, "src") && ffi::img_src_layout_neutral(node);
     if changed {
-        attrs::set_len(node, name, Some(value), value.len());
+        attrs::set_len(node, name, Some(value));
     }
     ffi::body_forward_content_handler(scope, node, name, Some(value_c));
     if let Some(js) = js.filter(|_| changed) {

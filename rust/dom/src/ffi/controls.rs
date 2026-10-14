@@ -4,24 +4,25 @@
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::{Node, NsNode};
+use super::node;
+use crate::Node;
+use crate::NsNode;
 use crate::controls::{self};
-
-unsafe fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_spellcheck_used(n: *const NsNode) -> GBoolean {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     glib::boolean(unsafe { node(n) }.is_none_or(controls::spellcheck_used))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_spellcheck_host(n: *const NsNode) -> *const NsNode {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     Node::ptr_or_null(unsafe { node(n) }.and_then(controls::spellcheck_host))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean {
+    // SAFETY: the C callers pass null or a node of this thread's store.
     glib::boolean(unsafe { node(n) }.is_some_and(controls::is_one_line_text))
 }

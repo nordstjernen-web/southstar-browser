@@ -88,7 +88,7 @@ pub fn cells(scope: &mut Scope<'_>, this: &Value) -> JsResult {
 }
 
 fn new_element(tag: &[u8]) -> Element {
-    southstar_dom::node::new_element(southstar_glib::strdup(tag))
+    southstar_dom::node::new_element(tag)
 }
 
 fn table_changed(scope: &Scope<'_>) {

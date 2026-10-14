@@ -1,0 +1,1 @@
+ignore-interior-mutability = ["southstar_dom::handle::Node", "southstar_dom::store::WeakNode"]

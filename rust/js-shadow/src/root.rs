@@ -5,7 +5,6 @@
 use core::ffi::CStr;
 
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH};
-use southstar_glib as glib;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -91,7 +90,7 @@ fn write_flags(root: Element, flags: Flags) {
         (flags.clonable, CLONABLE),
     ] {
         if on {
-            southstar_dom::attrs::set_len(root, attr, Some(b"1"), 1);
+            southstar_dom::attrs::set_len(root, attr, Some(b"1"));
         }
     }
 }
@@ -147,13 +146,8 @@ pub fn attach_shadow(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
         write_flags(existing, flags);
         return wrap_shadow_root(scope, existing);
     }
-    let root = southstar_dom::node::new_element(glib::strdup(b"div"));
-    southstar_dom::attrs::set_len(
-        root,
-        SHADOW_ATTR,
-        Some(mode.to_bytes()),
-        mode.to_bytes().len(),
-    );
+    let root = southstar_dom::node::new_element(b"div");
+    southstar_dom::attrs::set_len(root, SHADOW_ATTR, Some(mode.to_bytes()));
     write_flags(root, flags);
     ffi::append_child(host, root);
     ffi::arm_js_invalidate(root);

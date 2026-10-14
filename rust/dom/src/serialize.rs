@@ -6,8 +6,8 @@ use core::ffi::CStr;
 
 use southstar_html_util::{escape_append, is_raw_text, is_void};
 
-use crate::ffi::{Kind, Node};
 use crate::{FLAG_FOREIGN_NS, FLAG_PI, FLAG_SCRIPTING_DISABLED, FLAG_SVG_NS, MAX_DEPTH, children};
+use crate::{Kind, Node};
 
 const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 const HTML_NAMESPACE: &[u8] = b"http://www.w3.org/1999/xhtml";

@@ -146,7 +146,7 @@ pub(crate) fn link_is_loadable_stylesheet(n: Node) -> bool {
 }
 
 pub(crate) fn mark(n: Node, name: &CStr) {
-    southstar_dom::attrs::set_len(n, name, Some(b"1"), 1);
+    southstar_dom::attrs::set_len(n, name, Some(b"1"));
 }
 
 pub(crate) fn unmark(n: Node, name: &CStr) {

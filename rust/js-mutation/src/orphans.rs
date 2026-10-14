@@ -5,7 +5,8 @@
 use southstar_dom::{MAX_DEPTH, children};
 
 use crate::ffi::{self, Js};
-use crate::{Element, key, node_at, record, tree, with_page};
+use crate::{Element, key, record, tree, with_page};
+use southstar_dom::WeakNode;
 
 pub(crate) fn track(js: Js, node: Element) {
     with_page(js, |page| {
@@ -137,9 +138,10 @@ pub(crate) fn purge_node_refs(js: Js, root: Element) {
 
 pub(crate) fn collect_unreachable(js: Js) -> Option<Vec<Element>> {
     let roots: Vec<Element> = with_page(js, |page| {
-        page.orphans
-            .as_ref()
-            .map(|set| set.iter().map(|&k| node_at(k)).collect())
+        page.orphans.as_mut().map(|set| {
+            set.retain(|k| k.get().is_some());
+            set.iter().filter_map(|k| k.get()).collect()
+        })
     })?;
     let unreachable: Vec<Element> = roots
         .into_iter()
@@ -155,7 +157,7 @@ pub(crate) fn take_all(js: Js) -> Vec<Element> {
     with_page(js, |page| {
         page.orphans
             .as_mut()
-            .map(|set| set.drain().map(node_at).collect())
+            .map(|set| set.drain().filter_map(WeakNode::get).collect())
             .unwrap_or_default()
     })
 }
@@ -164,7 +166,7 @@ pub(crate) fn snapshot(js: Js) -> Option<Vec<Element>> {
     with_page(js, |page| {
         page.orphans
             .as_ref()
-            .map(|set| set.iter().map(|&k| node_at(k)).collect())
+            .map(|set| set.iter().filter_map(|k| k.get()).collect())
     })
 }
 

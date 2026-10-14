@@ -9,7 +9,7 @@ use core::ptr;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use southstar_dom::{Attr, Node, NsAttr, NsNode};
+use southstar_dom::{AttrView, Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -189,11 +189,7 @@ pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn new_text(js: Js, text: &[u8]) -> Element {
-    let node = southstar_dom::node::new_text(
-        southstar_dom::node::KIND_TEXT,
-        glib::strdup(text),
-        text.len() as u32,
-    );
+    let node = southstar_dom::node::new_text(southstar_dom::Kind::Text, text);
     unsafe { ns_js_track_orphan(js.0, node.as_mut_ptr()) };
     node
 }
@@ -290,16 +286,13 @@ pub fn nsr_attr_owner(value: &Value) -> *mut NsNode {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe fn nsr_attr_to_js(
+pub fn nsr_attr_to_js(
     scope: &mut Scope<'_>,
     owner: &Value,
-    attr: *const NsAttr,
+    attr: AttrView<'_>,
     include_base: bool,
 ) -> Result<Value, Value> {
-    match unsafe { Attr::from_ptr(attr) } {
-        Some(attr) => attr::to_js(scope, owner, attr, include_base),
-        None => Ok(Value::undefined()),
-    }
+    attr::to_js(scope, owner, attr, include_base)
 }
 
 #[unsafe(no_mangle)]
