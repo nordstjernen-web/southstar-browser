@@ -40,6 +40,7 @@ const OUTER_BLOCK: u8 = 1;
 const INNER_RUBY: u8 = 5;
 const INTERNAL_NONE: u8 = 0;
 const INTERNAL_TABLE_CAPTION: u8 = 8;
+const LAYOUT_UNIT: f64 = 1.0 / 64.0;
 
 #[derive(Clone, Copy)]
 pub struct FlowStart {
@@ -218,7 +219,7 @@ impl<'a> Flow<'a> {
             }
         }
         let (mut left_off, mut right_off) = self.offsets_at(float_y);
-        while avail > cw - left_off - right_off && !self.floats.is_empty() {
+        while avail > cw - left_off - right_off + LAYOUT_UNIT && !self.floats.is_empty() {
             let mut next_y = float_y;
             let mut advanced = false;
             for f in &self.floats {
