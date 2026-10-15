@@ -1158,9 +1158,9 @@ where
                         cursor.advance(interner);
                         let strict = cursor.strict();
                         cursor.set_strict(true);
-                        let mut rhs =
-                            AssignmentExpression::new(true, self.allow_yield, self.allow_await)
-                                .parse(cursor, interner)?;
+                        // Field initializers are function boundaries without [Yield] and [Await].
+                        let mut rhs = AssignmentExpression::new(true, false, false)
+                            .parse(cursor, interner)?;
                         cursor.expect_semicolon("expected semicolon", interner)?;
                         cursor.set_strict(strict);
                         let function_name = interner.get_or_intern(
@@ -1251,9 +1251,9 @@ where
                         cursor.advance(interner);
                         let strict = cursor.strict();
                         cursor.set_strict(true);
-                        let mut rhs =
-                            AssignmentExpression::new(true, self.allow_yield, self.allow_await)
-                                .parse(cursor, interner)?;
+                        // Field initializers are function boundaries without [Yield] and [Await].
+                        let mut rhs = AssignmentExpression::new(true, false, false)
+                            .parse(cursor, interner)?;
                         cursor.expect_semicolon("expected semicolon", interner)?;
                         cursor.set_strict(strict);
                         if let Some(name) = name.literal() {
@@ -1423,8 +1423,8 @@ impl ClassElement {
         {
             let strict = cursor.strict();
             cursor.set_strict(true);
-            let mut rhs = AssignmentExpression::new(true, self.allow_yield, self.allow_await)
-                .parse(cursor, interner)?;
+            // Field initializers are function boundaries without [Yield] and [Await].
+            let mut rhs = AssignmentExpression::new(true, false, false).parse(cursor, interner)?;
             cursor.set_strict(strict);
             match &name {
                 ClassElementName::PropertyName(name) => {
