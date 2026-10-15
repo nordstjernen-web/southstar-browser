@@ -87,6 +87,8 @@ pub struct RuntimeOptions {
     pub rejection_tracker: Option<RejectionTrackerFn>,
     pub module_normalize: Option<ModuleNormalizeFn>,
     pub module_load: Option<ModuleLoadFn>,
+    pub can_block: bool,
+    pub wait_for_jobs: bool,
 }
 
 impl Default for RuntimeOptions {
@@ -99,6 +101,8 @@ impl Default for RuntimeOptions {
             rejection_tracker: None,
             module_normalize: None,
             module_load: None,
+            can_block: false,
+            wait_for_jobs: false,
         }
     }
 }

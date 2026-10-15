@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+mod agent;
 mod host;
 mod test262;
 

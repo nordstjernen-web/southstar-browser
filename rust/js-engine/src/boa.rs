@@ -9,11 +9,12 @@ use std::path::Path;
 use boa_engine::builtins::object::OrdinaryObject;
 use boa_engine::builtins::promise::PromiseState as BoaPromiseState;
 use boa_engine::builtins::typed_array::TypedArrayKind;
-use boa_engine::job::PromiseJob;
+use boa_engine::job::{Job as BoaJob, NativeJob, PromiseJob, TimeoutJob};
 use boa_engine::object::builtins::{
     AlignedVec, JsArray, JsArrayBuffer, JsBigInt64Array, JsBigUint64Array, JsFloat16Array,
     JsFloat32Array, JsFloat64Array, JsInt8Array, JsInt16Array, JsInt32Array, JsPromise,
-    JsTypedArray, JsUint8Array, JsUint8ClampedArray, JsUint16Array, JsUint32Array,
+    JsSharedArrayBuffer, JsTypedArray, JsUint8Array, JsUint8ClampedArray, JsUint16Array,
+    JsUint32Array,
 };
 use boa_engine::object::{FunctionObjectBuilder, IntegrityLevel};
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
@@ -31,8 +32,8 @@ use boa_engine::object::builtins::{JsDataView, JsDate, JsMap, JsRegExp, JsSet};
 
 use crate::{
     Attributes, BoundFn, ElementType, HostClass, Job, NativeFn, ObjectKind, PromiseState,
-    PropertyDescriptor, RealmInit, RuntimeHandle, ScriptOptions, Trace, TypedArrayBytes,
-    TypedArrayView, int64_modulo,
+    PropertyDescriptor, RealmInit, RuntimeHandle, RuntimeOptions, ScriptOptions, Trace,
+    TypedArrayBytes, TypedArrayView, int64_modulo,
 };
 
 mod access;
@@ -208,8 +209,12 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(module_root: &Path) -> Engine {
+        Engine::with_options(module_root, &RuntimeOptions::default())
+    }
+
+    pub fn with_options(module_root: &Path, options: &RuntimeOptions) -> Engine {
         Engine {
-            rt: runtime::engine_runtime(module_root),
+            rt: runtime::engine_runtime(module_root, options),
         }
     }
 
@@ -229,6 +234,9 @@ impl Drop for Engine {
 }
 
 pub struct Realm(boa_engine::realm::Realm);
+
+#[derive(Clone)]
+pub struct SharedMemory(boa_engine::builtins::array_buffer::SharedArrayBuffer);
 
 pub struct Scope<'a> {
     ctx: *mut Context,
@@ -350,6 +358,31 @@ impl Scope<'_> {
             }
             None => Err(self.type_error("not a compiled script or module")),
         }
+    }
+
+    pub fn shared_memory(&mut self, value: &Value) -> Option<SharedMemory> {
+        let object = value.0.as_object()?;
+        JsSharedArrayBuffer::from_object(object.clone())
+            .ok()
+            .map(|buffer| SharedMemory(buffer.inner()))
+    }
+
+    pub fn from_shared_memory(&mut self, memory: &SharedMemory) -> Value {
+        Value(JsSharedArrayBuffer::from_buffer(memory.0.clone(), self.cx()).into())
+    }
+
+    pub fn set_timeout(&mut self, function: &Value, args: Vec<Value>, delay_ms: u64) {
+        let function = function.0.clone();
+        let args: Vec<JsValue> = args.into_iter().map(|arg| arg.0).collect();
+        let job = NativeJob::new(move |context| {
+            function
+                .as_callable()
+                .map_or(Ok(JsValue::undefined()), |function| {
+                    function.call(&JsValue::undefined(), &args, context)
+                })
+        });
+        self.cx()
+            .enqueue_job(BoaJob::TimeoutJob(TimeoutJob::new(job, delay_ms)));
     }
 
     pub fn run_jobs(&mut self) -> Result<(), Value> {

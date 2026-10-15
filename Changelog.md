@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* southstar-jsshell implements test262's $262.agent: agents run in their own
+  threads and engines, share SharedArrayBuffers with the main agent and
+  report back, and the shell has a setTimeout. The engine layer gains
+  RuntimeOptions.can_block ([[CanBlock]], so Atomics.wait may suspend) and
+  wait_for_jobs, which makes run_jobs honour timeout deadlines and wait for
+  pending asynchronous jobs such as Atomics.waitAsync; the browser keeps
+  neither. Every built-ins/Atomics test passes, and test262 reaches 50,271
+  of 52,133 (96.4%).
 * Scripts can use explicit resource management: using and await using
   declarations dispose their values when the block, function, module or
   loop iteration ends, however it ends, and DisposableStack,

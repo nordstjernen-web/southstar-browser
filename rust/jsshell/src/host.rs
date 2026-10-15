@@ -58,6 +58,22 @@ fn detach_array_buffer(
     Ok(Value::undefined())
 }
 
+fn set_timeout(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value, Value> {
+    let callback = argument(args, 0);
+    if !scope.is_function(&callback) {
+        return Err(scope.type_error("setTimeout needs a function"));
+    }
+    let delay = scope.to_number(&argument(args, 1))?;
+    let delay = if delay.is_finite() && delay > 0.0 {
+        delay as u64
+    } else {
+        0
+    };
+    let rest = args.get(2..).map(<[Value]>::to_vec).unwrap_or_default();
+    scope.set_timeout(&callback, rest, delay);
+    Ok(Value::undefined())
+}
+
 fn gc(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
     scope.gc();
     Ok(Value::undefined())
@@ -74,6 +90,8 @@ pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
     scope.set(&global, "print", print)?;
     let read = scope.function("read", 1, read);
     scope.set(&global, "read", read)?;
+    let set_timeout = scope.function("setTimeout", 2, set_timeout);
+    scope.set(&global, "setTimeout", set_timeout)?;
     let test262 = scope.new_object();
     scope.set(&test262, "global", global.clone())?;
     for (name, arity, f) in [
@@ -89,6 +107,7 @@ pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
         let function = scope.function(name, arity, f);
         scope.set(&test262, name, function)?;
     }
+    crate::agent::install_parent(scope, &test262)?;
     scope.set(&global, "$262", test262)
 }
 

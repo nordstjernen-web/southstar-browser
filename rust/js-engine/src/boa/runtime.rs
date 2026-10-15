@@ -8,6 +8,7 @@ use core::ptr;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use boa_engine::builtins::promise::OperationType;
 use boa_engine::context::HostHooks;
@@ -54,6 +55,8 @@ struct Executor {
     generic_jobs: RefCell<VecDeque<GenericJob>>,
     async_jobs: RefCell<VecDeque<NativeAsyncJob>>,
     timeout_jobs: RefCell<VecDeque<TimeoutJob>>,
+    wait: bool,
+    deadlines: RefCell<Vec<(Instant, TimeoutJob)>>,
 }
 
 enum Ran {
@@ -133,18 +136,116 @@ impl Executor {
     }
 }
 
+impl Executor {
+    fn run_microtask(&self, cell: &RefCell<&mut Context>) -> Option<JsResult<()>> {
+        let mut ctx = cell.try_borrow_mut().ok()?;
+        if let Some(Ran::Job(_, result)) = self.run_promise_job(&mut ctx) {
+            return Some(result);
+        }
+        let generic = self.generic_jobs.borrow_mut().pop_front();
+        generic.map(|job| job.call(&mut ctx).map(drop))
+    }
+
+    fn run_due_timeout(&self, cell: &RefCell<&mut Context>) -> Option<JsResult<()>> {
+        let mut ctx = cell.try_borrow_mut().ok()?;
+        let now = Instant::now();
+        let job = {
+            let mut deadlines = self.deadlines.borrow_mut();
+            let index = deadlines
+                .iter()
+                .enumerate()
+                .filter(|(_, (deadline, _))| *deadline <= now)
+                .min_by_key(|(_, (deadline, _))| *deadline)
+                .map(|(index, _)| index)?;
+            deadlines.remove(index).1
+        };
+        if job.cancelled() {
+            return Some(Ok(()));
+        }
+        Some(job.call(&mut ctx).map(drop))
+    }
+
+    fn run_jobs_to_completion(&self, context: &mut Context) -> JsResult<()> {
+        use core::future::Future;
+        use core::task::{Context as TaskContext, Poll, Waker};
+        let cell = RefCell::new(context);
+        let mut futures = Vec::new();
+        let mut task = TaskContext::from_waker(Waker::noop());
+        loop {
+            let mut progressed = false;
+            while let Some(result) = self.run_microtask(&cell) {
+                result?;
+                progressed = true;
+            }
+            loop {
+                let job = self.async_jobs.borrow_mut().pop_front();
+                let Some(job) = job else {
+                    break;
+                };
+                futures.push(job.call(&cell));
+                progressed = true;
+            }
+            let mut failure = None;
+            futures.retain_mut(|future| match core::pin::Pin::new(future).poll(&mut task) {
+                Poll::Pending => true,
+                Poll::Ready(result) => {
+                    progressed = true;
+                    if let Err(error) = result {
+                        failure.get_or_insert(error);
+                    }
+                    false
+                }
+            });
+            if let Some(error) = failure {
+                return Err(error);
+            }
+            if progressed {
+                continue;
+            }
+            if let Some(result) = self.run_due_timeout(&cell) {
+                result?;
+                continue;
+            }
+            let pending_timeouts = self.deadlines.borrow().len();
+            if futures.is_empty() && pending_timeouts == 0 {
+                break;
+            }
+            let pause = self
+                .deadlines
+                .borrow()
+                .iter()
+                .map(|(deadline, _)| deadline.saturating_duration_since(Instant::now()))
+                .min()
+                .unwrap_or(Duration::from_millis(1))
+                .min(Duration::from_millis(1));
+            std::thread::sleep(pause);
+        }
+        if let Ok(mut ctx) = cell.try_borrow_mut() {
+            ctx.clear_kept_objects();
+        }
+        Ok(())
+    }
+}
+
 impl JobExecutor for Executor {
     fn enqueue_job(self: Rc<Self>, job: Job, _context: &mut Context) {
         match job {
             Job::PromiseJob(job) => self.promise_jobs.borrow_mut().push_back(job),
             Job::GenericJob(job) => self.generic_jobs.borrow_mut().push_back(job),
             Job::AsyncJob(job) => self.async_jobs.borrow_mut().push_back(job),
+            Job::TimeoutJob(job) if self.wait => {
+                let deadline = Instant::now() + Duration::from_millis(job.timeout().as_millis());
+                self.deadlines.borrow_mut().push((deadline, job));
+            }
             Job::TimeoutJob(job) => self.timeout_jobs.borrow_mut().push_back(job),
             _ => {}
         }
     }
 
     fn run_jobs(self: Rc<Self>, context: &mut Context) -> JsResult<()> {
+        if self.wait {
+            return self.run_jobs_to_completion(context);
+        }
         loop {
             match self.run_one(context) {
                 Ran::Nothing => break,
@@ -293,7 +394,10 @@ impl ModuleLoader for Loader {
 
 impl BoaRuntime {
     fn build(options: &RuntimeOptions, simple: Option<SimpleModuleLoader>) -> RuntimeHandle {
-        let executor = Rc::new(Executor::default());
+        let executor = Rc::new(Executor {
+            wait: options.wait_for_jobs,
+            ..Executor::default()
+        });
         let hooks = Rc::new(Hooks {
             runtime: Cell::new(ptr::null()),
         });
@@ -306,6 +410,7 @@ impl BoaRuntime {
             .host_hooks(hooks.clone())
             .job_executor(executor.clone())
             .module_loader(loader.clone())
+            .can_block(options.can_block)
             .build()
         else {
             return RuntimeHandle::NULL;
@@ -343,11 +448,8 @@ impl BoaRuntime {
     }
 }
 
-pub(super) fn engine_runtime(module_root: &Path) -> RuntimeHandle {
-    BoaRuntime::build(
-        &RuntimeOptions::default(),
-        SimpleModuleLoader::new(module_root).ok(),
-    )
+pub(super) fn engine_runtime(module_root: &Path, options: &RuntimeOptions) -> RuntimeHandle {
+    BoaRuntime::build(options, SimpleModuleLoader::new(module_root).ok())
 }
 
 pub(super) fn default_context(rt: RuntimeHandle) -> *mut Context {

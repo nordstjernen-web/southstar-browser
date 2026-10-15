@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
 
-use southstar_js_engine::{Engine, PromiseState, Scope, Value};
+use southstar_js_engine::{Engine, PromiseState, RuntimeOptions, Scope, Value};
 
 use crate::host;
 
@@ -158,7 +158,13 @@ fn run_mode(
         }
     }
     host::take_printed();
-    let mut engine = Engine::new(&harness.root);
+    crate::agent::reset();
+    let options = RuntimeOptions {
+        can_block: !meta.flags.iter().any(|f| f == "CanBlockIsFalse"),
+        wait_for_jobs: true,
+        ..RuntimeOptions::default()
+    };
+    let mut engine = Engine::with_options(&harness.root, &options);
     engine.enter(|scope| {
         if let Err(error) = host::install(scope) {
             let (name, message) = error_text(scope, &error);

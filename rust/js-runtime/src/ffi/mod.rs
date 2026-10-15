@@ -300,6 +300,7 @@ impl Js {
             rejection_tracker: Some(tracker),
             module_normalize: Some(imports::nsr_js_module_normalize),
             module_load: Some(imports::nsr_js_module_load),
+            ..RuntimeOptions::default()
         };
         unsafe { record::create_runtime(self.0, &options) }
     }
