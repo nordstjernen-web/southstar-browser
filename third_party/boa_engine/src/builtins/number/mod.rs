@@ -954,10 +954,40 @@ fn f64_to_exponential(n: f64) -> JsString {
 // because in cases like (0.999).toExponential(0) the result will be 1e0.
 // Instead we get the index of 'e', and if the next character is not '-' we insert the plus sign
 fn f64_to_exponential_with_precision(n: f64, prec: usize) -> JsString {
-    let mut res = format!("{n:.prec$e}");
-    let idx = res.find('e').expect("'e' not found in exponential string");
-    if res.as_bytes()[idx + 1] != b'-' {
-        res.insert(idx + 1, '+');
+    // `Number.prototype.toExponential` picks the larger `n` when two candidates are equally
+    // close, while Rust's formatting rounds ties to even, so round the exact decimal expansion of
+    // the value (at most 767 significant digits) half up here.
+    let exact = format!("{:.800e}", n.abs());
+    let (mantissa, exponent) = exact
+        .split_once('e')
+        .expect("'e' not found in exponential string");
+    let mut exponent: i32 = exponent.parse().expect("exponent must be an integer");
+    let digits: Vec<u8> = mantissa.bytes().filter(u8::is_ascii_digit).collect();
+    let mut kept = digits[..=prec].to_vec();
+    if digits[prec + 1] >= b'5' {
+        match kept.iter().rposition(|&digit| digit != b'9') {
+            Some(index) => {
+                kept[index] += 1;
+                kept[index + 1..].fill(b'0');
+            }
+            None => {
+                kept.fill(b'0');
+                kept[0] = b'1';
+                exponent += 1;
+            }
+        }
     }
+    let mut res = String::with_capacity(prec + 8);
+    if n < 0.0 {
+        res.push('-');
+    }
+    res.push(char::from(kept[0]));
+    if prec > 0 {
+        res.push('.');
+        res.extend(kept[1..].iter().map(|&digit| char::from(digit)));
+    }
+    res.push('e');
+    res.push(if exponent < 0 { '-' } else { '+' });
+    res.push_str(&exponent.unsigned_abs().to_string());
     js_string!(res)
 }

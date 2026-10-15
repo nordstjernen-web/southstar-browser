@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* (25).toExponential(0) is "3e+1" as in other browsers (ties round up),
+  Date.parse rejects "-000000" years and dates beyond the representable
+  range instead of misreading them, and Promise.try returns a promise the
+  callback returns instead of wrapping it.
 * A class field initializer that writes to its own class, such as
   id = ++Counter.count, no longer crashes the JavaScript engine.
 * JavaScript decorators: classes and their methods, getters, setters and

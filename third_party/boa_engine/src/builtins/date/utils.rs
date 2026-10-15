@@ -776,6 +776,18 @@ pub(super) fn parse_date(date: &JsString, hooks: &dyn HostHooks) -> Option<i64> 
         return Some(dt);
     }
 
+    // A signed six-digit year only exists in the Date Time String Format, so a string starting
+    // with one that the parser above rejected (`-000000`, or a time value out of range) is
+    // invalid rather than a legacy date.
+    let bytes = date.as_bytes();
+    if matches!(bytes.first(), Some(b'+' | b'-'))
+        && bytes
+            .get(1..7)
+            .is_some_and(|year| year.iter().all(u8::is_ascii_digit))
+    {
+        return None;
+    }
+
     // `toString` format: `Thu Jan 01 1970 00:00:00 GMT+0000`
     if let Ok(t) = OffsetDateTime::parse(
         &date,
