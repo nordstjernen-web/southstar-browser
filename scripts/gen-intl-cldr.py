@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate rust/js-intl/src/cldr.rs from the CLDR JSON distribution.
+"""Generate rust/intl-core/src/cldr.rs from the CLDR JSON distribution.
 
 Usage: gen-intl-cldr.py CLDR_JSON_DIR [OUT]
 
@@ -10,13 +10,13 @@ scriptMetadata}.json and cldr-bcp47/bcp47/{calendar,collation,measure,
 number,timezone,transform}.json, all flattened into the one directory (the
 bcp47 files prefixed "bcp47-").
 
-The tables are what rust/js-intl needs for ECMA-402 without ICU: the alias
+The tables are what Intl needs for ECMA-402 without ICU: the alias
 rules of UTS #35 Annex C, the likely subtags of the languages CLDR has
 locale data for, of every two-letter language and of every "und" entry,
 the -u- and -t- value aliases, the region preferences behind Intl.Locale's
 getCalendars, getHourCycles, getWeekInfo and getTimeZones, the writing
 direction of each script, and the languages reported as available. Each table is a string of space-separated entries
-that rust/js-intl/src/cldr.rs's readers index on first use.
+that rust/intl-core/src/cldr_index.rs indexes on first use.
 """
 import json
 import os
@@ -26,7 +26,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = sys.argv[1] if len(sys.argv) > 1 else '.'
 OUT = sys.argv[2] if len(sys.argv) > 2 else \
-    os.path.join(ROOT, 'rust', 'js-intl', 'src', 'cldr.rs')
+    os.path.join(ROOT, 'rust', 'intl-core', 'src', 'cldr.rs')
 
 LANGUAGE = re.compile(r'^([a-z]{2,3}|[a-z]{5,8})$')
 SCRIPT = re.compile(r'^[A-Z][a-z]{3}$')

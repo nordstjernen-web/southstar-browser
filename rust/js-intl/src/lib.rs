@@ -3,9 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod case;
-mod cldr;
-mod cldr_index;
-mod collation;
 mod collator;
 mod datetime;
 mod ffi;
@@ -13,9 +10,9 @@ mod locale;
 mod negotiate;
 mod number;
 mod printf;
-mod tag;
 mod text;
 
+use southstar_intl_core::{cldr_index, collation, tag};
 use southstar_js_engine::{Attributes, BoundFn, NativeFn, ObjectKind, Scope, Value};
 
 const HIDDEN: Attributes = Attributes {

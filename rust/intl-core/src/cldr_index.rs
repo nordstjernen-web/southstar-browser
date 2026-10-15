@@ -106,7 +106,7 @@ pub(crate) fn likely_subtags(key: &str) -> Option<&'static str> {
         .copied()
 }
 
-pub(crate) fn calendars(region: &str) -> Option<&'static str> {
+pub fn calendars(region: &str) -> Option<&'static str> {
     static INDEX: OnceLock<Index> = OnceLock::new();
     INDEX
         .get_or_init(|| grouped(cldr::CALENDAR_PREFERENCES))
@@ -114,7 +114,7 @@ pub(crate) fn calendars(region: &str) -> Option<&'static str> {
         .copied()
 }
 
-pub(crate) fn hour_cycle(key: &str) -> Option<&'static str> {
+pub fn hour_cycle(key: &str) -> Option<&'static str> {
     static INDEX: OnceLock<Index> = OnceLock::new();
     INDEX
         .get_or_init(|| grouped(cldr::HOUR_CYCLES))
@@ -122,7 +122,7 @@ pub(crate) fn hour_cycle(key: &str) -> Option<&'static str> {
         .copied()
 }
 
-pub(crate) fn first_day(region: &str) -> Option<&'static str> {
+pub fn first_day(region: &str) -> Option<&'static str> {
     static INDEX: OnceLock<Index> = OnceLock::new();
     INDEX
         .get_or_init(|| grouped(cldr::FIRST_DAYS))
@@ -130,7 +130,7 @@ pub(crate) fn first_day(region: &str) -> Option<&'static str> {
         .copied()
 }
 
-pub(crate) fn weekend(region: &str) -> Option<&'static str> {
+pub fn weekend(region: &str) -> Option<&'static str> {
     static INDEX: OnceLock<Index> = OnceLock::new();
     INDEX
         .get_or_init(|| grouped(cldr::WEEKENDS))
@@ -149,36 +149,36 @@ fn zones_by_region() -> &'static HashMap<&'static str, Vec<&'static str>> {
     })
 }
 
-pub(crate) fn time_zones(region: &str) -> Option<&'static [&'static str]> {
+pub fn time_zones(region: &str) -> Option<&'static [&'static str]> {
     zones_by_region().get(region).map(Vec::as_slice)
 }
 
-pub(crate) fn all_time_zones() -> Vec<&'static str> {
+pub fn all_time_zones() -> Vec<&'static str> {
     let mut zones: Vec<&'static str> = zones_by_region().values().flatten().copied().collect();
     zones.sort_unstable();
     zones.dedup();
     zones
 }
 
-pub(crate) fn is_rtl_script(script: &str) -> bool {
+pub fn is_rtl_script(script: &str) -> bool {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
     SET.get_or_init(|| words(cldr::RTL_SCRIPTS))
         .contains(script)
 }
 
-pub(crate) fn is_ltr_script(script: &str) -> bool {
+pub fn is_ltr_script(script: &str) -> bool {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
     SET.get_or_init(|| words(cldr::LTR_SCRIPTS))
         .contains(script)
 }
 
-pub(crate) fn is_available_language(language: &str) -> bool {
+pub fn is_available_language(language: &str) -> bool {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
     SET.get_or_init(|| words(cldr::AVAILABLE_LANGUAGES))
         .contains(language)
 }
 
-pub(crate) fn is_available_script(language_script: &str) -> bool {
+pub fn is_available_script(language_script: &str) -> bool {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
     SET.get_or_init(|| words(cldr::AVAILABLE_SCRIPTS))
         .contains(language_script)

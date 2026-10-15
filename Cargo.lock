@@ -2149,6 +2149,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-intl-core"
+version = "0.9.11-dev"
+dependencies = [
+ "southstar-url",
+]
+
+[[package]]
 name = "southstar-ipc"
 version = "0.9.11-dev"
 
@@ -2442,8 +2449,8 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-glib",
  "southstar-i18n",
+ "southstar-intl-core",
  "southstar-js-engine",
- "southstar-url",
 ]
 
 [[package]]

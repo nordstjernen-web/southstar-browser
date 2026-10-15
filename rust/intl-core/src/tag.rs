@@ -5,27 +5,27 @@
 use crate::cldr_index;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct LanguageId {
-    pub(crate) language: String,
-    pub(crate) script: Option<String>,
-    pub(crate) region: Option<String>,
-    pub(crate) variants: Vec<String>,
+pub struct LanguageId {
+    pub language: String,
+    pub script: Option<String>,
+    pub region: Option<String>,
+    pub variants: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Transformed {
-    pub(crate) tlang: Option<LanguageId>,
-    pub(crate) fields: Vec<(String, String)>,
+pub struct Transformed {
+    pub tlang: Option<LanguageId>,
+    pub fields: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct LocaleId {
-    pub(crate) id: LanguageId,
-    pub(crate) attributes: Vec<String>,
-    pub(crate) keywords: Vec<(String, String)>,
-    pub(crate) transformed: Option<Transformed>,
-    pub(crate) others: Vec<(char, String)>,
-    pub(crate) private_use: Vec<String>,
+pub struct LocaleId {
+    pub id: LanguageId,
+    pub attributes: Vec<String>,
+    pub keywords: Vec<(String, String)>,
+    pub transformed: Option<Transformed>,
+    pub others: Vec<(char, String)>,
+    pub private_use: Vec<String>,
 }
 
 fn all_bytes(text: &str, min: usize, max: usize, test: fn(&u8) -> bool) -> bool {
@@ -40,23 +40,23 @@ fn alphanum(text: &str, min: usize, max: usize) -> bool {
     all_bytes(text, min, max, u8::is_ascii_alphanumeric)
 }
 
-pub(crate) fn is_language_subtag(text: &str) -> bool {
+pub fn is_language_subtag(text: &str) -> bool {
     alpha(text, 2, 3) || alpha(text, 5, 8)
 }
 
-pub(crate) fn is_script_subtag(text: &str) -> bool {
+pub fn is_script_subtag(text: &str) -> bool {
     alpha(text, 4, 4)
 }
 
-pub(crate) fn is_region_subtag(text: &str) -> bool {
+pub fn is_region_subtag(text: &str) -> bool {
     alpha(text, 2, 2) || all_bytes(text, 3, 3, u8::is_ascii_digit)
 }
 
-pub(crate) fn is_variant_subtag(text: &str) -> bool {
+pub fn is_variant_subtag(text: &str) -> bool {
     alphanum(text, 5, 8) || (alphanum(text, 4, 4) && text.as_bytes()[0].is_ascii_digit())
 }
 
-pub(crate) fn is_type_value(text: &str) -> bool {
+pub fn is_type_value(text: &str) -> bool {
     text.split('-').all(|part| alphanum(part, 3, 8))
 }
 
@@ -70,7 +70,7 @@ fn is_transform_key(text: &str) -> bool {
     bytes.len() == 2 && bytes[0].is_ascii_alphabetic() && bytes[1].is_ascii_digit()
 }
 
-pub(crate) fn title_case(text: &str) -> String {
+pub fn title_case(text: &str) -> String {
     let lower = text.to_ascii_lowercase();
     let mut chars = lower.chars();
     chars.next().map_or_else(String::new, |first| {
@@ -165,7 +165,7 @@ impl<'a> Subtags<'a> {
 }
 
 impl LanguageId {
-    pub(crate) fn parse(text: &str) -> Option<LanguageId> {
+    pub fn parse(text: &str) -> Option<LanguageId> {
         let locale = LocaleId::parse(text)?;
         let plain = LocaleId {
             id: locale.id.clone(),
@@ -186,7 +186,7 @@ impl LanguageId {
         }
     }
 
-    pub(crate) fn to_text(&self) -> String {
+    pub fn to_text(&self) -> String {
         let mut out = String::new();
         self.write(&mut out);
         out
@@ -246,7 +246,7 @@ impl LanguageId {
         }
     }
 
-    pub(crate) fn canonicalize(&mut self) {
+    pub fn canonicalize(&mut self) {
         self.variants.sort();
         self.replace_aliases();
     }
@@ -262,7 +262,7 @@ impl LanguageId {
 }
 
 impl LocaleId {
-    pub(crate) fn parse(text: &str) -> Option<LocaleId> {
+    pub fn parse(text: &str) -> Option<LocaleId> {
         if text.is_empty() || !text.is_ascii() {
             return None;
         }
@@ -306,18 +306,18 @@ impl LocaleId {
         Some(locale)
     }
 
-    pub(crate) fn keyword(&self, key: &str) -> Option<&str> {
+    pub fn keyword(&self, key: &str) -> Option<&str> {
         self.keywords
             .iter()
             .find(|(k, _)| k == key)
             .map(|(_, value)| value.as_str())
     }
 
-    pub(crate) fn has_unicode_extension(&self) -> bool {
+    pub fn has_unicode_extension(&self) -> bool {
         !self.attributes.is_empty() || !self.keywords.is_empty()
     }
 
-    pub(crate) fn without_unicode_extension(&self) -> LocaleId {
+    pub fn without_unicode_extension(&self) -> LocaleId {
         LocaleId {
             attributes: Vec::new(),
             keywords: Vec::new(),
@@ -325,7 +325,7 @@ impl LocaleId {
         }
     }
 
-    pub(crate) fn canonicalize(&mut self) {
+    pub fn canonicalize(&mut self) {
         self.id.canonicalize();
         self.attributes.sort();
         self.attributes.dedup();
@@ -349,7 +349,7 @@ impl LocaleId {
         self.others.sort_by_key(|(singleton, _)| *singleton);
     }
 
-    pub(crate) fn to_text(&self) -> String {
+    pub fn to_text(&self) -> String {
         let mut out = self.id.to_text();
         let mut extensions: Vec<(char, String)> = self.others.clone();
         if let Some(transformed) = &self.transformed {
@@ -387,7 +387,7 @@ impl LocaleId {
     }
 }
 
-pub(crate) fn canonical_unicode_value(key: &str, value: &str) -> String {
+pub fn canonical_unicode_value(key: &str, value: &str) -> String {
     let lower = value.to_ascii_lowercase();
     let aliased = match key {
         "rg" | "sd" => cldr_index::subdivision_alias(&lower),
@@ -401,7 +401,7 @@ pub(crate) fn canonical_unicode_value(key: &str, value: &str) -> String {
     }
 }
 
-pub(crate) fn canonicalize_tag(text: &str) -> Option<String> {
+pub fn canonicalize_tag(text: &str) -> Option<String> {
     let mut locale = LocaleId::parse(text)?;
     locale.canonicalize();
     Some(locale.to_text())
@@ -462,7 +462,7 @@ fn fill(id: &LanguageId, key: &str, missing: &str) -> LanguageId {
     }
 }
 
-pub(crate) fn maximize(id: &LanguageId) -> Option<LanguageId> {
+pub fn maximize(id: &LanguageId) -> Option<LanguageId> {
     let cleaned = clean(id);
     for key in lookup_keys(&cleaned) {
         if let Some(missing) = cldr_index::likely_subtags(&key) {
@@ -478,7 +478,7 @@ fn same_subtags(a: &LanguageId, b: &LanguageId) -> bool {
     a.language == b.language && a.script == b.script && a.region == b.region
 }
 
-pub(crate) fn minimize(id: &LanguageId) -> LanguageId {
+pub fn minimize(id: &LanguageId) -> LanguageId {
     let Some(maximal) = maximize(id) else {
         return id.clone();
     };

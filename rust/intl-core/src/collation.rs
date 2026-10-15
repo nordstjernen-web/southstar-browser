@@ -37,7 +37,7 @@ const DIGIT_ZEROS: [u32; 20] = [
 const LATIN_PUNCTUATION: &str = "¡§«¶·»¿";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Strength {
+pub enum Strength {
     Base,
     Accent,
     Case,
@@ -45,7 +45,7 @@ pub(crate) enum Strength {
 }
 
 impl Strength {
-    pub(crate) fn from_name(name: &str) -> Strength {
+    pub fn from_name(name: &str) -> Strength {
         match name {
             "base" => Strength::Base,
             "accent" => Strength::Accent,
@@ -63,12 +63,12 @@ impl Strength {
     }
 }
 
-pub(crate) struct Settings {
-    pub(crate) strength: Strength,
-    pub(crate) ignore_punctuation: bool,
-    pub(crate) numeric: bool,
-    pub(crate) upper_first: bool,
-    pub(crate) umlaut_as_e: bool,
+pub struct Settings {
+    pub strength: Strength,
+    pub ignore_punctuation: bool,
+    pub numeric: bool,
+    pub upper_first: bool,
+    pub umlaut_as_e: bool,
 }
 
 #[derive(Default)]
@@ -329,7 +329,7 @@ fn secondaries(elements: &[Element]) -> Vec<u32> {
     weights
 }
 
-pub(crate) fn compare(a: &str, b: &str, settings: &Settings) -> Ordering {
+pub fn compare(a: &str, b: &str, settings: &Settings) -> Ordering {
     let a = elements(a, settings);
     let b = elements(b, settings);
     let primary = compare_level(&a, &b, |e| e.primary);

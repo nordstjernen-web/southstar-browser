@@ -39,6 +39,7 @@ i18n	13	0	0	0	11	4	0
 idb	17	12	1	0	15	6	0
 image	150	43	17	0	94	22	1
 image-decoders	88	28	12	0	44	5	0
+intl-core	0	0	0	0	0	0	0
 ipc	19	9	1	0	11	1	0
 js-attrs	32	13	10	0	15	0	0
 js-bind	0	0	0	0	0	0	0
