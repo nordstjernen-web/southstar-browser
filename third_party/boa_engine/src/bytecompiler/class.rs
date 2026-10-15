@@ -257,18 +257,7 @@ impl ByteCompiler<'_> {
 
         let mut static_elements = Vec::new();
 
-        if let Some(scope) = class.name_scope
-            && decorations.is_none()
-        {
-            let binding = scope.get_identifier_reference(class_name.clone());
-            let index = self.insert_binding(binding);
-            self.emit_binding_access(
-                BindingAccessOpcode::PutLexicalValue,
-                &index,
-                &class_register,
-            );
-        }
-
+        let has_decorations = decorations.is_some();
         let elements = if let Some(state) = decorations {
             self.compile_decorated_elements(&class, state, &class_register);
             &[]
@@ -692,6 +681,20 @@ impl ByteCompiler<'_> {
                     static_elements.push(StaticElement::StaticBlock(code));
                 }
             }
+        }
+
+        // The class binding stays uninitialized while the computed keys are evaluated, and is
+        // initialized before the static fields and blocks run.
+        if let Some(scope) = class.name_scope
+            && !has_decorations
+        {
+            let binding = scope.get_identifier_reference(class_name.clone());
+            let index = self.insert_binding(binding);
+            self.emit_binding_access(
+                BindingAccessOpcode::PutLexicalValue,
+                &index,
+                &class_register,
+            );
         }
 
         for element in static_elements {

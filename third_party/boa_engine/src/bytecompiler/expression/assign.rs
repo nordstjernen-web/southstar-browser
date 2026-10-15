@@ -161,7 +161,7 @@ impl ByteCompiler<'_> {
                     if is_lexical {
                         match compiler.lexical_scope.set_mutable_binding(name.clone()) {
                             Ok(binding) => {
-                                let index = compiler.insert_binding(binding);
+                                let index = compiler.get_binding(&binding);
                                 compiler.emit_binding_access(
                                     BindingAccessOpcode::SetName,
                                     &index,
@@ -169,8 +169,7 @@ impl ByteCompiler<'_> {
                                 );
                             }
                             Err(BindingLocatorError::MutateImmutable) => {
-                                let index = compiler.get_or_insert_string(name);
-                                compiler.bytecode.emit_throw_mutate_immutable(index.into());
+                                compiler.emit_mutate_immutable(name);
                             }
                             Err(BindingLocatorError::Silent) => {}
                         }

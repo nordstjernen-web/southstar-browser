@@ -859,16 +859,31 @@ impl<'ctx> ByteCompiler<'ctx> {
             }
             BindingOpcode::SetName => match self.lexical_scope.set_mutable_binding(name.clone()) {
                 Ok(binding) => {
-                    let index = self.insert_binding(binding);
+                    let index = self.get_binding(&binding);
                     self.emit_binding_access(BindingAccessOpcode::SetName, &index, value);
                 }
-                Err(BindingLocatorError::MutateImmutable) => {
-                    let index = self.get_or_insert_string(name);
-                    self.bytecode.emit_throw_mutate_immutable(index.into());
-                }
+                Err(BindingLocatorError::MutateImmutable) => self.emit_mutate_immutable(name),
                 Err(BindingLocatorError::Silent) => {}
             },
         }
+    }
+
+    /// Emits the error of an assignment to the immutable binding `name`: the `ReferenceError`
+    /// of a binding that is not initialized yet, otherwise a `TypeError`.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-declarative-environment-records-setmutablebinding-n-v-s
+    pub(crate) fn emit_mutate_immutable(&mut self, name: JsString) {
+        let binding = self.lexical_scope.get_identifier_reference(name.clone());
+        let index = self.get_binding(&binding);
+        let value = self.register_allocator.alloc();
+        self.emit_binding_access(BindingAccessOpcode::GetName, &index, &value);
+        self.register_allocator.dealloc(value);
+
+        let index = self.get_or_insert_string(name);
+        self.bytecode.emit_throw_mutate_immutable(index.into());
     }
 
     /// Resolves the binding a `SingleNameBinding` with the environment `undefined` writes to,
@@ -1675,12 +1690,11 @@ impl<'ctx> ByteCompiler<'ctx> {
                 if is_lexical {
                     match self.lexical_scope.set_mutable_binding(name.clone()) {
                         Ok(binding) => {
-                            let index = self.insert_binding(binding);
+                            let index = self.get_binding(&binding);
                             self.emit_binding_access(BindingAccessOpcode::SetName, &index, value);
                         }
                         Err(BindingLocatorError::MutateImmutable) => {
-                            let index = self.get_or_insert_string(name);
-                            self.bytecode.emit_throw_mutate_immutable(index.into());
+                            self.emit_mutate_immutable(name);
                         }
                         Err(BindingLocatorError::Silent) => {}
                     }

@@ -127,9 +127,9 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         let direct_eval_old = self.direct_eval;
         self.direct_eval = node.contains_direct_eval || self.direct_eval;
         if let Some(scope) = &mut node.scope {
-            if self.direct_eval {
-                scope.escape_all_bindings();
-            }
+            // A case clause can be entered without running the declarations of the clauses
+            // before it, so the bindings of the case block keep their runtime TDZ checks.
+            scope.escape_all_bindings();
             std::mem::swap(&mut self.scope, scope);
         }
         for case in &mut node.cases {

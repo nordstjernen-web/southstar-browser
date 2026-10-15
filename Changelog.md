@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Assigning to a let, const or class variable before its declaration
+  runs, as in x = 1; let x; or let y = [y] = [], now throws the
+  ReferenceError the language requires instead of quietly creating the
+  variable, also between the cases of a switch statement, and a class
+  name used in one of its own computed method names is in its temporal
+  dead zone.
 * A function whose try block returns a value now returns that value
   even when its finally block contains a nested try statement that
   starts its own return and then leaves it with break or continue;

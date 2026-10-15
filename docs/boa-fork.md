@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,914 added and 1,387 removed lines in 135 files;
+2026-10-15 the difference is 11,954 added and 1,412 removed lines in 135 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -97,6 +97,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Class field initializers are parsed without `[Yield]` and `[Await]`, as the function boundaries they are (as in other engines; the specification's `?Yield, ?Await` gives an `await` or `yield` there no meaning): `await` is an identifier in a field initializer of a script, even inside an async function, and an error in a module, and `yield` is a reserved word there | `boa_parser`: `statement/declaration/hoistable/class_decl/mod.rs` | `staging/sm/fields` |
 | `new X` without arguments is a NewExpression, so an optional chain cannot follow it: `new o?.C()`, `new o?.["C"]()` and `new C?.()` are syntax errors | `boa_parser`: `expression/left_hand_side/member.rs` | `staging/sm/expressions` |
 | A `return` that has to run `finally` blocks first keeps its value in the accumulator, which each `finally` block saves and restores, instead of on the stack, so a `return` inside a `finally` block that the block then abandons with `break` or `continue` no longer replaces the pending value; closing an async iterator on the way out saves the value around its `await` | `boa_engine`: `bytecompiler/{jump_control,statement/mod}.rs` | `staging/sm/Function`, `staging/sm/generators` |
+| Temporal dead zone for bindings kept in registers: an assignment, compound or logical assignment, update or destructuring assignment to a `let`, `const` or `class` binding before its declaration throws a `ReferenceError` instead of creating the binding (`get_binding` in place of `insert_binding`), as does assigning to a `const` that is not initialized yet (`emit_mutate_immutable`); the bindings of a `switch` case block always live in a runtime environment, since a case clause can run without the declarations of the clauses before it; a class binding is initialized after the computed keys are evaluated and before the static elements run | `boa_ast`: `scope_analyzer.rs`; `boa_engine`: `bytecompiler/{mod,class,expression/assign,expression/update}.rs` | `staging/sm/expressions`, `staging/sm/class` |
 
 ## Rules for changing the fork
 
