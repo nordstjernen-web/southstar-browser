@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* innerWidth and innerHeight inside an iframe report the frame's size
+  again: a relayout started from frame script overwrote them with the
+  size of the top-level window.
 * Absolutely positioned boxes found while laying out other absolutely
   positioned boxes get their static position from the same batched pass
   instead of a walk over their whole containing block each, so a relayout

@@ -596,7 +596,13 @@ pub fn nsr_window_install_actions(scope: &mut Scope<'_>, global: &Value) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
-    with_main_context(Js::of(js), context::sync_metrics);
+    let js = Js::of(js);
+    if js.is_null() {
+        return;
+    }
+    in_main_realm_scope(js, || {
+        with_main_context(js, context::sync_metrics);
+    });
 }
 
 #[unsafe(no_mangle)]
