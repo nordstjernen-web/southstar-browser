@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A function whose try block returns a value now returns that value
+  even when its finally block contains a nested try statement that
+  starts its own return and then leaves it with break or continue;
+  before, the abandoned inner value replaced the real one.
 * The JavaScript parser accepts more valid code: let works as a label,
   a function name and an arrow function parameter in non-strict scripts,
   destructuring assignments take parenthesized targets such as

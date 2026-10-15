@@ -106,15 +106,19 @@ impl ByteCompiler<'_> {
     }
 
     pub(crate) fn r#return(&mut self, return_value_on_stack: bool) {
+        // The return value waits in the accumulator while the enclosing `finally` blocks run:
+        // each of them saves and restores the accumulator, so a `return` that one of them
+        // abandons through `break` or `continue` cannot replace it.
+        if return_value_on_stack {
+            let value = self.register_allocator.alloc();
+            self.pop_into_register(&value);
+            self.bytecode.emit_set_accumulator(value.variable());
+            self.register_allocator.dealloc(value);
+        }
+
         let actions = self.return_jump_record_actions();
 
-        JumpRecord::new(
-            JumpRecordKind::Return {
-                return_value_on_stack,
-            },
-            actions,
-        )
-        .perform_actions(Self::DUMMY_ADDRESS, self);
+        JumpRecord::new(JumpRecordKind::Return, actions).perform_actions(Self::DUMMY_ADDRESS, self);
     }
 
     fn return_jump_record_actions(&self) -> Vec<JumpRecordAction> {

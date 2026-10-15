@@ -72,7 +72,7 @@ pub(crate) enum JumpRecordAction {
 pub(crate) enum JumpRecordKind {
     Break,
     Continue,
-    Return { return_value_on_stack: bool },
+    Return,
 }
 
 /// This represents a local control flow handling. See [`JumpRecordKind`] for types.
@@ -126,7 +126,19 @@ impl JumpRecord {
                     compiler.emit_store_integer_with_index(index, finally_throw_index.into());
                 }
                 JumpRecordAction::CloseIterator { r#async } => {
-                    compiler.iterator_close(r#async);
+                    if r#async && self.kind == JumpRecordKind::Return {
+                        // Awaiting the result of `return()` suspends the frame, which does not
+                        // keep the accumulator that holds the return value.
+                        let value = compiler.register_allocator.alloc();
+                        compiler
+                            .bytecode
+                            .emit_set_register_from_accumulator(value.variable());
+                        compiler.iterator_close(true);
+                        compiler.bytecode.emit_set_accumulator(value.variable());
+                        compiler.register_allocator.dealloc(value);
+                    } else {
+                        compiler.iterator_close(r#async);
+                    }
                 }
             }
         }
@@ -135,16 +147,7 @@ impl JumpRecord {
         match self.kind {
             JumpRecordKind::Break => compiler.patch_jump(self.label),
             JumpRecordKind::Continue => compiler.patch_jump_with_target(self.label, start_address),
-            JumpRecordKind::Return {
-                return_value_on_stack,
-            } => {
-                if return_value_on_stack {
-                    let value = compiler.register_allocator.alloc();
-                    compiler.pop_into_register(&value);
-                    compiler.bytecode.emit_set_accumulator(value.variable());
-                    compiler.register_allocator.dealloc(value);
-                }
-
+            JumpRecordKind::Return => {
                 match (compiler.is_async(), compiler.is_generator()) {
                     // Taken from:
                     //  - 27.6.3.2 AsyncGeneratorStart ( generator, generatorBody ): https://tc39.es/ecma262/#sec-asyncgeneratorstart
