@@ -101,9 +101,13 @@ thread_local! {
     static BATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
     static POSITIONS: RefCell<Option<AddrMap<usize, Position>>> = const { RefCell::new(None) };
     static HAS_MEMO: RefCell<Option<AddrMap<(usize, usize), bool>>> = const { RefCell::new(None) };
-    static MATCH_OPS: Cell<u64> = const { Cell::new(0) };
-    static MATCH_DEPTH: Cell<i32> = const { Cell::new(0) };
-    static CHAIN_DEPTH: Cell<i32> = const { Cell::new(0) };
+    static NESTED_BUDGET: Cell<Option<Budget>> = const { Cell::new(None) };
+}
+
+#[derive(Clone, Copy, Default)]
+struct Budget {
+    ops: u64,
+    chain_depth: i32,
 }
 
 static DEFINED: Mutex<Option<HashSet<Vec<u8>>>> = Mutex::new(None);
@@ -558,46 +562,67 @@ fn has_group_matches(group: GroupRef<'_>, anchor: Node<'_>) -> bool {
     matched
 }
 
-fn take_op() -> bool {
-    let ops = MATCH_OPS.get() + 1;
-    MATCH_OPS.set(ops);
-    ops <= MATCH_BUDGET
+fn take_op(budget: &mut Budget) -> bool {
+    budget.ops += 1;
+    budget.ops <= MATCH_BUDGET
 }
 
-fn compound_then_chain(sel: SelectorRef<'_>, idx: usize, el: Node<'_>) -> Chain {
-    if CHAIN_DEPTH.get() >= MAX_CHAIN {
+fn may_nest(sel: CompoundRef<'_>) -> bool {
+    sel.has_group_arrays() || sel.pseudos().iter().any(|pc| pc.of_group().is_some())
+}
+
+fn compound_matches(sel: CompoundRef<'_>, el: Node<'_>, budget: &mut Budget) -> bool {
+    if !may_nest(sel) {
+        return matches_compound(sel, el);
+    }
+    NESTED_BUDGET.set(Some(*budget));
+    let matched = matches_compound(sel, el);
+    *budget = NESTED_BUDGET.take().unwrap_or(*budget);
+    matched
+}
+
+fn compound_then_chain(
+    sel: SelectorRef<'_>,
+    idx: usize,
+    el: Node<'_>,
+    budget: &mut Budget,
+) -> Chain {
+    if budget.chain_depth >= MAX_CHAIN {
         return Chain::FailsCompletely;
     }
-    if !sel.compound(idx).is_some_and(|c| matches_compound(c, el)) {
+    if !sel
+        .compound(idx)
+        .is_some_and(|c| compound_matches(c, el, budget))
+    {
         return Chain::FailsLocally;
     }
-    CHAIN_DEPTH.set(CHAIN_DEPTH.get() + 1);
-    let result = complex_chain(sel, idx, el);
-    CHAIN_DEPTH.set(CHAIN_DEPTH.get() - 1);
+    budget.chain_depth += 1;
+    let result = complex_chain(sel, idx, el, budget);
+    budget.chain_depth -= 1;
     result
 }
 
-fn complex_chain(sel: SelectorRef<'_>, idx: usize, cur: Node<'_>) -> Chain {
+fn complex_chain(sel: SelectorRef<'_>, idx: usize, cur: Node<'_>, budget: &mut Budget) -> Chain {
     if idx == 0 {
         return Chain::Matches;
     }
     match sel.combinator(idx) {
         COMB_CHILD => {
-            if !take_op() {
+            if !take_op(budget) {
                 return Chain::FailsCompletely;
             }
             match cur.parent() {
-                Some(p) => compound_then_chain(sel, idx - 1, p),
+                Some(p) => compound_then_chain(sel, idx - 1, p, budget),
                 None => Chain::FailsCompletely,
             }
         }
         COMB_ADJACENT => {
             let s = prev_element(cur);
-            if !take_op() {
+            if !take_op(budget) {
                 return Chain::FailsCompletely;
             }
             match s {
-                Some(s) => compound_then_chain(sel, idx - 1, s),
+                Some(s) => compound_then_chain(sel, idx - 1, s, budget),
                 None => Chain::FailsAllSiblings,
             }
         }
@@ -609,11 +634,11 @@ fn complex_chain(sel: SelectorRef<'_>, idx: usize, cur: Node<'_>) -> Chain {
                     return Chain::FailsLocally;
                 }
                 depth += 1;
-                if !take_op() {
+                if !take_op(budget) {
                     return Chain::FailsCompletely;
                 }
                 if sib.is_element() {
-                    let r = compound_then_chain(sel, idx - 1, sib);
+                    let r = compound_then_chain(sel, idx - 1, sib, budget);
                     if r != Chain::FailsLocally {
                         return r;
                     }
@@ -633,10 +658,10 @@ fn complex_chain(sel: SelectorRef<'_>, idx: usize, cur: Node<'_>) -> Chain {
                 if ancestor.kind() == Kind::Document {
                     return Chain::FailsCompletely;
                 }
-                if !take_op() {
+                if !take_op(budget) {
                     return Chain::FailsCompletely;
                 }
-                let r = compound_then_chain(sel, idx - 1, ancestor);
+                let r = compound_then_chain(sel, idx - 1, ancestor, budget);
                 if r == Chain::Matches || r == Chain::FailsCompletely {
                     return r;
                 }
@@ -652,12 +677,12 @@ fn matches_structural(sel: SelectorRef<'_>, el: Node<'_>) -> bool {
     if len == 0 {
         return false;
     }
-    if MATCH_DEPTH.get() == 0 {
-        MATCH_OPS.set(0);
+    let outer = NESTED_BUDGET.take();
+    let mut budget = outer.unwrap_or_default();
+    let matched = compound_then_chain(sel, len - 1, el, &mut budget) == Chain::Matches;
+    if outer.is_some() {
+        NESTED_BUDGET.set(Some(budget));
     }
-    MATCH_DEPTH.set(MATCH_DEPTH.get() + 1);
-    let matched = compound_then_chain(sel, len - 1, el) == Chain::Matches;
-    MATCH_DEPTH.set(MATCH_DEPTH.get() - 1);
     matched
 }
 

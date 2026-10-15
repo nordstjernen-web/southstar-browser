@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Matching CSS selectors no longer touches thread-local counters at every
+  combinator step, which were slow in the Windows build; restyling pages
+  with large style sheets is up to 17% faster.
 * for-in loops no longer allocate a result object and a next() function
   for every loop and key, which makes React pages about 10% faster.
 * The JavaScript garbage collector waits until the heap has doubled
