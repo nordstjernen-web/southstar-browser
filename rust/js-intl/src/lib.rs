@@ -14,7 +14,7 @@ mod plural;
 mod text;
 
 use southstar_intl_core::{cldr_index, collation, tag};
-use southstar_js_engine::{Attributes, BoundFn, NativeFn, ObjectKind, Scope, Value};
+use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 const HIDDEN: Attributes = Attributes {
     writable: false,
@@ -28,44 +28,6 @@ fn arg(args: &[Value], index: usize) -> Value {
     args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&c| c == 0)
-        .map_or(bytes, |nul| &bytes[..nul])
-}
-
-fn c_string(scope: &mut Scope<'_>, value: &Value) -> Result<Vec<u8>, Value> {
-    scope
-        .to_bytes(value)
-        .map(|bytes| until_nul(&bytes).to_vec())
-}
-
-fn text(scope: &mut Scope<'_>, bytes: &[u8]) -> Value {
-    scope.string_from_bytes(bytes)
-}
-
-fn number_arg(scope: &mut Scope<'_>, args: &[Value], index: usize, absent: f64) -> f64 {
-    match args.get(index) {
-        Some(value) => scope.to_number(value).unwrap_or(f64::NAN),
-        None => absent,
-    }
-}
-
-fn c_trunc_i64(d: f64) -> i64 {
-    if cfg!(any(target_arch = "x86", target_arch = "x86_64"))
-        && !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&d)
-    {
-        return i64::MIN;
-    }
-    d as i64
-}
-
-fn arg_locale(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
-    let requested = negotiate::canonicalize_locale_list(scope, value).unwrap_or_default();
-    negotiate::lookup_matcher(&requested).locale.into_bytes()
-}
-
 fn lang_subtag(locale: &[u8]) -> Vec<u8> {
     locale
         .iter()
@@ -75,124 +37,8 @@ fn lang_subtag(locale: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn lang_in(locale: &[u8], langs: &[&[u8]]) -> bool {
-    let lang = lang_subtag(locale);
-    langs.iter().any(|&known| known == lang)
-}
-
-fn hide(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.define(object, key, value, HIDDEN);
-}
-
-fn hide_text(scope: &mut Scope<'_>, object: &Value, key: &str, value: &[u8]) {
-    let value = text(scope, value);
-    hide(scope, object, key, value);
-}
-
-fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-fn set_text(scope: &mut Scope<'_>, object: &Value, key: &str, value: &[u8]) {
-    let value = text(scope, value);
-    set(scope, object, key, value);
-}
-
-fn string_value(scope: &mut Scope<'_>, value: Result<Value, Value>) -> Option<Vec<u8>> {
-    let value = value.ok().filter(Value::is_string)?;
-    c_string(scope, &value).ok()
-}
-
-fn hget_str(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>> {
-    let value = scope.get(object, key);
-    string_value(scope, value)
-}
-
-fn opt_str(scope: &mut Scope<'_>, options: &Value, key: &str) -> Option<Vec<u8>> {
-    if !options.is_object() {
-        return None;
-    }
-    hget_str(scope, options, key)
-}
-
-fn opt_present(scope: &mut Scope<'_>, options: &Value, key: &str) -> bool {
-    if !options.is_object() {
-        return false;
-    }
-    scope
-        .get(options, key)
-        .map_or(true, |value| !value.is_undefined() && !value.is_null())
-}
-
-fn opt_bool(scope: &mut Scope<'_>, options: &Value, key: &str, default: i32) -> i32 {
-    if !options.is_object() {
-        return default;
-    }
-    match scope.get(options, key) {
-        Ok(value) if value.is_undefined() || value.is_null() => default,
-        Ok(value) => i32::from(scope.to_bool(&value)),
-        Err(_) => 1,
-    }
-}
-
 fn object_property(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Value> {
     scope.get(object, key).ok().filter(Value::is_object)
-}
-
-fn instance_proto(scope: &mut Scope<'_>, this: &Value, service: &str) -> Option<Value> {
-    if let Some(proto) = object_property(scope, this, "prototype") {
-        return Some(proto);
-    }
-    if let Ok(constructor) = scope.get(this, service)
-        && let Some(proto) = object_property(scope, &constructor, "prototype")
-    {
-        return Some(proto);
-    }
-    let global = scope.global();
-    let constructor = scope
-        .get(&global, "Intl")
-        .and_then(|intl| scope.get(&intl, service));
-    constructor
-        .ok()
-        .and_then(|constructor| object_property(scope, &constructor, "prototype"))
-}
-
-fn new_instance(scope: &mut Scope<'_>, this: &Value, service: &str) -> Value {
-    match instance_proto(scope, this, service) {
-        Some(proto) => scope.new_object_with_proto(&proto),
-        None => scope.new_object(),
-    }
-}
-
-fn part(scope: &mut Scope<'_>, kind: &[u8], value: &[u8]) -> Value {
-    let part = scope.new_object();
-    set_text(scope, &part, "type", kind);
-    set_text(scope, &part, "value", value);
-    part
-}
-
-struct Parts {
-    array: Value,
-    count: u32,
-}
-
-impl Parts {
-    fn new(scope: &mut Scope<'_>) -> Parts {
-        Parts {
-            array: scope.new_array(),
-            count: 0,
-        }
-    }
-
-    fn push_value(&mut self, scope: &mut Scope<'_>, value: Value) {
-        let _ = scope.set_index(&self.array, self.count, value);
-        self.count += 1;
-    }
-
-    fn push(&mut self, scope: &mut Scope<'_>, kind: &[u8], value: &[u8]) {
-        let value = part(scope, kind, value);
-        self.push_value(scope, value);
-    }
 }
 
 fn length(scope: &mut Scope<'_>, object: &Value) -> u32 {
@@ -202,35 +48,8 @@ fn length(scope: &mut Scope<'_>, object: &Value) -> u32 {
         .map_or(0, |length| length as u32)
 }
 
-fn join_parts(scope: &mut Scope<'_>, parts: &Value) -> Value {
-    let mut joined = Vec::new();
-    for i in 0..length(scope, parts) {
-        let value = scope
-            .get_index(parts, i)
-            .and_then(|part| scope.get(&part, "value"));
-        if let Ok(value) = value
-            && let Ok(piece) = c_string(scope, &value)
-        {
-            joined.extend_from_slice(&piece);
-        }
-    }
-    text(scope, &joined)
-}
-
-fn join_range(scope: &mut Scope<'_>, a: &Value, b: &Value) -> Value {
-    let a = c_string(scope, a).unwrap_or_default();
-    let b = c_string(scope, b).unwrap_or_default();
-    let joined = [&a[..], "\u{2013}".as_bytes(), &b[..]].concat();
-    text(scope, &joined)
-}
-
 fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity: u32) {
     let function = scope.function(name, arity, f);
-    let _ = scope.define(object, name, function, Attributes::METHOD);
-}
-
-fn bind_bound(scope: &mut Scope<'_>, object: &Value, name: &str, f: BoundFn, arity: u32) {
-    let function = scope.bound_function("", arity, f, std::slice::from_ref(object));
     let _ = scope.define(object, name, function, Attributes::METHOD);
 }
 
@@ -272,85 +91,6 @@ fn global_constructor(scope: &mut Scope<'_>, name: &str) -> Result<Value, Value>
     let global = scope.global();
     let intl = scope.get(&global, "Intl")?;
     scope.get(&intl, name)
-}
-
-fn construct_global(scope: &mut Scope<'_>, name: &str, args: &[Value]) -> Value {
-    global_constructor(scope, name)
-        .and_then(|constructor| scope.construct(&constructor, args))
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-fn date_options(scope: &mut Scope<'_>, args: &[Value], defaults: &[(&str, &[u8])]) -> Value {
-    match args.get(1) {
-        Some(options) if options.is_object() => options.clone(),
-        _ => {
-            let options = scope.new_object();
-            for &(key, value) in defaults {
-                set_text(scope, &options, key, value);
-            }
-            options
-        }
-    }
-}
-
-fn date_format_with(scope: &mut Scope<'_>, this: &Value, locales: Value, options: Value) -> Value {
-    let ms = scope.to_number(this).unwrap_or(f64::NAN);
-    let format = construct_global(scope, "DateTimeFormat", &[locales, options]);
-    let parts = datetime::parts(scope, &format, ms);
-    join_parts(scope, &parts)
-}
-
-const DATE_DEFAULTS: [(&str, &[u8]); 3] = [
-    ("year", b"numeric"),
-    ("month", b"numeric"),
-    ("day", b"numeric"),
-];
-
-const TIME_DEFAULTS: [(&str, &[u8]); 3] = [
-    ("hour", b"numeric"),
-    ("minute", b"2-digit"),
-    ("second", b"2-digit"),
-];
-
-fn require_date(scope: &mut Scope<'_>, this: &Value, method: &str) -> Result<(), Value> {
-    if scope.object_kind(this) == Some(ObjectKind::Date) {
-        Ok(())
-    } else {
-        Err(scope.type_error(&format!(
-            "Date.prototype.{method} requires that 'this' be a Date"
-        )))
-    }
-}
-
-fn date_to_locale_string(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    require_date(scope, this, "toLocaleString")?;
-    let defaults = [&DATE_DEFAULTS[..], &TIME_DEFAULTS[..]].concat();
-    let options = date_options(scope, args, &defaults);
-    Ok(date_format_with(scope, this, arg(args, 0), options))
-}
-
-fn date_to_locale_date_string(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    require_date(scope, this, "toLocaleDateString")?;
-    let options = date_options(scope, args, &DATE_DEFAULTS);
-    Ok(date_format_with(scope, this, arg(args, 0), options))
-}
-
-fn date_to_locale_time_string(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    require_date(scope, this, "toLocaleTimeString")?;
-    let options = date_options(scope, args, &TIME_DEFAULTS);
-    Ok(date_format_with(scope, this, arg(args, 0), options))
 }
 
 fn install_proto_hook(
@@ -445,30 +185,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
     let _ = scope.define_to_string_tag(&intl, "Intl");
     let _ = scope.define(global, "Intl", intl, Attributes::METHOD);
     number::install_locale_string_hooks(scope, global);
-    install_proto_hook(
-        scope,
-        global,
-        "Date",
-        "toLocaleString",
-        date_to_locale_string,
-        0,
-    );
-    install_proto_hook(
-        scope,
-        global,
-        "Date",
-        "toLocaleDateString",
-        date_to_locale_date_string,
-        0,
-    );
-    install_proto_hook(
-        scope,
-        global,
-        "Date",
-        "toLocaleTimeString",
-        date_to_locale_time_string,
-        0,
-    );
+    datetime::install(scope, global);
     install_proto_hook(
         scope,
         global,

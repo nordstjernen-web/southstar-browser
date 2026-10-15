@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Intl.DateTimeFormat follows ECMA-402 closely: locale lists are validated
+  and resolved with their ca, hc and nu keywords, options are read in the
+  specified order, dateStyle and timeStyle work alongside hour cycles,
+  fractional seconds, eras, day periods and every timeZoneName style, IANA
+  time zones (through the engine's Temporal) and offset zones such as
+  "+05:30" format with the right local time, sixteen calendars and the
+  simple-digit numbering systems are supported, and formatRange shares the
+  parts both dates have in common. Patterns come from compact CLDR-style
+  tables for twenty languages instead of a fixed day/month/year order.
+  Date.prototype.toLocale*String and the toLocaleString methods of the
+  Temporal types format through it, and DateTimeFormat formats Temporal
+  objects directly. intl402 goes from 2,416 to 2,670 of 3,382.
 * Intl.NumberFormat, Intl.PluralRules and Number/BigInt toLocaleString now
   follow ECMA-402: exact decimal rounding of numbers, BigInts and decimal
   strings with every rounding mode, rounding increments and rounding
