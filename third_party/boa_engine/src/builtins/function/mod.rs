@@ -869,6 +869,7 @@ impl BuiltInFunctionObject {
                     value.to_string(context)?
                 }
             };
+            let name = native_source_name(name);
             return Ok(
                 js_string!(js_str!("function "), &name, js_str!("() { [native code] }")).into(),
             );
@@ -1217,4 +1218,23 @@ fn function_construct(
     );
 
     Ok(CallValue::Ready)
+}
+
+/// Returns the `NativeFunctionAccessor_opt PropertyName` part of a built-in function's source
+/// text, writing a name that is not an identifier, such as the legacy `RegExp` accessor `$&`, as
+/// a computed property name.
+fn native_source_name(name: JsString) -> JsString {
+    let text = name.to_std_string_escaped();
+    let (accessor, key) = text
+        .strip_prefix("get ")
+        .map(|key| ("get ", key))
+        .or_else(|| text.strip_prefix("set ").map(|key| ("set ", key)))
+        .unwrap_or(("", text.as_str()));
+    let identifier = key.chars().enumerate().all(|(index, c)| {
+        c == '$' || c == '_' || c.is_alphabetic() || (index > 0 && c.is_alphanumeric())
+    });
+    if key.is_empty() || key.starts_with('[') || identifier {
+        return name;
+    }
+    JsString::from(format!("{accessor}[{key:?}]").as_str())
 }

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* RegExp has the legacy static properties older scripts read after a match:
+  RegExp.$1 to RegExp.$9, RegExp.input ($_), lastMatch ($&), lastParen
+  ($+), leftContext ($`) and rightContext ($'), set by every successful
+  match in the same window and cleared by a match through a RegExp
+  subclass, as in other browsers.
 * Modules can defer evaluation (the import defer proposal):
   import defer * as ns from "m" loads and links m but runs it only when a
   property of ns is first read, and import.defer("m") does the same

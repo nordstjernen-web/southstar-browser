@@ -72,6 +72,14 @@ struct Inner {
     host_classes: GcRefCell<FxHashMap<TypeId, StandardConstructor>>,
 
     host_defined: GcRefCell<HostDefined>,
+
+    /// A number that identifies this realm, for `RegExp` objects that remember their `[[Realm]]`.
+    id: u64,
+
+    /// The legacy static properties of this realm's `%RegExp%` (`RegExp.$1`, `RegExp.lastMatch`,
+    /// ...), or `None` once they were invalidated.
+    #[cfg(feature = "annex-b")]
+    legacy_regexp: GcRefCell<Option<crate::builtins::regexp::LegacyRegExpStatics>>,
 }
 
 impl Realm {
@@ -100,6 +108,15 @@ impl Realm {
                 loaded_modules: GcRefCell::default(),
                 host_classes: GcRefCell::default(),
                 host_defined: GcRefCell::default(),
+                id: {
+                    static NEXT_REALM_ID: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    NEXT_REALM_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                },
+                #[cfg(feature = "annex-b")]
+                legacy_regexp: GcRefCell::new(Some(
+                    crate::builtins::regexp::LegacyRegExpStatics::default(),
+                )),
             }),
         };
 
@@ -113,6 +130,19 @@ impl Realm {
     #[must_use]
     pub fn intrinsics(&self) -> &Intrinsics {
         &self.inner.intrinsics
+    }
+
+    /// Gets the number that identifies this `Realm`.
+    pub(crate) fn id(&self) -> u64 {
+        self.inner.id
+    }
+
+    /// Gets the legacy static properties of this realm's `%RegExp%`.
+    #[cfg(feature = "annex-b")]
+    pub(crate) fn legacy_regexp(
+        &self,
+    ) -> &GcRefCell<Option<crate::builtins::regexp::LegacyRegExpStatics>> {
+        &self.inner.legacy_regexp
     }
 
     /// Returns an immutable reference to the [`ECMAScript specification`][spec] defined

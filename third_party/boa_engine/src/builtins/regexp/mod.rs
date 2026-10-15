@@ -10,7 +10,7 @@
 //! [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp
 
 use crate::{
-    Context, JsArgs, JsData, JsResult, JsString,
+    Context, JsArgs, JsData, JsExpect, JsResult, JsString,
     builtins::{BuiltInObject, array::Array, string},
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     error::JsNativeError,
@@ -45,6 +45,86 @@ pub struct RegExp {
     flags: RegExpFlags,
     original_source: JsString,
     original_flags: JsString,
+    /// The id of `[[Realm]]`, the realm the object was allocated in.
+    realm_id: u64,
+    /// `[[LegacyFeaturesEnabled]]`: false for objects of `RegExp` subclasses.
+    legacy_features: bool,
+}
+
+/// The values of the legacy static properties of a realm's `%RegExp%` (`[[RegExpInput]]`,
+/// `[[RegExpLastMatch]]`, `[[RegExpLastParen]]`, `[[RegExpLeftContext]]`,
+/// `[[RegExpRightContext]]` and `[[RegExpParen1]]` to `[[RegExpParen9]]`).
+///
+/// More information:
+///  - [Proposal reference][spec]
+///
+/// [spec]: https://github.com/tc39/proposal-regexp-legacy-features
+#[cfg(feature = "annex-b")]
+#[derive(Debug, Clone, Trace, Finalize)]
+pub(crate) struct LegacyRegExpStatics {
+    input: JsString,
+    last_match: JsString,
+    last_paren: JsString,
+    left_context: JsString,
+    right_context: JsString,
+    parens: Vec<JsString>,
+}
+
+#[cfg(feature = "annex-b")]
+impl Default for LegacyRegExpStatics {
+    fn default() -> Self {
+        Self {
+            input: js_string!(),
+            last_match: js_string!(),
+            last_paren: js_string!(),
+            left_context: js_string!(),
+            right_context: js_string!(),
+            parens: vec![js_string!(); 9],
+        }
+    }
+}
+
+/// One of the internal slots of [`LegacyRegExpStatics`].
+#[cfg(feature = "annex-b")]
+#[derive(Debug, Clone, Copy)]
+enum LegacySlot {
+    Input,
+    LastMatch,
+    LastParen,
+    LeftContext,
+    RightContext,
+    Paren(usize),
+}
+
+#[cfg(feature = "annex-b")]
+macro_rules! legacy_getters {
+    ($($name:ident => $slot:expr),* $(,)?) => {
+        impl RegExp {
+            $(
+                fn $name(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+                    Self::get_legacy_static(this, $slot, context)
+                }
+            )*
+        }
+    };
+}
+
+#[cfg(feature = "annex-b")]
+legacy_getters! {
+    get_legacy_input => LegacySlot::Input,
+    get_legacy_last_match => LegacySlot::LastMatch,
+    get_legacy_last_paren => LegacySlot::LastParen,
+    get_legacy_left_context => LegacySlot::LeftContext,
+    get_legacy_right_context => LegacySlot::RightContext,
+    get_legacy_paren1 => LegacySlot::Paren(0),
+    get_legacy_paren2 => LegacySlot::Paren(1),
+    get_legacy_paren3 => LegacySlot::Paren(2),
+    get_legacy_paren4 => LegacySlot::Paren(3),
+    get_legacy_paren5 => LegacySlot::Paren(4),
+    get_legacy_paren6 => LegacySlot::Paren(5),
+    get_legacy_paren7 => LegacySlot::Paren(6),
+    get_legacy_paren8 => LegacySlot::Paren(7),
+    get_legacy_paren9 => LegacySlot::Paren(8),
 }
 
 impl RegExp {
@@ -171,7 +251,47 @@ impl IntrinsicObject for RegExp {
             );
 
         #[cfg(feature = "annex-b")]
-        let regexp = regexp.method(Self::compile, js_string!("compile"), 2);
+        let regexp = {
+            let mut regexp = regexp.method(Self::compile, js_string!("compile"), 2);
+            let set_input = BuiltInBuilder::callable(realm, Self::set_legacy_input)
+                .name(js_string!("set input"))
+                .length(1)
+                .build();
+            let getters: [(&str, &str, crate::native_function::NativeFunctionPointer); 14] = [
+                ("input", "$_", Self::get_legacy_input),
+                ("lastMatch", "$&", Self::get_legacy_last_match),
+                ("lastParen", "$+", Self::get_legacy_last_paren),
+                ("leftContext", "$`", Self::get_legacy_left_context),
+                ("rightContext", "$'", Self::get_legacy_right_context),
+                ("$1", "", Self::get_legacy_paren1),
+                ("$2", "", Self::get_legacy_paren2),
+                ("$3", "", Self::get_legacy_paren3),
+                ("$4", "", Self::get_legacy_paren4),
+                ("$5", "", Self::get_legacy_paren5),
+                ("$6", "", Self::get_legacy_paren6),
+                ("$7", "", Self::get_legacy_paren7),
+                ("$8", "", Self::get_legacy_paren8),
+                ("$9", "", Self::get_legacy_paren9),
+            ];
+            for (name, alias, getter) in getters {
+                let setter = (name == "input").then(|| set_input.clone());
+                for key in [name, alias] {
+                    if key.is_empty() {
+                        continue;
+                    }
+                    let get = BuiltInBuilder::callable(realm, getter)
+                        .name(js_string!(format!("get {key}").as_str()))
+                        .build();
+                    regexp = regexp.static_accessor(
+                        js_string!(key),
+                        Some(get),
+                        setter.clone(),
+                        Attribute::CONFIGURABLE,
+                    );
+                }
+            }
+            regexp
+        };
 
         regexp.build();
     }
@@ -188,7 +308,11 @@ impl BuiltInObject for RegExp {
 impl BuiltInConstructor for RegExp {
     const CONSTRUCTOR_ARGUMENTS: usize = 2;
     const PROTOTYPE_STORAGE_SLOTS: usize = 30;
-    const CONSTRUCTOR_STORAGE_SLOTS: usize = 3;
+    const CONSTRUCTOR_STORAGE_SLOTS: usize = if cfg!(feature = "annex-b") {
+        3 + 2 * 19
+    } else {
+        3
+    };
 
     const STANDARD_CONSTRUCTOR: fn(&StandardConstructors) -> &StandardConstructor =
         StandardConstructors::regexp;
@@ -275,7 +399,24 @@ impl BuiltInConstructor for RegExp {
             get_prototype_from_constructor(new_target, StandardConstructors::regexp, context)?;
 
         // 8.Return ? RegExpInitialize(O, P, F).
-        Self::initialize(Some(proto), &p, &f, context)
+        let regexp = Self::initialize(Some(proto), &p, &f, context)?;
+
+        // RegExpAlloc: if SameValue(newTarget, thisRealm.[[Intrinsics]].[[%RegExp%]]) is false,
+        // set obj.[[LegacyFeaturesEnabled]] to false.
+        let intrinsic = context.intrinsics().constructors().regexp().constructor();
+        let legacy = new_target.is_undefined()
+            || new_target
+                .as_object()
+                .is_some_and(|target| JsObject::equals(&target, &intrinsic));
+        if !legacy
+            && let Some(mut data) = regexp
+                .as_object()
+                .as_ref()
+                .and_then(JsObject::downcast_mut::<RegExp>)
+        {
+            data.legacy_features = false;
+        }
+        Ok(regexp)
     }
 }
 
@@ -398,6 +539,8 @@ impl RegExp {
             flags,
             original_source: p,
             original_flags: f,
+            realm_id: context.realm().id(),
+            legacy_features: true,
         })
     }
 
@@ -1214,6 +1357,9 @@ impl RegExp {
         // 15. If fullUnicode is true, set e to GetStringIndex(S, e).
         // NOTE: Step 15 is already taken care of by regress.
         let e = match_value.end();
+
+        #[cfg(feature = "annex-b")]
+        Self::update_legacy_statics(&rx, input, last_index as usize, e, &match_value, context);
 
         // 16. If global is true or sticky is true, then
         if global || sticky {
@@ -2065,6 +2211,23 @@ impl RegExp {
                 JsNativeError::typ()
                     .with_message("`RegExp.prototype.compile` cannot be called for a non-object")
             })?;
+        let (realm_id, legacy_features) = {
+            let regexp = this
+                .downcast_ref::<RegExp>()
+                .js_expect("already checked that the object was a RegExp")?;
+            (regexp.realm_id, regexp.legacy_features)
+        };
+        // 3. Let thisRealm be the current Realm Record.
+        // 4. Let oRealm be O.[[Realm]].
+        // 5. If SameValue(thisRealm, oRealm) is false, throw a TypeError exception.
+        // 6. If O.[[LegacyFeaturesEnabled]] is false, throw a TypeError exception.
+        if realm_id != context.realm().id() || !legacy_features {
+            return Err(JsNativeError::typ()
+                .with_message(
+                    "`RegExp.prototype.compile` cannot be called on a RegExp from another realm or a RegExp subclass",
+                )
+                .into());
+        }
         let pattern = args.get_or_undefined(0);
         let flags = args.get_or_undefined(1);
         // 3. If pattern is an Object and pattern has a [[RegExpMatcher]] internal slot, then
@@ -2091,7 +2254,9 @@ impl RegExp {
             (pattern.clone(), flags.clone())
         };
 
-        let regexp = Self::compile_native_regexp(&pattern, &flags, context)?;
+        let mut regexp = Self::compile_native_regexp(&pattern, &flags, context)?;
+        regexp.realm_id = realm_id;
+        regexp.legacy_features = legacy_features;
 
         // 5. Return ? RegExpInitialize(O, P, F).
         {
@@ -2103,6 +2268,140 @@ impl RegExp {
         this.set(js_string!("lastIndex"), 0, true, context)?;
 
         Ok(this.into())
+    }
+}
+
+#[cfg(feature = "annex-b")]
+impl RegExp {
+    /// The legacy RegExp features' steps of `RegExpBuiltinExec`: a successful match updates the
+    /// legacy static properties of the current realm's `%RegExp%`, or invalidates them when the
+    /// `RegExp` belongs to a subclass.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://github.com/tc39/proposal-regexp-legacy-features#regexpbuiltinexec--r-s-
+    fn update_legacy_statics(
+        rx: &RegExp,
+        input: &JsString,
+        start: usize,
+        end: usize,
+        match_value: &regress::Match,
+        context: &mut Context,
+    ) {
+        // a. Let thisRealm be the current Realm Record.
+        // b. Let rRealm be the value of R's [[Realm]] internal slot.
+        // c. If SameValue(thisRealm, rRealm) is true, then
+        let realm = context.realm().clone();
+        if realm.id() != rx.realm_id {
+            return;
+        }
+        let mut statics = realm.legacy_regexp().borrow_mut();
+        // i. If the value of R's [[LegacyFeaturesEnabled]] internal slot is true, then
+        if rx.legacy_features {
+            // 1. Perform UpdateLegacyRegExpStaticProperties(%RegExp%, S, lastIndex, e, capturedValues).
+            let captured: Vec<JsString> = match_value
+                .captures
+                .iter()
+                .map(|capture| {
+                    capture
+                        .clone()
+                        .map_or_else(|| js_string!(), |range| input.get_expect(range))
+                })
+                .collect();
+            *statics = Some(LegacyRegExpStatics {
+                input: input.clone(),
+                last_match: input.get_expect(start..end),
+                last_paren: captured.last().cloned().unwrap_or_default(),
+                left_context: input.get_expect(..start),
+                right_context: input.get_expect(end..),
+                parens: (0..9)
+                    .map(|i| captured.get(i).cloned().unwrap_or_default())
+                    .collect(),
+            });
+        } else {
+            // ii. Else, perform InvalidateLegacyRegExpStaticProperties(%RegExp%).
+            *statics = None;
+        }
+    }
+
+    /// `GetLegacyRegExpStaticProperty ( C, thisValue, internalSlotName )` for `C` = `%RegExp%`.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://github.com/tc39/proposal-regexp-legacy-features#getlegacyregexpstaticproperty-c-thisvalue-internalslotname-
+    fn get_legacy_static(
+        this: &JsValue,
+        slot: LegacySlot,
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        // 1. Assert C is an object that has an internal slot named internalSlotName.
+        // 2. If SameValue(C, thisValue) is false, throw a TypeError exception.
+        let constructor = context.intrinsics().constructors().regexp().constructor();
+        if !this
+            .as_object()
+            .is_some_and(|this| JsObject::equals(&this, &constructor))
+        {
+            return Err(JsNativeError::typ()
+                .with_message("legacy RegExp static properties can only be read from %RegExp%")
+                .into());
+        }
+        // 3. Let val be the value of the internal slot of C named internalSlotName.
+        // 4. If val is empty, throw a TypeError exception.
+        // 5. Return val.
+        let realm = context.realm().clone();
+        let statics = realm.legacy_regexp().borrow();
+        let Some(statics) = statics.as_ref() else {
+            return Err(JsNativeError::typ()
+                .with_message(
+                    "the legacy RegExp static properties were invalidated by a RegExp subclass",
+                )
+                .into());
+        };
+        let value = match slot {
+            LegacySlot::Input => &statics.input,
+            LegacySlot::LastMatch => &statics.last_match,
+            LegacySlot::LastParen => &statics.last_paren,
+            LegacySlot::LeftContext => &statics.left_context,
+            LegacySlot::RightContext => &statics.right_context,
+            LegacySlot::Paren(index) => &statics.parens[index],
+        };
+        Ok(value.clone().into())
+    }
+
+    /// `set RegExp.input`: `SetLegacyRegExpStaticProperty(%RegExp%, this value, [[RegExpInput]], val)`.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://github.com/tc39/proposal-regexp-legacy-features#setlegacyregexpstaticproperty-c-thisvalue-internalslotname-val-
+    fn set_legacy_input(
+        this: &JsValue,
+        args: &[JsValue],
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        // 1. Assert C is an object that has an internal slot named internalSlotName.
+        // 2. If SameValue(C, thisValue) is false, throw a TypeError exception.
+        let constructor = context.intrinsics().constructors().regexp().constructor();
+        if !this
+            .as_object()
+            .is_some_and(|this| JsObject::equals(&this, &constructor))
+        {
+            return Err(JsNativeError::typ()
+                .with_message("legacy RegExp static properties can only be set on %RegExp%")
+                .into());
+        }
+        // 3. Let strVal be ? ToString(val).
+        let value = args.get_or_undefined(0).to_string(context)?;
+        // 4. Set the value of the internal slot of C named internalSlotName to strVal.
+        let realm = context.realm().clone();
+        realm
+            .legacy_regexp()
+            .borrow_mut()
+            .get_or_insert_with(LegacyRegExpStatics::default)
+            .input = value;
+        Ok(JsValue::undefined())
     }
 }
 
