@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use boa_gc::GcRefCell;
 use boa_parser::Source;
 
+use crate::builtins::array_buffer::ArrayBuffer;
 use crate::script::Script;
 use crate::{
     Context, JsError, JsNativeError, JsResult, JsString, js_error, js_string, object::JsObject,
@@ -304,6 +305,16 @@ impl ModuleCacheKey {
     }
 }
 
+/// Reads the file of a module loaded as text or bytes.
+fn read_module_bytes(path: &Path, short_path: &str) -> JsResult<Vec<u8>> {
+    std::fs::read(path).map_err(|err| {
+        JsNativeError::typ()
+            .with_message(format!("could not open file `{short_path}`"))
+            .with_cause(JsError::from_rust(err))
+            .into()
+    })
+}
+
 /// A simple module loader that loads modules relative to a root path.
 ///
 /// # Note
@@ -409,8 +420,10 @@ impl ModuleLoader for SimpleModuleLoader {
                 .extension()
                 .is_some_and(|ext| ext.to_string_lossy() == "json")
             {
-                let is_json_type = module_type.is_some_and(|t| t == &js_string!("json"));
-                if !is_json_type {
+                let reads_file_as_data = module_type.is_some_and(|t| {
+                    t == &js_string!("json") || t == &js_string!("text") || t == &js_string!("bytes")
+                });
+                if !reads_file_as_data {
                     return Err(JsNativeError::typ()
                         .with_message(format!(
                             "module `{short_path}` needs an import attribute of type \"json\""
@@ -438,6 +451,30 @@ impl ModuleLoader for SimpleModuleLoader {
                                     .with_cause(err)
                             },
                         )?
+                    }
+                    "text" => {
+                        // Load as a text module: the default export is the file decoded as UTF-8
+                        let bytes = read_module_bytes(&path, &short_path)?;
+                        let text = String::from_utf8_lossy(&bytes);
+                        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+                        Module::from_value_as_default(
+                            js_string!(text).into(),
+                            &mut context.borrow_mut(),
+                        )
+                    }
+                    "bytes" => {
+                        // Load as a bytes module: the default export is a `Uint8Array` over an
+                        // immutable `ArrayBuffer` holding the file
+                        let bytes = read_module_bytes(&path, &short_path)?;
+                        let context = &mut context.borrow_mut();
+                        let buffer = ArrayBuffer::new_immutable(&bytes, context)?;
+                        let array = context
+                            .intrinsics()
+                            .constructors()
+                            .typed_uint8_array()
+                            .constructor()
+                            .construct(&[buffer.into()], None, context)?;
+                        Module::from_value_as_default(array.into(), context)
                     }
                     other => {
                         // Unknown module type

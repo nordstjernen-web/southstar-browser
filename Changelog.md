@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* southstar-jsshell's module loader understands the import text and import
+  bytes proposals: with { type: "text" } imports a file as a string and
+  with { type: "bytes" } as a Uint8Array over an immutable ArrayBuffer.
+  test262 reaches 50,887 of 52,133.
 * Error.prototype.stack follows the error-stack accessor proposal: the
   getter throws on a non-object receiver, and the setter accepts only
   strings and, like Iterator.prototype's accessors, refuses to write to

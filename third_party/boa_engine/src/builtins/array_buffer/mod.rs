@@ -1009,6 +1009,11 @@ impl ArrayBuffer {
         Ok(buf.is_immutable().into())
     }
 
+    /// Creates an immutable `ArrayBuffer` holding a copy of `bytes`.
+    pub(crate) fn new_immutable(bytes: &[u8], context: &mut Context) -> JsResult<JsObject> {
+        Self::allocate_immutable(bytes.len() as u64, bytes, context)
+    }
+
     /// `AllocateImmutableArrayBuffer ( constructor, byteLength, fromBlock, fromIndex, count )`
     ///
     /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-allocateimmutablearraybuffer
