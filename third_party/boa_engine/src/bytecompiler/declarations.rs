@@ -705,10 +705,12 @@ impl ByteCompiler<'_> {
                     // i. Perform ! varEnv.CreateMutableBinding(F, true).
                     // ii. Perform ! varEnv.InitializeBinding(F, undefined).
 
+                    // NOTE: The binding is the variable environment's own, never the property of
+                    //       a `with` object that a name lookup would find first.
                     use crate::vm::CallFrame;
                     let index = self.insert_binding(binding);
                     self.emit_binding_access(
-                        BindingAccessOpcode::DefInitVar,
+                        BindingAccessOpcode::DefEvalVar,
                         &index,
                         &CallFrame::undefined_register(),
                     );
@@ -849,8 +851,12 @@ impl ByteCompiler<'_> {
                 // 3. Perform ! varEnv.InitializeBinding(fn, fo).
                 // iii. Else,
                 // 1. Perform ! varEnv.SetMutableBinding(fn, fo, false).
+                //
+                // NOTE: The binding is the variable environment's own, never the property of a
+                //       `with` object that a name lookup would find first.
                 let index = self.insert_binding(binding.clone());
-                self.emit_binding_access(BindingAccessOpcode::DefInitVar, &index, &dst);
+                self.emit_binding_access(BindingAccessOpcode::DefEvalVar, &index, &dst);
+                self.emit_binding_access(BindingAccessOpcode::PutLexicalValue, &index, &dst);
                 self.register_allocator.dealloc(dst);
             }
         }

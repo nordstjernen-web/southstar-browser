@@ -478,6 +478,16 @@ impl Scope {
         locator
     }
 
+    /// Returns `true` if a direct `eval` created the binding `name` of this scope.
+    #[must_use]
+    pub(crate) fn is_deletable_binding(&self, name: &JsString) -> bool {
+        self.inner
+            .bindings
+            .borrow()
+            .iter()
+            .any(|binding| &binding.name == name && binding.is_deletable())
+    }
+
     /// Calls `f` with the index of each binding of this scope that a direct `eval` created.
     pub fn for_each_deletable_binding(&self, mut f: impl FnMut(u32)) {
         if !self.inner.has_deletable_bindings.get() {

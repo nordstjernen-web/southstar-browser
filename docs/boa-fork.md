@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 12,275 added and 1,472 removed lines in 140 files;
+2026-10-15 the difference is 12,297 added and 1,475 removed lines in 140 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -105,6 +105,8 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Classes: a method named by the string literal `"constructor"` is the class constructor, as its `PropName` is "constructor"; `super[expr]` evaluates `this`, then the key, then the super base (`ByteCompiler::super_with_key`), as `MakeSuperPropertyReference` reads the base after the key; `delete super.x` and `delete super[expr]` evaluate the `this` binding and the key before throwing their `ReferenceError` | `boa_parser`: `parser/statement/declaration/hoistable/class_decl/mod.rs`; `boa_engine`: `bytecompiler/{mod,expression/assign,expression/update}.rs` | `staging/sm/class` |
 | Annex B block-level functions: a lexical declaration in a block, `switch`, `catch` pattern or loop head only rules out the B.3.2 var binding of the functions nested in that statement, not of a same-named function elsewhere (`AnnexBFunctionDeclarationNamesVisitor::retain_since`); inside a `with` statement the value of an evaluated block function is written to the variable environment's binding itself (`PutLexicalValue`, or a property write on the global object), not to the `with` object a name lookup finds first | `boa_ast`: `operations/mod.rs`; `boa_engine`: `bytecompiler/mod.rs` | `staging/sm/lexical-environment` |
 | The parts of a class that run in the code around it (heritage, computed keys, element definition) are strict mode code in sloppy code too: `CodeBlock::strict_ranges` records their addresses, and the opcodes that depend on strictness ask `CallFrame::strict` (`CodeBlock::strict_at` the instruction being executed) instead of the code block's flag | `boa_engine`: `vm/{code_block,call_frame/mod}.rs`, `bytecompiler/{mod,class}.rs`, `vm/opcode/{get/name,set/name,set/property,define/mod,delete/mod,call/mod}.rs`, `environments/runtime/mod.rs` | `staging/sm/class` |
+| `Contains(DirectEval)` counts a direct `eval` in a class method, field initializer or static block, or in an object literal method, for the code around it, as it does for nested functions, so the bindings the `eval` can name live in runtime environments instead of registers (a missing environment slot made the engine panic) | `boa_ast`: `operations/mod.rs` | `staging/sm/class` |
+| The functions and Annex B block function bindings that eval code declares in a function's variable environment are initialized and set in that environment directly (`DefEvalVar`, `PutLexicalValue`) instead of through a name lookup that a `with` object in between would intercept; an Annex B binding that an `eval` of an earlier call created is initialized again in a call that lacks it (`Scope::is_deletable_binding`) | `boa_ast`: `scope.rs`, `scope_analyzer.rs`; `boa_engine`: `bytecompiler/declarations.rs` | `staging/sm/lexical-environment`, `language/eval-code` |
 
 ## Rules for changing the fork
 

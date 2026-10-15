@@ -2546,7 +2546,10 @@ pub(crate) fn eval_declaration_instantiation_scope(
                 let f = name.to_js_string(interner);
                 // i. Let bindingExists be ! varEnv.HasBinding(F).
                 // ii. If bindingExists is false, then
-                if !var_env.has_binding(&f) {
+                //
+                // NOTE: A binding that an earlier `eval` created exists only in the call that
+                //       ran it, so it is initialized again if this call lacks it.
+                if !var_env.has_binding(&f) || var_env.is_deletable_binding(&f) {
                     // i. Perform ! varEnv.CreateMutableBinding(F, true).
                     // ii. Perform ! varEnv.InitializeBinding(F, undefined).
                     let binding = var_env.create_deletable_binding(f);
