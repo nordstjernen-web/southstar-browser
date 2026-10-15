@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* filter() and with() on a BigInt typed array whose buffer the callback or
+  an argument's valueOf detached or shrank no longer stop the engine with
+  an internal assertion: the TypeError from converting undefined to a
+  BigInt reaches the script. No test262 test crashes the engine any more.
 * A function from one script now sees the top-level let, const and class
   declarations of scripts that run after it: reading such a name used to
   look only at the window object (a ReferenceError, or a stale global
