@@ -58,11 +58,14 @@ pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64
     let Some((len, unit)) = v.length() else {
         return fallback;
     };
-    let (vw, vh) = (ffi::viewport_w(), ffi::viewport_h());
     match unit {
-        UNIT_PX | UNIT_NUMBER => len,
-        UNIT_EM | UNIT_REM => len * 16.0,
-        UNIT_PERCENT => len * basis / 100.0,
+        UNIT_PX | UNIT_NUMBER => return len,
+        UNIT_EM | UNIT_REM => return len * 16.0,
+        UNIT_PERCENT => return len * basis / 100.0,
+        _ => {}
+    }
+    let (vw, vh) = southstar_css::viewport();
+    match unit {
         UNIT_VW => len * vw / 100.0,
         UNIT_VH => len * vh / 100.0,
         UNIT_VMIN => len * c_min(vw, vh) / 100.0,
