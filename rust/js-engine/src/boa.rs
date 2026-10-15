@@ -283,6 +283,7 @@ impl Scope<'_> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let source = Source::from_bytes(source).with_path(&path);
         let module = Module::parse(source, None, self.cx()).map_err(|e| self.error(e))?;
+        self.register_module(&path, &module);
         let promise = module.load_link_evaluate(self.cx());
         Ok(Value(promise.into()))
     }

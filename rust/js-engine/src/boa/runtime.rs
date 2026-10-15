@@ -647,6 +647,13 @@ impl Scope<'_> {
         })
     }
 
+    pub(super) fn register_module(&mut self, path: &Path, module: &Module) {
+        let simple = runtime_of(self.cx()).and_then(|runtime| runtime.loader.simple.as_ref());
+        if let Some(simple) = simple {
+            simple.insert(path.to_path_buf(), module.clone());
+        }
+    }
+
     pub fn context_opaque(&self) -> *mut c_void {
         self.handle().opaque()
     }

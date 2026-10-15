@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A module that the engine layer evaluates as an entry point is entered
+  into the module map under its own path, so a module importing itself (or
+  an import cycle leading back to it) links to the same instance instead
+  of loading and running a second copy; temporal-dead-zone errors on its
+  bindings and evaluation order across cycles follow the standard. test262
+  reaches 50,854 of 52,133.
 * Strict-mode JavaScript gets proper tail calls (ES2015): a function that
   ends in return f(...), including through ?:, &&, ||, ?? and the comma
   operator, reuses its stack frame for the call, so tail-recursive code
