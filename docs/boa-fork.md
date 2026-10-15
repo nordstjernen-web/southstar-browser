@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 5,426 added and 618 removed lines in 77 files;
+2026-10-15 the difference is 5,586 added and 644 removed lines in 79 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -65,6 +65,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Calling an `[[IsHTMLDDA]]` object returns `null`, as test262's `$262.IsHTMLDDA` does | `builtins/is_html_dda.rs` | `annexB/language` |
 | Object environment records follow the spec's lookups: `GetBindingValue` checks `HasProperty` before `Get` (a binding deleted meanwhile reads as `undefined`, or throws a `ReferenceError` in strict code), and a call through a `with` resolves its callee once, taking both the function and its `this` from that one resolution | `environments/runtime/mod.rs`, `vm/opcode/environment/mod.rs`, `vm/opcode/mod.rs`, `vm/code_block.rs`, `bytecompiler/mod.rs` | `language/statements/with` |
 | Proper tail calls: a `return` in strict, non-async, non-generator code outside `try` blocks, `for-in`/`for-of` loops and dispose scopes compiles the calls in its tail positions (through `?:`, `&&`, `\|\|`, `??`, `,` and parentheses, tagged templates included) to `TailCall`/`TailCallEval`, which discard the caller's frame before calling a bytecode function; a frame entered from native code or constructing an object keeps a normal call | `bytecompiler/tail_call.rs` (new), `bytecompiler/{mod,statement/mod,expression/mod}.rs`, `vm/opcode/call/mod.rs`, `vm/opcode/mod.rs`, `vm/mod.rs`, `vm/code_block.rs`, `vm/flowgraph/mod.rs` | `language/expressions/*/tco-*`, `language/statements/*/tco-*` |
+| A global `let`, `const` or `class` declared by a later script is visible to code compiled earlier: each code block records how many global lexical bindings existed when it was compiled, and a name that compiled to the global object checks only the bindings added since (a single comparison when there are none); assigning to such a `const` throws | `boa_ast`: `scope.rs`; `boa_engine`: `vm/code_block.rs`, `bytecompiler/mod.rs`, `environments/runtime/mod.rs` | `language/global-code`, `annexB/language/eval-code` |
 
 ## Rules for changing the fork
 

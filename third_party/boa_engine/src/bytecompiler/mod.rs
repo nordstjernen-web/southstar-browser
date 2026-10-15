@@ -2725,6 +2725,16 @@ impl<'ctx> ByteCompiler<'ctx> {
 
         let source_map_entries = self.source_map_builder.build(final_bytecode_len.as_u32());
 
+        let mut global_scope = &self.lexical_scope;
+        while let Some(outer) = global_scope.outer() {
+            global_scope = outer;
+        }
+        let global_lexical_count = if global_scope.is_global() {
+            global_scope.num_bindings()
+        } else {
+            u32::MAX
+        };
+
         CodeBlock {
             length: self.length,
             register_count,
@@ -2745,6 +2755,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             global_lexs: self.global_lexs.into_boxed_slice(),
             global_fns: self.global_fns.into_boxed_slice(),
             global_vars: self.global_vars.into_boxed_slice(),
+            global_lexical_count,
             debug_id: CodeBlock::get_next_codeblock_id(),
             #[cfg(feature = "trace")]
             traced: Cell::new(false),

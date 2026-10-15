@@ -283,6 +283,31 @@ impl Scope {
         }
     }
 
+    /// Get the locator for a binding name among the bindings created after the first `known`
+    /// ones, and whether that binding is mutable.
+    #[must_use]
+    pub fn get_binding_created_after(
+        &self,
+        name: &JsString,
+        known: u32,
+    ) -> Option<(BindingLocator, bool)> {
+        self.inner
+            .bindings
+            .borrow()
+            .iter()
+            .skip(known as usize)
+            .find(|b| &b.name == name)
+            .map(|binding| {
+                let locator = BindingLocator::declarative(
+                    name.clone(),
+                    self.inner.index.get(),
+                    binding.index,
+                    self.inner.unique_id,
+                );
+                (locator, binding.is_mutable())
+            })
+    }
+
     /// Get the locator for a binding name.
     #[must_use]
     pub fn get_binding(&self, name: &JsString) -> Option<BindingLocator> {

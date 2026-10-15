@@ -166,6 +166,13 @@ pub struct CodeBlock {
     pub(crate) global_fns: Box<[GlobalFunctionBinding]>,
     pub(crate) global_vars: Box<[u32]>,
 
+    /// The number of lexical bindings the global scope had when this code was compiled.
+    ///
+    /// An identifier that resolved to the global object at compile time may name a global
+    /// `let`, `const` or `class` that a later script declared; only bindings past this count
+    /// need to be checked for that.
+    pub(crate) global_lexical_count: u32,
+
     // Used for identifying anonymous functions in compiled output and call frames.
     pub(crate) debug_id: u64,
 
@@ -201,6 +208,7 @@ impl CodeBlock {
             global_lexs: Box::default(),
             global_fns: Box::default(),
             global_vars: Box::default(),
+            global_lexical_count: u32::MAX,
             debug_id: CodeBlock::get_next_codeblock_id(),
             #[cfg(feature = "trace")]
             traced: Cell::new(false),

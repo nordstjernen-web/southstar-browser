@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A function from one script now sees the top-level let, const and class
+  declarations of scripts that run after it: reading such a name used to
+  look only at the window object (a ReferenceError, or a stale global
+  property), and assigning to it created a window property instead of
+  updating the binding. Assigning to such a const throws as it should.
+  test262 reaches 50,858 of 52,133.
 * A module that the engine layer evaluates as an entry point is entered
   into the module map under its own path, so a module importing itself (or
   an import cycle leading back to it) links to the same instance instead

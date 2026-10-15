@@ -1,4 +1,5 @@
 use crate::{
+    JsNativeError,
     Context, JsResult, JsString, JsSymbol, JsValue,
     object::{JsObject, PrivateName},
 };
@@ -468,6 +469,7 @@ impl Context {
             && !env.poisoned()
             && !deleted_binding
         {
+            self.find_later_global_lexical_binding(locator);
             return Ok(());
         }
 
@@ -540,7 +542,38 @@ impl Context {
             locator.set_binding_index(b.binding_index());
         }
 
+        self.find_later_global_lexical_binding(locator);
+
         Ok(())
+    }
+
+    /// Redirects `locator` from the global object to a global `let`, `const` or `class`
+    /// binding of the same name that a script declared after the current code was compiled.
+    fn find_later_global_lexical_binding(&self, locator: &mut BindingLocator) {
+        if locator.scope() != BindingLocatorScope::GlobalObject {
+            return;
+        }
+        let known = self.vm.frame().code_block.global_lexical_count;
+        let scope = self.realm().scope();
+        if scope.num_bindings() <= known {
+            return;
+        }
+        if let Some((binding, _)) = scope.get_binding_created_after(locator.name(), known) {
+            locator.set_scope(binding.scope());
+            locator.set_binding_index(binding.binding_index());
+        }
+    }
+
+    /// Returns `true` if `locator` names a global `const` that was declared after the current
+    /// code was compiled, which the compiler could not have rejected an assignment to.
+    fn is_later_global_constant(&self, locator: &BindingLocator) -> bool {
+        let known = self.vm.frame().code_block.global_lexical_count;
+        locator.binding_index() >= known
+            && self
+                .realm()
+                .scope()
+                .get_binding_created_after(locator.name(), known)
+                .is_some_and(|(_, mutable)| !mutable)
     }
 
     /// Returns the binding object of the object environment that a binding resolved by
@@ -653,6 +686,14 @@ impl Context {
                 obj.set(key, value, strict, self)?;
             }
             BindingLocatorScope::GlobalDeclarative => {
+                if self.is_later_global_constant(locator) {
+                    return Err(JsNativeError::typ()
+                        .with_message(format!(
+                            "cannot mutate an immutable binding '{}'",
+                            locator.name().to_std_string_escaped()
+                        ))
+                        .into());
+                }
                 let env = self.vm.frame().realm.environment();
                 env.set(locator.binding_index(), value);
             }
