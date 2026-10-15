@@ -847,6 +847,18 @@ impl FunctionScopes {
         self.function_scope.clone()
     }
 
+    /// Marks the `arguments` binding of the function, if it has one, as accessed: a direct
+    /// `eval` in the function can read it.
+    pub(crate) fn access_arguments_binding(&self) {
+        for scope in std::iter::once(&self.function_scope).chain(&self.parameters_eval_scope) {
+            if let Some(binding) = scope.inner.bindings.borrow_mut().first_mut()
+                && binding.name == "arguments"
+            {
+                binding.flags.insert(BindingFlags::ACCESSED);
+            }
+        }
+    }
+
     /// Marks all bindings in all scopes as escaping.
     pub(crate) fn escape_all_bindings(&self) {
         self.function_scope.escape_all_bindings();

@@ -1086,13 +1086,13 @@ impl ByteCompiler<'_> {
         // 28. Else,
         #[allow(unused_variables, unused_mut)]
         let (mut instantiated_var_names, mut variable_scope) =
-            if let Some(scope) = scopes.parameters_scope() {
+            if let Some(var_scope) = scopes.parameters_scope() {
                 // a. NOTE: A separate Environment Record is needed to ensure that closures created by
                 //          expressions in the formal parameter list do not have
                 //          visibility of declarations in the function body.
                 // b. Let varEnv be NewDeclarativeEnvironment(env).
                 // c. Set the VariableEnvironment of calleeContext to varEnv.
-                drop(self.push_declarative_scope(Some(scope)));
+                drop(self.push_declarative_scope(Some(var_scope)));
 
                 let mut variable_scope = self.lexical_scope.clone();
 
@@ -1131,9 +1131,6 @@ impl ByteCompiler<'_> {
 
                         // 5. Perform ! varEnv.InitializeBinding(n, initialValue).
                         let index = self.insert_binding(binding);
-
-                        // TODO: What?
-                        self.bytecode.emit_store_undefined(value.variable());
                         self.emit_binding_access(BindingAccessOpcode::DefInitVar, &index, &value);
                         self.register_allocator.dealloc(value);
 

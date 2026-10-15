@@ -569,6 +569,9 @@ impl BindingEscapeAnalyzer<'_> {
         if self.direct_eval {
             scopes.escape_all_bindings();
         }
+        if contains_direct_eval {
+            scopes.access_arguments_binding();
+        }
         let mut scope = scopes.parameter_scope();
         std::mem::swap(&mut self.scope, &mut scope);
         self.visit_formal_parameter_list_mut(parameters)?;
@@ -2135,6 +2138,11 @@ fn function_declaration_instantiation(
                 instantiated_var_names.push(n);
 
                 let n_string = n.to_js_string(interner);
+
+                // 4.a. Let initialValue be ! env.GetBindingValue(n, false).
+                if parameter_bindings.contains(&n) && !function_names.contains(&n) {
+                    env.access_binding(&n_string, false);
+                }
 
                 // 2. Perform ! varEnv.CreateMutableBinding(n, false).
                 drop(var_env.create_mutable_binding(n_string, false));

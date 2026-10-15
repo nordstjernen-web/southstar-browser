@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,954 added and 1,412 removed lines in 135 files;
+2026-10-15 the difference is 11,976 added and 1,417 removed lines in 136 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -98,6 +98,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | `new X` without arguments is a NewExpression, so an optional chain cannot follow it: `new o?.C()`, `new o?.["C"]()` and `new C?.()` are syntax errors | `boa_parser`: `expression/left_hand_side/member.rs` | `staging/sm/expressions` |
 | A `return` that has to run `finally` blocks first keeps its value in the accumulator, which each `finally` block saves and restores, instead of on the stack, so a `return` inside a `finally` block that the block then abandons with `break` or `continue` no longer replaces the pending value; closing an async iterator on the way out saves the value around its `await` | `boa_engine`: `bytecompiler/{jump_control,statement/mod}.rs` | `staging/sm/Function`, `staging/sm/generators` |
 | Temporal dead zone for bindings kept in registers: an assignment, compound or logical assignment, update or destructuring assignment to a `let`, `const` or `class` binding before its declaration throws a `ReferenceError` instead of creating the binding (`get_binding` in place of `insert_binding`), as does assigning to a `const` that is not initialized yet (`emit_mutate_immutable`); the bindings of a `switch` case block always live in a runtime environment, since a case clause can run without the declarations of the clauses before it; a class binding is initialized after the computed keys are evaluated and before the static elements run | `boa_ast`: `scope_analyzer.rs`; `boa_engine`: `bytecompiler/{mod,class,expression/assign,expression/update}.rs` | `staging/sm/expressions`, `staging/sm/class` |
+| The `arguments` object of a function that contains a direct `eval` is created even when the function does not name `arguments` itself (`FunctionScopes::access_arguments_binding`), so `eval("arguments")` finds it; in a function with parameter expressions, a body `var` named like a parameter (or `arguments`) starts with the parameter's value, as `FunctionDeclarationInstantiation` step 28 reads it, instead of throwing an uninitialized-binding `ReferenceError` (the compiler read the new `var` binding instead of the parameter) | `boa_ast`: `scope.rs`, `scope_analyzer.rs`; `boa_engine`: `bytecompiler/declarations.rs` | `staging/sm/Function`, `staging/sm/regress` |
 
 ## Rules for changing the fork
 

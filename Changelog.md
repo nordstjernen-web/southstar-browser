@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* eval("arguments") works in a function that does not mention
+  arguments itself, and a function with default parameter values such
+  as function f(a, b = 1) { var a; return a; } no longer throws a
+  ReferenceError: the var starts with the parameter's value.
 * Assigning to a let, const or class variable before its declaration
   runs, as in x = 1; let x; or let y = [y] = [], now throws the
   ReferenceError the language requires instead of quietly creating the
