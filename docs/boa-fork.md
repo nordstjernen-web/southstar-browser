@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 12,071 added and 1,428 removed lines in 137 files;
+2026-10-15 the difference is 12,093 added and 1,433 removed lines in 138 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -101,6 +101,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | The `arguments` object of a function that contains a direct `eval` is created even when the function does not name `arguments` itself (`FunctionScopes::access_arguments_binding`), so `eval("arguments")` finds it; in a function with parameter expressions, a body `var` named like a parameter (or `arguments`) starts with the parameter's value, as `FunctionDeclarationInstantiation` step 28 reads it, instead of throwing an uninitialized-binding `ReferenceError` (the compiler read the new `var` binding instead of the parameter) | `boa_ast`: `scope.rs`, `scope_analyzer.rs`; `boa_engine`: `bytecompiler/declarations.rs` | `staging/sm/Function`, `staging/sm/regress` |
 | A `var` or function that a direct `eval` declares in a function exists only in the call that ran the `eval`: the bindings it adds to the function's shared scope are flagged deletable (`Scope::create_deletable_binding`), and a function environment created later starts with them deleted until an `eval` declares them again, so a later call reads an outer or global binding of that name (or `undefined` for `typeof`) instead of an uninitialized slot, and can delete the binding again; `GetNameOrUndefined` decides whether an unresolved name is global after the runtime lookup | `boa_ast`: `scope.rs`, `scope_analyzer.rs`; `boa_engine`: `environments/runtime/declarative/function.rs`, `vm/opcode/get/name.rs` | `staging/sm/strict`, `staging/sm/lexical-environment` |
 | Iterator protocol: `IteratorNext` and `IteratorToArray` do not call `next()` again on an iterator that reported it is done, as array destructuring checks `iteratorRecord.[[Done]]` before each step; a generator's `return()` that resumes inside a `for-of` loop closes the loop's iterator (the empty exception of the return reaches the loop's handler through `MaybeException`), and an error thrown by that `return()` replaces the return | `boa_engine`: `vm/opcode/iteration/iterator.rs`, `bytecompiler/statement/loop.rs` | `staging/sm/expressions`, `staging/sm/generators` |
+| The constant folder keeps `true && x`, `false \|\| o.f` and `null ?? a?.b` when folding would leave a reference in their place, which `delete`, `typeof` and calls treat differently (`delete (true && x)` is `true` and deletes nothing); NamedEvaluation of `&&=`, `\|\|=` and `??=` applies only to an unparenthesized identifier, so `(a) ??= function () {}` stays anonymous | `boa_engine`: `optimizer/pass/constant_folding.rs`; `boa_parser`: `parser/expression/assignment/mod.rs` | `staging/sm/expressions` |
 
 ## Rules for changing the fork
 

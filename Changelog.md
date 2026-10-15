@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* delete (true && x) no longer deletes x, (true && obj.method)() calls
+  the method without obj as this, and (a) ??= function () {} leaves the
+  function anonymous, as the language specifies.
 * Array destructuring stops asking an iterator for values once it is
   done, and breaking out of a for-of loop over a generator that is
   itself inside a for-of loop now closes the inner iterator, so its

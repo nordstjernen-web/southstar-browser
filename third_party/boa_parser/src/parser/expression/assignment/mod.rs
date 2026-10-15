@@ -317,11 +317,9 @@ where
                             .filter(|target| !(logical && matches!(target, AssignTarget::Call(_))))
                     {
                         let mut rhs = self.parse(cursor, interner)?;
-                        if (assignop == AssignOp::BoolAnd
-                            || assignop == AssignOp::BoolOr
-                            || assignop == AssignOp::Coalesce)
-                            && let AssignTarget::Identifier(ident) = target
-                        {
+                        // NamedEvaluation applies only when the left-hand side is an
+                        // `IdentifierRef`, so not to a parenthesized one: `(a) ??= function() {}`.
+                        if logical && let Expression::Identifier(ident) = lhs {
                             rhs.set_anonymous_function_definition_name(&ident);
                         }
                         lhs = Assign::new(assignop, target, rhs).into();

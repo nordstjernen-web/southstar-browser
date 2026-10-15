@@ -172,6 +172,25 @@ impl ConstantFolding {
         // truthy             && call() --> call()
         // non-null/undefined ?? call() --> non-null/undefined
         if let BinaryOp::Logical(op) = binary.op() {
+            // The expression would replace its operand that is a reference, which changes what
+            // `delete`, `typeof` and calls see: `delete (true && x)` must not delete `x`, and
+            // `(true && o.f)()` must call `f` with an undefined `this`.
+            let keeps_rhs = match op {
+                LogicalOp::And => lhs.to_boolean(),
+                LogicalOp::Or => !lhs.to_boolean(),
+                LogicalOp::Coalesce => lhs.is_null_or_undefined(),
+            };
+            if keeps_rhs
+                && matches!(
+                    binary.rhs().flatten(),
+                    Expression::Identifier(_)
+                        | Expression::PropertyAccess(_)
+                        | Expression::Optional(_)
+                )
+            {
+                return PassAction::Keep;
+            }
+
             let expr = match op {
                 LogicalOp::And => {
                     if lhs.to_boolean() {
