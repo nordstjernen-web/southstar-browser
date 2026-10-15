@@ -43,42 +43,9 @@ const CALENDARS: [&str; 16] = [
     "persian",
     "roc",
 ];
-const NUMBERING_SYSTEMS: [&str; 1] = ["latn"];
 const CURRENCIES: [&str; 18] = [
     "AUD", "BRL", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW", "MXN", "NOK",
     "NZD", "RUB", "SEK", "USD", "ZAR",
-];
-const UNITS: [&str; 30] = [
-    "acre",
-    "bit",
-    "byte",
-    "celsius",
-    "centimeter",
-    "day",
-    "degree",
-    "fahrenheit",
-    "gigabyte",
-    "gram",
-    "hectare",
-    "hour",
-    "inch",
-    "kilogram",
-    "kilometer",
-    "liter",
-    "megabyte",
-    "meter",
-    "mile",
-    "milliliter",
-    "millimeter",
-    "millisecond",
-    "minute",
-    "month",
-    "ounce",
-    "percent",
-    "pound",
-    "second",
-    "week",
-    "year",
 ];
 
 const WEEKDAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -610,6 +577,7 @@ pub(crate) fn supported_values_of(
 ) -> Result<Value, Value> {
     let key = scope.to_string(&arg(args, 0))?;
     let computed;
+    let listed: Vec<&str>;
     let values: &[&str] = match key.as_str() {
         "calendar" => &CALENDARS,
         "collation" => {
@@ -617,12 +585,18 @@ pub(crate) fn supported_values_of(
             &computed
         }
         "currency" => &CURRENCIES,
-        "numberingSystem" => &NUMBERING_SYSTEMS,
+        "numberingSystem" => {
+            listed = crate::number::data::numbering_systems().collect();
+            &listed
+        }
         "timeZone" => {
             computed = cldr_index::all_time_zones();
             &computed
         }
-        "unit" => &UNITS,
+        "unit" => {
+            listed = crate::number::data::simple_units().collect();
+            &listed
+        }
         _ => return Err(scope.range_error(&format!("Invalid key: {key}"))),
     };
     string_array(scope, values)

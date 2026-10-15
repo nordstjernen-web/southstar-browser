@@ -5,11 +5,12 @@
 mod case;
 mod collator;
 mod datetime;
+mod ecma402;
 mod ffi;
 mod locale;
 mod negotiate;
 mod number;
-mod printf;
+mod plural;
 mod text;
 
 use southstar_intl_core::{cldr_index, collation, tag};
@@ -60,23 +61,6 @@ fn c_trunc_i64(d: f64) -> i64 {
     d as i64
 }
 
-fn c_trunc_i32(d: f64) -> i32 {
-    if cfg!(any(target_arch = "x86", target_arch = "x86_64"))
-        && !(d > -2_147_483_649.0 && d < 2_147_483_648.0)
-    {
-        return i32::MIN;
-    }
-    d as i32
-}
-
-fn c_long_trunc(d: f64) -> i64 {
-    if cfg!(windows) {
-        i64::from(c_trunc_i32(d))
-    } else {
-        c_trunc_i64(d)
-    }
-}
-
 fn arg_locale(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
     let requested = negotiate::canonicalize_locale_list(scope, value).unwrap_or_default();
     negotiate::lookup_matcher(&requested).locale.into_bytes()
@@ -124,15 +108,6 @@ fn hget_str(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>>
     string_value(scope, value)
 }
 
-fn hget_int(scope: &mut Scope<'_>, object: &Value, key: &str, default: i32) -> i32 {
-    match scope.get(object, key) {
-        Ok(value) if !value.is_undefined() && !value.is_null() => {
-            scope.to_int32(&value).unwrap_or(default)
-        }
-        _ => default,
-    }
-}
-
 fn opt_str(scope: &mut Scope<'_>, options: &Value, key: &str) -> Option<Vec<u8>> {
     if !options.is_object() {
         return None;
@@ -147,16 +122,6 @@ fn opt_present(scope: &mut Scope<'_>, options: &Value, key: &str) -> bool {
     scope
         .get(options, key)
         .map_or(true, |value| !value.is_undefined() && !value.is_null())
-}
-
-fn opt_num(scope: &mut Scope<'_>, options: &Value, key: &str) -> Option<f64> {
-    if !options.is_object() {
-        return None;
-    }
-    match scope.get(options, key) {
-        Ok(value) if !value.is_undefined() && !value.is_null() => scope.to_number(&value).ok(),
-        _ => None,
-    }
 }
 
 fn opt_bool(scope: &mut Scope<'_>, options: &Value, key: &str, default: i32) -> i32 {
@@ -315,22 +280,6 @@ fn construct_global(scope: &mut Scope<'_>, name: &str, args: &[Value]) -> Value 
         .unwrap_or_else(|_| Value::undefined())
 }
 
-fn number_to_locale_string(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    if !this.is_number() && scope.object_kind(this) != Some(ObjectKind::Number) {
-        return Err(
-            scope.type_error("Number.prototype.toLocaleString requires that 'this' be a Number")
-        );
-    }
-    let number = scope.to_number(this)?;
-    let format = construct_global(scope, "NumberFormat", &[arg(args, 0), arg(args, 1)]);
-    let parts = number::parts(scope, &format, number);
-    Ok(join_parts(scope, &parts))
-}
-
 fn date_options(scope: &mut Scope<'_>, args: &[Value], defaults: &[(&str, &[u8])]) -> Value {
     match args.get(1) {
         Some(options) if options.is_object() => options.clone(),
@@ -427,14 +376,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
     }
     let intl = scope.new_object();
     collator::install(scope, &intl);
-    register(
-        scope,
-        &intl,
-        "NumberFormat",
-        number::constructor,
-        0,
-        &number::METHODS,
-    );
+    number::install(scope, &intl);
     register(
         scope,
         &intl,
@@ -443,14 +385,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         0,
         &datetime::METHODS,
     );
-    register(
-        scope,
-        &intl,
-        "PluralRules",
-        text::plural_constructor,
-        0,
-        &text::PLURAL_METHODS,
-    );
+    plural::install(scope, &intl);
     register(
         scope,
         &intl,
@@ -509,14 +444,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
     );
     let _ = scope.define_to_string_tag(&intl, "Intl");
     let _ = scope.define(global, "Intl", intl, Attributes::METHOD);
-    install_proto_hook(
-        scope,
-        global,
-        "Number",
-        "toLocaleString",
-        number_to_locale_string,
-        0,
-    );
+    number::install_locale_string_hooks(scope, global);
     install_proto_hook(
         scope,
         global,

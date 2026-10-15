@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Intl.NumberFormat, Intl.PluralRules and Number/BigInt toLocaleString now
+  follow ECMA-402: exact decimal rounding of numbers, BigInts and decimal
+  strings with every rounding mode, rounding increments and rounding
+  priorities; scientific, engineering and compact notation; signDisplay,
+  accounting currency, units, useGrouping strategies, the 78 numbering
+  systems with simple digits, formatRange and formatRangeToParts, and real
+  locale negotiation with Unicode extensions. Locale data covers English
+  (with en-IN grouping), German, French, Spanish, Japanese, Korean, Chinese
+  and the other common languages as compact tables, and PluralRules knows
+  CLDR's cardinal rules for about a hundred languages. test262's NumberFormat,
+  PluralRules and toLocaleString tests all pass (322 of 322, from 116), and
+  intl402 reaches 2,619 of 3,382 (77.4%).
 * Intl.ListFormat, Intl.RelativeTimeFormat, Intl.DurationFormat,
   Intl.Segmenter and Intl.DisplayNames follow ECMA-402: they require new,
   read and validate their options in the specified order, negotiate locales
