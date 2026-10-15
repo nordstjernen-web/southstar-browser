@@ -1,7 +1,6 @@
 use boa_ast::{
     declaration::{Binding, LexicalDeclaration},
     operations::bound_names,
-    scope::BindingLocatorError,
     statement::{
         DoWhileLoop, ForInLoop, ForLoop, ForOfLoop, WhileLoop,
         iteration::{ForLoopInitializer, IterableLoopInitializer},
@@ -231,7 +230,7 @@ impl ByteCompiler<'_> {
             match for_in_loop.initializer() {
                 IterableLoopInitializer::Identifier(ident) => {
                     let ident = ident.to_js_string(self.interner());
-                    self.emit_binding(BindingOpcode::InitVar, ident, &value);
+                    self.emit_binding(BindingOpcode::SetName, ident, &value);
                 }
                 IterableLoopInitializer::Access(access) => {
                     self.access_set(Access::Property { access }, |_| &value);
@@ -355,21 +354,7 @@ impl ByteCompiler<'_> {
             match for_of_loop.initializer() {
                 IterableLoopInitializer::Identifier(ident) => {
                     let ident = ident.to_js_string(self.interner());
-                    match self.lexical_scope.set_mutable_binding(ident.clone()) {
-                        Ok(binding) => {
-                            let index = self.insert_binding(binding);
-                            self.emit_binding_access(
-                                BindingAccessOpcode::DefInitVar,
-                                &index,
-                                &value,
-                            );
-                        }
-                        Err(BindingLocatorError::MutateImmutable) => {
-                            let index = self.get_or_insert_string(ident);
-                            self.bytecode.emit_throw_mutate_immutable(index.into());
-                        }
-                        Err(BindingLocatorError::Silent) => {}
-                    }
+                    self.emit_binding(BindingOpcode::SetName, ident, &value);
                 }
                 IterableLoopInitializer::Access(access) => {
                     self.access_set(Access::Property { access }, |_| &value);
