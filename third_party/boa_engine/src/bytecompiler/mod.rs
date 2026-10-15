@@ -1535,8 +1535,31 @@ impl<'ctx> ByteCompiler<'ctx> {
     }
 
     fn super_(&mut self, this: &Register, super_: &Register) {
-        // Reuse super to avoid allocating a register just to get the function object.
         self.bytecode.emit_this(this.variable());
+        self.super_base(this, super_);
+    }
+
+    /// Evaluates `super[expr]` up to its reference: the `this` binding, then the key, then the
+    /// super base, which `MakeSuperPropertyReference` reads after the key is evaluated.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-super-keyword-runtime-semantics-evaluation
+    fn super_with_key(
+        &mut self,
+        this: &Register,
+        super_: &Register,
+        expr: &Expression,
+        key: &Register,
+    ) {
+        self.bytecode.emit_this(this.variable());
+        self.compile_expr(expr, key);
+        self.super_base(this, super_);
+    }
+
+    fn super_base(&mut self, this: &Register, super_: &Register) {
+        // Reuse super to avoid allocating a register just to get the function object.
         self.bytecode.emit_get_function_object(super_.variable());
         self.bytecode.emit_get_home_object(super_.variable());
 
@@ -1619,10 +1642,10 @@ impl<'ctx> ByteCompiler<'ctx> {
 
                     let value = compiler.register_allocator.alloc();
                     let receiver = compiler.register_allocator.alloc();
-                    compiler.super_(&receiver, &value);
 
                     match access.field() {
                         PropertyAccessField::Const(ident) => {
+                            compiler.super_(&receiver, &value);
                             compiler.emit_get_property_by_name(
                                 dst,
                                 Some(&receiver),
@@ -1632,7 +1655,7 @@ impl<'ctx> ByteCompiler<'ctx> {
                         }
                         PropertyAccessField::Expr(expr) => {
                             let key = compiler.register_allocator.alloc();
-                            compiler.compile_expr(expr, &key);
+                            compiler.super_with_key(&receiver, &value, expr, &key);
                             compiler.bytecode.emit_get_property_by_value(
                                 dst.variable(),
                                 key.variable(),
@@ -1763,10 +1786,8 @@ impl<'ctx> ByteCompiler<'ctx> {
                     PropertyAccessField::Expr(expr) => {
                         let object = self.register_allocator.alloc();
                         let receiver = self.register_allocator.alloc();
-                        self.super_(&receiver, &object);
-
                         let key = self.register_allocator.alloc();
-                        self.compile_expr(expr, &key);
+                        self.super_with_key(&receiver, &object, expr, &key);
 
                         let value = expr_fn(self);
 
@@ -1811,7 +1832,15 @@ impl<'ctx> ByteCompiler<'ctx> {
                         self.register_allocator.dealloc(key);
                     }
                 },
-                PropertyAccess::Super(_) => self.bytecode.emit_delete_super_throw(),
+                // The reference is evaluated, `this` binding and key included, before `delete`
+                // throws for a super reference.
+                PropertyAccess::Super(access) => {
+                    self.bytecode.emit_this(dst.variable());
+                    if let PropertyAccessField::Expr(expr) = access.field() {
+                        self.compile_expr(expr, dst);
+                    }
+                    self.bytecode.emit_delete_super_throw();
+                }
                 PropertyAccess::Private(_) => {
                     unreachable!("deleting private properties should always throw early errors.")
                 }
@@ -2005,15 +2034,15 @@ impl<'ctx> ByteCompiler<'ctx> {
             }
             PropertyAccess::Super(access) => {
                 let object = self.register_allocator.alloc();
-                self.super_(this, &object);
 
                 match access.field() {
                     PropertyAccessField::Const(ident) => {
+                        self.super_(this, &object);
                         self.emit_get_property_by_name(dst, Some(this), &object, ident.sym());
                     }
                     PropertyAccessField::Expr(expr) => {
                         let key = self.register_allocator.alloc();
-                        self.compile_expr(expr, &key);
+                        self.super_with_key(this, &object, expr, &key);
                         self.bytecode.emit_get_property_by_value(
                             dst.variable(),
                             key.variable(),

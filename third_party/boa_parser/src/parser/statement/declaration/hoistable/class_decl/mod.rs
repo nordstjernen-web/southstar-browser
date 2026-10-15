@@ -641,7 +641,9 @@ where
                 cursor.advance(interner);
                 self.auto_accessor(r#static, cursor, interner)?
             }
+            // The `PropName` of both `constructor` and `"constructor"` is "constructor".
             TokenKind::IdentifierName((Sym::CONSTRUCTOR, _))
+            | TokenKind::StringLiteral((Sym::CONSTRUCTOR, _))
                 if !r#static && !decorators.is_empty() =>
             {
                 return Err(Error::general(
@@ -649,7 +651,10 @@ where
                     position,
                 ));
             }
-            TokenKind::IdentifierName((Sym::CONSTRUCTOR, _)) if !r#static => {
+            TokenKind::IdentifierName((Sym::CONSTRUCTOR, _))
+            | TokenKind::StringLiteral((Sym::CONSTRUCTOR, _))
+                if !r#static =>
+            {
                 cursor.advance(interner);
                 let strict = cursor.strict();
                 cursor.set_strict(true);

@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* In classes, a method written "constructor"() { } with a quoted name is
+  the constructor, super[key] evaluates the key before looking up the
+  prototype it reads from, and delete super[key] evaluates the key
+  before throwing.
 * delete (true && x) no longer deletes x, (true && obj.method)() calls
   the method without obj as this, and (a) ??= function () {} leaves the
   function anonymous, as the language specifies.
