@@ -871,6 +871,56 @@ impl<'ctx> ByteCompiler<'ctx> {
         }
     }
 
+    /// Resolves the binding a `SingleNameBinding` with the environment `undefined` writes to,
+    /// before the property it reads is evaluated, when the binding is not statically known
+    /// (global object, `with` or eval bindings). A computed property name is converted to a
+    /// property key first, as its evaluation does.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-runtime-semantics-keyedbindinginitialization
+    pub(crate) fn resolve_pattern_binding(
+        &mut self,
+        def: BindingOpcode,
+        name: &JsString,
+        computed_key: Option<&Register>,
+    ) -> Option<BindingKind> {
+        if !matches!(def, BindingOpcode::InitVar | BindingOpcode::SetName) {
+            return None;
+        }
+        let binding = self.lexical_scope.get_identifier_reference(name.clone());
+        if binding.is_lexical() {
+            return None;
+        }
+        if let Some(key) = computed_key {
+            self.bytecode
+                .emit_to_property_key(key.variable(), key.variable());
+        }
+        let index = self.get_binding(&binding);
+        let unused = self.register_allocator.alloc();
+        self.emit_binding_access(BindingAccessOpcode::GetLocator, &index, &unused);
+        self.register_allocator.dealloc(unused);
+        Some(index)
+    }
+
+    /// Writes `value` to a binding of a pattern, through the locator
+    /// [`Self::resolve_pattern_binding`] resolved when there is one.
+    pub(crate) fn emit_pattern_binding(
+        &mut self,
+        resolved: Option<BindingKind>,
+        def: BindingOpcode,
+        name: JsString,
+        value: &Register,
+    ) {
+        match resolved {
+            Some(index) => {
+                self.emit_binding_access(BindingAccessOpcode::SetNameByLocator, &index, value);
+            }
+            None => self.emit_binding(def, name, value),
+        }
+    }
+
     fn next_opcode_location(&mut self) -> Address {
         self.bytecode.next_opcode_location()
     }

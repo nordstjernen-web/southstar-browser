@@ -37,9 +37,12 @@ impl ByteCompiler<'_> {
                             default_init,
                         } => {
                             let dst = self.register_allocator.alloc();
+                            let binding_name = ident.to_js_string(self.interner());
 
-                            match name {
+                            let resolved = match name {
                                 PropertyName::Literal(ident) => {
+                                    let resolved =
+                                        self.resolve_pattern_binding(def, &binding_name, None);
                                     self.emit_get_property_by_name(&dst, None, object, ident.sym());
                                     let key = self.register_allocator.alloc();
                                     self.emit_store_literal(
@@ -51,10 +54,16 @@ impl ByteCompiler<'_> {
                                         &key,
                                     );
                                     excluded_keys_registers.push(key);
+                                    resolved
                                 }
                                 PropertyName::Computed(node) => {
                                     let key = self.register_allocator.alloc();
                                     self.compile_expr(node, &key);
+                                    let resolved = self.resolve_pattern_binding(
+                                        def,
+                                        &binding_name,
+                                        Some(&key),
+                                    );
                                     if rest_exits {
                                         self.bytecode.emit_get_property_by_value_push(
                                             dst.variable(),
@@ -72,8 +81,9 @@ impl ByteCompiler<'_> {
                                         );
                                         self.register_allocator.dealloc(key);
                                     }
+                                    resolved
                                 }
-                            }
+                            };
 
                             if let Some(init) = default_init {
                                 let skip = self.jump_if_not_undefined(&dst);
@@ -81,7 +91,7 @@ impl ByteCompiler<'_> {
                                 self.patch_jump(skip);
                             }
 
-                            self.emit_binding(def, ident.to_js_string(self.interner()), &dst);
+                            self.emit_pattern_binding(resolved, def, binding_name, &dst);
                             self.register_allocator.dealloc(dst);
                         }
                         //  BindingRestProperty : ... BindingIdentifier
