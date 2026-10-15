@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,609 added and 1,334 removed lines in 131 files;
+2026-10-15 the difference is 11,639 added and 1,354 removed lines in 131 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -89,6 +89,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | A poisoned function environment (one whose function calls a direct eval) is searched through the function's shared compile-time scope, which an eval in a later call can extend with a `var`; the lookup now skips a binding the activation has no slot for (`FunctionEnvironment::has_slot`) instead of indexing past its storage | `boa_engine`: `environments/runtime/{mod,declarative/function}.rs` | `staging/sm/regress/regress-554955-*.js` |
 | `let` as an identifier in non-strict code: `let:` starts a labelled statement (escaped or not), and `let` names a function, generator or async function expression and an arrow function's single parameter (`let => 0`, `async let => 0`) | `boa_parser`: `statement/mod.rs`, `expression/assignment/mod.rs`, `expression/primary/{function_expression,generator_expression,async_function_expression,async_generator_expression}/mod.rs` | `staging/sm/syntax`, `staging/sm/misc` |
 | Destructuring assignment targets: an element, property value or rest target that is not an object or array literal may be any simple assignment target, parenthesized or not (`[(a), (o.p)] = …`, `({ a: (b) } = …)`, `[...(x)]`, `({...(o.p)} = …)`, `super` properties too), and `eval` and `arguments` are rejected as such targets everywhere in strict code; computed and numeric property names take nested patterns and initializers (`({ [k]: [x] = [] } = …)`); an initializer is named after its target only when that target is an unparenthesized identifier (IsIdentifierRef); a parenthesized object or array literal is not a pattern in a `for-in`/`for-of` head | `boa_ast`: `expression/literal/{array,object}.rs`; `boa_parser`: `statement/iteration/for_statement.rs` | `staging/sm/expressions`, `staging/sm/destructuring` |
+| Binding patterns require a comma between elements: `var {async async: a} = {}` and `let [a b] = []` are syntax errors instead of two bindings | `boa_parser`: `statement/mod.rs` | `staging/sm/async-functions` |
 
 ## Rules for changing the fork
 

@@ -725,14 +725,18 @@ where
                 }
             }
 
-            if let Some(peek_token) = cursor.peek(0, interner)?
-                && peek_token.kind() == &TokenKind::Punctuator(Punctuator::Comma)
-            {
-                cursor.expect(
-                    TokenKind::Punctuator(Punctuator::Comma),
-                    "object binding pattern",
-                    interner,
-                )?;
+            let peek_token = cursor.peek(0, interner).or_abrupt()?;
+            match peek_token.kind() {
+                TokenKind::Punctuator(Punctuator::Comma) => cursor.advance(interner),
+                TokenKind::Punctuator(Punctuator::CloseBlock) => {}
+                _ => {
+                    return Err(Error::expected(
+                        [",".to_owned(), "}".to_owned()],
+                        peek_token.to_string(interner),
+                        peek_token.span(),
+                        "object binding pattern",
+                    ));
+                }
             }
         }
     }
@@ -933,18 +937,24 @@ where
                 }
             }
 
-            if let Some(peek_token) = cursor.peek(0, interner)?
-                && peek_token.kind() == &TokenKind::Punctuator(Punctuator::Comma)
-            {
-                cursor.expect(
-                    TokenKind::Punctuator(Punctuator::Comma),
-                    "array binding pattern",
-                    interner,
-                )?;
-                if last_elision_or_first {
-                    patterns.push(ArrayPatternElement::Elision);
-                } else {
-                    last_elision_or_first = true;
+            let peek_token = cursor.peek(0, interner).or_abrupt()?;
+            match peek_token.kind() {
+                TokenKind::Punctuator(Punctuator::Comma) => {
+                    cursor.advance(interner);
+                    if last_elision_or_first {
+                        patterns.push(ArrayPatternElement::Elision);
+                    } else {
+                        last_elision_or_first = true;
+                    }
+                }
+                TokenKind::Punctuator(Punctuator::CloseBracket) => {}
+                _ => {
+                    return Err(Error::expected(
+                        [",".to_owned(), "]".to_owned()],
+                        peek_token.to_string(interner),
+                        peek_token.span(),
+                        "array binding pattern",
+                    ));
                 }
             }
         }
