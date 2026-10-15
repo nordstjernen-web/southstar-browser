@@ -86,6 +86,7 @@ fn create_realm(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result
 
 pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
     let global = scope.global();
+    southstar_js_intl::install(scope, &global);
     let print = scope.function("print", 1, print);
     scope.set(&global, "print", print)?;
     let read = scope.function("read", 1, read);

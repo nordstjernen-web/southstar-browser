@@ -189,11 +189,14 @@ pub(crate) fn string_locale_compare(
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
-    let a = c_string(scope, this).unwrap_or_default();
-    let b = match args.first() {
-        Some(other) => c_string(scope, other).unwrap_or_default(),
-        None => Vec::new(),
-    };
+    if this.is_undefined() || this.is_null() {
+        return Err(scope.type_error("String.prototype.localeCompare called on null or undefined"));
+    }
+    let a = c_string(scope, this)?;
+    let b = c_string(
+        scope,
+        &args.first().cloned().unwrap_or_else(Value::undefined),
+    )?;
     let (sensitivity, numeric) = match args.get(2) {
         Some(options) if options.is_object() => (
             opt_str(scope, options, "sensitivity"),

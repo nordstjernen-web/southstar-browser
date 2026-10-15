@@ -10,7 +10,7 @@ mod number;
 mod printf;
 mod text;
 
-use southstar_js_engine::{Attributes, BoundFn, NativeFn, Scope, Value};
+use southstar_js_engine::{Attributes, BoundFn, NativeFn, ObjectKind, Scope, Value};
 
 const HIDDEN: Attributes = Attributes {
     writable: false,
@@ -364,7 +364,12 @@ fn number_to_locale_string(
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
-    let number = scope.to_number(this).unwrap_or(f64::NAN);
+    if !this.is_number() && scope.object_kind(this) != Some(ObjectKind::Number) {
+        return Err(
+            scope.type_error("Number.prototype.toLocaleString requires that 'this' be a Number")
+        );
+    }
+    let number = scope.to_number(this)?;
     let format = construct_global(scope, "NumberFormat", &[arg(args, 0), arg(args, 1)]);
     let parts = number::parts(scope, &format, number);
     Ok(join_parts(scope, &parts))
@@ -402,11 +407,22 @@ const TIME_DEFAULTS: [(&str, &[u8]); 3] = [
     ("second", b"2-digit"),
 ];
 
+fn require_date(scope: &mut Scope<'_>, this: &Value, method: &str) -> Result<(), Value> {
+    if scope.object_kind(this) == Some(ObjectKind::Date) {
+        Ok(())
+    } else {
+        Err(scope.type_error(&format!(
+            "Date.prototype.{method} requires that 'this' be a Date"
+        )))
+    }
+}
+
 fn date_to_locale_string(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
+    require_date(scope, this, "toLocaleString")?;
     let defaults = [&DATE_DEFAULTS[..], &TIME_DEFAULTS[..]].concat();
     let options = date_options(scope, args, &defaults);
     Ok(date_format_with(scope, this, arg(args, 0), options))
@@ -417,6 +433,7 @@ fn date_to_locale_date_string(
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
+    require_date(scope, this, "toLocaleDateString")?;
     let options = date_options(scope, args, &DATE_DEFAULTS);
     Ok(date_format_with(scope, this, arg(args, 0), options))
 }
@@ -426,6 +443,7 @@ fn date_to_locale_time_string(
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
+    require_date(scope, this, "toLocaleTimeString")?;
     let options = date_options(scope, args, &TIME_DEFAULTS);
     Ok(date_format_with(scope, this, arg(args, 0), options))
 }

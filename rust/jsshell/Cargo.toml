@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-intl = { path = "../js-intl" }
 southstar-js-temporal = { path = "../js-temporal", default-features = false }
 
 [features]

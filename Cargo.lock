@@ -2694,6 +2694,7 @@ name = "southstar-jsshell"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-js-engine",
+ "southstar-js-intl",
  "southstar-js-temporal",
 ]
 

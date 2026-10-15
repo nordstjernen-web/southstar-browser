@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* southstar-jsshell installs the browser's own Intl (rust/js-intl), so
+  test262's intl402 measures the Intl that pages see: 71.4% (2,416 of
+  3,382) instead of the 57.7% that only tested for its absence. The Intl
+  hooks on String.prototype.localeCompare, Number.prototype.toLocaleString
+  and the Date toLocale*String methods now reject an incompatible this
+  value with a TypeError, and localeCompare compares a missing argument as
+  "undefined". test262 reaches 50,738 of 52,133 (97.3%).
 * southstar-jsshell implements test262's $262.agent: agents run in their own
   threads and engines, share SharedArrayBuffers with the main agent and
   report back, and the shell has a setTimeout. The engine layer gains
