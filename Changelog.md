@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* for-in loops no longer allocate a result object and a next() function
+  for every loop and key, which makes React pages about 10% faster.
 * The JavaScript garbage collector waits until the heap has doubled
   since the last collection instead of growing by 43%, so pages that keep
   a large heap alive spend less time collecting; Speedometer 3.1 is about

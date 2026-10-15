@@ -2,7 +2,7 @@
 
 use crate::{
     Context, JsResult, JsValue,
-    builtins::{BuiltInBuilder, IntrinsicObject},
+    builtins::{BuiltInBuilder, IntrinsicObject, object::for_in_iterator::ForInIterator},
     context::intrinsics::Intrinsics,
     error::JsNativeError,
     js_string,
@@ -398,7 +398,18 @@ pub struct IteratorRecord {
     done: bool,
 
     /// The result of the last call to `next`.
-    last_result: IteratorResult,
+    last_result: LastResult,
+}
+
+/// What the last step of an [`IteratorRecord`] produced.
+#[derive(Clone, Debug, Finalize, Trace)]
+enum LastResult {
+    /// The record was not stepped yet.
+    None,
+    /// The result object a `next` method returned.
+    Object(IteratorResult),
+    /// The value of a step that needed no result object (a `for-in` key).
+    Value(JsValue),
 }
 
 impl IteratorRecord {
@@ -410,9 +421,7 @@ impl IteratorRecord {
             iterator,
             next_method,
             done: false,
-            last_result: IteratorResult {
-                object: JsObject::with_null_proto(),
-            },
+            last_result: LastResult::None,
         }
     }
 
@@ -427,8 +436,16 @@ impl IteratorRecord {
     }
 
     /// Gets the last result object of the iterator record.
-    pub(crate) const fn last_result(&self) -> &IteratorResult {
-        &self.last_result
+    pub(crate) fn last_result(&self, context: &mut Context) -> JsObject {
+        match &self.last_result {
+            LastResult::None => JsObject::with_null_proto(),
+            LastResult::Object(result) => result.object().clone(),
+            LastResult::Value(value) => {
+                create_iter_result_object(value.clone(), self.done, context)
+                    .as_object()
+                    .unwrap_or_else(JsObject::with_null_proto)
+            }
+        }
     }
 
     /// Runs `f`, setting the `done` field of this `IteratorRecord` to `true` if `f` returns
@@ -446,7 +463,11 @@ impl IteratorRecord {
 
     /// Gets the current value of the `IteratorRecord`.
     pub(crate) fn value(&mut self, context: &mut Context) -> JsResult<JsValue> {
-        self.set_done_on_err(|iter| iter.last_result.value(context))
+        self.set_done_on_err(|iter| match &iter.last_result {
+            LastResult::None => Ok(JsValue::undefined()),
+            LastResult::Object(result) => result.value(context),
+            LastResult::Value(value) => Ok(value.clone()),
+        })
     }
 
     /// Get the `[[Done]]` field of the `IteratorRecord`.
@@ -470,7 +491,7 @@ impl IteratorRecord {
             // 3. If done is true, return false.
             iter.done = result.complete(context)?;
 
-            iter.last_result = result;
+            iter.last_result = LastResult::Object(result);
 
             Ok(())
         })
@@ -527,6 +548,14 @@ impl IteratorRecord {
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-iteratorstep
     pub(crate) fn step(&mut self, context: &mut Context) -> JsResult<bool> {
+        if self.iterator.is::<ForInIterator>() {
+            return self.set_done_on_err(|iter| {
+                let key = ForInIterator::step(&iter.iterator, context)?;
+                iter.done = key.is_none();
+                iter.last_result = LastResult::Value(key.unwrap_or_default());
+                Ok(iter.done)
+            });
+        }
         self.set_done_on_err(|iter| {
             // 1. Let result be ? IteratorNext(iteratorRecord).
             let result = iter.next(None, context)?;
@@ -541,7 +570,7 @@ impl IteratorRecord {
             //     b. Return done.
             iter.done = result.complete(context)?;
 
-            iter.last_result = result;
+            iter.last_result = LastResult::Object(result);
 
             // 6. Return result.
             Ok(iter.done)
