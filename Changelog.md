@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Iterators gain chunks() and windows(), Iterator.zip() and
+  Iterator.zipKeyed(), join() and [Symbol.dispose](); take() and drop() reject
+  limits past 2^53 - 1 and includes() checks skippedElements as the proposal
+  says. test262's built-ins/Iterator passes in full (654 tests), and the
+  total rises to 49,694 of 52,133.
 * Boa's experimental feature is on, so the script engine exposes the
   standards it already implemented behind it: Array.fromAsync, Error.isError,
   Atomics.pause, ArrayBuffer.prototype.detached/transfer/transferToFixedLength,

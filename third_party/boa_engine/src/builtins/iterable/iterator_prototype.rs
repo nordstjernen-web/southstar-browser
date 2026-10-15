@@ -25,6 +25,8 @@ use crate::{
 /// [spec]: https://tc39.es/ecma262/#sec-%iteratorprototype%-object
 pub(crate) struct Iterator;
 
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+
 impl IntrinsicObject for Iterator {
     fn init(realm: &Realm) {
         let get_constructor = BuiltInBuilder::callable(realm, Self::get_constructor)
@@ -52,6 +54,10 @@ impl IntrinsicObject for Iterator {
             .static_method(Self::some, js_string!("some"), 1)
             .static_method(Self::every, js_string!("every"), 1)
             .static_method(Self::find, js_string!("find"), 1)
+            .static_method(Self::join, js_string!("join"), 1)
+            .static_method(Self::chunks, js_string!("chunks"), 1)
+            .static_method(Self::windows, js_string!("windows"), 1)
+            .static_method(Self::dispose, JsSymbol::dispose(), 0)
             .static_accessor(
                 JsSymbol::to_string_tag(),
                 Some(get_to_string_tag),
@@ -312,6 +318,18 @@ impl Iterator {
             );
         }
 
+        // 7. If numLimit is finite and numLimit > 𝔽(2**53 - 1), then
+        //    a. Let error be ThrowCompletion(a newly created RangeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        if num_limit.is_finite() && num_limit > MAX_SAFE_INTEGER {
+            return iterated.close(
+                Err(js_error!(
+                    RangeError: "Iterator.prototype.take: limit cannot exceed 2^53 - 1"
+                )),
+                context,
+            );
+        }
+
         // 7. Let integerLimit be ! ToIntegerOrInfinity(numLimit).
         let integer_limit = IntegerOrInfinity::from(num_limit);
 
@@ -368,6 +386,18 @@ impl Iterator {
             return iterated.close(
                 Err(js_error!(
                     RangeError: "Iterator.prototype.drop: limit cannot be NaN"
+                )),
+                context,
+            );
+        }
+
+        // 7. If numLimit is finite and numLimit > 𝔽(2**53 - 1), then
+        //    a. Let error be ThrowCompletion(a newly created RangeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        if num_limit.is_finite() && num_limit > MAX_SAFE_INTEGER {
+            return iterated.close(
+                Err(js_error!(
+                    RangeError: "Iterator.prototype.drop: limit cannot exceed 2^53 - 1"
                 )),
                 context,
             );
@@ -442,6 +472,154 @@ impl Iterator {
         Ok(helper.into())
     }
 
+    /// `ValidateChunkSize ( iterated, size )`, the argument checks shared by
+    /// `Iterator.prototype.chunks` and `Iterator.prototype.windows`.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-iterator-chunking/
+    fn validate_chunk_size(
+        iterated: &IteratorRecord,
+        size: &JsValue,
+        method: &str,
+        context: &mut Context,
+    ) -> JsResult<usize> {
+        // 4. If size is not a Number, throw a TypeError exception.
+        // 5. If size is not an integral Number, throw a TypeError exception.
+        let Some(size) = size
+            .as_number()
+            .filter(|n| n.is_finite() && n.trunc() == *n)
+        else {
+            iterated.close(
+                Err(js_error!(TypeError: "Iterator.prototype.{}: size must be an integral Number", method)),
+                context,
+            )?;
+            return Ok(0);
+        };
+
+        // 6. If size is not in the inclusive interval from 1𝔽 to 𝔽(2^32 - 1), then
+        //    a. Let error be ThrowCompletion(a newly created RangeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        if !(1.0..=f64::from(u32::MAX)).contains(&size) {
+            iterated.close(
+                Err(js_error!(RangeError: "Iterator.prototype.{}: size must be between 1 and 2^32 - 1", method)),
+                context,
+            )?;
+            return Ok(0);
+        }
+
+        Ok(size as usize)
+    }
+
+    /// `Iterator.prototype.chunks ( chunkSize )`
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-iterator-chunking/#sec-iterator.prototype.chunks
+    fn chunks(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. If O is not an Object, throw a TypeError exception.
+        let o = this.as_object().ok_or_else(
+            || js_error!(TypeError: "Iterator.prototype.chunks called on non-object"),
+        )?;
+
+        // 3. Let iterated be the Iterator Record { [[Iterator]]: O, [[NextMethod]]: undefined, [[Done]]: false }.
+        let iterated = IteratorRecord::new(o, JsValue::undefined());
+
+        // 4-6. Validate chunkSize, closing iterated on failure.
+        let size =
+            Self::validate_chunk_size(&iterated, args.get_or_undefined(0), "chunks", context)?;
+
+        // 7. Set iterated to ? GetIteratorDirect(O).
+        let iterated = get_iterator_direct(iterated.iterator(), context)?;
+
+        // 8-10. Let result be CreateIteratorFromClosure(closure, "Iterator Helper", ...).
+        let result =
+            IteratorHelper::create(iterator_helper::Chunks::new(iterated, size, None), context);
+
+        Ok(result.into())
+    }
+
+    /// `Iterator.prototype.windows ( windowSize [ , undersized ] )`
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-iterator-chunking/#sec-iterator.prototype.windows
+    fn windows(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. If O is not an Object, throw a TypeError exception.
+        let o = this.as_object().ok_or_else(
+            || js_error!(TypeError: "Iterator.prototype.windows called on non-object"),
+        )?;
+
+        // 3. Let iterated be the Iterator Record { [[Iterator]]: O, [[NextMethod]]: undefined, [[Done]]: false }.
+        let iterated = IteratorRecord::new(o, JsValue::undefined());
+
+        // 4-6. Validate windowSize, closing iterated on failure.
+        let size =
+            Self::validate_chunk_size(&iterated, args.get_or_undefined(0), "windows", context)?;
+
+        // 7. If undersized is undefined, set undersized to "only-full".
+        // 8. If undersized is neither "only-full" nor "allow-partial", then
+        //    a. Let error be ThrowCompletion(a newly created TypeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        let undersized = args.get_or_undefined(1);
+        let undersized = if undersized.is_undefined() {
+            iterator_helper::Undersized::OnlyFull
+        } else if let Some(s) = undersized.as_string() {
+            if s == js_string!("only-full") {
+                iterator_helper::Undersized::OnlyFull
+            } else if s == js_string!("allow-partial") {
+                iterator_helper::Undersized::AllowPartial
+            } else {
+                return iterated.close(
+                    Err(js_error!(TypeError: "Iterator.prototype.windows: invalid undersized option")),
+                    context,
+                );
+            }
+        } else {
+            return iterated.close(
+                Err(js_error!(TypeError: "Iterator.prototype.windows: invalid undersized option")),
+                context,
+            );
+        };
+
+        // 9. Set iterated to ? GetIteratorDirect(O).
+        let iterated = get_iterator_direct(iterated.iterator(), context)?;
+
+        // 10-12. Let result be CreateIteratorFromClosure(closure, "Iterator Helper", ...).
+        let result = IteratorHelper::create(
+            iterator_helper::Chunks::new(iterated, size, Some(undersized)),
+            context,
+        );
+
+        Ok(result.into())
+    }
+
+    /// `Iterator.prototype [ %Symbol.dispose% ] ( )`
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-explicit-resource-management/#sec-%iteratorprototype%-@@dispose
+    fn dispose(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. Let return be ? GetMethod(O, "return").
+        let r#return = this.get_method(js_string!("return"), context)?;
+
+        // 3. If return is not undefined, then
+        if let Some(r#return) = r#return {
+            // a. Perform ? Call(return, O, « »).
+            r#return.call(this, &[], context)?;
+        }
+
+        // 4. Return undefined.
+        Ok(JsValue::undefined())
+    }
+
     // ==================== Prototype Methods — Eager (Consuming) ====================
 
     /// `Iterator.prototype.includes ( searchElement [, skippedElements ] )`
@@ -458,36 +636,41 @@ impl Iterator {
 
         let search_element = args.get_or_undefined(0);
 
-        // 4. If skippedElements is undefined, then
-        // a. Let toSkip be 0.
-        // 5. Else,
-        // a. If skippedElements is not one of +∞𝔽, -∞𝔽, or an integral Number, then
-        // i. Let error be ThrowCompletion(a newly created TypeError object).
-        // ii. Return ? IteratorClose(iterated, error).
-        // b. Let toSkip be the extended mathematical value of skippedElements.
-        let to_skip = match args.get_or_undefined(1).map(JsValue::as_number) {
-            // Step 4.a
-            None => 0,
-            // Step 5.b
-            Some(Some(number)) if !number.is_nan() => {
-                number.clamp(i64::MIN as f64, i64::MAX as f64) as i64
-            }
-            // Step 5.a
-            _ => {
-                let error = js_error!(TypeError: "skippedElements must be a number");
-                return iterated.close(Err(error), context);
+        // 4. If skippedElements is undefined, let toSkip be 0.
+        // 5. Else if skippedElements is not one of +∞𝔽, -∞𝔽, or an integral Number, then
+        //    a. Let error be ThrowCompletion(a newly created TypeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        // 6. Else, let toSkip be skippedElements.
+        let skipped_elements = args.get_or_undefined(1);
+        let to_skip = if skipped_elements.is_undefined() {
+            0.0
+        } else {
+            match skipped_elements.as_number() {
+                Some(number) if number.is_infinite() || number.trunc() == number => number,
+                _ => {
+                    let error = js_error!(TypeError: "skippedElements must be an integral number");
+                    return iterated.close(Err(error), context);
+                }
             }
         };
 
-        // 6. If toSkip < 0, then
-        if to_skip < 0 {
-            // a. Let error be ThrowCompletion(a newly created RangeError object).
-            let error = js_error!(RangeError: "skippedElements must be a positive number");
-            // b. Return ? IteratorClose(iterated, error).
+        // 7. If toSkip < -0𝔽, then
+        //    a. Let error be ThrowCompletion(a newly created RangeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        // 8. If toSkip is finite and toSkip > 𝔽(2**53 - 1), then
+        //    a. Let error be ThrowCompletion(a newly created RangeError object).
+        //    b. Return ? IteratorClose(iterated, error).
+        if to_skip < 0.0 || (to_skip.is_finite() && to_skip > MAX_SAFE_INTEGER) {
+            let error = js_error!(RangeError: "skippedElements is out of range");
             return iterated.close(Err(error), context);
         }
+        let to_skip = if to_skip.is_finite() {
+            to_skip as u64
+        } else {
+            u64::MAX
+        };
 
-        // 7. Let skipped be 0.
+        // 9. Let skipped be +0𝔽.
         let mut skipped = 0;
 
         // 8. Set iterated to ? GetIteratorDirect(O).
@@ -509,6 +692,62 @@ impl Iterator {
         }
         // Step 9.b. return false
         Ok(false.into())
+    }
+
+    /// `Iterator.prototype.join ( separator )`
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-iterator-join/
+    fn join(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. If O is not an Object, throw a TypeError exception.
+        let o = this
+            .as_object()
+            .ok_or_else(|| js_error!(TypeError: "Iterator.prototype.join called on non-object"))?;
+
+        // 3. Let iterated be the Iterator Record { [[Iterator]]: O, [[NextMethod]]: undefined, [[Done]]: false }.
+        let iterated = IteratorRecord::new(o, JsValue::undefined());
+
+        // 4. If separator is undefined, let sep be ",".
+        // 5. Else, let sep be Completion(ToString(separator)).
+        // 6. IfAbruptCloseIterator(sep, iterated).
+        let separator = args.get_or_undefined(0);
+        let sep = if separator.is_undefined() {
+            js_string!(",")
+        } else {
+            if_abrupt_close_iterator!(separator.to_string(context), iterated, context)
+        };
+
+        // 7. Set iterated to ? GetIteratorDirect(O).
+        let mut iterated = get_iterator_direct(iterated.iterator(), context)?;
+
+        // 8. Let R be the empty String.
+        let mut r = Vec::new();
+        let mut first = true;
+
+        // 9. Repeat,
+        //    a. Let value be ? IteratorStepValue(iterated).
+        //    b. If value is done, return R.
+        while let Some(value) = iterated.step_value(context)? {
+            // c. If R is not the first element, set R to the string-concatenation of R and sep.
+            if !first {
+                r.extend(sep.iter());
+            }
+            first = false;
+
+            // d. If value is either undefined or null, let next be the empty String.
+            // e. Else, let next be Completion(ToString(value)).
+            // f. IfAbruptCloseIterator(next, iterated).
+            if !value.is_null_or_undefined() {
+                let next = if_abrupt_close_iterator!(value.to_string(context), iterated, context);
+                // g. Set R to the string-concatenation of R and next.
+                r.extend(next.iter());
+            }
+        }
+
+        Ok(crate::JsString::from(&r[..]).into())
     }
 
     /// `Iterator.prototype.reduce ( reducer [ , initialValue ] )`

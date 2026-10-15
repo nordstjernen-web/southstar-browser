@@ -49,19 +49,23 @@ macro_rules! if_abrupt_close_iterator {
     };
 }
 
+mod chunks;
 mod concat;
 mod drop;
 mod filter;
 mod flat_map;
 mod map;
 mod take;
+mod zip;
 
+pub(crate) use chunks::{Chunks, Undersized};
 pub(crate) use concat::{Concat, IterableRecord};
 pub(crate) use drop::Drop;
 pub(crate) use filter::Filter;
 pub(crate) use flat_map::FlatMap;
 pub(crate) use map::Map;
 pub(crate) use take::Take;
+pub(crate) use zip::{Zip, ZipMode, iterator_close_all};
 
 /// The internal representation of an `Iterator Helper` object.
 ///
@@ -72,6 +76,7 @@ pub(crate) use take::Take;
 #[derive(Debug, Finalize, Trace, JsData)]
 pub(crate) struct IteratorHelper {
     pub(crate) coroutine: Option<NativeCoroutine>,
+    started: bool,
 }
 
 impl IntrinsicObject for IteratorHelper {
@@ -133,6 +138,7 @@ impl IteratorHelper {
                     TypeError: "Iterator Helper is already executing"
                 )
             })?;
+        helper.borrow_mut().data_mut().started = true;
 
         // 3. Assert: state is either suspended-start or suspended-yield.
         // 4. Let genContext be generator.[[GeneratorContext]].
@@ -217,6 +223,13 @@ impl IteratorHelper {
                 )
             })?;
 
+        // 4. If O.[[GeneratorState]] is suspended-start, then
+        //    a. Set O.[[GeneratorState]] to completed.
+        let suspended_start = !helper.borrow().data().started;
+        if suspended_start {
+            helper.borrow_mut().data_mut().coroutine = Some(Self::completed());
+        }
+
         // 2. If state is suspended-start, then
         //    a. Set generator.[[GeneratorState]] to completed.
         //    b. NOTE: Once a generator enters the completed state it never leaves
@@ -261,7 +274,9 @@ impl IteratorHelper {
             ControlFlow::Break(Err(err)) => Err(err),
         };
 
-        helper.borrow_mut().data_mut().coroutine = Some(coroutine);
+        if !suspended_start {
+            helper.borrow_mut().data_mut().coroutine = Some(coroutine);
+        }
 
         // 12. Return ? result.
         result
@@ -286,6 +301,11 @@ impl IteratorHelper {
             .ok_or_else(|| js_error!(TypeError: "Iterator Helper method called on non-object"))
     }
 
+    /// A coroutine in the completed state, which only reports that it is done.
+    fn completed() -> NativeCoroutine {
+        NativeCoroutine::from_copy_closure_with_captures(|_, (), _| ControlFlow::Break(Ok(())), ())
+    }
+
     /// Creates a new `IteratorHelper` object.
     pub(crate) fn create(op: NativeCoroutine, context: &mut Context) -> JsObject {
         // All eager iterators follow the following steps:
@@ -304,6 +324,7 @@ impl IteratorHelper {
                 .iterator_helper(),
             Self {
                 coroutine: Some(op),
+                started: false,
             },
         )
         .upcast()

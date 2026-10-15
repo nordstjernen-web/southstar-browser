@@ -9,9 +9,11 @@ into the build through `[patch.crates-io]` in `Cargo.toml`. Only
 `boa_string` and the other Boa crates come unchanged from crates.io at the
 same version, and `rust/js-engine` is the only crate that depends on Boa.
 
-The aim is a fork whose whole difference from upstream fits on one screen,
+The aim is a fork whose difference from upstream stays small and readable,
 so a Boa release, and above all a security fix, can be taken by re-applying
-the patch rather than by merging.
+the patch rather than by merging. Besides the embedder hooks, the fork
+carries the ECMAScript features test262 covers that Boa 0.22 lacks or gets
+wrong (see "Conformance work" below); each one is a candidate for upstream.
 
 ## Seeing the difference
 
@@ -22,8 +24,8 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 
 The script downloads the release the fork's `Cargo.toml` names, checks it
 against the crates.io index checksum and diffs `src/` and `Cargo.toml`. On
-2026-10-14 the difference is 783 added and 145 removed lines in 17 files; 137
-of the removed lines are the `Cargo.toml` trim below.
+2026-10-15 the difference is 1,746 added and 172 removed lines in 22 files;
+137 of the removed lines are the `Cargo.toml` trim below.
 
 ## What the fork adds
 
@@ -39,6 +41,15 @@ of the removed lines are the `Cargo.toml` trim below.
 | The legacy `Date.parse` fallback: month and weekday names, `/`, `-`, `,` and space separated dates, 12/24-hour times, zone names and offsets; ISO fractions past milliseconds ignored | `builtins/date/utils.rs` | `Date.parse(String(new Date()))` and the other strings every browser accepts | yes: the format is implementation-defined, and every other engine accepts these |
 | `JsObject::{identity, from_identity, retain_identity, release_identity}`: a `JsObject` as a raw pointer and back | `object/jsobject.rs` | the internal C ABI's opaque object handles (canvas, js-runtime wrappers) | no: scaffolding of the C port, removed as that ABI goes; the arena DOM and GC-traced bindings replace it |
 | `Cargo.toml`: no `cdylib` crate type; the tests, benches, dev-dependencies and lint tables of files the crate does not ship are dropped | `Cargo.toml` | building as an rlib inside the workspace | no |
+
+## Conformance work
+
+test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
+(`rust/jsshell`). The fork adds what it needs to pass:
+
+| Change | Files | test262 directories |
+| --- | --- | --- |
+| `Iterator.prototype.chunks`/`windows` (iterator chunking), `Iterator.zip`/`zipKeyed` (joint iteration), `Iterator.prototype.join`, `Iterator.prototype[Symbol.dispose]`; `take`/`drop` reject limits above 2^53 - 1, `includes` validates `skippedElements` without coercion, and `return()` on a helper that never started marks it completed before closing what it wraps | `builtins/iterable/iterator_prototype.rs`, `builtins/iterable/iterator_constructor.rs`, `builtins/iterable/iterator_helper/{chunks,zip,mod}.rs` | `built-ins/Iterator` |
 
 ## Rules for changing the fork
 
