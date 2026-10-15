@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Boa's experimental feature is on, so the script engine exposes the
+  standards it already implemented behind it: Array.fromAsync, Error.isError,
+  Atomics.pause, ArrayBuffer.prototype.detached/transfer/transferToFixedLength,
+  Promise.allKeyed/allSettledKeyed, Iterator.prototype.includes and
+  import.defer()/import.source(). test262 rises from 49,225 to 49,516 of
+  52,133 tests (94.4% to 95.0%).
 * The eleven crates that hold no unsafe code (html5, url, plmpeg, minimp3,
   js-temporal, js-bind, js-realm, webaudio, media-shm, about-style and
   jsshell) carry #![forbid(unsafe_code)], so they stay that way.
