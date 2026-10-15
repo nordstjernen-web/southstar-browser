@@ -117,56 +117,70 @@ m0:beta-metsehaf=betamets m0:ies-jes=iesjes m0:names=prprname m0:tekie-alibekit=
 
 pub(crate) const LIKELY_SUBTAGS: &str = "\
 aa=Latn-ET aae=Latn-IT ab=Cyrl-GE abq-Latn=TR abq-TR=Latn abq=Cyrl-RU ae=Avst-IR af=Latn-ZA \
-aho=Ahom-IN ak=Latn-GH akk=Xsux-IQ am=Ethi-ET an=Latn-ES apc=Arab-SY ar=Arab-EG arc-Hatr=IQ \
-arc-Nbat=JO arc-Palm=SY arc=Armi-IR as=Beng-IN ase=Sgnw-US ast=Latn-ES av=Cyrl-RU \
-ay=Latn-BO az-Arab=IR az-IQ=Arab az-IR=Arab az-RU=Cyrl az=Latn-AZ ba=Cyrl-RU bal=Arab-PK \
-ban=Latn-ID bap-Krai=IN bap=Deva-NP bax=Bamu-CM bbc=Latn-ID be=Cyrl-BY bg=Cyrl-BG \
-bgc=Deva-IN bgx=Grek-TR bho=Deva-IN bi=Latn-VU bku=Latn-PH blo=Latn-BJ blt=Tavt-VN \
-bm=Latn-ML bn=Beng-BD bo=Tibt-CN br=Latn-FR brx=Deva-IN bs=Latn-BA bsq=Latn-LR btv=Deva-PK \
-bua=Cyrl-RU bug=Latn-ID ca=Latn-ES ccp=Cakm-BD ce=Cyrl-RU ceb=Latn-PH ch=Latn-GU \
-chr=Cher-US cja=Arab-KH cjm=Cham-VN cmg=Soyo-MN co=Latn-FR cop=Copt-EG cr=Cans-CA \
-cs=Latn-CZ csw=Cans-CA ctd=Pauc-MM cu-Glag=BG cu=Cyrl-RU cv=Cyrl-RU cy=Latn-GB da=Latn-DK \
-de=Latn-DE dmf=Medf-NG doi=Deva-IN dsb=Latn-DE dv=Thaa-MV dz=Tibt-BT ecy=Cprt-CY ee=Latn-GH \
-egy=Egyp-EG eky=Kali-MM el=Grek-GR en-Shaw=GB en=Latn-US eo=Latn-001 es=Latn-ES esg=Gonm-IN \
-et=Latn-EE ett=Ital-IT eu=Latn-ES fa=Arab-IR ff-Adlm=GN ff=Latn-SN fi=Latn-FI fil=Latn-PH \
-fj=Latn-FJ fo=Latn-FO fr=Latn-FR fy=Latn-NL ga=Latn-IE gaa=Latn-GH gan=Hans-CN gd=Latn-GB \
-gl=Latn-ES gmy=Linb-GR gn=Latn-PY got=Goth-UA gu=Gujr-IN gv=Latn-IM gvr=Deva-NP ha-CM=Arab \
-ha-SD=Arab ha=Latn-NG hak-Hant=TW hak-TW=Hant hak=Hans-CN he=Hebr-IL hi=Deva-IN hif=Deva-FJ \
-hlu=Hluw-TR hmd=Plrd-CN hnj-Hmng=LA hnj=Hmnp-US hnn=Latn-PH ho=Latn-PG hoc=Deva-IN \
-hr=Latn-HR hsb=Latn-DE hsn=Hans-CN ht=Latn-HT hu=Latn-HU hy=Armn-AM hyw=Armn-AM hz=Latn-NA \
-ia=Latn-001 id=Latn-ID ie=Latn-EE ig=Latn-NG ii=Yiii-CN ik=Latn-US in=Latn-ID io=Latn-001 \
-is=Latn-IS it=Latn-IT iu=Cans-CA iw=Hebr-IL ja=Jpan-JP jbo=Latn-001 ji=Hebr-UA jv=Latn-ID \
-jw=Latn-ID ka=Geor-GE kaa=Cyrl-UZ kac=Latn-MM kaw=Bali-ID kbd=Cyrl-RU kdt=Thai-TH \
-kea=Latn-CV kg=Latn-CD kgp=Latn-BR khb=Talu-CN kht=Mymr-IN ki=Latn-KE kj=Latn-NA kk-AF=Arab \
-kk-Arab=CN kk-CN=Arab kk-IR=Arab kk-MN=Arab kk=Cyrl-KZ kl=Latn-GL km=Khmr-KH kn=Knda-IN \
-ko=Kore-KR kok=Deva-IN kr=Latn-NG krl=Latn-RU kru=Deva-IN ks=Arab-IN ku-AM=Cyrl ku-AZ=Cyrl \
-ku-Arab=IQ ku-Cyrl=AM ku-GE=Cyrl ku-IQ=Arab ku-IR=Arab ku-LB=Arab ku-TM=Cyrl ku-Yezi=GE \
-ku=Latn-TR kv=Cyrl-RU kw=Latn-GB kxv=Latn-IN ky-Arab=CN ky-CN=Arab ky-Latn=TR ky-TR=Latn \
-ky=Cyrl-KG la=Latn-VA lab=Lina-GR lb=Latn-LU lcp=Thai-CN lep=Lepc-IN lg=Latn-UG li=Latn-NL \
-lif-Limb=IN lif=Deva-NP lij=Latn-IT lis=Lisu-CN lmo=Latn-IT ln=Latn-CD lo=Laoo-LA \
-lt=Latn-LT lu=Latn-CD lv=Latn-LV lzh=Hant-CN lzz-GE=Geor lzz-Geor=GE lzz=Latn-TR \
-mai=Deva-IN mak=Latn-ID man-Nkoo=GN man=Latn-GM men=Latn-SL mey-Latn=SN mey-SN=Latn \
-mey=Arab-DZ mfa=Arab-TH mg=Latn-MG mh=Latn-MH mi=Latn-NZ mk=Cyrl-MK ml=Mlym-IN mn-CN=Mong \
-mn-Mong=CN mn=Cyrl-MN mni=Beng-IN mnw=Mymr-MM mo=Latn-RO mr=Deva-IN mro=Mroo-BD ms-CC=Arab \
-ms=Latn-MY mt=Latn-MT mww=Hmnp-US my=Mymr-MM myz=Mand-IR na=Latn-NR nan-Hant=TW nan-MO=Hant \
-nan-TW=Hant nan=Hans-CN nb=Latn-NO nd=Latn-ZW nds=Latn-DE ne=Deva-NP new=Deva-NP ng=Latn-NA \
-nl=Latn-NL nn=Latn-NO nnp=Wcho-IN no=Latn-NO nod=Lana-TH non=Runr-SE nqo=Nkoo-GN nr=Latn-ZA \
-nso=Latn-ZA nst=Tnsa-IN nv=Latn-US ny=Latn-MW oc=Latn-FR oj=Cans-CA om=Latn-ET or=Orya-IN \
-os=Cyrl-GE osa=Osge-US otk=Orkh-MN oui=Ougr-CN pa-Arab=PK pa-PK=Arab pa=Guru-IN pal-Phlp=CN \
-pal=Phli-IR pap=Latn-CW pau=Latn-PW pcm=Latn-NG peo=Xpeo-IR pgd=Khar-PK phn=Phnx-LB \
-pi-Deva=IN pi-IN=Deva pi-LK=Sinh pi-MM=Mymr pi-Mymr=MM pi-Sinh=LK pi-TH=Thai pi-Thai=TH \
-pi=Latn-GB pka=Brah-IN pl=Latn-PL pms=Latn-IT pnt-Cyrl=RU pnt-Latn=TR pnt-RU=Cyrl \
-pnt-TR=Latn pnt=Grek-GR ps=Arab-AF pt=Latn-BR qu=Latn-PE raj=Deva-IN rej=Latn-ID \
-rhg=Rohg-MM rm=Latn-CH rn=Latn-BI ro=Latn-RO ru=Cyrl-RU rw=Latn-RW sa=Deva-IN sah=Cyrl-RU \
-sat=Olck-IN saz=Saur-IN sc=Latn-IT scn=Latn-IT sd-Deva=IN sd-IN=Deva sd-Khoj=IN sd-Sind=IN \
-sd=Arab-PK se=Latn-NO sg=Latn-CF sga=Latn-IE shn=Mymr-MM si=Sinh-LK sk=Latn-SK skr=Arab-PK \
-sl=Latn-SI sm=Latn-WS smp=Samr-IL sn=Latn-ZW so=Latn-SO sog=Sogd-UZ sq=Latn-AL sr-ME=Latn \
+agq=Latn-CM aho=Ahom-IN ak=Latn-GH akk=Xsux-IQ am=Ethi-ET an=Latn-ES ann=Latn-NG \
+apc=Arab-SY ar=Arab-EG arc-Hatr=IQ arc-Nbat=JO arc-Palm=SY arc=Armi-IR arn=Latn-CL \
+as=Beng-IN asa=Latn-TZ ase=Sgnw-US ast=Latn-ES av=Cyrl-RU ay=Latn-BO az-Arab=IR az-IQ=Arab \
+az-IR=Arab az-RU=Cyrl az=Latn-AZ ba=Cyrl-RU bal=Arab-PK ban=Latn-ID bap-Krai=IN bap=Deva-NP \
+bas=Latn-CM bax=Bamu-CM bbc=Latn-ID be=Cyrl-BY bem=Latn-ZM bew=Latn-ID bez=Latn-TZ \
+bg=Cyrl-BG bgc=Deva-IN bgn=Arab-PK bgx=Grek-TR bho=Deva-IN bi=Latn-VU bku=Latn-PH \
+blo=Latn-BJ blt=Tavt-VN bm=Latn-ML bn=Beng-BD bo=Tibt-CN bqi=Arab-IR br=Latn-FR brx=Deva-IN \
+bs=Latn-BA bsq=Latn-LR bss=Latn-CM btv=Deva-PK bua=Cyrl-RU bug=Latn-ID byn=Ethi-ER \
+ca=Latn-ES cad=Latn-US cch=Latn-NG ccp=Cakm-BD ce=Cyrl-RU ceb=Latn-PH cgg=Latn-UG \
+ch=Latn-GU cho=Latn-US chr=Cher-US cic=Latn-US cja=Arab-KH cjm=Cham-VN ckb=Arab-IQ \
+cmg=Soyo-MN co=Latn-FR cop=Copt-EG cr=Cans-CA cs=Latn-CZ csw=Cans-CA ctd=Pauc-MM cu-Glag=BG \
+cu=Cyrl-RU cv=Cyrl-RU cy=Latn-GB da=Latn-DK dav=Latn-KE de=Latn-DE dje=Latn-NE dmf=Medf-NG \
+doi=Deva-IN dsb=Latn-DE dua=Latn-CM dv=Thaa-MV dyo=Latn-SN dz=Tibt-BT ebu=Latn-KE \
+ecy=Cprt-CY ee=Latn-GH egy=Egyp-EG eky=Kali-MM el=Grek-GR en-Shaw=GB en=Latn-US eo=Latn-001 \
+es=Latn-ES esg=Gonm-IN et=Latn-EE ett=Ital-IT eu=Latn-ES ewo=Latn-CM fa=Arab-IR ff-Adlm=GN \
+ff=Latn-SN fi=Latn-FI fil=Latn-PH fj=Latn-FJ fo=Latn-FO fr=Latn-FR frr=Latn-DE fur=Latn-IT \
+fy=Latn-NL ga=Latn-IE gaa=Latn-GH gan=Hans-CN gd=Latn-GB gez=Ethi-ET gl=Latn-ES gmy=Linb-GR \
+gn=Latn-PY got=Goth-UA gsw=Latn-CH gu=Gujr-IN guz=Latn-KE gv=Latn-IM gvr=Deva-NP ha-CM=Arab \
+ha-SD=Arab ha=Latn-NG hak-Hant=TW hak-TW=Hant hak=Hans-CN haw=Latn-US he=Hebr-IL hi=Deva-IN \
+hif=Deva-FJ hlu=Hluw-TR hmd=Plrd-CN hnj-Hmng=LA hnj=Hmnp-US hnn=Latn-PH ho=Latn-PG \
+hoc=Deva-IN hr=Latn-HR hsb=Latn-DE hsn=Hans-CN ht=Latn-HT hu=Latn-HU hy=Armn-AM hyw=Armn-AM \
+hz=Latn-NA ia=Latn-001 id=Latn-ID ie=Latn-EE ig=Latn-NG ii=Yiii-CN ik=Latn-US in=Latn-ID \
+io=Latn-001 is=Latn-IS it=Latn-IT iu=Cans-CA iw=Hebr-IL ja=Jpan-JP jbo=Latn-001 jgo=Latn-CM \
+ji=Hebr-UA jmc=Latn-TZ jv=Latn-ID jw=Latn-ID ka=Geor-GE kaa=Cyrl-UZ kab=Latn-DZ kac=Latn-MM \
+kaj=Latn-NG kam=Latn-KE kaw=Bali-ID kbd=Cyrl-RU kcg=Latn-NG kde=Latn-TZ kdt=Thai-TH \
+kea=Latn-CV kek=Latn-GT ken=Latn-CM kg=Latn-CD kgp=Latn-BR khb=Talu-CN khq=Latn-ML \
+kht=Mymr-IN ki=Latn-KE kj=Latn-NA kk-AF=Arab kk-Arab=CN kk-CN=Arab kk-IR=Arab kk-MN=Arab \
+kk=Cyrl-KZ kkj=Latn-CM kl=Latn-GL kln=Latn-KE km=Khmr-KH kn=Knda-IN ko=Kore-KR kok=Deva-IN \
+kpe=Latn-LR kr=Latn-NG krl=Latn-RU kru=Deva-IN ks=Arab-IN ksb=Latn-TZ ksf=Latn-CM \
+ksh=Latn-DE ku-AM=Cyrl ku-AZ=Cyrl ku-Arab=IQ ku-Cyrl=AM ku-GE=Cyrl ku-IQ=Arab ku-IR=Arab \
+ku-LB=Arab ku-TM=Cyrl ku-Yezi=GE ku=Latn-TR kv=Cyrl-RU kw=Latn-GB kxv=Latn-IN ky-Arab=CN \
+ky-CN=Arab ky-Latn=TR ky-TR=Latn ky=Cyrl-KG la=Latn-VA lab=Lina-GR lag=Latn-TZ lb=Latn-LU \
+lcp=Thai-CN lep=Lepc-IN lg=Latn-UG li=Latn-NL lif-Limb=IN lif=Deva-NP lij=Latn-IT \
+lis=Lisu-CN lkt=Latn-US lld=Latn-IT lmo=Latn-IT ln=Latn-CD lo=Laoo-LA lrc=Arab-IR \
+lt=Latn-LT ltg=Latn-LV lu=Latn-CD luo=Latn-KE luy=Latn-KE lv=Latn-LV lzh=Hant-CN \
+lzz-GE=Geor lzz-Geor=GE lzz=Latn-TR mai=Deva-IN mak=Latn-ID man-Nkoo=GN man=Latn-GM \
+mas=Latn-KE mdf=Cyrl-RU men=Latn-SL mer=Latn-KE mey-Latn=SN mey-SN=Latn mey=Arab-DZ \
+mfa=Arab-TH mfe=Latn-MU mg=Latn-MG mgh=Latn-MZ mgo=Latn-CM mh=Latn-MH mhn=Latn-IT \
+mi=Latn-NZ mic=Latn-CA mk=Cyrl-MK ml=Mlym-IN mn-CN=Mong mn-Mong=CN mn=Cyrl-MN mni=Beng-IN \
+mnw=Mymr-MM mo=Latn-RO moh=Latn-CA mr=Deva-IN mro=Mroo-BD ms-CC=Arab ms=Latn-MY mt=Latn-MT \
+mua=Latn-CM mus=Latn-US mww=Hmnp-US my=Mymr-MM myv=Cyrl-RU myz=Mand-IR mzn=Arab-IR \
+na=Latn-NR nan-Hant=TW nan-MO=Hant nan-TW=Hant nan=Hans-CN naq=Latn-NA nb=Latn-NO \
+nd=Latn-ZW nds=Latn-DE ne=Deva-NP new=Deva-NP ng=Latn-NA nl=Latn-NL nmg=Latn-CM nn=Latn-NO \
+nnh=Latn-CM nnp=Wcho-IN no=Latn-NO nod=Lana-TH non=Runr-SE nqo=Nkoo-GN nr=Latn-ZA \
+nso=Latn-ZA nst=Tnsa-IN nus=Latn-SS nv=Latn-US ny=Latn-MW nyn=Latn-UG oc=Latn-FR oj=Cans-CA \
+oka=Latn-CA om=Latn-ET or=Orya-IN os=Cyrl-GE osa=Osge-US otk=Orkh-MN oui=Ougr-CN pa-Arab=PK \
+pa-PK=Arab pa=Guru-IN pal-Phlp=CN pal=Phli-IR pap=Latn-CW pau=Latn-PW pcm=Latn-NG \
+peo=Xpeo-IR pgd=Khar-PK phn=Phnx-LB pi-Deva=IN pi-IN=Deva pi-LK=Sinh pi-MM=Mymr pi-Mymr=MM \
+pi-Sinh=LK pi-TH=Thai pi-Thai=TH pi=Latn-GB pis=Latn-SB pka=Brah-IN pl=Latn-PL pms=Latn-IT \
+pnt-Cyrl=RU pnt-Latn=TR pnt-RU=Cyrl pnt-TR=Latn pnt=Grek-GR prg=Latn-PL ps=Arab-AF \
+pt=Latn-BR qu=Latn-PE quc=Latn-GT raj=Deva-IN rej=Latn-ID rhg=Rohg-MM rif=Latn-MA \
+rm=Latn-CH rn=Latn-BI ro=Latn-RO rof=Latn-TZ ru=Cyrl-RU rw=Latn-RW rwk=Latn-TZ sa=Deva-IN \
+sah=Cyrl-RU saq=Latn-KE sat=Olck-IN saz=Saur-IN sbp=Latn-TZ sc=Latn-IT scn=Latn-IT \
+sd-Deva=IN sd-IN=Deva sd-Khoj=IN sd-Sind=IN sd=Arab-PK sdh=Arab-IR se=Latn-NO seh=Latn-MZ \
+ses=Latn-ML sg=Latn-CF sga=Latn-IE sgs=Latn-LT shi=Tfng-MA shn=Mymr-MM si=Sinh-LK \
+sid=Latn-ET sk=Latn-SK skr=Arab-PK sl=Latn-SI sm=Latn-WS sma=Latn-SE smj=Latn-SE \
+smn=Latn-FI smp=Samr-IL sms=Latn-FI sn=Latn-ZW so=Latn-SO sog=Sogd-UZ sq=Latn-AL sr-ME=Latn \
 sr-RO=Latn sr-TR=Latn sr=Cyrl-RS srb=Sora-IN ss=Latn-ZA ssy=Latn-ER st=Latn-ZA stu-CN=Tale \
 stu-Tale=CN stu=Lana-MM su=Latn-ID suz=Deva-NP sv=Latn-SE sw=Latn-TZ swb=Arab-YT \
 syl=Beng-BD syr=Syrc-IQ szl=Latn-PL ta=Taml-IN tbw=Latn-PH tdd=Tale-CN te=Telu-IN \
-tg-Arab=PK tg-PK=Arab tg=Cyrl-TJ th=Thai-TH ti=Ethi-ET tk=Latn-TM tkl=Latn-TK tl=Latn-PH \
-tn=Latn-ZA to=Latn-TO tpi=Latn-PG tr=Latn-TR trv=Latn-TW ts=Latn-ZA tt=Cyrl-RU tvl=Latn-TV \
-txg=Tang-CN txo=Toto-IN ty=Latn-PF tyj=Latn-VN tyv=Cyrl-RU ug-Cyrl=KZ ug-KZ=Cyrl ug-MN=Cyrl \
+teo=Latn-UG tg-Arab=PK tg-PK=Arab tg=Cyrl-TJ th=Thai-TH ti=Ethi-ET tig=Ethi-ER tk=Latn-TM \
+tkl=Latn-TK tl=Latn-PH tn=Latn-ZA to=Latn-TO tok=Latn-001 tpi=Latn-PG tr=Latn-TR \
+trv=Latn-TW trw=Arab-PK ts=Latn-ZA tt=Cyrl-RU tvl=Latn-TV twq=Latn-NE txg=Tang-CN \
+txo=Toto-IN ty=Latn-PF tyj=Latn-VN tyv=Cyrl-RU tzm=Latn-MA ug-Cyrl=KZ ug-KZ=Cyrl ug-MN=Cyrl \
 ug=Arab-CN uga=Ugar-SY uk=Cyrl-UA und-419=es-Latn und-AD=ca-Latn und-AE=ar-Arab \
 und-AF=fa-Arab und-AL=sq-Latn und-AM=hy-Armn und-AO=pt-Latn und-AR=es-Latn und-AS=sm-Latn \
 und-AT=de-Latn und-AW=nl-Latn und-AX=sv-Latn und-AZ=az-Latn und-Adlm=ff-GN und-Aghb=xag-AZ \
@@ -254,13 +268,14 @@ und-Vith=sq-AL und-WF=fr-Latn und-WS=sm-Latn und-Wara=hoc-IN und-Wcho=nnp-IN und
 und-Xpeo=peo-IR und-Xsux=akk-IQ und-YE=ar-Arab und-YT=fr-Latn und-Yezi=ku-GE und-Yiii=ii-CN \
 und-ZW=sn-Latn und-Zanb=cmg-MN und=en-Latn-US unr-Deva=NP unr-NP=Deva unr=Beng-IN \
 ur=Arab-PK uz-AF=Arab uz-Arab=AF uz-CN=Cyrl uz=Latn-UZ vai=Vaii-LR ve=Latn-ZA vec=Latn-IT \
-vi=Latn-VN vmw=Latn-MZ vo=Latn-001 wa=Latn-BE wo=Latn-SN wsg=Gong-IN wuu=Hans-CN \
-xag=Aghb-AZ xco=Chrs-UZ xcr=Cari-TR xh=Latn-ZA xlc=Lyci-TR xld=Lydi-TR xmn=Mani-CN \
-xmr=Merc-SD xna=Narb-SA xnr=Deva-IN xpr=Prti-IR xsa=Sarb-YE xsd=Sidt-TR yi=Hebr-UA \
-yo=Latn-NG yrl=Latn-BR yue-CN=Hans yue-Hans=CN yue=Hant-HK za=Latn-CN zag=Latn-SD \
-zgh=Tfng-MA zh-AU=Hant zh-BN=Hant zh-Bopo=TW zh-GB=Hant zh-GF=Hant zh-HK=Hant zh-Hanb=TW \
-zh-Hant=TW zh-ID=Hant zh-MO=Hant zh-PA=Hant zh-PF=Hant zh-PH=Hant zh-SR=Hant zh-TH=Hant \
-zh-TW=Hant zh-US=Hant zh-VN=Hant zh=Hans-CN zkt=Kits-CN zu=Latn-ZA";
+vi=Latn-VN vmw=Latn-MZ vo=Latn-001 vun=Latn-TZ wa=Latn-BE wae=Latn-CH wal=Ethi-ET \
+wbp=Latn-AU wo=Latn-SN wsg=Gong-IN wuu=Hans-CN xag=Aghb-AZ xco=Chrs-UZ xcr=Cari-TR \
+xh=Latn-ZA xlc=Lyci-TR xld=Lydi-TR xmn=Mani-CN xmr=Merc-SD xna=Narb-SA xnr=Deva-IN \
+xog=Latn-UG xpr=Prti-IR xsa=Sarb-YE xsd=Sidt-TR yav=Latn-CM yi=Hebr-UA yo=Latn-NG \
+yrl=Latn-BR yue-CN=Hans yue-Hans=CN yue=Hant-HK za=Latn-CN zag=Latn-SD zgh=Tfng-MA \
+zh-AU=Hant zh-BN=Hant zh-Bopo=TW zh-GB=Hant zh-GF=Hant zh-HK=Hant zh-Hanb=TW zh-Hant=TW \
+zh-ID=Hant zh-MO=Hant zh-PA=Hant zh-PF=Hant zh-PH=Hant zh-SR=Hant zh-TH=Hant zh-TW=Hant \
+zh-US=Hant zh-VN=Hant zh=Hans-CN zkt=Kits-CN zu=Latn-ZA";
 
 pub(crate) const CALENDAR_PREFERENCES: &str = "\
 buddhist,gregory:TH gregory,chinese:CN,CX,HK,MO,SG gregory,coptic,islamic,islamic-civil,\

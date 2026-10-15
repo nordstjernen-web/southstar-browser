@@ -5,16 +5,17 @@ Usage: gen-intl-cldr.py CLDR_JSON_DIR [OUT]
 
 CLDR_JSON_DIR holds these files from unicode-org/cldr-json (cldr-json/):
 cldr-core/supplemental/{aliases,likelySubtags,calendarPreferenceData,
-timeData,weekData}.json, cldr-core/{coverageLevels,scriptMetadata}.json and
-cldr-bcp47/bcp47/{calendar,collation,measure,number,timezone,transform}.json,
-all flattened into the one directory (bcp47 files prefixed "bcp47-").
+timeData,weekData}.json, cldr-core/{availableLocales,coverageLevels,
+scriptMetadata}.json and cldr-bcp47/bcp47/{calendar,collation,measure,
+number,timezone,transform}.json, all flattened into the one directory (the
+bcp47 files prefixed "bcp47-").
 
 The tables are what rust/js-intl needs for ECMA-402 without ICU: the alias
-rules of UTS #35 Annex C, the likely subtags of the languages CLDR covers, of
-every two-letter language and of every "und" entry, the -u- and -t- value aliases, the region preferences
-behind Intl.Locale's getCalendars, getHourCycles, getWeekInfo and
-getTimeZones, the writing direction of each script, and the languages
-reported as available. Each table is a string of space-separated entries
+rules of UTS #35 Annex C, the likely subtags of the languages CLDR has
+locale data for, of every two-letter language and of every "und" entry,
+the -u- and -t- value aliases, the region preferences behind Intl.Locale's
+getCalendars, getHourCycles, getWeekInfo and getTimeZones, the writing
+direction of each script, and the languages reported as available. Each table is a string of space-separated entries
 that rust/js-intl/src/cldr.rs's readers index on first use.
 """
 import json
@@ -124,8 +125,8 @@ def missing_subtags(key, value):
     return '-'.join(filled)
 
 
-def likely_subtags(likely, coverage):
-    languages = set(key.split('-')[0] for key in coverage)
+def likely_subtags(likely, locales):
+    languages = set(key.split('-')[0] for key in locales)
     languages.update(EXTRA_LANGUAGES)
     languages.update(key for key in likely if len(key) == 2)
     for key, value in likely.items():
@@ -249,6 +250,7 @@ def main():
     alias = load('aliases.json')['supplemental']['metadata']['alias']
     likely = load('likelySubtags.json')['supplemental']['likelySubtags']
     coverage = load('coverageLevels.json')['effectiveCoverageLevels']
+    locales = load('availableLocales.json')['availableLocales']['full']
     calendars = load('calendarPreferenceData.json')
     calendars = calendars['supplemental']['calendarPreferenceData']
     time_data = load('timeData.json')['supplemental']['timeData']
@@ -266,7 +268,7 @@ def main():
         ('UNICODE_VALUE_ALIASES', keyword_aliases(unicode_files, 'u')),
         ('TRANSFORM_VALUE_ALIASES',
          keyword_aliases(['bcp47-transform.json'], 't')),
-        ('LIKELY_SUBTAGS', likely_subtags(likely, coverage)),
+        ('LIKELY_SUBTAGS', likely_subtags(likely, locales)),
         ('CALENDAR_PREFERENCES', calendar_preferences(calendars)),
         ('HOUR_CYCLES', hour_cycles(time_data)),
         ('FIRST_DAYS', first_days(week)),
