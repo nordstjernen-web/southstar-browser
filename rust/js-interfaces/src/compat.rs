@@ -123,7 +123,6 @@ pub fn install_window_compat(scope: &mut Scope<'_>, global: &Value) {
     set_if_missing(scope, global, "frameElement", Value::null());
     ffi::install_intl(scope, global);
     ffi::install_temporal(scope, global);
-    ffi::install_realm(scope, global);
     function_if_missing(scope, global, "captureEvents");
     function_if_missing(scope, global, "releaseEvents");
     let external = scope.new_object();

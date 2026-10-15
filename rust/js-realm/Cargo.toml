@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-realm"
-description = "ShadowRealm, written once against the engine-neutral JavaScript layer"
+description = "Hides SharedArrayBuffer from window, frame and worker globals, since no page is cross-origin isolated"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

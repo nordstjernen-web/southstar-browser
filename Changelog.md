@@ -7,7 +7,8 @@ Southstar Browser 0.9.11-dev:
   with its own built-ins and global object, through evaluate() and
   importValue(), and only primitives and wrapped functions cross between the
   realms. All 64 of test262's ShadowRealm tests pass, which brings test262
-  as a whole to 51,902 of 52,133.
+  as a whole to 52,051 of 52,133 (99.8%). It replaces the page-level ShadowRealm,
+  whose importValue() always rejected.
 * Intl.DateTimeFormat called as a function on an object that inherits
   from it attaches the new formatter to that object, as Intl.NumberFormat
   does, under one fallback symbol per realm; Intl.RelativeTimeFormat
@@ -15,7 +16,7 @@ Southstar Browser 0.9.11-dev:
   Intl.DateTimeFormat resolves, reads era and eraYear in
   PlainMonthDay.from and toPlainDate, and keeps a ZonedDateTime's offset
   by default in with(). test262's intl402 now passes in full (3,382 of
-  3,382), and test262 as a whole passes 51,856 of 52,133.
+  3,382), and test262 as a whole passes 51,987 of 52,133.
 * A script can call a function named async: async(x) was a syntax error
   unless an arrow followed. In non-strict scripts an assignment to a call,
   such as f() = 1, f() += 1, f()++ or for (f() in o), now parses and

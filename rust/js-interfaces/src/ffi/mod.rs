@@ -108,10 +108,6 @@ pub(crate) fn install_temporal(scope: &mut Scope<'_>, global: &Value) {
     let _ = southstar_js_temporal::install(scope, global);
 }
 
-pub(crate) fn install_realm(scope: &mut Scope<'_>, global: &Value) {
-    southstar_js_realm::install(scope, global);
-}
-
 fn with_handle(ctx: ContextHandle, f: impl FnOnce(&mut Scope<'_>)) {
     let _ = ctx.with(f);
 }

@@ -238,8 +238,6 @@ impl Drop for Engine {
     }
 }
 
-pub struct Realm(boa_engine::realm::Realm);
-
 #[derive(Clone)]
 pub struct SharedMemory(boa_engine::builtins::array_buffer::SharedArrayBuffer);
 
@@ -1273,17 +1271,6 @@ impl Scope<'_> {
         JsPromise::reject(error, self.cx())
             .map(|promise| Value(promise.into()))
             .map_err(|e| self.error(e))
-    }
-
-    pub fn new_detached_realm(&mut self) -> Option<Realm> {
-        self.cx().create_realm().ok().map(Realm)
-    }
-
-    pub fn in_realm<R>(&mut self, realm: &Realm, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        let previous = self.cx().enter_realm(realm.0.clone());
-        let result = f(&mut Scope::of(self.ctx));
-        self.cx().enter_realm(previous);
-        result
     }
 
     pub fn new_realm(&mut self, init: RealmInit) -> Result<Value, Value> {
