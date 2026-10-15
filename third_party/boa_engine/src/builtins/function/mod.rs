@@ -333,6 +333,26 @@ impl IntrinsicObject for BuiltInFunctionObject {
             )
             .build();
 
+        BuiltInBuilder::callable_with_object(
+            realm,
+            realm.intrinsics().objects().function_legacy_caller().into(),
+            Self::legacy_caller,
+        )
+        .name(js_string!("get caller"))
+        .build();
+
+        BuiltInBuilder::callable_with_object(
+            realm,
+            realm
+                .intrinsics()
+                .objects()
+                .function_legacy_arguments()
+                .into(),
+            Self::legacy_arguments,
+        )
+        .name(js_string!("get arguments"))
+        .build();
+
         let prototype = realm.intrinsics().constructors().function().prototype();
 
         BuiltInBuilder::callable_with_object(realm, prototype.clone(), Self::prototype)
@@ -909,6 +929,84 @@ impl BuiltInFunctionObject {
     #[allow(clippy::unnecessary_wraps)]
     fn prototype(_: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
         Ok(JsValue::undefined())
+    }
+
+    /// Returns the index of the call frame of the most recent active invocation of `this`, when
+    /// `this` is a non-strict ordinary function.
+    fn legacy_active_frame(this: &JsValue, context: &Context) -> Option<usize> {
+        let function = this.as_object()?;
+        let sloppy = function
+            .downcast_ref::<OrdinaryFunction>()
+            .is_some_and(|f| !f.codeblock().strict() && !f.codeblock().is_class_constructor());
+        if !sloppy {
+            return None;
+        }
+        let vm = &context.vm;
+        (1..vm.frames.len()).rev().find(|&index| {
+            vm.stack
+                .get_function(&vm.frames[index])
+                .is_some_and(|active| JsObject::equals(&active, &function))
+        })
+    }
+
+    /// The getter of the legacy `caller` property of non-strict functions.
+    ///
+    /// Returns the non-strict function that made the most recent active call to `this`, and
+    /// `null` when `this` is not running, or was called from a strict or built-in function or
+    /// from script or eval code. It never returns a strict function, as the [forbidden
+    /// extensions][spec] require.
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-forbidden-extensions
+    #[allow(clippy::unnecessary_wraps)]
+    fn legacy_caller(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        let Some(index) = Self::legacy_active_frame(this, context) else {
+            return Ok(JsValue::null());
+        };
+        let vm = &context.vm;
+        let caller = (index > 1)
+            .then(|| vm.stack.get_function(&vm.frames[index - 1]))
+            .flatten()
+            .filter(|caller| {
+                caller
+                    .downcast_ref::<OrdinaryFunction>()
+                    .is_some_and(|f| !f.codeblock().strict())
+            });
+        Ok(caller.map_or_else(JsValue::null, JsValue::from))
+    }
+
+    /// The getter of the legacy `arguments` property of non-strict functions.
+    ///
+    /// Returns a new arguments object holding the arguments of the most recent active call to
+    /// `this`, or `null` when `this` is not running.
+    #[allow(clippy::unnecessary_wraps)]
+    fn legacy_arguments(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+        let Some(index) = Self::legacy_active_frame(this, context) else {
+            return Ok(JsValue::null());
+        };
+        let values: ThinVec<JsValue> = context
+            .vm
+            .stack
+            .get_arguments(&context.vm.frames[index])
+            .iter()
+            .cloned()
+            .collect();
+        let object = context.intrinsics().templates().mapped_arguments().create(
+            arguments::UnmappedArguments,
+            vec![
+                values.len().into(),
+                context
+                    .intrinsics()
+                    .objects()
+                    .array_prototype_values()
+                    .into(),
+                this.clone(),
+            ],
+        );
+        object
+            .borrow_mut()
+            .properties_mut()
+            .override_indexed_properties(values);
+        Ok(object.into())
     }
 }
 

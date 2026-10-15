@@ -1136,6 +1136,7 @@ pub(crate) fn create_function_object(
 
     let is_async = code.is_async();
     let is_generator = code.is_generator();
+    let sloppy = !code.strict() && !code.is_class_constructor();
     let function = OrdinaryFunction::new(
         code,
         context.vm.frame().environments.snapshot_for_closure(),
@@ -1172,13 +1173,30 @@ pub(crate) fn create_function_object(
             .function_prototype()
             .create(OrdinaryObject, vec![JsValue::undefined()]);
 
-        let template = templates.function_with_prototype_without_proto();
-
-        (
-            template.clone(),
-            vec![length, name, constructor_prototype.clone().into()],
-            Some(constructor_prototype),
-        )
+        if sloppy {
+            let objects = context.intrinsics().objects();
+            (
+                templates
+                    .sloppy_function_with_prototype_without_proto()
+                    .clone(),
+                vec![
+                    length,
+                    name,
+                    objects.function_legacy_arguments().into(),
+                    JsValue::undefined(),
+                    objects.function_legacy_caller().into(),
+                    JsValue::undefined(),
+                    constructor_prototype.clone().into(),
+                ],
+                Some(constructor_prototype),
+            )
+        } else {
+            (
+                templates.function_with_prototype_without_proto().clone(),
+                vec![length, name, constructor_prototype.clone().into()],
+                Some(constructor_prototype),
+            )
+        }
     };
 
     template.set_prototype(prototype);
@@ -1205,6 +1223,7 @@ pub(crate) fn create_function_object_fast(code: Gc<CodeBlock>, context: &mut Con
     let is_async = code.is_async();
     let is_generator = code.is_generator();
     let has_prototype_property = code.has_prototype_property();
+    let sloppy = !code.strict() && !code.is_class_constructor();
     let function = OrdinaryFunction::new(
         code,
         context.vm.frame().environments.snapshot_for_closure(),
@@ -1248,11 +1267,31 @@ pub(crate) fn create_function_object_fast(code: Gc<CodeBlock>, context: &mut Con
             .function_prototype()
             .create(OrdinaryObject, vec![JsValue::undefined()]);
 
-        let constructor = context
-            .intrinsics()
-            .templates()
-            .function_with_prototype()
-            .create(function, vec![length, name, prototype.clone().into()]);
+        let constructor = if sloppy {
+            let objects = context.intrinsics().objects();
+            context
+                .intrinsics()
+                .templates()
+                .sloppy_function_with_prototype()
+                .create(
+                    function,
+                    vec![
+                        length,
+                        name,
+                        objects.function_legacy_arguments().into(),
+                        JsValue::undefined(),
+                        objects.function_legacy_caller().into(),
+                        JsValue::undefined(),
+                        prototype.clone().into(),
+                    ],
+                )
+        } else {
+            context
+                .intrinsics()
+                .templates()
+                .function_with_prototype()
+                .create(function, vec![length, name, prototype.clone().into()])
+        };
 
         prototype.borrow_mut().properties_mut().storage[0] = constructor.clone().into();
 

@@ -1141,6 +1141,12 @@ pub struct IntrinsicObjects {
     /// [`%Array.prototype.values%`](https://tc39.es/ecma262/#sec-array.prototype.values)
     array_prototype_values: JsFunction,
 
+    /// The getter of the legacy `caller` property of non-strict functions.
+    function_legacy_caller: JsFunction,
+
+    /// The getter of the legacy `arguments` property of non-strict functions.
+    function_legacy_arguments: JsFunction,
+
     /// [`%Array.prototype.toString%`](https://tc39.es/ecma262/#sec-array.prototype.tostring)
     array_prototype_to_string: JsFunction,
 
@@ -1215,6 +1221,8 @@ impl IntrinsicObjects {
             json: JsObject::with_null_proto(),
             throw_type_error: JsFunction::empty_intrinsic_function(false),
             array_prototype_values: JsFunction::empty_intrinsic_function(false),
+            function_legacy_caller: JsFunction::empty_intrinsic_function(false),
+            function_legacy_arguments: JsFunction::empty_intrinsic_function(false),
             array_prototype_to_string: JsFunction::empty_intrinsic_function(false),
             iterator_prototypes: IteratorPrototypes::default(),
             generator: JsObject::with_null_proto(),
@@ -1257,6 +1265,20 @@ impl IntrinsicObjects {
     #[must_use]
     pub fn array_prototype_values(&self) -> JsFunction {
         self.array_prototype_values.clone()
+    }
+
+    /// Gets the getter of the legacy `caller` property of non-strict functions.
+    #[inline]
+    #[must_use]
+    pub fn function_legacy_caller(&self) -> JsFunction {
+        self.function_legacy_caller.clone()
+    }
+
+    /// Gets the getter of the legacy `arguments` property of non-strict functions.
+    #[inline]
+    #[must_use]
+    pub fn function_legacy_arguments(&self) -> JsFunction {
+        self.function_legacy_arguments.clone()
     }
 
     /// Gets the [`%Array.prototype.toString%`][spec] intrinsic function.
@@ -1462,6 +1484,9 @@ pub(crate) struct ObjectTemplates {
     function_with_prototype: ObjectTemplate,
     function_prototype: ObjectTemplate,
 
+    sloppy_function_with_prototype: ObjectTemplate,
+    sloppy_function_with_prototype_without_proto: ObjectTemplate,
+
     function: ObjectTemplate,
     async_function: ObjectTemplate,
     generator_function: ObjectTemplate,
@@ -1524,6 +1549,28 @@ impl ObjectTemplates {
         let function_without_proto = function.clone();
         let mut async_function = function.clone();
         let mut function_with_prototype = function.clone();
+
+        let mut sloppy_function_with_prototype_without_proto = function.clone();
+        sloppy_function_with_prototype_without_proto
+            .accessor(
+                js_string!("arguments").into(),
+                true,
+                false,
+                Attribute::NON_ENUMERABLE | Attribute::PERMANENT,
+            )
+            .accessor(
+                js_string!("caller").into(),
+                true,
+                false,
+                Attribute::NON_ENUMERABLE | Attribute::PERMANENT,
+            )
+            .property(
+                PROTOTYPE.into(),
+                Attribute::WRITABLE | Attribute::PERMANENT | Attribute::NON_ENUMERABLE,
+            );
+        let mut sloppy_function_with_prototype =
+            sloppy_function_with_prototype_without_proto.clone();
+        sloppy_function_with_prototype.set_prototype(constructors.function().prototype());
 
         function_with_prototype.property(
             PROTOTYPE.into(),
@@ -1633,6 +1680,8 @@ impl ObjectTemplates {
             mapped_arguments,
             function_with_prototype,
             function_prototype,
+            sloppy_function_with_prototype,
+            sloppy_function_with_prototype_without_proto,
             function,
             async_function,
             generator_function,
@@ -1774,6 +1823,33 @@ impl ObjectTemplates {
     /// 4. `__proto__`: `Function.prototype`
     pub(crate) const fn function_with_prototype(&self) -> &ObjectTemplate {
         &self.function_with_prototype
+    }
+
+    /// Cached non-strict function object with `"prototype"` property template.
+    ///
+    /// Transitions:
+    ///
+    /// 1. `"length"`: (`READONLY`, `NON_ENUMERABLE`, `CONFIGURABLE`)
+    /// 2. `"name"`: (`READONLY`, `NON_ENUMERABLE`, `CONFIGURABLE`)
+    /// 3. `"arguments"`: (`GET`, `NON_ENUMERABLE`, `PERMANENT`)
+    /// 4. `"caller"`: (`GET`, `NON_ENUMERABLE`, `PERMANENT`)
+    /// 5. `"prototype"`: (`WRITABLE`, `PERMANENT`, `NON_ENUMERABLE`)
+    /// 6. `__proto__`: `Function.prototype`
+    pub(crate) const fn sloppy_function_with_prototype(&self) -> &ObjectTemplate {
+        &self.sloppy_function_with_prototype
+    }
+
+    /// Cached non-strict function object with `"prototype"` and without `__proto__` template.
+    ///
+    /// Transitions:
+    ///
+    /// 1. `"length"`: (`READONLY`, `NON_ENUMERABLE`, `CONFIGURABLE`)
+    /// 2. `"name"`: (`READONLY`, `NON_ENUMERABLE`, `CONFIGURABLE`)
+    /// 3. `"arguments"`: (`GET`, `NON_ENUMERABLE`, `PERMANENT`)
+    /// 4. `"caller"`: (`GET`, `NON_ENUMERABLE`, `PERMANENT`)
+    /// 5. `"prototype"`: (`WRITABLE`, `PERMANENT`, `NON_ENUMERABLE`)
+    pub(crate) const fn sloppy_function_with_prototype_without_proto(&self) -> &ObjectTemplate {
+        &self.sloppy_function_with_prototype_without_proto
     }
 
     /// Cached constructor function object template.

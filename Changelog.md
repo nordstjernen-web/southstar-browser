@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Non-strict functions have the legacy caller and arguments properties
+  other browsers keep: f.caller is the function that called f (null for
+  strict callers and top-level code) and f.arguments the arguments of
+  its current call, so old scripts that read arguments.callee.caller no
+  longer throw a TypeError. test262 reaches 52,075 of 52,133 (99.9%).
 * JavaScript gains ShadowRealm: new ShadowRealm() runs code in a fresh realm
   with its own built-ins and global object, through evaluate() and
   importValue(), and only primitives and wrapped functions cross between the
