@@ -23,16 +23,10 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: ${{ matrix.compiler }} on ubuntu-${{ matrix.ubuntu }}
-    runs-on: ubuntu-${{ matrix.ubuntu }}
-    timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu: ['26.04']
-        compiler: [gcc]
+  checks:
+    name: fmt, clippy, tests, deny, vet
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
 
     env:
       DEBIAN_FRONTEND: noninteractive
@@ -47,7 +41,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            ccache gcc g++ make cmake pkg-config meson ninja-build \
+            gcc g++ pkg-config \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
@@ -113,65 +107,90 @@ jobs:
       - name: cargo vet
         run: cargo vet --locked
 
+  build:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'release build, smoke and WPT' || 'debug build and smoke' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      FULL: ${{ github.event_name == 'workflow_dispatch' }}
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ccache gcc g++ make cmake pkg-config meson ninja-build \
+            libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
+            libuchardet-dev libpsl-dev libsqlite3-dev \
+            libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
+            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain none
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+            --profile minimal
+          rustc --version
+          cargo --version
+
       - name: Restore ccache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ccache
-          key: ccache-linux-${{ matrix.compiler }}-${{ github.sha }}
+          key: ccache-linux-gcc-${{ env.FULL }}-${{ github.sha }}
           restore-keys: |
-            ccache-linux-${{ matrix.compiler }}-
+            ccache-linux-gcc-${{ env.FULL }}-
 
       - name: Configure ccache
         run: |
           ccache --max-size=200M
           ccache --zero-stats
-
-      - name: Select compiler
-        run: |
           echo "CC=ccache gcc"  >> $GITHUB_ENV
           echo "CXX=ccache g++" >> $GITHUB_ENV
 
       - name: Show toolchain versions
         run: |
           gcc --version | head -1
-          ccache --version | head -1
           meson --version
           ninja --version
           pkg-config --modversion gtk4
-          pkg-config --modversion libcrypto
           pkg-config --modversion libavcodec
 
-      # Build step is wired up the moment a meson.build (or Makefile)
-      # lands in the tree. Until then this job exists to (a) verify the
-      # toolchain we depend on is actually installable on the CI runner
-      # and (b) catch regressions in dependency availability.
       - name: Build
-        id: build
         shell: bash
         run: |
           set -o pipefail
-          if [ -f meson.build ]; then
+          if [ "$FULL" = true ]; then
             meson setup builddir --werror -Doverflow_checks=true
-            meson compile -C builddir 2>&1 | tee build.log
-          elif [ -f Makefile ]; then
-            make 2>&1 | tee build.log
           else
-            echo "No build system present yet — toolchain verified, skipping compile."
+            meson setup builddir --werror -Dbuildtype=debug
           fi
+          meson compile -C builddir 2>&1 | tee build.log
 
       - name: ccache stats
         if: always()
         run: ccache --show-stats
 
       - name: Smoke test (binary present and executable)
-        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
           test -x builddir/src/gtk/southstar
           file builddir/src/gtk/southstar
           ldd builddir/src/gtk/southstar | head -20
 
       - name: Headless smoke (about:start + <video> layout)
-        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: |
           set -o pipefail
           ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt
@@ -189,12 +208,11 @@ jobs:
           pkill -f "http.server 18765" || true
 
       - name: Headless baseline smoke (./scripts/dev.sh smoke)
-        if: hashFiles('builddir/src/gtk/southstar') != ''
         run: ./scripts/dev.sh smoke
 
       - name: Fetch web-platform-tests
         id: wpt-fetch
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: env.FULL == 'true'
         continue-on-error: true
         env:
           WPT_REV: ac7ff49df82aaf9630eeabb1f0f562279527cf10
@@ -234,16 +252,16 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: build-log-${{ matrix.ubuntu }}-${{ matrix.compiler }}
+          name: build-log
           path: build.log
           if-no-files-found: ignore
           retention-days: 14
 
       - name: Upload southstar binary
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: env.FULL == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: southstar-linux-${{ matrix.ubuntu }}-${{ matrix.compiler }}
+          name: southstar-linux
           path: builddir/src/gtk/southstar
           if-no-files-found: error
           retention-days: 14

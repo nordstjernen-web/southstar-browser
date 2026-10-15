@@ -58,8 +58,11 @@ test:
 
 The runner exits 0 only when every test file ran without failures.
 
-The Linux CI job runs the slice tracked in `docs/wpt-scores.md` on every
-push and pull request: it checks out the WPT revision pinned in
+The Linux CI workflow runs the slice tracked in `docs/wpt-scores.md` when
+it is started by hand (`workflow_dispatch`), together with the release
+build; pushes and pull requests run only the lint checks and a fast debug
+build with the smoke tests, to keep them near five minutes. The WPT step
+checks out the WPT revision pinned in
 `.github/workflows/linux.yml` (only the directories the slice needs),
 runs `scripts/wpt-score.sh --jobs=4 --summary=...`, puts the history row
 and per-area table in the job summary and uploads the per-file and
