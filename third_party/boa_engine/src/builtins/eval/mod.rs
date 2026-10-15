@@ -88,13 +88,6 @@ impl Eval {
             }
         }
 
-        /// Possible actions that can be executed after exiting this function to restore the environment to its
-        /// original state.
-        enum EnvStackAction {
-            Truncate(usize),
-            Restore(SavedEnvironments),
-        }
-
         // 1. Assert: If direct is false, then strictCaller is also false.
         debug_assert!(direct || !strict);
 
@@ -129,7 +122,7 @@ impl Eval {
         if strict {
             parser.set_strict();
         }
-        let (mut body, source) = parser.parse_eval(direct, context.interner_mut())?;
+        let (body, source) = parser.parse_eval(direct, context.interner_mut())?;
 
         // 6. Let inFunction be false.
         // 7. Let inMethod be false.
@@ -202,6 +195,27 @@ impl Eval {
         }
 
         strict |= body.strict();
+
+        Self::evaluate_parsed(body, source, direct, lexical_scope, strict, context)
+    }
+
+    /// The steps of `PerformEval` that follow parsing and the early errors: they instantiate the
+    /// declarations of the parsed `body` and evaluate it. `ShadowRealm.prototype.evaluate` shares
+    /// them, as an indirect eval in the shadow realm.
+    pub(crate) fn evaluate_parsed(
+        mut body: boa_ast::Script,
+        source: boa_ast::SourceText,
+        direct: bool,
+        lexical_scope: Option<Scope>,
+        strict: bool,
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        /// Possible actions that can be executed after exiting this function to restore the environment to its
+        /// original state.
+        enum EnvStackAction {
+            Truncate(usize),
+            Restore(SavedEnvironments),
+        }
 
         // Because our environment model does not map directly to the spec, this section looks very different.
         // 12 - 13 are implicit in the call of `Context::compile_with_new_declarative`.

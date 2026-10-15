@@ -30,6 +30,8 @@ pub mod proxy;
 pub mod reflect;
 pub mod regexp;
 pub mod set;
+#[cfg(feature = "experimental")]
+pub(crate) mod shadow_realm;
 pub mod string;
 pub mod symbol;
 pub mod typed_array;
@@ -321,6 +323,8 @@ impl Realm {
         WeakSet::init(self);
         Atomics::init(self);
         FinalizationRegistry::init(self);
+        #[cfg(feature = "experimental")]
+        shadow_realm::ShadowRealm::init(self);
 
         #[cfg(feature = "annex-b")]
         {
@@ -453,6 +457,8 @@ pub(crate) fn set_default_global_bindings(context: &mut Context) -> JsResult<()>
     global_binding::<IteratorConstructor>(context)?;
     global_binding::<Atomics>(context)?;
     global_binding::<FinalizationRegistry>(context)?;
+    #[cfg(feature = "experimental")]
+    global_binding::<shadow_realm::ShadowRealm>(context)?;
 
     #[cfg(feature = "annex-b")]
     {

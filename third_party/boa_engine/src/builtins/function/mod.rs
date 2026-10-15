@@ -877,9 +877,9 @@ impl BuiltInFunctionObject {
             return Ok(js_string!("function () { [native code] }").into());
         }
 
-        let function = object
-            .downcast_ref::<OrdinaryFunction>()
-            .ok_or_else(|| JsNativeError::typ().with_message("not a function"))?;
+        let Some(function) = object.downcast_ref::<OrdinaryFunction>() else {
+            return Ok(js_string!("function () { [native code] }").into());
+        };
 
         let code = function.codeblock();
         if let Some(code_points) = code.source_info().text_spanned().to_code_points() {

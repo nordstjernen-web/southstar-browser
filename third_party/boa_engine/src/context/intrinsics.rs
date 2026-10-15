@@ -175,6 +175,8 @@ pub struct StandardConstructors {
     weak_set: StandardConstructor,
     iterator: StandardConstructor,
     finalization_registry: StandardConstructor,
+    #[cfg(feature = "experimental")]
+    shadow_realm: StandardConstructor,
     #[cfg(feature = "intl")]
     collator: StandardConstructor,
     #[cfg(feature = "intl")]
@@ -274,6 +276,8 @@ impl Default for StandardConstructors {
             weak_set: StandardConstructor::default(),
             iterator: StandardConstructor::default(),
             finalization_registry: StandardConstructor::default(),
+            #[cfg(feature = "experimental")]
+            shadow_realm: StandardConstructor::default(),
             #[cfg(feature = "intl")]
             collator: StandardConstructor::default(),
             #[cfg(feature = "intl")]
@@ -895,6 +899,19 @@ impl StandardConstructors {
     #[must_use]
     pub const fn finalization_registry(&self) -> &StandardConstructor {
         &self.finalization_registry
+    }
+
+    /// Returns the `ShadowRealm` constructor.
+    ///
+    /// More information:
+    ///  - [ShadowRealm proposal][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-shadowrealm/#sec-shadowrealm-constructor
+    #[cfg(feature = "experimental")]
+    #[inline]
+    #[must_use]
+    pub const fn shadow_realm(&self) -> &StandardConstructor {
+        &self.shadow_realm
     }
 
     /// Returns the `Intl.Collator` constructor.

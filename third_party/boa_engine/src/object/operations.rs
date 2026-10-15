@@ -876,6 +876,12 @@ impl JsObject {
             return fun.get_function_realm(context);
         }
 
+        #[cfg(feature = "experimental")]
+        if let Some(wrapped) = self.downcast_ref::<crate::builtins::shadow_realm::WrappedFunction>()
+        {
+            return Ok(wrapped.realm().clone());
+        }
+
         Ok(context.realm().clone())
     }
 

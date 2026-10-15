@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* JavaScript gains ShadowRealm: new ShadowRealm() runs code in a fresh realm
+  with its own built-ins and global object, through evaluate() and
+  importValue(), and only primitives and wrapped functions cross between the
+  realms. All 64 of test262's ShadowRealm tests pass, which brings test262
+  as a whole to 51,902 of 52,133.
 * Intl.DateTimeFormat called as a function on an object that inherits
   from it attaches the new formatter to that object, as Intl.NumberFormat
   does, under one fallback symbol per realm; Intl.RelativeTimeFormat
