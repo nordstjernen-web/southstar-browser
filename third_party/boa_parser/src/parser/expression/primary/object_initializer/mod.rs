@@ -507,6 +507,15 @@ where
                     )));
                 }
 
+                // The parameters are strict mode code as well, so they cannot bind "eval",
+                // "arguments" or a word reserved in strict mode code.
+                if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+                    return Err(Error::lex(LexError::Syntax(
+                        "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
+                        params_start_position,
+                    )));
+                }
+
                 // It is a Syntax Error if any element of the BoundNames of FormalParameters also occurs in the
                 // LexicallyDeclaredNames of FunctionBody.
                 name_in_lexically_declared_names(
@@ -774,6 +783,15 @@ where
             )));
         }
 
+        // The parameters are strict mode code as well, so they cannot bind "eval",
+        // "arguments" or a word reserved in strict mode code.
+        if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+            return Err(Error::lex(LexError::Syntax(
+                "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
+                body_start,
+            )));
+        }
+
         // Early Error: It is a Syntax Error if any element of the BoundNames of UniqueFormalParameters also
         // occurs in the LexicallyDeclaredNames of GeneratorBody.
         name_in_lexically_declared_names(
@@ -873,6 +891,15 @@ where
             )));
         }
 
+        // The parameters are strict mode code as well, so they cannot bind "eval",
+        // "arguments" or a word reserved in strict mode code.
+        if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+            return Err(Error::lex(LexError::Syntax(
+                "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
+                body_start,
+            )));
+        }
+
         // Early Error: It is a Syntax Error if any element of the BoundNames of UniqueFormalParameters
         // also occurs in the LexicallyDeclaredNames of AsyncGeneratorBody.
         name_in_lexically_declared_names(
@@ -944,6 +971,15 @@ where
         if body.strict() && !params.is_simple() {
             return Err(Error::lex(LexError::Syntax(
                 "Illegal 'use strict' directive in function with non-simple parameter list".into(),
+                body_start,
+            )));
+        }
+
+        // The parameters are strict mode code as well, so they cannot bind "eval",
+        // "arguments" or a word reserved in strict mode code.
+        if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+            return Err(Error::lex(LexError::Syntax(
+                "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
                 body_start,
             )));
         }

@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,670 added and 1,357 removed lines in 131 files;
+2026-10-15 the difference is 11,802 added and 1,359 removed lines in 132 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -92,6 +92,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Binding patterns require a comma between elements: `var {async async: a} = {}` and `let [a b] = []` are syntax errors instead of two bindings | `boa_parser`: `statement/mod.rs` | `staging/sm/async-functions` |
 | `for await` takes only a `for-of` head: `for await (;;)` and `for await (x = 0;;)` are syntax errors like `for await (x in y)` | `boa_parser`: `statement/iteration/for_statement.rs` | `staging/sm/AsyncGenerators` |
 | `Function` and the generator and async function constructors parse the joined parameters and the body each as complete input, so neither string can end the source early (`new Function(") { var x = function (", "}")`, `Function("b = {a}}")`) | `boa_parser`: `parser/mod.rs` | `staging/sm/Function`, `staging/sm/class` |
+| A function whose own body has a "use strict" directive applies strict mode to its name and parameters: the words reserved in strict mode code (`let`, `static`, `yield`, `implements`, …) are rejected as the name of a function, generator or async function and, like `eval` and `arguments`, as a parameter of functions, arrow functions, object methods and setters and of the `Function` constructor (`ContainsSymbol::EvalOrArguments` matches them) | `boa_ast`: `operations/mod.rs`; `boa_parser`: `expression/primary/{function_expression,generator_expression,async_function_expression,async_generator_expression,object_initializer}/mod.rs`, `expression/assignment/{mod,arrow_function,async_arrow_function}.rs`, `statement/declaration/hoistable/mod.rs`; `boa_engine`: `builtins/function/mod.rs` | `staging/sm/misc`, `staging/sm/generators` |
 
 ## Rules for changing the fork
 

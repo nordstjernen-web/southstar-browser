@@ -210,6 +210,15 @@ pub(in crate::parser) fn finish_async_arrow_function<R: ReadChar>(
         )));
     }
 
+    // The parameters are strict mode code as well, so they cannot bind "eval",
+    // "arguments" or a word reserved in strict mode code.
+    if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+        return Err(Error::lex(LexError::Syntax(
+            "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
+            params_start_position,
+        )));
+    }
+
     // Early Error: It is a Syntax Error if any element of the BoundNames of CoverCallExpressionAndAsyncArrowHead
     // also occurs in the LexicallyDeclaredNames of AsyncConciseBody.
     name_in_lexically_declared_names(

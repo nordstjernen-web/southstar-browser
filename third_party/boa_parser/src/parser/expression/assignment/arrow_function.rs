@@ -141,6 +141,15 @@ where
             )));
         }
 
+        // The parameters are strict mode code as well, so they cannot bind "eval",
+        // "arguments" or a word reserved in strict mode code.
+        if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
+            return Err(Error::lex(LexError::Syntax(
+                "unexpected identifier 'eval' or 'arguments' in strict mode".into(),
+                params_start_position,
+            )));
+        }
+
         // It is a Syntax Error if any element of the BoundNames of ArrowParameters
         // also occurs in the LexicallyDeclaredNames of ConciseBody.
         // https://tc39.es/ecma262/#sec-arrow-function-definitions-static-semantics-early-errors

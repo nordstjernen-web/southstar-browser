@@ -618,6 +618,12 @@ impl BuiltInFunctionObject {
                             .with_message("Unexpected 'eval' or 'arguments' in strict mode")
                             .into());
                     }
+                    // The parameters are strict mode code too, where these words are reserved.
+                    if name.is_strict_reserved_identifier() {
+                        return Err(JsNativeError::syntax()
+                            .with_message("Unexpected strict reserved word in strict mode")
+                            .into());
+                    }
                 }
             }
 

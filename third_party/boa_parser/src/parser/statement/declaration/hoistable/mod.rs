@@ -217,6 +217,15 @@ fn parse_callable_declaration<R: ReadChar, C: CallableDeclaration>(
         )));
     }
 
+    // The BindingIdentifier is part of the function code, so a "use strict" directive in the
+    // body also makes the words reserved in strict mode code invalid as its name.
+    if body.strict() && name.sym().is_strict_reserved_identifier() {
+        return Err(Error::lex(LexError::Syntax(
+            "unexpected strict reserved word as a function name in strict mode".into(),
+            name_span.start(),
+        )));
+    }
+
     // Early Error for BindingIdentifier, because the strictness of the functions body is also
     // relevant for the function parameters.
     if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {

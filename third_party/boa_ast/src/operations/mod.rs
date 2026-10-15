@@ -82,7 +82,9 @@ pub enum ContainsSymbol {
     This,
     /// A method definition.
     MethodDefinition,
-    /// The `BindingIdentifier` "eval" or "arguments".
+    /// The `BindingIdentifier` "eval" or "arguments", or one that is reserved in strict mode code
+    /// ("implements", "interface", "let", "package", "private", "protected", "public", "static"
+    /// or "yield").
     EvalOrArguments,
     /// A direct call to `eval`.
     DirectEval,
@@ -139,7 +141,9 @@ where
 
         fn visit_identifier(&mut self, node: &'ast Identifier) -> ControlFlow<Self::BreakTy> {
             if self.0 == ContainsSymbol::EvalOrArguments
-                && (node.sym() == Sym::EVAL || node.sym() == Sym::ARGUMENTS)
+                && (node.sym() == Sym::EVAL
+                    || node.sym() == Sym::ARGUMENTS
+                    || node.sym().is_strict_reserved_identifier())
             {
                 return ControlFlow::Break(());
             }

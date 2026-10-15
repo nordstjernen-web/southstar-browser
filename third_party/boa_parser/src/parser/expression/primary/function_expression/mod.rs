@@ -120,6 +120,18 @@ where
             )));
         }
 
+        // The BindingIdentifier is part of the function code, so a "use strict" directive in the
+        // body also makes the words reserved in strict mode code invalid as its name.
+        if let Some(name) = name
+            && body.strict()
+            && name.sym().is_strict_reserved_identifier()
+        {
+            return Err(Error::lex(LexError::Syntax(
+                "unexpected strict reserved word as a function name in strict mode".into(),
+                name_span.start(),
+            )));
+        }
+
         // Catch early error for BindingIdentifier, because strictness of the functions body is also
         // relevant for the function parameters.
         if body.strict() && contains(&params, ContainsSymbol::EvalOrArguments) {
