@@ -18,8 +18,8 @@ use crate::{
     },
     operations::{
         ContainsSymbol, LexicallyScopedDeclaration, VarScopedDeclaration, bound_names, contains,
-        lexically_declared_names, lexically_scoped_declarations, var_declared_names,
-        var_scoped_declarations,
+        lexically_declared_names, lexically_declared_names_legacy, lexically_scoped_declarations,
+        var_declared_names, var_scoped_declarations,
     },
     property::PropertyName,
     scope::{FunctionScopes, IdentifierReference, Scope},
@@ -27,11 +27,11 @@ use crate::{
         Block, Catch, ForInLoop, ForLoop, ForOfLoop, Switch, With,
         iteration::{ForLoopInitializer, IterableLoopInitializer},
     },
-    visitor::{NodeRef, NodeRefMut, VisitorMut},
+    visitor::{NodeRef, NodeRefMut, Visitor, VisitorMut},
 };
 use boa_interner::{Interner, Sym};
-use rustc_hash::FxHashMap;
-use std::ops::ControlFlow;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::{convert::Infallible, ops::ControlFlow};
 
 /// Collect bindings and fill the scopes with them.
 ///
@@ -126,10 +126,11 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         self.visit_expression_mut(&mut node.val)?;
         let direct_eval_old = self.direct_eval;
         self.direct_eval = node.contains_direct_eval || self.direct_eval;
+        let needs_tdz_checks = case_bindings_need_tdz_checks(node);
         if let Some(scope) = &mut node.scope {
-            // A case clause can be entered without running the declarations of the clauses
-            // before it, so the bindings of the case block keep their runtime TDZ checks.
-            scope.escape_all_bindings();
+            if self.direct_eval || needs_tdz_checks {
+                scope.escape_all_bindings();
+            }
             std::mem::swap(&mut self.scope, scope);
         }
         for case in &mut node.cases {
@@ -554,6 +555,42 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         scope.reorder_binding_indices();
         ControlFlow::Continue(())
     }
+}
+
+/// Returns `true` if a binding that a case clause declares with `let`, `const` or `class` is
+/// named where its declaration may not have run although the code comes after it: in a later
+/// clause, which a match can enter directly, or in a case selector. Such bindings need the
+/// runtime TDZ checks of an environment, since registers rely on the static order of the code.
+fn case_bindings_need_tdz_checks(node: &Switch) -> bool {
+    struct IdentifierNames<'a>(&'a mut FxHashSet<Sym>);
+
+    impl<'ast> Visitor<'ast> for IdentifierNames<'_> {
+        type BreakTy = Infallible;
+
+        fn visit_identifier(&mut self, node: &'ast Identifier) -> ControlFlow<Self::BreakTy> {
+            self.0.insert(node.sym());
+            ControlFlow::Continue(())
+        }
+    }
+
+    let mut declared = FxHashSet::default();
+    let mut named = FxHashSet::default();
+    for case in &*node.cases {
+        if let Some(condition) = case.condition() {
+            let _ = IdentifierNames(&mut named).visit_expression(condition);
+        }
+    }
+    for case in &*node.cases {
+        if !declared.is_empty() {
+            let _ = IdentifierNames(&mut named).visit_statement_list(case.body());
+        }
+        declared.extend(
+            lexically_declared_names_legacy(case.body())
+                .into_iter()
+                .filter_map(|(name, function)| (!function).then_some(name)),
+        );
+    }
+    declared.iter().any(|name| named.contains(name))
 }
 
 impl BindingEscapeAnalyzer<'_> {
