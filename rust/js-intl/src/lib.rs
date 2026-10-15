@@ -491,6 +491,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         0,
         &text::SEGMENTER_METHODS,
     );
+    text::install(scope, &intl);
     locale::install(scope, &intl);
     bind(
         scope,

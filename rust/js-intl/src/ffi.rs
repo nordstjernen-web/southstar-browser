@@ -44,8 +44,6 @@ pub(crate) struct BrokenDown {
 }
 
 unsafe extern "C" {
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-    fn g_unichar_isalnum(c: u32) -> c_int;
     fn g_get_real_time() -> i64;
     fn g_time_zone_new_local() -> *mut GTimeZone;
     fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
@@ -78,31 +76,6 @@ unsafe extern "C" {
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-pub(crate) fn utf8_skip(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
-    }
-}
-
-pub(crate) fn utf8_strlen(text: &[u8]) -> usize {
-    let mut count = 0;
-    let mut at = 0;
-    while at < text.len() {
-        at += utf8_skip(text[at]);
-        count += 1;
-    }
-    count
-}
-
-pub(crate) fn is_alnum_at(text: &CStr, offset: usize) -> bool {
-    unsafe { g_unichar_isalnum(g_utf8_get_char(text.as_ptr().add(offset))) != 0 }
 }
 
 pub(crate) fn real_time_ms() -> f64 {
@@ -166,9 +139,8 @@ pub(crate) fn language_names() -> Vec<Vec<u8>> {
 }
 
 const CURSOR_POSITION: u32 = 4;
-const WORD_START: u32 = 5;
-const WORD_END: u32 = 6;
 const SENTENCE_BOUNDARY: u32 = 7;
+const WORD_BOUNDARY: u32 = 12;
 
 fn flag(attr: u32, bit: u32) -> bool {
     if cfg!(target_endian = "big") {
@@ -186,7 +158,7 @@ impl LogAttrs {
     }
 
     pub(crate) fn word_boundary(&self, at: usize) -> bool {
-        flag(self.0[at], WORD_START) || flag(self.0[at], WORD_END)
+        flag(self.0[at], WORD_BOUNDARY)
     }
 
     pub(crate) fn sentence_boundary(&self, at: usize) -> bool {

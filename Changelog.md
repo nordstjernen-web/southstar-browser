@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Intl.ListFormat, Intl.RelativeTimeFormat, Intl.DurationFormat,
+  Intl.Segmenter and Intl.DisplayNames follow ECMA-402: they require new,
+  read and validate their options in the specified order, negotiate locales
+  and numbering systems, brand-check their methods and gain
+  supportedLocalesOf. ListFormat formats any iterable of strings in English,
+  Spanish and ten more languages; RelativeTimeFormat speaks English and
+  Polish, with numeric "auto" phrases; DurationFormat formats every unit
+  style, display option, fractional digits and the digital clock style
+  through NumberFormat and ListFormat, and accepts Temporal durations and
+  ISO 8601 strings; Segmenter yields UTF-16-indexed grapheme, word and
+  sentence segments with containing() and an iterator; DisplayNames names
+  languages, regions, scripts, currencies, calendars and date fields.
+  test262's intl402 goes from 2,416 to 2,637 of 3,382.
 * Intl validates and canonicalizes locales as ECMA-402 and UTS #35 require
   (alias replacement, -u- and -t- extensions, likely subtags), from compact
   CLDR tables that scripts/gen-intl-cldr.py generates; resolvedOptions()
