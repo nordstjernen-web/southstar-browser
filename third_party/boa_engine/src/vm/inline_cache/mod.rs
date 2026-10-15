@@ -83,6 +83,21 @@ impl InlineCache {
         }
     }
 
+    /// Caches `slot`, which a property lookup found on an object of shape `looked_up`, for the
+    /// object's `current` shape.
+    ///
+    /// An accessor's getter or setter runs between the lookup and this call and can reshape the
+    /// object it runs on (redefining the accessor as a data property shifts the storage). The
+    /// slot then describes the old layout, so it is not cached.
+    pub(crate) fn set_after_access(&self, looked_up: &Shape, current: &Shape, slot: Slot) {
+        if slot.attributes.is_accessor_descriptor()
+            && looked_up.to_addr_usize() != current.to_addr_usize()
+        {
+            return;
+        }
+        self.set(current, slot);
+    }
+
     /// Returns the cached `(Shape, Slot)` if a matching shape exists in the inline cache.
     ///
     /// Opportunistically cleans up stale weak shape references during lookup.

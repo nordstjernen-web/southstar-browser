@@ -60,6 +60,7 @@ fn get_by_name<const LENGTH: bool>(
         return Ok(());
     }
 
+    let looked_up = object_borrowed.shape().clone();
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();
@@ -73,7 +74,7 @@ fn get_by_name<const LENGTH: bool>(
         let ic = &context.vm.frame().code_block.ic[usize::from(index)];
         let object_borrowed = object.borrow();
         let shape = object_borrowed.shape();
-        ic.set(shape, slot);
+        ic.set_after_access(&looked_up, shape, slot);
     }
 
     context.vm.set_register(dst.into(), result);

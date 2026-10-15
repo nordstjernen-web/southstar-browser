@@ -233,6 +233,7 @@ pub(crate) fn set_global_object_binding(
         object.borrow_mut().properties_mut().storage[slot.index as usize] = value;
         return Ok(());
     }
+    let looked_up = object_borrowed.shape().clone();
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();
@@ -262,7 +263,7 @@ pub(crate) fn set_global_object_binding(
     if slot.is_cacheable() {
         let ic = &context.vm.frame().code_block.ic[usize::from(ic_index)];
         let object_borrowed = object.borrow();
-        ic.set(object_borrowed.shape(), slot);
+        ic.set_after_access(&looked_up, object_borrowed.shape(), slot);
     }
 
     Ok(())

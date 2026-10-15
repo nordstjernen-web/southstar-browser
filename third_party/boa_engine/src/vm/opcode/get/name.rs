@@ -102,6 +102,7 @@ fn get_global_object_binding(
         return Ok(result);
     }
 
+    let looked_up = object_borrowed.shape().clone();
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();
@@ -120,7 +121,7 @@ fn get_global_object_binding(
         let ic = &context.vm.frame().code_block.ic[usize::from(ic_index)];
         let object_borrowed = object.borrow();
         let shape = object_borrowed.shape();
-        ic.set(shape, slot);
+        ic.set_after_access(&looked_up, shape, slot);
     }
 
     Ok(result)

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Speedometer 3.1's NewsSite-Next suite runs to completion. A property
+  getter or setter that replaced itself with a plain value (as a frame's
+  innerHeight does once the viewport size is known) left the script
+  engine's property cache pointing at the wrong slot, so later reads
+  threw "Illegal constructor" and broke React pages inside frames.
 * Lit apps load again, so the Speedometer 3.1 TodoMVC-Lit suites run to
   completion: a const or let declaration list now continues at a comma on
   the line after an arrow function (minified Lit failed to parse), and

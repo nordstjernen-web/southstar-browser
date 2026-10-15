@@ -58,6 +58,7 @@ fn set_by_name(
         }
         return Ok(());
     }
+    let looked_up = object_borrowed.shape().clone();
     drop(object_borrowed);
 
     let name: PropertyKey = ic.name.clone().into();
@@ -76,7 +77,7 @@ fn set_by_name(
         let ic = &context.vm.frame().code_block.ic[usize::from(index)];
         let object_borrowed = object.borrow();
         let shape = object_borrowed.shape();
-        ic.set(shape, slot);
+        ic.set_after_access(&looked_up, shape, slot);
     }
 
     Ok(())

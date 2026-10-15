@@ -91,8 +91,9 @@ zero. `window` is still the shared global, so the remaining gaps are:
 
 Still imperfect:
 
-- **NewsSite-Next** — past the head errors, but Next.js hydration doesn't
-  drive to completion. **React-Stockcharts-SVG** currently renders its
+- **NewsSite-Next** now runs to completion (it failed when a navigation
+  remounted the navbar: a stale Boa inline cache made reading the frame's
+  `innerHeight` call an interface constructor). **React-Stockcharts-SVG** currently renders its
   Stockcharts fit wrapper placeholder but never creates the SVG crosshair
   cursor, and **Perf-Dashboard** still reaches the harness UI but returns no
   score. Multi-suite aggregate runs are also polluted by stale window
