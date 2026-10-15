@@ -377,6 +377,10 @@ where
                 decls.push(decl);
             }
 
+            if cursor.next_if(Punctuator::Comma, interner)?.is_some() {
+                continue;
+            }
+
             match cursor.peek_semicolon(interner)? {
                 SemicolonResult::Found(_) => break,
                 SemicolonResult::NotFound(tk)
@@ -393,12 +397,6 @@ where
                         || tk.kind() == &TokenKind::Keyword((Keyword::In, false)) =>
                 {
                     break;
-                }
-                SemicolonResult::NotFound(tk)
-                    if tk.kind() == &TokenKind::Punctuator(Punctuator::Comma) =>
-                {
-                    // We discard the comma
-                    cursor.advance(interner);
                 }
                 SemicolonResult::NotFound(_) if self.loop_init => break,
                 SemicolonResult::NotFound(_) => {

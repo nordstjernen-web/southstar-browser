@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Lit apps load again, so the Speedometer 3.1 TodoMVC-Lit suites run to
+  completion: a const or let declaration list now continues at a comma on
+  the line after an arrow function (minified Lit failed to parse), and
+  trustedTypes works inside iframes instead of throwing "Illegal
+  invocation".
 * Scripts may nest calls 10,000 deep instead of 512, as in other
   browsers, while a native stack check still stops runaway recursion
   before it overflows the thread. Angular's router pipeline nests deeper

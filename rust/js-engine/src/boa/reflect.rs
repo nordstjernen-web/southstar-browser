@@ -1,4 +1,4 @@
-//! Southstar — the object-model calls that copy one realm's objects into another on Boa: every own key, full property definitions, native-function clones, forwarders and the plain-object test.
+//! Southstar — the object-model calls that copy one realm's objects into another on Boa: every own key, private elements, full property definitions, native-function clones, forwarders and the plain-object test.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -23,8 +23,11 @@ pub(super) fn remember_class(class: &'static HostClass) {
 }
 
 impl Scope<'_> {
-    pub fn own_property_keys_with_private(&mut self, object: &Value) -> Result<Vec<Value>, Value> {
-        self.own_property_keys(object, true)
+    pub fn copy_private_elements(&mut self, from: &Value, to: &Value) -> Result<(), Value> {
+        let source = self.object(from)?;
+        let target = self.object(to)?;
+        source.copy_private_elements_to(&target);
+        Ok(())
     }
 
     pub(super) fn descriptor_flag(

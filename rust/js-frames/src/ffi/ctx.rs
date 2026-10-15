@@ -56,7 +56,6 @@ pub(crate) type Descriptor = PropertyDescriptor;
 pub(crate) enum Keys {
     Strings,
     StringsAndSymbols,
-    WithPrivate,
     EnumerableStrings,
 }
 
@@ -127,7 +126,6 @@ impl Ctx {
             .try_enter(|scope| match keys {
                 Keys::Strings => scope.own_property_keys(object, false),
                 Keys::StringsAndSymbols => scope.own_property_keys(object, true),
-                Keys::WithPrivate => scope.own_property_keys_with_private(object),
                 Keys::EnumerableStrings => scope.own_enumerable_keys(object),
             })?
             .ok()?;
@@ -149,6 +147,10 @@ impl Ctx {
         self.try_enter(|scope| scope.own_property(object, &key.value).ok())
             .flatten()
             .map(|found| found.is_some())
+    }
+
+    pub fn copy_private_elements(self, from: &Value, to: &Value) {
+        self.try_enter(|scope| scope.copy_private_elements(from, to).ok());
     }
 
     pub fn define(self, object: &Value, key: &Key, descriptor: &Descriptor) {

@@ -465,7 +465,8 @@ impl Cloner {
 
     fn clone_instance_properties(&mut self, value: &Value, out: &Value, depth: u32) {
         let src = self.src;
-        let Some(keys) = src.own_keys(value, Keys::WithPrivate) else {
+        src.copy_private_elements(value, out);
+        let Some(keys) = src.own_keys(value, Keys::StringsAndSymbols) else {
             return;
         };
         for key in &keys {

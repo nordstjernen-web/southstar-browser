@@ -103,6 +103,21 @@ impl JsObject {
         JsObject { inner }
     }
 
+    /// Gives `target` the private elements of `self` that it lacks, so the class brands and
+    /// private fields of `self` also hold for `target`.
+    pub fn copy_private_elements_to(&self, target: &Self) {
+        if self == target {
+            return;
+        }
+        let elements = self.borrow().private_elements.clone();
+        let mut target = target.borrow_mut();
+        for (name, element) in elements {
+            if !target.private_elements.iter().any(|(key, _)| *key == name) {
+                target.append_private_element(name, element);
+            }
+        }
+    }
+
     /// Returns the address of the object's allocation, which identifies it while it is alive.
     #[must_use]
     pub fn identity(&self) -> *mut std::ffi::c_void {
