@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Southstar — diff third_party/boa_engine against the crates.io release it forks, verified by the registry checksum."""
+"""Southstar — diff the forked Boa crates in third_party against the crates.io releases they fork, verified by the registry checksums."""
 
 import argparse
 import hashlib
@@ -15,14 +15,18 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FORK = ROOT / "third_party" / "boa_engine"
-INDEX = "https://index.crates.io/bo/a_/boa_engine"
-DOWNLOAD = "https://static.crates.io/crates/boa_engine/boa_engine-{0}.crate"
+CRATES = ("boa_engine", "boa_parser", "boa_ast")
+INDEX = "https://index.crates.io/bo/a_/{0}"
+DOWNLOAD = "https://static.crates.io/crates/{0}/{0}-{1}.crate"
 COMPARED = ("src", "Cargo.toml")
 
 
-def fork_version():
-    with (FORK / "Cargo.toml").open("rb") as manifest:
+def fork_dir(crate):
+    return ROOT / "third_party" / crate
+
+
+def fork_version(crate):
+    with (fork_dir(crate) / "Cargo.toml").open("rb") as manifest:
         return tomllib.load(manifest)["package"]["version"]
 
 
@@ -32,28 +36,29 @@ def fetch(url):
         return response.read()
 
 
-def registry_checksum(version):
-    for line in fetch(INDEX).decode().splitlines():
+def registry_checksum(crate, version):
+    for line in fetch(INDEX.format(crate)).decode().splitlines():
         entry = json.loads(line)
         if entry["vers"] == version:
             return entry["cksum"]
-    sys.exit(f"boa-fork-diff: boa_engine {version} is not in the crates.io index")
+    sys.exit(f"boa-fork-diff: {crate} {version} is not in the crates.io index")
 
 
-def unpack(version, into):
-    crate = fetch(DOWNLOAD.format(version))
-    expected = registry_checksum(version)
-    actual = hashlib.sha256(crate).hexdigest()
+def unpack(crate, version, into):
+    archive_bytes = fetch(DOWNLOAD.format(crate, version))
+    expected = registry_checksum(crate, version)
+    actual = hashlib.sha256(archive_bytes).hexdigest()
     if actual != expected:
-        sys.exit(f"boa-fork-diff: checksum {actual} does not match the index's {expected}")
-    prefix = f"boa_engine-{version}/"
-    with tarfile.open(fileobj=io.BytesIO(crate), mode="r:gz") as archive:
+        sys.exit(f"boa-fork-diff: {crate} checksum {actual} does not match the index's {expected}")
+    prefix = f"{crate}-{version}/"
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
         members = [m for m in archive.getmembers() if m.name.startswith(prefix)]
         archive.extractall(Path(into) / "release", members=members, filter="data")
     return Path(into) / "release" / prefix
 
 
 def copy(source_root, into):
+    into.mkdir(parents=True, exist_ok=True)
     for name in COMPARED:
         source = source_root / name
         if source.is_dir():
@@ -63,9 +68,11 @@ def copy(source_root, into):
             shutil.copy2(source, into / name)
 
 
-def patch(release, scratch):
-    copy(release, Path(scratch) / "upstream")
-    copy(FORK, Path(scratch) / "fork")
+def patch(crates, version, scratch):
+    for crate in crates:
+        release = unpack(crate, version or fork_version(crate), scratch)
+        copy(release, Path(scratch) / "upstream" / crate)
+        copy(fork_dir(crate), Path(scratch) / "fork" / crate)
     result = subprocess.run(
         ["git", "diff", "--no-index", "--no-prefix", "upstream", "fork"],
         cwd=scratch,
@@ -101,10 +108,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stat", action="store_true", help="print a per-file summary")
     parser.add_argument("--version", help="upstream release to compare (default: the fork's)")
+    parser.add_argument("--crate", choices=CRATES, help="compare one forked crate (default: all)")
     args = parser.parse_args()
-    version = args.version or fork_version()
+    crates = (args.crate,) if args.crate else CRATES
     with tempfile.TemporaryDirectory() as scratch:
-        text = patch(unpack(version, scratch), scratch)
+        text = patch(crates, args.version, scratch)
     if args.stat:
         stat(text)
     else:

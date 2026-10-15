@@ -1,5 +1,5 @@
 use boa_ast::{
-    declaration::Binding,
+    declaration::{Binding, LexicalDeclaration},
     operations::bound_names,
     scope::BindingLocatorError,
     statement::{
@@ -16,6 +16,25 @@ use crate::{
 
 impl ByteCompiler<'_> {
     pub(crate) fn compile_for_loop(
+        &mut self,
+        for_loop: &ForLoop,
+        label: Option<Sym>,
+        use_expr: bool,
+    ) {
+        if let Some(ForLoopInitializer::Lexical(decl)) = for_loop.init()
+            && let LexicalDeclaration::Using(_) | LexicalDeclaration::AwaitUsing(_) =
+                decl.declaration()
+        {
+            let is_async = matches!(decl.declaration(), LexicalDeclaration::AwaitUsing(_));
+            self.compile_dispose_scope(is_async, use_expr, |compiler| {
+                compiler.compile_for_loop_statement(for_loop, label, use_expr);
+            });
+        } else {
+            self.compile_for_loop_statement(for_loop, label, use_expr);
+        }
+    }
+
+    fn compile_for_loop_statement(
         &mut self,
         for_loop: &ForLoop,
         label: Option<Sym>,
@@ -227,7 +246,9 @@ impl ByteCompiler<'_> {
                     }
                 },
                 IterableLoopInitializer::Let(declaration)
-                | IterableLoopInitializer::Const(declaration) => match declaration {
+                | IterableLoopInitializer::Const(declaration)
+                | IterableLoopInitializer::Using(declaration)
+                | IterableLoopInitializer::AwaitUsing(declaration) => match declaration {
                     Binding::Identifier(ident) => {
                         let ident = ident.to_js_string(self.interner());
                         self.emit_binding(BindingOpcode::InitLexical, ident, &value);
@@ -367,6 +388,30 @@ impl ByteCompiler<'_> {
                         }
                     }
                 }
+                IterableLoopInitializer::Using(declaration)
+                | IterableLoopInitializer::AwaitUsing(declaration) => {
+                    let is_async = matches!(
+                        for_of_loop.initializer(),
+                        IterableLoopInitializer::AwaitUsing(_)
+                    );
+                    self.compile_dispose_scope(is_async, use_expr, |compiler| {
+                        compiler.emit_add_disposable_resource(&value, is_async);
+                        match declaration {
+                            Binding::Identifier(ident) => {
+                                let ident = ident.to_js_string(compiler.interner());
+                                compiler.emit_binding(BindingOpcode::InitLexical, ident, &value);
+                            }
+                            Binding::Pattern(pattern) => {
+                                compiler.compile_declaration_pattern(
+                                    pattern,
+                                    BindingOpcode::InitLexical,
+                                    &value,
+                                );
+                            }
+                        }
+                        compiler.compile_stmt(for_of_loop.body(), use_expr, true);
+                    });
+                }
                 IterableLoopInitializer::Let(declaration)
                 | IterableLoopInitializer::Const(declaration) => match declaration {
                     Binding::Identifier(ident) => {
@@ -390,7 +435,12 @@ impl ByteCompiler<'_> {
             handler_index
         };
 
-        self.compile_stmt(for_of_loop.body(), use_expr, true);
+        if !matches!(
+            for_of_loop.initializer(),
+            IterableLoopInitializer::Using(_) | IterableLoopInitializer::AwaitUsing(_)
+        ) {
+            self.compile_stmt(for_of_loop.body(), use_expr, true);
+        }
 
         {
             let exit = self.jump();

@@ -33,6 +33,7 @@ mod control_flow;
 mod copy;
 mod define;
 mod delete;
+mod dispose;
 mod environment;
 mod function;
 mod generator;
@@ -71,6 +72,8 @@ pub(crate) use copy::*;
 pub(crate) use define::*;
 #[doc(inline)]
 pub(crate) use delete::*;
+#[doc(inline)]
+pub(crate) use dispose::*;
 #[doc(inline)]
 pub(crate) use environment::*;
 #[doc(inline)]
@@ -2152,16 +2155,47 @@ generate_opcodes! {
     ///   - Output: dst
     CreateUnmappedArgumentsObject { dst: RegisterOperand },
 
-    /// Reserved [`Opcode`].
-    Reserved1 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved2 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved3 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved4 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved5 => Reserved,
+    /// Create an empty dispose capability.
+    ///
+    /// - Registers:
+    ///   - Output: dst
+    CreateDisposeCapability { dst: RegisterOperand },
+
+    /// Add the value of a `using` declaration to a dispose capability; `hint` is 1 for
+    /// `await using`.
+    ///
+    /// - Registers:
+    ///   - Input: capability, value
+    AddDisposableResource { capability: RegisterOperand, value: RegisterOperand, hint: IndexOperand },
+
+    /// Dispose the resources of a capability, folding errors into the completion held in
+    /// `has_error` and `error`.
+    ///
+    /// - Registers:
+    ///   - Input: capability, has_error, error
+    ///   - Output: has_error, error
+    DisposeResources { capability: RegisterOperand, has_error: RegisterOperand, error: RegisterOperand },
+
+    /// Take one step of an asynchronous `DisposeResources`: store the next value to await in
+    /// `value`, or `true` in `done`.
+    ///
+    /// - Registers:
+    ///   - Input: capability, has_error, error
+    ///   - Output: has_error, error, value, done
+    AsyncDisposeStep {
+        capability: RegisterOperand,
+        has_error: RegisterOperand,
+        error: RegisterOperand,
+        value: RegisterOperand,
+        done: RegisterOperand
+    },
+
+    /// Fold `new_error` into the completion held in `has_error` and `error`.
+    ///
+    /// - Registers:
+    ///   - Input: has_error, error, new_error
+    ///   - Output: has_error, error
+    AddDisposeError { has_error: RegisterOperand, error: RegisterOperand, new_error: RegisterOperand },
     /// Reserved [`Opcode`].
     Reserved6 => Reserved,
     /// Reserved [`Opcode`].

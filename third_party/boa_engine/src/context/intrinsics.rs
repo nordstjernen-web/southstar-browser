@@ -146,6 +146,9 @@ pub struct StandardConstructors {
     eval_error: StandardConstructor,
     uri_error: StandardConstructor,
     aggregate_error: StandardConstructor,
+    suppressed_error: StandardConstructor,
+    disposable_stack: StandardConstructor,
+    async_disposable_stack: StandardConstructor,
     map: StandardConstructor,
     set: StandardConstructor,
     typed_array: StandardConstructor,
@@ -242,6 +245,9 @@ impl Default for StandardConstructors {
             eval_error: StandardConstructor::default(),
             uri_error: StandardConstructor::default(),
             aggregate_error: StandardConstructor::default(),
+            suppressed_error: StandardConstructor::default(),
+            disposable_stack: StandardConstructor::default(),
+            async_disposable_stack: StandardConstructor::default(),
             map: StandardConstructor::default(),
             set: StandardConstructor::default(),
             typed_array: StandardConstructor::default(),
@@ -567,6 +573,27 @@ impl StandardConstructors {
     #[must_use]
     pub const fn aggregate_error(&self) -> &StandardConstructor {
         &self.aggregate_error
+    }
+
+    /// Returns the `SuppressedError` constructor.
+    #[inline]
+    #[must_use]
+    pub const fn suppressed_error(&self) -> &StandardConstructor {
+        &self.suppressed_error
+    }
+
+    /// Returns the `DisposableStack` constructor.
+    #[inline]
+    #[must_use]
+    pub const fn disposable_stack(&self) -> &StandardConstructor {
+        &self.disposable_stack
+    }
+
+    /// Returns the `AsyncDisposableStack` constructor.
+    #[inline]
+    #[must_use]
+    pub const fn async_disposable_stack(&self) -> &StandardConstructor {
+        &self.async_disposable_stack
     }
 
     /// Returns the `Map` constructor.

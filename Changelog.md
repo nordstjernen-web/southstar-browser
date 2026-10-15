@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Scripts can use explicit resource management: using and await using
+  declarations dispose their values when the block, function, module or
+  loop iteration ends, however it ends, and DisposableStack,
+  AsyncDisposableStack and SuppressedError are available. using remains an
+  ordinary identifier unless a binding name follows it on the same line.
+  boa_parser and boa_ast are now forked in third_party too, since Boa 0.22
+  could not parse these declarations in loop heads. test262 reaches 50,152
+  of 52,133 (96.2%).
 * ArrayBuffers can be made immutable (the immutable ArrayBuffer proposal):
   transferToImmutable() and sliceToImmutable() create one and the immutable
   getter reports it; writes through typed arrays, DataView and Atomics throw

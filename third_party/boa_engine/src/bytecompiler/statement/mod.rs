@@ -10,6 +10,7 @@ mod labelled;
 mod r#loop;
 mod switch;
 mod r#try;
+mod using;
 mod with;
 
 impl ByteCompiler<'_> {

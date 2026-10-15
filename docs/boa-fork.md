@@ -1,11 +1,18 @@
 # The Boa fork
 
 Southstar's JavaScript engine is [Boa](https://github.com/boa-dev/boa).
-`third_party/boa_engine` is a copy of the **boa_engine 0.22.0** crate from
-crates.io (sha256 `5d6aaf7fdc4299df68adb67e1a5440a51d34630a1f5271b9698fd74bc97b60d9`,
-the registry's checksum) with a small set of embedder hooks added, patched
-into the build through `[patch.crates-io]` in `Cargo.toml`. Only
-`boa_engine` is forked: `boa_gc`, `boa_parser`, `boa_ast`, `boa_interner`,
+Three of its crates are forked into `third_party/`, each a copy of the
+**0.22.0** release from crates.io patched into the build through
+`[patch.crates-io]` in `Cargo.toml`:
+
+| Crate | crates.io sha256 |
+| --- | --- |
+| `boa_engine` | `5d6aaf7fdc4299df68adb67e1a5440a51d34630a1f5271b9698fd74bc97b60d9` |
+| `boa_parser` | `641e81b3c8cbb7a2140547fb3ea534e9edf210b4e8c920b5fa864a919e11fbcf` |
+| `boa_ast` | `9221b0a090572b4a118b46c5874c0781fe4bc9546b85f0a615b8bfb609ca4ed7` |
+
+`boa_engine` carries a small set of embedder hooks; the parser and the AST
+were forked for syntax that 0.22 does not parse. `boa_gc`, `boa_interner`,
 `boa_string` and the other Boa crates come unchanged from crates.io at the
 same version, and `rust/js-engine` is the only crate that depends on Boa.
 
@@ -22,10 +29,11 @@ python3 scripts/boa-fork-diff.py --stat   # per-file summary
 python3 scripts/boa-fork-diff.py          # the whole patch
 ```
 
-The script downloads the release the fork's `Cargo.toml` names, checks it
-against the crates.io index checksum and diffs `src/` and `Cargo.toml`. On
-2026-10-15 the difference is 2,840 added and 205 removed lines in 28 files;
-137 of the removed lines are the `Cargo.toml` trim below.
+The script downloads the releases the forks' `Cargo.toml` files name, checks
+them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
+of each (`--crate boa_parser` limits it to one). On
+2026-10-15 the difference is 4,821 added and 385 removed lines in 64 files;
+148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
 
@@ -40,7 +48,7 @@ against the crates.io index checksum and diffs `src/` and `Cargo.toml`. On
 | `JsObject::get_function_realm` made `pub` | `object/operations.rs` | `Scope::function_handle`: the realm a callback is re-entered in | yes, trivially |
 | The legacy `Date.parse` fallback: month and weekday names, `/`, `-`, `,` and space separated dates, 12/24-hour times, zone names and offsets; ISO fractions past milliseconds ignored | `builtins/date/utils.rs` | `Date.parse(String(new Date()))` and the other strings every browser accepts | yes: the format is implementation-defined, and every other engine accepts these |
 | `JsObject::{identity, from_identity, retain_identity, release_identity}`: a `JsObject` as a raw pointer and back | `object/jsobject.rs` | the internal C ABI's opaque object handles (canvas, js-runtime wrappers) | no: scaffolding of the C port, removed as that ABI goes; the arena DOM and GC-traced bindings replace it |
-| `Cargo.toml`: no `cdylib` crate type; the tests, benches, dev-dependencies and lint tables of files the crate does not ship are dropped | `Cargo.toml` | building as an rlib inside the workspace | no |
+| `Cargo.toml`: no `cdylib` crate type; the tests, benches, dev-dependencies and lint tables of files the crate does not ship are dropped (in `boa_parser` and `boa_ast` too) | `Cargo.toml` | building as an rlib inside the workspace | no |
 
 ## Conformance work
 
@@ -52,6 +60,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | `Iterator.prototype.chunks`/`windows` (iterator chunking), `Iterator.zip`/`zipKeyed` (joint iteration), `Iterator.prototype.join`, `Iterator.prototype[Symbol.dispose]`; `take`/`drop` reject limits above 2^53 - 1, `includes` validates `skippedElements` without coercion, and `return()` on a helper that never started marks it completed before closing what it wraps | `builtins/iterable/iterator_prototype.rs`, `builtins/iterable/iterator_constructor.rs`, `builtins/iterable/iterator_helper/{chunks,zip,mod}.rs` | `built-ins/Iterator` |
 | `Uint8Array.fromBase64`/`fromHex` and `Uint8Array.prototype.toBase64`/`toHex`/`setFromBase64`/`setFromHex` (ES2026) | `builtins/typed_array/base64.rs`, `builtins/typed_array/mod.rs` | `built-ins/Uint8Array` |
 | Immutable ArrayBuffers: `ArrayBuffer.prototype.immutable`, `transferToImmutable`, `sliceToImmutable`; typed arrays, `DataView`, `Atomics` and the `Uint8Array` setters refuse to write to them, their elements read as non-writable and non-configurable, and they cannot be detached, transferred or resized | `builtins/array_buffer/mod.rs`, `builtins/typed_array/{object,builtin,base64}.rs`, `builtins/dataview/mod.rs`, `builtins/atomics/mod.rs` | `built-ins/ArrayBuffer`, `built-ins/TypedArray`, `built-ins/DataView` |
+| Explicit resource management: `using` and `await using` declarations in blocks, function and module bodies and `for`/`for-of` heads (`using` stays an ordinary identifier unless a binding name follows on the same line), disposed at scope exit by a `try`/`finally`-shaped scope and five opcodes (`CreateDisposeCapability`, `AddDisposableResource`, `DisposeResources`, `AsyncDisposeStep`, `AddDisposeError`); `DisposableStack`, `AsyncDisposableStack`, `SuppressedError` and `%AsyncIteratorPrototype%[Symbol.asyncDispose]` | `boa_parser`: `statement/{mod,declaration/*,iteration/for_statement,switch/mod}.rs`, `expression/**`, `parser/mod.rs`; `boa_ast`: `statement/iteration/mod.rs`, `scope_analyzer.rs`, `operations/mod.rs`, `declaration/variable.rs`; `boa_engine`: `builtins/disposable_stack/mod.rs`, `builtins/error/suppressed.rs`, `bytecompiler/statement/{using,loop}.rs`, `bytecompiler/{mod,module}.rs`, `vm/opcode/dispose/mod.rs` | `language/statements/using`, `language/statements/await-using`, `built-ins/DisposableStack`, `built-ins/AsyncDisposableStack`, `built-ins/SuppressedError` |
 
 ## Rules for changing the fork
 
@@ -68,13 +77,13 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 ## Taking an upstream release
 
 1. `python3 scripts/boa-fork-diff.py > boa.patch` on the current fork.
-2. Unpack the new `boa_engine` release over `third_party/boa_engine`
-   (`src/`, `Cargo.toml`, `README.md`, `ABOUT.md`) and apply `boa.patch`
-   with `patch -p1 -d third_party/boa_engine`, fixing hunks that no longer
-   apply. Drop the rows of the table that upstream has since taken.
+2. Unpack each new release (`boa_engine`, `boa_parser`, `boa_ast`) over its
+   directory in `third_party/` (`src/`, `Cargo.toml`, `ABOUT.md`) and apply
+   `boa.patch` with `patch -p1 -d third_party`, fixing hunks that no longer
+   apply. Drop the rows of the tables that upstream has since taken.
 3. Bump the other `boa_*` crates in `Cargo.lock` to the same version
-   (`cargo update -p boa_gc -p boa_parser …`), update the version and
-   checksum at the top of this page, and run `cargo vet` for the new
+   (`cargo update -p boa_gc -p boa_interner …`), update the versions and
+   checksums at the top of this page, and run `cargo vet` for the new
    crate versions.
 4. Run `scripts/rust-tests.sh`, test262 through `southstar-jsshell`
    (`rust/jsshell`) and a browser smoke test before committing.

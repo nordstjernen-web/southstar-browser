@@ -7,8 +7,26 @@ impl ByteCompiler<'_> {
     /// Compiles a [`ModuleItemList`].
     #[inline]
     pub fn compile_module_item_list(&mut self, list: &ModuleItemList) {
-        for node in list.items() {
-            self.compile_module_item(node);
+        let using = list
+            .items()
+            .iter()
+            .filter_map(|item| match item {
+                ModuleItem::StatementListItem(item) => {
+                    boa_ast::operations::using_declarations(std::slice::from_ref(item))
+                }
+                _ => None,
+            })
+            .reduce(|a, b| a || b);
+        if let Some(is_async) = using {
+            self.compile_dispose_scope(is_async, false, |compiler| {
+                for node in list.items() {
+                    compiler.compile_module_item(node);
+                }
+            });
+        } else {
+            for node in list.items() {
+                self.compile_module_item(node);
+            }
         }
     }
 

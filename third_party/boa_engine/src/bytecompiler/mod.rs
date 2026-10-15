@@ -543,6 +543,10 @@ pub struct ByteCompiler<'ctx> {
 
     jump_info: Vec<JumpControlInfo>,
 
+    /// The registers holding the dispose capabilities of the enclosing dispose scopes,
+    /// innermost last.
+    pub(crate) dispose_capabilities: Vec<u32>,
+
     /// Used to handle exception throws that escape the async function types.
     ///
     /// Async functions and async generator functions, need to be closed and resolved.
@@ -669,6 +673,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             bindings_map: FxHashMap::default(),
             const_binding_cache: FxHashMap::default(),
             jump_info: Vec::new(),
+            dispose_capabilities: Vec::new(),
             async_handler: None,
             json_parse,
             variable_scope,
@@ -1708,6 +1713,16 @@ impl<'ctx> ByteCompiler<'ctx> {
 
     /// Compile a [`StatementList`].
     pub fn compile_statement_list(&mut self, list: &StatementList, use_expr: bool, block: bool) {
+        if let Some(is_async) = boa_ast::operations::using_declarations(list.statements()) {
+            self.compile_dispose_scope(is_async, use_expr, |compiler| {
+                compiler.compile_statement_list_items(list, use_expr, block);
+            });
+        } else {
+            self.compile_statement_list_items(list, use_expr, block);
+        }
+    }
+
+    fn compile_statement_list_items(&mut self, list: &StatementList, use_expr: bool, block: bool) {
         if use_expr || self.jump_control_info_has_use_expr() {
             let mut use_expr_index = 0;
             for (i, statement) in list.statements().iter().enumerate() {
@@ -2295,91 +2310,8 @@ impl<'ctx> ByteCompiler<'ctx> {
                     }
                 }
             }
-            LexicalDeclaration::Using(decls) => {
-                // For each using declaration, we need to:
-                // 1. Evaluate the initializer
-                // 2. Add the resource to the disposal stack
-                // 3. Bind the variable
-                for variable in decls.as_ref() {
-                    match variable.binding() {
-                        Binding::Identifier(ident) => {
-                            let ident = ident.to_js_string(self.interner());
-                            let value = self.register_allocator.alloc();
-
-                            if let Some(init) = variable.init() {
-                                self.compile_expr(init, &value);
-                            } else {
-                                self.bytecode.emit_store_undefined(value.variable());
-                            }
-
-                            // TODO(@abhinavs1920): Add resource to disposal stack
-                            // For now, we just bind the variable like a let declaration
-                            // Full implementation will add: AddDisposableResource opcode
-
-                            self.emit_binding(BindingOpcode::InitLexical, ident, &value);
-                            self.register_allocator.dealloc(value);
-                        }
-                        Binding::Pattern(pattern) => {
-                            let value = self.register_allocator.alloc();
-
-                            if let Some(init) = variable.init() {
-                                self.compile_expr(init, &value);
-                            } else {
-                                self.bytecode.emit_store_undefined(value.variable());
-                            }
-
-                            // TODO: Same as above
-
-                            self.compile_declaration_pattern(
-                                pattern,
-                                BindingOpcode::InitLexical,
-                                &value,
-                            );
-                            self.register_allocator.dealloc(value);
-                        }
-                    }
-                }
-            }
-            LexicalDeclaration::AwaitUsing(decls) => {
-                for variable in decls.as_ref() {
-                    match variable.binding() {
-                        Binding::Identifier(ident) => {
-                            let ident = ident.to_js_string(self.interner());
-                            let value = self.register_allocator.alloc();
-
-                            if let Some(init) = variable.init() {
-                                self.compile_expr(init, &value);
-                            } else {
-                                self.bytecode.emit_store_undefined(value.variable());
-                            }
-
-                            // TODO: Add resource to async disposal stack
-                            // For now, we just bind the variable like a let declaration
-                            // Full implementation will add: AddAsyncDisposableResource opcode
-
-                            self.emit_binding(BindingOpcode::InitLexical, ident, &value);
-                            self.register_allocator.dealloc(value);
-                        }
-                        Binding::Pattern(pattern) => {
-                            let value = self.register_allocator.alloc();
-
-                            if let Some(init) = variable.init() {
-                                self.compile_expr(init, &value);
-                            } else {
-                                self.bytecode.emit_store_undefined(value.variable());
-                            }
-
-                            // TODO: SAME
-                            self.compile_declaration_pattern(
-                                pattern,
-                                BindingOpcode::InitLexical,
-                                &value,
-                            );
-                            self.register_allocator.dealloc(value);
-                        }
-                    }
-                }
-            }
+            LexicalDeclaration::Using(decls) => self.compile_using_declaration(decls, false),
+            LexicalDeclaration::AwaitUsing(decls) => self.compile_using_declaration(decls, true),
         }
     }
 

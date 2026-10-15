@@ -193,6 +193,11 @@ impl IntrinsicObject for AsyncIterator {
     fn init(realm: &Realm) {
         BuiltInBuilder::with_intrinsic::<Self>(realm)
             .static_method(|v, _, _| Ok(v.clone()), JsSymbol::async_iterator(), 0)
+            .static_method(
+                crate::builtins::disposable_stack::async_iterator_dispose,
+                JsSymbol::async_dispose(),
+                0,
+            )
             .build();
     }
 

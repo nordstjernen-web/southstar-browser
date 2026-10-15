@@ -875,12 +875,32 @@ impl CodeBlock {
             | Instruction::PopPrivateEnvironment
             | Instruction::Generator
             | Instruction::AsyncGenerator => String::new(),
-            Instruction::Reserved1
-            | Instruction::Reserved2
-            | Instruction::Reserved3
-            | Instruction::Reserved4
-            | Instruction::Reserved5
-            | Instruction::Reserved6
+            Instruction::CreateDisposeCapability { dst } => format!("dst:{dst}"),
+            Instruction::AddDisposableResource {
+                capability,
+                value,
+                hint,
+            } => format!("capability:{capability}, value:{value}, hint:{hint}"),
+            Instruction::DisposeResources {
+                capability,
+                has_error,
+                error,
+            } => format!("capability:{capability}, has_error:{has_error}, error:{error}"),
+            Instruction::AsyncDisposeStep {
+                capability,
+                has_error,
+                error,
+                value,
+                done,
+            } => format!(
+                "capability:{capability}, has_error:{has_error}, error:{error}, value:{value}, done:{done}"
+            ),
+            Instruction::AddDisposeError {
+                has_error,
+                error,
+                new_error,
+            } => format!("has_error:{has_error}, error:{error}, new_error:{new_error}"),
+            Instruction::Reserved6
             | Instruction::Reserved7
             | Instruction::Reserved8
             | Instruction::Reserved9
