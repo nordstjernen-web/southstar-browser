@@ -7,6 +7,8 @@ mod data;
 mod locales;
 mod pattern;
 mod temporal;
+#[cfg(test)]
+mod tests;
 mod zone;
 
 use std::cell::{OnceCell, RefCell};
