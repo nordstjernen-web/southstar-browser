@@ -67,7 +67,12 @@ where
         let (name, name_span) = match token.kind() {
             TokenKind::IdentifierName(_)
             | TokenKind::Keyword((
-                Keyword::Yield | Keyword::Await | Keyword::Async | Keyword::Of | Keyword::Using,
+                Keyword::Yield
+                | Keyword::Await
+                | Keyword::Async
+                | Keyword::Of
+                | Keyword::Using
+                | Keyword::Let,
                 _,
             )) => {
                 let span = token.span();
