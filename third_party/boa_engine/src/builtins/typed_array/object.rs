@@ -9,8 +9,9 @@ use crate::{
         JsData, JsObject,
         internal_methods::{
             InternalMethodPropertyContext, InternalObjectMethods, ORDINARY_INTERNAL_METHODS,
-            ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
-            ordinary_has_property, ordinary_prevent_extensions, ordinary_set, ordinary_try_get,
+            is_compatible_property_descriptor, ordinary_define_own_property, ordinary_delete,
+            ordinary_get, ordinary_get_own_property, ordinary_has_property,
+            ordinary_prevent_extensions, ordinary_set, ordinary_try_get,
         },
     },
     property::{PropertyDescriptor, PropertyKey},
@@ -70,6 +71,11 @@ impl TypedArray {
             byte_length,
             array_length,
         }
+    }
+
+    /// `IsImmutableBuffer ( O.[[ViewedArrayBuffer]] )`
+    pub(crate) fn is_immutable(&self) -> bool {
+        self.viewed_array_buffer.is_immutable()
     }
 
     /// Returns `true` if the typed array has an automatic array length.
@@ -196,6 +202,18 @@ impl TypedArray {
     ///
     /// [spec]: https://tc39.es/ecma262/sec-validatetypedarray
     pub(crate) fn validate(this: &JsValue, order: Ordering) -> JsResult<(JsObject<Self>, usize)> {
+        Self::validate_access(this, order, false)
+    }
+
+    /// Abstract operation [`ValidateTypedArray ( O, order, accessMode )`][spec], with `write`
+    /// rejecting typed arrays backed by an immutable `ArrayBuffer`.
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-validatetypedarray
+    pub(crate) fn validate_access(
+        this: &JsValue,
+        order: Ordering,
+        write: bool,
+    ) -> JsResult<(JsObject<Self>, usize)> {
         // 1. Perform ? RequireInternalSlot(O, [[TypedArrayName]]).
         let obj = this
             .as_object()
@@ -203,6 +221,13 @@ impl TypedArray {
             .ok_or_else(|| {
                 JsNativeError::typ().with_message("`this` is not a typed array object")
             })?;
+
+        // If accessMode is write and IsImmutableBuffer(O.[[ViewedArrayBuffer]]) is true, throw a TypeError exception.
+        if write && obj.borrow().data().is_immutable() {
+            return Err(JsNativeError::typ()
+                .with_message("typed array is backed by an immutable ArrayBuffer")
+                .into());
+        }
 
         let len = {
             let array = obj.borrow();
@@ -352,6 +377,12 @@ fn canonical_numeric_index_string(argument: &JsString) -> Option<f64> {
     None
 }
 
+/// Returns `true` if `obj` is a `TypedArray` viewing an immutable `ArrayBuffer`.
+fn is_immutable_typed_array(obj: &JsObject) -> bool {
+    obj.downcast_ref::<TypedArray>()
+        .is_some_and(|ta| ta.is_immutable())
+}
+
 /// `[[GetOwnProperty]]` internal method for `TypedArray` exotic objects.
 ///
 /// More information:
@@ -379,13 +410,16 @@ pub(crate) fn typed_array_exotic_get_own_property(
         let value = typed_array_get_element(obj, numeric_index)?;
 
         // ii. If value is undefined, return undefined.
-        // iii. Return the PropertyDescriptor { [[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true }.
+        // iii. Let mutable be true.
+        // iv. If IsImmutableBuffer(O.[[ViewedArrayBuffer]]) is true, set mutable to false.
+        // v. Return the PropertyDescriptor { [[Value]]: value, [[Writable]]: mutable, [[Enumerable]]: true, [[Configurable]]: mutable }.
+        let mutable = !is_immutable_typed_array(obj);
         return Ok(value.map(|v| {
             PropertyDescriptor::builder()
                 .value(v)
-                .writable(true)
+                .writable(mutable)
                 .enumerable(true)
-                .configurable(true)
+                .configurable(mutable)
                 .build()
         }));
     }
@@ -451,6 +485,16 @@ pub(crate) fn typed_array_exotic_define_own_property(
         // i. If IsValidIntegerIndex(O, numericIndex) is false, return false.
         if !is_valid_integer_index(obj, numeric_index)? {
             return Ok(false);
+        }
+
+        // If IsImmutableBuffer(O.[[ViewedArrayBuffer]]) is true, then
+        if is_immutable_typed_array(obj) {
+            // 1. Let current be ! O.[[GetOwnProperty]](P).
+            let current = typed_array_exotic_get_own_property(obj, key, context)?;
+            // 3. NOTE: Attempting to redefine an immutable value always fails, even if the
+            //    new value would be cast to the current value.
+            // 4. Return ValidateAndApplyPropertyDescriptor(O, P, false, Desc, current).
+            return Ok(is_compatible_property_descriptor(false, desc, current));
         }
 
         // ii. If Desc has a [[Configurable]] field and Desc.[[Configurable]] is false, return false.
@@ -579,6 +623,11 @@ pub(crate) fn typed_array_exotic_set(
     // 1. If P is a String, then
     // 1.b. If numericIndex is not undefined, then
     if let Some(numeric_index) = p {
+        // If IsImmutableBuffer(O.[[ViewedArrayBuffer]]) is true, return false.
+        if is_immutable_typed_array(obj) {
+            return Ok(false);
+        }
+
         // i. If SameValue(O, Receiver) is true, then
         if JsValue::same_value(&obj.clone().into(), &receiver) {
             // 1. Perform ? IntegerIndexedElementSet(O, numericIndex, V).

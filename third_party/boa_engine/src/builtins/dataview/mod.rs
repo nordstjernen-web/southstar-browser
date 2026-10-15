@@ -796,6 +796,13 @@ impl DataView {
             .and_then(JsObject::downcast_ref::<Self>)
             .ok_or_else(|| JsNativeError::typ().with_message("`this` is not a DataView"))?;
 
+        // If IsImmutableBuffer(view.[[ViewedArrayBuffer]]) is true, throw a TypeError exception.
+        if view.viewed_array_buffer.is_immutable() {
+            return Err(JsNativeError::typ()
+                .with_message("DataView is backed by an immutable ArrayBuffer")
+                .into());
+        }
+
         // 3. Let getIndex be ? ToIndex(requestIndex).
         let get_index = request_index.to_index(context)?;
 

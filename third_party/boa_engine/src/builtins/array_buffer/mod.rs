@@ -176,6 +176,14 @@ impl BufferObject {
         }
     }
 
+    /// `IsImmutableBuffer ( arrayBuffer )`
+    pub(crate) fn is_immutable(&self) -> bool {
+        match self {
+            Self::Buffer(buf) => buf.borrow().data().is_immutable(),
+            Self::SharedBuffer(_) => false,
+        }
+    }
+
     /// Returns `true` if the buffer objects point to the same buffer.
     #[inline]
     #[track_caller]
@@ -213,6 +221,9 @@ pub struct ArrayBuffer {
     /// Memory owned by the embedder that this buffer views instead of `data`.
     #[unsafe_ignore_trace]
     external: Option<ExternalBytes>,
+
+    /// Whether the buffer has an `[[ArrayBufferIsImmutable]]` internal slot.
+    immutable: bool,
 }
 
 /// A view of embedder-owned memory backing an `ArrayBuffer`.
@@ -229,6 +240,7 @@ impl ArrayBuffer {
             max_byte_len: None,
             detach_key,
             external: None,
+            immutable: false,
         }
     }
 
@@ -243,6 +255,7 @@ impl ArrayBuffer {
             max_byte_len: None,
             detach_key: JsValue::undefined(),
             external: Some(ExternalBytes { ptr, len }),
+            immutable: false,
         }
     }
 
@@ -351,6 +364,11 @@ impl ArrayBuffer {
     ///
     /// Throws an error if the provided detach key is invalid.
     pub fn detach(&mut self, key: &JsValue) -> JsResult<Option<AlignedVec<u8>>> {
+        if self.immutable {
+            return Err(JsNativeError::typ()
+                .with_message("Cannot detach an immutable array buffer")
+                .into());
+        }
         if !JsValue::same_value(&self.detach_key, key) {
             return Err(JsNativeError::typ()
                 .with_message("Cannot detach array buffer with different key")
@@ -375,6 +393,16 @@ impl ArrayBuffer {
 
     pub(crate) fn is_fixed_len(&self) -> bool {
         self.max_byte_len.is_none()
+    }
+
+    /// `IsImmutableBuffer ( arrayBuffer )`
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-isimmutablebuffer
+    pub(crate) const fn is_immutable(&self) -> bool {
+        self.immutable
     }
 }
 
@@ -403,6 +431,10 @@ impl IntrinsicObject for ArrayBuffer {
             .name(js_string!("get detached"))
             .build();
 
+        let get_immutable = BuiltInBuilder::callable(realm, Self::get_immutable)
+            .name(js_string!("get immutable"))
+            .build();
+
         let builder = BuiltInBuilder::from_standard_constructor::<Self>(realm)
             .static_accessor(
                 JsSymbol::species(),
@@ -429,8 +461,20 @@ impl IntrinsicObject for ArrayBuffer {
                 None,
                 flag_attributes,
             )
+            .accessor(
+                js_string!("immutable"),
+                Some(get_immutable),
+                None,
+                flag_attributes,
+            )
             .method(Self::js_resize, js_string!("resize"), 1)
             .method(Self::slice, js_string!("slice"), 2)
+            .method(Self::slice_to_immutable, js_string!("sliceToImmutable"), 2)
+            .method(
+                Self::transfer_to_immutable,
+                js_string!("transferToImmutable"),
+                0,
+            )
             .property(
                 JsSymbol::to_string_tag(),
                 Self::NAME,
@@ -465,7 +509,7 @@ impl BuiltInObject for ArrayBuffer {
 }
 
 impl BuiltInConstructor for ArrayBuffer {
-    const PROTOTYPE_STORAGE_SLOTS: usize = 13;
+    const PROTOTYPE_STORAGE_SLOTS: usize = 17;
     const CONSTRUCTOR_STORAGE_SLOTS: usize = 3;
     const CONSTRUCTOR_ARGUMENTS: usize = 1;
 
@@ -665,6 +709,12 @@ impl ArrayBuffer {
                     .with_message("ArrayBuffer.prototype.resize called with invalid `this`")
             })?;
 
+        if buf.borrow().data().is_fixed_len() {
+            return Err(JsNativeError::typ()
+                .with_message("ArrayBuffer.prototype.resize: cannot resize a fixed-length buffer")
+                .into());
+        }
+
         // 4. Let newByteLength be ? ToIndex(newLength).
         let new_byte_length = args.get_or_undefined(0).to_index(context)?;
 
@@ -752,6 +802,13 @@ impl ArrayBuffer {
                 .with_message("ArrayBuffer constructor returned invalid object")
                 .into());
         };
+
+        // If IsImmutableBuffer(new) is true, throw a TypeError exception.
+        if new.borrow().data().is_immutable() {
+            return Err(JsNativeError::typ()
+                .with_message("ArrayBuffer constructor returned an immutable ArrayBuffer")
+                .into());
+        }
 
         // 20. If SameValue(new, O) is true, throw a TypeError exception.
         if JsObject::equals(&buf, &new) {
@@ -846,6 +903,19 @@ impl ArrayBuffer {
         }
 
         // 5. If IsDetachedBuffer(arrayBuffer) is true, throw a TypeError exception.
+        if buf.borrow().data().is_detached() {
+            return Err(JsNativeError::typ()
+                .with_message("cannot transfer a detached buffer")
+                .into());
+        }
+
+        // If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError exception.
+        if buf.borrow().data().is_immutable() {
+            return Err(JsNativeError::typ()
+                .with_message("cannot transfer an immutable buffer")
+                .into());
+        }
+
         let Some(mut bytes) = buf.borrow_mut().data_mut().data.take() else {
             return Err(JsNativeError::typ()
                 .with_message("cannot transfer a detached buffer")
@@ -913,9 +983,198 @@ impl ArrayBuffer {
                 max_byte_len: new_max_len,
                 detach_key: JsValue::undefined(),
                 external: None,
+                immutable: false,
             },
         )
         .into())
+    }
+
+    /// [`get ArrayBuffer.prototype.immutable`][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-get-arraybuffer.prototype.immutable
+    fn get_immutable(this: &JsValue, _args: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. Perform ? RequireInternalSlot(O, [[ArrayBufferData]]).
+        // 3. If IsSharedArrayBuffer(O) is true, throw a TypeError exception.
+        let object = this.as_object();
+        let buf = object
+            .as_ref()
+            .and_then(JsObject::downcast_ref::<Self>)
+            .ok_or_else(|| {
+                JsNativeError::typ()
+                    .with_message("get ArrayBuffer.prototype.immutable called with invalid `this`")
+            })?;
+
+        // 4. Return IsImmutableBuffer(O).
+        Ok(buf.is_immutable().into())
+    }
+
+    /// `AllocateImmutableArrayBuffer ( constructor, byteLength, fromBlock, fromIndex, count )`
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-allocateimmutablearraybuffer
+    fn allocate_immutable(
+        byte_len: u64,
+        from_block: &[u8],
+        context: &mut Context,
+    ) -> JsResult<JsObject> {
+        // 3. Let newBuffer be ? AllocateArrayBuffer(constructor, byteLength, immutable).
+        let mut block = create_byte_data_block(byte_len, None, context)?;
+        // 4. Let toBlock be newBuffer.[[ArrayBufferData]].
+        // 6. Perform CopyDataBlockBytes(toBlock, 0, fromBlock, fromIndex, count).
+        block[..from_block.len()].copy_from_slice(from_block);
+        let prototype = context
+            .intrinsics()
+            .constructors()
+            .array_buffer()
+            .prototype();
+        // 7. Return newBuffer.
+        Ok(JsObject::from_proto_and_data_with_shared_shape(
+            context.root_shape(),
+            prototype,
+            ArrayBuffer {
+                data: Some(block),
+                max_byte_len: None,
+                detach_key: JsValue::undefined(),
+                external: None,
+                immutable: true,
+            },
+        )
+        .upcast())
+    }
+
+    /// [`ArrayBuffer.prototype.sliceToImmutable ( start, end )`][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-arraybuffer.prototype.slicetoimmutable
+    fn slice_to_immutable(
+        this: &JsValue,
+        args: &[JsValue],
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. Perform ? RequireInternalSlot(O, [[ArrayBufferData]]).
+        // 3. If IsSharedArrayBuffer(O) is true, throw a TypeError exception.
+        let buf = this
+            .as_object()
+            .and_then(|o| o.clone().downcast::<Self>().ok())
+            .ok_or_else(|| {
+                JsNativeError::typ().with_message(
+                    "ArrayBuffer.prototype.sliceToImmutable called with invalid `this`",
+                )
+            })?;
+
+        // 4. If IsDetachedBuffer(O) is true, throw a TypeError exception.
+        // 5. Let len be O.[[ArrayBufferByteLength]].
+        let len = {
+            let buf = buf.borrow();
+            if buf.data().is_detached() {
+                return Err(JsNativeError::typ()
+                    .with_message(
+                        "ArrayBuffer.prototype.sliceToImmutable called with detached buffer",
+                    )
+                    .into());
+            }
+            buf.data().len() as u64
+        };
+
+        // 6. Let bounds be ? ResolveBounds(len, start, end).
+        // 7. Let first be bounds.[[From]].
+        // 8. Let final be bounds.[[To]].
+        let first = Array::get_relative_start(context, args.get_or_undefined(0), len)?;
+        let final_ = Array::get_relative_end(context, args.get_or_undefined(1), len)?;
+
+        // 9. Let newLen be max(final - first, 0).
+        let new_len = final_.saturating_sub(first);
+
+        // 10. NOTE: Side-effects of the above steps may have detached or resized O.
+        // 11. If IsDetachedBuffer(O) is true, throw a TypeError exception.
+        // 12. Let fromBuf be O.[[ArrayBufferData]].
+        // 13. Let currentLen be O.[[ArrayBufferByteLength]].
+        let from = {
+            let buf = buf.borrow();
+            let Some(from_buf) = buf.data().bytes() else {
+                return Err(JsNativeError::typ()
+                    .with_message("ArrayBuffer detached while sliceToImmutable was running")
+                    .into());
+            };
+            // 14. If currentLen < final, throw a RangeError exception.
+            if (from_buf.len() as u64) < final_ {
+                return Err(JsNativeError::range()
+                    .with_message("ArrayBuffer shrank while sliceToImmutable was running")
+                    .into());
+            }
+            let first = first as usize;
+            from_buf[first..first + new_len as usize].to_vec()
+        };
+
+        // 15. Let newBuffer be ? AllocateImmutableArrayBuffer(%ArrayBuffer%, newLen, fromBuf, first, newLen).
+        // 16. Return newBuffer.
+        Ok(Self::allocate_immutable(new_len, &from, context)?.into())
+    }
+
+    /// [`ArrayBuffer.prototype.transferToImmutable ( [ newLength ] )`][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-immutable-arraybuffer/#sec-arraybuffer.prototype.transfertoimmutable
+    fn transfer_to_immutable(
+        this: &JsValue,
+        args: &[JsValue],
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        // 1. Let O be the this value.
+        // 2. Return ? ArrayBufferCopyAndDetach(O, newLength, immutable).
+        let buf = this
+            .as_object()
+            .and_then(|o| o.clone().downcast::<Self>().ok())
+            .ok_or_else(|| {
+                JsNativeError::typ().with_message(
+                    "ArrayBuffer.prototype.transferToImmutable called with invalid `this`",
+                )
+            })?;
+
+        // 3. If newLength is undefined, then
+        //    a. Let newByteLength be arrayBuffer.[[ArrayBufferByteLength]].
+        // 4. Else,
+        //    a. Let newByteLength be ? ToIndex(newLength).
+        let new_length = args.get_or_undefined(0);
+        let new_len = if new_length.is_undefined() {
+            buf.borrow().data().len() as u64
+        } else {
+            new_length.to_index(context)?
+        };
+
+        let copy = {
+            let data = buf.borrow();
+            let data = data.data();
+            // 5. If IsDetachedBuffer(arrayBuffer) is true, throw a TypeError exception.
+            let Some(bytes) = data.bytes() else {
+                return Err(JsNativeError::typ()
+                    .with_message("cannot transfer a detached buffer")
+                    .into());
+            };
+            // 6. If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError exception.
+            if data.is_immutable() {
+                return Err(JsNativeError::typ()
+                    .with_message("cannot transfer an immutable buffer")
+                    .into());
+            }
+            // 7. If arrayBuffer.[[ArrayBufferDetachKey]] is not undefined, throw a TypeError exception.
+            if !data.detach_key.is_undefined() || data.external.is_some() {
+                return Err(JsNativeError::typ()
+                    .with_message("cannot transfer a buffer with a detach key")
+                    .into());
+            }
+            // 8. Let copyLength be min(newByteLength, arrayBuffer.[[ArrayBufferByteLength]]).
+            let copy_len = (new_len as usize).min(bytes.len());
+            bytes[..copy_len].to_vec()
+        };
+
+        // 9. Let newBuffer be ? AllocateImmutableArrayBuffer(%ArrayBuffer%, newByteLength, arrayBuffer.[[ArrayBufferData]], 0, copyLength).
+        let new_buffer = Self::allocate_immutable(new_len, &copy, context)?;
+
+        // Perform ! DetachArrayBuffer(arrayBuffer).
+        buf.borrow_mut().data_mut().detach(&JsValue::undefined())?;
+
+        // Return newBuffer.
+        Ok(new_buffer.into())
     }
 
     /// `AllocateArrayBuffer ( constructor, byteLength )`
@@ -969,6 +1228,7 @@ impl ArrayBuffer {
                 max_byte_len,
                 detach_key: JsValue::undefined(),
                 external: None,
+                immutable: false,
             },
         );
 

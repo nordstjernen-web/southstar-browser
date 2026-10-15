@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* ArrayBuffers can be made immutable (the immutable ArrayBuffer proposal):
+  transferToImmutable() and sliceToImmutable() create one and the immutable
+  getter reports it; writes through typed arrays, DataView and Atomics throw
+  or fail, and an immutable buffer cannot be detached, transferred or
+  resized. Detaching a buffer that is already detached is no longer an
+  error. test262 reaches 49,813 of 52,133.
 * Uint8Array converts to and from base64 and hex (ES2026):
   Uint8Array.fromBase64() and fromHex(), toBase64() with the base64url
   alphabet and omitPadding, toHex(), and setFromBase64()/setFromHex() that

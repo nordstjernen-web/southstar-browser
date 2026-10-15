@@ -91,14 +91,20 @@ fn get_last_chunk_handling(
     }
 }
 
-/// `ValidateUint8Array ( ta )`
-fn validate_uint8_array(ta: &JsValue) -> JsResult<JsObject<TypedArray>> {
+/// `ValidateUint8Array ( ta [ , accessMode ] )`
+fn validate_uint8_array(ta: &JsValue, write: bool) -> JsResult<JsObject<TypedArray>> {
     // 1. Perform ? RequireInternalSlot(ta, [[TypedArrayName]]).
     // 2. If ta.[[TypedArrayName]] is not "Uint8Array", throw a TypeError exception.
-    ta.as_object()
+    let ta = ta
+        .as_object()
         .and_then(|o| o.downcast::<TypedArray>().ok())
         .filter(|ta| ta.borrow().data().kind() == TypedArrayKind::Uint8)
-        .ok_or_else(|| js_error!(TypeError: "`this` is not a Uint8Array"))
+        .ok_or_else(|| js_error!(TypeError: "`this` is not a Uint8Array"))?;
+    // 4. If accessMode is write and IsImmutableBuffer(ta.[[ViewedArrayBuffer]]) is true, throw a TypeError exception.
+    if write && ta.borrow().data().is_immutable() {
+        return Err(js_error!(TypeError: "Uint8Array is backed by an immutable ArrayBuffer"));
+    }
+    Ok(ta)
 }
 
 /// `GetUint8ArrayBytes ( ta )`
@@ -581,7 +587,7 @@ impl BuiltinTypedArray {
     ) -> JsResult<JsValue> {
         // 1. Let into be the this value.
         // 2. Perform ? ValidateUint8Array(into).
-        let into = validate_uint8_array(this)?;
+        let into = validate_uint8_array(this, true)?;
         // 3. If string is not a String, throw a TypeError exception.
         let string = string_argument(args.get_or_undefined(0))?;
         // 4. Let opts be ? GetOptionsObject(options).
@@ -617,7 +623,7 @@ impl BuiltinTypedArray {
     ) -> JsResult<JsValue> {
         // 1. Let into be the this value.
         // 2. Perform ? ValidateUint8Array(into).
-        let into = validate_uint8_array(this)?;
+        let into = validate_uint8_array(this, true)?;
         // 3. If string is not a String, throw a TypeError exception.
         let string = string_argument(args.get_or_undefined(0))?;
         // 4-6. Let byteLength be TypedArrayLength(taRecord).
@@ -647,7 +653,7 @@ impl BuiltinTypedArray {
     ) -> JsResult<JsValue> {
         // 1. Let O be the this value.
         // 2. Perform ? ValidateUint8Array(O).
-        let o = validate_uint8_array(this)?;
+        let o = validate_uint8_array(this, false)?;
         // 3. Let opts be ? GetOptionsObject(options).
         let options = get_options_object(args.get_or_undefined(0))?;
         // 4-6. Let alphabet be ? Get(opts, "alphabet") ...
@@ -688,7 +694,7 @@ impl BuiltinTypedArray {
     pub(crate) fn to_hex(this: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
         // 1. Let O be the this value.
         // 2. Perform ? ValidateUint8Array(O).
-        let o = validate_uint8_array(this)?;
+        let o = validate_uint8_array(this, false)?;
         // 3. Let toEncode be ? GetUint8ArrayBytes(O).
         let to_encode = get_uint8_array_bytes(&o)?;
         // 4. Let out be the empty String.

@@ -87,7 +87,7 @@ macro_rules! atomic_op {
             // <https://tc39.es/ecma262/#sec-atomicreadmodifywrite>
 
             // 1. Let buffer be ? ValidateIntegerTypedArray(typedArray).
-            let (ta, buf_len) = validate_integer_typed_array(array, false)?;
+            let (ta, buf_len) = validate_integer_typed_array(array, false, true)?;
 
             // 2. Let indexedPosition be ? ValidateAtomicAccess(typedArray, index).
             let access = validate_atomic_access(&ta, buf_len, index, context)?;
@@ -189,7 +189,7 @@ impl Atomics {
         let index = args.get_or_undefined(1);
 
         // 1. Let indexedPosition be ? ValidateAtomicAccessOnIntegerTypedArray(typedArray, index).
-        let (ta, buf_len) = validate_integer_typed_array(array, false)?;
+        let (ta, buf_len) = validate_integer_typed_array(array, false, false)?;
         let access = validate_atomic_access(&ta, buf_len, index, context)?;
 
         // 2. Perform ? RevalidateAtomicAccess(typedArray, indexedPosition).
@@ -222,7 +222,7 @@ impl Atomics {
         let value = args.get_or_undefined(2);
 
         // 1. Let indexedPosition be ? ValidateAtomicAccessOnIntegerTypedArray(typedArray, index).
-        let (ta, buf_len) = validate_integer_typed_array(array, false)?;
+        let (ta, buf_len) = validate_integer_typed_array(array, false, true)?;
         let access = validate_atomic_access(&ta, buf_len, index, context)?;
 
         // bit of a hack to preserve the converted value
@@ -276,7 +276,7 @@ impl Atomics {
         // 1. Let indexedPosition be ? ValidateAtomicAccessOnIntegerTypedArray(typedArray, index).
         // 2. Let buffer be typedArray.[[ViewedArrayBuffer]].
         // 3. Let block be buffer.[[ArrayBufferData]].
-        let (ta, buf_len) = validate_integer_typed_array(array, false)?;
+        let (ta, buf_len) = validate_integer_typed_array(array, false, true)?;
         let access = validate_atomic_access(&ta, buf_len, index, context)?;
 
         // 4. If typedArray.[[ContentType]] is bigint, then
@@ -413,7 +413,7 @@ impl Atomics {
         let timeout = args.get_or_undefined(3);
 
         // 1. Let taRecord be ? ValidateIntegerTypedArray(typedArray, true).
-        let (ta, buf_len) = validate_integer_typed_array(array, true)?;
+        let (ta, buf_len) = validate_integer_typed_array(array, true, false)?;
 
         // 2. Let buffer be taRecord.[[Object]].[[ViewedArrayBuffer]].
         // 3. If IsSharedArrayBuffer(buffer) is false, throw a TypeError exception.
@@ -536,7 +536,7 @@ impl Atomics {
         let count = args.get_or_undefined(2);
 
         // 1. Let indexedPosition be ? ValidateAtomicAccessOnIntegerTypedArray(typedArray, index, true).
-        let (ta, buf_len) = validate_integer_typed_array(array, true)?;
+        let (ta, buf_len) = validate_integer_typed_array(array, true, false)?;
         let access = validate_atomic_access(&ta, buf_len, index, context)?;
 
         // 2. If count is undefined, then
@@ -620,10 +620,11 @@ impl Atomics {
 fn validate_integer_typed_array(
     array: &JsValue,
     waitable: bool,
+    write: bool,
 ) -> JsResult<(JsObject<TypedArray>, usize)> {
-    // 1. Let taRecord be ? ValidateTypedArray(typedArray, unordered).
+    // 1. Let taRecord be ? ValidateTypedArray(typedArray, unordered, accessMode).
     // 2. NOTE: Bounds checking is not a synchronizing operation when typedArray's backing buffer is a growable SharedArrayBuffer.
-    let ta_record = TypedArray::validate(array, Ordering::Relaxed)?;
+    let ta_record = TypedArray::validate_access(array, Ordering::Relaxed, write)?;
 
     {
         let array = ta_record.0.borrow();

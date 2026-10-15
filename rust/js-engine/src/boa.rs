@@ -776,6 +776,7 @@ impl Scope<'_> {
             .as_object()
             .and_then(|object| JsArrayBuffer::from_object(object.clone()).ok());
         match buffer {
+            Some(buffer) if buffer.data().is_none() => Ok(()),
             Some(buffer) => buffer
                 .detach(&JsValue::undefined())
                 .map(|_| ())
