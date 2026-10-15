@@ -279,6 +279,12 @@ where
                     ForOfLoop::new(init, expr, body, r#await).into()
                 });
             }
+            (_, _) if r#await => {
+                return Err(Error::general(
+                    "`await` can only be used in a `for await .. of` loop",
+                    position,
+                ));
+            }
             (init, _) => init,
         };
 
