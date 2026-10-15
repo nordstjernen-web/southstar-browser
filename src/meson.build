@@ -145,6 +145,9 @@ libsouthstar_api_link_args = []
 if cc.has_link_argument('-Wl,--version-script=' + meson.current_source_dir() / 'exe-local.map')
   libsouthstar_api_link_args += ['-Wl,--version-script=' + libsouthstar_map.full_path()]
 endif
+if host_machine.system() == 'windows'
+  libsouthstar_api_link_args += ['-Wl,--allow-multiple-definition']
+endif
 
 libsouthstar_lib = library(
   'southstar',

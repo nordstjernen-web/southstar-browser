@@ -61,6 +61,8 @@ Southstar Browser 0.9.11-dev:
   ($+), leftContext ($`) and rightContext ($'), set by every successful
   match in the same window and cleared by a match through a RegExp
   subclass, as in other browsers.
+* libsouthstar.dll links again on Windows: the whole-archive link no longer
+  fails on the duplicate ProcessPrng import stubs std and getrandom carry.
 * Modules can defer evaluation (the import defer proposal):
   import defer * as ns from "m" loads and links m but runs it only when a
   property of ns is first read, and import.defer("m") does the same
