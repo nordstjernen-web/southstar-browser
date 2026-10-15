@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Absolutely positioned boxes found while laying out other absolutely
+  positioned boxes get their static position from the same batched pass
+  instead of a walk over their whole containing block each, so a relayout
+  of a page with hundreds of positioned pseudo-elements is up to 20%
+  faster.
 * getComputedStyle() no longer forces a layout and copies every custom
   property name to count them before anything is read: length is
   computed when it is read, and the declaration's methods are created

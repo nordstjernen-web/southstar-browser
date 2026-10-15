@@ -558,6 +558,29 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
     }
 }
 
+fn precompute_round(ctx: &mut Ctx<'_, '_>, from: usize, to: usize) {
+    let mut entries = Vec::new();
+    for i in from..to {
+        let Some(Some(e)) = ffi::pending_entry(i) else {
+            continue;
+        };
+        if static_run(e).is_some() {
+            continue;
+        }
+        let cb = match positioned_entry_cb_dom(e, ctx.styles) {
+            Some(d) => match ctx.map.get(d) {
+                Some(b) => Some(b),
+                None => continue,
+            },
+            None => None,
+        };
+        entries.push((i, e, cb));
+    }
+    let mut round = precompute(ctx.root, &entries, ctx.order, to);
+    ctx.batch.resize(to, None);
+    ctx.batch[from..to].swap_with_slice(&mut round[from..to]);
+}
+
 pub fn process_absolute_boxes(root: BoxRef<'_>, styles: StyleTable, viewport_width: f64) {
     let batch_len = ffi::pending_len();
     if batch_len == 0 {
@@ -573,34 +596,20 @@ pub fn process_absolute_boxes(root: BoxRef<'_>, styles: StyleTable, viewport_wid
     let order = NodeOrder::build(order_root);
     let mut map = BoxMap::default();
     map.add_tree(root);
-    let mut entries = Vec::new();
-    for i in 0..batch_len {
-        let Some(Some(e)) = ffi::pending_entry(i) else {
-            continue;
-        };
-        if static_run(e).is_some() {
-            continue;
-        }
-        let cb = match positioned_entry_cb_dom(e, styles) {
-            Some(d) => match map.get(d) {
-                Some(b) => Some(b),
-                None => continue,
-            },
-            None => None,
-        };
-        entries.push((i, e, cb));
-    }
-    let batch = precompute(root, &entries, &order, batch_len);
     let mut ctx = Ctx {
         root,
         styles,
         viewport_width,
         map,
         order: &order,
-        batch,
+        batch: Vec::new(),
     };
+    precompute_round(&mut ctx, 0, batch_len);
     let mut i = 0;
     while let Some(entry) = ffi::pending_entry(i) {
+        if i == ctx.batch.len() {
+            precompute_round(&mut ctx, i, ffi::pending_len());
+        }
         if let Some(e) = entry {
             place_entry(&mut ctx, i, e);
         }
