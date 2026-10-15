@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A headless run no longer ends early while a script is still loading:
+  the settle loop could run nested inside a blocking fetch, find nothing
+  else pending and quit before DOMContentLoaded, so Speedometer 3.1 runs
+  stopped before their first suite about a third of the time.
 * In classes, a method written "constructor"() { } with a quoted name is
   the constructor, super[key] evaluates the key before looking up the
   prototype it reads from, and delete super[key] evaluates the key

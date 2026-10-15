@@ -67,6 +67,10 @@ pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
     if now >= state.deadline_us {
         return true;
     }
+    if busy(b) {
+        state.quiet_ticks = 0;
+        return false;
+    }
     if let Some(images) = b.images() {
         images.tick(now);
     }
