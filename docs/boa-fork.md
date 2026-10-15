@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,645 added and 1,354 removed lines in 131 files;
+2026-10-15 the difference is 11,670 added and 1,357 removed lines in 131 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -91,6 +91,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Destructuring assignment targets: an element, property value or rest target that is not an object or array literal may be any simple assignment target, parenthesized or not (`[(a), (o.p)] = …`, `({ a: (b) } = …)`, `[...(x)]`, `({...(o.p)} = …)`, `super` properties too), and `eval` and `arguments` are rejected as such targets everywhere in strict code; computed and numeric property names take nested patterns and initializers (`({ [k]: [x] = [] } = …)`); an initializer is named after its target only when that target is an unparenthesized identifier (IsIdentifierRef); a parenthesized object or array literal is not a pattern in a `for-in`/`for-of` head | `boa_ast`: `expression/literal/{array,object}.rs`; `boa_parser`: `statement/iteration/for_statement.rs` | `staging/sm/expressions`, `staging/sm/destructuring` |
 | Binding patterns require a comma between elements: `var {async async: a} = {}` and `let [a b] = []` are syntax errors instead of two bindings | `boa_parser`: `statement/mod.rs` | `staging/sm/async-functions` |
 | `for await` takes only a `for-of` head: `for await (;;)` and `for await (x = 0;;)` are syntax errors like `for await (x in y)` | `boa_parser`: `statement/iteration/for_statement.rs` | `staging/sm/AsyncGenerators` |
+| `Function` and the generator and async function constructors parse the joined parameters and the body each as complete input, so neither string can end the source early (`new Function(") { var x = function (", "}")`, `Function("b = {a}}")`) | `boa_parser`: `parser/mod.rs` | `staging/sm/Function`, `staging/sm/class` |
 
 ## Rules for changing the fork
 
