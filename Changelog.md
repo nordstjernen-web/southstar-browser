@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Together, the Intl rewrites below take test262's intl402 from 2,416 to
+  3,364 of 3,382 (99.5%) and test262 as a whole to 51,838 of 52,133
+  (99.4%). The remaining intl402 failures are Temporal calendar cases in
+  the Boa fork and the legacy Intl constructor-as-function behaviour.
 * Intl.DateTimeFormat follows ECMA-402 closely: locale lists are validated
   and resolved with their ca, hc and nu keywords, options are read in the
   specified order, dateStyle and timeStyle work alongside hour cycles,
@@ -14,7 +18,7 @@ Southstar Browser 0.9.11-dev:
   tables for twenty languages instead of a fixed day/month/year order.
   Date.prototype.toLocale*String and the toLocaleString methods of the
   Temporal types format through it, and DateTimeFormat formats Temporal
-  objects directly. intl402 goes from 2,416 to 2,670 of 3,382.
+  objects directly.
 * Intl.NumberFormat, Intl.PluralRules and Number/BigInt toLocaleString now
   follow ECMA-402: exact decimal rounding of numbers, BigInts and decimal
   strings with every rounding mode, rounding increments and rounding
@@ -25,8 +29,7 @@ Southstar Browser 0.9.11-dev:
   (with en-IN grouping), German, French, Spanish, Japanese, Korean, Chinese
   and the other common languages as compact tables, and PluralRules knows
   CLDR's cardinal rules for about a hundred languages. test262's NumberFormat,
-  PluralRules and toLocaleString tests all pass (322 of 322, from 116), and
-  intl402 reaches 2,619 of 3,382 (77.4%).
+  PluralRules and toLocaleString tests all pass.
 * Intl.ListFormat, Intl.RelativeTimeFormat, Intl.DurationFormat,
   Intl.Segmenter and Intl.DisplayNames follow ECMA-402: they require new,
   read and validate their options in the specified order, negotiate locales
@@ -39,7 +42,6 @@ Southstar Browser 0.9.11-dev:
   ISO 8601 strings; Segmenter yields UTF-16-indexed grapheme, word and
   sentence segments with containing() and an iterator; DisplayNames names
   languages, regions, scripts, currencies, calendars and date fields.
-  test262's intl402 goes from 2,416 to 2,637 of 3,382.
 * Intl validates and canonicalizes locales as ECMA-402 and UTS #35 require
   (alias replacement, -u- and -t- extensions, likely subtags), from compact
   CLDR tables that scripts/gen-intl-cldr.py generates; resolvedOptions()
@@ -48,8 +50,7 @@ Southstar Browser 0.9.11-dev:
   (getCalendars, getHourCycles, getWeekInfo, getTimeZones, ...);
   Intl.Collator sorts with an in-tree multi-level collation instead of the
   C library's locale; toLocaleUpperCase/toLocaleLowerCase apply the
-  Turkish, Azeri and Lithuanian rules. intl402 goes from 2,416 to 2,674
-  of 3,382.
+  Turkish, Azeri and Lithuanian rules.
 * southstar-jsshell's module loader understands the import text and import
   bytes proposals: with { type: "text" } imports a file as a string and
   with { type: "bytes" } as a Uint8Array over an immutable ArrayBuffer.

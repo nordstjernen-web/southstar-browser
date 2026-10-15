@@ -307,7 +307,8 @@ impl Tag {
 }
 
 pub(crate) fn canonical_tag(text: &str) -> Option<Tag> {
-    let mut tag = parse(text)?;
+    let canonical = southstar_intl_core::tag::canonicalize_tag(text)?;
+    let mut tag = parse(&canonical)?;
     tag.canonicalize();
     Some(tag)
 }
