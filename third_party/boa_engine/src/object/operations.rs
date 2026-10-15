@@ -1285,20 +1285,28 @@ impl JsObject {
         constructor: &Self,
         context: &mut Context,
     ) -> JsResult<()> {
-        let constructor_function = constructor
-            .downcast_ref::<OrdinaryFunction>()
-            .js_expect("class constructor must be function object")?;
+        // The initializers run user code, which may write to the constructor, so it is not
+        // kept borrowed while they run.
+        let (methods, fields) = {
+            let constructor_function = constructor
+                .downcast_ref::<OrdinaryFunction>()
+                .js_expect("class constructor must be function object")?;
+            (
+                constructor_function.get_private_methods().to_vec(),
+                constructor_function.get_fields().to_vec(),
+            )
+        };
 
         // 1. Let methods be the value of constructor.[[PrivateMethods]].
         // 2. For each PrivateElement method of methods, do
-        for (name, method) in constructor_function.get_private_methods() {
+        for (name, method) in &methods {
             // a. Perform ? PrivateMethodOrAccessorAdd(O, method).
             self.private_method_or_accessor_add(name, method, context)?;
         }
 
         // 3. Let fields be the value of constructor.[[Fields]].
         // 4. For each element fieldRecord of fields, do
-        for field_record in constructor_function.get_fields() {
+        for field_record in &fields {
             // a. Perform ? DefineField(O, fieldRecord).
             self.define_field(field_record, context)?;
         }
