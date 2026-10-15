@@ -496,27 +496,33 @@ impl RegExp {
         let full_unicode =
             flags.contains(RegExpFlags::UNICODE) || flags.contains(RegExpFlags::UNICODE_SETS);
 
+        let code_points: Vec<u32> = p.code_points().map(CodePoint::as_u32).collect();
+        let code_points = prepare_pattern(
+            code_points,
+            full_unicode,
+            flags.contains(RegExpFlags::UNICODE_SETS),
+        );
+
         let matcher = if full_unicode {
             // Unicode mode (u/v flag) OR pattern has named groups:
             // compile as full Unicode codepoints.
-            Regex::from_unicode(p.code_points().map(CodePoint::as_u32), Flags::from(flags))
-                .map_err(|error| {
-                    JsNativeError::syntax()
-                        .with_message(format!("failed to create matcher: {}", error.text))
-                })?
+            Regex::from_unicode(code_points.into_iter(), Flags::from(flags)).map_err(|error| {
+                JsNativeError::syntax()
+                    .with_message(format!("failed to create matcher: {}", error.text))
+            })?
         } else {
             // Non-Unicode mode with no named groups:
             // compile as raw UTF-16 code units so that surrogate pairs
             // (e.g. 𠮷 = [0xD842, 0xDFB7]) are matched correctly by find_from_ucs2.
-            let utf16_units = p.code_points().flat_map(|cp| {
+            let utf16_units = code_points.into_iter().flat_map(|cp| {
                 let mut buf = [0u16; 2];
-                match cp {
-                    CodePoint::Unicode(c) => c
+                match char::from_u32(cp) {
+                    Some(c) => c
                         .encode_utf16(&mut buf)
                         .iter()
                         .map(|&u| u32::from(u))
                         .collect::<Vec<_>>(),
-                    CodePoint::UnpairedSurrogate(s) => vec![u32::from(s)],
+                    None => vec![cp],
                 }
             });
             Regex::from_unicode(utf16_units, Flags::from(flags)).map_err(|error| {
@@ -1425,6 +1431,11 @@ impl RegExp {
             // iii. Append s to groupNames.
             for (name, range) in named_groups {
                 let name = js_string!(name);
+                // Of several groups with the same name (in different alternatives) the one
+                // that participated in the match supplies the value.
+                if range.is_none() && !groups.get(name.clone(), context)?.is_undefined() {
+                    continue;
+                }
                 if let Some(range) = range {
                     let value = input.get_expect(range.clone());
 
@@ -2433,4 +2444,127 @@ fn advance_string_index(s: &JsString, index: u64, unicode: bool) -> u64 {
     let code_point = s.code_point_at(index as usize);
 
     index + code_point.code_unit_count() as u64
+}
+
+/// A capturing group name or a `\k<name>` backreference found in a pattern: the range of code
+/// points of the name, and the number of the group (zero for a backreference).
+struct PatternName {
+    start: usize,
+    end: usize,
+    group: usize,
+}
+
+/// Rewrites a pattern for `regress` where it lacks ECMAScript semantics:
+///
+/// - a backreference to a group name that several groups share (duplicate named groups, in
+///   different alternatives) becomes a sequence of numbered backreferences to all of them, since
+///   a backreference to a group that did not participate matches the empty string;
+/// - without the `u` or `v` flag, a supplementary code point written literally in a group name
+///   becomes a `\u{...}` escape, so the name survives the conversion to UTF-16 code units.
+fn prepare_pattern(pattern: Vec<u32>, full_unicode: bool, unicode_sets: bool) -> Vec<u32> {
+    const BACKSLASH: u32 = '\\' as u32;
+    let names = scan_pattern_names(&pattern, unicode_sets);
+    let groups_named = |name: &[u32]| -> Vec<usize> {
+        names
+            .iter()
+            .filter(|n| n.group != 0 && pattern[n.start..n.end] == *name)
+            .map(|n| n.group)
+            .collect()
+    };
+    let rewrite_backreference =
+        |n: &PatternName| n.group == 0 && groups_named(&pattern[n.start..n.end]).len() > 1;
+    let escape_name =
+        |n: &PatternName| !full_unicode && pattern[n.start..n.end].iter().any(|&c| c > 0xFFFF);
+    if !names
+        .iter()
+        .any(|n| rewrite_backreference(n) || escape_name(n))
+    {
+        return pattern;
+    }
+
+    let mut out = Vec::with_capacity(pattern.len() + 16);
+    let mut position = 0;
+    for name in &names {
+        if rewrite_backreference(name) {
+            // `\k<` precedes the name and `>` follows it.
+            out.extend_from_slice(&pattern[position..name.start - 3]);
+            out.extend("(?:".chars().map(u32::from));
+            for group in groups_named(&pattern[name.start..name.end]) {
+                out.push(BACKSLASH);
+                out.extend(group.to_string().chars().map(u32::from));
+            }
+            out.push(u32::from(')'));
+            position = name.end + 1;
+        } else if escape_name(name) {
+            out.extend_from_slice(&pattern[position..name.start]);
+            for &c in &pattern[name.start..name.end] {
+                if c > 0xFFFF {
+                    out.extend(format!("\\u{{{c:x}}}").chars().map(u32::from));
+                } else {
+                    out.push(c);
+                }
+            }
+            position = name.end;
+        }
+    }
+    out.extend_from_slice(&pattern[position..]);
+    out
+}
+
+/// Finds the capturing group names and the `\k<name>` backreferences of a pattern, numbering
+/// the capturing groups from the left.
+fn scan_pattern_names(pattern: &[u32], unicode_sets: bool) -> Vec<PatternName> {
+    let at = |index: usize| pattern.get(index).copied().and_then(char::from_u32);
+    let name_end = |start: usize| (start..pattern.len()).find(|&i| at(i) == Some('>'));
+    let mut names = Vec::new();
+    let mut groups = 0;
+    let mut class_depth = 0usize;
+    let mut i = 0;
+    while i < pattern.len() {
+        match at(i) {
+            Some('\\') => {
+                if class_depth == 0
+                    && at(i + 1) == Some('k')
+                    && at(i + 2) == Some('<')
+                    && let Some(end) = name_end(i + 3)
+                {
+                    names.push(PatternName {
+                        start: i + 3,
+                        end,
+                        group: 0,
+                    });
+                    i = end + 1;
+                    continue;
+                }
+                i += 2;
+                continue;
+            }
+            Some('[') => {
+                if class_depth == 0 || unicode_sets {
+                    class_depth += 1;
+                }
+            }
+            Some(']') if class_depth > 0 => class_depth -= 1,
+            Some('(') if class_depth == 0 => {
+                if at(i + 1) != Some('?') {
+                    groups += 1;
+                } else if at(i + 2) == Some('<')
+                    && !matches!(at(i + 3), Some('=' | '!'))
+                    && let Some(end) = name_end(i + 3)
+                {
+                    groups += 1;
+                    names.push(PatternName {
+                        start: i + 3,
+                        end,
+                        group: groups,
+                    });
+                    i = end + 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    names
 }

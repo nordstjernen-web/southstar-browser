@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Regular expressions support duplicate named groups in different
+  alternatives, such as /(?<year>\d{4})-\d\d|\d\d-(?<year>\d{4})/, with
+  \k<year> and groups.year following whichever group matched, and accept
+  supplementary characters such as 𝓓 written directly in group names.
+  The JavaScript engine now passes every test of test262 (52,133 of
+  52,133, test/staging aside).
 * Scripts that keep their state in global variables run several times
   faster: reading and writing a global var now goes through a cache
   instead of a full property lookup each time (a loop over global
