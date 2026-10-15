@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* eval inside a method, a class field initializer or a static block no
+  longer crashes the JavaScript engine when it reads a let or const
+  declared in an enclosing block, and calling a function again after an
+  eval in another call added a var to it no longer crashes either.
 * Regular expressions support duplicate named groups in different
   alternatives, such as /(?<year>\d{4})-\d\d|\d\d-(?<year>\d{4})/, with
   \k<year> and groups.year following whichever group matched, and accept

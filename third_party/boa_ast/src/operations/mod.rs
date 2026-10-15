@@ -249,11 +249,11 @@ where
             for decorator in node.decorators() {
                 self.visit_expression(decorator)?;
             }
+            // A direct eval anywhere in the class body sees the bindings around the class, so
+            // for `DirectEval` method bodies, field initializers and static blocks count too.
             match node {
                 ClassElement::MethodDefinition(m) => {
-                    if self.0 == ContainsSymbol::DirectEval {
-                        return ControlFlow::Continue(());
-                    }
+                    self.visit_contains_eval(m.contains_direct_eval)?;
 
                     if let ClassElementName::PropertyName(name) = m.name() {
                         name.visit_with(self)
@@ -262,8 +262,26 @@ where
                     }
                 }
                 ClassElement::FieldDefinition(field)
-                | ClassElement::StaticFieldDefinition(field) => field.name.visit_with(self),
-                _ => ControlFlow::Continue(()),
+                | ClassElement::StaticFieldDefinition(field) => {
+                    field.name.visit_with(self)?;
+                    match &field.initializer {
+                        Some(initializer) if self.0 == ContainsSymbol::DirectEval => {
+                            initializer.visit_with(self)
+                        }
+                        _ => ControlFlow::Continue(()),
+                    }
+                }
+                ClassElement::PrivateFieldDefinition(field)
+                | ClassElement::PrivateStaticFieldDefinition(field) => match &field.initializer {
+                    Some(initializer) if self.0 == ContainsSymbol::DirectEval => {
+                        initializer.visit_with(self)
+                    }
+                    _ => ControlFlow::Continue(()),
+                },
+                ClassElement::StaticBlock(block) if self.0 == ContainsSymbol::DirectEval => {
+                    block.body.visit_with(self)
+                }
+                ClassElement::StaticBlock(_) => ControlFlow::Continue(()),
             }
         }
 
@@ -272,9 +290,7 @@ where
             node: &'ast PropertyDefinition,
         ) -> ControlFlow<Self::BreakTy> {
             if let PropertyDefinition::MethodDefinition(m) = node {
-                if self.0 == ContainsSymbol::DirectEval {
-                    return ControlFlow::Continue(());
-                }
+                self.visit_contains_eval(m.contains_direct_eval)?;
 
                 if self.0 == ContainsSymbol::MethodDefinition {
                     return ControlFlow::Break(());
