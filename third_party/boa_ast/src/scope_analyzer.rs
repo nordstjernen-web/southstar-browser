@@ -2512,7 +2512,7 @@ pub(crate) fn eval_declaration_instantiation_scope(
                 if !var_env.has_binding(&f) {
                     // i. Perform ! varEnv.CreateMutableBinding(F, true).
                     // ii. Perform ! varEnv.InitializeBinding(F, undefined).
-                    let binding = var_env.create_mutable_binding(f, true);
+                    let binding = var_env.create_deletable_binding(f);
                     result
                         .new_annex_b_function_names
                         .push(IdentifierReference::new(
@@ -2625,7 +2625,11 @@ pub(crate) fn eval_declaration_instantiation_scope(
                 // 1. NOTE: The following invocation cannot return an abrupt completion because of the validation preceding step 14.
                 // 2. Perform ! varEnv.CreateMutableBinding(fn, true).
                 // 3. Perform ! varEnv.InitializeBinding(fn, fo).
-                let binding = var_env.create_mutable_binding(n, !strict);
+                let binding = if strict {
+                    var_env.create_mutable_binding(n, false)
+                } else {
+                    var_env.create_deletable_binding(n)
+                };
                 result.new_function_names.insert(
                     name,
                     IdentifierReference::new(binding, !var_env.is_function(), true),
@@ -2649,7 +2653,7 @@ pub(crate) fn eval_declaration_instantiation_scope(
                 // 1. NOTE: The following invocation cannot return an abrupt completion because of the validation preceding step 14.
                 // 2. Perform ! varEnv.CreateMutableBinding(vn, true).
                 // 3. Perform ! varEnv.InitializeBinding(vn, undefined).
-                drop(var_env.create_mutable_binding(name.clone(), true));
+                drop(var_env.create_deletable_binding(name.clone()));
             }
 
             let binding = var_env

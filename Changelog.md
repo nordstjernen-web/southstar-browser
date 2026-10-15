@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A variable that eval declares inside a function no longer haunts
+  later calls of that function: once one call ran eval("var x = 1"),
+  the next call saw an uninitialized x, so typeof x threw and a global
+  x was unreachable. Each call now sees only what its own eval calls
+  declared.
 * eval("arguments") works in a function that does not mention
   arguments itself, and a function with default parameter values such
   as function f(a, b = 1) { var a; return a; } no longer throws a

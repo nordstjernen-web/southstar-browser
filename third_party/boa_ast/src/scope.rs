@@ -18,6 +18,7 @@ bitflags! {
         const STRICT   = 1 << 2;
         const ESCAPES  = 1 << 3;
         const ACCESSED = 1 << 4;
+        const DELETABLE = 1 << 5;
     }
 }
 
@@ -36,6 +37,9 @@ impl BindingFlags {
     }
     fn is_accessed(self) -> bool {
         self.contains(BindingFlags::ACCESSED)
+    }
+    fn is_deletable(self) -> bool {
+        self.contains(BindingFlags::DELETABLE)
     }
 }
 
@@ -61,6 +65,9 @@ impl Binding {
     }
     fn is_accessed(&self) -> bool {
         self.flags.is_accessed()
+    }
+    fn is_deletable(&self) -> bool {
+        self.flags.is_deletable()
     }
 }
 
@@ -107,6 +114,8 @@ pub(crate) struct Inner {
     catch_clause: bool,
     // Has the `this` been accessed/escaped outside the function environment boundary.
     this_escaped: Cell<bool>,
+    // Has a direct `eval` added a deletable binding to this scope.
+    has_deletable_bindings: Cell<bool>,
 
     context: Rc<ScopeContext>,
 }
@@ -124,6 +133,7 @@ impl Scope {
                 function: true,
                 catch_clause: false,
                 this_escaped: Cell::new(false),
+                has_deletable_bindings: Cell::new(false),
                 context: Rc::default(),
             }),
         }
@@ -150,6 +160,7 @@ impl Scope {
                 function,
                 catch_clause,
                 this_escaped: Cell::new(false),
+                has_deletable_bindings: Cell::new(false),
                 context: parent.inner.context.clone(),
                 outer: Some(parent),
             }),
@@ -449,6 +460,34 @@ impl Scope {
             binding_index,
             self.inner.unique_id,
         )
+    }
+
+    /// Creates a mutable binding that can be deleted, as the declarations of a direct `eval`
+    /// create in the variable environment that encloses it (`CreateMutableBinding(N, true)`).
+    ///
+    /// The binding is added to a scope that every run of the enclosing code shares, so the
+    /// environments created for it later start without the binding, until an `eval` declares
+    /// it again.
+    pub(crate) fn create_deletable_binding(&self, name: JsString) -> BindingLocator {
+        let created = !self.has_binding(&name);
+        let locator = self.create_mutable_binding(name, true);
+        if created && let Some(binding) = self.inner.bindings.borrow_mut().last_mut() {
+            binding.flags.insert(BindingFlags::DELETABLE);
+            self.inner.has_deletable_bindings.set(true);
+        }
+        locator
+    }
+
+    /// Calls `f` with the index of each binding of this scope that a direct `eval` created.
+    pub fn for_each_deletable_binding(&self, mut f: impl FnMut(u32)) {
+        if !self.inner.has_deletable_bindings.get() {
+            return;
+        }
+        for binding in self.inner.bindings.borrow().iter() {
+            if binding.is_deletable() {
+                f(binding.index);
+            }
+        }
     }
 
     /// Crate an immutable binding.

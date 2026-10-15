@@ -21,10 +21,22 @@ pub(crate) struct FunctionEnvironment {
 impl FunctionEnvironment {
     /// Creates a new `FunctionEnvironment`.
     pub(crate) fn new(bindings_count: u32, slots: FunctionSlots, scope: Scope) -> Self {
+        let mut deletable_bindings = vec![false; bindings_count as usize];
+        let mut deleted_bindings = vec![false; bindings_count as usize];
+
+        // A direct `eval` in an earlier call added these bindings to the shared scope: they do
+        // not exist in this environment until an `eval` declares them again.
+        scope.for_each_deletable_binding(|index| {
+            if let Some(deletable) = deletable_bindings.get_mut(index as usize) {
+                *deletable = true;
+                deleted_bindings[index as usize] = true;
+            }
+        });
+
         Self {
             bindings: GcRefCell::new(vec![None; bindings_count as usize]),
-            deletable_bindings: RefCell::new(vec![false; bindings_count as usize]),
-            deleted_bindings: RefCell::new(vec![false; bindings_count as usize]),
+            deletable_bindings: RefCell::new(deletable_bindings),
+            deleted_bindings: RefCell::new(deleted_bindings),
             slots: Box::new(slots),
             scope,
         }
