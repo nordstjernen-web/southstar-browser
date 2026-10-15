@@ -188,9 +188,23 @@ struct ModuleRepr {
     realm: Realm,
     namespace: GcRefCell<Option<JsObject>>,
     deferred_namespace: GcRefCell<Option<JsObject>>,
+    source: GcRefCell<Option<ModuleSource>>,
     kind: ModuleKind,
     host_defined: HostDefined,
     path: Option<PathBuf>,
+}
+
+/// The `[[ModuleSource]]` of a module record that has a source phase representation, with the
+/// string its `GetModuleSourceKind()` returns.
+///
+/// More information:
+///  - [Source phase imports proposal][spec]
+///
+/// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-abstract-module-records
+#[derive(Debug, Clone, Trace, Finalize)]
+struct ModuleSource {
+    object: JsObject,
+    kind: JsString,
 }
 
 /// The kind of a [`Module`].
@@ -223,14 +237,17 @@ pub(crate) struct ResolvedBinding {
 
 /// The local name of the resolved binding within its containing module.
 ///
-/// Note that a resolved binding can resolve to a single binding inside a module (`export var a = 1"`)
-/// or to a whole module namespace (`export * as ns from "mod.js"`).
+/// Note that a resolved binding can resolve to a single binding inside a module (`export var a = 1"`),
+/// to a whole module namespace (`export * as ns from "mod.js"`) or to the module source object of
+/// a module (`import source src from "mod.js"; export { src }`).
 #[derive(Debug, Clone)]
 pub(crate) enum BindingName {
     /// A local binding.
     Name(JsString),
     /// The whole namespace of the containing module.
     Namespace,
+    /// The module source object of the containing module.
+    Source,
 }
 
 impl ResolvedBinding {
@@ -291,6 +308,7 @@ impl Module {
                 realm,
                 namespace: GcRefCell::default(),
                 deferred_namespace: GcRefCell::default(),
+                source: GcRefCell::default(),
                 kind: ModuleKind::SourceText(Box::new(src)),
                 host_defined: HostDefined::default(),
                 path,
@@ -321,6 +339,7 @@ impl Module {
                 realm,
                 namespace: GcRefCell::default(),
                 deferred_namespace: GcRefCell::default(),
+                source: GcRefCell::default(),
                 kind: ModuleKind::Synthetic(Box::new(synth)),
                 host_defined: HostDefined::default(),
                 path,
@@ -384,6 +403,58 @@ impl Module {
         &self.inner.kind
     }
 
+    /// Sets the [`[[ModuleSource]]`][spec] of this module: the module source object that
+    /// `import source` and `import.source()` give for it, and the string its
+    /// `GetModuleSourceKind()` returns, which `%AbstractModuleSource%.prototype[@@toStringTag]`
+    /// reports.
+    ///
+    /// Source text modules have no source phase representation; a host gives one to a module
+    /// record it creates (a WebAssembly module, say) right after creating it. The object's
+    /// initial `[[Prototype]]` should be an object whose initial `[[Prototype]]` is
+    /// `%AbstractModuleSource%.prototype`, and [`ModuleLoader::get_module_source_module_record`]
+    /// should return this module for it.
+    ///
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-abstract-module-records
+    pub fn set_module_source(&self, object: JsObject, kind: JsString) {
+        *self.inner.source.borrow_mut() = Some(ModuleSource { object, kind });
+    }
+
+    /// Gets the [`[[ModuleSource]]`][spec] of this module, or `None` if its kind of module has
+    /// no source phase representation.
+    ///
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-abstract-module-records
+    #[must_use]
+    pub fn module_source(&self) -> Option<JsObject> {
+        self.inner
+            .source
+            .borrow()
+            .as_ref()
+            .map(|source| source.object.clone())
+    }
+
+    /// The `[[ModuleSource]]` of this module for an import of its source phase, or the
+    /// `SyntaxError` such an import throws when the module has none, as source text modules do.
+    pub(crate) fn source_phase(&self) -> JsResult<JsObject> {
+        self.module_source().ok_or_else(|| {
+            JsNativeError::syntax()
+                .with_message("source phase import is not available for this module")
+                .into()
+        })
+    }
+
+    /// Abstract method [`GetModuleSourceKind ( )`][spec], or `None` for a module without a
+    /// source phase representation, on which the method is never called.
+    ///
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#table-abstract-methods-of-module-records
+    #[must_use]
+    pub fn module_source_kind(&self) -> Option<JsString> {
+        self.inner
+            .source
+            .borrow()
+            .as_ref()
+            .map(|source| source.kind.clone())
+    }
+
     /// Gets the declarative environment of this `Module`.
     pub(crate) fn environment(&self) -> Option<Gc<DeclarativeEnvironment>> {
         match self.kind() {
@@ -417,7 +488,7 @@ impl Module {
                     "capability creation must always succeed when using the `%Promise%` intrinsic",
                 );
 
-                // 4. Perform InnerModuleLoading(state, module).
+                // 4. Perform InnerModuleLoading(state, module, recursive-load).
                 self.inner_load(
                     // 3. Let state be the GraphLoadingState Record {
                     //     [[IsLoading]]: true, [[PendingModulesCount]]: 1, [[Visited]]: « »,
@@ -429,6 +500,7 @@ impl Module {
                         pending_modules: Cell::new(1),
                         visited: RefCell::default(),
                     }),
+                    true,
                     context,
                 );
 
@@ -440,14 +512,17 @@ impl Module {
         }
     }
 
-    /// Abstract operation [`InnerModuleLoading`][spec].
+    /// Abstract operation [`InnerModuleLoading ( state, module, loadType )`][spec], where
+    /// `recursive` tells a `recursive-load` from a `single` load, which loads only the module
+    /// itself, for an import of its source phase.
     ///
-    /// [spec]: https://tc39.es/ecma262/#sec-InnerModuleLoading
-    fn inner_load(&self, state: &Rc<GraphLoadingState>, context: &mut Context) {
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-InnerModuleLoading
+    fn inner_load(&self, state: &Rc<GraphLoadingState>, recursive: bool, context: &mut Context) {
         // 1. Assert: state.[[IsLoading]] is true.
         assert!(state.loading.get());
 
-        if let ModuleKind::SourceText(src) = self.kind() {
+        // 2. If loadType is recursive-load, module is a Cyclic Module Record, ...
+        if recursive && let ModuleKind::SourceText(src) = self.kind() {
             // continues on `inner_load
             src.inner_load(self, state, context);
             if !state.loading.get() {

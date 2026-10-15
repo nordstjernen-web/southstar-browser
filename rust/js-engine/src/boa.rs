@@ -1164,6 +1164,11 @@ impl Scope<'_> {
 
     pub fn set_is_html_dda(&mut self, _object: &Value) {}
 
+    pub fn abstract_module_source(&mut self) -> Value {
+        let constructors = self.cx().intrinsics().constructors();
+        Value(constructors.abstract_module_source().constructor().into())
+    }
+
     pub fn new_html_dda(&mut self) -> Value {
         let prototype = self.cx().intrinsics().constructors().object().prototype();
         Value(

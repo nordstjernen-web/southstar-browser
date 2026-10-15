@@ -1,5 +1,6 @@
 //! Boa's ECMAScript built-in object implementations, e.g. Object, String, Math, Array, etc.
 
+pub(crate) mod abstract_module_source;
 pub mod array;
 pub mod array_buffer;
 pub mod async_function;
@@ -323,6 +324,7 @@ impl Realm {
         WeakSet::init(self);
         Atomics::init(self);
         FinalizationRegistry::init(self);
+        abstract_module_source::AbstractModuleSource::init(self);
         #[cfg(feature = "experimental")]
         shadow_realm::ShadowRealm::init(self);
 

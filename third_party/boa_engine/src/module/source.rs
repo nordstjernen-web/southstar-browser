@@ -12,6 +12,7 @@ use boa_ast::{
         ExportEntry, ImportEntry, ImportName, IndirectExportEntry, LocalExportEntry,
         ReExportImportName,
     },
+    expression::ImportPhase,
     operations::{
         ContainsSymbol, LexicallyScopedDeclaration, bound_names, contains,
         lexically_scoped_declarations, var_scoped_declarations,
@@ -22,7 +23,7 @@ use boa_gc::{Finalize, Gc, GcRefCell, Trace};
 use boa_interner::Interner;
 use boa_macros::js_str;
 use dynify::Dynify;
-use indexmap::IndexSet;
+use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 
 use crate::{
@@ -273,9 +274,13 @@ impl std::fmt::Debug for SourceTextModule {
 #[derive(Debug)]
 struct ModuleCode {
     has_tla: bool,
-    requested_modules: IndexSet<super::ModuleRequest, BuildHasherDefault<FxHasher>>,
+    /// `[[RequestedModules]]`, one entry per request, with `false` when every import of it is
+    /// an import of its source phase, which neither loads its dependencies nor links nor
+    /// evaluates it.
+    requested_modules: IndexMap<super::ModuleRequest, bool, BuildHasherDefault<FxHasher>>,
     /// `[[RequestedModules]]` as the deferred imports proposal orders them: one entry per
-    /// specifier and phase, with `true` for the defer phase. Evaluation follows this order.
+    /// specifier and phase other than source, with `true` for the defer phase. Evaluation
+    /// follows this order.
     phased_requests: Vec<(super::ModuleRequest, bool)>,
     path: Option<PathBuf>,
     import_entries: Vec<ImportEntry>,
@@ -286,17 +291,20 @@ struct ModuleCode {
 
 struct ModuleRequestsVisitor<'a> {
     interner: &'a Interner,
-    requests: IndexSet<super::ModuleRequest, BuildHasherDefault<FxHasher>>,
+    requests: IndexMap<super::ModuleRequest, bool, BuildHasherDefault<FxHasher>>,
     phased: Vec<(super::ModuleRequest, bool)>,
 }
 
 impl ModuleRequestsVisitor<'_> {
-    fn add(&mut self, request: super::ModuleRequest, deferred: bool) {
-        let phased = (request, deferred);
-        if !self.phased.contains(&phased) {
-            self.phased.push(phased.clone());
+    fn add(&mut self, request: super::ModuleRequest, phase: ImportPhase) {
+        let evaluated = phase != ImportPhase::Source;
+        if evaluated {
+            let phased = (request.clone(), phase == ImportPhase::Defer);
+            if !self.phased.contains(&phased) {
+                self.phased.push(phased);
+            }
         }
-        self.requests.insert(phased.0);
+        *self.requests.entry(request).or_insert(false) |= evaluated;
     }
 }
 
@@ -309,10 +317,7 @@ impl<'ast> boa_ast::visitor::Visitor<'ast> for ModuleRequestsVisitor<'_> {
     ) -> std::ops::ControlFlow<Self::BreakTy> {
         let specifier = node.specifier().sym().to_js_string(self.interner);
         let request = super::ModuleRequest::from_ast(specifier, node.attributes(), self.interner);
-        self.add(
-            request,
-            node.phase() == boa_ast::expression::ImportPhase::Defer,
-        );
+        self.add(request, node.phase());
         std::ops::ControlFlow::Continue(())
     }
 
@@ -328,7 +333,7 @@ impl<'ast> boa_ast::visitor::Visitor<'ast> for ModuleRequestsVisitor<'_> {
         {
             let spec = specifier.sym().to_js_string(self.interner);
             let request = super::ModuleRequest::from_ast(spec, attributes, self.interner);
-            self.add(request, false);
+            self.add(request, ImportPhase::Evaluation);
         }
         std::ops::ControlFlow::Continue(())
     }
@@ -359,7 +364,7 @@ impl SourceTextModule {
 
             let mut visitor = ModuleRequestsVisitor {
                 interner,
-                requests: IndexSet::default(),
+                requests: IndexMap::default(),
                 phased: Vec::new(),
             };
             let _ = visitor.visit_module(&source);
@@ -422,7 +427,23 @@ impl SourceTextModule {
                                     ie.attributes().to_vec().into_boxed_slice(),
                                 ));
                             }
-                            // 4. Else,
+                            // 4. Else if ie.[[ImportName]] is source, then
+                            ImportName::Source => {
+                                // a. NOTE: This is a re-export of an imported module source object.
+                                // b. Append the ExportEntry Record {
+                                //        [[ModuleRequest]]: ie.[[ModuleRequest]],
+                                //        [[ImportName]]: source,
+                                //        [[LocalName]]: null,
+                                //        [[ExportName]]: ee.[[ExportName]]
+                                //    } to indirectExportEntries.
+                                indirect_export_entries.push(IndirectExportEntry::new(
+                                    ie.module_request(),
+                                    ReExportImportName::Source,
+                                    entry.export_name(),
+                                    ie.attributes().to_vec().into_boxed_slice(),
+                                ));
+                            }
+                            // 5. Else,
                             ImportName::Name(import) => {
                                 // a. NOTE: This is a re-export of a single name.
                                 // b. Append the ExportEntry Record {
@@ -516,13 +537,14 @@ impl SourceTextModule {
         /// This combines the operations:
         /// - [`HostLoadImportedModule(module, required, state.[[HostDefined]], state)`][load]
         /// - [`FinishLoadingImportedModule ( referrer, specifier, payload, result )`][finish]
-        /// - [`ContinueModuleLoading ( state, moduleCompletion )`][continue]
+        /// - [`ContinueModuleLoading ( state, phase, moduleCompletion )`][continue]
         ///
         /// [load]: https://tc39.es/ecma262/#sec-HostLoadImportedModule
         /// [finish]: https://tc39.es/ecma262/#sec-FinishLoadingImportedModule
-        /// [continue]: https://tc39.es/ecma262/#sec-ContinueModuleLoading
+        /// [continue]: https://tc39.es/proposal-source-phase-imports/#sec-ContinueModuleLoading
         async fn finish_loading_imported_module(
             request: super::ModuleRequest,
+            recursive: bool,
             src: Module,
             state: Rc<GraphLoadingState>,
             context: &RefCell<&mut Context>,
@@ -572,8 +594,9 @@ impl SourceTextModule {
             // 2. If moduleCompletion is a normal completion, then
             match completion {
                 Ok(m) => {
-                    // a. Perform InnerModuleLoading(state, moduleCompletion.[[Value]]).
-                    m.inner_load(&state, &mut context.borrow_mut());
+                    // a. If phase is source, let loadType be single; else let loadType be recursive-load.
+                    // b. Perform InnerModuleLoading(state, moduleCompletion.[[Value]], loadType).
+                    m.inner_load(&state, recursive, &mut context.borrow_mut());
                 }
                 // 3. Else,
                 Err(err) => {
@@ -607,14 +630,15 @@ impl SourceTextModule {
             state
                 .pending_modules
                 .set(state.pending_modules.get() + requested.len());
-            // d. For each String required of module.[[RequestedModules]], do
-            for required in requested {
-                // i. If module.[[LoadedModules]] contains a Record whose [[Specifier]] is required, then
+            // d. For each ModuleRequest Record required of module.[[RequestedModules]], do
+            for (required, &recursive) in requested {
+                // i. If module.[[LoadedModules]] contains a Record whose [[Specifier]] is required.[[Specifier]], then
                 let loaded = self.loaded_modules.borrow().get(required).cloned();
                 if let Some(loaded) = loaded {
                     // 1. Let record be that Record.
-                    // 2. Perform InnerModuleLoading(state, record.[[Module]]).
-                    loaded.inner_load(state, context);
+                    // 2. If required.[[Phase]] is source, let innerLoadType be single; else let innerLoadType be recursive-load.
+                    // 3. Perform InnerModuleLoading(state, record.[[Module]], innerLoadType).
+                    loaded.inner_load(state, recursive, context);
                 } else {
                     //    ii. Else,
                     //       1. Perform HostLoadImportedModule(module, required, state.[[HostDefined]], state).
@@ -625,7 +649,8 @@ impl SourceTextModule {
                     let state = state.clone();
                     let async_job = NativeAsyncJob::with_realm(
                         async move |context| {
-                            finish_loading_imported_module(request, src, state, context).await?;
+                            finish_loading_imported_module(request, recursive, src, state, context)
+                                .await?;
                             Ok(JsValue::undefined())
                         },
                         context.realm().clone(),
@@ -759,7 +784,14 @@ impl SourceTextModule {
                         module: imported_module,
                         binding_name: BindingName::Namespace,
                     }),
-                    // iii. Else,
+                    // iii. Else if e.[[ImportName]] is source, then
+                    //    1. Assert: module does not provide the direct binding for this export.
+                    //    2. Return ResolvedBinding Record { [[Module]]: importedModule, [[BindingName]]: source }.
+                    ReExportImportName::Source => Ok(ResolvedBinding {
+                        module: imported_module,
+                        binding_name: BindingName::Source,
+                    }),
+                    // iv. Else,
                     //    1. Assert: module imports a specific binding for this export.
                     //    2. Return importedModule.ResolveExport(e.[[ImportName]], resolveSet).
                     ReExportImportName::Name(name) => {
@@ -818,6 +850,13 @@ impl SourceTextModule {
                     }
                     (BindingName::Name(res), BindingName::Name(star)) if res != star => {
                         // See step 4 above.
+                        return Err(ResolveExportError::Ambiguous);
+                    }
+                    // The source phase imports proposal folds steps 3 and 4 into "If
+                    // resolution.[[BindingName]] is not starResolution.[[BindingName]], return
+                    // ambiguous", which also covers a source binding against any other one.
+                    (BindingName::Source, BindingName::Name(_) | BindingName::Namespace)
+                    | (BindingName::Name(_) | BindingName::Namespace, BindingName::Source) => {
                         return Err(ResolveExportError::Ambiguous);
                     }
                     _ => {}
@@ -937,8 +976,9 @@ impl SourceTextModule {
         // 8. Append module to stack.
         stack.push(module_self.clone());
 
-        // 9. For each ModuleRequest Record request of module.[[RequestedModules]], do
-        for required in &self.code.requested_modules {
+        // 9. For each ModuleRequest Record required of module.[[RequestedModules]], do
+        //    a. If required.[[Phase]] is evaluation, then
+        for required in self.evaluated_requests() {
             // a. Let requiredModule be GetImportedModule(module, required).
             let required_module = self.loaded_modules.borrow()[required].clone();
 
@@ -1642,6 +1682,10 @@ impl SourceTextModule {
                 locator: BindingLocator,
                 export_locator: ResolvedBinding,
             },
+            Source {
+                locator: BindingLocator,
+                source: JsObject,
+            },
         }
 
         {
@@ -1751,6 +1795,16 @@ impl SourceTextModule {
                             locator,
                             export_locator: resolution,
                         });
+                    } else if let BindingName::Source = resolution.binding_name() {
+                        // v. Else if resolution.[[BindingName]] is source, then
+                        //    1. Let moduleSourceObject be resolution.[[Module]].[[ModuleSource]].
+                        //    2. If moduleSourceObject is empty, throw a SyntaxError exception.
+                        //    3. Perform ! env.CreateImmutableBinding(in.[[LocalName]], true).
+                        //    4. Perform ! env.InitializeBinding(in.[[LocalName]], moduleSourceObject).
+                        imports.push(ImportBinding::Source {
+                            locator,
+                            source: resolution.module().source_phase()?,
+                        });
                     } else {
                         // 1. Let namespace be GetModuleNamespace(resolution.[[Module]]).
                         // deferred to initialization below
@@ -1760,6 +1814,18 @@ impl SourceTextModule {
                             deferred: false,
                         });
                     }
+                } else if let ImportName::Source = entry.import_name() {
+                    // c. Else if in.[[ImportName]] is source, then
+                    //    i. Let moduleSourceObject be importedModule.[[ModuleSource]].
+                    //    ii. If moduleSourceObject is empty, throw a SyntaxError exception.
+                    //    iii. Perform ! env.CreateImmutableBinding(in.[[LocalName]], true).
+                    //    iv. Perform ! env.InitializeBinding(in.[[LocalName]], moduleSourceObject).
+                    let name = entry.local_name().to_js_string(compiler.interner());
+                    let locator = env.get_binding(&name).js_expect("binding must exist")?;
+                    imports.push(ImportBinding::Source {
+                        locator,
+                        source: imported_module.source_phase()?,
+                    });
                 } else {
                     // b. If in.[[ImportName]] is namespace-object, then
                     //    ii. Perform ! env.CreateImmutableBinding(in.[[LocalName]], true).
@@ -1950,7 +2016,20 @@ impl SourceTextModule {
                             global,
                         );
                     }
+                    BindingName::Source => {
+                        unreachable!("source bindings are collected as `ImportBinding::Source`")
+                    }
                 },
+                ImportBinding::Source { locator, source } => {
+                    let frame = context.vm.frame_mut();
+                    let global = frame.realm.environment();
+                    frame.environments.put_lexical_value(
+                        locator.scope(),
+                        locator.binding_index(),
+                        source.into(),
+                        global,
+                    );
+                }
             }
         }
 
@@ -2072,13 +2151,20 @@ impl SourceTextModule {
         }
     }
 
-    /// Gets the loaded modules of this module.
-    /// The modules this module requests, in the order of its `[[RequestedModules]]`.
-    fn required_modules(&self) -> Vec<Module> {
-        let loaded = self.loaded_modules.borrow();
+    /// The requests of `[[RequestedModules]]` that link and evaluate the module they import:
+    /// every one but those whose only phase is source.
+    fn evaluated_requests(&self) -> impl Iterator<Item = &super::ModuleRequest> {
         self.code
             .requested_modules
             .iter()
+            .filter_map(|(request, &evaluated)| evaluated.then_some(request))
+    }
+
+    /// Gets the loaded modules of this module.
+    /// The modules this module requests for evaluation, in the order of its `[[RequestedModules]]`.
+    fn required_modules(&self) -> Vec<Module> {
+        let loaded = self.loaded_modules.borrow();
+        self.evaluated_requests()
             .map(|request| loaded[request].clone())
             .collect()
     }
@@ -2111,10 +2197,7 @@ impl SourceTextModule {
             return true;
         }
         // 5. If module.[[Status]] is evaluating, evaluating-async or evaluated, return false.
-        if !matches!(
-            &*self.status.borrow(),
-            ModuleStatus::Linked { .. }
-        ) {
+        if !matches!(&*self.status.borrow(), ModuleStatus::Linked { .. }) {
             return false;
         }
         // 6. Assert: module.[[Status]] is linked.

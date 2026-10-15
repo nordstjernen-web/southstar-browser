@@ -458,11 +458,30 @@ fn module_namespace_exotic_try_get(
                 .with_message(format!("cannot get uninitialized import `{import}`"))
                 .into()
         })
+    } else if let BindingName::Source = binding.binding_name() {
+        // 8. If binding.[[BindingName]] is source, then
+        //     a. Let moduleSourceObject be targetModule.[[ModuleSource]].
+        //     b. If moduleSourceObject is empty, throw a ReferenceError exception.
+        //     c. Return moduleSourceObject.
+        module_source_of(target_module, &export_name).map(|source| Some(source.into()))
     } else {
         // 9. If binding.[[BindingName]] is namespace, then
         //     a. Return GetModuleNamespace(targetModule).
         Ok(Some(target_module.namespace(context).into()))
     }
+}
+
+/// The `[[ModuleSource]]` of the module a namespace export resolved to as a source binding, or
+/// the `ReferenceError` reading that export throws when the module has none.
+fn module_source_of(module: &Module, export_name: &JsString) -> JsResult<JsObject> {
+    module.module_source().ok_or_else(|| {
+        let export = export_name.to_std_string_escaped();
+        JsNativeError::reference()
+            .with_message(format!(
+                "cannot get export `{export}`: its module has no source phase representation"
+            ))
+            .into()
+    })
 }
 
 /// [`[[Get]] ( P, Receiver )`][spec]
@@ -552,6 +571,12 @@ fn module_namespace_exotic_get(
                 .with_message(format!("cannot get uninitialized import `{import}`"))
                 .into()
         })
+    } else if let BindingName::Source = binding.binding_name() {
+        // 8. If binding.[[BindingName]] is source, then
+        //     a. Let moduleSourceObject be targetModule.[[ModuleSource]].
+        //     b. If moduleSourceObject is empty, throw a ReferenceError exception.
+        //     c. Return moduleSourceObject.
+        module_source_of(target_module, &export_name).map(Into::into)
     } else {
         // 9. If binding.[[BindingName]] is namespace, then
         //     a. Return GetModuleNamespace(targetModule).

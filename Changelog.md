@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Modules understand source phase imports: import source x from "m" and
+  import.source("m") give a module's source object, an instance of the new
+  AbstractModuleSource class, without linking or running the module, and a
+  module can re-export it. Plain JavaScript modules have no source object,
+  so importing theirs is a SyntaxError, as the proposal specifies; source
+  stays an ordinary name elsewhere, as in import source from "m". test262
+  reaches 52,126 of 52,133 (99.99%).
 * In strict code, assigning to an undeclared variable throws even when
   the assigned expression itself creates that global; in non-strict code
   eval("var e") inside catch (e) works as in other browsers, and of two

@@ -89,7 +89,8 @@ pub struct ImportDeclaration {
     specifier: ModuleSpecifier,
     /// Import attributes.
     attributes: Box<[ImportAttribute]>,
-    /// The phase of the import (`import defer * as name from "module-name"` is deferred).
+    /// The phase of the import (`import defer * as name from "module-name"` is deferred,
+    /// `import source name from "module-name"` imports the source phase into `default`).
     phase: ImportPhase,
 }
 
@@ -253,6 +254,8 @@ pub enum ImportName {
     Namespace,
     /// The deferred namespace object of the imported module (`import defer * as name`).
     DeferredNamespace,
+    /// The module source object of the imported module (`import source name`).
+    Source,
     /// A binding of the imported module.
     Name(Sym),
 }

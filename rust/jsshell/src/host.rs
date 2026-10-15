@@ -84,6 +84,15 @@ fn create_realm(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result
     scope.get(&global, "$262")
 }
 
+fn install_module_source(scope: &mut Scope<'_>, test262: &Value) -> Result<(), Value> {
+    let abstract_module_source = scope.abstract_module_source();
+    let base = scope.get(&abstract_module_source, "prototype")?;
+    let prototype = scope.new_object_with_proto(&base);
+    let source = scope.new_object_with_proto(&prototype);
+    scope.define_module_source("<module source>", &source, "Test262ModuleSource")?;
+    scope.set(test262, "AbstractModuleSource", abstract_module_source)
+}
+
 pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
     let global = scope.global();
     southstar_js_intl::install(scope, &global);
@@ -110,6 +119,7 @@ pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
     }
     let html_dda = scope.new_html_dda();
     scope.set(&test262, "IsHTMLDDA", html_dda)?;
+    install_module_source(scope, &test262)?;
     crate::agent::install_parent(scope, &test262)?;
     scope.set(&global, "$262", test262)
 }

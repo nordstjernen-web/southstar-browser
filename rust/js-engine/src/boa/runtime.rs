@@ -13,11 +13,13 @@ use std::time::{Duration, Instant};
 use boa_engine::builtins::promise::OperationType;
 use boa_engine::context::HostHooks;
 use boa_engine::job::{GenericJob, Job, JobExecutor, NativeAsyncJob, PromiseJob, TimeoutJob};
-use boa_engine::module::{ModuleLoader, ModuleRequest, Referrer, SimpleModuleLoader};
+use boa_engine::module::{
+    ModuleLoader, ModuleRequest, Referrer, SimpleModuleLoader, SyntheticModuleInitializer,
+};
 use boa_engine::object::builtins::JsPromise;
 use boa_engine::prelude::{Finalize, JsData, Trace};
 use boa_engine::realm::Realm;
-use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsValue, Module};
+use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsString, JsValue, Module};
 
 use super::{Compiled, Scope, Value};
 use crate::{ContextHandle, JobOutcome, MemoryUsage, RuntimeHandle, RuntimeOptions};
@@ -384,11 +386,34 @@ impl ModuleLoader for Loader {
         context: &RefCell<&mut Context>,
     ) -> JsResult<Module> {
         if let Some(simple) = self.simple.clone() {
+            let specifier = request.specifier().to_std_string_escaped();
+            let defined = self.loaded(&specifier, context.borrow().realm());
+            if let Some(module) = defined {
+                return Ok(module);
+            }
             return simple
                 .load_imported_module(referrer, request, context)
                 .await;
         }
         self.hooked(&referrer, &request, &mut context.borrow_mut())
+    }
+
+    fn get_module_source_module_record(
+        self: Rc<Self>,
+        source: &JsObject,
+        _context: &mut Context,
+    ) -> Option<Module> {
+        self.modules
+            .borrow()
+            .values()
+            .flatten()
+            .map(|(_, module)| module)
+            .find(|module| {
+                module
+                    .module_source()
+                    .is_some_and(|object| JsObject::equals(&object, source))
+            })
+            .cloned()
     }
 }
 
@@ -652,6 +677,37 @@ impl Scope<'_> {
         if let Some(simple) = simple {
             simple.insert(path.to_path_buf(), module.clone());
         }
+    }
+
+    pub fn define_module_source(
+        &mut self,
+        specifier: &str,
+        source: &Value,
+        kind: &str,
+    ) -> Result<(), Value> {
+        let Some(object) = source.0.as_object() else {
+            return Err(self.type_error("a module source must be an object"));
+        };
+        let Some(runtime) = runtime_of(self.cx()) else {
+            return Err(self.type_error("module loading is not available"));
+        };
+        let module = Module::synthetic(
+            &[],
+            SyntheticModuleInitializer::from_copy_closure(|_, _| Ok(())),
+            None,
+            None,
+            self.cx(),
+        );
+        module.set_module_source(object, JsString::from(kind));
+        let realm = self.cx().realm().clone();
+        runtime
+            .loader
+            .modules
+            .borrow_mut()
+            .entry(specifier.to_owned())
+            .or_default()
+            .push((realm, module));
+        Ok(())
     }
 
     pub fn context_opaque(&self) -> *mut c_void {

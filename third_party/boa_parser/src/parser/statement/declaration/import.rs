@@ -101,6 +101,23 @@ where
                 .with_phase(ImportPhase::Defer));
         }
 
+        // `import source name from "module-name"`
+        if is_source_phase_import(cursor, interner)? {
+            cursor.advance(interner);
+            let binding = ImportedBinding.parse(cursor, interner)?;
+            let module_identifier =
+                FromClause::new("import declaration").parse(cursor, interner)?;
+            let attributes = WithClause::new("import declaration").parse(cursor, interner)?;
+            cursor.expect_semicolon("import declaration", interner)?;
+            return Ok(AstImportDeclaration::new(
+                Some(binding),
+                ImportKind::DefaultOrUnnamed,
+                module_identifier,
+                attributes,
+            )
+            .with_phase(ImportPhase::Source));
+        }
+
         let tok = cursor.peek(0, interner).or_abrupt()?;
 
         let import_clause = match tok.kind() {
@@ -185,6 +202,44 @@ where
         cursor.expect_semicolon("import declaration", interner)?;
 
         Ok(import_clause.with_specifier_and_attributes(module_identifier, attributes))
+    }
+}
+
+/// Tests if the tokens after `import` start `source ImportedBinding FromClause`.
+///
+/// `source` stays an ordinary binding name otherwise: `import source from "m"` and
+/// `import source, { a } from "m"` import the default export as `source`, while
+/// `import source from from "m"` imports the source phase as `from`.
+///
+/// More information:
+///  - [Source phase imports proposal][spec]
+///
+/// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-imports
+fn is_source_phase_import<R: ReadChar>(
+    cursor: &mut Cursor<R>,
+    interner: &mut Interner,
+) -> ParseResult<bool> {
+    if !matches!(
+        cursor.peek(0, interner).or_abrupt()?.kind(),
+        TokenKind::IdentifierName((Sym::SOURCE, ContainsEscapeSequence(false)))
+    ) {
+        return Ok(false);
+    }
+    let Some(binding) = cursor.peek(1, interner)? else {
+        return Ok(false);
+    };
+    match binding.kind() {
+        TokenKind::IdentifierName((Sym::FROM, _)) => {
+            Ok(cursor.peek(2, interner)?.is_some_and(|next| {
+                matches!(
+                    next.kind(),
+                    TokenKind::IdentifierName((Sym::FROM, ContainsEscapeSequence(false)))
+                )
+            }))
+        }
+        TokenKind::IdentifierName(_)
+        | TokenKind::Keyword((Keyword::Await | Keyword::Yield | Keyword::Using, _)) => Ok(true),
+        _ => Ok(false),
     }
 }
 

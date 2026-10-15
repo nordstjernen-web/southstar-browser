@@ -266,6 +266,8 @@ pub enum ReExportImportName {
     Name(Sym),
     /// All exports of the module.
     Star,
+    /// The module source object of the module, re-exported from an `import source`.
+    Source,
 }
 
 /// [`ExportEntry`][spec] record.

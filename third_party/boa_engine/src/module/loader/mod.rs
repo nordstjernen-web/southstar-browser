@@ -197,6 +197,24 @@ pub trait ModuleLoader: Any {
         context: &mut Context,
     ) {
     }
+
+    /// Host hook [`HostGetModuleSourceModuleRecord ( specifier )`][spec].
+    ///
+    /// Returns the module record whose module source object is `source`, for the host's own
+    /// kinds of module that have a source phase representation (see
+    /// [`Module::set_module_source`]), or `None` (`not-a-source`) for every other object.
+    ///
+    /// The default implementation returns `None`.
+    ///
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-hostgetmodulesourcemodulerecord
+    #[allow(unused_variables, reason = "this should be overridden by implementors")]
+    fn get_module_source_module_record(
+        self: Rc<Self>,
+        source: &JsObject,
+        context: &mut Context,
+    ) -> Option<Module> {
+        None
+    }
 }
 
 /// A module loader that throws when trying to load any modules.
@@ -421,7 +439,9 @@ impl ModuleLoader for SimpleModuleLoader {
                 .is_some_and(|ext| ext.to_string_lossy() == "json")
             {
                 let reads_file_as_data = module_type.is_some_and(|t| {
-                    t == &js_string!("json") || t == &js_string!("text") || t == &js_string!("bytes")
+                    t == &js_string!("json")
+                        || t == &js_string!("text")
+                        || t == &js_string!("bytes")
                 });
                 if !reads_file_as_data {
                     return Err(JsNativeError::typ()

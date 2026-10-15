@@ -545,20 +545,31 @@ async fn load_dyn_import(
         return Ok(());
     }
 
-    // TODO: For source phase (phase == 2), implement GetModuleSource()
-    // 16.2.1.7.2 GetModuleSource ( )
-    // Source Text Module Record provides a GetModuleSource implementation
-    // that always returns an abrupt completion indicating that a source phase import is not available.
-    // 1. Throw a SyntaxError exception.
+    // 3. If phase is source, then
     #[cfg(feature = "experimental")]
     if phase == 2 {
-        let err = JsNativeError::syntax()
-            .with_message("source phase import is not available for this module")
-            .into();
-        let err = JsError::into_opaque(err, &mut context.borrow_mut())?;
-        cap.reject()
-            .call(&JsValue::undefined(), &[err], &mut context.borrow_mut())
-            .expect("default `reject` function cannot throw");
+        match module.source_phase() {
+            // a. Let moduleSource be module.[[ModuleSource]].
+            // c. Else,
+            //     i. Perform ! Call(promiseCapability.[[Resolve]], undefined, « moduleSource »).
+            Ok(source) => cap
+                .resolve()
+                .call(
+                    &JsValue::undefined(),
+                    &[source.into()],
+                    &mut context.borrow_mut(),
+                )
+                .expect("default `resolve` function cannot throw"),
+            // b. If moduleSource is empty, then
+            //     i. Perform ! Call(promiseCapability.[[Reject]], undefined, « a newly created SyntaxError object »).
+            Err(err) => {
+                let err = JsError::into_opaque(err, &mut context.borrow_mut())?;
+                cap.reject()
+                    .call(&JsValue::undefined(), &[err], &mut context.borrow_mut())
+                    .expect("default `reject` function cannot throw")
+            }
+        };
+        // d. Return unused.
         return Ok(());
     }
 

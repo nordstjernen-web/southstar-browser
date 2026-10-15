@@ -175,6 +175,7 @@ pub struct StandardConstructors {
     weak_set: StandardConstructor,
     iterator: StandardConstructor,
     finalization_registry: StandardConstructor,
+    abstract_module_source: StandardConstructor,
     #[cfg(feature = "experimental")]
     shadow_realm: StandardConstructor,
     #[cfg(feature = "intl")]
@@ -276,6 +277,7 @@ impl Default for StandardConstructors {
             weak_set: StandardConstructor::default(),
             iterator: StandardConstructor::default(),
             finalization_registry: StandardConstructor::default(),
+            abstract_module_source: StandardConstructor::default(),
             #[cfg(feature = "experimental")]
             shadow_realm: StandardConstructor::default(),
             #[cfg(feature = "intl")]
@@ -899,6 +901,19 @@ impl StandardConstructors {
     #[must_use]
     pub const fn finalization_registry(&self) -> &StandardConstructor {
         &self.finalization_registry
+    }
+
+    /// Returns the `%AbstractModuleSource%` constructor, the superclass of module source
+    /// objects, which has no global binding.
+    ///
+    /// More information:
+    ///  - [Source phase imports proposal][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-source-phase-imports/#sec-%abstractmodulesource%-constructor
+    #[inline]
+    #[must_use]
+    pub const fn abstract_module_source(&self) -> &StandardConstructor {
+        &self.abstract_module_source
     }
 
     /// Returns the `ShadowRealm` constructor.

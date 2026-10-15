@@ -262,12 +262,13 @@ impl ModuleItemList {
                 let attributes: Box<[ImportAttribute]> = Box::from(node.attributes());
 
                 if let Some(default) = node.default() {
-                    self.0.push(ImportEntry::new(
-                        module,
-                        ImportName::Name(Sym::DEFAULT),
-                        default,
-                        attributes.clone(),
-                    ));
+                    let name = if node.phase() == ImportPhase::Source {
+                        ImportName::Source
+                    } else {
+                        ImportName::Name(Sym::DEFAULT)
+                    };
+                    self.0
+                        .push(ImportEntry::new(module, name, default, attributes.clone()));
                 }
 
                 match node.kind() {
@@ -278,12 +279,8 @@ impl ModuleItemList {
                         } else {
                             ImportName::Namespace
                         };
-                        self.0.push(ImportEntry::new(
-                            module,
-                            name,
-                            *binding,
-                            attributes.clone(),
-                        ));
+                        self.0
+                            .push(ImportEntry::new(module, name, *binding, attributes.clone()));
                     }
                     ImportKind::Named { names } => {
                         for name in &**names {
