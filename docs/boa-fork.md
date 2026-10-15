@@ -24,7 +24,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 
 The script downloads the release the fork's `Cargo.toml` names, checks it
 against the crates.io index checksum and diffs `src/` and `Cargo.toml`. On
-2026-10-15 the difference is 1,746 added and 172 removed lines in 22 files;
+2026-10-15 the difference is 2,469 added and 177 removed lines in 24 files;
 137 of the removed lines are the `Cargo.toml` trim below.
 
 ## What the fork adds
@@ -50,6 +50,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Change | Files | test262 directories |
 | --- | --- | --- |
 | `Iterator.prototype.chunks`/`windows` (iterator chunking), `Iterator.zip`/`zipKeyed` (joint iteration), `Iterator.prototype.join`, `Iterator.prototype[Symbol.dispose]`; `take`/`drop` reject limits above 2^53 - 1, `includes` validates `skippedElements` without coercion, and `return()` on a helper that never started marks it completed before closing what it wraps | `builtins/iterable/iterator_prototype.rs`, `builtins/iterable/iterator_constructor.rs`, `builtins/iterable/iterator_helper/{chunks,zip,mod}.rs` | `built-ins/Iterator` |
+| `Uint8Array.fromBase64`/`fromHex` and `Uint8Array.prototype.toBase64`/`toHex`/`setFromBase64`/`setFromHex` (ES2026) | `builtins/typed_array/base64.rs`, `builtins/typed_array/mod.rs` | `built-ins/Uint8Array` |
 
 ## Rules for changing the fork
 

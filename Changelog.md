@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Uint8Array converts to and from base64 and hex (ES2026):
+  Uint8Array.fromBase64() and fromHex(), toBase64() with the base64url
+  alphabet and omitPadding, toHex(), and setFromBase64()/setFromHex() that
+  decode into an existing array. test262 reaches 49,754 of 52,133.
 * Iterators gain chunks() and windows(), Iterator.zip() and
   Iterator.zipKeyed(), join() and [Symbol.dispose](); take() and drop() reject
   limits past 2^53 - 1 and includes() checks skippedElements as the proposal
