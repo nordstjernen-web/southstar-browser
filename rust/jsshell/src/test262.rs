@@ -42,7 +42,11 @@ fn parse_meta(source: &str) -> Meta {
         return meta;
     };
     let mut section = "";
-    for line in source[start + 5..start + end].lines() {
+    let frontmatter = &source[start + 5..start + end];
+    for line in frontmatter
+        .split(['\r', '\n'])
+        .filter(|line| !line.is_empty())
+    {
         let trimmed = line.trim();
         if !line.starts_with(' ') && !line.starts_with('\t') {
             if let Some((key, value)) = trimmed.split_once(':') {
