@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Error.prototype.stack follows the error-stack accessor proposal: the
+  getter throws on a non-object receiver, and the setter accepts only
+  strings and, like Iterator.prototype's accessors, refuses to write to
+  Error.prototype itself, updates an existing own property through [[Set]]
+  and otherwise creates one. test262 reaches 50,876 of 52,133.
 * filter() and with() on a BigInt typed array whose buffer the callback or
   an argument's valueOf detached or shrank no longer stop the engine with
   an internal assertion: the TypeError from converting undefined to a

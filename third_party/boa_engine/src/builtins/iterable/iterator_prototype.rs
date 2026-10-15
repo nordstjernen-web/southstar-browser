@@ -168,7 +168,7 @@ impl Iterator {
     ///  - [ECMAScript reference][spec]
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-SetterThatIgnoresPrototypeProperties
-    fn setter_that_ignores_prototype_properties<K: Into<PropertyKey>>(
+    pub(crate) fn setter_that_ignores_prototype_properties<K: Into<PropertyKey>>(
         this: &JsValue,
         home: &JsObject,
         p: K,

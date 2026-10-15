@@ -14,7 +14,7 @@ use std::fmt::Write;
 
 use crate::{
     Context, JsArgs, JsData, JsResult, JsString, JsValue,
-    builtins::BuiltInObject,
+    builtins::{BuiltInObject, iterable::Iterator},
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     error::{IgnoreEq, JsNativeError},
     js_string,
@@ -192,6 +192,7 @@ impl IntrinsicObject for Error {
 
         let set_stack = BuiltInBuilder::callable(realm, Self::set_stack)
             .name(js_string!("set stack"))
+            .length(1)
             .build();
 
         let builder = BuiltInBuilder::from_standard_constructor::<Self>(realm)
@@ -302,12 +303,13 @@ impl Error {
     ///  - [Proposal][spec]
     ///
     /// [spec]: https://tc39.es/proposal-error-stacks/
-    #[allow(clippy::unnecessary_wraps)]
     fn get_stack(this: &JsValue, _: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
         // 1. Let E be the this value.
-        // 2. If E is not an Object, return undefined.
+        // 2. If E is not an Object, throw a TypeError exception.
         let Some(e) = this.as_object() else {
-            return Ok(JsValue::undefined());
+            return Err(JsNativeError::typ()
+                .with_message("Error.prototype.stack getter requires that 'this' be an Object")
+                .into());
         };
 
         // 3. Let errorData be the value of the [[ErrorData]] internal slot of E.
@@ -343,25 +345,33 @@ impl Error {
     /// [spec]: https://tc39.es/proposal-error-stacks/
     fn set_stack(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
         // 1. Let E be the this value.
-        // 2. If Type(E) is not Object, throw a TypeError exception.
-        let e = this.as_object().ok_or_else(|| {
-            JsNativeError::typ()
-                .with_message("Error.prototype.stack setter requires that 'this' be an Object")
-        })?;
-
-        // 3. Let numberOfArgs be the number of arguments passed to this function call.
-        // 4. If numberOfArgs is 0, throw a TypeError exception.
-        let Some(value) = args.first() else {
+        // 2. If E is not an Object, throw a TypeError exception.
+        if !this.is_object() {
             return Err(JsNativeError::typ()
-                .with_message(
-                    "Error.prototype.stack setter requires at least 1 argument, but only 0 were passed",
-                )
+                .with_message("Error.prototype.stack setter requires that 'this' be an Object")
                 .into());
-        };
+        }
 
-        // 5. Return ? CreateDataPropertyOrThrow(E, "stack", value).
-        e.create_data_property_or_throw(js_string!("stack"), value.clone(), context)
-            .map(Into::into)
+        // 3. If v is not a String, throw a TypeError exception.
+        let value = args.get_or_undefined(0);
+        if !value.is_string() {
+            return Err(JsNativeError::typ()
+                .with_message("Error.prototype.stack setter requires a string value")
+                .into());
+        }
+
+        // 4. Perform ? SetterThatIgnoresPrototypeProperties(this value, %Error.prototype%, "stack", v).
+        let home = context.intrinsics().constructors().error().prototype();
+        Iterator::setter_that_ignores_prototype_properties(
+            this,
+            &home,
+            js_string!("stack"),
+            value,
+            context,
+        )?;
+
+        // 5. Return undefined.
+        Ok(JsValue::undefined())
     }
 
     /// `Error.prototype.toString()`
