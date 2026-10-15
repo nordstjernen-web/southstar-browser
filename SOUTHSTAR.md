@@ -65,10 +65,11 @@ to a DOM (`rust/dom`); the engine does the CSS cascade and selectors,
 block/inline/flex/grid/table/multicol/float/positioned layout, and Cairo +
 Pango paint (text shaped through the `ns-pango` fork; gradients incl.
 `repeating-*` and gradient masks, filters, transforms, transitions /
-`@keyframes`). JavaScript runs on Boa and passes 97.4% of test262 (50,789 of
-52,133), including ES2025/ES2026 and late-stage proposals such as explicit
-resource management, iterator chunking and joint iteration, immutable
-ArrayBuffers and Temporal; `Intl` is the ICU-free `rust/js-intl`. Bindings
+`@keyframes`). JavaScript runs on Boa and passes all of test262 (52,133 of
+52,133 outside `test/staging`), including ES2025/ES2026 and late-stage
+proposals such as explicit resource management, iterator chunking and joint
+iteration, immutable ArrayBuffers, decorators, `ShadowRealm`, `import defer`,
+source phase imports and Temporal; `Intl` is the ICU-free `rust/js-intl`. Bindings
 (`rust/js-*`) cover DOM, Shadow DOM, `fetch`/XHR, canvas 2D, storage
 (`localStorage`/`sessionStorage`, IndexedDB over SQLite),
 `WebSocket`/`EventSource`, dedicated and module workers, service workers, the
@@ -155,9 +156,9 @@ live in `rust/sandbox`; `SECURITY.md` describes the boundary.
   fall back to a full cascade. Land as small, measured commits — profile
   before/after; this area regresses easily (prior per-element class-hashset
   attempts both regressed).
-- **20 · test262 to 100%** — what remains is mostly `intl402`, then
-  `import defer` / source-phase imports, `ShadowRealm`, decorators, proper
-  tail calls and the Annex B RegExp legacy features.
+- **20 · test262 to 100%** — done: 52,133 of 52,133 outside
+  `test/staging` (`southstar-jsshell test262`). Keep it there: run the
+  suite after engine changes.
 
 **Next**
 - **19 · Incremental paint** — viewport culling shipped; the real win is

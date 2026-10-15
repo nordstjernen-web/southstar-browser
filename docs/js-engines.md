@@ -37,17 +37,17 @@ test262 counts each test file once: it passes only if every mode it runs in (slo
 
 ## Boa in Southstar today
 
-On 2026-10-15 the in-tree fork (`third_party/boa_engine`, its changes listed in `docs/boa-fork.md`) gives these results with `southstar-jsshell test262 --jobs 6` on Linux x86-64, against a newer test262 checkout than the table above:
+On 2026-10-15 the in-tree fork (`third_party/boa_engine`, its changes listed in `docs/boa-fork.md`) passes every test262 test outside `test/staging` with `southstar-jsshell test262 --jobs 6` on Linux x86-64, against a newer test262 checkout than the table above; the whole run takes about two and a half minutes:
 
 | | boa (Southstar fork) |
 |---|---:|
-| test262 total | 99.8% (52,051 / 52,133) |
-| test262 annexB | 99.5% (1,081 / 1,086) |
-| test262 built-ins | 99.8% (23,781 / 23,823) |
+| test262 total | 100.0% (52,133 / 52,133) |
+| test262 annexB | 100.0% (1,086 / 1,086) |
+| test262 built-ins | 100.0% (23,823 / 23,823) |
 | test262 harness | 100.0% (116 / 116) |
 | test262 intl402 | 100.0% (3,382 / 3,382) |
-| test262 language | 99.9% (23,691 / 23,726) |
+| test262 language | 100.0% (23,726 / 23,726) |
 | test262 tests that crashed the engine | 0 |
 | test262 tests over 10 s | 0 |
 
-The two slowest tests, `decodeURI/S15.1.3.1_A2.5_T1.js` and `decodeURIComponent/S15.1.3.2_A2.5_T1.js`, take 7 to 8 s each on their own and can pass the 10 s limit when many workers share the machine. Most of the remaining failures are the legacy `Function.prototype.caller` extension, `AbstractModuleSource` and source-phase imports, and decorators.
+The slowest tests, `decodeURI/S15.1.3.1_A2.5_T1.js` and `decodeURIComponent/S15.1.3.2_A2.5_T1.js`, take about 2 s per mode now that writes to global variables go through an inline cache (they took 3 to 4 s per mode and timed out under load before).

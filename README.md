@@ -21,8 +21,9 @@ OpenSSL, FFmpeg, SDL2, …).
 (an interpreter, no JIT), forked into the tree at `third_party/boa_engine` and
 extended there with the hooks the browser needs and the newest language
 features. The bindings are Rust, over the engine layer in `rust/js-engine`.
-It passes **97.4% of test262** (50,789 of 52,133 tests, October 2026),
-ES2025 and ES2026 included, with an ICU-free `Intl` and `Temporal`.
+It passes **all of test262** (52,133 of 52,133 tests outside `test/staging`,
+October 2026), ES2025 and ES2026 included, with decorators, `ShadowRealm`,
+`import defer`, source phase imports, an ICU-free `Intl` and `Temporal`.
 
 Supported platforms:
 * Linux
@@ -61,7 +62,7 @@ small enough for one person to read and audit end-to-end.
       replaced by Boa, and the vendored C decoders replaced by Rust ports.
 - [ ] Bring the Boa build up to and past the QuickJS-era browser on the WPT
       slice, Acid3, speed and memory.
-- [ ] Pass all of test262 (97.4% today; `southstar-jsshell test262`).
+- [x] Pass all of test262 (52,133 of 52,133; `southstar-jsshell test262`).
 
 How the port was done (the processes, the engine's data model and the order
 the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
