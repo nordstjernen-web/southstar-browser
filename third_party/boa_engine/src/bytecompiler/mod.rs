@@ -2355,6 +2355,29 @@ impl<'ctx> ByteCompiler<'ctx> {
         }
     }
 
+    /// Returns `true` if a scope enclosing the current block, below the variable scope, binds
+    /// `name`, so that replacing a function declaration of the block with `var name` would be an
+    /// early error and the declaration does not get the semantics of [B.3.2.1][spec].
+    ///
+    /// The parameter of a `catch` clause does not count (B.3.4).
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-web-compat-functiondeclarationinstantiation
+    #[cfg(feature = "annex-b")]
+    fn enclosing_block_declares(&self, name: &JsString) -> bool {
+        let variable_scope = self.variable_scope.unique_id();
+        let mut scope = self.lexical_scope.outer();
+        while let Some(current) = scope {
+            if current.unique_id() == variable_scope || current.is_function() {
+                return false;
+            }
+            if !current.is_catch_clause() && current.has_binding(name) {
+                return true;
+            }
+            scope = current.outer();
+        }
+        false
+    }
+
     /// Compile a [`Declaration`].
     #[allow(unused_variables)]
     pub fn compile_decl(&mut self, decl: &Declaration, block: bool) {
@@ -2362,7 +2385,9 @@ impl<'ctx> ByteCompiler<'ctx> {
             #[cfg(feature = "annex-b")]
             Declaration::FunctionDeclaration(function) if block => {
                 let name = function.name();
-                if self.annex_b_function_names.contains(&name.sym()) {
+                if self.annex_b_function_names.contains(&name.sym())
+                    && !self.enclosing_block_declares(&name.to_js_string(self.interner()))
+                {
                     let name = name.to_js_string(self.interner());
                     let binding = self.lexical_scope.get_identifier_reference(name.clone());
                     let index = self.get_binding(&binding);

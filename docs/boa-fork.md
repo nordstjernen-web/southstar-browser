@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 10,340 added and 1,105 removed lines in 123 files;
+2026-10-15 the difference is 10,424 added and 1,112 removed lines in 126 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -80,6 +80,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | `InitializeInstanceElements` no longer keeps the class constructor borrowed while the field initializers run, so an initializer that writes to its own class (`id = ++Counter.count`) no longer aborts with a `BorrowMutError` | `object/operations.rs` | `language/statements/class/elements`, `language/expressions/class/elements` |
 | `Number.prototype.toExponential` rounds exact ties up (the larger `n`) from the value's exact decimal expansion instead of Rust's ties-to-even; `Date.parse` returns `NaN` for a string with a signed six-digit year that the Date Time String Format parser rejected (`-000000`, out-of-range time values) instead of handing it to the legacy parser; `Promise.try` calls the callback first and returns `PromiseResolve(C, result)`, so a promise of the same constructor comes back unwrapped (the current specification) | `boa_engine`: `builtins/number/mod.rs`, `builtins/date/utils.rs`, `builtins/promise/mod.rs` | `built-ins/Number/prototype/toExponential`, `built-ins/Date`, `built-ins/Promise/try` |
 | Parser: an object literal ending in a spread and a comma (`{...rest,}`) records it (`ObjectLiteral::has_trailing_comma_spread`) and is not refined into an assignment pattern; the start of a Script counts as the start of a line for Annex B `HTMLCloseComment` (`-->` on the first line, after whitespace and single-line block comments), while whitespace before `#!` still rules out a hashbang; `export default` of an anonymous function or class names it `default` at parse time (NamedEvaluation), so a class's static `name` member wins | `boa_ast`: `expression/literal/object.rs`; `boa_parser`: `expression/primary/object_initializer/mod.rs`, `lexer/mod.rs`, `parser/cursor/buffered_lexer/mod.rs`, `statement/declaration/export.rs` | `language/expressions/assignment/dstr`, `language/statements/for-{in,of}/dstr`, `annexB/language/comments`, `language/comments/hashbang`, `language/module-code`, `language/expressions/dynamic-import` |
+| Strict assignment to an unresolvable reference throws a `ReferenceError` even when evaluating the right-hand side created the global (`GetLocator` records the reference as unresolvable in the frame's binding stack); Annex B.3.4 lets a direct eval inside a `catch` block declare `var`s and functions named like the catch parameter (`Scope::new_catch`, `Scope::is_catch_clause`); a block-level function whose name an enclosing block also declares no longer gets the B.3.2.1 var binding | `boa_ast`: `scope.rs`, `scope_analyzer.rs`; `boa_engine`: `vm/call_frame/mod.rs`, `vm/opcode/{get,set}/name.rs`, `bytecompiler/mod.rs` | `language/identifier-resolution`, `annexB/language/eval-code`, `annexB/language/function-code` |
 
 ## Rules for changing the fork
 

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* In strict code, assigning to an undeclared variable throws even when
+  the assigned expression itself creates that global; in non-strict code
+  eval("var e") inside catch (e) works as in other browsers, and of two
+  nested block functions with the same name only the outer one becomes a
+  function-wide variable. test262 reaches 52,114 of 52,133 (99.96%).
 * A script may start with an HTML close comment (-->) as old pages
   served inside HTML comments do, ({...rest,} = obj) is the syntax error
   the language requires, and export default class { static name() {} }

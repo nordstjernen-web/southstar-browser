@@ -1,3 +1,5 @@
+use boa_ast::scope::BindingLocatorScope;
+
 use crate::{
     Context, JsResult, JsValue,
     error::JsNativeError,
@@ -136,7 +138,17 @@ impl GetLocator {
             context.vm.frame().code_block.bindings[usize::from(index)].clone();
         context.find_runtime_binding(&mut binding_locator)?;
 
-        context.vm.frame_mut().binding_stack.push(binding_locator);
+        // A strict reference that resolves to no binding stays unresolvable, so the `PutValue`
+        // that follows throws even if evaluating the right-hand side created the property.
+        let unresolvable = context.vm.frame().code_block.strict()
+            && matches!(binding_locator.scope(), BindingLocatorScope::GlobalObject)
+            && !context.is_initialized_binding(&binding_locator)?;
+
+        context
+            .vm
+            .frame_mut()
+            .binding_stack
+            .push((binding_locator, unresolvable));
 
         Ok(())
     }
@@ -170,7 +182,11 @@ impl GetNameAndLocator {
             JsNativeError::reference().with_message(format!("{name} is not defined"))
         })?;
 
-        context.vm.frame_mut().binding_stack.push(binding_locator);
+        context
+            .vm
+            .frame_mut()
+            .binding_stack
+            .push((binding_locator, false));
         context.vm.set_register(value.into(), result);
         Ok(())
     }

@@ -60,10 +60,10 @@ pub struct CallFrame {
     // Iterators and their `[[Done]]` flags that must be closed when an abrupt completion is thrown.
     pub(crate) iterators: ThinVec<IteratorRecord>,
 
-    // The stack of bindings being updated.
+    // The stack of bindings being updated, each with whether strict code found it unresolvable.
     // SAFETY: Nothing in `BindingLocator` requires tracing, so this is safe.
     #[unsafe_ignore_trace]
-    pub(crate) binding_stack: ThinVec<BindingLocator>,
+    pub(crate) binding_stack: ThinVec<(BindingLocator, bool)>,
 
     /// How many iterations a loop has done.
     pub(crate) loop_iteration_count: u64,
