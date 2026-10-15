@@ -503,6 +503,10 @@ impl CodeBlock {
             Instruction::CallEval {
                 argument_count,
                 scope_index,
+            }
+            | Instruction::TailCallEval {
+                argument_count,
+                scope_index,
             } => {
                 format!("argument_count:{argument_count}, scope_index:{scope_index}")
             }
@@ -511,6 +515,7 @@ impl CodeBlock {
                 format!("scope_index:{scope_index}")
             }
             Instruction::Call { argument_count }
+            | Instruction::TailCall { argument_count }
             | Instruction::New { argument_count }
             | Instruction::SuperCall { argument_count } => {
                 format!("argument_count:{argument_count}")
@@ -902,9 +907,7 @@ impl CodeBlock {
                 error,
                 new_error,
             } => format!("has_error:{has_error}, error:{error}, new_error:{new_error}"),
-            Instruction::Reserved6
-            | Instruction::Reserved7
-            | Instruction::Reserved8
+            Instruction::Reserved8
             | Instruction::Reserved9
             | Instruction::Reserved10
             | Instruction::Reserved11

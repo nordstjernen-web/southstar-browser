@@ -154,7 +154,9 @@ impl CodeBlock {
                     );
                 }
                 Instruction::CallEval { .. }
+                | Instruction::TailCallEval { .. }
                 | Instruction::Call { .. }
+                | Instruction::TailCall { .. }
                 | Instruction::New { .. }
                 | Instruction::SuperCall { .. }
                 | Instruction::ConcatToString { .. }
@@ -380,9 +382,7 @@ impl CodeBlock {
                 Instruction::Return => {
                     graph.add_node(previous_pc, NodeShape::Diamond, label.into(), Color::Red);
                 }
-                Instruction::Reserved6
-                | Instruction::Reserved7
-                | Instruction::Reserved8
+                Instruction::Reserved8
                 | Instruction::Reserved9
                 | Instruction::Reserved10
                 | Instruction::Reserved11

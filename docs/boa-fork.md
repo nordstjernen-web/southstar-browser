@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 5,174 added and 607 removed lines in 74 files;
+2026-10-15 the difference is 5,426 added and 618 removed lines in 77 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -64,6 +64,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Symbols as weak keys: `WeakMap`, `WeakSet`, `WeakRef` and `FinalizationRegistry` accept any value that `CanBeHeldWeakly`, so a symbol outside the global registry too; object keys stay ephemerons, and symbol keys are held strongly, since Boa never collects symbols | `builtins/weak/{mod,table,weak_ref}.rs`, `builtins/weak_map/mod.rs`, `builtins/weak_set/mod.rs`, `builtins/finalization_registry/mod.rs`, `builtins/symbol/mod.rs` | `built-ins/WeakMap`, `built-ins/WeakSet`, `built-ins/WeakRef`, `built-ins/FinalizationRegistry` |
 | Calling an `[[IsHTMLDDA]]` object returns `null`, as test262's `$262.IsHTMLDDA` does | `builtins/is_html_dda.rs` | `annexB/language` |
 | Object environment records follow the spec's lookups: `GetBindingValue` checks `HasProperty` before `Get` (a binding deleted meanwhile reads as `undefined`, or throws a `ReferenceError` in strict code), and a call through a `with` resolves its callee once, taking both the function and its `this` from that one resolution | `environments/runtime/mod.rs`, `vm/opcode/environment/mod.rs`, `vm/opcode/mod.rs`, `vm/code_block.rs`, `bytecompiler/mod.rs` | `language/statements/with` |
+| Proper tail calls: a `return` in strict, non-async, non-generator code outside `try` blocks, `for-in`/`for-of` loops and dispose scopes compiles the calls in its tail positions (through `?:`, `&&`, `\|\|`, `??`, `,` and parentheses, tagged templates included) to `TailCall`/`TailCallEval`, which discard the caller's frame before calling a bytecode function; a frame entered from native code or constructing an object keeps a normal call | `bytecompiler/tail_call.rs` (new), `bytecompiler/{mod,statement/mod,expression/mod}.rs`, `vm/opcode/call/mod.rs`, `vm/opcode/mod.rs`, `vm/mod.rs`, `vm/code_block.rs`, `vm/flowgraph/mod.rs` | `language/expressions/*/tco-*`, `language/statements/*/tco-*` |
 
 ## Rules for changing the fork
 

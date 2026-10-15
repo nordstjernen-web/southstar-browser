@@ -6,7 +6,10 @@
 
 use crate::{
     Context, JsError, JsExpect, JsNativeError, JsObject, JsResult, JsString, JsValue, Module,
-    builtins::promise::{PromiseCapability, ResolvingFunctions},
+    builtins::{
+        function::OrdinaryFunction,
+        promise::{PromiseCapability, ResolvingFunctions},
+    },
     environments::EnvironmentStack,
     error::RuntimeLimitError,
     object::JsFunction,
@@ -636,6 +639,33 @@ impl Vm {
         self.stack.push(function);
 
         self.push_frame(frame);
+    }
+
+    /// Returns `true` if a call to `callee` in tail position may replace the current frame:
+    /// the callee runs bytecode, and the current frame neither returns to native code, nor
+    /// constructs an object, nor resumes as a generator.
+    pub(crate) fn can_tail_call(&self, callee: &JsObject) -> bool {
+        let frame = self.frame();
+        self.frames.len() > 1
+            && !frame.exit_early()
+            && !frame.construct()
+            && !frame.registers_already_pushed()
+            && callee.is::<OrdinaryFunction>()
+    }
+
+    /// `PrepareForTailCall ( )`: discards the current frame, moving the `this` value, the
+    /// function and the arguments of the call in tail position to where the frame began.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-preparefortailcall
+    pub(crate) fn prepare_for_tail_call(&mut self, argument_count: usize) {
+        let call_length = argument_count + CallFrame::FUNCTION_PROLOGUE as usize;
+        let call_start = self.stack.stack.len() - call_length;
+        let frame_pointer = self.frame().frame_pointer();
+        self.stack.stack.drain(frame_pointer..call_start);
+        self.pop_frame();
     }
 
     pub(crate) fn pop_frame(&mut self) -> Option<CallFrame> {

@@ -78,6 +78,8 @@ impl ByteCompiler<'_> {
                         self.register_allocator.dealloc(resume_kind);
                         self.push_from_register(&value);
                         self.register_allocator.dealloc(value);
+                    } else if self.return_is_in_tail_position() {
+                        self.compile_tail_expr_to_stack(expr);
                     } else {
                         self.compile_expr_to_stack(expr);
                     }

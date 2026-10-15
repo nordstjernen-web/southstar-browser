@@ -31,6 +31,7 @@ mod jump_control;
 mod module;
 mod register;
 mod statement;
+mod tail_call;
 mod utils;
 
 use std::{
@@ -547,6 +548,10 @@ pub struct ByteCompiler<'ctx> {
     /// innermost last.
     pub(crate) dispose_capabilities: Vec<u32>,
 
+    /// Whether the next call compiled is in tail position, set by
+    /// [`ByteCompiler::compile_tail_expr_to_stack`].
+    pub(crate) tail_call: bool,
+
     /// Used to handle exception throws that escape the async function types.
     ///
     /// Async functions and async generator functions, need to be closed and resolved.
@@ -674,6 +679,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             const_binding_cache: FxHashMap::default(),
             jump_info: Vec::new(),
             dispose_capabilities: Vec::new(),
+            tail_call: false,
             async_handler: None,
             json_parse,
             variable_scope,
@@ -2543,6 +2549,7 @@ impl<'ctx> ByteCompiler<'ctx> {
     }
 
     fn call(&mut self, callable: Callable<'_>, dst: CallResultDest<'_>) {
+        let tail_call = std::mem::take(&mut self.tail_call);
         #[derive(PartialEq)]
         enum CallKind {
             CallEval,
@@ -2661,6 +2668,11 @@ impl<'ctx> ByteCompiler<'ctx> {
                 compiler.constants.push(Constant::Scope(lexical_scope));
                 if contains_spread {
                     compiler.bytecode.emit_call_eval_spread(scope_index.into());
+                } else if tail_call {
+                    compiler.bytecode.emit_tail_call_eval(
+                        (call.args().len() as u32).into(),
+                        scope_index.into(),
+                    );
                 } else {
                     compiler
                         .bytecode
@@ -2668,6 +2680,11 @@ impl<'ctx> ByteCompiler<'ctx> {
                 }
             }
             CallKind::Call if contains_spread => compiler.bytecode.emit_call_spread(),
+            CallKind::Call if tail_call => {
+                compiler
+                    .bytecode
+                    .emit_tail_call((call.args().len() as u32).into());
+            }
             CallKind::Call => {
                 compiler
                     .bytecode

@@ -2197,10 +2197,23 @@ generate_opcodes! {
     ///   - Input: has_error, error, new_error
     ///   - Output: has_error, error
     AddDisposeError { has_error: RegisterOperand, error: RegisterOperand, new_error: RegisterOperand },
-    /// Reserved [`Opcode`].
-    Reserved6 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved7 => Reserved,
+    /// Call a function in tail position: the current frame is discarded before the call
+    /// (`PrepareForTailCall`) when the callee runs bytecode and the frame may be replaced,
+    /// otherwise this is `Call`.
+    ///
+    /// - Operands:
+    ///   - argument_count: `IndexOperand`
+    /// - Stack: this, func, argument_1, ... argument_n **=>** result
+    TailCall { argument_count: IndexOperand },
+
+    /// Call a function named "eval" in tail position: a direct eval is `CallEval`, any other
+    /// callee `TailCall`.
+    ///
+    /// - Operands:
+    ///   - argument_count: `IndexOperand`
+    ///   - scope_index: `IndexOperand`
+    /// - Stack: this, func, argument_1, ... argument_n **=>** result
+    TailCallEval { argument_count: IndexOperand, scope_index: IndexOperand },
     /// Reserved [`Opcode`].
     Reserved8 => Reserved,
     /// Reserved [`Opcode`].

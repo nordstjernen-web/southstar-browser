@@ -246,6 +246,7 @@ impl ByteCompiler<'_> {
                 self.patch_jump(resume_exit);
             }
             Expression::TaggedTemplate(template) => {
+                let tail_call = std::mem::take(&mut self.tail_call);
                 let this = self.register_allocator.alloc();
                 let function = self.register_allocator.alloc();
 
@@ -332,8 +333,12 @@ impl ByteCompiler<'_> {
                     self.compile_expr_to_stack(expr);
                 }
 
-                self.bytecode
-                    .emit_call((template.exprs().len() as u32 + 1).into());
+                let argument_count = (template.exprs().len() as u32 + 1).into();
+                if tail_call {
+                    self.bytecode.emit_tail_call(argument_count);
+                } else {
+                    self.bytecode.emit_call(argument_count);
+                }
                 self.pop_into_register(dst);
             }
             Expression::ClassExpression(class) => {

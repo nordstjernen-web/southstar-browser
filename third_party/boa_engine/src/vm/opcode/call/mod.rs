@@ -213,6 +213,82 @@ impl Operation for Call {
     const COST: u8 = 3;
 }
 
+/// `TailCall` implements the Opcode Operation for `Opcode::TailCall`
+///
+/// Operation:
+///  - Call a function in tail position, replacing the current frame when possible.
+///
+/// More information:
+///  - [ECMAScript reference][spec]
+///
+/// [spec]: https://tc39.es/ecma262/#sec-preparefortailcall
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TailCall;
+
+impl TailCall {
+    #[inline(always)]
+    pub(super) fn operation(argument_count: IndexOperand, context: &mut Context) -> JsResult<()> {
+        let argument_count = usize::from(argument_count);
+        let func = context
+            .vm
+            .stack
+            .calling_convention_get_function(argument_count);
+
+        let Some(object) = func.as_object() else {
+            return Err(Call::handle_not_callable());
+        };
+
+        if context.vm.can_tail_call(&object) {
+            context.vm.prepare_for_tail_call(argument_count);
+        }
+
+        object.__call__(argument_count).resolve(context)?;
+
+        Ok(())
+    }
+}
+
+impl Operation for TailCall {
+    const NAME: &'static str = "TailCall";
+    const INSTRUCTION: &'static str = "INST - TailCall";
+    const COST: u8 = 3;
+}
+
+/// `TailCallEval` implements the Opcode Operation for `Opcode::TailCallEval`
+///
+/// Operation:
+///  - Call a function named "eval" in tail position: a direct eval runs like `CallEval`, any
+///    other function is called like `TailCall`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TailCallEval;
+
+impl TailCallEval {
+    #[inline(always)]
+    pub(super) fn operation(
+        (argument_count, scope_index): (IndexOperand, IndexOperand),
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let eval = context.intrinsics().objects().eval();
+        let is_direct_eval = context
+            .vm
+            .stack
+            .calling_convention_get_function(argument_count.into())
+            .as_object()
+            .is_some_and(|object| JsObject::equals(&object, &eval));
+
+        if is_direct_eval {
+            return CallEval::operation((argument_count, scope_index), context);
+        }
+        TailCall::operation(argument_count, context)
+    }
+}
+
+impl Operation for TailCallEval {
+    const NAME: &'static str = "TailCallEval";
+    const INSTRUCTION: &'static str = "INST - TailCallEval";
+    const COST: u8 = 5;
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CallSpread;
 

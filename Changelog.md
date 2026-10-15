@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Strict-mode JavaScript gets proper tail calls (ES2015): a function that
+  ends in return f(...), including through ?:, &&, ||, ?? and the comma
+  operator, reuses its stack frame for the call, so tail-recursive code
+  runs to any depth instead of hitting the recursion limit. Calls inside
+  try blocks, for-of loops, generators and async functions keep their
+  frames, and an error's stack no longer lists the frames a tail call
+  replaced. test262 reaches 50,827 of 52,133 (97.5%).
 * Inside a with statement, a call such as f() looks f up once instead of
   twice, and reading a binding first checks that the object still has it,
   so proxies and getters see the operations the standard specifies and a
