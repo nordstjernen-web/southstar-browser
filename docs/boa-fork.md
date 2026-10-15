@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 5,586 added and 644 removed lines in 79 files;
+2026-10-15 the difference is 5,614 added and 646 removed lines in 79 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -41,6 +41,7 @@ of each (`--crate boa_parser` limits it to one). On
 | --- | --- | --- | --- |
 | `Context::set_interrupt_handler`, polled every 1024 loop back-edges and calls, stops a script with the uncatchable `RuntimeLimitError::Interrupted` | `vm/mod.rs`, `context/mod.rs`, `error/mod.rs`, `vm/opcode/iteration/loop_ops.rs` | halting a realm, a closing worker, the eval budget and the long-running script monitor (`rust/js-runtime/src/interrupt.rs`) | yes: a general embedder need |
 | `Context::frame_depth`, `Context::frame_source_path` | `context/mod.rs` | telling host access from page script (`boa/access.rs`): engine state on events and other host objects is visible only to host code | yes |
+| `Context::native_constructor_receiver`: the `this` value a native constructor received when it was called without `new`, which Boa replaces with `undefined` | `vm/mod.rs`, `native_function/mod.rs`, `context/mod.rs` | `Scope::constructor_receiver`: `Intl.NumberFormat.call(object)` attaches the new format to `object` (ECMA-402 ChainNumberFormat) | yes |
 | `FunctionObjectBuilder::host`, `NativeFunctionObject::{is_host, function, name, is_constructor}` | `object/mod.rs`, `native_function/mod.rs`, `builtins/builder.rs`, `object/builtins/jsfunction.rs` | telling the embedder's functions from Boa's built-ins (structured clone, `on<type>` handlers) | yes |
 | `HostExoticHooks`, `host_internal_methods`, `ordinary_define_own_property_of`, `set_with_receiver`, the `InternalObjectMethods` re-export | `object/internal_methods/host.rs` (new), `object/internal_methods/mod.rs`, `object/mod.rs` | WebIDL indexed and named properties (collections, `Storage`, `dataset`, `DOMTokenList`, the CSSOM, the window) and setters forwarded to a prototype with the right `this` | yes, as a public custom-internal-methods API; upstream may want a different shape |
 | `JsArrayBuffer::from_external_bytes`: an `ArrayBuffer` viewing embedder memory, detachable, never transferable or resizable | `builtins/array_buffer/mod.rs`, `object/builtins/jsarraybuffer.rs` | `WebAssembly.Memory.prototype.buffer` over wasmi's linear memory | yes |

@@ -456,6 +456,14 @@ impl Context {
         self.instructions_remaining
     }
 
+    /// Returns the `this` value the running native constructor received when it
+    /// was called without `new`, or `undefined` for any other native call.
+    #[inline]
+    #[must_use]
+    pub fn native_constructor_receiver(&self) -> JsValue {
+        self.vm.native_constructor_receiver.clone()
+    }
+
     /// Returns how many call frames are on the VM stack; native functions push none.
     #[inline]
     #[must_use]

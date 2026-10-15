@@ -390,12 +390,20 @@ pub(crate) fn native_function_call(
     context.swap_realm(&mut realm);
     context.vm.native_active_function = Some(this_function_object);
 
+    let receiver = if constructor.is_some() {
+        this.clone()
+    } else {
+        JsValue::undefined()
+    };
+    let previous_receiver =
+        std::mem::replace(&mut context.vm.native_constructor_receiver, receiver);
     let result = if constructor.is_some() {
         function.call(&JsValue::undefined(), &args, context)
     } else {
         function.call(&this, &args, context)
     }
     .map_err(|err| err.inject_realm(context.realm().clone()));
+    context.vm.native_constructor_receiver = previous_receiver;
 
     context.vm.native_active_function = None;
     context.swap_realm(&mut realm);
@@ -454,8 +462,13 @@ fn native_function_construct(
     let _func = context.vm.stack.pop();
     let _this = context.vm.stack.pop();
 
-    let result = function
-        .call(&new_target, &args, context)
+    let previous_receiver = std::mem::replace(
+        &mut context.vm.native_constructor_receiver,
+        JsValue::undefined(),
+    );
+    let result = function.call(&new_target, &args, context);
+    context.vm.native_constructor_receiver = previous_receiver;
+    let result = result
         .map_err(|err| err.inject_realm(context.realm().clone()))
         .and_then(|v| match v.variant() {
             JsVariant::Object(o) => Ok(o.clone()),

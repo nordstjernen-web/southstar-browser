@@ -21,6 +21,7 @@ use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{
     PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaPropertyKey,
 };
+use boa_engine::value::PreferredType;
 use boa_engine::{
     Context, JsBigInt, JsError, JsNativeError, JsObject, JsString, JsSymbol, JsValue, Module,
     NativeFunction, Script, Source,
@@ -183,6 +184,10 @@ impl Value {
 
     pub fn is_symbol(&self) -> bool {
         self.0.is_symbol()
+    }
+
+    pub fn is_bigint(&self) -> bool {
+        self.0.is_bigint()
     }
 
     pub fn object_key(&self) -> Option<ObjectKey> {
@@ -695,6 +700,18 @@ impl Scope<'_> {
         value.0.to_big_int64(self.cx()).map_err(|e| self.error(e))
     }
 
+    pub fn constructor_receiver(&mut self) -> Value {
+        Value(self.cx().native_constructor_receiver())
+    }
+
+    pub fn to_primitive_number(&mut self, value: &Value) -> Result<Value, Value> {
+        value
+            .0
+            .to_primitive(self.cx(), PreferredType::Number)
+            .map(Value)
+            .map_err(|e| self.error(e))
+    }
+
     pub fn range_error(&mut self, message: &str) -> Value {
         let error = JsNativeError::range().with_message(message.to_owned());
         Value(error.into_opaque(self.cx()).into())
@@ -1202,6 +1219,16 @@ impl Scope<'_> {
             Some(prototype) => Value(prototype.into()),
             None => Value::null(),
         })
+    }
+
+    pub fn get_prototype_of(&mut self, object: &Value) -> Result<Value, Value> {
+        OrdinaryObject::get_prototype_of(
+            &JsValue::undefined(),
+            std::slice::from_ref(&object.0),
+            self.cx(),
+        )
+        .map(Value)
+        .map_err(|e| self.error(e))
     }
 
     pub fn is_function(&mut self, value: &Value) -> bool {
