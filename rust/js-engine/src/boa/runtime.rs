@@ -24,6 +24,9 @@ use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsString, 
 use super::{Compiled, Scope, Value};
 use crate::{ContextHandle, JobOutcome, MemoryUsage, RuntimeHandle, RuntimeOptions};
 
+const CALL_DEPTH_LIMIT: usize = 10_000;
+const VALUE_STACK_LIMIT: usize = 1 << 20;
+
 pub(super) struct BoaRuntime {
     ctx: *mut Context,
     options: RuntimeOptions,
@@ -444,6 +447,12 @@ impl BoaRuntime {
             let opaque = options.interrupt_opaque;
             let handler: Rc<dyn Fn() -> bool> = Rc::new(move || interrupt(opaque));
             context.set_interrupt_handler(Some(handler));
+        }
+        if options.stack_size != 0 {
+            context.set_native_stack_limit(options.stack_size);
+            let limits = context.runtime_limits_mut();
+            limits.set_recursion_limit(CALL_DEPTH_LIMIT);
+            limits.set_stack_size_limit(VALUE_STACK_LIMIT);
         }
         let runtime = Box::into_raw(Box::new(BoaRuntime {
             ctx: Box::into_raw(Box::new(context)),

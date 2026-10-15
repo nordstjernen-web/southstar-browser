@@ -620,6 +620,19 @@ impl Context {
         self.vm.interrupt_handler = handler.map(crate::vm::InterruptHandler);
     }
 
+    /// Limits the native stack that script execution may use below the current frame to
+    /// `bytes`, past which calls fail like exceeding the recursion limit; `0` removes the limit.
+    #[inline]
+    pub fn set_native_stack_limit(&mut self, bytes: usize) {
+        self.vm.native_stack_floor = if bytes == 0 {
+            0
+        } else {
+            crate::vm::native_stack_address()
+                .saturating_sub(bytes)
+                .max(1)
+        };
+    }
+
     /// Get a mutable reference to the [`RuntimeLimits`].
     #[inline]
     pub fn runtime_limits_mut(&mut self) -> &mut RuntimeLimits {

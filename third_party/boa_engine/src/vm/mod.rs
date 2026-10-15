@@ -109,6 +109,9 @@ pub struct Vm {
     /// Polls left until the interrupt check runs again.
     pub(crate) interrupt_countdown: u32,
 
+    /// The lowest native stack address execution may reach, or `0` for no limit.
+    pub(crate) native_stack_floor: usize,
+
     #[cfg(feature = "trace")]
     pub(crate) trace: bool,
     #[cfg(feature = "trace")]
@@ -437,6 +440,7 @@ impl Vm {
             shadow_stack: ShadowStack::default(),
             interrupt_handler: None,
             interrupt_countdown: INTERRUPT_INTERVAL,
+            native_stack_floor: 0,
             #[cfg(feature = "trace")]
             trace: false,
             #[cfg(feature = "trace")]
@@ -1090,6 +1094,10 @@ impl Context {
         if self.vm.runtime_limits.recursion_limit() <= recursion_depth {
             return Err(RuntimeLimitError::Recursion.into());
         }
+        // Must throw before the native stack, which host calls grow, overflows.
+        if self.vm.native_stack_floor != 0 && native_stack_address() < self.vm.native_stack_floor {
+            return Err(RuntimeLimitError::Recursion.into());
+        }
         // Must throw if the stack size exceeds the defined maximum length.
         if self.vm.runtime_limits.stack_size_limit() <= self.vm.stack.stack.len() {
             return Err(RuntimeLimitError::StackSize.into());
@@ -1097,6 +1105,13 @@ impl Context {
 
         Ok(())
     }
+}
+
+/// An address in the current native stack frame.
+#[inline(never)]
+pub(crate) fn native_stack_address() -> usize {
+    let marker = 0u8;
+    std::hint::black_box(std::ptr::addr_of!(marker)) as usize
 }
 
 /// The embedder's interrupt check.
