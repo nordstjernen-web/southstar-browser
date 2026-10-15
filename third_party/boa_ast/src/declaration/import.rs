@@ -12,7 +12,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    expression::Identifier,
+    expression::{Identifier, ImportPhase},
     visitor::{VisitWith, Visitor, VisitorMut},
 };
 use boa_interner::Sym;
@@ -89,6 +89,8 @@ pub struct ImportDeclaration {
     specifier: ModuleSpecifier,
     /// Import attributes.
     attributes: Box<[ImportAttribute]>,
+    /// The phase of the import (`import defer * as name from "module-name"` is deferred).
+    phase: ImportPhase,
 }
 
 impl ImportDeclaration {
@@ -106,7 +108,23 @@ impl ImportDeclaration {
             kind,
             specifier,
             attributes,
+            phase: ImportPhase::Evaluation,
         }
+    }
+
+    /// Sets the phase of the import declaration.
+    #[inline]
+    #[must_use]
+    pub const fn with_phase(mut self, phase: ImportPhase) -> Self {
+        self.phase = phase;
+        self
+    }
+
+    /// Gets the phase of the import declaration.
+    #[inline]
+    #[must_use]
+    pub const fn phase(&self) -> ImportPhase {
+        self.phase
     }
 
     /// Gets the binding for the default export of the module.
@@ -233,6 +251,8 @@ impl VisitWith for ImportSpecifier {
 pub enum ImportName {
     /// The namespace object of the imported module.
     Namespace,
+    /// The deferred namespace object of the imported module (`import defer * as name`).
+    DeferredNamespace,
     /// A binding of the imported module.
     Name(Sym),
 }

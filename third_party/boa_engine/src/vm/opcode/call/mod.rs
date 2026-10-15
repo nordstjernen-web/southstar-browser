@@ -417,6 +417,50 @@ fn parse_import_attributes(
 /// [load]: https://tc39.es/ecma262/#sec-HostLoadImportedModule
 /// [finish]: https://tc39.es/ecma262/#sec-FinishLoadingImportedModule
 /// [continue]: https://tc39.es/ecma262/#sec-ContinueDynamicImport
+/// Returns a promise that fulfills with `undefined` once all `promises` have fulfilled, or
+/// rejects with the first rejection, using internal promise reactions only.
+fn wait_for_all(
+    promises: Vec<crate::object::builtins::JsPromise>,
+    context: &mut Context,
+) -> JsResult<crate::object::builtins::JsPromise> {
+    let (all, resolvers) = crate::object::builtins::JsPromise::new_pending(context);
+    if promises.is_empty() {
+        resolvers
+            .resolve
+            .call(&JsValue::undefined(), &[], context)?;
+        return Ok(all);
+    }
+    let remaining = boa_gc::Gc::new(boa_gc::GcRefCell::new(promises.len()));
+    for promise in promises {
+        let on_fulfilled = FunctionObjectBuilder::new(
+            context.realm(),
+            NativeFunction::from_copy_closure_with_captures(
+                |_, _, (remaining, resolve), context| {
+                    let left = {
+                        let mut remaining = remaining.borrow_mut();
+                        *remaining -= 1;
+                        *remaining
+                    };
+                    if left == 0 {
+                        resolve.call(&JsValue::undefined(), &[], context)?;
+                    }
+                    Ok(JsValue::undefined())
+                },
+                (remaining.clone(), resolvers.resolve.clone()),
+            ),
+        )
+        .build();
+        Promise::perform_promise_then(
+            &promise,
+            Some(on_fulfilled),
+            Some(resolvers.reject.clone()),
+            None,
+            context,
+        );
+    }
+    Ok(all)
+}
+
 async fn load_dyn_import(
     referrer: Referrer,
     request: ModuleRequest,
@@ -546,7 +590,7 @@ async fn load_dyn_import(
     let link_evaluate = FunctionObjectBuilder::new(
         context.borrow().realm(),
         NativeFunction::from_copy_closure_with_captures(
-            |_, _, (module, cap, on_rejected), context| {
+            |_, _, (module, cap, on_rejected, phase), context| {
                 // a. Let link be Completion(module.Link()).
                 // b. If link is an abrupt completion, then
                 if let Err(e) = module.link(context) {
@@ -559,17 +603,42 @@ async fn load_dyn_import(
                     return Ok(JsValue::undefined());
                 }
 
-                // c. Let evaluatePromise be module.Evaluate().
-                let evaluate = module.evaluate(context)?;
+                let deferred = *phase == 1;
+                let evaluate = if deferred {
+                    // c. If phase is defer, then
+                    //     i. Let evaluationList be GatherAsynchronousTransitiveDependencies(module).
+                    let mut evaluation_list = Vec::new();
+                    module.gather_asynchronous_transitive_dependencies(
+                        &mut rustc_hash::FxHashSet::default(),
+                        &mut evaluation_list,
+                    );
+                    //     ii. Let asyncDepsEvaluationPromises be a new empty List.
+                    //     iii. For each Module Record dep of evaluationList, append dep.Evaluate() to asyncDepsEvaluationPromises.
+                    let promises = evaluation_list
+                        .iter()
+                        .map(|dep| dep.evaluate(context))
+                        .collect::<JsResult<Vec<_>>>()?;
+                    //     iv. Let evaluatePromise be a promise that fulfills once every promise
+                    //         of asyncDepsEvaluationPromises has, through internal reactions
+                    //         that never look up `then`.
+                    wait_for_all(promises, context)?
+                } else {
+                    // d. Else, let evaluatePromise be module.Evaluate().
+                    module.evaluate(context)?
+                };
 
                 // d. Let fulfilledClosure be a new Abstract Closure with no parameters that captures module and promiseCapability and performs the following steps when called:
                 // e. Let onFulfilled be CreateBuiltinFunction(fulfilledClosure, 0, "", « »).
                 let fulfill = FunctionObjectBuilder::new(
                     context.realm(),
                     NativeFunction::from_copy_closure_with_captures(
-                        |_, _, (module, cap), context| {
-                            // i. Let namespace be GetModuleNamespace(module).
-                            let namespace = module.namespace(context);
+                        |_, _, (module, cap, deferred), context| {
+                            // i. Let namespace be GetModuleNamespace(module, phase).
+                            let namespace = if *deferred {
+                                module.deferred_namespace(context)
+                            } else {
+                                module.namespace(context)
+                            };
 
                             // ii. Perform ! Call(promiseCapability.[[Resolve]], undefined, « namespace »).
                             cap.resolve()
@@ -579,7 +648,7 @@ async fn load_dyn_import(
                             // iii. Return unused.
                             Ok(JsValue::undefined())
                         },
-                        (module.clone(), cap.clone()),
+                        (module.clone(), cap.clone(), deferred),
                     ),
                 )
                 .build();
@@ -596,7 +665,7 @@ async fn load_dyn_import(
                 // g. Return unused.
                 Ok(JsValue::undefined())
             },
-            (module.clone(), cap.clone(), on_rejected.clone()),
+            (module.clone(), cap.clone(), on_rejected.clone(), phase),
         ),
     )
     .build();

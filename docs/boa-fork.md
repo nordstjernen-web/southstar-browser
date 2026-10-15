@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 5,614 added and 646 removed lines in 79 files;
+2026-10-15 the difference is 6,178 added and 714 removed lines in 85 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -70,6 +70,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | `%TypedArray%.prototype.filter` and `with` propagate the `TypeError` that writing `undefined` into a BigInt array throws once the callback or an argument's `valueOf` detached or shrank the buffer, instead of failing an internal assertion | `builtins/typed_array/builtin.rs` | `built-ins/TypedArray` |
 | `Error.prototype.stack` as the error-stack accessor proposal now specifies: the getter throws a `TypeError` for a non-object `this`; the setter (length 1) requires a string and stores it through `SetterThatIgnoresPrototypeProperties` | `builtins/error/mod.rs`, `builtins/iterable/iterator_prototype.rs` | `built-ins/Error/prototype/stack` |
 | `SimpleModuleLoader` loads `with { type: "text" }` (the file decoded as UTF-8) and `with { type: "bytes" }` (a `Uint8Array` over an immutable `ArrayBuffer`) as synthetic default-export modules, from any file, `.json` included | `module/loader/mod.rs`, `builtins/array_buffer/mod.rs` | `language/import/import-attributes`, `language/import/import-bytes`, `language/expressions/dynamic-import` |
+| Deferred module evaluation (`import defer * as ns from "m"`, `import.defer("m")`): requests keep their phase and evaluation order, a deferred import evaluates only the module's asynchronous transitive dependencies, its namespace is a `[[Deferred]]` namespace (`@@toStringTag` "Deferred Module") whose string-keyed operations other than `then` run `EvaluateSync` after `ReadyForSyncExecution` (with `IsModuleSCCEvaluated`), and `import.defer()` waits for the async dependencies with internal reactions; `Module::load_link_evaluate` no longer resolves through an observable `then` | `boa_parser`: `statement/declaration/import.rs`; `boa_ast`: `declaration/import.rs`, `module_item_list/mod.rs`; `boa_engine`: `module/{mod,source,namespace}.rs`, `vm/opcode/call/mod.rs`, `builtins/promise/mod.rs`, `object/builtins/jspromise.rs` | `language/import/import-defer`, `language/expressions/dynamic-import/import-defer` |
 
 ## Rules for changing the fork
 

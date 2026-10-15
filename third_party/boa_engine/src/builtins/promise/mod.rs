@@ -459,6 +459,18 @@ impl BuiltInConstructor for Promise {
 }
 
 impl Promise {
+    /// Sets `[[PromiseIsHandled]]` to true, performing `HostPromiseRejectionTracker(promise,
+    /// "handle")` if it was false.
+    pub(crate) fn mark_as_handled(promise: &JsObject<Promise>, context: &mut Context) {
+        let handled = promise.borrow().data().handled;
+        if !handled {
+            context
+                .host_hooks()
+                .promise_rejection_tracker(promise, OperationType::Handle, context);
+            promise.borrow_mut().data_mut().handled = true;
+        }
+    }
+
     /// Creates a new, pending `Promise`.
     pub(crate) fn new() -> Self {
         Self {

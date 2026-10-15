@@ -274,6 +274,9 @@ impl std::fmt::Debug for SourceTextModule {
 struct ModuleCode {
     has_tla: bool,
     requested_modules: IndexSet<super::ModuleRequest, BuildHasherDefault<FxHasher>>,
+    /// `[[RequestedModules]]` as the deferred imports proposal orders them: one entry per
+    /// specifier and phase, with `true` for the defer phase. Evaluation follows this order.
+    phased_requests: Vec<(super::ModuleRequest, bool)>,
     path: Option<PathBuf>,
     import_entries: Vec<ImportEntry>,
     local_export_entries: Vec<LocalExportEntry>,
@@ -284,6 +287,17 @@ struct ModuleCode {
 struct ModuleRequestsVisitor<'a> {
     interner: &'a Interner,
     requests: IndexSet<super::ModuleRequest, BuildHasherDefault<FxHasher>>,
+    phased: Vec<(super::ModuleRequest, bool)>,
+}
+
+impl ModuleRequestsVisitor<'_> {
+    fn add(&mut self, request: super::ModuleRequest, deferred: bool) {
+        let phased = (request, deferred);
+        if !self.phased.contains(&phased) {
+            self.phased.push(phased.clone());
+        }
+        self.requests.insert(phased.0);
+    }
 }
 
 impl<'ast> boa_ast::visitor::Visitor<'ast> for ModuleRequestsVisitor<'_> {
@@ -294,11 +308,11 @@ impl<'ast> boa_ast::visitor::Visitor<'ast> for ModuleRequestsVisitor<'_> {
         node: &'ast boa_ast::declaration::ImportDeclaration,
     ) -> std::ops::ControlFlow<Self::BreakTy> {
         let specifier = node.specifier().sym().to_js_string(self.interner);
-        self.requests.insert(super::ModuleRequest::from_ast(
-            specifier,
-            node.attributes(),
-            self.interner,
-        ));
+        let request = super::ModuleRequest::from_ast(specifier, node.attributes(), self.interner);
+        self.add(
+            request,
+            node.phase() == boa_ast::expression::ImportPhase::Defer,
+        );
         std::ops::ControlFlow::Continue(())
     }
 
@@ -313,11 +327,8 @@ impl<'ast> boa_ast::visitor::Visitor<'ast> for ModuleRequestsVisitor<'_> {
         } = node
         {
             let spec = specifier.sym().to_js_string(self.interner);
-            self.requests.insert(super::ModuleRequest::from_ast(
-                spec,
-                attributes,
-                self.interner,
-            ));
+            let request = super::ModuleRequest::from_ast(spec, attributes, self.interner);
+            self.add(request, false);
         }
         std::ops::ControlFlow::Continue(())
     }
@@ -343,15 +354,16 @@ impl SourceTextModule {
         path: Option<PathBuf>,
     ) -> Self {
         // 3. Let requestedModules be the ModuleRequests of body.
-        let requested_modules = {
+        let (requested_modules, phased_requests) = {
             use boa_ast::visitor::Visitor;
 
             let mut visitor = ModuleRequestsVisitor {
                 interner,
                 requests: IndexSet::default(),
+                phased: Vec::new(),
             };
             let _ = visitor.visit_module(&source);
-            visitor.requests
+            (visitor.requests, visitor.phased)
         };
         // 4. Let importEntries be ImportEntries of body.
         let import_entries = source.items().import_entries();
@@ -392,6 +404,8 @@ impl SourceTextModule {
                         //    [[LocalName]] is ee.[[LocalName]].
                         //
                         match ie.import_name() {
+                            // A deferred namespace is exported as the local binding that holds it.
+                            ImportName::DeferredNamespace => local_export_entries.push(entry),
                             // 3. If ie.[[ImportName]] is namespace-object, then
                             ImportName::Namespace => {
                                 // a. NOTE: This is a re-export of an imported module namespace object.
@@ -478,6 +492,7 @@ impl SourceTextModule {
             code: ModuleCode {
                 has_tla,
                 requested_modules,
+                phased_requests,
                 path,
                 import_entries,
                 local_export_entries,
@@ -1256,10 +1271,37 @@ impl SourceTextModule {
         stack.push(module_self.clone());
 
         // 11. 11. For each ModuleRequest Record request of module.[[RequestedModules]], do
-        for required in &self.code.requested_modules {
-            // a. Let requiredModule be GetImportedModule(module, required).
+        // 11. Let evaluationList be a new empty List.
+        let mut evaluation_list: Vec<Module> = Vec::new();
+        // 12. For each ModuleRequest Record required of module.[[RequestedModules]], do
+        for (required, deferred) in &self.code.phased_requests {
+            // a. Let requiredModule be GetImportedModule(module, required.[[Specifier]]).
             let required_module = self.loaded_modules.borrow()[required].clone();
-            // b. Set index to ? InnerModuleEvaluation(requiredModule, stack, index).
+            // b. If required.[[Phase]] is defer, then
+            if *deferred {
+                // i. Let additionalModules be GatherAsynchronousTransitiveDependencies(requiredModule).
+                let mut additional_modules = Vec::new();
+                required_module.gather_asynchronous_transitive_dependencies(
+                    &mut FxHashSet::default(),
+                    &mut additional_modules,
+                );
+                // ii. For each Module Record additionalModule of additionalModules, do
+                //     1. If evaluationList does not contain additionalModule, append it.
+                for additional_module in additional_modules {
+                    if !evaluation_list.contains(&additional_module) {
+                        evaluation_list.push(additional_module);
+                    }
+                }
+            // c. Else if evaluationList does not contain requiredModule, then
+            } else if !evaluation_list.contains(&required_module) {
+                // i. Append requiredModule to evaluationList.
+                evaluation_list.push(required_module);
+            }
+        }
+
+        // 13. For each Module Record requiredModule of evaluationList, do
+        for required_module in evaluation_list {
+            // Set index to ? InnerModuleEvaluation(requiredModule, stack, index).
             index = required_module.inner_evaluate(stack, index, context)?;
 
             // c. If requiredModule is a Cyclic Module Record, then
@@ -1594,6 +1636,7 @@ impl SourceTextModule {
             Namespace {
                 locator: BindingLocator,
                 module: Module,
+                deferred: bool,
             },
             Single {
                 locator: BindingLocator,
@@ -1714,6 +1757,7 @@ impl SourceTextModule {
                         imports.push(ImportBinding::Namespace {
                             locator,
                             module: resolution.into_module(),
+                            deferred: false,
                         });
                     }
                 } else {
@@ -1728,6 +1772,7 @@ impl SourceTextModule {
                     imports.push(ImportBinding::Namespace {
                         locator,
                         module: imported_module.clone(),
+                        deferred: matches!(entry.import_name(), ImportName::DeferredNamespace),
                     });
                 }
             }
@@ -1853,9 +1898,17 @@ impl SourceTextModule {
         // deferred initialization of import bindings
         for import in imports {
             match import {
-                ImportBinding::Namespace { locator, module } => {
-                    // i. Let namespace be GetModuleNamespace(importedModule).
-                    let namespace = module.namespace(context);
+                ImportBinding::Namespace {
+                    locator,
+                    module,
+                    deferred,
+                } => {
+                    // i. Let namespace be GetModuleNamespace(importedModule, in.[[ModuleRequest]].[[Phase]]).
+                    let namespace = if deferred {
+                        module.deferred_namespace(context)
+                    } else {
+                        module.namespace(context)
+                    };
                     {
                         let frame = context.vm.frame_mut();
                         let global = frame.realm.environment();
@@ -2020,6 +2073,101 @@ impl SourceTextModule {
     }
 
     /// Gets the loaded modules of this module.
+    /// The modules this module requests, in the order of its `[[RequestedModules]]`.
+    fn required_modules(&self) -> Vec<Module> {
+        let loaded = self.loaded_modules.borrow();
+        self.code
+            .requested_modules
+            .iter()
+            .map(|request| loaded[request].clone())
+            .collect()
+    }
+
+    /// Abstract operation `IsModuleSCCEvaluated ( module )` of the deferred imports proposal:
+    /// whether the module and every module of its strongly connected component are evaluated.
+    fn is_scc_evaluated(&self) -> bool {
+        match &*self.status.borrow() {
+            // 1. If module.[[CycleRoot]] is not empty, then
+            ModuleStatus::Evaluating { cycle_root, .. }
+            | ModuleStatus::EvaluatingAsync { cycle_root, .. }
+            | ModuleStatus::Evaluated { cycle_root, .. } => match cycle_root.kind() {
+                // a. If module.[[CycleRoot]].[[Status]] is evaluated, return true.
+                // b. Return false.
+                ModuleKind::SourceText(root) => {
+                    matches!(&*root.status.borrow(), ModuleStatus::Evaluated { .. })
+                }
+                ModuleKind::Synthetic(_) => true,
+            },
+            // 2. If module.[[Status]] is evaluated, return true.
+            // 3. Return false.
+            _ => false,
+        }
+    }
+
+    /// The part of [`Module::ready_for_sync_execution`] that is specific to cyclic modules.
+    pub(super) fn ready_for_sync_execution(&self, seen: &mut FxHashSet<Module>) -> bool {
+        // 4. If IsModuleSCCEvaluated(module) is true, return true.
+        if self.is_scc_evaluated() {
+            return true;
+        }
+        // 5. If module.[[Status]] is evaluating, evaluating-async or evaluated, return false.
+        if !matches!(
+            &*self.status.borrow(),
+            ModuleStatus::Linked { .. }
+        ) {
+            return false;
+        }
+        // 6. Assert: module.[[Status]] is linked.
+
+        // 7. If module.[[HasTLA]] is true, return false.
+        if self.code.has_tla {
+            return false;
+        }
+
+        // 8. For each ModuleRequest Record required of module.[[RequestedModules]], do
+        //     a. Let requiredModule be GetImportedModule(module, required).
+        //     b. If ReadyForSyncExecution(requiredModule, seen) is false, then
+        //         i. Return false.
+        // 9. Return true.
+        self.required_modules()
+            .iter()
+            .all(|required| required.ready_for_sync_execution(seen))
+    }
+
+    /// The part of [`Module::gather_asynchronous_transitive_dependencies`] that is specific to
+    /// cyclic modules.
+    pub(super) fn gather_asynchronous_transitive_dependencies(
+        &self,
+        module_self: &Module,
+        seen: &mut FxHashSet<Module>,
+        result: &mut Vec<Module>,
+    ) {
+        // 6. If module.[[Status]] is either evaluating or IsModuleSCCEvaluated(module), return result.
+        if matches!(&*self.status.borrow(), ModuleStatus::Evaluating { .. })
+            || self.is_scc_evaluated()
+        {
+            return;
+        }
+
+        // 7. If module.[[HasTLA]] is true, then
+        if self.code.has_tla {
+            // a. Append module to result.
+            if !result.contains(module_self) {
+                result.push(module_self.clone());
+            }
+            // b. Return result.
+            return;
+        }
+
+        // 8. For each ModuleRequest Record required of module.[[RequestedModules]], do
+        for required in self.required_modules() {
+            // a. Let requiredModule be GetImportedModule(module, required).
+            // b. Let additionalModules be GatherAsynchronousTransitiveDependencies(requiredModule, seen).
+            // c. For each Module Record m of additionalModules, if result does not contain m, append m to result.
+            required.gather_asynchronous_transitive_dependencies(seen, result);
+        }
+    }
+
     pub(crate) fn loaded_modules(&self) -> &GcRefCell<FxHashMap<super::ModuleRequest, Module>> {
         &self.loaded_modules
     }

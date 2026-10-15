@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Modules can defer evaluation (the import defer proposal):
+  import defer * as ns from "m" loads and links m but runs it only when a
+  property of ns is first read, and import.defer("m") does the same
+  dynamically; modules with top-level await in a deferred graph still run
+  ahead of time. test262 reaches 51,936 of 52,133 (99.6%).
 * Together, the Intl rewrites below take test262's intl402 from 2,416 to
   3,364 of 3,382 (99.5%) and test262 as a whole to 51,838 of 52,133
   (99.4%). The remaining intl402 failures are Temporal calendar cases in

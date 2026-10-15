@@ -49,7 +49,7 @@ use crate::spanned_source_text::SourceText;
 use crate::{
     Context, HostDefined, JsError, JsNativeError, JsResult, JsString, JsValue, NativeFunction,
     builtins,
-    builtins::promise::{PromiseCapability, PromiseState},
+    builtins::promise::{Promise, PromiseCapability, PromiseState},
     environments::DeclarativeEnvironment,
     object::{JsObject, JsPromise},
     realm::Realm,
@@ -187,6 +187,7 @@ impl std::fmt::Debug for Module {
 struct ModuleRepr {
     realm: Realm,
     namespace: GcRefCell<Option<JsObject>>,
+    deferred_namespace: GcRefCell<Option<JsObject>>,
     kind: ModuleKind,
     host_defined: HostDefined,
     path: Option<PathBuf>,
@@ -289,6 +290,7 @@ impl Module {
             inner: Gc::new(ModuleRepr {
                 realm,
                 namespace: GcRefCell::default(),
+                deferred_namespace: GcRefCell::default(),
                 kind: ModuleKind::SourceText(Box::new(src)),
                 host_defined: HostDefined::default(),
                 path,
@@ -318,6 +320,7 @@ impl Module {
             inner: Gc::new(ModuleRepr {
                 realm,
                 namespace: GcRefCell::default(),
+                deferred_namespace: GcRefCell::default(),
                 kind: ModuleKind::Synthetic(Box::new(synth)),
                 host_defined: HostDefined::default(),
                 path,
@@ -648,34 +651,138 @@ impl Module {
     #[allow(dropping_copy_types)]
     #[inline]
     pub fn load_link_evaluate(&self, context: &mut Context) -> JsPromise {
-        self.load(context)
-            .then(
-                Some(
-                    NativeFunction::from_copy_closure_with_captures(
-                        |_, _, module, context| {
-                            module.link(context)?;
-                            Ok(JsValue::undefined())
-                        },
-                        self.clone(),
-                    )
-                    .to_js_function(context.realm()),
-                ),
-                None,
-                context,
-            )
-            .expect("`then` cannot fail for a native `JsPromise`")
-            .then(
-                Some(
-                    NativeFunction::from_copy_closure_with_captures(
-                        |_, _, module, context| Ok(module.evaluate(context)?.into()),
-                        self.clone(),
-                    )
-                    .to_js_function(context.realm()),
-                ),
-                None,
-                context,
-            )
-            .expect("`then` cannot fail for a native `JsPromise`")
+        let (promise, resolvers) = JsPromise::new_pending(context);
+        let on_loaded = NativeFunction::from_copy_closure_with_captures(
+            |_, _, (module, resolve, reject), context| {
+                let evaluated = module.link(context).and_then(|()| module.evaluate(context));
+                match evaluated {
+                    Ok(evaluate) => Promise::perform_promise_then(
+                        &evaluate,
+                        Some(resolve.clone()),
+                        Some(reject.clone()),
+                        None,
+                        context,
+                    ),
+                    Err(error) => {
+                        let error = error.into_opaque(context)?;
+                        reject.call(&JsValue::undefined(), &[error], context)?;
+                    }
+                }
+                Ok(JsValue::undefined())
+            },
+            (
+                self.clone(),
+                resolvers.resolve.clone(),
+                resolvers.reject.clone(),
+            ),
+        )
+        .to_js_function(context.realm());
+        let load = self.load(context);
+        Promise::perform_promise_then(
+            &load,
+            Some(on_loaded),
+            Some(resolvers.reject),
+            None,
+            context,
+        );
+        promise
+    }
+
+    /// Abstract operation `GetModuleNamespace ( module, defer )` of the deferred imports
+    /// proposal, for the defer phase: the namespace object of `import defer * as name`, which
+    /// evaluates the module the first time a string-keyed property of it is accessed.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-getmodulenamespace
+    pub(crate) fn deferred_namespace(&self, context: &mut Context) -> JsObject {
+        if let Some(namespace) = &*self.inner.deferred_namespace.borrow() {
+            return namespace.clone();
+        }
+        let exported_names = self.get_exported_names(&mut Vec::default(), context.interner());
+        let unambiguous_names = exported_names
+            .into_iter()
+            .filter(|name| {
+                self.resolve_export(name, &mut HashSet::default(), context.interner())
+                    .is_ok()
+            })
+            .collect();
+        let namespace = ModuleNamespace::create_deferred(self.clone(), unambiguous_names, context);
+        *self.inner.deferred_namespace.borrow_mut() = Some(namespace.clone());
+        namespace
+    }
+
+    /// Abstract operation `ReadyForSyncExecution ( module [ , seen ] )` of the deferred imports
+    /// proposal: whether the module and its dependencies can be evaluated without awaiting.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-ReadyForSyncExecution
+    pub(crate) fn ready_for_sync_execution(&self, seen: &mut FxHashSet<Module>) -> bool {
+        // 1. If seen is not present, set seen to a new empty List.
+        // 2. If seen contains module, return true.
+        // 3. Append module to seen.
+        if !seen.insert(self.clone()) {
+            return true;
+        }
+        match self.kind() {
+            ModuleKind::SourceText(src) => src.ready_for_sync_execution(seen),
+            ModuleKind::Synthetic(_) => true,
+        }
+    }
+
+    /// Abstract operation `GatherAsynchronousTransitiveDependencies ( module [ , seen ] )` of the
+    /// deferred imports proposal: the modules with top-level await that evaluating `module`
+    /// would evaluate, which a deferred import still evaluates eagerly. They are appended to
+    /// `result` unless already in it.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-GatherAsynchronousTransitiveDependencies
+    pub(crate) fn gather_asynchronous_transitive_dependencies(
+        &self,
+        seen: &mut FxHashSet<Module>,
+        result: &mut Vec<Module>,
+    ) {
+        // 3. If seen contains module, return result.
+        // 4. Append module to seen.
+        if !seen.insert(self.clone()) {
+            return;
+        }
+        // 5. If module is not a Cyclic Module Record, return result.
+        if let ModuleKind::SourceText(src) = self.kind() {
+            src.gather_asynchronous_transitive_dependencies(self, seen, result);
+        }
+    }
+
+    /// Abstract operation `EvaluateSync ( module )` of the deferred imports proposal: evaluates a
+    /// module that is ready for synchronous execution and throws its evaluation error.
+    ///
+    /// More information:
+    ///  - [Proposal reference][spec]
+    ///
+    /// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-EvaluateSync
+    pub(crate) fn evaluate_sync(&self, context: &mut Context) -> JsResult<()> {
+        // 1. Let promise be ! module.Evaluate().
+        let promise = self.evaluate(context)?;
+        // 2. Assert: promise.[[PromiseState]] is either fulfilled or rejected.
+        match promise.state() {
+            // 3. If promise.[[PromiseState]] is rejected, then
+            PromiseState::Rejected(reason) => {
+                // a. If promise.[[PromiseIsHandled]] is false, perform HostPromiseRejectionTracker(promise, "handle").
+                // b. Set promise.[[PromiseIsHandled]] to true.
+                promise.mark_as_handled(context);
+                // c. Throw promise.[[PromiseResult]].
+                Err(JsError::from_opaque(reason))
+            }
+            PromiseState::Fulfilled(_) => Ok(()),
+            PromiseState::Pending => Err(JsNativeError::typ()
+                .with_message("a deferred module could not be evaluated synchronously")
+                .into()),
+        }
     }
 
     /// Abstract operation [`GetModuleNamespace ( module )`][spec].

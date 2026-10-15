@@ -12,6 +12,7 @@ use crate::{
         ImportEntry, ImportKind, ImportName, IndirectExportEntry, LocalExportEntry,
         ModuleSpecifier, ReExportImportName, ReExportKind,
     },
+    expression::ImportPhase,
     operations::{BoundNamesVisitor, bound_names},
     visitor::{VisitWith, Visitor, VisitorMut},
 };
@@ -272,9 +273,14 @@ impl ModuleItemList {
                 match node.kind() {
                     ImportKind::DefaultOrUnnamed => {}
                     ImportKind::Namespaced { binding } => {
+                        let name = if node.phase() == ImportPhase::Defer {
+                            ImportName::DeferredNamespace
+                        } else {
+                            ImportName::Namespace
+                        };
                         self.0.push(ImportEntry::new(
                             module,
-                            ImportName::Namespace,
+                            name,
                             *binding,
                             attributes.clone(),
                         ));

@@ -1,7 +1,7 @@
 use std::hash::BuildHasherDefault;
 
 use indexmap::IndexSet;
-use rustc_hash::{FxHashMap, FxHasher};
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 
 use boa_gc::{Finalize, Trace};
 
@@ -38,6 +38,9 @@ pub struct ModuleNamespace {
     /// a lookup to check if the pointer is alive. The logic is correct either way.
     #[unsafe_ignore_trace]
     resolved_bindings: FxHashMap<JsString, ResolvedBinding>,
+    /// `[[Deferred]]`: whether this is the namespace of an `import defer`, which evaluates
+    /// the module when one of its string-keyed properties is first accessed.
+    deferred: bool,
 }
 
 impl JsData for ModuleNamespace {
@@ -67,6 +70,27 @@ impl ModuleNamespace {
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-modulenamespacecreate
     pub(crate) fn create(module: Module, names: Vec<JsString>, context: &mut Context) -> JsObject {
+        Self::create_with_phase(module, names, false, context)
+    }
+
+    /// Abstract operation `ModuleNamespaceCreate ( module, exports, phase )` of the deferred
+    /// imports proposal, for the defer phase.
+    ///
+    /// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-modulenamespacecreate
+    pub(crate) fn create_deferred(
+        module: Module,
+        names: Vec<JsString>,
+        context: &mut Context,
+    ) -> JsObject {
+        Self::create_with_phase(module, names, true, context)
+    }
+
+    fn create_with_phase(
+        module: Module,
+        names: Vec<JsString>,
+        deferred: bool,
+        context: &mut Context,
+    ) -> JsObject {
         // 1. Assert: module.[[Namespace]] is empty.
         // ignored since this is ensured by `Module::namespace`.
 
@@ -104,8 +128,13 @@ impl ModuleNamespace {
                 module,
                 exports,
                 resolved_bindings,
+                deferred,
             },
-            vec![js_string!("Module").into()],
+            vec![if deferred {
+                js_string!("Deferred Module").into()
+            } else {
+                js_string!("Module").into()
+            }],
         )
     }
 
@@ -123,6 +152,52 @@ impl ModuleNamespace {
     pub(crate) fn get_resolved_binding(&self, name: &JsString) -> Option<&ResolvedBinding> {
         self.resolved_bindings.get(name)
     }
+}
+
+/// Abstract operation `IsSymbolLikeNamespaceKey ( P, O )` of the deferred imports proposal:
+/// symbols, and `"then"` on a deferred namespace, are handled like ordinary properties.
+///
+/// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-IsSymbolLikeNamespaceKey
+fn is_symbol_like_namespace_key(obj: &JsObject, key: &PropertyKey) -> bool {
+    match key {
+        PropertyKey::Symbol(_) => true,
+        PropertyKey::String(name) => {
+            name == &js_string!("then")
+                && obj
+                    .downcast_ref::<ModuleNamespace>()
+                    .is_some_and(|namespace| namespace.deferred)
+        }
+        PropertyKey::Index(_) => false,
+    }
+}
+
+/// The evaluation steps of abstract operation `GetModuleExportsList ( O )` of the deferred
+/// imports proposal: accessing the exports of a deferred namespace evaluates its module.
+///
+/// [spec]: https://tc39.es/proposal-defer-import-eval/#sec-GetModuleExportsList
+fn evaluate_deferred_namespace(obj: &JsObject, context: &mut Context) -> JsResult<()> {
+    let module = {
+        let namespace = obj
+            .downcast_ref::<ModuleNamespace>()
+            .js_expect("internal method can only be called on module namespace objects")?;
+        // 1. If O.[[Deferred]] is true, then
+        if !namespace.deferred {
+            return Ok(());
+        }
+        // a. Let m be O.[[Module]].
+        namespace.module.clone()
+    };
+
+    // b. If m is a Cyclic Module Record, m.[[Status]] is not evaluated, and
+    //    ReadyForSyncExecution(m) is false, throw a TypeError exception.
+    if !module.ready_for_sync_execution(&mut FxHashSet::default()) {
+        return Err(JsNativeError::typ()
+            .with_message("a deferred module cannot be evaluated while it or a dependency is evaluating or awaiting")
+            .into());
+    }
+
+    // c. Perform ? EvaluateSync(m).
+    module.evaluate_sync(context)
 }
 
 /// [`[[GetPrototypeOf]] ( )`][spec].
@@ -178,12 +253,18 @@ fn module_namespace_exotic_get_own_property(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<Option<PropertyDescriptor>> {
-    // 1. If P is a Symbol, return OrdinaryGetOwnProperty(O, P).
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, return OrdinaryGetOwnProperty(O, P).
+    if is_symbol_like_namespace_key(obj, key) {
+        return ordinary_get_own_property(obj, key, context);
+    }
     let key = match key {
         PropertyKey::Symbol(_) => return ordinary_get_own_property(obj, key, context),
         PropertyKey::Index(idx) => js_string!(format!("{}", idx.get())),
         PropertyKey::String(s) => s.clone(),
     };
+
+    // 2. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
 
     {
         let obj = obj
@@ -221,8 +302,8 @@ fn module_namespace_exotic_define_own_property(
     desc: PropertyDescriptor,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
-    // 1. If P is a Symbol, return ! OrdinaryDefineOwnProperty(O, P, Desc).
-    if let PropertyKey::Symbol(_) = key {
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, return ! OrdinaryDefineOwnProperty(O, P, Desc).
+    if is_symbol_like_namespace_key(obj, key) {
         return ordinary_define_own_property(obj, key, desc, context);
     }
 
@@ -257,12 +338,18 @@ fn module_namespace_exotic_has_property(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
-    // 1. If P is a Symbol, return ! OrdinaryHasProperty(O, P).
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, return ! OrdinaryHasProperty(O, P).
+    if is_symbol_like_namespace_key(obj, key) {
+        return ordinary_has_property(obj, key, context);
+    }
     let key = match key {
         PropertyKey::Symbol(_) => return ordinary_has_property(obj, key, context),
         PropertyKey::Index(idx) => js_string!(format!("{}", idx.get())),
         PropertyKey::String(s) => s.clone(),
     };
+
+    // 2. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
 
     let obj = obj
         .downcast_ref::<ModuleNamespace>()
@@ -292,13 +379,19 @@ fn module_namespace_exotic_try_get(
     receiver: JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<Option<JsValue>> {
-    // 1. If P is a Symbol, then
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, then
     //     a. Return ! OrdinaryGet(O, P, Receiver).
+    if is_symbol_like_namespace_key(obj, key) {
+        return ordinary_try_get(obj, key, receiver, context);
+    }
     let key = match key {
         PropertyKey::Symbol(_) => return ordinary_try_get(obj, key, receiver, context),
         PropertyKey::Index(idx) => js_string!(format!("{}", idx.get())),
         PropertyKey::String(s) => s.clone(),
     };
+
+    // 2. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
 
     let obj = obj
         .downcast_ref::<ModuleNamespace>()
@@ -381,13 +474,19 @@ fn module_namespace_exotic_get(
     receiver: JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<JsValue> {
-    // 1. If P is a Symbol, then
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, then
     //     a. Return ! OrdinaryGet(O, P, Receiver).
+    if is_symbol_like_namespace_key(obj, key) {
+        return ordinary_get(obj, key, receiver, context);
+    }
     let key = match key {
         PropertyKey::Symbol(_) => return ordinary_get(obj, key, receiver, context),
         PropertyKey::Index(idx) => js_string!(format!("{}", idx.get())),
         PropertyKey::String(s) => s.clone(),
     };
+
+    // 2. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
 
     let obj = obj
         .downcast_ref::<ModuleNamespace>()
@@ -483,13 +582,19 @@ fn module_namespace_exotic_delete(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
-    // 1. If P is a Symbol, then
+    // 1. If IsSymbolLikeNamespaceKey(P, O) is true, then
     //     a. Return ! OrdinaryDelete(O, P).
+    if is_symbol_like_namespace_key(obj, key) {
+        return ordinary_delete(obj, key, context);
+    }
     let key = match key {
         PropertyKey::Symbol(_) => return ordinary_delete(obj, key, context),
         PropertyKey::Index(idx) => js_string!(format!("{}", idx.get())),
         PropertyKey::String(s) => s.clone(),
     };
+
+    // 2. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
 
     let obj = obj
         .downcast_ref::<ModuleNamespace>()
@@ -510,6 +615,9 @@ fn module_namespace_exotic_own_property_keys(
     obj: &JsObject,
     context: &mut Context,
 ) -> JsResult<Vec<PropertyKey>> {
+    // 1. Let exports be ? GetModuleExportsList(O).
+    evaluate_deferred_namespace(obj, context)?;
+
     // 2. Let symbolKeys be OrdinaryOwnPropertyKeys(O).
     let symbol_keys = ordinary_own_property_keys(obj, context)?;
 

@@ -10,7 +10,7 @@
 //! [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
 
 use crate::{
-    lexer::TokenKind,
+    lexer::{TokenKind, token::ContainsEscapeSequence},
     parser::{
         Error, OrAbrupt, ParseResult, TokenParser,
         cursor::Cursor,
@@ -27,7 +27,7 @@ use boa_ast::{
         ImportAttribute, ImportDeclaration as AstImportDeclaration, ImportKind,
         ImportSpecifier as AstImportSpecifier, ModuleSpecifier,
     },
-    expression::Identifier,
+    expression::{Identifier, ImportPhase},
 };
 use boa_interner::{Interner, Sym};
 
@@ -79,6 +79,27 @@ where
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
         cursor.expect((Keyword::Import, false), "import declaration", interner)?;
+
+        // `import defer * as name from "module-name"`
+        let is_defer = matches!(
+            cursor.peek(0, interner).or_abrupt()?.kind(),
+            TokenKind::IdentifierName((Sym::DEFER, ContainsEscapeSequence(false)))
+        );
+        if is_defer
+            && cursor
+                .peek(1, interner)?
+                .is_some_and(|next| next.kind() == &TokenKind::Punctuator(Punctuator::Mul))
+        {
+            cursor.advance(interner);
+            let alias = NameSpaceImport.parse(cursor, interner)?;
+            let module_identifier =
+                FromClause::new("import declaration").parse(cursor, interner)?;
+            let attributes = WithClause::new("import declaration").parse(cursor, interner)?;
+            cursor.expect_semicolon("import declaration", interner)?;
+            return Ok(ImportClause::Namespace(None, alias)
+                .with_specifier_and_attributes(module_identifier, attributes)
+                .with_phase(ImportPhase::Defer));
+        }
 
         let tok = cursor.peek(0, interner).or_abrupt()?;
 

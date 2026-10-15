@@ -485,6 +485,11 @@ impl JsPromise {
         self.inner.borrow().data().state().clone()
     }
 
+    /// Sets `[[PromiseIsHandled]]` to true, telling the host's rejection tracker if it was false.
+    pub(crate) fn mark_as_handled(&self, context: &mut Context) {
+        Promise::mark_as_handled(&self.inner, context);
+    }
+
     /// Schedules callback functions to run when the promise settles.
     ///
     /// Equivalent to the [`Promise.prototype.then`] method.
