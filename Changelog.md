@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A script can call a function named async: async(x) was a syntax error
+  unless an arrow followed. In non-strict scripts an assignment to a call,
+  such as f() = 1, f() += 1, f()++ or for (f() in o), now parses and
+  throws a ReferenceError when it runs, as in other browsers, instead of
+  rejecting the whole script. test262 reaches 51,967 of 52,133 (99.7%).
 * RegExp has the legacy static properties older scripts read after a match:
   RegExp.$1 to RegExp.$9, RegExp.input ($_), lastMatch ($&), lastParen
   ($+), leftContext ($`) and rightContext ($'), set by every successful

@@ -83,6 +83,7 @@ where
                     }
 
                     if let Some(next) = cursor.next_if(Punctuator::CloseParen, interner)? {
+                        cursor.set_arguments_trailing_comma(next.span().end());
                         break next.span().end();
                     }
                 }

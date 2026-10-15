@@ -32,6 +32,11 @@ impl ByteCompiler<'_> {
             let access = Access::from_assign_target(assign.lhs())
                 .expect("patterns should throw early errors on complex assignment operators");
 
+            if let Access::Call { call } = access {
+                compiler.compile_call_assignment_target(call);
+                return;
+            }
+
             let short_circuit = matches!(
                 assign.op(),
                 AssignOp::BoolAnd | AssignOp::BoolOr | AssignOp::Coalesce
@@ -295,7 +300,7 @@ impl ByteCompiler<'_> {
                         }
                     },
                 },
-                Access::This => unreachable!(),
+                Access::This | Access::Call { .. } => unreachable!(),
             }
 
             if let Some(early_exit) = early_exit {

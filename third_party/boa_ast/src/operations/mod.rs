@@ -86,6 +86,8 @@ pub enum ContainsSymbol {
     EvalOrArguments,
     /// A direct call to `eval`.
     DirectEval,
+    /// An `IdentifierReference` or `BindingIdentifier` named `await`.
+    AwaitIdentifier,
 }
 
 /// Returns `true` if the node contains the given symbol.
@@ -139,6 +141,9 @@ where
             if self.0 == ContainsSymbol::EvalOrArguments
                 && (node.sym() == Sym::EVAL || node.sym() == Sym::ARGUMENTS)
             {
+                return ControlFlow::Break(());
+            }
+            if self.0 == ContainsSymbol::AwaitIdentifier && node.sym() == Sym::AWAIT {
                 return ControlFlow::Break(());
             }
             ControlFlow::Continue(())
@@ -280,6 +285,9 @@ where
             &mut self,
             node: &'ast ArrowFunction,
         ) -> ControlFlow<Self::BreakTy> {
+            if self.0 == ContainsSymbol::AwaitIdentifier {
+                return node.parameters().visit_with(self);
+            }
             if ![
                 ContainsSymbol::NewTarget,
                 ContainsSymbol::SuperProperty,
@@ -300,6 +308,9 @@ where
             &mut self,
             node: &'ast AsyncArrowFunction,
         ) -> ControlFlow<Self::BreakTy> {
+            if self.0 == ContainsSymbol::AwaitIdentifier {
+                return node.parameters().visit_with(self);
+            }
             if ![
                 ContainsSymbol::NewTarget,
                 ContainsSymbol::SuperProperty,

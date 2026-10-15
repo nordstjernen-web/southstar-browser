@@ -74,6 +74,8 @@ fn as_simple(
             Ok(Some(UpdateTarget::PropertyAccess(access.clone())))
         }
         Expression::Parenthesized(p) => as_simple(p.expression(), position, strict),
+        #[cfg(feature = "annex-b")]
+        Expression::Call(call) if !strict => Ok(Some(UpdateTarget::Call(call.clone()))),
         _ => Ok(None),
     }
 }

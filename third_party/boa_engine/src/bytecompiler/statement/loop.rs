@@ -236,6 +236,9 @@ impl ByteCompiler<'_> {
                 IterableLoopInitializer::Access(access) => {
                     self.access_set(Access::Property { access }, |_| &value);
                 }
+                IterableLoopInitializer::Call(call) => {
+                    self.access_set(Access::Call { call }, |_| &value);
+                }
                 IterableLoopInitializer::Var(declaration) => match declaration.binding() {
                     Binding::Identifier(ident) => {
                         let ident = ident.to_js_string(self.interner());
@@ -370,6 +373,9 @@ impl ByteCompiler<'_> {
                 }
                 IterableLoopInitializer::Access(access) => {
                     self.access_set(Access::Property { access }, |_| &value);
+                }
+                IterableLoopInitializer::Call(call) => {
+                    self.access_set(Access::Call { call }, |_| &value);
                 }
                 IterableLoopInitializer::Var(declaration) => {
                     // ignore initializers since those aren't allowed on for-of loops.

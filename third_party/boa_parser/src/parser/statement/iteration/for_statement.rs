@@ -396,6 +396,8 @@ fn initializer_to_iterable_loop_initializer(
                 ast::Expression::PropertyAccess(access) => {
                     Ok(IterableLoopInitializer::Access(access))
                 }
+                #[cfg(feature = "annex-b")]
+                ast::Expression::Call(call) if !strict => Ok(IterableLoopInitializer::Call(call)),
                 _ => Err(Error::lex(LexError::Syntax(
                     "invalid variable for iterable loop".into(),
                     position,

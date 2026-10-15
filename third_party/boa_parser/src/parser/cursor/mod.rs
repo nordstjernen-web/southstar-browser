@@ -7,7 +7,7 @@ use crate::{
     parser::{OrAbrupt, ParseResult},
     source::ReadChar,
 };
-use boa_ast::{LinearPosition, PositionGroup, Punctuator, Spanned};
+use boa_ast::{LinearPosition, Position, PositionGroup, Punctuator, Spanned};
 use boa_interner::Interner;
 use buffered_lexer::BufferedLexer;
 
@@ -37,6 +37,9 @@ pub(super) struct Cursor<R> {
 
     /// Tracks the number of tagged templates that are currently being parsed.
     tagged_templates_count: u32,
+
+    /// The end of the closing parenthesis of the last argument list that had a trailing comma.
+    arguments_trailing_comma: Option<Position>,
 }
 
 impl<R> Cursor<R>
@@ -51,7 +54,18 @@ where
             json_parse: false,
             identifier: 0,
             tagged_templates_count: 0,
+            arguments_trailing_comma: None,
         }
+    }
+
+    /// Records that the argument list closed at `close_end` ended with a trailing comma.
+    pub(super) fn set_arguments_trailing_comma(&mut self, close_end: Position) {
+        self.arguments_trailing_comma = Some(close_end);
+    }
+
+    /// Returns `true` if the argument list closed at `close_end` ended with a trailing comma.
+    pub(super) fn arguments_had_trailing_comma(&self, close_end: Position) -> bool {
+        self.arguments_trailing_comma == Some(close_end)
     }
 
     /// Sets the goal symbol of the cursor to `Module`.

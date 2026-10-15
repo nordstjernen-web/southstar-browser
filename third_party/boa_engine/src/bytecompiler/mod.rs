@@ -409,6 +409,7 @@ enum Access<'a> {
     Variable { name: Identifier },
     Property { access: &'a PropertyAccess },
     This,
+    Call { call: &'a Call },
 }
 
 impl Access<'_> {
@@ -417,6 +418,7 @@ impl Access<'_> {
             AssignTarget::Identifier(ident) => Ok(Access::Variable { name: *ident }),
             AssignTarget::Access(access) => Ok(Access::Property { access }),
             AssignTarget::Pattern(pat) => Err(pat),
+            AssignTarget::Call(call) => Ok(Access::Call { call }),
         }
     }
 
@@ -434,6 +436,7 @@ impl Access<'_> {
         match target {
             UpdateTarget::Identifier(name) => Access::Variable { name: *name },
             UpdateTarget::PropertyAccess(access) => Access::Property { access },
+            UpdateTarget::Call(call) => Access::Call { call },
         }
     }
 }
@@ -1556,7 +1559,23 @@ impl<'ctx> ByteCompiler<'ctx> {
             Access::This => {
                 self.bytecode.emit_this(dst.variable());
             }
+            Access::Call { call } => self.compile_call_assignment_target(call),
         }
+    }
+
+    /// Runtime errors for function call assignment targets: a non-strict assignment to a call
+    /// evaluates the call, then throws a `ReferenceError`.
+    ///
+    /// More information:
+    ///  - [ECMAScript reference][spec]
+    ///
+    /// [spec]: https://tc39.es/ecma262/#sec-runtime-errors-for-function-call-assignment-targets
+    pub(crate) fn compile_call_assignment_target(&mut self, call: &Call) {
+        self.call(Callable::Call(call), CallResultDest::Discard);
+        let error_msg =
+            self.get_or_insert_literal(Literal::String(js_string!("invalid assignment target")));
+        self.bytecode
+            .emit_throw_new_reference_error(error_msg.into());
     }
 
     fn access_set<'a, F>(&mut self, access: Access<'_>, expr_fn: F)
@@ -1680,6 +1699,7 @@ impl<'ctx> ByteCompiler<'ctx> {
                 // the RHS for side effects (e.g. `this = foo()` must call foo()).
                 let _ = expr_fn(self);
             }
+            Access::Call { call } => self.compile_call_assignment_target(call),
         }
     }
 
@@ -1714,6 +1734,10 @@ impl<'ctx> ByteCompiler<'ctx> {
                 self.emit_binding_access(BindingAccessOpcode::DeleteName, &index, dst);
             }
             Access::This => self.bytecode.emit_store_true(dst.variable()),
+            Access::Call { call } => {
+                self.call(Callable::Call(call), CallResultDest::Discard);
+                self.bytecode.emit_store_true(dst.variable());
+            }
         }
     }
 
@@ -2669,10 +2693,9 @@ impl<'ctx> ByteCompiler<'ctx> {
                 if contains_spread {
                     compiler.bytecode.emit_call_eval_spread(scope_index.into());
                 } else if tail_call {
-                    compiler.bytecode.emit_tail_call_eval(
-                        (call.args().len() as u32).into(),
-                        scope_index.into(),
-                    );
+                    compiler
+                        .bytecode
+                        .emit_tail_call_eval((call.args().len() as u32).into(), scope_index.into());
                 } else {
                     compiler
                         .bytecode

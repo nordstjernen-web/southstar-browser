@@ -162,6 +162,7 @@ impl ObjectLiteral {
                                     default_init: Some(assign.rhs().clone()),
                                 });
                             }
+                            AssignTarget::Call(_) => return None,
                         }
                     }
                     (_, Expression::PropertyAccess(access)) => {

@@ -296,6 +296,7 @@ impl ByteCompiler<'_> {
                 },
             },
             Access::This => unreachable!(),
+            Access::Call { call } => compiler.compile_call_assignment_target(call),
         }
     }
 }

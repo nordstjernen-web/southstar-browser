@@ -21,7 +21,7 @@ use boa_interner::{Interner, Sym, ToInternedString};
 
 use crate::{
     Span, Spanned,
-    expression::{Expression, access::PropertyAccess, identifier::Identifier},
+    expression::{Call, Expression, access::PropertyAccess, identifier::Identifier},
     pattern::Pattern,
     visitor::{VisitWith, Visitor, VisitorMut},
 };
@@ -130,6 +130,9 @@ pub enum AssignTarget {
     Access(PropertyAccess),
     /// A pattern assignment, such as `{a, b, ...c}`.
     Pattern(Pattern),
+    /// A call, such as `f()`, which non-strict code may assign to: the call is evaluated, then a
+    /// `ReferenceError` is thrown (runtime errors for function call assignment targets).
+    Call(Call),
 }
 
 impl AssignTarget {
@@ -165,6 +168,8 @@ impl AssignTarget {
             Expression::Identifier(id) => Some(Self::Identifier(*id)),
             Expression::PropertyAccess(access) => Some(Self::Access(access.clone())),
             Expression::Parenthesized(p) => Self::from_expression_simple(p.expression(), strict),
+            #[cfg(feature = "annex-b")]
+            Expression::Call(call) if !strict => Some(Self::Call(call.clone())),
             _ => None,
         }
     }
@@ -177,6 +182,7 @@ impl Spanned for AssignTarget {
             AssignTarget::Identifier(identifier) => identifier.span(),
             AssignTarget::Access(property_access) => property_access.span(),
             AssignTarget::Pattern(pattern) => pattern.span(),
+            AssignTarget::Call(call) => call.span(),
         }
     }
 }
@@ -188,6 +194,7 @@ impl ToInternedString for AssignTarget {
             Self::Identifier(id) => id.to_interned_string(interner),
             Self::Access(access) => access.to_interned_string(interner),
             Self::Pattern(pattern) => pattern.to_interned_string(interner),
+            Self::Call(call) => call.to_interned_string(interner),
         }
     }
 }
@@ -208,6 +215,7 @@ impl VisitWith for AssignTarget {
             Self::Identifier(id) => visitor.visit_identifier(id),
             Self::Access(pa) => visitor.visit_property_access(pa),
             Self::Pattern(pat) => visitor.visit_pattern(pat),
+            Self::Call(call) => visitor.visit_call(call),
         }
     }
 
@@ -219,6 +227,7 @@ impl VisitWith for AssignTarget {
             Self::Identifier(id) => visitor.visit_identifier_mut(id),
             Self::Access(pa) => visitor.visit_property_access_mut(pa),
             Self::Pattern(pat) => visitor.visit_pattern_mut(pat),
+            Self::Call(call) => visitor.visit_call_mut(call),
         }
     }
 }

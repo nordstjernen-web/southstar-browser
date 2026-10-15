@@ -13,7 +13,7 @@ use crate::{
     lexer::{Error as LexError, TokenKind},
     parser::{
         AllowIn, AllowYield, Cursor, OrAbrupt, TokenParser,
-        expression::BindingIdentifier,
+        expression::{BindingIdentifier, primary::expression_to_formal_parameters},
         function::{FormalParameters, FunctionBody},
         name_in_lexically_declared_names,
     },
@@ -24,8 +24,9 @@ use ast::{
     operations::{ContainsSymbol, bound_names, contains, lexically_declared_names},
 };
 use boa_ast::{
-    self as ast, Punctuator, Span, Spanned, StatementList,
+    self as ast, Expression, LinearSpan, Position, Punctuator, Span, Spanned, StatementList,
     declaration::Variable,
+    expression::Call,
     function::{FormalParameter, FormalParameterList},
     statement::Return,
 };
@@ -97,65 +98,138 @@ where
                 )
             };
 
-        cursor.peek_expect_no_lineterminator(0, "async arrow function", interner)?;
-        cursor.expect(Punctuator::Arrow, "async arrow function", interner)?;
-
-        let body = AsyncConciseBody::new(self.allow_in).parse(cursor, interner)?;
-
-        // Early Error: ArrowFormalParameters are UniqueFormalParameters.
-        if params.has_duplicates() {
-            return Err(Error::lex(LexError::Syntax(
-                "Duplicate parameter name not allowed in this context".into(),
-                params_start_position,
-            )));
-        }
-
-        // Early Error: It is a Syntax Error if CoverCallExpressionAndAsyncArrowHead Contains YieldExpression is true.
-        if contains(&params, ContainsSymbol::YieldExpression) {
-            return Err(Error::lex(LexError::Syntax(
-                "Yield expression not allowed in this context".into(),
-                params_start_position,
-            )));
-        }
-
-        // Early Error: It is a Syntax Error if CoverCallExpressionAndAsyncArrowHead Contains AwaitExpression is true.
-        if contains(&params, ContainsSymbol::AwaitExpression) {
-            return Err(Error::lex(LexError::Syntax(
-                "Await expression not allowed in this context".into(),
-                params_start_position,
-            )));
-        }
-
-        // Early Error: It is a Syntax Error if AsyncConciseBodyContainsUseStrict of AsyncConciseBody is true and
-        // IsSimpleParameterList of CoverCallExpressionAndAsyncArrowHead is false.
-        if body.strict() && !params.is_simple() {
-            return Err(Error::lex(LexError::Syntax(
-                "Illegal 'use strict' directive in function with non-simple parameter list".into(),
-                params_start_position,
-            )));
-        }
-
-        // Early Error: It is a Syntax Error if any element of the BoundNames of CoverCallExpressionAndAsyncArrowHead
-        // also occurs in the LexicallyDeclaredNames of AsyncConciseBody.
-        name_in_lexically_declared_names(
-            &bound_names(&params),
-            &lexically_declared_names(&body),
-            params_start_position,
+        finish_async_arrow_function(
+            cursor,
             interner,
-        )?;
-
-        let linear_pos_end = body.linear_pos_end();
-        let linear_span = start_linear_span.union(linear_pos_end);
-
-        let body_span_end = body.span().end();
-        Ok(ast::function::AsyncArrowFunction::new(
-            None,
             params,
-            body,
-            linear_span,
-            Span::new(async_token_span.start(), body_span_end),
-        ))
+            params_start_position,
+            async_token_span,
+            start_linear_span,
+            self.allow_in,
+        )
     }
+}
+
+/// Refines the arguments of a `CoverCallExpressionAndAsyncArrowHead` into the formal parameters
+/// of an `AsyncArrowHead`.
+///
+/// More information:
+///  - [ECMAScript specification][spec]
+///
+/// [spec]: https://tc39.es/ecma262/#prod-AsyncArrowHead
+pub(in crate::parser) fn cover_call_parameters(
+    call: &Call,
+    trailing_comma: bool,
+    strict: bool,
+) -> ParseResult<FormalParameterList> {
+    let span = call.span();
+    let mut parameters = Vec::new();
+    let last = call.args().len().saturating_sub(1);
+    for (index, argument) in call.args().iter().enumerate() {
+        let Expression::Spread(spread) = argument else {
+            expression_to_formal_parameters(argument, &mut parameters, strict, span)?;
+            continue;
+        };
+        if index != last || trailing_comma {
+            return Err(Error::general(
+                "rest parameter must be last formal parameter",
+                spread.span().start(),
+            ));
+        }
+        if matches!(spread.target(), Expression::Assign(_)) {
+            return Err(Error::general(
+                "rest parameter may not have a default initializer",
+                spread.span().start(),
+            ));
+        }
+        expression_to_formal_parameters(spread.target(), &mut parameters, strict, span)?;
+        if let Some(rest) = parameters.pop() {
+            parameters.push(FormalParameter::new(rest.variable().clone(), true));
+        }
+    }
+
+    // Early Error: It is a Syntax Error if the AsyncArrowHead contains `await` as an
+    // IdentifierReference or a BindingIdentifier, which the [+Await] reparse rejects.
+    let parameters = FormalParameterList::from(parameters);
+    if contains(&parameters, ContainsSymbol::AwaitIdentifier) {
+        return Err(Error::general(
+            "'await' is not a valid identifier in async arrow function parameters",
+            span.start(),
+        ));
+    }
+    Ok(parameters)
+}
+
+/// Parses the `=>` and the body of an async arrow function whose parameters were already
+/// parsed, either directly or as the arguments of a `CoverCallExpressionAndAsyncArrowHead`, and
+/// applies the early errors of `AsyncArrowFunction`.
+pub(in crate::parser) fn finish_async_arrow_function<R: ReadChar>(
+    cursor: &mut Cursor<R>,
+    interner: &mut Interner,
+    params: FormalParameterList,
+    params_start_position: Position,
+    async_token_span: Span,
+    start_linear_span: LinearSpan,
+    allow_in: AllowIn,
+) -> ParseResult<ast::function::AsyncArrowFunction> {
+    cursor.peek_expect_no_lineterminator(0, "async arrow function", interner)?;
+    cursor.expect(Punctuator::Arrow, "async arrow function", interner)?;
+
+    let body = AsyncConciseBody::new(allow_in).parse(cursor, interner)?;
+
+    // Early Error: ArrowFormalParameters are UniqueFormalParameters.
+    if params.has_duplicates() {
+        return Err(Error::lex(LexError::Syntax(
+            "Duplicate parameter name not allowed in this context".into(),
+            params_start_position,
+        )));
+    }
+
+    // Early Error: It is a Syntax Error if CoverCallExpressionAndAsyncArrowHead Contains YieldExpression is true.
+    if contains(&params, ContainsSymbol::YieldExpression) {
+        return Err(Error::lex(LexError::Syntax(
+            "Yield expression not allowed in this context".into(),
+            params_start_position,
+        )));
+    }
+
+    // Early Error: It is a Syntax Error if CoverCallExpressionAndAsyncArrowHead Contains AwaitExpression is true.
+    if contains(&params, ContainsSymbol::AwaitExpression) {
+        return Err(Error::lex(LexError::Syntax(
+            "Await expression not allowed in this context".into(),
+            params_start_position,
+        )));
+    }
+
+    // Early Error: It is a Syntax Error if AsyncConciseBodyContainsUseStrict of AsyncConciseBody is true and
+    // IsSimpleParameterList of CoverCallExpressionAndAsyncArrowHead is false.
+    if body.strict() && !params.is_simple() {
+        return Err(Error::lex(LexError::Syntax(
+            "Illegal 'use strict' directive in function with non-simple parameter list".into(),
+            params_start_position,
+        )));
+    }
+
+    // Early Error: It is a Syntax Error if any element of the BoundNames of CoverCallExpressionAndAsyncArrowHead
+    // also occurs in the LexicallyDeclaredNames of AsyncConciseBody.
+    name_in_lexically_declared_names(
+        &bound_names(&params),
+        &lexically_declared_names(&body),
+        params_start_position,
+        interner,
+    )?;
+
+    let linear_pos_end = body.linear_pos_end();
+    let linear_span = start_linear_span.union(linear_pos_end);
+
+    let body_span_end = body.span().end();
+    Ok(ast::function::AsyncArrowFunction::new(
+        None,
+        params,
+        body,
+        linear_span,
+        Span::new(async_token_span.start(), body_span_end),
+    ))
 }
 
 /// <https://tc39.es/ecma262/#prod-AsyncConciseBody>

@@ -15,14 +15,16 @@ mod r#yield;
 
 use crate::{
     Error,
-    lexer::{Error as LexError, InputElement, TokenKind},
+    lexer::{Error as LexError, InputElement, Token, TokenKind},
     parser::{
         AllowAwait, AllowIn, AllowYield, Cursor, OrAbrupt, ParseResult, TokenParser,
         expression::{
             FormalParameterListOrExpression,
             assignment::{
                 arrow_function::{ArrowFunction, ConciseBody},
-                async_arrow_function::AsyncArrowFunction,
+                async_arrow_function::{
+                    AsyncArrowFunction, cover_call_parameters, finish_async_arrow_function,
+                },
                 conditional::ConditionalExpression,
                 r#yield::YieldExpression,
             },
@@ -36,7 +38,7 @@ use boa_ast::{
     expression::operator::assign::{Assign, AssignOp, AssignTarget},
     operations::{ContainsSymbol, bound_names, contains, lexically_declared_names},
 };
-use boa_interner::Interner;
+use boa_interner::{Interner, Sym};
 
 pub(super) use exponentiation::ExponentiationExpression;
 
@@ -90,6 +92,7 @@ where
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Expression> {
         cursor.set_goal(InputElement::RegExp);
 
+        let mut async_call_head = false;
         match cursor.peek(0, interner).or_abrupt()?.kind() {
             // [+Yield]YieldExpression[?In, ?Await]
             TokenKind::Keyword((Keyword::Yield, _)) if self.allow_yield.0 => {
@@ -125,22 +128,24 @@ where
                 };
 
                 let peek_1 = cursor.peek(1, interner).or_abrupt()?.kind().clone();
-                if !cursor
+                let line_terminator = cursor
                     .peek_is_line_terminator(skip_n, interner)
-                    .or_abrupt()?
-                    && (matches!(peek_1, TokenKind::Punctuator(Punctuator::OpenParen))
-                        || (matches!(
-                            peek_1,
-                            TokenKind::IdentifierName(_)
-                                | TokenKind::Keyword((
-                                    Keyword::Yield | Keyword::Await | Keyword::Of | Keyword::Using,
-                                    _
-                                ))
-                        ) && matches!(
-                            cursor.peek(2, interner).or_abrupt()?.kind(),
-                            TokenKind::Punctuator(Punctuator::Arrow)
-                        )))
-                {
+                    .or_abrupt()?;
+                if line_terminator {
+                    async_call_head = false;
+                } else if matches!(peek_1, TokenKind::Punctuator(Punctuator::OpenParen)) {
+                    async_call_head = true;
+                } else if matches!(
+                    peek_1,
+                    TokenKind::IdentifierName(_)
+                        | TokenKind::Keyword((
+                            Keyword::Yield | Keyword::Await | Keyword::Of | Keyword::Using,
+                            _
+                        ))
+                ) && matches!(
+                    cursor.peek(2, interner).or_abrupt()?.kind(),
+                    TokenKind::Punctuator(Punctuator::Arrow)
+                ) {
                     return Ok(AsyncArrowFunction::new(self.allow_in, self.allow_yield)
                         .parse(cursor, interner)?
                         .into());
@@ -234,6 +239,30 @@ where
             FormalParameterListOrExpression::Expression(expression) => expression,
         };
 
+        // CoverCallExpressionAndAsyncArrowHead: `async(...)` followed by `=>` is refined into an
+        // AsyncArrowHead, anything else stays a call to a function named `async`.
+        if async_call_head
+            && let Expression::Call(call) = &lhs
+            && let Expression::Identifier(callee) = call.function()
+            && callee.sym() == Sym::ASYNC
+            && callee.span().start() == position
+            && cursor.peek(0, interner)?.map(Token::kind)
+                == Some(&TokenKind::Punctuator(Punctuator::Arrow))
+        {
+            let trailing_comma = cursor.arguments_had_trailing_comma(call.span().end());
+            let params = cover_call_parameters(call, trailing_comma, cursor.strict())?;
+            return Ok(finish_async_arrow_function(
+                cursor,
+                interner,
+                params,
+                call.span().start(),
+                callee.span(),
+                start_linear_span,
+                self.allow_in,
+            )?
+            .into());
+        }
+
         // Review if we are trying to assign to an invalid left hand side expression.
         if let Some(tok) = cursor.peek(0, interner)?.cloned() {
             match tok.kind() {
@@ -262,11 +291,15 @@ where
                 }
                 TokenKind::Punctuator(p) if p.as_assign_op().is_some() => {
                     cursor.advance(interner);
+                    let assignop = p.as_assign_op().expect("assignop disappeared");
+                    let logical = matches!(
+                        assignop,
+                        AssignOp::BoolAnd | AssignOp::BoolOr | AssignOp::Coalesce
+                    );
                     if let Some(target) =
                         AssignTarget::from_expression_simple(&lhs, cursor.strict())
+                            .filter(|target| !(logical && matches!(target, AssignTarget::Call(_))))
                     {
-                        let assignop = p.as_assign_op().expect("assignop disappeared");
-
                         let mut rhs = self.parse(cursor, interner)?;
                         if (assignop == AssignOp::BoolAnd
                             || assignop == AssignOp::BoolOr

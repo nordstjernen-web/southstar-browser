@@ -120,6 +120,7 @@ impl ArrayLiteral {
                                 default_init: Some(assign.rhs().clone()),
                             });
                         }
+                        AssignTarget::Call(_) => return None,
                         AssignTarget::Pattern(pattern) => match pattern {
                             Pattern::Object(pattern) => {
                                 bindings.push(ArrayPatternElement::Pattern {
