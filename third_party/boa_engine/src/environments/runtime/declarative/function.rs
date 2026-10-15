@@ -40,6 +40,14 @@ impl FunctionEnvironment {
         &self.scope
     }
 
+    /// Returns `true` if this activation has a slot for the binding at `index`.
+    ///
+    /// A direct eval can add `var` bindings to the shared compile-time scope of a function,
+    /// which activations created before the eval ran have no slot for.
+    pub(crate) fn has_slot(&self, index: u32) -> bool {
+        (index as usize) < self.bindings.borrow().len()
+    }
+
     /// Gets the binding value from the environment by it's index.
     ///
     /// # Panics

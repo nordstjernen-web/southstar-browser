@@ -1,6 +1,5 @@
 use crate::{
-    JsNativeError,
-    Context, JsResult, JsString, JsSymbol, JsValue,
+    Context, JsNativeError, JsResult, JsString, JsSymbol, JsValue,
     object::{JsObject, PrivateName},
 };
 use boa_ast::scope::{BindingLocator, BindingLocatorScope, Scope};
@@ -486,6 +485,7 @@ impl Context {
                     if env.poisoned() || deleted_binding {
                         if let Some(env) = env.kind().as_function()
                             && let Some(b) = env.compile().get_binding(locator.name())
+                            && env.has_slot(b.binding_index())
                         {
                             if env.is_deleted_binding(b.binding_index()) {
                                 continue;

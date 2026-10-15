@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,488 added and 1,262 removed lines in 130 files;
+2026-10-15 the difference is 11,497 added and 1,263 removed lines in 131 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -86,6 +86,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | Inline caches for writes to global object bindings: `SetNameGlobal`, `SetNameByLocatorGlobal`, `DefInitVarGlobal` and `GetNameAndLocatorGlobal` (reserved opcode slots) replace `SetName`, `SetNameByLocator`, `DefInitVar` and `GetNameAndLocator` for global bindings; a cached own data property of the global object is written directly, anything else goes through `HasProperty` (strict) and `[[Set]]` and is cached afterwards, as `SetPropertyByName` does; the IC read of `GetNameGlobal` is shared | `boa_engine`: `vm/opcode/{mod,get/name,set/name,define/mod}.rs`, `vm/code_block.rs`, `vm/flowgraph/mod.rs`, `bytecompiler/mod.rs` | (performance: `decodeURI/S15.1.3.1_A2.5_T1.js` and `decodeURIComponent/S15.1.3.2_A2.5_T1.js` no longer time out) |
 | Patterns reach `regress` through `prepare_pattern`: a `\k<name>` backreference to a name that several groups share (duplicate named groups) becomes numbered backreferences to all of them, and without `u`/`v` a supplementary code point written in a group name becomes a `\u{…}` escape so it survives the UTF-16 conversion; the `groups` object takes a duplicate name's value from the group that participated | `boa_engine`: `builtins/regexp/mod.rs` | `built-ins/RegExp/named-groups` |
 | `Contains(DirectEval)` looks into object and class method bodies, class field initializers (public and private) and static blocks, as it already did into function expressions, so a block whose class or object literal has a direct `eval` keeps its bindings in an environment instead of registers; such an eval read a binding from the wrong environment and aborted the engine | `boa_ast`: `operations/mod.rs` | `staging/sm/class/fields-static-class-name-binding-eval.js` |
+| A poisoned function environment (one whose function calls a direct eval) is searched through the function's shared compile-time scope, which an eval in a later call can extend with a `var`; the lookup now skips a binding the activation has no slot for (`FunctionEnvironment::has_slot`) instead of indexing past its storage | `boa_engine`: `environments/runtime/{mod,declarative/function}.rs` | `staging/sm/regress/regress-554955-*.js` |
 
 ## Rules for changing the fork
 
