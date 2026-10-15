@@ -62,8 +62,10 @@ thread_local!(static BOA_GC: RefCell<BoaGc> = RefCell::new( BoaGc {
 struct GcConfig {
     /// The threshold at which the garbage collector will trigger a collection.
     threshold: usize,
-    /// The percentage of used space at which the garbage collector will trigger a collection.
-    used_space_percentage: usize,
+    /// How many times the bytes still live after a collection the heap may grow to before the next one.
+    growth_factor: usize,
+    /// The lowest threshold a collection may set.
+    min_threshold: usize,
 }
 
 // Setting the defaults to an arbitrary value currently.
@@ -74,7 +76,8 @@ impl Default for GcConfig {
         Self {
             // Start at 1MB, the nursary size for V8 is ~1-8MB and SM can be up to 16MB
             threshold: 1_048_576,
-            used_space_percentage: 70,
+            growth_factor: 2,
+            min_threshold: 4_194_304,
         }
     }
 }
@@ -199,14 +202,15 @@ impl Allocator {
         if gc.runtime.bytes_allocated > gc.config.threshold {
             Collector::collect(gc);
 
-            // Post collection check
-            // If the allocated bytes are still above the threshold, increase the threshold.
-            if gc.runtime.bytes_allocated
-                > gc.config.threshold / 100 * gc.config.used_space_percentage
-            {
-                gc.config.threshold =
-                    gc.runtime.bytes_allocated / gc.config.used_space_percentage * 100;
-            }
+            // Collecting once the heap outgrows a fixed fraction of its threshold marked the whole
+            // live heap again after every 43% of growth; tracing in proportion to what was
+            // allocated keeps a large live heap from making every collection the slowest part of
+            // running a script.
+            gc.config.threshold = gc
+                .runtime
+                .bytes_allocated
+                .saturating_mul(gc.config.growth_factor)
+                .max(gc.config.min_threshold);
         }
     }
 }

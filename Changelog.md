@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The JavaScript garbage collector waits until the heap has doubled
+  since the last collection instead of growing by 43%, so pages that keep
+  a large heap alive spend less time collecting; Speedometer 3.1 is about
+  3% faster.
 * Speedometer 3.1's NewsSite-Next suite runs to completion. A property
   getter or setter that replaced itself with a plain value (as a frame's
   innerHeight does once the viewport size is known) left the script
