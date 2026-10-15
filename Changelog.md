@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Intl.DateTimeFormat called as a function on an object that inherits
+  from it attaches the new formatter to that object, as Intl.NumberFormat
+  does, under one fallback symbol per realm; Intl.RelativeTimeFormat
+  speaks German; and Temporal rejects the "islamic" calendar, which only
+  Intl.DateTimeFormat resolves, reads era and eraYear in
+  PlainMonthDay.from and toPlainDate, and keeps a ZonedDateTime's offset
+  by default in with(). test262's intl402 now passes in full (3,382 of
+  3,382), and test262 as a whole passes 51,856 of 52,133.
 * A script can call a function named async: async(x) was a syntax error
   unless an arrow followed. In non-strict scripts an assignment to a call,
   such as f() = 1, f() += 1, f()++ or for (f() in o), now parses and
@@ -20,8 +28,7 @@ Southstar Browser 0.9.11-dev:
   ahead of time. test262 reaches 51,936 of 52,133 (99.6%).
 * Together, the Intl rewrites below take test262's intl402 from 2,416 to
   3,364 of 3,382 (99.5%) and test262 as a whole to 51,838 of 52,133
-  (99.4%). The remaining intl402 failures are Temporal calendar cases in
-  the Boa fork and the legacy Intl constructor-as-function behaviour.
+  (99.4%).
 * Intl.DateTimeFormat follows ECMA-402 closely: locale lists are validated
   and resolved with their ca, hc and nu keywords, options are read in the
   specified order, dateStyle and timeStyle work alongside hour cycles,

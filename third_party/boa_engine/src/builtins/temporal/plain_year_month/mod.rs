@@ -28,8 +28,10 @@ use temporal_rs::{
 };
 
 use super::{
-    DateTimeValues, calendar::get_temporal_calendar_slot_value_with_default, create_temporal_date,
-    create_temporal_duration, is_partial_temporal_object, options::get_difference_settings,
+    DateTimeValues,
+    calendar::{canonicalize_calendar, get_temporal_calendar_slot_value_with_default},
+    create_temporal_date, create_temporal_duration, is_partial_temporal_object,
+    options::get_difference_settings,
     to_temporal_duration,
 };
 
@@ -234,7 +236,7 @@ impl BuiltInConstructor for PlainYearMonth {
                     .ok_or_else(|| JsNativeError::typ().with_message("calendar must be a string."))
             })
             .transpose()?
-            .map(|s| Calendar::try_from_utf8(s.as_bytes()))
+            .map(|s| canonicalize_calendar(s.as_bytes()))
             .transpose()?
             .unwrap_or_default();
 
@@ -594,9 +596,9 @@ impl PlainYearMonth {
     /// [temporal_rs-docs]: https://docs.rs/temporal_rs/latest/temporal_rs/struct.PlainYearMonth.html#method.add
     fn add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
         let duration_like = args.get_or_undefined(0);
-        let options = get_options_object(args.get_or_undefined(1))?;
+        let options = args.get_or_undefined(1);
 
-        add_or_subtract_duration(true, this, duration_like, &options, context)
+        add_or_subtract_duration(true, this, duration_like, options, context)
     }
 
     /// 9.3.15 `Temporal.PlainYearMonth.prototype.subtract ( temporalDurationLike [ , options ] )`
@@ -612,9 +614,9 @@ impl PlainYearMonth {
     /// [temporal_rs-docs]: https://docs.rs/temporal_rs/latest/temporal_rs/struct.PlainYearMonth.html#method.subtract
     fn subtract(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
         let duration_like = args.get_or_undefined(0);
-        let options = get_options_object(args.get_or_undefined(1))?;
+        let options = args.get_or_undefined(1);
 
-        add_or_subtract_duration(false, this, duration_like, &options, context)
+        add_or_subtract_duration(false, this, duration_like, options, context)
     }
 
     /// 9.3.16 `Temporal.PlainYearMonth.prototype.until ( other [ , options ] )`
@@ -967,9 +969,18 @@ fn add_or_subtract_duration(
     is_addition: bool,
     this: &JsValue,
     duration_like: &JsValue,
-    options: &JsObject,
+    options: &JsValue,
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    let object = this.as_object();
+    let year_month = object
+        .as_ref()
+        .and_then(JsObject::downcast_ref::<PlainYearMonth>)
+        .ok_or_else(|| {
+            JsNativeError::typ().with_message("this value must be a PlainYearMonth object.")
+        })?;
+
+    // 1. Let duration be ? ToTemporalDuration(temporalDurationLike).
     let duration: Duration = if duration_like.is_object() {
         to_temporal_duration(duration_like, context)?
     } else if let Some(duration_string) = duration_like.as_string() {
@@ -980,16 +991,11 @@ fn add_or_subtract_duration(
             .into());
     };
 
+    // 3. Let resolvedOptions be ? GetOptionsObject(options).
+    let options = get_options_object(options)?;
+    // 4. Let overflow be ? GetTemporalOverflowOption(resolvedOptions).
     let overflow =
-        get_option(options, js_string!("overflow"), context)?.unwrap_or(Overflow::Constrain);
-
-    let object = this.as_object();
-    let year_month = object
-        .as_ref()
-        .and_then(JsObject::downcast_ref::<PlainYearMonth>)
-        .ok_or_else(|| {
-            JsNativeError::typ().with_message("this value must be a PlainYearMonth object.")
-        })?;
+        get_option(&options, js_string!("overflow"), context)?.unwrap_or(Overflow::Constrain);
 
     let inner = &year_month.inner;
     let year_month_result = if is_addition {

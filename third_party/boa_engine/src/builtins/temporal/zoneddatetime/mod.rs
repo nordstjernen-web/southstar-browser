@@ -8,7 +8,10 @@ use crate::{
     builtins::{
         BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject,
         options::{get_option, get_options_object},
-        temporal::{calendar::to_temporal_calendar_identifier, options::get_digits_option},
+        temporal::{
+            calendar::{canonicalize_calendar, to_temporal_calendar_identifier},
+            options::get_digits_option,
+        },
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_string,
@@ -447,7 +450,7 @@ impl BuiltInConstructor for ZonedDateTime {
                     .ok_or_else(|| JsNativeError::typ().with_message("calendar must be a string."))
             })
             .transpose()?
-            .map(|s| Calendar::try_from_utf8(s.as_bytes()))
+            .map(|s| canonicalize_calendar(s.as_bytes()))
             .transpose()?
             .unwrap_or_default();
 
@@ -1220,14 +1223,15 @@ impl ZonedDateTime {
             get_option::<Disambiguation>(&resolved_options, js_string!("disambiguation"), context)?;
         // 21. Let offset be ? GetTemporalOffsetOption(resolvedOptions, prefer).
         let offset =
-            get_option::<OffsetDisambiguation>(&resolved_options, js_string!("offset"), context)?;
+            get_option::<OffsetDisambiguation>(&resolved_options, js_string!("offset"), context)?
+                .unwrap_or(OffsetDisambiguation::Prefer);
         // 22. Let overflow be ? GetTemporalOverflowOption(resolvedOptions).
         let overflow = get_option::<Overflow>(&resolved_options, js_string!("overflow"), context)?;
 
         let result = zdt.inner.with_with_provider(
             fields,
             disambiguation,
-            offset,
+            Some(offset),
             overflow,
             context.timezone_provider(),
         )?;

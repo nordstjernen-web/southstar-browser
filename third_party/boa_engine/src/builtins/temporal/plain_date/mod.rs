@@ -10,7 +10,7 @@ use crate::{
     builtins::{
         BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject,
         options::{get_option, get_options_object},
-        temporal::calendar::to_temporal_calendar_identifier,
+        temporal::calendar::{canonicalize_calendar, to_temporal_calendar_identifier},
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_string,
@@ -304,7 +304,7 @@ impl BuiltInConstructor for PlainDate {
                     .ok_or_else(|| JsNativeError::typ().with_message("calendar must be a string."))
             })
             .transpose()?
-            .map(|s| Calendar::try_from_utf8(s.as_bytes()))
+            .map(|s| canonicalize_calendar(s.as_bytes()))
             .transpose()?
             .unwrap_or_default();
 
@@ -1419,37 +1419,7 @@ pub(crate) fn to_calendar_fields(
                 .map_err(JsError::from)
         })
         .transpose()?;
-    // TODO: `temporal_rs` needs a `has_era` method
-    let has_no_era = calendar.kind() == AnyCalendarKind::Iso
-        || calendar.kind() == AnyCalendarKind::Chinese
-        || calendar.kind() == AnyCalendarKind::Dangi;
-    let (era, era_year) = if has_no_era {
-        (None, None)
-    } else {
-        let era = obj
-            .get(js_string!("era"), context)?
-            .map(|v| {
-                let v = v.to_primitive(context, crate::value::PreferredType::String)?;
-                let Some(era) = v.as_string() else {
-                    return Err(JsError::from(
-                        JsNativeError::typ()
-                            .with_message("The monthCode field value must be a string."),
-                    ));
-                };
-                // TODO: double check if an invalid monthCode is a range or type error.
-                TinyAsciiStr::<19>::try_from_str(&era.to_std_string_escaped())
-                    .map_err(|e| JsError::from(JsNativeError::range().with_message(e.to_string())))
-            })
-            .transpose()?;
-        let era_year = obj
-            .get(js_string!("eraYear"), context)?
-            .map(|v| {
-                let finite = v.to_finitef64(context)?;
-                Ok::<i32, JsError>(finite.as_integer_with_truncation::<i32>())
-            })
-            .transpose()?;
-        (era, era_year)
-    };
+    let (era, era_year) = to_era_fields(obj, calendar, context)?;
     let month = obj
         .get(js_string!("month"), context)?
         .map(|v| {
@@ -1486,4 +1456,43 @@ pub(crate) fn to_calendar_fields(
         era,
         era_year,
     })
+}
+
+/// Reads the `era` and `eraYear` fields that `CalendarExtraFields` adds to the field names of a
+/// calendar that has eras.
+pub(crate) fn to_era_fields(
+    obj: &JsObject,
+    calendar: &Calendar,
+    context: &mut Context,
+) -> JsResult<(Option<TinyAsciiStr<19>>, Option<i32>)> {
+    // TODO: `temporal_rs` needs a `has_era` method
+    let has_no_era = calendar.kind() == AnyCalendarKind::Iso
+        || calendar.kind() == AnyCalendarKind::Chinese
+        || calendar.kind() == AnyCalendarKind::Dangi;
+    if has_no_era {
+        return Ok((None, None));
+    }
+    let era = obj
+        .get(js_string!("era"), context)?
+        .map(|v| {
+            let v = v.to_primitive(context, crate::value::PreferredType::String)?;
+            let Some(era) = v.as_string() else {
+                return Err(JsError::from(
+                    JsNativeError::typ()
+                        .with_message("The monthCode field value must be a string."),
+                ));
+            };
+            // TODO: double check if an invalid monthCode is a range or type error.
+            TinyAsciiStr::<19>::try_from_str(&era.to_std_string_escaped())
+                .map_err(|e| JsError::from(JsNativeError::range().with_message(e.to_string())))
+        })
+        .transpose()?;
+    let era_year = obj
+        .get(js_string!("eraYear"), context)?
+        .map(|v| {
+            let finite = v.to_finitef64(context)?;
+            Ok::<i32, JsError>(finite.as_integer_with_truncation::<i32>())
+        })
+        .transpose()?;
+    Ok((era, era_year))
 }

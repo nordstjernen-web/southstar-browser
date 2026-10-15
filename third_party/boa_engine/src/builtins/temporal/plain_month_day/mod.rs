@@ -1,13 +1,14 @@
 //! Boa's implementation of the ECMAScript `Temporal.PlainMonthDay` built-in object.
-use std::str::FromStr;
-
 use crate::{
     Context, JsArgs, JsData, JsError, JsNativeError, JsObject, JsResult, JsString, JsSymbol,
     JsValue,
     builtins::{
         BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject,
         options::{get_option, get_options_object},
-        temporal::{calendar::get_temporal_calendar_slot_value_with_default, to_calendar_fields},
+        temporal::{
+            calendar::{canonicalize_calendar, get_temporal_calendar_slot_value_with_default},
+            to_calendar_fields, to_era_fields,
+        },
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_string,
@@ -19,7 +20,7 @@ use crate::{
 use boa_gc::{Finalize, Trace};
 
 use temporal_rs::{
-    Calendar, MonthCode, PlainMonthDay as InnerMonthDay,
+    PlainMonthDay as InnerMonthDay,
     fields::CalendarFields,
     options::{DisplayCalendar, Overflow},
     parsed_intermediates::ParsedDate,
@@ -150,7 +151,7 @@ impl BuiltInConstructor for PlainMonthDay {
                     .ok_or_else(|| JsNativeError::typ().with_message("calendar must be a string."))
             })
             .transpose()?
-            .map(|s| Calendar::try_from_utf8(s.as_bytes()))
+            .map(|s| canonicalize_calendar(s.as_bytes()))
             .transpose()?
             .unwrap_or_default();
 
@@ -461,6 +462,7 @@ impl PlainMonthDay {
         // 4. Let calendar be monthDay.[[Calendar]].
         // 5. Let fields be ISODateToFields(calendar, monthDay.[[ISODate]], month-day).
         // 6. Let inputFields be ? PrepareCalendarFields(calendar, item, « year », « », « »).
+        let (era, era_year) = to_era_fields(&item, month_day.inner.calendar(), context)?;
         let year = item
             .get(js_string!("year"), context)?
             .map(|v| {
@@ -469,7 +471,9 @@ impl PlainMonthDay {
             })
             .transpose()?;
 
-        let fields = CalendarFields::new().with_optional_year(year);
+        let mut fields = CalendarFields::new().with_optional_year(year);
+        fields.era = era;
+        fields.era_year = era_year;
 
         // 7. Let mergedFields be CalendarMergeFields(calendar, fields, inputFields).
         // 8. Let isoDate be ? CalendarDateFromFields(calendar, mergedFields, constrain).
@@ -540,55 +544,12 @@ fn to_temporal_month_day(
 
         // b. Let calendar be ? GetTemporalCalendarIdentifierWithISODefault(item).
         let calendar = get_temporal_calendar_slot_value_with_default(&obj, context)?;
-        // NOTE: inlined
         // c. Let fields be ? PrepareCalendarFields(calendar, item, « year, month, month-code, day », «», «»).
-        let day = obj
-            .get(js_string!("day"), context)?
-            .map(|v| {
-                let finite = v.to_finitef64(context)?;
-                finite
-                    .as_positive_integer_with_truncation::<u8>()
-                    .map_err(JsError::from)
-            })
-            .transpose()?;
-
-        let month = obj
-            .get(js_string!("month"), context)?
-            .map(|v| {
-                let finite = v.to_finitef64(context)?;
-                finite
-                    .as_positive_integer_with_truncation::<u8>()
-                    .map_err(JsError::from)
-            })
-            .transpose()?;
-
-        let month_code = obj
-            .get(js_string!("monthCode"), context)?
-            .map(|v| {
-                let primitive = v.to_primitive(context, crate::value::PreferredType::String)?;
-                let Some(month_code) = primitive.as_string() else {
-                    return Err(JsNativeError::typ()
-                        .with_message("The monthCode field value must be a string.")
-                        .into());
-                };
-                MonthCode::from_str(&month_code.to_std_string_escaped()).map_err(JsError::from)
-            })
-            .transpose()?;
-
-        let year = obj
-            .get(js_string!("year"), context)?
-            .map(|v| {
-                let finite = v.to_finitef64(context)?;
-                Ok::<i32, JsError>(finite.as_integer_with_truncation::<i32>())
-            })
-            .transpose()?;
-
-        let partial_date = PartialDate::new()
-            .with_month(month)
-            .with_day(day)
-            .with_year(year)
-            .with_month_code(month_code)
-            .with_calendar(calendar);
+        let calendar_fields = to_calendar_fields(&obj, &calendar, context)?;
+        let partial_date = PartialDate {
+            calendar_fields,
+            calendar,
+        };
 
         // d. Let resolvedOptions be ? GetOptionsObject(options).
         let options = get_options_object(options)?;

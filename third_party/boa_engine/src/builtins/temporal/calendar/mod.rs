@@ -1,10 +1,8 @@
 //! An implementation of the `Temporal` proposal's Calendar builtin.
 
-use std::str::FromStr;
-
 use super::extract_from_temporal_type;
 use crate::{Context, JsNativeError, JsObject, JsResult, JsValue, js_string};
-use temporal_rs::Calendar;
+use temporal_rs::{Calendar, parsers::parse_allowed_calendar_formats};
 
 // -- `Calendar` Abstract Operations --
 
@@ -65,6 +63,28 @@ pub(crate) fn to_temporal_calendar_identifier(calendar_like: &JsValue) -> JsResu
             .into());
     };
     // 3. Let identifier be ? ParseTemporalCalendarString(temporalCalendarLike).
+    let calendar_id = calendar_id.to_std_string_escaped();
+    let identifier = match parse_allowed_calendar_formats(calendar_id.as_bytes()) {
+        Some([]) => return Ok(Calendar::ISO),
+        Some(identifier) => identifier,
+        None => calendar_id.as_bytes(),
+    };
     // 4. Return ? CanonicalizeCalendar(identifier).
-    Ok(Calendar::from_str(&calendar_id.to_std_string_escaped())?)
+    canonicalize_calendar(identifier)
+}
+
+/// `CanonicalizeCalendar ( id )`
+///
+/// `islamic` is not one of Temporal's available calendars: only the `Intl.DateTimeFormat`
+/// constructor resolves it, by falling back to another Hijri calendar.
+pub(crate) fn canonicalize_calendar(id: &[u8]) -> JsResult<Calendar> {
+    // 1. Let calendars be AvailableCalendars().
+    // 2. If calendars does not contain the ASCII-lowercase of id, throw a RangeError exception.
+    if id.eq_ignore_ascii_case(b"islamic") {
+        return Err(JsNativeError::range()
+            .with_message("unknown calendar")
+            .into());
+    }
+    // 3. Return CanonicalizeUValue("ca", id).
+    Ok(Calendar::try_from_utf8(id)?)
 }

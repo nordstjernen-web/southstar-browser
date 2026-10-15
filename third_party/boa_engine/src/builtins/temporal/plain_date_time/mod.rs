@@ -8,7 +8,7 @@ use crate::{
     builtins::{
         BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject,
         options::{get_option, get_options_object},
-        temporal::calendar::to_temporal_calendar_identifier,
+        temporal::calendar::{canonicalize_calendar, to_temporal_calendar_identifier},
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_string,
@@ -450,7 +450,7 @@ impl BuiltInConstructor for PlainDateTime {
                     .ok_or_else(|| JsNativeError::typ().with_message("calendar must be a string."))
             })
             .transpose()?
-            .map(|s| Calendar::try_from_utf8(s.as_bytes()))
+            .map(|s| canonicalize_calendar(s.as_bytes()))
             .transpose()?
             .unwrap_or_default();
 
