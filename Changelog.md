@@ -13,6 +13,10 @@ Southstar Browser 0.9.11-dev:
   before it overflows the thread. Angular's router pipeline nests deeper
   than 512 calls at startup, so TodoMVC Angular added no todos and both
   Speedometer 3.1 Angular suites failed; they now run to completion.
+* JavaScript runs about twice as fast in the Windows build. The garbage
+  collector checked a thread-local flag on every value it released, and
+  thread-locals are slow on the MinGW toolchain Windows builds use; the
+  check now reads a shared counter unless a collection is under way.
 * A headless run no longer ends early while a script is still loading:
   the settle loop could run nested inside a blocking fetch, find nothing
   else pending and quit before DOMContentLoaded, so Speedometer 3.1 runs

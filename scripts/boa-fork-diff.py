@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CRATES = ("boa_engine", "boa_parser", "boa_ast")
+CRATES = ("boa_engine", "boa_parser", "boa_ast", "boa_gc")
 INDEX = "https://index.crates.io/bo/a_/{0}"
 DOWNLOAD = "https://static.crates.io/crates/{0}/{0}-{1}.crate"
 COMPARED = ("src", "Cargo.toml")

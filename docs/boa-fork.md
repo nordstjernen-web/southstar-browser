@@ -1,7 +1,7 @@
 # The Boa fork
 
 Southstar's JavaScript engine is [Boa](https://github.com/boa-dev/boa).
-Three of its crates are forked into `third_party/`, each a copy of the
+Four of its crates are forked into `third_party/`, each a copy of the
 **0.22.0** release from crates.io patched into the build through
 `[patch.crates-io]` in `Cargo.toml`:
 
@@ -10,10 +10,12 @@ Three of its crates are forked into `third_party/`, each a copy of the
 | `boa_engine` | `5d6aaf7fdc4299df68adb67e1a5440a51d34630a1f5271b9698fd74bc97b60d9` |
 | `boa_parser` | `641e81b3c8cbb7a2140547fb3ea534e9edf210b4e8c920b5fa864a919e11fbcf` |
 | `boa_ast` | `9221b0a090572b4a118b46c5874c0781fe4bc9546b85f0a615b8bfb609ca4ed7` |
+| `boa_gc` | `af82119558ab1002d1978c8459b53a3ebb506177d29a3aca37c07c1777b1d966` |
 
 `boa_engine` carries a small set of embedder hooks; the parser and the AST
-were forked for syntax that 0.22 does not parse. `boa_gc`, `boa_interner`,
-`boa_string` and the other Boa crates come unchanged from crates.io at the
+were forked for syntax that 0.22 does not parse, and `boa_gc` for the cost of
+its thread-locals on Windows. `boa_interner`, `boa_string` and the other Boa
+crates come unchanged from crates.io at the
 same version, and `rust/js-engine` is the only crate that depends on Boa.
 
 The aim is a fork whose difference from upstream stays small and readable,
@@ -51,6 +53,7 @@ of each (`--crate boa_parser` limits it to one). On
 | `JsObject::get_function_realm` made `pub` | `object/operations.rs` | `Scope::function_handle`: the realm a callback is re-entered in | yes, trivially |
 | The legacy `Date.parse` fallback: month and weekday names, `/`, `-`, `,` and space separated dates, 12/24-hour times, zone names and offsets; ISO fractions past milliseconds ignored | `builtins/date/utils.rs` | `Date.parse(String(new Date()))` and the other strings every browser accepts | yes: the format is implementation-defined, and every other engine accepts these |
 | `JsObject::{identity, from_identity, retain_identity, release_identity}`: a `JsObject` as a raw pointer and back | `object/jsobject.rs` | the internal C ABI's opaque object handles (canvas, js-runtime wrappers) | no: scaffolding of the C port, removed as that ABI goes; the arena DOM and GC-traced bindings replace it |
+| `finalizer_safe` reads the `GC_DROPPING` thread-local only while some thread is sweeping, counted by a process-wide `THREADS_DROPPING` atomic: on windows-gnu, which has no native TLS, every `thread_local!` access runs `guard::enable` (a fenced atomic round trip and `FlsSetValue`), and `Gc::drop` calls `finalizer_safe` on every drop, half of the JS time in Speedometer | `boa_gc`: `lib.rs` | every `Gc` drop | yes |
 | `Cargo.toml`: no `cdylib` crate type; the tests, benches, dev-dependencies and lint tables of files the crate does not ship are dropped (in `boa_parser` and `boa_ast` too) | `Cargo.toml` | building as an rlib inside the workspace | no |
 
 ## Conformance work

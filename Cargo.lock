@@ -150,8 +150,6 @@ dependencies = [
 [[package]]
 name = "boa_gc"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af82119558ab1002d1978c8459b53a3ebb506177d29a3aca37c07c1777b1d966"
 dependencies = [
  "arrayvec",
  "boa_macros",

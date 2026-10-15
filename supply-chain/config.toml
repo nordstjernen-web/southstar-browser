@@ -25,6 +25,9 @@ audit-as-crates-io = false
 [policy.boa_engine]
 audit-as-crates-io = false
 
+[policy.boa_gc]
+audit-as-crates-io = false
+
 [policy.boa_parser]
 audit-as-crates-io = false
 
@@ -50,10 +53,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.block-buffer]]
 version = "0.12.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.boa_gc]]
-version = "0.22.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.boa_icu_provider]]
