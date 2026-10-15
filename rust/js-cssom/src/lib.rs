@@ -21,6 +21,7 @@ use crate::ffi::Js;
 #[derive(Default)]
 pub(crate) struct Page {
     computed_proxy: RefCell<Option<Value>>,
+    computed_methods: RefCell<Option<Rc<declaration::ComputedMethods>>>,
 }
 
 thread_local! {
@@ -39,5 +40,7 @@ pub(crate) fn teardown(js: Js) {
     if let Some(page) = page {
         let proxy = page.computed_proxy.borrow_mut().take();
         drop(proxy);
+        let methods = page.computed_methods.borrow_mut().take();
+        drop(methods);
     }
 }

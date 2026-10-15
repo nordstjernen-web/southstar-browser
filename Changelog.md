@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* getComputedStyle() no longer forces a layout and copies every custom
+  property name to count them before anything is read: length is
+  computed when it is read, and the declaration's methods are created
+  once per page instead of on every call.
 * Matching CSS selectors no longer touches thread-local counters at every
   combinator step, which were slow in the Windows build; restyling pages
   with large style sheets is up to 17% faster.

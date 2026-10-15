@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::rc::Rc;
+
 use southstar_dom::Node;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
@@ -108,20 +110,44 @@ fn pseudo_supported(name: &str, colons: usize) -> bool {
     LEGACY.contains(&name) || (colons == 2 && MODERN.contains(&name))
 }
 
-fn bind(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &str,
-    f: NativeFn,
-    arity: u32,
-) -> Result<(), Value> {
-    let function = scope.function(name, arity, f);
-    scope.set(object, name, function)
-}
-
 fn custom_names(js: Js, node: Node<'_>) -> Vec<Vec<u8>> {
     ffi::flush_layout(js);
     ffi::style_of(js, node).map_or_else(Vec::new, |s| s.var_names())
+}
+
+fn custom_count(js: Js, node: Node<'_>) -> usize {
+    ffi::flush_layout(js);
+    ffi::style_of(js, node).map_or(0, |s| s.var_count())
+}
+
+pub(crate) struct ComputedMethods {
+    get_property_value: Value,
+    get_property_priority: Value,
+    set_property: Value,
+    remove_property: Value,
+    item: Value,
+    length: Value,
+}
+
+fn computed_methods(scope: &mut Scope<'_>, js: Js) -> Rc<ComputedMethods> {
+    let page = page_or_new(js);
+    if let Some(methods) = page.computed_methods.borrow().clone() {
+        return methods;
+    }
+    let methods = Rc::new(ComputedMethods {
+        get_property_value: scope.function("getPropertyValue", 1, computed_get_property_value),
+        get_property_priority: scope.function(
+            "getPropertyPriority",
+            1,
+            computed_get_property_priority,
+        ),
+        set_property: scope.function("setProperty", 2, computed_readonly),
+        remove_property: scope.function("removeProperty", 1, computed_readonly),
+        item: scope.function("item", 1, computed_item),
+        length: scope.function("get length", 0, computed_length),
+    });
+    *page.computed_methods.borrow_mut() = Some(methods.clone());
+    methods
 }
 
 fn proxy(scope: &mut Scope<'_>) -> Option<Value> {
@@ -172,36 +198,24 @@ pub(crate) fn get_computed_style(
             }
         }
     }
-    bind(
-        scope,
-        &cs,
-        "getPropertyValue",
-        computed_get_property_value,
-        1,
-    )?;
-    bind(
-        scope,
+    let js = ffi::js_of(scope);
+    let methods = computed_methods(scope, js);
+    scope.set(&cs, "getPropertyValue", methods.get_property_value.clone())?;
+    scope.set(
         &cs,
         "getPropertyPriority",
-        computed_get_property_priority,
-        1,
+        methods.get_property_priority.clone(),
     )?;
-    bind(scope, &cs, "setProperty", computed_readonly, 2)?;
-    bind(scope, &cs, "removeProperty", computed_readonly, 1)?;
-    let empty_value = scope.get(&cs, "_empty")?;
-    let empty = scope.to_bool(&empty_value);
-    let js = ffi::js_of(scope);
-    let custom_count = match args.first().and_then(ffi::unwrap_element) {
-        Some(node) if !empty && !js.is_null() => custom_names(js, node).len(),
-        _ => 0,
-    };
-    let length = if empty {
-        0
-    } else {
-        (COMPUTED_PROPS.len() + custom_count) as i32
-    };
-    scope.define(&cs, "length", Value::int(length), Attributes::CONFIGURABLE)?;
-    bind(scope, &cs, "item", computed_item, 1)?;
+    scope.set(&cs, "setProperty", methods.set_property.clone())?;
+    scope.set(&cs, "removeProperty", methods.remove_property.clone())?;
+    scope.define_accessor(
+        &cs,
+        "length",
+        Some(&methods.length),
+        None,
+        Attributes::CONFIGURABLE,
+    )?;
+    scope.set(&cs, "item", methods.item.clone())?;
 
     if let Some(helper) = proxy(scope)
         && let Ok(wrapped) = scope.call(&helper, &Value::undefined(), core::slice::from_ref(&cs))
@@ -261,6 +275,20 @@ fn computed_readonly(
         "NoModificationAllowedError",
         "Computed styles are read-only.",
     ))
+}
+
+fn computed_length(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
+    let empty = scope.get(this, "_empty")?;
+    if scope.to_bool(&empty) {
+        return Ok(Value::int(0));
+    }
+    let node = scope.get(this, "_node")?;
+    let js = ffi::js_of(scope);
+    let custom = match ffi::unwrap_element(&node) {
+        Some(node) if !js.is_null() => custom_count(js, node),
+        _ => 0,
+    };
+    Ok(Value::int((COMPUTED_PROPS.len() + custom) as i32))
 }
 
 fn computed_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {

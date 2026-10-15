@@ -630,6 +630,14 @@ impl<'a> StyleRef<'a> {
             .collect()
     }
 
+    pub fn var_count(self) -> usize {
+        let map = self.fields().vars;
+        if map.is_null() {
+            return 0;
+        }
+        Names::of(map).get().len()
+    }
+
     pub fn resolve_vars(self, text: &CStr) -> Option<GStr> {
         unsafe { GStr::take(ns_css_resolve_style_vars(text.as_ptr(), self.0.as_ptr())) }
     }
