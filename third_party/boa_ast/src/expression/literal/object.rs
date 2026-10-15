@@ -41,6 +41,7 @@ use core::{fmt::Write as _, ops::ControlFlow};
 #[derive(Clone, Debug, PartialEq)]
 pub struct ObjectLiteral {
     properties: Box<[PropertyDefinition]>,
+    has_trailing_comma_spread: bool,
     span: Span,
 }
 
@@ -54,8 +55,25 @@ impl ObjectLiteral {
     {
         Self {
             properties: properties.into(),
+            has_trailing_comma_spread: false,
             span,
         }
+    }
+
+    /// Records that the literal ends with a spread element followed by a comma, as in
+    /// `{...rest,}`, which cannot be refined into an `ObjectAssignmentPattern`.
+    #[inline]
+    #[must_use]
+    pub const fn with_trailing_comma_spread(mut self, has_trailing_comma_spread: bool) -> Self {
+        self.has_trailing_comma_spread = has_trailing_comma_spread;
+        self
+    }
+
+    /// Indicates if the literal ends with a spread element followed by a comma.
+    #[inline]
+    #[must_use]
+    pub const fn has_trailing_comma_spread(&self) -> bool {
+        self.has_trailing_comma_spread
     }
 
     /// Gets the object literal properties
@@ -68,6 +86,9 @@ impl ObjectLiteral {
     /// Converts the object literal into an [`ObjectPattern`].
     #[must_use]
     pub fn to_pattern(&self, strict: bool) -> Option<ObjectPattern> {
+        if self.has_trailing_comma_spread {
+            return None;
+        }
         let mut bindings = Vec::new();
         for (i, property) in self.properties.iter().enumerate() {
             match property {

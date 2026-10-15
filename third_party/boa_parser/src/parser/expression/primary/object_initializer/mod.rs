@@ -85,6 +85,7 @@ where
 
         let mut has_proto = false;
         let mut duplicate_proto_position = None;
+        let mut has_trailing_comma_spread = false;
 
         let end = loop {
             if let Some(token) = cursor.next_if(Punctuator::CloseBlock, interner)? {
@@ -106,9 +107,11 @@ where
                 }
             }
 
+            has_trailing_comma_spread = matches!(property, PropertyDefinitionNode::SpreadObject(_));
             elements.push(property);
 
             if let Some(token) = cursor.next_if(Punctuator::CloseBlock, interner)? {
+                has_trailing_comma_spread = false;
                 break token.span().end();
             }
 
@@ -136,7 +139,8 @@ where
         }
 
         let start = open_block_token.span().start();
-        Ok(literal::ObjectLiteral::new(elements, Span::new(start, end)))
+        Ok(literal::ObjectLiteral::new(elements, Span::new(start, end))
+            .with_trailing_comma_spread(has_trailing_comma_spread))
     }
 }
 

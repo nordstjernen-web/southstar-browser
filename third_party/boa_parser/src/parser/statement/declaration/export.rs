@@ -22,6 +22,7 @@ use crate::{
 use boa_ast::{
     Keyword, Punctuator, Spanned,
     declaration::{ExportDeclaration as AstExportDeclaration, ReExportKind},
+    expression::Identifier,
 };
 use boa_interner::{Interner, Sym};
 
@@ -206,8 +207,15 @@ where
                         )
                     }
                     _ => {
-                        let expr =
+                        let mut expr =
                             AssignmentExpression::new(true, false, true).parse(cursor, interner)?;
+
+                        // NamedEvaluation with "default": the name is part of the function or
+                        // class definition, so a class's own static `name` member replaces it.
+                        expr.set_anonymous_function_definition_name(&Identifier::new(
+                            Sym::DEFAULT,
+                            expr.span(),
+                        ));
 
                         cursor.expect_semicolon("default expression export", interner)?;
 

@@ -192,8 +192,15 @@ impl<R> Lexer<R> {
             return Ok(());
         }
 
+        let mut skipped_whitespace = false;
         while self.cursor.peek_char()?.is_some_and(is_whitespace) {
             let _next = self.cursor.next_char();
+            skipped_whitespace = true;
+        }
+
+        // A hashbang comment must be the very first input element.
+        if skipped_whitespace && self.get_goal() == InputElement::HashbangOrRegExp {
+            self.set_goal(InputElement::RegExp);
         }
 
         // -->

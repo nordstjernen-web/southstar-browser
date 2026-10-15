@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A script may start with an HTML close comment (-->) as old pages
+  served inside HTML comments do, ({...rest,} = obj) is the syntax error
+  the language requires, and export default class { static name() {} }
+  keeps its own name method.
 * (25).toExponential(0) is "3e+1" as in other browsers (ties round up),
   Date.parse rejects "-000000" years and dates beyond the representable
   range instead of misreading them, and Promise.try returns a promise the

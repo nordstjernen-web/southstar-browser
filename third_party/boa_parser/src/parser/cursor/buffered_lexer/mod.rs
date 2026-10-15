@@ -30,6 +30,7 @@ pub(super) struct BufferedLexer<R> {
     read_index: usize,
     write_index: usize,
     last_linear_pos: LinearPosition,
+    at_start: bool,
 }
 
 impl<R> From<Lexer<R>> for BufferedLexer<R>
@@ -53,6 +54,7 @@ where
             read_index: 0,
             write_index: 0,
             last_linear_pos: LinearPosition::default(),
+            at_start: true,
         }
     }
 }
@@ -134,8 +136,13 @@ where
 
         let previous_index = self.write_index.checked_sub(1).unwrap_or(PEEK_BUF_SIZE - 1);
 
-        if let Some(ref token) = self.peeked[previous_index]
-            && token.kind() == &TokenKind::LineTerminator
+        // The start of a Script counts as the start of a line for `HTMLCloseComment`.
+        let at_start = std::mem::replace(&mut self.at_start, false)
+            && self.lexer.get_goal() == InputElement::HashbangOrRegExp;
+        if at_start
+            || self.peeked[previous_index]
+                .as_ref()
+                .is_some_and(|token| token.kind() == &TokenKind::LineTerminator)
         {
             // We don't want to have multiple contiguous line terminators in the buffer, since
             // they have no meaning.
