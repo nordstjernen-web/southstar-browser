@@ -960,6 +960,14 @@ impl<'ctx> ByteCompiler<'ctx> {
         self.bytecode.emit_push_from_register(src.variable());
     }
 
+    /// Adds an inline cache for the global object property the global binding at `index` names.
+    fn push_global_ic(&mut self, index: u32) -> u32 {
+        let ic_index = self.ic.len() as u32;
+        let name = self.bindings[index as usize].name().clone();
+        self.ic.push(InlineCache::new(name));
+        ic_index
+    }
+
     pub(crate) fn emit_binding_access(
         &mut self,
         opcode: BindingAccessOpcode,
@@ -969,7 +977,9 @@ impl<'ctx> ByteCompiler<'ctx> {
         match binding {
             BindingKind::Global(index) => match opcode {
                 BindingAccessOpcode::SetNameByLocator => {
-                    self.bytecode.emit_set_name_by_locator(value.variable());
+                    let ic_index = self.push_global_ic(*index);
+                    self.bytecode
+                        .emit_set_name_by_locator_global(value.variable(), ic_index.into());
                 }
                 BindingAccessOpcode::GetName => {
                     let ic_index = self.ic.len() as u32;
@@ -989,15 +999,30 @@ impl<'ctx> ByteCompiler<'ctx> {
                 BindingAccessOpcode::PutLexicalValue => self
                     .bytecode
                     .emit_put_lexical_value(value.variable(), (*index).into()),
-                BindingAccessOpcode::DefInitVar => self
-                    .bytecode
-                    .emit_def_init_var(value.variable(), (*index).into()),
-                BindingAccessOpcode::SetName => self
-                    .bytecode
-                    .emit_set_name(value.variable(), (*index).into()),
-                BindingAccessOpcode::GetNameAndLocator => self
-                    .bytecode
-                    .emit_get_name_and_locator(value.variable(), (*index).into()),
+                BindingAccessOpcode::DefInitVar => {
+                    let ic_index = self.push_global_ic(*index);
+                    self.bytecode.emit_def_init_var_global(
+                        value.variable(),
+                        (*index).into(),
+                        ic_index.into(),
+                    );
+                }
+                BindingAccessOpcode::SetName => {
+                    let ic_index = self.push_global_ic(*index);
+                    self.bytecode.emit_set_name_global(
+                        value.variable(),
+                        (*index).into(),
+                        ic_index.into(),
+                    );
+                }
+                BindingAccessOpcode::GetNameAndLocator => {
+                    let ic_index = self.push_global_ic(*index);
+                    self.bytecode.emit_get_name_and_locator_global(
+                        value.variable(),
+                        (*index).into(),
+                        ic_index.into(),
+                    );
+                }
                 BindingAccessOpcode::GetNameOrUndefined => self
                     .bytecode
                     .emit_get_name_or_undefined(value.variable(), (*index).into()),

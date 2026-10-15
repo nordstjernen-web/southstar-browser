@@ -1,8 +1,10 @@
 use boa_ast::scope::{BindingLocator, BindingLocatorScope};
 
 use crate::{
-    Context, JsError, JsExpect, JsNativeError, JsResult,
+    Context, JsError, JsExpect, JsNativeError, JsResult, JsValue,
     environments::Environment,
+    object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
+    property::PropertyKey,
     vm::opcode::{IndexOperand, Operation, RegisterOperand},
 };
 
@@ -114,6 +116,156 @@ impl Operation for SetNameByLocator {
     const NAME: &'static str = "SetNameByLocator";
     const INSTRUCTION: &'static str = "INST - SetNameByLocator";
     const COST: u8 = 4;
+}
+
+/// `SetNameGlobal` implements the Opcode Operation for `Opcode::SetNameGlobal`
+///
+/// Operation:
+///  - Like `SetName`, writing a global object binding through an inline cache.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SetNameGlobal;
+
+impl SetNameGlobal {
+    #[inline(always)]
+    pub(crate) fn operation(
+        (value, index, ic_index): (RegisterOperand, IndexOperand, IndexOperand),
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let value = context.vm.get_register(value.into()).clone();
+        let code_block = context.vm.frame().code_block();
+        let mut binding_locator = code_block.bindings[usize::from(index)].clone();
+        let strict = code_block.strict();
+
+        context.find_runtime_binding(&mut binding_locator)?;
+
+        if binding_locator.is_global() {
+            return set_global_object_binding(&binding_locator, value, ic_index, true, context);
+        }
+
+        verify_initialized(&binding_locator, context)?;
+
+        context.set_binding(&binding_locator, value, strict)?;
+
+        Ok(())
+    }
+}
+
+impl Operation for SetNameGlobal {
+    const NAME: &'static str = "SetNameGlobal";
+    const INSTRUCTION: &'static str = "INST - SetNameGlobal";
+    const COST: u8 = 4;
+}
+
+/// `SetNameByLocatorGlobal` implements the Opcode Operation for `Opcode::SetNameByLocatorGlobal`
+///
+/// Operation:
+///  - Like `SetNameByLocator`, writing a global object binding through an inline cache.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SetNameByLocatorGlobal;
+
+impl SetNameByLocatorGlobal {
+    #[inline(always)]
+    pub(crate) fn operation(
+        (value, ic_index): (RegisterOperand, IndexOperand),
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let frame = context.vm.frame_mut();
+        let strict = frame.code_block.strict();
+        let (mut binding_locator, unresolvable) = frame
+            .binding_stack
+            .pop()
+            .js_expect("locator should have been popped before")?;
+        let value = context.vm.get_register(value.into()).clone();
+
+        if unresolvable {
+            return Err(JsNativeError::reference()
+                .with_message(format!(
+                    "{} is not defined",
+                    binding_locator.name().to_std_string_escaped()
+                ))
+                .into());
+        }
+
+        if context.is_deleted_binding(&binding_locator) {
+            context.find_runtime_binding(&mut binding_locator)?;
+        }
+
+        if binding_locator.is_global() {
+            return set_global_object_binding(&binding_locator, value, ic_index, true, context);
+        }
+
+        verify_initialized(&binding_locator, context)?;
+
+        context.set_binding(&binding_locator, value, strict)?;
+
+        Ok(())
+    }
+}
+
+impl Operation for SetNameByLocatorGlobal {
+    const NAME: &'static str = "SetNameByLocatorGlobal";
+    const INSTRUCTION: &'static str = "INST - SetNameByLocatorGlobal";
+    const COST: u8 = 4;
+}
+
+/// Writes `value` to the global object property a global binding names, through the inline
+/// cache at `ic_index`.
+///
+/// A cached own data property is written directly; otherwise strict code first checks that the
+/// property still exists (when `check_exists` is set) and the value is stored with `[[Set]]`.
+pub(crate) fn set_global_object_binding(
+    binding_locator: &BindingLocator,
+    value: JsValue,
+    ic_index: IndexOperand,
+    check_exists: bool,
+    context: &mut Context,
+) -> JsResult<()> {
+    let object = context.global_object();
+    let strict = context.vm.frame().code_block.strict();
+
+    let ic = &context.vm.frame().code_block().ic[usize::from(ic_index)];
+    let object_borrowed = object.borrow();
+    if let Some((_, slot)) = ic.get(object_borrowed.shape())
+        && !slot.attributes.is_accessor_descriptor()
+        && !slot.attributes.contains(SlotAttributes::PROTOTYPE)
+    {
+        drop(object_borrowed);
+        object.borrow_mut().properties_mut().storage[slot.index as usize] = value;
+        return Ok(());
+    }
+    drop(object_borrowed);
+
+    let key: PropertyKey = ic.name.clone().into();
+
+    if check_exists && strict && !object.has_property(key.clone(), context)? {
+        return Err(JsNativeError::reference()
+            .with_message(format!(
+                "cannot assign to uninitialized global property `{}`",
+                binding_locator.name().to_std_string_escaped()
+            ))
+            .into());
+    }
+
+    let context = &mut InternalMethodPropertyContext::new(context);
+    let succeeded = object.__set__(key.clone(), value, object.clone().into(), context)?;
+    if !succeeded {
+        if strict {
+            return Err(JsNativeError::typ()
+                .with_message(format!("cannot set non-writable property: {key}"))
+                .into());
+        }
+        return Ok(());
+    }
+
+    // Cache the property.
+    let slot = *context.slot();
+    if slot.is_cacheable() {
+        let ic = &context.vm.frame().code_block.ic[usize::from(ic_index)];
+        let object_borrowed = object.borrow();
+        ic.set(object_borrowed.shape(), slot);
+    }
+
+    Ok(())
 }
 
 /// Checks that the binding pointed by `locator` exists and is initialized.

@@ -105,6 +105,50 @@ impl Operation for DefInitVar {
     const COST: u8 = 3;
 }
 
+/// `DefInitVarGlobal` implements the Opcode Operation for `Opcode::DefInitVarGlobal`
+///
+/// Operation:
+///  - Like `DefInitVar`, writing a global object binding through an inline cache.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DefInitVarGlobal;
+
+impl DefInitVarGlobal {
+    #[inline(always)]
+    pub(super) fn operation(
+        (value, index, ic_index): (RegisterOperand, IndexOperand, IndexOperand),
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let value = context.vm.get_register(value.into()).clone();
+        let frame = context.vm.frame();
+        let strict = frame.code_block.strict();
+        let mut binding_locator = frame.code_block.bindings[usize::from(index)].clone();
+
+        if context.is_deleted_binding(&binding_locator) {
+            context.restore_deleted_binding(&binding_locator);
+        }
+
+        context.find_runtime_binding(&mut binding_locator)?;
+        if binding_locator.is_global() {
+            return super::set::set_global_object_binding(
+                &binding_locator,
+                value,
+                ic_index,
+                false,
+                context,
+            );
+        }
+        context.set_binding(&binding_locator, value, strict)?;
+
+        Ok(())
+    }
+}
+
+impl Operation for DefInitVarGlobal {
+    const NAME: &'static str = "DefInitVarGlobal";
+    const INSTRUCTION: &'static str = "INST - DefInitVarGlobal";
+    const COST: u8 = 3;
+}
+
 /// `PutLexicalValue` implements the Opcode Operation for `Opcode::PutLexicalValue`
 ///
 /// Operation:

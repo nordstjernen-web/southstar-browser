@@ -2217,14 +2217,41 @@ generate_opcodes! {
     ///   - scope_index: `IndexOperand`
     /// - Stack: this, func, argument_1, ... argument_n **=>** result
     TailCallEval { argument_count: IndexOperand, scope_index: IndexOperand },
-    /// Reserved [`Opcode`].
-    Reserved8 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved9 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved10 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved11 => Reserved,
+
+    /// Like `SetName`, writing a global object binding through an inline cache.
+    ///
+    /// - Operands:
+    ///   - binding_index: `IndexOperand`
+    ///   - ic_index: `IndexOperand`
+    /// - Registers:
+    ///   - Input: src
+    SetNameGlobal { src: RegisterOperand, binding_index: IndexOperand, ic_index: IndexOperand },
+
+    /// Like `SetNameByLocator`, writing a global object binding through an inline cache.
+    ///
+    /// - Operands:
+    ///   - ic_index: `IndexOperand`
+    /// - Registers:
+    ///   - Input: src
+    SetNameByLocatorGlobal { src: RegisterOperand, ic_index: IndexOperand },
+
+    /// Like `DefInitVar`, writing a global object binding through an inline cache.
+    ///
+    /// - Operands:
+    ///   - binding_index: `IndexOperand`
+    ///   - ic_index: `IndexOperand`
+    /// - Registers:
+    ///   - Input: src
+    DefInitVarGlobal { src: RegisterOperand, binding_index: IndexOperand, ic_index: IndexOperand },
+
+    /// Like `GetNameAndLocator`, reading a global object binding through an inline cache.
+    ///
+    /// - Operands:
+    ///   - binding_index: `IndexOperand`
+    ///   - ic_index: `IndexOperand`
+    /// - Registers:
+    ///   - Output: dst
+    GetNameAndLocatorGlobal { dst: RegisterOperand, binding_index: IndexOperand, ic_index: IndexOperand },
     /// Reserved [`Opcode`].
     Reserved12 => Reserved,
     /// Reserved [`Opcode`].

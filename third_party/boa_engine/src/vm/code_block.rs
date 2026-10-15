@@ -546,8 +546,28 @@ impl CodeBlock {
                 dst,
                 binding_index,
                 ic_index,
+            }
+            | Instruction::GetNameAndLocatorGlobal {
+                dst,
+                binding_index,
+                ic_index,
             } => {
                 format!("dst:{dst}, binding_index:{binding_index}, ic_index:{ic_index}")
+            }
+            Instruction::SetNameGlobal {
+                src,
+                binding_index,
+                ic_index,
+            }
+            | Instruction::DefInitVarGlobal {
+                src,
+                binding_index,
+                ic_index,
+            } => {
+                format!("src:{src}, binding_index:{binding_index}, ic_index:{ic_index}")
+            }
+            Instruction::SetNameByLocatorGlobal { src, ic_index } => {
+                format!("src:{src}, ic_index:{ic_index}")
             }
             Instruction::DefineOwnPropertyByName {
                 object,
@@ -936,11 +956,7 @@ impl CodeBlock {
             ),
             Instruction::DecorateClass { state, dst } => format!("state:{state}, dst:{dst}"),
             Instruction::InitializeStaticElements { state } => format!("state:{state}"),
-            Instruction::Reserved8
-            | Instruction::Reserved9
-            | Instruction::Reserved10
-            | Instruction::Reserved11
-            | Instruction::Reserved12
+            Instruction::Reserved12
             | Instruction::Reserved13
             | Instruction::Reserved14
             | Instruction::Reserved15

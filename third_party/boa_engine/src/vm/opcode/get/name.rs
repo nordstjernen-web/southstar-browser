@@ -1,4 +1,4 @@
-use boa_ast::scope::BindingLocatorScope;
+use boa_ast::scope::{BindingLocator, BindingLocatorScope};
 
 use crate::{
     Context, JsResult, JsValue,
@@ -56,66 +56,74 @@ impl GetNameGlobal {
             context.vm.frame().code_block.bindings[usize::from(index)].clone();
         context.find_runtime_binding(&mut binding_locator)?;
 
-        if binding_locator.is_global() {
-            let object = context.global_object();
-
-            let ic = &context.vm.frame().code_block().ic[usize::from(ic_index)];
-
-            let object_borrowed = object.borrow();
-            if let Some((shape, slot)) = ic.get(object_borrowed.shape()) {
-                let mut result = if slot.attributes.contains(SlotAttributes::PROTOTYPE) {
-                    let prototype = shape.prototype().expect("prototype should have value");
-                    let prototype = prototype.borrow();
-                    prototype.properties().storage[slot.index as usize].clone()
-                } else {
-                    object_borrowed.properties().storage[slot.index as usize].clone()
-                };
-
-                drop(object_borrowed);
-                if slot.attributes.has_get() && result.is_object() {
-                    result = result.as_object().expect("should contain getter").call(
-                        &object.clone().into(),
-                        &[],
-                        context,
-                    )?;
-                }
-                context.vm.set_register(dst.into(), result);
-                return Ok(());
-            }
-
-            drop(object_borrowed);
-
-            let key: PropertyKey = ic.name.clone().into();
-
-            let context = &mut InternalMethodPropertyContext::new(context);
-            let Some(result) = object.__try_get__(&key, object.clone().into(), context)? else {
+        let result = if binding_locator.is_global() {
+            get_global_object_binding(&binding_locator, ic_index, context)?
+        } else {
+            context.get_binding(&binding_locator)?.ok_or_else(|| {
                 let name = binding_locator.name().to_std_string_escaped();
-                return Err(JsNativeError::reference()
-                    .with_message(format!("{name} is not defined"))
-                    .into());
-            };
-
-            // Cache the property.
-            let slot = *context.slot();
-            if slot.is_cacheable() {
-                let ic = &context.vm.frame().code_block.ic[usize::from(ic_index)];
-                let object_borrowed = object.borrow();
-                let shape = object_borrowed.shape();
-                ic.set(shape, slot);
-            }
-
-            context.vm.set_register(dst.into(), result);
-            return Ok(());
-        }
-
-        let result = context.get_binding(&binding_locator)?.ok_or_else(|| {
-            let name = binding_locator.name().to_std_string_escaped();
-            JsNativeError::reference().with_message(format!("{name} is not defined"))
-        })?;
+                JsNativeError::reference().with_message(format!("{name} is not defined"))
+            })?
+        };
 
         context.vm.set_register(dst.into(), result);
         Ok(())
     }
+}
+
+/// Reads the global object property a global binding names through the inline cache at
+/// `ic_index`, throwing a `ReferenceError` when it does not exist.
+fn get_global_object_binding(
+    binding_locator: &BindingLocator,
+    ic_index: IndexOperand,
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let object = context.global_object();
+
+    let ic = &context.vm.frame().code_block().ic[usize::from(ic_index)];
+
+    let object_borrowed = object.borrow();
+    if let Some((shape, slot)) = ic.get(object_borrowed.shape()) {
+        let mut result = if slot.attributes.contains(SlotAttributes::PROTOTYPE) {
+            let prototype = shape.prototype().expect("prototype should have value");
+            let prototype = prototype.borrow();
+            prototype.properties().storage[slot.index as usize].clone()
+        } else {
+            object_borrowed.properties().storage[slot.index as usize].clone()
+        };
+
+        drop(object_borrowed);
+        if slot.attributes.has_get() && result.is_object() {
+            result = result.as_object().expect("should contain getter").call(
+                &object.clone().into(),
+                &[],
+                context,
+            )?;
+        }
+        return Ok(result);
+    }
+
+    drop(object_borrowed);
+
+    let key: PropertyKey = ic.name.clone().into();
+
+    let context = &mut InternalMethodPropertyContext::new(context);
+    let Some(result) = object.__try_get__(&key, object.clone().into(), context)? else {
+        let name = binding_locator.name().to_std_string_escaped();
+        return Err(JsNativeError::reference()
+            .with_message(format!("{name} is not defined"))
+            .into());
+    };
+
+    // Cache the property.
+    let slot = *context.slot();
+    if slot.is_cacheable() {
+        let ic = &context.vm.frame().code_block.ic[usize::from(ic_index)];
+        let object_borrowed = object.borrow();
+        let shape = object_borrowed.shape();
+        ic.set(shape, slot);
+    }
+
+    Ok(result)
 }
 
 impl Operation for GetNameGlobal {
@@ -195,6 +203,48 @@ impl GetNameAndLocator {
 impl Operation for GetNameAndLocator {
     const NAME: &'static str = "GetNameAndLocator";
     const INSTRUCTION: &'static str = "INST - GetNameAndLocator";
+    const COST: u8 = 4;
+}
+
+/// `GetNameAndLocatorGlobal` implements the Opcode Operation for
+/// `Opcode::GetNameAndLocatorGlobal`
+///
+/// Operation:
+///  - Like `GetNameAndLocator`, reading a global object binding through an inline cache.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct GetNameAndLocatorGlobal;
+
+impl GetNameAndLocatorGlobal {
+    #[inline(always)]
+    pub(crate) fn operation(
+        (value, index, ic_index): (RegisterOperand, IndexOperand, IndexOperand),
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let mut binding_locator =
+            context.vm.frame().code_block.bindings[usize::from(index)].clone();
+        context.find_runtime_binding(&mut binding_locator)?;
+        let result = if binding_locator.is_global() {
+            get_global_object_binding(&binding_locator, ic_index, context)?
+        } else {
+            context.get_binding(&binding_locator)?.ok_or_else(|| {
+                let name = binding_locator.name().to_std_string_escaped();
+                JsNativeError::reference().with_message(format!("{name} is not defined"))
+            })?
+        };
+
+        context
+            .vm
+            .frame_mut()
+            .binding_stack
+            .push((binding_locator, false));
+        context.vm.set_register(value.into(), result);
+        Ok(())
+    }
+}
+
+impl Operation for GetNameAndLocatorGlobal {
+    const NAME: &'static str = "GetNameAndLocatorGlobal";
+    const INSTRUCTION: &'static str = "INST - GetNameAndLocatorGlobal";
     const COST: u8 = 4;
 }
 
