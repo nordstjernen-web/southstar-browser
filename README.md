@@ -19,8 +19,10 @@ OpenSSL, FFmpeg, SDL2, …).
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
 (an interpreter, no JIT), forked into the tree at `third_party/boa_engine` and
-extended there with the hooks the browser needs. The bindings are Rust, over
-the engine layer in `rust/js-engine`.
+extended there with the hooks the browser needs and the newest language
+features. The bindings are Rust, over the engine layer in `rust/js-engine`.
+It passes **97.4% of test262** (50,789 of 52,133 tests, October 2026),
+ES2025 and ES2026 included, with an ICU-free `Intl` and `Temporal`.
 
 Supported platforms:
 * Linux
@@ -38,12 +40,14 @@ WHATWG HTML standard (§1–§16) in
 [docs/HTML-compatibility.md](docs/HTML-compatibility.md) records **140 spec
 rows fully implemented, 31 partial, 0 absent** (July 2026), besides a handful
 that are non-goals by design: `embed`/`object` plugins, `frame`/`frameset`,
-`applet`/`marquee`, telemetry, and AI-style web APIs.
+`applet`/`marquee`, telemetry, and AI-style web APIs. The tracked
+web-platform-tests slice passes 95% of its subtests
+([docs/wpt-scores.md](docs/wpt-scores.md)).
 
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The browser is about 330,000 lines of Rust in some 140
+**Minimalism.** The browser is about 330,000 lines of Rust in some 145
 crates under `rust/`, excluding the vendored Boa fork and generated tables —
 small enough for one person to read and audit end-to-end.
 
@@ -57,6 +61,7 @@ small enough for one person to read and audit end-to-end.
       replaced by Boa, and the vendored C decoders replaced by Rust ports.
 - [ ] Bring the Boa build up to and past the QuickJS-era browser on the WPT
       slice, Acid3, speed and memory.
+- [ ] Pass all of test262 (97.4% today; `southstar-jsshell test262`).
 
 How the port was done (the processes, the engine's data model and the order
 the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
@@ -77,19 +82,23 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   metrics across layouts, so measuring and painting a run reach HarfBuzz once
   instead of three times. `-Dns-pango=disabled` links the system Pango
   instead.
-- **JavaScript** on the Boa interpreter — DOM, Shadow DOM, observer APIs,
+- **JavaScript** on the Boa interpreter, with modern ECMAScript through
+  ES2026 (iterator helpers, explicit resource management with `using`,
+  `Temporal`, `Intl`) — DOM, Shadow DOM, observer APIs,
   Canvas 2D (`Path2D`, `ImageBitmap`, `DOMMatrix`), WebCrypto
   (`crypto.subtle` over OpenSSL), custom elements including customized
   built-ins (`is=` / `{extends}`), and the `Navigation` API for single-page
   routing, plus Web Workers, IndexedDB (over SQLite), WebSocket and
   `EventSource`.
 - **Networking** over an in-tree Rust HTTP client (`rust/http`) — HTTP/1.1
-  and multiplexed HTTP/2 with its own framing and HPACK over OpenSSL, FTP,
+  and multiplexed HTTP/2 with its own framing and HPACK over rustls (TLS 1.3
+  and 1.2, post-quantum key exchange), FTP,
   HTTP CONNECT and SOCKS proxies, plus HSTS, CSP, subresource-integrity
   checks, partitioned cookies, speculative subresource loading, request
   coalescing and a `Vary`-aware HTTP cache.
-- **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg` and an in-tree BMP decoder) read PNG/APNG, GIF, BMP, JPEG and lossy
-  WebP; libwebp handles lossless and animated WebP; ICO and SVG are rendered
+- **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg`
+  and an in-tree BMP decoder) read PNG/APNG, GIF, BMP and JPEG; libwebp
+  decodes lossy, lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
@@ -174,7 +183,7 @@ fork; `-Dns-pango=disabled` links the system Pango and needs no network.
 | uchardet | — | charset detection |
 | libpsl | — | public-suffix list for cookie scoping |
 | SQLite | — | IndexedDB persistent storage |
-| libwebp | — | animated, lossless and fallback WebP decoding |
+| libwebp | — | WebP decoding (lossy, lossless and animated) |
 | SDL2 | — | audio output for the `southstar-audio` helper |
 | libseccomp | — (Linux only) | syscall sandbox; no-op on macOS/Windows |
 
