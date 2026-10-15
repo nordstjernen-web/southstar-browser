@@ -8,11 +8,6 @@ use std::ffi::CString;
 
 use southstar_glib as glib;
 
-const G_NORMALIZE_ALL: c_int = 2;
-const G_UNICODE_SPACING_MARK: c_int = 10;
-const G_UNICODE_ENCLOSING_MARK: c_int = 11;
-const G_UNICODE_NON_SPACING_MARK: c_int = 12;
-
 #[repr(C)]
 struct GTimeZone {
     _private: [u8; 0],
@@ -49,14 +44,8 @@ pub(crate) struct BrokenDown {
 }
 
 unsafe extern "C" {
-    fn g_utf8_normalize(text: *const c_char, len: isize, mode: c_int) -> *mut c_char;
     fn g_utf8_get_char(p: *const c_char) -> u32;
-    fn g_unichar_type(c: u32) -> c_int;
-    fn g_unichar_to_utf8(c: u32, outbuf: *mut c_char) -> c_int;
     fn g_unichar_isalnum(c: u32) -> c_int;
-    fn g_utf8_casefold(text: *const c_char, len: isize) -> *mut c_char;
-    fn g_utf8_collate_key(text: *const c_char, len: isize) -> *mut c_char;
-    fn g_utf8_collate(a: *const c_char, b: *const c_char) -> c_int;
     fn g_get_real_time() -> i64;
     fn g_time_zone_new_local() -> *mut GTimeZone;
     fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
@@ -91,15 +80,6 @@ fn cstring(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-unsafe fn take(text: *mut c_char) -> Vec<u8> {
-    if text.is_null() {
-        return Vec::new();
-    }
-    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
-    unsafe { glib::g_free(text.cast()) };
-    bytes
-}
-
 pub(crate) fn utf8_skip(lead: u8) -> usize {
     match lead {
         0xc0..=0xdf => 2,
@@ -119,51 +99,6 @@ pub(crate) fn utf8_strlen(text: &[u8]) -> usize {
         count += 1;
     }
     count
-}
-
-fn strip_marks(text: &CStr) -> CString {
-    let bytes = text.to_bytes();
-    let mut kept = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        let c = unsafe { g_utf8_get_char(text.as_ptr().add(at)) };
-        let kind = unsafe { g_unichar_type(c) };
-        if !matches!(
-            kind,
-            G_UNICODE_NON_SPACING_MARK | G_UNICODE_SPACING_MARK | G_UNICODE_ENCLOSING_MARK
-        ) {
-            let mut encoded = [0 as c_char; 8];
-            let len = unsafe { g_unichar_to_utf8(c, encoded.as_mut_ptr()) };
-            kept.extend(encoded[..len as usize].iter().map(|&b| b as u8));
-        }
-        at += utf8_skip(bytes[at]);
-    }
-    cstring(&kept)
-}
-
-pub(crate) fn collation_key(text: &[u8], sensitivity: &[u8]) -> Vec<u8> {
-    let input = cstring(text);
-    let normalized = unsafe { g_utf8_normalize(input.as_ptr(), -1, G_NORMALIZE_ALL) };
-    let mut current = if normalized.is_null() {
-        input
-    } else {
-        cstring(&unsafe { take(normalized) })
-    };
-    let fold = sensitivity == b"base" || sensitivity == b"accent";
-    let strip = sensitivity == b"base" || sensitivity == b"case";
-    if strip {
-        current = strip_marks(&current);
-    }
-    if fold {
-        current = cstring(&unsafe { take(g_utf8_casefold(current.as_ptr(), -1)) });
-    }
-    unsafe { take(g_utf8_collate_key(current.as_ptr(), -1)) }
-}
-
-pub(crate) fn collate(a: &[u8], b: &[u8]) -> i32 {
-    let a = cstring(a);
-    let b = cstring(b);
-    unsafe { g_utf8_collate(a.as_ptr(), b.as_ptr()) }
 }
 
 pub(crate) fn is_alnum_at(text: &CStr, offset: usize) -> bool {

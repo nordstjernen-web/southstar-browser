@@ -20,6 +20,7 @@ mod tests;
 
 pub use host::Host;
 pub use idna::domain_to_ascii;
+pub use nfc::{combining_class, nfd};
 pub use setters::Setter;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

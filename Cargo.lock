@@ -2443,6 +2443,7 @@ dependencies = [
  "southstar-glib",
  "southstar-i18n",
  "southstar-js-engine",
+ "southstar-url",
 ]
 
 [[package]]

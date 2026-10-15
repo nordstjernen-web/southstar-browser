@@ -1,187 +1,262 @@
-//! Southstar — Intl.Collator and String.prototype.localeCompare over GLib's Unicode collation.
+//! Southstar — Intl.Collator and String.prototype.localeCompare over the in-tree collation.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::RefCell;
 use core::cmp::Ordering;
 
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{Attributes, Scope, Trace, Value};
 
-use crate::{
-    Method, arg, arg_locale, bind_bound, c_string, ffi, hget_int, hget_str, hide, hide_text,
-    new_instance, opt_bool, opt_str, set, set_text,
-};
+use crate::collation::{self, Settings, Strength};
+use crate::negotiate::{self, Options, create_data_property};
+use crate::{arg, lang_subtag};
 
-pub(crate) const METHODS: [Method; 2] = [("compare", compare, 2), ("resolvedOptions", resolved, 0)];
+const TAILORED_LANGUAGES: [&str; 14] = [
+    "ar", "bn", "de", "es", "fi", "ja", "kn", "ko", "ln", "si", "sv", "vi", "yue", "zh",
+];
 
-pub(crate) fn constructor(
+const RELEVANT_KEYS: [&str; 3] = ["co", "kf", "kn"];
+
+pub(crate) fn collations_for(language: &str) -> Vec<&'static str> {
+    match language {
+        "ar" => vec!["compat"],
+        "bn" | "es" | "fi" | "kn" | "sv" | "vi" => vec!["trad"],
+        "de" => vec!["phonebk"],
+        "ja" => vec!["unihan"],
+        "ko" => vec!["searchjl", "unihan"],
+        "ln" => vec!["phonetic"],
+        "si" => vec!["dict"],
+        "yue" | "zh" => vec!["pinyin", "stroke", "unihan", "zhuyin"],
+        _ => Vec::new(),
+    }
+}
+
+pub(crate) fn available_collations() -> Vec<&'static str> {
+    let mut list: Vec<&str> = TAILORED_LANGUAGES
+        .iter()
+        .filter(|language| negotiate::is_available(language))
+        .flat_map(|language| collations_for(language))
+        .chain(["emoji", "eor"])
+        .collect();
+    list.sort_unstable();
+    list.dedup();
+    list
+}
+
+#[derive(Clone)]
+struct Resolved {
+    locale: String,
+    usage: String,
+    sensitivity: String,
+    ignore_punctuation: bool,
+    collation: String,
+    numeric: bool,
+    case_first: String,
+}
+
+struct CollatorSlots {
+    resolved: Resolved,
+    bound_compare: RefCell<Option<Value>>,
+}
+
+impl Trace for CollatorSlots {
+    fn trace(&self, visit: &mut dyn FnMut(&Value)) {
+        if let Some(bound) = self.bound_compare.borrow().as_ref() {
+            visit(bound);
+        }
+    }
+}
+
+impl Resolved {
+    fn settings(&self) -> Settings {
+        let language = lang_subtag(self.locale.as_bytes());
+        Settings {
+            strength: Strength::from_name(&self.sensitivity),
+            ignore_punctuation: self.ignore_punctuation,
+            numeric: self.numeric,
+            upper_first: self.case_first == "upper",
+            umlaut_as_e: language == b"de"
+                && (self.collation == "phonebk" || self.usage == "search"),
+        }
+    }
+
+    fn compare(&self, a: &str, b: &str) -> i32 {
+        match collation::compare(a, b, &self.settings()) {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        }
+    }
+}
+
+fn locale_data(locale: &str, key: &str) -> Vec<Option<String>> {
+    let owned = |values: &[&str]| values.iter().map(|v| Some((*v).to_owned())).collect();
+    match key {
+        "co" => {
+            let language = String::from_utf8_lossy(&lang_subtag(locale.as_bytes())).into_owned();
+            let mut values = vec![None];
+            values.extend(
+                collations_for(&language)
+                    .into_iter()
+                    .chain(["emoji", "eor"])
+                    .map(|v| Some(v.to_owned())),
+            );
+            values
+        }
+        "kf" => owned(&["false", "lower", "upper"]),
+        "kn" => owned(&["false", "true"]),
+        _ => Vec::new(),
+    }
+}
+
+fn resolve(scope: &mut Scope<'_>, locales: &Value, options: &Value) -> Result<Resolved, Value> {
+    let requested = negotiate::canonicalize_locale_list(scope, locales)?;
+    let options = Options::coerce(scope, options)?;
+    let usage = options
+        .string(scope, "usage", &["sort", "search"])?
+        .unwrap_or_else(|| "sort".to_owned());
+    options.locale_matcher(scope)?;
+    let collation = options.string(scope, "collation", &[])?;
+    if let Some(collation) = &collation
+        && !crate::tag::is_type_value(collation)
+    {
+        return Err(scope.range_error(&format!("Invalid collation: {collation}")));
+    }
+    let numeric = options
+        .boolean(scope, "numeric")?
+        .map(|numeric| numeric.to_string());
+    let case_first = options.string(scope, "caseFirst", &["upper", "lower", "false"])?;
+    let resolution = negotiate::resolve_locale(
+        &requested,
+        &RELEVANT_KEYS,
+        &[("co", collation), ("kn", numeric), ("kf", case_first)],
+        &locale_data,
+    );
+    let sensitivity = options
+        .string(scope, "sensitivity", &["base", "accent", "case", "variant"])?
+        .unwrap_or_else(|| "variant".to_owned());
+    let default_ignore = lang_subtag(resolution.data_locale.as_bytes()) == b"th";
+    let ignore_punctuation = options
+        .boolean(scope, "ignorePunctuation")?
+        .unwrap_or(default_ignore);
+    Ok(Resolved {
+        locale: resolution.locale.clone(),
+        usage,
+        sensitivity,
+        ignore_punctuation,
+        collation: resolution.value("co").unwrap_or("default").to_owned(),
+        numeric: resolution.value("kn") == Some("true"),
+        case_first: resolution.value("kf").unwrap_or("false").to_owned(),
+    })
+}
+
+fn constructor(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
+    data: &[Value],
 ) -> Result<Value, Value> {
-    let locale = arg_locale(scope, &arg(args, 0));
-    let options = arg(args, 1);
-    let collator = new_instance(scope, this, "Collator");
-    let usage = opt_str(scope, &options, "usage");
-    let sensitivity = opt_str(scope, &options, "sensitivity");
-    let case_first = opt_str(scope, &options, "caseFirst");
-    hide_text(scope, &collator, "_locale", &locale);
-    hide_text(
-        scope,
-        &collator,
-        "_usage",
-        usage.as_deref().unwrap_or(b"sort"),
-    );
-    hide_text(
-        scope,
-        &collator,
-        "_sensitivity",
-        sensitivity.as_deref().unwrap_or(b"variant"),
-    );
-    hide_text(
-        scope,
-        &collator,
-        "_caseFirst",
-        case_first.as_deref().unwrap_or(b"false"),
-    );
-    let numeric = opt_bool(scope, &options, "numeric", 0) != 0;
-    hide(scope, &collator, "_numeric", Value::boolean(numeric));
-    bind_bound(scope, &collator, "compare", compare_bound, 2);
-    Ok(collator)
-}
-
-fn digits_end(text: &[u8], from: usize) -> usize {
-    from + text[from..]
-        .iter()
-        .take_while(|c| c.is_ascii_digit())
-        .count()
-}
-
-pub(crate) fn numeric_compare(a: &[u8], b: &[u8]) -> i32 {
-    let (mut i, mut j) = (0, 0);
-    while i < a.len() && j < b.len() {
-        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
-            let (end_a, end_b) = (digits_end(a, i), digits_end(b, j));
-            while a[i] == b'0' && i + 1 < end_a {
-                i += 1;
-            }
-            while b[j] == b'0' && j + 1 < end_b {
-                j += 1;
-            }
-            let (len_a, len_b) = (end_a - i, end_b - j);
-            if len_a != len_b {
-                return if len_a < len_b { -1 } else { 1 };
-            }
-            match a[i..end_a].cmp(&b[j..end_b]) {
-                Ordering::Less => return -1,
-                Ordering::Greater => return 1,
-                Ordering::Equal => {}
-            }
-            i = end_a;
-            j = end_b;
-        } else {
-            if a[i] != b[j] {
-                return if a[i] < b[j] { -1 } else { 1 };
-            }
-            i += 1;
-            j += 1;
-        }
-    }
-    if i < a.len() {
-        1
-    } else if j < b.len() {
-        -1
+    let fallback = arg(data, 0);
+    let proto = if this.is_undefined() {
+        fallback
     } else {
-        0
-    }
-}
-
-fn sign(order: Ordering) -> i32 {
-    match order {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
-    }
-}
-
-fn key_compare(a: &[u8], b: &[u8], sensitivity: &[u8], collate_ties: bool) -> i32 {
-    let key_a = ffi::collation_key(a, sensitivity);
-    let key_b = ffi::collation_key(b, sensitivity);
-    let mut order = sign(key_a.cmp(&key_b));
-    if order == 0 && collate_ties {
-        order = ffi::collate(a, b).signum();
-    }
-    order
-}
-
-fn compare_strings(
-    scope: &mut Scope<'_>,
-    collator: &Value,
-    a: Vec<u8>,
-    b: Vec<u8>,
-) -> Result<Value, Value> {
-    let sensitivity = hget_str(scope, collator, "_sensitivity");
-    let numeric = hget_int(scope, collator, "_numeric", 0);
-    let result = if numeric != 0 {
-        numeric_compare(&a, &b)
-    } else {
-        let sensitivity = sensitivity.as_deref().unwrap_or(b"variant");
-        key_compare(&a, &b, sensitivity, sensitivity == b"variant")
+        negotiate::prototype_from_constructor(scope, this, "Collator", &fallback)?
     };
-    Ok(Value::int(result))
+    let resolved = resolve(scope, &arg(args, 0), &arg(args, 1))?;
+    let slots = CollatorSlots {
+        resolved,
+        bound_compare: RefCell::new(None),
+    };
+    Ok(scope.new_traced_host_object(Some(&proto), slots))
 }
 
-fn compare(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
-    let a = c_string(scope, &arg(args, 0));
-    let b = c_string(scope, &arg(args, 1));
-    let b = b?;
-    let a = a?;
-    compare_strings(scope, this, a, b)
+fn resolved_of(scope: &mut Scope<'_>, this: &Value, method: &str) -> Result<Resolved, Value> {
+    this.with_host(|slots: &CollatorSlots| slots.resolved.clone())
+        .ok_or_else(|| {
+            scope.type_error(&format!(
+                "Intl.Collator.prototype.{method} called on an incompatible receiver"
+            ))
+        })
 }
 
-fn compare_bound(
+fn bound_compare(
     scope: &mut Scope<'_>,
     _this: &Value,
     args: &[Value],
     data: &[Value],
 ) -> Result<Value, Value> {
-    compare(scope, &arg(data, 0), args)
+    let resolved = resolved_of(scope, &arg(data, 0), "compare")?;
+    let a = scope.to_string(&arg(args, 0))?;
+    let b = scope.to_string(&arg(args, 1))?;
+    Ok(Value::int(resolved.compare(&a, &b)))
 }
 
-fn resolved(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
+fn compare_getter(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
+    resolved_of(scope, this, "compare")?;
+    let cached = this.with_host(|slots: &CollatorSlots| slots.bound_compare.borrow().clone());
+    if let Some(Some(bound)) = cached {
+        return Ok(bound);
+    }
+    let bound = scope.bound_function("", 2, bound_compare, std::slice::from_ref(this));
+    this.with_host(|slots: &CollatorSlots| slots.bound_compare.replace(Some(bound.clone())));
+    Ok(bound)
+}
+
+fn resolved_options(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
+    let resolved = resolved_of(scope, this, "resolvedOptions")?;
     let options = scope.new_object();
-    let locale = hget_str(scope, this, "_locale");
-    let usage = hget_str(scope, this, "_usage");
-    let sensitivity = hget_str(scope, this, "_sensitivity");
-    let case_first = hget_str(scope, this, "_caseFirst");
-    set_text(
-        scope,
-        &options,
-        "locale",
-        locale.as_deref().unwrap_or(b"en-US"),
-    );
-    set_text(
-        scope,
-        &options,
-        "usage",
-        usage.as_deref().unwrap_or(b"sort"),
-    );
-    set_text(
-        scope,
-        &options,
-        "sensitivity",
-        sensitivity.as_deref().unwrap_or(b"variant"),
-    );
-    set_text(
-        scope,
-        &options,
-        "caseFirst",
-        case_first.as_deref().unwrap_or(b"false"),
-    );
-    set_text(scope, &options, "collation", b"default");
-    let numeric = hget_int(scope, this, "_numeric", 0) != 0;
-    set(scope, &options, "numeric", Value::boolean(numeric));
-    set(scope, &options, "ignorePunctuation", Value::boolean(false));
+    let texts = [
+        ("locale", &resolved.locale),
+        ("usage", &resolved.usage),
+        ("sensitivity", &resolved.sensitivity),
+    ];
+    for (key, value) in texts {
+        let value = scope.string(value);
+        create_data_property(scope, &options, key, value)?;
+    }
+    let ignore = Value::boolean(resolved.ignore_punctuation);
+    create_data_property(scope, &options, "ignorePunctuation", ignore)?;
+    let collation = scope.string(&resolved.collation);
+    create_data_property(scope, &options, "collation", collation)?;
+    create_data_property(scope, &options, "numeric", Value::boolean(resolved.numeric))?;
+    let case_first = scope.string(&resolved.case_first);
+    create_data_property(scope, &options, "caseFirst", case_first)?;
     Ok(options)
+}
+
+fn supported_locales_of(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let requested = negotiate::canonicalize_locale_list(scope, &arg(args, 0))?;
+    negotiate::supported_locales(scope, &requested, &arg(args, 1))
+}
+
+pub(crate) fn install(scope: &mut Scope<'_>, intl: &Value) -> Value {
+    let proto = scope.new_object();
+    let constructor =
+        scope.bound_constructor("Collator", 0, constructor, std::slice::from_ref(&proto));
+    let _ = scope.set_constructor(&constructor, &proto);
+    crate::bind(
+        scope,
+        &constructor,
+        "supportedLocalesOf",
+        supported_locales_of,
+        1,
+    );
+    crate::bind(scope, &proto, "resolvedOptions", resolved_options, 0);
+    let getter = scope.function("get compare", 0, compare_getter);
+    let _ = scope.define_accessor(
+        &proto,
+        "compare",
+        Some(&getter),
+        None,
+        Attributes::CONFIGURABLE,
+    );
+    let _ = scope.define_to_string_tag(&proto, "Intl.Collator");
+    let _ = scope.define(intl, "Collator", constructor, Attributes::METHOD);
+    proto
 }
 
 pub(crate) fn string_locale_compare(
@@ -192,22 +267,8 @@ pub(crate) fn string_locale_compare(
     if this.is_undefined() || this.is_null() {
         return Err(scope.type_error("String.prototype.localeCompare called on null or undefined"));
     }
-    let a = c_string(scope, this)?;
-    let b = c_string(
-        scope,
-        &args.first().cloned().unwrap_or_else(Value::undefined),
-    )?;
-    let (sensitivity, numeric) = match args.get(2) {
-        Some(options) if options.is_object() => (
-            opt_str(scope, options, "sensitivity"),
-            opt_bool(scope, options, "numeric", 0),
-        ),
-        _ => (None, 0),
-    };
-    let result = if numeric != 0 {
-        numeric_compare(&a, &b)
-    } else {
-        key_compare(&a, &b, sensitivity.as_deref().unwrap_or(b"variant"), true)
-    };
-    Ok(Value::int(result))
+    let a = scope.to_string(this)?;
+    let b = scope.to_string(&arg(args, 0))?;
+    let resolved = resolve(scope, &arg(args, 1), &arg(args, 2))?;
+    Ok(Value::int(resolved.compare(&a, &b)))
 }

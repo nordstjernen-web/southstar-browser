@@ -1269,4 +1269,15 @@ impl Scope<'_> {
         self.cx().enter_realm(previous);
         result
     }
+
+    pub fn function_realm_global(&mut self, function: &Value) -> Result<Value, Value> {
+        let object = self.object(function)?;
+        let realm = object
+            .get_function_realm(self.cx())
+            .map_err(|e| self.error(e))?;
+        let previous = self.cx().enter_realm(realm);
+        let global = self.global();
+        self.cx().enter_realm(previous);
+        Ok(global)
+    }
 }

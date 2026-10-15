@@ -126,7 +126,7 @@ fn compose(first: char, second: char) -> Option<char> {
     char::from_u32(tables::COMPOSE_VALUES[i])
 }
 
-pub fn nfc(input: &[char]) -> Vec<char> {
+pub fn nfd(input: &[char]) -> Vec<char> {
     let mut decomposed = Vec::with_capacity(input.len());
     for &c in input {
         decompose(c, &mut decomposed);
@@ -142,6 +142,11 @@ pub fn nfc(input: &[char]) -> Vec<char> {
             j -= 1;
         }
     }
+    decomposed
+}
+
+pub fn nfc(input: &[char]) -> Vec<char> {
+    let decomposed = nfd(input);
     let mut out: Vec<char> = Vec::with_capacity(decomposed.len());
     let mut starter: Option<usize> = None;
     let mut last_class: i32 = -1;

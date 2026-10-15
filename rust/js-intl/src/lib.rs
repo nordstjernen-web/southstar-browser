@@ -2,12 +2,18 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod case;
+mod cldr;
+mod cldr_index;
+mod collation;
 mod collator;
 mod datetime;
 mod ffi;
 mod locale;
+mod negotiate;
 mod number;
 mod printf;
+mod tag;
 mod text;
 
 use southstar_js_engine::{Attributes, BoundFn, NativeFn, ObjectKind, Scope, Value};
@@ -74,42 +80,9 @@ fn c_long_trunc(d: f64) -> i64 {
     }
 }
 
-fn norm_locale(locale: &[u8]) -> Option<Vec<u8>> {
-    (!locale.is_empty()).then(|| {
-        locale
-            .iter()
-            .map(|&c| if c == b'_' { b'-' } else { c })
-            .collect()
-    })
-}
-
-fn default_locale() -> Vec<u8> {
-    if let Some(locale) = southstar_i18n::language().and_then(|tag| norm_locale(tag.to_bytes())) {
-        return locale;
-    }
-    for name in ffi::language_names() {
-        if name == b"C" || name == b"POSIX" || name.contains(&b'.') || name.contains(&b'@') {
-            continue;
-        }
-        if let Some(locale) = norm_locale(&name) {
-            return locale;
-        }
-    }
-    b"en-US".to_vec()
-}
-
 fn arg_locale(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
-    if value.is_string() {
-        let locale = c_string(scope, value).ok().and_then(|s| norm_locale(&s));
-        return locale.unwrap_or_else(default_locale);
-    }
-    if value.is_array()
-        && let Ok(first) = scope.get_index(value, 0)
-        && first.is_string()
-    {
-        return arg_locale(scope, &first);
-    }
-    default_locale()
+    let requested = negotiate::canonicalize_locale_list(scope, value).unwrap_or_default();
+    negotiate::lookup_matcher(&requested).locale.into_bytes()
 }
 
 fn lang_subtag(locale: &[u8]) -> Vec<u8> {
@@ -304,22 +277,8 @@ fn supported_locales_of(
     _this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
-    let mut out = Parts::new(scope);
-    let Some(locales) = args.first() else {
-        return Ok(out.array);
-    };
-    if locales.is_string() {
-        out.push_value(scope, locales.clone());
-    } else if locales.is_array() {
-        for i in 0..length(scope, locales) {
-            if let Ok(entry) = scope.get_index(locales, i)
-                && entry.is_string()
-            {
-                out.push_value(scope, entry);
-            }
-        }
-    }
-    Ok(out.array)
+    let requested = negotiate::canonicalize_locale_list(scope, &arg(args, 0))?;
+    negotiate::supported_locales(scope, &requested, &arg(args, 1))
 }
 
 fn register(
@@ -470,14 +429,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         return;
     }
     let intl = scope.new_object();
-    register(
-        scope,
-        &intl,
-        "Collator",
-        collator::constructor,
-        0,
-        &collator::METHODS,
-    );
+    collator::install(scope, &intl);
     register(
         scope,
         &intl,
@@ -542,14 +494,7 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         0,
         &text::SEGMENTER_METHODS,
     );
-    register(
-        scope,
-        &intl,
-        "Locale",
-        locale::constructor,
-        1,
-        &locale::METHODS,
-    );
+    locale::install(scope, &intl);
     bind(
         scope,
         &intl,
@@ -606,4 +551,5 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         collator::string_locale_compare,
         1,
     );
+    case::install(scope, global);
 }

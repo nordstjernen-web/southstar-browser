@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-glib = { path = "../glib" }
 southstar-i18n = { path = "../i18n" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-url = { path = "../url" }
 
 [features]
 ns-pango = []

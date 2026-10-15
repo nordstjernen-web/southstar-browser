@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Intl validates and canonicalizes locales as ECMA-402 and UTS #35 require
+  (alias replacement, -u- and -t- extensions, likely subtags), from compact
+  CLDR tables that scripts/gen-intl-cldr.py generates; resolvedOptions()
+  reports a supported, canonical locale. Intl.Locale gains its full option
+  and getter set, maximize/minimize and the locale info methods
+  (getCalendars, getHourCycles, getWeekInfo, getTimeZones, ...);
+  Intl.Collator sorts with an in-tree multi-level collation instead of the
+  C library's locale; toLocaleUpperCase/toLocaleLowerCase apply the
+  Turkish, Azeri and Lithuanian rules. intl402 goes from 2,416 to 2,674
+  of 3,382.
 * southstar-jsshell's module loader understands the import text and import
   bytes proposals: with { type: "text" } imports a file as a string and
   with { type: "bytes" } as a Uint8Array over an immutable ArrayBuffer.
