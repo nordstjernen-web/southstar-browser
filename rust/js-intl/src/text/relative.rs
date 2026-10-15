@@ -13,7 +13,7 @@ pub(crate) const METHODS: [Method; 3] = [
     ("resolvedOptions", resolved_options, 0),
 ];
 
-const LANGUAGES: [&str; 2] = ["en", "pl"];
+const LANGUAGES: [&str; 3] = ["de", "en", "pl"];
 
 const STYLES: [&str; 3] = ["long", "short", "narrow"];
 const NUMERIC: [&str; 2] = ["always", "auto"];
@@ -65,7 +65,7 @@ const fn same(word: &'static str) -> Forms {
     }
 }
 
-const fn english(one: &'static str, other: &'static str) -> Forms {
+const fn one_other(one: &'static str, other: &'static str) -> Forms {
     Forms {
         one,
         few: other,
@@ -99,36 +99,45 @@ const fn unit(forms: Forms, words: &'static [(i32, &'static str)]) -> UnitNames 
 
 struct Phrasing {
     future_prefix: &'static str,
+    past_prefix: &'static str,
     past_suffix: &'static str,
 }
 
 const ENGLISH: Phrasing = Phrasing {
     future_prefix: "in ",
+    past_prefix: "",
     past_suffix: " ago",
+};
+
+const GERMAN: Phrasing = Phrasing {
+    future_prefix: "in ",
+    past_prefix: "vor ",
+    past_suffix: "",
 };
 
 const POLISH: Phrasing = Phrasing {
     future_prefix: "za ",
+    past_prefix: "",
     past_suffix: " temu",
 };
 
 const EN_DAY: &[(i32, &str)] = &[(-1, "yesterday"), (0, "today"), (1, "tomorrow")];
 
 const EN_LONG: [UnitNames; 8] = [
-    unit(english("second", "seconds"), &[(0, "now")]),
-    unit(english("minute", "minutes"), &[(0, "this minute")]),
-    unit(english("hour", "hours"), &[(0, "this hour")]),
-    unit(english("day", "days"), EN_DAY),
+    unit(one_other("second", "seconds"), &[(0, "now")]),
+    unit(one_other("minute", "minutes"), &[(0, "this minute")]),
+    unit(one_other("hour", "hours"), &[(0, "this hour")]),
+    unit(one_other("day", "days"), EN_DAY),
     unit(
-        english("week", "weeks"),
+        one_other("week", "weeks"),
         &[(-1, "last week"), (0, "this week"), (1, "next week")],
     ),
     unit(
-        english("month", "months"),
+        one_other("month", "months"),
         &[(-1, "last month"), (0, "this month"), (1, "next month")],
     ),
     unit(
-        english("quarter", "quarters"),
+        one_other("quarter", "quarters"),
         &[
             (-1, "last quarter"),
             (0, "this quarter"),
@@ -136,7 +145,7 @@ const EN_LONG: [UnitNames; 8] = [
         ],
     ),
     unit(
-        english("year", "years"),
+        one_other("year", "years"),
         &[(-1, "last year"), (0, "this year"), (1, "next year")],
     ),
 ];
@@ -145,7 +154,7 @@ const EN_SHORT: [UnitNames; 8] = [
     unit(same("sec."), &[(0, "now")]),
     unit(same("min."), &[(0, "this minute")]),
     unit(same("hr."), &[(0, "this hour")]),
-    unit(english("day", "days"), EN_DAY),
+    unit(one_other("day", "days"), EN_DAY),
     unit(
         same("wk."),
         &[(-1, "last wk."), (0, "this wk."), (1, "next wk.")],
@@ -155,13 +164,81 @@ const EN_SHORT: [UnitNames; 8] = [
         &[(-1, "last mo."), (0, "this mo."), (1, "next mo.")],
     ),
     unit(
-        english("qtr.", "qtrs."),
+        one_other("qtr.", "qtrs."),
         &[(-1, "last qtr."), (0, "this qtr."), (1, "next qtr.")],
     ),
     unit(
         same("yr."),
         &[(-1, "last yr."), (0, "this yr."), (1, "next yr.")],
     ),
+];
+
+const DE_DAY: &[(i32, &str)] = &[
+    (-2, "vorgestern"),
+    (-1, "gestern"),
+    (0, "heute"),
+    (1, "morgen"),
+    (2, "übermorgen"),
+];
+const DE_WEEK: &[(i32, &str)] = &[
+    (-1, "letzte Woche"),
+    (0, "diese Woche"),
+    (1, "nächste Woche"),
+];
+const DE_MONTH: &[(i32, &str)] = &[
+    (-1, "letzten Monat"),
+    (0, "diesen Monat"),
+    (1, "nächsten Monat"),
+];
+const DE_QUARTER: &[(i32, &str)] = &[
+    (-1, "letztes Quartal"),
+    (0, "dieses Quartal"),
+    (1, "nächstes Quartal"),
+];
+const DE_YEAR: &[(i32, &str)] = &[
+    (-1, "letztes Jahr"),
+    (0, "dieses Jahr"),
+    (1, "nächstes Jahr"),
+];
+const DE_NOW: &[(i32, &str)] = &[(0, "jetzt")];
+const DE_THIS_MINUTE: &[(i32, &str)] = &[(0, "in dieser Minute")];
+const DE_THIS_HOUR: &[(i32, &str)] = &[(0, "in dieser Stunde")];
+const DE_DAY_FORMS: Forms = one_other("Tag", "Tagen");
+const DE_WEEK_FORMS: Forms = one_other("Woche", "Wochen");
+const DE_MONTH_FORMS: Forms = one_other("Monat", "Monaten");
+const DE_YEAR_FORMS: Forms = one_other("Jahr", "Jahren");
+
+const DE_LONG: [UnitNames; 8] = [
+    unit(one_other("Sekunde", "Sekunden"), DE_NOW),
+    unit(one_other("Minute", "Minuten"), DE_THIS_MINUTE),
+    unit(one_other("Stunde", "Stunden"), DE_THIS_HOUR),
+    unit(DE_DAY_FORMS, DE_DAY),
+    unit(DE_WEEK_FORMS, DE_WEEK),
+    unit(DE_MONTH_FORMS, DE_MONTH),
+    unit(one_other("Quartal", "Quartalen"), DE_QUARTER),
+    unit(DE_YEAR_FORMS, DE_YEAR),
+];
+
+const DE_SHORT: [UnitNames; 8] = [
+    unit(same("Sek."), DE_NOW),
+    unit(same("Min."), DE_THIS_MINUTE),
+    unit(same("Std."), DE_THIS_HOUR),
+    unit(DE_DAY_FORMS, DE_DAY),
+    unit(DE_WEEK_FORMS, DE_WEEK),
+    unit(DE_MONTH_FORMS, DE_MONTH),
+    unit(same("Quart."), DE_QUARTER),
+    unit(DE_YEAR_FORMS, DE_YEAR),
+];
+
+const DE_NARROW: [UnitNames; 8] = [
+    unit(same("s"), DE_NOW),
+    unit(same("m"), DE_THIS_MINUTE),
+    unit(same("Std."), DE_THIS_HOUR),
+    unit(DE_DAY_FORMS, DE_DAY),
+    unit(same("Wo."), DE_WEEK),
+    unit(DE_MONTH_FORMS, DE_MONTH),
+    unit(same("Q"), DE_QUARTER),
+    unit(DE_YEAR_FORMS, DE_YEAR),
 ];
 
 const PL_DAY: &[(i32, &str)] = &[
@@ -213,6 +290,9 @@ const PL_NARROW: [UnitNames; 8] = [
 
 fn locale_data(locale: &str, style: &str) -> (&'static Phrasing, &'static [UnitNames; 8]) {
     match (service::language_of(locale), style) {
+        ("de", "long") => (&GERMAN, &DE_LONG),
+        ("de", "short") => (&GERMAN, &DE_SHORT),
+        ("de", _) => (&GERMAN, &DE_NARROW),
         ("pl", "long") => (&POLISH, &PL_LONG),
         ("pl", "short") => (&POLISH, &PL_SHORT),
         ("pl", _) => (&POLISH, &PL_NARROW),
@@ -310,8 +390,13 @@ fn partition(
     let category = plural_category(scope, &format.plural_rules, &magnitude)?;
     let word = names.forms.pick(&category);
     let mut parts = Vec::with_capacity(number.len() + 2);
-    if !past {
-        parts.push(Part::literal(phrasing.future_prefix));
+    let prefix = if past {
+        phrasing.past_prefix
+    } else {
+        phrasing.future_prefix
+    };
+    if !prefix.is_empty() {
+        parts.push(Part::literal(prefix));
     }
     parts.extend(number.into_iter().map(|part| part.with_unit(unit)));
     let suffix = if past { phrasing.past_suffix } else { "" };
