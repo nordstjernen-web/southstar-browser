@@ -314,6 +314,11 @@ impl<R> Lexer<R> {
                     start,
                     self.cursor.pos_group(),
                 )),
+                '@' => Ok(Token::new_by_position_group(
+                    Punctuator::At.into(),
+                    start,
+                    self.cursor.pos_group(),
+                )),
                 '#' => PrivateIdentifier::new().lex(&mut self.cursor, start, interner),
                 '/' => self.lex_slash_token(start, interner, false),
                 #[cfg(feature = "annex-b")]

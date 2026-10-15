@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* JavaScript decorators: classes and their methods, getters, setters and
+  fields accept @decorator syntax, with decorators that replace methods and
+  classes, add field initializers and extra initializers, read and write
+  elements through context.access, and share context.metadata, which ends up
+  as the class's Symbol.metadata. Classes also gain auto-accessors
+  (accessor name = value), public or private, static or not.
 * Non-strict functions have the legacy caller and arguments properties
   other browsers keep: f.caller is the function that called f (null for
   strict callers and top-level code) and f.arguments the arguments of

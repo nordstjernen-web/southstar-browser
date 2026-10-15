@@ -2,7 +2,8 @@ use crate::{
     lexer::TokenKind,
     parser::{
         AllowAwait, AllowYield, Cursor, OrAbrupt, ParseResult, TokenParser,
-        expression::BindingIdentifier, statement::ClassTail,
+        expression::{BindingIdentifier, DecoratorList},
+        statement::ClassTail,
     },
     source::ReadChar,
 };
@@ -42,14 +43,14 @@ where
     type Output = ClassExpressionNode;
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
-        let class_span_start = cursor
-            .expect(
-                TokenKind::Keyword((Keyword::Class, false)),
-                "class expression",
-                interner,
-            )?
-            .span()
-            .start();
+        let class_span_start = cursor.peek(0, interner).or_abrupt()?.span().start();
+        let decorators =
+            DecoratorList::new(self.allow_yield, self.allow_await).parse(cursor, interner)?;
+        cursor.expect(
+            TokenKind::Keyword((Keyword::Class, false)),
+            "class expression",
+            interner,
+        )?;
 
         let strict = cursor.strict();
         cursor.set_strict(true);
@@ -76,6 +77,7 @@ where
             elements.into_boxed_slice(),
             name.is_some(),
             Span::new(class_span_start, end),
-        ))
+        )
+        .with_decorators(decorators))
     }
 }

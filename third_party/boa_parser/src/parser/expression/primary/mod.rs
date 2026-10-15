@@ -123,7 +123,7 @@ where
                         .map(Into::into)
                 }
             }
-            TokenKind::Keyword((Keyword::Class, _)) => {
+            TokenKind::Keyword((Keyword::Class, _)) | TokenKind::Punctuator(Punctuator::At) => {
                 ClassExpression::new(self.allow_yield, self.allow_await)
                     .parse(cursor, interner)
                     .map(Into::into)

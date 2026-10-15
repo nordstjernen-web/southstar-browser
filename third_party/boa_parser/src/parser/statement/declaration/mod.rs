@@ -74,7 +74,8 @@ where
         let tok_str = tok.to_string(interner);
 
         match tok_kind {
-            TokenKind::Keyword((Keyword::Function | Keyword::Async | Keyword::Class, _)) => {
+            TokenKind::Keyword((Keyword::Function | Keyword::Async | Keyword::Class, _))
+            | TokenKind::Punctuator(Punctuator::At) => {
                 HoistableDeclaration::new(self.allow_yield, self.allow_await, false)
                     .parse(cursor, interner)
             }

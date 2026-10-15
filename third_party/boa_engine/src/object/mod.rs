@@ -212,6 +212,22 @@ impl PrivateName {
     pub(crate) const fn new(description: JsString, id: usize) -> Self {
         Self { description, id }
     }
+
+    /// Create a private name distinct from every other one, such as the storage of an
+    /// auto-accessor.
+    ///
+    /// Its `description` is never a private identifier, so it cannot equal a private name
+    /// declared in source text, whose identifier is the address of its class.
+    pub(crate) fn unique(description: JsString) -> Self {
+        static NEXT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+        let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self { description, id }
+    }
+
+    /// Get the `[[Description]]` of the private name, without its leading `#`.
+    pub(crate) const fn description(&self) -> &JsString {
+        &self.description
+    }
 }
 
 /// The representation of private object elements.

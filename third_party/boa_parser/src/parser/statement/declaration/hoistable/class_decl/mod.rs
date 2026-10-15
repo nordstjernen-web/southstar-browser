@@ -8,7 +8,7 @@ use crate::{
         AllowAwait, AllowDefault, AllowYield, Cursor, OrAbrupt, ParseResult, TokenParser,
         expression::{
             AssignmentExpression, AsyncGeneratorMethod, AsyncMethod, BindingIdentifier,
-            GeneratorMethod, LeftHandSideExpression, PropertyName,
+            DecoratorList, GeneratorMethod, LeftHandSideExpression, PropertyName,
         },
         function::{FUNCTION_BREAK_TOKENS, FunctionBody, UniqueFormalParameters},
         statement::StatementList,
@@ -75,6 +75,8 @@ where
     type Output = ClassDeclarationNode;
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
+        let decorators =
+            DecoratorList::new(self.allow_yield, self.allow_await).parse(cursor, interner)?;
         let span = cursor
             .expect((Keyword::Class, false), "class declaration", interner)?
             .span();
@@ -106,12 +108,10 @@ where
         let (super_ref, constructor, elements, _end) =
             ClassTail::new(name, self.allow_yield, self.allow_await).parse(cursor, interner)?;
 
-        Ok(ClassDeclarationNode::new(
-            name,
-            super_ref,
-            constructor,
-            elements.into_boxed_slice(),
-        ))
+        Ok(
+            ClassDeclarationNode::new(name, super_ref, constructor, elements.into_boxed_slice())
+                .with_decorators(decorators),
+        )
     }
 }
 
@@ -533,7 +533,26 @@ where
     type Output = (Option<FunctionExpression>, Option<function::ClassElement>);
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
+        // ClassElement : DecoratorList[opt] MethodDefinition, and the other forms below.
+        // Decorators are part of the class body, so they are strict mode code.
+        let strict = cursor.strict();
+        cursor.set_strict(true);
+        let decorators =
+            DecoratorList::new(self.allow_yield, self.allow_await).parse(cursor, interner)?;
+        cursor.set_strict(strict);
+
         let token = cursor.peek(0, interner).or_abrupt()?;
+        if !decorators.is_empty()
+            && matches!(
+                token.kind(),
+                TokenKind::Punctuator(Punctuator::Semicolon | Punctuator::CloseBlock)
+            )
+        {
+            return Err(Error::general(
+                "decorators must be followed by a class element",
+                token.span().start(),
+            ));
+        }
         let r#static = match token.kind() {
             TokenKind::Punctuator(Punctuator::Semicolon) => {
                 cursor.advance(interner);
@@ -579,12 +598,57 @@ where
             )
         );
 
+        // FieldDefinition : accessor [no LineTerminator here] ClassElementName Initializer[opt]
+        let accessor = interner.get_or_intern_static("accessor", utf16!("accessor"));
+        let is_accessor = matches!(
+            cursor.peek(0, interner).or_abrupt()?.kind(),
+            TokenKind::IdentifierName((name, _)) if *name == accessor
+        ) && {
+            let skip_n = if cursor.peek_is_line_terminator(0, interner).or_abrupt()? {
+                2
+            } else {
+                1
+            };
+            !cursor
+                .peek_is_line_terminator(skip_n, interner)?
+                .unwrap_or(true)
+                && matches!(
+                    cursor.peek(1, interner).or_abrupt()?.kind(),
+                    TokenKind::IdentifierName(_)
+                        | TokenKind::StringLiteral(_)
+                        | TokenKind::NumericLiteral(_)
+                        | TokenKind::Keyword(_)
+                        | TokenKind::NullLiteral(_)
+                        | TokenKind::BooleanLiteral(_)
+                        | TokenKind::PrivateIdentifier(_)
+                        | TokenKind::Punctuator(Punctuator::OpenBracket)
+                )
+        };
+
         let token = cursor.peek(0, interner).or_abrupt()?;
         let start_linear_span = token.linear_span();
         let start_linear_pos = start_linear_span.start();
 
         let position = token.span().start();
         let element = match token.kind() {
+            TokenKind::IdentifierName((_, ContainsEscapeSequence(true))) if is_accessor => {
+                return Err(Error::general(
+                    "keyword must not contain escaped characters",
+                    token.span().start(),
+                ));
+            }
+            TokenKind::IdentifierName(_) if is_accessor => {
+                cursor.advance(interner);
+                self.auto_accessor(r#static, cursor, interner)?
+            }
+            TokenKind::IdentifierName((Sym::CONSTRUCTOR, _))
+                if !r#static && !decorators.is_empty() =>
+            {
+                return Err(Error::general(
+                    "decorators are not valid on a class constructor",
+                    position,
+                ));
+            }
             TokenKind::IdentifierName((Sym::CONSTRUCTOR, _)) if !r#static => {
                 cursor.advance(interner);
                 let strict = cursor.strict();
@@ -609,6 +673,12 @@ where
                         Span::new(position, function_span_end),
                     )),
                     None,
+                ));
+            }
+            TokenKind::Punctuator(Punctuator::OpenBlock) if r#static && !decorators.is_empty() => {
+                return Err(Error::general(
+                    "decorators are not valid on a class static block",
+                    position,
                 ));
             }
             TokenKind::Punctuator(Punctuator::OpenBlock) if r#static => {
@@ -1294,6 +1364,112 @@ where
             _ => {}
         }
 
-        Ok((None, Some(element)))
+        Ok((None, Some(element.with_decorators(decorators))))
+    }
+}
+
+impl ClassElement {
+    /// Parses the rest of an auto-accessor, after the `accessor` keyword.
+    ///
+    /// More information:
+    ///  - [Decorators proposal][spec]
+    ///
+    /// [spec]: https://arai-a.github.io/ecma262-compare/?pr=2417&id=prod-FieldDefinition
+    fn auto_accessor<R: ReadChar>(
+        self,
+        r#static: bool,
+        cursor: &mut Cursor<R>,
+        interner: &mut Interner,
+    ) -> ParseResult<function::ClassElement> {
+        let token = cursor.peek(0, interner).or_abrupt()?;
+        let start = token.span().start();
+        let name = match token.kind() {
+            TokenKind::PrivateIdentifier(Sym::CONSTRUCTOR) => {
+                return Err(Error::general(
+                    "class constructor may not be a private method",
+                    start,
+                ));
+            }
+            TokenKind::PrivateIdentifier(name) => {
+                let name = PrivateName::new(*name, token.span());
+                cursor.advance(interner);
+                ClassElementName::PrivateName(name)
+            }
+            _ => ClassElementName::PropertyName(
+                PropertyName::new(self.allow_yield, self.allow_await).parse(cursor, interner)?,
+            ),
+        };
+        if let ClassElementName::PropertyName(name) = &name
+            && let Some(name) = name.literal()
+        {
+            if r#static {
+                if [Sym::CONSTRUCTOR, Sym::PROTOTYPE].contains(&name.sym()) {
+                    return Err(Error::general(
+                        "class may not have static field definitions named 'constructor' or 'prototype'",
+                        start,
+                    ));
+                }
+            } else if name == Sym::CONSTRUCTOR {
+                return Err(Error::general(
+                    "class may not have field definitions named 'constructor'",
+                    start,
+                ));
+            }
+        }
+
+        let initializer = if cursor
+            .next_if(TokenKind::Punctuator(Punctuator::Assign), interner)?
+            .is_some()
+        {
+            let strict = cursor.strict();
+            cursor.set_strict(true);
+            let mut rhs = AssignmentExpression::new(true, self.allow_yield, self.allow_await)
+                .parse(cursor, interner)?;
+            cursor.set_strict(strict);
+            match &name {
+                ClassElementName::PropertyName(name) => {
+                    if let Some(name) = name.literal() {
+                        rhs.set_anonymous_function_definition_name(&name);
+                    }
+                }
+                ClassElementName::PrivateName(name) => {
+                    let function_name = interner.get_or_intern(
+                        [
+                            utf16!("#"),
+                            interner.resolve_expect(name.description()).utf16(),
+                        ]
+                        .concat()
+                        .as_slice(),
+                    );
+                    rhs.set_anonymous_function_definition_name(&Identifier::new(
+                        function_name,
+                        name.span(),
+                    ));
+                }
+            }
+            Some(rhs)
+        } else {
+            None
+        };
+        cursor.expect_semicolon("expected semicolon", interner)?;
+
+        Ok(match name {
+            ClassElementName::PropertyName(name) => {
+                let field = ClassFieldDefinition::new(name, initializer).with_accessor(true);
+                if r#static {
+                    function::ClassElement::StaticFieldDefinition(field)
+                } else {
+                    function::ClassElement::FieldDefinition(field)
+                }
+            }
+            ClassElementName::PrivateName(name) => {
+                let field = PrivateFieldDefinition::new(name, initializer).with_accessor(true);
+                if r#static {
+                    function::ClassElement::PrivateStaticFieldDefinition(field)
+                } else {
+                    function::ClassElement::PrivateFieldDefinition(field)
+                }
+            }
+        })
     }
 }

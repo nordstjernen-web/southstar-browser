@@ -92,7 +92,8 @@ where
                 | Punctuator::Dec
                 | Punctuator::OpenBracket
                 | Punctuator::OpenBlock
-                | Punctuator::Div,
+                | Punctuator::Div
+                | Punctuator::At,
             )
             | TokenKind::Keyword((
                 Keyword::Yield

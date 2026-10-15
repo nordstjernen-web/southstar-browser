@@ -31,6 +31,7 @@ mod call;
 mod concat;
 mod control_flow;
 mod copy;
+mod decorator;
 mod define;
 mod delete;
 mod dispose;
@@ -68,6 +69,8 @@ pub(crate) use concat::*;
 pub(crate) use control_flow::*;
 #[doc(inline)]
 pub(crate) use copy::*;
+#[doc(inline)]
+pub(crate) use decorator::*;
 #[doc(inline)]
 pub(crate) use define::*;
 #[doc(inline)]
@@ -2310,14 +2313,52 @@ generate_opcodes! {
     Reserved54 => Reserved,
     /// Reserved [`Opcode`].
     Reserved55 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved56 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved57 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved58 => Reserved,
-    /// Reserved [`Opcode`].
-    Reserved59 => Reserved,
+    /// Start the definition of a class with decorators or auto-accessors.
+    ///
+    /// `decorators` holds an array of the decorators of the class and the `this` values they
+    /// are called with, or `undefined` if neither the class nor its elements have decorators.
+    ///
+    /// - Operands:
+    ///   - name: `IndexOperand`
+    /// - Registers:
+    ///   - Input: class, prototype, superclass, decorators
+    ///   - Output: dst
+    CreateClassDecorations {
+        dst: RegisterOperand,
+        class: RegisterOperand,
+        prototype: RegisterOperand,
+        superclass: RegisterOperand,
+        decorators: RegisterOperand,
+        name: IndexOperand
+    },
+
+    /// Add an evaluated element to a class started by `CreateClassDecorations`.
+    ///
+    /// - Operands:
+    ///   - flags: `IndexOperand`
+    /// - Registers:
+    ///   - Input: state, key, value, decorators
+    AddClassElement {
+        state: RegisterOperand,
+        flags: IndexOperand,
+        key: RegisterOperand,
+        value: RegisterOperand,
+        decorators: RegisterOperand
+    },
+
+    /// Apply the decorators of a class and its elements, and define the elements.
+    ///
+    /// - Registers:
+    ///   - Input: state
+    ///   - Output: dst
+    DecorateClass { state: RegisterOperand, dst: RegisterOperand },
+
+    /// Run the static initializers, fields and blocks of a class with decorators or
+    /// auto-accessors.
+    ///
+    /// - Registers:
+    ///   - Input: state
+    InitializeStaticElements { state: RegisterOperand },
     /// Declare `var` type variable during eval declaration instantiation.
     ///
     /// - Operands:

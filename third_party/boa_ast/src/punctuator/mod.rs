@@ -29,6 +29,8 @@ pub enum Punctuator {
     And,
     /// `=>`
     Arrow,
+    /// `@`
+    At,
     /// `=`
     Assign,
     /// `+=`
@@ -207,6 +209,7 @@ impl Punctuator {
             Self::Add => "+",
             Self::And => "&",
             Self::Arrow => "=>",
+            Self::At => "@",
             Self::Assign => "=",
             Self::AssignAdd => "+=",
             Self::AssignAnd => "&=",

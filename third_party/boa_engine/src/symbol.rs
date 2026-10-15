@@ -78,6 +78,7 @@ enum WellKnown {
     Unscopables,
     Dispose,
     AsyncDispose,
+    Metadata,
 }
 
 impl WellKnown {
@@ -98,6 +99,7 @@ impl WellKnown {
             Self::Unscopables => StaticJsStrings::SYMBOL_UNSCOPABLES,
             Self::Dispose => StaticJsStrings::SYMBOL_DISPOSE,
             Self::AsyncDispose => StaticJsStrings::SYMBOL_ASYNC_DISPOSE,
+            Self::Metadata => js_string!("Symbol.metadata"),
         }
     }
 
@@ -118,6 +120,7 @@ impl WellKnown {
             Self::Unscopables => StaticJsStrings::FN_SYMBOL_UNSCOPABLES,
             Self::Dispose => StaticJsStrings::FN_SYMBOL_DISPOSE,
             Self::AsyncDispose => StaticJsStrings::FN_SYMBOL_ASYNC_DISPOSE,
+            Self::Metadata => js_string!("[Symbol.metadata]"),
         }
     }
 
@@ -316,6 +319,8 @@ impl JsSymbol {
         (dispose, WellKnown::Dispose),
         /// Gets the static `JsSymbol` for `"Symbol.asyncDispose"`.
         (async_dispose, WellKnown::AsyncDispose),
+        /// Gets the static `JsSymbol` for `"Symbol.metadata"`.
+        (metadata, WellKnown::Metadata),
     }
 }
 

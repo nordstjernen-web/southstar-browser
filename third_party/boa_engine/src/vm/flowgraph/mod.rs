@@ -375,7 +375,11 @@ impl CodeBlock {
                 | Instruction::AddDisposableResource { .. }
                 | Instruction::DisposeResources { .. }
                 | Instruction::AsyncDisposeStep { .. }
-                | Instruction::AddDisposeError { .. } => {
+                | Instruction::AddDisposeError { .. }
+                | Instruction::CreateClassDecorations { .. }
+                | Instruction::AddClassElement { .. }
+                | Instruction::DecorateClass { .. }
+                | Instruction::InitializeStaticElements { .. } => {
                     graph.add_node(previous_pc, NodeShape::None, label.into(), Color::None);
                     graph.add_edge(previous_pc, pc, None, Color::None, EdgeStyle::Line);
                 }
@@ -429,11 +433,7 @@ impl CodeBlock {
                 | Instruction::Reserved52
                 | Instruction::Reserved53
                 | Instruction::Reserved54
-                | Instruction::Reserved55
-                | Instruction::Reserved56
-                | Instruction::Reserved57
-                | Instruction::Reserved58
-                | Instruction::Reserved59 => unreachable!("Reserved opcodes are unreachable"),
+                | Instruction::Reserved55 => unreachable!("Reserved opcodes are unreachable"),
             }
         }
 

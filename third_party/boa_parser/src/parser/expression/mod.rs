@@ -8,6 +8,7 @@
 //! [spec]: https://tc39.es/ecma262/#sec-ecmascript-language-expressions
 
 mod assignment;
+mod decorator;
 mod fpl_or_exp;
 mod identifiers;
 mod left_hand_side;
@@ -44,6 +45,7 @@ use boa_interner::{Interner, Sym};
 
 pub(super) use self::{assignment::AssignmentExpression, primary::Initializer};
 pub(in crate::parser) use {
+    decorator::DecoratorList,
     fpl_or_exp::FormalParameterListOrExpression,
     identifiers::{BindingIdentifier, LabelIdentifier},
     left_hand_side::LeftHandSideExpression,

@@ -28,6 +28,7 @@ pub struct ClassDeclaration {
     pub(crate) super_ref: Option<Expression>,
     pub(crate) constructor: Option<FunctionExpression>,
     pub(crate) elements: Box<[ClassElement]>,
+    pub(crate) decorators: Box<[Expression]>,
 
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) name_scope: Scope,
@@ -48,8 +49,24 @@ impl ClassDeclaration {
             super_ref,
             constructor,
             elements,
+            decorators: Box::default(),
             name_scope: Scope::default(),
         }
+    }
+
+    /// Sets the decorators applied to the class declaration.
+    #[inline]
+    #[must_use]
+    pub fn with_decorators(mut self, decorators: Box<[Expression]>) -> Self {
+        self.decorators = decorators;
+        self
+    }
+
+    /// Returns the decorators applied to the class declaration, in source order.
+    #[inline]
+    #[must_use]
+    pub const fn decorators(&self) -> &[Expression] {
+        &self.decorators
     }
 
     /// Returns the name of the class declaration.
@@ -90,7 +107,8 @@ impl ClassDeclaration {
 
 impl ToIndentedString for ClassDeclaration {
     fn to_indented_string(&self, interner: &Interner, indent_n: usize) -> String {
-        let mut buf = format!("class {}", interner.resolve_expect(self.name.sym()));
+        let mut buf = decorators_to_string(&self.decorators, interner);
+        let _ = write!(buf, "class {}", interner.resolve_expect(self.name.sym()));
         if let Some(super_ref) = self.super_ref.as_ref() {
             let _ = write!(buf, " extends {}", super_ref.to_interned_string(interner));
         }
@@ -121,6 +139,9 @@ impl VisitWith for ClassDeclaration {
     where
         V: Visitor<'a>,
     {
+        for decorator in &*self.decorators {
+            visitor.visit_expression(decorator)?;
+        }
         visitor.visit_identifier(&self.name)?;
         if let Some(expr) = &self.super_ref {
             visitor.visit_expression(expr)?;
@@ -138,6 +159,9 @@ impl VisitWith for ClassDeclaration {
     where
         V: VisitorMut<'a>,
     {
+        for decorator in &mut *self.decorators {
+            visitor.visit_expression_mut(decorator)?;
+        }
         visitor.visit_identifier_mut(&mut self.name)?;
         if let Some(expr) = &mut self.super_ref {
             visitor.visit_expression_mut(expr)?;
@@ -174,6 +198,7 @@ pub struct ClassExpression {
     pub(crate) super_ref: Option<Expression>,
     pub(crate) constructor: Option<FunctionExpression>,
     pub(crate) elements: Box<[ClassElement]>,
+    pub(crate) decorators: Box<[Expression]>,
 
     span: Span,
 
@@ -203,9 +228,25 @@ impl ClassExpression {
             super_ref,
             constructor,
             elements,
+            decorators: Box::default(),
             span,
             name_scope,
         }
+    }
+
+    /// Sets the decorators applied to the class expression.
+    #[inline]
+    #[must_use]
+    pub fn with_decorators(mut self, decorators: Box<[Expression]>) -> Self {
+        self.decorators = decorators;
+        self
+    }
+
+    /// Returns the decorators applied to the class expression, in source order.
+    #[inline]
+    #[must_use]
+    pub const fn decorators(&self) -> &[Expression] {
+        &self.decorators
     }
 
     /// Returns the name of the class expression.
@@ -253,7 +294,8 @@ impl Spanned for ClassExpression {
 
 impl ToIndentedString for ClassExpression {
     fn to_indented_string(&self, interner: &Interner, indent_n: usize) -> String {
-        let mut buf = "class".to_string();
+        let mut buf = decorators_to_string(&self.decorators, interner);
+        buf.push_str("class");
         if self.name_scope.is_some()
             && let Some(name) = self.name
         {
@@ -295,6 +337,9 @@ impl VisitWith for ClassExpression {
     where
         V: Visitor<'a>,
     {
+        for decorator in &*self.decorators {
+            visitor.visit_expression(decorator)?;
+        }
         if let Some(ident) = &self.name {
             visitor.visit_identifier(ident)?;
         }
@@ -314,6 +359,9 @@ impl VisitWith for ClassExpression {
     where
         V: VisitorMut<'a>,
     {
+        for decorator in &mut *self.decorators {
+            visitor.visit_expression_mut(decorator)?;
+        }
         if let Some(ident) = &mut self.name {
             visitor.visit_identifier_mut(ident)?;
         }
@@ -401,6 +449,56 @@ pub enum ClassElement {
     StaticBlock(StaticBlockBody),
 }
 
+impl ClassElement {
+    /// Returns the decorators applied to the class element, in source order.
+    #[inline]
+    #[must_use]
+    pub fn decorators(&self) -> &[Expression] {
+        match self {
+            Self::MethodDefinition(m) => &m.decorators,
+            Self::FieldDefinition(field) | Self::StaticFieldDefinition(field) => &field.decorators,
+            Self::PrivateFieldDefinition(field) | Self::PrivateStaticFieldDefinition(field) => {
+                &field.decorators
+            }
+            Self::StaticBlock(_) => &[],
+        }
+    }
+
+    /// Sets the decorators applied to the class element; a static block takes none.
+    #[must_use]
+    pub fn with_decorators(self, decorators: Box<[Expression]>) -> Self {
+        match self {
+            Self::MethodDefinition(m) => Self::MethodDefinition(m.with_decorators(decorators)),
+            Self::FieldDefinition(field) => {
+                Self::FieldDefinition(field.with_decorators(decorators))
+            }
+            Self::StaticFieldDefinition(field) => {
+                Self::StaticFieldDefinition(field.with_decorators(decorators))
+            }
+            Self::PrivateFieldDefinition(field) => {
+                Self::PrivateFieldDefinition(field.with_decorators(decorators))
+            }
+            Self::PrivateStaticFieldDefinition(field) => {
+                Self::PrivateStaticFieldDefinition(field.with_decorators(decorators))
+            }
+            Self::StaticBlock(block) => Self::StaticBlock(block),
+        }
+    }
+
+    /// Returns `true` if the class element is an auto-accessor.
+    #[inline]
+    #[must_use]
+    pub const fn is_accessor(&self) -> bool {
+        match self {
+            Self::FieldDefinition(field) | Self::StaticFieldDefinition(field) => field.is_accessor,
+            Self::PrivateFieldDefinition(field) | Self::PrivateStaticFieldDefinition(field) => {
+                field.is_accessor
+            }
+            Self::MethodDefinition(_) | Self::StaticBlock(_) => false,
+        }
+    }
+}
+
 /// A non-private class element field definition.
 ///
 /// More information:
@@ -413,6 +511,8 @@ pub enum ClassElement {
 pub struct ClassFieldDefinition {
     pub(crate) name: PropertyName,
     pub(crate) initializer: Option<Expression>,
+    pub(crate) decorators: Box<[Expression]>,
+    pub(crate) is_accessor: bool,
 
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) scope: Scope,
@@ -426,8 +526,40 @@ impl ClassFieldDefinition {
         Self {
             name,
             initializer,
+            decorators: Box::default(),
+            is_accessor: false,
             scope: Scope::default(),
         }
+    }
+
+    /// Makes the field an auto-accessor (`accessor name = initializer`).
+    #[inline]
+    #[must_use]
+    pub const fn with_accessor(mut self, is_accessor: bool) -> Self {
+        self.is_accessor = is_accessor;
+        self
+    }
+
+    /// Sets the decorators applied to the class field definition.
+    #[inline]
+    #[must_use]
+    pub fn with_decorators(mut self, decorators: Box<[Expression]>) -> Self {
+        self.decorators = decorators;
+        self
+    }
+
+    /// Returns `true` if the field is an auto-accessor.
+    #[inline]
+    #[must_use]
+    pub const fn is_accessor(&self) -> bool {
+        self.is_accessor
+    }
+
+    /// Returns the decorators applied to the class field definition, in source order.
+    #[inline]
+    #[must_use]
+    pub const fn decorators(&self) -> &[Expression] {
+        &self.decorators
     }
 
     /// Returns the name of the class field definition.
@@ -464,6 +596,8 @@ impl ClassFieldDefinition {
 pub struct PrivateFieldDefinition {
     pub(crate) name: PrivateName,
     pub(crate) initializer: Option<Expression>,
+    pub(crate) decorators: Box<[Expression]>,
+    pub(crate) is_accessor: bool,
 
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) scope: Scope,
@@ -477,8 +611,40 @@ impl PrivateFieldDefinition {
         Self {
             name,
             initializer,
+            decorators: Box::default(),
+            is_accessor: false,
             scope: Scope::default(),
         }
+    }
+
+    /// Makes the field a private auto-accessor (`accessor #name = initializer`).
+    #[inline]
+    #[must_use]
+    pub const fn with_accessor(mut self, is_accessor: bool) -> Self {
+        self.is_accessor = is_accessor;
+        self
+    }
+
+    /// Sets the decorators applied to the private field definition.
+    #[inline]
+    #[must_use]
+    pub fn with_decorators(mut self, decorators: Box<[Expression]>) -> Self {
+        self.decorators = decorators;
+        self
+    }
+
+    /// Returns `true` if the field is a private auto-accessor.
+    #[inline]
+    #[must_use]
+    pub const fn is_accessor(&self) -> bool {
+        self.is_accessor
+    }
+
+    /// Returns the decorators applied to the private field definition, in source order.
+    #[inline]
+    #[must_use]
+    pub const fn decorators(&self) -> &[Expression] {
+        &self.decorators
     }
 
     /// Returns the name of the private field definition.
@@ -506,81 +672,49 @@ impl PrivateFieldDefinition {
 impl ToIndentedString for ClassElement {
     fn to_indented_string(&self, interner: &Interner, indent_n: usize) -> String {
         let indentation = "    ".repeat(indent_n + 1);
-        match self {
-            Self::MethodDefinition(m) => m.to_indented_string(interner, indent_n),
-            Self::FieldDefinition(field) => match &field.initializer {
-                Some(expr) => {
-                    format!(
-                        "{indentation}{} = {};\n",
-                        field.name.to_interned_string(interner),
-                        expr.to_no_indent_string(interner, indent_n + 1)
-                    )
-                }
-                None => {
-                    format!(
-                        "{indentation}{};\n",
-                        field.name.to_interned_string(interner),
-                    )
-                }
-            },
-            Self::StaticFieldDefinition(field) => match &field.initializer {
-                Some(expr) => {
-                    format!(
-                        "{indentation}static {} = {};\n",
-                        field.name.to_interned_string(interner),
-                        expr.to_no_indent_string(interner, indent_n + 1)
-                    )
-                }
-                None => {
-                    format!(
-                        "{indentation}static {};\n",
-                        field.name.to_interned_string(interner),
-                    )
-                }
-            },
-            Self::PrivateFieldDefinition(PrivateFieldDefinition {
-                name, initializer, ..
-            }) => match initializer {
-                Some(expr) => {
-                    format!(
-                        "{indentation}#{} = {};\n",
-                        interner.resolve_expect(name.description()),
-                        expr.to_no_indent_string(interner, indent_n + 1)
-                    )
-                }
-                None => {
-                    format!(
-                        "{indentation}#{};\n",
-                        interner.resolve_expect(name.description()),
-                    )
-                }
-            },
-            Self::PrivateStaticFieldDefinition(PrivateFieldDefinition {
-                name,
-                initializer,
-                ..
-            }) => match initializer {
-                Some(expr) => {
-                    format!(
-                        "{indentation}static #{} = {};\n",
-                        interner.resolve_expect(name.description()),
-                        expr.to_no_indent_string(interner, indent_n + 1)
-                    )
-                }
-                None => {
-                    format!(
-                        "{indentation}static #{};\n",
-                        interner.resolve_expect(name.description()),
-                    )
-                }
-            },
+        let (is_static, name, initializer, decorators, is_accessor) = match self {
+            Self::MethodDefinition(m) => return m.to_indented_string(interner, indent_n),
             Self::StaticBlock(block) => {
-                format!(
+                return format!(
                     "{indentation}static {}\n",
                     block_to_string(&block.body.statements, interner, indent_n + 1)
-                )
+                );
             }
+            Self::FieldDefinition(field) | Self::StaticFieldDefinition(field) => (
+                matches!(self, Self::StaticFieldDefinition(_)),
+                field.name.to_interned_string(interner),
+                &field.initializer,
+                &field.decorators,
+                field.is_accessor,
+            ),
+            Self::PrivateFieldDefinition(field) | Self::PrivateStaticFieldDefinition(field) => (
+                matches!(self, Self::PrivateStaticFieldDefinition(_)),
+                format!("#{}", interner.resolve_expect(field.name.description())),
+                &field.initializer,
+                &field.decorators,
+                field.is_accessor,
+            ),
+        };
+        let mut buf = format!(
+            "{indentation}{}",
+            decorators_to_string(decorators, interner)
+        );
+        if is_static {
+            buf.push_str("static ");
         }
+        if is_accessor {
+            buf.push_str("accessor ");
+        }
+        buf.push_str(&name);
+        if let Some(expr) = initializer {
+            let _ = write!(
+                buf,
+                " = {}",
+                expr.to_no_indent_string(interner, indent_n + 1)
+            );
+        }
+        buf.push_str(";\n");
+        buf
     }
 }
 
@@ -589,6 +723,9 @@ impl VisitWith for ClassElement {
     where
         V: Visitor<'a>,
     {
+        for decorator in self.decorators() {
+            visitor.visit_expression(decorator)?;
+        }
         match self {
             Self::MethodDefinition(m) => {
                 match &m.name {
@@ -635,6 +772,9 @@ impl VisitWith for ClassElement {
     {
         match self {
             Self::MethodDefinition(m) => {
+                for decorator in &mut *m.decorators {
+                    visitor.visit_expression_mut(decorator)?;
+                }
                 match m.name {
                     ClassElementName::PropertyName(ref mut pn) => {
                         visitor.visit_property_name_mut(pn)?;
@@ -647,6 +787,9 @@ impl VisitWith for ClassElement {
                 visitor.visit_function_body_mut(&mut m.body)
             }
             Self::FieldDefinition(field) | Self::StaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    visitor.visit_expression_mut(decorator)?;
+                }
                 visitor.visit_property_name_mut(&mut field.name)?;
                 if let Some(expr) = &mut field.initializer {
                     visitor.visit_expression_mut(expr)
@@ -655,13 +798,20 @@ impl VisitWith for ClassElement {
                 }
             }
             Self::PrivateFieldDefinition(PrivateFieldDefinition {
-                name, initializer, ..
+                name,
+                initializer,
+                decorators,
+                ..
             })
             | Self::PrivateStaticFieldDefinition(PrivateFieldDefinition {
                 name,
                 initializer,
+                decorators,
                 ..
             }) => {
+                for decorator in &mut **decorators {
+                    visitor.visit_expression_mut(decorator)?;
+                }
                 visitor.visit_private_name_mut(name)?;
                 if let Some(expr) = initializer {
                     visitor.visit_expression_mut(expr)
@@ -693,6 +843,7 @@ pub struct ClassMethodDefinition {
     pub(crate) contains_direct_eval: bool,
     kind: MethodDefinitionKind,
     is_static: bool,
+    pub(crate) decorators: Box<[Expression]>,
 
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) scopes: FunctionScopes,
@@ -723,9 +874,25 @@ impl ClassMethodDefinition {
             contains_direct_eval,
             kind,
             is_static,
+            decorators: Box::default(),
             scopes: FunctionScopes::default(),
             linear_span: linear_span.into(),
         }
+    }
+
+    /// Sets the decorators applied to the class method definition.
+    #[inline]
+    #[must_use]
+    pub fn with_decorators(mut self, decorators: Box<[Expression]>) -> Self {
+        self.decorators = decorators;
+        self
+    }
+
+    /// Returns the decorators applied to the class method definition, in source order.
+    #[inline]
+    #[must_use]
+    pub const fn decorators(&self) -> &[Expression] {
+        &self.decorators
     }
 
     /// Returns the name of the class method definition.
@@ -809,10 +976,11 @@ impl ToIndentedString for ClassMethodDefinition {
             (false, MethodDefinitionKind::AsyncGenerator) => "async *",
             (false, MethodDefinitionKind::Async) => "async ",
         };
+        let decorators = decorators_to_string(&self.decorators, interner);
         let name = self.name.to_interned_string(interner);
         let parameters = join_nodes(interner, self.parameters.as_ref());
         let body = block_to_string(&self.body.statements, interner, indent_n + 1);
-        format!("{indentation}{prefix}{name}({parameters}) {body}\n")
+        format!("{indentation}{decorators}{prefix}{name}({parameters}) {body}\n")
     }
 }
 
@@ -900,4 +1068,12 @@ impl VisitWith for PrivateName {
     {
         visitor.visit_sym_mut(&mut self.description)
     }
+}
+
+/// Formats a decorator list as source text, each decorator followed by a space.
+fn decorators_to_string(decorators: &[Expression], interner: &Interner) -> String {
+    decorators
+        .iter()
+        .map(|decorator| format!("@{} ", decorator.to_interned_string(interner)))
+        .collect()
 }

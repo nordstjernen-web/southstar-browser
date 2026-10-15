@@ -27,8 +27,8 @@ use self::{
     break_stm::BreakStatement,
     continue_stm::ContinueStatement,
     declaration::{
-        Declaration, ExportDeclaration, ImportDeclaration, allowed_token_after_let,
-        await_using_declaration_ahead, using_declaration_ahead,
+        ClassDeclaration, Declaration, ExportDeclaration, ImportDeclaration,
+        allowed_token_after_let, await_using_declaration_ahead, using_declaration_ahead,
     },
     expression::ExpressionStatement,
     if_stm::IfStatement,
@@ -46,7 +46,7 @@ use crate::{
     lexer::{Error as LexError, InputElement, Token, TokenKind, token::EscapeSequence},
     parser::{
         AllowAwait, AllowReturn, AllowYield, Cursor, OrAbrupt, ParseResult, TokenParser,
-        expression::{BindingIdentifier, Initializer, PropertyName},
+        expression::{BindingIdentifier, DecoratorList, Initializer, PropertyName},
     },
     source::ReadChar,
 };
@@ -427,7 +427,8 @@ where
         let tok = cursor.peek(0, interner).or_abrupt()?;
 
         match tok.kind().clone() {
-            TokenKind::Keyword((Keyword::Function | Keyword::Class | Keyword::Const, _)) => {
+            TokenKind::Keyword((Keyword::Function | Keyword::Class | Keyword::Const, _))
+            | TokenKind::Punctuator(Punctuator::At) => {
                 Declaration::new(self.allow_yield, self.allow_await)
                     .parse(cursor, interner)
                     .map(ast::StatementListItem::from)
@@ -1020,6 +1021,42 @@ where
                 .parse(cursor, interner)
                 .map(Box::new)
                 .map(Self::Output::ExportDeclaration),
+            // Decorators may come before `export` instead of after it, but not in both places.
+            TokenKind::Punctuator(Punctuator::At) => {
+                let decorators = DecoratorList::new(false, true).parse(cursor, interner)?;
+                let token = cursor.peek(0, interner).or_abrupt()?;
+                if token.kind() != &TokenKind::Keyword((Keyword::Export, false)) {
+                    let class =
+                        ClassDeclaration::new(false, true, false).parse(cursor, interner)?;
+                    return Ok(Self::Output::StatementListItem(
+                        ast::Declaration::from(class.with_decorators(decorators)).into(),
+                    ));
+                }
+                let position = token.span().start();
+                let export = match ExportDeclaration.parse(cursor, interner)? {
+                    ast::declaration::ExportDeclaration::Declaration(
+                        ast::Declaration::ClassDeclaration(class),
+                    ) if class.decorators().is_empty() => {
+                        ast::declaration::ExportDeclaration::Declaration(
+                            class.with_decorators(decorators).into(),
+                        )
+                    }
+                    ast::declaration::ExportDeclaration::DefaultClassDeclaration(class)
+                        if class.decorators().is_empty() =>
+                    {
+                        ast::declaration::ExportDeclaration::DefaultClassDeclaration(Box::new(
+                            class.with_decorators(decorators),
+                        ))
+                    }
+                    _ => {
+                        return Err(Error::general(
+                            "decorators must be followed by a class declaration",
+                            position,
+                        ));
+                    }
+                };
+                Ok(Self::Output::ExportDeclaration(Box::new(export)))
+            }
             TokenKind::Keyword((Keyword::Import, false)) => {
                 if ImportDeclaration::test(cursor, interner)? {
                     ImportDeclaration

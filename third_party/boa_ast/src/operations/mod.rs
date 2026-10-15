@@ -245,6 +245,10 @@ where
 
         // `ComputedPropertyContains`: https://tc39.es/ecma262/#sec-static-semantics-computedpropertycontains
         fn visit_class_element(&mut self, node: &'ast ClassElement) -> ControlFlow<Self::BreakTy> {
+            // Decorators are evaluated in the scope enclosing the class, like computed names.
+            for decorator in node.decorators() {
+                self.visit_expression(decorator)?;
+            }
             match node {
                 ClassElement::MethodDefinition(m) => {
                     if self.0 == ContainsSymbol::DirectEval {
@@ -490,6 +494,9 @@ where
             if let ClassElement::MethodDefinition(m) = node
                 && let ClassElementName::PropertyName(name) = m.name()
             {
+                for decorator in m.decorators() {
+                    decorator.visit_with(self)?;
+                }
                 return name.visit_with(self);
             }
 
@@ -1247,6 +1254,10 @@ impl<'ast> Visitor<'ast> for AllPrivateIdentifiersValidVisitor {
         &mut self,
         node: &'ast ClassExpression,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in node.decorators() {
+            self.visit(decorator)?;
+        }
+
         if let Some(node) = node.super_ref() {
             self.visit(node)?;
         }
@@ -1276,6 +1287,9 @@ impl<'ast> Visitor<'ast> for AllPrivateIdentifiersValidVisitor {
         }
 
         for element in node.elements() {
+            for decorator in element.decorators() {
+                visitor.visit(decorator)?;
+            }
             match element {
                 ClassElement::MethodDefinition(m) => {
                     if let ClassElementName::PropertyName(name) = m.name() {
@@ -1316,6 +1330,10 @@ impl<'ast> Visitor<'ast> for AllPrivateIdentifiersValidVisitor {
         &mut self,
         node: &'ast ClassDeclaration,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in node.decorators() {
+            self.visit(decorator)?;
+        }
+
         if let Some(node) = node.super_ref() {
             self.visit(node)?;
         }
@@ -1345,6 +1363,9 @@ impl<'ast> Visitor<'ast> for AllPrivateIdentifiersValidVisitor {
         }
 
         for element in node.elements() {
+            for decorator in element.decorators() {
+                visitor.visit(decorator)?;
+            }
             match element {
                 ClassElement::MethodDefinition(m) => {
                     if let ClassElementName::PropertyName(name) = m.name() {

@@ -114,7 +114,7 @@ where
                         .map(Declaration::from)
                 }
             }
-            TokenKind::Keyword((Keyword::Class, false)) => {
+            TokenKind::Keyword((Keyword::Class, false)) | TokenKind::Punctuator(Punctuator::At) => {
                 ClassDeclaration::new(self.allow_yield, self.allow_await, false)
                     .parse(cursor, interner)
                     .map(Declaration::from)

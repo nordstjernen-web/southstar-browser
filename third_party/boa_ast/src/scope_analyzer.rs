@@ -390,6 +390,9 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         &mut self,
         node: &'ast mut ClassDeclaration,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         node.name_scope.escape_all_bindings();
         std::mem::swap(&mut self.scope, &mut node.name_scope);
         if let Some(super_ref) = &mut node.super_ref {
@@ -410,6 +413,9 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         &mut self,
         node: &'ast mut ClassExpression,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         if let Some(name_scope) = &mut node.name_scope {
             if self.direct_eval {
                 name_scope.escape_all_bindings();
@@ -438,13 +444,21 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
         node: &'ast mut ClassElement,
     ) -> ControlFlow<Self::BreakTy> {
         match node {
-            ClassElement::MethodDefinition(node) => self.visit_function_like(
-                &mut node.parameters,
-                &mut node.body,
-                &mut node.scopes,
-                node.contains_direct_eval,
-            ),
+            ClassElement::MethodDefinition(node) => {
+                for decorator in &mut *node.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
+                self.visit_function_like(
+                    &mut node.parameters,
+                    &mut node.body,
+                    &mut node.scopes,
+                    node.contains_direct_eval,
+                )
+            }
             ClassElement::FieldDefinition(field) | ClassElement::StaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 self.visit_property_name_mut(&mut field.name)?;
                 if let Some(e) = &mut field.initializer {
                     std::mem::swap(&mut self.scope, &mut field.scope);
@@ -455,6 +469,9 @@ impl<'ast> VisitorMut<'ast> for BindingEscapeAnalyzer<'_> {
             }
             ClassElement::PrivateFieldDefinition(field)
             | ClassElement::PrivateStaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 if let Some(e) = &mut field.initializer {
                     std::mem::swap(&mut self.scope, &mut field.scope);
                     self.visit_expression_mut(e)?;
@@ -780,6 +797,9 @@ impl<'ast> VisitorMut<'ast> for BindingCollectorVisitor<'_> {
         &mut self,
         node: &'ast mut ClassDeclaration,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         let mut name_scope = Scope::new(self.scope.clone(), false);
         let name = node.name().to_js_string(self.interner);
         name_scope.create_immutable_binding(name, true);
@@ -802,6 +822,9 @@ impl<'ast> VisitorMut<'ast> for BindingCollectorVisitor<'_> {
         &mut self,
         node: &'ast mut ClassExpression,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         let mut name_scope = None;
         if let Some(name) = node.name
             && node.name_scope.is_some()
@@ -835,6 +858,9 @@ impl<'ast> VisitorMut<'ast> for BindingCollectorVisitor<'_> {
     ) -> ControlFlow<Self::BreakTy> {
         match node {
             ClassElement::MethodDefinition(node) => {
+                for decorator in &mut *node.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 let strict = node.body.strict();
                 self.visit_function_like(
                     &mut node.body,
@@ -847,6 +873,9 @@ impl<'ast> VisitorMut<'ast> for BindingCollectorVisitor<'_> {
                 )
             }
             ClassElement::FieldDefinition(field) | ClassElement::StaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 self.visit_property_name_mut(&mut field.name)?;
                 let mut scope = Scope::new(self.scope.clone(), true);
                 std::mem::swap(&mut self.scope, &mut scope);
@@ -859,6 +888,9 @@ impl<'ast> VisitorMut<'ast> for BindingCollectorVisitor<'_> {
             }
             ClassElement::PrivateFieldDefinition(field)
             | ClassElement::PrivateStaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 let mut scope = Scope::new(self.scope.clone(), true);
                 std::mem::swap(&mut self.scope, &mut scope);
                 if let Some(e) = &mut field.initializer {
@@ -1425,6 +1457,9 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
         &mut self,
         node: &'ast mut ClassDeclaration,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         let index = self.index;
         if !node.name_scope.all_bindings_local() {
             self.index += 1;
@@ -1455,6 +1490,9 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
         &mut self,
         node: &'ast mut ClassExpression,
     ) -> ControlFlow<Self::BreakTy> {
+        for decorator in &mut *node.decorators {
+            self.visit_expression_mut(decorator)?;
+        }
         let index = self.index;
         if let Some(scope) = &node.name_scope {
             if !scope.all_bindings_local() {
@@ -1488,6 +1526,9 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
     ) -> ControlFlow<Self::BreakTy> {
         match node {
             ClassElement::MethodDefinition(node) => {
+                for decorator in &mut *node.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 let contains_direct_eval = node.contains_direct_eval();
                 self.visit_function_like(
                     &mut node.body,
@@ -1499,6 +1540,9 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
                 )
             }
             ClassElement::FieldDefinition(field) | ClassElement::StaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 self.visit_property_name_mut(&mut field.name)?;
                 let index = self.index;
                 self.index += 1;
@@ -1511,6 +1555,9 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
             }
             ClassElement::PrivateFieldDefinition(field)
             | ClassElement::PrivateStaticFieldDefinition(field) => {
+                for decorator in &mut *field.decorators {
+                    self.visit_expression_mut(decorator)?;
+                }
                 let index = self.index;
                 self.index += 1;
                 field.scope.set_index(self.index);

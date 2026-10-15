@@ -34,7 +34,7 @@ use crate::{
     string::StaticJsStrings,
     symbol::JsSymbol,
     value::IntegerOrInfinity,
-    vm::{ActiveRunnable, CallFrame, CallFrameFlags, CodeBlock},
+    vm::{ActiveRunnable, CallFrame, CallFrameFlags, CodeBlock, opcode::DecoratedField},
 };
 use boa_ast::{
     Position, Span, Spanned, StatementList,
@@ -142,6 +142,13 @@ pub enum ClassFieldDefinition {
 
     /// A class field definition with a private name.
     Private(PrivateName, JsFunction),
+
+    /// A field or auto-accessor of a class with decorators, see [`DecoratedField`].
+    Decorated(Gc<DecoratedField>),
+
+    /// An initializer added by a method decorator, called on each instance before its fields
+    /// are defined.
+    Initializer(JsObject),
 }
 
 unsafe impl Trace for ClassFieldDefinition {
@@ -152,6 +159,12 @@ unsafe impl Trace for ClassFieldDefinition {
             }
             Self::Private(_, func) => {
                 mark(func);
+            }
+            Self::Decorated(field) => {
+                mark(field);
+            }
+            Self::Initializer(initializer) => {
+                mark(initializer);
             }
         }
     }}
@@ -276,6 +289,11 @@ impl OrdinaryFunction {
     /// Pushes a private value to the `[[Fields]]` internal slot if present.
     pub(crate) fn push_field_private(&mut self, name: PrivateName, value: JsFunction) {
         self.fields.push(ClassFieldDefinition::Private(name, value));
+    }
+
+    /// Pushes a field of a class with decorators to the `[[Fields]]` internal slot.
+    pub(crate) fn push_field_definition(&mut self, field: ClassFieldDefinition) {
+        self.fields.push(field);
     }
 
     /// Returns the values of the `[[PrivateMethods]]` internal slot.

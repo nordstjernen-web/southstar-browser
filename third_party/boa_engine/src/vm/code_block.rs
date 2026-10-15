@@ -915,6 +915,27 @@ impl CodeBlock {
                 error,
                 new_error,
             } => format!("has_error:{has_error}, error:{error}, new_error:{new_error}"),
+            Instruction::CreateClassDecorations {
+                dst,
+                class,
+                prototype,
+                superclass,
+                decorators,
+                name,
+            } => format!(
+                "dst:{dst}, class:{class}, prototype:{prototype}, superclass:{superclass}, decorators:{decorators}, name:{name}"
+            ),
+            Instruction::AddClassElement {
+                state,
+                flags,
+                key,
+                value,
+                decorators,
+            } => format!(
+                "state:{state}, flags:{flags}, key:{key}, value:{value}, decorators:{decorators}"
+            ),
+            Instruction::DecorateClass { state, dst } => format!("state:{state}, dst:{dst}"),
+            Instruction::InitializeStaticElements { state } => format!("state:{state}"),
             Instruction::Reserved8
             | Instruction::Reserved9
             | Instruction::Reserved10
@@ -962,11 +983,7 @@ impl CodeBlock {
             | Instruction::Reserved52
             | Instruction::Reserved53
             | Instruction::Reserved54
-            | Instruction::Reserved55
-            | Instruction::Reserved56
-            | Instruction::Reserved57
-            | Instruction::Reserved58
-            | Instruction::Reserved59 => unreachable!("Reserved opcodes are unreachable"),
+            | Instruction::Reserved55 => unreachable!("Reserved opcodes are unreachable"),
         }
     }
 }

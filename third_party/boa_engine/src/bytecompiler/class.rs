@@ -1,14 +1,17 @@
 use super::{BindingAccessOpcode, ByteCompiler, Literal, Register, ToJsString};
 use crate::{
-    js_string,
-    vm::{CodeBlock, CodeBlockFlags, opcode::BindingOpcode},
+    JsString, js_string,
+    vm::{
+        CodeBlock, CodeBlockFlags,
+        opcode::{BindingOpcode, ClassElementFlags},
+    },
 };
 use boa_ast::{
     Expression,
     expression::Identifier,
     function::{
         ClassDeclaration, ClassElement, ClassElementName, ClassExpression, FormalParameterList,
-        FunctionExpression,
+        FunctionExpression, StaticBlockBody,
     },
     property::{MethodDefinitionKind, PropertyName},
     scope::Scope,
@@ -43,6 +46,7 @@ pub(crate) struct ClassSpec<'a> {
     super_ref: Option<&'a Expression>,
     constructor: Option<&'a FunctionExpression>,
     elements: &'a [ClassElement],
+    decorators: &'a [Expression],
     has_binding_identifier: bool,
     name_scope: Option<&'a Scope>,
 }
@@ -54,6 +58,7 @@ impl<'a> From<&'a ClassDeclaration> for ClassSpec<'a> {
             super_ref: class.super_ref(),
             constructor: class.constructor(),
             elements: class.elements(),
+            decorators: class.decorators(),
             has_binding_identifier: true,
             name_scope: Some(class.name_scope()),
         }
@@ -67,6 +72,7 @@ impl<'a> From<&'a ClassExpression> for ClassSpec<'a> {
             super_ref: class.super_ref(),
             constructor: class.constructor(),
             elements: class.elements(),
+            decorators: class.decorators(),
             has_binding_identifier: class.name().is_some(),
             name_scope: class.name_scope(),
         }
@@ -80,6 +86,30 @@ impl ByteCompiler<'_> {
     /// A class declaration binds the resulting class object to it's identifier.
     /// A class expression leaves the resulting class object on the stack for following operations.
     pub(crate) fn compile_class(&mut self, class: ClassSpec<'_>, dst: Option<&Register>) {
+        // A class with decorators or auto-accessors defines its elements through
+        // `CreateClassDecorations`, `AddClassElement`, `DecorateClass` and
+        // `InitializeStaticElements`, which also need its superclass. The decorators of the
+        // class are evaluated first, in the scope enclosing it.
+        let has_decorators = !class.decorators.is_empty()
+            || class
+                .elements
+                .iter()
+                .any(|element| !element.decorators().is_empty());
+        let class_decorators =
+            if has_decorators || class.elements.iter().any(ClassElement::is_accessor) {
+                let decorators = self.register_allocator.alloc();
+                if has_decorators {
+                    self.compile_decorators(class.decorators, &decorators);
+                } else {
+                    self.bytecode.emit_store_undefined(decorators.variable());
+                }
+                let superclass = self.register_allocator.alloc();
+                self.bytecode.emit_store_undefined(superclass.variable());
+                Some((decorators, superclass))
+            } else {
+                None
+            };
+
         // 11.2.2 Strict Mode Code - <https://tc39.es/ecma262/#sec-strict-mode-code>
         //  - All parts of a ClassDeclaration or a ClassExpression are strict mode code.
         let strict = self.strict();
@@ -166,6 +196,10 @@ impl ByteCompiler<'_> {
 
         if let Some(node) = class.super_ref {
             self.compile_expr(node, &prototype_register);
+            if let Some((_, superclass)) = &class_decorators {
+                self.bytecode
+                    .emit_move(superclass.variable(), prototype_register.variable());
+            }
             self.bytecode.emit_store_class_prototype(
                 prototype_register.variable(),
                 class_register.variable(),
@@ -205,9 +239,27 @@ impl ByteCompiler<'_> {
         self.bytecode
             .emit_push_private_environment(class_register.variable(), name_indices);
 
+        let decorations = class_decorators.map(|(decorators, superclass)| {
+            let state = self.register_allocator.alloc();
+            let name_index = self.get_or_insert_string(class_name.clone());
+            self.bytecode.emit_create_class_decorations(
+                state.variable(),
+                class_register.variable(),
+                proto_register.variable(),
+                superclass.variable(),
+                decorators.variable(),
+                name_index.into(),
+            );
+            self.register_allocator.dealloc(superclass);
+            self.register_allocator.dealloc(decorators);
+            state
+        });
+
         let mut static_elements = Vec::new();
 
-        if let Some(scope) = class.name_scope {
+        if let Some(scope) = class.name_scope
+            && decorations.is_none()
+        {
             let binding = scope.get_identifier_reference(class_name.clone());
             let index = self.insert_binding(binding);
             self.emit_binding_access(
@@ -217,7 +269,14 @@ impl ByteCompiler<'_> {
             );
         }
 
-        for element in class.elements {
+        let elements = if let Some(state) = decorations {
+            self.compile_decorated_elements(&class, state, &class_register);
+            &[]
+        } else {
+            class.elements
+        };
+
+        for element in elements {
             match element {
                 ClassElement::MethodDefinition(m) => match m.name() {
                     ClassElementName::PropertyName(PropertyName::Literal(name)) => {
@@ -720,5 +779,235 @@ impl ByteCompiler<'_> {
 
         // NOTE: Reset strict mode to before class declaration/expression evaluation.
         self.code_block_flags.set(CodeBlockFlags::STRICT, strict);
+    }
+
+    /// Evaluates a `DecoratorList` into `dst`, as an array of each decorator followed by the
+    /// `this` value it is called with: the object of a property access, otherwise `undefined`.
+    fn compile_decorators(&mut self, decorators: &[Expression], dst: &Register) {
+        self.bytecode.emit_store_new_array(dst.variable());
+        for decorator in decorators {
+            let this = self.register_allocator.alloc();
+            let value = self.register_allocator.alloc();
+            if let Expression::PropertyAccess(access) = decorator.flatten() {
+                self.compile_access_preserve_this(access, &this, &value);
+            } else {
+                self.bytecode.emit_store_undefined(this.variable());
+                self.compile_expr(decorator, &value);
+            }
+            self.bytecode
+                .emit_push_value_to_array(value.variable(), dst.variable());
+            self.bytecode
+                .emit_push_value_to_array(this.variable(), dst.variable());
+            self.register_allocator.dealloc(value);
+            self.register_allocator.dealloc(this);
+        }
+    }
+
+    /// Evaluates the elements of a class with decorators or auto-accessors in order, applies
+    /// the decorators, initializes the class binding and runs the static elements.
+    fn compile_decorated_elements(
+        &mut self,
+        class: &ClassSpec<'_>,
+        state: Register,
+        class_register: &Register,
+    ) {
+        for element in class.elements {
+            let decorators = self.register_allocator.alloc();
+            if element.decorators().is_empty() {
+                self.bytecode.emit_store_undefined(decorators.variable());
+            } else {
+                self.compile_decorators(element.decorators(), &decorators);
+            }
+            let key = self.register_allocator.alloc();
+            let value = self.register_allocator.alloc();
+            let flags = match element {
+                ClassElement::MethodDefinition(m) => {
+                    let kind = match m.kind() {
+                        MethodDefinitionKind::Get => ClassElementFlags::GETTER,
+                        MethodDefinitionKind::Set => ClassElementFlags::SETTER,
+                        _ => ClassElementFlags::METHOD,
+                    };
+                    let flags = match m.name() {
+                        ClassElementName::PropertyName(name) => {
+                            self.compile_element_key(name, &key);
+                            kind
+                        }
+                        ClassElementName::PrivateName(name) => {
+                            let description = name.description().to_js_string(self.interner());
+                            self.emit_store_literal(Literal::String(description), &key);
+                            kind | ClassElementFlags::PRIVATE
+                        }
+                    };
+                    let method = self.method(m.into());
+                    self.bytecode.emit_move(value.variable(), method.variable());
+                    self.register_allocator.dealloc(method);
+                    if m.is_static() {
+                        flags | ClassElementFlags::STATIC
+                    } else {
+                        flags
+                    }
+                }
+                ClassElement::FieldDefinition(field)
+                | ClassElement::StaticFieldDefinition(field) => {
+                    self.compile_element_key(field.name(), &key);
+                    let names_anonymous_function =
+                        self.compile_field_initializer(field.scope(), field.initializer(), &value)
+                            && matches!(field.name(), PropertyName::Computed(_));
+                    let mut flags = if field.is_accessor() {
+                        ClassElementFlags::ACCESSOR
+                    } else {
+                        ClassElementFlags::FIELD
+                    };
+                    if matches!(element, ClassElement::StaticFieldDefinition(_)) {
+                        flags |= ClassElementFlags::STATIC;
+                    }
+                    if names_anonymous_function {
+                        flags |= ClassElementFlags::ANONYMOUS_FUNCTION;
+                    }
+                    flags
+                }
+                ClassElement::PrivateFieldDefinition(field)
+                | ClassElement::PrivateStaticFieldDefinition(field) => {
+                    let description = field.name().description().to_js_string(self.interner());
+                    self.emit_store_literal(Literal::String(description), &key);
+                    self.compile_field_initializer(field.scope(), field.initializer(), &value);
+                    let mut flags = ClassElementFlags::PRIVATE
+                        | if field.is_accessor() {
+                            ClassElementFlags::ACCESSOR
+                        } else {
+                            ClassElementFlags::FIELD
+                        };
+                    if matches!(element, ClassElement::PrivateStaticFieldDefinition(_)) {
+                        flags |= ClassElementFlags::STATIC;
+                    }
+                    flags
+                }
+                ClassElement::StaticBlock(block) => {
+                    self.bytecode.emit_store_undefined(key.variable());
+                    let code = self.compile_static_block(block);
+                    let index = self.push_function_to_constants(code);
+                    self.emit_get_function(&value, index);
+                    ClassElementFlags::STATIC_BLOCK | ClassElementFlags::STATIC
+                }
+            };
+            self.bytecode.emit_add_class_element(
+                state.variable(),
+                flags.into(),
+                key.variable(),
+                value.variable(),
+                decorators.variable(),
+            );
+            self.register_allocator.dealloc(value);
+            self.register_allocator.dealloc(key);
+            self.register_allocator.dealloc(decorators);
+        }
+
+        self.bytecode
+            .emit_decorate_class(state.variable(), class_register.variable());
+
+        if let Some(scope) = class.name_scope {
+            let class_name = class
+                .name
+                .map_or(Sym::EMPTY_STRING, Identifier::sym)
+                .to_js_string(self.interner());
+            let binding = scope.get_identifier_reference(class_name);
+            let index = self.insert_binding(binding);
+            self.emit_binding_access(BindingAccessOpcode::PutLexicalValue, &index, class_register);
+        }
+
+        self.bytecode
+            .emit_initialize_static_elements(state.variable());
+        self.register_allocator.dealloc(state);
+    }
+
+    /// Evaluates the name of a class element into `dst` as a property key.
+    fn compile_element_key(&mut self, name: &PropertyName, dst: &Register) {
+        match name {
+            PropertyName::Literal(name) => {
+                let name = name.sym().to_js_string(self.interner());
+                self.emit_store_literal(Literal::String(name), dst);
+            }
+            PropertyName::Computed(expr) => {
+                self.compile_expr(expr, dst);
+                self.bytecode
+                    .emit_to_property_key(dst.variable(), dst.variable());
+            }
+        }
+    }
+
+    /// Compiles the initializer function of a field into `dst`, returning whether the
+    /// initializer is an anonymous function definition.
+    fn compile_field_initializer(
+        &mut self,
+        scope: &Scope,
+        initializer: Option<&Expression>,
+        dst: &Register,
+    ) -> bool {
+        let mut compiler = ByteCompiler::new(
+            JsString::default(),
+            true,
+            self.json_parse,
+            self.variable_scope.clone(),
+            self.lexical_scope.clone(),
+            false,
+            false,
+            self.interner,
+            self.in_with,
+            self.spanned_source_text.clone_only_source(),
+            self.source_path.clone(),
+        );
+        compiler.code_block_flags |= CodeBlockFlags::HAS_FUNCTION_SCOPE;
+        let _ = compiler.push_scope(scope);
+        let value = compiler.register_allocator.alloc();
+        let is_anonymous_function = if let Some(node) = initializer {
+            compiler.compile_expr(node, &value);
+            node.is_anonymous_function_definition()
+        } else {
+            compiler.bytecode.emit_store_undefined(value.variable());
+            false
+        };
+        compiler.bytecode.emit_set_accumulator(value.variable());
+        compiler.register_allocator.dealloc(value);
+        compiler.code_block_flags |= CodeBlockFlags::IN_CLASS_FIELD_INITIALIZER;
+
+        let code = Gc::new(compiler.finish());
+        let index = self.push_function_to_constants(code);
+        self.emit_get_function(dst, index);
+        is_anonymous_function
+    }
+
+    /// Compiles the body of a static block as a function.
+    fn compile_static_block(&mut self, block: &StaticBlockBody) -> Gc<CodeBlock> {
+        let mut compiler = ByteCompiler::new(
+            Sym::EMPTY_STRING.to_js_string(self.interner()),
+            true,
+            false,
+            self.variable_scope.clone(),
+            self.lexical_scope.clone(),
+            false,
+            false,
+            self.interner,
+            self.in_with,
+            self.spanned_source_text.clone_only_source(),
+            self.source_path.clone(),
+        );
+        compiler.code_block_flags |= CodeBlockFlags::HAS_FUNCTION_SCOPE;
+        let _ = compiler.push_scope(block.scopes().function_scope());
+
+        compiler.function_declaration_instantiation(
+            block.statements(),
+            &FormalParameterList::default(),
+            false,
+            true,
+            false,
+            block.scopes(),
+        );
+
+        {
+            let mut compiler = compiler.position_guard(block.statements());
+            compiler.compile_statement_list(block.statements().statement_list(), false, false);
+        }
+
+        Gc::new(compiler.finish())
     }
 }

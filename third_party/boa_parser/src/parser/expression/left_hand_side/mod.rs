@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod tests;
 
-mod arguments;
+pub(super) mod arguments;
 mod call;
 mod member;
 mod optional;

@@ -197,7 +197,8 @@ where
                             )
                         }
                     }
-                    TokenKind::Keyword((Keyword::Class, false)) => {
+                    TokenKind::Keyword((Keyword::Class, false))
+                    | TokenKind::Punctuator(Punctuator::At) => {
                         AstExportDeclaration::DefaultClassDeclaration(
                             ClassDeclaration::new(false, true, true)
                                 .parse(cursor, interner)?

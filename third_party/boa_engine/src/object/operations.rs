@@ -1226,6 +1226,13 @@ impl JsObject {
         let initializer = match field_record {
             ClassFieldDefinition::Public(_, function, _)
             | ClassFieldDefinition::Private(_, function) => function,
+            ClassFieldDefinition::Decorated(field) => {
+                return field.initialize(self, context);
+            }
+            ClassFieldDefinition::Initializer(initializer) => {
+                initializer.call(&self.clone().into(), &[], context)?;
+                return Ok(());
+            }
         };
 
         // 3. If initializer is not empty, then
@@ -1258,6 +1265,7 @@ impl JsObject {
                 // b. Perform ? CreateDataPropertyOrThrow(receiver, fieldName, initValue).
                 self.create_data_property_or_throw(field_name.clone(), init_value, context)?;
             }
+            ClassFieldDefinition::Decorated(_) | ClassFieldDefinition::Initializer(_) => {}
         }
 
         // 7. Return unused.

@@ -50,7 +50,8 @@ where
                     next_token.span().start(),
                 ));
             }
-            TokenKind::Keyword((Keyword::Function | Keyword::Class, false)) => {
+            TokenKind::Keyword((Keyword::Function | Keyword::Class, false))
+            | TokenKind::Punctuator(Punctuator::At) => {
                 return Err(Error::general(
                     "expected statement",
                     next_token.span().start(),

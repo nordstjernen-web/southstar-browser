@@ -204,6 +204,7 @@ impl_argument_for_tuple!(a A, b B);
 impl_argument_for_tuple!(a A, b B, c C);
 impl_argument_for_tuple!(a A, b B, c C, d D);
 impl_argument_for_tuple!(a A, b B, c C, d D, e E);
+impl_argument_for_tuple!(a A, b B, c C, d D, e E, f F);
 
 macro_rules! impl_argument_for_int {
     ($( $t: ty )*) => {
