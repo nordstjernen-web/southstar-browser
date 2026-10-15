@@ -2513,6 +2513,29 @@ impl<'ctx> ByteCompiler<'ctx> {
                     let value = self.register_allocator.alloc();
                     self.emit_binding_access(BindingAccessOpcode::GetName, &index, &value);
                     match self.variable_scope.set_mutable_binding_var(name.clone()) {
+                        // `fenv.SetMutableBinding(F, fobj, false)` writes the binding of the
+                        // variable environment itself, never the object of a `with` statement
+                        // in between, which a name lookup would find first.
+                        Ok(binding) if self.in_with => match self.get_binding(&binding) {
+                            // The variable environment is the global one only in script code
+                            // and in eval code run from it, where `this` is the global object.
+                            BindingKind::Global(_) => {
+                                let global = self.register_allocator.alloc();
+                                self.bytecode.emit_this(global.variable());
+                                self.emit_set_property_by_name(
+                                    &value,
+                                    None,
+                                    &global,
+                                    function.name().sym(),
+                                );
+                                self.register_allocator.dealloc(global);
+                            }
+                            index => self.emit_binding_access(
+                                BindingAccessOpcode::PutLexicalValue,
+                                &index,
+                                &value,
+                            ),
+                        },
                         Ok(binding) => {
                             let index = self.get_binding(&binding);
                             self.emit_binding_access(BindingAccessOpcode::SetName, &index, &value);
