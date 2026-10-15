@@ -114,6 +114,7 @@ impl ByteCompiler<'_> {
         //  - All parts of a ClassDeclaration or a ClassExpression are strict mode code.
         let strict = self.strict();
         self.code_block_flags |= CodeBlockFlags::STRICT;
+        let strict_start = self.next_opcode_location().as_u32();
 
         let class_name = class
             .name
@@ -782,6 +783,12 @@ impl ByteCompiler<'_> {
 
         // NOTE: Reset strict mode to before class declaration/expression evaluation.
         self.code_block_flags.set(CodeBlockFlags::STRICT, strict);
+        if !strict {
+            // The code evaluated here, like the heritage and the computed keys, runs as strict
+            // mode code inside the non-strict code block.
+            let strict_end = self.next_opcode_location().as_u32();
+            self.strict_ranges.push((strict_start, strict_end));
+        }
     }
 
     /// Evaluates a `DecoratorList` into `dst`, as an array of each decorator followed by the

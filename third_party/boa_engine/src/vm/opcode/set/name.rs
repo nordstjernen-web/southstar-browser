@@ -55,7 +55,7 @@ impl SetName {
         let value = context.vm.get_register(value.into()).clone();
         let code_block = context.vm.frame().code_block();
         let mut binding_locator = code_block.bindings[usize::from(index)].clone();
-        let strict = code_block.strict();
+        let strict = context.vm.frame().strict();
 
         context.find_runtime_binding(&mut binding_locator)?;
 
@@ -84,7 +84,7 @@ impl SetNameByLocator {
     #[inline(always)]
     pub(crate) fn operation(value: RegisterOperand, context: &mut Context) -> JsResult<()> {
         let frame = context.vm.frame_mut();
-        let strict = frame.code_block.strict();
+        let strict = frame.strict();
         let (mut binding_locator, unresolvable) = frame
             .binding_stack
             .pop()
@@ -134,7 +134,7 @@ impl SetNameGlobal {
         let value = context.vm.get_register(value.into()).clone();
         let code_block = context.vm.frame().code_block();
         let mut binding_locator = code_block.bindings[usize::from(index)].clone();
-        let strict = code_block.strict();
+        let strict = context.vm.frame().strict();
 
         context.find_runtime_binding(&mut binding_locator)?;
 
@@ -170,7 +170,7 @@ impl SetNameByLocatorGlobal {
         context: &mut Context,
     ) -> JsResult<()> {
         let frame = context.vm.frame_mut();
-        let strict = frame.code_block.strict();
+        let strict = frame.strict();
         let (mut binding_locator, unresolvable) = frame
             .binding_stack
             .pop()
@@ -221,7 +221,7 @@ pub(crate) fn set_global_object_binding(
     context: &mut Context,
 ) -> JsResult<()> {
     let object = context.global_object();
-    let strict = context.vm.frame().code_block.strict();
+    let strict = context.vm.frame().strict();
 
     let ic = &context.vm.frame().code_block().ic[usize::from(ic_index)];
     let object_borrowed = object.borrow();
@@ -272,7 +272,7 @@ pub(crate) fn set_global_object_binding(
 fn verify_initialized(locator: &BindingLocator, context: &mut Context) -> JsResult<()> {
     if !context.is_initialized_binding(locator)? {
         let key = locator.name();
-        let strict = context.vm.frame().code_block.strict();
+        let strict = context.vm.frame().strict();
 
         let message = match locator.scope() {
             BindingLocatorScope::GlobalObject if strict => Some(format!(

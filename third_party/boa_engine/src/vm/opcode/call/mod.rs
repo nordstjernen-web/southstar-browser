@@ -60,7 +60,7 @@ impl CallEval {
                 // iv. If the source text matched by this CallExpression is strict mode code,
                 //     let strictCaller be true. Otherwise let strictCaller be false.
                 // v. Return ? PerformEval(evalArg, strictCaller, true).
-                let strict = context.vm.frame().code_block.strict();
+                let strict = context.vm.frame().strict();
                 let scope = context
                     .vm
                     .frame()
@@ -139,7 +139,7 @@ impl CallEvalSpread {
                 // iv. If the source text matched by this CallExpression is strict mode code,
                 //     let strictCaller be true. Otherwise let strictCaller be false.
                 // v. Return ? PerformEval(evalArg, strictCaller, true).
-                let strict = context.vm.frame().code_block.strict();
+                let strict = context.vm.frame().strict();
                 let scope = context.vm.frame().code_block().constant_scope(index.into());
                 let result = crate::builtins::eval::Eval::perform_eval(
                     x,

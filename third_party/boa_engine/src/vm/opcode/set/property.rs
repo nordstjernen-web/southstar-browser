@@ -64,7 +64,7 @@ fn set_by_name(
 
     let context = &mut InternalMethodPropertyContext::new(context);
     let succeeded = object.__set__(name.clone(), value.clone(), receiver.clone(), context)?;
-    if !succeeded && context.vm.frame().code_block.strict() {
+    if !succeeded && context.vm.frame().strict() {
         return Err(JsNativeError::typ()
             .with_message(format!("cannot set non-writable property: {name}"))
             .into());
@@ -190,7 +190,7 @@ impl SetPropertyByValue {
             receiver.clone(),
             &mut context.into(),
         )?;
-        if !succeeded && context.vm.frame().code_block.strict() {
+        if !succeeded && context.vm.frame().strict() {
             return Err(JsNativeError::typ()
                 .with_message(format!("cannot set non-writable property: {key}"))
                 .into());

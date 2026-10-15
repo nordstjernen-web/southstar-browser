@@ -656,7 +656,7 @@ impl Context {
                     let key = locator.name().clone();
                     let obj = obj.clone();
                     if !obj.has_property(key.clone(), self)? {
-                        if self.vm.frame().code_block.strict() {
+                        if self.vm.frame().strict() {
                             return Ok(None);
                         }
                         return Ok(Some(JsValue::undefined()));

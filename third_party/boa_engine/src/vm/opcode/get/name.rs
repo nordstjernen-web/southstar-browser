@@ -148,7 +148,7 @@ impl GetLocator {
 
         // A strict reference that resolves to no binding stays unresolvable, so the `PutValue`
         // that follows throws even if evaluating the right-hand side created the property.
-        let unresolvable = context.vm.frame().code_block.strict()
+        let unresolvable = context.vm.frame().strict()
             && matches!(binding_locator.scope(), BindingLocatorScope::GlobalObject)
             && !context.is_initialized_binding(&binding_locator)?;
 

@@ -156,6 +156,12 @@ pub struct CodeBlock {
     #[unsafe_ignore_trace]
     pub(crate) handlers: ThinVec<Handler>,
 
+    /// The instructions of non-strict code that are strict mode code, as `(start, end)`
+    /// addresses with `end` exclusive: the parts of a class evaluated in the code around it,
+    /// such as its heritage and computed keys.
+    #[unsafe_ignore_trace]
+    pub(crate) strict_ranges: ThinVec<(u32, u32)>,
+
     /// inline caching
     pub(crate) ic: Box<[InlineCache]>,
 
@@ -199,6 +205,7 @@ impl CodeBlock {
             mapped_arguments_binding_indices: ThinVec::new(),
             parameter_length: 0,
             handlers: ThinVec::default(),
+            strict_ranges: ThinVec::default(),
             ic: Box::default(),
             source_info: SourceInfo::new(
                 SourceMap::new(Box::default(), SourcePath::None),
@@ -251,6 +258,16 @@ impl CodeBlock {
     /// Check if the function is in strict mode.
     pub(crate) fn strict(&self) -> bool {
         self.flags.get().contains(CodeBlockFlags::STRICT)
+    }
+
+    /// Check if the instruction that ends at `pc` is strict mode code: the whole code block is,
+    /// or the instruction lies in one of its strict ranges.
+    pub(crate) fn strict_at(&self, pc: u32) -> bool {
+        self.strict()
+            || self
+                .strict_ranges
+                .iter()
+                .any(|&(start, end)| start < pc && pc <= end)
     }
 
     /// Indicates if the function is an expression and has a binding identifier.

@@ -536,6 +536,7 @@ pub struct ByteCompiler<'ctx> {
     pub(crate) current_open_environments_count: u32,
     code_block_flags: CodeBlockFlags,
     handlers: ThinVec<Handler>,
+    strict_ranges: ThinVec<(u32, u32)>,
     pub(crate) ic: Vec<InlineCache>,
     literals_map: FxHashMap<Literal, u32>,
     names_map: FxHashMap<Sym, u32>,
@@ -674,6 +675,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             register_allocator,
             code_block_flags,
             handlers: ThinVec::default(),
+            strict_ranges: ThinVec::default(),
             ic: Vec::default(),
 
             literals_map: FxHashMap::default(),
@@ -2934,6 +2936,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             constants: self.constants,
             bindings: self.bindings.into_boxed_slice(),
             handlers: self.handlers,
+            strict_ranges: self.strict_ranges,
             flags: Cell::new(self.code_block_flags),
             ic: self.ic.into_boxed_slice(),
             source_info: SourceInfo::new(

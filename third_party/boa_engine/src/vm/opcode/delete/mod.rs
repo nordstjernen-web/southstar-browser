@@ -22,7 +22,7 @@ impl DeletePropertyByName {
         let object = object.to_object(context)?;
         let code_block = context.vm.frame().code_block();
         let key = code_block.constant_string(index.into()).into();
-        let strict = code_block.strict();
+        let strict = context.vm.frame().strict();
 
         let result = object.__delete__(&key, &mut InternalMethodPropertyContext::new(context))?;
         if !result && strict {
@@ -65,7 +65,7 @@ impl DeletePropertyByValue {
             &property_key,
             &mut InternalMethodPropertyContext::new(context),
         )?;
-        if !result && context.vm.frame().code_block().strict() {
+        if !result && context.vm.frame().strict() {
             return Err(JsNativeError::typ()
                 .with_message("Cannot delete property")
                 .into());

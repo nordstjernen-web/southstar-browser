@@ -91,6 +91,13 @@ impl CallFrame {
         &self.code_block
     }
 
+    /// Returns `true` if the instruction being executed is strict mode code (`pc` already
+    /// points past it).
+    #[inline]
+    pub(crate) fn strict(&self) -> bool {
+        self.code_block.strict_at(self.pc)
+    }
+
     /// Retrieves a tuple of `(`[`JsString`]`, `[`SourcePath`]`, `[`Position`]`)` to know the
     /// location of the call frame.
     #[inline]

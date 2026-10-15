@@ -85,7 +85,7 @@ impl DefInitVar {
     ) -> JsResult<()> {
         let value = context.vm.get_register(value.into()).clone();
         let frame = context.vm.frame();
-        let strict = frame.code_block.strict();
+        let strict = frame.strict();
         let mut binding_locator = frame.code_block.bindings[usize::from(index)].clone();
 
         if context.is_deleted_binding(&binding_locator) {
@@ -120,7 +120,7 @@ impl DefInitVarGlobal {
     ) -> JsResult<()> {
         let value = context.vm.get_register(value.into()).clone();
         let frame = context.vm.frame();
-        let strict = frame.code_block.strict();
+        let strict = frame.strict();
         let mut binding_locator = frame.code_block.bindings[usize::from(index)].clone();
 
         if context.is_deleted_binding(&binding_locator) {
