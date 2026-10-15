@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::cell::OnceCell;
 use std::sync::OnceLock;
 
 use southstar_js_engine::{Scope, Value};
@@ -363,12 +364,21 @@ fn local_zone_id() -> &'static str {
     })
 }
 
+thread_local! {
+    static SYSTEM_ZONE: OnceCell<String> = const { OnceCell::new() };
+}
+
 pub(crate) fn system_zone(scope: &mut Scope<'_>) -> String {
-    let local = local_zone_id();
-    if local == "UTC" {
-        return local.to_string();
+    if let Some(zone) = SYSTEM_ZONE.with(|zone| zone.get().cloned()) {
+        return zone;
     }
-    named(scope, local).unwrap_or_else(|| "UTC".to_string())
+    let local = local_zone_id();
+    let zone = if local == "UTC" {
+        local.to_string()
+    } else {
+        named(scope, local).unwrap_or_else(|| "UTC".to_string())
+    };
+    SYSTEM_ZONE.with(|cached| cached.get_or_init(|| zone.clone()).clone())
 }
 
 fn libc_offset_ms(epoch_ms: f64) -> i64 {

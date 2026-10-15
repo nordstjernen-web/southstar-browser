@@ -9,8 +9,9 @@ mod pattern;
 mod temporal;
 mod zone;
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use southstar_js_engine::{Attributes, NativeFn, ObjectKind, Scope, Trace, Value};
 
@@ -73,12 +74,48 @@ struct DateTimeFormat {
     date_style: Option<usize>,
     time_style: Option<usize>,
     date_time: Format,
+    request: Request,
+    zoned: bool,
+    temporal: OnceCell<TemporalFormats>,
+}
+
+struct TemporalFormats {
     plain_date: Option<Format>,
     plain_year_month: Option<Format>,
     plain_month_day: Option<Format>,
     plain_time: Option<Format>,
     plain_date_time: Format,
     instant: Format,
+}
+
+impl DateTimeFormat {
+    fn styled(&self) -> bool {
+        self.date_style.is_some() || self.time_style.is_some()
+    }
+
+    fn builder(&self) -> Builder<'_> {
+        Builder {
+            data: self.data,
+            calendar: &self.calendar,
+            cycle: self.cycle,
+            decimal: pattern::decimal_for(self.data, &self.numbering),
+        }
+    }
+
+    fn temporal_formats(&self) -> &TemporalFormats {
+        self.temporal.get_or_init(|| {
+            let builder = self.builder();
+            if self.styled() {
+                builder.styled_formats(
+                    &self.date_time,
+                    self.date_style.is_some(),
+                    self.time_style.is_some(),
+                )
+            } else {
+                builder.component_formats(&self.request, self.zoned)
+            }
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -172,6 +209,11 @@ fn available(tag: &Tag) -> bool {
 }
 
 fn default_tag() -> Tag {
+    static DEFAULT: OnceLock<Tag> = OnceLock::new();
+    DEFAULT.get_or_init(system_tag).clone()
+}
+
+fn system_tag() -> Tag {
     let fallback = || locales::canonical_tag("en-US").unwrap_or_default();
     let system = crate::negotiate::default_locale().to_owned();
     match locales::canonical_tag(&system) {
@@ -287,6 +329,40 @@ impl Builder<'_> {
             }
         }
         Some(self.components(&request))
+    }
+
+    fn styled_formats(&self, base: &Format, date: bool, time: bool) -> TemporalFormats {
+        let all_fields: Vec<Field> = DATE_FIELDS.iter().chain(&TIME_FIELDS).copied().collect();
+        TemporalFormats {
+            plain_date: date.then(|| self.adjust(base, &DATE_FIELDS)),
+            plain_year_month: date
+                .then(|| self.adjust(base, &[Field::Era, Field::Year, Field::Month])),
+            plain_month_day: date.then(|| self.adjust(base, &[Field::Month, Field::Day])),
+            plain_time: time.then(|| self.adjust(base, &TIME_FIELDS)),
+            plain_date_time: self.adjust(base, &all_fields),
+            instant: base.clone(),
+        }
+    }
+
+    fn component_formats(&self, request: &Request, zoned: bool) -> TemporalFormats {
+        let instant_defaults = if zoned {
+            Defaults::ZonedDateTime
+        } else {
+            Defaults::All
+        };
+        let fallback = || self.components(&[None; 11]);
+        TemporalFormats {
+            plain_date: self.best(request, Required::Date, Defaults::Date, false),
+            plain_year_month: self.best(request, Required::YearMonth, Defaults::YearMonth, false),
+            plain_month_day: self.best(request, Required::MonthDay, Defaults::MonthDay, false),
+            plain_time: self.best(request, Required::Time, Defaults::Time, false),
+            plain_date_time: self
+                .best(request, Required::Any, Defaults::All, false)
+                .unwrap_or_else(fallback),
+            instant: self
+                .best(request, Required::Any, instant_defaults, true)
+                .unwrap_or_else(fallback),
+        }
     }
 
     fn adjust(&self, base: &Format, allowed: &[Field]) -> Format {
@@ -413,7 +489,7 @@ fn create(
         decimal: pattern::decimal_for(data, &numbering),
     };
     let styled = date_style.is_some() || time_style.is_some();
-    let formats = if styled {
+    let date_time = if styled {
         if explicit {
             return Err(scope.type_error(
                 "dateStyle and timeStyle cannot be combined with other date-time options",
@@ -425,52 +501,12 @@ fn create(
         if required == Required::Time && date_style.is_some() {
             return Err(scope.type_error("dateStyle cannot be used to format a time"));
         }
-        let base = pattern::styles(data, &calendar, date_style, time_style, cycle);
-        let date_only = date_style.is_some();
-        let all_fields: Vec<Field> = DATE_FIELDS.iter().chain(&TIME_FIELDS).copied().collect();
-        (
-            base.clone(),
-            date_only.then(|| builder.adjust(&base, &DATE_FIELDS)),
-            date_only.then(|| builder.adjust(&base, &[Field::Era, Field::Year, Field::Month])),
-            date_only.then(|| builder.adjust(&base, &[Field::Month, Field::Day])),
-            time_style
-                .is_some()
-                .then(|| builder.adjust(&base, &TIME_FIELDS)),
-            builder.adjust(&base, &all_fields),
-            base,
-        )
+        pattern::styles(data, &calendar, date_style, time_style, cycle)
     } else {
-        let instant_defaults = if zone_override.is_some() {
-            Defaults::ZonedDateTime
-        } else {
-            Defaults::All
-        };
-        let fallback = || builder.components(&[None; 11]);
-        (
-            builder
-                .best(&request, required, defaults, true)
-                .unwrap_or_else(fallback),
-            builder.best(&request, Required::Date, Defaults::Date, false),
-            builder.best(&request, Required::YearMonth, Defaults::YearMonth, false),
-            builder.best(&request, Required::MonthDay, Defaults::MonthDay, false),
-            builder.best(&request, Required::Time, Defaults::Time, false),
-            builder
-                .best(&request, Required::Any, Defaults::All, false)
-                .unwrap_or_else(fallback),
-            builder
-                .best(&request, Required::Any, instant_defaults, true)
-                .unwrap_or_else(fallback),
-        )
+        builder
+            .best(&request, required, defaults, true)
+            .unwrap_or_else(|| builder.components(&[None; 11]))
     };
-    let (
-        date_time,
-        plain_date,
-        plain_year_month,
-        plain_month_day,
-        plain_time,
-        plain_date_time,
-        instant,
-    ) = formats;
     Ok(DateTimeFormat {
         locale: resolution.locale,
         data,
@@ -481,12 +517,9 @@ fn create(
         date_style,
         time_style,
         date_time,
-        plain_date,
-        plain_year_month,
-        plain_month_day,
-        plain_time,
-        plain_date_time,
-        instant,
+        request,
+        zoned: zone_override.is_some(),
+        temporal: OnceCell::new(),
     })
 }
 
@@ -593,14 +626,15 @@ fn handle<'a>(
             temporal.calendar, format.calendar
         )));
     }
+    let formats = format.temporal_formats();
     let chosen = match temporal.kind {
-        Kind::PlainDate => format.plain_date.as_ref(),
-        Kind::PlainYearMonth => format.plain_year_month.as_ref(),
-        Kind::PlainMonthDay => format.plain_month_day.as_ref(),
-        Kind::PlainTime => format.plain_time.as_ref(),
-        Kind::PlainDateTime => Some(&format.plain_date_time),
+        Kind::PlainDate => formats.plain_date.as_ref(),
+        Kind::PlainYearMonth => formats.plain_year_month.as_ref(),
+        Kind::PlainMonthDay => formats.plain_month_day.as_ref(),
+        Kind::PlainTime => formats.plain_time.as_ref(),
+        Kind::PlainDateTime => Some(&formats.plain_date_time),
         Kind::Instant => {
-            return Ok((&format.instant, Source::Epoch(temporal.epoch_ms)));
+            return Ok((&formats.instant, Source::Epoch(temporal.epoch_ms)));
         }
         Kind::ZonedDateTime | Kind::Duration => None,
     };
@@ -817,7 +851,7 @@ fn resolved_options(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Res
         entries.push(("hourCycle", scope.string(format.cycle.name())));
         entries.push(("hour12", Value::boolean(format.cycle.twelve_hour())));
     }
-    if format.date_style.is_none() && format.time_style.is_none() {
+    if !format.styled() {
         for field in FIELDS {
             match format.date_time.fields[field.index()] {
                 Some(Style::Digits(digits)) => {

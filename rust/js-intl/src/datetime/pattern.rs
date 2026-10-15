@@ -292,16 +292,23 @@ fn distance(field: Field, wanted: Style, found: Style) -> u32 {
     u32::from(width(wanted).abs_diff(width(found)))
 }
 
-fn skeleton(key: &str) -> Vec<(Field, Style, u8)> {
-    parse_pattern(key)
-        .into_iter()
-        .filter_map(|token| match token {
-            Token::Field(letter, count) => {
-                token_field(letter, count).map(|(field, style)| (field, style, letter))
-            }
-            Token::Text(_) => None,
-        })
-        .collect()
+type Skeleton = Vec<(Field, Style, u8)>;
+
+fn skeleton(key: &str) -> Skeleton {
+    let bytes = key.as_bytes();
+    let mut fields = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let letter = bytes[at];
+        let start = at;
+        while at < bytes.len() && bytes[at] == letter {
+            at += 1;
+        }
+        if let Some((field, style)) = token_field(letter, (at - start) as u8) {
+            fields.push((field, style, letter));
+        }
+    }
+    fields
 }
 
 fn field_token(field: Field, style: Style, cycle: Cycle) -> Token {
@@ -408,7 +415,7 @@ pub(crate) fn set_hour_cycle(tokens: Vec<Token>, cycle: Cycle) -> Vec<Token> {
 
 fn match_part(tables: &[Formats], wanted: &[(Field, Style)], cycle: Cycle) -> Vec<Token> {
     let twelve = cycle.twelve_hour();
-    let mut best: Option<(u32, &str, Vec<(Field, Style, u8)>)> = None;
+    let mut best: Option<(u32, &str, Skeleton)> = None;
     for table in tables {
         for &(key, pattern) in table.iter() {
             let fields = skeleton(key);
