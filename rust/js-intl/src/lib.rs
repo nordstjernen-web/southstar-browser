@@ -87,6 +87,15 @@ fn register(
     let _ = scope.define(intl, name, function, Attributes::METHOD);
 }
 
+fn legacy_constructed_symbol(scope: &mut Scope<'_>) -> Value {
+    let global = scope.global();
+    let description = scope.string("IntlLegacyConstructedSymbol");
+    scope
+        .get(&global, "Symbol")
+        .and_then(|symbol| scope.call(&symbol, &Value::undefined(), &[description]))
+        .unwrap_or_else(|_| Value::undefined())
+}
+
 fn global_constructor(scope: &mut Scope<'_>, name: &str) -> Result<Value, Value> {
     let global = scope.global();
     let intl = scope.get(&global, "Intl")?;
@@ -115,16 +124,10 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         return;
     }
     let intl = scope.new_object();
+    let fallback_symbol = legacy_constructed_symbol(scope);
     collator::install(scope, &intl);
-    number::install(scope, &intl);
-    register(
-        scope,
-        &intl,
-        "DateTimeFormat",
-        datetime::constructor,
-        0,
-        &datetime::METHODS,
-    );
+    number::install(scope, &intl, &fallback_symbol);
+    datetime::install_constructor(scope, &intl, &fallback_symbol);
     plural::install(scope, &intl);
     register(
         scope,

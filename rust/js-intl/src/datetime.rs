@@ -22,13 +22,13 @@ use self::data::{Cycle, LocaleData};
 use self::locales::{Keyword, Requested, Tag};
 use self::pattern::{FIELDS, Field, Format, Moment, Renderer, Request, Style};
 use self::temporal::{Kind, Temporal};
-use crate::{Method, arg, ffi};
+use crate::ecma402::{is_new_target, ordinary_has_instance};
+use crate::{HIDDEN, Method, arg, ffi, negotiate};
 
-pub(crate) const METHODS: [Method; 4] = [
+const METHODS: [Method; 3] = [
     ("formatToParts", format_to_parts, 1),
     ("formatRange", format_range, 2),
     ("formatRangeToParts", format_range_to_parts, 2),
-    ("resolvedOptions", resolved_options, 0),
 ];
 
 const STYLE_NAMES: [&str; 4] = ["full", "long", "medium", "short"];
@@ -525,24 +525,23 @@ fn create(
     })
 }
 
-fn intrinsic_prototype(scope: &mut Scope<'_>) -> Result<Value, Value> {
-    let constructor = crate::global_constructor(scope, "DateTimeFormat")?;
-    scope.get(&constructor, "prototype")
-}
-
-pub(crate) fn constructor(
+fn construct(
     scope: &mut Scope<'_>,
     this: &Value,
     args: &[Value],
+    data: &[Value],
 ) -> Result<Value, Value> {
-    let prototype = if this.is_undefined() {
-        None
+    let intrinsic = arg(data, 1);
+    let new_target = is_new_target(scope, this);
+    let receiver = if new_target {
+        Value::undefined()
     } else {
-        scope.get(this, "prototype").ok().filter(Value::is_object)
+        scope.constructor_receiver()
     };
-    let prototype = match prototype {
-        Some(prototype) => prototype,
-        None => intrinsic_prototype(scope)?,
+    let prototype = if new_target {
+        negotiate::prototype_from_constructor(scope, this, "DateTimeFormat", &intrinsic)?
+    } else {
+        intrinsic.clone()
     };
     let format = create(
         scope,
@@ -552,13 +551,18 @@ pub(crate) fn constructor(
         Defaults::Date,
         None,
     )?;
-    Ok(scope.new_traced_host_object(
+    let object = scope.new_traced_host_object(
         Some(&prototype),
         Instance {
             format: Rc::new(format),
             bound: Rc::default(),
         },
-    ))
+    );
+    if !new_target && ordinary_has_instance(scope, &intrinsic, &receiver)? {
+        scope.define_with_key(&receiver, &arg(data, 0), object, HIDDEN)?;
+        return Ok(receiver);
+    }
+    Ok(object)
 }
 
 fn instance(scope: &mut Scope<'_>, this: &Value, method: &str) -> Result<Instance, Value> {
@@ -568,6 +572,21 @@ fn instance(scope: &mut Scope<'_>, this: &Value, method: &str) -> Result<Instanc
             "Intl.DateTimeFormat.prototype.{method} called on an incompatible receiver"
         ))),
     }
+}
+
+fn unwrap(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    data: &[Value],
+    method: &str,
+) -> Result<(Value, Instance), Value> {
+    let initialized = this.with_host(|_: &Instance| ()).is_some();
+    if !initialized && ordinary_has_instance(scope, &arg(data, 1), this)? {
+        let format = scope.get_key(this, &arg(data, 0))?;
+        let found = instance(scope, &format, method)?;
+        return Ok((format, found));
+    }
+    Ok((this.clone(), instance(scope, this, method)?))
 }
 
 enum Input {
@@ -781,12 +800,17 @@ fn format_bound(
     Ok(scope.string(&joined(&parts)))
 }
 
-fn format_getter(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    let instance = instance(scope, this, "format")?;
+fn format_getter(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    _args: &[Value],
+    data: &[Value],
+) -> Result<Value, Value> {
+    let (format, instance) = unwrap(scope, this, data, "format")?;
     if let Some(bound) = instance.bound.borrow().as_ref() {
         return Ok(bound.clone());
     }
-    let bound = scope.bound_function("", 1, format_bound, std::slice::from_ref(this));
+    let bound = scope.bound_function("", 1, format_bound, std::slice::from_ref(&format));
     *instance.bound.borrow_mut() = Some(bound.clone());
     Ok(bound)
 }
@@ -840,8 +864,13 @@ fn format_range_to_parts(
     parts_array(scope, &parts)
 }
 
-fn resolved_options(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    let instance = instance(scope, this, "resolvedOptions")?;
+fn resolved_options(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    _args: &[Value],
+    data: &[Value],
+) -> Result<Value, Value> {
+    let (_, instance) = unwrap(scope, this, data, "resolvedOptions")?;
     let format = &instance.format;
     let mut entries: Vec<(&str, Value)> = vec![
         ("locale", scope.string(&format.locale)),
@@ -1204,31 +1233,37 @@ fn replace_method(scope: &mut Scope<'_>, prototype: &Value, name: &str, f: Nativ
     let _ = scope.define(prototype, name, function, Attributes::METHOD);
 }
 
-pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    if let Ok(intl) = scope.get(global, "Intl")
-        && let Some(constructor) = scope
-            .get(&intl, "DateTimeFormat")
-            .ok()
-            .filter(Value::is_object)
-    {
-        if let Ok(prototype) = scope.get(&constructor, "prototype") {
-            let getter = scope.function("get format", 0, format_getter);
-            let _ = scope.define_accessor(
-                &prototype,
-                "format",
-                Some(&getter),
-                None,
-                Attributes::CONFIGURABLE,
-            );
-        }
-        replace_method(
-            scope,
-            &constructor,
-            "supportedLocalesOf",
-            supported_locales_of,
-            1,
-        );
+pub(crate) fn install_constructor(scope: &mut Scope<'_>, intl: &Value, fallback_symbol: &Value) {
+    let prototype = scope.new_object();
+    let data = [fallback_symbol.clone(), prototype.clone()];
+    let constructor = scope.bound_constructor("DateTimeFormat", 0, construct, &data);
+    for (name, method, arity) in METHODS {
+        let function = scope.function(name, arity, method);
+        let _ = scope.define(&prototype, name, function, Attributes::METHOD);
     }
+    let resolved = scope.bound_function("resolvedOptions", 0, resolved_options, &data);
+    let _ = scope.define(&prototype, "resolvedOptions", resolved, Attributes::METHOD);
+    let getter = scope.bound_function("get format", 0, format_getter, &data);
+    let _ = scope.define_accessor(
+        &prototype,
+        "format",
+        Some(&getter),
+        None,
+        Attributes::CONFIGURABLE,
+    );
+    let _ = scope.define_to_string_tag(&prototype, "Intl.DateTimeFormat");
+    let _ = scope.set_constructor(&constructor, &prototype);
+    replace_method(
+        scope,
+        &constructor,
+        "supportedLocalesOf",
+        supported_locales_of,
+        1,
+    );
+    let _ = scope.define(intl, "DateTimeFormat", constructor, Attributes::METHOD);
+}
+
+pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
     if let Some(prototype) = prototype_of(scope, global, "Date") {
         replace_method(
             scope,

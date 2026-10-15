@@ -503,18 +503,9 @@ fn supported_locales_of(
     supported_locales(scope, &arg(args, 0), &arg(args, 1), &data::is_available)
 }
 
-fn fallback_symbol(scope: &mut Scope<'_>) -> Value {
-    let global = scope.global();
-    let description = scope.string("IntlLegacyConstructedSymbol");
-    scope
-        .get(&global, "Symbol")
-        .and_then(|symbol| scope.call(&symbol, &Value::undefined(), &[description]))
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn install(scope: &mut Scope<'_>, intl: &Value) {
+pub(crate) fn install(scope: &mut Scope<'_>, intl: &Value, fallback_symbol: &Value) {
     let prototype = scope.new_object();
-    let data = [fallback_symbol(scope), prototype.clone()];
+    let data = [fallback_symbol.clone(), prototype.clone()];
     let function = scope.bound_constructor("NumberFormat", 0, construct, &data);
     let getter = scope.bound_function("get format", 0, format_getter, &data);
     let accessor = Attributes {
