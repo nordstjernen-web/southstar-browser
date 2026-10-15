@@ -42,7 +42,7 @@ use self::{
     template::TemplateLiteral,
 };
 use crate::source::{ReadChar, UTF8Input};
-use boa_ast::{PositionGroup, Punctuator};
+use boa_ast::{PositionGroup, Punctuator, Spanned};
 use boa_interner::Interner;
 
 pub use self::{
@@ -93,6 +93,47 @@ impl<R> Lexer<R> {
     /// Returns if module mode is currently active.
     pub(super) const fn module(&self) -> bool {
         self.cursor.module()
+    }
+
+    /// Checks a token that was lexed before the code it belongs to became strict mode code, as the
+    /// token after a "use strict" directive is: legacy octal and non-octal decimal integer
+    /// literals and string literals with legacy octal or non-octal decimal escape sequences are
+    /// not allowed in strict mode code.
+    pub(super) fn check_strict_literal(&self, token: &Token) -> Result<(), Error> {
+        match token.kind() {
+            TokenKind::StringLiteral((_, escape))
+                if escape.contains(token::EscapeSequence::LEGACY_OCTAL) =>
+            {
+                Err(Error::syntax(
+                    "octal escape sequences are not allowed in strict mode",
+                    token.span().start(),
+                ))
+            }
+            TokenKind::StringLiteral((_, escape))
+                if escape.contains(token::EscapeSequence::NON_OCTAL_DECIMAL) =>
+            {
+                Err(Error::syntax(
+                    "\\8 and \\9 are not allowed in strict mode",
+                    token.span().start(),
+                ))
+            }
+            TokenKind::NumericLiteral(_) => {
+                let source = self.cursor.source_code_points(token.linear_span());
+                if source.first() == Some(&u16::from(b'0'))
+                    && source
+                        .get(1)
+                        .is_some_and(|c| (u16::from(b'0')..=u16::from(b'9')).contains(c))
+                {
+                    Err(Error::syntax(
+                        "implicit octal literals and leading 0's are not allowed in strict mode",
+                        token.span().start(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Signals that the goal symbol is a module

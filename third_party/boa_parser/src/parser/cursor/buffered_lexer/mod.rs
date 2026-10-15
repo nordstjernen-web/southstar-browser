@@ -121,6 +121,19 @@ where
         self.lexer.module()
     }
 
+    /// Checks the tokens that were lexed ahead, as non-strict code, for literals that strict mode
+    /// code does not allow.
+    pub(super) fn check_peeked_strict_literals(&self) -> ParseResult<()> {
+        let mut index = self.read_index;
+        while index != self.write_index {
+            if let Some(token) = &self.peeked[index] {
+                self.lexer.check_strict_literal(token)?;
+            }
+            index = (index + 1) % PEEK_BUF_SIZE;
+        }
+        Ok(())
+    }
+
     pub(super) fn set_module(&mut self, module: bool) {
         self.lexer.set_module(module);
     }

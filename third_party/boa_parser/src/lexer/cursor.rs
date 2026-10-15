@@ -1,7 +1,7 @@
 //! Boa's lexer cursor that manages the input byte stream.
 
 use crate::source::{ReadChar, UTF8Input};
-use boa_ast::{LinearPosition, Position, PositionGroup, SourceText};
+use boa_ast::{LinearPosition, LinearSpan, Position, PositionGroup, SourceText};
 use std::io::{self, Error, ErrorKind};
 
 /// Cursor over the source code.
@@ -32,6 +32,11 @@ impl<R> Cursor<R> {
     #[inline]
     pub(super) fn linear_pos(&self) -> LinearPosition {
         self.source_collector.cur_linear_position()
+    }
+
+    /// Gets the source code that has been read within the given span.
+    pub(super) fn source_code_points(&self, span: LinearSpan) -> &[u16] {
+        self.source_collector.get_code_points_from_span(span)
     }
 
     pub(super) fn take_source(&mut self) -> SourceText {

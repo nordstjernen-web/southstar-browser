@@ -340,7 +340,7 @@ where
                             ) && directives_stack.last().expect("token should exist").1
                                 == EscapeSequence::empty()
                             {
-                                cursor.set_strict(true);
+                                cursor.set_strict_after_directive()?;
                                 strict = true;
 
                                 directives_stack.pop();

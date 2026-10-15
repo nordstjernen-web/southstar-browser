@@ -151,6 +151,14 @@ where
         self.buffered_lexer.set_strict(strict);
     }
 
+    /// Switches to strict mode after a "use strict" directive. The tokens after the directive
+    /// that were already lexed as non-strict code must not be literals that strict mode code
+    /// does not allow.
+    pub(super) fn set_strict_after_directive(&mut self) -> ParseResult<()> {
+        self.buffered_lexer.set_strict(true);
+        self.buffered_lexer.check_peeked_strict_literals()
+    }
+
     /// Returns if the cursor is currently in an arrow function declaration.
     pub(super) const fn arrow(&self) -> bool {
         self.arrow
