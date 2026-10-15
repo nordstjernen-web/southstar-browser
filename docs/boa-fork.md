@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 11,878 added and 1,368 removed lines in 133 files;
+2026-10-15 the difference is 11,888 added and 1,368 removed lines in 134 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -95,6 +95,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | A function whose own body has a "use strict" directive applies strict mode to its name and parameters: the words reserved in strict mode code (`let`, `static`, `yield`, `implements`, …) are rejected as the name of a function, generator or async function and, like `eval` and `arguments`, as a parameter of functions, arrow functions, object methods and setters and of the `Function` constructor (`ContainsSymbol::EvalOrArguments` matches them) | `boa_ast`: `operations/mod.rs`; `boa_parser`: `expression/primary/{function_expression,generator_expression,async_function_expression,async_generator_expression,object_initializer}/mod.rs`, `expression/assignment/{mod,arrow_function,async_arrow_function}.rs`, `statement/declaration/hoistable/mod.rs`; `boa_engine`: `builtins/function/mod.rs` | `staging/sm/misc`, `staging/sm/generators` |
 | Tokens lexed ahead of a "use strict" directive, as non-strict code, are checked once the directive applies: a legacy octal or non-octal decimal integer literal (`0755`, `08`) or a string with an octal or `\8`/`\9` escape on the line after `"use strict"` is a syntax error (`Cursor::set_strict_after_directive`, `Lexer::check_strict_literal`, which reads the literal's source text) | `boa_parser`: `lexer/{mod,cursor}.rs`, `parser/cursor/{mod,buffered_lexer/mod}.rs`, `statement/mod.rs` | `staging/sm/strict` |
 | Class field initializers are parsed without `[Yield]` and `[Await]`, as the function boundaries they are (as in other engines; the specification's `?Yield, ?Await` gives an `await` or `yield` there no meaning): `await` is an identifier in a field initializer of a script, even inside an async function, and an error in a module, and `yield` is a reserved word there | `boa_parser`: `statement/declaration/hoistable/class_decl/mod.rs` | `staging/sm/fields` |
+| `new X` without arguments is a NewExpression, so an optional chain cannot follow it: `new o?.C()`, `new o?.["C"]()` and `new C?.()` are syntax errors | `boa_parser`: `expression/left_hand_side/member.rs` | `staging/sm/expressions` |
 
 ## Rules for changing the fork
 

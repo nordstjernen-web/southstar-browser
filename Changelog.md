@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The JavaScript parser accepts more valid code: let works as a label,
+  a function name and an arrow function parameter in non-strict scripts,
+  destructuring assignments take parenthesized targets such as
+  [(a), (obj.b)] = list and nested patterns under computed property names
+  such as ({ [key]: [x] } = obj), and await in a class field initializer
+  is an ordinary name in scripts, as in other browsers.
+* The parser also reports more of the syntax errors the language
+  requires, among them var {a b} = obj, for await (;;),
+  new obj?.method(), Function() parameter or body strings that close the
+  function early, let, static or eval as the name or a parameter of a
+  function whose body says "use strict", and 0755 or "\8" on the line
+  after a "use strict" directive. 1,416 of test262's 1,483 staging tests
+  pass, up from 1,401.
 * eval inside a method, a class field initializer or a static block no
   longer crashes the JavaScript engine when it reads a let or const
   declared in an enclosing block, and calling a function again after an
