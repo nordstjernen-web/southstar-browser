@@ -145,7 +145,11 @@ impl IteratorNext {
             .pop()
             .expect("iterator stack should have at least an iterator");
 
-        iterator.step(context)?;
+        // A destructuring pattern stops calling `next()` once the iterator reported that it is
+        // done (`If iteratorRecord.[[Done]] is false, then ...`).
+        if !iterator.done() {
+            iterator.step(context)?;
+        }
 
         context.vm.frame_mut().iterators.push(iterator);
 
@@ -362,7 +366,7 @@ impl IteratorToArray {
 
         let mut values = Vec::new();
 
-        loop {
+        while !iterator.done() {
             let done = match iterator.step(context) {
                 Ok(done) => done,
                 Err(err) => {

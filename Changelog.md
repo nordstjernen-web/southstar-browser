@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Array destructuring stops asking an iterator for values once it is
+  done, and breaking out of a for-of loop over a generator that is
+  itself inside a for-of loop now closes the inner iterator, so its
+  return() cleanup runs.
 * A variable that eval declares inside a function no longer haunts
   later calls of that function: once one call ran eval("var x = 1"),
   the next call saw an uninitialized x, so typeof x threw and a global

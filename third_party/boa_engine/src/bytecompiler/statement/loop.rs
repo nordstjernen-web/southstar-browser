@@ -453,7 +453,17 @@ impl ByteCompiler<'_> {
             self.patch_handler(handler_index);
 
             let error = self.register_allocator.alloc();
-            self.bytecode.emit_exception(error.variable());
+            let generator_return = if self.is_generator() {
+                let has_exception = self.register_allocator.alloc();
+                self.bytecode
+                    .emit_maybe_exception(has_exception.variable(), error.variable());
+                let generator_return = self.jump_if_false(&has_exception);
+                self.register_allocator.dealloc(has_exception);
+                Some(generator_return)
+            } else {
+                self.bytecode.emit_exception(error.variable());
+                None
+            };
 
             // NOTE: Capture throw of the iterator close and ignore it.
             let handler_index = self.push_handler();
@@ -462,6 +472,21 @@ impl ByteCompiler<'_> {
 
             self.bytecode.emit_throw(error.variable());
             self.register_allocator.dealloc(error);
+
+            // A generator's `return()` reaches the handler as an empty exception: the iterator
+            // is closed with that return completion, so an error thrown by closing it wins, and
+            // the return value waits in the accumulator.
+            if let Some(generator_return) = generator_return {
+                self.patch_jump(generator_return);
+                let value = self.register_allocator.alloc();
+                self.bytecode
+                    .emit_set_register_from_accumulator(value.variable());
+                self.iterator_close(for_of_loop.r#await());
+                self.bytecode.emit_set_accumulator(value.variable());
+                self.register_allocator.dealloc(value);
+                self.bytecode.emit_re_throw();
+            }
+
             self.patch_jump(exit);
         }
 
