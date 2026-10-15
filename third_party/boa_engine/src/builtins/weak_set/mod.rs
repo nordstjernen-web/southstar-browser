@@ -12,7 +12,7 @@ use crate::{
     builtins::{BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject},
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_error, js_string,
-    object::{ErasedVTableObject, JsObject, internal_methods::get_prototype_from_constructor},
+    object::{JsObject, internal_methods::get_prototype_from_constructor},
     property::Attribute,
     realm::Realm,
     string::StaticJsStrings,
@@ -20,9 +20,12 @@ use crate::{
 };
 use boa_gc::{Finalize, Trace};
 
-use super::iterable::IteratorHint;
+use super::{
+    iterable::IteratorHint,
+    weak::table::{WeakTable, can_be_held_weakly},
+};
 
-pub(crate) type NativeWeakSet = boa_gc::WeakMap<ErasedVTableObject, ()>;
+pub(crate) type NativeWeakSet = WeakTable<()>;
 
 #[derive(Debug, Trace, Finalize)]
 pub(crate) struct WeakSet;
@@ -149,25 +152,24 @@ impl WeakSet {
                     "WeakSet.prototype.add: expected 'this' to be a WeakSet object")
             })?;
 
-        // 3. If Type(value) is not Object, throw a TypeError exception.
+        // 3. If CanBeHeldWeakly(value) is false, throw a TypeError exception.
         let value = args.get_or_undefined(0);
-        let Some(value) = value.as_object() else {
+        if !can_be_held_weakly(value) {
             return Err(js_error!(TypeError:
-                "WeakSet.add: expected target argument of type `object`, got target of type `{}`",
+                "WeakSet.add: expected a value that can be held weakly, got a value of type `{}`",
                 value.type_of()
             ));
-        };
+        }
 
-        // 4. Let entries be the List that is S.[[WeakSetData]].
-        // 5. For each element e of entries, do
-        if set.contains_key(value.inner()) {
+        // 4. For each element e of S.[[WeakSetData]], do
+        if set.contains(value) {
             // a. If e is not empty and SameValue(e, value) is true, then
             // i. Return S.
             return Ok(this.clone());
         }
 
-        // 6. Append value as the last element of entries.
-        set.insert(value.inner(), ());
+        // 5. Append value to S.[[WeakSetData]].
+        set.insert(value, ());
 
         // 7. Return S.
         Ok(this.clone())
@@ -200,19 +202,18 @@ impl WeakSet {
                 )
             })?;
 
-        // 3. If Type(value) is not Object, return false.
+        // 3. If CanBeHeldWeakly(value) is false, return false.
         let value = args.get_or_undefined(0);
-        let Some(value) = value.as_object() else {
+        if !can_be_held_weakly(value) {
             return Ok(false.into());
-        };
+        }
 
-        // 4. Let entries be the List that is S.[[WeakSetData]].
-        // 5. For each element e of entries, do
+        // 4. For each element e of S.[[WeakSetData]], do
         // a. If e is not empty and SameValue(e, value) is true, then
-        // i. Replace the element of entries whose value is e with an element whose value is empty.
+        // i. Replace the element of S.[[WeakSetData]] whose value is e with an element whose value is empty.
         // ii. Return true.
-        // 6. Return false.
-        Ok(set.remove(value.inner()).into())
+        // 5. Return false.
+        Ok(set.remove(value).into())
     }
 
     /// `WeakSet.prototype.has( value )`
@@ -241,17 +242,12 @@ impl WeakSet {
                     "WeakSet.prototype.has: expected 'this' to be a WeakSet object")
             })?;
 
-        // 3. Let entries be the List that is S.[[WeakSetData]].
-        // 4. If Type(value) is not Object, return false.
-        let value = args.get_or_undefined(0);
-        let Some(value) = value.as_object() else {
-            return Ok(false.into());
-        };
-
-        // 5. For each element e of entries, do
+        // 3. If CanBeHeldWeakly(value) is false, return false.
+        // 4. For each element e of S.[[WeakSetData]], do
         // a. If e is not empty and SameValue(e, value) is true, return true.
-        // 6. Return false.
-        Ok(set.contains_key(value.inner()).into())
+        // 5. Return false.
+        let value = args.get_or_undefined(0);
+        Ok(set.contains(value).into())
     }
 }
 

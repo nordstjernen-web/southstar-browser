@@ -108,6 +108,8 @@ pub fn install(scope: &mut Scope<'_>) -> Result<(), Value> {
         let function = scope.function(name, arity, f);
         scope.set(&test262, name, function)?;
     }
+    let html_dda = scope.new_html_dda();
+    scope.set(&test262, "IsHTMLDDA", html_dda)?;
     crate::agent::install_parent(scope, &test262)?;
     scope.set(&global, "$262", test262)
 }

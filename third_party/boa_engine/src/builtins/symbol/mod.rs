@@ -88,6 +88,12 @@ impl GlobalSymbolRegistry {
     }
 }
 
+/// Returns `true` if `symbol` is in the global symbol registry, i.e. if `KeyForSymbol(symbol)`
+/// is not `undefined`.
+pub(crate) fn is_registered_symbol(symbol: &JsSymbol) -> bool {
+    GLOBAL_SYMBOL_REGISTRY.get_key(symbol).is_some()
+}
+
 /// The internal representation of a `Symbol` object.
 #[derive(Debug, Clone, Copy)]
 pub struct Symbol;

@@ -32,7 +32,7 @@ python3 scripts/boa-fork-diff.py          # the whole patch
 The script downloads the releases the forks' `Cargo.toml` files name, checks
 them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
 of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 4,821 added and 385 removed lines in 64 files;
+2026-10-15 the difference is 5,131 added and 550 removed lines in 72 files;
 148 of the removed lines are the `Cargo.toml` trims below.
 
 ## What the fork adds
@@ -61,6 +61,8 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 | `Uint8Array.fromBase64`/`fromHex` and `Uint8Array.prototype.toBase64`/`toHex`/`setFromBase64`/`setFromHex` (ES2026) | `builtins/typed_array/base64.rs`, `builtins/typed_array/mod.rs` | `built-ins/Uint8Array` |
 | Immutable ArrayBuffers: `ArrayBuffer.prototype.immutable`, `transferToImmutable`, `sliceToImmutable`; typed arrays, `DataView`, `Atomics` and the `Uint8Array` setters refuse to write to them, their elements read as non-writable and non-configurable, and they cannot be detached, transferred or resized | `builtins/array_buffer/mod.rs`, `builtins/typed_array/{object,builtin,base64}.rs`, `builtins/dataview/mod.rs`, `builtins/atomics/mod.rs` | `built-ins/ArrayBuffer`, `built-ins/TypedArray`, `built-ins/DataView` |
 | Explicit resource management: `using` and `await using` declarations in blocks, function and module bodies and `for`/`for-of` heads (`using` stays an ordinary identifier unless a binding name follows on the same line), disposed at scope exit by a `try`/`finally`-shaped scope and five opcodes (`CreateDisposeCapability`, `AddDisposableResource`, `DisposeResources`, `AsyncDisposeStep`, `AddDisposeError`); `DisposableStack`, `AsyncDisposableStack`, `SuppressedError` and `%AsyncIteratorPrototype%[Symbol.asyncDispose]` | `boa_parser`: `statement/{mod,declaration/*,iteration/for_statement,switch/mod}.rs`, `expression/**`, `parser/mod.rs`; `boa_ast`: `statement/iteration/mod.rs`, `scope_analyzer.rs`, `operations/mod.rs`, `declaration/variable.rs`; `boa_engine`: `builtins/disposable_stack/mod.rs`, `builtins/error/suppressed.rs`, `bytecompiler/statement/{using,loop}.rs`, `bytecompiler/{mod,module}.rs`, `vm/opcode/dispose/mod.rs` | `language/statements/using`, `language/statements/await-using`, `built-ins/DisposableStack`, `built-ins/AsyncDisposableStack`, `built-ins/SuppressedError` |
+| Symbols as weak keys: `WeakMap`, `WeakSet`, `WeakRef` and `FinalizationRegistry` accept any value that `CanBeHeldWeakly`, so a symbol outside the global registry too; object keys stay ephemerons, and symbol keys are held strongly, since Boa never collects symbols | `builtins/weak/{mod,table,weak_ref}.rs`, `builtins/weak_map/mod.rs`, `builtins/weak_set/mod.rs`, `builtins/finalization_registry/mod.rs`, `builtins/symbol/mod.rs` | `built-ins/WeakMap`, `built-ins/WeakSet`, `built-ins/WeakRef`, `built-ins/FinalizationRegistry` |
+| Calling an `[[IsHTMLDDA]]` object returns `null`, as test262's `$262.IsHTMLDDA` does | `builtins/is_html_dda.rs` | `annexB/language` |
 
 ## Rules for changing the fork
 

@@ -44,7 +44,7 @@ impl JsData for IsHTMLDDA {
 
 /// The `[[Call]]` internal method for `IsHTMLDDA` objects.
 ///
-/// When called, simply returns `undefined`.
+/// When called, returns `null`, as test262's `$262.IsHTMLDDA` does for no argument or `""`.
 #[allow(clippy::unnecessary_wraps)]
 fn is_html_dda_call(
     _obj: &JsObject,
@@ -59,8 +59,8 @@ fn is_html_dda_call(
     let _func = context.vm.stack.pop();
     let _this = context.vm.stack.pop();
 
-    // Push undefined as the return value.
-    context.vm.stack.push(JsValue::undefined());
+    // Push null as the return value.
+    context.vm.stack.push(JsValue::null());
 
     Ok(CallValue::Complete)
 }

@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* WeakMap, WeakSet, WeakRef and FinalizationRegistry accept symbols that
+  are not in the global symbol registry as keys, targets and unregister
+  tokens (symbols as WeakMap keys, ES2023). southstar-jsshell provides
+  test262's $262.IsHTMLDDA. test262 reaches 50,789 of 52,133 (97.4%).
 * southstar-jsshell installs the browser's own Intl (rust/js-intl), so
   test262's intl402 measures the Intl that pages see: 71.4% (2,416 of
   3,382) instead of the 57.7% that only tested for its absence. The Intl

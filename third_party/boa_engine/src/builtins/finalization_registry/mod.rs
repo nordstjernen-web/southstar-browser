@@ -21,7 +21,10 @@ use crate::{
     string::StaticJsStrings,
 };
 
-use super::{BuiltInConstructor, BuiltInObject, IntrinsicObject, builder::BuiltInBuilder};
+use super::{
+    BuiltInConstructor, BuiltInObject, IntrinsicObject, builder::BuiltInBuilder,
+    weak::table::can_be_held_weakly,
+};
 
 #[cfg(test)]
 mod tests;
@@ -49,9 +52,57 @@ impl Finalize for CleanupSignaler {
 ///  A cell tracked by a [`FinalizationRegistry`].
 #[derive(Trace, Finalize)]
 pub(crate) struct RegistryCell {
-    target: Ephemeron<ErasedVTableObject, CleanupSignaler>,
+    target: CellTarget,
     held_value: JsValue,
-    unregister_token: Option<WeakGc<ErasedVTableObject>>,
+    unregister_token: Option<UnregisterToken>,
+}
+
+/// The `[[WeakRefTarget]]` of a [`RegistryCell`].
+#[derive(Trace, Finalize)]
+enum CellTarget {
+    /// An object, which signals the registry once the garbage collector clears it.
+    Object(Ephemeron<ErasedVTableObject, CleanupSignaler>),
+    /// A symbol that is not in the global symbol registry. Boa never collects symbols, so the
+    /// cell is never cleaned up.
+    Symbol(JsSymbol),
+}
+
+impl CellTarget {
+    /// Returns `true` while the target has not been collected.
+    fn is_live(&self) -> bool {
+        match self {
+            Self::Object(target) => target.has_value(),
+            Self::Symbol(_) => true,
+        }
+    }
+
+    /// Stops the target from signaling the registry when it is collected.
+    fn cancel_cleanup(&self) {
+        if let Self::Object(target) = self {
+            let _key = target.key();
+            target.value().and_then(|v| v.0.take());
+        }
+    }
+}
+
+/// The `[[UnregisterToken]]` of a [`RegistryCell`].
+#[derive(Trace, Finalize)]
+enum UnregisterToken {
+    Object(WeakGc<ErasedVTableObject>),
+    Symbol(JsSymbol),
+}
+
+impl UnregisterToken {
+    /// Returns `SameValue(token, value)`.
+    fn is(&self, value: &JsValue) -> bool {
+        match (self, value.variant()) {
+            (Self::Object(token), JsVariant::Object(value)) => token
+                .upgrade()
+                .is_some_and(|token| Gc::ptr_eq(&token, value.inner())),
+            (Self::Symbol(token), JsVariant::Symbol(value)) => *token == value,
+            _ => false,
+        }
+    }
 }
 
 /// Boa's implementation of ECMAScript's [`FinalizationRegistry`] builtin object.
@@ -218,23 +269,24 @@ impl FinalizationRegistry {
         let unregister_token = args.get_or_undefined(2);
 
         // 3. If CanBeHeldWeakly(target) is false, throw a TypeError exception.
-        //
-        // [`CanBeHeldWeakly ( v )`](https://tc39.es/ecma262/#sec-canbeheldweakly)
-        //
-        // 1. If v is an Object, return true.
-        // 2. If v is a Symbol and KeyForSymbol(v) is undefined, return true.
-        // 3. Return false.
-        //
-        // TODO: support Symbols
-        let Some(target_obj) = target.as_object() else {
-            return Err(js_error!(
-                TypeError: "FinalizationRegistry.prototype.register: \
-                    `target` must be an Object or Symbol",
-            ));
+        let target = match target.variant() {
+            JsVariant::Object(object) => CellTarget::Object(Ephemeron::new(
+                object.inner(),
+                CleanupSignaler(Cell::new(Some(
+                    registry.cleanup_notifier.clone().downgrade(),
+                ))),
+            )),
+            JsVariant::Symbol(symbol) if can_be_held_weakly(target) => CellTarget::Symbol(symbol),
+            _ => {
+                return Err(js_error!(
+                    TypeError: "FinalizationRegistry.prototype.register: \
+                        `target` must be an Object or a non-registered Symbol",
+                ));
+            }
         };
 
         // 4. If SameValue(target, heldValue) is true, throw a TypeError exception.
-        if target == held_value {
+        if args.get_or_undefined(0) == held_value {
             return Err(js_error!(
                 TypeError: "FinalizationRegistry.prototype.register: \
                     `heldValue` cannot be the same as `target`"
@@ -242,35 +294,25 @@ impl FinalizationRegistry {
         }
 
         // 5. If CanBeHeldWeakly(unregisterToken) is false, then
-        //
-        // // [`CanBeHeldWeakly ( v )`](https://tc39.es/ecma262/#sec-canbeheldweakly)
-        //
-        // 1. If v is an Object, return true.
-        // 2. If v is a Symbol and KeyForSymbol(v) is undefined, return true.
-        // 3. Return false.
-        //
-        // TODO: support Symbols
         let unregister_token = match unregister_token.variant() {
-            JsVariant::Object(obj) => Some(WeakGc::new(obj.inner())),
+            JsVariant::Object(obj) => Some(UnregisterToken::Object(WeakGc::new(obj.inner()))),
+            JsVariant::Symbol(symbol) if can_be_held_weakly(unregister_token) => {
+                Some(UnregisterToken::Symbol(symbol))
+            }
             // b. Set unregisterToken to empty.
             JsVariant::Undefined => None,
             // a. If unregisterToken is not undefined, throw a TypeError exception.
             _ => {
                 return Err(js_error!(
                     TypeError: "FinalizationRegistry.prototype.register: \
-                        `unregisterToken` must be an Object, a Symbol, or undefined",
+                        `unregisterToken` must be an Object, a non-registered Symbol, or undefined",
                 ));
             }
         };
 
         // 6. Let cell be the Record { [[WeakRefTarget]]: target, [[HeldValue]]: heldValue, [[UnregisterToken]]: unregisterToken }.
         let cell = RegistryCell {
-            target: Ephemeron::new(
-                target_obj.inner(),
-                CleanupSignaler(Cell::new(Some(
-                    registry.cleanup_notifier.clone().downgrade(),
-                ))),
-            ),
+            target,
             held_value: held_value.clone(),
             unregister_token,
         };
@@ -299,25 +341,14 @@ impl FinalizationRegistry {
                 )
             })?;
 
-        // 3. If CanBeHeldWeakly(unregisterToken) is false, throw a TypeError exception.\
-        //
-        // // [`CanBeHeldWeakly ( v )`](https://tc39.es/ecma262/#sec-canbeheldweakly)
-        //
-        // 1. If v is an Object, return true.
-        // 2. If v is a Symbol and KeyForSymbol(v) is undefined, return true.
-        // 3. Return false.
-        //
-        // TODO: support Symbols
-        let unregister_token = args.get_or_undefined(0).as_object();
-        let unregister_token = unregister_token
-            .as_ref()
-            .map(JsObject::inner)
-            .ok_or_else(|| {
-                js_error!(
-                    TypeError: "FinalizationRegistry.prototype.unregister: \
-                                `unregisterToken` must be an Object or a Symbol.",
-                )
-            })?;
+        // 3. If CanBeHeldWeakly(unregisterToken) is false, throw a TypeError exception.
+        let unregister_token = args.get_or_undefined(0);
+        if !can_be_held_weakly(unregister_token) {
+            return Err(js_error!(
+                TypeError: "FinalizationRegistry.prototype.unregister: \
+                            `unregisterToken` must be an Object or a non-registered Symbol.",
+            ));
+        }
 
         // 4. Let removed be false.
         let mut removed = false;
@@ -327,16 +358,14 @@ impl FinalizationRegistry {
             let cell = &registry.cells[i];
 
             // a. If cell.[[UnregisterToken]] is not empty and SameValue(cell.[[UnregisterToken]], unregisterToken) is true, then
-            if let Some(tok) = cell.unregister_token.as_ref()
-                && let Some(tok) = tok.upgrade()
-                && Gc::ptr_eq(&tok, unregister_token)
+            if cell
+                .unregister_token
+                .as_ref()
+                .is_some_and(|token| token.is(unregister_token))
             {
                 // i. Remove cell from finalizationRegistry.[[Cells]].
                 let cell = registry.cells.swap_remove(i);
-                let _key = cell.target.key();
-                // TODO: it might be better to add a special ref for the value that
-                // also preserves the original key instead.
-                cell.target.value().and_then(|v| v.0.take());
+                cell.target.cancel_cleanup();
 
                 // ii. Set removed to true.
                 removed = true;
@@ -379,7 +408,7 @@ impl FinalizationRegistry {
                 break Ok(());
             }
             // 3. While finalizationRegistry.[[Cells]] contains a Record cell such that cell.[[WeakRefTarget]] is empty, an implementation may perform the following steps:
-            if obj.borrow().data().cells[i].target.has_value() {
+            if obj.borrow().data().cells[i].target.is_live() {
                 i += 1;
             } else {
                 // a. Choose any such cell.

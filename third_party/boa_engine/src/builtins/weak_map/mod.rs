@@ -15,7 +15,8 @@ use crate::{
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_error, js_string,
-    object::{ErasedVTableObject, JsObject, internal_methods::get_prototype_from_constructor},
+    builtins::weak::table::{WeakTable, can_be_held_weakly},
+    object::{JsObject, internal_methods::get_prototype_from_constructor},
     property::Attribute,
     realm::Realm,
     string::StaticJsStrings,
@@ -23,7 +24,7 @@ use crate::{
 };
 use boa_gc::{Finalize, Trace};
 
-pub(crate) type NativeWeakMap = boa_gc::WeakMap<ErasedVTableObject, JsValue>;
+pub(crate) type NativeWeakMap = WeakTable<JsValue>;
 
 #[derive(Debug, Trace, Finalize)]
 pub(crate) struct WeakMap;
@@ -146,10 +147,11 @@ impl WeakMap {
             })?;
 
         // 3. Let entries be M.[[WeakMapData]].
-        // 4. If key is not an Object, return false.
-        let Some(key) = args.get_or_undefined(0).as_object() else {
+        // 4. If CanBeHeldWeakly(key) is false, return false.
+        let key = args.get_or_undefined(0);
+        if !can_be_held_weakly(key) {
             return Ok(false.into());
-        };
+        }
 
         // 5. For each Record { [[Key]], [[Value]] } p of entries, do
         // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, then
@@ -157,7 +159,7 @@ impl WeakMap {
         // ii. Set p.[[Value]] to empty.
         // iii. Return true.
         // 6. Return false.
-        Ok(map.remove(key.inner()).into())
+        Ok(map.remove(key).into())
     }
 
     /// `WeakMap.prototype.get ( key )`
@@ -185,21 +187,11 @@ impl WeakMap {
             })?;
 
         // 3. Let entries be M.[[WeakMapData]].
-        // 4. If key is not an Object, return undefined.
-        let Some(key) = args.get_or_undefined(0).as_object() else {
-            return Ok(JsValue::undefined());
-        };
-
+        // 4. If CanBeHeldWeakly(key) is false, return undefined.
         // 5. For each Record { [[Key]], [[Value]] } p of entries, do
         // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
         // 6. Return undefined.
-        if let Some(entry) = map.get(key.inner())
-            && let Some(val) = entry.value()
-        {
-            Ok(val.clone())
-        } else {
-            Ok(JsValue::undefined())
-        }
+        Ok(map.get(args.get_or_undefined(0)).unwrap_or_default())
     }
 
     /// `WeakMap.prototype.has ( key )`
@@ -227,15 +219,11 @@ impl WeakMap {
             })?;
 
         // 3. Let entries be M.[[WeakMapData]].
-        // 4. If key is not an Object, return false.
-        let Some(key) = args.get_or_undefined(0).as_object() else {
-            return Ok(false.into());
-        };
-
+        // 4. If CanBeHeldWeakly(key) is false, return false.
         // 5. For each Record { [[Key]], [[Value]] } p of entries, do
         // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return true.
         // 6. Return false.
-        Ok(map.contains_key(key.inner()).into())
+        Ok(map.contains(args.get_or_undefined(0)).into())
     }
 
     /// `WeakMap.prototype.set ( key, value )`
@@ -263,14 +251,14 @@ impl WeakMap {
             })?;
 
         // 3. Let entries be M.[[WeakMapData]].
-        // 4. If key is not an Object, throw a TypeError exception.
+        // 4. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
         let key = args.get_or_undefined(0);
-        let Some(key) = key.as_object() else {
+        if !can_be_held_weakly(key) {
             return Err(js_error!(TypeError:
-                "WeakMap.set: expected target argument of type `object`, got target of type `{}`",
+                "WeakMap.set: expected an object or a non-registered symbol as key, got `{}`",
                 key.type_of()
             ));
-        };
+        }
 
         // 5. For each Record { [[Key]], [[Value]] } p of entries, do
         // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, then
@@ -278,7 +266,7 @@ impl WeakMap {
         // ii. Return M.
         // 6. Let p be the Record { [[Key]]: key, [[Value]]: value }.
         // 7. Append p to entries.
-        map.insert(key.inner(), args.get_or_undefined(1).clone());
+        map.insert(key, args.get_or_undefined(1).clone());
 
         // 8. Return M.
         Ok(this.clone())
@@ -312,30 +300,24 @@ impl WeakMap {
             })?;
 
         // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
-        // TODO: Implement proper CanBeHeldWeakly once available. For now, only
-        //       objects are accepted as keys; symbols should be allowed in the
-        //       future according to the proposal.
-        let key_val = args.get_or_undefined(0);
-        let Some(key) = key_val.as_object() else {
+        let key = args.get_or_undefined(0);
+        if !can_be_held_weakly(key) {
             return Err(js_error!(TypeError:
-                "WeakMap.getOrInsert: expected target argument of type `object`, got target of type `{}`",
-                key_val.type_of()
+                "WeakMap.getOrInsert: expected an object or a non-registered symbol as key, got `{}`",
+                key.type_of()
             ));
-        };
+        }
 
         // 4. For each Record { [[Key]], [[Value]] } p of M.[[WeakMapData]]
-        if let Some(existing) = map.borrow().data().get(key.inner())
-            && let Some(value) = existing.value()
-        {
-            // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
-            return Ok(value.clone());
+        //    a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
+        let existing = map.borrow().data().get(key);
+        if let Some(value) = existing {
+            return Ok(value);
         }
 
         // 5-6. Insert the new record with provided value and return it.
         let value = args.get_or_undefined(1).clone();
-        map.borrow_mut()
-            .data_mut()
-            .insert(key.inner(), value.clone());
+        map.borrow_mut().data_mut().insert(key, value.clone());
         Ok(value)
     }
 
@@ -367,16 +349,13 @@ impl WeakMap {
             })?;
 
         // 3. If CanBeHeldWeakly(key) is false, throw a TypeError exception.
-        // TODO: Implement proper CanBeHeldWeakly once available. For now, only
-        //       objects are accepted as keys; symbols should be allowed in the
-        //       future according to the proposal.
         let key_value = args.get_or_undefined(0).clone();
-        let Some(key_obj) = key_value.as_object() else {
+        if !can_be_held_weakly(&key_value) {
             return Err(js_error!(TypeError:
-                "WeakMap.getOrInsertComputed: expected target argument of type `object`, got target of type `{}`",
+                "WeakMap.getOrInsertComputed: expected an object or a non-registered symbol as key, got `{}`",
                 key_value.type_of()
             ));
-        };
+        }
 
         // 4. If IsCallable(callback) is false, throw a TypeError exception.
         let Some(callback_fn) = args.get_or_undefined(1).as_callable() else {
@@ -386,11 +365,10 @@ impl WeakMap {
         };
 
         // 5. For each Record { [[Key]], [[Value]] } p of M.[[WeakMapData]]
-        if let Some(existing) = map.borrow().data().get(key_obj.inner())
-            && let Some(value) = existing.value()
-        {
-            // a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
-            return Ok(value.clone());
+        //    a. If p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, return p.[[Value]].
+        let existing = map.borrow().data().get(&key_value);
+        if let Some(value) = existing {
+            return Ok(value);
         }
 
         // 6. Let value be ? Call(callback, undefined, « key »).
@@ -402,9 +380,7 @@ impl WeakMap {
         )?;
 
         // 8-10. Insert or update the entry and return value.
-        map.borrow_mut()
-            .data_mut()
-            .insert(key_obj.inner(), value.clone());
+        map.borrow_mut().data_mut().insert(&key_value, value.clone());
         Ok(value)
     }
 }

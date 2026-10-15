@@ -1148,6 +1148,14 @@ impl Scope<'_> {
 
     pub fn set_is_html_dda(&mut self, _object: &Value) {}
 
+    pub fn new_html_dda(&mut self) -> Value {
+        let prototype = self.cx().intrinsics().constructors().object().prototype();
+        Value(
+            JsObject::from_proto_and_data(prototype, boa_engine::builtins::is_html_dda::IsHTMLDDA)
+                .into(),
+        )
+    }
+
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
         let native = PromiseJob::new(move |ctx| {
             let _host = access::enter(ctx);
