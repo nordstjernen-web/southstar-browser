@@ -33,7 +33,7 @@ fn request(fields: &[(Field, Style)]) -> Request {
 }
 
 fn shape(language: &str, region: Option<&str>, fields: &[(Field, Style)], cycle: Cycle) -> String {
-    let data = data::locale_data(language, region);
+    let data = data::locale_data(language, None, region);
     let format = pattern::components(data, "gregory", &request(fields), cycle, ".");
     pattern_text(&format.tokens)
 }
@@ -234,7 +234,7 @@ fn skeletons_match_cldr_patterns() {
 
 #[test]
 fn parts_render_names_and_digits() {
-    let data = data::locale_data("en", Some("US"));
+    let data = data::locale_data("en", None, Some("US"));
     let tokens = pattern::parse_pattern("EEEE, MMMM d, y 'at' h:mm a");
     let renderer = Renderer::new(data, "gregory", "UTC", "latn");
     let parts = renderer.parts(&tokens, &moment(2019, 1, 3, 14, 5));
@@ -252,7 +252,7 @@ fn parts_render_names_and_digits() {
 
 #[test]
 fn ranges_share_the_common_fields() {
-    let data = data::locale_data("en", Some("US"));
+    let data = data::locale_data("en", None, Some("US"));
     let renderer = Renderer::new(data, "gregory", "UTC", "latn");
     let text = |pattern: &str, start: Moment, end: Moment| -> String {
         renderer

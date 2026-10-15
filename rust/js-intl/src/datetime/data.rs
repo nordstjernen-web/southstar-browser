@@ -739,7 +739,7 @@ pub(crate) const SINGLE_FIELD_FORMATS: Formats = &[
     ("s", "s"),
 ];
 
-pub(crate) static LOCALES: [LocaleData; 20] = [
+pub(crate) static LOCALES: [LocaleData; 22] = [
     LocaleData {
         id: "en",
         months: EN_MONTHS,
@@ -1333,9 +1333,59 @@ pub(crate) static LOCALES: [LocaleData; 20] = [
         decimal: ".",
         range: " ~ ",
     },
+    LocaleData {
+        id: "en-AU",
+        months: [
+            EN_MONTHS[0],
+            "Jan|Feb|Mar|Apr|May|June|July|Aug|Sept|Oct|Nov|Dec",
+            EN_MONTHS[2],
+        ],
+        standalone_months: None,
+        weekdays: EN_WEEKDAYS,
+        standalone_weekdays: None,
+        eras: EN_ERAS,
+        am_pm: "am|pm",
+        periods: Some(EN_PERIODS),
+        cycle: Cycle::H12,
+        cycle12: Cycle::H12,
+        date_styles: ["EEEE d MMMM y", "d MMMM y", "d MMM y", "d/M/yy"],
+        time_styles12: TIME12,
+        time_styles24: TIME24,
+        style_glue: ["{1} 'at' {0}", "{1} 'at' {0}", "{1}, {0}", "{1}, {0}"],
+        glue: "{1}, {0}",
+        formats: EN_GB_FORMATS,
+        decimal: ".",
+        range: " – ",
+    },
+    LocaleData {
+        id: "zh-Hant",
+        months: [NUMERIC_MONTHS, CJK_MONTHS, CJK_MONTHS],
+        standalone_months: None,
+        weekdays: [
+            "日|一|二|三|四|五|六",
+            "週日|週一|週二|週三|週四|週五|週六",
+            "星期日|星期一|星期二|星期三|星期四|星期五|星期六",
+        ],
+        standalone_weekdays: None,
+        eras: ["西元前|西元", "西元前|西元", "西元前|西元"],
+        am_pm: "上午|下午",
+        periods: None,
+        cycle: Cycle::H12,
+        cycle12: Cycle::H12,
+        date_styles: ["y年M月d日 EEEE", "y年M月d日", "y年M月d日", "y/M/d"],
+        time_styles12: ["ah:mm:ss [zzzz]", "ah:mm:ss [z]", "ah:mm:ss", "ah:mm"],
+        time_styles24: ["HH:mm:ss [zzzz]", "HH:mm:ss [z]", "HH:mm:ss", "HH:mm"],
+        style_glue: SPACE_GLUE,
+        glue: "{1} {0}",
+        formats: ZH_FORMATS,
+        decimal: ".",
+        range: "–",
+    },
 ];
 
 const GB_REGIONS: [&str; 4] = ["GB", "IE", "MT", "ZA"];
+const AU_REGIONS: [&str; 4] = ["AU", "NZ", "IN", "SG"];
+const HANT_REGIONS: [&str; 3] = ["TW", "HK", "MO"];
 
 const LATIN_DIGIT_ARABIC_REGIONS: [&str; 6] = ["AE", "DZ", "EH", "LY", "MA", "TN"];
 
@@ -1357,15 +1407,31 @@ pub(crate) fn has_language(language: &str) -> bool {
     LOCALES.iter().any(|data| data.id == language)
 }
 
-pub(crate) fn locale_data(language: &str, region: Option<&str>) -> &'static LocaleData {
-    let language = if language == "no" { "nb" } else { language };
-    let british = language == "en"
-        && region.is_some_and(|region| {
-            GB_REGIONS
-                .iter()
-                .any(|known| known.eq_ignore_ascii_case(region))
-        });
-    let id = if british { "en-GB" } else { language };
+fn in_regions(region: Option<&str>, regions: &[&str]) -> bool {
+    region.is_some_and(|region| {
+        regions
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(region))
+    })
+}
+
+pub(crate) fn locale_data(
+    language: &str,
+    script: Option<&str>,
+    region: Option<&str>,
+) -> &'static LocaleData {
+    let id = match language {
+        "no" => "nb",
+        "en" if in_regions(region, &GB_REGIONS) => "en-GB",
+        "en" if in_regions(region, &AU_REGIONS) => "en-AU",
+        "zh" if script.map_or(in_regions(region, &HANT_REGIONS), |script| {
+            script.eq_ignore_ascii_case("hant")
+        }) =>
+        {
+            "zh-Hant"
+        }
+        _ => language,
+    };
     LOCALES
         .iter()
         .find(|data| data.id == id)

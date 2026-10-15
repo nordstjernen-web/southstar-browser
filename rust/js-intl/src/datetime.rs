@@ -428,7 +428,7 @@ fn create(
         &keyword_default,
     );
     let tag = &resolution.data_tag;
-    let data = data::locale_data(&tag.language, tag.region.as_deref());
+    let data = data::locale_data(&tag.language, tag.script.as_deref(), tag.region.as_deref());
     let mut values = resolution.values.into_iter();
     let calendar = values
         .next()

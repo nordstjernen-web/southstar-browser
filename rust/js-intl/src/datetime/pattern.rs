@@ -824,7 +824,7 @@ impl Renderer<'_> {
                 let slot = match (date.month, date.leap_month) {
                     (5, true) => 5,
                     (6, _) if date.months_in_year == 13 => 13,
-                    (month, _) if month <= 5 => month as usize - 1,
+                    (month, _) if month <= 5 => (month as usize).saturating_sub(1),
                     (month, _) => month as usize,
                 };
                 pick(data::HEBREW_MONTHS, slot).to_string()
