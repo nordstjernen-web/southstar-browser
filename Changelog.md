@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Inside a with statement, a call such as f() looks f up once instead of
+  twice, and reading a binding first checks that the object still has it,
+  so proxies and getters see the operations the standard specifies and a
+  binding deleted along the way reads as undefined (or throws in strict
+  code). test262 reaches 50,794 of 52,133.
 * WeakMap, WeakSet, WeakRef and FinalizationRegistry accept symbols that
   are not in the global symbol registry as keys, targets and unregister
   tokens (symbols as WeakMap keys, ES2023). southstar-jsshell provides

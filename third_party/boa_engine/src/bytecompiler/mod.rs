@@ -2590,19 +2590,25 @@ impl<'ctx> ByteCompiler<'ctx> {
                                 unreachable!("with binding cannot be local")
                             }
                         };
+                        let this = self.register_allocator.alloc();
                         let value = self.register_allocator.alloc();
-                        self.bytecode
-                            .emit_this_for_object_environment_name(value.variable(), index.into());
+                        self.bytecode.emit_this_for_object_environment_name(
+                            this.variable(),
+                            value.variable(),
+                            index.into(),
+                        );
+                        self.push_from_register(&this);
                         self.push_from_register(&value);
                         self.register_allocator.dealloc(value);
+                        self.register_allocator.dealloc(this);
                     } else {
                         self.push_from_register(&CallFrame::undefined_register());
+                        self.compile_expr_to_stack(expr);
                     }
                 } else {
                     self.push_from_register(&CallFrame::undefined_register());
+                    self.compile_expr_to_stack(expr);
                 }
-
-                self.compile_expr_to_stack(expr);
             }
             expr => {
                 let value = self.register_allocator.alloc();

@@ -459,8 +459,10 @@ impl CodeBlock {
             Instruction::StoreDouble { value, dst } => {
                 format!("value:{value}, dst:{dst}")
             }
+            Instruction::ThisForObjectEnvironmentName { dst, value, index } => {
+                format!("dst:{dst}, value:{value}, index:{index}")
+            }
             Instruction::StoreLiteral { index, dst }
-            | Instruction::ThisForObjectEnvironmentName { index, dst }
             | Instruction::GetFunction { index, dst }
             | Instruction::GetArgument { index, dst } => {
                 format!("index:{index}, dst:{dst}")

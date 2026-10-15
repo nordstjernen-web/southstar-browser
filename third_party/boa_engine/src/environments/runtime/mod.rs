@@ -543,53 +543,16 @@ impl Context {
         Ok(())
     }
 
-    /// Finds the object environment that contains the binding and returns the `this` value of the object environment.
-    pub(crate) fn this_from_object_environment_binding(
-        &mut self,
-        locator: &BindingLocator,
-    ) -> JsResult<Option<JsObject>> {
-        let global = self.vm.frame().realm.environment();
-        if let Some(env) = self.vm.frame().environments.current_declarative_ref(global)
-            && !env.with()
-        {
-            return Ok(None);
-        }
-
-        let min_index = match locator.scope() {
-            BindingLocatorScope::GlobalObject | BindingLocatorScope::GlobalDeclarative => 0,
-            BindingLocatorScope::Stack(index) => index,
+    /// Returns the binding object of the object environment that a binding resolved by
+    /// [`Self::find_runtime_binding`] belongs to, which is the `this` value of a call through it.
+    pub(crate) fn object_environment_of(&self, locator: &BindingLocator) -> Option<JsObject> {
+        let BindingLocatorScope::Stack(index) = locator.scope() else {
+            return None;
         };
-        let max_index = self.vm.frame().environments.len() as u32;
-
-        for index in (min_index..max_index).rev() {
-            match self.environment_expect(index) {
-                Environment::Declarative(env) => {
-                    if env.poisoned() {
-                        if let Some(env) = env.kind().as_function()
-                            && env.compile().get_binding(locator.name()).is_some()
-                        {
-                            break;
-                        }
-                    } else if !env.with() {
-                        break;
-                    }
-                }
-                Environment::Object(o) => {
-                    let o = o.clone();
-                    let key = locator.name().clone();
-                    if o.has_property(key.clone(), self)? {
-                        if let Some(unscopables) = o.get(JsSymbol::unscopables(), self)?.as_object()
-                            && unscopables.get(key.clone(), self)?.to_boolean()
-                        {
-                            continue;
-                        }
-                        return Ok(Some(o));
-                    }
-                }
-            }
+        match self.environment_expect(index) {
+            Environment::Object(o) => Some(o.clone()),
+            Environment::Declarative(_) => None,
         }
-
-        Ok(None)
     }
 
     /// Checks if the binding pointed by `locator` is initialized.
@@ -659,6 +622,12 @@ impl Context {
                 Environment::Object(obj) => {
                     let key = locator.name().clone();
                     let obj = obj.clone();
+                    if !obj.has_property(key.clone(), self)? {
+                        if self.vm.frame().code_block.strict() {
+                            return Ok(None);
+                        }
+                        return Ok(Some(JsValue::undefined()));
+                    }
                     obj.get(key, self).map(Some)
                 }
             },

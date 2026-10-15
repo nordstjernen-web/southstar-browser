@@ -1764,13 +1764,14 @@ generate_opcodes! {
     ///   - Output: dst
     This { dst: RegisterOperand },
 
-    /// Pushes `this` value that is related to the object environment of the given binding
+    /// Resolves the given binding once, and stores its value and the `this` value that is
+    /// related to the object environment it resolved to.
     ///
     /// - Operands:
     ///   - index: `IndexOperand`
     /// - Registers:
-    ///   - Output: dst
-    ThisForObjectEnvironmentName { dst: RegisterOperand, index: IndexOperand },
+    ///   - Output: dst, value
+    ThisForObjectEnvironmentName { dst: RegisterOperand, value: RegisterOperand, index: IndexOperand },
 
     /// Execute the `super()` method.
     ///

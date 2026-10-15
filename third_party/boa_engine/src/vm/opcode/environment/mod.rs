@@ -88,21 +88,29 @@ impl Operation for This {
 /// `ThisForObjectEnvironmentName` implements the Opcode Operation for `Opcode::ThisForObjectEnvironmentName`
 ///
 /// Operation:
-///  - Pushes `this` value that is related to the object environment of the given binding.
+///  - Resolves the given binding once (`ResolveBinding`), then stores its value and the `this`
+///    value that is related to the object environment it resolved to (`WithBaseObject`).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ThisForObjectEnvironmentName;
 
 impl ThisForObjectEnvironmentName {
     #[inline(always)]
     pub(super) fn operation(
-        (dst, index): (RegisterOperand, IndexOperand),
+        (dst, value, index): (RegisterOperand, RegisterOperand, IndexOperand),
         context: &mut Context,
     ) -> JsResult<()> {
-        let binding_locator = context.vm.frame().code_block.bindings[usize::from(index)].clone();
+        let mut binding_locator =
+            context.vm.frame().code_block.bindings[usize::from(index)].clone();
+        context.find_runtime_binding(&mut binding_locator)?;
         let this = context
-            .this_from_object_environment_binding(&binding_locator)?
+            .object_environment_of(&binding_locator)
             .map_or(JsValue::undefined(), Into::into);
+        let result = context.get_binding(&binding_locator)?.ok_or_else(|| {
+            let name = binding_locator.name().to_std_string_escaped();
+            JsNativeError::reference().with_message(format!("{name} is not defined"))
+        })?;
         context.vm.set_register(dst.into(), this);
+        context.vm.set_register(value.into(), result);
         Ok(())
     }
 }
