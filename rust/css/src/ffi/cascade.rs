@@ -8,21 +8,24 @@ use core::mem::size_of;
 use core::ptr;
 use core::slice;
 
+use southstar_css_color::Color;
 use southstar_glib::{GArray, GBoolean};
 
 use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView, cow};
 use super::property::to_c;
 use super::value::{
-    KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, alloc, new_keyword,
+    KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, new_keyword,
     ns_css_value_free,
 };
 use crate::cascade::{self, CURRENTCOLOR_PROPS, DisplayContext, Entry, OverflowFix, Revert};
+use crate::color;
 use crate::computed_units;
 use crate::display::{self, Display};
 use crate::font;
 use crate::initial;
 use crate::prop::Prop;
 use crate::property;
+use crate::property::{Body, Value};
 
 #[repr(C)]
 pub(super) struct RawMatch {
@@ -200,13 +203,44 @@ fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     }
 }
 
+fn raw_color(v: *const NsCssValue) -> Option<RawColor> {
+    unsafe { v.as_ref() }
+        .filter(|v| v.kind == KIND_COLOR)
+        .map(|v| unsafe { v.u.color })
+}
+
+fn new_color(color: &Color) -> *mut NsCssValue {
+    to_c(Value::of(Body::Color(*color)))
+}
+
+fn current_color_function(kw: &[u8], current: *const NsCssValue) -> Option<*mut NsCssValue> {
+    if !color::needs_current_color(kw) {
+        return None;
+    }
+    let current =
+        raw_color(current).map_or_else(|| Color::from_rgba8([0, 0, 0, 255]), RawColor::to_color);
+    color::parse_with_current(kw, Some(current)).map(|c| new_color(&c))
+}
+
 fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
-    if out.keyword(Prop::Color) == Some(b"currentcolor") {
-        let color = match parent {
-            Some(p) => dup(p.values[Prop::Color.id()]),
-            None => initial_value_of(Prop::Color.id()),
-        };
-        out.replace(Prop::Color.id(), color);
+    match out.keyword(Prop::Color) {
+        Some(b"currentcolor") => {
+            let color = match parent {
+                Some(p) => dup(p.values[Prop::Color.id()]),
+                None => initial_value_of(Prop::Color.id()),
+            };
+            out.replace(Prop::Color.id(), color);
+        }
+        Some(kw) => {
+            let inherited = match parent {
+                Some(p) => p.values[Prop::Color.id()],
+                None => ptr::null_mut(),
+            };
+            if let Some(color) = current_color_function(kw, inherited) {
+                out.replace(Prop::Color.id(), color);
+            }
+        }
+        None => {}
     }
     if let Some(kw @ (b"bolder" | b"lighter")) = out.keyword(Prop::FontWeight) {
         let bolder = kw == b"bolder";
@@ -224,23 +258,17 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
                 out.style.currentcolor_bits |= 1 << bit;
             }
             Some(b"transparent") => {
-                let clear = alloc(KIND_COLOR);
-                unsafe {
-                    (*clear).u.color = RawColor {
-                        r: 0,
-                        g: 0,
-                        b: 0,
-                        a: 0,
-                    }
-                };
-                out.replace(prop.id(), clear);
+                out.replace(prop.id(), new_color(&Color::transparent()));
             }
-            _ => {}
+            Some(kw) => {
+                if let Some(color) = current_color_function(kw, out.get(Prop::Color)) {
+                    out.replace(prop.id(), color);
+                }
+            }
+            None => {}
         }
     }
-    let current = unsafe { out.get(Prop::Color).as_ref() }
-        .filter(|v| v.kind == KIND_COLOR)
-        .map(|v| unsafe { v.u.color });
+    let current = raw_color(out.get(Prop::Color));
     for prop in [Prop::BoxShadow, Prop::TextShadow] {
         let Some(v) = (unsafe { out.get(prop).as_ref() }) else {
             continue;

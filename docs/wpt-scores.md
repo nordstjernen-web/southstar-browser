@@ -194,6 +194,7 @@ the same settings (whole-slice totals mix in timeouts under load).
 | `white-space` shorthand values | `white-space-shorthand.html` | 9 → 43/45 |
 | clip-path validation | `css/css-masking/parsing/clip-path-*` | +53 |
 | hwb()/hsl() rounding | `css/css-color/parsing/color-*-hwb.html` | +15 |
+| Colour spaces, relative colours, `color-mix()`, `alpha()`, `contrast-color()` (`rust/css-color`) | `css/css-color/parsing` | 5321 → 11803/12166 |
 
 Not visible in WPT but found on live sites and fixed in the same pass:
 `<br>` with `display:block` and spaces at forced breaks (rust-lang.org),
@@ -224,7 +225,7 @@ polyfill, not a dead binding — grep `polyfills.js` first.
 | 1 | ~~**HTML parsing methods**~~ — **landed.** `setHTML`, `append/prepend/before/after/replaceWithHTML` (+`Unsafe`), sanitizer and `runScripts` options, a `Sanitizer` class. Residue: Trusted Types parser options. | `domparsing/positional-*` | landed (~650) |
 | 2 | ~~**`blob:` URL origins**~~ — **landed.** Blob documents in iframes are same-origin with their creator, so the html5lib URL runner works. | `html5lib_url.html?file=*` | landed (+2144) |
 | 3 | ~~**CSSOM `insertRule` cost**~~ — **landed.** Rule lists sync from the changed index and sheet rebuilds batch per microtask; bbc.com hydrates. Residue: each insert still parses its rule in `polyfills.js` (~1–4 ms on Boa). | real sites | landed |
-| 4 | **CSS Color 4/5 colour spaces** — computed colours collapse to 8-bit sRGB, so `lab()`/`lch()`/`oklab()`/`oklch()`/`color()` serialize as `rgb()`, `none` components are lost, and relative colour syntax (`rgb(from …)`), `color-mix()` serialization, powerless hues, `alpha()`, `contrast-color()` and `color-layers()` are missing. Needs a colour value that keeps its space and components. | `color-valid-relative-color` 1136, `color-valid-color-mix-function` 627, `color-computed-powerless` 570, `color-valid-color-function` 340, `color-*-lab` 234, `rgb/hsl none` ~150 | ~3000 |
+| 4 | ~~**CSS Color 4/5 colour spaces**~~ — **landed.** `rust/css-color` keeps a colour's space and missing components; relative colours, N-colour `color-mix()`, `alpha()`, `contrast-color()`. Residue: `calc()` with font-relative lengths inside colours (~80), `color-layers()` (170). | `css/css-color/parsing` | landed (+6482) |
 | 5 | **Trusted Types** — no `trustedTypes`/`TrustedHTML`/policies, so the `createParserOptions` and policy-injected sanitizer cases fail. | `domparsing/positional-methods-with-*trusted-types*` | ~450 |
 | 6 | **Scroll-padding / scroll-margin logical longhands** — `scroll-padding-block-start` and friends are unknown; `scroll-padding: auto` and `%` handling. | `css-scroll-snap/parsing` | ~150 |
 | 7 | **mask shorthand and `mask-*` longhands** — `mask`, `mask-position`, `mask-repeat`, `mask-size` are missing or not serialized. | `css-masking/parsing/mask-*` | ~130 |

@@ -203,9 +203,12 @@ carry forward from the 1.0.21 pass.
 | Topic | Status | Notes |
 |-------|:--:|------|
 | Named, `#hex`, `rgb()`/`rgba()`, `hsl()`/`hsla()` | ✅ | modern space/slash syntax |
-| `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()` | ✅ | converted to sRGB |
-| `color-mix(in srgb, …)` | ✅ | |
-| `currentColor`, `transparent` | ✅ | |
+| `hwb()`, `lab()`/`lch()`, `oklab()`/`oklch()`, `color()` with every predefined space | ✅ | computed values keep their colour space and `none` components (`rust/css-color`); painted after conversion to sRGB with clipping |
+| Relative colours (`rgb(from …)`, `oklch(from … calc(l - 0.1) c h)`, `color(from … display-p3 r g b)`), `alpha()` | ✅ | channel keywords, `calc()` and the math functions; powerless and missing components per Color 4 |
+| `color-mix()` | ✅ | any number of colours, every interpolation space and hue method, premultiplied alpha, percentage normalization |
+| `contrast-color()`, `light-dark()` | ✅ | |
+| `currentColor`, `transparent` | ✅ | also inside `color-mix()` and relative colours, resolved at cascade time |
+| `color-layers()`, `calc()` with font-relative lengths inside colours | ❌ | |
 | `accent-color` / `caret-color` | ✅ | |
 
 ## Transforms, transitions, animation (Transforms 1/2, Transitions 1, Animations 1)

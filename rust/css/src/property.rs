@@ -4,11 +4,13 @@
 
 use std::ffi::CString;
 
+use southstar_css_color::Color;
+
 use crate::animation::{self, Entry, Longhand};
 use crate::border_image;
 use crate::calc::{self, Calc, Parsed};
 use crate::clip_path;
-use crate::color::parse_color;
+use crate::color;
 use crate::container;
 use crate::content::content_canonical;
 use crate::counter::{self, CounterProp};
@@ -46,7 +48,7 @@ pub(crate) enum Body {
     Keyword(Vec<u8>),
     Length(f64, Unit),
     Calc(Calc),
-    Color([u8; 4]),
+    Color(Color),
     Size(Size),
     Rect(Rect),
     Url(Vec<u8>),
@@ -696,9 +698,22 @@ fn clip_rect(t: &[u8]) -> Option<Value> {
     (idx == 4).then(|| Value::of(Body::Rect(rect)))
 }
 
+fn color_value(t: &[u8]) -> Option<Value> {
+    match color::parse_value_or_current(t)? {
+        Some(color) => Some(Value::of(Body::Color(color))),
+        None => Some(Value::keyword(lower(t))),
+    }
+}
+
 fn color_prop(prop: Prop, t: &[u8]) -> Option<Value> {
-    if let Some(rgba) = parse_color(&c_text(t)) {
-        return Some(Value::of(Body::Color(rgba)));
+    if let Some(value) = color_value(t) {
+        return Some(value);
+    }
+    if prop == Prop::CaretColor
+        && let [first, second] = split_ws_limit(t, 3)[..]
+        && eq(second, b"auto")
+    {
+        return color_prop(prop, first);
     }
     let kw = lower(t);
     let ok = matches!(kw.as_slice(), b"currentcolor" | b"inherit" | b"transparent")
@@ -707,8 +722,8 @@ fn color_prop(prop: Prop, t: &[u8]) -> Option<Value> {
 }
 
 fn paint_prop(t: &[u8]) -> Option<Value> {
-    if let Some(rgba) = parse_color(&c_text(t)) {
-        return Some(Value::of(Body::Color(rgba)));
+    if let Some(value) = color_value(t) {
+        return Some(value);
     }
     let kw = lower(t);
     let ok = matches!(

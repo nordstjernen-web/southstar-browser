@@ -23,6 +23,17 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* CSS colours keep their colour space. lab(), lch(), oklab(), oklch()
+  and color() with every predefined space (display-p3, rec2020,
+  xyz-d50, ...) are parsed, computed and serialized in their own space
+  instead of collapsing to 8-bit rgb(), and none components survive.
+  Relative colours (rgb(from ...), oklch(from ... calc(l - 0.1) c h)),
+  alpha(), contrast-color() and color-mix() with any number of colours,
+  every interpolation space and hue method are new, including colours
+  that refer to currentcolor. Missing and powerless components follow
+  CSS Color 4, and transitions between non-legacy colours interpolate
+  in Oklab. The new rust/css-color crate does the work; the WPT
+  css-color parsing tests go from 5,321 to 11,803 passing subtests.
 * An arrow function nested in another arrow function sees the this of
   the method around them: when the outer arrow did not mention this
   itself, the inner one got the global object, so code such as

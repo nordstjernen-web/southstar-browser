@@ -4,7 +4,7 @@
 
 use crate::animation::{self, Longhand};
 use crate::border_image;
-use crate::color::parse_color;
+use crate::color::{self, parse_color};
 use crate::ffi;
 use crate::font;
 use crate::gradient::text_starts_gradient;
@@ -242,7 +242,7 @@ fn join(parts: &[&[u8]], sep: &[u8]) -> Vec<u8> {
 }
 
 fn is_color(tok: &[u8]) -> bool {
-    parse_color(&c_text(tok)).is_some()
+    parse_color(&c_text(tok)).is_some() || color::needs_current_color(tok)
 }
 
 fn is_color_keyword(tok: &[u8]) -> bool {
@@ -1240,8 +1240,8 @@ fn text_decoration(out: &mut Out, text: &[u8], line_only: bool) {
             .any(|k| eq(tk, k))
         {
             out.push(Prop::TextDecorationStyle, Value::keyword(lower(tk)));
-        } else if let Some(rgba) = parse_color(&c_text(tk)) {
-            out.push(Prop::TextDecorationColor, Value::of(Body::Color(rgba)));
+        } else if let Some(color) = color::parse_value(tk) {
+            out.push(Prop::TextDecorationColor, Value::of(Body::Color(color)));
         }
     }
     if !lines.is_empty() {

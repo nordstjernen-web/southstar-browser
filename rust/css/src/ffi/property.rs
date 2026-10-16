@@ -53,9 +53,9 @@ pub(crate) fn to_c(v: Value) -> *mut NsCssValue {
         Body::Keyword(text) => value::new_keyword(&text),
         Body::Length(v, unit) => value::new_value(&Parsed::Length(v, unit)),
         Body::Calc(c) => value::new_value(&Parsed::Calc(c)),
-        Body::Color([r, g, b, a]) => {
+        Body::Color(color) => {
             let raw = value::alloc(KIND_COLOR);
-            unsafe { (*raw).u.color = RawColor { r, g, b, a } };
+            unsafe { (*raw).u.color = RawColor::from_color(&color) };
             raw
         }
         Body::Size(s) => {

@@ -6,7 +6,9 @@ use std::ffi::CString;
 
 use crate::animation::{self, Entry};
 use crate::calc::Calc;
-use crate::color::{color_text, parse_color};
+use southstar_css_color::{Color, HueMethod, Interpolation, Space};
+
+use crate::color::{self, parse_color};
 use crate::display;
 use crate::ffi;
 use crate::gradient;
@@ -203,7 +205,7 @@ fn rect_text(r: &Rect) -> Vec<u8> {
 pub(crate) fn serialize_one(v: &Value) -> Vec<u8> {
     match &v.body {
         Body::Keyword(text) => text.clone(),
-        Body::Color(rgba) => color_text(*rgba),
+        Body::Color(color) => color.serialize().into_bytes(),
         Body::Length(n, unit) => g_unit(*n, *unit),
         Body::Size(s) => size_text(s),
         Body::Calc(c) => calc_text(c),
@@ -281,6 +283,22 @@ fn lerp_lengths(a: &Body, b: &Body, t: f64) -> Option<Linear> {
         pct: apct + (bpct - apct) * t,
         em: aem + (bem - aem) * t,
     })
+}
+
+fn color_lerp(a: &Color, b: &Color, t: f64) -> Color {
+    let legacy = a.legacy && b.legacy;
+    let space = if legacy { Space::Srgb } else { Space::Oklab };
+    let method = Interpolation {
+        space,
+        hue: HueMethod::Shorter,
+    };
+    let mut out = southstar_css_color::interpolate(a, b, t, method);
+    if legacy {
+        out.legacy = true;
+        out.components = out.components.map(|c| c.map(|v| v.clamp(0.0, 1.0)));
+        out.alpha = out.alpha.map(|v| v.clamp(0.0, 1.0));
+    }
+    out
 }
 
 fn lerp_channel(a: u8, b: u8, t: f64) -> u8 {
@@ -556,9 +574,7 @@ pub(crate) fn interpolate(a: &Value, b: &Value, t: f64) -> Option<Value> {
     let body = match (&a.body, &b.body) {
         (Body::Keyword(ka), Body::Keyword(kb)) => Body::Keyword(keyword_lerp(ka, kb, t)?),
         (Body::Rect(ra), Body::Rect(rb)) => Body::Rect(rect_lerp(ra, rb, t)?),
-        (Body::Color(ca), Body::Color(cb)) => {
-            Body::Color(core::array::from_fn(|i| lerp_channel(ca[i], cb[i], t)))
-        }
+        (Body::Color(ca), Body::Color(cb)) => Body::Color(color_lerp(ca, cb, t)),
         (Body::Shadow(sa), Body::Shadow(sb)) => Body::Shadow(Box::new(shadow_lerp(sa, sb, t)?)),
         (Body::Transform(ta), Body::Transform(tb)) => {
             Body::Transform(Box::new(transform_lerp(ta, tb, t)?))
@@ -620,10 +636,6 @@ const KEYWORD_CANONICAL_PROPS: [&[u8]; 24] = [
     b"overflow-clip-margin",
 ];
 
-fn starts_ci(text: &[u8], prefix: &[u8]) -> bool {
-    text.len() >= prefix.len() && text[..prefix.len()].eq_ignore_ascii_case(prefix)
-}
-
 fn has(text: &[u8], needle: &[u8]) -> bool {
     text.windows(needle.len()).any(|w| w == needle)
 }
@@ -638,14 +650,10 @@ fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
         let known = parse_color(&text).is_some() || value.eq_ignore_ascii_case(b"currentcolor");
         return known.then(|| value.to_ascii_lowercase());
     }
-    let functional = value.first() == Some(&b'#')
-        || starts_ci(value, b"rgb")
-        || starts_ci(value, b"hsl")
-        || starts_ci(value, b"hwb(");
-    if !functional || has(value, b"var(") || has(value, b"calc(") || has(value, b"none") {
+    if has(value, b"var(") || has(value, b"env(") || has(value, b"attr(") {
         return None;
     }
-    parse_color(&text).map(color_text)
+    color::specified_text(value)
 }
 
 pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>> {

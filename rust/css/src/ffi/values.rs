@@ -37,7 +37,7 @@ unsafe fn body_of(raw: &NsCssValue) -> Body {
                 w_auto: u.size.w_auto != 0,
                 h_auto: u.size.h_auto != 0,
             }),
-            KIND_COLOR => Body::Color([u.color.r, u.color.g, u.color.b, u.color.a]),
+            KIND_COLOR => Body::Color(u.color.to_color()),
             KIND_CALC => Body::Calc(u.calc.to_calc()),
             KIND_SHADOW => Body::Shadow(Box::new(u.shadow)),
             KIND_GRADIENT => Body::Gradient(Box::new(u.gradient)),

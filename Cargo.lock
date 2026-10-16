@@ -1796,6 +1796,7 @@ dependencies = [
 name = "southstar-css"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-color",
  "southstar-css-media",
  "southstar-css-syntax",
  "southstar-dom",
@@ -1803,6 +1804,13 @@ dependencies = [
  "southstar-mat4",
  "southstar-numfmt",
  "southstar-url",
+]
+
+[[package]]
+name = "southstar-css-color"
+version = "0.9.11-dev"
+dependencies = [
+ "southstar-css-syntax",
 ]
 
 [[package]]

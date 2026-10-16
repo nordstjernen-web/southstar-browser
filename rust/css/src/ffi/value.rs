@@ -5,6 +5,7 @@
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::{offset_of, size_of};
 
+use southstar_css_color::{Color, Space};
 use southstar_glib as glib;
 
 use super::animation::RawList;
@@ -92,12 +93,58 @@ pub(crate) struct RawSize {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct RawColor {
     pub r: u8,
     pub g: u8,
     pub b: u8,
     pub a: u8,
+    pub space: u8,
+    pub missing: u8,
+    pub legacy: u8,
+    pub tagged: u8,
+    pub components: [f64; 3],
+    pub alpha: f64,
+}
+
+impl RawColor {
+    pub(crate) fn from_color(color: &Color) -> RawColor {
+        let [r, g, b, a] = color.to_rgba8();
+        let mut missing = 0;
+        for (bit, component) in color.components.iter().enumerate() {
+            if component.is_none() {
+                missing |= 1 << bit;
+            }
+        }
+        if color.alpha.is_none() {
+            missing |= 1 << 3;
+        }
+        RawColor {
+            r,
+            g,
+            b,
+            a,
+            space: color.space.index(),
+            missing,
+            legacy: u8::from(color.legacy),
+            tagged: 1,
+            components: color.values(),
+            alpha: color.alpha_value(),
+        }
+    }
+
+    pub(crate) fn to_color(self) -> Color {
+        let Some(space) = Space::from_index(self.space).filter(|_| self.tagged != 0) else {
+            return Color::from_rgba8([self.r, self.g, self.b, self.a]);
+        };
+        let present = |bit: u8| self.missing & (1 << bit) == 0;
+        Color {
+            space,
+            components: core::array::from_fn(|i| present(i as u8).then_some(self.components[i])),
+            alpha: present(3).then_some(self.alpha),
+            legacy: self.legacy != 0,
+        }
+    }
 }
 
 #[repr(C)]
