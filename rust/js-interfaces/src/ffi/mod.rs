@@ -43,7 +43,6 @@ pub(crate) enum Members {
 unsafe extern "C" {
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_perf_now_ms(js: *const NsJs) -> f64;
-    fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
@@ -84,12 +83,7 @@ pub(crate) fn navigator_brand(scope: &Scope<'_>) -> Value {
 
 pub(crate) fn page_clock(scope: &Scope<'_>) -> (f64, f64) {
     let js = page_record(scope);
-    let origin = if js.is_null() {
-        0.0
-    } else {
-        unsafe { ns_js_page_time_origin_real_ms(js) }
-    };
-    (origin, unsafe { ns_perf_now_ms(js) })
+    (api::time_origin_real_ms(js), unsafe { ns_perf_now_ms(js) })
 }
 
 pub(crate) fn install_event_handler_props(scope: &mut Scope<'_>, global: &Value) {

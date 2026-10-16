@@ -7,6 +7,7 @@ use core::ffi::c_uint;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
@@ -24,8 +25,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64;
     safe fn nsr_submit_event_ctor(
         scope: &mut Scope<'_>,
@@ -40,11 +39,11 @@ fn js_of(scope: &Scope<'_>) -> *mut NsJs {
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    nsr_make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn event_state(_scope: &mut Scope<'_>, value: &Value) -> Option<Value> {

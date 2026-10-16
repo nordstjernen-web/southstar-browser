@@ -1766,6 +1766,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 
@@ -2161,6 +2162,7 @@ dependencies = [
  "southstar-digest",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-sqlite",
 ]
 
@@ -2222,6 +2224,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]
@@ -2324,6 +2327,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 
@@ -2342,6 +2346,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]
@@ -2360,6 +2365,7 @@ name = "southstar-js-fonts"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]
@@ -2597,6 +2603,7 @@ name = "southstar-js-perf"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-net",
 ]
 
@@ -2614,6 +2621,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 
@@ -2686,6 +2694,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-style",
 ]
 
@@ -3244,6 +3253,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 

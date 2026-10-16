@@ -4,7 +4,7 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -38,8 +38,6 @@ impl Js {
 const SYNTAX_ERR: i32 = 12;
 
 unsafe extern "C" {
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_form_listed_controls(form: *const NsNode, include_image: GBoolean, out: *mut GPtrArray);
     fn g_ptr_array_new() -> *mut GPtrArray;
@@ -54,10 +52,7 @@ fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    if js.is_null() {
-        return None;
-    }
-    node(unsafe { ns_js_current_document(js.ptr()) })
+    api::current_document(js.ptr())
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {
@@ -71,11 +66,8 @@ pub(crate) fn current_url_fragment(js: Js) -> Option<Vec<u8>> {
     if js.is_null() {
         return None;
     }
-    let url = unsafe { ns_js_current_url(js.ptr()) };
-    if url.is_null() {
-        return None;
-    }
-    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
+    let url = api::current_url(js.ptr());
+    let url = url.to_bytes();
     let hash = url.iter().position(|&c| c == b'#')?;
     let fragment = &url[hash + 1..];
     (!fragment.is_empty()).then(|| fragment.to_vec())

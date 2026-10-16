@@ -4,14 +4,12 @@
 
 use core::ffi::{c_uint, c_void};
 
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{font_face, ready};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(usize);
@@ -33,10 +31,6 @@ impl Js {
 type IdleCallback = unsafe extern "C" fn(user_data: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_js_flush_layout(js: *mut NsJs);
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_font_pending_count() -> c_uint;
     fn ns_font_add_idle_cb(cb: Option<IdleCallback>, user_data: *mut c_void);
     fn ns_font_remove_idle_cb(cb: Option<IdleCallback>, user_data: *mut c_void);
@@ -47,17 +41,15 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn flush_layout(js: Js) {
-    if !js.is_null() {
-        unsafe { ns_js_flush_layout(js.ptr()) };
-    }
+    api::flush_layout(js.ptr());
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.ptr()) };
+    api::mark_mutated(js.ptr());
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
-    unsafe { ns_drain_microtasks(js.ptr()) };
+    api::drain_microtasks(js.ptr());
 }
 
 pub(crate) fn pending_font_count() -> u32 {
@@ -69,7 +61,7 @@ unsafe extern "C" fn fonts_idle(user_data: *mut c_void) {
     if js.is_null() || !ready::has_waiting(js) {
         return;
     }
-    unsafe { ns_js_main_context(js.ptr()) }.with(|scope| ready::fonts_idle(scope, js));
+    api::main_context(js.ptr()).with(|scope| ready::fonts_idle(scope, js));
 }
 
 pub(crate) fn wait_for_fonts(js: Js) {

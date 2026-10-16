@@ -31,8 +31,6 @@ pub(crate) enum TargetMethod {
 unsafe extern "C" {
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_record_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -43,7 +41,6 @@ unsafe extern "C" {
     );
     fn ns_ce_upgrade_element(js: *mut NsJs, node: *mut NsNode);
     fn ns_ce_upgrade_subtree_detached(js: *mut NsJs, root: *mut NsNode);
-    fn ns_node_in_template_content(node: *const NsNode) -> GBoolean;
     fn ns_element_get_attr_len(
         node: *const NsNode,
         name: *const c_char,
@@ -99,11 +96,11 @@ pub(crate) fn track_orphan(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.0)) }
+    api::current_document(js.0)
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn record_removal(
@@ -134,7 +131,7 @@ pub(crate) fn ce_upgrade_subtree_detached(js: Js, root: Element) {
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {
-    unsafe { ns_node_in_template_content(node.as_ptr()) != glib::FALSE }
+    api::in_template_content(node)
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {

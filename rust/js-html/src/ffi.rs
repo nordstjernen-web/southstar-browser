@@ -13,17 +13,12 @@ use southstar_js_runtime::api;
 
 use crate::{Element, JsResult, markup, microdata, text};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
@@ -33,7 +28,6 @@ unsafe extern "C" {
     fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
     fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
     fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
@@ -57,7 +51,6 @@ unsafe extern "C" {
     fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-    fn ns_node_in_template_content(node: *const NsNode) -> GBoolean;
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_node_is_shadow_root(node: *const NsNode) -> GBoolean;
@@ -86,10 +79,6 @@ fn raw(node: Option<Element>) -> *mut NsNode {
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
-}
-
-fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
 }
 
 pub(crate) fn c_string(bytes: &[u8]) -> CString {
@@ -137,19 +126,15 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
 }
 
 pub(crate) fn current_document(js: Option<Js>) -> Option<Element> {
-    js.and_then(|js| node(unsafe { ns_js_current_document(js.0) }))
+    js.and_then(|js| api::current_document(js.0))
 }
 
 pub(crate) fn resolve_against_page(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
-    let base = unsafe { ns_js_current_url(raw_js(js)) };
-    if base.is_null() {
-        return None;
-    }
-    let base = unsafe { CStr::from_ptr(base) }.to_bytes();
+    let base = api::current_url(raw_js(js));
     if base.is_empty() {
         return None;
     }
-    southstar_url::bytes::resolve(Some(base), href.to_bytes())
+    southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {
@@ -179,7 +164,7 @@ pub(crate) fn new_text(text: &[u8]) -> Element {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn track_orphan(js: Js, node: Element) {
@@ -262,7 +247,7 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {
-    unsafe { ns_node_in_template_content(node.as_ptr()) != 0 }
+    api::in_template_content(node)
 }
 
 pub(crate) fn insert_sibling_before(reference: Element, node: Element) {

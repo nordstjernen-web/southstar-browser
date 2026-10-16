@@ -2,18 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use super::cairo::Surface;
 use super::imports;
-use super::state::{CanvasState, Node, NsJs, js_of};
-
-unsafe extern "C" {
-    fn ns_js_is_worker(js: *const NsJs) -> c_int;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-}
+use super::state::{CanvasState, Node, js_of};
 
 fn state(st: *mut CanvasState) -> &'static mut CanvasState {
     unsafe { &mut *st }
@@ -56,13 +52,13 @@ pub(crate) fn attach_ctx2d(scope: &mut Scope<'_>, st: *mut CanvasState, obj: &Va
         unsafe { scope.release_identity(st.ctx2d) };
     }
     st.ctx2d = scope.retain_identity(obj);
-    st.jsctx = unsafe { ns_js_main_context(js.ptr()) };
+    st.jsctx = api::main_context(js.ptr());
     st.context_kind = kind;
 }
 
 pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {
     let js = js_of(scope);
-    !js.is_null() && unsafe { ns_js_is_worker(js.ptr()) } != 0
+    api::is_worker(js.ptr())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Node {

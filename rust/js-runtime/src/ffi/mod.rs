@@ -34,11 +34,25 @@ pub(crate) struct GMainContext {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub(crate) struct NavigationTiming {
+#[derive(Clone, Copy, Default)]
+pub struct NavigationTiming {
     pub origin_us: i64,
     pub origin_real_ms: f64,
-    milestones: [f64; 15],
+    pub domain_lookup_start_ms: f64,
+    pub domain_lookup_end_ms: f64,
+    pub connect_start_ms: f64,
+    pub connect_end_ms: f64,
+    pub secure_connection_start_ms: f64,
+    pub request_start_ms: f64,
+    pub response_start_ms: f64,
+    pub response_end_ms: f64,
+    pub dom_loading_ms: f64,
+    pub dom_interactive_ms: f64,
+    pub dom_content_loaded_event_start_ms: f64,
+    pub dom_content_loaded_event_end_ms: f64,
+    pub dom_complete_ms: f64,
+    pub load_event_start_ms: f64,
+    pub load_event_end_ms: f64,
 }
 
 #[cfg(target_pointer_width = "64")]
@@ -49,7 +63,7 @@ impl NavigationTiming {
         NavigationTiming {
             origin_us,
             origin_real_ms,
-            milestones: [0.0; 15],
+            ..NavigationTiming::default()
         }
     }
 }
@@ -250,7 +264,7 @@ impl Js {
     }
 
     pub fn set_navigation_timing(self, timing: NavigationTiming) {
-        unsafe { record::set_navigation_timing(self.0, timing) };
+        record::set_navigation_timing(self.0, timing);
         self.set_time_origin(timing.origin_us, timing.origin_real_ms);
     }
 

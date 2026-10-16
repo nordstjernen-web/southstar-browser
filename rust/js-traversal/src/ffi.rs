@@ -2,19 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::GBoolean;
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -36,9 +32,6 @@ pub(crate) struct SelectionState {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_selection_state(js: *const NsJs, text: *mut *const c_char, rect: *mut f64)
-    -> GBoolean;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
 }
 
@@ -51,10 +44,7 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    if js.0 == 0 {
-        return None;
-    }
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.ptr()).with(f)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -74,19 +64,11 @@ pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: [f64; 4]) -> Value {
 }
 
 pub(crate) fn selection_state(js: Js) -> SelectionState {
-    let mut text: *const c_char = core::ptr::null();
-    let mut rect = [0.0f64; 4];
-    let has_range =
-        js.0 != 0 && unsafe { ns_js_selection_state(js.ptr(), &mut text, rect.as_mut_ptr()) } != 0;
-    let text = if text.is_null() {
-        Vec::new()
-    } else {
-        unsafe { CStr::from_ptr(text) }.to_bytes().to_vec()
-    };
+    let selection = api::selection_state(js.ptr());
     SelectionState {
-        text,
-        has_range,
-        rect,
+        text: selection.text.map(CString::into_bytes).unwrap_or_default(),
+        has_range: selection.has_range,
+        rect: selection.rect,
     }
 }
 

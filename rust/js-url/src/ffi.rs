@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_url::bytes::Parts;
 
@@ -18,10 +18,7 @@ pub(crate) const HO_FILE_READER: HostKind = HostKind::FileReader;
 pub(crate) const HO_TEXT_ENCODER: HostKind = HostKind::TextEncoder;
 pub(crate) const HO_TEXT_DECODER: HostKind = HostKind::TextDecoder;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -64,8 +61,6 @@ impl Drop for SharedBytes {
 #[derive(Clone, Copy)]
 pub(crate) struct Source(c_uint);
 
-type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
 type BlobResolver = Option<
     unsafe extern "C" fn(
         url: *const c_char,
@@ -75,18 +70,6 @@ type BlobResolver = Option<
 >;
 
 unsafe extern "C" {
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_attach_idle(js: *mut NsJs, func: SourceFunc, data: *mut c_void) -> c_uint;
-    fn ns_js_attach_timeout(
-        js: *mut NsJs,
-        ms: c_uint,
-        func: SourceFunc,
-        data: *mut c_void,
-    ) -> c_uint;
-    fn ns_js_source_remove(js: *mut NsJs, id: c_uint);
     fn ns_net_set_blob_resolver(resolver: BlobResolver, user_data: *mut c_void);
     fn g_bytes_new(data: *const c_void, size: usize) -> *mut GBytes;
     fn g_bytes_ref(bytes: *mut GBytes) -> *mut GBytes;
@@ -147,8 +130,7 @@ pub(crate) fn page_origin(js: Js) -> Option<Vec<u8>> {
     if js.is_null() {
         return None;
     }
-    let url = unsafe { glib::bytes(ns_js_current_url(js.ptr())) }?;
-    southstar_url::bytes::origin_from(url)
+    southstar_url::bytes::origin_from(api::current_url(js.ptr()).to_bytes())
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {
@@ -156,7 +138,7 @@ pub(crate) fn random_uuid() -> Vec<u8> {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.ptr()) };
+    api::mark_mutated(js.ptr());
 }
 
 unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
@@ -165,23 +147,32 @@ unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
 }
 
 pub(crate) fn attach_read_idle(js: Js, id: u64) -> Source {
-    Source(unsafe { ns_js_attach_idle(js.ptr(), read_ready, id as usize as *mut c_void) })
+    Source(api::attach_idle(
+        js.ptr(),
+        read_ready,
+        id as usize as *mut c_void,
+    ))
 }
 
 pub(crate) fn attach_read_retry(js: Js, id: u64, ms: u32) -> Source {
-    Source(unsafe { ns_js_attach_timeout(js.ptr(), ms, read_ready, id as usize as *mut c_void) })
+    Source(api::attach_timeout(
+        js.ptr(),
+        ms,
+        read_ready,
+        id as usize as *mut c_void,
+    ))
 }
 
 pub(crate) fn source_remove(js: Js, source: Source) {
-    unsafe { ns_js_source_remove(js.ptr(), source.0) };
+    api::source_remove(js.ptr(), source.0);
 }
 
 pub(crate) fn in_pump(js: Js) -> bool {
-    unsafe { ns_js_in_pump(js.ptr()) != 0 }
+    api::in_pump(js.ptr())
 }
 
 pub(crate) fn in_main_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
-    unsafe { ns_js_main_context(js.ptr()) }.with(f);
+    api::main_context(js.ptr()).with(f);
 }
 
 pub(crate) fn fire_progress(

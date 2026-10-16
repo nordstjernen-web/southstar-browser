@@ -68,7 +68,7 @@ pub fn attr_get(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
         || (index == tables::FORM_ACTION && (is_named(n, b"button") || is_named(n, b"input")));
     let js = ffi::js_of(scope);
     if defaults_to_document && v.is_none_or(|v| v.first().is_none_or(|&b| b == 0)) {
-        return text(scope, ffi::current_url(js));
+        return text(scope, &ffi::current_url(js));
     }
     if tables::URL_ATTRS.contains(&index) {
         return match v {

@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
+southstar-js-runtime = { path = "../js-runtime" }
 southstar-url = { path = "../url" }
 
 [lints]

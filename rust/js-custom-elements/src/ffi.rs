@@ -7,15 +7,12 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::Element;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -35,14 +32,7 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode;
-    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
-    fn ns_js_wrapper_pinned(js: *const NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_popover_removing(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
 }
 
 fn c_string(text: &str) -> CString {
@@ -62,10 +52,7 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    if js.is_null() {
-        return None;
-    }
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.ptr()).with(f)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -84,19 +71,19 @@ pub(crate) fn node_wrapper(scope: &mut Scope<'_>, node: Element) -> Value {
 }
 
 pub(crate) fn wrapper_pinned(js: Js, node: Element) -> bool {
-    unsafe { ns_js_wrapper_pinned(js.ptr(), node.as_ptr()) != 0 }
+    api::wrapper_pinned(js.ptr(), node)
 }
 
 pub(crate) fn node_in_page(js: Js, node: Element) -> bool {
-    unsafe { ns_js_node_in_page(js.ptr(), node.as_ptr()) != 0 }
+    api::node_in_page(js.ptr(), Some(node))
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+    api::current_document(js.ptr())
 }
 
 pub(crate) fn main_document(js: Js) -> usize {
-    unsafe { ns_js_ce_main_doc(js.ptr()) as usize }
+    Node::ptr_or_null(api::ce_main_doc(js.ptr())) as usize
 }
 
 pub(crate) fn realm_document(scope: &mut Scope<'_>) -> Option<Element> {
@@ -119,12 +106,11 @@ pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &str) -> Value {
 }
 
 pub(crate) fn log_enabled(js: Js) -> bool {
-    unsafe { ns_js_log_enabled(js.ptr()) != 0 }
+    api::log_enabled(js.ptr())
 }
 
 pub(crate) fn log_line(js: Js, line: &str) {
-    let line = c_string(line);
-    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) }
+    api::log_line(js.ptr(), &c_string(line));
 }
 
 pub(crate) fn register_defined_element(name: &str) {

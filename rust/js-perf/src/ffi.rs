@@ -6,15 +6,13 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use std::ffi::CString;
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::entry::{Fetch, ResourceInfo, Response};
 use crate::navigation;
 use crate::timeline::{self, Observer};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::{NavigationTiming, NsJs};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -35,30 +33,6 @@ impl Js {
 
 #[derive(Clone, Copy)]
 pub(crate) struct RawObject(usize);
-
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub(crate) struct NavigationTiming {
-    pub origin_us: i64,
-    pub origin_real_ms: f64,
-    pub domain_lookup_start_ms: f64,
-    pub domain_lookup_end_ms: f64,
-    pub connect_start_ms: f64,
-    pub connect_end_ms: f64,
-    pub secure_connection_start_ms: f64,
-    pub request_start_ms: f64,
-    pub response_start_ms: f64,
-    pub response_end_ms: f64,
-    pub dom_loading_ms: f64,
-    pub dom_interactive_ms: f64,
-    pub dom_content_loaded_event_start_ms: f64,
-    pub dom_content_loaded_event_end_ms: f64,
-    pub dom_complete_ms: f64,
-    pub load_event_start_ms: f64,
-    pub load_event_end_ms: f64,
-}
-
-const _: () = assert!(core::mem::size_of::<NavigationTiming>() == 136);
 
 #[repr(C)]
 pub struct NsPerfResourceInfo {
@@ -119,13 +93,6 @@ const _: () = assert!(
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_get_real_time() -> i64;
-    fn ns_js_page_time_origin_us(js: *const NsJs) -> i64;
-    fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64;
-    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_log_line(js: *const NsJs, line: *const c_char);
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -150,43 +117,32 @@ pub(crate) fn real_us() -> i64 {
 }
 
 pub(crate) fn page_time_origin_us(js: Js) -> i64 {
-    unsafe { ns_js_page_time_origin_us(js.ptr()) }
+    api::time_origin_us(js.ptr())
 }
 
 pub(crate) fn page_time_origin_real_ms(js: Js) -> f64 {
-    unsafe { ns_js_page_time_origin_real_ms(js.ptr()) }
+    api::time_origin_real_ms(js.ptr())
 }
 
 pub(crate) fn main_realm(js: Js) -> usize {
-    unsafe { ns_js_main_realm(js.ptr()) }.as_ptr() as usize
+    api::main_realm(js.ptr()).as_ptr() as usize
 }
 
 pub(crate) fn main_context(js: Js) -> Option<ContextHandle> {
-    if js.is_null() {
-        return None;
-    }
-    unsafe { ns_js_main_context(js.ptr()) }.non_null()
+    api::main_context(js.ptr()).non_null()
 }
 
 pub(crate) fn navigation_timing(js: Js) -> Option<NavigationTiming> {
-    if js.is_null() {
-        return None;
-    }
-    unsafe { ns_js_page_navigation_timing(js.ptr()).as_ref() }.copied()
+    api::navigation_timing(js.ptr())
 }
 
 pub(crate) fn current_url(js: Js) -> Vec<u8> {
-    unsafe { bytes(ns_js_current_url(js.ptr())) }
-        .unwrap_or_default()
-        .to_vec()
+    api::current_url(js.ptr()).into_bytes()
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
-    if js.is_null() {
-        return;
-    }
     if let Ok(line) = CString::new(line) {
-        unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+        api::log_line(js.ptr(), &line);
     }
 }
 
@@ -394,15 +350,16 @@ pub unsafe extern "C" fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const
     let Ok(key) = core::str::from_utf8(key) else {
         return;
     };
-    if js.is_null() {
+    let Some(mut timing) = api::navigation_timing(js.ptr()) else {
         return;
-    }
-    let timing = unsafe { ns_js_page_navigation_timing(js.ptr()) }.cast_mut();
-    let Some(field) = unsafe { timing.as_mut() }.and_then(|t| navigation::milestone(t, key)) else {
+    };
+    let Some(field) = navigation::milestone(&mut timing, key) else {
         return;
     };
     *field = crate::now_ms(js);
-    let absolute_ms = (page_time_origin_real_ms(js) + *field).floor() as i64;
+    let milestone_ms = *field;
+    api::set_navigation_timing(js.ptr(), timing);
+    let absolute_ms = (page_time_origin_real_ms(js) + milestone_ms).floor() as i64;
     if let Some(ctx) = main_context(js) {
         ctx.with(|scope| navigation::record_legacy_milestone(scope, key, absolute_ms));
     }

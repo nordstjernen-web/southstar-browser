@@ -16,7 +16,7 @@ const ANCESTOR: &str = "the new child is an inclusive ancestor of the parent";
 
 fn place(js: Option<Js>, parent: Element, node: Element, reference: Option<Element>) {
     match reference.filter(|r| r.parent() == Some(parent)) {
-        Some(reference) => ffi::insert_before_single(js, parent, node, reference),
+        Some(reference) => ffi::insert_before_single(js, node, reference),
         None => {
             if let Some(js) = js {
                 ffi::unorphan(js, node);
@@ -378,7 +378,7 @@ pub fn move_before(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
         record_move_removal(js, node);
     }
     match reference.filter(|r| r.parent() == Some(parent)) {
-        Some(reference) => ffi::insert_before_single(js, parent, node, reference),
+        Some(reference) => ffi::insert_before_single(js, node, reference),
         None => {
             node.detach();
             if let Some(js) = js {

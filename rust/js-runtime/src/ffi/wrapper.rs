@@ -326,13 +326,6 @@ pub(crate) fn arm_js_invalidate(target: Node<'_>) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_arm_js_invalidate(n: *mut NsNode) {
-    if let Some(target) = node(n) {
-        arm_js_invalidate(target);
-    }
-}
-
 pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
     let current_doc = unsafe { *page.st().slots.current_doc };
     scope.new_instance_with(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))

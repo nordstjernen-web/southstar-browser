@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", default-features = false }
 
 [lints]
 workspace = true

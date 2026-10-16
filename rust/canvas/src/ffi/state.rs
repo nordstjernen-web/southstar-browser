@@ -34,10 +34,7 @@ pub struct CanvasState {
     pub context_kind: c_int,
 }
 
-#[repr(C)]
-pub struct NsJs {
-    _private: [u8; 0],
-}
+pub use southstar_js_runtime::api::NsJs;
 
 #[repr(C)]
 pub struct NsNode {

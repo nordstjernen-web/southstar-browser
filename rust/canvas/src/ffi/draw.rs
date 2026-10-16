@@ -4,11 +4,7 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use super::state::{CanvasState, NsJs};
-
-unsafe extern "C" {
-    fn ns_js_mark_mutated(js: *mut NsJs);
-}
+use super::state::CanvasState;
 
 pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<&'static mut CanvasState> {
     let js = super::state::js_of(scope);
@@ -21,8 +17,5 @@ pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<&'static mut 
 }
 
 pub(crate) fn mark_mutated(scope: &Scope<'_>) {
-    let js = super::state::js_of(scope);
-    if !js.is_null() {
-        unsafe { ns_js_mark_mutated(js.ptr()) };
-    }
+    southstar_js_runtime::api::mark_mutated(super::state::js_of(scope).ptr());
 }

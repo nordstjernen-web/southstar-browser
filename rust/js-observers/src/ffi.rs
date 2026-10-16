@@ -14,10 +14,7 @@ use southstar_layout::{BoxRef, NsBox};
 use crate::mutation::{self, Emit};
 use crate::{intersection, page, resize};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -45,11 +42,6 @@ pub(crate) struct Rect {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_log_line(js: *const NsJs, line: *const c_char);
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
-    fn ns_observer_schedule_tick(js: *const NsJs);
-    fn ns_node_arm_js_invalidate(node: *const NsNode);
     safe fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_border_box(b: *const NsBox, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64);
@@ -79,36 +71,28 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    if js.is_null() {
-        return None;
-    }
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.ptr()).with(f)
 }
 
 pub(crate) fn has_main_context(js: Js) -> bool {
-    !js.is_null() && !unsafe { ns_js_main_context(js.ptr()) }.is_null()
+    !api::main_context(js.ptr()).is_null()
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
-    if js.is_null() {
-        return;
-    }
     if let Ok(line) = CString::new(line) {
-        unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+        api::log_line(js.ptr(), &line);
     }
 }
 
 pub(crate) fn schedule_tick(js: Js) {
-    if !js.is_null() {
-        unsafe { ns_observer_schedule_tick(js.ptr()) };
-    }
+    api::observer_schedule_tick(js.ptr());
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(ns_js_layout_root(js.ptr())) }
+    unsafe { BoxRef::from_ptr(api::layout_root(js.ptr()).cast::<NsBox>()) }
 }
 
 pub(crate) fn call_observer(
@@ -122,7 +106,7 @@ pub(crate) fn call_observer(
     let js = js_of(scope);
     let report = report_type.map(|text| text.to_string_lossy().into_owned());
     api::call_observer(
-        js.ptr().cast_mut().cast(),
+        js.ptr(),
         scope.handle(),
         callback,
         this,
@@ -145,7 +129,9 @@ pub(crate) fn node_address(value: &Value) -> usize {
 }
 
 pub(crate) fn arm_invalidate(node: usize) {
-    unsafe { ns_node_arm_js_invalidate(node as *const NsNode) };
+    if let Some(node) = unsafe { Node::from_ptr(node as *const NsNode) } {
+        api::arm_js_invalidate(node);
+    }
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: Rect) -> Value {

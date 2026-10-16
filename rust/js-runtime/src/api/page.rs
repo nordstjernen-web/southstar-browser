@@ -13,7 +13,7 @@ use southstar_js_engine::{ContextHandle, Value};
 
 use crate::budget;
 use crate::ffi::state::PageState;
-use crate::ffi::{self, Js, NsJs, glue, record, scopes, wrapper};
+use crate::ffi::{self, Js, NavigationTiming, NsJs, glue, record, scopes, wrapper};
 use crate::{scheduling, worker};
 
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
@@ -263,6 +263,14 @@ pub fn time_origin_us(js: *const NsJs) -> i64 {
 
 pub fn time_origin_real_ms(js: *const NsJs) -> f64 {
     record::time_origin_real_ms(js)
+}
+
+pub fn navigation_timing(js: *const NsJs) -> Option<NavigationTiming> {
+    record::navigation_timing(js)
+}
+
+pub fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
+    record::set_navigation_timing(js, timing);
 }
 
 pub fn layout_root(js: *const NsJs) -> *const c_void {

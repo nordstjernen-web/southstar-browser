@@ -2,14 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
-use southstar_js_engine::ContextHandle;
 
-use super::glue::{self, SourceFn};
+use super::glue;
 use super::record;
 use super::state::{
     DataFn, DelayFn, DownloadFn, FormSubmitFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
@@ -39,30 +38,6 @@ pub unsafe extern "C" fn ns_js_in_pump(js: *const NsJs) -> GBoolean {
     flag(api::in_pump(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_source_remove(js: *mut NsJs, id: c_uint) {
-    api::source_remove(js, id);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_attach_timeout(
-    js: *mut NsJs,
-    ms: c_uint,
-    func: SourceFn,
-    data: *mut c_void,
-) -> c_uint {
-    api::attach_timeout(js, ms, func, data)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_attach_idle(
-    js: *mut NsJs,
-    func: SourceFn,
-    data: *mut c_void,
-) -> c_uint {
-    api::attach_idle(js, func, data)
-}
-
 pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
     let js = Js(data.cast());
     match scheduling::run_message_tasks(js) {
@@ -74,21 +49,6 @@ pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean
             SOURCE_REMOVE
         }
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_in_page(js: *mut NsJs, n: *const NsNode) -> GBoolean {
-    flag(api::node_in_page(js, node(n)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_drain_microtasks(js: *mut NsJs) {
-    api::drain_microtasks(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_observer_schedule_tick(js: *mut NsJs) {
-    api::observer_schedule_tick(js);
 }
 
 #[unsafe(no_mangle)]
@@ -193,22 +153,6 @@ pub unsafe extern "C" fn ns_js_set_selection(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_selection_state(
-    js: *const NsJs,
-    text_out: *mut *const c_char,
-    rect: *mut f64,
-) -> GBoolean {
-    let state = Js(js.cast_mut()).st();
-    unsafe {
-        *text_out = state.selection_text.get();
-        for (i, value) in state.selection_rect.get().into_iter().enumerate() {
-            *rect.add(i) = value;
-        }
-    }
-    flag(state.selection_has_range.get())
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_set_early_inject_src(js: *mut NsJs, src: *const c_char) {
     if let Some(js) = Js::of(js) {
         let src = text(src).map_or(ptr::null_mut(), |src| glib::strdup(src.to_bytes()));
@@ -227,12 +171,6 @@ pub unsafe extern "C" fn ns_js_flush_style(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_current_url(js: *const NsJs) -> *const c_char {
-    let url = api::page_url_ptr(js);
-    if url.is_null() { c"".as_ptr() } else { url }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_submit_form(
     js: *mut NsJs,
     form: *const NsNode,
@@ -240,84 +178,6 @@ pub unsafe extern "C" fn ns_js_submit_form(
 ) {
     if let Some(form) = node(form) {
         api::submit_form(js, form, node(submitter));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_realm(js: *const NsJs) -> ContextHandle {
-    api::main_realm(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_context(js: *const NsJs) -> ContextHandle {
-    api::main_context(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_is_worker(js: *const NsJs) -> GBoolean {
-    flag(api::is_worker(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_current_document(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(api::current_document(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_log_enabled(js: *const NsJs) -> GBoolean {
-    flag(api::log_enabled(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_log_line(js: *mut NsJs, line: *const c_char) {
-    if let Some(line) = text(line) {
-        api::log_line(js, line);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_img_src_layout_neutral(n: *const NsNode) -> GBoolean {
-    flag(node(n).is_some_and(api::img_src_layout_neutral))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_src_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    s: *const c_char,
-    slen: usize,
-) {
-    if let Some(el) = node(n) {
-        api::set_src_recorded(js, el, unsafe { glib::slice(s.cast(), slen) });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_in_template_content(n: *const NsNode) -> GBoolean {
-    flag(node(n).is_some_and(api::in_template_content))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_media_native_formats() -> c_uint {
-    api::media_native_formats()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNode) {
-    if let Some(root) = node(root) {
-        api::purge_subtree_rafs(js, root);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_insert_before_single(
-    js: *mut NsJs,
-    parent: *mut NsNode,
-    newc: *mut NsNode,
-    reference: *mut NsNode,
-) {
-    if let (Some(_), Some(child), Some(reference)) = (node(parent), node(newc), node(reference)) {
-        api::insert_before_single(js, child, reference);
     }
 }
 
@@ -334,37 +194,6 @@ pub unsafe extern "C" fn ns_js_form_reset(js: *mut NsJs, form: *mut NsNode) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char {
-    if let Some(url) = node(el).and_then(record::node_frame_url) {
-        return url.as_ptr();
-    }
-    api::page_url_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(api::ce_main_doc(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_wrapper_pinned(js: *const NsJs, n: *const NsNode) -> GBoolean {
-    flag(node(n).is_some_and(|n| api::wrapper_pinned(js, n)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_attr_changed(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    attr_name: *const c_char,
-    old_value: *const c_char,
-    new_value: *const c_char,
-) {
-    if let (Some(el), Some(name)) = (node(n), text(attr_name)) {
-        api::ce_attr_changed(js, el, name, text(old_value), text(new_value));
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_add_csp_header(js: *mut NsJs, header_value: *const c_char) {
     api::add_csp_header(js, text(header_value));
 }
@@ -375,32 +204,4 @@ pub unsafe extern "C" fn ns_js_csp_form_action_allowed(
     action_url: *const c_char,
 ) -> GBoolean {
     flag(api::csp_form_action_allowed(js, text(action_url)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_storage_partition(js: *const NsJs) -> *const c_char {
-    record::partition_key_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_time_origin_us(js: *const NsJs) -> i64 {
-    api::time_origin_us(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64 {
-    api::time_origin_real_ms(js)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_make_element(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    node: *const NsNode,
-) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
-    crate::api::make_element(scope, node)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_unwrap_element(value: &southstar_js_engine::Value) -> *const NsNode {
-    Node::ptr_or_null(crate::api::unwrap_element(value))
 }

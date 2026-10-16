@@ -18,9 +18,9 @@ mod nodes;
 mod page;
 mod tasks;
 
-pub use crate::ffi::NsJs;
 pub use crate::ffi::glue::BytesView;
 pub use crate::ffi::record::AdoptedProtos;
+pub use crate::ffi::{NavigationTiming, NsJs};
 pub use enter::*;
 pub use hooks::*;
 pub use nodes::*;

@@ -12,6 +12,7 @@ southstar-config = { path = "../config" }
 southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-runtime = { path = "../js-runtime" }
 southstar-sqlite = { path = "../sqlite" }
 
 [lints]

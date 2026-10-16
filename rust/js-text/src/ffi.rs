@@ -7,16 +7,14 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 use southstar_style::StyleTable;
 
 use crate::Element;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -28,9 +26,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_style_table(js: *const NsJs) -> *mut GHashTable;
-    fn ns_js_flush_layout(js: *mut NsJs);
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_record_character_data(js: *mut NsJs, node: *mut NsNode, old_value: *const c_char);
@@ -51,8 +46,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
         name: &[u8],
@@ -70,11 +63,11 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    nsr_make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
@@ -85,17 +78,15 @@ pub(crate) fn style_table(js: Js) -> StyleTable {
     if js.is_null() {
         return StyleTable::none();
     }
-    unsafe { StyleTable::from_ptr(ns_js_style_table(js.0)) }
+    unsafe { StyleTable::from_ptr(api::style_table(js.0)) }
 }
 
 pub(crate) fn flush_layout(js: Js) {
-    if !js.is_null() {
-        unsafe { ns_js_flush_layout(js.0) };
-    }
+    api::flush_layout(js.0);
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn clear_children(js: Js, node: Element) {

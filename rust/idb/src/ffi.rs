@@ -8,6 +8,7 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GStr};
 use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
@@ -28,7 +29,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: u32) -> i64;
     fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
-    fn ns_js_storage_partition(js: *const c_void) -> *const c_char;
 }
 
 fn cstring(bytes: &[u8]) -> CString {
@@ -125,8 +125,7 @@ pub fn warning(message: &[u8]) {
 }
 
 pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {
-    let partition = unsafe { glib::bytes(ns_js_storage_partition(scope.context_opaque())) }?;
-    Some(partition.to_vec())
+    api::partition_key(scope.context_opaque().cast()).map(CString::into_bytes)
 }
 
 #[unsafe(no_mangle)]

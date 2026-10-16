@@ -5,7 +5,7 @@
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GPtrArray};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -22,7 +22,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_record_child_change(
@@ -51,14 +50,7 @@ unsafe extern "C" {
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-    fn ns_node_in_template_content(node: *const NsNode) -> GBoolean;
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
-    fn ns_element_insert_before_single(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        node: *mut NsNode,
-        reference: *mut NsNode,
-    );
 }
 
 fn raw(node: Option<Element>) -> *mut NsNode {
@@ -92,7 +84,7 @@ pub(crate) fn new_text(text: &[u8]) -> Element {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn orphan(js: Js, node: Element) {
@@ -194,25 +186,13 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {
-    unsafe { ns_node_in_template_content(node.as_ptr()) != 0 }
+    api::in_template_content(node)
 }
 
 pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
     unsafe { ns_insert_sibling_before(reference.as_mut_ptr(), node.as_mut_ptr()) };
 }
 
-pub(crate) fn insert_before_single(
-    js: Option<Js>,
-    parent: Element,
-    node: Element,
-    reference: Element,
-) {
-    unsafe {
-        ns_element_insert_before_single(
-            raw_js(js),
-            parent.as_mut_ptr(),
-            node.as_mut_ptr(),
-            reference.as_mut_ptr(),
-        )
-    };
+pub(crate) fn insert_before_single(js: Option<Js>, node: Element, reference: Element) {
+    api::insert_before_single(raw_js(js), node, reference);
 }

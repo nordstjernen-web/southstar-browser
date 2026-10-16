@@ -14,10 +14,7 @@ use southstar_js_runtime::api;
 use crate::hooks::{self, Hook};
 use crate::{audio, element, eme, mse, support, tracks};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -89,13 +86,9 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
     fn ns_video_codec_available(codec: *const c_char) -> GBoolean;
     fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
-    fn ns_media_native_formats() -> c_uint;
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -165,15 +158,11 @@ pub(crate) fn dispatch(js: Js, element: Element, kind: &str) {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.ptr()) };
+    api::mark_mutated(js.ptr());
 }
 
 pub(crate) fn current_url(js: Js) -> Option<String> {
-    let url = unsafe { ns_js_current_url(js.ptr()) };
-    if url.is_null() {
-        return None;
-    }
-    let url = unsafe { CStr::from_ptr(url) };
+    let url = api::current_url(js.ptr());
     (!url.is_empty()).then(|| url.to_string_lossy().into_owned())
 }
 
@@ -207,7 +196,7 @@ pub(crate) struct NativeFormats {
 }
 
 pub(crate) fn native_formats() -> NativeFormats {
-    let bits = unsafe { ns_media_native_formats() };
+    let bits = api::media_native_formats();
     NativeFormats {
         libav: bits & FORMAT_LIBAV != 0,
         vorbis: bits & FORMAT_VORBIS != 0,
@@ -425,7 +414,7 @@ pub unsafe extern "C" fn ns_js_video_event(
     let Some(node) = (unsafe { Node::from_ptr(node.cast()) }) else {
         return;
     };
-    let handle = unsafe { ns_js_main_context(js.ptr()) };
+    let handle = api::main_context(js.ptr());
     if handle.is_null() {
         return;
     }

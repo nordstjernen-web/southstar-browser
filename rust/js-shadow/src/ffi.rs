@@ -11,18 +11,13 @@ use southstar_js_runtime::api;
 
 use crate::Element;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_node_arm_js_invalidate(node: *mut NsNode);
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
 }
 
@@ -79,11 +74,11 @@ pub(crate) fn append_child(parent: Element, child: Element) {
 }
 
 pub(crate) fn arm_js_invalidate(node: Element) {
-    unsafe { ns_node_arm_js_invalidate(node.as_mut_ptr()) };
+    api::arm_js_invalidate(node);
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    node_of(unsafe { ns_js_current_document(js.0) })
+    api::current_document(js.0)
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {

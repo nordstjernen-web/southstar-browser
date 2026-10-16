@@ -13,10 +13,7 @@ use southstar_js_runtime::api;
 use crate::attrs::QualifiedName;
 use crate::{Element, attribute_maps, attrs, change, orphans, record, tree};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(*mut NsJs);
@@ -24,8 +21,6 @@ pub(crate) struct Js(*mut NsJs);
 unsafe extern "C" {
     fn ns_qcache_invalidate(js: *mut NsJs);
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
     fn ns_mut_record_emit(
         js: *mut NsJs,
         kind: *const c_char,
@@ -46,16 +41,7 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_ce_attr_changed(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        attr: *const c_char,
-        old_value: *const c_char,
-        new_value: *const c_char,
-    );
     fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_request_repaint(js: *mut NsJs);
     fn ns_attr_detach_matching(
         js: *mut NsJs,
         owner: *mut NsNode,
@@ -81,7 +67,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_images_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
@@ -92,7 +77,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_node_arm_js_invalidate(n: *mut NsNode);
 }
 
 impl Js {
@@ -158,11 +142,11 @@ pub(crate) fn is_shadow_root(node: Element) -> bool {
 }
 
 fn page_context(js: Js) -> ContextHandle {
-    unsafe { ns_js_main_context(js.0).or(ns_js_main_realm(js.0)) }
+    api::main_context(js.0).or(api::main_realm(js.0))
 }
 
 pub(crate) fn has_main_context(js: Js) -> bool {
-    !unsafe { ns_js_main_context(js.0) }.is_null()
+    !api::main_context(js.0).is_null()
 }
 
 pub(crate) fn with_page_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
@@ -262,15 +246,7 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    unsafe {
-        ns_ce_attr_changed(
-            js.0,
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            c_ptr(old),
-            c_ptr(new),
-        )
-    };
+    api::ce_attr_changed(js.0, node, name, old, new);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
@@ -278,11 +254,11 @@ pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    unsafe { ns_js_request_repaint(js.0) };
+    api::request_repaint(js.0);
 }
 
 pub(crate) fn attr_detach_matching(
@@ -345,7 +321,7 @@ pub(crate) fn remove_attr_ns(el: Element, namespace_uri: Option<&CStr>, local_na
 }
 
 pub(crate) fn purge_subtree_rafs(js: Js, root: Element) {
-    unsafe { ns_js_purge_subtree_rafs(js.0, root.as_mut_ptr()) };
+    api::purge_subtree_rafs(js.0, root);
 }
 
 pub(crate) fn images_forget_node(js: Js, node: Element) {
@@ -373,7 +349,7 @@ pub(crate) fn dispatch_event(js: Js, target: Element, kind: &CStr) {
 }
 
 pub(crate) fn arm_js_invalidate(el: Element) {
-    unsafe { ns_node_arm_js_invalidate(el.as_mut_ptr()) };
+    api::arm_js_invalidate(el);
 }
 
 #[unsafe(no_mangle)]

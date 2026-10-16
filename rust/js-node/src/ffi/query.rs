@@ -15,7 +15,6 @@ use super::{Js, NsJs, imports, raw_js};
 use crate::{Element, JsResult};
 
 unsafe extern "C" {
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
     fn ns_js_set_attr_recorded(
@@ -45,26 +44,17 @@ unsafe extern "C" {
     fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
     fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_js_img_src_layout_neutral(n: *const NsNode) -> GBoolean;
     fn ns_body_forward_content_handler(
         ctx: ContextHandle,
         n: *const NsNode,
         name: *const c_char,
         code: *const c_char,
     );
-    fn ns_js_request_repaint(js: *mut NsJs);
     fn ns_js_record_attr_change(
         js: *mut NsJs,
         target: *mut NsNode,
         name: *const c_char,
         old_value: *const c_char,
-    );
-    fn ns_ce_attr_changed(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        attr: *const c_char,
-        old_value: *const c_char,
-        new_value: *const c_char,
     );
 }
 
@@ -81,7 +71,7 @@ pub(crate) fn attr_owner(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.0)) }
+    api::current_document(js.0)
 }
 
 pub(crate) fn doc_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
@@ -191,7 +181,7 @@ pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn img_src_layout_neutral(node: Element) -> bool {
-    unsafe { ns_js_img_src_layout_neutral(node.as_ptr()) != 0 }
+    api::img_src_layout_neutral(node)
 }
 
 pub(crate) fn body_forward_content_handler(
@@ -210,7 +200,7 @@ pub(crate) fn attr_may_affect_style(_node: Element, name: &CStr) -> bool {
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    unsafe { ns_js_request_repaint(js.0) };
+    api::request_repaint(js.0);
 }
 
 pub(crate) fn record_attr_change(js: Js, node: Element, name: &CStr, old: Option<&CStr>) {
@@ -224,15 +214,7 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    unsafe {
-        ns_ce_attr_changed(
-            js.0,
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            c_ptr(old),
-            c_ptr(new),
-        )
-    };
+    api::ce_attr_changed(js.0, node, name, old, new);
 }
 
 pub(crate) fn with_text<R>(

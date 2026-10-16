@@ -9,13 +9,7 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 const DATA_CLONE_ERR: i32 = 25;
 const HIDDEN_IMAGEDATA: i32 = 4;
 
-#[repr(C)]
-pub(crate) struct NsNode {
-    _private: [u8; 0],
-}
-
 unsafe extern "Rust" {
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
         name: &[u8],
@@ -69,7 +63,7 @@ pub(crate) fn is_host_object(value: &Value) -> bool {
 }
 
 pub(crate) fn is_element(value: &Value) -> bool {
-    !nsr_unwrap_element(value).is_null()
+    southstar_js_runtime::api::unwrap_element(value).is_some()
 }
 
 pub(crate) fn is_port(_scope: &Scope<'_>, value: &Value) -> bool {

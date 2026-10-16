@@ -9,13 +9,11 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -23,7 +21,6 @@ pub(crate) struct Js(*mut NsJs);
 const LIVE_LABELS: c_int = 13;
 
 unsafe extern "C" {
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_qcache_invalidate(js: *const NsJs);
     fn ns_js_record_child_change(
@@ -33,12 +30,6 @@ unsafe extern "C" {
         removed: *mut NsNode,
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
-    );
-    fn ns_element_insert_before_single(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        node: *mut NsNode,
-        reference: *mut NsNode,
     );
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
@@ -54,11 +45,9 @@ unsafe extern "C" {
         len: isize,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void;
     fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char;
     fn ns_img_chosen_density(n: *const NsNode) -> f64;
-    fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_enum_normalize(attr: *const c_char, v: *const c_char) -> *const c_char;
@@ -73,8 +62,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_make_live(
         scope: &mut Scope<'_>,
         owner: &Value,
@@ -125,11 +112,11 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    nsr_make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn make_labels(scope: &mut Scope<'_>, owner: &Value) -> JsResult {
@@ -137,7 +124,7 @@ pub(crate) fn make_labels(scope: &mut Scope<'_>, owner: &Value) -> JsResult {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn orphan(js: Option<Js>, node: Element) {
@@ -168,20 +155,8 @@ pub(crate) fn record_child_change(
     };
 }
 
-pub(crate) fn insert_before_single(
-    js: Option<Js>,
-    parent: Element,
-    node: Element,
-    reference: Element,
-) {
-    unsafe {
-        ns_element_insert_before_single(
-            raw_js(js),
-            parent.as_mut_ptr(),
-            node.as_mut_ptr(),
-            reference.as_mut_ptr(),
-        )
-    };
+pub(crate) fn insert_before_single(js: Option<Js>, node: Element, reference: Element) {
+    api::insert_before_single(raw_js(js), node, reference);
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {
@@ -248,7 +223,7 @@ pub(crate) fn has_assigned_slot(node: Element) -> bool {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.0)) }
+    api::current_document(js.0)
 }
 
 pub(crate) fn image_for_node(js: Option<Js>, node: Element) -> Option<ImageRef<'static>> {
@@ -269,11 +244,8 @@ pub(crate) fn resolve_against_doc_base(
     href: &[u8],
 ) -> Option<Vec<u8>> {
     let js = js?;
-    let base = unsafe { ns_js_node_doc_base(js.0, node.as_ptr()) };
-    if base.is_null() {
-        return None;
-    }
-    let document_url = unsafe { CStr::from_ptr(base) }.to_bytes();
+    let base = api::node_doc_base(js.0, Some(node))?;
+    let document_url = base.to_bytes();
     let base = southstar_dom::base_url::owning_document(node)
         .and_then(|doc| southstar_dom::base_url::document_base(doc, Some(document_url)))
         .unwrap_or_else(|| document_url.to_vec());

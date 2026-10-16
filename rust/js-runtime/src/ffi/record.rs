@@ -209,7 +209,7 @@ struct Record {
     csp: *mut NsCsp,
     time_origin_us: i64,
     time_origin_real_ms: f64,
-    navigation_timing: NavigationTiming,
+    navigation_timing: Cell<NavigationTiming>,
     ce_main_doc: *const NsNode,
     platform_globals: *mut GHashTable,
     protos: Option<DomProtos>,
@@ -366,7 +366,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         csp: ptr::null_mut(),
         time_origin_us: 0,
         time_origin_real_ms: 0.0,
-        navigation_timing: NavigationTiming::starting_at(0, 0.0),
+        navigation_timing: Cell::new(NavigationTiming::starting_at(0, 0.0)),
         ce_main_doc: ptr::null(),
         platform_globals: ptr::null_mut(),
         protos: None,
@@ -408,8 +408,14 @@ pub(crate) unsafe fn set_time_origin(js: *mut NsJs, origin_us: i64, origin_real_
     }
 }
 
-pub(crate) unsafe fn set_navigation_timing(js: *mut NsJs, timing: NavigationTiming) {
-    unsafe { (*rec(js)).navigation_timing = timing };
+pub(crate) fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
+    if let Some(js) = record(js) {
+        js.navigation_timing.set(timing);
+    }
+}
+
+pub(crate) fn navigation_timing(js: *const NsJs) -> Option<NavigationTiming> {
+    record(js).map(|js| js.navigation_timing.get())
 }
 
 pub(crate) unsafe fn create_runtime(js: *mut NsJs, options: &RuntimeOptions) -> bool {
@@ -1419,15 +1425,6 @@ pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
 
 pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {
     record(js)?.partition_key.clone()
-}
-
-pub(crate) fn partition_key_ptr(js: *const NsJs) -> *const c_char {
-    record(js).map_or(ptr::null(), |js| opt_ptr(&js.partition_key))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_navigation_timing(js: *const NsJs) -> *const NavigationTiming {
-    record(js).map_or(ptr::null(), |js| &raw const js.navigation_timing)
 }
 
 pub(crate) fn page_csp(js: *const NsJs) -> *const NsCsp {

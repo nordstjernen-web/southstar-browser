@@ -8,13 +8,11 @@ use core::ptr;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult, numeric, strings};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -39,21 +37,18 @@ unsafe extern "C" {
         len: isize,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
-    fn ns_js_set_src_recorded(js: *mut NsJs, node: *mut NsNode, value: *const c_char, len: usize);
     fn ns_js_image_natural_size(
         js: *mut NsJs,
         node: *const NsNode,
         width: *mut c_int,
         height: *mut c_int,
     ) -> GBoolean;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
         name: &[u8],
@@ -77,7 +72,7 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {
@@ -116,8 +111,7 @@ pub(crate) fn remove_attr(js: Js, node: Element, name: &CStr) {
 }
 
 pub(crate) fn set_src(js: Js, node: Element, value: &JsText) {
-    let bytes = value.bytes();
-    unsafe { ns_js_set_src_recorded(js.0, node.as_mut_ptr(), bytes.as_ptr().cast(), bytes.len()) };
+    api::set_src_recorded(js.0, node, value.bytes());
 }
 
 pub(crate) fn image_natural_size(js: Js, node: Element) -> Option<(i32, i32)> {
@@ -126,8 +120,8 @@ pub(crate) fn image_natural_size(js: Js, node: Element) -> Option<(i32, i32)> {
     (found != glib::FALSE).then_some((w, h))
 }
 
-pub(crate) fn current_url(js: Js) -> &'static [u8] {
-    unsafe { CStr::from_ptr(ns_js_current_url(js.0)) }.to_bytes()
+pub(crate) fn current_url(js: Js) -> Vec<u8> {
+    api::current_url(js.0).into_bytes()
 }
 
 pub(crate) fn resolved_url(scope: &mut Scope<'_>, js: Js, href: &'static [u8]) -> Value {

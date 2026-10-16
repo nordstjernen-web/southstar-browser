@@ -111,7 +111,7 @@ fn create_section(scope: &mut Scope<'_>, this: &Value, tag: &[u8], before_body: 
         .flatten()
         .filter(|body| body.parent() == Some(table));
     match body {
-        Some(body) => ffi::insert_before_single(ffi::js_of(scope), table, created, body),
+        Some(body) => ffi::insert_before_single(ffi::js_of(scope), created, body),
         None => table.append(created),
     }
     table_changed(scope);
@@ -139,7 +139,7 @@ pub fn create_caption(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> J
     }
     let created = new_element(b"caption");
     match table.first_child() {
-        Some(first) => ffi::insert_before_single(ffi::js_of(scope), table, created, first),
+        Some(first) => ffi::insert_before_single(ffi::js_of(scope), created, first),
         None => table.append(created),
     }
     table_changed(scope);
@@ -240,7 +240,7 @@ pub fn insert_row(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
         .and_then(|i| rows.get(i).copied());
     match reference {
         Some(reference) => match reference.parent() {
-            Some(parent) => ffi::insert_before_single(ffi::js_of(scope), parent, row, reference),
+            Some(_) => ffi::insert_before_single(ffi::js_of(scope), row, reference),
             None => table.append(row),
         },
         None => row_parent(table, &rows).append(row),
@@ -276,7 +276,7 @@ pub fn insert_cell(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRes
         .ok()
         .and_then(|i| cells.get(i).copied())
     {
-        Some(reference) => ffi::insert_before_single(ffi::js_of(scope), row, cell, reference),
+        Some(reference) => ffi::insert_before_single(ffi::js_of(scope), cell, reference),
         None => row.append(cell),
     }
     record_insert(scope, cell);
