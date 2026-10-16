@@ -177,7 +177,7 @@ elements (`head title meta link style script noscript template`) to
 | Element | Status | Notes |
 |---------|:--:|------|
 | `img` | ✅ | layout + decode pipeline |
-| `img srcset` / `sizes` | ✅ | descriptor parsing (`first_url_from_srcset_sized`) + `sizes` evaluation (`ns_css_sizes_resolve`); width & density descriptors selected by viewport/density. `HTMLImageElement.currentSrc` reflects the actually-selected source (resolved to an absolute URL via the shared `ns_img_chosen_url` so it always matches the image the engine renders, including `<picture>` selection) |
+| `img srcset` / `sizes` | ✅ | descriptor parsing (`first_url_from_srcset_sized`) + `sizes` evaluation (`southstar_css::sizes_resolve`); width & density descriptors selected by viewport/density. `HTMLImageElement.currentSrc` reflects the actually-selected source (resolved to an absolute URL via the shared `ns_img_chosen_url` so it always matches the image the engine renders, including `<picture>` selection) |
 | `picture` / `source` | ✅ | `pick_picture_source_url` matches `media`/`type` via `ns_css_media_query_matches` |
 | `img loading="lazy"` | ✅ | fetch/decode deferred until the image scrolls near the viewport (`rust/engine/src/fetch.rs`) |
 | Decode pipeline | ✅/🟡 | ICO (`src/image_ico.c`) → Rust raster decoders (`png`, `gif`, `zune-jpeg`, in-tree BMP: PNG/APNG, GIF, BMP, JPEG) → WebP via libwebp (lossy VP8 + lossless VP8L + animated via `WebPAnimDecoder`, `src/image_webp.c`) → AVIF via libavif (`src/image_avif.c`, if built). SVG renders in-engine (`src/svg.c`). Nothing follows: an unsupported format fails to decode |
@@ -669,7 +669,7 @@ CSS support (abridged):
   gap is exposing the computed *used* direction of `dir=auto` elements to
   `:dir()`.
 - 🟡 Writing modes: `writing-mode` and `text-orientation` are parsed and inherited
-  (`ns_css_writing_mode` / `ns_css_text_orientation` in `src/css.c`); a
+  (`writing_mode_of` / `text_orientation` in `rust/css/src/style_query.rs`); a
   block/inline-block container in `vertical-rl` / `vertical-lr` (and the
   `sideways-*` aliases) lays its text out in vertical columns — measured with the
   inline and block axes swapped (`inline_layout` in `src/layout.c`) and painted in

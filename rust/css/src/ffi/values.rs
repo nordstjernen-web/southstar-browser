@@ -95,9 +95,9 @@ pub(super) unsafe fn text_of(v: *const NsCssValue, specified: bool) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_char {
-    glib::strdup(&unsafe { text_of(v, false) })
+pub fn value_serialize(v: &NsCssValue) -> Vec<u8> {
+    // SAFETY: a value's strings and next layer are null or owned by it for as long as the reference lives.
+    unsafe { text_of(v, false) }
 }
 
 #[unsafe(no_mangle)]

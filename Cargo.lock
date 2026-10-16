@@ -2760,6 +2760,7 @@ version = "0.9.11-dev"
 name = "southstar-layout"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
@@ -2824,6 +2825,7 @@ dependencies = [
 name = "southstar-layout-float"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -2869,6 +2871,7 @@ dependencies = [
 name = "southstar-layout-inline"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -3093,9 +3096,9 @@ dependencies = [
 name = "southstar-selection"
 version = "0.9.11-dev"
 dependencies = [
- "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]

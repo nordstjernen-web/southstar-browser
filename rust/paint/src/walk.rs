@@ -936,9 +936,8 @@ fn paint_scrollbars(cr: Cr, b: BoxRef<'_>) {
 }
 
 fn paint_column_rules(cr: Cr, b: BoxRef<'_>, s: StyleRef<'_>) {
-    let mut col_gap = 16.0;
     let n_cols = b.columns();
-    engine::used_column_count(s, b.content_width(), &mut col_gap);
+    let (_, col_gap) = southstar_css::used_column_count(Some(s.data()), b.content_width());
     let rule_w = length_or(s.get(P::ColumnRuleWidth), 0.0);
     let Some(rstyle) = s
         .get(P::ColumnRuleStyle)

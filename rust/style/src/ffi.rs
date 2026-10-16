@@ -128,6 +128,10 @@ impl<'a> ValueRef<'a> {
         ptr::from_ref(self.0)
     }
 
+    pub fn data(self) -> &'a NsCssValue {
+        self.0
+    }
+
     pub fn font_slanted(self) -> bool {
         self.keyword_text().is_some_and(|kw| {
             let kw = kw.to_bytes();
@@ -324,6 +328,10 @@ impl<'a> StyleRef<'a> {
 
     pub fn as_ptr(self) -> *const Style {
         ptr::from_ref(self.0).cast()
+    }
+
+    pub fn data(self) -> &'a StyleData {
+        self.0
     }
 
     pub fn value(self, prop: &Prop) -> Option<ValueRef<'a>> {

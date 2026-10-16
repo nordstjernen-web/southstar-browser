@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::mem::{offset_of, size_of};
 use core::ptr;
 
@@ -167,7 +167,7 @@ pub(crate) enum SlotMut<'a> {
     Other,
 }
 
-pub(super) fn slot(v: &NsCssValue) -> Slot<'_> {
+pub(crate) fn slot(v: &NsCssValue) -> Slot<'_> {
     unsafe {
         match v.kind {
             KIND_KEYWORD => {
@@ -200,7 +200,7 @@ fn slot_mut(v: &mut NsCssValue) -> SlotMut<'_> {
 
 pub(crate) struct ComputedStyle<'a>(pub(super) &'a mut RawStyle);
 
-pub(crate) struct StyleView<'a>(pub(super) &'a RawStyle);
+pub(crate) struct StyleView<'a>(pub(crate) &'a RawStyle);
 
 impl ComputedStyle<'_> {
     pub(crate) fn get(&self, prop: usize) -> Option<Slot<'_>> {
@@ -260,33 +260,24 @@ pub(super) unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_tracks_computed_serialize(
-    style: *const RawStyle,
-    root: *const RawStyle,
-    prop: c_int,
-) -> *mut c_char {
-    let Some(style) = (unsafe { style.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    let value = usize::try_from(prop)
-        .ok()
-        .and_then(|prop| style.values.get(prop))
-        .and_then(|&v| unsafe { v.as_ref() });
-    let Some(value) = value.filter(|v| v.kind == KIND_TRACKS && !v.specified.is_null()) else {
-        return ptr::null_mut();
-    };
-    if unsafe { value.u.tracks.subgrid } != 0 {
-        return ptr::null_mut();
+pub fn tracks_computed_text(
+    style: &RawStyle,
+    root: Option<&RawStyle>,
+    prop: Prop,
+) -> Option<Vec<u8>> {
+    let value = style.value_at(prop.id())?;
+    let tracks = value.tracks()?;
+    if value.specified.is_null() || tracks.subgrid != 0 {
+        return None;
     }
+    // SAFETY: a value's specified text is null or a NUL-terminated string the value owns, and it is not null here.
     let specified = unsafe { CStr::from_ptr(value.specified) }.to_bytes();
-    let root = unsafe { root.as_ref() }.unwrap_or(style);
-    let text = track_text::tracks_computed_text(
+    let root = root.unwrap_or(style);
+    Some(track_text::tracks_computed_text(
         specified,
         computed_units::style_font_px(&StyleView(style)),
         computed_units::style_font_px(&StyleView(root)),
-    );
-    glib::strdup(&text)
+    ))
 }
 
 #[unsafe(no_mangle)]

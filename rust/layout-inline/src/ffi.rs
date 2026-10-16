@@ -31,7 +31,6 @@ unsafe extern "C" {
     fn ns_layout_measure_inline_atomics_end(saved: *mut c_void);
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
-    fn ns_css_text_orientation(s: *const Style) -> c_int;
     fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char;
 }
 
@@ -186,7 +185,7 @@ pub(crate) fn writing_mode(s: *const Style) -> c_int {
 }
 
 pub(crate) fn text_orientation(s: *const Style) -> c_int {
-    unsafe { ns_css_text_orientation(s) }
+    southstar_css::text_orientation(style(s).map(StyleRef::data))
 }
 
 pub(crate) fn vertical_stack_text(text: &CStr) -> Option<GStr> {

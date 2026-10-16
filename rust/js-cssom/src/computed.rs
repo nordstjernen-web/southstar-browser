@@ -1489,8 +1489,8 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     if (is(PropId::Overflow) || is(PropId::OverflowX) || is(PropId::OverflowY))
         && let Some(c) = computed
     {
-        let x = ffi::overflow_keyword(c, PropId::OverflowX as usize);
-        let y = ffi::overflow_keyword(c, PropId::OverflowY as usize);
+        let x = ffi::overflow_keyword(c, PropId::OverflowX);
+        let y = ffi::overflow_keyword(c, PropId::OverflowY);
         if is(PropId::OverflowX) {
             return Some(x);
         }

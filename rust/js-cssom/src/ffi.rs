@@ -199,18 +199,10 @@ unsafe extern "C" {
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
-    fn ns_css_value_serialize(v: *const NsCssValue) -> *mut c_char;
-    fn ns_css_dimension_px(v: *const NsCssValue, font_size: f64, basis: f64) -> f64;
     fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
     fn ns_css_declarations_free(decls: *mut GArray);
     fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
     fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-    fn ns_css_tracks_computed_serialize(
-        s: *const Style,
-        root: *const Style,
-        prop: c_int,
-    ) -> *mut c_char;
-    fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
 
     fn ns_css_anim_lists(
         style: *const Style,
@@ -288,13 +280,6 @@ fn take_text(p: *mut c_char) -> Option<String> {
     let text = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
     unsafe { glib::g_free(p.cast()) };
     Some(text)
-}
-
-fn static_text(p: *const c_char) -> Option<&'static str> {
-    if p.is_null() {
-        return None;
-    }
-    unsafe { CStr::from_ptr(p) }.to_str().ok()
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
@@ -472,16 +457,24 @@ pub(crate) fn transform_matrix(t: &Transform, bw: f64, bh: f64) -> Mat4 {
     southstar_style::transform_to_mat4(t, bw, bh)
 }
 
+fn text_until_nul(text: &[u8]) -> String {
+    lossy(&text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())])
+}
+
 pub(crate) fn serialize(v: ValueRef<'_>) -> Option<String> {
-    take_text(unsafe { ns_css_value_serialize(v.as_ptr()) })
+    Some(text_until_nul(&css_engine::value_serialize(v.data())))
 }
 
 pub(crate) fn serialize_raw(v: *const NsCssValue) -> Option<String> {
-    take_text(unsafe { ns_css_value_serialize(v) })
+    // SAFETY: callers pass null or a value the style or animation engine keeps alive across this call.
+    let v = unsafe { ValueRef::from_ptr(v) };
+    Some(v.map_or_else(String::new, |v| {
+        text_until_nul(&css_engine::value_serialize(v.data()))
+    }))
 }
 
 pub(crate) fn dimension_px(v: ValueRef<'_>, font_px: f64, basis: f64) -> f64 {
-    unsafe { ns_css_dimension_px(v.as_ptr(), font_px, basis) }
+    css_engine::dimension_px(v.data(), font_px, basis)
 }
 
 pub(crate) struct Decl {
@@ -584,8 +577,12 @@ pub(crate) fn tracks_computed_serialize(
     root: Option<StyleRef<'_>>,
     prop: usize,
 ) -> Option<String> {
-    let root = root.map_or(core::ptr::null(), StyleRef::as_ptr);
-    take_text(unsafe { ns_css_tracks_computed_serialize(style.as_ptr(), root, prop as c_int) })
+    let text = css_engine::tracks_computed_text(
+        style.data(),
+        root.map(StyleRef::data),
+        Prop::from_id(prop)?,
+    )?;
+    Some(text_until_nul(&text))
 }
 
 pub(crate) fn node_dir(node: Node<'_>) -> String {
@@ -603,8 +600,9 @@ pub(crate) fn list_style_serialize(kind: &str, position: &str, image: &str) -> O
     )))
 }
 
-pub(crate) fn overflow_keyword(style: StyleRef<'_>, axis: usize) -> String {
-    static_text(unsafe { ns_style_overflow_keyword(style.as_ptr(), axis as c_int) })
+pub(crate) fn overflow_keyword(style: StyleRef<'_>, axis: Prop) -> String {
+    css_engine::overflow_keyword(Some(style.data()), axis)
+        .to_str()
         .unwrap_or("")
         .to_string()
 }

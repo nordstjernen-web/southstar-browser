@@ -13,7 +13,6 @@ use southstar_style::{PropId, StyleRef};
 use crate::overflow;
 
 unsafe extern "C" {
-    fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
 }
 
@@ -69,8 +68,7 @@ fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
 }
 
 pub fn overflow_axis_keyword<'a>(s: Option<StyleRef<'a>>, axis: PropId) -> Option<&'a CStr> {
-    let s = s.map_or(ptr::null(), StyleRef::as_ptr);
-    c_str(unsafe { ns_style_overflow_keyword(s, axis as c_int) })
+    Some(southstar_css::overflow_keyword(s.map(StyleRef::data), axis))
 }
 
 pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
@@ -90,7 +88,11 @@ pub unsafe extern "C" fn ns_layout_overflow_axis_keyword(
     s: *const Style,
     axis: c_int,
 ) -> *const c_char {
-    unsafe { ns_style_overflow_keyword(s, axis) }
+    let axis = usize::try_from(axis)
+        .ok()
+        .and_then(PropId::from_id)
+        .unwrap_or(PropId::OverflowX);
+    overflow_axis_keyword(style_ref(s), axis).map_or(ptr::null(), CStr::as_ptr)
 }
 
 #[unsafe(no_mangle)]

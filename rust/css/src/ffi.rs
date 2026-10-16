@@ -43,8 +43,10 @@ use core::ffi::CStr;
 use southstar_glib::{self as glib};
 
 pub use compute::set_render_zoom;
-pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView};
-pub use computed_units::{PROP_COUNT, RawStyle, style_retain, style_value_slot};
+pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView, slot};
+pub use computed_units::{
+    PROP_COUNT, RawStyle, style_retain, style_value_slot, tracks_computed_text,
+};
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
@@ -78,6 +80,7 @@ pub use sheet_cache::{
 pub(crate) use shorthand::prop_named;
 pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, RawAreaRect, RawAreas, ValueKind};
+pub use values::value_serialize;
 pub use viewport::{FrameViewport, set_frame_viewport_measure};
 
 pub(crate) fn prefers_dark() -> bool {

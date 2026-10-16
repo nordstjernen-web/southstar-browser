@@ -6,18 +6,13 @@ use core::ffi::CStr;
 
 use crate::calc;
 use crate::container;
-use crate::ffi::{RawCalc, Slot, StyleView, font_relative_px, viewport};
+use crate::ffi::{
+    NsCssValue, RawCalc, RawStyle, Slot, StyleView, font_relative_px, slot, viewport,
+};
 use crate::prop::Prop;
 use crate::units::{
     self, CAP, CH, EM, EX, IC, LH, NUMBER, PERCENT, PX, RCAP, RCH, REM, REX, RIC, RLH, VH, VW,
 };
-
-fn keyword<'a>(style: &'a StyleView<'a>, prop: Prop) -> Option<&'a CStr> {
-    match style.get(prop.id()) {
-        Some(Slot::Keyword(kw)) => kw,
-        _ => None,
-    }
-}
 
 pub fn writing_mode_of(keyword: Option<&CStr>) -> i32 {
     match keyword.map(CStr::to_bytes) {
@@ -27,9 +22,9 @@ pub fn writing_mode_of(keyword: Option<&CStr>) -> i32 {
     }
 }
 
-pub(crate) fn text_orientation(style: Option<&StyleView<'_>>) -> i32 {
+pub fn text_orientation(style: Option<&RawStyle>) -> i32 {
     match style
-        .and_then(|s| keyword(s, Prop::TextOrientation))
+        .and_then(|s| s.keyword(Prop::TextOrientation))
         .map(CStr::to_bytes)
     {
         Some(b"upright") => 1,
@@ -42,20 +37,20 @@ fn math_fn(c: &RawCalc) -> bool {
     c.func != 0 && c.n_args > 0
 }
 
-pub(crate) fn dimension_px(value: Option<Slot<'_>>, font_size: f64, basis: f64) -> f64 {
-    let length = match value {
-        Some(Slot::Calc(c)) if math_fn(c) && basis > 0.0 => {
+pub fn dimension_px(value: &NsCssValue, font_size: f64, basis: f64) -> f64 {
+    let length = match slot(value) {
+        Slot::Calc(c) if math_fn(c) && basis > 0.0 => {
             let out = calc::math_fn_px(&c.to_calc(), basis);
             return if out > 0.0 { out } else { 0.0 };
         }
-        Some(Slot::Calc(c)) => {
+        Slot::Calc(c) => {
             let mut out = c.px;
             if basis > 0.0 {
                 out += c.pct * basis / 100.0;
             }
             return if out > 0.0 { out } else { 0.0 };
         }
-        Some(Slot::Length(l)) => l,
+        Slot::Length(l) => l,
         _ => return 0.0,
     };
     let n = length.v;
@@ -106,8 +101,8 @@ fn column_len_px(value: Option<Slot<'_>>, basis: f64, fallback: f64) -> f64 {
     }
 }
 
-pub(crate) fn used_column_count(style: Option<&StyleView<'_>>, avail_w: f64) -> (i32, f64) {
-    let Some(style) = style else {
+pub fn used_column_count(style: Option<&RawStyle>, avail_w: f64) -> (i32, f64) {
+    let Some(style) = style.map(StyleView) else {
         return (1, 16.0);
     };
     let mut gap = 16.0;
@@ -161,17 +156,8 @@ pub(crate) fn is_alignment(prop: Prop) -> bool {
     )
 }
 
-pub(crate) fn style_keyword<'a>(style: &'a StyleView<'a>, prop: Prop) -> Option<&'a CStr> {
-    let kw = keyword(style, prop)?;
-    Some(if is_alignment(prop) {
-        alignment_base(kw)
-    } else {
-        kw
-    })
-}
-
-pub(crate) fn overflow_keyword<'a>(style: Option<&'a StyleView<'a>>, axis: Prop) -> &'a CStr {
-    let lookup = |prop| style.and_then(|s| style_keyword(s, prop));
+pub fn overflow_keyword(style: Option<&RawStyle>, axis: Prop) -> &CStr {
+    let lookup = |prop| style.and_then(|s| s.keyword(prop));
     let value = lookup(axis)
         .or_else(|| lookup(Prop::Overflow))
         .unwrap_or(c"visible");

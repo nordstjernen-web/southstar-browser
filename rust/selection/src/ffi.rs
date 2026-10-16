@@ -4,13 +4,13 @@
 
 use core::ffi::{c_char, c_void};
 use core::ptr;
-use std::sync::OnceLock;
 
 use southstar_glib::{
     FALSE, GBoolean, GHashTable, boolean, g_direct_equal, g_direct_hash, g_free,
     g_hash_table_insert, g_hash_table_new_full, g_malloc, strdup,
 };
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
+use southstar_style::PropId;
 
 use crate::Selection;
 
@@ -30,7 +30,6 @@ struct NsSelectionRun {
 }
 
 unsafe extern "C" {
-    fn ns_css_keyword_is(v: *const c_void, kw: *const c_char) -> GBoolean;
     fn ns_paint_inline_xy_to_byte(
         b: *const NsBox,
         rel_x: f64,
@@ -55,23 +54,9 @@ unsafe extern "C" {
     ) -> GBoolean;
 }
 
-fn user_select_prop() -> usize {
-    static PROP: OnceLock<usize> = OnceLock::new();
-    *PROP.get_or_init(|| {
-        southstar_css::Prop::from_name(b"user-select").map_or(usize::MAX, |p| p.id())
-    })
-}
-
 pub fn user_select_is_none(b: BoxRef<'_>) -> Option<bool> {
-    let style: *const Style = b.style();
-    if style.is_null() {
-        return None;
-    }
-    let value = unsafe { *style.cast::<*const c_void>().add(user_select_prop()) };
-    if value.is_null() {
-        return None;
-    }
-    Some(unsafe { ns_css_keyword_is(value, c"none".as_ptr()) } != 0)
+    let value = southstar_style::box_style(b)?.get(PropId::UserSelect)?;
+    Some(value.is_keyword(c"none"))
 }
 
 pub fn xy_to_byte(b: BoxRef<'_>, x: f64, y: f64) -> usize {

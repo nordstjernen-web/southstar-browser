@@ -382,11 +382,6 @@ pub fn math_paint(cr: Cr, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) 
 unsafe extern "C" {
     fn ns_anim_get_opacity(anim: *mut c_void, dom: *const c_void, out: *mut c_double) -> GBoolean;
     fn ns_anim_get_transform(anim: *mut c_void, dom: *const c_void) -> *const Transform;
-    fn ns_css_used_column_count(
-        s: *const Style,
-        avail_w: c_double,
-        out_gap: *mut c_double,
-    ) -> c_int;
     fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
     fn ns_box_in_scroller(b: *const NsBox) -> GBoolean;
     fn ns_box_sticky_offset(
@@ -421,10 +416,6 @@ pub fn effective_transform(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Transform 
         unsafe { ns_anim_get_transform(anim, b.dom_ptr()).as_ref() }
     };
     southstar_style::effective_transform(s, anim_tf)
-}
-
-pub fn used_column_count(s: StyleRef<'_>, avail_w: f64, gap: &mut f64) -> i32 {
-    unsafe { ns_css_used_column_count(s.as_ptr(), avail_w, gap) }
 }
 
 pub fn box_is_fixed(b: BoxRef<'_>) -> bool {

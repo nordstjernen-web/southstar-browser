@@ -1,72 +1,13 @@
-//! Southstar — the C ABI of computed-style queries: css.c's ns_style read through the style mirror for layout, paint and script — writing mode, lengths in px, columns, keywords and currentcolor flags.
+//! Southstar — the C ABI of computed-style queries: whether a property of css.c's ns_style took its colour from currentcolor.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int};
+use core::ffi::c_int;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::computed_units::{RawStyle, StyleView, slot};
-use super::value::{KIND_KEYWORD, NsCssValue};
+use super::computed_units::RawStyle;
 use crate::cascade::CURRENTCOLOR_PROPS;
-use crate::prop::Prop;
-use crate::style_query;
-
-unsafe fn view<'a>(style: *const RawStyle) -> Option<StyleView<'a>> {
-    unsafe { style.as_ref() }.map(StyleView)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_text_orientation(style: *const RawStyle) -> c_int {
-    style_query::text_orientation(unsafe { view(style) }.as_ref())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_dimension_px(
-    v: *const NsCssValue,
-    font_size: c_double,
-    basis: c_double,
-) -> c_double {
-    style_query::dimension_px(unsafe { v.as_ref() }.map(slot), font_size, basis)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_used_column_count(
-    style: *const RawStyle,
-    avail_w: c_double,
-    out_gap: *mut c_double,
-) -> c_int {
-    let (n, gap) = style_query::used_column_count(unsafe { view(style) }.as_ref(), avail_w);
-    if let Some(out) = unsafe { out_gap.as_mut() } {
-        *out = gap;
-    }
-    n
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_keyword_is(v: *const NsCssValue, kw: *const c_char) -> GBoolean {
-    let Some(v) = (unsafe { v.as_ref() }).filter(|v| v.kind == KIND_KEYWORD) else {
-        return glib::FALSE;
-    };
-    let keyword = unsafe { v.u.keyword };
-    if kw.is_null() || keyword.is_null() {
-        return glib::FALSE;
-    }
-    glib::boolean(unsafe { CStr::from_ptr(keyword) == CStr::from_ptr(kw) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_style_overflow_keyword(
-    style: *const RawStyle,
-    axis: c_int,
-) -> *const c_char {
-    let axis = usize::try_from(axis)
-        .ok()
-        .and_then(Prop::from_id)
-        .unwrap_or(Prop::OverflowX);
-    let view = unsafe { view(style) };
-    style_query::overflow_keyword(view.as_ref(), axis).as_ptr()
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_style_prop_from_currentcolor(

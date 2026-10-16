@@ -71,7 +71,7 @@ pub use container::{
 pub use container::{set_unit_dims as set_container_unit_dims, unit_dims as container_unit_dims};
 pub use content::append_unescaped;
 pub use counter::list_style_serialize;
-pub use declarations::{named_declaration_valid, named_property_supported};
+pub use declarations::{named_declaration_valid, named_property_supported, sizes_resolve};
 pub use element_state::node_dir;
 pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target_fragment};
 pub use ffi::viewport::get as viewport;
@@ -83,7 +83,7 @@ pub use ffi::{
     selector_cache_begin, selector_cache_end, set_active_node, set_focus_node,
     set_focus_visible_node, set_font_alias, set_font_oracle, set_frame_viewport_measure,
     set_fullscreen_node, set_hover_node, set_render_zoom, style_element_cache_begin,
-    style_element_cache_end, style_retain, style_value_slot,
+    style_element_cache_end, style_retain, style_value_slot, tracks_computed_text, value_serialize,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
@@ -115,7 +115,10 @@ pub use restyle::{
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
-pub use style_query::{alignment_base, writing_mode_of};
+pub use style_query::{
+    alignment_base, dimension_px, overflow_keyword, text_orientation, used_column_count,
+    writing_mode_of,
+};
 pub use style_text::{shadow_adopted_text, style_element_text};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
 pub use time::list_serialize as time_list_serialize;

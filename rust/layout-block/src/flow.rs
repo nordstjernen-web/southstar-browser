@@ -14,14 +14,14 @@ use southstar_layout_geom::{
     containing_block_definite_height, edges_into_box, height_keyword_stretches, length_resolve,
     resolve_used_height, style_is_absolute_or_fixed,
 };
-use southstar_style::{Display, Kind, PropId, ValueRef, display_of};
+use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
 
 use crate::align::legacy_align_block_child;
 use crate::dispatch::{layout_box, shift_box_tree};
 use crate::ffi::{
     ContentBox, dom_of, inline_box_can_fragment_multicol, inline_line_height,
     inline_run_break_before, inline_run_split, measure_natural_width, min_width_of,
-    multicol_single_inline, style_of, style_ref, used_column_count,
+    multicol_single_inline, style_of, style_ref,
 };
 use crate::fieldset::c_max;
 use crate::flex::box_is_border_box;
@@ -449,8 +449,7 @@ struct Columns<'a> {
 }
 
 fn plan_columns<'a>(b: BoxRef<'a>, cw: &mut f64, child_inherited: *const Style) -> Columns<'a> {
-    let mut gap = 16.0;
-    let mut n = style_of(b).map_or(1, |s| used_column_count(s, *cw, &mut gap));
+    let (mut n, gap) = southstar_css::used_column_count(style_of(b).map(StyleRef::data), *cw);
     let mut host = None;
     if n > 1 {
         let distributable = multicol_distributable_children(b);

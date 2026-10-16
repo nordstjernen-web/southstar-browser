@@ -12,7 +12,6 @@ use southstar_glib::{self as glib, GBoolean};
 use crate::image_source::{Chosen, Environment};
 
 unsafe extern "C" {
-    fn ns_css_sizes_resolve(sizes: *const c_char) -> f64;
     fn ns_image_supports_mime(mime: *const c_char) -> GBoolean;
 }
 
@@ -21,10 +20,8 @@ fn c_string(text: &[u8]) -> CString {
 }
 
 fn choose(node: Node<'_>) -> Chosen<'_> {
-    let resolve_sizes = |sizes: Option<&[u8]>| {
-        let sizes = sizes.map(c_string);
-        unsafe { ns_css_sizes_resolve(sizes.as_ref().map_or(ptr::null(), |s| s.as_ptr())) }
-    };
+    let resolve_sizes =
+        |sizes: Option<&[u8]>| southstar_css::sizes_resolve(sizes.unwrap_or_default());
     let media_matches = |query: &[u8]| southstar_css_media::query_matches(query);
     let supports_type =
         |mime: &[u8]| unsafe { ns_image_supports_mime(c_string(mime).as_ptr()) != 0 };

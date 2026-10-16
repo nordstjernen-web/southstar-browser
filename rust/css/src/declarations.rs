@@ -448,7 +448,7 @@ fn sizes_is_length_fn(p: &[u8]) -> bool {
         .any(|f| p.len() >= f.len() && p[..f.len()].eq_ignore_ascii_case(f))
 }
 
-pub(crate) fn sizes_resolve(sizes: &[u8]) -> f64 {
+pub fn sizes_resolve(sizes: &[u8]) -> f64 {
     let (viewport_w, _) = ffi::viewport();
     let end = sizes.len();
     let mut p = 0;

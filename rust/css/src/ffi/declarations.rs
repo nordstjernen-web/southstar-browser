@@ -1,8 +1,8 @@
-//! Southstar — the C ABI of declaration blocks: declarations appended to css.c's arrays, custom properties and waiting values captured into its ns_css_rule, and the validity checks and sizes evaluation css.c and the bindings call.
+//! Southstar — the C ABI of declaration blocks: declarations appended to css.c's arrays, custom properties and waiting values captured into its ns_css_rule, and the validity checks css.c and the bindings call.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
 use std::ffi::CString;
@@ -223,9 +223,4 @@ pub unsafe extern "C" fn ns_css_declarations_free(decls: *mut GArray) {
         unsafe { ns_css_value_free((*array.data.cast::<RawDecl>().add(i)).value) };
     }
     unsafe { g_array_free(decls, glib::TRUE) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_sizes_resolve(sizes: *const c_char) -> c_double {
-    declarations::sizes_resolve(unsafe { bytes(sizes) }.unwrap_or_default())
 }
