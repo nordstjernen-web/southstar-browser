@@ -241,8 +241,8 @@ pub fn inline_handlers_allowed(js: *const NsJs) -> bool {
     record::inline_handlers_allowed(js)
 }
 
-pub fn page_csp(js: *const NsJs) -> *const c_void {
-    record::page_csp(js).cast()
+pub fn with_page_csp<R>(js: *const NsJs, f: impl FnOnce(Option<&southstar_csp::Csp>) -> R) -> R {
+    record::with_page_csp(js, f)
 }
 
 pub fn cookie_value(js: *const NsJs) -> Option<CString> {

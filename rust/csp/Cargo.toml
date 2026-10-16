@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 southstar-digest = { path = "../digest" }
-southstar-glib = { path = "../glib" }
 southstar-url = { path = "../url" }
 
 [lints]

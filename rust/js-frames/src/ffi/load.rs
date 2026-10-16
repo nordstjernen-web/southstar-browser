@@ -39,33 +39,17 @@ struct GByteArray {
 }
 
 #[repr(C)]
-struct NsCsp {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct ScriptTask {
     node: *mut NsNode,
     schedule: c_int,
 }
 
-const CSP_FRAME: c_int = 7;
-const CSP_FRAME_ANCESTORS: c_int = 10;
-const CSP_OBJECT: c_int = 11;
 const SCRIPT_DEFERRED: c_int = 1;
 const SCRIPT_ASYNC: c_int = 2;
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_csp_allows(
-        csp: *const NsCsp,
-        kind: c_int,
-        url: *const c_char,
-        page: *const c_char,
-    ) -> GBoolean;
-    fn ns_csp_parse(header: *const c_char) -> *mut NsCsp;
-    fn ns_csp_free(csp: *mut NsCsp);
     fn ns_js_start_frame_clock(js: *mut NsJs, frame: *const c_void);
     fn ns_response_free(resp: *mut NsResponse);
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut ResourceInfo);
@@ -235,23 +219,25 @@ pub(crate) enum FrameKind {
 }
 
 pub(crate) fn page_csp_allows(js: Js, kind: FrameKind, url: &CStr, page: &CStr) -> bool {
-    let csp = api::page_csp(js.ptr()).cast::<NsCsp>();
-    if csp.is_null() {
-        return true;
-    }
     let kind = match kind {
-        FrameKind::Frame => CSP_FRAME,
-        FrameKind::Object => CSP_OBJECT,
+        FrameKind::Frame => southstar_csp::FRAME,
+        FrameKind::Object => southstar_csp::OBJECT,
     };
-    unsafe { ns_csp_allows(csp, kind, url.as_ptr(), page.as_ptr()) != 0 }
+    api::with_page_csp(js.ptr(), |csp| {
+        csp.is_none_or(|csp| csp.allows(kind, url, Some(page), None, true))
+    })
 }
 
 pub(crate) fn csp_header_allows_framing(header: &CStr, embedder: &CStr, framed: &CStr) -> bool {
-    let csp = unsafe { ns_csp_parse(header.as_ptr()) };
-    let allowed =
-        unsafe { ns_csp_allows(csp, CSP_FRAME_ANCESTORS, embedder.as_ptr(), framed.as_ptr()) != 0 };
-    unsafe { ns_csp_free(csp) };
-    allowed
+    southstar_csp::Csp::parse(header.to_bytes()).is_none_or(|csp| {
+        csp.allows(
+            southstar_csp::FRAME_ANCESTORS,
+            embedder,
+            Some(framed),
+            None,
+            true,
+        )
+    })
 }
 
 fn trimmed_at_nul(line: &[u8]) -> CString {

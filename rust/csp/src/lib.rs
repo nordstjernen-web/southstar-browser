@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 use core::ffi::CStr;
 
 use southstar_digest::Algorithm;
 use southstar_url::bytes::{parts as url_parts, same_origin};
 
-mod ffi;
 #[cfg(test)]
 mod tests;
 

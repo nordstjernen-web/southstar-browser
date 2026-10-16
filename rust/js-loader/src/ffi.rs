@@ -19,11 +19,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
 #[repr(C)]
-struct NsCsp {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct NsWorkerHost {
     _private: [u8; 0],
 }
@@ -81,8 +76,8 @@ struct RawTask {
     schedule: c_int,
 }
 
-pub(crate) const CSP_SCRIPT: c_uint = 1;
-pub(crate) const CSP_STYLE: c_uint = 2;
+pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
+pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
 const FETCH_DEST_SCRIPT: c_int = 1;
 
 unsafe extern "C" {
@@ -132,20 +127,6 @@ unsafe extern "C" {
     fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrading(js: *const NsJs) -> GBoolean;
-    fn ns_csp_allows_with_nonce(
-        csp: *const NsCsp,
-        kind: c_uint,
-        resource_url: *const c_char,
-        document_url: *const c_char,
-        nonce: *const c_char,
-        parser_inserted: GBoolean,
-    ) -> GBoolean;
-    fn ns_csp_inline_script_allowed(
-        csp: *const NsCsp,
-        body: *const c_char,
-        body_len: usize,
-        nonce: *const c_char,
-    ) -> GBoolean;
     fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_response_free(resp: *mut NsResponse);
@@ -543,30 +524,23 @@ impl Js {
 
     pub(crate) fn csp_allows(
         self,
-        kind: c_uint,
+        kind: usize,
         url: &CStr,
         origin: Option<&CStr>,
         nonce: Option<&CStr>,
         parser_inserted: bool,
     ) -> bool {
-        let csp = api::page_csp(self.0).cast::<NsCsp>();
-        unsafe {
-            ns_csp_allows_with_nonce(
-                csp,
-                kind,
-                url.as_ptr(),
-                opt_ptr(origin),
-                opt_ptr(nonce),
-                glib::boolean(parser_inserted),
-            ) != 0
-        }
+        let nonce = nonce.map(CStr::to_bytes);
+        api::with_page_csp(self.0, |csp| {
+            csp.is_none_or(|csp| csp.allows(kind, url, origin, nonce, parser_inserted))
+        })
     }
 
     pub(crate) fn inline_script_allowed(self, text: &[u8], nonce: Option<&CStr>) -> bool {
-        let csp = api::page_csp(self.0).cast::<NsCsp>();
-        unsafe {
-            ns_csp_inline_script_allowed(csp, text.as_ptr().cast(), text.len(), opt_ptr(nonce)) != 0
-        }
+        let nonce = nonce.map(CStr::to_bytes);
+        api::with_page_csp(self.0, |csp| {
+            csp.is_none_or(|csp| csp.inline_script_allowed(text, nonce))
+        })
     }
 
     pub(crate) fn element_perf_info(self, n: Node) -> PerfInfo {

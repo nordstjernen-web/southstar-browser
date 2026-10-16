@@ -31,12 +31,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_csp_allows(
-        csp: *const c_void,
-        kind: c_int,
-        resource_url: *const c_char,
-        document_url: *const c_char,
-    ) -> GBoolean;
     fn ns_js_frame_referrer_for(js: *const NsJs, frame: *const NsNode) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
@@ -116,8 +110,6 @@ pub(crate) fn current_document(js: Js) -> Option<Element> {
     api::current_document(js.0)
 }
 
-const CSP_BASE_URI: c_int = 12;
-
 pub(crate) fn current_url_c(js: Js) -> Option<CString> {
     Some(api::current_url(js.0))
 }
@@ -134,13 +126,10 @@ pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) 
     if js.is_null() {
         return true;
     }
-    let csp = api::page_csp(js.0);
-    if csp.is_null() {
-        return true;
-    }
     let url = c_bytes(url);
-    let document_url = document_url.map_or(ptr::null(), CStr::as_ptr);
-    unsafe { ns_csp_allows(csp, CSP_BASE_URI, url.as_ptr(), document_url) != 0 }
+    api::with_page_csp(js.0, |csp| {
+        csp.is_none_or(|csp| csp.allows(southstar_csp::BASE_URI, &url, document_url, None, true))
+    })
 }
 
 pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame: Element) -> Value {

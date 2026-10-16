@@ -1817,7 +1817,6 @@ name = "southstar-csp"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-digest",
- "southstar-glib",
  "southstar-url",
 ]
 
@@ -2340,6 +2339,7 @@ dependencies = [
 name = "southstar-js-document"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-csp",
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
@@ -2431,6 +2431,7 @@ name = "southstar-js-frames"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-csp",
  "southstar-css",
  "southstar-dom",
  "southstar-glib",
@@ -2563,6 +2564,7 @@ name = "southstar-js-loader"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-bytecode-cache",
+ "southstar-csp",
  "southstar-dom",
  "southstar-engine",
  "southstar-extensions",
@@ -2678,6 +2680,7 @@ name = "southstar-js-runtime"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-csp",
  "southstar-css",
  "southstar-dom",
  "southstar-glib",

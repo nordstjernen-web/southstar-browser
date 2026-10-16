@@ -3,12 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
+use southstar_csp::Csp;
 use southstar_dom::{Kind, Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
 use southstar_js_bind::bind_native;
@@ -17,6 +18,7 @@ use southstar_js_engine::{
 };
 
 use super::NavigationTiming;
+use super::glue;
 use super::imports;
 use super::state::Slots;
 
@@ -27,9 +29,6 @@ const FLAG_SVG_NS: u32 = 1 << 7;
 const FLAG_FOREIGN_NS: u32 = 1 << 9;
 const FLAG_CDATA: u32 = 1 << 10;
 const FLAG_PI: u32 = 1 << 11;
-const CSP_CONNECT: c_int = 5;
-const CSP_WORKER: c_int = 9;
-const CSP_FORM_ACTION: c_int = 13;
 const MATHML_NS: &CStr = c"http://www.w3.org/1998/Math/MathML";
 
 static POLYFILLS: &str = concat!(include_str!("../../../../data/js/polyfills.js"), "\0");
@@ -146,11 +145,6 @@ const FORM_CONTROLS: [&CStr; 7] = [
     c"textarea",
 ];
 
-#[repr(C)]
-pub(crate) struct NsCsp {
-    _private: [u8; 0],
-}
-
 pub struct AdoptedProtos {
     pub node: Value,
     pub element: Value,
@@ -206,7 +200,7 @@ struct Record {
     opaque_counter: u64,
     navigator_brand: Value,
     halted: GBoolean,
-    csp: *mut NsCsp,
+    csp: Option<Csp>,
     time_origin_us: i64,
     time_origin_real_ms: f64,
     navigation_timing: Cell<NavigationTiming>,
@@ -242,16 +236,6 @@ unsafe extern "C" {
     fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_csp_allows(
-        csp: *const NsCsp,
-        kind: c_int,
-        url: *const c_char,
-        page: *const c_char,
-    ) -> GBoolean;
-    fn ns_csp_parse(header: *const c_char) -> *mut NsCsp;
-    fn ns_csp_merge(dst: *mut NsCsp, src: *mut NsCsp);
-    fn ns_csp_free(csp: *mut NsCsp);
-    fn ns_csp_inline_event_handler_allowed(csp: *const NsCsp) -> GBoolean;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
     fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
     fn ns_js_scrub_iframe_globals(js: *mut NsJs, iframe: *const NsNode);
@@ -349,7 +333,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         opaque_counter: 0,
         navigator_brand: Value::undefined(),
         halted: glib::FALSE,
-        csp: ptr::null_mut(),
+        csp: None,
         time_origin_us: 0,
         time_origin_real_ms: 0.0,
         navigation_timing: Cell::new(NavigationTiming::starting_at(0, 0.0)),
@@ -503,10 +487,7 @@ pub(crate) unsafe fn eval_worker_polyfills(js: *mut NsJs) {
 
 pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
     unsafe {
-        if !(*rec(js)).csp.is_null() {
-            ns_csp_free((*rec(js)).csp);
-            (*rec(js)).csp = ptr::null_mut();
-        }
+        (*rec(js)).csp = None;
         (*rec(js)).cookie_value = None;
         glib::g_free((*rec(js)).current_url.cast());
         (*rec(js)).current_url = ptr::null_mut();
@@ -839,8 +820,10 @@ pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
     let Some(js) = record(js) else {
         return true;
     };
-    js.csp.is_null()
-        || unsafe { ns_csp_allows(js.csp, CSP_WORKER, url.as_ptr(), js.current_url) } != 0
+    let page = glue::text(js.current_url);
+    js.csp
+        .as_ref()
+        .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page, None, true))
 }
 
 #[unsafe(no_mangle)]
@@ -1341,18 +1324,12 @@ pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
     if js.is_null() {
         return;
     }
-    let js = js.cast_mut();
-    let parsed = unsafe { ns_csp_parse(header_value.as_ptr()) };
-    if parsed.is_null() {
+    let Some(mut parsed) = Csp::parse(header_value.to_bytes()) else {
         return;
-    }
-    unsafe {
-        if (*rec(js)).csp.is_null() {
-            (*rec(js)).csp = parsed;
-        } else {
-            ns_csp_merge((*rec(js)).csp, parsed);
-            ns_csp_free(parsed);
-        }
+    };
+    match unsafe { &mut (*rec(js)).csp } {
+        Some(csp) => csp.merge(&mut parsed),
+        slot @ None => *slot = Some(parsed),
     }
 }
 
@@ -1360,15 +1337,17 @@ pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>
     let Some(js) = record(js) else {
         return true;
     };
-    let Some(action_url) = action_url.filter(|_| !js.csp.is_null()) else {
+    let (Some(csp), Some(action_url)) = (js.csp.as_ref(), action_url) else {
         return true;
     };
-    unsafe { ns_csp_allows(js.csp, CSP_FORM_ACTION, action_url.as_ptr(), js.current_url) != 0 }
+    let page = glue::text(js.current_url);
+    csp.allows(southstar_csp::FORM_ACTION, action_url, page, None, true)
 }
 
 pub(crate) fn inline_handlers_allowed(js: *const NsJs) -> bool {
-    let csp = record(js).map_or(ptr::null_mut(), |js| js.csp);
-    unsafe { ns_csp_inline_event_handler_allowed(csp) != 0 }
+    record(js)
+        .and_then(|js| js.csp.as_ref())
+        .is_none_or(Csp::inline_event_handler_allowed)
 }
 
 pub(crate) fn time_origin_us(js: *const NsJs) -> i64 {
@@ -1412,14 +1391,12 @@ pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {
     record(js)?.partition_key.clone()
 }
 
-pub(crate) fn page_csp(js: *const NsJs) -> *const NsCsp {
-    record(js).map_or(ptr::null(), |js| js.csp.cast_const())
+pub(crate) fn with_page_csp<R>(js: *const NsJs, f: impl FnOnce(Option<&Csp>) -> R) -> R {
+    f(record(js).and_then(|js| js.csp.as_ref()))
 }
 
 pub(crate) fn csp_allows_connect(js: *const NsJs, url: &CStr, page: Option<&CStr>) -> bool {
-    let Some(js) = record(js) else {
-        return true;
-    };
-    let page = page.map_or(ptr::null(), CStr::as_ptr);
-    js.csp.is_null() || unsafe { ns_csp_allows(js.csp, CSP_CONNECT, url.as_ptr(), page) } != 0
+    record(js)
+        .and_then(|js| js.csp.as_ref())
+        .is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
 }

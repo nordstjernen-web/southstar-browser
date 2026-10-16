@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
+southstar-csp = { path = "../csp" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
