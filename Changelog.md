@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Layout: a table caption's ::before and ::after are built like a table
+  cell's, so a floated or block pseudo-element inside a caption is a float
+  or a block, and an absolutely positioned one is laid out. Captions turned
+  every pseudo-element into inline text, so the floated magnifier slot in
+  Wikipedia's thumbnail captions took no room and the caption text wrapped
+  differently from other browsers.
 * The layout crates no longer call each other through C symbols. A call
   down the crate order is an ordinary Cargo dependency; a call that has
   to come back up (block layout into flex, grid, table and inline, the

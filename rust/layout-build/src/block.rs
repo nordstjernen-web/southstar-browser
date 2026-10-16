@@ -220,7 +220,7 @@ pub fn append_display_contents_children(
     n: Node<'_>,
     styles: StyleTable,
     blockify_children: bool,
-    pending_before: Option<&mut Pending>,
+    mut pending_before: Option<&mut Pending>,
 ) {
     if state::with(|st| st.contents_depth) >= MAX_DEPTH {
         return;
@@ -233,14 +233,25 @@ pub fn append_display_contents_children(
     } else {
         None
     };
-    let mut no_pending: Pending = None;
-    let has_pending_slot = pending_before.is_some();
-    let pending = pending_before.unwrap_or(&mut no_pending);
-    if let Some(prefix) = pending.take() {
+    if let Some(prefix) = pending_before.as_deref_mut().and_then(Option::take) {
         contents_before = ffi::inline_merge_prefix(prefix, contents_before);
     }
     append_some(block, contents_before);
+    append_node_children(block, n, styles, blockify_children, pending_before);
+    let after = s.and_then(StyleRef::after);
+    if after.is_some_and(|a| !style_is_absolute_or_fixed(Some(a))) {
+        append_some(block, build_pseudo_inline_for(after, Some(n)));
+    }
+    state::with(|st| st.contents_depth -= 1);
+}
 
+pub fn append_node_children(
+    block: BoxRef<'_>,
+    n: Node<'_>,
+    styles: StyleTable,
+    blockify_children: bool,
+    mut pending_before: Option<&mut Pending>,
+) {
     let sr = shadow_root(Some(n));
     let mut c = match sr {
         Some(sr) => sr.first_child(),
@@ -287,15 +298,7 @@ pub fn append_display_contents_children(
                 c = cur.next_sibling();
                 continue;
             }
-            let item = build_blockified_inline_item(
-                cur,
-                styles,
-                if has_pending_slot {
-                    Some(&mut *pending)
-                } else {
-                    None
-                },
-            );
+            let item = build_blockified_inline_item(cur, styles, pending_before.as_deref_mut());
             append_some(block, item);
             c = cur.next_sibling();
             continue;
@@ -334,12 +337,6 @@ pub fn append_display_contents_children(
             c = cur.next_sibling();
         }
     }
-
-    let after = s.and_then(StyleRef::after);
-    if after.is_some_and(|a| !style_is_absolute_or_fixed(Some(a))) {
-        append_some(block, build_pseudo_inline_for(after, Some(n)));
-    }
-    state::with(|st| st.contents_depth -= 1);
 }
 
 fn build_blockified_inline_item(

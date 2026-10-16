@@ -20,6 +20,7 @@ pub struct Builders {
     pub queue_absolute_node: fn(Node<'_>, StyleRef<'_>),
     pub collect_box_bg_image: fn(BoxRef<'_>, Option<StyleRef<'_>>),
     pub append_display_contents_children: fn(BoxRef<'_>, Node<'_>, Styles),
+    pub append_node_children: fn(BoxRef<'_>, Node<'_>, Styles),
     pub append_generated_after: fn(BoxRef<'_>, BoxRef<'static>),
     pub is_inline_dom: fn(Node<'_>, Styles) -> bool,
     pub continues_inline_run: fn(Node<'_>, Styles) -> bool,
@@ -75,6 +76,10 @@ pub fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {
 
 pub fn append_display_contents_children(block: BoxRef<'_>, n: Node<'_>, styles: Styles) {
     (builders().append_display_contents_children)(block, n, styles);
+}
+
+pub fn append_node_children(block: BoxRef<'_>, n: Node<'_>, styles: Styles) {
+    (builders().append_node_children)(block, n, styles);
 }
 
 pub fn append_generated_after(block: BoxRef<'_>, generated: BoxRef<'static>) {

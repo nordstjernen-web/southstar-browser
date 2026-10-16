@@ -8,10 +8,10 @@ use southstar_layout_geom::style_is_absolute_or_fixed;
 use southstar_style::{Display, StyleRef, display_of};
 
 use crate::ffi::{
-    Styles, append_display_contents_children, append_generated_after, build_block,
-    build_inline_run, build_pseudo_block_for, build_pseudo_inline_for, collect_box_bg_image,
-    continues_inline_run, dom_ptr_of, is_inline_dom, parse_int, queue_absolute_node,
-    register_abs_pseudo, tag_is_non_rendering,
+    Styles, append_display_contents_children, append_generated_after, append_node_children,
+    build_block, build_inline_run, build_pseudo_block_for, build_pseudo_inline_for,
+    collect_box_bg_image, continues_inline_run, dom_ptr_of, is_inline_dom, parse_int,
+    queue_absolute_node, register_abs_pseudo, tag_is_non_rendering,
 };
 use crate::runs::{append_child, merge_prefix};
 
@@ -369,7 +369,15 @@ fn build_table_caption<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let s = styles.get(n);
     caption.set_style(s.map_or(core::ptr::null(), StyleRef::as_ptr));
     collect_box_bg_image(caption, s);
-    append_display_contents_children(caption, n, styles);
+    if let Some(s) = s {
+        register_abs_pseudo(n, s.before());
+        register_abs_pseudo(n, s.after());
+    }
+    if let Some(inline_before) = cell_pseudo_before(caption, n, s) {
+        append_child(caption, inline_before);
+    }
+    append_node_children(caption, n, styles);
+    cell_pseudo_after(caption, n, s);
     caption
 }
 

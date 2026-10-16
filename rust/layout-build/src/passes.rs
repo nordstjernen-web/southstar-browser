@@ -83,6 +83,10 @@ fn append_display_contents_children(b: BoxRef<'_>, n: Node<'_>, st: StyleTable) 
     block::append_display_contents_children(b, n, st, false, None);
 }
 
+fn append_node_children(b: BoxRef<'_>, n: Node<'_>, st: StyleTable) {
+    block::append_node_children(b, n, st, false, None);
+}
+
 fn append_generated_after(b: BoxRef<'_>, generated_box: BoxRef<'static>) {
     generated::append_generated_after(b, generated_box);
 }
@@ -111,6 +115,7 @@ pub fn install_builders() {
             queue_absolute_node,
             collect_box_bg_image,
             append_display_contents_children,
+            append_node_children,
             append_generated_after,
             is_inline_dom,
             continues_inline_run,
