@@ -85,7 +85,7 @@ HEADER
         cat <<'NFIX'
     <text x="128" y="196" text-anchor="middle"
           font-family="Georgia, 'Times New Roman', 'DejaVu Serif', 'Liberation Serif', serif"
-          font-size="184" font-weight="bold" fill="url(#nfill)" opacity="0.92">S</text>
+          font-size="184" font-weight="bold" fill="url(#nfill)" opacity="0.92">N</text>
     <circle cx="128" cy="128" r="86" fill="url(#halo)"/>
     <polygon points="128,18 138,118 238,128 138,138 128,238 118,138 18,128 118,118" fill="url(#starGrad)" opacity="0.55"/>
     <polygon points="128,62 132,124 194,128 132,132 128,194 124,132 62,128 124,124" fill="#ffffff" opacity="0.30"/>

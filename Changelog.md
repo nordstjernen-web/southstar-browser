@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11:
 ======
+* The logo is the N of the Nordstjernen browser again instead of an S:
+  the scalable icon, the animated about-page GIF and the Windows .ico
+  are regenerated from it.
 * A page that deletes a property from a prototype, such as
   Object.prototype, no longer crashes the tab or reads the wrong value.
   The script engine's property cache remembered where an inherited

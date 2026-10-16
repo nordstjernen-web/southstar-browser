@@ -75,7 +75,7 @@
           font-size="184"
           font-weight="bold"
           fill="url(#nfill)"
-          opacity="0.92">S</text>
+          opacity="0.92">N</text>
 
     <circle cx="128" cy="128" r="86" fill="url(#halo)"/>
 
