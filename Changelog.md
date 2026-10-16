@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Running out of call stack throws a RangeError ("Maximum call stack
+  size exceeded") that scripts can catch, as in other browsers. It used
+  to end the script with an uncatchable error, so code that measures the
+  stack depth or falls back after deep recursion stopped; x.com's login
+  page logged it from every timer and message handler.
 * The CSS Font Loading API works. document.fonts returned a new object
   on every access and was not an EventTarget, so
   document.fonts.addEventListener("loadingdone", ...) threw and stopped

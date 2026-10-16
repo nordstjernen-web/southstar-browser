@@ -1090,13 +1090,16 @@ impl Context {
         // `host_call_depth` accounts for nested host calls that re-enter the VM by invoking
         // `Context::run()` recursively (for example, accessor calls).
         // Subtract 1 to exclude the dummy frame at index 0.
+        //
+        // Like other engines, this is a catchable RangeError: scripts probe the stack depth
+        // and fall back from deep recursion by catching it.
         let recursion_depth = (self.vm.frames.len() - 1).saturating_add(self.vm.host_call_depth);
         if self.vm.runtime_limits.recursion_limit() <= recursion_depth {
-            return Err(RuntimeLimitError::Recursion.into());
+            return Err(stack_exhausted());
         }
         // Must throw before the native stack, which host calls grow, overflows.
         if self.vm.native_stack_floor != 0 && native_stack_address() < self.vm.native_stack_floor {
-            return Err(RuntimeLimitError::Recursion.into());
+            return Err(stack_exhausted());
         }
         // Must throw if the stack size exceeds the defined maximum length.
         if self.vm.runtime_limits.stack_size_limit() <= self.vm.stack.stack.len() {
@@ -1105,6 +1108,13 @@ impl Context {
 
         Ok(())
     }
+}
+
+/// The error a call raises once the call depth or the native stack reaches its limit.
+fn stack_exhausted() -> JsError {
+    JsNativeError::range()
+        .with_message("Maximum call stack size exceeded")
+        .into()
 }
 
 /// An address in the current native stack frame.
