@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Gradient backgrounds honour background-size, background-position and
+  background-repeat. A gradient always filled its whole box, so a
+  linear-gradient(red, red) 0 100% / 100% 2px no-repeat underline bar
+  became a solid block and tiled dot or stripe patterns became one large
+  shape. Inline elements (span, a) now paint their gradient backgrounds as
+  well; only url() images were drawn.
 * The width in <meta name="viewport"> is ignored, as desktop browsers
   ignore it. A page asking for width=1120 (Wikipedia) was laid out 1120px
   wide in a narrower window, so its narrow-window media queries and

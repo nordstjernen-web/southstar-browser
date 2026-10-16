@@ -690,6 +690,134 @@ pub fn paint_bg_gradient_core(
     }
 }
 
+fn bg_repeat_axes(repeat: Option<ValueRef<'_>>) -> (bool, bool) {
+    let Some(k) = repeat
+        .filter(|v| v.kind() == Kind::Keyword)
+        .and_then(ValueRef::keyword_text)
+        .map(|k| k.to_bytes())
+    else {
+        return (true, true);
+    };
+    match k {
+        b"repeat-x" => (true, false),
+        b"repeat-y" => (false, true),
+        _ => {
+            let mut words = k.split(|&c| c == b' ').filter(|w| !w.is_empty());
+            let x = words.next().unwrap_or(b"repeat");
+            let y = words.next().unwrap_or(x);
+            (x != b"no-repeat", y != b"no-repeat")
+        }
+    }
+}
+
+fn bg_gradient_tile_size(size: Option<ValueRef<'_>>, w: f64, h: f64) -> (f64, f64) {
+    let Some(sz) = size else {
+        return (w, h);
+    };
+    if let Some((v, unit)) = sz.length() {
+        (bg_size_px(v, unit, w), h)
+    } else if let Some(s) = sz.size() {
+        (
+            if s.w_auto {
+                w
+            } else {
+                bg_size_px(s.w, s.w_unit, w)
+            },
+            if s.h_auto {
+                h
+            } else {
+                bg_size_px(s.h, s.h_unit, h)
+            },
+        )
+    } else {
+        (w, h)
+    }
+}
+
+pub fn paint_bg_gradient_layer(
+    cr: Cr,
+    gr: &Gradient,
+    p: &BgImage<'_>,
+    area: (f64, f64, f64, f64),
+    clip: (f64, f64, f64, f64),
+    radii: CornerRadii,
+) {
+    let (x, y, w, h) = area;
+    let (clip_x, clip_y, clip_w, clip_h) = clip;
+    let (tw, th) = bg_gradient_tile_size(p.size, w, h);
+    if tw <= 0.0 || th <= 0.0 || clip_w <= 0.0 || clip_h <= 0.0 {
+        return;
+    }
+    let tx = x + bg_offset(p.pos_x, w - tw);
+    let ty = y + bg_offset(p.pos_y, h - th);
+    let (tile_x, tile_y) = bg_repeat_axes(p.repeat);
+    let covers_x = tx <= clip_x && tx + tw >= clip_x + clip_w;
+    let covers_y = ty <= clip_y && ty + th >= clip_y + clip_h;
+    cr.save();
+    rounded_rect_path(cr, clip_x, clip_y, clip_w, clip_h, radii);
+    cr.clip();
+    if (covers_x || !tile_x) && (covers_y || !tile_y) {
+        let tile = (tx, ty, tw, th);
+        paint_bg_gradient_core(cr, gr, tile, tile, CornerRadii::default());
+        cr.restore();
+        return;
+    }
+    let (x0, y0) = cr.user_to_device(0.0, 0.0);
+    let (x1, y1) = cr.user_to_device(1.0, 1.0);
+    let scale_x = (x1 - x0).abs().max(1.0);
+    let scale_y = (y1 - y0).abs().max(1.0);
+    let pw = (tw * scale_x).min(4096.0).ceil().max(1.0);
+    let ph = (th * scale_y).min(4096.0).ceil().max(1.0);
+    let Some(tile) = Surface::image(cairo::FORMAT_ARGB32, pw as i32, ph as i32) else {
+        cr.restore();
+        return;
+    };
+    {
+        let ctx = Context::new(tile.as_ref());
+        ctx.cr().scale(pw / tw, ph / th);
+        let whole = (0.0, 0.0, tw, th);
+        paint_bg_gradient_core(ctx.cr(), gr, whole, whole, CornerRadii::default());
+    }
+    let pat = Pattern::for_surface(tile.as_ref());
+    pat.set_extend(cairo::EXTEND_REPEAT);
+    let mut m = Matrix::identity();
+    m.scale(pw / tw, ph / th);
+    m.translate(-tx, -ty);
+    pat.set_matrix(&m);
+    cr.set_source(&pat);
+    cr.rectangle(
+        if tile_x { clip_x } else { tx },
+        if tile_y { clip_y } else { ty },
+        if tile_x { clip_w } else { tw },
+        if tile_y { clip_h } else { th },
+    );
+    cr.fill();
+    drop(pat);
+    cr.restore();
+}
+
+fn inline_bg_gradients(
+    cr: Cr,
+    s: Option<StyleRef<'_>>,
+    rect: (f64, f64, f64, f64),
+    radii: CornerRadii,
+) {
+    let head = get(s, P::BackgroundImage);
+    for li in (0..layer_count(head)).rev() {
+        let Some(gr) = layer(head, li).and_then(|lv| lv.gradient()) else {
+            continue;
+        };
+        let p = BgImage {
+            repeat: layer(get(s, P::BackgroundRepeat), li),
+            size: layer(get(s, P::BackgroundSize), li),
+            pos_x: layer(get(s, P::BackgroundPositionX), li),
+            pos_y: layer(get(s, P::BackgroundPositionY), li),
+            pixelated: false,
+        };
+        paint_bg_gradient_layer(cr, gr, &p, rect, rect, radii);
+    }
+}
+
 fn inline_bg_image(
     cr: Cr,
     r: &InlineAttr,
@@ -728,6 +856,7 @@ pub fn paint_inline_css_chrome(cr: Cr, r: Option<&InlineAttr>, rect: (f64, f64, 
         rounded_rect_path(cr, x, y, w, h, radii);
         cr.fill();
     }
+    inline_bg_gradients(cr, s, rect, radii);
     if let Some(r) = r {
         inline_bg_image(cr, r, s, rect, radii);
     }
@@ -1292,7 +1421,14 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
         let lclip = bg_layer_clip_area(b, li, border);
         let lpos = bg_layer_origin_area(b, li, border);
         if let Some(gr) = lv.gradient() {
-            paint_bg_gradient_core(cr, gr, lpos, lclip, radii);
+            let params = BgImage {
+                repeat: layer(get(s, P::BackgroundRepeat), li),
+                size: layer(get(s, P::BackgroundSize), li),
+                pos_x: layer(get(s, P::BackgroundPositionX), li),
+                pos_y: layer(get(s, P::BackgroundPositionY), li),
+                pixelated: false,
+            };
+            paint_bg_gradient_layer(cr, gr, &params, lpos, lclip, radii);
             continue;
         }
         if lv.kind() != Kind::Url {
