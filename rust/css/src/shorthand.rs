@@ -373,8 +373,20 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
             text_decoration(&mut out, text, name == b"text-decoration-line");
         }
         b"font" => font_shorthand(&mut out, text),
-        b"flex" => flex(&mut out, text),
-        b"flex-flow" => flex_flow(&mut out, text),
+        b"-webkit-perspective" => {
+            let text = strip(text);
+            match length(text).filter(|_| !text.contains(&b'(')) {
+                Some((n, NUMBER)) if n >= 0.0 => {
+                    out.emit(
+                        Prop::Perspective,
+                        format!("{}px", southstar_numfmt::g(n)).as_bytes(),
+                    );
+                }
+                _ => generic(&mut out, b"perspective", text),
+            }
+        }
+        b"flex" | b"-webkit-flex" => flex(&mut out, text),
+        b"flex-flow" | b"-webkit-flex-flow" => flex_flow(&mut out, text),
         b"list-style" => list_style(&mut out, text),
         b"border-radius" => border_radius(&mut out, text),
         b"margin-block" => logical_pair(&mut out, text, Prop::MarginTop, Prop::MarginBottom),
@@ -1332,15 +1344,50 @@ fn place(out: &mut Out, name: &[u8], text: &[u8]) {
 }
 
 fn columns(out: &mut Out, text: &[u8]) {
-    for tok in split_ws(text) {
-        if let Some((_, unit)) = length(tok) {
-            let prop = if unit == NUMBER {
-                Prop::ColumnCount
-            } else {
-                Prop::ColumnWidth
-            };
-            out.emit(prop, tok);
+    let props = [Prop::ColumnWidth, Prop::ColumnCount, Prop::ColumnHeight];
+    if let Some(wide) = wide_keyword(text) {
+        out.shared(&props, wide);
+        return;
+    }
+    let (main, height) = match text.iter().position(|&c| c == b'/') {
+        Some(slash) => (&text[..slash], Some(strip(&text[slash + 1..]))),
+        None => (text, None),
+    };
+    let tokens = split_ws(main);
+    if !(1..=2).contains(&tokens.len()) {
+        return;
+    }
+    let (mut width, mut count): (Option<&[u8]>, Option<&[u8]>) = (None, None);
+    for &tok in &tokens {
+        if eq(tok, b"auto") {
+            continue;
         }
+        let integer =
+            length(tok).is_some_and(|(n, unit)| unit == NUMBER && n >= 1.0 && n.fract() == 0.0);
+        if integer && count.is_none() {
+            count = Some(tok);
+        } else if width.is_none() && parse(Prop::ColumnWidth, tok).is_some() {
+            width = Some(tok);
+        } else {
+            return;
+        }
+    }
+    let height = match height {
+        Some(h) if h.is_empty() || split_ws(h).len() != 1 => return,
+        Some(h) => h,
+        None => b"auto",
+    };
+    let values = [width.unwrap_or(b"auto"), count.unwrap_or(b"auto"), height];
+    let parsed: Option<Vec<Value>> = props
+        .iter()
+        .zip(values)
+        .map(|(&prop, text)| parse(prop, text))
+        .collect();
+    let Some(parsed) = parsed else {
+        return;
+    };
+    for (prop, value) in props.into_iter().zip(parsed) {
+        out.push(prop, value);
     }
 }
 
@@ -1602,6 +1649,10 @@ fn flex(out: &mut Out, text: &[u8]) {
             basis = Some(b"auto".to_vec());
             continue;
         }
+        if word_is_one_of(t, "content min-content max-content fit-content") {
+            basis = Some(lower(t));
+            continue;
+        }
         if [&b"calc("[..], b"min(", b"max(", b"clamp("]
             .iter()
             .any(|f| starts_with_ci(t, f))
@@ -1631,8 +1682,13 @@ fn flex(out: &mut Out, text: &[u8]) {
     }
     out.emit(Prop::FlexGrow, &southstar_numfmt::g(grow).into_bytes());
     out.emit(Prop::FlexShrink, &southstar_numfmt::g(shrink).into_bytes());
-    if let Some(basis) = basis {
-        out.emit(Prop::FlexBasis, &basis);
+    if let Some(basis) = basis
+        && let Some(mut value) = parse(Prop::FlexBasis, &basis)
+    {
+        if basis.contains(&b'(') {
+            value.specified = Some(basis);
+        }
+        out.push(Prop::FlexBasis, value);
     }
 }
 

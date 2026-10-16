@@ -180,6 +180,23 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* -webkit-transform, -webkit-transform-origin, -webkit-transition,
+  -webkit-animation (and their longhands), -webkit-box-shadow,
+  -webkit-filter, -webkit-box-sizing, -webkit-clip-path,
+  -webkit-perspective (unitless lengths included), the -webkit- flexbox
+  properties and the other WebKit aliases browsers accept now apply.
+  They were dropped before, so pages that only set
+  element.style.webkitTransform drew untransformed.
+* element.style.length and item() list longhands, as CSSOM requires:
+  setting "flex: 1" reports flex-grow, flex-shrink and flex-basis, and
+  removing one longhand of a shorthand keeps the others.
+* New properties: contain, will-change and column-height. The columns
+  shorthand takes "<width> || <count> [/ <height>]" and serializes
+  canonically; flex serializes as "grow shrink basis" and takes the
+  content and intrinsic sizing keywords for its basis; text-transform
+  combines a case with full-width and full-size-kana.
+* getComputedStyle reports transform-origin and perspective-origin
+  resolved to pixels against the border box.
 * Fonts: font-style accepts an oblique angle ("oblique 14deg", calc()
   included, rendered slanted), font-palette is a property, font-stretch
   and font-width take calc() percentages, font-feature-settings

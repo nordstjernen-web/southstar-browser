@@ -544,6 +544,11 @@ pub(crate) fn with_sheet_declarations<R>(text: &str, f: impl FnOnce(&[Vec<Decl>]
     result
 }
 
+pub(crate) fn columns_shorthand(values: &[Option<String>]) -> Option<String> {
+    let [width, count, height]: [&[u8]; 3] = all_present(values)?;
+    Some(lossy(&css_engine::columns_serialize(width, count, height)))
+}
+
 pub(crate) fn mask_shorthand(values: &[Option<String>]) -> Option<String> {
     let parts: [&[u8]; 8] = all_present(values)?;
     css_engine::mask_shorthand_serialize(parts).map(|text| lossy(&text))
@@ -654,6 +659,13 @@ pub(crate) fn inline_style_set(style: Option<&CStr>, prop: &str, value: &str) ->
         until_nul(prop),
         Some(until_nul(value)),
     )
+}
+
+pub(crate) fn inline_style_longhands(style: Option<&CStr>) -> Vec<String> {
+    css_engine::inline_style_longhands(style.map_or(&b""[..], CStr::to_bytes))
+        .iter()
+        .map(|name| lossy(name))
+        .collect()
 }
 
 pub(crate) fn inline_style_serialize(style: Option<&CStr>) -> String {

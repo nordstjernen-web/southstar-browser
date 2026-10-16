@@ -92,8 +92,9 @@ pub use grid::{
 };
 pub use initial::initial_value;
 pub use inline::{
-    background_position_zip as background_position_join, get as inline_style_get,
-    mask_shorthand_serialize, serialize as inline_style_serialize, set as inline_style_set,
+    background_position_zip as background_position_join, columns_serialize,
+    get as inline_style_get, longhand_names as inline_style_longhands, mask_shorthand_serialize,
+    serialize as inline_style_serialize, set as inline_style_set,
 };
 pub use prop::Prop;
 pub use scan::strip_important;

@@ -369,6 +369,12 @@ fn positions_canonical(value: &[u8], background: bool) -> Option<Vec<u8>> {
 }
 
 fn value_canonical(prop: &[u8], mut value: Vec<u8>) -> Vec<u8> {
+    if prop == b"-webkit-perspective"
+        && !value.contains(&b'(')
+        && let Some((n, crate::units::NUMBER)) = property::length(&value)
+    {
+        return format!("{}px", southstar_numfmt::g(n)).into_bytes();
+    }
     if let Some(
         id @ (Prop::BorderImageSlice
         | Prop::BorderImageWidth
@@ -854,6 +860,36 @@ pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
     {
         return keep(Some(text));
     }
+    if eq(prop, b"flex") {
+        let parts = [b"flex-grow", &b"flex-shrink"[..], b"flex-basis"]
+            .map(|name| get(style, name).filter(|v| !v.is_empty()));
+        if let [Some(grow), Some(shrink), Some(basis)] = parts {
+            let (g, important) = strip_important(&grow);
+            let (s, _) = strip_important(&shrink);
+            let (b, _) = strip_important(&basis);
+            let text = if css_wide(g) && g == s && s == b {
+                g.to_vec()
+            } else {
+                [g, b" ", s, b" ", b].concat()
+            };
+            return keep(Some(with_important(text, important)));
+        }
+    }
+    if eq(prop, b"columns") {
+        let parts = [b"column-width", &b"column-count"[..], b"column-height"]
+            .map(|name| get(style, name).filter(|v| !v.is_empty()));
+        if let [Some(width), Some(count), Some(height)] = parts {
+            let (w, important) = strip_important(&width);
+            let (c, _) = strip_important(&count);
+            let (h, _) = strip_important(&height);
+            let text = if css_wide(w) && w == c && c == h {
+                w.to_vec()
+            } else {
+                columns_serialize(w, c, h)
+            };
+            return keep(Some(with_important(text, important)));
+        }
+    }
     if eq(prop, b"mask")
         && let Some((text, _)) = mask_value(style)
     {
@@ -1248,8 +1284,74 @@ fn members_expanded(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
     (!out.is_empty()).then_some(out)
 }
 
+fn shorthand_longhands(name: &[u8], value: &[u8]) -> Option<Vec<Prop>> {
+    if is_custom(name) {
+        return None;
+    }
+    let (value, _) = strip_important(value);
+    let mut props: Vec<Prop> = Vec::new();
+    for decl in shorthand::expand(name, value) {
+        if !matches!(decl.prop, Prop::Animation | Prop::Transition) && !props.contains(&decl.prop) {
+            props.push(decl.prop);
+        }
+    }
+    (props.len() > 1).then_some(props)
+}
+
+pub fn longhand_names(style: &[u8]) -> Vec<Vec<u8>> {
+    let mut names: Vec<Vec<u8>> = Vec::new();
+    for (key, value) in declarations(style) {
+        let expanded = shorthand_longhands(key, value)
+            .map(|props| props.iter().map(|p| p.name().to_vec()).collect())
+            .unwrap_or_else(|| vec![key.to_vec()]);
+        for name in expanded {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
+}
+
+fn remove_from_shorthand(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
+    let id = ffi::prop_named(prop)?;
+    if declarations(style).any(|(key, _)| eq(key, prop)) {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut split = false;
+    for (key, value) in declarations(style) {
+        let covers =
+            !split && shorthand_longhands(key, value).is_some_and(|props| props.contains(&id));
+        if !covers {
+            push_separated(&mut out, b"; ", &[key, b": ", value].concat());
+            continue;
+        }
+        split = true;
+        let (plain, important) = strip_important(value);
+        let expanded = members_expanded(key, plain)?;
+        for decl in expanded.split(|&c| c == b';') {
+            let decl = strip(decl);
+            let name_end = decl.iter().position(|&c| c == b':').unwrap_or(decl.len());
+            if decl.is_empty() || eq(strip(&decl[..name_end]), prop) {
+                continue;
+            }
+            let text = with_important(decl.to_vec(), important);
+            push_separated(&mut out, b"; ", &text);
+        }
+    }
+    split.then_some(out)
+}
+
 pub fn set(style: Option<&[u8]>, prop: &[u8], value: Option<&[u8]>) -> Vec<u8> {
     let value = value.filter(|v| !v.is_empty());
+    if value.is_none()
+        && !is_custom(prop)
+        && let Some(style) = style
+        && let Some(split) = remove_from_shorthand(style, prop)
+    {
+        return split;
+    }
     let members = member_ids(prop);
     if style.is_none_or(<[u8]>::is_empty) {
         let Some(value) = value else {
@@ -1332,6 +1434,24 @@ pub fn background_position_zip(xs: &[u8], ys: &[u8]) -> Option<Vec<u8>> {
         push_separated(&mut out, b", ", &[x.as_slice(), b" ", y].concat());
     }
     Some(with_important(out, x_important))
+}
+
+pub fn columns_serialize(width: &[u8], count: &[u8], height: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    if !eq(width, b"auto") {
+        out.extend_from_slice(width);
+    }
+    if !eq(count, b"auto") {
+        push_separated(&mut out, b" ", count);
+    }
+    if out.is_empty() {
+        out.extend_from_slice(b"auto");
+    }
+    if !eq(height, b"auto") {
+        out.extend_from_slice(b" / ");
+        out.extend_from_slice(height);
+    }
+    out
 }
 
 #[allow(clippy::needless_range_loop)]

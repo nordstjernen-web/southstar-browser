@@ -278,10 +278,13 @@ pub enum Prop {
     MaskBorderOutset,
     MaskBorderRepeat,
     FontPalette,
+    ColumnHeight,
+    Contain,
+    WillChange,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 270] = [
+    pub(crate) const ALL: [Prop; 273] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -552,6 +555,9 @@ impl Prop {
         Prop::MaskBorderOutset,
         Prop::MaskBorderRepeat,
         Prop::FontPalette,
+        Prop::ColumnHeight,
+        Prop::Contain,
+        Prop::WillChange,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -920,11 +926,14 @@ impl Prop {
             Prop::MaskBorderOutset => c"mask-border-outset",
             Prop::MaskBorderRepeat => c"mask-border-repeat",
             Prop::FontPalette => c"font-palette",
+            Prop::ColumnHeight => c"column-height",
+            Prop::Contain => c"contain",
+            Prop::WillChange => c"will-change",
         }
     }
 }
 
-const ALIASES: [(&[u8], Prop); 22] = [
+const ALIASES: [(&[u8], Prop); 59] = [
     (b"word-wrap", Prop::OverflowWrap),
     (b"font-width", Prop::FontStretch),
     (b"text-decoration-line", Prop::TextDecoration),
@@ -934,6 +943,52 @@ const ALIASES: [(&[u8], Prop); 22] = [
     (b"-webkit-mask-image", Prop::MaskImage),
     (b"-webkit-mask-clip", Prop::MaskClip),
     (b"-webkit-mask-composite", Prop::MaskComposite),
+    (b"-webkit-transform", Prop::Transform),
+    (b"-webkit-transform-origin", Prop::TransformOrigin),
+    (b"-webkit-transform-style", Prop::TransformStyle),
+    (b"-webkit-backface-visibility", Prop::BackfaceVisibility),
+    (b"-webkit-perspective-origin", Prop::PerspectiveOrigin),
+    (b"-webkit-transition", Prop::Transition),
+    (b"-webkit-transition-property", Prop::TransitionProperty),
+    (b"-webkit-transition-duration", Prop::TransitionDuration),
+    (
+        b"-webkit-transition-timing-function",
+        Prop::TransitionTimingFunction,
+    ),
+    (b"-webkit-transition-delay", Prop::TransitionDelay),
+    (b"-webkit-animation", Prop::Animation),
+    (b"-webkit-animation-name", Prop::AnimationName),
+    (b"-webkit-animation-duration", Prop::AnimationDuration),
+    (
+        b"-webkit-animation-timing-function",
+        Prop::AnimationTimingFunction,
+    ),
+    (b"-webkit-animation-delay", Prop::AnimationDelay),
+    (
+        b"-webkit-animation-iteration-count",
+        Prop::AnimationIterationCount,
+    ),
+    (b"-webkit-animation-direction", Prop::AnimationDirection),
+    (b"-webkit-animation-fill-mode", Prop::AnimationFillMode),
+    (b"-webkit-animation-play-state", Prop::AnimationPlayState),
+    (b"-webkit-box-shadow", Prop::BoxShadow),
+    (b"-webkit-filter", Prop::Filter),
+    (b"-webkit-box-sizing", Prop::BoxSizing),
+    (b"-webkit-clip-path", Prop::ClipPath),
+    (b"-webkit-hyphens", Prop::Hyphens),
+    (b"-webkit-column-count", Prop::ColumnCount),
+    (b"-webkit-column-gap", Prop::ColumnGap),
+    (b"-webkit-column-width", Prop::ColumnWidth),
+    (b"-webkit-align-content", Prop::AlignContent),
+    (b"-webkit-align-items", Prop::AlignItems),
+    (b"-webkit-align-self", Prop::AlignSelf),
+    (b"-webkit-flex-basis", Prop::FlexBasis),
+    (b"-webkit-flex-direction", Prop::FlexDirection),
+    (b"-webkit-flex-grow", Prop::FlexGrow),
+    (b"-webkit-flex-shrink", Prop::FlexShrink),
+    (b"-webkit-flex-wrap", Prop::FlexWrap),
+    (b"-webkit-justify-content", Prop::JustifyContent),
+    (b"-webkit-order", Prop::Order),
     (b"-webkit-mask-size", Prop::MaskSize),
     (b"-webkit-mask-repeat", Prop::MaskRepeat),
     (b"-webkit-mask-origin", Prop::MaskOrigin),

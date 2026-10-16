@@ -611,7 +611,10 @@ const COLOR_PROPS: [&[u8]; 22] = [
     b"border-inline-end-color",
 ];
 
-const KEYWORD_CANONICAL_PROPS: [&[u8]; 24] = [
+const KEYWORD_CANONICAL_PROPS: [&[u8]; 27] = [
+    b"contain",
+    b"will-change",
+    b"text-transform",
     b"font-variant-caps",
     b"font-variant-numeric",
     b"font-variant-east-asian",

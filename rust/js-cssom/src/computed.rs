@@ -505,6 +505,30 @@ fn transform_matrix(s: Option<StyleRef<'_>>, b: Option<BoxRef<'_>>) -> String {
     format!("matrix3d({})", parts.join(", "))
 }
 
+fn resolved_origin(style: Option<StyleRef<'_>>, b: BoxRef<'_>, id: PropId) -> Option<String> {
+    let t = style?.get(id)?.transform().filter(|t| t.n_ops > 0)?;
+    let o = &t.ops[0];
+    let (p, br) = (b.padding(), b.border());
+    let width = b.content_width() + p.left + p.right + br.left + br.right;
+    let height = b.content_height() + p.top + p.bottom + br.top + br.bottom;
+    let x = if o.a_is_percent != 0 {
+        o.a / 100.0 * width
+    } else {
+        o.a
+    };
+    let y = if o.b_is_percent != 0 {
+        o.b / 100.0 * height
+    } else {
+        o.b
+    };
+    let mut out = format!("{} {}", px(x), px(y));
+    if id == PropId::TransformOrigin && o.c != 0.0 {
+        out.push(' ');
+        out.push_str(&px(o.c));
+    }
+    Some(out)
+}
+
 fn font_px(js: Js, n: Node<'_>) -> f64 {
     let v = lookup(js, n, "font-size").map_or(16.0, |fs| ffi::ascii_strtod(&fs).0);
     if v > 0.0 { v } else { 16.0 }
@@ -1109,7 +1133,11 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
         | "border-inline-start"
         | "border-inline-end" => border_side(js, n, &name["border-".len()..]),
         "outline" => joined_shorthand(js, n, &["outline-color", "outline-style", "outline-width"]),
-        "columns" => joined_shorthand(js, n, &["column-width", "column-count"]),
+        "columns" => {
+            let parts = ["column-width", "column-count", "column-height"];
+            let values: Vec<Option<String>> = parts.iter().map(|p| lookup(js, n, p)).collect();
+            ffi::columns_shorthand(&values)
+        }
         "column-rule" => joined_shorthand(
             js,
             n,
@@ -1337,6 +1365,16 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
 
     if name == "transform" {
         return Some(transform_matrix(computed, lbox));
+    }
+
+    if let (Some(b), Some(id @ (PropId::TransformOrigin | PropId::PerspectiveOrigin))) = (
+        lbox,
+        [PropId::TransformOrigin, PropId::PerspectiveOrigin]
+            .into_iter()
+            .find(|&p| ffi::prop_id(name) == Some(p as usize)),
+    ) && let Some(origin) = resolved_origin(computed, b, id)
+    {
+        return Some(origin);
     }
 
     if name == "direction" {

@@ -360,25 +360,7 @@ fn is_prototype_name(name: &str) -> bool {
 }
 
 fn declared_names(node: Node<'_>) -> Vec<String> {
-    let style = ffi::inline_style_serialize(node.attr(c"style"));
-    let mut names = Vec::new();
-    let mut p = style.as_str();
-    loop {
-        p = p.trim_start_matches([' ', ';']);
-        if p.is_empty() {
-            break;
-        }
-        let Some(colon) = p.find(':') else {
-            break;
-        };
-        names.push(p[..colon].trim_end_matches(' ').to_string());
-        let after = &p[colon..];
-        match after.find(';') {
-            Some(end) => p = &after[end..],
-            None => break,
-        }
-    }
-    names
+    ffi::inline_style_longhands(node.attr(c"style"))
 }
 
 fn parse_index(name: &str) -> Option<usize> {
@@ -468,24 +450,8 @@ fn get_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<V
     let Some(node) = decl_node(this) else {
         return Ok(Value::int(0));
     };
-    let style = ffi::inline_style_serialize(node.attr(c"style"));
-    let mut count = 0;
-    let mut p = style.as_str();
-    loop {
-        p = p.trim_start_matches([' ', ';']);
-        if p.is_empty() {
-            break;
-        }
-        let Some(colon) = p.find(':') else {
-            break;
-        };
-        count += 1;
-        let after = &p[colon..];
-        match after.find(';') {
-            Some(end) => p = &after[end..],
-            None => break,
-        }
-    }
+    let count = declared_names(node).len();
+    let count = i32::try_from(count).unwrap_or(i32::MAX);
     Ok(Value::int(count))
 }
 

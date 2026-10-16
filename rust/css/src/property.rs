@@ -412,6 +412,7 @@ fn accepts_auto(prop: Prop) -> bool {
             | Prop::Left
             | Prop::FlexBasis
             | Prop::ColumnWidth
+            | Prop::ColumnHeight
     )
 }
 
@@ -463,6 +464,7 @@ fn requires_nonnegative(prop: Prop) -> bool {
             | Prop::LineHeight
             | Prop::OutlineWidth
             | Prop::ColumnWidth
+            | Prop::ColumnHeight
             | Prop::ColumnRuleWidth
     )
 }
@@ -856,6 +858,7 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     let sizing = matches!(
         prop,
         Prop::Width
+            | Prop::FlexBasis
             | Prop::Height
             | Prop::MinWidth
             | Prop::MaxWidth
@@ -1053,6 +1056,11 @@ fn perspective(t: &[u8]) -> Option<Value> {
     {
         return None;
     }
+    if let Some(Parsed::Length(plain, NUMBER)) = calc_value(t)
+        && plain != 0.0
+    {
+        return None;
+    }
     let (ok, r) = calc::resolve_to_px_pct(t, false);
     if ok && r.px > 0.0 && r.pct == 0.0 {
         return Some(Value::length(r.px, PX));
@@ -1144,6 +1152,81 @@ fn font_style(t: &[u8]) -> Option<Value> {
     } else {
         format!("oblique {}deg", southstar_numfmt::general(deg, 6)).into_bytes()
     }))
+}
+
+fn contain(t: &[u8]) -> Option<Value> {
+    if let Some(v) = keyword_choice(t, "none strict content") {
+        return Some(v);
+    }
+    const ORDER: [&[u8]; 5] = [b"size", b"inline-size", b"layout", b"style", b"paint"];
+    let mut seen = [false; 5];
+    for word in split_ws_limit(t, 6) {
+        let i = ORDER.iter().position(|k| eq(word, k))?;
+        if seen[i] || (i < 2 && (seen[0] || seen[1])) {
+            return None;
+        }
+        seen[i] = true;
+    }
+    let words: Vec<&[u8]> = ORDER
+        .iter()
+        .zip(seen)
+        .filter_map(|(k, on)| on.then_some(*k))
+        .collect();
+    (!words.is_empty()).then(|| Value::keyword(words.join(&b' ')))
+}
+
+fn will_change(t: &[u8]) -> Option<Value> {
+    if eq(strip(t), b"auto") {
+        return Some(Value::keyword(b"auto".to_vec()));
+    }
+    let mut out: Vec<u8> = Vec::new();
+    for part in t.split(|&c| c == b',') {
+        let word = strip(part);
+        let reserved = word_is_one_of(
+            word,
+            "will-change none all auto initial inherit unset revert revert-layer revert-rule default",
+        );
+        if word.is_empty() || reserved || !text_is_ident(word) {
+            return None;
+        }
+        if !out.is_empty() {
+            out.extend_from_slice(b", ");
+        }
+        out.extend_from_slice(word);
+    }
+    Some(Value::keyword(out))
+}
+
+fn text_transform(t: &[u8]) -> Option<Value> {
+    if let Some(v) = keyword_choice(t, "none math-auto") {
+        return Some(v);
+    }
+    let mut case: Option<Vec<u8>> = None;
+    let (mut full_width, mut full_size_kana) = (false, false);
+    for word in split_ws_limit(t, 4) {
+        if word_is_one_of(word, "capitalize uppercase lowercase") && case.is_none() {
+            case = Some(lower(word));
+        } else if eq(word, b"full-width") && !full_width {
+            full_width = true;
+        } else if eq(word, b"full-size-kana") && !full_size_kana {
+            full_size_kana = true;
+        } else {
+            return None;
+        }
+    }
+    let mut out = case.unwrap_or_default();
+    for (set, word) in [
+        (full_width, &b"full-width"[..]),
+        (full_size_kana, b"full-size-kana"),
+    ] {
+        if set {
+            if !out.is_empty() {
+                out.push(b' ');
+            }
+            out.extend_from_slice(word);
+        }
+    }
+    (!out.is_empty()).then(|| Value::keyword(out))
 }
 
 fn font_palette(t: &[u8]) -> Option<Value> {
@@ -1664,7 +1747,9 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::FontPalette => font_palette(t),
         P::FontVariant => font_variant(t),
         P::TextAlign => keyword_choice(t, "start end left right center justify match-parent"),
-        P::TextTransform => keyword_choice(t, "none capitalize uppercase lowercase"),
+        P::TextTransform => text_transform(t),
+        P::Contain => contain(t),
+        P::WillChange => will_change(t),
         P::JustifyContent => alignment_keyword(
             t,
             "normal stretch center start end flex-start flex-end left right space-between space-around space-evenly",
@@ -1779,6 +1864,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         | P::Bottom
         | P::Left
         | P::ColumnWidth
+        | P::ColumnHeight
         | P::ScrollPaddingTop
         | P::ScrollPaddingRight
         | P::ScrollPaddingBottom

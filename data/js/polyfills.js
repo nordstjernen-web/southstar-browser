@@ -8147,17 +8147,9 @@
         });
 
         function declText(rule) {
-            var style = rule.__style, out = [];
             try {
-                for (var i = 0; i < (style.length >>> 0); i++) {
-                    var name = style.item(i);
-                    if (!name) continue;
-                    var val = style.getPropertyValue(name);
-                    var pri = style.getPropertyPriority(name);
-                    out.push(name + ': ' + val + (pri ? ' !' + pri : '') + ';');
-                }
+                return String(rule.__style.cssText || '').replace(/^\s+|\s+$/g, '');
             } catch (e) { return ''; }
-            return out.join(' ');
         }
         method(CSSStyleRule.prototype, '__cssText', function () {
             var d = declText(this);
