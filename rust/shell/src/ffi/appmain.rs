@@ -10,6 +10,9 @@ use std::ffi::CString;
 use southstar_config::NsConfig;
 use southstar_glib::{GBoolean, GError, GStr, g_free, g_getenv, g_path_get_dirname, g_strdup};
 
+use super::app::{ns_procapp_run, ns_procapp_set_window_size};
+use super::gtk::borrowed;
+use super::procview_worker::ns_proc_renderer_path;
 use crate::appmain::{self, Action, Gsk, Options};
 
 #[repr(C)]
@@ -114,14 +117,6 @@ unsafe extern "C" {
     fn ns_watchdog_child_session_arg(argc: c_int, argv: *mut *mut c_char) -> *const c_char;
     fn ns_watchdog_child_is_recovery() -> GBoolean;
     fn ns_rproc_single_process_enable();
-    fn ns_proc_renderer_path() -> *mut c_char;
-    fn ns_procapp_run(
-        startup_url: *const c_char,
-        session_path: *const c_char,
-        recover: GBoolean,
-        private_mode: GBoolean,
-    ) -> c_int;
-    fn ns_procapp_set_window_size(width: c_int, height: c_int);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_net_init();
@@ -692,14 +687,8 @@ fn run_proc_gui(
     };
     let file_url = file_url_for(start);
     let start = file_url.as_deref().unwrap_or(start);
-    let status = unsafe {
-        ns_procapp_run(
-            start.as_ptr(),
-            session_path,
-            GBoolean::from(recover),
-            GBoolean::from(private_mode),
-        )
-    };
+    let session_path = unsafe { borrowed(session_path) };
+    let status = ns_procapp_run(start, session_path, recover, private_mode);
     drop(file_url);
     clear_self_exe();
     unsafe { ns_config_shutdown() };
@@ -856,7 +845,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
                     setenv(c"NS_HTTPS_PROXY", proxy);
                 }
             },
-            Action::WindowSize(w, h) => unsafe { ns_procapp_set_window_size(*w, *h) },
+            Action::WindowSize(w, h) => ns_procapp_set_window_size(*w, *h),
             Action::PrintConfig => {
                 print_config();
                 unsafe { ns_config_shutdown() };

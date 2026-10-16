@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean, GStr};
@@ -10,7 +10,14 @@ use southstar_gtk_ffi::{
     self as gtk, GSList, GValue, GdkModifierType, GtkEventController, GtkGesture,
 };
 
+use super::procview_chrome::{ns_pv_console_set_open, request_find, search_open, view_save};
+use super::procview_draw::{scroll_target_x, scroll_target_y};
+use super::procview_media::ns_pv_media_forget_rect;
+use super::procview_result::{
+    ns_proc_view_zoom_in, ns_proc_view_zoom_out, ns_proc_view_zoom_reset,
+};
 use super::procview_state::{NsProcView, Req};
+use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
 use crate::procview::input::{
     self, ControlKey, EditOp, ScrollFrame, ScrollKey, edit_op, js_code, js_key, js_keycode,
     modifier_bits,
@@ -38,19 +45,6 @@ unsafe extern "C" {
     fn g_malloc0(n_bytes: usize) -> *mut c_void;
     fn g_slist_free(list: *mut GSList);
     fn g_unichar_iscntrl(c: u32) -> GBoolean;
-
-    fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView;
-    fn ns_proc_view_unref(v: *mut NsProcView);
-    fn ns_proc_view_zoom_in(v: *mut NsProcView);
-    fn ns_proc_view_zoom_out(v: *mut NsProcView);
-    fn ns_proc_view_zoom_reset(v: *mut NsProcView);
-    fn ns_pv_media_forget_rect(media: *mut c_void);
-    fn ns_pv_console_set_open(v: *mut NsProcView, open: GBoolean);
-    fn ns_pv_search_open(v: *mut NsProcView);
-    fn ns_pv_request_find(v: *mut NsProcView, direction: c_int);
-    fn ns_pv_view_save(v: *mut NsProcView, pdf: GBoolean);
-    fn ns_pv_scroll_target_x(v: *const NsProcView) -> c_double;
-    fn ns_pv_scroll_target_y(v: *const NsProcView) -> c_double;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -160,7 +154,7 @@ fn css_viewport(size: c_int, scale: f64) -> c_int {
     if css > 0 { css } else { 1 }
 }
 
-fn push_req(v: *mut NsProcView, req: *mut Req) {
+pub(super) fn push_req(v: *mut NsProcView, req: *mut Req) {
     unsafe { g_async_queue_push(view(v).queue, req.cast()) };
 }
 
@@ -214,7 +208,7 @@ fn start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
     push_req(v, req);
 }
 
-fn request_hover(v: *mut NsProcView, x: c_int, y: c_int) {
+pub(super) fn request_hover(v: *mut NsProcView, x: c_int, y: c_int) {
     if !opened(v) {
         return;
     }
@@ -358,7 +352,7 @@ fn start_viewport(v: *mut NsProcView, width: c_int, height: c_int) {
     push_req(v, req);
 }
 
-fn maybe_update_viewport(v: *mut NsProcView) -> bool {
+pub(super) fn maybe_update_viewport(v: *mut NsProcView) -> bool {
     if !opened(v) || viewport_w(v) <= 1 || viewport_h(v) <= 1 {
         return false;
     }
@@ -370,10 +364,8 @@ fn maybe_update_viewport(v: *mut NsProcView) -> bool {
     if w == state.last_vp_w && h == state.last_vp_h && dpr == state.last_vp_dpr {
         return false;
     }
-    unsafe {
-        ns_pv_media_forget_rect(state.media);
-        gtk::gtk_widget_queue_draw(state.area);
-    }
+    ns_pv_media_forget_rect(v);
+    unsafe { gtk::gtk_widget_queue_draw(state.area) };
     state.last_vp_w = w;
     state.last_vp_h = h;
     state.last_vp_dpr = dpr;
@@ -406,7 +398,7 @@ unsafe extern "C" fn on_paste_text_ready(src: *mut c_void, result: *mut c_void, 
     {
         start_key_text(v, 4, text.to_bytes());
     }
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
 }
 
 fn paste_clipboard(v: *mut NsProcView) {
@@ -620,7 +612,7 @@ unsafe extern "C" fn on_key(
             && (keyval == input::KEY_J || keyval == input::KEY_UPPER_J));
     if toggle_console {
         let open = view(v).console_open == 0;
-        unsafe { ns_pv_console_set_open(v, GBoolean::from(open)) };
+        ns_pv_console_set_open(v, open);
         return 1;
     }
     let edit = edit_op(keyval, state, unsafe { gtk::gdk_keyval_to_lower(keyval) });
@@ -641,18 +633,14 @@ unsafe extern "C" fn on_key(
     }
     if state & gtk::CONTROL_MASK != 0 {
         start_key(v, 0, keyval, state);
-        unsafe {
-            match input::control_key(keyval, state) {
-                ControlKey::ZoomIn => ns_proc_view_zoom_in(v),
-                ControlKey::ZoomOut => ns_proc_view_zoom_out(v),
-                ControlKey::ZoomReset => ns_proc_view_zoom_reset(v),
-                ControlKey::Find => ns_pv_search_open(v),
-                ControlKey::FindNext { backwards } => {
-                    ns_pv_request_find(v, if backwards { 2 } else { 1 })
-                }
-                ControlKey::Print => ns_pv_view_save(v, 1),
-                ControlKey::Other => return 0,
-            }
+        match input::control_key(keyval, state) {
+            ControlKey::ZoomIn => ns_proc_view_zoom_in(v),
+            ControlKey::ZoomOut => ns_proc_view_zoom_out(v),
+            ControlKey::ZoomReset => ns_proc_view_zoom_reset(v),
+            ControlKey::Find => search_open(v),
+            ControlKey::FindNext { backwards } => request_find(v, if backwards { 2 } else { 1 }),
+            ControlKey::Print => view_save(v, true),
+            ControlKey::Other => return 0,
         }
         return 1;
     }
@@ -666,8 +654,8 @@ unsafe extern "C" fn on_key(
     let line = input::LINE_PX;
     let page = (f64::from(viewport_h(v)) / cur_scale(v) - line).max(line);
     let frame = ScrollFrame {
-        x: unsafe { ns_pv_scroll_target_x(v) },
-        y: unsafe { ns_pv_scroll_target_y(v) },
+        x: scroll_target_x(v),
+        y: scroll_target_y(v),
         page,
         bottom: unsafe { gtk::gtk_adjustment_get_upper(view(v).vadj.cast()) },
     };
@@ -802,18 +790,8 @@ pub unsafe extern "C" fn ns_pv_input_install_keys(v: *mut NsProcView) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_push_req(v: *mut NsProcView, req: *mut Req) {
-    push_req(v, req);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
     start_link(v, x, y, action);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_request_hover(v: *mut NsProcView, x: c_int, y: c_int) {
-    request_hover(v, x, y);
 }
 
 #[unsafe(no_mangle)]
@@ -829,11 +807,6 @@ pub unsafe extern "C" fn ns_pv_start_select(v: *mut NsProcView, kind: c_int, x: 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_run_edit_op(v: *mut NsProcView, op: c_int) {
     run_edit_op(v, EditOp::from_raw(op));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_maybe_update_viewport(v: *mut NsProcView) -> GBoolean {
-    GBoolean::from(maybe_update_viewport(v))
 }
 
 #[unsafe(no_mangle)]

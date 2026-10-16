@@ -16,8 +16,7 @@ use super::procview_draw::{
     ns_pv_install_scroll, ns_pv_install_view_signals,
 };
 use super::procview_input::{
-    ns_pv_input_install_keys, ns_pv_input_install_pointer, ns_pv_input_install_secondary,
-    ns_pv_push_req,
+    ns_pv_input_install_keys, ns_pv_input_install_pointer, ns_pv_input_install_secondary, push_req,
 };
 use super::procview_media::{ns_pv_media_free, ns_pv_media_new};
 use super::procview_state::{NotifyFn, NsProcView, Req};
@@ -140,10 +139,8 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
     state.perm_revealer = ptr::null_mut();
     state.perm_label = ptr::null_mut();
     let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
-    unsafe {
-        (*req).r#type = REQ_QUIT;
-        ns_pv_push_req(v, req);
-    }
+    unsafe { (*req).r#type = REQ_QUIT };
+    push_req(v, req);
     lock_proc(v);
     let p = view(v).proc;
     if !p.is_null() {
@@ -155,29 +152,25 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
         unsafe { g_thread_join(state.thread) };
         state.thread = ptr::null_mut();
     }
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView {
+pub(super) fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView {
     unsafe { g_ref_count_inc(&raw mut (*v).rc) };
     v
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_unref(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_unref(v: *mut NsProcView) {
     if unsafe { g_ref_count_dec(&raw mut (*v).rc) } != 0 {
         free_view(v);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_area(v: *mut NsProcView) -> *mut GtkWidget {
+pub(super) fn ns_proc_view_area(v: *mut NsProcView) -> *mut GtkWidget {
     view(v).area
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void {
+pub(super) fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void {
     if v.is_null() {
         ptr::null_mut()
     } else {
@@ -185,8 +178,7 @@ pub unsafe extern "C" fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_new() -> *mut NsProcView {
+pub(super) fn ns_proc_view_new() -> *mut NsProcView {
     let v = unsafe { g_malloc0(core::mem::size_of::<NsProcView>()) }.cast::<NsProcView>();
     let state = view(v);
     unsafe {
@@ -253,30 +245,22 @@ pub unsafe extern "C" fn ns_proc_view_new() -> *mut NsProcView {
     v
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_widget(v: *mut NsProcView) -> *mut GtkWidget {
+pub(super) fn ns_proc_view_widget(v: *mut NsProcView) -> *mut GtkWidget {
     view(v).root
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_set_notify(
-    v: *mut NsProcView,
-    cb: NotifyFn,
-    ud: *mut c_void,
-) {
+pub(super) fn ns_proc_view_set_notify(v: *mut NsProcView, cb: NotifyFn, ud: *mut c_void) {
     let state = view(v);
     state.notify = cb;
     state.notify_ud = ud;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_set_private(v: *mut NsProcView, private_mode: GBoolean) {
+pub(super) fn ns_proc_view_set_private(v: *mut NsProcView, private_mode: bool) {
     if !v.is_null() {
-        view(v).private_mode = private_mode;
+        view(v).private_mode = GBoolean::from(private_mode);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_is_private(v: *mut NsProcView) -> GBoolean {
-    glib::boolean(!v.is_null() && view(v).private_mode != 0)
+pub(super) fn ns_proc_view_is_private(v: *mut NsProcView) -> bool {
+    !v.is_null() && view(v).private_mode != 0
 }

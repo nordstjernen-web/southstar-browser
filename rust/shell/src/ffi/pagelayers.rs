@@ -24,8 +24,9 @@ pub unsafe extern "C" fn ns_layer_update_parse(
     LayerUpdate::parse(desc, map).map_or(core::ptr::null_mut(), |u| Box::into_raw(Box::new(u)))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layer_update_free(u: *mut LayerUpdate) {
+/// # Safety
+/// `u` is null or a layer update `ns_layer_update_parse` returned that has not been freed.
+pub(super) unsafe fn ns_layer_update_free(u: *mut LayerUpdate) {
     if !u.is_null() {
         drop(unsafe { Box::from_raw(u) });
     }

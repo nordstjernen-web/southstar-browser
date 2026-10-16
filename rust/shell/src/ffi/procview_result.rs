@@ -9,7 +9,7 @@ use std::ffi::CString;
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
 use southstar_gtk_ffi as gtk;
 
-use super::pagelayers::ns_page_layers_reset;
+use super::pagelayers::{ns_layer_update_free, ns_page_layers_reset};
 use super::procview_chrome::{
     ns_pv_console_append, ns_pv_console_set_open, ns_pv_print_run, ns_pv_show_context_menu,
 };
@@ -19,8 +19,8 @@ use super::procview_draw::{
     ns_pv_tiles_leave, request_render, request_tick, set_busy_cursor, start_render,
 };
 use super::procview_input::{
-    cur_scale, ns_pv_css_viewport_h, ns_pv_css_viewport_w, ns_pv_maybe_update_viewport,
-    ns_pv_push_req, ns_pv_start_hover, ns_pv_start_link, ns_pv_start_select, page_dpr,
+    cur_scale, maybe_update_viewport, ns_pv_css_viewport_h, ns_pv_css_viewport_w,
+    ns_pv_start_hover, ns_pv_start_link, ns_pv_start_select, page_dpr, push_req,
 };
 use super::procview_media::{
     Media, ns_pv_media_append_stats, ns_pv_media_audio_pid, ns_pv_media_audio_shutdown,
@@ -80,8 +80,6 @@ unsafe extern "C" {
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn free(p: *mut c_void);
-
-    fn ns_layer_update_free(u: *mut c_void);
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -136,10 +134,6 @@ fn new_req(kind: c_int) -> *mut Req {
     let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
     unsafe { (*req).r#type = kind };
     req
-}
-
-fn push_req(v: *mut NsProcView, req: *mut Req) {
-    unsafe { ns_pv_push_req(v, req) };
 }
 
 pub(super) fn post_emit(v: *mut NsProcView, evt: c_int, text: *const c_char) {
@@ -207,7 +201,7 @@ fn follow_same_document_state(
     }
 }
 
-fn do_load(
+pub(super) fn do_load(
     v: *mut NsProcView,
     url: *const c_char,
     record: bool,
@@ -329,7 +323,7 @@ fn set_zoom(v: *mut NsProcView, scale: f64) {
     view(v).scale = clamped;
     let percent = CString::new((permille / 10).to_string()).unwrap_or_default();
     post_emit(v, EVT_ZOOM, percent.as_ptr());
-    if view(v).opened != 0 && unsafe { ns_pv_maybe_update_viewport(v) } == 0 {
+    if view(v).opened != 0 && !maybe_update_viewport(v) {
         configure_adjustments(v);
         request_render(v);
     }
@@ -519,7 +513,7 @@ fn on_tick(v: *mut NsProcView, res: &Res) {
         if adopt_page_size(v, res) {
             configure_adjustments(v);
         }
-        if res.kind != 0 && unsafe { ns_pv_media_video_playing(media(v)) } == 0 {
+        if res.kind != 0 && !ns_pv_media_video_playing(v) {
             request_render(v);
         }
     }
@@ -947,7 +941,7 @@ fn free_res(res: *mut Res) {
     unsafe {
         let r = &mut *res;
         clear_object(&mut r.texture);
-        ns_layer_update_free(r.layers);
+        ns_layer_update_free(r.layers.cast());
         for s in [
             r.title,
             r.url,
@@ -982,23 +976,11 @@ pub(super) unsafe extern "C" fn on_result(data: *mut c_void) -> GBoolean {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_do_load(
-    v: *mut NsProcView,
-    url: *const c_char,
-    record: GBoolean,
-    history: GBoolean,
-    user_activated: GBoolean,
-) {
-    do_load(v, url, record != 0, history != 0, user_activated != 0);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_pv_perm_resolve(v: *mut NsProcView, allow: GBoolean) {
     perm_resolve(v, allow != 0);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_stop(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_stop(v: *mut NsProcView) {
     if v.is_null() {
         return;
     }
@@ -1010,52 +992,41 @@ pub unsafe extern "C" fn ns_proc_view_stop(v: *mut NsProcView) {
     clear_busy_cursor(v);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_push_video_event(
-    v: *mut NsProcView,
-    token: *const c_char,
-    kind: *const c_char,
-) {
+pub(super) fn ns_proc_view_push_video_event(v: *mut NsProcView, token: &CStr, kind: &CStr) {
     let req = new_req(REQ_VIDEO_EVENT);
     unsafe {
         (*req).seq = view(v).load_seq;
-        (*req).key = dup(token);
-        (*req).query = dup(kind);
+        (*req).key = dup(token.as_ptr());
+        (*req).query = dup(kind.as_ptr());
         g_async_queue_push_front(view(v).queue, req.cast());
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_load(v: *mut NsProcView, url: *const c_char) {
+pub(super) fn ns_proc_view_load(v: *mut NsProcView, url: *const c_char) {
     load(v, url);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_can_back(v: *mut NsProcView) -> GBoolean {
-    glib::boolean(can_back(v))
+pub(super) fn ns_proc_view_can_back(v: *mut NsProcView) -> bool {
+    can_back(v)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_can_forward(v: *mut NsProcView) -> GBoolean {
-    glib::boolean(can_forward(v))
+pub(super) fn ns_proc_view_can_forward(v: *mut NsProcView) -> bool {
+    can_forward(v)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_back(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_back(v: *mut NsProcView) {
     if can_back(v) {
         step_history(v, -1);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_forward(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_forward(v: *mut NsProcView) {
     if can_forward(v) {
         step_history(v, 1);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_reload(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_reload(v: *mut NsProcView) {
     let state = view(v);
     state.render_restarts = 0;
     if state.hist_index >= 0 && state.hist_index < history_len(v) {
@@ -1065,16 +1036,14 @@ pub unsafe extern "C" fn ns_proc_view_reload(v: *mut NsProcView) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_toggle_console(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_toggle_console(v: *mut NsProcView) {
     let state = view(v);
     if state.opened != 0 {
-        unsafe { ns_pv_console_set_open(v, glib::boolean(state.console_open == 0)) };
+        ns_pv_console_set_open(v, state.console_open == 0);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_exit_fullscreen(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_exit_fullscreen(v: *mut NsProcView) {
     if v.is_null() || view(v).closed != 0 || view(v).opened == 0 {
         return;
     }
@@ -1083,23 +1052,19 @@ pub unsafe extern "C" fn ns_proc_view_exit_fullscreen(v: *mut NsProcView) {
     push_req(v, req);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char {
+pub(super) fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char {
     view(v).current_url
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_title(v: *mut NsProcView) -> *const c_char {
+pub(super) fn ns_proc_view_title(v: *mut NsProcView) -> *const c_char {
     view(v).current_title
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_security(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_proc_view_security(v: *mut NsProcView) -> c_int {
     if v.is_null() { 0 } else { view(v).security }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_remote_ip(v: *mut NsProcView) -> *const c_char {
+pub(super) fn ns_proc_view_remote_ip(v: *mut NsProcView) -> *const c_char {
     if v.is_null() {
         ptr::null()
     } else {
@@ -1107,13 +1072,11 @@ pub unsafe extern "C" fn ns_proc_view_remote_ip(v: *mut NsProcView) -> *const c_
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_is_loading(v: *mut NsProcView) -> GBoolean {
-    view(v).loading
+pub(super) fn ns_proc_view_is_loading(v: *mut NsProcView) -> bool {
+    view(v).loading != 0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_favicon(v: *mut NsProcView) -> *mut c_void {
+pub(super) fn ns_proc_view_favicon(v: *mut NsProcView) -> *mut c_void {
     if v.is_null() {
         ptr::null_mut()
     } else {
@@ -1121,8 +1084,7 @@ pub unsafe extern "C" fn ns_proc_view_favicon(v: *mut NsProcView) -> *mut c_void
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_renderer_pid(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_proc_view_renderer_pid(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         return -1;
     }
@@ -1137,8 +1099,7 @@ pub unsafe extern "C" fn ns_proc_view_renderer_pid(v: *mut NsProcView) -> c_int 
     pid
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_audio_pid(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_proc_view_audio_pid(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         -1
     } else {
@@ -1146,8 +1107,7 @@ pub unsafe extern "C" fn ns_proc_view_audio_pid(v: *mut NsProcView) -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_video_pid(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_proc_view_video_pid(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         -1
     } else {
@@ -1155,8 +1115,7 @@ pub unsafe extern "C" fn ns_proc_view_video_pid(v: *mut NsProcView) -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_end_task(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_end_task(v: *mut NsProcView) {
     if v.is_null() {
         return;
     }
@@ -1171,45 +1130,38 @@ pub unsafe extern "C" fn ns_proc_view_end_task(v: *mut NsProcView) {
     unlock_proc(v);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_stop_video(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_stop_video(v: *mut NsProcView) {
     if !v.is_null() {
         unsafe { ns_pv_media_video_shutdown(media(v)) };
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_stop_audio(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_stop_audio(v: *mut NsProcView) {
     if !v.is_null() {
         unsafe { ns_pv_media_audio_shutdown(media(v)) };
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_focus(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_focus(v: *mut NsProcView) {
     let area = view(v).area;
     if !area.is_null() {
         unsafe { gtk::gtk_widget_grab_focus(area) };
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_zoom_in(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_zoom_in(v: *mut NsProcView) {
     set_zoom(v, nav::zoom_step(cur_scale(v), 1));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_zoom_out(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_zoom_out(v: *mut NsProcView) {
     set_zoom(v, nav::zoom_step(cur_scale(v), -1));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_zoom_reset(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_zoom_reset(v: *mut NsProcView) {
     set_zoom(v, 1.0);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_zoom_percent(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_proc_view_zoom_percent(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         100
     } else {

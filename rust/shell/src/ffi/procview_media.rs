@@ -18,7 +18,11 @@ use southstar_gtk_ffi::{
     self as gtk, Cairo, CairoSurface, GdkFrameClock, GrapheneRect, GtkSnapshot, GtkWidget,
 };
 
+use super::procview_result::{ns_proc_view_push_video_event, ns_proc_view_url};
 use super::procview_state::NsProcView;
+use super::procview_view::{
+    ns_proc_view_area, ns_proc_view_media, ns_proc_view_ref, ns_proc_view_unref,
+};
 use crate::procview::media::{
     self, FrameRing, HelperLine, Rect, SlotView, VideoCommand, clock_position, pick_frame,
 };
@@ -52,13 +56,6 @@ const FILE_TEST_IS_EXECUTABLE: c_uint = 1 << 3;
 const RESYNC_INTERVAL_US: i64 = 950_000;
 
 unsafe extern "C" {
-    fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView;
-    fn ns_proc_view_unref(v: *mut NsProcView);
-    fn ns_proc_view_area(v: *mut NsProcView) -> *mut GtkWidget;
-    fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void;
-    fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char;
-    fn ns_proc_view_push_video_event(v: *mut NsProcView, token: *const c_char, kind: *const c_char);
-
     fn ns_app_self_exe() -> *const c_char;
     fn ns_net_proxy_override() -> *const c_char;
     fn ns_net_http_proxy() -> *const c_char;
@@ -571,7 +568,7 @@ fn audio_url_allowed(v: *mut NsProcView, url: &[u8]) -> bool {
     if !url.starts_with(b"file://") {
         return false;
     }
-    if text(unsafe { ns_proc_view_url(v) }).is_some_and(|u| u.starts_with(b"file:")) {
+    if text(ns_proc_view_url(v)).is_some_and(|u| u.starts_with(b"file:")) {
         return true;
     }
     stream_url_allowed(url, c"msaudio")
@@ -591,7 +588,7 @@ fn media_of(v: *mut NsProcView) -> Option<&'static mut Media> {
 }
 
 fn area(v: *mut NsProcView) -> *mut GtkWidget {
-    unsafe { ns_proc_view_area(v) }
+    ns_proc_view_area(v)
 }
 
 fn subprocess_pid(process: *mut GSubprocess) -> c_int {
@@ -1109,10 +1106,8 @@ unsafe extern "C" fn audio_feedback_line(
         if let Some(m) = media_of(v) {
             m.clock_unmap();
         }
-        unsafe {
-            gtk::g_object_unref(stream.cast());
-            ns_proc_view_unref(v);
-        }
+        unsafe { gtk::g_object_unref(stream.cast()) };
+        ns_proc_view_unref(v);
         return;
     };
     let line = line.to_bytes();
@@ -1175,11 +1170,7 @@ fn audio_pump(v: *mut NsProcView, m: &mut Media, commands: &[&[u8]]) {
         let feedback = unsafe { g_subprocess_get_stdout_pipe(m.audio_proc) };
         if !feedback.is_null() {
             let stream = unsafe { g_data_input_stream_new(feedback) };
-            read_line_async(
-                stream,
-                audio_feedback_line,
-                unsafe { ns_proc_view_ref(v) }.cast(),
-            );
+            read_line_async(stream, audio_feedback_line, ns_proc_view_ref(v).cast());
         }
     }
     if m.audio_in.is_null() {
@@ -1267,7 +1258,7 @@ fn video_handle_line(v: *mut NsProcView, m: &mut Media, line: &[u8]) {
                 unsafe { gtk::gtk_widget_queue_draw(area(v)) };
                 let token = CString::new(token).unwrap_or_default();
                 let event = CString::new(event).unwrap_or_default();
-                unsafe { ns_proc_view_push_video_event(v, token.as_ptr(), event.as_ptr()) };
+                ns_proc_view_push_video_event(v, &token, &event);
             }
         }
         HelperLine::Ignored => {}
@@ -1295,16 +1286,12 @@ unsafe extern "C" fn video_read_line(
         video_handle_line(v, m, line.to_bytes());
         video_read_next(v, m);
     }
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
 }
 
 fn video_read_next(v: *mut NsProcView, m: &Media) {
     if !m.video_out.is_null() {
-        read_line_async(
-            m.video_out,
-            video_read_line,
-            unsafe { ns_proc_view_ref(v) }.cast(),
-        );
+        read_line_async(m.video_out, video_read_line, ns_proc_view_ref(v).cast());
     }
 }
 
@@ -1561,26 +1548,22 @@ pub unsafe extern "C" fn ns_pv_media_video_pid(m: *const Media) -> c_int {
     unsafe { m.as_ref() }.map_or(-1, |m| subprocess_pid(m.video_proc))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_video_playing(m: *const Media) -> GBoolean {
-    glib::boolean(unsafe { m.as_ref() }.is_some_and(Media::video_playing))
+pub(super) fn ns_pv_media_video_playing(v: *mut NsProcView) -> bool {
+    media_of(v).is_some_and(|m| m.video_playing())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_forget_rect(m: *mut Media) {
-    if let Some(m) = unsafe { m.as_mut() } {
+pub(super) fn ns_pv_media_forget_rect(v: *mut NsProcView) {
+    if let Some(m) = media_of(v) {
         m.rect.valid = false;
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_on_page(m: *const Media) -> GBoolean {
-    glib::boolean(unsafe { m.as_ref() }.is_some_and(|m| m.rect.page))
+pub(super) fn ns_pv_media_on_page(v: *mut NsProcView) -> bool {
+    media_of(v).is_some_and(|m| m.rect.page)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_snapshot(m: *mut Media, fs: f64, snapshot: *mut GtkSnapshot) {
-    if let Some(m) = unsafe { m.as_mut() } {
+pub(super) fn ns_pv_media_snapshot(v: *mut NsProcView, fs: f64, snapshot: *mut GtkSnapshot) {
+    if let Some(m) = media_of(v) {
         m.snapshot(fs, snapshot);
     }
 }
@@ -1594,13 +1577,12 @@ pub unsafe extern "C" fn ns_pv_media_append_stats(m: *const Media, out: *mut c_v
     unsafe { g_string_append_len(out.cast(), text.as_ptr().cast(), text.len() as isize) };
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_proc_video_helper_available() -> GBoolean {
+pub(super) fn ns_proc_video_helper_available() -> bool {
     let path = video_helper_path();
     let absolute = unsafe { g_path_is_absolute(path.as_ptr()) } != 0;
     let mut ok = absolute && unsafe { g_file_test(path.as_ptr(), FILE_TEST_IS_EXECUTABLE) } != 0;
     if !ok && !absolute {
         ok = unsafe { GStr::take(g_find_program_in_path(path.as_ptr())) }.is_some();
     }
-    glib::boolean(ok)
+    ok
 }

@@ -13,7 +13,12 @@ use southstar_gtk_ffi::{
 };
 
 use super::pagelayers;
-use super::procview_input::{cur_scale, page_dpr, raster_scale, viewport_h, viewport_w};
+use super::procview_input::{
+    cur_scale, maybe_update_viewport, page_dpr, push_req, raster_scale, request_hover, viewport_h,
+    viewport_w,
+};
+use super::procview_media::{ns_pv_media_on_page, ns_pv_media_snapshot, ns_pv_media_video_playing};
+use super::procview_result::{do_load, ns_proc_view_zoom_in, ns_proc_view_zoom_out};
 use super::procview_state::{NsProcView, Res};
 use crate::procview::draw::{self, Cursor, Glide, PathOp};
 
@@ -33,22 +38,6 @@ unsafe extern "C" {
     ) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-
-    fn ns_proc_view_zoom_in(v: *mut NsProcView);
-    fn ns_proc_view_zoom_out(v: *mut NsProcView);
-    fn ns_pv_media_snapshot(media: *mut c_void, scale: c_double, snapshot: *mut GtkSnapshot);
-    fn ns_pv_media_on_page(media: *const c_void) -> GBoolean;
-    fn ns_pv_media_video_playing(media: *const c_void) -> GBoolean;
-    fn ns_pv_maybe_update_viewport(v: *mut NsProcView) -> GBoolean;
-    fn ns_pv_request_hover(v: *mut NsProcView, x: c_int, y: c_int);
-    fn ns_pv_push_req(v: *mut NsProcView, req: *mut super::procview_state::Req);
-    fn ns_pv_do_load(
-        v: *mut NsProcView,
-        url: *const c_char,
-        record: GBoolean,
-        history: GBoolean,
-        user_activated: GBoolean,
-    );
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -136,8 +125,7 @@ unsafe extern "C" fn snapshot_page_video(
     data: *mut c_void,
 ) {
     let v = data.cast::<NsProcView>();
-    let media = view(v).media;
-    if unsafe { ns_pv_media_on_page(media) } == 0 {
+    if !ns_pv_media_on_page(v) {
         return;
     }
     let fs = raster_scale(v);
@@ -148,7 +136,7 @@ unsafe extern "C" fn snapshot_page_video(
             y: (-offset_y / fs) as f32,
         };
         gtk::gtk_snapshot_translate(snapshot, &point);
-        ns_pv_media_snapshot(media, fs, snapshot);
+        ns_pv_media_snapshot(v, fs, snapshot);
         gtk::gtk_snapshot_restore(snapshot);
     }
 }
@@ -192,8 +180,8 @@ unsafe extern "C" fn area_snapshot(widget: *mut GtkWidget, snapshot: *mut GtkSna
         };
         unsafe { gtk::gtk_snapshot_append_color(snapshot, &white, &area) };
     }
-    if unsafe { ns_pv_media_on_page(state.media) } == 0 {
-        unsafe { ns_pv_media_snapshot(state.media, fs, snapshot) };
+    if !ns_pv_media_on_page(v) {
+        ns_pv_media_snapshot(v, fs, snapshot);
     }
     let frame = state.frame.cast::<GdkTexture>();
     if frame.is_null() {
@@ -665,7 +653,7 @@ pub(super) fn start_render(v: *mut NsProcView) {
         r.wheel.y = state.scroll_y + (state.pointer_y / s) as c_int;
         r.wheel.viewport = state.wheel_viewport;
     }
-    unsafe { ns_pv_push_req(v, req) };
+    push_req(v, req);
 }
 
 unsafe extern "C" fn hover_after_scroll(data: *mut c_void) -> GBoolean {
@@ -677,13 +665,11 @@ unsafe extern "C" fn hover_after_scroll(data: *mut c_void) -> GBoolean {
     }
     if unsafe { gtk::gtk_widget_contains(state.area, state.pointer_x, state.pointer_y) } != 0 {
         let s = cur_scale(v);
-        unsafe {
-            ns_pv_request_hover(
-                v,
-                state.scroll_x + (state.pointer_x / s) as c_int,
-                state.scroll_y + (state.pointer_y / s) as c_int,
-            )
-        };
+        request_hover(
+            v,
+            state.scroll_x + (state.pointer_x / s) as c_int,
+            state.scroll_y + (state.pointer_y / s) as c_int,
+        );
     }
     SOURCE_REMOVE
 }
@@ -807,12 +793,12 @@ fn arm_wheel_animation(v: *mut NsProcView) {
         unsafe { gtk::gtk_widget_add_tick_callback(state.area, Some(wheel_tick), v.cast(), None) };
 }
 
-fn scroll_target_x(v: *const NsProcView) -> f64 {
+pub(super) fn scroll_target_x(v: *const NsProcView) -> f64 {
     let state = unsafe { &*v };
     f64::from(state.scroll_x) + state.wheel_pend_x + state.wheel_left_x
 }
 
-fn scroll_target_y(v: *const NsProcView) -> f64 {
+pub(super) fn scroll_target_y(v: *const NsProcView) -> f64 {
     let state = unsafe { &*v };
     f64::from(state.scroll_y) + state.wheel_pend_y + state.wheel_left_y
 }
@@ -847,7 +833,7 @@ unsafe extern "C" fn on_device_scale_changed(
     if state.closed != 0 || state.opened == 0 {
         return;
     }
-    if unsafe { ns_pv_maybe_update_viewport(v) } == 0 {
+    if !maybe_update_viewport(v) {
         request_render(v);
     }
 }
@@ -912,7 +898,7 @@ unsafe extern "C" fn anim_tick(
         state.last_anim_frame_us = 0;
         return SOURCE_REMOVE;
     }
-    if unsafe { ns_pv_media_video_playing(state.media) } != 0 {
+    if ns_pv_media_video_playing(v) {
         return SOURCE_CONTINUE;
     }
     let mut now = if clock.is_null() {
@@ -973,14 +959,12 @@ unsafe extern "C" fn on_resize(
         let history = state.deferred_history;
         let activated = state.deferred_user_activated;
         state.deferred_url = ptr::null_mut();
-        unsafe {
-            ns_pv_do_load(v, url, record, history, activated);
-            glib::g_free(url.cast());
-        }
+        do_load(v, url, record != 0, history != 0, activated != 0);
+        unsafe { glib::g_free(url.cast()) };
         return;
     }
     if state.opened != 0 {
-        if unsafe { ns_pv_maybe_update_viewport(v) } != 0 {
+        if maybe_update_viewport(v) {
             return;
         }
         configure_adjustments(v);
@@ -1006,12 +990,10 @@ unsafe extern "C" fn on_scroll(
     }
     if mods & gtk::CONTROL_MASK != 0 {
         let delta = if dy != 0.0 { dy } else { dx };
-        unsafe {
-            if delta < 0.0 {
-                ns_proc_view_zoom_in(v);
-            } else if delta > 0.0 {
-                ns_proc_view_zoom_out(v);
-            }
+        if delta < 0.0 {
+            ns_proc_view_zoom_in(v);
+        } else if delta > 0.0 {
+            ns_proc_view_zoom_out(v);
         }
         return 1;
     }
@@ -1152,16 +1134,6 @@ pub unsafe extern "C" fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
     state.wheel_pend_y = 0.0;
     state.fling_vx = 0.0;
     state.fling_vy = 0.0;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_scroll_target_x(v: *const NsProcView) -> c_double {
-    scroll_target_x(v)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_scroll_target_y(v: *const NsProcView) -> c_double {
-    scroll_target_y(v)
 }
 
 #[unsafe(no_mangle)]

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The GTK shell (rust/shell) no longer calls its own code through C
+  declarations: the tab window, the tab view's input, drawing, media and
+  chrome modules and the application entry point reach the 62 functions
+  they used to declare in extern "C" blocks through ordinary Rust paths,
+  with bool and &CStr arguments where they took C booleans and strings.
+  None of those functions is exported under a C symbol any more, nine
+  wrappers that only forwarded to a private function are gone, and the
+  shell's unsafe count drops from 1343 to 1144.
 * Style sheets have a typed view in rust/css, southstar_css::Sheet, with
   its font faces, imports, @page rule and container/hover/active flags.
   The renderer and the engine read sheets through it instead of their own

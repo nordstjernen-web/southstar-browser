@@ -19,6 +19,7 @@ use super::icons::{
     ns_icon_button_new, ns_icon_button_set, ns_icon_entry_set, ns_icon_image_new,
     ns_icon_image_set, ns_icon_menu_button_set,
 };
+use super::procview_chrome::ns_popover_menu_fit;
 use super::titlerow::ns_title_row_new;
 use super::view::{self, View};
 use super::{downloads, taskmgr};
@@ -54,7 +55,6 @@ unsafe extern "C" {
     fn ns_config_reload();
     fn ns_config_unlock();
     fn ns_rproc_single_process_enabled() -> c_int;
-    fn ns_popover_menu_fit(popover: *mut GtkWidget);
     fn ns_app_self_exe() -> *const c_char;
 }
 

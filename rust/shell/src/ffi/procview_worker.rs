@@ -382,7 +382,7 @@ fn post(res: *mut Res) {
 unsafe extern "C" fn video_event_render(data: *mut c_void) -> GBoolean {
     let v = data.cast::<NsProcView>();
     super::procview_draw::request_tick(v);
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
     gtk::SOURCE_REMOVE
 }
 
@@ -953,7 +953,7 @@ unsafe extern "C" fn worker_main(data: *mut c_void) -> *mut c_void {
     if !proc_of(v).is_null() {
         unsafe { ns_rproc_http_close(swap_proc(v, ptr::null_mut())) };
     }
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
     ptr::null_mut()
 }
 
@@ -967,8 +967,7 @@ pub(super) fn start_worker(v: *mut NsProcView) -> *mut c_void {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_proc_renderer_path() -> *mut c_char {
+pub(super) fn ns_proc_renderer_path() -> *mut c_char {
     let env = unsafe { glib::g_getenv(c"NS_RENDERER".as_ptr()) };
     if unsafe { glib::bytes(env) }.is_some_and(|e| !e.is_empty()) {
         return unsafe { glib::g_strdup(env) };

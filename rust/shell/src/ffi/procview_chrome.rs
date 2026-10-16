@@ -10,7 +10,7 @@ use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
 use southstar_gtk_ffi::{self as gtk, GtkWidget};
 
 use super::gtk::{connect, cstring, handler, set_accessible_label, tr};
-use super::procview_input::{ns_pv_push_req, ns_pv_run_edit_op, ns_pv_start_select};
+use super::procview_input::{ns_pv_run_edit_op, ns_pv_start_select, push_req};
 use super::procview_result::{
     ns_proc_view_back, ns_proc_view_can_back, ns_proc_view_can_forward, ns_proc_view_forward,
     ns_proc_view_load, ns_proc_view_reload, ns_pv_perm_resolve, post_emit,
@@ -67,10 +67,6 @@ fn new_req(kind: c_int) -> *mut Req {
     let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
     unsafe { (*req).r#type = kind };
     req
-}
-
-fn push_req(v: *mut NsProcView, req: *mut Req) {
-    unsafe { ns_pv_push_req(v, req) };
 }
 
 fn is_window(widget: *mut GtkWidget) -> bool {
@@ -252,10 +248,10 @@ unsafe extern "C" fn on_save_dialog_done(src: *mut c_void, res: *mut c_void, ud:
     if !err.is_null() {
         unsafe { glib::g_error_free(err) };
     }
-    unsafe { ns_proc_view_unref(v) };
+    ns_proc_view_unref(v);
 }
 
-fn view_save(v: *mut NsProcView, pdf: bool) {
+pub(super) fn view_save(v: *mut NsProcView, pdf: bool) {
     let state = view(v);
     if state.opened == 0 || state.area.is_null() {
         return;
@@ -303,15 +299,15 @@ fn ctx_set_clipboard(v: *mut NsProcView, text: *const c_char, status: &CStr) {
 }
 
 unsafe extern "C" fn on_ctx_back(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_proc_view_back(ud.cast()) };
+    ns_proc_view_back(ud.cast());
 }
 
 unsafe extern "C" fn on_ctx_forward(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_proc_view_forward(ud.cast()) };
+    ns_proc_view_forward(ud.cast());
 }
 
 unsafe extern "C" fn on_ctx_reload(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_proc_view_reload(ud.cast()) };
+    ns_proc_view_reload(ud.cast());
 }
 
 unsafe extern "C" fn on_ctx_copy_url(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
@@ -329,7 +325,7 @@ unsafe extern "C" fn on_ctx_open_newtab(_a: *mut c_void, _p: *mut c_void, ud: *m
 unsafe extern "C" fn on_ctx_open_link(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
     if nonempty(view(v).ctx_link) {
-        unsafe { ns_proc_view_load(v, view(v).ctx_link) };
+        ns_proc_view_load(v, view(v).ctx_link);
     }
 }
 
@@ -420,8 +416,7 @@ unsafe extern "C" fn on_popover_menu_mapped(pop: *mut GtkWidget, _ud: *mut c_voi
     unsafe { gtk::g_idle_add(popover_present_idle, gtk::g_object_ref(pop.cast())) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_popover_menu_fit(popover: *mut GtkWidget) {
+pub(super) fn ns_popover_menu_fit(popover: *mut GtkWidget) {
     if popover.is_null()
         || unsafe { gtk::g_type_check_instance_is_a(popover.cast(), gtk::gtk_popover_get_type()) }
             == 0
@@ -471,8 +466,8 @@ fn ctx_field_menu(v: *mut NsProcView, edit: c_int) -> *mut c_void {
 fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
     let has_link = !view(v).ctx_link.is_null();
     let has_selection = view(v).has_selection != 0;
-    ctx_action_enable(v, c"back", unsafe { ns_proc_view_can_back(v) } != 0);
-    ctx_action_enable(v, c"forward", unsafe { ns_proc_view_can_forward(v) } != 0);
+    ctx_action_enable(v, c"back", ns_proc_view_can_back(v));
+    ctx_action_enable(v, c"forward", ns_proc_view_can_forward(v));
     ctx_action_enable(v, c"open-link", has_link);
     ctx_action_enable(v, c"open-newtab", has_link);
     ctx_action_enable(v, c"copy-link", has_link);
@@ -548,7 +543,7 @@ pub unsafe extern "C" fn ns_pv_show_context_menu(
     }
 }
 
-fn request_find(v: *mut NsProcView, direction: c_int) {
+pub(super) fn request_find(v: *mut NsProcView, direction: c_int) {
     let state = view(v);
     if state.opened == 0 || state.search_entry.is_null() {
         return;
@@ -567,7 +562,7 @@ fn request_find(v: *mut NsProcView, direction: c_int) {
     push_req(v, req);
 }
 
-fn search_open(v: *mut NsProcView) {
+pub(super) fn search_open(v: *mut NsProcView) {
     let state = view(v);
     if state.search_revealer.is_null() {
         return;
@@ -602,40 +597,27 @@ fn search_close(v: *mut NsProcView) {
     unsafe { gtk::gtk_widget_grab_focus(view(v).area) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_request_find(v: *mut NsProcView, direction: c_int) {
-    request_find(v, direction);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_search_open(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_find_open(v: *mut NsProcView) {
     search_open(v);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_find_open(v: *mut NsProcView) {
-    search_open(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_find_close(v: *mut NsProcView) -> GBoolean {
+pub(super) fn ns_proc_view_find_close(v: *mut NsProcView) -> bool {
     if v.is_null()
         || view(v).search_revealer.is_null()
         || unsafe { gtk::gtk_revealer_get_reveal_child(view(v).search_revealer) } == 0
     {
-        return 0;
+        return false;
     }
     search_close(v);
-    1
+    true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_set_color_scheme(v: *mut NsProcView, dark: GBoolean) {
+pub(super) fn ns_proc_view_set_color_scheme(v: *mut NsProcView, dark: bool) {
     if v.is_null() {
         return;
     }
     let req = new_req(REQ_COLOR_SCHEME);
-    unsafe { (*req).mods = c_int::from(dark != 0) };
+    unsafe { (*req).mods = c_int::from(dark) };
     push_req(v, req);
 }
 
@@ -834,18 +816,17 @@ unsafe extern "C" fn on_console_eval(entry: *mut GtkWidget, data: *mut c_void) {
     unsafe { gtk::gtk_editable_set_text(entry, c"".as_ptr()) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_console_set_open(v: *mut NsProcView, open: GBoolean) {
-    if open != 0 && view(v).console_window.is_null() {
+pub(super) fn ns_pv_console_set_open(v: *mut NsProcView, open: bool) {
+    if open && view(v).console_window.is_null() {
         build_console_window(v);
     }
     let state = view(v);
     if state.console_window.is_null() {
         return;
     }
-    state.console_open = open;
+    state.console_open = GBoolean::from(open);
     unsafe {
-        if open != 0 {
+        if open {
             let root = gtk::gtk_widget_get_root(state.area);
             if is_window(root) {
                 gtk::gtk_window_set_transient_for(state.console_window, root);
@@ -953,7 +934,7 @@ unsafe extern "C" fn on_inspect_activate(entry: *mut GtkWidget, data: *mut c_voi
 }
 
 unsafe extern "C" fn on_console_close_request(_win: *mut GtkWidget, data: *mut c_void) -> GBoolean {
-    unsafe { ns_pv_console_set_open(data.cast(), 0) };
+    ns_pv_console_set_open(data.cast(), false);
     1
 }
 
@@ -1099,28 +1080,20 @@ pub unsafe extern "C" fn ns_pv_print_run(
     print_run(v, pages.cast(), unsafe { &*setup }, raster_scale);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_view_save(v: *mut NsProcView, pdf: GBoolean) {
-    view_save(v, pdf != 0);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_print(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_print(v: *mut NsProcView) {
     if v.is_null() || view(v).opened == 0 {
         return;
     }
     push_req(v, new_req(REQ_PRINT));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_save_pdf(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_save_pdf(v: *mut NsProcView) {
     if !v.is_null() {
         view_save(v, true);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_proc_view_save_image(v: *mut NsProcView) {
+pub(super) fn ns_proc_view_save_image(v: *mut NsProcView) {
     if !v.is_null() {
         view_save(v, false);
     }

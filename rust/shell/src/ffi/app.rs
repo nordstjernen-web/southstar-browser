@@ -7,14 +7,14 @@ use core::ptr;
 use core::sync::atomic::{AtomicI32, Ordering};
 use std::ffi::CString;
 
-use southstar_gtk_ffi::{self as gtk, GBoolean};
+use southstar_gtk_ffi as gtk;
 
 use super::gtk::{borrowed, build_filename, connect, file_test, handler, take_gstring, tr};
+use super::procview_media::ns_proc_video_helper_available;
 use super::window;
 use crate::window as rules;
 
 unsafe extern "C" {
-    fn ns_proc_video_helper_available() -> GBoolean;
     fn ns_history_init();
     fn ns_history_shutdown();
 }
@@ -27,8 +27,7 @@ const LC_NUMERIC: c_int = 4;
 static INITIAL_WIDTH: AtomicI32 = AtomicI32::new(0);
 static INITIAL_HEIGHT: AtomicI32 = AtomicI32::new(0);
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_procapp_set_window_size(width: c_int, height: c_int) {
+pub(super) fn ns_procapp_set_window_size(width: c_int, height: c_int) {
     INITIAL_WIDTH.store(width, Ordering::Relaxed);
     INITIAL_HEIGHT.store(height, Ordering::Relaxed);
 }
@@ -171,26 +170,25 @@ fn clear_http_caches(at_exit: bool) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_procapp_run(
-    startup_url: *const c_char,
-    session_path: *const c_char,
-    recover: GBoolean,
-    private_mode: GBoolean,
+pub(super) fn ns_procapp_run(
+    startup_url: &CStr,
+    session_path: Option<&CStr>,
+    recover: bool,
+    private_mode: bool,
 ) -> c_int {
     unsafe {
-        if ns_proc_video_helper_available() != 0 {
+        if ns_proc_video_helper_available() {
             gtk::g_setenv(c"NS_VIDEO_HELPER".as_ptr(), c"1".as_ptr(), 1);
         }
         clear_http_caches(false);
-        if private_mode == 0 {
+        if !private_mode {
             ns_history_init();
         }
         let ctx = Context {
-            url: borrowed(startup_url).map(CStr::to_owned),
-            session_path: borrowed(session_path).map(CStr::to_owned),
-            recover: recover != 0,
-            private_mode: private_mode != 0,
+            url: Some(startup_url.to_owned()),
+            session_path: session_path.map(CStr::to_owned),
+            recover,
+            private_mode,
         };
         let app = gtk::gtk_application_new(rules::APP_ID.as_ptr(), gtk::APPLICATION_NON_UNIQUE);
         connect(
