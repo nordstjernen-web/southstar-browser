@@ -387,9 +387,12 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         fallback: None,
     };
     let id = crate::next_id();
-    let signal = init
-        .map(|init| prop(scope, init, "signal"))
-        .filter(|s| s.is_object());
+    let signal = match init.map(|init| prop(scope, init, "signal")) {
+        Some(given) if !given.is_undefined() => Some(given),
+        _ if input.is_object() => Some(prop(scope, input, "signal")),
+        _ => None,
+    }
+    .filter(|s| s.is_object());
     if let Some(signal) = signal {
         if crate::bool_prop(scope, &signal, "aborted") {
             reject_with_abort(scope, &state.reject, Some(&signal));

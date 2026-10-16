@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Request has a signal. new Request() left it undefined and ignored the
+  signal, mode, credentials, cache, redirect, referrerPolicy, integrity
+  and keepalive it was given; the request's signal now follows the one
+  passed in (or the input request's), invalid option values throw, and
+  fetch(request) aborts when the request's signal does. React Router's
+  data loaders read request.signal.aborted, so GitHub's repository pages
+  stopped short of loading their commit messages, branches and releases.
+* An inline-block's min-content contribution is its own min-content
+  width instead of its widest line, and a table whose width is set below
+  its min-content width grows to fit it. Wikipedia's infoboxes, whose
+  lists are inline-blocks, were laid out wider than their 22em width,
+  and a table squeezed below its content drew its cells outside its box.
 * Table cells that follow a rowspan land in the right column. Column
   counting and column widths ignored the slots a rowspan holds in later
   rows, so a cell after one was measured into the column to its left, or

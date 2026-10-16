@@ -101,6 +101,27 @@ fn any_handler(scope: &mut Scope<'_>, _this: &Value, _args: &[Value], data: &[Va
     Ok(Value::undefined())
 }
 
+fn follow(scope: &mut Scope<'_>, combined: &Value, signal: &Value) {
+    if !signal.is_object() {
+        return;
+    }
+    if bool_prop(scope, signal, "aborted") {
+        propagate(scope, combined, signal);
+        return;
+    }
+    let handler = scope.bound_function("", 0, any_handler, &[combined.clone(), signal.clone()]);
+    let kind = scope.string("abort");
+    crate::call_method(scope, signal, "addEventListener", &[kind, handler]);
+}
+
+pub(crate) fn following(scope: &mut Scope<'_>, parent: Option<&Value>) -> JsResult {
+    let signal = make_signal(scope, false, &Value::undefined())?;
+    if let Some(parent) = parent {
+        follow(scope, &signal, parent);
+    }
+    Ok(signal)
+}
+
 fn static_any(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let combined = make_signal(scope, false, &Value::undefined())?;
     let Some(list) = args.first().filter(|l| l.is_object()) else {
@@ -111,16 +132,7 @@ fn static_any(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult 
         let signal = scope
             .get_index(list, i)
             .unwrap_or_else(|_| Value::undefined());
-        if !signal.is_object() {
-            continue;
-        }
-        if bool_prop(scope, &signal, "aborted") {
-            propagate(scope, &combined, &signal);
-            continue;
-        }
-        let handler = scope.bound_function("", 0, any_handler, &[combined.clone(), signal.clone()]);
-        let kind = scope.string("abort");
-        crate::call_method(scope, &signal, "addEventListener", &[kind, handler]);
+        follow(scope, &combined, &signal);
     }
     Ok(combined)
 }

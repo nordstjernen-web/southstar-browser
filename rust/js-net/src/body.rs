@@ -361,6 +361,83 @@ fn define_ro_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &[u8]) 
     define_ro(scope, object, key, value);
 }
 
+const REQUEST_ENUMS: [(&str, &[&[u8]]); 6] = [
+    ("mode", &[b"cors", b"same-origin", b"no-cors", b"navigate"]),
+    ("credentials", &[b"same-origin", b"omit", b"include"]),
+    (
+        "cache",
+        &[
+            b"default",
+            b"no-store",
+            b"reload",
+            b"no-cache",
+            b"force-cache",
+            b"only-if-cached",
+        ],
+    ),
+    ("redirect", &[b"follow", b"error", b"manual"]),
+    (
+        "referrerPolicy",
+        &[
+            b"",
+            b"no-referrer",
+            b"no-referrer-when-downgrade",
+            b"same-origin",
+            b"origin",
+            b"strict-origin",
+            b"origin-when-cross-origin",
+            b"strict-origin-when-cross-origin",
+            b"unsafe-url",
+        ],
+    ),
+    ("priority", &[b"auto", b"high", b"low"]),
+];
+
+fn request_option(
+    scope: &mut Scope<'_>,
+    input: Option<&Value>,
+    init: Option<&Value>,
+    key: &str,
+    allowed: &[&[u8]],
+) -> Result<Vec<u8>, Value> {
+    if let Some(init) = init {
+        let given = prop(scope, init, key);
+        if !given.is_undefined() {
+            let text = c_bytes(scope, &given).unwrap_or_default();
+            if !allowed.contains(&text.as_slice()) || (key == "mode" && text == b"navigate") {
+                return Err(scope.type_error(&format!(
+                    "Failed to construct 'Request': '{}' is not a valid value for {key}",
+                    String::from_utf8_lossy(&text)
+                )));
+            }
+            return Ok(text);
+        }
+    }
+    let inherited = input
+        .and_then(|input| crate::string_prop(scope, input, key))
+        .filter(|text| allowed.contains(&text.as_slice()));
+    Ok(inherited.unwrap_or_else(|| allowed[0].to_vec()))
+}
+
+fn request_signal(scope: &mut Scope<'_>, input: Option<&Value>, init: Option<&Value>) -> JsResult {
+    let given = init
+        .map(|init| prop(scope, init, "signal"))
+        .filter(|s| !s.is_undefined());
+    let parent = match given {
+        Some(signal) if signal.is_null() => None,
+        Some(signal) if ffi::host_is(&signal, ffi::HO_ABORT_SIGNAL) => Some(signal),
+        Some(_) => {
+            return Err(scope.type_error(
+                "Failed to construct 'Request': member signal is not of type AbortSignal",
+            ));
+        }
+        None => input
+            .map(|input| prop(scope, input, "signal"))
+            .filter(|s| ffi::host_is(s, ffi::HO_ABORT_SIGNAL)),
+    };
+    crate::abort::following(scope, parent.as_ref())
+}
+
 pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let object = scope.new_object();
     set_instance_proto(scope, &object, "Request");
@@ -368,10 +445,12 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     let mut method: Option<Vec<u8>> = None;
     let mut headers_init = Value::undefined();
     let mut body = Value::undefined();
+    let mut input_request: Option<&Value> = None;
     if let Some(input) = args.first() {
         if input.is_object() {
             let url = prop(scope, input, "url");
             if url.is_string() {
+                input_request = Some(input);
                 url_raw = c_bytes(scope, &url);
                 let given = prop(scope, input, "method");
                 if !given.is_undefined() {
@@ -386,7 +465,8 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
             url_raw = c_bytes(scope, input);
         }
     }
-    if let Some(init) = args.get(1).filter(|i| i.is_object()) {
+    let init = args.get(1).filter(|i| i.is_object());
+    if let Some(init) = init {
         let given = prop(scope, init, "method");
         if !given.is_undefined() {
             method = c_bytes(scope, &given);
@@ -400,6 +480,24 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
             body = given;
         }
     }
+    let mut options = Vec::with_capacity(REQUEST_ENUMS.len());
+    for (key, allowed) in REQUEST_ENUMS {
+        options.push((
+            key,
+            request_option(scope, input_request, init, key, allowed)?,
+        ));
+    }
+    let integrity = match init.map(|init| prop(scope, init, "integrity")) {
+        Some(given) if !given.is_undefined() => c_bytes(scope, &given).unwrap_or_default(),
+        _ => input_request
+            .and_then(|input| crate::string_prop(scope, input, "integrity"))
+            .unwrap_or_default(),
+    };
+    let keepalive = match init.map(|init| prop(scope, init, "keepalive")) {
+        Some(given) if !given.is_undefined() => scope.to_bool(&given),
+        _ => input_request.is_some_and(|input| crate::bool_prop(scope, input, "keepalive")),
+    };
+    let signal = request_signal(scope, input_request, init)?;
     let page = Js::of(scope).page_url().filter(|p| !p.is_empty());
     let final_url = match (&url_raw, &page) {
         (Some(url), Some(page)) => ffi::url_resolve(Some(page), url).unwrap_or_else(|| url.clone()),
@@ -426,18 +524,13 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     install_body(scope, &object, &body, true);
     apply_inferred_content_type(scope, &object);
     define_ro(scope, &object, "bodyUsed", Value::boolean(false));
-    for (key, value) in [
-        ("mode", &b"cors"[..]),
-        ("credentials", b"same-origin"),
-        ("cache", b"default"),
-        ("redirect", b"follow"),
-        ("referrer", b"about:client"),
-        ("referrerPolicy", b""),
-        ("integrity", b""),
-    ] {
+    for (key, value) in options.iter().filter(|(key, _)| *key != "priority") {
         define_ro_str(scope, &object, key, value);
     }
-    define_ro(scope, &object, "keepalive", Value::boolean(false));
+    define_ro_str(scope, &object, "referrer", b"about:client");
+    define_ro_str(scope, &object, "integrity", &integrity);
+    define_ro(scope, &object, "keepalive", Value::boolean(keepalive));
+    define_ro(scope, &object, "signal", signal);
     define_ro_str(scope, &object, "destination", b"");
     define_ro(scope, &object, "isReloadNavigation", Value::boolean(false));
     define_ro(scope, &object, "isHistoryNavigation", Value::boolean(false));
