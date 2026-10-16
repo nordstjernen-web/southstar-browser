@@ -7,7 +7,7 @@ mod ffi;
 mod os;
 
 pub use ffi::PrintFn;
-pub use os::AttachFn;
+pub use os::{AttachFn, ProcInfo, proc_cpu, proc_info, proc_threads, self_pid};
 
 pub fn set_inproc(attach: Option<AttachFn>) {
     os::set_attach(attach);

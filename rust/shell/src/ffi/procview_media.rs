@@ -62,12 +62,6 @@ unsafe extern "C" {
     fn ns_net_https_proxy() -> *const c_char;
     fn ns_net_no_proxy() -> *const c_char;
     fn ns_net_ca_bundle_path() -> *const c_char;
-    fn ns_rproc_http_proc_info(
-        pid: c_int,
-        state: *mut c_char,
-        state_sz: c_int,
-        rss_kb: *mut c_long,
-    ) -> c_int;
 
     fn g_subprocess_launcher_new(flags: c_uint) -> *mut GSubprocessLauncher;
     fn g_subprocess_launcher_setenv(
@@ -1451,10 +1445,9 @@ fn stats(m: &Media) -> Vec<u8> {
             out.extend_from_slice(b"\n\n== Media helper processes ==\n");
             any = true;
         }
-        let mut state = [0 as c_char; 32];
-        let mut rss: c_long = -1;
-        unsafe { ns_rproc_http_proc_info(pid, state.as_mut_ptr(), 32, &mut rss) };
-        let state = unsafe { CStr::from_ptr(state.as_ptr()) }.to_string_lossy();
+        let info = southstar_renderer_client::proc_info(pid);
+        let state = info.state.unwrap_or("running");
+        let rss = info.rss_kb.unwrap_or(-1);
         let mb = if rss >= 0 { rss as f64 / 1024.0 } else { 0.0 };
         out.extend_from_slice(format!("{label}  pid {pid}  {state}  rss {mb:.1} MB\n").as_bytes());
         append_threads(&mut out, pid);

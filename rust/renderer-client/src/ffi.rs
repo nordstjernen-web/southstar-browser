@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_long, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::sync::Mutex;
 
@@ -1035,41 +1035,4 @@ pub unsafe extern "C" fn ns_rproc_http_terminate(r: *mut Renderer) {
     }
     let sock = unsafe { (&raw const (*r).sock).read() };
     os::terminate(unsafe { &(*r).child }, sock);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_self_pid() -> c_int {
-    os::self_pid()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_rproc_http_proc_info(
-    pid: c_int,
-    state: *mut c_char,
-    state_sz: c_int,
-    rss_kb: *mut c_long,
-) -> c_int {
-    let info = os::proc_info(pid);
-    if !state.is_null() && state_sz > 0 {
-        let word = info.state.unwrap_or("running").as_bytes();
-        let n = word.len().min(state_sz as usize - 1);
-        unsafe {
-            ptr::copy_nonoverlapping(word.as_ptr(), state.cast::<u8>(), n);
-            *state.add(n) = 0;
-        }
-    }
-    if !rss_kb.is_null() {
-        unsafe { *rss_kb = info.rss_kb.unwrap_or(-1) };
-    }
-    c_int::from(info.alive)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_http_proc_cpu(pid: c_int) -> f64 {
-    os::proc_cpu(pid)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_http_proc_threads(pid: c_int) -> c_int {
-    os::proc_threads(pid)
 }

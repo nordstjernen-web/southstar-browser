@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
 use southstar_gtk_ffi::{self as gtk, GBoolean, GtkWidget};
+use southstar_renderer_client as renderer_client;
 
 use super::gtk::{
     borrowed, connect, cstring, handler, hexpand_spacer, label, set_margins, tr, tr_string,
@@ -14,15 +15,6 @@ use super::view::{self, View};
 use crate::taskmgr::{self, CpuHistory};
 
 unsafe extern "C" {
-    fn ns_rproc_self_pid() -> c_int;
-    fn ns_rproc_http_proc_info(
-        pid: c_int,
-        state: *mut c_char,
-        state_sz: c_int,
-        rss_kb: *mut c_long,
-    ) -> c_int;
-    fn ns_rproc_http_proc_cpu(pid: c_int) -> f64;
-    fn ns_rproc_http_proc_threads(pid: c_int) -> c_int;
     fn ns_rproc_single_process_enabled() -> c_int;
     fn ns_watchdog_supervisor_pid() -> c_int;
     fn ns_thread_dump_text(pid: c_int, label: *const c_char) -> *mut c_char;
@@ -49,18 +41,12 @@ struct ProcInfo {
     rss: c_long,
 }
 
-fn proc_info(pid: c_int, initial: &str) -> ProcInfo {
-    let mut buf = [0 as c_char; 32];
-    let init = initial.as_bytes();
-    for (slot, &b) in buf.iter_mut().zip(init) {
-        *slot = b as c_char;
+fn proc_info(pid: c_int) -> ProcInfo {
+    let info = renderer_client::proc_info(pid);
+    ProcInfo {
+        state: info.state.unwrap_or("running").to_owned(),
+        rss: info.rss_kb.unwrap_or(-1),
     }
-    let mut rss: c_long = -1;
-    unsafe { ns_rproc_http_proc_info(pid, buf.as_mut_ptr(), buf.len() as c_int, &mut rss) };
-    let state = unsafe { CStr::from_ptr(buf.as_ptr()) }
-        .to_string_lossy()
-        .into_owned();
-    ProcInfo { state, rss }
 }
 
 fn row_pid(row: *mut GtkWidget) -> c_int {
@@ -100,12 +86,12 @@ unsafe fn add_row(
         gtk::gtk_box_append(title, l_name);
 
         let threads = if pid > 0 {
-            ns_rproc_http_proc_threads(pid)
+            renderer_client::proc_threads(pid)
         } else {
             -1
         };
         let cpu = if pid > 0 {
-            ns_rproc_http_proc_cpu(pid)
+            renderer_client::proc_cpu(pid)
         } else {
             -1.0
         };
@@ -151,7 +137,7 @@ unsafe fn refresh(tm: &mut TaskManager) {
         let brand = tr_string(c"Southstar Browser");
         let wpid = ns_watchdog_supervisor_pid();
         if wpid > 0 {
-            let info = proc_info(wpid, "");
+            let info = proc_info(wpid);
             let name = format!("{brand} ({})", tr_string(c"watchdog"));
             add_row(
                 tm,
@@ -163,8 +149,8 @@ unsafe fn refresh(tm: &mut TaskManager) {
                 None,
             );
         }
-        let gpid = ns_rproc_self_pid();
-        let info = proc_info(gpid, "");
+        let gpid = renderer_client::self_pid();
+        let info = proc_info(gpid);
         add_row(
             tm,
             c"web-browser-symbolic",
@@ -182,10 +168,10 @@ unsafe fn refresh(tm: &mut TaskManager) {
                 rss: -1,
             };
             if pid > 0 {
-                info = proc_info(pid, "starting");
+                info = proc_info(pid);
             } else if ns_rproc_single_process_enabled() != 0 {
-                pid = ns_rproc_self_pid();
-                info = proc_info(pid, "starting");
+                pid = renderer_client::self_pid();
+                info = proc_info(pid);
                 info.state = "in-process".into();
             }
             let tab = v
@@ -208,7 +194,7 @@ unsafe fn refresh(tm: &mut TaskManager) {
             );
             let apid = v.audio_pid();
             if apid > 0 {
-                let a = proc_info(apid, "");
+                let a = proc_info(apid);
                 let name = format!("   ⤷ {}", tr_string(c"Audio playback"));
                 add_row(
                     tm,
@@ -222,7 +208,7 @@ unsafe fn refresh(tm: &mut TaskManager) {
             }
             let vpid = v.video_pid();
             if vpid > 0 {
-                let vi = proc_info(vpid, "");
+                let vi = proc_info(vpid);
                 let name = format!("   ⤷ {}", tr_string(c"Video decoder"));
                 add_row(
                     tm,
