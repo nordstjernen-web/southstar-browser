@@ -15,7 +15,7 @@ use core::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Weak;
 
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{RealmCache, Scope, Value};
 
 use crate::ffi::Js;
 
@@ -27,7 +27,7 @@ pub(crate) struct Page {
     pub aborts: HashMap<u32, abort::AbortTimeout>,
     pub xhrs: HashMap<u32, xhr::XhrState>,
     pub sockets: Vec<Weak<socket::Socket>>,
-    pub body_helper: Option<Value>,
+    pub body_helper: RealmCache,
 }
 
 thread_local! {

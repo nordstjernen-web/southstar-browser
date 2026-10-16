@@ -14,7 +14,7 @@ mod url;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, RealmCache, Scope, Value};
 
 use crate::ffi::Js;
 
@@ -28,9 +28,23 @@ pub(crate) const ALL: Attributes = Attributes {
 
 #[derive(Default)]
 pub(crate) struct Page {
-    url_helper: Option<Value>,
-    search_params_helper: Option<Value>,
+    url_helpers: RealmCache,
+    search_params_helpers: RealmCache,
     reads: Vec<file_reader::PendingRead>,
+}
+
+pub(crate) fn realm_helper(
+    scope: &mut Scope<'_>,
+    js: Js,
+    helpers: fn(&mut Page) -> &mut RealmCache,
+    build: impl FnOnce(&mut Scope<'_>) -> Option<Value>,
+) -> Option<Value> {
+    if let Some(helper) = with_page(js, |page| helpers(page).lookup(scope)) {
+        return Some(helper);
+    }
+    let helper = build(scope)?;
+    with_page(js, |page| helpers(page).store(scope, helper.clone()));
+    Some(helper)
 }
 
 thread_local! {

@@ -17,9 +17,11 @@ const BODY_CONSUMER_SOURCE: &str = "(function(){\
       return a; })();\
  }\
  function isStream(v){ return v && typeof v.getReader === 'function'; }\
+ var toTag = Function.prototype.call.bind(Object.prototype.toString);\
+ function isBuffer(v){ return toTag(v) === '[object ArrayBuffer]'; }\
  function dropRaw(r){try{if(Object.prototype.hasOwnProperty.call(r,'body'))delete r.body;}catch(e){}}\
  function normalize(r){\
-  if (r._bodyBuffer instanceof ArrayBuffer || r._bodyStream) {\
+  if (isBuffer(r._bodyBuffer) || r._bodyStream) {\
    if (!('_bodyNull' in r))\
     try { Object.defineProperty(r,'_bodyNull',{value:false,configurable:true}); } catch(e){}\
    dropRaw(r);\
@@ -41,11 +43,11 @@ const BODY_CONSUMER_SOURCE: &str = "(function(){\
   dropRaw(r);\
  }\
  function bytes(r){\
-  return (r._bodyBuffer instanceof ArrayBuffer)\
+  return (isBuffer(r._bodyBuffer))\
    ? new Uint8Array(r._bodyBuffer) : new Uint8Array(0);\
  }\
  function readAll(r){\
-  if (r._bodyBuffer instanceof ArrayBuffer) return Promise.resolve(new Uint8Array(r._bodyBuffer));\
+  if (isBuffer(r._bodyBuffer)) return Promise.resolve(new Uint8Array(r._bodyBuffer));\
   if (!r._bodyStream) return Promise.resolve(new Uint8Array(0));\
   var rd = r._bodyStream.getReader(), chunks = [], total = 0;\
   return (function pump(){ return rd.read().then(function(x){\
@@ -85,7 +87,7 @@ const BODY_CONSUMER_SOURCE: &str = "(function(){\
  function clone(){var r=this;var c=Object.create(Object.getPrototypeOf(r));\
   Object.getOwnPropertyNames(r).forEach(function(k){if(k!=='body'&&k!=='bodyUsed')\
    try{Object.defineProperty(c,k,Object.getOwnPropertyDescriptor(r,k));}catch(e){}});\
-  if(r._bodyBuffer instanceof ArrayBuffer)\
+  if(isBuffer(r._bodyBuffer))\
    try{Object.defineProperty(c,'_bodyBuffer',{value:r._bodyBuffer,configurable:true});}catch(e){}\
   if(r._bodyStream)\
    try{Object.defineProperty(c,'_bodyStream',{value:r._bodyStream,configurable:true});}catch(e){}\
@@ -157,12 +159,12 @@ pub(crate) fn attach_consumers(scope: &mut Scope<'_>, object: &Value) {
     if js.is_null() {
         return;
     }
-    let cached = crate::with_page(js, |page| page.body_helper.clone()).flatten();
+    let cached = crate::with_page(js, |page| page.body_helper.lookup(scope)).flatten();
     let helper = match cached {
         Some(helper) => helper,
         None => match scope.eval_native_script(BODY_CONSUMER_SOURCE, "<body-consumer>") {
             Ok(helper) => {
-                crate::with_page(js, |page| page.body_helper = Some(helper.clone()));
+                crate::with_page(js, |page| page.body_helper.store(scope, helper.clone()));
                 helper
             }
             Err(_) => return,

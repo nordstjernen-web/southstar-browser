@@ -14,13 +14,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use southstar_js_engine::Value;
+use southstar_js_engine::RealmCache;
 
 use crate::ffi::Js;
 
 #[derive(Default)]
 pub(crate) struct Page {
-    computed_proxy: RefCell<Option<Value>>,
+    computed_proxy: RefCell<RealmCache>,
     computed_methods: RefCell<Option<Rc<declaration::ComputedMethods>>>,
 }
 
@@ -38,8 +38,8 @@ pub(crate) fn teardown(js: Js) {
         .ok()
         .flatten();
     if let Some(page) = page {
-        let proxy = page.computed_proxy.borrow_mut().take();
-        drop(proxy);
+        let proxies = page.computed_proxy.take();
+        drop(proxies);
         let methods = page.computed_methods.borrow_mut().take();
         drop(methods);
     }

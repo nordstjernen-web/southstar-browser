@@ -11,12 +11,14 @@ pub use backend::{
 use boa as backend;
 
 mod handles;
+mod realm_cache;
 mod table;
 
 pub use handles::{
     ContextHandle, InterruptFn, JobOutcome, MemoryUsage, ModuleLoadFn, ModuleNormalizeFn,
     RejectionTrackerFn, RuntimeHandle, RuntimeOptions,
 };
+pub use realm_cache::RealmCache;
 pub use table::{
     GetterFn, GetterMagicFn, Prop, SetterFn, SetterMagicFn, accessor, accessor_magic, getter,
     method, method_enumerable,
