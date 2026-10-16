@@ -816,6 +816,11 @@ pub unsafe extern "C" fn ns_layout_abs_build_box(
     };
     let abox = southstar_layout::BoxPool::new_box(media::KIND_BLOCK);
     abox.set_style(ps.as_ptr());
+    let after = node(dom)
+        .and_then(|host| styles(table).get(host))
+        .and_then(StyleRef::after)
+        .is_some_and(|a| a.as_ptr() == ps.as_ptr());
+    abox.set_pseudo_host(dom.cast(), after);
     media::collect_box_bg_image(abox, Some(ps));
     let mut generated = generated::build_pseudo_inline_for(Some(ps), node(dom));
     if let Some(g) = generated

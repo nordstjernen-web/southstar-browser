@@ -111,11 +111,19 @@ pub struct NsBox {
     first_child: *const NsBox,
     last_child: *const NsBox,
     next_sibling: *const NsBox,
+    pseudo_host: PseudoHost,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PseudoHost {
+    node: *const c_void,
+    after: GBoolean,
 }
 
 #[cfg(target_pointer_width = "64")]
 const _: () =
-    assert!(size_of::<NsBox>() == 560 && core::mem::offset_of!(NsBox, next_sibling) == 552);
+    assert!(size_of::<NsBox>() == 576 && core::mem::offset_of!(NsBox, next_sibling) == 552);
 
 #[repr(C)]
 pub struct NsBoxMedia {
@@ -633,6 +641,21 @@ impl<'a> BoxRef<'a> {
 
     pub fn dom_ptr(self) -> *const c_void {
         self.raw().dom
+    }
+
+    pub fn pseudo_host(self) -> Option<(*const c_void, bool)> {
+        let host = self.raw().pseudo_host;
+        (!host.node.is_null()).then_some((host.node, host.after != 0))
+    }
+
+    pub fn set_pseudo_host(self, node: *const c_void, after: bool) {
+        let host = PseudoHost {
+            node,
+            after: GBoolean::from(after),
+        };
+        // SAFETY: self.0 points to a live box owned by the box pool, and no
+        // other reference to its pseudo_host field is held across this write.
+        unsafe { (*self.0.as_ptr()).pseudo_host = host };
     }
 
     pub fn media(self) -> Option<MediaRef<'a>> {
