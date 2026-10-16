@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A ::before or ::after whose content is none or normal generates no
+  box, as the standard says. An absolutely positioned or inline-block
+  pseudo-element with content: none was still drawn, with its size and
+  background, and its counter-increment and counter-reset still counted.
 * JavaScript: removed the last site-specific hack, a script that ran
   after every script evaluation on freecivweb.com and filled in missing
   match_style/sprite_type fields of the page's tileset table. Boa
