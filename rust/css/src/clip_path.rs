@@ -578,7 +578,7 @@ fn shape_command(item: &[u8]) -> Option<String> {
     let (cmd, rest) = ws.split_first()?;
     let cmd = String::from_utf8_lossy(&cmd.to_ascii_lowercase()).into_owned();
     if cmd == "close" {
-        return rest.is_empty().then(|| cmd);
+        return rest.is_empty().then_some(cmd);
     }
     let (mode, rest) = rest.split_first()?;
     let by = if eq(mode, b"by") {
