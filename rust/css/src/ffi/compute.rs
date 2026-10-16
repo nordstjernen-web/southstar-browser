@@ -16,7 +16,7 @@ use southstar_dom::{Kind, Node, NsNode, children};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::cascade::{RawMatch, ns_css_cascade_apply};
-use super::computed_units::RawStyle;
+use super::computed_units::{PROP_COUNT, RawStyle};
 use super::container::{
     ns_css_container_map_signature, ns_css_container_stack_pop, ns_css_container_stack_push,
     ns_css_container_stack_reset,
@@ -52,11 +52,14 @@ use super::style_share::{
 };
 use super::ua::ns_css_ua_sheet;
 use super::value::{KIND_LENGTH, ns_css_value_free};
+use super::values::ns_css_value_equal;
 use super::vars::ns_var_map_unref;
 use super::viewport;
+use crate::NsCssValue;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
 use crate::incremental::{self, PassKey};
 use crate::prop::Prop;
+use crate::restyle;
 use crate::units::PX;
 
 const MAX_DEPTH: i32 = 512;
@@ -198,6 +201,27 @@ impl Drop for StyleRef {
     }
 }
 
+impl StyleRef {
+    fn get(&self) -> &RawStyle {
+        // SAFETY: a StyleRef holds a reference on a live style, so the style outlives it.
+        unsafe { &*self.0 }
+    }
+}
+
+fn same_value(a: *const NsCssValue, b: *const NsCssValue) -> bool {
+    // SAFETY: both values belong to styles that stay alive for the whole style pass.
+    ptr::eq(a, b) || unsafe { ns_css_value_equal(a, b) } != 0
+}
+
+fn keeps_children(before: &RawStyle, after: &RawStyle, variables_may_differ: bool) -> bool {
+    before.display == after.display
+        && (!variables_may_differ || ptr::eq(before.vars, after.vars))
+        && (0..PROP_COUNT).all(|prop| {
+            !super::cascade::passed_to_children(prop)
+                || same_value(before.values[prop], after.values[prop])
+        })
+}
+
 type Styles = HashMap<usize, StyleRef>;
 
 struct Previous {
@@ -325,14 +349,17 @@ impl Walk<'_> {
         };
         let mut recurse_dirty = under_dirty;
         if node.is_element() {
-            let mut dirty =
-                under_dirty || unsafe { ns_css_restyle_dirty(ptr) } != 0 || excluded(ptr as usize);
+            let restyled = under_dirty || unsafe { ns_css_restyle_dirty(ptr) } != 0;
+            let inline_styled = !restyled && restyle::inline_style_changed(node);
+            let animated = !restyled && excluded(ptr as usize);
+            let own_only = inline_styled || animated;
+            let mut dirty = restyled || own_only;
+            let reuse = self.reuse;
+            let before = reuse.and_then(|styles| styles.get(&(ptr as usize)));
             let previous = if dirty {
                 None
             } else {
-                self.reuse
-                    .and_then(|styles| styles.get(&(ptr as usize)))
-                    .map(|style| style.0)
+                before.map(|style| style.0)
             };
             let style = match previous {
                 Some(style) => {
@@ -357,7 +384,11 @@ impl Walk<'_> {
             {
                 self.root_px = px;
             }
-            recurse_dirty = dirty;
+            recurse_dirty = dirty
+                && !(own_only
+                    && before.is_some_and(|before| {
+                        keeps_children(before.get(), computed, inline_styled)
+                    }));
         }
         let pushed = ns_css_container_stack_push(ptr.cast()) != 0;
         let outer_filter = if is_document && node.parent().is_some() {
