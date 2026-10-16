@@ -5,34 +5,12 @@
 use core::ffi::{CStr, c_char, c_uint};
 use core::ptr;
 
-use southstar_glib::{
-    FALSE, GBoolean, GChecksumType, TRUE, boolean, bytes, g_base64_encode, g_checksum_free,
-    g_checksum_get_digest, g_checksum_new, g_checksum_update, g_free, slice,
-};
+use southstar_glib::{FALSE, GBoolean, TRUE, boolean, bytes, slice};
 
 use crate::Csp;
 
 unsafe fn cstr<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-unsafe fn owned(p: *const c_char) -> Option<Vec<u8>> {
-    unsafe { bytes(p) }.map(<[u8]>::to_vec)
-}
-
-pub(crate) fn base64_digest(checksum_type: GChecksumType, data: &[u8]) -> Vec<u8> {
-    let mut digest = [0u8; 64];
-    let mut digest_len = digest.len();
-    unsafe {
-        let checksum = g_checksum_new(checksum_type);
-        g_checksum_update(checksum, data.as_ptr(), data.len() as isize);
-        g_checksum_get_digest(checksum, digest.as_mut_ptr(), &mut digest_len);
-        let encoded = g_base64_encode(digest.as_ptr(), digest_len);
-        let out = owned(encoded).unwrap_or_default();
-        g_free(encoded.cast());
-        g_checksum_free(checksum);
-        out
-    }
 }
 
 #[unsafe(no_mangle)]

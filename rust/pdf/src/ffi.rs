@@ -158,9 +158,8 @@ mod poppler {
             let png = unsafe { render_page(page) };
             unsafe { g_object_unref(page.cast()) };
             let png = png?;
-            let encoded = unsafe { glib::g_base64_encode(png.as_ptr(), png.len()) };
-            let encoded = unsafe { super::take(encoded) };
-            Some([b"data:image/png;base64,".as_slice(), &encoded].concat())
+            let encoded = southstar_digest::base64(&png);
+            Some([b"data:image/png;base64,".as_slice(), encoded.as_bytes()].concat())
         }
     }
 

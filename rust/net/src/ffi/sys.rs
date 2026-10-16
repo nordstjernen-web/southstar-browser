@@ -28,7 +28,7 @@ struct File {
 const FILE_ERROR_ACCES: c_int = 2;
 const FILE_ERROR_NOENT: c_int = 4;
 const FILE_TEST_IS_SYMLINK: c_uint = 1 << 1;
-const CHECKSUM_SHA256: c_int = 2;
+
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
@@ -79,11 +79,7 @@ unsafe extern "C" {
         length: isize,
         error: *mut *mut GError,
     ) -> GBoolean;
-    fn g_compute_checksum_for_string(
-        checksum_type: c_int,
-        text: *const c_char,
-        length: isize,
-    ) -> *mut c_char;
+
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
@@ -423,12 +419,6 @@ pub fn write_file(path: &[u8], contents: &[u8]) -> bool {
         )
     };
     ok != 0
-}
-
-pub fn sha256_hex(text: &[u8]) -> Vec<u8> {
-    let text = c(text);
-    take(unsafe { g_compute_checksum_for_string(CHECKSUM_SHA256, text.as_ptr(), -1) })
-        .unwrap_or_default()
 }
 
 pub fn is_public_suffix(domain: &[u8]) -> bool {

@@ -276,7 +276,7 @@ fn cache_file_name(family: &[u8], url: &[u8], forced_extension: Option<&[u8]>) -
         })
         .collect();
     name.push(b'-');
-    name.extend_from_slice(&ffi::sha256_hex(url));
+    name.extend_from_slice(southstar_digest::sha256_hex(url).as_bytes());
     match forced_extension {
         Some(extension) => name.extend_from_slice(extension),
         None => name.extend(extension_for(url)),

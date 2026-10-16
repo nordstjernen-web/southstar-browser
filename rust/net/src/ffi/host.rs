@@ -132,10 +132,6 @@ pub fn system_data_dirs() -> Vec<Vec<u8>> {
     dirs
 }
 
-pub fn base64(data: &[u8]) -> Vec<u8> {
-    owned(unsafe { glib::g_base64_encode(data.as_ptr(), data.len()) }).unwrap_or_default()
-}
-
 pub fn markup_escape(text: &[u8]) -> Vec<u8> {
     let text = c(text);
     owned(unsafe { glib::g_markup_escape_text(text.as_ptr(), -1) }).unwrap_or_default()

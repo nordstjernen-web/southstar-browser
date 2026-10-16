@@ -1,31 +1,16 @@
-//! Southstar — the C ABI of the safe-browsing blocklist, and the GLib, OpenSSL and platform calls behind it.
+//! Southstar — the C ABI of the safe-browsing blocklist, and the GLib and platform calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+#[cfg(target_vendor = "apple")]
+use core::ffi::c_int;
+#[cfg(any(windows, target_vendor = "apple"))]
+use core::ffi::c_void;
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib as glib;
-
-#[repr(C)]
-struct EvpMd {
-    _private: [u8; 0],
-}
-
-const EVP_MAX_MD_SIZE: usize = 64;
-
-unsafe extern "C" {
-    fn EVP_sha256() -> *const EvpMd;
-    fn EVP_Digest(
-        data: *const c_void,
-        count: usize,
-        md: *mut u8,
-        size: *mut c_uint,
-        kind: *const EvpMd,
-        engine: *mut c_void,
-    ) -> c_int;
-}
 
 #[cfg(windows)]
 unsafe extern "system" {
@@ -90,25 +75,6 @@ pub(crate) fn file_text(path: &CStr) -> Option<Vec<u8>> {
 
 pub(crate) fn markup_escape(text: &CStr) -> Vec<u8> {
     unsafe { take(glib::g_markup_escape_text(text.as_ptr(), -1)) }.into_bytes()
-}
-
-pub(crate) fn sha256(data: &[u8]) -> Option<Vec<u8>> {
-    let mut digest = [0u8; EVP_MAX_MD_SIZE];
-    let mut len: c_uint = 0;
-    let digested = unsafe {
-        EVP_Digest(
-            data.as_ptr().cast(),
-            data.len(),
-            digest.as_mut_ptr(),
-            &mut len,
-            EVP_sha256(),
-            ptr::null_mut(),
-        )
-    };
-    if digested != 1 {
-        return None;
-    }
-    digest.get(..len as usize).map(<[u8]>::to_vec)
 }
 
 #[cfg(windows)]

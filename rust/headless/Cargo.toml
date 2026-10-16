@@ -13,6 +13,7 @@ libav = []
 [dependencies]
 southstar-config = { path = "../config" }
 southstar-css-media = { path = "../css-media" }
+southstar-digest = { path = "../digest" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }

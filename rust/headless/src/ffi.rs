@@ -46,8 +46,7 @@ pub use stdio::{
     err, flush, out, scan_drag, scan_hold, scan_pair, scan_point, scan_select, scan_size,
 };
 pub use util::{
-    MainLoop, ascii_strtoll, base64, dlog_level_name, file_contents, monotonic_us, strcompress,
-    usleep,
+    MainLoop, ascii_strtoll, dlog_level_name, file_contents, monotonic_us, strcompress, usleep,
 };
 
 use crate::inproc::{Settle, WptWait};

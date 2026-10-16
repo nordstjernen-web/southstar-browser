@@ -9,7 +9,6 @@ use std::ffi::CString;
 use southstar_glib::{self as glib, GStr};
 use southstar_js_engine::{Scope, Value};
 
-const CHECKSUM_SHA256: c_int = 2;
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 #[repr(C)]
@@ -18,11 +17,7 @@ struct GDir {
 }
 
 unsafe extern "C" {
-    fn g_compute_checksum_for_string(
-        checksum_type: c_int,
-        s: *const c_char,
-        length: isize,
-    ) -> *mut c_char;
+
     fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
@@ -42,15 +37,8 @@ fn cstring(bytes: &[u8]) -> CString {
 }
 
 pub fn sha256_hex(input: &[u8]) -> Vec<u8> {
-    let input = cstring(input);
-    let hex = unsafe {
-        GStr::take(g_compute_checksum_for_string(
-            CHECKSUM_SHA256,
-            input.as_ptr(),
-            -1,
-        ))
-    };
-    hex.map_or_else(Vec::new, |h| h.to_bytes().to_vec())
+    let end = input.iter().position(|&b| b == 0).unwrap_or(input.len());
+    southstar_digest::sha256_hex(&input[..end]).into_bytes()
 }
 
 pub fn user_data_dir() -> Vec<u8> {

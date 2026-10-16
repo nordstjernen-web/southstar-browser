@@ -158,8 +158,9 @@ fn read_first(rel_paths: &[&str]) -> Option<Vec<u8>> {
 fn logo_data_uri() -> &'static [u8] {
     static URI: OnceLock<Vec<u8>> = OnceLock::new();
     URI.get_or_init(|| {
-        let encoded = sys::base64(read_first(&LOGO_PATHS).as_deref().unwrap_or(LOGO_GIF));
-        [&b"data:image/gif;base64,"[..], &encoded].concat()
+        let encoded =
+            southstar_digest::base64(read_first(&LOGO_PATHS).as_deref().unwrap_or(LOGO_GIF));
+        [&b"data:image/gif;base64,"[..], encoded.as_bytes()].concat()
     })
 }
 
@@ -174,7 +175,7 @@ fn logo_markup() -> Vec<u8> {
 
 fn splash_markup() -> Vec<u8> {
     static SPLASH: OnceLock<Vec<u8>> = OnceLock::new();
-    let encoded = SPLASH.get_or_init(|| sys::base64(SPLASH_GIF));
+    let encoded = SPLASH.get_or_init(|| southstar_digest::base64(SPLASH_GIF).into_bytes());
     [
         &b"<img class=\"splash\" src=\"data:image/gif;base64,"[..],
         encoded,

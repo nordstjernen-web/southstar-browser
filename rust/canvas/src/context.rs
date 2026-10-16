@@ -354,7 +354,7 @@ pub fn element_to_data_url(
     match surface.png() {
         Some(png) => {
             let mut url = b"data:image/png;base64,".to_vec();
-            url.extend_from_slice(&host::base64(&png));
+            url.extend_from_slice(southstar_digest::base64(&png).as_bytes());
             Ok(scope.string_from_bytes(&url))
         }
         None => Ok(scope.string("data:,")),

@@ -65,11 +65,7 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_get_home_dir() -> *const c_char;
-    fn g_compute_checksum_for_data(
-        checksum_type: glib::GChecksumType,
-        data: *const u8,
-        length: usize,
-    ) -> *mut c_char;
+
 }
 
 fn take_gstring(s: *mut c_char) -> Option<CString> {
@@ -105,12 +101,6 @@ pub fn cache_dir() -> CString {
 pub fn build_path(dir: &CStr, name: &[u8]) -> Option<CString> {
     let name = CString::new(name).ok()?;
     build_filename(&[dir, &name])
-}
-
-pub fn sha256_hex(data: &[u8]) -> Vec<u8> {
-    let digest =
-        unsafe { g_compute_checksum_for_data(glib::G_CHECKSUM_SHA256, data.as_ptr(), data.len()) };
-    take_gstring(digest).map_or_else(|| b"0".to_vec(), CString::into_bytes)
 }
 
 pub fn write_file(path: &CStr, data: &[u8]) -> bool {

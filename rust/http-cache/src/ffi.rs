@@ -31,7 +31,6 @@ const G_FILE_SET_CONTENTS_CONSISTENT: c_int = 1;
 
 unsafe extern "C" {
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
-    fn g_checksum_get_string(checksum: *mut glib::GChecksum) -> *const c_char;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     #[cfg(not(windows))]
     fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
@@ -76,20 +75,6 @@ pub(crate) fn warn(message: &[u8]) {
             message.as_ptr(),
         )
     };
-}
-
-pub(crate) fn sha256_hex(parts: &[&[u8]]) -> Vec<u8> {
-    unsafe {
-        let checksum = glib::g_checksum_new(glib::G_CHECKSUM_SHA256);
-        for part in parts {
-            glib::g_checksum_update(checksum, part.as_ptr(), part.len() as isize);
-        }
-        let hex = CStr::from_ptr(g_checksum_get_string(checksum))
-            .to_bytes()
-            .to_vec();
-        glib::g_checksum_free(checksum);
-        hex
-    }
 }
 
 pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {

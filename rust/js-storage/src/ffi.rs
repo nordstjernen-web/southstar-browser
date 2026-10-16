@@ -62,11 +62,7 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
-    fn g_compute_checksum_for_string(
-        checksum_type: glib::GChecksumType,
-        text: *const c_char,
-        length: isize,
-    ) -> *mut c_char;
+
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
     fn g_file_set_contents(
@@ -245,10 +241,7 @@ pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {
     if origin.is_empty() || southstar_config::private_mode() {
         return None;
     }
-    let origin = c_text(origin);
-    let hash = taken(unsafe {
-        g_compute_checksum_for_string(glib::G_CHECKSUM_SHA256, origin.as_ptr(), -1)
-    })?;
+    let hash = southstar_digest::sha256_hex(c_text(origin).as_bytes());
     let data_dir = owned(unsafe { glib::g_get_user_data_dir() })?;
     let separator = std::path::MAIN_SEPARATOR;
     let dir = format!("{data_dir}{separator}southstar{separator}localstorage");

@@ -139,17 +139,6 @@ fn with_lists<R>(f: impl FnOnce(&mut Lists) -> R) -> R {
     f(lists.get_or_insert_with(load))
 }
 
-fn sha256_hex(host: &[u8]) -> Option<Vec<u8>> {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = ffi::sha256(host)?;
-    Some(
-        digest
-            .iter()
-            .flat_map(|&byte| [HEX[usize::from(byte >> 4)], HEX[usize::from(byte & 15)]])
-            .collect(),
-    )
-}
-
 pub fn allow_host(host: &[u8]) {
     if host.is_empty() {
         return;
@@ -176,7 +165,10 @@ pub fn blocked(host: &[u8]) -> bool {
         }
         let mut suffix = &low[..];
         while let Some(dot) = suffix.iter().position(|&byte| byte == b'.') {
-            if sha256_hex(suffix).is_some_and(|hex| lists.blocked.contains(&hex)) {
+            if lists
+                .blocked
+                .contains(southstar_digest::sha256_hex(suffix).as_bytes())
+            {
                 return true;
             }
             suffix = &suffix[dot + 1..];

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* SHA digests and base64 come from rust/digest, a new crate that forbids
+  unsafe code and hashes through ring, already in the tree for TLS. CSP
+  hash-sources, Subresource Integrity, the HTTP cache keys, the bytecode,
+  font, localStorage, IndexedDB and extension-storage file names, the
+  safe-browsing host hashes, canvas.toDataURL, PDF page images and the
+  headless screenshot no longer reach GLib's g_checksum/g_base64 or
+  OpenSSL's EVP_Digest through unsafe FFI; every key and file name is
+  unchanged, and GLib's checksum and base64 declarations are gone.
 * URL, URLSearchParams, Response/Request bodies and getComputedStyle
   keep working in pages with iframes. The script helpers behind them were
   built once per page, in whichever window used them first, and then

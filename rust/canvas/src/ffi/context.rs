@@ -4,7 +4,6 @@
 
 use core::ffi::{CStr, c_int};
 
-use southstar_glib as glib;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::cairo::Surface;
@@ -35,18 +34,6 @@ pub(crate) fn set_context_kind(st: *mut CanvasState, kind: i32) {
 
 pub(crate) fn origin_clean(st: *mut CanvasState) -> bool {
     state(st).origin_clean != 0
-}
-
-pub(crate) fn base64(data: &[u8]) -> Vec<u8> {
-    let encoded = unsafe { glib::g_base64_encode(data.as_ptr(), data.len()) };
-    if encoded.is_null() {
-        return Vec::new();
-    }
-    let text = unsafe { core::ffi::CStr::from_ptr(encoded) }
-        .to_bytes()
-        .to_vec();
-    unsafe { glib::g_free(encoded.cast()) };
-    text
 }
 
 pub(crate) fn dom_exception(

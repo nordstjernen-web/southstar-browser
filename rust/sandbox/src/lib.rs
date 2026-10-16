@@ -19,6 +19,15 @@ impl SriDigest {
             SriDigest::Sha512 => b"sha512-",
         }
     }
+
+    fn base64_of(self, body: &[u8]) -> Vec<u8> {
+        let algorithm = match self {
+            SriDigest::Sha256 => southstar_digest::Algorithm::Sha256,
+            SriDigest::Sha384 => southstar_digest::Algorithm::Sha384,
+            SriDigest::Sha512 => southstar_digest::Algorithm::Sha512,
+        };
+        southstar_digest::base64(&southstar_digest::digest(algorithm, body)).into_bytes()
+    }
 }
 
 pub fn sri_check(integrity: &[u8], body: Option<&[u8]>) -> bool {
@@ -56,7 +65,7 @@ pub fn sri_check(integrity: &[u8], body: Option<&[u8]>) -> bool {
         if b64.is_empty() {
             continue;
         }
-        let got = expected.get_or_insert_with(|| ffi::digest_base64(digest, body));
+        let got = expected.get_or_insert_with(|| digest.base64_of(body));
         if got.as_slice() == b64 {
             return true;
         }

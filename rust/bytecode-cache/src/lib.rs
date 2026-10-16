@@ -151,7 +151,7 @@ pub fn get(src: &[u8]) -> Option<Vec<u8>> {
     if src.is_empty() {
         return None;
     }
-    let key = ffi::sha256_hex(src);
+    let key = southstar_digest::sha256_hex(src);
     {
         let mut cache = lock();
         let used = cache.tick();
@@ -177,7 +177,7 @@ pub fn put(src: &[u8], bytecode: &[u8]) {
     if src.is_empty() || bytecode.is_empty() || bytecode.len() > VALUE_CAP_BYTES {
         return;
     }
-    let key = ffi::sha256_hex(src);
+    let key = southstar_digest::sha256_hex(src);
     {
         let mut cache = lock();
         let used = cache.tick();

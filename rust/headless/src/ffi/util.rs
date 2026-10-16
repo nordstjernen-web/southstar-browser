@@ -104,11 +104,6 @@ pub fn file_contents(path: &[u8]) -> Option<GStr> {
     unsafe { GStr::take(contents) }
 }
 
-pub fn base64(data: &[u8]) -> GStr {
-    let encoded = unsafe { GStr::take(glib::g_base64_encode(data.as_ptr(), data.len())) };
-    encoded.expect("g_base64_encode")
-}
-
 pub fn dlog_level_name(level: u32) -> Option<&'static [u8]> {
     let name = unsafe { ns_dlog_level_name(level) };
     (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_bytes())

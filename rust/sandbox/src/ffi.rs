@@ -9,8 +9,6 @@ use std::sync::Mutex;
 
 use southstar_glib::{self as glib, FALSE, GBoolean, TRUE};
 
-use crate::SriDigest;
-
 const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 const G_LOG_LEVEL_INFO: c_int = 1 << 6;
@@ -54,29 +52,6 @@ fn strerror(errnum: c_int) -> String {
 
 fn getenv(name: &CStr) -> Option<&'static [u8]> {
     unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }
-}
-
-pub(crate) fn digest_base64(digest: SriDigest, body: &[u8]) -> Vec<u8> {
-    let kind = match digest {
-        SriDigest::Sha256 => glib::G_CHECKSUM_SHA256,
-        SriDigest::Sha384 => glib::G_CHECKSUM_SHA384,
-        SriDigest::Sha512 => glib::G_CHECKSUM_SHA512,
-    };
-    let mut raw = [0u8; 64];
-    let mut raw_len = raw.len();
-    unsafe {
-        let checksum = glib::g_checksum_new(kind);
-        glib::g_checksum_update(checksum, body.as_ptr(), body.len() as isize);
-        glib::g_checksum_get_digest(checksum, raw.as_mut_ptr(), &mut raw_len);
-        glib::g_checksum_free(checksum);
-        let encoded = glib::g_base64_encode(raw.as_ptr(), raw_len);
-        if encoded.is_null() {
-            return Vec::new();
-        }
-        let text = CStr::from_ptr(encoded).to_bytes().to_vec();
-        glib::g_free(encoded.cast());
-        text
-    }
 }
 
 #[unsafe(no_mangle)]

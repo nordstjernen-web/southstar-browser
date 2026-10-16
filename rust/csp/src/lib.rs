@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use southstar_glib::{G_CHECKSUM_SHA256, G_CHECKSUM_SHA384, G_CHECKSUM_SHA512};
+use southstar_digest::Algorithm;
 use southstar_url::bytes::{parts as url_parts, same_origin};
 
 mod ffi;
@@ -256,12 +256,12 @@ fn nonce_token_matches(source: &[u8], nonce: &[u8]) -> bool {
 }
 
 fn hash_token_matches(source: &[u8], body: &[u8]) -> bool {
-    let checksum_type = if source.starts_with(b"'sha256-") {
-        G_CHECKSUM_SHA256
+    let algorithm = if source.starts_with(b"'sha256-") {
+        Algorithm::Sha256
     } else if source.starts_with(b"'sha384-") {
-        G_CHECKSUM_SHA384
+        Algorithm::Sha384
     } else if source.starts_with(b"'sha512-") {
-        G_CHECKSUM_SHA512
+        Algorithm::Sha512
     } else {
         return false;
     };
@@ -271,7 +271,7 @@ fn hash_token_matches(source: &[u8], body: &[u8]) -> bool {
     if want.is_empty() {
         return false;
     }
-    let got = ffi::base64_digest(checksum_type, body);
+    let got = southstar_digest::base64(&southstar_digest::digest(algorithm, body)).into_bytes();
     let got_url_safe: Vec<u8> = got
         .iter()
         .map(|&c| match c {

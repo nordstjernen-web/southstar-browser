@@ -48,11 +48,7 @@ unsafe extern "C" {
     fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut glib::GError) -> *mut GDir;
     fn g_dir_read_name(dir: *mut GDir) -> *const c_char;
     fn g_dir_close(dir: *mut GDir);
-    fn g_compute_checksum_for_string(
-        checksum_type: glib::GChecksumType,
-        text: *const c_char,
-        length: isize,
-    ) -> *mut c_char;
+
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_int,
@@ -142,10 +138,7 @@ pub(crate) fn language_name() -> Option<Vec<u8>> {
 }
 
 pub(crate) fn sha256_hex(text: &[u8]) -> Vec<u8> {
-    let text = cstring(text);
-    take_string(unsafe {
-        g_compute_checksum_for_string(glib::G_CHECKSUM_SHA256, text.as_ptr(), -1)
-    })
+    southstar_digest::sha256_hex(cstring(text).as_bytes()).into_bytes()
 }
 
 fn file_test(path: &[u8], test: glib::GFileTest) -> bool {

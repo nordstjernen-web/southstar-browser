@@ -243,8 +243,8 @@ fn shot(r: &Renderer, path: &[u8], vw: c_int, vh: c_int) {
         return;
     };
     if let Some(png) = frame.encode_png() {
-        let b64 = ffi::base64(&png);
-        out(&[b"shot-b64:", path, b":", b64.to_bytes(), b"\n"].concat());
+        let b64 = southstar_digest::base64(&png);
+        out(&[b"shot-b64:", path, b":", b64.as_bytes(), b"\n"].concat());
         ffi::flush();
     }
     err(format!("[headless] shot {width}x{height} emitted\n").as_bytes());

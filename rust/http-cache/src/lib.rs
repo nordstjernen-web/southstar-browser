@@ -78,14 +78,22 @@ fn base_key_for_url(url: &[u8], partition: Option<&[u8]>) -> Vec<u8> {
         parts.push(b"\x1f");
         parts.push(partition);
     }
-    ffi::sha256_hex(&parts)
+    sha256_hex(&parts)
 }
 
 fn row_key_for(base_key: &[u8], selector: &[u8]) -> Vec<u8> {
     if selector.is_empty() {
         return base_key.to_vec();
     }
-    ffi::sha256_hex(&[base_key, b"\x1f", selector])
+    sha256_hex(&[base_key, b"\x1f", selector])
+}
+
+fn sha256_hex(parts: &[&[u8]]) -> Vec<u8> {
+    let mut hasher = southstar_digest::Hasher::new(southstar_digest::Algorithm::Sha256);
+    for part in parts {
+        hasher.update(part);
+    }
+    southstar_digest::hex(&hasher.finish()).into_bytes()
 }
 
 fn request_header_value<'a>(headers: &[&'a [u8]], name: &[u8]) -> Option<&'a [u8]> {

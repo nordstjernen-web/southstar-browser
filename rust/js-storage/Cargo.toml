@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 southstar-config = { path = "../config" }
+southstar-digest = { path = "../digest" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }

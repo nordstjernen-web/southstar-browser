@@ -119,8 +119,8 @@ pub fn hsts_path() -> Option<Vec<u8>> {
 pub fn cookie_jar_path(top_origin: Option<&[u8]>, js: bool) -> Option<Vec<u8>> {
     let dir = cookie_dir()?;
     let key = top_origin.filter(|o| !o.is_empty()).unwrap_or(b"default");
-    let digest = sys::sha256_hex(key);
-    let short = &digest[..digest.len().min(32)];
+    let digest = southstar_digest::sha256_hex(key);
+    let short = &digest.as_bytes()[..digest.len().min(32)];
     let suffix: &[u8] = if js { b".js.txt" } else { b".txt" };
     Some(join(&dir, &[short, suffix].concat()))
 }
