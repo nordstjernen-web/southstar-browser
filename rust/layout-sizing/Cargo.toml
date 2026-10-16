@@ -13,8 +13,9 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
-southstar-layout-geom = { path = "../layout-geom" }
+southstar-layout-build = { path = "../layout-build" }
 southstar-layout-float = { path = "../layout-float" }
+southstar-layout-geom = { path = "../layout-geom" }
 southstar-style = { path = "../style" }
 
 [lints]

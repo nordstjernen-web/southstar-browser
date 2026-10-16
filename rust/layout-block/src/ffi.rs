@@ -2,27 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_void};
 
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox, Style};
-use southstar_style::{NsCssValue, StyleRef, ValueRef};
+use southstar_style::StyleRef;
 
 use crate::{align, block, dispatch, fieldset};
 
 unsafe extern "C" {
-    fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_intrinsic_keyword_width(
-        b: *const NsBox,
-        kw: *const c_char,
-        mi: *const Style,
-        avail: f64,
-    ) -> f64;
-    fn ns_layout_text_input_intrinsic_width(b: *const NsBox) -> f64;
-    fn ns_layout_size_keyword_is_intrinsic(v: *const NsCssValue) -> GBoolean;
     fn ns_layout_inline_box_can_fragment_multicol(
         b: *const NsBox,
         style: *const Style,
@@ -42,7 +31,6 @@ unsafe extern "C" {
     fn ns_layout_inline_line_height(parent_style: *const Style) -> f64;
     fn ns_layout_inline(b: *mut NsBox, content_width: f64, parent_style: *const Style);
     fn ns_layout_table(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_image(b: *mut NsBox, parent_content_width: f64);
     fn ns_layout_flex_row(
         b: *mut NsBox,
         cw: f64,
@@ -83,10 +71,6 @@ unsafe extern "C" {
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
 }
 
-fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
-    v.map_or(ptr::null(), ValueRef::as_ptr)
-}
-
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
 }
@@ -99,12 +83,12 @@ pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
 }
 
-pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_measure_natural_width(b.as_ptr(), parent_style) }
-}
+pub use southstar_layout_sizing::{
+    layout_image, measure_natural_width, size_keyword_is_intrinsic, text_input_intrinsic_width,
+};
 
 pub fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_width_of(b.as_ptr(), parent_style) }
+    southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
 pub fn intrinsic_keyword_width(
@@ -113,16 +97,9 @@ pub fn intrinsic_keyword_width(
     mi: *const Style,
     avail: f64,
 ) -> f64 {
-    let kw = kw.map_or(ptr::null(), CStr::as_ptr);
-    unsafe { ns_layout_intrinsic_keyword_width(b.as_ptr(), kw, mi, avail) }
-}
-
-pub fn text_input_intrinsic_width(b: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_text_input_intrinsic_width(b.as_ptr()) }
-}
-
-pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_size_keyword_is_intrinsic(value_ptr(v)) != 0 }
+    kw.map_or(-1.0, |kw| {
+        southstar_layout_sizing::intrinsic_keyword_width(b, kw, mi, avail)
+    })
 }
 
 pub use southstar_layout_tree::{
@@ -176,10 +153,6 @@ pub fn layout_inline(b: BoxRef<'_>, content_width: f64, parent_style: *const Sty
 
 pub fn layout_table(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
     unsafe { ns_layout_table(b.as_mut_ptr(), parent_content_width, inherited) }
-}
-
-pub fn layout_image(b: BoxRef<'_>, parent_content_width: f64) {
-    unsafe { ns_layout_image(b.as_mut_ptr(), parent_content_width) }
 }
 
 pub struct ContentBox {

@@ -9,6 +9,7 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
+use southstar_layout_sizing::SavedGeometry;
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{AttrList, Attribute, Context, Layout};
 use southstar_style::StyleRef;
@@ -18,15 +19,6 @@ use crate::{attrs, intrinsic, layout, multicol};
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_box_is_abs_placeholder(b: *const NsBox) -> GBoolean;
-    fn ns_layout_abs_static_target(b: *const NsBox) -> *const c_void;
-    fn ns_layout_record_abs_static(dom: *const c_void, run: *const NsBox, rel_x: f64, rel_y: f64);
-    fn ns_layout_measure_inline_atomics_begin(
-        b: *const NsBox,
-        parent_style: *const Style,
-        max_content: GBoolean,
-    ) -> *mut c_void;
-    fn ns_layout_measure_inline_atomics_end(saved: *mut c_void);
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
 }
@@ -128,36 +120,15 @@ pub(crate) use southstar_layout_float::box_clips_children as clips_children;
 
 pub(crate) use southstar_layout_content::inline_attr_control_width as control_width;
 
-pub(crate) fn is_abs_placeholder(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_box_is_abs_placeholder(b.as_ptr()) != 0 }
-}
+pub(crate) use southstar_layout_build::{
+    abs_static_target, box_is_abs_placeholder as is_abs_placeholder, record_abs_static,
+};
+pub(crate) use southstar_layout_sizing::measure_inline_atomics_begin as measure_atomics_begin;
 
-pub(crate) fn abs_static_target(b: BoxRef<'_>) -> *const c_void {
-    unsafe { ns_layout_abs_static_target(b.as_ptr()) }
-}
-
-pub(crate) fn record_abs_static(dom: *const c_void, run: BoxRef<'_>, rel_x: f64, rel_y: f64) {
-    unsafe { ns_layout_record_abs_static(dom, run.as_ptr(), rel_x, rel_y) };
-}
-
-pub(crate) struct SavedAtomics(*mut c_void);
-
-pub(crate) fn measure_atomics_begin(
-    b: BoxRef<'_>,
-    parent_style: *const Style,
-    max_content: bool,
-) -> SavedAtomics {
-    SavedAtomics(unsafe {
-        ns_layout_measure_inline_atomics_begin(
-            b.as_ptr(),
-            parent_style,
-            southstar_glib::boolean(max_content),
-        )
-    })
-}
-
-pub(crate) fn measure_atomics_end(saved: SavedAtomics) {
-    unsafe { ns_layout_measure_inline_atomics_end(saved.0) };
+pub(crate) fn measure_atomics_end(saved: Option<Box<SavedGeometry<'_>>>) {
+    if let Some(saved) = saved {
+        southstar_layout_sizing::measure_inline_atomics_end(*saved);
+    }
 }
 
 pub(crate) fn math_ascent(dom: *const c_void, font_px: f64) -> f64 {

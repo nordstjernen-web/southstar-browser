@@ -20,8 +20,6 @@ pub(crate) struct TrackEdges {
 
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
 }
@@ -34,12 +32,10 @@ pub(crate) fn layout_child(b: BoxRef<'_>, width: f64, inherited: *const Style) {
     unsafe { ns_layout_box(b.as_ptr(), width, inherited) }
 }
 
-pub(crate) fn natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_measure_natural_width(b.as_ptr(), parent_style) }
-}
+pub(crate) use southstar_layout_sizing::measure_natural_width as natural_width;
 
 pub(crate) fn min_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_width_of(b.as_ptr(), parent_style) }
+    southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
 pub(crate) fn shift(b: BoxRef<'_>, dx: f64, dy: f64) {

@@ -52,7 +52,6 @@ unsafe extern "C" {
     fn ns_layout_apply_position_offsets(b: *mut NsBox, parent_w: f64, parent_h: f64);
     fn ns_layout_process_absolute_boxes(root: *mut NsBox, styles: *mut GHashTable, vw: f64);
     fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
-    fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64);
     fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
     fn ns_paint_li_marker_text(
         li: *const NsNode,
@@ -383,50 +382,24 @@ pub unsafe extern "C" fn ns_layout_peek_image(src: *const c_char) -> *mut c_void
     media::peek_image(c_str(src))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_translate_subtree(b: *mut NsBox, dx: f64, dy: f64) {
-    if b.is_null() || (dx == 0.0 && dy == 0.0) {
-        return;
-    }
-    unsafe { ns_layout_shift_box_tree(b, dx, dy) };
+pub use block::flat_parent;
+pub use media::image_dimension_attr;
+
+pub fn abs_pending_len() -> usize {
+    state::with(|st| st.abs_pending.as_ref().map_or(0, Vec::len))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flat_parent(n: *const NsNode) -> *const NsNode {
-    Node::ptr_or_null(block::flat_parent(node(n)))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_abs_pending_len() -> u32 {
-    state::with(|st| st.abs_pending.as_ref().map_or(0, |p| p.len() as u32))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_abs_pending_entry(
-    i: u32,
-    dom: *mut *const NsNode,
-    pseudo: *mut *const Style,
-    fixed: *mut GBoolean,
-) -> GBoolean {
-    let entry = state::with(|st| {
+pub fn abs_pending_entry<'a>(i: usize) -> Option<(Option<Node<'a>>, Option<StyleRef<'a>>, bool)> {
+    let (dom, pseudo, fixed) = state::with(|st| {
         st.abs_pending
             .as_ref()
-            .and_then(|p| p.get(i as usize))
+            .and_then(|p| p.get(i))
             .map(|e| (e.dom, e.pseudo, e.fixed))
-    });
-    let Some((d, p, f)) = entry else {
-        return 0;
-    };
-    unsafe {
-        *dom = d;
-        *pseudo = p;
-        *fixed = boolean(f);
-    }
-    1
+    })?;
+    Some((node(dom), style(pseudo), fixed))
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_abs_pending_clear() {
+pub fn abs_pending_clear() {
     state::with(|st| {
         if let Some(p) = st.abs_pending.as_mut() {
             p.clear();
@@ -434,48 +407,31 @@ pub extern "C" fn ns_layout_abs_pending_clear() {
     });
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_abs_static_run(
-    dom: *const NsNode,
-    rel_x: *mut f64,
-    rel_y: *mut f64,
-) -> *mut NsBox {
-    let found = state::with(|st| {
-        st.abs_static
-            .as_ref()
-            .and_then(|m| m.get(&(dom as usize)).copied())
-    });
-    let Some(st) = found.filter(|st| !st.run.is_null()) else {
-        return ptr::null_mut();
-    };
-    unsafe {
-        *rel_x = st.rel_x;
-        *rel_y = st.rel_y;
-    }
-    st.run
+pub fn abs_static_run<'a>(key: usize) -> Option<(BoxRef<'a>, f64, f64)> {
+    let found = state::with(|st| st.abs_static.as_ref().and_then(|m| m.get(&key).copied()))?;
+    box_ref(found.run).map(|run| (run, found.rel_x, found.rel_y))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_abs_build_box(
-    dom: *const NsNode,
-    pseudo: *const Style,
-    table: *mut GHashTable,
-) -> *mut NsBox {
-    let Some(ps) = style(pseudo) else {
+pub fn abs_build_box(
+    dom: Node<'_>,
+    pseudo: Option<StyleRef<'_>>,
+    table: StyleTable,
+) -> Option<BoxRef<'static>> {
+    let Some(ps) = pseudo else {
         state::with(|st| st.abs_force_build = true);
-        let abox = block::build_block(node(dom), styles(table));
+        let abox = block::build_block(Some(dom), table);
         state::with(|st| st.abs_force_build = false);
-        return box_ptr(abox);
+        return abox;
     };
     let abox = southstar_layout::BoxPool::new_box(media::KIND_BLOCK);
     abox.set_style(ps.as_ptr());
-    let after = node(dom)
-        .and_then(|host| styles(table).get(host))
+    let after = table
+        .get(dom)
         .and_then(StyleRef::after)
         .is_some_and(|a| a.as_ptr() == ps.as_ptr());
-    abox.set_pseudo_host(dom.cast(), after);
+    abox.set_pseudo_host(dom.as_ptr().cast(), after);
     media::collect_box_bg_image(abox, Some(ps));
-    let mut generated = generated::build_pseudo_inline_for(Some(ps), node(dom));
+    let mut generated = generated::build_pseudo_inline_for(Some(ps), Some(dom));
     if let Some(g) = generated
         && g.kind() == southstar_layout::BoxKind::Inline
         && g.text().is_some_and(CStr::is_empty)
@@ -487,54 +443,37 @@ pub unsafe extern "C" fn ns_layout_abs_build_box(
     if let Some(g) = generated {
         southstar_layout_tree::append_child(abox, g);
     }
-    abox.as_mut_ptr()
+    Some(abox)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_box_is_abs_placeholder(b: *const NsBox) -> GBoolean {
-    boolean(state::with(|st| {
-        st.abs_placeholders
-            .as_ref()
-            .is_some_and(|m| m.contains_key(&(b as usize)))
-    }))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_abs_static_target(b: *const NsBox) -> *const NsNode {
+pub fn box_is_abs_placeholder(b: BoxRef<'_>) -> bool {
+    let key = b.as_ptr() as usize;
     state::with(|st| {
-        if st.abs_static.is_none() {
-            return ptr::null();
-        }
         st.abs_placeholders
             .as_ref()
-            .and_then(|m| m.get(&(b as usize)).copied())
-            .unwrap_or(ptr::null())
+            .is_some_and(|m| m.contains_key(&key))
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_record_abs_static(
-    dom: *const NsNode,
-    run: *mut NsBox,
-    rel_x: f64,
-    rel_y: f64,
-) {
+pub fn abs_static_target(b: BoxRef<'_>) -> Option<usize> {
+    let key = b.as_ptr() as usize;
     state::with(|st| {
-        if let Some(m) = st.abs_static.as_mut() {
-            m.insert(dom as usize, state::AbsStatic { run, rel_x, rel_y });
-        }
-    });
+        st.abs_static.as_ref()?;
+        st.abs_placeholders
+            .as_ref()
+            .and_then(|m| m.get(&key).copied())
+            .filter(|target| !target.is_null())
+            .map(|target| target as usize)
+    })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_image_dimension_attr(
-    n: *const NsNode,
-    name: *const c_char,
-) -> f64 {
-    match c_str(name) {
-        Some(name) => media::image_dimension_attr(node(n), name),
-        None => 0.0,
-    }
+pub fn record_abs_static(key: usize, run: BoxRef<'_>, rel_x: f64, rel_y: f64) {
+    let run = run.as_mut_ptr();
+    state::with(|st| {
+        if let Some(m) = st.abs_static.as_mut() {
+            m.insert(key, state::AbsStatic { run, rel_x, rel_y });
+        }
+    });
 }
 
 #[unsafe(no_mangle)]

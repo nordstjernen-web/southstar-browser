@@ -178,15 +178,14 @@ fn record_abs_statics(
         let Some(ab) = a.box_ref() else {
             continue;
         };
-        let dom = ffi::abs_static_target(ab);
-        if dom.is_null() {
+        let Some(target) = ffi::abs_static_target(ab) else {
             continue;
-        }
+        };
         let off = a.byte_off() as i32;
         let pos = layout.index_to_box(off);
         let line_index = usize::try_from(layout.index_to_line(off)).unwrap_or(0);
         let line_top = line_heights.iter().take(line_index).sum();
-        ffi::record_abs_static(dom, b, indent + f64::from(pos.x) / SCALE, line_top);
+        ffi::record_abs_static(target, b, indent + f64::from(pos.x) / SCALE, line_top);
     }
 }
 

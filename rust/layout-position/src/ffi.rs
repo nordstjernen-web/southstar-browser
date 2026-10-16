@@ -2,40 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_char};
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_layout::{BoxRef, NsBox, Style};
-use southstar_style::{NsCssValue, PropId, StyleRef, StyleTable, ValueRef};
+use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::sticky::{self, StickyY};
 use crate::{abs, relative};
 
 unsafe extern "C" {
-    fn ns_layout_size_keyword_is_intrinsic(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_estimate_natural_width(b: *const NsBox, cap: f64) -> f64;
-    fn ns_layout_flat_parent(n: *const NsNode) -> *const NsNode;
-    fn ns_layout_abs_pending_len() -> c_uint;
-    fn ns_layout_abs_pending_entry(
-        i: c_uint,
-        dom: *mut *const NsNode,
-        pseudo: *mut *const Style,
-        fixed: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_layout_abs_pending_clear();
-    fn ns_layout_abs_static_run(dom: *const NsNode, rel_x: *mut f64, rel_y: *mut f64)
-    -> *mut NsBox;
-    fn ns_layout_abs_build_box(
-        dom: *const NsNode,
-        pseudo: *const Style,
-        styles: *mut GHashTable,
-    ) -> *mut NsBox;
     fn ns_layout_grid_abs_containing_block(
         cb: *const NsBox,
         st: *const Style,
@@ -76,14 +55,6 @@ pub struct Area {
     pub h: f64,
 }
 
-fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
-    v.map_or(ptr::null(), ValueRef::as_ptr)
-}
-
-fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
-    s.map_or(ptr::null(), StyleRef::as_ptr)
-}
-
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
 }
@@ -96,16 +67,12 @@ pub fn prop(b: BoxRef<'_>, p: PropId) -> Option<ValueRef<'_>> {
     style_of(b).and_then(|s| s.get(p))
 }
 
-pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_size_keyword_is_intrinsic(value_ptr(v)) != 0 }
-}
-
-pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_measure_natural_width(b.as_ptr(), parent_style) }
-}
+pub use southstar_layout_sizing::{
+    estimate_natural_width, measure_natural_width, size_keyword_is_intrinsic,
+};
 
 pub fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_width_of(b.as_ptr(), parent_style) }
+    southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
 pub fn layout_box(b: BoxRef<'_>, width: f64, inherited: *const Style) {
@@ -121,59 +88,32 @@ pub use southstar_layout_geom::flex::{
     item_align as flex_item_align,
 };
 
-pub fn estimate_natural_width(b: BoxRef<'_>, cap: f64) -> f64 {
-    unsafe { ns_layout_estimate_natural_width(b.as_ptr(), cap) }
-}
-
 pub use southstar_layout_float::box_clips_children;
 
 pub use southstar_layout_tree::append_child;
 
 pub fn flat_parent(n: Node<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(ns_layout_flat_parent(n.as_ptr())) }
+    southstar_layout_build::flat_parent(Some(n))
 }
 
-pub fn pending_len() -> usize {
-    unsafe { ns_layout_abs_pending_len() as usize }
-}
+pub use southstar_layout_build::{
+    abs_pending_clear as pending_clear, abs_pending_len as pending_len,
+};
 
 pub fn pending_entry<'a>(i: usize) -> Option<Option<Entry<'a>>> {
-    let i = c_uint::try_from(i).ok()?;
-    let mut dom = ptr::null();
-    let mut pseudo = ptr::null();
-    let mut fixed = glib::FALSE;
-    if unsafe { ns_layout_abs_pending_entry(i, &mut dom, &mut pseudo, &mut fixed) } == 0 {
-        return None;
-    }
-    Some(unsafe { Node::from_ptr(dom) }.map(|dom| Entry {
-        dom,
-        pseudo: unsafe { StyleRef::from_ptr(pseudo) },
-        fixed: fixed != 0,
-    }))
-}
-
-pub fn pending_clear() {
-    unsafe { ns_layout_abs_pending_clear() }
+    let (dom, pseudo, fixed) = southstar_layout_build::abs_pending_entry(i)?;
+    Some(dom.map(|dom| Entry { dom, pseudo, fixed }))
 }
 
 pub fn static_run<'a>(e: Entry<'_>) -> Option<(BoxRef<'a>, f64, f64)> {
     let key = e
         .pseudo
-        .map_or(e.dom.as_ptr(), |ps| ps.as_ptr().cast::<NsNode>());
-    let mut rel_x = 0.0;
-    let mut rel_y = 0.0;
-    let run = unsafe { ns_layout_abs_static_run(key, &mut rel_x, &mut rel_y) };
-    unsafe { BoxRef::from_ptr(run) }.map(|run| (run, rel_x, rel_y))
+        .map_or(e.dom.as_ptr() as usize, |ps| ps.as_ptr() as usize);
+    southstar_layout_build::abs_static_run(key)
 }
 
-pub fn build_abs_box<'a>(e: Entry<'_>, styles: StyleTable) -> Option<BoxRef<'a>> {
-    unsafe {
-        BoxRef::from_ptr(ns_layout_abs_build_box(
-            e.dom.as_ptr(),
-            style_ptr(e.pseudo),
-            styles.as_ptr(),
-        ))
-    }
+pub fn build_abs_box(e: Entry<'_>, styles: StyleTable) -> Option<BoxRef<'static>> {
+    southstar_layout_build::abs_build_box(e.dom, e.pseudo, styles)
 }
 
 pub fn inline_containing_block(root: BoxRef<'_>, target: Node<'_>) -> Option<Area> {

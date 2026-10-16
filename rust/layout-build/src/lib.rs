@@ -13,3 +13,9 @@ mod generated;
 mod media;
 mod run;
 mod state;
+
+pub use ffi::{
+    abs_build_box, abs_pending_clear, abs_pending_entry, abs_pending_len, abs_static_run,
+    abs_static_target, box_is_abs_placeholder, flat_parent, image_dimension_attr,
+    record_abs_static,
+};

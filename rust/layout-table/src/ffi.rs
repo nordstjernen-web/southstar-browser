@@ -9,9 +9,6 @@ use southstar_style::StyleRef;
 use crate::table;
 
 unsafe extern "C" {
-    fn ns_layout_min_width_of(b: *mut NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_measure_natural_width(b: *mut NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_min_content_width_of(b: *mut NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_block(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_legacy_align_block_child(
@@ -21,7 +18,6 @@ unsafe extern "C" {
         inherited: *const Style,
     );
     fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64);
-    fn ns_layout_translate_subtree(b: *mut NsBox, dx: f64, dy: f64);
 }
 
 #[unsafe(no_mangle)]
@@ -52,16 +48,10 @@ pub(crate) fn style_of(s: *const Style) -> Option<StyleRef<'static>> {
 }
 
 pub(crate) fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_width_of(b.as_mut_ptr(), parent_style) }
+    southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
-pub(crate) fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_measure_natural_width(b.as_mut_ptr(), parent_style) }
-}
-
-pub(crate) fn min_content_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_content_width_of(b.as_mut_ptr(), parent_style) }
-}
+pub(crate) use southstar_layout_sizing::{measure_natural_width, min_content_width_of};
 
 pub(crate) fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
     unsafe { ns_layout_box(b.as_mut_ptr(), parent_content_width, inherited) };
@@ -85,5 +75,7 @@ pub(crate) fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
 }
 
 pub(crate) fn translate_subtree(b: BoxRef<'_>, dx: f64, dy: f64) {
-    unsafe { ns_layout_translate_subtree(b.as_mut_ptr(), dx, dy) };
+    if dx != 0.0 || dy != 0.0 {
+        shift_box_tree(b, dx, dy);
+    }
 }

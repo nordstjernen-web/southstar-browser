@@ -2,31 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
-
 use southstar_dom::Node;
 use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
-use southstar_style::{NsCssValue, PropId, StyleRef, ValueRef};
+use southstar_style::{PropId, StyleRef};
 
 unsafe extern "C" {
-    fn ns_layout_size_keyword_is_intrinsic(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_intrinsic_keyword_width(
-        b: *const NsBox,
-        kw: *const c_char,
-        mi: *const Style,
-        avail: f64,
-    ) -> f64;
-    fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_min_content_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-}
-
-fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
-    v.map_or(ptr::null(), ValueRef::as_ptr)
 }
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
@@ -37,21 +21,9 @@ pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
 }
 
-pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_size_keyword_is_intrinsic(value_ptr(v)) != 0 }
-}
-
-pub fn intrinsic_keyword_width(b: BoxRef<'_>, kw: &CStr, mi: *const Style, avail: f64) -> f64 {
-    unsafe { ns_layout_intrinsic_keyword_width(b.as_ptr(), kw.as_ptr(), mi, avail) }
-}
-
-pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_measure_natural_width(b.as_ptr(), parent_style) }
-}
-
-pub fn min_content_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_min_content_width_of(b.as_ptr(), parent_style) }
-}
+pub use southstar_layout_sizing::{
+    intrinsic_keyword_width, measure_natural_width, min_content_width_of, size_keyword_is_intrinsic,
+};
 
 pub use southstar_layout_float::box_is_scroll_container;
 

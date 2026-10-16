@@ -13,6 +13,7 @@ southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-layout-geom = { path = "../layout-geom" }
+southstar-layout-sizing = { path = "../layout-sizing" }
 southstar-style = { path = "../style" }
 
 [lints]
