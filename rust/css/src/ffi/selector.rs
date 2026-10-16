@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr;
 
@@ -242,10 +242,6 @@ unsafe fn simple_free(s: *mut RawSimple) {
     }
 }
 
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
 pub(super) unsafe fn selector_free(sel: *mut c_void) {
     let raw = sel.cast::<RawSelector>();
     let Some(selector) = (unsafe { raw.as_mut() }) else {
@@ -260,14 +256,6 @@ pub(super) unsafe fn selector_free(sel: *mut c_void) {
         g_array_free(selector.combinators, glib::TRUE);
         glib::g_free(sel);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_selector_list(text: *const c_char) -> *mut GPtrArray {
-    let list = unsafe { bytes(text) }
-        .map(selector::parse_list)
-        .unwrap_or_default();
-    group_to_c(&list)
 }
 
 pub(super) fn attr_ancestor_hashes() -> bool {

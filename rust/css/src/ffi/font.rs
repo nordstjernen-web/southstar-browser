@@ -2,38 +2,35 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
+use core::ffi::{CStr, c_uint};
 use core::sync::atomic::{AtomicU32, Ordering};
 use std::ffi::CString;
 use std::sync::{Mutex, PoisonError};
 
-use southstar_glib::{self as glib, GBoolean};
-
 use crate::font;
 
-type AvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
-type GenerationFn = unsafe extern "C" fn() -> u64;
+pub type AvailableFn = fn(family: Option<&CStr>) -> bool;
+pub type GenerationFn = fn() -> u64;
 pub type AliasFn = fn(family: &[u8]) -> Option<Vec<u8>>;
-type MetricsFn = unsafe extern "C" fn(
-    family: *const c_char,
-    size_px: c_double,
-    weight: c_int,
-    italic: GBoolean,
-    out: *mut FontMetrics,
-);
+pub type MetricsFn =
+    fn(family: Option<&CStr>, size_px: f64, weight: i32, italic: bool, out: &mut FontMetrics);
 
-#[repr(C)]
-pub(crate) struct FontMetrics {
-    ex_px: f64,
-    ch_px: f64,
-    cap_px: f64,
-    ic_px: f64,
-    line_px: f64,
-    ascent_px: f64,
-    descent_px: f64,
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct FontMetrics {
+    pub ex_px: f64,
+    pub ch_px: f64,
+    pub cap_px: f64,
+    pub ic_px: f64,
+    pub line_px: f64,
+    pub ascent_px: f64,
+    pub descent_px: f64,
 }
 
-const _: () = assert!(core::mem::size_of::<FontMetrics>() == 56);
+pub struct FontOracle {
+    pub available: AvailableFn,
+    pub generation: GenerationFn,
+    pub metrics: MetricsFn,
+}
 
 static AVAILABLE: Mutex<Option<AvailableFn>> = Mutex::new(None);
 static GENERATION: Mutex<Option<GenerationFn>> = Mutex::new(None);
@@ -52,7 +49,7 @@ fn store<T>(slot: &Mutex<Option<T>>, value: Option<T>) {
 pub(crate) fn font_available(family: &[u8]) -> Option<bool> {
     let cb = load(&AVAILABLE)?;
     let family = CString::new(family).unwrap_or_default();
-    Some(unsafe { cb(family.as_ptr()) } != 0)
+    Some(cb(Some(&family)))
 }
 
 pub(crate) fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
@@ -65,28 +62,19 @@ pub fn set_font_alias(cb: AliasFn) {
 }
 
 pub(crate) fn font_generation() -> u64 {
-    load(&GENERATION).map_or(0, |cb| unsafe { cb() })
+    load(&GENERATION).map_or(0, |cb| cb())
 }
 
 pub(crate) fn font_oracle_serial() -> u32 {
     ORACLE_SERIAL.load(Ordering::Relaxed)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_font_available_cb(cb: Option<AvailableFn>) {
-    store(&AVAILABLE, cb);
+pub fn set_font_oracle(oracle: FontOracle) {
+    store(&AVAILABLE, Some(oracle.available));
     ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_font_generation_cb(cb: Option<GenerationFn>) {
-    store(&GENERATION, cb);
+    store(&GENERATION, Some(oracle.generation));
     ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_font_metrics_cb(cb: Option<MetricsFn>) {
-    store(&METRICS, cb);
+    store(&METRICS, Some(oracle.metrics));
 }
 
 pub(crate) fn relative_unit_px(
@@ -96,17 +84,6 @@ pub(crate) fn relative_unit_px(
     weight: i32,
     italic: bool,
 ) -> f64 {
-    let family = family.map_or(core::ptr::null(), CStr::as_ptr);
-    unsafe { font_relative_unit_px(unit, font_px, family, weight, glib::boolean(italic)) }
-}
-
-pub(super) unsafe fn font_relative_unit_px(
-    unit: c_uint,
-    font_px: c_double,
-    family: *const c_char,
-    weight: c_int,
-    italic: GBoolean,
-) -> c_double {
     let mut m = FontMetrics {
         ex_px: font_px * 0.5,
         ch_px: font_px * 0.5,
@@ -117,7 +94,7 @@ pub(super) unsafe fn font_relative_unit_px(
         descent_px: 0.0,
     };
     if let Some(cb) = load(&METRICS).filter(|_| font_px > 0.0) {
-        unsafe { cb(family, font_px, weight, italic, &mut m) };
+        cb(family, font_px, weight, italic, &mut m);
     }
     font::relative_unit_px(unit, &[m.ex_px, m.ch_px, m.cap_px, m.ic_px], font_px)
 }

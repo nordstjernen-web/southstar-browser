@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/css asks the painter about fonts through a FontOracle of plain
+  Rust functions instead of three unsafe extern "C" callbacks that took
+  raw C strings and wrote through an out-pointer, and the headless
+  driver matches selectors through southstar_css::SelectorList instead
+  of a hand-freed GPtrArray and two C exports.
 * The length, height and edge helpers the layout crates share live in
   rust/layout-geom, a new crate that forbids unsafe code. Block, flex,
   grid, table, sizing, positioned, float, inline, hit-testing, query and

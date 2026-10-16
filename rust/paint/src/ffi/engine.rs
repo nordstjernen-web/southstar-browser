@@ -16,32 +16,9 @@ use super::cairo::{Cr, SurfaceRef};
 use super::pango::{AttrList, Layout};
 use crate::util::Rgba;
 
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug, PartialEq)]
-pub struct FontMetrics {
-    pub ex_px: c_double,
-    pub ch_px: c_double,
-    pub cap_px: c_double,
-    pub ic_px: c_double,
-    pub line_px: c_double,
-    pub ascent_px: c_double,
-    pub descent_px: c_double,
-}
-
-pub type FontAvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
-pub type FontGenerationFn = unsafe extern "C" fn() -> u64;
-pub type FontMetricsFn = unsafe extern "C" fn(
-    family: *const c_char,
-    size_px: c_double,
-    weight: c_int,
-    italic: GBoolean,
-    out: *mut FontMetrics,
-);
+pub use southstar_css::FontMetrics;
 
 unsafe extern "C" {
-    fn ns_css_set_font_available_cb(cb: Option<FontAvailableFn>);
-    fn ns_css_set_font_generation_cb(cb: Option<FontGenerationFn>);
-    fn ns_css_set_font_metrics_cb(cb: Option<FontMetricsFn>);
     fn ns_font_family_loaded(family: *const c_char) -> GBoolean;
     fn ns_font_generation() -> c_uint;
     fn ns_texture_get_width(texture: *mut c_void) -> c_int;
@@ -88,18 +65,6 @@ pub fn css_unescape(text: &[u8]) -> Vec<u8> {
         southstar_css::append_unescaped(&mut out, text, &mut pos);
     }
     out
-}
-
-pub fn set_font_oracle(
-    available: FontAvailableFn,
-    generation: FontGenerationFn,
-    metrics: FontMetricsFn,
-) {
-    unsafe {
-        ns_css_set_font_available_cb(Some(available));
-        ns_css_set_font_generation_cb(Some(generation));
-        ns_css_set_font_metrics_cb(Some(metrics));
-    }
 }
 
 pub fn font_family_loaded(family: &CStr) -> bool {

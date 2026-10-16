@@ -53,7 +53,7 @@ pub(crate) use element_state::{
     url_resolve,
 };
 pub(crate) use font::relative_unit_px as font_relative_px;
-pub use font::set_font_alias;
+pub use font::{FontMetrics, FontOracle, set_font_alias, set_font_oracle};
 pub(crate) use font::{font_alias, font_available, font_generation, font_oracle_serial};
 pub use gather::{selector_cache_begin, selector_cache_end};
 pub(crate) use hints::image_supports_mime;

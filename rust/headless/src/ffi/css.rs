@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
+use southstar_dom::Node;
+use southstar_glib::{self as glib, GHashTable};
 use southstar_layout::{BoxRef, NsBox, Style};
 
 #[repr(C)]
@@ -47,8 +47,6 @@ const KIND_CALC: c_uint = 4;
 const KIND_URL: c_uint = 8;
 
 unsafe extern "C" {
-    fn ns_css_parse_selector_list(text: *const c_char) -> *mut GPtrArray;
-    fn ns_css_selector_matches(sel: *const c_void, el: *const NsNode) -> GBoolean;
     fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox;
 }
 
@@ -120,27 +118,14 @@ impl StyleTable {
     }
 }
 
-pub struct Selectors(NonNull<GPtrArray>);
+pub struct Selectors(southstar_css::SelectorList);
 
 impl Selectors {
     pub fn parse(text: &CStr) -> Option<Selectors> {
-        let list = NonNull::new(unsafe { ns_css_parse_selector_list(text.as_ptr()) })?;
-        let sels = Selectors(list);
-        (sels.len() > 0).then_some(sels)
-    }
-
-    fn len(&self) -> usize {
-        unsafe { self.0.as_ref() }.len as usize
+        southstar_css::SelectorList::parse_lenient(text.to_bytes()).map(Selectors)
     }
 
     pub fn any_matches(&self, el: Node) -> bool {
-        let data = unsafe { self.0.as_ref() }.pdata;
-        (0..self.len()).any(|i| unsafe { ns_css_selector_matches(*data.add(i), el.as_ptr()) } != 0)
-    }
-}
-
-impl Drop for Selectors {
-    fn drop(&mut self) {
-        unsafe { glib::g_ptr_array_free(self.0.as_ptr(), glib::TRUE) };
+        self.0.matches_any(el)
     }
 }

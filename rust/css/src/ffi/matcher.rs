@@ -3,14 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::c_void;
 use std::thread::LocalKey;
 
-use southstar_dom::{Node, NsNode, WeakNode};
-use southstar_glib::{self as glib, GBoolean};
-
-use super::selector_view::SelectorRef;
-use crate::matcher;
+use southstar_dom::{Node, WeakNode};
 
 thread_local! {
     static MATCH_SCOPE: Cell<Option<WeakNode>> = const { Cell::new(None) };
@@ -95,17 +90,4 @@ pub(crate) fn active_node<'a>() -> Option<Node<'a>> {
 
 pub(crate) fn fullscreen_node<'a>() -> Option<Node<'a>> {
     load(&FULLSCREEN)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_selector_matches(
-    sel: *const c_void,
-    el: *const NsNode,
-) -> GBoolean {
-    let (Some(sel), Some(el)) = (unsafe { SelectorRef::from_ptr(sel) }, unsafe {
-        Node::from_ptr(el)
-    }) else {
-        return glib::FALSE;
-    };
-    glib::boolean(matcher::matches(sel, el))
 }

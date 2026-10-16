@@ -37,6 +37,12 @@ impl SelectorList {
         NonNull::new(group_to_c(&list)).map(SelectorList)
     }
 
+    pub fn parse_lenient(text: &[u8]) -> Option<SelectorList> {
+        let list = selector::parse_list(text);
+        let parsed = NonNull::new(group_to_c(&list)).map(SelectorList)?;
+        (!parsed.pointers().is_empty()).then_some(parsed)
+    }
+
     fn pointers(&self) -> &[*mut c_void] {
         let array = unsafe { self.0.as_ref() };
         if array.pdata.is_null() || array.len == 0 {

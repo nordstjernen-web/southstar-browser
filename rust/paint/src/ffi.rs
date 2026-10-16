@@ -15,7 +15,6 @@ use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::StyleRef;
 
 use self::cairo::Cr;
-use self::engine::FontMetrics;
 use self::pango::{AttrList, Layout, RawAttribute};
 use crate::document::{self, DocLayers, LayerPlan};
 use crate::walk::{UpperFn, VpCapture};
@@ -106,30 +105,13 @@ pub unsafe extern "C" fn ns_paint_font_variations_attr_from_values(
         .map_or(core::ptr::null_mut(), pango::Attribute::into_raw)
 }
 
-unsafe extern "C" fn font_metrics_cb(
-    family: *const c_char,
-    size_px: c_double,
-    weight: c_int,
-    italic: GBoolean,
-    out: *mut FontMetrics,
-) {
-    let Some(out) = (unsafe { out.as_mut() }) else {
-        return;
-    };
-    text::font_metrics(c_str(family), size_px, weight, italic != 0, out);
-}
-
-unsafe extern "C" fn font_available_cb(family: *const c_char) -> GBoolean {
-    boolean(text::font_available(c_str(family)))
-}
-
-unsafe extern "C" fn font_generation_cb() -> u64 {
-    text::font_generation()
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_paint_register_font_oracle() {
-    engine::set_font_oracle(font_available_cb, font_generation_cb, font_metrics_cb);
+    southstar_css::set_font_oracle(southstar_css::FontOracle {
+        available: text::font_available,
+        generation: text::font_generation,
+        metrics: text::font_metrics,
+    });
     southstar_css::set_font_alias(text::font_alias);
 }
 
