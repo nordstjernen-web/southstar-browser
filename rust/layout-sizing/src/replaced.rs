@@ -14,7 +14,7 @@ use crate::ffi::{
     resolve_used_height, style_is_absolute_or_fixed, style_is_flex_container, style_of,
     svg_intrinsic_size, value_is_percent, viewport_w,
 };
-use crate::intrinsic::{measure_natural_width, size_keyword_is_intrinsic};
+use crate::intrinsic::{measure_natural_width, min_width_of, size_keyword_is_intrinsic};
 
 const MEDIA_SRC_ATTR: &core::ffi::CStr = c"data-nd-media-src";
 const MEDIA_STREAM_ATTR: &core::ffi::CStr = c"data-nd-media-stream";
@@ -529,6 +529,35 @@ pub struct AtomicGeometry<'a> {
 
 pub type SavedGeometry<'a> = Vec<AtomicGeometry<'a>>;
 
+fn is_form_control(b: BoxRef<'_>) -> bool {
+    dom_of(b)
+        .and_then(|n| n.element_name())
+        .is_some_and(|name| {
+            matches!(
+                name,
+                b"input" | b"button" | b"select" | b"textarea" | b"meter" | b"progress"
+            )
+        })
+}
+
+fn shrinks_to_min_content(ab: BoxRef<'_>) -> bool {
+    ab.kind() == BoxKind::Block
+        && style_value(ab, PropId::Width).is_none_or(|v| v.is_keyword(c"auto"))
+        && !is_form_control(ab)
+        && !box_is_abs_placeholder(ab)
+}
+
+fn geometry(ab: BoxRef<'_>) -> AtomicGeometry<'_> {
+    AtomicGeometry {
+        b: ab,
+        width: ab.content_width(),
+        height: ab.content_height(),
+        margin: ab.margin(),
+        padding: ab.padding(),
+        border: ab.border(),
+    }
+}
+
 pub fn measure_inline_atomics_begin<'a>(
     b: BoxRef<'a>,
     parent_style: *const Style,
@@ -540,17 +569,17 @@ pub fn measure_inline_atomics_begin<'a>(
         let cyclic =
             replaced_width_is_cyclic(ab) || (!max_content && replaced_width_is_percent(ab));
         if cyclic {
-            saved.get_or_insert_default().push(AtomicGeometry {
-                b: ab,
-                width: ab.content_width(),
-                height: ab.content_height(),
-                margin: ab.margin(),
-                padding: ab.padding(),
-                border: ab.border(),
-            });
+            saved.get_or_insert_default().push(geometry(ab));
         }
         if inline_atomic_needs_layout(ab) {
             layout_box(ab, inline_atomic_measure_basis(ab), parent_style);
+        }
+        if !max_content && !cyclic && shrinks_to_min_content(ab) {
+            let min = min_width_of(Some(ab), parent_style);
+            if min >= 0.0 && min < ab.content_width() {
+                saved.get_or_insert_default().push(geometry(ab));
+                ab.set_content_width(min);
+            }
         }
         if cyclic {
             let w = replaced_intrinsic_contribution(ab, max_content);
