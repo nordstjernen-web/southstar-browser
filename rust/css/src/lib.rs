@@ -75,8 +75,8 @@ pub use ffi::{
     Selector, SelectorList, set_font_alias,
 };
 pub use font::{
-    family_for_pango as font_family_for_pango, stretch_rank as font_stretch_rank,
-    weight_number as font_weight_number,
+    family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
+    stretch_rank as font_stretch_rank, weight_number as font_weight_number,
 };
 pub use gradient::{
     Gradient, Stop as GradientStop, angle as gradient_angle, radii as gradient_radii,

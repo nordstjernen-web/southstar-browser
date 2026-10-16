@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint};
-use core::ptr;
 use core::sync::atomic::{AtomicU32, Ordering};
 use std::ffi::CString;
 use std::sync::{Mutex, PoisonError};
@@ -73,14 +72,6 @@ pub(crate) fn font_oracle_serial() -> u32 {
     ORACLE_SERIAL.load(Ordering::Relaxed)
 }
 
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-fn owned(text: Option<Vec<u8>>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), |text| glib::strdup(&text))
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_font_available_cb(cb: Option<AvailableFn>) {
     store(&AVAILABLE, cb);
@@ -130,9 +121,4 @@ pub unsafe extern "C" fn ns_css_font_relative_unit_px(
         unsafe { cb(family, font_px, weight, italic, &mut m) };
     }
     font::relative_unit_px(unit, &[m.ex_px, m.ch_px, m.cap_px, m.ic_px], font_px)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_shorthand_canonical(text: *const c_char) -> *mut c_char {
-    owned(unsafe { bytes(text) }.and_then(font::shorthand_canonical))
 }

@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use southstar_css::{self as css_engine, Prop};
+use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -210,10 +211,7 @@ unsafe extern "C" {
         prop: c_int,
     ) -> *mut c_char;
     fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
-    fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
-    fn ns_css_syntax_def_free(syntax: *mut c_void);
-    fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
-    fn ns_css_syntax_def_initial_valid(syntax: *const c_void, value: *const c_char) -> GBoolean;
+
     fn ns_css_register_property(
         name: *const c_char,
         syntax_text: *const c_char,
@@ -699,22 +697,17 @@ pub(crate) fn property_rule_valid(
     initial: Option<&str>,
     has_inherits: bool,
 ) -> bool {
-    let syntax_def = syntax.map_or(core::ptr::null_mut(), |s| {
-        let s = c_string(s.as_bytes());
-        unsafe { ns_css_syntax_def_parse(s.as_ptr()) }
-    });
-    let initial = initial.map(|i| c_string(i.as_bytes()));
-    let mut ok = !syntax_def.is_null() && has_inherits;
-    if ok && unsafe { ns_css_syntax_def_universal(syntax_def) } == 0 {
-        ok = initial.is_some()
-            && unsafe { ns_css_syntax_def_initial_valid(syntax_def, opt_ptr(&initial)) } != 0;
-    } else if ok && initial.is_some() {
-        ok = unsafe { ns_css_syntax_def_initial_valid(syntax_def, opt_ptr(&initial)) } != 0;
+    let Some(syntax_def) = syntax.and_then(|s| prop_syntax::parse(until_nul(s))) else {
+        return false;
+    };
+    let initial_valid = |initial: &str| prop_syntax::initial_valid(&syntax_def, until_nul(initial));
+    if !has_inherits {
+        false
+    } else if !syntax_def.universal() {
+        initial.is_some_and(initial_valid)
+    } else {
+        initial.is_none_or(initial_valid)
     }
-    if !syntax_def.is_null() {
-        unsafe { ns_css_syntax_def_free(syntax_def) };
-    }
-    ok
 }
 
 pub(crate) enum RegisterStatus {

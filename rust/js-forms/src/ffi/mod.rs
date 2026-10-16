@@ -69,13 +69,7 @@ unsafe extern "C" {
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
     fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
-    fn ns_css_parse_color(
-        s: *const c_char,
-        r: *mut u8,
-        g: *mut u8,
-        b: *mut u8,
-        a: *mut u8,
-    ) -> GBoolean;
+
     fn ns_element_insert_before_single(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -148,10 +142,7 @@ pub(crate) fn mark_restyle_dirty(node: Element) {
 }
 
 pub(crate) fn parse_color(text: &[u8]) -> Option<(u8, u8, u8, u8)> {
-    let text = cstring(text);
-    let (mut r, mut g, mut b, mut a) = (0u8, 0u8, 0u8, 0u8);
-    let ok = unsafe { ns_css_parse_color(text.as_ptr(), &mut r, &mut g, &mut b, &mut a) };
-    (ok != 0).then_some((r, g, b, a))
+    southstar_css::parse_color(&cstring(text)).map(|[r, g, b, a]| (r, g, b, a))
 }
 
 pub(crate) fn utf8_casefold(text: &[u8]) -> Vec<u8> {

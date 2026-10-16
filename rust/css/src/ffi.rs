@@ -40,11 +40,11 @@ mod values;
 mod vars;
 pub(crate) mod viewport;
 
-use core::ffi::{CStr, c_char, c_double};
+use core::ffi::{CStr, c_double};
 
 use southstar_glib::{self as glib, GBoolean};
 
-use crate::{calc, color, units};
+use crate::{calc, units};
 
 pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
 pub(crate) use container::{Container, container_map};
@@ -87,34 +87,6 @@ pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {
     glib::ascii_strtod_at(text, pos)
-}
-
-unsafe fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_color(
-    s: *const c_char,
-    r: *mut u8,
-    g: *mut u8,
-    b: *mut u8,
-    a: *mut u8,
-) -> GBoolean {
-    let mut channels: color::Channels = [None; 4];
-    let ok = match unsafe { text(s) } {
-        Some(s) => color::parse_into(s, &mut channels),
-        None => {
-            channels[3] = Some(255);
-            false
-        }
-    };
-    for (slot, value) in [r, g, b, a].into_iter().zip(channels) {
-        if let (false, Some(value)) = (slot.is_null(), value) {
-            unsafe { *slot = value };
-        }
-    }
-    glib::boolean(ok)
 }
 
 #[unsafe(no_mangle)]

@@ -3,11 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::{offset_of, size_of};
+use core::mem::{ManuallyDrop, offset_of, size_of};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::declarations::{RawPending, RawRule, RuleSink};
@@ -94,7 +95,7 @@ pub(super) struct RawPropertyRule {
     name: *mut c_char,
     pub(super) initial_value: *mut c_char,
     syntax_text: *mut c_char,
-    syntax: *mut c_void,
+    syntax: Option<Box<prop_syntax::SyntaxDef>>,
     inherits: GBoolean,
     pub(super) has_initial: GBoolean,
 }
@@ -103,7 +104,7 @@ impl RawPropertyRule {
     pub(super) unsafe fn registered(
         name: *const c_char,
         syntax_text: *const c_char,
-        syntax: *mut c_void,
+        syntax: prop_syntax::SyntaxDef,
         inherits: GBoolean,
         initial_value: *const c_char,
         has_initial: GBoolean,
@@ -122,7 +123,7 @@ impl RawPropertyRule {
                     ptr::null_mut()
                 },
                 syntax_text: glib::g_strdup(syntax_text),
-                syntax,
+                syntax: Some(Box::new(syntax)),
                 inherits,
                 has_initial,
             }
@@ -144,18 +145,13 @@ impl RawPropertyRule {
         Some(unsafe { CStr::from_ptr(self.initial_value) }.to_bytes())
     }
 
-    pub(super) fn typed_syntax(&self) -> Option<*const c_void> {
-        let typed =
-            !self.syntax.is_null() && unsafe { ns_css_syntax_def_universal(self.syntax) } == 0;
-        typed.then_some(self.syntax.cast_const())
+    pub(super) fn typed_syntax(&self) -> Option<&prop_syntax::SyntaxDef> {
+        self.syntax.as_deref().filter(|syntax| !syntax.universal())
     }
 
     pub(super) fn rejects(&self, value: &[u8]) -> bool {
-        let Some(syntax) = self.typed_syntax() else {
-            return false;
-        };
-        let value = c_string(value);
-        unsafe { ns_css_syntax_def_matches(syntax, value.as_ptr()) == 0 }
+        self.typed_syntax()
+            .is_some_and(|syntax| !prop_syntax::matches(syntax, value))
     }
 }
 
@@ -202,11 +198,6 @@ unsafe extern "C" {
     );
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
     fn ns_css_container_query_free(query: *mut c_void);
-    fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
-    fn ns_css_syntax_def_free(syntax: *mut c_void);
-    fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
-    fn ns_css_syntax_def_initial_valid(syntax: *const c_void, value: *const c_char) -> GBoolean;
-    fn ns_css_syntax_def_matches(syntax: *const c_void, value: *const c_char) -> GBoolean;
 }
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
@@ -284,14 +275,13 @@ unsafe extern "C" fn keyframes_clear(data: *mut c_void) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_property_rule_clear(data: *mut c_void) {
+pub(super) unsafe extern "C" fn property_rule_clear(data: *mut c_void) {
     let rule = data.cast::<RawPropertyRule>();
     unsafe {
         glib::g_free((*rule).name.cast());
         glib::g_free((*rule).initial_value.cast());
         glib::g_free((*rule).syntax_text.cast());
-        ns_css_syntax_def_free((*rule).syntax);
+        drop((*rule).syntax.take());
     }
 }
 
@@ -356,40 +346,23 @@ pub unsafe extern "C" fn ns_css_rule_free(data: *mut c_void) {
     }
 }
 
-pub(crate) struct SyntaxDef(*mut c_void);
+pub(crate) struct SyntaxDef(prop_syntax::SyntaxDef);
 
 impl SyntaxDef {
     pub(crate) fn parse(text: &[u8]) -> Option<SyntaxDef> {
-        let text = c_string(text);
-        let raw = unsafe { ns_css_syntax_def_parse(text.as_ptr()) };
-        (!raw.is_null()).then(|| SyntaxDef(raw))
+        prop_syntax::parse(text).map(SyntaxDef)
     }
 
     pub(crate) fn universal(&self) -> bool {
-        unsafe { ns_css_syntax_def_universal(self.0) != 0 }
+        self.0.universal()
     }
 
     pub(crate) fn initial_valid(&self, initial: Option<&[u8]>) -> bool {
-        let initial = initial.map(c_string);
-        let initial = initial.as_ref().map_or(ptr::null(), |text| text.as_ptr());
-        unsafe { ns_css_syntax_def_initial_valid(self.0, initial) != 0 }
+        initial.is_some_and(|initial| prop_syntax::initial_valid(&self.0, initial))
     }
 
     pub(crate) fn matches(&self, value: &[u8]) -> bool {
-        let value = c_string(value);
-        unsafe { ns_css_syntax_def_matches(self.0, value.as_ptr()) != 0 }
-    }
-
-    fn into_raw(self) -> *mut c_void {
-        let raw = self.0;
-        core::mem::forget(self);
-        raw
-    }
-}
-
-impl Drop for SyntaxDef {
-    fn drop(&mut self) {
-        unsafe { ns_css_syntax_def_free(self.0) };
+        prop_syntax::matches(&self.0, value)
     }
 }
 
@@ -589,22 +562,18 @@ impl SheetBuilder {
     ) {
         let sheet = self.sheet();
         if sheet.property_rules.is_null() {
-            sheet.property_rules = unsafe {
-                new_array(
-                    size_of::<RawPropertyRule>(),
-                    Some(ns_css_property_rule_clear),
-                )
-            };
+            sheet.property_rules =
+                unsafe { new_array(size_of::<RawPropertyRule>(), Some(property_rule_clear)) };
         }
-        let rule = RawPropertyRule {
+        let rule = ManuallyDrop::new(RawPropertyRule {
             name: glib::strdup(name),
             initial_value: opt_strdup(initial),
             syntax_text: opt_strdup(syntax_text),
-            syntax: syntax.into_raw(),
+            syntax: Some(Box::new(syntax.0)),
             inherits: glib::boolean(inherits),
             has_initial: glib::boolean(has_initial),
-        };
-        unsafe { append(self.sheet().property_rules, &rule) };
+        });
+        unsafe { append(self.sheet().property_rules, &*rule) };
     }
 
     pub(crate) fn page_rule(&mut self) -> &mut PageRule {

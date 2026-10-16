@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -27,21 +27,12 @@ pub(crate) use objects::{
     new_textmetrics, path2d_context, set_element_attr, with_bitmap, with_hidden,
 };
 
-unsafe extern "C" {
-    fn ns_css_parse_color(
-        s: *const c_char,
-        r: *mut u8,
-        g: *mut u8,
-        b: *mut u8,
-        a: *mut u8,
-    ) -> c_int;
-    fn ns_css_font_shorthand_canonical(css: *const c_char) -> *mut c_char;
-}
-
 pub(crate) fn font_string(css: &[u8]) -> Option<Vec<u8>> {
-    let css = CString::new(css).ok()?;
-    let canon = unsafe { glib::GStr::take(ns_css_font_shorthand_canonical(css.as_ptr())) }?;
-    Some(crate::font::canonical(canon.to_bytes()))
+    if css.contains(&0) {
+        return None;
+    }
+    let canon = southstar_css::font_shorthand_canonical(css)?;
+    Some(crate::font::canonical(&canon))
 }
 
 pub(crate) fn state_font(st: &state::CanvasState) -> &[u8] {
@@ -61,9 +52,5 @@ pub(crate) fn strtod(text: &[u8]) -> f64 {
 }
 
 pub(crate) fn css_parse_color(s: &[u8]) -> Option<[u8; 4]> {
-    let s = CString::new(s).ok()?;
-    let mut rgba = [0u8; 4];
-    let [r, g, b, a] = &mut rgba;
-    let ok = unsafe { ns_css_parse_color(s.as_ptr(), r, g, b, a) };
-    (ok != 0).then_some(rgba)
+    southstar_css::parse_color(&CString::new(s).ok()?)
 }

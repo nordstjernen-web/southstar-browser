@@ -3,14 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 
+use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
 
-use super::sheet::{RawPropertyRule, RawSheet, ns_css_property_rule_clear};
+use super::sheet::{RawPropertyRule, RawSheet, property_rule_clear};
 
 const REGISTER_OK: c_int = 0;
 const REGISTER_BAD_NAME: c_int = 1;
@@ -18,20 +19,13 @@ const REGISTER_BAD_SYNTAX: c_int = 2;
 const REGISTER_BAD_INITIAL: c_int = 3;
 const REGISTER_EXISTS: c_int = 4;
 
-unsafe extern "C" {
-    fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
-    fn ns_css_syntax_def_free(syntax: *mut c_void);
-    fn ns_css_syntax_def_universal(syntax: *const c_void) -> GBoolean;
-    fn ns_css_syntax_def_initial_valid(syntax: *const c_void, value: *const c_char) -> GBoolean;
-}
-
 struct Registered(Box<RawPropertyRule>);
 
 unsafe impl Send for Registered {}
 
 impl Drop for Registered {
     fn drop(&mut self) {
-        unsafe { ns_css_property_rule_clear(ptr::from_mut(&mut *self.0).cast()) };
+        unsafe { property_rule_clear(ptr::from_mut(&mut *self.0).cast()) };
     }
 }
 
@@ -59,14 +53,14 @@ fn valid_name(name: &[u8]) -> bool {
             .any(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | b'\x0c'))
 }
 
-unsafe fn syntax_rejects_initial(
-    syntax: *const c_void,
-    initial_value: *const c_char,
+fn syntax_rejects_initial(
+    syntax: &prop_syntax::SyntaxDef,
+    initial_value: Option<&[u8]>,
     has_initial: bool,
 ) -> bool {
-    let universal = unsafe { ns_css_syntax_def_universal(syntax) } != 0;
-    (!universal && !has_initial)
-        || (has_initial && unsafe { ns_css_syntax_def_initial_valid(syntax, initial_value) } == 0)
+    (!syntax.universal() && !has_initial)
+        || (has_initial
+            && !initial_value.is_some_and(|value| prop_syntax::initial_valid(syntax, value)))
 }
 
 #[unsafe(no_mangle)]
@@ -83,12 +77,14 @@ pub unsafe extern "C" fn ns_css_register_property(
     if registry().rules.contains_key(key) {
         return REGISTER_EXISTS;
     }
-    let syntax = unsafe { ns_css_syntax_def_parse(syntax_text) };
-    if syntax.is_null() {
+    let Some(syntax) = unsafe { glib::bytes(syntax_text) }.and_then(prop_syntax::parse) else {
         return REGISTER_BAD_SYNTAX;
-    }
-    if unsafe { syntax_rejects_initial(syntax, initial_value, has_initial != 0) } {
-        unsafe { ns_css_syntax_def_free(syntax) };
+    };
+    if syntax_rejects_initial(
+        &syntax,
+        unsafe { glib::bytes(initial_value) },
+        has_initial != 0,
+    ) {
         return REGISTER_BAD_INITIAL;
     }
     let rule = unsafe {

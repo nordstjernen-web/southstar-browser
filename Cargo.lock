@@ -1770,6 +1770,7 @@ dependencies = [
 name = "southstar-canvas"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-digest",
  "southstar-dom",
  "southstar-glib",
@@ -1802,6 +1803,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-css-color",
  "southstar-css-media",
+ "southstar-css-prop-syntax",
  "southstar-css-syntax",
  "southstar-dom",
  "southstar-glib",
@@ -1830,8 +1832,9 @@ dependencies = [
 name = "southstar-css-prop-syntax"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css-color",
+ "southstar-css-media",
  "southstar-css-syntax",
- "southstar-glib",
  "southstar-numfmt",
 ]
 
@@ -2247,6 +2250,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
+ "southstar-css-prop-syntax",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2353,6 +2357,7 @@ dependencies = [
 name = "southstar-js-forms"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-datetime",
  "southstar-dom",
  "southstar-glib",

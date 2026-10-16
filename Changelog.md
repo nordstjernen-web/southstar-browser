@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/css-prop-syntax, the @property <syntax> grammar, has no C ABI left
+  and forbids unsafe code: rust/css, CSS.registerProperty() and the
+  CSSPropertyRule bindings call its Rust API instead of six
+  ns_css_syntax_def_* exports that handed a boxed syntax around as a
+  void pointer, and it parses colours through rust/css-color directly
+  instead of calling back into rust/css. Canvas and form controls parse
+  colours and canvas fonts through rust/css's Rust API as well.
 * An inline-block narrower than its content no longer shrinks below its
   min-content width: a long word in a narrow column now widens the
   inline-block instead of overflowing it.

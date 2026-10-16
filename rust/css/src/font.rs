@@ -463,7 +463,7 @@ fn weight_token(t: &[u8]) -> bool {
     end == text.to_bytes().len() && (1.0..=1000.0).contains(&w)
 }
 
-pub(crate) fn shorthand_canonical(text: &[u8]) -> Option<Vec<u8>> {
+pub fn shorthand_canonical(text: &[u8]) -> Option<Vec<u8>> {
     let tokens = split_ws_paren(text, 24);
     let n = tokens.len();
     let (mut style, mut variant, mut weight, mut stretch) = (None, None, None, None);

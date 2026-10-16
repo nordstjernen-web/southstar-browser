@@ -2,18 +2,20 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::OnceCell;
 use core::ffi::{CStr, c_char, c_double, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 use core::slice;
 use std::ffi::CString;
 
+use southstar_css_prop_syntax::{self as prop_syntax, Context};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 
 use super::computed_units::{RawStyle, StyleView};
 use super::font::relative_unit_px;
 use super::sheet::RawPropertyRule;
-use super::values::ns_css_value_serialize;
+use super::values::text_of;
 use super::vars::{RawVarMap, chain_lookup, map_ref, new_map};
 use crate::computed_units::{self, Font};
 use crate::custom_props::{self, Inherited, Own, Registered, Registry, VarMatch};
@@ -41,36 +43,7 @@ pub(super) struct RawVarMatch {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<RawVarMatch>() == 72);
 
-#[repr(C)]
-struct SyntaxCtx {
-    font_size: f64,
-    root_font_size: f64,
-    line_height: f64,
-    root_line_height: f64,
-    ex_px: f64,
-    ch_px: f64,
-    cap_px: f64,
-    ic_px: f64,
-    root_ex_px: f64,
-    root_ch_px: f64,
-    root_cap_px: f64,
-    root_ic_px: f64,
-    viewport_w: f64,
-    viewport_h: f64,
-    container_w: f64,
-    container_h: f64,
-    current_color: *const c_char,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<SyntaxCtx>() == 136);
-
 unsafe extern "C" {
-    fn ns_css_syntax_def_compute(
-        syntax: *const c_void,
-        value: *const c_char,
-        ctx: *const SyntaxCtx,
-    ) -> *mut c_char;
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
 }
 
@@ -224,14 +197,14 @@ fn relative(unit: u32, px: f64, font: &Font<'_>) -> f64 {
     relative_unit_px(unit, px, font.family, font.weight, font.italic)
 }
 
-fn syntax_ctx(style: &StyleView<'_>, root_px: f64) -> SyntaxCtx {
+fn syntax_ctx<'a>(style: &StyleView<'_>, root_px: f64, current_color: &'a [u8]) -> Context<'a> {
     let b = computed_units::syntax_basis(style, root_px);
     let plain = Font {
         family: None,
         weight: 400,
         italic: false,
     };
-    SyntaxCtx {
+    Context {
         font_size: b.font_px,
         root_font_size: b.root_px,
         line_height: b.line_height,
@@ -248,7 +221,7 @@ fn syntax_ctx(style: &StyleView<'_>, root_px: f64) -> SyntaxCtx {
         viewport_h: units::viewport_resolve(100.0, VH),
         container_w: crate::container::unit_dims().0,
         container_h: crate::container::unit_dims().1,
-        current_color: ptr::null(),
+        current_color: Some(current_color),
     }
 }
 
@@ -274,7 +247,8 @@ pub unsafe extern "C" fn ns_css_compute_registered_vars(
     if unsafe { glib::g_hash_table_size(registered_props) } == 0 {
         return;
     }
-    let mut ctx: Option<SyntaxCtx> = None;
+    let current_color = OnceCell::new();
+    let mut ctx: Option<Context<'_>> = None;
     let mut iter = glib::GHashTableIter::new();
     unsafe { glib::g_hash_table_iter_init(&mut iter, vars.own) };
     let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
@@ -286,17 +260,15 @@ pub unsafe extern "C" fn ns_css_compute_registered_vars(
             continue;
         };
         let ctx = ctx.get_or_insert_with(|| {
-            let mut ctx = syntax_ctx(&StyleView(style), root_px);
-            ctx.current_color =
-                unsafe { ns_css_value_serialize(style.value(Prop::Color as usize)) };
-            ctx
+            let color = current_color
+                .get_or_init(|| unsafe { text_of(style.value(Prop::Color as usize), false) });
+            syntax_ctx(&StyleView(style), root_px, color)
         });
-        let computed = unsafe { ns_css_syntax_def_compute(syntax, value.cast(), ctx) };
-        if !computed.is_null() {
-            unsafe { g_hash_table_iter_replace(&mut iter, computed.cast()) };
+        let Some(value) = (unsafe { glib::bytes(value.cast()) }) else {
+            continue;
+        };
+        if let Some(computed) = prop_syntax::compute(syntax, value, Some(ctx)) {
+            unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&computed).cast()) };
         }
-    }
-    if let Some(ctx) = ctx {
-        unsafe { glib::g_free(ctx.current_color.cast_mut().cast()) };
     }
 }

@@ -8,15 +8,16 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-southstar-css-media = { path = "../css-media" }
 southstar-css-color = { path = "../css-color" }
+southstar-css-media = { path = "../css-media" }
+southstar-css-prop-syntax = { path = "../css-prop-syntax" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
-southstar-url = { path = "../url" }
 southstar-selector-text = { path = "../selector-text" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

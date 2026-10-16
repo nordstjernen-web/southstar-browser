@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
 
 use core::f64::consts::PI;
 use southstar_css_syntax::{self as css, Component, Kind};
@@ -832,6 +832,14 @@ fn parse_component(full: &[u8], mut start: usize, mut end: usize) -> Option<SynC
     })
 }
 
+fn parse_color(text: &[u8]) -> Option<[u8; 4]> {
+    let context = southstar_css_color::Context {
+        current: None,
+        dark: southstar_css_media::prefers_dark(),
+    };
+    southstar_css_color::computed(text, &context).map(|color| color.to_rgba8())
+}
+
 pub fn parse(text: &[u8]) -> Option<SyntaxDef> {
     let mut p = 0;
     let mut end = text.len();
@@ -1224,11 +1232,7 @@ fn match_single(
             }
             let text = input.text_of(first);
             let current = caseless(text, "currentcolor");
-            let parsed = if current {
-                None
-            } else {
-                ffi::parse_color(text)
-            };
+            let parsed = if current { None } else { parse_color(text) };
             let ok = current || parsed.is_some() || first.kind == Kind::Function;
             if ok && let Some(emit) = emit {
                 match (current, emit.ctx.and_then(|ctx| ctx.current_color), parsed) {

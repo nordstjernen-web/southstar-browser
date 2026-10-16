@@ -47,8 +47,6 @@ const _: () = assert!(
 unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_css_syntax_def_parse(text: *const c_char) -> *mut c_void;
-    fn ns_css_syntax_def_free(syntax: *mut c_void);
 }
 
 fn c_string(text: &[u8]) -> CString {
@@ -60,13 +58,7 @@ pub(crate) fn media_query_matches(query: &[u8]) -> bool {
 }
 
 pub(crate) fn syntax_def_valid(text: &[u8]) -> bool {
-    let text = c_string(text);
-    let syntax = unsafe { ns_css_syntax_def_parse(text.as_ptr()) };
-    if syntax.is_null() {
-        return false;
-    }
-    unsafe { ns_css_syntax_def_free(syntax) };
-    true
+    southstar_css_prop_syntax::parse(text).is_some()
 }
 
 unsafe extern "C" fn pending_clear(data: *mut c_void) {
