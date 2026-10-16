@@ -2,20 +2,22 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::cell::{Cell, OnceCell};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::{ManuallyDrop, size_of};
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
+use std::collections::HashSet;
 use std::ffi::CString;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean};
 
-use super::declarations::{Rule, RuleSink, until_nul};
+use super::declarations::{Rule, RuleSink, lookup_key, until_nul};
 use super::keyframes::{KeyframeStop, Keyframes};
-use super::rule_index::index_free;
+use super::rule_index::RuleIndex;
 use super::selector::SelectorGroup;
 use super::value::{KIND_URL, NsCssValue};
 use crate::declarations;
@@ -23,14 +25,14 @@ use crate::nesting;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
 
-pub(super) struct RawSheet {
+pub(super) struct SheetData {
     pub(super) rules: Vec<Rule>,
     imports: Vec<Import>,
-    pub(super) layer_names: *mut GPtrArray,
-    layers: *mut GHashTable,
+    pub(super) layer_names: Vec<Vec<u8>>,
+    layers: HashSet<Vec<u8>>,
     font_faces: Vec<FontFaceData>,
     keyframes: Vec<Keyframes>,
-    property_rules: Vec<PropertyRule>,
+    property_rules: Vec<Arc<PropertyRule>>,
     page_rule: Option<PageRule>,
     has_container_rules: bool,
     has_container_units: bool,
@@ -40,16 +42,16 @@ pub(super) struct RawSheet {
     pub(super) pseudo_mask: Cell<c_uint>,
     serial: u64,
     resolved_base: Option<Vec<u8>>,
-    pub(super) index: Cell<*mut c_void>,
+    pub(super) index: OnceCell<RuleIndex>,
 }
 
-impl RawSheet {
-    fn new(serial: u64, has_container_units: bool) -> RawSheet {
-        RawSheet {
+impl SheetData {
+    fn new(serial: u64, has_container_units: bool) -> SheetData {
+        SheetData {
             rules: Vec::new(),
             imports: Vec::new(),
-            layer_names: ptr::null_mut(),
-            layers: ptr::null_mut(),
+            layer_names: Vec::new(),
+            layers: HashSet::new(),
             font_faces: Vec::new(),
             keyframes: Vec::new(),
             property_rules: Vec::new(),
@@ -62,7 +64,7 @@ impl RawSheet {
             pseudo_mask: Cell::new(0),
             serial,
             resolved_base: None,
-            index: Cell::new(ptr::null_mut()),
+            index: OnceCell::new(),
         }
     }
 
@@ -70,46 +72,17 @@ impl RawSheet {
         self.serial
     }
 
-    pub(super) fn property_rules(&self) -> &[PropertyRule] {
+    pub(super) fn property_rules(&self) -> &[Arc<PropertyRule>] {
         &self.property_rules
     }
 
     fn layer_register(&mut self, name: &[u8]) {
-        if name.is_empty() {
+        if name.is_empty() || self.layers.contains(lookup_key(name)) {
             return;
         }
-        unsafe {
-            if self.layer_names.is_null() {
-                self.layer_names = glib::g_ptr_array_new_with_free_func(Some(glib::g_free));
-            }
-            if self.layers.is_null() {
-                self.layers =
-                    glib::g_hash_table_new(Some(glib::g_str_hash), Some(glib::g_str_equal));
-            }
-            let key = c_string(name);
-            if !glib::g_hash_table_lookup(self.layers, key.as_ptr().cast()).is_null() {
-                return;
-            }
-            let rank = (*self.layer_names).len as usize;
-            let owned = glib::strdup(name);
-            glib::g_ptr_array_add(self.layer_names, owned.cast());
-            glib::g_hash_table_insert(self.layers, owned.cast(), (rank + 1) as *mut c_void);
-        }
-    }
-}
-
-impl Drop for RawSheet {
-    fn drop(&mut self) {
-        if !self.layers.is_null() {
-            // SAFETY: layers is the sheet's own table; its keys belong to layer_names, freed next.
-            unsafe { glib::g_hash_table_destroy(self.layers) };
-        }
-        if !self.layer_names.is_null() {
-            // SAFETY: layer_names is the sheet's own array of GLib strings.
-            unsafe { glib::g_ptr_array_free(self.layer_names, glib::TRUE) };
-        }
-        // SAFETY: index is null or the rule index built for this sheet alone.
-        unsafe { index_free(self.index.get().cast()) };
+        let owned = until_nul(name).to_vec();
+        self.layer_names.push(owned.clone());
+        self.layers.insert(owned);
     }
 }
 
@@ -200,25 +173,8 @@ const _: () = assert!(size_of::<PageRule>() == 72);
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
 
-fn c_string(text: &[u8]) -> CString {
-    CString::new(text).unwrap_or_default()
-}
-
 fn c_text(text: &[u8]) -> CString {
     CString::new(until_nul(text)).unwrap_or_default()
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-unsafe fn pointers<'a, T>(array: *mut GPtrArray) -> &'a [*mut T] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.pdata.is_null() && a.len > 0 => unsafe {
-            core::slice::from_raw_parts(a.pdata.cast::<*mut T>(), a.len as usize)
-        },
-        _ => &[],
-    }
 }
 
 fn sort_stops(stops: &mut Vec<KeyframeStop>) {
@@ -278,7 +234,7 @@ impl SyntaxDef {
 }
 
 pub(crate) struct SheetBuilder {
-    sheet: Box<RawSheet>,
+    sheet: Box<SheetData>,
 }
 
 pub(crate) struct RuleBuilder {
@@ -334,8 +290,7 @@ impl SheetBuilder {
     }
 
     pub(crate) fn layer_count(&self) -> u32 {
-        // SAFETY: layer_names is null or the sheet's own array of layer names.
-        unsafe { self.sheet.layer_names.as_ref() }.map_or(0, |names| names.len)
+        self.sheet.layer_names.len() as u32
     }
 
     pub(crate) fn layer_register(&mut self, name: &[u8]) {
@@ -391,13 +346,13 @@ impl SheetBuilder {
         inherits: bool,
         has_initial: bool,
     ) {
-        self.sheet.property_rules.push(PropertyRule {
+        self.sheet.property_rules.push(Arc::new(PropertyRule {
             name: c_text(name),
             initial_value: initial.map(c_text),
             syntax: syntax.0,
             inherits,
             has_initial,
-        });
+        }));
     }
 
     pub(crate) fn page_rule(&mut self) -> &mut PageRule {
@@ -441,14 +396,14 @@ impl SheetBuilder {
     }
 }
 
-pub struct OwnedSheet(NonNull<RawSheet>);
+pub struct OwnedSheet(NonNull<SheetData>);
 
 impl OwnedSheet {
     pub fn parse(css: &[u8]) -> OwnedSheet {
         let serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
         let has_container_units = nesting::has_container_units(css);
         let mut builder = SheetBuilder {
-            sheet: Box::new(RawSheet::new(serial, has_container_units)),
+            sheet: Box::new(SheetData::new(serial, has_container_units)),
         };
         let mut flattened = nesting::flatten(css);
         if let Some(nul) = flattened.iter().position(|&c| c == 0) {
@@ -458,12 +413,12 @@ impl OwnedSheet {
         OwnedSheet(NonNull::from(Box::leak(builder.sheet)))
     }
 
-    fn raw_mut(&mut self) -> &mut RawSheet {
+    fn raw_mut(&mut self) -> &mut SheetData {
         // SAFETY: the handle points to a live sheet, and borrowing the handle mutably keeps its other uses out.
         unsafe { self.0.as_mut() }
     }
 
-    pub(super) fn into_raw(self) -> *mut RawSheet {
+    pub(super) fn into_raw(self) -> *mut SheetData {
         ManuallyDrop::new(self).0.as_ptr()
     }
 
@@ -501,15 +456,11 @@ impl OwnedSheet {
         }
         let sheet = self.raw_mut();
         sheet.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
-        let old_names = sheet.layer_names;
-        let old_layers = sheet.layers;
-        sheet.layer_names = ptr::null_mut();
-        sheet.layers = ptr::null_mut();
+        let old_names = core::mem::take(&mut sheet.layer_names);
+        sheet.layers.clear();
         sheet.layer_register(layer);
-        // SAFETY: old_names is null or the array of layer names the sheet owned until now.
-        for &old in unsafe { pointers::<c_char>(old_names) } {
-            // SAFETY: a layer name is a NUL-terminated string the array owns.
-            let full = layer_join(Some(layer), unsafe { bytes(old) }.unwrap_or_default());
+        for old in &old_names {
+            let full = layer_join(Some(layer), old);
             sheet.layer_register(&full);
         }
         for rule in &mut sheet.rules {
@@ -529,14 +480,6 @@ impl OwnedSheet {
             sheet.layer_register(&full);
         }
         sheet.imports = imports;
-        if !old_layers.is_null() {
-            // SAFETY: old_layers is the layer table the sheet owned until now, and nothing refers to it.
-            unsafe { glib::g_hash_table_destroy(old_layers) };
-        }
-        if !old_names.is_null() {
-            // SAFETY: old_names is the layer name array the sheet owned until now, and nothing refers to it.
-            unsafe { glib::g_ptr_array_free(old_names, glib::TRUE) };
-        }
     }
 }
 
@@ -559,7 +502,7 @@ impl Deref for OwnedSheet {
     type Target = Sheet;
 
     fn deref(&self) -> &Sheet {
-        // SAFETY: the handle points to a live sheet, and Sheet is a transparent RawSheet.
+        // SAFETY: the handle points to a live sheet, and Sheet is a transparent SheetData.
         unsafe { self.0.cast::<Sheet>().as_ref() }
     }
 }
@@ -644,18 +587,23 @@ fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
     changed.then_some(out)
 }
 
+/// # Safety
+///
+/// `v` is null or a live value chain that nothing else borrows during the call.
 unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
+    // SAFETY: the caller passes null or a live value chain that nothing else borrows.
     while let Some(value) = unsafe { v.as_mut() } {
         if value.kind == KIND_URL {
+            // SAFETY: a url value's payload is its url string.
             let url = unsafe { value.u.url };
-            if let Some(resolved) = unsafe { bytes(url) }
+            // SAFETY: url is null or a NUL-terminated string the value owns.
+            if let Some(resolved) = unsafe { glib::bytes(url) }
                 .filter(|url| url_should_resolve(url))
                 .and_then(|url| url_resolve(base, url))
             {
-                unsafe {
-                    glib::g_free(url.cast());
-                    value.u.url = glib::strdup(&resolved);
-                }
+                // SAFETY: url is the value's own GLib string, replaced right after.
+                unsafe { glib::g_free(url.cast()) };
+                value.u.url = glib::strdup(&resolved);
             }
         }
         v = value.next_layer;
@@ -663,7 +611,7 @@ unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
 }
 
 #[repr(transparent)]
-pub struct Sheet(RawSheet);
+pub struct Sheet(SheetData);
 
 pub struct FontFaceRule<'a> {
     pub family: Option<&'a CStr>,
@@ -684,11 +632,11 @@ impl Sheet {
     ///
     /// `sheet` is null or points to a style sheet made by this crate that outlives `'a`.
     pub unsafe fn from_ptr<'a>(sheet: *const c_void) -> Option<&'a Sheet> {
-        // SAFETY: the caller passes null or a live sheet, and Sheet is a transparent RawSheet.
+        // SAFETY: the caller passes null or a live sheet, and Sheet is a transparent SheetData.
         unsafe { sheet.cast::<Sheet>().as_ref() }
     }
 
-    pub(super) fn raw(&self) -> &RawSheet {
+    pub(super) fn raw(&self) -> &SheetData {
         &self.0
     }
 

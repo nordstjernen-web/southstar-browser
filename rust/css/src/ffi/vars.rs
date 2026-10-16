@@ -8,7 +8,8 @@ use std::collections::HashSet;
 
 use southstar_glib::{self as glib, GHashTable, GPtrArray};
 
-use super::sheet::PropertyRule;
+use super::declarations::lookup_key;
+use super::registry::RegisteredProps;
 use crate::vars::{self, Lookup};
 
 #[repr(C)]
@@ -77,7 +78,7 @@ fn c_string(text: &[u8]) -> std::ffi::CString {
 
 struct Chain<'a> {
     map: Option<&'a RawVarMap>,
-    registered: *mut GHashTable,
+    registered: Option<&'a RegisteredProps>,
 }
 
 pub(super) fn chain_lookup_text<'a>(
@@ -107,20 +108,14 @@ impl Lookup for Chain<'_> {
     }
 
     fn registered_initial(&self, name: &[u8]) -> Option<Option<&[u8]>> {
-        if self.registered.is_null() {
-            return None;
-        }
-        let key = c_string(name);
-        let rule = unsafe { glib::g_hash_table_lookup(self.registered, key.as_ptr().cast()) }
-            .cast::<PropertyRule>();
-        unsafe { rule.as_ref() }?.registered_initial()
+        self.registered?.get(lookup_key(name))?.registered_initial()
     }
 }
 
 pub(super) fn substitute_in(
     value: &[u8],
     map: *const RawVarMap,
-    registered: *mut GHashTable,
+    registered: Option<&RegisteredProps>,
 ) -> Option<Vec<u8>> {
     let chain = Chain {
         map: unsafe { map.as_ref() },

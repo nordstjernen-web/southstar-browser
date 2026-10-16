@@ -4,12 +4,12 @@
 
 use std::sync::OnceLock;
 
-use super::sheet::{OwnedSheet, RawSheet};
+use super::sheet::{OwnedSheet, SheetData};
 
 const UA: &str = include_str!("../ua.css");
 const UA_QUIRKS: &str = include_str!("../ua-quirks.css");
 
-struct Sheet(*const RawSheet);
+struct Sheet(*const SheetData);
 
 unsafe impl Send for Sheet {}
 unsafe impl Sync for Sheet {}
@@ -18,7 +18,7 @@ fn parse(text: &str) -> Sheet {
     Sheet(OwnedSheet::parse(text.as_bytes()).into_raw())
 }
 
-pub(super) fn ua_sheet(quirks: bool) -> &'static RawSheet {
+pub(super) fn ua_sheet(quirks: bool) -> &'static SheetData {
     static STANDARD: OnceLock<Sheet> = OnceLock::new();
     static QUIRKS: OnceLock<Sheet> = OnceLock::new();
     let sheet = if quirks {

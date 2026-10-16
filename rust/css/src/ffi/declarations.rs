@@ -73,7 +73,7 @@ pub(super) fn until_nul(text: &[u8]) -> &[u8] {
         .map_or(text, |nul| &text[..nul])
 }
 
-fn lookup_key(text: &[u8]) -> &[u8] {
+pub(super) fn lookup_key(text: &[u8]) -> &[u8] {
     if text.contains(&0) { &[] } else { text }
 }
 

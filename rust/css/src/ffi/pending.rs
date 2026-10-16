@@ -6,10 +6,11 @@ use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 
 use super::cascade::RawMatch;
 use super::declarations::{Declarations, PendingDecl};
+use super::registry::RegisteredProps;
 use super::value::OwnedValue;
 use super::vars::{RawVarMap, substitute_in};
 use crate::pending::{self, Pending};
@@ -79,7 +80,7 @@ pub(super) struct Resolved<'a> {
 pub(super) fn resolve_pending(
     raw: &[RawPendingMatch],
     vars: *const RawVarMap,
-    registered: *mut GHashTable,
+    registered: &RegisteredProps,
     out: Resolved<'_>,
     node: Node<'_>,
 ) {
@@ -113,8 +114,12 @@ pub(super) fn resolve_pending(
             continue;
         };
         let custom = pending::is_custom(name);
-        let substituted =
-            pending::substituted_value(text, custom, |t| substitute_in(t, vars, registered), node);
+        let substituted = pending::substituted_value(
+            text,
+            custom,
+            |t| substitute_in(t, vars, Some(registered)),
+            node,
+        );
         let applied = substituted
             .is_some_and(|value| append_decls(pm, pd, name, &value, matches, owned_values));
         if !applied && !custom {

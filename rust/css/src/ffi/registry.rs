@@ -1,28 +1,27 @@
-//! Southstar — the C ABI of registered custom properties: CSS.registerProperty()'s process-wide registry, and the per-pass table of @property rules and script registrations the cascade checks custom properties against.
+//! Southstar — registered custom properties: CSS.registerProperty()'s process-wide registry, and the per-pass table of @property rules and script registrations the cascade checks custom properties against.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ptr;
+use core::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
+use std::rc::Rc;
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_glib::{self as glib, GHashTable};
 
 use super::selector_view::SheetRef;
-use super::sheet::{PropertyRule, RawSheet};
+use super::sheet::PropertyRule;
 
 #[derive(Default)]
 struct Registry {
-    rules: HashMap<Vec<u8>, Box<PropertyRule>>,
+    rules: HashMap<Vec<u8>, Arc<PropertyRule>>,
     serial: u64,
 }
 
 static REGISTRY: LazyLock<Mutex<Registry>> = LazyLock::new(Mutex::default);
 
 thread_local! {
-    static PASS: Cell<*mut GHashTable> = const { Cell::new(ptr::null_mut()) };
+    static PASS: RefCell<Option<Rc<RegisteredProps>>> = const { RefCell::new(None) };
 }
 
 fn registry() -> MutexGuard<'static, Registry> {
@@ -84,7 +83,7 @@ pub fn register_property(registration: &Registration<'_>) -> Result<(), Register
         registration.has_initial,
     );
     let mut registry = registry();
-    let replaced = registry.rules.insert(key.to_vec(), Box::new(rule));
+    let replaced = registry.rules.insert(key.to_vec(), Arc::new(rule));
     registry.serial += 1;
     drop(registry);
     drop(replaced);
@@ -106,44 +105,48 @@ pub(super) fn registered_property_serial() -> u64 {
     registry().serial
 }
 
-fn put_rules(table: *mut GHashTable, sheet: &RawSheet) {
-    for rule in sheet.property_rules() {
-        unsafe {
-            glib::g_hash_table_replace(
-                table,
-                rule.name().as_ptr().cast_mut().cast(),
-                ptr::from_ref(rule).cast_mut().cast(),
-            )
-        };
+#[derive(Default)]
+pub(super) struct RegisteredProps(HashMap<Vec<u8>, Arc<PropertyRule>>);
+
+impl RegisteredProps {
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(super) fn get(&self, name: &[u8]) -> Option<&PropertyRule> {
+        self.0.get(name).map(|rule| &**rule)
+    }
+
+    pub(super) fn iter(&self) -> impl Iterator<Item = (&[u8], &PropertyRule)> {
+        self.0.iter().map(|(name, rule)| (name.as_slice(), &**rule))
+    }
+
+    fn put(&mut self, rule: &Arc<PropertyRule>) {
+        self.0
+            .insert(rule.name().to_bytes().to_vec(), Arc::clone(rule));
     }
 }
 
-pub(super) fn pass_registered() -> *mut GHashTable {
-    PASS.get()
+pub(super) fn pass_registered() -> Option<Rc<RegisteredProps>> {
+    PASS.with(|pass| pass.borrow().clone())
 }
 
 pub(super) fn registered_props_end() {
-    let table = PASS.replace(ptr::null_mut());
-    if !table.is_null() {
-        unsafe { glib::g_hash_table_destroy(table) };
-    }
+    let table = PASS.with(|pass| pass.borrow_mut().take());
+    drop(table);
 }
 
-pub(super) fn registered_props_begin(sheets: &[SheetRef<'_>]) -> *mut GHashTable {
-    let table = unsafe { glib::g_hash_table_new(Some(glib::g_str_hash), Some(glib::g_str_equal)) };
+pub(super) fn registered_props_begin(sheets: &[SheetRef<'_>]) -> Rc<RegisteredProps> {
+    let mut table = RegisteredProps::default();
     for sheet in sheets {
-        put_rules(table, sheet.raw());
+        for rule in sheet.raw().property_rules() {
+            table.put(rule);
+        }
     }
     for rule in registry().rules.values() {
-        let rule = &**rule;
-        unsafe {
-            glib::g_hash_table_replace(
-                table,
-                rule.name().as_ptr().cast_mut().cast(),
-                ptr::from_ref(rule).cast_mut().cast(),
-            )
-        };
+        table.put(rule);
     }
-    PASS.set(table);
+    let table = Rc::new(table);
+    PASS.with(|pass| *pass.borrow_mut() = Some(Rc::clone(&table)));
     table
 }

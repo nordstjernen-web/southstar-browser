@@ -6,13 +6,13 @@ use core::cell::OnceCell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
-use std::ffi::CString;
 
 use southstar_css_prop_syntax::{self as prop_syntax, Context};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
 
 use super::computed_units::{RawStyle, StyleView};
 use super::font::relative_unit_px;
+use super::registry::RegisteredProps;
 use super::sheet::PropertyRule;
 use super::values::text_of;
 use super::vars::{RawVarMap, chain_lookup, map_ref, new_map};
@@ -46,7 +46,7 @@ unsafe extern "C" {
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
 }
 
-struct Props(*mut GHashTable);
+struct Props<'a>(&'a RegisteredProps);
 
 struct Parent<'a>(&'a RawVarMap);
 
@@ -57,28 +57,23 @@ fn registered(rule: &PropertyRule) -> Registered<'_> {
     }
 }
 
-impl Props {
+impl Props<'_> {
     fn rule(&self, name: &[u8]) -> Option<&PropertyRule> {
-        let key = CString::new(name).ok()?;
-        let rule = unsafe { glib::g_hash_table_lookup(self.0, key.as_ptr().cast()) };
-        unsafe { rule.cast::<PropertyRule>().as_ref() }
+        if name.contains(&0) {
+            return None;
+        }
+        self.0.get(name)
     }
 }
 
-impl Registry for Props {
+impl Registry for Props<'_> {
     fn get(&self, name: &[u8]) -> Option<Registered<'_>> {
         self.rule(name).map(registered)
     }
 
     fn each(&self, f: &mut dyn FnMut(&[u8], Registered<'_>)) {
-        for (key, value) in unsafe { glib::hash_table_entries(self.0) } {
-            let rule = unsafe { value.cast::<PropertyRule>().as_ref() };
-            if let (false, Some(rule)) = (key.is_null(), rule) {
-                f(
-                    unsafe { CStr::from_ptr(key.cast()) }.to_bytes(),
-                    registered(rule),
-                );
-            }
+        for (name, rule) in self.0.iter() {
+            f(name, registered(rule));
         }
     }
 
@@ -137,11 +132,10 @@ fn own_table(own: Own) -> *mut GHashTable {
 pub(super) fn build_vars(
     parent: *mut RawVarMap,
     raw: &[RawVarMatch],
-    registered_props: *mut GHashTable,
+    registered_props: &RegisteredProps,
     adjust_cache: *mut GHashTable,
 ) -> *mut RawVarMap {
-    let have_regs =
-        !registered_props.is_null() && unsafe { glib::g_hash_table_size(registered_props) } > 0;
+    let have_regs = !registered_props.is_empty();
     let have_local = !raw.is_empty();
     let inherited = unsafe { parent.as_ref() }.map(Parent);
     let inherited = inherited.as_ref().map(|p| p as &dyn Inherited);
@@ -215,19 +209,19 @@ fn syntax_ctx<'a>(style: &StyleView<'_>, root_px: f64, current_color: &'a [u8]) 
 pub(super) fn compute_registered_vars(
     style: &RawStyle,
     parent_style: Option<&RawStyle>,
-    registered_props: *mut GHashTable,
+    registered_props: &RegisteredProps,
     root_px: f64,
 ) {
     let Some(vars) = (unsafe { style.vars.as_ref() }) else {
         return;
     };
-    if registered_props.is_null() || vars.own.is_null() {
+    if vars.own.is_null() {
         return;
     }
     if parent_style.is_some_and(|p| p.vars == style.vars) {
         return;
     }
-    if unsafe { glib::g_hash_table_size(registered_props) } == 0 {
+    if registered_props.is_empty() {
         return;
     }
     let current_color = OnceCell::new();
@@ -236,9 +230,11 @@ pub(super) fn compute_registered_vars(
     unsafe { glib::g_hash_table_iter_init(&mut iter, vars.own) };
     let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
     while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-        let rule = unsafe { glib::g_hash_table_lookup(registered_props, key) };
-        let Some(syntax) =
-            unsafe { rule.cast::<PropertyRule>().as_ref() }.and_then(PropertyRule::typed_syntax)
+        // SAFETY: the variable map's keys are NUL-terminated names it owns.
+        let name = unsafe { CStr::from_ptr(key.cast()) }.to_bytes();
+        let Some(syntax) = registered_props
+            .get(name)
+            .and_then(PropertyRule::typed_syntax)
         else {
             continue;
         };

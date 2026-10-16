@@ -160,7 +160,8 @@ impl RawStyle {
     }
 
     pub fn resolve_vars(&self, text: &[u8]) -> Option<Vec<u8>> {
-        super::vars::substitute_in(text, self.vars, super::registry::pass_registered())
+        let registered = super::registry::pass_registered();
+        super::vars::substitute_in(text, self.vars, registered.as_deref())
     }
 }
 

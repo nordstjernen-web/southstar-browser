@@ -1,101 +1,39 @@
-//! Southstar — the C ABI of the rule index: css.c's ns_css_rule_index built as the GLib tables of candidate arrays its gather loop reads, with the pseudo-element masks recorded on the sheet and its rules on the way.
+//! Southstar — the rule index: a sheet's candidate rules and selectors bucketed by id, class, tag and attribute for its gather loop, with the pseudo-element masks recorded on the sheet and its rules on the way.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_uint, c_void};
-use core::mem::size_of;
-use core::ptr;
-use std::ffi::CString;
+use core::ffi::c_uint;
+use std::collections::HashMap;
 
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
-
+use super::declarations::lookup_key;
 use super::selector_view::SelectorRef;
-use super::sheet::RawSheet;
+use super::sheet::SheetData;
 use crate::rule_index::{self, Key, Table};
 
-#[repr(C)]
-pub(super) struct RawIndex {
-    pub(super) by_id: *mut GHashTable,
-    pub(super) by_class: *mut GHashTable,
-    pub(super) by_tag: *mut GHashTable,
-    pub(super) by_attr: *mut GHashTable,
-    pub(super) universal: *mut GArray,
-}
-
-#[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct Candidate {
     pub(super) rule_idx: c_uint,
     pub(super) selector_idx: c_uint,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawIndex>() == 40 && size_of::<Candidate>() == 8);
+pub(super) type Buckets = HashMap<Vec<u8>, Vec<Candidate>>;
 
-unsafe extern "C" {
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
+#[derive(Default)]
+pub(super) struct RuleIndex {
+    pub(super) by_id: Buckets,
+    pub(super) by_class: Buckets,
+    pub(super) by_tag: Buckets,
+    pub(super) by_attr: Buckets,
+    pub(super) universal: Vec<Candidate>,
 }
 
-unsafe extern "C" fn bucket_free(data: *mut c_void) {
-    unsafe { g_array_free(data.cast(), glib::TRUE) };
-}
-
-fn new_bucket() -> *mut GArray {
-    unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, size_of::<Candidate>() as c_uint) }
-}
-
-fn new_table() -> *mut GHashTable {
-    unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            Some(bucket_free),
-        )
+fn push(bucket: &mut Vec<Candidate>, cand: Candidate) {
+    if bucket.last() != Some(&cand) {
+        bucket.push(cand);
     }
 }
 
-unsafe fn push(bucket: *mut GArray, cand: Candidate) {
-    unsafe {
-        let len = (*bucket).len as usize;
-        if len > 0 && *(*bucket).data.cast::<Candidate>().add(len - 1) == cand {
-            return;
-        }
-        glib::g_array_append_vals(bucket, ptr::from_ref(&cand).cast(), 1);
-    }
-}
-
-unsafe fn bucket_for(table: *mut GHashTable, key: &[u8]) -> *mut GArray {
-    let key = CString::new(key).unwrap_or_default();
-    unsafe {
-        let found = glib::g_hash_table_lookup(table, key.as_ptr().cast()).cast::<GArray>();
-        if !found.is_null() {
-            return found;
-        }
-        let bucket = new_bucket();
-        glib::g_hash_table_insert(table, glib::strdup(key.to_bytes()).cast(), bucket.cast());
-        bucket
-    }
-}
-
-pub(super) unsafe fn index_free(idx: *mut RawIndex) {
-    let Some(index) = (unsafe { idx.as_ref() }) else {
-        return;
-    };
-    unsafe {
-        for table in [index.by_id, index.by_class, index.by_tag, index.by_attr] {
-            if !table.is_null() {
-                glib::g_hash_table_destroy(table);
-            }
-        }
-        if !index.universal.is_null() {
-            g_array_free(index.universal, glib::TRUE);
-        }
-        glib::g_free(idx.cast());
-    }
-}
-
-pub(super) fn rule_index_build(sheet: &RawSheet) -> *mut RawIndex {
+pub(super) fn rule_index_build(sheet: &SheetData) -> RuleIndex {
     let mut rules = Vec::new();
     for rule in &sheet.rules {
         let mut selectors = Vec::new();
@@ -108,37 +46,27 @@ pub(super) fn rule_index_build(sheet: &RawSheet) -> *mut RawIndex {
         }
         rules.push(selectors);
     }
-    let index = RawIndex {
-        by_id: new_table(),
-        by_class: new_table(),
-        by_tag: new_table(),
-        by_attr: new_table(),
-        universal: new_bucket(),
-    };
+    let mut index = RuleIndex::default();
     for (key, rule_idx, selector_idx) in rule_index::plan(&rules) {
         let bucket = match &key {
-            Key::Universal => index.universal,
+            Key::Universal => &mut index.universal,
             Key::In(table, name) => {
                 let table = match table {
-                    Table::Id => index.by_id,
-                    Table::Class => index.by_class,
-                    Table::Tag => index.by_tag,
-                    Table::Attr => index.by_attr,
+                    Table::Id => &mut index.by_id,
+                    Table::Class => &mut index.by_class,
+                    Table::Tag => &mut index.by_tag,
+                    Table::Attr => &mut index.by_attr,
                 };
-                unsafe { bucket_for(table, name) }
+                table.entry(lookup_key(name).to_vec()).or_default()
             }
         };
-        unsafe {
-            push(
-                bucket,
-                Candidate {
-                    rule_idx,
-                    selector_idx,
-                },
-            )
-        };
+        push(
+            bucket,
+            Candidate {
+                rule_idx,
+                selector_idx,
+            },
+        );
     }
-    let raw = unsafe { glib::g_malloc0(size_of::<RawIndex>()) }.cast::<RawIndex>();
-    unsafe { raw.write(index) };
-    raw
+    index
 }

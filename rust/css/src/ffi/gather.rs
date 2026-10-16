@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 
 use southstar_dom::{Node, attrs};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 
 use super::cascade::RawMatch;
 use super::custom_props::RawVarMatch;
@@ -19,10 +19,10 @@ use super::declarations::{DECL_SLOT_SPAN, Rule};
 use super::layers::LayerRanks;
 use super::matcher::match_scope;
 use super::pending::RawPendingMatch;
-use super::rule_index::{Candidate, RawIndex, rule_index_build};
+use super::rule_index::{Buckets, Candidate, RuleIndex, rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
-use super::sheet::{OwnedSheet, RawSheet};
+use super::sheet::{OwnedSheet, SheetData};
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
 use crate::hints;
 use crate::matcher::{self, AddrHasher};
@@ -75,15 +75,6 @@ thread_local! {
             key: Vec::new(),
         })
     };
-}
-
-unsafe fn elements<'a, T>(array: *const GArray) -> &'a [T] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            slice::from_raw_parts(a.data.cast::<T>(), a.len as usize)
-        },
-        _ => &[],
-    }
 }
 
 fn filter_update(filter: &mut AncestorFilter, el: Node<'_>, delta: i32) {
@@ -202,58 +193,50 @@ fn cached_match(
     result
 }
 
-pub(super) fn rule_index_ensure(sheet: &RawSheet) {
-    if sheet.index.get().is_null() {
-        sheet.index.set(rule_index_build(sheet).cast());
-    }
+pub(super) fn rule_index_ensure(sheet: &SheetData) {
+    sheet.index.get_or_init(|| rule_index_build(sheet));
 }
 
-fn bucket<'a>(
-    table: *mut GHashTable,
-    key: &mut Vec<u8>,
-    name: &[u8],
-    lower: bool,
-) -> &'a [Candidate] {
-    if table.is_null() {
+fn bucket<'a>(table: &'a Buckets, key: &mut Vec<u8>, name: &[u8], lower: bool) -> &'a [Candidate] {
+    if table.is_empty() {
         return &[];
     }
-    key.clear();
-    if lower {
+    let found = if lower {
+        key.clear();
         key.extend(name.iter().map(u8::to_ascii_lowercase));
+        table.get(key.as_slice())
     } else {
-        key.extend_from_slice(name);
-    }
-    key.push(0);
-    let found = unsafe { glib::g_hash_table_lookup(table, key.as_ptr().cast()) };
-    unsafe { elements(found.cast::<GArray>()) }
+        table.get(name)
+    };
+    found.map_or(&[], Vec::as_slice)
 }
 
-fn collect_candidates(idx: &RawIndex, el: Option<Node<'_>>, scratch: &mut Scratch) {
+fn collect_candidates(idx: &RuleIndex, el: Option<Node<'_>>, scratch: &mut Scratch) {
     let Scratch {
         candidates, key, ..
     } = scratch;
     candidates.clear();
     if let Some(el) = el.filter(|e| e.is_element()) {
         if let Some(id) = attrs::get(el, c"id").filter(|id| !id.is_empty()) {
-            candidates.extend_from_slice(bucket(idx.by_id, key, id.to_bytes(), false));
+            candidates.extend_from_slice(bucket(&idx.by_id, key, id.to_bytes(), false));
         }
         if let Some(cls) = attrs::get(el, c"class") {
             for token in class_tokens(cls.to_bytes()) {
-                candidates.extend_from_slice(bucket(idx.by_class, key, token, false));
+                candidates.extend_from_slice(bucket(&idx.by_class, key, token, false));
             }
         }
         if let Some(name) = el.name().filter(|n| !n.is_empty()) {
-            candidates.extend_from_slice(bucket(idx.by_tag, key, name.to_bytes(), true));
+            candidates.extend_from_slice(bucket(&idx.by_tag, key, name.to_bytes(), true));
         }
-        if !idx.by_attr.is_null() && unsafe { glib::g_hash_table_size(idx.by_attr) } > 0 {
+        if !idx.by_attr.is_empty() {
             for attr in el.attrs() {
                 if let Some(name) = attr.name() {
-                    candidates.extend_from_slice(bucket(idx.by_attr, key, name.to_bytes(), true));
+                    candidates.extend_from_slice(bucket(&idx.by_attr, key, name.to_bytes(), true));
                 }
             }
         }
     }
-    candidates.extend_from_slice(unsafe { elements(idx.universal) });
+    candidates.extend_from_slice(&idx.universal);
 }
 
 fn layer_rank(layer_ranks: &LayerRanks, name: Option<&[u8]>) -> c_int {
@@ -363,7 +346,7 @@ impl Gather<'_> {
 
     fn run(
         &self,
-        idx: &RawIndex,
+        idx: &RuleIndex,
         cache: &mut Option<SelectorCache>,
         scratch: &mut Scratch,
         outs: &mut [Matches],
@@ -457,15 +440,14 @@ pub(super) struct Origin {
 }
 
 pub(super) fn gather_matches(
-    sheet: &RawSheet,
+    sheet: &SheetData,
     origin: Origin,
     el: Node<'_>,
     pes: &[c_uint],
     outs: &mut [Matches],
     layer_ranks: &LayerRanks,
 ) {
-    // SAFETY: index is null or the RawIndex rule_index_ensure built for this sheet, freed with it.
-    let Some(idx) = (unsafe { sheet.index.get().cast::<RawIndex>().as_ref() }) else {
+    let Some(idx) = sheet.index.get() else {
         return;
     };
     let rules = &sheet.rules[..];

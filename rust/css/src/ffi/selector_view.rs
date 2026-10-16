@@ -9,7 +9,7 @@ use southstar_glib::{GArray, GPtrArray};
 
 use super::declarations::Rule;
 use super::selector::{RawAttrPred, RawPseudoPred, RawSelector, RawSimple};
-use super::sheet::{RawSheet, Scope};
+use super::sheet::{Scope, SheetData};
 
 unsafe fn pointers<'a, T>(array: *const GPtrArray) -> &'a [*mut T] {
     match unsafe { array.as_ref() } {
@@ -49,7 +49,7 @@ pub(crate) struct RuleRef<'a>(&'a Rule);
 pub(crate) struct ScopeRef<'a>(&'a Scope);
 
 #[derive(Clone, Copy)]
-pub(crate) struct SheetRef<'a>(&'a RawSheet);
+pub(crate) struct SheetRef<'a>(&'a SheetData);
 
 #[repr(transparent)]
 pub(crate) struct AttrRef(RawAttrPred);
@@ -268,18 +268,16 @@ impl<'a> ScopeRef<'a> {
 }
 
 impl<'a> SheetRef<'a> {
-    pub(super) fn new(sheet: &'a RawSheet) -> Self {
+    pub(super) fn new(sheet: &'a SheetData) -> Self {
         SheetRef(sheet)
     }
 
-    pub(super) fn raw(self) -> &'a RawSheet {
+    pub(super) fn raw(self) -> &'a SheetData {
         self.0
     }
 
     pub(crate) fn layer_names(self) -> impl Iterator<Item = &'a [u8]> {
-        unsafe { pointers::<c_char>(self.0.layer_names) }
-            .iter()
-            .filter_map(|&name| unsafe { text(name) }.map(CStr::to_bytes))
+        self.0.layer_names.iter().map(Vec::as_slice)
     }
 
     pub(crate) fn rules(self) -> impl Iterator<Item = RuleRef<'a>> {

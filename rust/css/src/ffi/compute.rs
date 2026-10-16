@@ -31,10 +31,12 @@ use super::gather::{
 use super::layers::{LayerRanks, layer_ranks_build};
 use super::matcher::{active_node, focus_node, fullscreen_node, hover_node};
 use super::pending::{Resolved, resolve_pending};
-use super::registry::{registered_property_serial, registered_props_begin, registered_props_end};
+use super::registry::{
+    RegisteredProps, registered_property_serial, registered_props_begin, registered_props_end,
+};
 use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
-use super::sheet::{RawSheet, Sheet};
+use super::sheet::{Sheet, SheetData};
 use super::style_alloc::{RetainedStyle, style_alloc, style_clone_shared, style_free};
 use super::style_share::{
     Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
@@ -205,26 +207,26 @@ fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f6
     (w > 0.0 && h > 0.0 && differs).then(|| viewport::replace(w, h))
 }
 
-fn pseudo_mask(sheet: Option<&RawSheet>) -> c_uint {
+fn pseudo_mask(sheet: Option<&SheetData>) -> c_uint {
     sheet.map_or(0, |sheet| sheet.pseudo_mask.get())
 }
 
-type Sheets<'a> = [Option<&'a RawSheet>];
+type Sheets<'a> = [Option<&'a SheetData>];
 
 #[derive(Clone, Copy)]
-struct Pass {
-    registered: *mut GHashTable,
+struct Pass<'a> {
+    registered: &'a RegisteredProps,
     adjust_cache: *mut GHashTable,
     root_px: f64,
 }
 
 struct Walk<'a> {
-    ua: Option<&'a RawSheet>,
+    ua: Option<&'a SheetData>,
     layer_ranks: &'a LayerRanks,
     out: *mut GHashTable,
-    registered: *mut GHashTable,
+    registered: &'a RegisteredProps,
     adjust_cache: *mut GHashTable,
-    doc_sheets: Option<HashMap<usize, Vec<Option<&'a RawSheet>>>>,
+    doc_sheets: Option<HashMap<usize, Vec<Option<&'a SheetData>>>>,
     reuse: Option<&'a Styles>,
     scratch: &'a mut Scratch,
     root_px: f64,
@@ -254,7 +256,7 @@ impl<'a> Walk<'a> {
         } else {
             None
         };
-        let own_sheets: Vec<Option<&'a RawSheet>>;
+        let own_sheets: Vec<Option<&'a SheetData>>;
         let author = match &self.doc_sheets {
             Some(by_doc) if is_document => {
                 own_sheets = by_doc.get(&(ptr as usize)).cloned().unwrap_or_default();
@@ -536,13 +538,13 @@ pub fn compute_styles(
     sheet_docs: &[Node<'_>],
     containers: Option<&ContainerMap>,
 ) -> *mut GHashTable {
-    let authors: Vec<Option<&RawSheet>> = sheets.iter().map(|sheet| Some(sheet.raw())).collect();
+    let authors: Vec<Option<&SheetData>> = sheets.iter().map(|sheet| Some(sheet.raw())).collect();
     with_container_map(containers, || compute(doc, &authors, sheet_docs))
 }
 
 fn compute(
     doc_node: Option<Node<'_>>,
-    authors: &[Option<&RawSheet>],
+    authors: &[Option<&SheetData>],
     sheet_docs: &[Node<'_>],
 ) -> *mut GHashTable {
     let out = unsafe {
@@ -584,7 +586,7 @@ fn compute(
     matcher::has_memo_begin();
     matcher::batch_begin();
 
-    let serial = |sheet: Option<&RawSheet>| sheet.map_or(0, RawSheet::serial);
+    let serial = |sheet: Option<&SheetData>| sheet.map_or(0, SheetData::serial);
     let author_serials: Vec<u64> = authors.iter().map(|&sheet| serial(sheet)).collect();
     let sig =
         incremental::sheet_signature(serial(ua), &author_serials, registered_property_serial());
@@ -599,7 +601,7 @@ fn compute(
 
     ancestor_filter_begin(attr_ancestor_hashes());
     let doc_sheets = (!sheet_docs.is_empty()).then(|| {
-        let mut by_doc: HashMap<usize, Vec<Option<&RawSheet>>> = HashMap::new();
+        let mut by_doc: HashMap<usize, Vec<Option<&SheetData>>> = HashMap::new();
         for (owner, &sheet) in sheet_docs.iter().zip(authors) {
             by_doc
                 .entry(owner.as_ptr() as usize)
@@ -613,7 +615,7 @@ fn compute(
         ua,
         layer_ranks: &layer_ranks,
         out,
-        registered,
+        registered: &registered,
         adjust_cache,
         doc_sheets,
         reuse: previous.as_ref().filter(|_| active).map(|p| &p.styles),
