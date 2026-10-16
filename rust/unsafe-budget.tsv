@@ -5,7 +5,7 @@ anim	125	23	20	0	80	7	0
 audio-helper	119	35	1	0	28	5	0
 av	10	40	0	0	3	2	3
 bookmarks	34	4	7	0	18	4	0
-browser	705	287	88	0	446	45	0
+browser	706	288	88	0	446	45	0
 bytecode-cache	1	0	0	0	1	1	0
 camera	59	11	17	0	27	3	0
 canvas	186	123	8	0	158	18	0
@@ -28,7 +28,7 @@ forms	19	5	4	0	10	2	0
 glctx	81	55	4	0	3	0	0
 glib	24	58	0	0	11	1	4
 gtk-ffi	29	374	0	0	0	0	0
-headless	266	161	2	0	215	24	0
+headless	267	162	2	0	215	24	0
 helper-ffi	0	0	0	0	0	0	0
 history	31	18	5	0	22	6	0
 html-parser	25	0	6	0	4	0	0
@@ -61,7 +61,7 @@ js-events	21	6	13	0	5	0	0
 js-focus	110	47	24	0	56	0	0
 js-fonts	13	7	2	0	7	0	0
 js-forms	101	43	28	0	50	1	0
-js-frames	197	87	33	0	120	9	0
+js-frames	211	92	34	0	120	9	0
 js-geometry	54	25	12	0	34	6	0
 js-html	36	27	3	0	31	3	0
 js-images	61	26	10	0	35	5	0
@@ -79,7 +79,7 @@ js-page	57	112	2	0	48	12	0
 js-perf	62	9	24	0	22	4	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	32	15	9	0	18	1	0
-js-runtime	790	337	198	0	322	56	5
+js-runtime	792	338	198	0	322	56	5
 js-services	93	53	19	0	49	4	0
 js-shadow	16	7	4	0	6	0	0
 js-storage	63	25	11	0	35	3	0
