@@ -22,7 +22,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    unsafe fn nsr_ce_class_for_node(js: *const NsJs, node: *const NsNode) -> Value;
     safe fn nsr_document_element_from_point(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -61,7 +60,7 @@ pub(crate) fn not_supported(scope: &mut Scope<'_>, message: &str) -> Value {
 }
 
 pub(crate) fn custom_element_class(_scope: &mut Scope<'_>, js: Js, node: Element) -> Value {
-    unsafe { nsr_ce_class_for_node(js.0, node.as_ptr()) }
+    southstar_js_custom_elements::class_for_node(js.0, node)
 }
 
 pub(crate) fn clear_children(js: Option<Js>, node: Element) {

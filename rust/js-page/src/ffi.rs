@@ -155,7 +155,6 @@ unsafe extern "C" {
     fn ns_lifecycle_reset(js: *mut NsJs);
     fn ns_dispatch_reset(js: *mut NsJs);
     fn ns_js_net_reset(js: *mut NsJs);
-    fn ns_ce_reset(js: *mut NsJs);
     fn ns_js_cancel_async_scripts(js: *mut NsJs);
     fn ns_attr_detach_all(js: *mut NsJs);
     fn ns_attribute_maps_release_all(js: *mut NsJs);
@@ -328,7 +327,7 @@ impl Js {
             ns_lifecycle_reset(self.0);
             ns_dispatch_reset(self.0);
             ns_js_net_reset(self.0);
-            ns_ce_reset(self.0);
+            southstar_js_custom_elements::reset(self.0);
             southstar_css::clear_defined_elements();
             southstar_css::clear_registered_properties();
             ns_js_cancel_async_scripts(self.0);

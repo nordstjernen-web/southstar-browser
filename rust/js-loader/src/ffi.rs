@@ -125,8 +125,6 @@ unsafe extern "C" {
     );
     fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode);
-    fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
-    fn ns_ce_upgrading(js: *const NsJs) -> GBoolean;
     fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_response_free(resp: *mut NsResponse);
@@ -334,12 +332,13 @@ impl Js {
     }
 
     pub(crate) fn upgrade_all(self) {
-        let doc = Node::ptr_or_null(self.current_doc()).cast_mut();
-        unsafe { ns_ce_upgrade_subtree_all(self.0, doc) }
+        if let Some(doc) = self.current_doc() {
+            southstar_js_custom_elements::upgrade_subtree_all(self.0, doc);
+        }
     }
 
     pub(crate) fn ce_upgrading(self) -> bool {
-        unsafe { ns_ce_upgrading(self.0) != 0 }
+        southstar_js_custom_elements::upgrading(self.0)
     }
 
     pub(crate) fn drain_microtasks(self) {

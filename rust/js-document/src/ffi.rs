@@ -46,7 +46,6 @@ unsafe extern "C" {
         next_sibling: *mut NsNode,
     );
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
-    fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
     fn ns_js_set_attr_recorded_len(
         js: *mut NsJs,
@@ -236,7 +235,7 @@ pub(crate) fn iters_pre_remove(js: Js, node: Element) {
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, node: Element) {
-    unsafe { ns_ce_disconnect_subtree(js.0, node.as_mut_ptr()) };
+    southstar_js_custom_elements::disconnect_subtree(js.0, node);
 }
 
 pub(crate) fn insert_before_single(js: Js, node: Element, reference: Element) {
@@ -350,7 +349,6 @@ unsafe extern "C" {
     );
     fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-    fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
 }
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
@@ -459,7 +457,7 @@ pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
 }
 
 pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
-    unsafe { ns_ce_upgrade_subtree_all(js.0, root.as_mut_ptr()) };
+    southstar_js_custom_elements::upgrade_subtree_all(js.0, root);
 }
 
 pub(crate) fn expose_legacy_named(scope: &mut Scope<'_>, root: Element, document: &Value) {

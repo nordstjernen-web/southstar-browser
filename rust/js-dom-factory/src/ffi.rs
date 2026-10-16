@@ -39,8 +39,6 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_ce_upgrade_element(js: *mut NsJs, node: *mut NsNode);
-    fn ns_ce_upgrade_subtree_detached(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
@@ -118,11 +116,11 @@ pub(crate) fn record_removal(
 }
 
 pub(crate) fn ce_upgrade_element(js: Option<Js>, node: Element) {
-    unsafe { ns_ce_upgrade_element(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_custom_elements::upgrade_element(raw_js(js), node);
 }
 
 pub(crate) fn ce_upgrade_subtree_detached(js: Js, root: Element) {
-    unsafe { ns_ce_upgrade_subtree_detached(js.0, root.as_mut_ptr()) };
+    southstar_js_custom_elements::upgrade_subtree_detached(js.0, root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {

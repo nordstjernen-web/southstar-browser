@@ -37,31 +37,6 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_crypto_install_window(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_crypto_install_window_subtle(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_crypto_install_worker(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_ce_define(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_ce_get(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_ce_upgrade(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_ce_when_defined(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_ce_get_name(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_name_engine_members(scope: &mut Scope<'_>);
     pub(crate) safe fn nsr_static_range_ctor(
         scope: &mut Scope<'_>,

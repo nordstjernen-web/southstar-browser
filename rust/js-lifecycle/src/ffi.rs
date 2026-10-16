@@ -197,7 +197,9 @@ impl Js {
     }
 
     pub fn upgrade_custom_elements(self, root: *mut NsNode) {
-        unsafe { ns_ce_upgrade_subtree_all(self.0, root) };
+        if let Some(root) = node(root) {
+            southstar_js_custom_elements::upgrade_subtree_all(self.0, root);
+        }
     }
 
     pub fn fire_parsed_stylesheet_loads(self, doc: *mut NsNode) {
@@ -237,7 +239,7 @@ impl Js {
                 || ns_mutation_drain_pending(self.0) != 0
                 || api::observer_tick_pending(self.0)
                 || ns_js_async_scripts_pending(self.0) != 0
-                || ns_ce_has_pending(self.0) != 0
+                || southstar_js_custom_elements::has_pending(self.0)
                 || ns_workers_pending(self.0) != 0
         }
     }
@@ -283,7 +285,6 @@ unsafe extern "C" {
     fn ns_js_drain_load_event_scripts(js: *mut NsJs);
     fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
     fn ns_js_has_pending_script_roots(js: *const NsJs) -> GBoolean;
-    fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_js_profile_enabled() -> GBoolean;
@@ -295,7 +296,6 @@ unsafe extern "C" {
     fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_js_async_scripts_pending(js: *const NsJs) -> GBoolean;
-    fn ns_ce_has_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
 

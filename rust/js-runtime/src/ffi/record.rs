@@ -218,7 +218,6 @@ unsafe extern "C" {
         new_partition: *const c_char,
     );
     fn ns_storage_load_local(js: *mut NsJs, url: *const c_char);
-    fn ns_ce_name_valid(name: *const c_char) -> GBoolean;
     fn ns_js_set_attr_recorded_paint_only(
         js: *mut NsJs,
         n: *mut NsNode,
@@ -261,13 +260,6 @@ unsafe extern "C" {
         new_value: *const c_char,
     );
     fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
-    fn ns_ce_attribute_changed(
-        js: *const NsJs,
-        node: *const NsNode,
-        attr: *const c_char,
-        old_value: *const c_char,
-        new_value: *const c_char,
-    );
     fn ns_js_eval(js: *mut NsJs, src: *const c_char, len: usize, origin: *const c_char);
     fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
 }
@@ -634,7 +626,7 @@ fn html_kind_proto<'a>(js: &'a Record, protos: &'a DomProtos, n: Node<'_>) -> &'
     }
     let valid_custom = n
         .name()
-        .is_some_and(|name| unsafe { ns_ce_name_valid(name.as_ptr()) } != 0);
+        .is_some_and(|name| (crate::api::custom_elements_hooks().name_valid)(name.to_bytes()));
     if !valid_custom && protos.html_unknown_element.is_object() {
         return &protos.html_unknown_element;
     }
@@ -1115,7 +1107,7 @@ pub(crate) fn ce_attr_changed(
     if !live() {
         return;
     }
-    unsafe { ns_ce_attribute_changed(js, n, attr_name.as_ptr(), old_value, new_value) };
+    (crate::api::custom_elements_hooks().attribute_changed)(js, el, attr_name, old, new);
 }
 
 pub(crate) fn illegal_constructor(

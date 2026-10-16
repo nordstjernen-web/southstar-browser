@@ -30,7 +30,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_ce_html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> Value;
 }
 
 fn js_of(scope: &Scope<'_>) -> *mut NsJs {
@@ -62,7 +61,9 @@ pub(crate) fn has_page(scope: &Scope<'_>) -> bool {
 }
 
 pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
-    Ok(nsr_ce_html_element_construct(scope, new_target))
+    Ok(southstar_js_custom_elements::html_element_construct(
+        scope, new_target,
+    ))
 }
 
 pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {

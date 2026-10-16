@@ -78,11 +78,21 @@ pub(crate) enum Binding {
 impl Binding {
     fn native(self) -> (&'static str, NativeFn, u32) {
         match self {
-            Binding::CustomElementsDefine => ("define", nsr_ce_define, 3),
-            Binding::CustomElementsGet => ("get", nsr_ce_get, 1),
-            Binding::CustomElementsUpgrade => ("upgrade", nsr_ce_upgrade, 1),
-            Binding::CustomElementsWhenDefined => ("whenDefined", nsr_ce_when_defined, 1),
-            Binding::CustomElementsGetName => ("getName", nsr_ce_get_name, 1),
+            Binding::CustomElementsDefine => {
+                ("define", southstar_js_custom_elements::define_native, 3)
+            }
+            Binding::CustomElementsGet => ("get", southstar_js_custom_elements::get_native, 1),
+            Binding::CustomElementsUpgrade => {
+                ("upgrade", southstar_js_custom_elements::upgrade_native, 1)
+            }
+            Binding::CustomElementsWhenDefined => (
+                "whenDefined",
+                southstar_js_custom_elements::when_defined_native,
+                1,
+            ),
+            Binding::CustomElementsGetName => {
+                ("getName", southstar_js_custom_elements::get_name_native, 1)
+            }
             Binding::WindowAddEventListener => ("addEventListener", nsr_window_addEventListener, 2),
             Binding::WindowRemoveEventListener => {
                 ("removeEventListener", nsr_window_removeEventListener, 2)

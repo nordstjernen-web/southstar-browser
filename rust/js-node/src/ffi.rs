@@ -46,8 +46,6 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
-    fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
@@ -170,11 +168,11 @@ pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
-    unsafe { ns_ce_disconnect_subtree(js.0, root.as_mut_ptr()) };
+    southstar_js_custom_elements::disconnect_subtree(js.0, root);
 }
 
 pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
-    unsafe { ns_ce_upgrade_subtree_all(js.0, root.as_mut_ptr()) };
+    southstar_js_custom_elements::upgrade_subtree_all(js.0, root);
 }
 
 pub(crate) fn iters_pre_remove(js: Js, node: Element) {

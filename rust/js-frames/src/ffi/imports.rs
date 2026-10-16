@@ -21,11 +21,6 @@ macro_rules! natives {
 }
 
 natives! {
-    nsr_ce_define,
-    nsr_ce_get,
-    nsr_ce_upgrade,
-    nsr_ce_when_defined,
-    nsr_ce_get_name,
     nsr_window_addEventListener,
     nsr_window_removeEventListener,
     nsr_window_dispatchEvent,

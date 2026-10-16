@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-anim = { path = "../anim" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-images = { path = "../js-images" }
 southstar-js-loader = { path = "../js-loader" }

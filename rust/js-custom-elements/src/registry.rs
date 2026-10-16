@@ -59,7 +59,7 @@ fn record_extends(scope: &mut Scope<'_>, class: &Value, options: &Value) -> JsRe
     Ok(())
 }
 
-pub(crate) fn define(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn define(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Err(scope.type_error("customElements.define: name and class required"));
     }
@@ -99,7 +99,7 @@ pub(crate) fn define(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Js
     Ok(Value::undefined())
 }
 
-pub(crate) fn get(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn get(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let Some(name) = args.first() else {
         return Ok(Value::undefined());
     };
@@ -108,7 +108,7 @@ pub(crate) fn get(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsRes
     Ok(lookup_class(scope, js, &name).unwrap_or_else(Value::undefined))
 }
 
-pub(crate) fn when_defined(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn when_defined(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let (promise, resolve, reject) = scope.new_promise()?;
     let Some(name) = args.first() else {
         let _ = scope.call(&reject, &Value::undefined(), &[]);
@@ -139,14 +139,14 @@ pub(crate) fn when_defined(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     Ok(promise)
 }
 
-pub(crate) fn upgrade(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn upgrade(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     if let Some(root) = args.first().and_then(ffi::unwrap_node) {
         reactions::upgrade_root(ffi::js_of(scope), root);
     }
     Ok(Value::undefined())
 }
 
-pub(crate) fn get_name(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+pub fn get_name(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let class = arg(args, 0);
     let name = class
         .is_object()

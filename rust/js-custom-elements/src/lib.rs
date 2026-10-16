@@ -15,6 +15,15 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{
+    class_for_node, disconnect_subtree, has_pending, html_element_construct, install_runtime_hooks,
+    reset, upgrade_element, upgrade_subtree_all, upgrade_subtree_detached, upgrading,
+};
+pub use crate::registry::{
+    define as define_native, get as get_native, get_name as get_name_native,
+    upgrade as upgrade_native, when_defined as when_defined_native,
+};
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 
@@ -120,7 +129,7 @@ pub(crate) fn arg(args: &[Value], index: usize) -> Value {
     args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
-pub(crate) fn name_valid(bytes: &[u8]) -> bool {
+pub fn name_valid(bytes: &[u8]) -> bool {
     let Some(&first) = bytes.first() else {
         return false;
     };

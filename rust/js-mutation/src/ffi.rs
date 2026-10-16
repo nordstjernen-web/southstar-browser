@@ -41,7 +41,6 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_attr_detach_matching(
         js: *mut NsJs,
         owner: *mut NsNode,
@@ -234,7 +233,7 @@ pub(crate) fn ce_attr_changed(
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
-    unsafe { ns_ce_disconnect_subtree(js.0, root.as_mut_ptr()) };
+    southstar_js_custom_elements::disconnect_subtree(js.0, root);
 }
 
 pub(crate) fn mark_mutated(js: Js) {

@@ -151,7 +151,6 @@ unsafe extern "C" {
     fn ns_focus_teardown(js: *mut NsJs);
     fn ns_js_input_teardown(js: *mut NsJs);
     fn ns_observers_teardown(js: *mut NsJs);
-    fn ns_ce_teardown(js: *mut NsJs);
     fn ns_storage_teardown(js: *mut NsJs);
     fn ns_media_teardown(js: *mut NsJs);
     fn ns_collections_teardown(js: *mut NsJs);
@@ -517,7 +516,7 @@ impl Js {
     pub fn teardown_registries(self) {
         unsafe {
             ns_observers_teardown(self.0);
-            ns_ce_teardown(self.0);
+            (crate::api::custom_elements_hooks().teardown)(self.0);
             record::free_platform_globals(self.0);
             ns_storage_teardown(self.0);
             ns_media_teardown(self.0);

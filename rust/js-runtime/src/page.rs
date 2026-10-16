@@ -589,29 +589,12 @@ fn install_window_members(js: Js, scope: &mut Scope<'_>, global: &Value) {
     bind_native(scope, global, "atob", 1, imports::nsr_window_atob);
     bind_url(scope, global);
     let custom_elements = scope.new_object();
-    bind_native(scope, &custom_elements, "define", 3, imports::nsr_ce_define);
-    bind_native(scope, &custom_elements, "get", 1, imports::nsr_ce_get);
-    bind_native(
-        scope,
-        &custom_elements,
-        "upgrade",
-        1,
-        imports::nsr_ce_upgrade,
-    );
-    bind_native(
-        scope,
-        &custom_elements,
-        "whenDefined",
-        1,
-        imports::nsr_ce_when_defined,
-    );
-    bind_native(
-        scope,
-        &custom_elements,
-        "getName",
-        1,
-        imports::nsr_ce_get_name,
-    );
+    let ce = crate::api::custom_elements_hooks();
+    bind_native(scope, &custom_elements, "define", 3, ce.define);
+    bind_native(scope, &custom_elements, "get", 1, ce.get);
+    bind_native(scope, &custom_elements, "upgrade", 1, ce.upgrade);
+    bind_native(scope, &custom_elements, "whenDefined", 1, ce.when_defined);
+    bind_native(scope, &custom_elements, "getName", 1, ce.get_name);
     let _ = scope.set(global, "customElements", custom_elements);
 }
 

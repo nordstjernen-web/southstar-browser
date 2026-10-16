@@ -17,6 +17,7 @@ pub(crate) type Element = Node<'static>;
 pub fn install_runtime_hooks() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
+        southstar_js_custom_elements::install_runtime_hooks();
         southstar_js_images::install_runtime_hooks();
         southstar_js_perf::install_runtime_hooks();
     });

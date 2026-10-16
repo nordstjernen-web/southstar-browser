@@ -63,3 +63,26 @@ pub(crate) fn images_hooks() -> &'static ImagesHooks {
         .get()
         .expect("the image hooks are installed before the first page")
 }
+
+pub struct CustomElementsHooks {
+    pub name_valid: fn(&[u8]) -> bool,
+    pub attribute_changed: fn(*const NsJs, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
+    pub teardown: fn(*const NsJs),
+    pub define: NativeFn,
+    pub get: NativeFn,
+    pub when_defined: NativeFn,
+    pub upgrade: NativeFn,
+    pub get_name: NativeFn,
+}
+
+static CUSTOM_ELEMENTS: OnceLock<CustomElementsHooks> = OnceLock::new();
+
+pub fn set_custom_elements_hooks(hooks: CustomElementsHooks) {
+    let _ = CUSTOM_ELEMENTS.set(hooks);
+}
+
+pub(crate) fn custom_elements_hooks() -> &'static CustomElementsHooks {
+    CUSTOM_ELEMENTS
+        .get()
+        .expect("the custom element hooks are installed before the first page")
+}
