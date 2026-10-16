@@ -75,6 +75,18 @@ struct DispatchScope {
     url: FrameUrl,
 }
 
+impl DispatchScope {
+    const fn inactive() -> DispatchScope {
+        DispatchScope {
+            ctx: ContextHandle::NULL,
+            doc: ptr::null_mut(),
+            frame: ptr::null_mut(),
+            entered: false,
+            url: FrameUrl::new(),
+        }
+    }
+}
+
 pub(crate) struct TimerScope {
     js: Js,
     ctx: ContextHandle,
@@ -92,7 +104,7 @@ pub(crate) struct RafScope {
     url: FrameUrl,
 }
 
-struct FrameLoadScope {
+pub(crate) struct FrameLoadScope {
     url: FrameUrl,
     doc: *mut NsNode,
     script: *mut NsNode,
@@ -330,18 +342,18 @@ pub(crate) unsafe fn frame_scope_push(
     }
 }
 
-pub(crate) fn realm_scope_new() -> *mut c_void {
-    Box::into_raw(Box::new(RealmScope::inactive())).cast()
+pub(crate) fn frame_url_begin(js: Js, url: *const c_char) -> Box<FrameUrl> {
+    let mut fu = Box::new(FrameUrl::new());
+    frame_url_enter(js, &mut fu, url);
+    fu
 }
 
-pub(crate) unsafe fn realm_scope_free(scope: *mut c_void) {
-    drop(unsafe { Box::from_raw(scope.cast::<RealmScope>()) });
+pub(crate) fn frame_url_end(js: Js, fu: &mut FrameUrl) {
+    frame_url_leave(js, fu);
 }
 
 pub(crate) fn frame_url_push(js: Js, url: *const c_char) -> *mut c_void {
-    let mut fu = Box::new(FrameUrl::new());
-    frame_url_enter(js, &mut fu, url);
-    Box::into_raw(fu).cast()
+    Box::into_raw(frame_url_begin(js, url)).cast()
 }
 
 pub(crate) unsafe fn frame_url_pop(js: Js, token: *mut c_void) {
@@ -349,7 +361,52 @@ pub(crate) unsafe fn frame_url_pop(js: Js, token: *mut c_void) {
         return;
     }
     let mut fu = unsafe { Box::from_raw(token.cast::<FrameUrl>()) };
-    frame_url_leave(js, &mut fu);
+    frame_url_end(js, &mut fu);
+}
+
+fn dispatch_enter(
+    js: Js,
+    ctx: ContextHandle,
+    doc: *mut NsNode,
+    frame: *mut NsNode,
+    scope: &mut DispatchScope,
+) {
+    *scope = DispatchScope {
+        ctx: js.ctx(),
+        doc: js.current_doc(),
+        frame: js.frame(),
+        entered: !frame.is_null(),
+        url: FrameUrl::new(),
+    };
+    js.set_ctx(ctx);
+    if !frame.is_null() {
+        js.set_current_doc(doc);
+        js.set_frame(frame);
+        frame_url_enter(js, &mut scope.url, frame_url_attr(frame));
+    }
+}
+
+fn dispatch_leave(js: Js, scope: &mut DispatchScope) {
+    if scope.entered {
+        frame_url_leave(js, &mut scope.url);
+    }
+    js.set_frame(scope.frame);
+    js.set_current_doc(scope.doc);
+    js.set_ctx(scope.ctx);
+}
+
+pub(crate) fn in_dispatch<R>(
+    js: Js,
+    ctx: ContextHandle,
+    doc: *mut NsNode,
+    frame: *mut NsNode,
+    f: impl FnOnce() -> R,
+) -> R {
+    let mut scope = DispatchScope::inactive();
+    dispatch_enter(js, ctx, doc, frame, &mut scope);
+    let result = f();
+    dispatch_leave(js, &mut scope);
+    result
 }
 
 pub(crate) unsafe fn dispatch_scope_enter(
@@ -360,40 +417,21 @@ pub(crate) unsafe fn dispatch_scope_enter(
     buf: *mut c_void,
 ) {
     let scope = buf.cast::<DispatchScope>();
-    unsafe {
-        scope.write(DispatchScope {
-            ctx: js.ctx(),
-            doc: js.current_doc(),
-            frame: js.frame(),
-            entered: !frame.is_null(),
-            url: FrameUrl::new(),
-        });
-    }
-    js.set_ctx(ctx);
-    if !frame.is_null() {
-        js.set_current_doc(doc);
-        js.set_frame(frame);
-        frame_url_enter(js, unsafe { &mut (*scope).url }, frame_url_attr(frame));
-    }
+    unsafe { scope.write(DispatchScope::inactive()) };
+    dispatch_enter(js, ctx, doc, frame, unsafe { &mut *scope });
 }
 
 pub(crate) unsafe fn dispatch_scope_leave(js: Js, buf: *mut c_void) {
-    let scope = unsafe { &mut *buf.cast::<DispatchScope>() };
-    if scope.entered {
-        frame_url_leave(js, &mut scope.url);
-    }
-    js.set_frame(scope.frame);
-    js.set_current_doc(scope.doc);
-    js.set_ctx(scope.ctx);
+    dispatch_leave(js, unsafe { &mut *buf.cast::<DispatchScope>() });
 }
 
-pub(crate) fn frame_load_enter(
+pub(crate) fn frame_load_begin(
     js: Js,
     frame: *mut NsNode,
     doc: *mut NsNode,
     url: *const c_char,
     realm_doc: Option<Value>,
-) -> *mut c_void {
+) -> Box<FrameLoadScope> {
     let mut scope = Box::new(FrameLoadScope {
         url: FrameUrl::new(),
         doc: ptr::null_mut(),
@@ -419,11 +457,25 @@ pub(crate) fn frame_load_enter(
     state
         .iframe_load_depth
         .set(state.iframe_load_depth.get() + 1);
-    Box::into_raw(scope).cast()
+    scope
+}
+
+pub(crate) fn frame_load_enter(
+    js: Js,
+    frame: *mut NsNode,
+    doc: *mut NsNode,
+    url: *const c_char,
+    realm_doc: Option<Value>,
+) -> *mut c_void {
+    Box::into_raw(frame_load_begin(js, frame, doc, url, realm_doc)).cast()
 }
 
 pub(crate) unsafe fn frame_load_leave(js: Js, token: *mut c_void) {
     let mut scope = unsafe { Box::from_raw(token.cast::<FrameLoadScope>()) };
+    frame_load_end(js, &mut scope);
+}
+
+pub(crate) fn frame_load_end(js: Js, scope: &mut FrameLoadScope) {
     let state = js.st();
     state
         .iframe_load_depth
@@ -436,18 +488,26 @@ pub(crate) unsafe fn frame_load_leave(js: Js, token: *mut c_void) {
     frame_url_leave(js, &mut scope.url);
 }
 
-pub(crate) fn realm_url_enter(js: Js, realm: ContextHandle) -> *mut c_void {
+pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameUrl>> {
     let url = realm_url(js, realm);
     if url.is_null() || unsafe { *url } == 0 {
-        return ptr::null_mut();
+        return None;
     }
     let copy = unsafe { glib::g_strdup(url) };
-    let token = frame_url_push(js, copy);
+    let token = frame_url_begin(js, copy);
     unsafe { glib::g_free(copy.cast()) };
-    token
+    Some(token)
+}
+
+pub(crate) fn realm_url_enter(js: Js, realm: ContextHandle) -> *mut c_void {
+    realm_url_begin(js, realm).map_or(ptr::null_mut(), |token| Box::into_raw(token).cast())
 }
 
 pub(crate) fn timer_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
+    Box::into_raw(timer_scope_begin(js, ctx, frame)).cast()
+}
+
+pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> Box<TimerScope> {
     let previous_ctx = js.ctx();
     let mut ctx = if ctx.is_null() { previous_ctx } else { ctx };
     if !frame.is_null() {
@@ -471,7 +531,7 @@ pub(crate) fn timer_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) 
     scope.budget = budget::push(js);
     let state = js.st();
     state.callback_depth.set(state.callback_depth.get() + 1);
-    Box::into_raw(scope).cast()
+    scope
 }
 
 pub(crate) unsafe fn timer_scope_context(scope: *const c_void) -> ContextHandle {
@@ -506,8 +566,16 @@ impl TimerScope {
 }
 
 pub(crate) fn raf_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
+    raf_scope_begin(js, ctx, frame).map_or(ptr::null_mut(), |scope| Box::into_raw(scope).cast())
+}
+
+pub(crate) fn raf_scope_begin(
+    js: Js,
+    ctx: ContextHandle,
+    frame: *mut NsNode,
+) -> Option<Box<RafScope>> {
     if !frame.is_null() && node_root(frame) != node_root(js.current_doc()) {
-        return ptr::null_mut();
+        return None;
     }
     let current_realm = if frame.is_null() {
         ContextHandle::NULL
@@ -541,7 +609,7 @@ pub(crate) fn raf_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) ->
     js.st()
         .eval_deadline_us
         .set(super::monotonic_us() + budget::eval_budget_us());
-    Box::into_raw(scope).cast()
+    Some(scope)
 }
 
 pub(crate) unsafe fn raf_scope_js(scope: *const c_void) -> Js {
@@ -550,6 +618,16 @@ pub(crate) unsafe fn raf_scope_js(scope: *const c_void) -> Js {
 
 pub(crate) unsafe fn raf_scope_finish(scope: *mut c_void) {
     let mut scope = unsafe { Box::from_raw(scope.cast::<RafScope>()) };
+    raf_scope_end(&mut scope);
+}
+
+impl RafScope {
+    pub fn js(&self) -> Js {
+        self.js
+    }
+}
+
+pub(crate) fn raf_scope_end(scope: &mut RafScope) {
     let js = scope.js;
     if !scope.frame.is_null() {
         frame_url_leave(js, &mut scope.url);

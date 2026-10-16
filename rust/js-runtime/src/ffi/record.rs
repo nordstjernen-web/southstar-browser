@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -300,13 +300,14 @@ unsafe extern "C" {
         new_value: *const c_char,
     );
     fn ns_js_eval(js: *mut NsJs, src: *const c_char, len: usize, origin: *const c_char);
+    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
 }
 
 thread_local! {
     static ACTIVE: Cell<*mut NsJs> = const { Cell::new(ptr::null_mut()) };
 }
 
-fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
+pub(crate) fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(n) }
 }
 
@@ -740,13 +741,16 @@ fn adopt_frame_window_events(js: &Record, fctx: ContextHandle, frame_global: &Va
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_active_js() -> *mut NsJs {
+pub(crate) fn active() -> *mut NsJs {
     ACTIVE.with(Cell::get)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_set_active_js(js: *mut NsJs) {
+pub extern "C" fn ns_active_js() -> *mut NsJs {
+    active()
+}
+
+pub(crate) fn set_active(js: *mut NsJs) {
     ACTIVE.with(|active| active.set(js));
 }
 
@@ -757,44 +761,37 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
         .map_or(0, |length| length as u32)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_load_for(js: *mut NsJs, new_url: *const c_char) {
+pub(crate) fn storage_load_for(js: *const NsJs, new_url: Option<&CStr>) {
     if js.is_null() {
         return;
     }
+    let js = js.cast_mut();
+    let new_url = new_url.map_or(ptr::null(), CStr::as_ptr);
     partition_apply(js, new_url);
     unsafe { ns_storage_load_local(js, new_url) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_img_src_layout_neutral(n: *const NsNode) -> GBoolean {
-    let neutral = node(n).is_some_and(|n| {
-        n.name().is_some_and(|name| name.to_bytes() == b"img")
-            && attr(n, c"width").is_some_and(|w| !w.is_empty())
-            && attr(n, c"height").is_some_and(|h| !h.is_empty())
-    });
-    glib::boolean(neutral)
+pub(crate) fn img_src_layout_neutral(n: Node<'_>) -> bool {
+    n.name().is_some_and(|name| name.to_bytes() == b"img")
+        && attr(n, c"width").is_some_and(|w| !w.is_empty())
+        && attr(n, c"height").is_some_and(|h| !h.is_empty())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_src_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    s: *const c_char,
-    slen: usize,
-) {
-    let Some(el) = node(n) else {
-        return;
-    };
-    let new = unsafe { glib::slice(s.cast(), slen) };
+pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
+    let js = js.cast_mut();
+    let n = el.as_mut_ptr();
+    let mut terminated = Vec::with_capacity(src.len() + 1);
+    terminated.extend_from_slice(src);
+    terminated.push(0);
+    let s = terminated.as_ptr().cast::<c_char>();
     let mut old_len = 0usize;
     let old = unsafe { ns_element_get_attr_len(n, c"src".as_ptr(), &mut old_len) };
-    let changed = old.is_null() || unsafe { glib::slice(old.cast(), old_len) } != new;
+    let changed = old.is_null() || unsafe { glib::slice(old.cast(), old_len) } != src;
     unsafe {
-        if changed && ns_js_img_src_layout_neutral(n) != 0 {
+        if changed && img_src_layout_neutral(el) {
             ns_js_set_attr_recorded_paint_only(js, n, c"src".as_ptr(), s);
         } else {
-            ns_js_set_attr_recorded_len(js, n, c"src".as_ptr(), s, slen as isize);
+            ns_js_set_attr_recorded_len(js, n, c"src".as_ptr(), s, src.len() as isize);
         }
     }
     let name = el.name().map(CStr::to_bytes);
@@ -807,13 +804,9 @@ pub unsafe extern "C" fn ns_js_set_src_recorded(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_in_template_content(n: *const NsNode) -> GBoolean {
-    let inside = node(n).is_some_and(|n| {
-        southstar_dom::ancestors_and_self(n)
-            .any(|p| p.flags() & FLAG_TEMPLATE_CONTENT != 0 || is_named(p, c"template"))
-    });
-    glib::boolean(inside)
+pub(crate) fn in_template_content(n: Node<'_>) -> bool {
+    southstar_dom::ancestors_and_self(n)
+        .any(|p| p.flags() & FLAG_TEMPLATE_CONTENT != 0 || is_named(p, c"template"))
 }
 
 pub(crate) fn bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value) {
@@ -833,8 +826,7 @@ pub(crate) fn bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value) {
     );
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_media_native_formats() -> c_uint {
+pub(crate) fn media_native_formats() -> u32 {
     let mut formats = 0;
     if cfg!(feature = "libav") {
         formats |= 1;
@@ -848,28 +840,21 @@ pub extern "C" fn ns_media_native_formats() -> c_uint {
     formats
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean {
-    if url.is_null() {
-        return glib::FALSE;
-    }
-    let base = unsafe { GStr::take(ns_js_doc_base_url(js)) };
+pub(crate) fn url_parses(js: *const NsJs, url: &CStr) -> bool {
+    let base = unsafe { GStr::take(ns_js_doc_base_url(js.cast_mut())) };
     let base = base
         .as_deref()
         .map(CStr::to_bytes)
         .filter(|base| !base.is_empty());
-    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
-    glib::boolean(southstar_url::bytes::resolve(base, url).is_some())
+    southstar_url::bytes::resolve(base, url.to_bytes()).is_some()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_csp_allows_worker(js: *mut NsJs, url: *const c_char) -> GBoolean {
+pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
     let Some(js) = record(js) else {
-        return glib::TRUE;
+        return true;
     };
-    glib::boolean(
-        js.csp.is_null() || unsafe { ns_csp_allows(js.csp, CSP_WORKER, url, js.current_url) } != 0,
-    )
+    js.csp.is_null()
+        || unsafe { ns_csp_allows(js.csp, CSP_WORKER, url.as_ptr(), js.current_url) } != 0
 }
 
 #[unsafe(no_mangle)]
@@ -880,11 +865,11 @@ pub extern "C" fn ns_js_engine_version() -> *const c_char {
         .as_ptr()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNode) {
+pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
     if js.is_null() {
         return;
     }
+    let js = js.cast_mut();
     let mut n = root;
     while !n.is_null() {
         if node(n).is_some_and(|el| is_named(el, c"iframe")) {
@@ -898,18 +883,10 @@ pub unsafe extern "C" fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNo
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_insert_before_single(
-    js: *mut NsJs,
-    parent: *mut NsNode,
-    newc: *mut NsNode,
-    reference: *mut NsNode,
-) {
-    let (Some(_), Some(child), Some(reference_node)) = (node(parent), node(newc), node(reference))
-    else {
-        return;
-    };
-    if newc == reference {
+pub(crate) fn insert_before_single(js: *const NsJs, child: Node<'_>, reference_node: Node<'_>) {
+    let js = js.cast_mut();
+    let newc = child.as_mut_ptr();
+    if child == reference_node {
         return;
     }
     if child.parent().is_some() {
@@ -940,11 +917,11 @@ pub(crate) fn attr_apply_proto(scope: &mut Scope<'_>, obj: &Value) {
     bind_native(scope, obj, "isSameNode", 1, imports::nsr_element_isSameNode);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_layout_root(js: *mut NsJs, root: *const c_void) {
+pub(crate) fn set_layout_root(js: *const NsJs, root: *const c_void) {
     if js.is_null() {
         return;
     }
+    let js = js.cast_mut();
     unsafe {
         if (*rec(js)).layout_root != root {
             ns_box_lookup_forget(js);
@@ -954,7 +931,7 @@ pub unsafe extern "C" fn ns_js_set_layout_root(js: *mut NsJs, root: *const c_voi
         if !root.is_null() {
             ns_js_promote_deferred_iframes(js);
             if super::glue::is_running_script(super::Js(js).ctx()) {
-                super::exports::ns_observer_schedule_tick(js);
+                crate::api::observer_schedule_tick(js);
             } else {
                 ns_intersection_observers_tick(js);
                 ns_resize_observers_tick(js);
@@ -985,65 +962,52 @@ pub(crate) fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
     array
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_disabled_form_control(el: *const NsNode) -> GBoolean {
-    let disabled = node(el).is_some_and(|el| {
-        el.is_element()
-            && el.name().is_some_and(|name| {
-                FORM_CONTROLS
-                    .iter()
-                    .any(|control| name.to_bytes().eq_ignore_ascii_case(control.to_bytes()))
-            })
-            && southstar_dom::controls::effectively_disabled(el)
-    });
-    glib::boolean(disabled)
+pub(crate) fn is_disabled_form_control(el: Node<'_>) -> bool {
+    el.is_element()
+        && el.name().is_some_and(|name| {
+            FORM_CONTROLS
+                .iter()
+                .any(|control| name.to_bytes().eq_ignore_ascii_case(control.to_bytes()))
+        })
+        && southstar_dom::controls::effectively_disabled(el)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_form_reset(js: *mut NsJs, form: *mut NsNode) {
+pub(crate) fn form_reset(js: *const NsJs, form: Node<'_>) {
     let Some(ctx) = record(js).map(|js| js.ctx) else {
         return;
     };
-    if form.is_null() {
-        return;
-    }
-    ctx.with(|scope| unsafe { imports::nsr_js_reset_form(scope, form) });
+    ctx.with(|scope| unsafe { imports::nsr_js_reset_form(scope, form.as_mut_ptr()) });
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_load_realm(js: *mut NsJs) -> ContextHandle {
+pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {
     let Some(record) = record(js) else {
         return ContextHandle::NULL;
     };
     let realm = if record.raf_frame_ctx.is_null() {
         ContextHandle::NULL
     } else {
-        unsafe { ns_js_frame_context(js, record.raf_frame_ctx) }
+        unsafe { ns_js_frame_context(js.cast_mut(), record.raf_frame_ctx) }
     };
     realm.or(record.ctx)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char {
-    if let Some(el) = node(el) {
-        for p in southstar_dom::ancestors(el) {
-            if (is_named(p, c"iframe") || is_named(p, c"frame") || is_named(p, c"object"))
-                && let Some(url) = attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty())
-            {
-                return url.as_ptr();
-            }
-        }
-    }
-    record(js).map_or(ptr::null(), |js| js.current_url.cast_const())
+pub(crate) fn frame_url(js: super::Js, frame: *const NsNode) -> *const c_char {
+    // SAFETY: the page is live and the frame is null or one of its nodes, which is all ns_js_frame_url reads.
+    unsafe { ns_js_frame_url(js.ptr(), frame) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_platform_globals(js: *mut NsJs) -> *mut GHashTable {
+pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
+    southstar_dom::ancestors(el)
+        .filter(|&p| is_named(p, c"iframe") || is_named(p, c"frame") || is_named(p, c"object"))
+        .find_map(|p| attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty()))
+}
+
+pub(crate) fn platform_globals(js: *mut NsJs) -> *mut GHashTable {
     unsafe {
         if (*rec(js)).platform_globals.is_null() {
             let saved = (*rec(js)).ctx;
             (*rec(js)).ctx = main_context(&*rec(js));
-            let globals = super::exports::ns_js_snapshot_globals(js);
+            let globals = super::exports::snapshot_globals(super::Js(js));
             (*rec(js)).ctx = saved;
             (*rec(js)).platform_globals = globals;
         }
@@ -1051,8 +1015,25 @@ pub unsafe extern "C" fn ns_js_platform_globals(js: *mut NsJs) -> *mut GHashTabl
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_new_frame_context(js: *mut NsJs) -> ContextHandle {
+pub(crate) fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
+    if js.is_null() {
+        return Vec::new();
+    }
+    let table = platform_globals(js.cast_mut());
+    if table.is_null() {
+        return Vec::new();
+    }
+    // SAFETY: the table is the page's platform-globals set, alive until the page is freed, and its keys are strings it owns.
+    unsafe { glib::hash_table_entries(table) }
+        .filter_map(|(key, _)| super::glue::text(key.cast()).map(|name| name.to_bytes().to_vec()))
+        .collect()
+}
+
+pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
+    if js.is_null() {
+        return ContextHandle::NULL;
+    }
+    let js = js.cast_mut();
     let fctx = unsafe { (*rec(js)).rt }.new_context(js.cast());
     if fctx.is_null() {
         return fctx;
@@ -1100,9 +1081,8 @@ pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> *mut NsN
     record(page_of(scope)).map_or(ptr::null_mut(), |js| js.current_doc)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode {
-    record(js).map_or(ptr::null(), |js| js.ce_main_doc)
+pub(crate) fn ce_main_doc(js: *const NsJs) -> Option<Node<'static>> {
+    node(record(js)?.ce_main_doc)
 }
 
 pub(crate) fn node_wrapper(scope: &mut Scope<'_>, n: *const NsNode) -> Option<Value> {
@@ -1119,14 +1099,13 @@ pub unsafe extern "C" fn ns_js_node_unpinned(js: *const NsJs, n: *const NsNode) 
     glib::boolean(unpinned)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_wrapper_pinned(js: *const NsJs, n: *const NsNode) -> GBoolean {
-    let pinned = record(js).is_some_and(|js| {
-        node(n).is_some_and(Node::has_js_wrapper)
+pub(crate) fn wrapper_pinned(js: *const NsJs, n: Node<'_>) -> bool {
+    record(js).is_some_and(|js| {
+        n.has_js_wrapper()
             && !js.pinned_wrappers_set.is_null()
-            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.cast()) } != 0
-    });
-    glib::boolean(pinned)
+            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.as_ptr().cast()) }
+                != 0
+    })
 }
 
 pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<Value, Value> {
@@ -1134,51 +1113,50 @@ pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<V
     let name = cstring(name);
     let element_node = southstar_dom::node::new_element(name.to_bytes());
     let n = element_node.as_mut_ptr();
-    unsafe {
-        super::wrapper::ns_node_arm_js_invalidate(n);
-        ns_js_track_orphan(js, n);
-    }
+    super::wrapper::arm_js_invalidate(element_node);
+    unsafe { ns_js_track_orphan(js, n) };
     let element = super::wrapper::make(scope, element_node)?;
     tag_caller_document(scope, &element);
     Ok(element)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ce_attr_changed(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    attr_name: *const c_char,
-    old_value: *const c_char,
-    new_value: *const c_char,
+pub(crate) fn ce_attr_changed(
+    js: *const NsJs,
+    el: Node<'_>,
+    attr_name: &CStr,
+    old: Option<&CStr>,
+    new: Option<&CStr>,
 ) {
-    let live = |js: *mut NsJs| record(js).is_some_and(|js| !js.ctx.is_null() && js.halted == 0);
-    let attr_bytes = unsafe { glib::bytes(attr_name) };
-    if !n.is_null() && attr_bytes.is_some() && live(js) {
+    let js = js.cast_mut();
+    let n = el.as_mut_ptr();
+    let old_value = old.map_or(ptr::null(), CStr::as_ptr);
+    let new_value = new.map_or(ptr::null(), CStr::as_ptr);
+    let live = || record(js).is_some_and(|js| !js.ctx.is_null() && js.halted == 0);
+    let attr_bytes = attr_name.to_bytes();
+    if live() {
         unsafe {
-            if n.cast_const() == ns_js_focused_node(js)
-                && attr_bytes.is_some_and(|a| a.eq_ignore_ascii_case(b"type"))
+            if n.cast_const() == ns_js_focused_node(js) && attr_bytes.eq_ignore_ascii_case(b"type")
             {
                 ns_js_update_focus_visible(js);
             }
-            ns_popover_attr_changed(js, n, attr_name, old_value, new_value);
+            ns_popover_attr_changed(js, n, attr_name.as_ptr(), old_value, new_value);
         }
     }
-    let is_plain_script = node(n).is_some_and(|el| {
-        is_named(el, c"script") && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0
-    });
+    let is_plain_script =
+        is_named(el, c"script") && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0;
     if !js.is_null()
-        && attr_bytes.is_some_and(|a| a.eq_ignore_ascii_case(b"src"))
-        && old_value.is_null()
-        && !new_value.is_null()
+        && attr_bytes.eq_ignore_ascii_case(b"src")
+        && old.is_none()
+        && new.is_some()
         && is_plain_script
     {
         unsafe { ns_js_script_needs_prepare(js, n) };
         return;
     }
-    if n.is_null() || attr_bytes.is_none() || !live(js) {
+    if !live() {
         return;
     }
-    unsafe { ns_ce_attribute_changed(js, n, attr_name, old_value, new_value) };
+    unsafe { ns_ce_attribute_changed(js, n, attr_name.as_ptr(), old_value, new_value) };
 }
 
 pub(crate) fn illegal_constructor(
@@ -1292,8 +1270,10 @@ pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node_val: &Value) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_free_frame_contexts(js: *mut NsJs) {
+pub(crate) fn free_frame_contexts(js: *const NsJs) {
+    if js.is_null() {
+        return;
+    }
     let frames = unsafe { (*rec(js)).frame_ctxs.as_mut() };
     if let Some(frames) = frames {
         for ctx in frames.drain(..) {
@@ -1302,15 +1282,17 @@ pub unsafe extern "C" fn ns_js_free_frame_contexts(js: *mut NsJs) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_context_count(js: *const NsJs) -> c_uint {
+pub(crate) fn frame_context_count(js: *const NsJs) -> u32 {
     record(js)
         .and_then(|js| js.frame_ctxs.as_ref())
-        .map_or(0, |frames| frames.len() as c_uint)
+        .map_or(0, |frames| frames.len() as u32)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval_polyfills(js: *mut NsJs) {
+pub(crate) fn eval_polyfills(js: *const NsJs) {
+    if js.is_null() {
+        return;
+    }
+    let js = js.cast_mut();
     unsafe {
         ns_js_eval(
             js,
@@ -1327,16 +1309,18 @@ pub unsafe extern "C" fn ns_js_eval_polyfills(js: *mut NsJs) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_snapshot_platform_globals(js: *mut NsJs) {
+pub(crate) fn snapshot_platform_globals(js: *const NsJs) {
+    if js.is_null() {
+        return;
+    }
+    let js = js.cast_mut();
     unsafe {
         free_platform_globals(js);
-        (*rec(js)).platform_globals = super::exports::ns_js_snapshot_globals(js);
+        (*rec(js)).platform_globals = super::exports::snapshot_globals(super::Js(js));
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_apply_site_quirks(js: *mut NsJs) {
+pub(crate) fn apply_site_quirks(js: *const NsJs) {
     let Some(record) = record(js) else {
         return;
     };
@@ -1364,12 +1348,15 @@ pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {
         .unwrap_or_else(|_| b"Script error.".to_vec())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_add_csp_header(js: *mut NsJs, header_value: *const c_char) {
-    if js.is_null() || unsafe { glib::bytes(header_value) }.is_none_or(<[u8]>::is_empty) {
+pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
+    let Some(header_value) = header_value.filter(|header| !header.is_empty()) else {
+        return;
+    };
+    if js.is_null() {
         return;
     }
-    let parsed = unsafe { ns_csp_parse(header_value) };
+    let js = js.cast_mut();
+    let parsed = unsafe { ns_csp_parse(header_value.as_ptr()) };
     if parsed.is_null() {
         return;
     }
@@ -1383,38 +1370,26 @@ pub unsafe extern "C" fn ns_js_add_csp_header(js: *mut NsJs, header_value: *cons
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_csp_form_action_allowed(
-    js: *const NsJs,
-    action_url: *const c_char,
-) -> GBoolean {
+pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>) -> bool {
     let Some(js) = record(js) else {
-        return glib::TRUE;
+        return true;
     };
-    if js.csp.is_null() || action_url.is_null() {
-        return glib::TRUE;
-    }
-    unsafe { ns_csp_allows(js.csp, CSP_FORM_ACTION, action_url, js.current_url) }
+    let Some(action_url) = action_url.filter(|_| !js.csp.is_null()) else {
+        return true;
+    };
+    unsafe { ns_csp_allows(js.csp, CSP_FORM_ACTION, action_url.as_ptr(), js.current_url) != 0 }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_storage_partition(js: *const NsJs) -> *const c_char {
-    record(js).map_or(ptr::null(), |js| opt_ptr(&js.partition_key))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean {
+pub(crate) fn inline_handlers_allowed(js: *const NsJs) -> bool {
     let csp = record(js).map_or(ptr::null_mut(), |js| js.csp);
-    unsafe { ns_csp_inline_event_handler_allowed(csp) }
+    unsafe { ns_csp_inline_event_handler_allowed(csp) != 0 }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_time_origin_us(js: *const NsJs) -> i64 {
+pub(crate) fn time_origin_us(js: *const NsJs) -> i64 {
     record(js).map_or(0, |js| js.time_origin_us)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64 {
+pub(crate) fn time_origin_real_ms(js: *const NsJs) -> f64 {
     record(js).map_or(0.0, |js| js.time_origin_real_ms)
 }
 
@@ -1426,27 +1401,36 @@ pub(crate) unsafe fn pristine_promise_ref<'a>(js: *const NsJs) -> Option<&'a Val
     record(js).map(|js| &js.pristine_promise)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_layout_root(js: *const NsJs) -> *const c_void {
+pub(crate) fn layout_root(js: *const NsJs) -> *const c_void {
     record(js).map_or(ptr::null(), |js| js.layout_root)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_cookie_value(js: *const NsJs) -> *const c_char {
+pub unsafe extern "C" fn ns_js_layout_root(js: *const NsJs) -> *const c_void {
+    layout_root(js)
+}
+
+pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {
+    record(js)?.cookie_value.clone()
+}
+
+pub(crate) fn cookie_value_ptr(js: *const NsJs) -> *const c_char {
     record(js).map_or(ptr::null(), |js| opt_ptr(&js.cookie_value))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char) {
+pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
     if js.is_null() {
         return;
     }
-    let value = unsafe { glib::bytes(value) }.map(cstring);
+    let value = value.map(|value| cstring(value.to_bytes()));
     unsafe { (*rec(js)).cookie_value = value };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_partition_key(js: *const NsJs) -> *const c_char {
+pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {
+    record(js)?.partition_key.clone()
+}
+
+pub(crate) fn partition_key_ptr(js: *const NsJs) -> *const c_char {
     record(js).map_or(ptr::null(), |js| opt_ptr(&js.partition_key))
 }
 
@@ -1455,19 +1439,14 @@ pub unsafe extern "C" fn ns_js_page_navigation_timing(js: *const NsJs) -> *const
     record(js).map_or(ptr::null(), |js| &raw const js.navigation_timing)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_csp(js: *const NsJs) -> *const NsCsp {
+pub(crate) fn page_csp(js: *const NsJs) -> *const NsCsp {
     record(js).map_or(ptr::null(), |js| js.csp.cast_const())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_csp_allows_connect(
-    js: *const NsJs,
-    url: *const c_char,
-    page: *const c_char,
-) -> GBoolean {
+pub(crate) fn csp_allows_connect(js: *const NsJs, url: &CStr, page: Option<&CStr>) -> bool {
     let Some(js) = record(js) else {
-        return glib::TRUE;
+        return true;
     };
-    glib::boolean(js.csp.is_null() || unsafe { ns_csp_allows(js.csp, CSP_CONNECT, url, page) } != 0)
+    let page = page.map_or(ptr::null(), CStr::as_ptr);
+    js.csp.is_null() || unsafe { ns_csp_allows(js.csp, CSP_CONNECT, url.as_ptr(), page) } != 0
 }

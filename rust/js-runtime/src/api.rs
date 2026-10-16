@@ -13,9 +13,20 @@ use crate::ffi::state::TaskRun;
 use crate::ffi::{self, Js, glue, record, scopes, wrapper};
 use crate::scheduling;
 
+mod enter;
+mod hooks;
+mod nodes;
+mod page;
+mod tasks;
+
 pub use crate::ffi::NsJs;
 pub use crate::ffi::glue::BytesView;
 pub use crate::ffi::record::AdoptedProtos;
+pub use enter::*;
+pub use hooks::*;
+pub use nodes::*;
+pub use page::*;
+pub use tasks::*;
 
 const BODY_BYTES_MAX: usize = 32 * 1024 * 1024;
 
@@ -140,28 +151,7 @@ pub fn queue_message_task(scope: &mut Scope<'_>, f: TaskFn, args: &[Value]) -> R
 
 pub unsafe fn timer_scope_leave(token: *mut c_void, exception: Option<Value>) {
     let mut scope = unsafe { scopes::timer_scope_take(token) };
-    let js = scope.js();
-    let ctx = scope.ctx();
-    scheduling::add_depth(&js.st().callback_depth, -1);
-    budget::pop(js, scope.budget());
-    if let Some(exception) = exception {
-        let (message, stack) = glue::exception_text_in(ctx, &exception);
-        if let Some(message) = message
-            && js.st().log.is_set()
-        {
-            let mut line = b"JS error in timer: ".to_vec();
-            line.extend_from_slice(&message);
-            if let Some(stack) = stack {
-                line.push(b'\n');
-                line.extend_from_slice(&stack);
-            }
-            let line = glue::c_line(&line);
-            glue::log_line(js, line.as_ptr());
-        }
-        glue::report_uncaught(js, &exception, js.current_url_raw());
-    }
-    scheduling::drain_mutations(js);
-    scope.leave();
+    enter::finish_timer(&mut scope, exception);
 }
 
 pub fn this_is_detached_window(js: *mut NsJs, scope: &mut Scope<'_>, this: &Value) -> bool {
@@ -219,13 +209,6 @@ pub fn dispatch_document_window_event(js: *mut NsJs, kind: &str, event: Value) {
 
 pub fn iframe_document(js: *const NsJs) -> Option<Value> {
     Js::of(js)?.st().iframe_doc.borrow().clone()
-}
-
-pub fn enter_handler_realm(scope: &mut Scope<'_>, obj: &Value, kind: &str) -> *mut c_void {
-    let token = scopes::realm_scope_new();
-    let realm = glue::handler_realm(scope, obj, kind);
-    unsafe { scopes::realm_scope_push(Js::of_scope(scope), realm, token) };
-    token
 }
 
 pub fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {

@@ -192,10 +192,6 @@ impl Js {
         (!js.is_null()).then_some(Js(js.cast_mut()))
     }
 
-    pub(crate) fn of_context(ctx: ContextHandle) -> Option<Js> {
-        Js::of(ctx.opaque().cast())
-    }
-
     pub(crate) fn of_scope(scope: &Scope<'_>) -> Option<Js> {
         Js::of(scope.context_opaque().cast())
     }
@@ -397,11 +393,11 @@ impl Js {
     }
 
     pub fn is_active(self) -> bool {
-        record::ns_active_js() == self.0
+        record::active() == self.0
     }
 
     pub fn clear_active(self) {
-        record::ns_set_active_js(ptr::null_mut());
+        record::set_active(ptr::null_mut());
     }
 
     pub fn take_pinned_wrappers(self) -> Vec<Element> {
@@ -683,7 +679,7 @@ pub(crate) fn default_main_context() -> *mut GMainContext {
 }
 
 pub(crate) fn set_active(js: Js) {
-    record::ns_set_active_js(js.0);
+    record::set_active(js.0);
 }
 
 pub(crate) fn monotonic_us() -> i64 {

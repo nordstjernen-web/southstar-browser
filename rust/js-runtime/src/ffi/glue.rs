@@ -14,7 +14,7 @@ use super::imports;
 use super::state::MessageTask;
 use super::{GMainContext, Js, NsJs};
 
-pub(crate) type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+pub type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 type ReadyFn = unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
 
 #[repr(C)]
@@ -23,7 +23,7 @@ pub(crate) struct GSource {
 }
 
 #[repr(C)]
-pub(crate) struct Response {
+pub struct Response {
     _private: [u8; 0],
 }
 
@@ -285,7 +285,7 @@ pub(crate) fn dispatch_window_only_event(
 }
 
 pub(crate) fn active_js() -> Option<Js> {
-    Js::of(super::record::ns_active_js())
+    Js::of(super::record::active())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> *const NsNode {
@@ -362,8 +362,8 @@ pub(crate) fn collect_orphans(js: Js) -> Vec<*mut NsNode> {
 }
 
 pub(crate) fn free_orphan_subtree(js: Js, root: *mut NsNode) {
+    super::record::purge_subtree_rafs(js.ptr(), root);
     unsafe {
-        super::record::ns_js_purge_subtree_rafs(js.ptr(), root);
         ns_js_purge_subtree_pending_iframes(js.ptr(), root);
         ns_js_purge_subtree_script_refs(js.ptr(), root);
         ns_js_purge_subtree_node_refs(js.ptr(), root);
@@ -494,6 +494,15 @@ pub(crate) unsafe fn fetch_resource(
         }
     }
     unsafe { (*data).response }
+}
+
+pub(crate) fn take_error(error: *mut GError) -> Option<CString> {
+    // SAFETY: the error is null or one a GLib call just handed over, so it is live until it is freed below.
+    let message =
+        text(unsafe { error.as_ref() }?.message).map_or_else(CString::default, CStr::to_owned);
+    // SAFETY: the error is non-null, ours, and freed exactly once.
+    unsafe { g_error_free(error) };
+    Some(message)
 }
 
 pub(crate) fn add_resource_timing(

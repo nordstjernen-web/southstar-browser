@@ -283,7 +283,7 @@ pub(crate) fn make_element(scope: &mut Scope<'_>, cnode: *const NsNode) -> Resul
 
 fn invalidate_wrapper(target: Node<'static>) {
     let n = target.as_mut_ptr();
-    let js = super::record::ns_active_js();
+    let js = super::record::active();
     unsafe {
         ns_mut_scrub_node(js, n);
         ns_attr_detach_owner(js, n);
@@ -320,12 +320,16 @@ fn invalidate_wrapper(target: Node<'static>) {
     }
 }
 
+pub(crate) fn arm_js_invalidate(target: Node<'_>) {
+    if target.js_invalidate().is_none() {
+        target.set_js_invalidate(Some(invalidate_wrapper));
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_arm_js_invalidate(n: *mut NsNode) {
-    if let Some(target) = node(n)
-        && target.js_invalidate().is_none()
-    {
-        target.set_js_invalidate(Some(invalidate_wrapper));
+    if let Some(target) = node(n) {
+        arm_js_invalidate(target);
     }
 }
 

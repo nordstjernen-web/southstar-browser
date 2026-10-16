@@ -167,7 +167,6 @@ unsafe extern "C" {
     fn ns_es_free(es: *mut c_void);
     fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_net_leave_handler_realm(ctx: ContextHandle, scope: *mut c_void);
 }
 
 unsafe extern "C" {
@@ -315,18 +314,16 @@ pub(crate) fn hsts_should_upgrade(host: &[u8]) -> bool {
     unsafe { ns_net_hsts_should_upgrade(host.as_ptr()) != 0 }
 }
 
-pub(crate) struct HandlerRealm(*mut c_void);
-
 pub(crate) fn enter_handler_realm(
     scope: &mut Scope<'_>,
     target: &Value,
     kind: &str,
-) -> HandlerRealm {
-    HandlerRealm(api::enter_handler_realm(scope, target, kind))
+) -> api::HandlerRealm {
+    api::enter_handler_realm(scope, target, kind)
 }
 
-pub(crate) fn leave_handler_realm(scope: &mut Scope<'_>, entered: HandlerRealm) {
-    unsafe { ns_js_net_leave_handler_realm(scope.handle(), entered.0) };
+pub(crate) fn leave_handler_realm(scope: &mut Scope<'_>, entered: api::HandlerRealm) {
+    entered.leave(scope);
 }
 
 fn bind_c(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity: u32) {
