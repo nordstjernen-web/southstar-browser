@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* An inline-block or inline-flex with a percentage width and
+  box-sizing: border-box keeps its padding when its container shrinks to
+  fit it, instead of squeezing its content by the padding.
 * white-space: nowrap on an inline element keeps its text on one line.
   Only a block's own nowrap was honoured, so nowrap spans wrapped at
   every space and between every CJK character (Rakuten's top menu,
