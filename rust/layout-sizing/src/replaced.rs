@@ -291,6 +291,10 @@ pub fn inline_atomic_measure_basis(b: BoxRef<'_>) -> f64 {
     let wv = style_value(b, PropId::Width);
     if value_is_percent(wv) && !is_replaced(b) {
         let content = measure_natural_width(b, b.style());
+        if content >= 0.0 && is_border_box(b) {
+            let (_, pd, bd) = edges_of(b.style(), 0.0);
+            return content + pd.left + pd.right + bd.left + bd.right;
+        }
         if content >= 0.0 {
             return content;
         }
