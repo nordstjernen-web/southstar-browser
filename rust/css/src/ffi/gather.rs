@@ -20,7 +20,7 @@ use super::layers::LayerRanks;
 use super::matcher::match_scope;
 use super::pending::RawPendingMatch;
 use super::rule_index::{Buckets, Candidate, RuleIndex, rule_index_build};
-use super::selector::RawSelector;
+use super::selector::SelectorData;
 use super::selector_view::{RuleRef, SelectorRef};
 use super::sheet::{OwnedSheet, SheetData};
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
@@ -163,13 +163,13 @@ pub fn selector_cache_end() {
 fn cached_match(
     cache: &mut Option<SelectorCache>,
     rule: &Rule,
-    sel: *const RawSelector,
+    sel: &SelectorData,
     el: Option<Node<'_>>,
     pe: c_uint,
 ) -> (bool, c_int) {
     let key = (
         ptr::from_ref(rule) as usize,
-        sel as usize,
+        ptr::from_ref(sel) as usize,
         Node::ptr_or_null(el) as usize,
         pe,
     );
@@ -179,7 +179,7 @@ fn cached_match(
     let order = el.and_then(|el| {
         matcher::rule_matches(
             Some(RuleRef::new(rule)),
-            unsafe { SelectorRef::from_ptr(sel.cast()) },
+            Some(SelectorRef::new(sel)),
             el,
             pe,
         )
@@ -330,7 +330,7 @@ struct Gather<'a> {
 }
 
 impl Gather<'_> {
-    fn rejected(&self, rule: &Rule, sel: &RawSelector) -> bool {
+    fn rejected(&self, rule: &Rule, sel: &SelectorData) -> bool {
         let Some(filter) = self.filter else {
             return false;
         };
@@ -370,49 +370,42 @@ impl Gather<'_> {
             let Some(rule) = self.rules.get(ri) else {
                 continue;
             };
-            let Some(&sel_ptr) = rule.selectors.selectors().get(cand.selector_idx as usize) else {
+            let Some(sel) = rule.selectors.selectors().get(cand.selector_idx as usize) else {
                 continue;
             };
             if rule.container_condition.is_some() && !rule.container_matches() {
                 continue;
             }
-            let sel = unsafe { sel_ptr.as_ref() };
-            if sel.is_some_and(|sel| self.rejected(rule, sel)) {
+            if self.rejected(rule, sel) {
                 continue;
             }
-            let range = match sel {
-                Some(sel) => match self.dest_of_pe.get(sel.pseudo_element as usize) {
-                    Some(&Some(dd)) => dd..dd + 1,
-                    _ => continue,
-                },
-                None => 0..self.pes.len(),
+            let Some(&Some(dd)) = self.dest_of_pe.get(sel.pseudo_element as usize) else {
+                continue;
             };
-            for dd in range {
-                let pe = self.pes[dd];
-                if pe != 0 && rule.pe_mask.get() & 1u32.checked_shl(pe).unwrap_or(0) == 0 {
-                    continue;
-                }
-                if sel.is_some_and(|s| s.pseudo_element != pe) {
-                    continue;
-                }
-                let (matched, scope_order) = cached_match(cache, rule, sel_ptr, self.node, pe);
-                if !matched {
-                    continue;
-                }
-                if rule.container_condition.is_some() {
-                    crate::container::note_features();
-                }
-                let acc = &mut scratch.accums[ri];
-                if acc.epoch != epoch {
-                    *acc = Accum {
-                        epoch,
-                        ..Accum::default()
-                    };
-                    scratch.matched.push(ri);
-                }
-                let spec = sel.map_or((0, 0, 0), |s| (s.spec_a, s.spec_b, s.spec_c));
-                acc.note(dd, spec, scope_order);
+            let pe = self.pes[dd];
+            if pe != 0 && rule.pe_mask.get() & 1u32.checked_shl(pe).unwrap_or(0) == 0 {
+                continue;
             }
+            if sel.pseudo_element != pe {
+                continue;
+            }
+            let (matched, scope_order) = cached_match(cache, rule, sel, self.node, pe);
+            if !matched {
+                continue;
+            }
+            if rule.container_condition.is_some() {
+                crate::container::note_features();
+            }
+            let acc = &mut scratch.accums[ri];
+            if acc.epoch != epoch {
+                *acc = Accum {
+                    epoch,
+                    ..Accum::default()
+                };
+                scratch.matched.push(ri);
+            }
+            let spec = (sel.spec_a, sel.spec_b, sel.spec_c);
+            acc.note(dd, spec, scope_order);
         }
         scratch.candidates = candidates;
         let output = Output {

@@ -1,21 +1,17 @@
-//! Southstar — the C ABI of the selector parser: parsed selectors built as css.c's ns_css_selector, ns_css_simple and predicate structs with the GLib arrays the matcher reads, the owning group a rule, scope or query holds, and the parser state and hashes css.c still asks for.
+//! Southstar — parsed selectors laid out for the matcher: each selector's compounds, combinators, specificity and ancestor hashes with the strings it reads cut where css.c's copies ended, the owning group a rule, scope or query holds, and the parser state css.c still asks for.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem::{offset_of, size_of};
-use core::ptr::{self, NonNull};
-use core::slice;
+use core::ffi::{c_int, c_uint};
+use std::ffi::CString;
 
-use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
-
+use super::declarations::until_nul;
 use super::selector_view::{GroupRef, SelectorRef};
 use crate::selector::{self, AttrPred, Compound, FLAGS, PseudoPred, Selector};
 
-#[repr(C)]
-pub(super) struct RawSelector {
-    pub(super) compounds: *mut GPtrArray,
-    pub(super) combinators: *mut GArray,
+pub(super) struct SelectorData {
+    pub(super) compounds: Vec<CompoundData>,
+    pub(super) combinators: Vec<c_uint>,
     pub(super) pseudo_element: c_uint,
     pub(super) spec_a: c_int,
     pub(super) spec_b: c_int,
@@ -25,276 +21,129 @@ pub(super) struct RawSelector {
     pub(super) n_ancestor_attr_hashes: c_uint,
 }
 
-#[repr(C)]
-pub(super) struct RawSimple {
-    pub(super) type_: *mut c_char,
-    pub(super) id: *mut c_char,
-    pub(super) classes: *mut GPtrArray,
-    pub(super) class_lens: *mut GArray,
-    pub(super) attrs: *mut GArray,
-    pub(super) pseudos: *mut GArray,
-    pub(super) matches_any: *mut GPtrArray,
-    pub(super) matches_none: *mut GPtrArray,
-    pub(super) has_groups: *mut GPtrArray,
-    pub(super) never_match: GBoolean,
-    pub(super) ns_none: GBoolean,
+pub(super) struct CompoundData {
+    pub(super) type_: Option<CString>,
+    pub(super) id: Option<CString>,
+    pub(super) classes: Vec<Vec<u8>>,
+    pub(super) first_class: Option<CString>,
+    pub(super) attrs: Vec<AttrData>,
+    pub(super) pseudos: Vec<PseudoData>,
+    pub(super) matches_any: Option<Vec<Vec<SelectorData>>>,
+    pub(super) matches_none: Option<Vec<Vec<SelectorData>>>,
+    pub(super) has_groups: Option<Vec<Vec<SelectorData>>>,
+    pub(super) never_match: bool,
+    pub(super) ns_none: bool,
 }
 
-#[repr(C)]
-pub(super) struct RawAttrPred {
-    pub(super) name: *mut c_char,
+pub(crate) struct AttrData {
+    pub(super) name: CString,
     pub(super) op: c_uint,
-    pub(super) value: *mut c_char,
-    pub(super) case_insensitive: GBoolean,
-    pub(super) case_sensitive: GBoolean,
-    pub(super) html_ci: GBoolean,
+    pub(super) value: Option<Vec<u8>>,
+    pub(super) case_insensitive: bool,
+    pub(super) case_sensitive: bool,
+    pub(super) html_ci: bool,
     pub(super) name_bit: u64,
 }
 
-#[repr(C)]
-pub(super) struct RawPseudoPred {
+pub(crate) struct PseudoData {
     pub(super) kind: c_uint,
     pub(super) a: c_int,
     pub(super) b: c_int,
-    pub(super) arg: *mut c_char,
-    pub(super) of_group: *mut GPtrArray,
+    pub(super) arg: Option<Vec<u8>>,
+    pub(super) of_group: Option<Vec<SelectorData>>,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    size_of::<RawSelector>() == 56
-        && offset_of!(RawSelector, ancestor_hashes) == 32
-        && size_of::<RawSimple>() == 80
-        && offset_of!(RawSimple, never_match) == 72
-        && size_of::<RawAttrPred>() == 48
-        && offset_of!(RawAttrPred, name_bit) == 40
-        && size_of::<RawPseudoPred>() == 32
-        && offset_of!(RawPseudoPred, arg) == 16
-);
-
-unsafe extern "C" {
-    fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
+fn c_text(text: &[u8]) -> CString {
+    CString::new(until_nul(text)).unwrap_or_default()
 }
 
-fn opt_strdup(text: Option<&[u8]>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), glib::strdup)
+fn text(text: Option<&[u8]>) -> Option<Vec<u8>> {
+    text.map(|text| until_nul(text).to_vec())
 }
 
-unsafe fn new_array(element: usize) -> *mut GArray {
-    unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, element as c_uint) }
+fn group(group: &[Selector]) -> Vec<SelectorData> {
+    group.iter().map(selector_data).collect()
 }
 
-unsafe fn append<T>(array: *mut GArray, item: &T) {
-    unsafe { glib::g_array_append_vals(array, ptr::from_ref(item).cast(), 1) };
+fn groups(groups: Option<&Vec<Vec<Selector>>>) -> Option<Vec<Vec<SelectorData>>> {
+    groups.map(|groups| groups.iter().map(|g| group(g)).collect())
 }
 
-unsafe extern "C" fn attr_pred_clear(data: *mut c_void) {
-    let pred = data.cast::<RawAttrPred>();
-    unsafe {
-        glib::g_free((*pred).name.cast());
-        glib::g_free((*pred).value.cast());
-    }
-}
-
-unsafe extern "C" fn pseudo_pred_clear(data: *mut c_void) {
-    let pred = data.cast::<RawPseudoPred>();
-    unsafe {
-        glib::g_free((*pred).arg.cast());
-        if !(*pred).of_group.is_null() {
-            glib::g_ptr_array_free((*pred).of_group, glib::TRUE);
-        }
-    }
-}
-
-unsafe extern "C" fn group_free(data: *mut c_void) {
-    unsafe { glib::g_ptr_array_free(data.cast(), glib::TRUE) };
-}
-
-unsafe extern "C" fn selector_free_notify(data: *mut c_void) {
-    unsafe { selector_free(data.cast()) };
-}
-
-fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
-    let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(selector_free_notify)) };
-    for sel in group {
-        unsafe { glib::g_ptr_array_add(array, selector_to_c(sel).cast()) };
-    }
-    array
-}
-
-pub(super) struct SelectorGroup(NonNull<GPtrArray>);
-
-impl SelectorGroup {
-    pub(super) fn new(group: &[Selector]) -> SelectorGroup {
-        SelectorGroup(NonNull::new(group_to_c(group)).expect("g_ptr_array_new_with_free_func"))
-    }
-
-    pub(super) fn push(&mut self, sel: &Selector) {
-        // SAFETY: the group owns its array, which frees the selector it is handed.
-        unsafe { glib::g_ptr_array_add(self.0.as_ptr(), selector_to_c(sel).cast()) };
-    }
-
-    pub(super) fn array(&self) -> &GPtrArray {
-        // SAFETY: the group owns its array for as long as it lives.
-        unsafe { self.0.as_ref() }
-    }
-
-    pub(super) fn selectors(&self) -> &[*mut RawSelector] {
-        let array = self.array();
-        if array.pdata.is_null() || array.len == 0 {
-            return &[];
-        }
-        // SAFETY: a non-empty array's pdata holds len selector pointers it owns.
-        unsafe { slice::from_raw_parts(array.pdata.cast::<*mut RawSelector>(), array.len as usize) }
-    }
-
-    pub(super) fn refs(&self) -> impl Iterator<Item = Option<SelectorRef<'_>>> {
-        GroupRef::new(self.array()).selectors()
-    }
-}
-
-impl Drop for SelectorGroup {
-    fn drop(&mut self) {
-        // SAFETY: the group owns its array, whose free function frees each selector.
-        unsafe { glib::g_ptr_array_free(self.0.as_ptr(), glib::TRUE) };
-    }
-}
-
-fn groups_to_c(groups: Option<&Vec<Vec<Selector>>>) -> *mut GPtrArray {
-    let Some(groups) = groups else {
-        return ptr::null_mut();
-    };
-    let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(group_free)) };
-    for group in groups {
-        unsafe { glib::g_ptr_array_add(array, group_to_c(group).cast()) };
-    }
-    array
-}
-
-fn attr_to_c(pred: &AttrPred) -> RawAttrPred {
-    RawAttrPred {
-        name: glib::strdup(&pred.name),
+fn attr_data(pred: &AttrPred) -> AttrData {
+    AttrData {
+        name: c_text(&pred.name),
         op: pred.op,
-        value: opt_strdup(pred.value.as_deref()),
-        case_insensitive: glib::boolean(pred.case_insensitive),
-        case_sensitive: glib::boolean(pred.case_sensitive),
-        html_ci: glib::boolean(pred.html_ci),
+        value: text(pred.value.as_deref()),
+        case_insensitive: pred.case_insensitive,
+        case_sensitive: pred.case_sensitive,
+        html_ci: pred.html_ci,
         name_bit: pred.name_bit,
     }
 }
 
-fn pseudo_to_c(pred: &PseudoPred) -> RawPseudoPred {
-    RawPseudoPred {
+fn pseudo_data(pred: &PseudoPred) -> PseudoData {
+    PseudoData {
         kind: pred.kind,
         a: pred.a,
         b: pred.b,
-        arg: opt_strdup(pred.arg.as_deref()),
-        of_group: pred.of_group.as_deref().map_or(ptr::null_mut(), group_to_c),
+        arg: text(pred.arg.as_deref()),
+        of_group: pred.of_group.as_deref().map(group),
     }
 }
 
-fn simple_to_c(c: &Compound) -> *mut RawSimple {
-    unsafe {
-        let classes = glib::g_ptr_array_new_with_free_func(Some(glib::g_free));
-        let class_lens = new_array(size_of::<usize>());
-        for class in &c.classes {
-            glib::g_ptr_array_add(classes, glib::strdup(class).cast());
-            append(class_lens, &class.len());
-        }
-        let attrs = new_array(size_of::<RawAttrPred>());
-        g_array_set_clear_func(attrs, Some(attr_pred_clear));
-        for pred in &c.attrs {
-            append(attrs, &attr_to_c(pred));
-        }
-        let pseudos = new_array(size_of::<RawPseudoPred>());
-        g_array_set_clear_func(pseudos, Some(pseudo_pred_clear));
-        for pred in &c.pseudos {
-            append(pseudos, &pseudo_to_c(pred));
-        }
-        let raw = glib::g_malloc0(size_of::<RawSimple>()).cast::<RawSimple>();
-        raw.write(RawSimple {
-            type_: opt_strdup(c.type_.as_deref()),
-            id: opt_strdup(c.id.as_deref()),
-            classes,
-            class_lens,
-            attrs,
-            pseudos,
-            matches_any: groups_to_c(c.matches_any.as_ref()),
-            matches_none: groups_to_c(c.matches_none.as_ref()),
-            has_groups: groups_to_c(c.has_groups.as_ref()),
-            never_match: glib::boolean(c.never_match || c.inert),
-            ns_none: glib::boolean(c.ns_none),
-        });
-        raw
+fn compound_data(c: &Compound) -> CompoundData {
+    CompoundData {
+        type_: c.type_.as_deref().map(c_text),
+        id: c.id.as_deref().map(c_text),
+        classes: c.classes.clone(),
+        first_class: c.classes.first().map(|class| c_text(class)),
+        attrs: c.attrs.iter().map(attr_data).collect(),
+        pseudos: c.pseudos.iter().map(pseudo_data).collect(),
+        matches_any: groups(c.matches_any.as_ref()),
+        matches_none: groups(c.matches_none.as_ref()),
+        has_groups: groups(c.has_groups.as_ref()),
+        never_match: c.never_match || c.inert,
+        ns_none: c.ns_none,
     }
 }
 
-fn selector_to_c(sel: &Selector) -> *mut RawSelector {
-    unsafe {
-        let compounds = glib::g_ptr_array_new();
-        for c in &sel.compounds {
-            glib::g_ptr_array_add(compounds, simple_to_c(c).cast());
-        }
-        let combinators = new_array(size_of::<c_uint>());
-        for comb in &sel.combinators {
-            append(combinators, comb);
-        }
-        let mut ancestor_hashes = [0u32; 4];
-        ancestor_hashes[..sel.ancestor_hashes.len()].copy_from_slice(&sel.ancestor_hashes);
-        let raw = glib::g_malloc0(size_of::<RawSelector>()).cast::<RawSelector>();
-        raw.write(RawSelector {
-            compounds,
-            combinators,
-            pseudo_element: sel.pseudo_element,
-            spec_a: sel.spec[0],
-            spec_b: sel.spec[1],
-            spec_c: sel.spec[2],
-            ancestor_hashes,
-            n_ancestor_hashes: sel.ancestor_hashes.len() as c_uint,
-            n_ancestor_attr_hashes: sel.n_ancestor_attr_hashes,
-        });
-        raw
+fn selector_data(sel: &Selector) -> SelectorData {
+    let mut ancestor_hashes = [0u32; 4];
+    ancestor_hashes[..sel.ancestor_hashes.len()].copy_from_slice(&sel.ancestor_hashes);
+    SelectorData {
+        compounds: sel.compounds.iter().map(compound_data).collect(),
+        combinators: sel.combinators.clone(),
+        pseudo_element: sel.pseudo_element,
+        spec_a: sel.spec[0],
+        spec_b: sel.spec[1],
+        spec_c: sel.spec[2],
+        ancestor_hashes,
+        n_ancestor_hashes: sel.ancestor_hashes.len() as c_uint,
+        n_ancestor_attr_hashes: sel.n_ancestor_attr_hashes,
     }
 }
 
-unsafe fn simple_free(s: *mut RawSimple) {
-    let Some(simple) = (unsafe { s.as_mut() }) else {
-        return;
-    };
-    unsafe {
-        glib::g_free(simple.type_.cast());
-        glib::g_free(simple.id.cast());
-        glib::g_ptr_array_free(simple.classes, glib::TRUE);
-        g_array_free(simple.class_lens, glib::TRUE);
-        if !simple.attrs.is_null() {
-            g_array_free(simple.attrs, glib::TRUE);
-        }
-        if !simple.pseudos.is_null() {
-            g_array_free(simple.pseudos, glib::TRUE);
-        }
-        for groups in [simple.matches_any, simple.matches_none, simple.has_groups] {
-            if !groups.is_null() {
-                glib::g_ptr_array_free(groups, glib::TRUE);
-            }
-        }
-        glib::g_free(s.cast());
-    }
-}
+pub(super) struct SelectorGroup(Vec<SelectorData>);
 
-unsafe fn selector_free(sel: *mut c_void) {
-    let raw = sel.cast::<RawSelector>();
-    let Some(selector) = (unsafe { raw.as_mut() }) else {
-        return;
-    };
-    unsafe {
-        let compounds = &*selector.compounds;
-        for i in 0..compounds.len as usize {
-            simple_free((*compounds.pdata.add(i)).cast());
-        }
-        glib::g_ptr_array_free(selector.compounds, glib::TRUE);
-        g_array_free(selector.combinators, glib::TRUE);
-        glib::g_free(sel);
+impl SelectorGroup {
+    pub(super) fn new(selectors: &[Selector]) -> SelectorGroup {
+        SelectorGroup(group(selectors))
+    }
+
+    pub(super) fn push(&mut self, sel: &Selector) {
+        self.0.push(selector_data(sel));
+    }
+
+    pub(super) fn group(&self) -> &Vec<SelectorData> {
+        &self.0
+    }
+
+    pub(super) fn selectors(&self) -> &[SelectorData] {
+        &self.0
+    }
+
+    pub(super) fn refs(&self) -> impl Iterator<Item = Option<SelectorRef<'_>>> {
+        GroupRef::new(&self.0).selectors()
     }
 }
 
