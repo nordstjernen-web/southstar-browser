@@ -117,7 +117,7 @@ fn expand(
             .filter(|_| name.starts_with(b"--"))
             .and_then(|vars| vars.value(name));
         let substituted = match replacement {
-            Some(replacement) if !replacement.is_empty() && !invalid(Some(replacement)) => {
+            Some(replacement) if !invalid(Some(replacement)) => {
                 let mut sub_valid = true;
                 let mut sub = Some(expand(replacement, vars, depth + 1, &mut sub_valid, budget));
                 if sub_valid && invalid(sub.as_deref()) {
