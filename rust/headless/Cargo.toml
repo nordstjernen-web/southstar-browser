@@ -25,6 +25,7 @@ southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-paint = { path = "../paint" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-url = { path = "../url" }

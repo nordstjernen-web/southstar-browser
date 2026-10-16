@@ -1752,6 +1752,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-hit",
  "southstar-layout-query",
+ "southstar-paint",
  "southstar-selection",
  "southstar-style",
  "southstar-url",
@@ -1892,6 +1893,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-paint",
  "southstar-render",
  "southstar-url",
 ]
@@ -2091,6 +2093,7 @@ dependencies = [
  "southstar-layout-hit",
  "southstar-layout-query",
  "southstar-numfmt",
+ "southstar-paint",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-url",
@@ -3037,6 +3040,7 @@ version = "0.9.11-dev"
 name = "southstar-paint"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-dom",
  "southstar-font",
@@ -3046,6 +3050,7 @@ dependencies = [
  "southstar-layout-geom",
  "southstar-mat4",
  "southstar-numfmt",
+ "southstar-selection",
  "southstar-style",
 ]
 
@@ -3069,6 +3074,7 @@ dependencies = [
  "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-paint",
  "southstar-style",
 ]
 

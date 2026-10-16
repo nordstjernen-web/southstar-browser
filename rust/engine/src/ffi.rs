@@ -91,7 +91,6 @@ unsafe extern "C" {
     fn cairo_create(surface: *mut CairoSurface) -> *mut Cairo;
     fn cairo_destroy(cr: *mut Cairo);
     fn cairo_show_page(cr: *mut Cairo);
-    fn ns_paint(cr: *mut Cairo, root: *const NsBox, highlight: *const c_char);
     fn ns_print_page_offsets(root: *const NsBox, page_content_height: f64) -> *mut GArray;
     fn ns_print_page_bottom(offsets: *const GArray, i: c_uint, page_content_height: f64) -> f64;
     fn ns_print_draw_page(
@@ -169,7 +168,9 @@ impl Capture {
     }
 
     pub fn paint(&self, root: BoxRef) {
-        unsafe { ns_paint(self.cr, root.as_ptr(), ptr::null()) };
+        // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
+        let cr = unsafe { southstar_paint::Cr::from_raw(self.cr.cast()) };
+        southstar_paint::paint(cr, root, None, None);
     }
 
     pub fn show_page(&self) {

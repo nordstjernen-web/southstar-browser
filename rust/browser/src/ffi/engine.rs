@@ -74,9 +74,6 @@ unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
-    fn ns_paint_3d_invalidate();
-    fn ns_paint_set_js(js: *mut c_void);
-    fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_config_init();
     fn ns_config_shutdown();
     fn ns_security_harden_allocator();
@@ -282,15 +279,16 @@ pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
 }
 
 pub fn paint_3d_invalidate() {
-    unsafe { ns_paint_3d_invalidate() };
+    southstar_paint::invalidate_3d();
 }
 
 pub fn paint_set_js(js: Option<Js>) {
-    unsafe { ns_paint_set_js(js.map_or(ptr::null_mut(), Js::raw)) };
+    // SAFETY: the page's script engine outlives the paint passes it is set for, and the caller resets it to null when they end.
+    unsafe { southstar_paint::set_js(js.map_or(ptr::null_mut(), Js::raw)) };
 }
 
 pub fn paint_set_anim(anim: Option<Anim>) {
-    unsafe { ns_paint_set_anim(anim.map_or(ptr::null_mut(), Anim::raw)) };
+    southstar_paint::set_anim(anim);
 }
 
 pub fn init_subsystems() {

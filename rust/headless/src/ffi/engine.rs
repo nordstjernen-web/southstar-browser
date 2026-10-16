@@ -139,9 +139,6 @@ unsafe extern "C" {
         setup: *const PrintSetup,
     ) -> c_int;
     fn ns_box_free(b: *mut NsBox);
-    fn ns_paint_3d_invalidate();
-    fn ns_paint_set_anim(anim: *mut c_void);
-    fn ns_paint_set_js(js: *mut c_void);
     fn g_hash_table_new_full(
         hash: unsafe extern "C" fn(*const c_void) -> c_uint,
         equal: unsafe extern "C" fn(*const c_void, *const c_void) -> GBoolean,
@@ -438,12 +435,11 @@ pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
     anim.map_or(ptr::null_mut(), Anim::raw)
 }
 
-pub fn paint_set_anim(anim: Option<Anim>) {
-    unsafe { ns_paint_set_anim(anim_raw(anim)) };
-}
+pub use southstar_paint::set_anim as paint_set_anim;
 
 pub fn paint_set_js(js: *mut c_void) {
-    unsafe { ns_paint_set_js(js) };
+    // SAFETY: the run's script engine stays alive through the captures painted after this, and the next run replaces it before it paints.
+    unsafe { southstar_paint::set_js(js) };
 }
 
 pub use southstar_image::ImageCache;
@@ -489,10 +485,8 @@ pub fn relayout(r: &Relayout, out_layout: *mut *mut NsBox) -> *mut GHashTable {
 }
 
 pub fn free_layout(layout: *mut NsBox) {
-    unsafe {
-        ns_paint_3d_invalidate();
-        ns_box_free(layout);
-    }
+    southstar_paint::invalidate_3d();
+    unsafe { ns_box_free(layout) };
 }
 
 pub fn fetch_images(root: *mut NsBox, base: Option<&CStr>, cache: Option<ImageCache>) {

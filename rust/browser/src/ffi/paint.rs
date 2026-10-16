@@ -7,8 +7,11 @@ use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ptr::{self, NonNull};
 
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GPtrArray};
 use southstar_layout::{BoxRef, NsBox, Style};
+
+use southstar_paint::Cr;
+use southstar_selection::NsSelection;
 
 use super::{NsBrowser, PrintSetup};
 
@@ -16,23 +19,6 @@ const FORMAT_ARGB32: c_int = 0;
 const STATUS_SUCCESS: c_int = 0;
 const ANTIALIAS_FAST: c_int = 4;
 pub const VP_STICKY: c_int = 2;
-
-#[repr(C)]
-pub struct LayerPlan {
-    dynamic: GBoolean,
-    _kinds: *mut GHashTable,
-    vp: *mut GArray,
-}
-
-#[repr(C)]
-pub struct VpCapture {
-    b: *const NsBox,
-    kind: c_int,
-    _rel: [f64; 6],
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<VpCapture>() == 64);
 
 #[repr(C)]
 #[derive(Default)]
@@ -57,8 +43,6 @@ pub struct VpLayerInfo {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<VpLayerInfo>() == 72);
-
-type UpperFn = unsafe extern "C" fn(index: c_int, data: *mut c_void) -> *mut c_void;
 
 unsafe extern "C" {
     fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut c_void;
@@ -85,35 +69,6 @@ unsafe extern "C" {
     fn cairo_clip(cr: *mut c_void);
     fn cairo_scale(cr: *mut c_void, sx: f64, sy: f64);
     fn cairo_translate(cr: *mut c_void, tx: f64, ty: f64);
-    fn ns_paint(cr: *mut c_void, root: *const NsBox, highlight: *const c_char);
-    fn ns_paint_with_selection(
-        cr: *mut c_void,
-        root: *const NsBox,
-        highlight: *const c_char,
-        sel: *const c_void,
-    );
-    fn ns_paint_set_search(case_sensitive: GBoolean, active: *const NsBox);
-    fn ns_paint_set_caret_visible(visible: GBoolean);
-    fn ns_paint_plan_layers(cr: *mut c_void, root: *const NsBox, plan: *mut LayerPlan);
-    fn ns_paint_doc_layers(
-        cr: *mut c_void,
-        upper: UpperFn,
-        data: *mut c_void,
-        root: *const NsBox,
-        highlight: *const c_char,
-        sel: *const c_void,
-        plan: *const LayerPlan,
-    ) -> GBoolean;
-    fn ns_paint_vp_layer(
-        cr: *mut c_void,
-        root: *const NsBox,
-        layer: *const VpCapture,
-        vp_x: f64,
-        vp_y: f64,
-        highlight: *const c_char,
-        sel: *const c_void,
-    );
-    fn ns_paint_canvas_color(root: *const NsBox, rgba: *mut f64) -> GBoolean;
     fn ns_box_sticky_y_model(b: *const NsBox, viewport_h: f64, out: *mut StickyY) -> GBoolean;
     fn ns_box_sticky_offset(
         b: *const NsBox,
@@ -124,8 +79,6 @@ unsafe extern "C" {
         dx: *mut f64,
         dy: *mut f64,
     );
-    fn ns_paint_layer_plan_init(plan: *mut LayerPlan);
-    fn ns_paint_layer_plan_clear(plan: *mut LayerPlan);
     fn ns_engine_print_recordings(root: *const NsBox, setup: *const PrintSetup) -> *mut GPtrArray;
 }
 
@@ -257,21 +210,19 @@ impl Cairo {
         Surface(NonNull::new(surf).expect("cairo target"))
     }
 
+    fn cr(&self) -> Cr {
+        // SAFETY: the context is live until destroy or finish consumes this value.
+        unsafe { Cr::from_raw(self.raw()) }
+    }
+
     pub fn paint(&self, b: &NsBrowser, layout: BoxRef<'_>) {
         let sel = b.selection_if_range();
         let query = b.search_query.get();
-        let query = query.as_deref().map_or(ptr::null(), CStr::as_ptr);
-        unsafe {
-            if sel.is_null() {
-                ns_paint(self.raw(), layout.as_ptr(), query);
-            } else {
-                ns_paint_with_selection(self.raw(), layout.as_ptr(), query, sel);
-            }
-        }
+        southstar_paint::paint(self.cr(), layout, query.as_deref(), sel.as_ref());
     }
 
     pub fn plan_layers(&self, layout: BoxRef<'_>, plan: &mut LayerPlan) {
-        unsafe { ns_paint_plan_layers(self.raw(), layout.as_ptr(), plan) };
+        southstar_paint::plan_layers(self.cr(), layout, plan);
     }
 
     pub fn vp_layer(
@@ -283,17 +234,14 @@ impl Cairo {
         vp_y: f64,
     ) {
         let query = b.search_query.get();
-        unsafe {
-            ns_paint_vp_layer(
-                self.raw(),
-                layout.as_ptr(),
-                cap,
-                vp_x,
-                vp_y,
-                query.as_deref().map_or(ptr::null(), CStr::as_ptr),
-                b.selection_if_range(),
-            )
-        };
+        southstar_paint::vp_layer(
+            self.cr(),
+            layout,
+            cap,
+            (vp_x, vp_y),
+            query.as_deref(),
+            b.selection_if_range().as_ref(),
+        );
     }
 }
 
@@ -339,49 +287,6 @@ impl<'a> PixelBuf<'a> {
 
     pub fn clear(&self) {
         unsafe { ptr::write_bytes(self.data, 0, self.stride as usize * self.height as usize) };
-    }
-}
-
-impl LayerPlan {
-    pub fn new() -> LayerPlan {
-        let mut plan = LayerPlan {
-            dynamic: 0,
-            _kinds: ptr::null_mut(),
-            vp: ptr::null_mut(),
-        };
-        // SAFETY: `plan` is a live, writable plan whose tables the paint layer creates here.
-        unsafe { ns_paint_layer_plan_init(&mut plan) };
-        plan
-    }
-
-    pub fn viewport_layers(&self) -> usize {
-        // SAFETY: a plan's layer array is null or the GArray its init created, alive until it is cleared.
-        unsafe { self.vp.as_ref() }.map_or(0, |vp| vp.len as usize)
-    }
-
-    pub(crate) fn dynamic(&self) -> bool {
-        self.dynamic != 0
-    }
-
-    pub(crate) fn capture(&self, index: c_int) -> Option<&VpCapture> {
-        let index = usize::try_from(index)
-            .ok()
-            .filter(|&i| i < self.viewport_layers())?;
-        // SAFETY: `index` is below the layer array's length and its elements are VpCapture records.
-        Some(unsafe { &*(*self.vp).data.cast::<VpCapture>().add(index) })
-    }
-}
-
-impl Default for LayerPlan {
-    fn default() -> LayerPlan {
-        LayerPlan::new()
-    }
-}
-
-impl Drop for LayerPlan {
-    fn drop(&mut self) {
-        // SAFETY: only plans made by LayerPlan::new are owned by Rust, and this frees their tables once.
-        unsafe { ns_paint_layer_plan_clear(self) };
     }
 }
 
@@ -433,16 +338,6 @@ impl Drop for PrintPages {
     }
 }
 
-impl VpCapture {
-    pub fn kind(&self) -> c_int {
-        self.kind
-    }
-
-    pub fn box_ref(&self) -> Option<BoxRef<'_>> {
-        unsafe { BoxRef::from_ptr(self.b) }
-    }
-}
-
 struct DocTile {
     bufs: *const *mut u8,
     upper: Vec<Option<Cairo>>,
@@ -463,22 +358,26 @@ impl DocTile {
     }
 }
 
-unsafe extern "C" fn doc_tile_upper(index: c_int, data: *mut c_void) -> *mut c_void {
-    let tile = unsafe { &mut *data.cast::<DocTile>() };
-    let i = index as usize;
-    if let Some(cr) = &tile.upper[i] {
-        return cr.raw();
+impl DocTile {
+    fn upper(&mut self, index: c_int) -> Option<Cr> {
+        let i = index as usize;
+        if let Some(cr) = &self.upper[i] {
+            return Some(cr.cr());
+        }
+        // SAFETY: the embedder passes one buffer per viewport layer after the document's own, and `i` is below the plan's layer count.
+        let buf = unsafe { *self.bufs.add(i + 1) };
+        // SAFETY: each layer buffer holds `stride * height` writable bytes.
+        unsafe { ptr::write_bytes(buf, 0, self.stride as usize * self.height as usize) };
+        let cr = Cairo::for_data(buf, self.width, self.height, self.stride, self.scale);
+        if let Some(cr) = &cr {
+            self.transform(cr);
+        }
+        // SAFETY: the embedder's used flags hold one entry per viewport layer.
+        unsafe { *self.used.add(i) = glib::boolean(cr.is_some()) };
+        let out = cr.as_ref().map(Cairo::cr);
+        self.upper[i] = cr;
+        out
     }
-    let buf = unsafe { *tile.bufs.add(i + 1) };
-    unsafe { ptr::write_bytes(buf, 0, tile.stride as usize * tile.height as usize) };
-    let cr = Cairo::for_data(buf, tile.width, tile.height, tile.stride, tile.scale);
-    if let Some(cr) = &cr {
-        tile.transform(cr);
-    }
-    unsafe { *tile.used.add(i) = glib::boolean(cr.is_some()) };
-    let raw = cr.as_ref().map_or(ptr::null_mut(), Cairo::raw);
-    tile.upper[i] = cr;
-    raw
 }
 
 pub struct TileTarget {
@@ -528,35 +427,29 @@ pub fn render_doc_tile(
     tile.transform(&cr);
     begin();
     let query = b.search_query.get();
-    let ok = unsafe {
-        ns_paint_doc_layers(
-            cr.raw(),
-            doc_tile_upper,
-            ptr::from_mut(&mut tile).cast(),
-            layout.as_ptr(),
-            query.as_deref().map_or(ptr::null(), CStr::as_ptr),
-            b.selection_if_range(),
-            plan,
-        )
-    };
+    let sel = b.selection_if_range();
+    let ok = southstar_paint::doc_layers(
+        cr.cr(),
+        &mut |index| tile.upper(index),
+        layout,
+        query.as_deref(),
+        sel.as_ref(),
+        plan,
+    );
     end();
     for upper in tile.upper.drain(..).take(n_upper).flatten() {
         drop(upper.finish());
     }
     drop(cr.finish());
-    if ok != 0 { 0 } else { -2 }
+    if ok { 0 } else { -2 }
 }
 
-pub fn set_search(case_sensitive: bool, active: *const NsBox) {
-    unsafe { ns_paint_set_search(glib::boolean(case_sensitive), active) };
-}
-
-pub fn set_caret_visible(visible: bool) {
-    unsafe { ns_paint_set_caret_visible(glib::boolean(visible)) };
-}
+pub use southstar_paint::{LayerPlan, VpCapture, set_caret_visible, set_search};
 
 pub fn canvas_color(layout: BoxRef<'_>, rgba: &mut [f64; 4]) -> bool {
-    unsafe { ns_paint_canvas_color(layout.as_ptr(), rgba.as_mut_ptr()) != 0 }
+    let (found, color) = southstar_paint::canvas_color(layout);
+    *rgba = color;
+    found
 }
 
 pub use southstar_layout_hit::{
@@ -620,12 +513,8 @@ impl NsBrowser {
         }))
     }
 
-    pub fn selection_if_range(&self) -> *const c_void {
-        if self.selection_has_range() {
-            self.selection.as_ptr().cast_const().cast()
-        } else {
-            ptr::null()
-        }
+    pub fn selection_if_range(&self) -> Option<NsSelection> {
+        self.selection_has_range().then(|| self.selection.get())
     }
 
     pub fn flush_video_composites(&self, now_us: i64) {

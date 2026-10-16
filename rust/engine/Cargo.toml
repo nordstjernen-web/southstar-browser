@@ -14,6 +14,7 @@ southstar-css-syntax = { path = "../css-syntax" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-paint = { path = "../paint" }
 southstar-render = { path = "../render" }
 southstar-url = { path = "../url" }
 

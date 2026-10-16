@@ -298,7 +298,8 @@ pub fn vp_layer_info(
     index: c_int,
     out: &mut VpLayerInfo,
 ) -> c_int {
-    let Some(cap) = plan.and_then(|p| p.capture(index)) else {
+    let index = usize::try_from(index).ok();
+    let Some(cap) = plan.zip(index).and_then(|(p, i)| p.capture(i)) else {
         return -1;
     };
     if b.layout().is_none() {
@@ -325,7 +326,7 @@ pub struct VpRender {
 }
 
 pub fn render_vp_layer(b: &NsBrowser, plan: &LayerPlan, r: &VpRender, out: &PixelBuf<'_>) -> c_int {
-    let Some(cap) = plan.capture(r.index) else {
+    let Some(cap) = usize::try_from(r.index).ok().and_then(|i| plan.capture(i)) else {
         return -1;
     };
     let Some(layout) = b.layout() else {

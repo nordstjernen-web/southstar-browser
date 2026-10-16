@@ -24,9 +24,9 @@ pub const VP_STICKY: i32 = 2;
 
 #[repr(C)]
 pub struct LayerPlan {
-    pub dynamic: GBoolean,
-    pub kinds: *mut GHashTable,
-    pub vp: *mut GArray,
+    pub(crate) dynamic: GBoolean,
+    pub(crate) kinds: *mut GHashTable,
+    pub(crate) vp: *mut GArray,
 }
 
 #[cfg(target_pointer_width = "64")]

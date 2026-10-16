@@ -35,9 +35,9 @@ pub type UpperFn = unsafe extern "C" fn(index: i32, data: *mut c_void) -> *mut c
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VpCapture {
-    pub b: *const NsBox,
-    pub kind: i32,
-    pub rel: Matrix,
+    pub(crate) b: *const NsBox,
+    pub(crate) kind: i32,
+    pub(crate) rel: Matrix,
 }
 
 #[cfg(target_pointer_width = "64")]

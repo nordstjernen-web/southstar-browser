@@ -22,6 +22,7 @@ southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-query = { path = "../layout-query" }
+southstar-paint = { path = "../paint" }
 southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }

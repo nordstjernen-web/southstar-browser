@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use std::sync::OnceLock;
 
 use southstar_glib::{FALSE, GArray, GBoolean, g_array_append_vals, g_array_new};
@@ -42,13 +41,6 @@ pub enum BreakProp {
 
 unsafe extern "C" {
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
-    fn ns_paint(cr: *mut c_void, root: *const NsBox, highlight_query: *const c_char);
-    fn cairo_save(cr: *mut c_void);
-    fn cairo_restore(cr: *mut c_void);
-    fn cairo_scale(cr: *mut c_void, sx: f64, sy: f64);
-    fn cairo_translate(cr: *mut c_void, tx: f64, ty: f64);
-    fn cairo_rectangle(cr: *mut c_void, x: f64, y: f64, width: f64, height: f64);
-    fn cairo_clip(cr: *mut c_void);
 }
 
 fn break_props() -> &'static [c_int; 3] {
@@ -165,14 +157,18 @@ pub unsafe extern "C" fn ns_print_draw_page(
     if !crate::exceeds(content_w, 0.0) || !crate::exceeds(content_h, 0.0) {
         return;
     }
-    unsafe {
-        cairo_save(cr);
-        cairo_scale(cr, scale, scale);
-        cairo_translate(cr, setup.margin_left, setup.margin_top);
-        cairo_rectangle(cr, 0.0, 0.0, content_w, content_h);
-        cairo_clip(cr);
-        cairo_translate(cr, 0.0, -page_top);
-        ns_paint(cr, root, ptr::null());
-        cairo_restore(cr);
-    }
+    // SAFETY: the caller passes a live cairo context, checked non-null above.
+    let cr = unsafe { southstar_paint::Cr::from_raw(cr) };
+    // SAFETY: the caller passes the root of a live box tree, checked non-null above.
+    let Some(root) = (unsafe { BoxRef::from_ptr(root) }) else {
+        return;
+    };
+    cr.save();
+    cr.scale(scale, scale);
+    cr.translate(setup.margin_left, setup.margin_top);
+    cr.rectangle(0.0, 0.0, content_w, content_h);
+    cr.clip();
+    cr.translate(0.0, -page_top);
+    southstar_paint::paint(cr, root, None, None);
+    cr.restore();
 }
