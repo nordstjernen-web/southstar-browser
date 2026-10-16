@@ -8,7 +8,7 @@ use std::ffi::CString;
 use southstar_css::{self as css_engine, Prop};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox, Style};
@@ -95,24 +95,6 @@ struct AnimScriptTiming {
     easing: *const c_char,
 }
 
-#[repr(C)]
-struct RawDecl {
-    prop: c_int,
-    value: *const NsCssValue,
-    important: GBoolean,
-}
-
-#[repr(C)]
-struct RawSheet {
-    rules: *mut GPtrArray,
-}
-
-#[repr(C)]
-struct RawRule {
-    _selectors: *mut GPtrArray,
-    decls: *mut GArray,
-}
-
 type AnimVisitCb = unsafe extern "C" fn(info: *const AnimInfo, user: *mut c_void);
 type KeyframeCb = unsafe extern "C" fn(
     offset: f64,
@@ -156,9 +138,6 @@ unsafe extern "C" {
     fn ns_paint_normal_line_height_px(style: *const Style) -> f64;
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
-
-    fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
-    fn ns_css_stylesheet_free(sheet: *mut RawSheet);
 
     fn ns_anim_visit(a: *mut c_void, node: *const NsNode, cb: AnimVisitCb, user: *mut c_void);
     fn ns_anim_info_for(
@@ -421,24 +400,7 @@ pub(crate) fn dimension_px(v: ValueRef<'_>, font_px: f64, basis: f64) -> f64 {
 }
 
 pub(crate) struct Decl {
-    pub prop: c_int,
     pub value: *const NsCssValue,
-}
-
-unsafe fn decls_of(array: *const GArray) -> Vec<Decl> {
-    let Some(array) = (unsafe { array.as_ref() }) else {
-        return Vec::new();
-    };
-    let base = array.data.cast::<RawDecl>();
-    (0..array.len as usize)
-        .map(|i| {
-            let d = unsafe { &*base.add(i) };
-            Decl {
-                prop: d.prop,
-                value: d.value,
-            }
-        })
-        .collect()
 }
 
 pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[Decl]) -> R) -> R {
@@ -446,32 +408,17 @@ pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[Decl]) -> R) -> 
     let decls: Vec<Decl> = block
         .iter()
         .map(|d| Decl {
-            prop: d.prop(),
             value: core::ptr::from_ref(d.value()),
         })
         .collect();
     f(&decls)
 }
 
-pub(crate) fn with_sheet_declarations<R>(text: &str, f: impl FnOnce(&[Vec<Decl>]) -> R) -> R {
+pub(crate) fn sheet_declared_value(text: &str, prop: usize) -> Option<String> {
     let text = c_string(text.as_bytes());
-    let sheet = unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) };
-    let mut rules = Vec::new();
-    if let Some(s) = unsafe { sheet.as_ref() }
-        && let Some(array) = unsafe { s.rules.as_ref() }
-    {
-        for i in 0..array.len as usize {
-            let rule = unsafe { *array.pdata.add(i) }.cast::<RawRule>();
-            if let Some(rule) = unsafe { rule.as_ref() } {
-                rules.push(unsafe { decls_of(rule.decls) });
-            }
-        }
-    }
-    let result = f(&rules);
-    if !sheet.is_null() {
-        unsafe { ns_css_stylesheet_free(sheet) };
-    }
-    result
+    let sheet = css_engine::OwnedSheet::parse(text.to_bytes());
+    let (_, value) = sheet.declared_values().find(|&(id, _)| id == prop)?;
+    serialize_raw(value)
 }
 
 pub(crate) fn columns_shorthand(values: &[Option<String>]) -> Option<String> {

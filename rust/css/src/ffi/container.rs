@@ -1,21 +1,21 @@
-//! Southstar — the C ABI of container queries: the container map layout fills, the container stack the cascade pushes and pops, container units, and @container conditions.
+//! Southstar — the storage behind container queries: the container map layout fills, the container stack the cascade pushes and pops, container units, and @container conditions.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
-use core::mem::size_of;
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 
 use crate::container::{self, Query, TYPE_INLINE, TYPE_SIZE};
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct Container {
-    names: *mut c_char,
+    names: Option<Arc<CStr>>,
     pub(crate) width: f64,
     pub(crate) height: f64,
     pub(crate) kind: c_int,
@@ -24,154 +24,119 @@ pub(crate) struct Container {
     pub(crate) sibling_count: c_int,
 }
 
-const _: () = assert!(size_of::<Container>() == 40);
-
 impl Container {
     pub(crate) fn names(&self) -> Option<&CStr> {
-        (!self.names.is_null()).then(|| unsafe { CStr::from_ptr(self.names) })
+        self.names.as_deref()
     }
 }
 
-unsafe extern "C" {
-    fn g_str_hash(v: *const c_void) -> c_uint;
-    fn g_hash_table_size(table: *mut GHashTable) -> c_uint;
+#[derive(Default, PartialEq)]
+pub struct ContainerMap(HashMap<usize, Container>);
+
+impl ContainerMap {
+    pub fn new() -> ContainerMap {
+        ContainerMap::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn add(
+        &mut self,
+        node: Node<'_>,
+        type_kw: &CStr,
+        name_kw: Option<&CStr>,
+        width: f64,
+        height: f64,
+        vertical: bool,
+    ) {
+        let kind = if type_kw.to_bytes().eq_ignore_ascii_case(b"size") {
+            TYPE_SIZE
+        } else {
+            TYPE_INLINE
+        };
+        let names = name_kw
+            .filter(|name| !name.to_bytes().eq_ignore_ascii_case(b"none"))
+            .map(Arc::from);
+        let mut container = Container {
+            names,
+            width,
+            height,
+            kind,
+            vertical: glib::boolean(vertical),
+            sibling_index: 1,
+            sibling_count: 1,
+        };
+        if let Some(parent) = node.parent() {
+            let mut count = 0;
+            let mut sibling = parent.first_child();
+            while let Some(sib) = sibling {
+                if sib.is_element() {
+                    count += 1;
+                    if sib.as_ptr() == node.as_ptr() {
+                        container.sibling_index = count;
+                    }
+                }
+                sibling = sib.next_sibling();
+            }
+            container.sibling_count = count;
+        }
+        self.0.insert(node.as_ptr() as usize, container);
+    }
 }
 
 thread_local! {
-    static MAP: Cell<*mut GHashTable> = const { Cell::new(ptr::null_mut()) };
+    static MAP: Cell<*const ContainerMap> = const { Cell::new(ptr::null()) };
 }
 
-pub(crate) fn container_map() -> *mut GHashTable {
-    MAP.with(Cell::get)
+pub(super) fn with_container_map<R>(map: Option<&ContainerMap>, f: impl FnOnce() -> R) -> R {
+    struct Restore(*const ContainerMap);
+
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            MAP.with(|current| current.set(self.0));
+        }
+    }
+
+    let installed = map.map_or(ptr::null(), ptr::from_ref);
+    let _restore = Restore(MAP.with(|current| current.replace(installed)));
+    f()
+}
+
+fn with_current_map<R>(f: impl FnOnce(Option<&ContainerMap>) -> R) -> R {
+    let map = MAP.with(Cell::get);
+    // SAFETY: MAP is null or a map with_container_map borrows until its closure, which this call runs within, returns.
+    f(unsafe { map.as_ref() })
+}
+
+pub(crate) fn container_map_installed() -> bool {
+    !MAP.with(Cell::get).is_null()
 }
 
 unsafe fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: the caller passes null or a NUL-terminated string that outlives 'a.
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_container_map(map: *mut GHashTable) {
-    MAP.with(|current| current.set(map));
+fn str_hash(text: &CStr) -> u32 {
+    text.to_bytes().iter().fold(5381u32, |h, &c| {
+        (h << 5).wrapping_add(h).wrapping_add(c as i8 as u32)
+    })
 }
 
-unsafe extern "C" fn container_free(data: *mut c_void) {
-    let container = data.cast::<Container>();
-    if let Some(container) = unsafe { container.as_ref() } {
-        unsafe { glib::g_free(container.names.cast()) };
-    }
-    unsafe { glib::g_free(data) };
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_map_new() -> *mut GHashTable {
-    unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_direct_hash),
-            Some(glib::g_direct_equal),
-            None,
-            Some(container_free),
-        )
-    }
-}
-
-fn same_container(a: &Container, b: &Container) -> bool {
-    a.kind == b.kind
-        && a.vertical == b.vertical
-        && a.width == b.width
-        && a.height == b.height
-        && a.sibling_index == b.sibling_index
-        && a.sibling_count == b.sibling_count
-        && a.names() == b.names()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_maps_equal(
-    a: *mut GHashTable,
-    b: *mut GHashTable,
-) -> GBoolean {
-    if a.is_null() || b.is_null() {
-        return glib::boolean(a == b);
-    }
-    if unsafe { g_hash_table_size(a) != g_hash_table_size(b) } {
-        return glib::FALSE;
-    }
-    for (key, value) in unsafe { glib::hash_table_entries(a) } {
-        let other = unsafe { glib::g_hash_table_lookup(b, key) }.cast::<Container>();
-        let (Some(other), Some(value)) = (unsafe { other.as_ref() }, unsafe {
-            value.cast::<Container>().as_ref()
-        }) else {
-            return glib::FALSE;
-        };
-        if !same_container(value, other) {
-            return glib::FALSE;
-        }
-    }
-    glib::TRUE
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_map_add(
-    map: *mut GHashTable,
-    node: *const c_void,
-    type_kw: *const c_char,
-    name_kw: *const c_char,
-    w: c_double,
-    h: c_double,
-    vertical: GBoolean,
-) {
-    let Some(type_kw) = (unsafe { text(type_kw) }) else {
-        return;
-    };
-    if map.is_null() || node.is_null() {
-        return;
-    }
-    let kind = if type_kw.to_bytes().eq_ignore_ascii_case(b"size") {
-        TYPE_SIZE
-    } else {
-        TYPE_INLINE
-    };
-    let names = match unsafe { text(name_kw) } {
-        Some(name) if !name.to_bytes().eq_ignore_ascii_case(b"none") => unsafe {
-            glib::g_strdup(name.as_ptr())
-        },
-        _ => ptr::null_mut(),
-    };
-    let mut container = Container {
-        names,
-        width: w,
-        height: h,
-        kind,
-        vertical,
-        sibling_index: 1,
-        sibling_count: 1,
-    };
-    if let Some(element) = unsafe { Node::from_ptr(node.cast()) }
-        && let Some(parent) = element.parent()
-    {
-        let mut count = 0;
-        let mut sibling = parent.first_child();
-        while let Some(sib) = sibling {
-            if sib.is_element() {
-                count += 1;
-                if sib.as_ptr() == element.as_ptr() {
-                    container.sibling_index = count;
-                }
-            }
-            sibling = sib.next_sibling();
-        }
-        container.sibling_count = count;
-    }
-    unsafe {
-        let slot = glib::g_malloc0(size_of::<Container>()).cast::<Container>();
-        slot.write(container);
-        glib::g_hash_table_insert(map, node.cast_mut(), slot.cast());
-    }
-}
-
-fn container_hash(node: *const c_void, c: &Container) -> u64 {
+fn container_hash(node: usize, c: &Container) -> u64 {
     let w = c.width.to_bits();
     let h = c.height.to_bits();
-    let mut x = (node as usize as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    let mut x = (node as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
     x ^= w
         .wrapping_add(0x7f4a_7c15_9e37_79b9)
         .wrapping_add(x << 6)
@@ -184,8 +149,8 @@ fn container_hash(node: *const c_void, c: &Container) -> u64 {
         ^ ((c.vertical as i64 as u64) << 39)
         ^ (u64::from(c.sibling_index as u32) << 20)
         ^ u64::from(c.sibling_count as u32);
-    if !c.names.is_null() {
-        x ^= u64::from(unsafe { g_str_hash(c.names.cast()) });
+    if let Some(names) = c.names() {
+        x ^= u64::from(str_hash(names));
     }
     x ^= x >> 33;
     x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
@@ -194,28 +159,23 @@ fn container_hash(node: *const c_void, c: &Container) -> u64 {
 }
 
 pub(super) fn container_map_signature() -> u64 {
-    let map = container_map();
-    if map.is_null() {
-        return 0;
-    }
-    let mut signature = u64::from(unsafe { g_hash_table_size(map) }) + 1;
-    for (key, value) in unsafe { glib::hash_table_entries(map) } {
-        if let Some(container) = unsafe { value.cast::<Container>().as_ref() } {
-            signature = signature.wrapping_add(container_hash(key, container));
+    with_current_map(|map| {
+        let Some(map) = map else {
+            return 0;
+        };
+        let mut signature = map.len() as u64 + 1;
+        for (&node, container) in &map.0 {
+            signature = signature.wrapping_add(container_hash(node, container));
         }
-    }
-    signature
+        signature
+    })
 }
 
 pub(super) fn container_stack_push(node: Node<'_>) -> bool {
-    let map = container_map();
-    if map.is_null() {
-        return false;
-    }
-    let info = unsafe { glib::g_hash_table_lookup(map, node.as_ptr().cast()) }.cast::<Container>();
-    match unsafe { info.as_ref() } {
+    let info = with_current_map(|map| map?.0.get(&(node.as_ptr() as usize)).cloned());
+    match info {
         Some(info) => {
-            container::stack_push(*info);
+            container::stack_push(info);
             true
         }
         None => false,

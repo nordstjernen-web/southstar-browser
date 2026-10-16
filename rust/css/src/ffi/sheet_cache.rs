@@ -1,18 +1,13 @@
-//! Southstar — the C ABI of the style sheet caches: parsed sheets kept per <style> element, per merged style text, per linked URL and per imported URL and layer, so a style pass reparses only what changed.
+//! Southstar — the style sheet caches: parsed sheets kept per <style> element, per merged style text, per linked URL and per imported URL and layer, so a style pass reparses only what changed.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
-use core::ptr::{self, NonNull};
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
 
-use super::sheet::{
-    RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse, stylesheet_force_layer,
-};
+use super::sheet::OwnedSheet;
 use crate::style_text;
 
 const STYLE_ELEMENTS_MAX: usize = 2048;
@@ -20,56 +15,24 @@ const MERGED_TRIM_ABOVE: usize = 64;
 const MERGED_TRIM_TO: usize = 48;
 const URL_SHEETS_MAX: usize = 256;
 
-unsafe extern "C" {
-    fn g_bytes_ref(bytes: *mut c_void) -> *mut c_void;
-    fn g_bytes_unref(bytes: *mut c_void);
-    fn g_bytes_equal(a: *const c_void, b: *const c_void) -> GBoolean;
-    fn g_bytes_get_data(bytes: *mut c_void, size: *mut usize) -> *const c_void;
-}
-
-struct Sheet(NonNull<RawSheet>);
+struct Sheet(OwnedSheet);
 
 unsafe impl Send for Sheet {}
 
 impl Sheet {
-    fn adopt(raw: *mut c_void) -> Option<Self> {
-        let raw = NonNull::new(raw.cast::<RawSheet>())?;
-        unsafe { (*raw.as_ptr()).cached = glib::TRUE };
-        Some(Sheet(raw))
+    fn adopt(sheet: OwnedSheet) -> Self {
+        sheet.set_cached(true);
+        Sheet(sheet)
     }
 
-    fn ptr(&self) -> *mut c_void {
-        self.0.as_ptr().cast()
+    fn handle(&self) -> OwnedSheet {
+        self.0.share()
     }
 }
 
 impl Drop for Sheet {
     fn drop(&mut self) {
-        unsafe {
-            (*self.0.as_ptr()).cached = glib::FALSE;
-            ns_css_stylesheet_free(self.0.as_ptr());
-        }
-    }
-}
-
-struct Bytes(NonNull<c_void>);
-
-unsafe impl Send for Bytes {}
-
-impl Bytes {
-    fn retain(bytes: NonNull<c_void>) -> Self {
-        unsafe { g_bytes_ref(bytes.as_ptr()) };
-        Bytes(bytes)
-    }
-
-    fn same(&self, other: NonNull<c_void>) -> bool {
-        self.0 == other || unsafe { g_bytes_equal(self.0.as_ptr(), other.as_ptr()) } != 0
-    }
-}
-
-impl Drop for Bytes {
-    fn drop(&mut self) {
-        unsafe { g_bytes_unref(self.0.as_ptr()) };
+        self.0.set_cached(false);
     }
 }
 
@@ -111,7 +74,7 @@ struct UrlKey {
 }
 
 struct ImportSheet {
-    bytes: Bytes,
+    css: Vec<u8>,
     sheet: Sheet,
 }
 
@@ -192,47 +155,24 @@ fn with<R>(f: impl FnOnce(&mut Caches) -> R) -> R {
     f(&mut lock())
 }
 
-unsafe fn parse(css: *const c_char, len: isize) -> *mut c_void {
-    unsafe { ns_css_stylesheet_parse(css, len) }
-}
-
-fn parse_bytes(css: &[u8]) -> *mut c_void {
-    unsafe { parse(css.as_ptr().cast(), css.len() as isize) }
-}
-
-unsafe fn parse_in_layer(bytes: NonNull<c_void>, layer: *const c_char) -> *mut c_void {
-    let mut len = 0;
-    let data = unsafe { g_bytes_get_data(bytes.as_ptr(), &mut len) };
-    let sheet = unsafe { parse(data.cast(), len as isize) };
-    if !sheet.is_null() && !layer.is_null() {
-        unsafe { stylesheet_force_layer(sheet, layer) };
+fn parse_in_layer(css: &[u8], layer: Option<&[u8]>) -> OwnedSheet {
+    let mut sheet = OwnedSheet::parse(css);
+    if let Some(layer) = layer {
+        sheet.force_layer(layer);
     }
     sheet
 }
 
-unsafe fn owned_bytes(text: *const c_char) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(text) }.map(<[u8]>::to_vec)
-}
-
-unsafe fn url_key(url: *const c_char, layer: *const c_char) -> Option<UrlKey> {
-    let url = unsafe { glib::bytes(url) }.filter(|url| !url.is_empty())?;
-    Some(UrlKey {
+fn url_key(url: &[u8], layer: Option<&[u8]>) -> Option<UrlKey> {
+    (!url.is_empty()).then(|| UrlKey {
         viewport: viewport_rounded(),
-        layer: unsafe { owned_bytes(layer) },
+        layer: layer.map(<[u8]>::to_vec),
         url: url.to_vec(),
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_from_style_element_cached(
-    style: *mut NsNode,
-) -> *mut c_void {
-    let Some(style) = (unsafe { Node::from_ptr(style) }) else {
-        return ptr::null_mut();
-    };
-    let Some(css) = style_text::style_element_text(style) else {
-        return ptr::null_mut();
-    };
+pub fn stylesheet_from_style_element_cached(style: Node<'_>) -> Option<OwnedSheet> {
+    let css = style_text::style_element_text(style)?;
     let key = style.as_ptr() as usize;
     let viewport = viewport();
     let hit = with(|caches| {
@@ -240,112 +180,82 @@ pub unsafe extern "C" fn ns_css_stylesheet_from_style_element_cached(
             .style_elements
             .get(&key)
             .filter(|entry| entry.css == css && entry.viewport == viewport)
-            .map(|entry| entry.sheet.ptr())
+            .map(|entry| entry.sheet.handle())
     });
-    if let Some(sheet) = hit {
-        return sheet;
+    if hit.is_some() {
+        return hit;
     }
-    let Some(sheet) = Sheet::adopt(parse_bytes(&css)) else {
-        return ptr::null_mut();
-    };
-    let out = sheet.ptr();
+    let sheet = Sheet::adopt(OwnedSheet::parse(&css));
+    let out = sheet.handle();
     let entry = StyleElementSheet {
         css,
         viewport,
         sheet,
     };
     drop(with(|caches| caches.style_elements.insert(key, entry)));
-    out
+    Some(out)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_merged_styles_cached(
-    css: *const c_char,
-    len: isize,
-    base_url: *const c_char,
-) -> *mut c_void {
-    if css.is_null() || len == 0 {
-        return ptr::null_mut();
+pub fn merged_styles_cached(css: &[u8], base: Option<&[u8]>) -> Option<OwnedSheet> {
+    if css.is_empty() {
+        return None;
     }
-    let len = usize::try_from(len).unwrap_or_else(|_| unsafe { CStr::from_ptr(css) }.count_bytes());
     let key = MergedKey {
         viewport: viewport_rounded(),
-        base: unsafe { owned_bytes(base_url) },
-        css: unsafe { glib::slice(css.cast(), len) }.to_vec(),
+        base: base.map(<[u8]>::to_vec),
+        css: css.to_vec(),
     };
     let hit = with(|caches| {
         let Caches { merged, clock, .. } = caches;
         merged.get_mut(&key).map(|entry| {
             *clock += 1;
             entry.stamp = *clock;
-            entry.sheet.ptr()
+            entry.sheet.handle()
         })
     });
-    if let Some(sheet) = hit {
-        return sheet;
+    if hit.is_some() {
+        return hit;
     }
-    let Some(sheet) = Sheet::adopt(parse_bytes(&key.css)) else {
-        return ptr::null_mut();
-    };
-    let out = sheet.ptr();
+    let sheet = Sheet::adopt(OwnedSheet::parse(&key.css));
+    let out = sheet.handle();
     drop(with(|caches| {
         let stamp = caches.tick();
         caches.merged.insert(key, MergedSheet { sheet, stamp })
     }));
-    out
+    Some(out)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_parse_url_cached(
-    url: *const c_char,
-    css: *const c_char,
-    len: isize,
-) -> *mut c_void {
-    if css.is_null() {
-        return ptr::null_mut();
-    }
-    let Some(key) = (unsafe { url_key(url, ptr::null()) }) else {
-        return unsafe { parse(css, len) };
+pub fn parse_url_cached(url: &[u8], css: &[u8]) -> OwnedSheet {
+    let Some(key) = url_key(url, None) else {
+        return OwnedSheet::parse(css);
     };
-    if let Some(sheet) = with(|caches| caches.links.get(&key).map(Sheet::ptr)) {
+    if let Some(sheet) = with(|caches| caches.links.get(&key).map(Sheet::handle)) {
         return sheet;
     }
-    let Some(sheet) = Sheet::adopt(unsafe { parse(css, len) }) else {
-        return ptr::null_mut();
-    };
-    let out = sheet.ptr();
+    let sheet = Sheet::adopt(OwnedSheet::parse(css));
+    let out = sheet.handle();
     drop(with(|caches| caches.links.insert(key, sheet)));
     out
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_parse_import_cached(
-    url: *const c_char,
-    layer_name: *const c_char,
-    bytes: *mut c_void,
-) -> *mut c_void {
-    let Some(bytes) = NonNull::new(bytes) else {
-        return ptr::null_mut();
-    };
-    let Some(key) = (unsafe { url_key(url, layer_name) }) else {
-        return unsafe { parse_in_layer(bytes, layer_name) };
+pub fn parse_import_cached(url: &[u8], layer: Option<&[u8]>, css: &[u8]) -> OwnedSheet {
+    let Some(key) = url_key(url, layer) else {
+        return parse_in_layer(css, layer);
     };
     let hit = with(|caches| {
         caches
             .imports
             .get(&key)
-            .filter(|entry| entry.bytes.same(bytes))
-            .map(|entry| entry.sheet.ptr())
+            .filter(|entry| entry.css == css)
+            .map(|entry| entry.sheet.handle())
     });
     if let Some(sheet) = hit {
         return sheet;
     }
-    let Some(sheet) = Sheet::adopt(unsafe { parse_in_layer(bytes, layer_name) }) else {
-        return ptr::null_mut();
-    };
-    let out = sheet.ptr();
+    let sheet = Sheet::adopt(parse_in_layer(css, layer));
+    let out = sheet.handle();
     let entry = ImportSheet {
-        bytes: Bytes::retain(bytes),
+        css: css.to_vec(),
         sheet,
     };
     drop(with(|caches| caches.imports.insert(key, entry)));

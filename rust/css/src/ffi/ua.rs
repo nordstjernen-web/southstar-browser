@@ -4,7 +4,7 @@
 
 use std::sync::OnceLock;
 
-use super::sheet::{RawSheet, ns_css_stylesheet_parse};
+use super::sheet::{OwnedSheet, RawSheet};
 
 const UA: &str = include_str!("../ua.css");
 const UA_QUIRKS: &str = include_str!("../ua-quirks.css");
@@ -15,15 +15,17 @@ unsafe impl Send for Sheet {}
 unsafe impl Sync for Sheet {}
 
 fn parse(text: &str) -> Sheet {
-    Sheet(unsafe { ns_css_stylesheet_parse(text.as_ptr().cast(), text.len() as isize) }.cast())
+    Sheet(OwnedSheet::parse(text.as_bytes()).into_raw())
 }
 
-pub(super) fn ua_sheet(quirks: bool) -> *const RawSheet {
+pub(super) fn ua_sheet(quirks: bool) -> &'static RawSheet {
     static STANDARD: OnceLock<Sheet> = OnceLock::new();
     static QUIRKS: OnceLock<Sheet> = OnceLock::new();
-    if quirks {
-        QUIRKS.get_or_init(|| parse(&[UA, UA_QUIRKS].concat())).0
+    let sheet = if quirks {
+        QUIRKS.get_or_init(|| parse(&[UA, UA_QUIRKS].concat()))
     } else {
-        STANDARD.get_or_init(|| parse(UA)).0
-    }
+        STANDARD.get_or_init(|| parse(UA))
+    };
+    // SAFETY: the user-agent sheets are parsed once and never freed.
+    unsafe { &*sheet.0 }
 }

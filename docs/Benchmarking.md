@@ -372,7 +372,7 @@ How it works:
   the already-refcounted `ns_css_value`s) instead of gathering and matching
   rules. Anything inside a dirty subtree recomputes fully. A recomputed node
   marks its descendants dirty, so inherited values stay correct.
-- The previous styles are kept in an independent table owned by `ns_css_compute`
+- The previous styles are kept in an independent table owned by `compute_styles`
   (cloned from the prior `out`), so the borrowed-table lifetime of the
   free-before-recompute callers is not an issue.
 

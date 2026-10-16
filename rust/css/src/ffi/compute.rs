@@ -4,8 +4,8 @@
 
 use core::cell::Cell;
 use core::ffi::{c_int, c_uint, c_void};
+use core::ops::Deref;
 use core::ptr;
-use core::slice;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -16,7 +16,9 @@ use southstar_glib::{self as glib, GHashTable};
 
 use super::cascade::{Parents, cascade_apply};
 use super::computed_units::{PROP_COUNT, RawStyle};
-use super::container::{container_map_signature, container_stack_push};
+use super::container::{
+    ContainerMap, container_map_signature, container_stack_push, with_container_map,
+};
 use super::custom_props::{build_vars, compute_registered_vars};
 use super::fixups::{
     display_contents_to_none, frame_viewport_from_style, strip_native_widget_decorations,
@@ -32,7 +34,7 @@ use super::pending::{Resolved, resolve_pending};
 use super::registry::{registered_property_serial, registered_props_begin, registered_props_end};
 use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
-use super::sheet::RawSheet;
+use super::sheet::{RawSheet, Sheet};
 use super::style_alloc::{RetainedStyle, style_alloc, style_clone_shared, style_free};
 use super::style_share::{
     Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
@@ -78,14 +80,6 @@ unsafe extern "C" fn style_free_notify(data: *mut c_void) {
 
 unsafe extern "C" fn var_map_unref_notify(data: *mut c_void) {
     unsafe { var_map_unref(data.cast()) };
-}
-
-unsafe fn items<'a, T>(data: *const T, len: usize) -> &'a [T] {
-    if data.is_null() || len == 0 {
-        &[]
-    } else {
-        unsafe { slice::from_raw_parts(data, len) }
-    }
 }
 
 struct Scratch {
@@ -212,7 +206,7 @@ fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f6
 }
 
 fn pseudo_mask(sheet: Option<&RawSheet>) -> c_uint {
-    sheet.map_or(0, |sheet| sheet.pseudo_mask)
+    sheet.map_or(0, |sheet| sheet.pseudo_mask.get())
 }
 
 type Sheets<'a> = [Option<&'a RawSheet>];
@@ -536,12 +530,20 @@ fn ms(from: Instant, to: Instant) -> f64 {
     to.duration_since(from).as_secs_f64() * 1000.0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_compute(
-    doc: *mut NsNode,
-    author_sheets: *const *const RawSheet,
-    sheet_docs: *const *const NsNode,
-    n_sheets: usize,
+pub fn compute_styles(
+    doc: Option<Node<'_>>,
+    sheets: &[impl Deref<Target = Sheet>],
+    sheet_docs: &[Node<'_>],
+    containers: Option<&ContainerMap>,
+) -> *mut GHashTable {
+    let authors: Vec<Option<&RawSheet>> = sheets.iter().map(|sheet| Some(sheet.raw())).collect();
+    with_container_map(containers, || compute(doc, &authors, sheet_docs))
+}
+
+fn compute(
+    doc_node: Option<Node<'_>>,
+    authors: &[Option<&RawSheet>],
+    sheet_docs: &[Node<'_>],
 ) -> *mut GHashTable {
     let out = unsafe {
         glib::g_hash_table_new_full(
@@ -552,23 +554,15 @@ pub unsafe extern "C" fn ns_css_compute(
         )
     };
     element_state::reset_language_cache();
-    let doc_node = unsafe { Node::from_ptr(doc) };
+    let doc = Node::ptr_or_null(doc_node);
     let quirks = doc_node.is_some_and(|d| d.flags() & NODE_QUIRKS != 0);
-    let ua_ptr = ua_sheet(quirks);
+    let ua = Some(ua_sheet(quirks));
     let profile = std::env::var_os("NS_PROFILE").is_some();
     let started = Instant::now();
-    let author_ptrs = unsafe { items(author_sheets, n_sheets) };
-    for &sheet in core::iter::once(&ua_ptr).chain(author_ptrs) {
-        if let Some(sheet) = unsafe { sheet.cast_mut().as_mut() } {
-            rule_index_ensure(sheet);
-        }
+    for &sheet in core::iter::once(&ua).chain(authors).flatten() {
+        rule_index_ensure(sheet);
     }
     let indexed = Instant::now();
-    let ua = unsafe { ua_ptr.as_ref() };
-    let authors: Vec<Option<&RawSheet>> = author_ptrs
-        .iter()
-        .map(|&sheet| unsafe { sheet.as_ref() })
-        .collect();
     let sheet_refs: Vec<SheetRef<'_>> = ua
         .into_iter()
         .chain(authors.iter().flatten().copied())
@@ -604,10 +598,13 @@ pub unsafe extern "C" fn ns_css_compute(
     let active = usable && previous.as_ref().is_some_and(|p| p.key == key);
 
     ancestor_filter_begin(attr_ancestor_hashes());
-    let doc_sheets = (!sheet_docs.is_null()).then(|| {
+    let doc_sheets = (!sheet_docs.is_empty()).then(|| {
         let mut by_doc: HashMap<usize, Vec<Option<&RawSheet>>> = HashMap::new();
-        for (&owner, &sheet) in unsafe { items(sheet_docs, n_sheets) }.iter().zip(&authors) {
-            by_doc.entry(owner as usize).or_default().push(sheet);
+        for (owner, &sheet) in sheet_docs.iter().zip(authors) {
+            by_doc
+                .entry(owner.as_ptr() as usize)
+                .or_default()
+                .push(sheet);
         }
         by_doc
     });
@@ -627,7 +624,7 @@ pub unsafe extern "C" fn ns_css_compute(
         recomputed: 0,
     };
     if let Some(doc) = doc_node {
-        walk.walk(doc, &authors, ptr::null(), ptr::null(), false);
+        walk.walk(doc, authors, ptr::null(), ptr::null(), false);
     }
     let (reused, recomputed) = (walk.reused, walk.recomputed);
     SCRATCH.set(Some(scratch));

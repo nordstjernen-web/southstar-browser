@@ -42,12 +42,14 @@ use core::ffi::CStr;
 use southstar_glib::{self as glib};
 
 pub use animation::{animation_effective, animation_lists, style_may_animate};
-pub use compute::{incremental_exclude, set_render_zoom, style_before_change};
+pub use compute::{compute_styles, incremental_exclude, set_render_zoom, style_before_change};
 pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView, slot};
 pub use computed_units::{
-    PROP_COUNT, RawStyle, style_retain, style_value_slot, tracks_computed_text,
+    PROP_COUNT, RawStyle, style_retain, style_scale_font_size, style_value_slot,
+    tracks_computed_text,
 };
-pub(crate) use container::{Container, container_map};
+pub use container::ContainerMap;
+pub(crate) use container::{Container, container_map_installed};
 pub use declarations::{Declaration, Declarations};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
@@ -74,10 +76,11 @@ pub use registry::{RegisterError, Registration, clear_registered_properties, reg
 pub(crate) use selector_view::{
     AttrRef, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef, SheetRef,
 };
-pub use sheet::{FontFaceRule, ImportRule, PageRule, Sheet};
+pub use sheet::{FontFaceRule, ImportRule, OwnedSheet, PageRule, Sheet};
 pub(crate) use sheet::{SheetBuilder, SyntaxDef};
 pub use sheet_cache::{
-    relayout_enter, relayout_leave, style_element_cache_begin, style_element_cache_end,
+    merged_styles_cached, parse_import_cached, parse_url_cached, relayout_enter, relayout_leave,
+    style_element_cache_begin, style_element_cache_end, stylesheet_from_style_element_cached,
 };
 pub(crate) use shorthand::prop_named;
 pub use style_alloc::RetainedStyle;

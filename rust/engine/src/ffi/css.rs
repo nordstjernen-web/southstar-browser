@@ -3,43 +3,20 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr;
 use std::ffi::CString;
 
+use southstar_css::OwnedSheet;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_layout::NsBox;
 
-use super::net::{Bytes, GBytes};
+use super::net::Bytes;
 
 pub use southstar_render::{RenderCtx, RenderProfile};
 
 unsafe extern "C" {
-    fn ns_css_stylesheet_parse_import_cached(
-        url: *const c_char,
-        layer: *const c_char,
-        bytes: *mut GBytes,
-    ) -> *mut c_void;
-    fn ns_css_stylesheet_parse_url_cached(
-        url: *const c_char,
-        text: *const c_char,
-        len: isize,
-    ) -> *mut c_void;
-    fn ns_css_stylesheet_resolve_urls(sheet: *mut c_void, base_url: *const c_char);
-    fn ns_css_merged_styles_cached(
-        text: *const c_char,
-        len: isize,
-        base_url: *const c_char,
-    ) -> *mut c_void;
-    fn ns_css_stylesheet_from_style_element_cached(style: *mut NsNode) -> *mut c_void;
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
-    fn ns_css_compute(
-        doc: *mut NsNode,
-        sheets: *const *const c_void,
-        docs: *const *const NsNode,
-        n: c_uint,
-    ) -> *mut GHashTable;
-    fn ns_css_stylesheet_free(sheet: *mut c_void);
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
     fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
@@ -47,89 +24,16 @@ unsafe extern "C" {
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn g_printerr(format: *const c_char, ...);
-    fn g_ptr_array_set_size(array: *mut GPtrArray, length: c_int);
 }
 
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
 }
 
-pub struct SheetList(NonNull<GPtrArray>);
-
-impl SheetList {
-    pub fn new() -> SheetList {
-        SheetList(NonNull::new(unsafe { glib::g_ptr_array_new() }).expect("g_ptr_array_new"))
-    }
-
-    pub fn len(&self) -> usize {
-        unsafe { self.0.as_ref() }.len as usize
-    }
-
-    pub fn push(&self, item: *mut c_void) {
-        unsafe { glib::g_ptr_array_add(self.0.as_ptr(), item) };
-    }
-
-    fn data(&self) -> *const *const c_void {
-        unsafe { self.0.as_ref() }.pdata.cast_const().cast()
-    }
-
-    fn items(&self) -> Vec<*mut c_void> {
-        let a = unsafe { self.0.as_ref() };
-        (0..a.len as usize)
-            .map(|i| unsafe { *a.pdata.add(i) })
-            .collect()
-    }
-
-    pub fn free_sheets(&self) {
-        for sheet in self.items() {
-            unsafe { ns_css_stylesheet_free(sheet) };
-        }
-    }
-
-    pub fn truncate(&self) {
-        unsafe { g_ptr_array_set_size(self.0.as_ptr(), 0) };
-    }
-
-    pub fn destroy(self) {
-        unsafe { glib::g_ptr_array_free(self.0.as_ptr(), glib::TRUE) };
-    }
-}
-
-pub struct Import<'a> {
-    pub url: Option<&'a CStr>,
-    pub layer_name: Option<&'a CStr>,
-    pub media: Option<&'a CStr>,
-}
-
-#[derive(Clone, Copy)]
-pub struct Stylesheet(NonNull<c_void>);
-
-impl Stylesheet {
-    fn from_ptr(p: *mut c_void) -> Option<Stylesheet> {
-        NonNull::new(p).map(Stylesheet)
-    }
-
-    pub fn as_ptr(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn imports<'a>(self) -> Vec<Import<'a>> {
-        let Some(sheet) = (unsafe { southstar_css::Sheet::from_ptr(self.as_ptr()) }) else {
-            return Vec::new();
-        };
-        sheet
-            .imports()
-            .map(|import| Import {
-                url: import.url,
-                layer_name: import.layer_name,
-                media: import.media,
-            })
-            .collect()
-    }
-
-    pub fn resolve_urls(self, base: Option<&CStr>) {
-        unsafe { ns_css_stylesheet_resolve_urls(self.as_ptr(), ptr_or_null(base)) };
-    }
+#[derive(Default)]
+pub struct SheetList<'a> {
+    pub sheets: Vec<OwnedSheet>,
+    pub docs: Vec<Node<'a>>,
 }
 
 pub fn media_query_matches(query: &CStr) -> bool {
@@ -141,33 +45,20 @@ pub fn url_resolve_opt(base: Option<&CStr>, href: &CStr) -> Option<CString> {
         .and_then(|abs| CString::new(abs).ok())
 }
 
-pub fn parse_import_cached(url: &CStr, layer: Option<&CStr>, bytes: &Bytes) -> Option<Stylesheet> {
-    Stylesheet::from_ptr(unsafe {
-        ns_css_stylesheet_parse_import_cached(url.as_ptr(), ptr_or_null(layer), bytes.raw())
-    })
+pub fn parse_import_cached(url: &CStr, layer: Option<&CStr>, bytes: &Bytes) -> OwnedSheet {
+    southstar_css::parse_import_cached(url.to_bytes(), layer.map(CStr::to_bytes), bytes.data())
 }
 
-pub fn parse_url_cached(url: &CStr, text: &[u8]) -> Option<Stylesheet> {
-    let data = if text.is_empty() {
-        ptr::null()
-    } else {
-        text.as_ptr().cast()
-    };
-    Stylesheet::from_ptr(unsafe {
-        ns_css_stylesheet_parse_url_cached(url.as_ptr(), data, text.len() as isize)
-    })
+pub fn parse_url_cached(url: &CStr, text: &[u8]) -> Option<OwnedSheet> {
+    (!text.is_empty()).then(|| southstar_css::parse_url_cached(url.to_bytes(), text))
 }
 
-pub fn merged_styles_cached(run: &[u8], base: Option<&CStr>) -> Option<Stylesheet> {
-    let mut text = run.to_vec();
-    text.push(0);
-    Stylesheet::from_ptr(unsafe {
-        ns_css_merged_styles_cached(text.as_ptr().cast(), run.len() as isize, ptr_or_null(base))
-    })
+pub fn merged_styles_cached(run: &[u8], base: Option<&CStr>) -> Option<OwnedSheet> {
+    southstar_css::merged_styles_cached(run, base.map(CStr::to_bytes))
 }
 
-pub fn stylesheet_from_style_element_cached(style: Node) -> Option<Stylesheet> {
-    Stylesheet::from_ptr(unsafe { ns_css_stylesheet_from_style_element_cached(style.as_mut_ptr()) })
+pub fn stylesheet_from_style_element_cached(style: Node) -> Option<OwnedSheet> {
+    southstar_css::stylesheet_from_style_element_cached(style)
 }
 
 pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
@@ -242,28 +133,21 @@ impl Drop for CssScope {
 }
 
 pub fn load_into_anim(anim: *mut c_void, sheets: &SheetList) {
-    for sheet in sheets.items() {
-        unsafe { ns_anim_load_from_stylesheet(anim, sheet) };
+    for sheet in &sheets.sheets {
+        // SAFETY: anim is the embedder's animation engine, and the sheet stays alive for the call.
+        unsafe { ns_anim_load_from_stylesheet(anim, sheet.as_ptr()) };
     }
 }
 
-pub fn css_compute(doc: *mut NsNode, sheets: &SheetList, docs: &SheetList) -> *mut GHashTable {
-    unsafe {
-        ns_css_compute(
-            doc,
-            sheets.data(),
-            docs.data().cast(),
-            sheets.len() as c_uint,
-        )
-    }
+pub fn css_compute(doc: Option<Node>, sheets: &SheetList) -> *mut GHashTable {
+    southstar_css::compute_styles(doc, &sheets.sheets, &sheets.docs, None)
 }
 
-pub fn render_ctx(r: &Relayout, sheets: &SheetList, docs: &SheetList) -> RenderCtx {
+pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> {
     RenderCtx {
         doc: r.doc,
-        sheets: sheets.data(),
-        sheet_docs: docs.data().cast(),
-        n_sheets: sheets.len() as c_uint,
+        sheets: &sheets.sheets,
+        sheet_docs: &sheets.docs,
         viewport_width: r.viewport_width as f64,
         viewport_height: if r.viewport_height > 0.0 {
             r.viewport_height

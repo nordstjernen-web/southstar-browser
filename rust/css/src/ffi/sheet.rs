@@ -1,10 +1,12 @@
-//! Southstar — the C ABI of the style sheet parser: css.c's ns_css_stylesheet, ns_css_rule and at-rule structs built as the Rust parser reads a sheet, freeing them, resolving a sheet's URLs and moving it into a layer.
+//! Southstar — the style sheet parser's GLib-backed storage: css.c's ns_css_stylesheet, ns_css_rule and at-rule structs built as the Rust parser reads a sheet, the owning handle that frees them, resolving a sheet's URLs and moving it into a layer.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::{ManuallyDrop, offset_of, size_of};
-use core::ptr;
+use core::ops::Deref;
+use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -38,11 +40,11 @@ pub(super) struct RawSheet {
     has_container_units: GBoolean,
     has_hover_rules: GBoolean,
     has_active_rules: GBoolean,
-    pub(super) cached: GBoolean,
-    pub(super) pseudo_mask: c_uint,
+    cached: Cell<GBoolean>,
+    pub(super) pseudo_mask: Cell<c_uint>,
     serial: u64,
     resolved_base: *mut c_char,
-    pub(super) index: *mut c_void,
+    pub(super) index: Cell<*mut c_void>,
 }
 
 impl RawSheet {
@@ -626,27 +628,185 @@ unsafe extern "C" fn rule_free_notify(data: *mut c_void) {
     unsafe { rule_free(data) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut c_void {
-    let raw = unsafe { glib::g_malloc0(size_of::<RawSheet>()) }.cast::<RawSheet>();
-    unsafe {
-        (*raw).serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
-        (*raw).rules = glib::g_ptr_array_new_with_free_func(Some(rule_free_notify));
+pub struct OwnedSheet(NonNull<RawSheet>);
+
+impl OwnedSheet {
+    pub fn parse(css: &[u8]) -> OwnedSheet {
+        // SAFETY: g_malloc0 aborts rather than fail, and all-zero bytes are an empty RawSheet.
+        let raw = unsafe { glib::g_malloc0(size_of::<RawSheet>()) }.cast::<RawSheet>();
+        let mut sheet = OwnedSheet(NonNull::new(raw).expect("g_malloc0"));
+        let fields = sheet.raw_mut();
+        fields.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: rule_free_notify frees the RawRule pointers this array is given.
+        fields.rules = unsafe { glib::g_ptr_array_new_with_free_func(Some(rule_free_notify)) };
+        fields.has_container_units = glib::boolean(nesting::has_container_units(css));
+        let mut flattened = nesting::flatten(css);
+        if let Some(nul) = flattened.iter().position(|&c| c == 0) {
+            flattened.truncate(nul);
+        }
+        let mut builder = SheetBuilder { raw };
+        sheet::parse_into(&mut builder, &flattened);
+        sheet
     }
-    if text.is_null() {
-        return raw.cast();
+
+    fn raw_mut(&mut self) -> &mut RawSheet {
+        // SAFETY: the handle points to a live sheet, and borrowing the handle mutably keeps its other uses out.
+        unsafe { self.0.as_mut() }
     }
-    let len =
-        usize::try_from(len).unwrap_or_else(|_| unsafe { CStr::from_ptr(text) }.to_bytes().len());
-    let text = unsafe { core::slice::from_raw_parts(text.cast::<u8>(), len) };
-    unsafe { (*raw).has_container_units = glib::boolean(nesting::has_container_units(text)) };
-    let mut flattened = nesting::flatten(text);
-    if let Some(nul) = flattened.iter().position(|&c| c == 0) {
-        flattened.truncate(nul);
+
+    pub(super) fn as_raw(&self) -> *mut RawSheet {
+        self.0.as_ptr()
     }
-    let mut builder = SheetBuilder { raw };
-    sheet::parse_into(&mut builder, &flattened);
-    raw.cast()
+
+    pub(super) fn into_raw(self) -> *mut RawSheet {
+        ManuallyDrop::new(self).0.as_ptr()
+    }
+
+    pub(super) fn set_cached(&self, cached: bool) {
+        self.raw().cached.set(glib::boolean(cached));
+    }
+
+    pub(super) fn share(&self) -> OwnedSheet {
+        OwnedSheet(self.0)
+    }
+
+    pub fn resolve_urls(&mut self, base: &CStr) {
+        let sheet = self.raw_mut();
+        // SAFETY: resolved_base is null or a string the sheet owns.
+        if unsafe { bytes(sheet.resolved_base) } == Some(base.to_bytes()) {
+            return;
+        }
+        // SAFETY: resolved_base is null or a GLib string the sheet owns, replaced right after.
+        unsafe { glib::g_free(sheet.resolved_base.cast()) };
+        sheet.resolved_base = glib::strdup(base.to_bytes());
+        // SAFETY: rules is the sheet's array of RawRule pointers.
+        for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
+            // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
+            if let Some(rule) = unsafe { rule.as_mut() } {
+                rule_resolve_urls(rule, base);
+            }
+        }
+        // SAFETY: font_faces is null or the sheet's array of RawFontFace.
+        for face in unsafe { elements::<RawFontFace>(sheet.font_faces) } {
+            // SAFETY: src_url is null or a string the face owns.
+            let Some(resolved) = unsafe { bytes(face.src_url) }
+                .filter(|url| url_should_resolve(url))
+                .and_then(|url| url_resolve(base, url))
+            else {
+                continue;
+            };
+            // SAFETY: src_url is a GLib string the face owns, replaced right after.
+            unsafe { glib::g_free(face.src_url.cast()) };
+            face.src_url = glib::strdup(&resolved);
+        }
+    }
+
+    pub(super) fn force_layer(&mut self, layer: &[u8]) {
+        if layer.is_empty() {
+            return;
+        }
+        let raw = self.as_raw();
+        let sheet = self.raw_mut();
+        sheet.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
+        let old_names = sheet.layer_names;
+        let old_layers = sheet.layers;
+        let rules = sheet.rules;
+        let imports = sheet.imports;
+        sheet.layer_names = ptr::null_mut();
+        sheet.layers = ptr::null_mut();
+        let mut builder = SheetBuilder { raw };
+        builder.layer_register(layer);
+        // SAFETY: old_names is null or the array of layer names the sheet owned until now.
+        for &old in unsafe { pointers::<c_char>(old_names) } {
+            // SAFETY: a layer name is a NUL-terminated string the array owns.
+            let full = layer_join(Some(layer), unsafe { bytes(old) }.unwrap_or_default());
+            builder.layer_register(&full);
+        }
+        // SAFETY: rules is the sheet's array of RawRule pointers.
+        for &rule in unsafe { pointers::<RawRule>(rules) } {
+            // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
+            let Some(rule) = (unsafe { rule.as_mut() }) else {
+                continue;
+            };
+            // SAFETY: layer_name is null or a string the rule owns.
+            let full = match unsafe { bytes(rule.layer_name) } {
+                Some(existing) => layer_join(Some(layer), existing),
+                None => layer.to_vec(),
+            };
+            // SAFETY: layer_name is null or a GLib string the rule owns, replaced right after.
+            unsafe { glib::g_free(rule.layer_name.cast()) };
+            rule.layer_name = glib::strdup(&full);
+        }
+        // SAFETY: imports is null or the sheet's array of RawImport.
+        for import in unsafe { elements::<RawImport>(imports) } {
+            // SAFETY: layer_name is null or a string the import owns.
+            let full = match unsafe { bytes(import.layer_name) } {
+                Some(existing) => layer_join(Some(layer), existing),
+                None => layer.to_vec(),
+            };
+            // SAFETY: layer_name is null or a GLib string the import owns, replaced right after.
+            unsafe { glib::g_free(import.layer_name.cast()) };
+            import.layer_name = glib::strdup(&full);
+            builder.layer_register(&full);
+        }
+        if !old_layers.is_null() {
+            // SAFETY: old_layers is the layer table the sheet owned until now, and nothing refers to it.
+            unsafe { glib::g_hash_table_destroy(old_layers) };
+        }
+        if !old_names.is_null() {
+            // SAFETY: old_names is the layer name array the sheet owned until now, and nothing refers to it.
+            unsafe { glib::g_ptr_array_free(old_names, glib::TRUE) };
+        }
+    }
+}
+
+fn rule_resolve_urls(rule: &mut RawRule, base: &CStr) {
+    // SAFETY: decls is the rule's array of RawDecl.
+    for decl in unsafe { elements::<RawDecl>(rule.decls) } {
+        // SAFETY: a declaration's value is null or a live value chain the rule owns.
+        unsafe { value_resolve_url(decl.value, base) };
+    }
+    if !rule.vars.is_null() {
+        let mut iter = glib::GHashTableIter::new();
+        // SAFETY: vars is the rule's live table of custom property texts.
+        unsafe { glib::g_hash_table_iter_init(&mut iter, rule.vars) };
+        let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
+        // SAFETY: iter was initialized over vars, which is not changed but through the iterator.
+        while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
+            // SAFETY: the table's values are NUL-terminated strings it owns.
+            let text = unsafe { bytes(value.cast()) }.unwrap_or_default();
+            if let Some(resolved) = raw_text_resolve_urls(text, base) {
+                // SAFETY: iter points at a live entry, and the table frees the value it replaces.
+                unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&resolved).cast()) };
+            }
+        }
+    }
+    // SAFETY: pending is null or the rule's array of RawPending.
+    for pending in unsafe { elements::<RawPending>(rule.pending) } {
+        // SAFETY: raw_vtext is null or a string the pending declaration owns.
+        let text = unsafe { bytes(pending.raw_vtext) }.unwrap_or_default();
+        if let Some(resolved) = raw_text_resolve_urls(text, base) {
+            // SAFETY: raw_vtext is a GLib string the pending declaration owns, replaced right after.
+            unsafe { glib::g_free(pending.raw_vtext.cast()) };
+            pending.raw_vtext = glib::strdup(&resolved);
+        }
+    }
+}
+
+impl Deref for OwnedSheet {
+    type Target = Sheet;
+
+    fn deref(&self) -> &Sheet {
+        // SAFETY: the handle points to a live sheet, and Sheet is a transparent RawSheet.
+        unsafe { self.0.cast::<Sheet>().as_ref() }
+    }
+}
+
+impl Drop for OwnedSheet {
+    fn drop(&mut self) {
+        // SAFETY: the handle points to a live sheet, which stylesheet_free leaves alone while a cache holds it.
+        unsafe { stylesheet_free(self.0) };
+    }
 }
 
 fn url_should_resolve(url: &[u8]) -> bool {
@@ -737,63 +897,6 @@ unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_resolve_urls(
-    sheet: *mut c_void,
-    base_url: *const c_char,
-) {
-    let (Some(sheet), false) = (
-        unsafe { sheet.cast::<RawSheet>().as_mut() },
-        base_url.is_null(),
-    ) else {
-        return;
-    };
-    let base = unsafe { CStr::from_ptr(base_url) };
-    if unsafe { bytes(sheet.resolved_base) } == Some(base.to_bytes()) {
-        return;
-    }
-    unsafe {
-        glib::g_free(sheet.resolved_base.cast());
-        sheet.resolved_base = glib::strdup(base.to_bytes());
-    }
-    for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
-        let Some(rule) = (unsafe { rule.as_mut() }) else {
-            continue;
-        };
-        for decl in unsafe { elements::<RawDecl>(rule.decls) } {
-            unsafe { value_resolve_url(decl.value, base) };
-        }
-        if !rule.vars.is_null() {
-            let mut iter = glib::GHashTableIter::new();
-            unsafe { glib::g_hash_table_iter_init(&mut iter, rule.vars) };
-            let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
-            while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-                let text = unsafe { bytes(value.cast()) }.unwrap_or_default();
-                if let Some(resolved) = raw_text_resolve_urls(text, base) {
-                    unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&resolved).cast()) };
-                }
-            }
-        }
-        for pending in unsafe { elements::<RawPending>(rule.pending) } {
-            let text = unsafe { bytes(pending.raw_vtext) }.unwrap_or_default();
-            if let Some(resolved) = raw_text_resolve_urls(text, base) {
-                unsafe { glib::g_free(pending.raw_vtext.cast()) };
-                pending.raw_vtext = glib::strdup(&resolved);
-            }
-        }
-    }
-    for face in unsafe { elements::<RawFontFace>(sheet.font_faces) } {
-        let Some(resolved) = unsafe { bytes(face.src_url) }
-            .filter(|url| url_should_resolve(url))
-            .and_then(|url| url_resolve(base, url))
-        else {
-            continue;
-        };
-        unsafe { glib::g_free(face.src_url.cast()) };
-        face.src_url = glib::strdup(&resolved);
-    }
-}
-
 #[repr(transparent)]
 pub struct Sheet(RawSheet);
 
@@ -823,6 +926,19 @@ impl Sheet {
     pub unsafe fn from_ptr<'a>(sheet: *const c_void) -> Option<&'a Sheet> {
         // SAFETY: the caller passes null or a live sheet, and Sheet is a transparent RawSheet.
         unsafe { sheet.cast::<Sheet>().as_ref() }
+    }
+
+    pub(super) fn raw(&self) -> &RawSheet {
+        &self.0
+    }
+
+    pub(super) fn rules(&self) -> &[*mut RawRule] {
+        // SAFETY: rules is null or the sheet's array of RawRule pointers, freed with the sheet.
+        unsafe { pointers(self.0.rules) }
+    }
+
+    pub fn as_ptr(&self) -> *const c_void {
+        ptr::from_ref(self).cast()
     }
 
     pub fn has_container_rules(&self) -> bool {
@@ -858,6 +974,24 @@ impl Sheet {
         })
     }
 
+    pub fn declared_values(&self) -> impl Iterator<Item = (usize, &NsCssValue)> {
+        self.rules()
+            .iter()
+            .filter_map(|&rule| {
+                // SAFETY: a sheet's rules are null or live RawRules freed with the sheet.
+                unsafe { rule.as_ref() }
+            })
+            .flat_map(|rule| {
+                // SAFETY: decls is null or the rule's array of RawDecl.
+                let decls: &[RawDecl] = unsafe { shared_elements(rule.decls) };
+                decls.iter().filter_map(|decl| {
+                    // SAFETY: a declaration's value is null or a live value the rule owns.
+                    let value = unsafe { decl.value.as_ref() }?;
+                    Some((decl.prop as usize, value))
+                })
+            })
+    }
+
     pub fn imports(&self) -> impl Iterator<Item = ImportRule<'_>> {
         // SAFETY: imports is null or the sheet's array of RawImport.
         let imports: &[RawImport] = unsafe { shared_elements(self.0.imports) };
@@ -884,82 +1018,43 @@ unsafe fn shared_elements<'a, T>(array: *const GArray) -> &'a [T] {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_free(s: *mut RawSheet) {
-    let Some(sheet) = (unsafe { s.as_ref() }) else {
-        return;
-    };
-    if sheet.cached != 0 {
-        return;
-    }
-    unsafe {
-        if !sheet.rules.is_null() {
-            glib::g_ptr_array_free(sheet.rules, glib::TRUE);
-        }
-        if !sheet.imports.is_null() {
-            g_array_free(sheet.imports, glib::TRUE);
-        }
-        if !sheet.layers.is_null() {
-            glib::g_hash_table_destroy(sheet.layers);
-        }
-        if !sheet.layer_names.is_null() {
-            glib::g_ptr_array_free(sheet.layer_names, glib::TRUE);
-        }
-        for array in [sheet.font_faces, sheet.keyframes, sheet.property_rules] {
-            if !array.is_null() {
-                g_array_free(array, glib::TRUE);
-            }
-        }
-        glib::g_free(sheet.page_rule.cast());
-        glib::g_free(sheet.resolved_base.cast());
-        index_free(sheet.index.cast());
-        glib::g_free(s.cast());
-    }
-}
-
-pub(super) unsafe fn stylesheet_force_layer(sheet: *mut c_void, layer_name: *const c_char) {
-    let raw = sheet.cast::<RawSheet>();
-    let (Some(sheet), Some(layer)) = (unsafe { raw.as_mut() }, unsafe { bytes(layer_name) }) else {
-        return;
-    };
-    if layer.is_empty() {
+/// # Safety
+///
+/// `s` points to a live sheet that no reference outlives this call into.
+unsafe fn stylesheet_free(s: NonNull<RawSheet>) {
+    // SAFETY: the caller passes a live sheet.
+    let sheet = unsafe { s.as_ref() };
+    if sheet.cached.get() != 0 {
         return;
     }
-    sheet.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
-    let old_names = sheet.layer_names;
-    let old_layers = sheet.layers;
-    sheet.layer_names = ptr::null_mut();
-    sheet.layers = ptr::null_mut();
-    let mut builder = SheetBuilder { raw };
-    builder.layer_register(layer);
-    for &old in unsafe { pointers::<c_char>(old_names) } {
-        let full = layer_join(Some(layer), unsafe { bytes(old) }.unwrap_or_default());
-        builder.layer_register(&full);
+    if !sheet.rules.is_null() {
+        // SAFETY: rules is the sheet's own array, and its free function frees each rule.
+        unsafe { glib::g_ptr_array_free(sheet.rules, glib::TRUE) };
     }
-    for &rule in unsafe { pointers::<RawRule>((*raw).rules) } {
-        let rule = unsafe { &mut *rule };
-        let full = match unsafe { bytes(rule.layer_name) } {
-            Some(existing) => layer_join(Some(layer), existing),
-            None => layer.to_vec(),
-        };
-        unsafe { glib::g_free(rule.layer_name.cast()) };
-        rule.layer_name = glib::strdup(&full);
+    if !sheet.imports.is_null() {
+        // SAFETY: imports is the sheet's own array, and its clear function frees each import.
+        unsafe { g_array_free(sheet.imports, glib::TRUE) };
     }
-    for import in unsafe { elements::<RawImport>((*raw).imports) } {
-        let full = match unsafe { bytes(import.layer_name) } {
-            Some(existing) => layer_join(Some(layer), existing),
-            None => layer.to_vec(),
-        };
-        unsafe { glib::g_free(import.layer_name.cast()) };
-        import.layer_name = glib::strdup(&full);
-        builder.layer_register(&full);
+    if !sheet.layers.is_null() {
+        // SAFETY: layers is the sheet's own table; its keys belong to layer_names, freed next.
+        unsafe { glib::g_hash_table_destroy(sheet.layers) };
     }
-    unsafe {
-        if !old_layers.is_null() {
-            glib::g_hash_table_destroy(old_layers);
-        }
-        if !old_names.is_null() {
-            glib::g_ptr_array_free(old_names, glib::TRUE);
+    if !sheet.layer_names.is_null() {
+        // SAFETY: layer_names is the sheet's own array of GLib strings.
+        unsafe { glib::g_ptr_array_free(sheet.layer_names, glib::TRUE) };
+    }
+    for array in [sheet.font_faces, sheet.keyframes, sheet.property_rules] {
+        if !array.is_null() {
+            // SAFETY: each array is the sheet's own, and its clear function frees its elements.
+            unsafe { g_array_free(array, glib::TRUE) };
         }
     }
+    // SAFETY: page_rule is null or the sheet's own GLib allocation.
+    unsafe { glib::g_free(sheet.page_rule.cast()) };
+    // SAFETY: resolved_base is null or the sheet's own GLib string.
+    unsafe { glib::g_free(sheet.resolved_base.cast()) };
+    // SAFETY: index is null or the rule index built for this sheet alone.
+    unsafe { index_free(sheet.index.get().cast()) };
+    // SAFETY: the sheet was allocated with g_malloc0, and everything it owned is freed above.
+    unsafe { glib::g_free(s.as_ptr().cast()) };
 }

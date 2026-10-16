@@ -77,7 +77,7 @@ fn select_container(name: Option<&[u8]>) -> Option<Container> {
             .iter()
             .rev()
             .find(|c| name.is_none_or(|name| names_contain(c.names(), name)))
-            .copied()
+            .cloned()
     })
 }
 
@@ -87,12 +87,12 @@ fn select_axis(block_axis: bool) -> Option<Container> {
             .iter()
             .rev()
             .find(|c| !block_axis || c.kind == TYPE_SIZE)
-            .copied()
+            .cloned()
     })
 }
 
 pub(crate) fn unit_resolve(v: f64, unit: Unit) -> f64 {
-    if !ffi::container_map().is_null() {
+    if ffi::container_map_installed() {
         note_features();
     }
     let (viewport_w, viewport_h) = ffi::viewport();

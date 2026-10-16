@@ -8,10 +8,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
-use southstar_css::{PageRule, Sheet};
+use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
@@ -19,12 +19,10 @@ use crate::fonts::{self, Usage};
 type ResolveUrl = unsafe extern "C" fn(href: *const c_char, user_data: *mut c_void) -> *mut c_char;
 type FontAllowed = unsafe extern "C" fn(abs_url: *const c_char, user_data: *mut c_void) -> GBoolean;
 
-#[repr(C)]
-pub struct RenderCtx {
+pub struct RenderCtx<'a> {
     pub doc: *mut NsNode,
-    pub sheets: *const *const c_void,
-    pub sheet_docs: *const *const NsNode,
-    pub n_sheets: c_uint,
+    pub sheets: &'a [OwnedSheet],
+    pub sheet_docs: &'a [Node<'a>],
     pub viewport_width: f64,
     pub viewport_height: f64,
     pub zoom: f64,
@@ -40,13 +38,6 @@ pub struct RenderCtx {
     pub font_allowed: Option<FontAllowed>,
     pub cb_ud: *mut c_void,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<RenderCtx>() == 144
-        && core::mem::offset_of!(RenderCtx, viewport_width) == 32
-        && core::mem::offset_of!(RenderCtx, caret_byte) == 104
-);
 
 #[repr(C)]
 #[derive(Default)]
@@ -77,25 +68,6 @@ struct FontDescriptors {
 }
 
 unsafe extern "C" {
-    fn ns_css_set_container_map(map: *mut GHashTable);
-    fn ns_css_container_map_new() -> *mut GHashTable;
-    fn ns_css_container_maps_equal(a: *mut GHashTable, b: *mut GHashTable) -> GBoolean;
-    fn ns_css_container_map_add(
-        map: *mut GHashTable,
-        node: *const c_void,
-        type_kw: *const c_char,
-        name_kw: *const c_char,
-        w: f64,
-        h: f64,
-        vertical: GBoolean,
-    );
-    fn ns_css_compute(
-        doc: *mut NsNode,
-        sheets: *const *const c_void,
-        docs: *const *const NsNode,
-        n: c_uint,
-    ) -> *mut GHashTable;
-    fn ns_css_style_scale_font_size(style: *mut Style, factor: f64);
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
     fn ns_font_available() -> GBoolean;
@@ -137,14 +109,14 @@ static PAGE_RULE: Mutex<Option<PageRule>> = Mutex::new(None);
 struct Containers {
     doc: usize,
     width: f64,
-    map: usize,
+    map: Option<ContainerMap>,
     settled: bool,
 }
 
 static CONTAINERS: Mutex<Containers> = Mutex::new(Containers {
     doc: 0,
     width: 0.0,
-    map: 0,
+    map: None,
     settled: false,
 });
 
@@ -160,18 +132,9 @@ fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
 }
 
-impl RenderCtx {
-    fn sheets(&self) -> &[*const c_void] {
-        if self.sheets.is_null() {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(self.sheets, self.n_sheets as usize) }
-    }
-
+impl RenderCtx<'_> {
     fn style_sheets(&self) -> impl Iterator<Item = &Sheet> {
-        self.sheets()
-            .iter()
-            .filter_map(|&sheet| unsafe { Sheet::from_ptr(sheet) })
+        self.sheets.iter().map(|sheet| &**sheet)
     }
 
     fn doc(&self) -> Option<Node<'_>> {
@@ -285,10 +248,9 @@ fn feed_animations(c: &RenderCtx, styles: *mut GHashTable) {
     if c.anim.is_null() {
         return;
     }
-    for &sheet in c.sheets() {
-        if !sheet.is_null() {
-            unsafe { ns_anim_load_from_stylesheet(c.anim, sheet) };
-        }
+    for sheet in c.style_sheets() {
+        // SAFETY: anim is the render context's live animation engine, and the sheet outlives the call.
+        unsafe { ns_anim_load_from_stylesheet(c.anim, sheet.as_ptr()) };
     }
     unsafe { ns_anim_observe_all(c.anim, styles, now_us()) };
 }
@@ -299,7 +261,10 @@ fn apply_zoom(c: &RenderCtx, styles: *mut GHashTable) {
         return;
     }
     for (_, style) in unsafe { glib::hash_table_entries(styles) } {
-        unsafe { ns_css_style_scale_font_size(style.cast(), zoom) };
+        // SAFETY: the table holds the live computed styles of this pass, and none is borrowed while it is scaled.
+        if let Some(style) = unsafe { style.cast::<StyleData>().as_mut() } {
+            southstar_css::style_scale_font_size(style, zoom);
+        }
     }
 }
 
@@ -343,12 +308,12 @@ fn container_entry_sig(b: BoxRef<'_>, kind: &CStr, names: Option<&CStr>) -> u64 
     })
 }
 
-fn collect_containers(b: Option<BoxRef<'_>>, map: *mut GHashTable, mut sig: Option<&mut u64>) {
+fn collect_containers(b: Option<BoxRef<'_>>, map: &mut ContainerMap, mut sig: Option<&mut u64>) {
     let Some(b) = b else {
         return;
     };
     let style = unsafe { StyleRef::from_ptr(b.style()) };
-    if let Some(style) = style.filter(|_| !b.dom_ptr().is_null()) {
+    if let (Some(style), Some(node)) = (style, b.dom()) {
         let kind = style
             .value(&CONTAINER_TYPE)
             .and_then(|v| v.keyword_text())
@@ -359,17 +324,14 @@ fn collect_containers(b: Option<BoxRef<'_>>, map: *mut GHashTable, mut sig: Opti
                 .value(&WRITING_MODE)
                 .and_then(|v| v.keyword_text())
                 .is_some_and(|w| w.to_bytes().starts_with(b"vertical"));
-            unsafe {
-                ns_css_container_map_add(
-                    map,
-                    b.dom_ptr(),
-                    kind.as_ptr(),
-                    names.map_or(ptr::null(), CStr::as_ptr),
-                    b.content_width(),
-                    b.content_height(),
-                    glib::boolean(vertical),
-                )
-            };
+            map.add(
+                node,
+                kind,
+                names,
+                b.content_width(),
+                b.content_height(),
+                vertical,
+            );
             if let Some(sig) = sig.as_deref_mut() {
                 *sig = sig.wrapping_add(container_entry_sig(b, kind, names));
             }
@@ -382,34 +344,29 @@ fn collect_containers(b: Option<BoxRef<'_>>, map: *mut GHashTable, mut sig: Opti
     }
 }
 
-fn predicted_map(doc: *mut NsNode, viewport_width: f64, want: bool) -> *mut GHashTable {
-    let cq = lock(&CONTAINERS);
-    if !want || cq.map == 0 || cq.doc != doc as usize || cq.width != viewport_width {
-        return ptr::null_mut();
-    }
-    cq.map as *mut GHashTable
+fn predicted_map(doc: *mut NsNode, viewport_width: f64, want: bool) -> Option<ContainerMap> {
+    let mut cq = lock(&CONTAINERS);
+    let matches = want && cq.doc == doc as usize && cq.width == viewport_width;
+    cq.map.take().filter(|_| matches)
 }
 
-fn settled(predicted: *mut GHashTable, measured: *mut GHashTable) -> bool {
-    let settled =
-        !predicted.is_null() && unsafe { ns_css_container_maps_equal(predicted, measured) } != 0;
+fn settled(predicted: Option<&ContainerMap>, measured: &ContainerMap) -> bool {
+    let settled = predicted.is_some_and(|predicted| predicted == measured);
     lock(&CONTAINERS).settled = settled;
     settled
 }
 
 fn remember(doc: *mut NsNode, viewport_width: f64, layout: *mut NsBox, want: bool) {
     let mut cq = lock(&CONTAINERS);
-    if cq.map != 0 {
-        unsafe { glib::g_hash_table_destroy(cq.map as *mut GHashTable) };
-        cq.map = 0;
-    }
+    cq.map = None;
     cq.doc = 0;
     if !want {
         return;
     }
-    let map = unsafe { ns_css_container_map_new() };
-    collect_containers(unsafe { BoxRef::from_ptr(layout) }, map, None);
-    cq.map = map as usize;
+    let mut map = ContainerMap::new();
+    // SAFETY: layout is null or the box tree this relayout just built.
+    collect_containers(unsafe { BoxRef::from_ptr(layout) }, &mut map, None);
+    cq.map = Some(map);
     cq.doc = doc as usize;
     cq.width = viewport_width;
 }
@@ -444,8 +401,8 @@ fn containers_wanted(c: &RenderCtx) -> (bool, bool) {
     (want, units)
 }
 
-fn selector_cache_wanted(c: &RenderCtx, predicted: *mut GHashTable) -> bool {
-    if !predicted.is_null() && lock(&CONTAINERS).settled {
+fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> bool {
+    if predicted.is_some() && lock(&CONTAINERS).settled {
         return false;
     }
     c.style_sheets()
@@ -506,14 +463,14 @@ fn relayout(
     southstar_css::set_render_zoom(c.zoom());
     let (want_cq, uses_cq_units) = containers_wanted(c);
     let predicted = predicted_map(c.doc, viewport_width, want_cq);
-    let cache_selectors = selector_cache_wanted(c, predicted);
+    let cache_selectors = selector_cache_wanted(c, predicted.as_ref());
     if cache_selectors {
         southstar_css::selector_cache_begin();
     }
-    let compute = || unsafe { ns_css_compute(c.doc, c.sheets, c.sheet_docs, c.n_sheets) };
-    unsafe { ns_css_set_container_map(predicted) };
-    let mut styles = compute();
-    unsafe { ns_css_set_container_map(ptr::null_mut()) };
+    let compute = |containers: Option<&ContainerMap>| {
+        southstar_css::compute_styles(c.doc(), c.sheets, c.sheet_docs, containers)
+    };
+    let mut styles = compute(predicted.as_ref());
     let t1 = clock();
 
     style_pass(c, styles);
@@ -527,25 +484,25 @@ fn relayout(
         p.layout1_us = t3 - t2;
     }
 
-    let containers = unsafe { ns_css_container_map_new() };
+    let mut containers = ContainerMap::new();
     let mut container_sig = 0u64;
     let tc0 = clock();
     if want_cq {
         collect_containers(
             unsafe { BoxRef::from_ptr(layout) },
-            containers,
+            &mut containers,
             Some(&mut container_sig),
         );
     }
     let tc1 = clock();
-    let mut n_containers = unsafe { glib::g_hash_table_size(containers) };
+    let mut n_containers = containers.len();
     if let Some(p) = profile.as_deref_mut() {
         p.container_us = tc1 - tc0;
-        p.containers = n_containers;
+        p.containers = n_containers as c_uint;
     }
     let mut container_passes = if uses_cq_units { 3 } else { 1 };
-    let mut stale = !predicted.is_null();
-    if settled(predicted, containers) {
+    let mut stale = predicted.is_some();
+    if settled(predicted.as_ref(), &containers) {
         container_passes = 0;
     }
     let mut pass = 0;
@@ -554,13 +511,11 @@ fn relayout(
             p.container_pass = glib::TRUE;
             p.container_passes += 1;
         }
-        unsafe { ns_css_set_container_map(containers) };
         southstar_css::container_features_begin();
         let t4 = clock();
-        let styles2 = compute();
+        let styles2 = compute(Some(&containers));
         let t5 = clock();
         let features_used = southstar_css::container_features_used();
-        unsafe { ns_css_set_container_map(ptr::null_mut()) };
         if (!features_used && !stale) || styles_tables_equal(styles, styles2) {
             if let Some(p) = profile.as_deref_mut() {
                 p.css2_us += t5 - t4;
@@ -585,19 +540,19 @@ fn relayout(
         styles = styles2;
         stale = false;
         if pass + 1 < container_passes {
-            unsafe { glib::g_hash_table_remove_all(containers) };
+            containers.clear();
             let tr0 = clock();
             let mut next_sig = 0u64;
             collect_containers(
                 unsafe { BoxRef::from_ptr(layout) },
-                containers,
+                &mut containers,
                 Some(&mut next_sig),
             );
             let tr1 = clock();
-            n_containers = unsafe { glib::g_hash_table_size(containers) };
+            n_containers = containers.len();
             if let Some(p) = profile.as_deref_mut() {
                 p.container_us += tr1 - tr0;
-                p.containers = n_containers;
+                p.containers = n_containers as c_uint;
             }
             if next_sig == container_sig {
                 break;
@@ -606,7 +561,8 @@ fn relayout(
         }
         pass += 1;
     }
-    unsafe { glib::g_hash_table_destroy(containers) };
+    drop(containers);
+    drop(predicted);
     remember(c.doc, viewport_width, layout, want_cq);
     unsafe {
         if cache_selectors {

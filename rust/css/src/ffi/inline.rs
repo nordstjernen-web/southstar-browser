@@ -7,15 +7,14 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray};
 
-use super::declarations::RawRule;
 use super::property::prop_of;
-use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
+use super::sheet::OwnedSheet;
 use super::shorthand::RawDecl;
 use super::values::text_of;
 use crate::prop::Prop;
 
-unsafe fn parse_sheet(text: &CStr) -> *mut RawSheet {
-    unsafe { ns_css_stylesheet_parse(text.as_ptr(), -1) }.cast()
+fn parse_sheet(text: &CStr) -> OwnedSheet {
+    OwnedSheet::parse(text.to_bytes())
 }
 
 pub(crate) struct SheetDecl {
@@ -42,57 +41,46 @@ pub(crate) fn sheet_declarations(
     wanted: impl Fn(Option<Prop>) -> bool,
 ) -> Vec<SheetDecl> {
     let text = c_string(css);
-    let sheet = unsafe { parse_sheet(&text) };
+    let sheet = parse_sheet(&text);
     let mut out = Vec::new();
-    if let Some(sheet_ref) = unsafe { sheet.as_ref() } {
-        let rules = match unsafe { sheet_ref.rules.as_ref() } {
-            Some(rules) if !rules.pdata.is_null() => unsafe {
-                core::slice::from_raw_parts(
-                    rules.pdata.cast::<*const RawRule>(),
-                    rules.len as usize,
-                )
-            },
-            _ => &[],
+    for &rule in sheet.rules() {
+        // SAFETY: a sheet's rules are null or live RawRules freed with the sheet.
+        let Some(rule) = (unsafe { rule.as_ref() }) else {
+            continue;
         };
-        for &rule in rules {
-            let Some(rule) = (unsafe { rule.as_ref() }) else {
+        // SAFETY: decls is null or the rule's array of RawDecl.
+        for decl in unsafe { decls_of(rule.decls) } {
+            let prop = prop_of(decl.prop);
+            if !wanted(prop) {
                 continue;
-            };
-            for decl in unsafe { decls_of(rule.decls) } {
-                let prop = prop_of(decl.prop);
-                if !wanted(prop) {
-                    continue;
-                }
-                out.push(SheetDecl {
-                    prop,
-                    text: unsafe { text_of(decl.value, true) },
-                    important: decl.important != 0,
-                });
             }
+            out.push(SheetDecl {
+                prop,
+                // SAFETY: a declaration's value is null or a live value the rule owns.
+                text: unsafe { text_of(decl.value, true) },
+                important: decl.important != 0,
+            });
         }
-        unsafe { ns_css_stylesheet_free(sheet) };
     }
     out
 }
 
 pub(crate) fn first_rule_declares(css: &[u8]) -> bool {
     let text = c_string(css);
-    let sheet = unsafe { parse_sheet(&text) };
-    let Some(sheet_ref) = (unsafe { sheet.as_ref() }) else {
+    let sheet = parse_sheet(&text);
+    let Some(&first) = sheet.rules().first() else {
         return false;
     };
-    let declares = unsafe {
-        let first = sheet_ref
-            .rules
-            .as_ref()
-            .filter(|rules| rules.len > 0 && !rules.pdata.is_null())
-            .and_then(|rules| (*rules.pdata).cast::<RawRule>().as_ref());
-        first.is_some_and(|rule| {
-            rule.decls.as_ref().is_some_and(|d| d.len > 0)
-                || (!rule.vars.is_null() && glib::g_hash_table_size(rule.vars) > 0)
-                || rule.pending.as_ref().is_some_and(|p| p.len > 0)
-        })
+    // SAFETY: a sheet's rules are null or live RawRules freed with the sheet.
+    let Some(rule) = (unsafe { first.as_ref() }) else {
+        return false;
     };
-    unsafe { ns_css_stylesheet_free(sheet) };
-    declares
+    // SAFETY: decls is null or the rule's live GArray.
+    let has_decls = unsafe { rule.decls.as_ref() }.is_some_and(|d| d.len > 0);
+    has_decls || {
+        // SAFETY: vars is the rule's live hash table when it is not null.
+        let has_vars = !rule.vars.is_null() && unsafe { glib::g_hash_table_size(rule.vars) } > 0;
+        // SAFETY: pending is null or the rule's live GArray.
+        has_vars || unsafe { rule.pending.as_ref() }.is_some_and(|p| p.len > 0)
+    }
 }

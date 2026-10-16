@@ -16,11 +16,10 @@ use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArr
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
-    CssScope, SheetList, Stylesheet, is_self_contained, layout_frame_viewport,
-    layout_frame_viewport_raw, media_query_matches, media_viewport_pop, media_viewport_push,
-    merged_styles_cached, parse_import_cached, parse_url_cached, shadow_adopted_css,
-    style_element_cache_end, style_element_text, stylesheet_from_style_element_cached,
-    url_resolve_opt,
+    CssScope, SheetList, is_self_contained, layout_frame_viewport, layout_frame_viewport_raw,
+    media_query_matches, media_viewport_pop, media_viewport_push, merged_styles_cached,
+    parse_import_cached, parse_url_cached, shadow_adopted_css, style_element_cache_end,
+    style_element_text, stylesheet_from_style_element_cached, url_resolve_opt,
 };
 pub use images::{ImageCache, Session, Wanted, collect_images};
 pub use net::{
@@ -371,17 +370,13 @@ pub unsafe extern "C" fn ns_engine_load_keyframes(
     if anim.is_null() {
         return;
     }
-    let sheets = SheetList::new();
-    crate::styles::collect_stylesheets(
+    let sheets = crate::styles::collect_stylesheets(
         unsafe { Node::from_ptr(doc) },
         c_str(base_url),
-        &sheets,
-        None,
         unsafe { CssCache::from_ptr(css_cache) },
     );
     css::load_into_anim(anim, &sheets);
-    sheets.free_sheets();
-    sheets.destroy();
+    drop(sheets);
 }
 
 #[unsafe(no_mangle)]
@@ -393,22 +388,16 @@ pub unsafe extern "C" fn ns_engine_compute_cascade(
 ) -> *mut GHashTable {
     let base = c_str(base_url);
     let _scope = CssScope::enter(base);
-    let sheets = SheetList::new();
-    let docs = SheetList::new();
-    crate::styles::collect_stylesheets(
-        unsafe { Node::from_ptr(doc) },
-        base,
-        &sheets,
-        Some(&docs),
-        unsafe { CssCache::from_ptr(css_cache) },
-    );
+    // SAFETY: the embedder passes null or a node of this thread's DOM.
+    let doc_node = unsafe { Node::from_ptr(doc) };
+    // SAFETY: the embedder passes null or its live CSS byte cache.
+    let cache = unsafe { CssCache::from_ptr(css_cache) };
+    let sheets = crate::styles::collect_stylesheets(doc_node, base, cache);
     if !anim.is_null() {
         css::load_into_anim(anim, &sheets);
     }
-    let styles = css::css_compute(doc, &sheets, &docs);
-    sheets.free_sheets();
-    sheets.destroy();
-    docs.destroy();
+    let styles = css::css_compute(doc_node, &sheets);
+    drop(sheets);
     styles
 }
 
@@ -444,10 +433,8 @@ pub unsafe extern "C" fn ns_engine_relayout(
     let cache = unsafe { CssCache::from_ptr(css_cache) };
     let doc_node = unsafe { Node::from_ptr(doc) };
     let scope = CssScope::enter(r.base);
-    let sheets = SheetList::new();
-    let docs = SheetList::new();
-    crate::styles::collect_stylesheets(doc_node, r.base, &sheets, Some(&docs), cache);
-    let ctx = css::render_ctx(&r, &sheets, &docs);
+    let mut sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
+    let ctx = css::render_ctx(&r, &sheets);
     let t0 = monotonic_us();
     let mut styles = if profile_enabled() {
         css::render_relayout_profiled(&ctx, out_layout, viewport_width)
@@ -456,19 +443,15 @@ pub unsafe extern "C" fn ns_engine_relayout(
     };
     if crate::styles::frame_viewports_disagree_with_layout() {
         css::discard_layout(js, styles, out_layout);
-        sheets.free_sheets();
-        sheets.truncate();
-        docs.truncate();
+        drop(sheets);
         scope.cache_begin();
-        crate::styles::collect_stylesheets(doc_node, r.base, &sheets, Some(&docs), cache);
-        let ctx = css::render_ctx(&r, &sheets, &docs);
+        sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
+        let ctx = css::render_ctx(&r, &sheets);
         styles = css::render_relayout(&ctx, out_layout);
     }
     crate::styles::add_relayout(monotonic_us() - t0);
     css::log_relayout(styles, viewport_width);
-    sheets.free_sheets();
-    sheets.destroy();
-    docs.destroy();
+    drop(sheets);
     styles
 }
 

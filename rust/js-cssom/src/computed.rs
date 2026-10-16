@@ -1589,18 +1589,10 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return Some(v);
     }
 
-    if let (true, Some(id), Some(style)) = (has_style_attr, pid, style_attr) {
-        let found = ffi::with_sheet_declarations(&format!("* {{ {style} }}"), |rules| {
-            rules.iter().find_map(|decls| {
-                decls
-                    .iter()
-                    .find(|d| d.prop as usize == id && !d.value.is_null())
-                    .map(|d| ffi::serialize_raw(d.value))
-            })
-        });
-        if let Some(Some(result)) = found {
-            return Some(result);
-        }
+    if let (true, Some(id), Some(style)) = (has_style_attr, pid, style_attr)
+        && let Some(result) = ffi::sheet_declared_value(&format!("* {{ {style} }}"), id)
+    {
+        return Some(result);
     }
     ffi::initial_value(canonical).map(str::to_string)
 }

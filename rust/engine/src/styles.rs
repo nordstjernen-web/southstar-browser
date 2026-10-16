@@ -9,10 +9,11 @@ use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
+use southstar_css::OwnedSheet;
 use southstar_dom::{Kind, Node, ancestors, children};
 
 use crate::fetch::{self, CssFetch};
-use crate::ffi::{self, CssCache, SheetList, Stylesheet};
+use crate::ffi::{self, CssCache, SheetList};
 
 const IMPORT_MAX_DEPTH: u32 = 8;
 const MAX_DEPTH: u32 = 512;
@@ -234,8 +235,8 @@ pub struct Expand<'a> {
 }
 
 fn append_expanded(
-    out: &SheetList,
-    sh: Stylesheet,
+    out: &mut Vec<OwnedSheet>,
+    mut sh: OwnedSheet,
     base: Option<&CStr>,
     x: &Expand,
     seen: &mut HashSet<Vec<u8>>,
@@ -266,26 +267,26 @@ fn append_expanded(
                 render_blocking: x.render_blocking,
                 in_frame: x.in_frame,
             };
-            if let Some(bytes) = fetch::fetch_css_bytes(&f, x.cache)
-                && let Some(child) = ffi::parse_import_cached(&abs, import.layer_name, &bytes)
-            {
+            if let Some(bytes) = fetch::fetch_css_bytes(&f, x.cache) {
+                let child = ffi::parse_import_cached(&abs, import.layer_name, &bytes);
                 append_expanded(out, child, Some(&abs), x, seen, depth + 1);
             }
         }
     }
-    sh.resolve_urls(base);
-    out.push(sh.as_ptr());
+    if let Some(base) = base {
+        sh.resolve_urls(base);
+    }
+    out.push(sh);
 }
 
-struct Collect<'a> {
-    out: &'a SheetList,
-    docs: Option<&'a SheetList>,
-    doc: *const southstar_dom::NsNode,
+struct Collect<'a, 'b> {
+    out: SheetList<'a>,
+    doc: Option<Node<'a>>,
     cache: Option<CssCache>,
     run: Vec<u8>,
     run_chunks: Vec<Vec<u8>>,
     run_base: Option<Option<CString>>,
-    top_url: Option<&'a CStr>,
+    top_url: Option<&'b CStr>,
     strict_css_mime: bool,
     media_seen: bool,
     frame_depth: i32,
@@ -296,7 +297,7 @@ pub fn document_base(doc: Node, url: Option<&CStr>) -> Option<CString> {
         .and_then(|base| CString::new(base).ok())
 }
 
-impl Collect<'_> {
+impl<'a> Collect<'a, '_> {
     fn run_append(&mut self, css: &[u8], base: Option<&CStr>) {
         self.run.extend_from_slice(css);
         self.run.push(b'\n');
@@ -355,21 +356,20 @@ impl Collect<'_> {
                 render_blocking: false,
                 in_frame: self.frame_depth > 0,
             };
-            append_expanded(self.out, sh, base, &x, &mut HashSet::new(), 0);
+            append_expanded(&mut self.out.sheets, sh, base, &x, &mut HashSet::new(), 0);
         }
         self.run.clear();
     }
 
     fn docs_sync(&mut self) {
         self.flush();
-        if let Some(docs) = self.docs {
-            while docs.len() < self.out.len() {
-                docs.push(self.doc.cast_mut().cast());
-            }
+        if let Some(doc) = self.doc {
+            let SheetList { sheets, docs } = &mut self.out;
+            docs.resize(docs.len().max(sheets.len()), doc);
         }
     }
 
-    fn frame_children(&mut self, frame: Node, base: Option<&CStr>, depth: u32) {
+    fn frame_children(&mut self, frame: Node<'a>, base: Option<&CStr>, depth: u32) {
         for c in children(frame) {
             if c.kind() != Kind::Document {
                 self.walk(c, base, depth + 1);
@@ -377,7 +377,7 @@ impl Collect<'_> {
             }
             self.docs_sync();
             let outer = self.doc;
-            self.doc = c.as_ptr();
+            self.doc = Some(c);
             self.walk(c, base, depth + 1);
             self.docs_sync();
             self.doc = outer;
@@ -404,7 +404,7 @@ impl Collect<'_> {
         }
     }
 
-    fn walk(&mut self, n: Node, base: Option<&CStr>, depth: u32) {
+    fn walk(&mut self, n: Node<'a>, base: Option<&CStr>, depth: u32) {
         if depth >= MAX_DEPTH || ffi::is_named(n, c"noscript") {
             return;
         }
@@ -466,7 +466,7 @@ impl Collect<'_> {
                     render_blocking: node_in_head(n),
                     in_frame: self.frame_depth > 0,
                 };
-                append_expanded(self.out, sh, base, &x, &mut HashSet::new(), 0);
+                append_expanded(&mut self.out.sheets, sh, base, &x, &mut HashSet::new(), 0);
             }
         } else {
             self.run_append(&css, base);
@@ -515,23 +515,20 @@ impl Collect<'_> {
                 render_blocking: blocking,
                 in_frame: self.frame_depth > 0,
             };
-            append_expanded(self.out, sh, Some(&abs), &x, &mut seen, 0);
+            append_expanded(&mut self.out.sheets, sh, Some(&abs), &x, &mut seen, 0);
         }
     }
 }
 
-pub fn collect_stylesheets(
-    doc: Option<Node>,
+pub fn collect_stylesheets<'a>(
+    doc: Option<Node<'a>>,
     base: Option<&CStr>,
-    out: &SheetList,
-    docs: Option<&SheetList>,
     cache: Option<CssCache>,
-) {
+) -> SheetList<'a> {
     frame_viewports_reset();
     let mut cc = Collect {
-        out,
-        docs,
-        doc: doc.map_or(core::ptr::null(), |d| d.as_ptr()),
+        out: SheetList::default(),
+        doc,
         cache,
         run: Vec::new(),
         run_chunks: Vec::new(),
@@ -546,4 +543,5 @@ pub fn collect_stylesheets(
     }
     cc.docs_sync();
     ffi::style_element_cache_end();
+    cc.out
 }

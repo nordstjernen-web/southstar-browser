@@ -79,16 +79,18 @@ pub use element_state::node_dir;
 pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target_fragment};
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
-    Declaration, Declarations, FontFaceRule, FontMetrics, FontOracle, FrameViewport, ImportRule,
-    KeyframeStop, Keyframes, MatchContext, NsCssValue, OwnedValue, PROP_COUNT, PageRule, QueryKey,
-    RawAreaRect as GridAreaRect, RawAreas as GridAreas, RawStyle as StyleData, RegisterError,
-    Registration, RetainedStyle, Selector, SelectorList, Sheet, ValueKind, animation_effective,
-    animation_lists, clear_registered_properties, incremental_exclude, register_property,
-    relayout_enter, relayout_leave, selector_cache_begin, selector_cache_end, set_active_node,
-    set_focus_node, set_focus_visible_node, set_font_alias, set_font_oracle,
-    set_frame_viewport_measure, set_fullscreen_node, set_hover_node, set_render_zoom,
-    style_before_change, style_element_cache_begin, style_element_cache_end, style_may_animate,
-    style_retain, style_value_slot, tracks_computed_text, value_interpolate, value_serialize,
+    ContainerMap, Declaration, Declarations, FontFaceRule, FontMetrics, FontOracle, FrameViewport,
+    ImportRule, KeyframeStop, Keyframes, MatchContext, NsCssValue, OwnedSheet, OwnedValue,
+    PROP_COUNT, PageRule, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
+    RawStyle as StyleData, RegisterError, Registration, RetainedStyle, Selector, SelectorList,
+    Sheet, ValueKind, animation_effective, animation_lists, clear_registered_properties,
+    compute_styles, incremental_exclude, merged_styles_cached, parse_import_cached,
+    parse_url_cached, register_property, relayout_enter, relayout_leave, selector_cache_begin,
+    selector_cache_end, set_active_node, set_focus_node, set_focus_visible_node, set_font_alias,
+    set_font_oracle, set_frame_viewport_measure, set_fullscreen_node, set_hover_node,
+    set_render_zoom, style_before_change, style_element_cache_begin, style_element_cache_end,
+    style_may_animate, style_retain, style_scale_font_size, style_value_slot,
+    stylesheet_from_style_element_cached, tracks_computed_text, value_interpolate, value_serialize,
     values_equal,
 };
 pub use font::{

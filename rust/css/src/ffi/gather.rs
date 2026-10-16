@@ -23,7 +23,7 @@ use super::pending::RawPendingMatch;
 use super::rule_index::{Candidate, RawIndex, rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
-use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
+use super::sheet::{OwnedSheet, RawSheet};
 use super::shorthand::RawDecl;
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
 use crate::hints;
@@ -213,9 +213,9 @@ fn cached_match(
     result
 }
 
-pub(super) fn rule_index_ensure(sheet: &mut RawSheet) {
-    if sheet.index.is_null() {
-        sheet.index = rule_index_build(sheet).cast();
+pub(super) fn rule_index_ensure(sheet: &RawSheet) {
+    if sheet.index.get().is_null() {
+        sheet.index.set(rule_index_build(sheet).cast());
     }
 }
 
@@ -488,7 +488,8 @@ pub(super) fn gather_matches(
     outs: &mut [Matches],
     layer_ranks: &LayerRanks,
 ) {
-    let Some(idx) = (unsafe { sheet.index.cast::<RawIndex>().as_ref() }) else {
+    // SAFETY: index is null or the RawIndex rule_index_ensure built for this sheet, freed with it.
+    let Some(idx) = (unsafe { sheet.index.get().cast::<RawIndex>().as_ref() }) else {
         return;
     };
     let rules = unsafe { pointers::<RawRule>(sheet.rules) };
@@ -520,15 +521,9 @@ pub(super) fn gather_matches(
     });
 }
 
-struct DeclSheet(*mut RawSheet);
+struct DeclSheet(OwnedSheet);
 
 unsafe impl Send for DeclSheet {}
-
-impl Drop for DeclSheet {
-    fn drop(&mut self) {
-        unsafe { ns_css_stylesheet_free(self.0) };
-    }
-}
 
 static DECL_SHEETS: LazyLock<Mutex<HashMap<Vec<u8>, DeclSheet>>> = LazyLock::new(Mutex::default);
 
@@ -542,15 +537,13 @@ fn decl_sheet(decls: &[u8]) -> *const RawSheet {
         return ptr::null();
     }
     if let Some(sheet) = decl_sheets().get(decls) {
-        return sheet.0;
+        return sheet.0.as_raw();
     }
     let wrapped = [&b"* { "[..], decls, b" }"].concat();
-    let sheet = unsafe { ns_css_stylesheet_parse(wrapped.as_ptr().cast(), wrapped.len() as isize) }
-        .cast::<RawSheet>();
-    if !sheet.is_null() {
-        decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
-    }
-    sheet
+    let sheet = OwnedSheet::parse(&wrapped);
+    let raw = sheet.as_raw();
+    decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
+    raw
 }
 
 fn emit_decl_sheet(

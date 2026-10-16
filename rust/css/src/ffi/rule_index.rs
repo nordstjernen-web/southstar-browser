@@ -114,7 +114,7 @@ pub(super) unsafe fn index_free(idx: *mut RawIndex) {
     }
 }
 
-pub(super) fn rule_index_build(sheet: &mut RawSheet) -> *mut RawIndex {
+pub(super) fn rule_index_build(sheet: &RawSheet) -> *mut RawIndex {
     let mut rules = Vec::new();
     for &rule in unsafe { rule_slice(sheet) } {
         let Some(rule) = (unsafe { rule.as_mut() }) else {
@@ -125,7 +125,7 @@ pub(super) fn rule_index_build(sheet: &mut RawSheet) -> *mut RawIndex {
         for &sel in unsafe { selector_slice(rule) } {
             let view = unsafe { SelectorRef::from_ptr(sel) };
             if let Some(pe) = view.map(SelectorRef::pseudo_element).filter(|&pe| pe != 0) {
-                sheet.pseudo_mask |= 1 << pe;
+                sheet.pseudo_mask.set(sheet.pseudo_mask.get() | 1 << pe);
                 rule.pe_mask |= 1 << pe;
             }
             selectors.push(view);

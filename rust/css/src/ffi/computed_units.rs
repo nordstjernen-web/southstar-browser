@@ -280,11 +280,7 @@ pub fn tracks_computed_text(
     ))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_style_scale_font_size(s: *mut RawStyle, factor: f64) {
-    let Some(style) = (unsafe { s.as_mut() }) else {
-        return;
-    };
+pub fn style_scale_font_size(style: &mut RawStyle, factor: f64) {
     let font_size = Prop::FontSize.id();
     if unsafe { style.values[font_size].as_ref() }.is_none_or(|v| v.kind != KIND_LENGTH) {
         return;
