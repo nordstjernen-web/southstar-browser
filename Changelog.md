@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/css keeps a parsed style sheet in Rust-owned types instead of
+  the GLib arrays, hash tables and strdup'd strings the C code used:
+  rules are a Vec of Rule structs owning their declarations, waiting
+  var() values, layer and container conditions and scopes; imports,
+  font faces, keyframes, @property rules and the layer table are Vecs
+  and HashMaps; the rule index is a HashMap of buckets hashed with
+  SipHash, so selectors in page CSS cannot crowd one bucket; and parsed
+  selectors are plain Rust data rather than C structs. The hand-written
+  free functions and struct layout assertions are gone, and the parser,
+  selector, rule index and registry modules no longer contain unsafe
+  code. rust/css drops from 538 unsafe keywords to 255.
 * The JavaScript bindings reach the page's runtime record through
   rust/js-runtime's Rust API instead of its C ABI: frames, the loader,
   window, lifecycle, dispatch, focus, the page, networking, services,
