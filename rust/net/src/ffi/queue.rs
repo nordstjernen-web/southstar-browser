@@ -28,7 +28,7 @@ const PRECONNECT_CONNECT_TIMEOUT_S: i64 = 6;
 const PRECONNECT_TIMEOUT_S: i64 = 10;
 const DLOG_NET: c_int = 4;
 
-type ReadyCallback =
+pub type ReadyCallback =
     Option<unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void)>;
 type ThreadFunc = unsafe extern "C" fn(
     task: *mut c_void,
@@ -444,14 +444,12 @@ fn coalescing_key(
     fetch::request_key(url, top_url, method, headers)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_idle() -> GBoolean {
+pub fn idle() -> bool {
     let throttle = lock(&THROTTLE);
-    glib::boolean(throttle.active == 0 && throttle.preconnects == 0)
+    throttle.active == 0 && throttle.preconnects == 0
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_shutdown() {
+pub fn shutdown() {
     ns_net_join_rng();
     if !drain(DRAIN_TIMEOUT) {
         return;
@@ -460,15 +458,11 @@ pub extern "C" fn ns_net_shutdown() {
     ns_net_transport_shutdown();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_preload_expect(key: *const c_char) {
-    if let Some(key) = text(key) {
-        lock(&SHARED).coalescer.expect(key);
-    }
+pub fn preload_expect(key: &[u8]) {
+    lock(&SHARED).coalescer.expect(key);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_preload_clear() {
+pub fn preload_clear() {
     lock(&SHARED).coalescer.clear();
 }
 
@@ -518,14 +512,17 @@ unsafe extern "C" fn preconnect_thread(
     unsafe { g_task_return_boolean(task, 1) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_preconnect_async(url: *const c_char) {
-    if !text(url).is_some_and(url::is_http_or_https) {
+pub fn preconnect_async(url: &CStr) {
+    if !url::is_http_or_https(url.to_bytes()) {
         return;
     }
     let task = Task::new(ptr::null_mut(), None, ptr::null_mut());
     unsafe {
-        g_task_set_task_data(task.0, glib::g_strdup(url).cast(), Some(glib::g_free));
+        g_task_set_task_data(
+            task.0,
+            glib::g_strdup(url.as_ptr()).cast(),
+            Some(glib::g_free),
+        );
         g_task_run_in_thread(task.0, preconnect_thread);
     }
 }
@@ -559,6 +556,12 @@ pub unsafe extern "C" fn ns_net_fetch_async(
     };
 }
 
+/// # Safety
+///
+/// `url` and every non-null `top_url`, `method` and `content_type` are NUL-terminated,
+/// `body` holds `body_len` readable bytes or is null, `extra_headers` is null or a
+/// NULL-terminated array of NUL-terminated lines, and `cancellable` is null or a live
+/// GCancellable; `callback` receives `user_data` on the main context.
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn ns_net_request_async(
@@ -683,27 +686,34 @@ pub unsafe extern "C" fn ns_net_request_blocking(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_fetch_blocking(
-    url: *const c_char,
-    cancellable: *mut c_void,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
-    unsafe {
+pub fn fetch_blocking(url: &CStr) -> Option<Response> {
+    let mut error: *mut GError = ptr::null_mut();
+    // SAFETY: url is NUL-terminated, the other arguments are null or empty and error is a writable local.
+    let resp = unsafe {
         ns_net_request_blocking(
-            url,
+            url.as_ptr(),
             ptr::null(),
             c"GET".as_ptr(),
             ptr::null(),
             0,
             ptr::null(),
             ptr::null(),
-            cancellable,
-            error,
+            ptr::null_mut(),
+            &mut error,
         )
+    };
+    if !error.is_null() {
+        // SAFETY: ns_net_request_blocking handed this error over to the caller.
+        unsafe { glib::g_error_free(error) };
     }
+    // SAFETY: the response, if any, is new and owned by nobody else.
+    unsafe { Response::from_raw(resp) }
 }
 
+/// # Safety
+///
+/// `result` is the GAsyncResult a request callback received, and `error` is null or
+/// points to a null GError slot.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_net_fetch_finish(
     result: *mut c_void,

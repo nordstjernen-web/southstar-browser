@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_long, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
-use southstar_gtk_ffi::{self as gtk, GBoolean, GByteArray, GtkWidget};
+use southstar_gtk_ffi::{self as gtk, GBoolean, GtkWidget};
 
 use super::gtk::{
     basename, borrowed, build_filename, connect, cstring, file_test, handler, hexpand_spacer,
@@ -15,32 +15,8 @@ use super::gtk::{
 };
 use crate::downloads;
 
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-}
-
 unsafe extern "C" {
-    fn ns_net_fetch_blocking(
-        url: *const c_char,
-        cancellable: *mut c_void,
-        error: *mut *mut c_void,
-    ) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
     fn ns_security_mark_download_origin(path: *const c_char, url: *const c_char);
-    fn g_clear_error(err: *mut *mut c_void);
 }
 
 const STATE_KEY: &CStr = c"ns-downloads";
@@ -119,31 +95,25 @@ unsafe extern "C" fn finish_idle(data: *mut c_void) -> GBoolean {
 unsafe extern "C" fn worker(data: *mut c_void) -> *mut c_void {
     let d = data.cast::<Download>();
     unsafe {
-        let mut err = ptr::null_mut();
-        let resp = ns_net_fetch_blocking((*d).url.as_ptr(), ptr::null_mut(), &mut err);
-        if !resp.is_null()
-            && (*resp).error.is_null()
-            && !(*resp).body.is_null()
+        let resp = southstar_net::fetch_blocking(&(*d).url);
+        let body = resp
+            .as_ref()
+            .filter(|r| r.error().is_none())
+            .and_then(southstar_net::Response::body);
+        if let (Some(resp), Some(body)) = (&resp, body)
             && gtk::g_file_set_contents(
                 (*d).path.as_ptr(),
-                (*(*resp).body).data.cast(),
-                (*(*resp).body).len as isize,
+                body.as_ptr().cast(),
+                body.len() as isize,
                 ptr::null_mut(),
             ) != 0
         {
             (*d).ok = true;
-            (*d).size = u64::from((*(*resp).body).len);
-            let origin = if (*resp).final_url.is_null() {
-                (*d).url.as_ptr()
-            } else {
-                (*resp).final_url
-            };
-            ns_security_mark_download_origin((*d).path.as_ptr(), origin);
+            (*d).size = body.len() as u64;
+            let origin = resp.final_url().unwrap_or(&(*d).url);
+            ns_security_mark_download_origin((*d).path.as_ptr(), origin.as_ptr());
         }
-        if !resp.is_null() {
-            ns_response_free(resp);
-        }
-        g_clear_error(&mut err);
+        drop(resp);
         gtk::g_idle_add(finish_idle, data);
     }
     ptr::null_mut()

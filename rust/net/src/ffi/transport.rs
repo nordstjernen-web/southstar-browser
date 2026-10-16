@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_int};
-use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -25,10 +24,6 @@ unsafe extern "C" {
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn slot_ptr(slot: &Slot) -> *const c_char {
-    slot.with_ptr(|value| value.map_or(ptr::null(), |v| v.as_ptr()))
 }
 
 #[unsafe(no_mangle)]
@@ -89,8 +84,7 @@ pub extern "C" fn ns_net_join_rng() {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_init() {
+pub fn init() {
     resolve_ca_bundle();
     southstar_http::init();
     CA_BUNDLE.with_ptr(|path| southstar_http::preload_trust_roots(path.map(|p| p.as_bytes())));
@@ -108,9 +102,8 @@ pub extern "C" fn ns_net_transport_shutdown() {
     transport::shutdown_origin_slots();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_ca_bundle_path() -> *const c_char {
-    slot_ptr(&CA_BUNDLE)
+pub fn ca_bundle_path() -> Option<Vec<u8>> {
+    CA_BUNDLE.get()
 }
 
 #[unsafe(no_mangle)]

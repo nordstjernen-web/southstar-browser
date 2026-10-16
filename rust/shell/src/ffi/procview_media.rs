@@ -57,11 +57,6 @@ const FILE_TEST_IS_EXECUTABLE: c_uint = 1 << 3;
 const RESYNC_INTERVAL_US: i64 = 950_000;
 
 unsafe extern "C" {
-    fn ns_net_proxy_override() -> *const c_char;
-    fn ns_net_http_proxy() -> *const c_char;
-    fn ns_net_https_proxy() -> *const c_char;
-    fn ns_net_no_proxy() -> *const c_char;
-    fn ns_net_ca_bundle_path() -> *const c_char;
 
     fn g_subprocess_launcher_new(flags: c_uint) -> *mut GSubprocessLauncher;
     fn g_subprocess_launcher_setenv(
@@ -466,32 +461,31 @@ fn video_helper_path() -> GStr {
 }
 
 fn apply_proxy_env(launcher: *mut GSubprocessLauncher) {
-    let set = |name: &CStr, value: *const c_char| unsafe {
-        g_subprocess_launcher_setenv(launcher, name.as_ptr(), value, glib::TRUE)
+    let set = |name: &CStr, value: &CString| unsafe {
+        g_subprocess_launcher_setenv(launcher, name.as_ptr(), value.as_ptr(), glib::TRUE)
     };
-    let non_empty = |p: *const c_char| text(p).is_some_and(|t| !t.is_empty());
-    let proxy = unsafe { ns_net_proxy_override() };
-    if non_empty(proxy) {
-        set(c"all_proxy", proxy);
-        set(c"http_proxy", proxy);
-        set(c"https_proxy", proxy);
+    let non_empty = |value: Option<Vec<u8>>| {
+        value
+            .filter(|v| !v.is_empty())
+            .and_then(|v| CString::new(v).ok())
+    };
+    if let Some(proxy) = non_empty(southstar_net::proxy_override()) {
+        set(c"all_proxy", &proxy);
+        set(c"http_proxy", &proxy);
+        set(c"https_proxy", &proxy);
     } else {
-        let http = unsafe { ns_net_http_proxy() };
-        let https = unsafe { ns_net_https_proxy() };
-        if non_empty(http) {
-            set(c"http_proxy", http);
+        if let Some(http) = non_empty(southstar_net::http_proxy()) {
+            set(c"http_proxy", &http);
         }
-        if non_empty(https) {
-            set(c"https_proxy", https);
+        if let Some(https) = non_empty(southstar_net::https_proxy()) {
+            set(c"https_proxy", &https);
         }
     }
-    let no_proxy = unsafe { ns_net_no_proxy() };
-    if non_empty(no_proxy) {
-        set(c"no_proxy", no_proxy);
+    if let Some(no_proxy) = non_empty(southstar_net::no_proxy()) {
+        set(c"no_proxy", &no_proxy);
     }
-    let ca = unsafe { ns_net_ca_bundle_path() };
-    if non_empty(ca) {
-        set(c"CURL_CA_BUNDLE", ca);
+    if let Some(ca) = non_empty(southstar_net::ca_bundle_path()) {
+        set(c"CURL_CA_BUNDLE", &ca);
     }
 }
 

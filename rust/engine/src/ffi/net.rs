@@ -2,38 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray, GStr};
+use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
+pub use southstar_net::{NsResponse, Response};
 
 use crate::fetch::CssFetch;
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-pub struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    _content_disposition: *mut c_char,
-    _csp_header: *mut c_char,
-    _xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    _refresh: *mut c_char,
-    _content_language: *mut c_char,
-    _raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-}
 
 #[repr(C)]
 struct ResourceTiming {
@@ -73,31 +51,6 @@ pub enum Dest {
 }
 
 unsafe extern "C" {
-    fn ns_net_request_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        callback: AsyncReady,
-        user_data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
-    fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
-    fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
-    fn ns_net_preload_clear();
-    fn ns_net_preconnect_async(url: *const c_char);
-    fn ns_net_request_key(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        extra_headers: *const *const c_char,
-    ) -> *mut c_char;
-    fn ns_net_preload_expect(key: *const c_char);
-    fn ns_response_free(resp: *mut NsResponse);
     fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
     fn g_main_loop_run(main_loop: *mut GMainLoop);
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
@@ -159,65 +112,13 @@ pub unsafe fn quit_loop(main_loop: *mut c_void) {
     unsafe { g_main_loop_quit(main_loop.cast()) };
 }
 
-pub struct Response(NonNull<NsResponse>);
-
-impl Response {
-    pub unsafe fn take(resp: *mut NsResponse) -> Option<Response> {
-        NonNull::new(resp).map(Response)
-    }
-
-    fn raw(&self) -> &NsResponse {
-        unsafe { self.0.as_ref() }
-    }
-
-    pub fn into_raw(self) -> *mut NsResponse {
-        let raw = self.0.as_ptr();
-        core::mem::forget(self);
-        raw
-    }
-
-    pub fn status(&self) -> c_long {
-        self.raw().status
-    }
-
-    pub fn error(&self) -> Option<&CStr> {
-        c_str(self.raw().error)
-    }
-
-    pub fn content_type(&self) -> Option<&[u8]> {
-        c_str(self.raw().content_type).map(CStr::to_bytes)
-    }
-
-    pub fn final_url(&self) -> *const c_char {
-        self.raw().final_url
-    }
-
-    pub fn cors_allow_origin(&self) -> *const c_char {
-        self.raw().cors_allow_origin
-    }
-
-    pub fn nosniff(&self) -> bool {
-        unsafe { ns_net_header_is_nosniff(self.raw().x_content_type_options) != 0 }
-    }
-
-    pub fn body(&self) -> Option<&[u8]> {
-        let b = unsafe { self.raw().body.as_ref() }?;
-        Some(if b.data.is_null() || b.len == 0 {
-            &[]
-        } else {
-            unsafe { core::slice::from_raw_parts(b.data, b.len as usize) }
-        })
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        unsafe { ns_response_free(self.0.as_ptr()) };
-    }
+pub fn nosniff(resp: &Response) -> bool {
+    resp.x_content_type_options()
+        .is_some_and(|value| southstar_net::header_is_nosniff(value.to_bytes()))
 }
 
 pub fn accept_headers(dest: Dest) -> *const *const c_char {
-    unsafe { ns_net_accept_headers_for(dest as c_int) }
+    southstar_net::accept_headers_for(dest as c_int)
 }
 
 struct FetchState {
@@ -228,7 +129,7 @@ struct FetchState {
 
 unsafe extern "C" fn on_fetch_done(_src: *mut c_void, result: *mut c_void, ud: *mut c_void) {
     let st = unsafe { &mut *ud.cast::<FetchState>() };
-    st.resp = unsafe { ns_net_fetch_finish(result, &mut st.error) };
+    st.resp = unsafe { southstar_net::fetch_finish(result, &mut st.error) };
     unsafe { quit_loop(st.main_loop) };
 }
 
@@ -263,7 +164,7 @@ pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> *mut NsR
         _ => r.headers,
     };
     unsafe {
-        ns_net_request_async(
+        southstar_net::request_async(
             r.url,
             r.top_url,
             r.method.as_ptr(),
@@ -272,7 +173,7 @@ pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> *mut NsR
             r.content_type,
             headers,
             ptr::null_mut(),
-            on_fetch_done,
+            Some(on_fetch_done),
             (&mut st as *mut FetchState).cast(),
         )
     };
@@ -304,7 +205,7 @@ pub fn fetch_blocking_with_headers(
         user_activated: false,
         headers: accept_headers(dest),
     };
-    unsafe { Response::take(request_blocking(&r, ptr::null_mut())) }
+    unsafe { Response::from_raw(request_blocking(&r, ptr::null_mut())) }
 }
 
 pub struct Bytes(NonNull<GBytes>);
@@ -415,7 +316,7 @@ unsafe extern "C" fn resource_timing_free(p: *mut c_void) {
     unsafe {
         glib::g_free(t.top_url.cast());
         glib::g_free(t.url.cast());
-        ns_response_free(t.resp);
+        drop(Response::from_raw(t.resp));
         glib::g_free(p);
     }
 }
@@ -491,33 +392,32 @@ pub fn url_origin(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn preload_clear() {
-    unsafe { ns_net_preload_clear() };
+    southstar_net::preload_clear();
 }
 
 pub fn preconnect(origin: &[u8]) {
-    unsafe { ns_net_preconnect_async(cstring(origin).as_ptr()) };
+    southstar_net::preconnect_async(&cstring(origin));
 }
 
 unsafe extern "C" fn on_preload_fetched(_src: *mut c_void, result: *mut c_void, _ud: *mut c_void) {
-    drop(unsafe { Response::take(ns_net_fetch_finish(result, ptr::null_mut())) });
+    drop(unsafe { Response::from_raw(southstar_net::fetch_finish(result, ptr::null_mut())) });
 }
 
 pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
     let url = cstring(url);
     let headers = accept_headers(dest);
-    if dest != Dest::Default {
-        let key = unsafe {
-            GStr::take(ns_net_request_key(
-                url.as_ptr(),
-                base.as_ptr(),
-                c"GET".as_ptr(),
-                headers,
-            ))
-        };
-        unsafe { ns_net_preload_expect(key.as_deref().map_or(ptr::null(), CStr::as_ptr)) };
+    if dest != Dest::Default
+        && let Some(key) = southstar_net::request_key(
+            url.to_bytes(),
+            Some(base.to_bytes()),
+            Some(b"GET"),
+            &southstar_net::accept_header_lines(dest as c_int),
+        )
+    {
+        southstar_net::preload_expect(&key);
     }
     unsafe {
-        ns_net_request_async(
+        southstar_net::request_async(
             url.as_ptr(),
             base.as_ptr(),
             c"GET".as_ptr(),
@@ -526,7 +426,7 @@ pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
             ptr::null(),
             headers,
             ptr::null_mut(),
-            on_preload_fetched,
+            Some(on_preload_fetched),
             ptr::null_mut(),
         )
     };
@@ -540,7 +440,7 @@ pub fn request_async(
     ud: *mut c_void,
 ) {
     unsafe {
-        ns_net_request_async(
+        southstar_net::request_async(
             url,
             base.as_ptr(),
             c"GET".as_ptr(),
@@ -549,7 +449,7 @@ pub fn request_async(
             ptr::null(),
             accept_headers(dest),
             ptr::null_mut(),
-            callback,
+            Some(callback),
             ud,
         )
     };
@@ -557,9 +457,9 @@ pub fn request_async(
 
 pub unsafe fn finish(result: *mut c_void) -> Option<Response> {
     let mut err: *mut GError = ptr::null_mut();
-    let resp = unsafe { ns_net_fetch_finish(result, &mut err) };
+    let resp = unsafe { southstar_net::fetch_finish(result, &mut err) };
     if !err.is_null() {
         unsafe { glib::g_error_free(err) };
     }
-    unsafe { Response::take(resp) }
+    unsafe { Response::from_raw(resp) }
 }

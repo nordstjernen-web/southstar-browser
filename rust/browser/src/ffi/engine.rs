@@ -21,15 +21,10 @@ unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
-    fn ns_config_init();
-    fn ns_config_shutdown();
     fn ns_security_harden_allocator();
     fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
     fn ns_security_sandbox_init(self_exe: *const c_char);
     fn ns_security_seccomp_init();
-    fn ns_net_init();
-    fn ns_net_shutdown();
-    fn ns_net_set_allow_file_urls(allow: GBoolean);
     fn ns_cache_init();
     fn ns_cache_shutdown();
     fn ns_history_init();
@@ -211,13 +206,14 @@ pub fn paint_set_anim(anim: Option<Anim>) {
 }
 
 pub fn init_subsystems() {
+    southstar_config::init();
+    if southstar_config::get().is_some_and(|c| c.harden_allocator != 0) {
+        // SAFETY: hardening the allocator has no preconditions and runs before the engine allocates.
+        unsafe { ns_security_harden_allocator() };
+    }
+    southstar_net::init();
+    southstar_net::set_allow_file_urls(true);
     unsafe {
-        ns_config_init();
-        if southstar_config::get().is_some_and(|c| c.harden_allocator != 0) {
-            ns_security_harden_allocator();
-        }
-        ns_net_init();
-        ns_net_set_allow_file_urls(1);
         ns_cache_init();
         ns_history_init();
         ns_font_init();
@@ -240,9 +236,9 @@ pub fn shutdown() {
         ns_font_shutdown();
         ns_history_shutdown();
         ns_cache_shutdown();
-        ns_net_shutdown();
-        ns_config_shutdown();
     }
+    southstar_net::shutdown();
+    southstar_config::shutdown();
 }
 
 pub fn webgl_take_pending_origin() -> Option<GStr> {

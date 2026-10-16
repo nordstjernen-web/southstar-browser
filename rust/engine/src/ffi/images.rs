@@ -4,7 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr::NonNull;
+use core::ptr::{self, NonNull};
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -64,8 +64,9 @@ impl ImageCache {
             return;
         };
         if img.final_url.is_null() {
-            img.final_url = unsafe { glib::g_strdup(resp.final_url()) };
-            img.cors_allow_origin = unsafe { glib::g_strdup(resp.cors_allow_origin()) };
+            let text = |value: Option<&CStr>| value.map_or(ptr::null(), CStr::as_ptr);
+            img.final_url = unsafe { glib::g_strdup(text(resp.final_url())) };
+            img.cors_allow_origin = unsafe { glib::g_strdup(text(resp.cors_allow_origin())) };
         }
     }
 }

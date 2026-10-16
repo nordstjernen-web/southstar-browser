@@ -97,11 +97,11 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
     }
     let start_us = ffi::monotonic_us();
     let resp = ffi::fetch_blocking_with_headers(f.url, f.top_url, Dest::Style);
-    let enforce_mime = f.strict_mime || resp.as_ref().is_some_and(|r| r.nosniff());
+    let enforce_mime = f.strict_mime || resp.as_ref().is_some_and(ffi::nosniff);
     let mime_ok = !enforce_mime
         || resp
             .as_ref()
-            .is_none_or(|r| content_type_is_css(r.content_type()));
+            .is_none_or(|r| content_type_is_css(r.content_type().map(CStr::to_bytes)));
     let body = resp
         .as_ref()
         .filter(|r| r.error().is_none() && r.status() < 400 && mime_ok)

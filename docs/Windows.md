@@ -308,8 +308,8 @@ source Firefox uses. We bundle it because:
   only exists on a machine with MSYS2 installed; on a fresh
   user box it is missing.
 
-`src/net.c::ns_net_resolve_ca_bundle` resolves the file at
-`ns_net_init()` time, in this order:
+`resolve_ca_bundle` in `rust/net/src/ffi/transport.rs` resolves the file at
+`southstar_net::init()` time, in this order:
 
 1. `$CURL_CA_BUNDLE` env var, if set and the path exists.
 2. `$SSL_CERT_FILE` env var, same condition.

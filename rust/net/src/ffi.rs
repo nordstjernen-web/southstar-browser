@@ -190,9 +190,8 @@ pub unsafe extern "C" fn ns_net_synthesize_data_response(
     1
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_set_allow_file_urls(allow: GBoolean) {
-    file::ALLOW_FILE_URLS.store(allow != 0, Ordering::Relaxed);
+pub fn set_allow_file_urls(allow: bool) {
+    file::ALLOW_FILE_URLS.store(allow, Ordering::Relaxed);
 }
 
 #[unsafe(no_mangle)]

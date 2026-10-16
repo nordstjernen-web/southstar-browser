@@ -98,18 +98,6 @@ unsafe extern "C" {
     fn ns_thread_dump_install_signal(label: *const c_char);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
-    fn ns_net_init();
-    fn ns_net_shutdown();
-    fn ns_net_idle() -> GBoolean;
-    fn ns_net_set_proxy_override(proxy_url: *const c_char);
-    fn ns_net_set_allow_file_urls(allow: GBoolean);
-    fn ns_net_set_log_fetches(on: GBoolean);
-    fn ns_net_perf_snapshot(
-        fetches: *mut u64,
-        bytes: *mut u64,
-        sum_ms: *mut c_double,
-        span_ms: *mut c_double,
-    );
     fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
     fn ns_cache_init();
     fn ns_cache_shutdown();
@@ -578,12 +566,14 @@ fn opt_ptr(s: Option<&CStr>) -> *const c_char {
 }
 
 fn print_perf() {
-    let (mut fetches, mut bytes, mut relayouts) = (0u64, 0u64, 0u64);
-    let (mut sum_ms, mut span_ms, mut layout_ms) = (0f64, 0f64, 0f64);
-    unsafe {
-        ns_net_perf_snapshot(&mut fetches, &mut bytes, &mut sum_ms, &mut span_ms);
-        ns_engine_layout_perf(&mut relayouts, &mut layout_ms);
-    }
+    let southstar_net::PerfSnapshot {
+        fetches,
+        bytes,
+        sum_ms,
+        span_ms,
+    } = southstar_net::perf_snapshot();
+    let (mut relayouts, mut layout_ms) = (0u64, 0f64);
+    unsafe { ns_engine_layout_perf(&mut relayouts, &mut layout_ms) };
     let mut line = format!(
         "[net perf] fetches={fetches} bytes={bytes} net_span={span_ms:.1}ms net_sum={sum_ms:.1}ms | relayouts={relayouts} layout={layout_ms:.1}ms"
     );
@@ -615,12 +605,12 @@ fn print_perf() {
 fn run_headless(opts: &mut HeadlessOpts) -> c_int {
     setenv_unless_set(c"NS_WEBGL_ALLOW", c"1");
     let log_net = opts.debug_levels & (1 << appmain::DLOG_NET) != 0;
+    southstar_net::init();
+    southstar_net::set_allow_file_urls(true);
+    if log_net {
+        southstar_net::set_log_fetches(true);
+    }
     unsafe {
-        ns_net_init();
-        ns_net_set_allow_file_urls(1);
-        if log_net {
-            ns_net_set_log_fetches(1);
-        }
         ns_cache_init();
         ns_history_init();
         ns_font_init();
@@ -644,8 +634,8 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
     unsafe {
         ns_history_shutdown();
         ns_cache_shutdown();
-        ns_net_shutdown();
     }
+    southstar_net::shutdown();
     southstar_config::shutdown();
     rc
 }
@@ -815,13 +805,13 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let options = appmain::parse(&args);
     for action in &options.actions {
         match action {
-            Action::Proxy(proxy) => unsafe {
-                ns_net_set_proxy_override(proxy.as_ptr());
+            Action::Proxy(proxy) => {
+                southstar_net::set_proxy_override(Some(proxy.to_bytes()));
                 if !proxy.is_empty() {
                     setenv(c"NS_HTTP_PROXY", proxy);
                     setenv(c"NS_HTTPS_PROXY", proxy);
                 }
-            },
+            }
             Action::WindowSize(w, h) => ns_procapp_set_window_size(*w, *h),
             Action::PrintConfig => {
                 print_config();
@@ -867,7 +857,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     );
     let mut opts = headless_opts(&options);
     let headless_rc = run_headless(&mut opts);
-    if unsafe { ns_net_idle() } == 0 {
+    if !southstar_net::idle() {
         unsafe {
             fflush(ptr::null_mut());
             _exit(headless_rc);

@@ -5,7 +5,7 @@
 use core::ffi::{c_char, c_int, c_long};
 use core::sync::atomic::Ordering;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 
 use crate::netlog::{self, Entry};
 
@@ -23,9 +23,8 @@ fn owned(p: *const c_char) -> Vec<u8> {
     text(p).map(<[u8]>::to_vec).unwrap_or_default()
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_set_log_fetches(on: GBoolean) {
-    netlog::LOG_FETCHES.store(on != 0, Ordering::Relaxed);
+pub fn set_log_fetches(on: bool) {
+    netlog::LOG_FETCHES.store(on, Ordering::Relaxed);
 }
 
 #[unsafe(no_mangle)]
@@ -61,42 +60,8 @@ pub unsafe extern "C" fn ns_net_log_record(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_net_log_clear() {
-    netlog::clear();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_log_dump() -> *mut c_char {
-    glib::strdup(&netlog::dump())
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_net_perf_record(start_us: i64, end_us: i64, bytes: u64) {
     netlog::record_timing(start_us, end_us, bytes);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_perf_snapshot(
-    fetches: *mut u64,
-    bytes: *mut u64,
-    sum_ms: *mut f64,
-    span_ms: *mut f64,
-) {
-    let s = netlog::snapshot();
-    unsafe {
-        if let Some(f) = fetches.as_mut() {
-            *f = s.fetches;
-        }
-        if let Some(b) = bytes.as_mut() {
-            *b = s.bytes;
-        }
-        if let Some(m) = sum_ms.as_mut() {
-            *m = s.sum_ms;
-        }
-        if let Some(m) = span_ms.as_mut() {
-            *m = s.span_ms;
-        }
-    }
 }
 
 #[unsafe(no_mangle)]

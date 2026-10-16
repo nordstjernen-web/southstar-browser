@@ -123,7 +123,7 @@ pub struct Response(NonNull<NsResponse>);
 unsafe impl Send for Response {}
 
 impl Response {
-    pub fn new() -> Response {
+    pub(crate) fn new() -> Response {
         let raw =
             unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast::<NsResponse>();
         let resp = Response(NonNull::new(raw).expect("g_malloc0 aborts on failure"));
@@ -156,6 +156,44 @@ impl Response {
         let raw = self.as_ptr();
         core::mem::forget(self);
         raw
+    }
+
+    /// # Safety
+    ///
+    /// `resp` is null or a response the caller owns; the returned value frees it.
+    pub unsafe fn from_raw(resp: *mut NsResponse) -> Option<Response> {
+        NonNull::new(resp).map(Response)
+    }
+
+    pub fn status(&self) -> c_long {
+        self.view().status
+    }
+
+    pub fn final_url(&self) -> Option<&CStr> {
+        c_str(self.view().final_url)
+    }
+
+    pub fn content_type(&self) -> Option<&CStr> {
+        c_str(self.view().content_type)
+    }
+
+    pub fn cors_allow_origin(&self) -> Option<&CStr> {
+        c_str(self.view().cors_allow_origin)
+    }
+
+    pub fn x_content_type_options(&self) -> Option<&CStr> {
+        c_str(self.view().x_content_type_options)
+    }
+
+    pub fn error(&self) -> Option<&CStr> {
+        c_str(self.view().error)
+    }
+
+    pub fn body(&self) -> Option<&[u8]> {
+        // SAFETY: a response's body is null or the GByteArray it owns.
+        let body = unsafe { self.view().body.as_ref() }?;
+        // SAFETY: the array holds len initialized bytes at data, or data is null.
+        Some(unsafe { glib::slice(body.data, body.len as usize) })
     }
 
     fn with_error(url: &[u8], status: c_long, error: &[u8]) -> Response {
@@ -205,6 +243,11 @@ pub struct Fetch<'a> {
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
+}
+
+fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: response texts are null or NUL-terminated strings the response owns.
+    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
 pub fn cstr(bytes: &[u8]) -> CString {
@@ -854,17 +897,7 @@ pub fn request_key(
     Some(request::coalescing_key(url, &partition, &lines))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_request_key(
-    url: *const c_char,
-    top_url: *const c_char,
-    method: *const c_char,
-    extra_headers: *const *const c_char,
-) -> *mut c_char {
-    let Some(url) = text(url) else {
-        return ptr::null_mut();
-    };
-    let headers = unsafe { header_lines(extra_headers) };
-    request_key(url, text(top_url), text(method), &headers)
-        .map_or(ptr::null_mut(), |key| glib::strdup(&key))
+pub fn accept_header_lines(dest: c_int) -> Vec<Vec<u8>> {
+    // SAFETY: the Accept lines of a destination are a static NULL-terminated array of C strings, or null.
+    unsafe { header_lines(ns_net_accept_headers_for(dest)) }
 }

@@ -26,18 +26,12 @@ fn override_ptr() -> *const c_char {
     OVERRIDE.with_ptr(|value| value.map_or(ptr::null(), |v| v.as_ptr()))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_set_proxy_override(proxy_url: *const c_char) {
-    OVERRIDE.set(
-        unsafe { glib::bytes(proxy_url) }
-            .filter(|p| !p.is_empty())
-            .map(<[u8]>::to_vec),
-    );
+pub fn set_proxy_override(proxy_url: Option<&[u8]>) {
+    OVERRIDE.set(proxy_url.filter(|p| !p.is_empty()).map(<[u8]>::to_vec));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_proxy_override() -> *const c_char {
-    override_ptr()
+pub fn proxy_override() -> Option<Vec<u8>> {
+    OVERRIDE.get()
 }
 
 #[unsafe(no_mangle)]
@@ -68,19 +62,22 @@ pub extern "C" fn ns_net_configured_no_proxy() -> *const c_char {
         .unwrap_or(ptr::null())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_http_proxy() -> *const c_char {
-    config().map_or(ptr::null(), |cfg| cfg.http_proxy.cast_const())
+fn config_text(field: impl FnOnce(&NsConfig) -> *mut c_char) -> Option<Vec<u8>> {
+    let value = config().map_or(ptr::null_mut(), field);
+    // SAFETY: a configuration text is null or a NUL-terminated string the configuration owns.
+    unsafe { glib::bytes(value) }.map(<[u8]>::to_vec)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_https_proxy() -> *const c_char {
-    config().map_or(ptr::null(), |cfg| cfg.https_proxy.cast_const())
+pub fn http_proxy() -> Option<Vec<u8>> {
+    config_text(|cfg| cfg.http_proxy)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_no_proxy() -> *const c_char {
-    config().map_or(ptr::null(), |cfg| cfg.no_proxy.cast_const())
+pub fn https_proxy() -> Option<Vec<u8>> {
+    config_text(|cfg| cfg.https_proxy)
+}
+
+pub fn no_proxy() -> Option<Vec<u8>> {
+    config_text(|cfg| cfg.no_proxy)
 }
 
 pub fn shutdown() {

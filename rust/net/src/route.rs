@@ -8,7 +8,7 @@ use southstar_glib as glib;
 use southstar_http::{Route, TlsSettings};
 
 use crate::ffi::proxy::{ns_net_configured_no_proxy, ns_net_pick_configured_proxy};
-use crate::ffi::transport::{ns_net_ca_bundle_path, ns_net_ec_curves};
+use crate::ffi::transport::{ca_bundle_path, ns_net_ec_curves};
 use crate::{hsts, url};
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
@@ -17,7 +17,7 @@ fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
 
 pub fn tls_settings() -> TlsSettings {
     TlsSettings {
-        ca_bundle: text(ns_net_ca_bundle_path()).map(<[u8]>::to_vec),
+        ca_bundle: ca_bundle_path(),
         curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),
     }
 }

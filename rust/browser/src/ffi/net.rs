@@ -7,6 +7,8 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
 use southstar_dom::Tree;
+
+use super::glib::gstr_from;
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
 
 #[repr(C)]
@@ -68,14 +70,6 @@ unsafe extern "C" {
         user_activated: GBoolean,
         error: *mut *mut GError,
     ) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
-    fn ns_build_error_page(
-        url: *const c_char,
-        status: c_long,
-        transport_error: *const c_char,
-    ) -> *mut c_char;
-    fn ns_url_strip_tracking_params(url: *const c_char) -> *mut c_char;
-    fn ns_net_https_first_upgrade(url: *const c_char) -> *mut c_char;
     fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
     fn ns_safebrowsing_allow_host(host: *const c_char);
     fn ns_safebrowsing_interstitial(url: *const c_char, host: *const c_char) -> *mut c_char;
@@ -282,7 +276,8 @@ impl Response {
 
 impl Drop for Response {
     fn drop(&mut self) {
-        unsafe { ns_response_free(self.0.as_ptr()) };
+        // SAFETY: self.0 is the ns_response this value owns; NsResponse mirrors its layout.
+        drop(unsafe { southstar_net::Response::from_raw(self.0.as_ptr().cast()) });
     }
 }
 
@@ -291,7 +286,11 @@ pub fn build_error_page(
     status: c_long,
     transport_error: Option<&CStr>,
 ) -> Option<GStr> {
-    take(unsafe { ns_build_error_page(url.as_ptr(), status, opt(transport_error)) })
+    gstr_from(&southstar_net::build_error_page(
+        Some(url.to_bytes()),
+        status,
+        transport_error.map(CStr::to_bytes),
+    ))
 }
 
 pub fn url_host_from(url: &CStr) -> Option<CString> {
@@ -299,11 +298,11 @@ pub fn url_host_from(url: &CStr) -> Option<CString> {
 }
 
 pub fn url_strip_tracking_params(url: &CStr) -> Option<GStr> {
-    take(unsafe { ns_url_strip_tracking_params(url.as_ptr()) })
+    southstar_net::strip_tracking_params(url.to_bytes()).and_then(|url| gstr_from(&url))
 }
 
 pub fn https_first_upgrade(url: &CStr) -> Option<GStr> {
-    take(unsafe { ns_net_https_first_upgrade(url.as_ptr()) })
+    southstar_net::https_first_upgrade(url.to_bytes()).and_then(|url| gstr_from(&url))
 }
 
 pub fn safebrowsing_blocked(host: &CStr) -> bool {

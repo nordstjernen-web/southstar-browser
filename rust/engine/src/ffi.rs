@@ -28,8 +28,8 @@ pub use css::{
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
     Bytes, CssCache, Dest, NsResponse, Request, fetch_blocking_with_headers, in_blocking_fetch,
-    monotonic_us, preconnect, preload_clear, preload_request, record_timing, url_is_http_or_https,
-    url_origin, url_resolve,
+    monotonic_us, nosniff, preconnect, preload_clear, preload_request, record_timing,
+    url_is_http_or_https, url_origin, url_resolve,
 };
 
 use crate::fetch;

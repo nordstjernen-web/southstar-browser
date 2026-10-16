@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use core::ffi::CStr;
 
 use southstar_dom::{self as dom, Node, NsNode};
 use southstar_glib::{GBoolean, GStr};
@@ -25,16 +24,6 @@ unsafe extern "C" {
         first: *mut GBoolean,
         submitter: *const NsNode,
     );
-    fn ns_form_set_submission_charset(charset: *const c_char);
-    fn ns_net_parse_refresh(
-        input: *const c_char,
-        time_out: *mut f64,
-        url_out: *mut *mut c_char,
-    ) -> GBoolean;
-}
-
-fn opt(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
 }
 
 pub fn is_named(n: Node<'_>, tag: &CStr) -> bool {
@@ -125,7 +114,7 @@ pub fn form_collect_inputs(
 }
 
 pub fn set_submission_charset(charset: Option<&CStr>) {
-    unsafe { ns_form_set_submission_charset(opt(charset)) };
+    southstar_net::set_submission_charset(charset.map(CStr::to_bytes));
 }
 
 pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<GStr> {
@@ -138,9 +127,6 @@ pub fn url_origin_from(url: Option<&CStr>) -> Option<Vec<u8>> {
 }
 
 pub fn parse_refresh(input: &CStr) -> Option<(f64, Option<GStr>)> {
-    let mut seconds = 0.0;
-    let mut target: *mut c_char = ptr::null_mut();
-    let ok = unsafe { ns_net_parse_refresh(input.as_ptr(), &mut seconds, &mut target) } != 0;
-    let target = unsafe { GStr::take(target) };
-    ok.then_some((seconds, target))
+    let (seconds, target) = southstar_net::parse_refresh(input.to_bytes())?;
+    Some((seconds, target.and_then(|target| gstr_from(&target))))
 }

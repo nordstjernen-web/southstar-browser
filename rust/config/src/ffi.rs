@@ -188,11 +188,6 @@ fn free_texts(config: &mut NsConfig) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_init() {
-    init();
-}
-
 pub fn init() {
     let path = global_path();
     if !path.is_null() {
@@ -217,11 +212,6 @@ pub fn reload() {
     let mut fresh = NsConfig::ZERO;
     load(&mut fresh, path);
     crate::adopt(global_config(), &mut fresh);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_shutdown() {
-    shutdown();
 }
 
 pub fn shutdown() {

@@ -10,7 +10,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
 
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
-use super::transport::{ns_net_aborting, ns_net_ca_bundle_path, ns_net_ec_curves};
+use super::transport::{ca_bundle_path, ns_net_aborting, ns_net_ec_curves};
 use crate::{cookies, hsts, url};
 
 const HTTP_VERSION_1_1: c_long = 2;
@@ -236,7 +236,7 @@ pub fn transport(
         connect_timeout: seconds(hop.connect_timeout_s, 10).min(seconds(hop.timeout_s, 30)),
         allow_insecure: insecure_opt_in && !pinned,
         tls: TlsSettings {
-            ca_bundle: text(ns_net_ca_bundle_path()).map(<[u8]>::to_vec),
+            ca_bundle: ca_bundle_path(),
             curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),
         },
         proxy,

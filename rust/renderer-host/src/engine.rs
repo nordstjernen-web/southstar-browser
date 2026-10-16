@@ -2,30 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
-
-use southstar_glib::GBoolean;
 
 pub use southstar_browser::api::{
     LayerPlan, LayerTarget, Page, Post, PrintPages, PrintSetup, TileTarget, VpLayerInfo, init,
     print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_referrer,
     set_next_user_activated, shutdown,
 };
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct ResponseHead {
-    status: c_long,
-    strings: [*mut c_char; 10],
-    body: *mut GByteArray,
-}
 
 #[repr(C)]
 struct Texture {
@@ -46,17 +30,7 @@ const CAIRO_FORMAT_RGB24: c_int = 1;
 const CAIRO_STATUS_SUCCESS: c_int = 0;
 
 unsafe extern "C" {
-    fn free(ptr: *mut c_void);
     fn g_get_monotonic_time() -> i64;
-    fn ns_net_idle() -> GBoolean;
-    fn ns_net_fetch_blocking(
-        url: *const c_char,
-        cancellable: *mut c_void,
-        error: *mut *mut c_void,
-    ) -> *mut ResponseHead;
-    fn ns_response_free(resp: *mut ResponseHead);
-    fn ns_net_log_clear();
-    fn ns_net_log_dump() -> *mut c_char;
     fn ns_image_decode_bytes(
         data: *const u8,
         len: usize,
@@ -82,17 +56,8 @@ pub fn cstring(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-fn take(text: *mut c_char) -> Option<Vec<u8>> {
-    if text.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
-    unsafe { free(text.cast()) };
-    Some(bytes)
-}
-
 pub fn net_idle() -> bool {
-    unsafe { ns_net_idle() != 0 }
+    southstar_net::idle()
 }
 
 pub fn monotonic_us() -> i64 {
@@ -100,11 +65,11 @@ pub fn monotonic_us() -> i64 {
 }
 
 pub fn net_log_clear() {
-    unsafe { ns_net_log_clear() };
+    southstar_net::log_clear();
 }
 
 pub fn net_log_dump() -> Option<Vec<u8>> {
-    take(unsafe { ns_net_log_dump() })
+    Some(southstar_net::log_dump())
 }
 
 pub fn same_origin(a: &CStr, b: &CStr) -> bool {
@@ -118,16 +83,14 @@ pub struct Favicon {
 }
 
 pub fn fetch_favicon(url: &CStr) -> Option<Favicon> {
-    let resp = unsafe { ns_net_fetch_blocking(url.as_ptr(), ptr::null_mut(), ptr::null_mut()) };
-    let head = unsafe { resp.as_ref() }?;
-    let body = unsafe { head.body.as_ref() }.filter(|body| head.status < 400 && body.len > 0);
-    let Some(body) = body else {
-        unsafe { ns_response_free(resp) };
-        return None;
-    };
+    let resp = southstar_net::fetch_blocking(url)?;
+    let body = resp
+        .body()
+        .filter(|body| resp.status() < 400 && !body.is_empty())?;
     let (mut w, mut h) = (0, 0);
-    let tex = unsafe { ns_image_decode_bytes(body.data, body.len as usize, &mut w, &mut h) };
-    unsafe { ns_response_free(resp) };
+    // SAFETY: body is body.len() readable bytes and w and h are writable locals.
+    let tex = unsafe { ns_image_decode_bytes(body.as_ptr(), body.len(), &mut w, &mut h) };
+    drop(resp);
     if tex.is_null() {
         return None;
     }

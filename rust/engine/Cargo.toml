@@ -17,6 +17,7 @@ southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
 southstar-layout-query = { path = "../layout-query" }
+southstar-net = { path = "../net" }
 southstar-paint = { path = "../paint" }
 southstar-print = { path = "../print" }
 southstar-render = { path = "../render" }
