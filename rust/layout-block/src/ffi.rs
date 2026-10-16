@@ -8,32 +8,11 @@ use core::ptr;
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox, Style};
-use southstar_style::{NsCssValue, PropId, StyleRef, ValueRef};
+use southstar_style::{NsCssValue, StyleRef, ValueRef};
 
 use crate::{align, block, dispatch, fieldset, flex};
 
 unsafe extern "C" {
-    fn ns_layout_length_resolve(v: *const NsCssValue, basis: f64, fallback: f64) -> f64;
-    fn ns_layout_edges_from_style(
-        s: *const Style,
-        basis: f64,
-        margin: *mut southstar_layout::Edges,
-        padding: *mut southstar_layout::Edges,
-        border: *mut southstar_layout::Edges,
-    );
-    fn ns_layout_resolve_used_height(
-        b: *const NsBox,
-        hv: *const NsCssValue,
-        width_basis: f64,
-        fallback: f64,
-    ) -> f64;
-    fn ns_layout_containing_block_definite_height(b: *const NsBox) -> f64;
-    fn ns_layout_height_keyword_stretches(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean;
-    fn ns_layout_style_is_flex_container(s: *const Style) -> GBoolean;
-    fn ns_layout_keyword_or(s: *const Style, p: c_int, fallback: *const c_char) -> *const c_char;
-    fn ns_layout_aspect_ratio_number(v: *const NsCssValue, with_auto: *mut GBoolean) -> f64;
-    fn ns_layout_flex_direction_of(s: *const Style) -> *const c_char;
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_intrinsic_keyword_width(
@@ -107,73 +86,22 @@ unsafe extern "C" {
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_css_used_column_count(s: *const Style, avail_w: f64, gap_out: *mut f64) -> c_int;
-    fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
 }
 
 fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
     v.map_or(ptr::null(), ValueRef::as_ptr)
 }
 
-fn c_str<'a>(p: *const c_char) -> &'a CStr {
-    unsafe { CStr::from_ptr(p) }
-}
-
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
 pub fn style_ref<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
 }
 
-pub fn dom_of<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
-}
-
-pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
-    unsafe { ns_layout_length_resolve(value_ptr(v), basis, fallback) }
-}
-
-pub fn edges_into_box(b: BoxRef<'_>, basis: f64) {
-    let (margin, padding, border) = b.edges_mut();
-    unsafe { ns_layout_edges_from_style(b.style(), basis, margin, padding, border) }
-}
-
-pub fn resolve_used_height(
-    b: BoxRef<'_>,
-    hv: Option<ValueRef<'_>>,
-    width_basis: f64,
-    fallback: f64,
-) -> f64 {
-    unsafe { ns_layout_resolve_used_height(b.as_ptr(), value_ptr(hv), width_basis, fallback) }
-}
-
-pub fn containing_block_definite_height(b: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_containing_block_definite_height(b.as_ptr()) }
-}
-
-pub fn height_keyword_stretches(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_height_keyword_stretches(value_ptr(v)) != 0 }
-}
-
-pub fn style_is_absolute_or_fixed(s: *const Style) -> bool {
-    unsafe { ns_layout_style_is_absolute_or_fixed(s) != 0 }
-}
-
-pub fn style_is_flex_container(s: *const Style) -> bool {
-    unsafe { ns_layout_style_is_flex_container(s) != 0 }
-}
-
-pub fn keyword_or<'a>(s: *const Style, p: PropId, fallback: &'static CStr) -> &'a CStr {
-    c_str(unsafe { ns_layout_keyword_or(s, p as c_int, fallback.as_ptr()) })
-}
-
-pub fn aspect_ratio_number(v: Option<ValueRef<'_>>) -> f64 {
-    unsafe { ns_layout_aspect_ratio_number(value_ptr(v), ptr::null_mut()) }
-}
-
-pub fn flex_direction_of<'a>(s: *const Style) -> &'a [u8] {
-    c_str(unsafe { ns_layout_flex_direction_of(s) }).to_bytes()
+pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
+    b.dom()
 }
 
 pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
@@ -350,10 +278,6 @@ pub fn set_container_dims(inline_px: f64, block_px: f64) {
 
 pub fn used_column_count(s: StyleRef<'_>, avail_w: f64, gap: &mut f64) -> i32 {
     unsafe { ns_css_used_column_count(s.as_ptr(), avail_w, gap) }
-}
-
-pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
-    unsafe { ns_css_length_or(value_ptr(v), fallback) }
 }
 
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {

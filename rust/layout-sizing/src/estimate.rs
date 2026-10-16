@@ -3,12 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::{BoxKind, BoxRef, children};
+use southstar_layout_geom::{
+    edges_from_style, flex_direction_of, length_or, length_resolve, style_is_absolute_or_fixed,
+    style_is_flex_container,
+};
 use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef};
 
-use crate::ffi::{
-    dom_of, edges_of, flex_direction_of, length_or, length_resolve, parse_int,
-    style_is_absolute_or_fixed, style_is_flex_container, style_of, viewport_w,
-};
+use crate::ffi::{dom_of, parse_int, style_of, viewport_w};
 use crate::intrinsic::style_contains_inline_size;
 use crate::replaced::{is_length_or_calc, is_replaced};
 
@@ -121,14 +122,14 @@ fn inline_text_width(b: BoxRef<'_>, text: &[u8], font_size: f64, cap: f64) -> f6
 fn flow_children_width(b: BoxRef<'_>, cap: f64) -> f64 {
     let style = style_of(b);
     let column_flex = style.is_some()
-        && style_is_flex_container(b.style())
-        && is_column_direction(flex_direction_of(b.style()));
+        && style_is_flex_container(style_of(b))
+        && is_column_direction(flex_direction_of(style_of(b)).to_bytes());
     let mut w = 0.0;
     let mut flow_children = 0;
     for c in children(b) {
         if !c.style().is_null()
             && !core::ptr::eq(c.style(), b.style())
-            && style_is_absolute_or_fixed(c.style())
+            && style_is_absolute_or_fixed(style_of(c))
         {
             continue;
         }
@@ -136,7 +137,7 @@ fn flow_children_width(b: BoxRef<'_>, cap: f64) -> f64 {
         if let Some(cs) = style_of(c)
             && (cs.get(PropId::MarginLeft).is_some() || cs.get(PropId::MarginRight).is_some())
         {
-            let (m, _, _) = edges_of(c.style(), 0.0);
+            let (m, _, _) = edges_from_style(style_of(c), 0.0);
             cw_child += m.left + m.right;
         }
         if column_flex {
@@ -149,8 +150,8 @@ fn flow_children_width(b: BoxRef<'_>, cap: f64) -> f64 {
         flow_children += 1;
     }
     if flow_children > 1
-        && style_is_flex_container(b.style())
-        && !is_column_direction(flex_direction_of(b.style()))
+        && style_is_flex_container(style_of(b))
+        && !is_column_direction(flex_direction_of(style_of(b)).to_bytes())
         && let Some(s) = style
     {
         let cg = s
@@ -195,7 +196,7 @@ pub fn estimate_natural_width(b: BoxRef<'_>, cap: f64) -> f64 {
                 || s.get(PropId::BorderLeftWidth).is_some()
                 || s.get(PropId::BorderRightWidth).is_some()
             {
-                let (_, bpd, bbd) = edges_of(b.style(), cap);
+                let (_, bpd, bbd) = edges_from_style(style_of(b), cap);
                 w += bpd.left + bpd.right + bbd.left + bbd.right;
             }
         }

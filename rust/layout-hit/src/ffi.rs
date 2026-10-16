@@ -29,7 +29,6 @@ unsafe extern "C" {
         parent_style: *const Style,
     ) -> *const NsNode;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
-    fn ns_layout_style_creates_fixed_cb(s: *const Style) -> GBoolean;
     fn ns_box_sticky_offset(
         b: *const NsBox,
         vp_x0: f64,
@@ -52,12 +51,12 @@ unsafe extern "C" {
     fn cairo_matrix_invert(m: *mut CairoMatrix) -> c_int;
 }
 
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
-pub fn dom_of<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
+    b.dom()
 }
 
 pub fn node<'a>(p: *const core::ffi::c_void) -> Option<Node<'a>> {
@@ -82,10 +81,6 @@ pub fn inline_box_form_hit<'a>(
 
 pub fn clips_children(b: BoxRef<'_>) -> bool {
     unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }
-}
-
-pub fn style_creates_fixed_cb(s: *const Style) -> bool {
-    unsafe { ns_layout_style_creates_fixed_cb(s) != 0 }
 }
 
 pub fn effective_transform(s: StyleRef<'_>) -> Transform {

@@ -12,6 +12,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
+use southstar_dom::Node;
 use southstar_glib::{GArray, GBoolean, GHashTable, GPtrArray};
 
 #[repr(C)]
@@ -642,6 +643,11 @@ impl<'a> BoxRef<'a> {
 
     pub fn dom_ptr(self) -> *const c_void {
         self.raw().dom
+    }
+
+    pub fn dom(self) -> Option<Node<'a>> {
+        // SAFETY: a box's dom pointer is null or a node of this thread's DOM store, set by the box-tree builder.
+        unsafe { Node::from_ptr(self.raw().dom.cast()) }
     }
 
     pub fn pseudo_host(self) -> Option<(*const c_void, bool)> {

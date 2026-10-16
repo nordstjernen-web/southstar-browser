@@ -43,7 +43,7 @@ pub fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {
     if let Some(url) = s
         .and_then(|s| s.get(PropId::ListStyleImage))
         .and_then(ValueRef::url)
-        && ffi::box_dom(b).is_some_and(|d| d.element_name() == Some(b"li"))
+        && b.dom().is_some_and(|d| d.element_name() == Some(b"li"))
     {
         let (src, img) = dup_peek(url);
         b.ensure_media().set_marker_image(src, img);

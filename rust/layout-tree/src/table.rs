@@ -4,13 +4,14 @@
 
 use southstar_dom::Node;
 use southstar_layout::{BoxPool, BoxRef};
+use southstar_layout_geom::style_is_absolute_or_fixed;
 use southstar_style::{Display, StyleRef, display_of};
 
 use crate::ffi::{
     Styles, append_display_contents_children, append_generated_after, build_block,
     build_inline_run, build_pseudo_block_for, build_pseudo_inline_for, collect_box_bg_image,
     continues_inline_run, dom_ptr_of, is_inline_dom, parse_int, queue_absolute_node,
-    register_abs_pseudo, style_is_absolute_or_fixed, tag_is_non_rendering,
+    register_abs_pseudo, tag_is_non_rendering,
 };
 use crate::runs::{append_child, merge_prefix};
 

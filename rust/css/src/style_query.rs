@@ -19,15 +19,16 @@ fn keyword<'a>(style: &'a StyleView<'a>, prop: Prop) -> Option<&'a CStr> {
     }
 }
 
-pub(crate) fn writing_mode(style: Option<&StyleView<'_>>) -> i32 {
-    match style
-        .and_then(|s| keyword(s, Prop::WritingMode))
-        .map(CStr::to_bytes)
-    {
+pub fn writing_mode_of(keyword: Option<&CStr>) -> i32 {
+    match keyword.map(CStr::to_bytes) {
         Some(b"vertical-rl" | b"sideways-rl" | b"tb-rl" | b"tb") => 1,
         Some(b"vertical-lr" | b"sideways-lr") => 2,
         _ => 0,
     }
+}
+
+pub(crate) fn writing_mode(style: Option<&StyleView<'_>>) -> i32 {
+    writing_mode_of(style.and_then(|s| keyword(s, Prop::WritingMode)))
 }
 
 pub(crate) fn text_orientation(style: Option<&StyleView<'_>>) -> i32 {
@@ -143,7 +144,7 @@ pub(crate) fn used_column_count(style: Option<&StyleView<'_>>, avail_w: f64) -> 
     (n, gap)
 }
 
-pub(crate) fn alignment_base(kw: &CStr) -> &CStr {
+pub fn alignment_base(kw: &CStr) -> &CStr {
     let bytes = kw.to_bytes_with_nul();
     [&b"safe "[..], b"unsafe ", b"legacy "]
         .iter()

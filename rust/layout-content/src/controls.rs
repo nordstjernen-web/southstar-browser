@@ -7,6 +7,8 @@ use core::ptr;
 
 use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
+use southstar_layout_geom::{edges_from_style, length_resolve};
+pub use southstar_layout_geom::{keyword_is, length_or};
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 use crate::ffi;
@@ -68,14 +70,6 @@ const BORDER_RADII: [PropId; 5] = [
     PropId::BorderBottomLeftRadius,
 ];
 
-pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
-    v.map_or(fallback, |v| v.length_or(fallback))
-}
-
-pub fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
-}
-
 pub fn get(s: Option<StyleRef<'_>>, prop: PropId) -> Option<ValueRef<'_>> {
     s.and_then(|s| s.get(prop))
 }
@@ -108,7 +102,7 @@ pub fn pad_spaces(s: Option<StyleRef<'_>>, right: bool) -> c_int {
     } else {
         PropId::PaddingLeft
     };
-    let pad = ffi::length_resolve(s.get(prop), fs * 20.0, 0.0);
+    let pad = length_resolve(s.get(prop), fs * 20.0, 0.0);
     let space = fs * 0.25;
     if space.is_nan() || space <= 0.0 || pad <= space {
         return 0;
@@ -298,7 +292,7 @@ pub fn css_extra(dom: Option<Node<'_>>, s: Option<StyleRef<'_>>, vertical: bool)
     if is_border_box(dom, s) {
         return 0.0;
     }
-    let (_, p, b) = ffi::edges_of(st, 0.0);
+    let (_, p, b) = edges_from_style(Some(st), 0.0);
     if vertical {
         p.top + p.bottom + b.top + b.bottom
     } else {

@@ -2771,6 +2771,7 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-layout-float",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2783,6 +2784,7 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-layout-content",
+ "southstar-layout-geom",
  "southstar-layout-tree",
  "southstar-numfmt",
  "southstar-paint",
@@ -2799,6 +2801,7 @@ dependencies = [
  "southstar-glib",
  "southstar-html-util",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-paint",
  "southstar-style",
 ]
@@ -2810,6 +2813,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2819,6 +2823,16 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-layout",
+ "southstar-layout-geom",
+ "southstar-style",
+]
+
+[[package]]
+name = "southstar-layout-geom"
+version = "0.9.11-dev"
+dependencies = [
+ "southstar-css",
  "southstar-layout",
  "southstar-style",
 ]
@@ -2830,6 +2844,7 @@ dependencies = [
  "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-numfmt",
  "southstar-style",
 ]
@@ -2842,6 +2857,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-mat4",
  "southstar-style",
 ]
@@ -2853,6 +2869,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-layout-tree",
  "southstar-paint",
  "southstar-style",
@@ -2866,6 +2883,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2876,6 +2894,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2889,6 +2908,7 @@ dependencies = [
  "southstar-image",
  "southstar-layout",
  "southstar-layout-float",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2898,6 +2918,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2908,6 +2929,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-style",
 ]
 
@@ -2979,6 +3001,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-layout",
+ "southstar-layout-geom",
  "southstar-mat4",
  "southstar-numfmt",
  "southstar-style",

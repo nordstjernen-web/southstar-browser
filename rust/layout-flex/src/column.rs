@@ -5,15 +5,17 @@
 use core::ffi::CStr;
 
 use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout_geom::{
+    aspect_ratio_number, edges_into_box, height_keyword_stretches, keyword_or, length_resolve,
+    resolve_used_height, style_is_absolute_or_fixed, value_is_percent,
+};
 use southstar_style::{Kind, PropId};
 
 use crate::Frame;
 use crate::ffi::{
-    aspect_ratio_number, box_is_scroll_container, box_read_definite_height, edges_from_style,
-    flex_gap_of, flex_grow_of, flex_shrink_of, flex_wraps, gap_px, height_keyword_stretches,
-    keyword_or, layout_box, length_resolve, measure_natural_width, overflow_scrolls,
-    resolve_used_height, shift_box_tree, size_keyword_is_intrinsic, style_is_absolute_or_fixed,
-    style_of, value_is_percent,
+    box_is_scroll_container, flex_gap_of, flex_grow_of, flex_shrink_of, flex_wraps, gap_px,
+    layout_box, measure_natural_width, overflow_scrolls, shift_box_tree, size_keyword_is_intrinsic,
+    style_of,
 };
 use crate::items::{
     self, FlexLen, Item, align_content_offsets, basis_main_height, clamp_main, has_auto,
@@ -194,19 +196,19 @@ fn main_limits(b: BoxRef<'_>, cw: f64, parent_content_height: f64) -> MainLimits
     }
     if explicit < 0.0
         && s.is_some()
-        && style_is_absolute_or_fixed(b.style())
+        && style_is_absolute_or_fixed(style_of(b))
         && b.content_height() > 0.0
         && (hv.is_some() || (get(PropId::Top).is_some() && get(PropId::Bottom).is_some()))
     {
         explicit = b.content_height();
     }
     if explicit < 0.0 && s.is_some() {
-        let ratio = aspect_ratio_number(get(PropId::AspectRatio));
+        let ratio = aspect_ratio_number(get(PropId::AspectRatio)).0;
         if ratio > 0.0 && cw > 0.0 {
             explicit = cw / ratio;
         }
     }
-    if explicit < 0.0 && box_read_definite_height(b) > 0.0 {
+    if explicit < 0.0 && b.read_definite_height() > 0.0 {
         explicit = b.definite_height();
     }
     if explicit > 0.0 {
@@ -339,8 +341,8 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_height: f64) -> f64 {
     let mut list: Vec<Item<'_>> = Vec::new();
     items::collect(b, &mut list);
 
-    let align = keyword_or(b.style(), PropId::AlignItems, c"stretch");
-    let justify = keyword_or(b.style(), PropId::JustifyContent, c"flex-start");
+    let align = keyword_or(style_of(b), PropId::AlignItems, c"stretch");
+    let justify = keyword_or(style_of(b), PropId::JustifyContent, c"flex-start");
     let limits = main_limits(b, cw, parent_content_height);
     let explicit_h = limits.explicit;
     let row_gap = limits.row_gap;
@@ -358,7 +360,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_height: f64) -> f64 {
 
     for it in list.iter_mut() {
         let c = it.b;
-        edges_from_style(c, cw);
+        edges_into_box(c, cw);
         c.set_x(inner_x);
         c.set_y(inner_y);
         layout_item(

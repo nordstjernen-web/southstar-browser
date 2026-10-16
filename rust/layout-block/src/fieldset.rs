@@ -3,13 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::{BoxRef, Style, children};
+use southstar_layout_geom::{edges_into_box, resolve_used_height};
 use southstar_style::{Kind, PropId, ValueRef};
 
 use crate::align::length_is_auto;
 use crate::dispatch::{layout_box, shift_box_tree};
-use crate::ffi::{
-    edges_into_box, measure_natural_width, min_width_of, resolve_used_height, style_of,
-};
+use crate::ffi::{measure_natural_width, min_width_of, style_of};
 
 pub fn c_max(a: f64, b: f64) -> f64 {
     if a > b { a } else { b }

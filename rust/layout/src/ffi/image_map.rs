@@ -16,7 +16,7 @@ pub unsafe extern "C" fn ns_box_image_map_area(
     let Some(b) = (unsafe { BoxRef::from_ptr(b) }).filter(|b| b.kind() == BoxKind::Image) else {
         return core::ptr::null();
     };
-    let Some(img) = (unsafe { Node::from_ptr(b.dom_ptr().cast()) }) else {
+    let Some(img) = b.dom() else {
         return core::ptr::null();
     };
     let (margin, border, padding) = (b.margin(), b.border(), b.padding());

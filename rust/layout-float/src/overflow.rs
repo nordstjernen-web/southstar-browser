@@ -6,11 +6,10 @@ use core::ffi::CStr;
 
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef};
+use southstar_layout_geom::{style_is_absolute_or_fixed, style_is_flex_container};
 use southstar_style::{Display, PropId, StyleRef, display_of};
 
-use crate::ffi::{
-    dom_of, overflow_axis_keyword, style_is_absolute_or_fixed, style_is_flex_container, style_of,
-};
+use crate::ffi::{dom_of, overflow_axis_keyword, style_of};
 
 const BOX_NORMAL: u8 = 0;
 const OUTER_BLOCK: u8 = 1;
@@ -149,14 +148,14 @@ pub fn box_establishes_bfc(b: BoxRef<'_>) -> bool {
     }
     let style = style_of(b);
     if float_side_of(style) >= 0
-        || style_is_absolute_or_fixed(b.style())
+        || style_is_absolute_or_fixed(style_of(b))
         || style_is_multicol(style)
-        || style_is_flex_container(b.style())
+        || style_is_flex_container(style_of(b))
         || style_is_grid_container(style)
     {
         return true;
     }
-    if style_is_flex_container(parent.style()) || style_is_grid_container(style_of(parent)) {
+    if style_is_flex_container(style_of(parent)) || style_is_grid_container(style_of(parent)) {
         return true;
     }
     if b.is_rendered_legend()
@@ -174,7 +173,7 @@ pub fn box_establishes_bfc(b: BoxRef<'_>) -> bool {
 }
 
 fn is_column_candidate(c: BoxRef<'_>) -> bool {
-    !style_is_absolute_or_fixed(c.style()) && float_side_of(style_of(c)) < 0
+    !style_is_absolute_or_fixed(style_of(c)) && float_side_of(style_of(c)) < 0
 }
 
 pub fn multicol_distributable_children(b: BoxRef<'_>) -> i32 {

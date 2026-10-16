@@ -15,7 +15,7 @@ use southstar_dom::Node;
 use southstar_glib::{
     GBoolean, GHashTable, GPtrArray, GStr, g_hash_table_lookup, g_ptr_array_unref,
 };
-use southstar_layout::Style;
+use southstar_layout::{BoxRef, Style};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -42,18 +42,47 @@ struct CalcHead {
     px: f64,
     em: f64,
     rem: f64,
-    _viewport: [f64; 6],
-    _func: u8,
+    vw: f64,
+    vh: f64,
+    vmin: f64,
+    vmax: f64,
+    parsed_vw: f64,
+    parsed_vh: f64,
+    func: u8,
     n_args: u8,
-    _arg_none: u8,
+    arg_none: u8,
     args: [CalcArg; 4],
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct CalcArg {
-    _px: f64,
+    px: f64,
     pct: f64,
+}
+
+impl CalcHead {
+    fn to_calc(self) -> southstar_css::Calc {
+        southstar_css::Calc {
+            pct: self.pct,
+            px: self.px,
+            em: self.em,
+            rem: self.rem,
+            vw: self.vw,
+            vh: self.vh,
+            vmin: self.vmin,
+            vmax: self.vmax,
+            parsed_vw: self.parsed_vw,
+            parsed_vh: self.parsed_vh,
+            func: self.func,
+            n_args: self.n_args,
+            arg_none: self.arg_none,
+            args: self.args.map(|a| southstar_css::CalcArg {
+                px: a.px,
+                pct: a.pct,
+            }),
+        }
+    }
 }
 
 #[repr(C)]
@@ -101,6 +130,9 @@ const _: () = assert!(
         && core::mem::size_of::<Size>() == 32
         && core::mem::offset_of!(Rect, unit) == 32
         && core::mem::offset_of!(Rect, is_auto) == 48
+        && core::mem::offset_of!(CalcHead, func) == 80
+        && core::mem::offset_of!(CalcHead, args) == 88
+        && core::mem::size_of::<CalcHead>() == 152
 );
 
 pub const PROP_COUNT: usize = 277;
@@ -381,33 +413,40 @@ impl<'a> ValueRef<'a> {
         })
     }
 
-    pub fn calc_terms(self) -> Option<[f64; 4]> {
+    fn calc_head(self) -> Option<CalcHead> {
         let v = self.raw();
-        (v.kind == KIND_CALC).then(|| {
-            let c = unsafe { v.u.calc };
-            [c.pct, c.px, c.em, c.rem]
-        })
+        if v.kind != KIND_CALC {
+            return None;
+        }
+        // SAFETY: the style engine stores a calc payload in the union whenever kind is KIND_CALC.
+        Some(unsafe { v.u.calc })
+    }
+
+    pub fn calc_terms(self) -> Option<[f64; 4]> {
+        self.calc_head().map(|c| [c.pct, c.px, c.em, c.rem])
     }
 
     pub fn calc_arg_pcts(self) -> Vec<f64> {
-        let v = self.raw();
-        if v.kind != KIND_CALC {
-            return Vec::new();
-        }
-        let c = unsafe { v.u.calc };
-        c.args[..usize::from(c.n_args).min(4)]
-            .iter()
-            .map(|a| a.pct)
-            .collect()
+        self.calc_head().map_or_else(Vec::new, |c| {
+            c.args[..usize::from(c.n_args).min(4)]
+                .iter()
+                .map(|a| a.pct)
+                .collect()
+        })
     }
 
     pub fn calc(self) -> Option<(f64, f64)> {
-        let v = self.raw();
-        if v.kind == KIND_CALC {
-            Some(unsafe { (v.u.calc.pct, v.u.calc.px) })
-        } else {
-            None
-        }
+        self.calc_head().map(|c| (c.pct, c.px))
+    }
+
+    pub fn is_math_fn(self) -> bool {
+        self.calc_head()
+            .is_some_and(|c| c.func != 0 && c.n_args > 0)
+    }
+
+    pub fn math_fn_px(self, basis: f64) -> f64 {
+        self.calc_head()
+            .map_or(0.0, |c| southstar_css::calc_math_fn_px(&c.to_calc(), basis))
     }
 
     pub fn url(self) -> Option<&'a CStr> {
@@ -696,6 +735,11 @@ pub unsafe fn retain(style: *mut Style) {
     if let Some(fields) = unsafe { style.cast::<NsStyle>().as_mut() } {
         fields._ref += 1;
     }
+}
+
+pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    // SAFETY: a box's style pointer is null or the computed style the box holds for as long as it lives.
+    unsafe { StyleRef::from_ptr(b.style()) }
 }
 
 pub fn display_of(style: Option<StyleRef<'_>>) -> Display {

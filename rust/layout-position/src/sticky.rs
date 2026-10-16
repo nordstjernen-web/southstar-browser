@@ -4,9 +4,10 @@
 
 use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::BoxRef;
+use southstar_layout_geom::length_resolve;
 use southstar_style::{Kind, PropId, ValueRef};
 
-use crate::ffi::{length_resolve, prop};
+use crate::ffi::prop;
 use crate::relative::length_is_auto;
 
 #[repr(C)]

@@ -5,6 +5,7 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_layout::{BoxRef, InlineAtomic};
+use southstar_layout_geom::style_creates_fixed_cb;
 use southstar_style::{PropId, StyleRef};
 
 use crate::ffi;
@@ -40,7 +41,7 @@ pub fn is_fixed(b: BoxRef<'_>) -> bool {
         return false;
     }
     core::iter::successors(b.parent(), |p| p.parent())
-        .all(|p| !ffi::style_creates_fixed_cb(p.style()))
+        .all(|p| !style_creates_fixed_cb(ffi::style_of(p)))
 }
 
 pub fn hit_offset(b: BoxRef<'_>) -> (f64, f64) {

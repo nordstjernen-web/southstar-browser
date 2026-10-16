@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-layout-geom = { path = "../layout-geom" }
 southstar-style = { path = "../style" }
 
 [lints]

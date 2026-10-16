@@ -3,13 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::BoxRef;
+use southstar_layout_geom::{
+    edges_into_box, keyword_or, resolve_used_height, style_is_flex_container,
+};
 use southstar_style::PropId;
 
 use crate::Frame;
 use crate::ffi::{
-    box_read_definite_height, edges_from_style, flex_align_is_baseline, flex_gap_of,
-    flex_item_align, flex_item_baseline, gap_px, keyword_or, layout_box, resolve_used_height,
-    shift_box_tree, style_is_flex_container, style_of,
+    flex_align_is_baseline, flex_gap_of, flex_item_align, flex_item_baseline, gap_px, layout_box,
+    shift_box_tree, style_of,
 };
 use crate::items::{
     self, Item, align_content_offsets, align_stretches, cross_size_auto, has_auto, is_keyword,
@@ -39,7 +41,7 @@ fn container_cross_size(b: BoxRef<'_>, cw: f64, has_lines: bool) -> f64 {
     }
     let flexed_item = b
         .parent()
-        .is_some_and(|p| style_is_flex_container(p.style()) && box_read_definite_height(b) > 0.0);
+        .is_some_and(|p| style_is_flex_container(style_of(p)) && b.read_definite_height() > 0.0);
     if (eh < 0.0 || flexed_item) && b.definite_height() > 0.0 && has_lines {
         eh = b.definite_height();
     }
@@ -59,7 +61,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame) -> f64 {
     let n = list.len();
     let style = style_of(b);
     let gap = flex_gap_of(b.style(), cw);
-    let row_gap_basis = if box_read_definite_height(b) > 0.0 {
+    let row_gap_basis = if b.read_definite_height() > 0.0 {
         b.definite_height()
     } else {
         0.0
@@ -67,13 +69,13 @@ pub fn layout(b: BoxRef<'_>, at: &Frame) -> f64 {
     let row_gap = style.map_or(0.0, |s| {
         gap_px(s.get(PropId::RowGap), s.get(PropId::Gap), row_gap_basis)
     });
-    let align = keyword_or(b.style(), PropId::AlignItems, c"stretch");
-    let justify = keyword_or(b.style(), PropId::JustifyContent, c"flex-start");
+    let align = keyword_or(style_of(b), PropId::AlignItems, c"stretch");
+    let justify = keyword_or(style_of(b), PropId::JustifyContent, c"flex-start");
     let main_reversed = reverse != is_rtl(b);
     let mut lines: Vec<Line> = Vec::new();
 
     for it in list.iter_mut() {
-        edges_from_style(it.b, cw);
+        edges_into_box(it.b, cw);
         it.extra = outer_main_extras(it.b);
         it.len = row_len(it.b, cw, child_inherited);
     }

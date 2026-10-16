@@ -24,13 +24,13 @@ pub(crate) const FN_REM: u8 = 9;
 pub(crate) const FN_ABS: u8 = 10;
 
 #[derive(Clone, Copy, Default, PartialEq)]
-pub(crate) struct CalcArg {
+pub struct CalcArg {
     pub px: f64,
     pub pct: f64,
 }
 
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Calc {
+pub struct Calc {
     pub pct: f64,
     pub px: f64,
     pub em: f64,
@@ -684,7 +684,7 @@ pub(crate) fn stepped_eval(func: u8, k: &[f64; 4]) -> f64 {
     }
 }
 
-pub(crate) fn math_fn_px(calc: &Calc, basis: f64) -> f64 {
+pub fn math_fn_px(calc: &Calc, basis: f64) -> f64 {
     let n = usize::from(calc.n_args.min(4));
     let mut k = [0.0; 4];
     for (slot, arg) in k.iter_mut().zip(&calc.args).take(n) {

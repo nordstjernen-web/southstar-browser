@@ -9,6 +9,10 @@ use std::ffi::CString;
 use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, NsNode, children};
 use southstar_layout::{BoxPool, BoxRef};
 use southstar_layout_content::tags;
+use southstar_layout_geom::{
+    style_is_absolute_or_fixed, style_is_block, style_is_contents, style_is_flex_container,
+    style_is_grid_container, style_is_none,
+};
 use southstar_layout_tree::append_child;
 use southstar_style::{StyleRef, StyleTable};
 
@@ -21,10 +25,6 @@ use crate::ffi;
 use crate::generated::{
     append_generated_after, build_pseudo_block_for, build_pseudo_inline_for, pseudo_item_block,
     register_abs_pseudo,
-};
-use crate::geom::{
-    style_is_absolute_or_fixed, style_is_block, style_is_contents, style_is_flex_container,
-    style_is_grid_container, style_is_none,
 };
 use crate::media::{
     KIND_BLOCK, KIND_MATH, build_audio_box, build_canvas_box, build_image_box, build_svg_box,

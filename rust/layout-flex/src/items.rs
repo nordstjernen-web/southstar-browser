@@ -5,14 +5,16 @@
 use core::ffi::CStr;
 
 use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout_geom::{
+    containing_block_definite_height, height_keyword_stretches, keyword_or, length_resolve,
+    resolve_height_with_basis, resolve_used_height, style_is_absolute_or_fixed, value_is_percent,
+};
 use southstar_style::{Kind, PropId, ValueRef};
 
 use crate::ffi::{
-    box_is_scroll_container, containing_block_definite_height, dom_of, flex_box_is_border_box,
-    flex_grow_of, flex_shrink_of, height_keyword_stretches, intrinsic_keyword_width, layout_box,
-    length_resolve, measure_natural_width, min_content_width_of, overflow_scrolls,
-    resolve_height_with_basis, resolve_used_height, shift_box_tree, size_keyword_is_intrinsic,
-    style_is_absolute_or_fixed, style_of, value_is_percent,
+    box_is_scroll_container, dom_of, flex_box_is_border_box, flex_grow_of, flex_shrink_of,
+    intrinsic_keyword_width, layout_box, measure_natural_width, min_content_width_of,
+    overflow_scrolls, shift_box_tree, size_keyword_is_intrinsic, style_of,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -44,7 +46,7 @@ pub struct Item<'a> {
 pub fn collect<'a>(container: BoxRef<'a>, out: &mut Vec<Item<'a>>) {
     out.extend(
         southstar_layout::children(container)
-            .filter(|c| !style_is_absolute_or_fixed(c.style()))
+            .filter(|c| !style_is_absolute_or_fixed(style_of(*c)))
             .map(|b| Item {
                 b,
                 len: FlexLen::default(),
@@ -382,8 +384,7 @@ pub struct ContentOffsets {
 }
 
 pub fn align_content_offsets(b: BoxRef<'_>, free_cross: f64, n: usize) -> ContentOffsets {
-    let s = b.style();
-    let mut acont = crate::ffi::keyword_or(s, PropId::AlignContent, c"stretch").to_bytes();
+    let mut acont = keyword_or(style_of(b), PropId::AlignContent, c"stretch").to_bytes();
     let wrap_reverse = is_keyword(value(b, PropId::FlexWrap), c"wrap-reverse");
     if matches!(acont, b"start" | b"left" | b"self-start") {
         acont = if wrap_reverse {
@@ -578,7 +579,7 @@ pub fn preset_cross_size(c: BoxRef<'_>, line_cross_size: f64, width_basis: f64) 
 }
 
 pub fn is_rtl(b: BoxRef<'_>) -> bool {
-    crate::ffi::keyword_or(b.style(), PropId::Direction, c"ltr") == c"rtl"
+    keyword_or(style_of(b), PropId::Direction, c"ltr") == c"rtl"
 }
 
 pub fn wrap_clamp_height(b: BoxRef<'_>, mut h: f64, width_basis: f64) -> f64 {

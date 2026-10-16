@@ -13,6 +13,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
+southstar-layout-geom = { path = "../layout-geom" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-style = { path = "../style" }
 

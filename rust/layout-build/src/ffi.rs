@@ -11,14 +11,12 @@ use southstar_glib::{
     GBoolean, GHashTable, GPtrArray, boolean, g_array_append_vals, g_free, g_ptr_array_add,
     g_ptr_array_new, g_ptr_array_new_with_free_func, strdup,
 };
-use southstar_layout::{
-    BoxRef, Edges, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style,
-};
+use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{AttrList, Context, Layout};
-use southstar_style::{NsCssValue, StyleRef, StyleTable, ValueRef};
+use southstar_style::{StyleRef, StyleTable, ValueRef};
 
-use crate::{block, build, classify, generated, geom, hit, media, state};
+use crate::{block, build, classify, generated, hit, media, state};
 
 #[repr(C)]
 struct GByteArray {
@@ -47,10 +45,6 @@ pub struct SvgSize {
 }
 
 unsafe extern "C" {
-    fn ns_css_calc_is_math_fn(v: *const NsCssValue) -> GBoolean;
-    fn ns_css_calc_math_fn_px(v: *const NsCssValue, basis: f64) -> f64;
-    fn ns_css_writing_mode(s: *const Style) -> c_int;
-    fn ns_css_alignment_base(keyword: *const c_char) -> *const c_char;
     fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_layout_clear_kind_of(s: *const Style) -> c_int;
     fn ns_layout_float_side_of(s: *const Style) -> c_int;
@@ -126,20 +120,8 @@ pub fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
 }
 
-fn value<'a>(v: *const NsCssValue) -> Option<ValueRef<'a>> {
-    unsafe { ValueRef::from_ptr(v) }
-}
-
 pub fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
-}
-
-pub fn box_dom<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    node(b.dom_ptr().cast())
-}
-
-pub fn box_style<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    style(b.style())
 }
 
 fn styles(t: *mut GHashTable) -> StyleTable {
@@ -154,37 +136,12 @@ fn box_ptr(b: Option<BoxRef<'_>>) -> *mut NsBox {
     b.map_or(ptr::null_mut(), BoxRef::as_mut_ptr)
 }
 
-pub fn calc_is_math_fn(v: ValueRef<'_>) -> bool {
-    unsafe { ns_css_calc_is_math_fn(v.as_ptr()) != 0 }
-}
-
-pub fn calc_math_fn_px(v: ValueRef<'_>, basis: f64) -> f64 {
-    unsafe { ns_css_calc_math_fn_px(v.as_ptr(), basis) }
-}
-
 pub fn viewport_w() -> f64 {
     southstar_css::viewport().0
 }
 
 pub fn viewport_h() -> f64 {
     southstar_css::viewport().1
-}
-
-pub fn container_w() -> f64 {
-    southstar_css::container_unit_dims().0
-}
-
-pub fn container_h() -> f64 {
-    southstar_css::container_unit_dims().1
-}
-
-pub fn writing_mode(s: Option<StyleRef<'_>>) -> c_int {
-    unsafe { ns_css_writing_mode(style_ptr(s)) }
-}
-
-pub fn alignment_base(kw: &CStr) -> &CStr {
-    let base = unsafe { ns_css_alignment_base(kw.as_ptr()) };
-    c_str(base).unwrap_or(kw)
 }
 
 pub fn border_image_source<'a>(s: Option<StyleRef<'a>>) -> Option<ValueRef<'a>> {
@@ -511,28 +468,11 @@ pub unsafe extern "C" fn ns_vertical_stack_text(text: *const c_char) -> *mut c_c
     strdup(&out)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_text_indent_px(s: *const Style, basis: f64) -> f64 {
-    geom::text_indent_px(style(s), basis)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_text_indent_px(
-    run: *const NsBox,
-    s: *const Style,
-    basis: f64,
-) -> f64 {
-    if box_ref(run).is_some_and(BoxRef::inline_split_tail) {
-        return 0.0;
-    }
-    geom::text_indent_px(style(s), basis)
-}
-
 fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
     if b.parent().is_none() {
         return false;
     }
-    if box_dom(b)
+    if b.dom()
         .and_then(Node::name)
         .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"))
     {
@@ -569,133 +509,11 @@ pub unsafe extern "C" fn ns_layout_peek_image(src: *const c_char) -> *mut c_void
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_length_resolve(
-    v: *const NsCssValue,
-    basis: f64,
-    fallback: f64,
-) -> f64 {
-    geom::length_resolve(value(v), basis, fallback)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_value_is_percent(v: *const NsCssValue) -> GBoolean {
-    boolean(geom::value_is_percent(value(v)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_edges_from_style(
-    s: *const Style,
-    basis: f64,
-    margin: *mut Edges,
-    padding: *mut Edges,
-    border: *mut Edges,
-) {
-    let (m, p, b) = geom::edges_from_style(style(s), basis);
-    unsafe {
-        *margin = m;
-        *padding = p;
-        *border = b;
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_resolve_used_height(
-    b: *const NsBox,
-    hv: *const NsCssValue,
-    width_basis: f64,
-    fallback: f64,
-) -> f64 {
-    geom::resolve_used_height(box_ref(b), value(hv), width_basis, fallback)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_specified_height_to_content(b: *const NsBox, h: f64) -> f64 {
-    box_ref(b).map_or(h, |b| geom::specified_height_to_content(b, h))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_clamp_height_minmax_px(s: *const Style, h: f64) -> f64 {
-    geom::clamp_height_minmax_px(style(s), h)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_self_start_is_far_side(
-    s: *const Style,
-    horizontal_axis: GBoolean,
-) -> GBoolean {
-    boolean(geom::self_start_is_far_side(style(s), horizontal_axis != 0))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_translate_subtree(b: *mut NsBox, dx: f64, dy: f64) {
     if b.is_null() || (dx == 0.0 && dy == 0.0) {
         return;
     }
     unsafe { ns_layout_shift_box_tree(b, dx, dy) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_resolve_height_with_basis(
-    hv: *const NsCssValue,
-    width_basis: f64,
-    height_basis: f64,
-    fallback: f64,
-) -> f64 {
-    geom::resolve_height_with_basis(value(hv), width_basis, height_basis, fallback)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_containing_block_definite_height(b: *const NsBox) -> f64 {
-    geom::containing_block_definite_height(box_ref(b))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_height_keyword_stretches(v: *const NsCssValue) -> GBoolean {
-    boolean(geom::height_keyword_stretches(value(v)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_box_read_definite_height(b: *const NsBox) -> f64 {
-    box_ref(b).map_or(0.0, BoxRef::read_definite_height)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean {
-    boolean(geom::style_is_absolute_or_fixed(style(s)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_style_is_flex_container(s: *const Style) -> GBoolean {
-    boolean(geom::style_is_flex_container(style(s)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_keyword_or(
-    s: *const Style,
-    p: c_int,
-    fallback: *const c_char,
-) -> *const c_char {
-    let kw = usize::try_from(p).ok().and_then(|p| {
-        style(s)
-            .and_then(|s| s.value_at(p))
-            .and_then(ValueRef::keyword_text)
-    });
-    match kw {
-        Some(kw) => unsafe { ns_css_alignment_base(kw.as_ptr()) },
-        None => fallback,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_aspect_ratio_number(
-    v: *const NsCssValue,
-    with_auto: *mut GBoolean,
-) -> f64 {
-    let (ratio, auto) = geom::aspect_ratio_number(value(v));
-    if let Some(w) = unsafe { with_auto.as_mut() } {
-        *w = boolean(auto);
-    }
-    ratio
 }
 
 #[unsafe(no_mangle)]
@@ -726,16 +544,6 @@ pub unsafe extern "C" fn ns_layout_inline_box_form_hit(
     let hit =
         box_ref(b).and_then(|b| hit::inline_box_form_hit(b, local_x, local_y, style(parent_style)));
     Node::ptr_or_null(hit)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_style_creates_fixed_cb(s: *const Style) -> GBoolean {
-    boolean(geom::style_creates_fixed_cb(style(s)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_direction_of(s: *const Style) -> *const c_char {
-    geom::flex_direction_of(style(s)).as_ptr()
 }
 
 #[unsafe(no_mangle)]

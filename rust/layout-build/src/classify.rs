@@ -6,15 +6,15 @@ use core::ffi::CStr;
 
 use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, children};
 use southstar_layout_content::tags;
-use southstar_style::{StyleTable, display_of};
-
-use crate::atomic::is_inline_level_replaced;
-use crate::ffi;
-use crate::geom::{
+use southstar_layout_geom::{
     INNER_FLEX, INNER_GRID, OUTER_INLINE, inner_is, is_atomic_inline, is_atomic_inline_container,
     is_table_internal, style_is_absolute_or_fixed, style_is_block, style_is_block_level,
     style_is_flex_container, style_is_grid_container, style_is_none,
 };
+use southstar_style::{StyleTable, display_of};
+
+use crate::atomic::is_inline_level_replaced;
+use crate::ffi;
 use crate::state;
 
 pub const MEDIA_SRC_ATTR: &CStr = c"data-nd-media-src";

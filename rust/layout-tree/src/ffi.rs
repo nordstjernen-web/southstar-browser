@@ -35,7 +35,6 @@ unsafe extern "C" {
     fn ns_layout_tag_is_non_rendering(name: *const c_char) -> GBoolean;
     fn ns_layout_is_inline_dom(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
     fn ns_layout_continues_inline_run(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
-    fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -63,8 +62,8 @@ fn owned<'a>(b: *mut NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
 
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
 pub fn build_block<'a>(n: Node<'_>, styles: Styles) -> Option<BoxRef<'a>> {
@@ -125,10 +124,6 @@ pub fn is_inline_dom(n: Node<'_>, styles: Styles) -> bool {
 
 pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
     unsafe { ns_layout_continues_inline_run(n.as_ptr(), styles.0) != 0 }
-}
-
-pub fn style_is_absolute_or_fixed(s: Option<StyleRef<'_>>) -> bool {
-    unsafe { ns_layout_style_is_absolute_or_fixed(style_ptr(s)) != 0 }
 }
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {

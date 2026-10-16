@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::BoxRef;
+use southstar_layout_geom::length_resolve;
 use southstar_style::{PropId, StyleRef};
 
 use crate::ffi;
@@ -53,7 +54,7 @@ fn snap_length(s: Option<StyleRef<'_>>, prop: PropId, basis: f64) -> f64 {
     if v.is_keyword(c"auto") {
         return 0.0;
     }
-    let px = ffi::length_resolve(v, basis, 0.0);
+    let px = length_resolve(Some(v), basis, 0.0);
     if px.is_finite() { px } else { 0.0 }
 }
 

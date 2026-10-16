@@ -7,12 +7,12 @@ use std::collections::{HashMap, HashSet};
 
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, NsBox};
+use southstar_layout_geom::{
+    flex_direction_of, keyword_or, style_is_absolute_or_fixed, style_is_flex_container,
+};
 use southstar_style::{PropId, StyleRef};
 
-use crate::ffi::{
-    Entry, dom_of, flex_align_is_baseline, flex_direction_of, flex_item_align, keyword_or,
-    style_is_absolute_or_fixed, style_is_flex_container, style_of,
-};
+use crate::ffi::{Entry, dom_of, flex_align_is_baseline, flex_item_align, style_of};
 
 pub struct NodeOrder(HashMap<*const c_void, u32>);
 
@@ -126,7 +126,7 @@ impl<'a> BoxMap<'a> {
 }
 
 fn is_abs_or_fixed(b: BoxRef<'_>) -> bool {
-    style_is_absolute_or_fixed(b.style())
+    style_is_absolute_or_fixed(style_of(b))
 }
 
 fn content_top(b: BoxRef<'_>) -> f64 {
@@ -465,11 +465,11 @@ fn outer_size(b: BoxRef<'_>) -> (f64, f64) {
 }
 
 pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f64)> {
-    let fs = style_of(fc).filter(|s| style_is_flex_container(*s))?;
+    let fs = style_of(fc).filter(|s| style_is_flex_container(Some(*s)))?;
     let origin_x = content_left(fc);
     let origin_y = content_top(fc);
     let (outer_w, outer_h) = outer_size(abox);
-    let dir = flex_direction_of(fs).to_bytes();
+    let dir = flex_direction_of(Some(fs)).to_bytes();
     let row = dir.starts_with(b"row");
     let main_reverse = dir.windows(8).any(|w| w == b"-reverse");
     let wrap_reverse = fs
@@ -484,7 +484,7 @@ pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f6
     let main_free = main_size - if row { outer_w } else { outer_h };
     let cross_free = cross_size - if row { outer_h } else { outer_w };
     let main = flex_main_offset(
-        keyword_or(fs, PropId::JustifyContent, c"flex-start"),
+        keyword_or(Some(fs), PropId::JustifyContent, c"flex-start"),
         main_free,
         row,
         main_reverse,
@@ -492,7 +492,7 @@ pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f6
     );
     let self_rtl = is_rtl(style_of(abox));
     let cross = flex_cross_offset(
-        flex_item_align(abox, keyword_or(fs, PropId::AlignItems, c"stretch")),
+        flex_item_align(abox, keyword_or(Some(fs), PropId::AlignItems, c"stretch")),
         cross_free,
         row,
         wrap_reverse,

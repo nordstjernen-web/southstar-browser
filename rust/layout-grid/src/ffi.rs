@@ -5,8 +5,8 @@
 use core::ffi::{CStr, c_char, c_uint};
 
 use southstar_glib::{self as glib, GArray, GBoolean};
-use southstar_layout::{BoxRef, Edges, NsBox, Style};
-use southstar_style::{NsCssValue, StyleRef, ValueRef};
+use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_style::StyleRef;
 
 use crate::abs::{self, Area};
 use crate::{intrinsic, layout};
@@ -22,40 +22,13 @@ unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_edges_from_style(
-        s: *const Style,
-        basis: f64,
-        margin: *mut Edges,
-        padding: *mut Edges,
-        border: *mut Edges,
-    );
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_resolve_used_height(
-        b: *const NsBox,
-        hv: *const NsCssValue,
-        width_basis: f64,
-        fallback: f64,
-    ) -> f64;
-    fn ns_layout_specified_height_to_content(b: *const NsBox, h: f64) -> f64;
-    fn ns_layout_clamp_height_minmax_px(s: *const Style, h: f64) -> f64;
-    fn ns_layout_length_resolve(v: *const NsCssValue, basis: f64, fallback: f64) -> f64;
     fn ns_layout_overflow_establishes_bfc(s: *const Style) -> GBoolean;
-    fn ns_layout_value_is_percent(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_self_start_is_far_side(s: *const Style, horizontal_axis: GBoolean) -> GBoolean;
-    fn ns_css_alignment_base(kw: *const c_char) -> *const c_char;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
 }
 
-fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
-    v.map_or(core::ptr::null(), ValueRef::as_ptr)
-}
-
-pub(crate) fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
-}
-
-pub(crate) fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
-    s.map_or(core::ptr::null(), StyleRef::as_ptr)
+pub(crate) fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
 pub(crate) fn layout_child(b: BoxRef<'_>, width: f64, inherited: *const Style) {
@@ -70,58 +43,12 @@ pub(crate) fn min_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     unsafe { ns_layout_min_width_of(b.as_ptr(), parent_style) }
 }
 
-pub(crate) fn edges_into(b: BoxRef<'_>, basis: f64) {
-    let (m, p, e) = b.edges_mut();
-    unsafe { ns_layout_edges_from_style(b.style(), basis, m, p, e) };
-}
-
-pub(crate) fn edges(s: *const Style, basis: f64) -> (Edges, Edges, Edges) {
-    let mut m = Edges::default();
-    let mut p = Edges::default();
-    let mut b = Edges::default();
-    unsafe { ns_layout_edges_from_style(s, basis, &mut m, &mut p, &mut b) };
-    (m, p, b)
-}
-
 pub(crate) fn shift(b: BoxRef<'_>, dx: f64, dy: f64) {
     unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
 }
 
-pub(crate) fn used_height(
-    b: BoxRef<'_>,
-    v: Option<ValueRef<'_>>,
-    basis: f64,
-    fallback: f64,
-) -> f64 {
-    unsafe { ns_layout_resolve_used_height(b.as_ptr(), value_ptr(v), basis, fallback) }
-}
-
-pub(crate) fn height_to_content(b: BoxRef<'_>, h: f64) -> f64 {
-    unsafe { ns_layout_specified_height_to_content(b.as_ptr(), h) }
-}
-
-pub(crate) fn clamp_height(s: Option<StyleRef<'_>>, h: f64) -> f64 {
-    unsafe { ns_layout_clamp_height_minmax_px(style_ptr(s), h) }
-}
-
-pub(crate) fn resolve_length(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
-    unsafe { ns_layout_length_resolve(value_ptr(v), basis, fallback) }
-}
-
 pub(crate) fn establishes_bfc(s: StyleRef<'_>) -> bool {
     unsafe { ns_layout_overflow_establishes_bfc(s.as_ptr()) != 0 }
-}
-
-pub(crate) fn is_percent(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_value_is_percent(value_ptr(v)) != 0 }
-}
-
-pub(crate) fn start_is_far_side(s: Option<StyleRef<'_>>, horizontal: bool) -> bool {
-    unsafe { ns_layout_self_start_is_far_side(style_ptr(s), glib::boolean(horizontal)) != 0 }
-}
-
-pub(crate) fn alignment_base(kw: &CStr) -> &CStr {
-    unsafe { CStr::from_ptr(ns_css_alignment_base(kw.as_ptr())) }
 }
 
 pub(crate) fn new_track_array() -> *mut GArray {

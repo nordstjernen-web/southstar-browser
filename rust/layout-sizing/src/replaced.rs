@@ -5,14 +5,16 @@
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef, Edges, Style};
 use southstar_layout_float::{float_side_of, style_is_grid_container};
+use southstar_layout_geom::{
+    aspect_ratio_number, containing_block_definite_height, edges_from_style, edges_into_box,
+    flex_direction_of, height_keyword_stretches, length_resolve, resolve_height_with_basis,
+    resolve_used_height, style_is_absolute_or_fixed, style_is_flex_container, value_is_percent,
+};
 use southstar_style::{Display, Kind, PropId, ValueRef, display_of};
 
 use crate::ffi::{
-    aspect_ratio_number, box_is_abs_placeholder, container_w, containing_block_definite_height,
-    dom_of, edges_into_box, edges_of, flex_direction_of, height_keyword_stretches,
-    image_dimension_attr, image_of, layout_box, length_resolve, resolve_height_with_basis,
-    resolve_used_height, style_is_absolute_or_fixed, style_is_flex_container, style_of,
-    svg_intrinsic_size, value_is_percent, viewport_w,
+    box_is_abs_placeholder, container_w, dom_of, image_dimension_attr, image_of, layout_box,
+    style_of, svg_intrinsic_size, viewport_w,
 };
 use crate::intrinsic::{measure_natural_width, min_width_of, size_keyword_is_intrinsic};
 
@@ -72,8 +74,8 @@ pub fn layout_image(b: BoxRef<'_>, parent_content_width: f64) {
     let declared_size = media.is_some_and(|m| m.declared_image_size());
     let placeholder_size = media.is_some_and(|m| m.placeholder_image_size());
     let flex_row_item = b.parent().is_some_and(|p| {
-        let dir = flex_direction_of(p.style());
-        style_is_flex_container(p.style()) && flex_row_direction(dir)
+        let dir = flex_direction_of(style_of(p)).to_bytes();
+        style_is_flex_container(style_of(p)) && flex_row_direction(dir)
     });
     let mut pct_width_base = parent_content_width;
     if flex_row_item && let Some(p) = b.parent().filter(|p| p.content_width() > 0.0) {
@@ -292,7 +294,7 @@ pub fn inline_atomic_measure_basis(b: BoxRef<'_>) -> f64 {
     if value_is_percent(wv) && !is_replaced(b) {
         let content = measure_natural_width(b, b.style());
         if content >= 0.0 && is_border_box(b) {
-            let (_, pd, bd) = edges_of(b.style(), 0.0);
+            let (_, pd, bd) = edges_from_style(style_of(b), 0.0);
             return content + pd.left + pd.right + bd.left + bd.right;
         }
         if content >= 0.0 {
@@ -333,14 +335,14 @@ fn box_inline_size_is_definite(b: BoxRef<'_>) -> bool {
         if is_length_or_calc(wv) && !value_is_percent(wv) {
             return true;
         }
-        if style_is_absolute_or_fixed(s.as_ptr())
+        if style_is_absolute_or_fixed(Some(s))
             || float_side_of(Some(s)) >= 0
             || display_is_atomic_inline(display_of(Some(s)))
         {
             return false;
         }
         if let Some(p) = bx.parent()
-            && (style_is_flex_container(p.style()) || style_is_grid_container(style_of(p)))
+            && (style_is_flex_container(style_of(p)) || style_is_grid_container(style_of(p)))
         {
             return false;
         }
@@ -364,7 +366,7 @@ fn replaced_height_for_width(b: BoxRef<'_>) -> f64 {
         }
     };
     if h > 0.0 && is_border_box(b) {
-        let (_, pd, bd) = edges_of(b.style(), 0.0);
+        let (_, pd, bd) = edges_from_style(style_of(b), 0.0);
         h -= pd.top + pd.bottom + bd.top + bd.bottom;
         if h < 0.0 {
             h = 0.0;

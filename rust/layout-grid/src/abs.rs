@@ -6,6 +6,7 @@ use core::ffi::CStr;
 
 use southstar_css::{AUTO_REPEAT_NONE, GridTracks};
 use southstar_layout::{BoxRef, children};
+use southstar_layout_geom::keyword_or;
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
 use crate::ffi::{self, TrackEdges, style_of};
@@ -131,17 +132,6 @@ pub(crate) fn static_align_offset(align: Option<&CStr>, free_space: f64, flip: b
         _ if at_end => far,
         _ if at_start => near,
         _ => near,
-    }
-}
-
-pub(crate) fn keyword_or<'a>(
-    s: Option<StyleRef<'a>>,
-    prop: PropId,
-    fallback: &'a CStr,
-) -> &'a CStr {
-    match s.and_then(|s| s.get(prop)).and_then(ValueRef::keyword_text) {
-        Some(kw) => ffi::alignment_base(kw),
-        None => fallback,
     }
 }
 

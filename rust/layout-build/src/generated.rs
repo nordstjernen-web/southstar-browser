@@ -11,12 +11,12 @@ use southstar_layout_content::controls::{
     FontKeyword, font_kerning, font_keyword, keyword_is, length_or,
 };
 use southstar_layout_content::pseudo;
+use southstar_layout_geom::{OUTER_INLINE, is_atomic_inline, style_is_absolute_or_fixed};
 use southstar_layout_tree::append_child;
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
 use crate::collect::OBJECT_REPLACEMENT;
 use crate::ffi;
-use crate::geom::{OUTER_INLINE, is_atomic_inline, style_is_absolute_or_fixed};
 use crate::media::{KIND_BLOCK, collect_box_bg_image};
 use crate::state::{self, AbsEntry};
 

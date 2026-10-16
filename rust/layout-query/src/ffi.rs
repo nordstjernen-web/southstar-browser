@@ -8,12 +8,11 @@ use core::ptr;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GPtrArray, boolean, g_ptr_array_add};
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style, inline_kind};
-use southstar_style::{NsCssValue, StyleRef, ValueRef};
+use southstar_style::StyleRef;
 
 use crate::{collect, extent, find, snap};
 
 unsafe extern "C" {
-    fn ns_layout_length_resolve(v: *const NsCssValue, basis: f64, fallback: f64) -> f64;
     fn ns_paint_inline_range_extents(
         b: *const NsBox,
         start: usize,
@@ -26,16 +25,12 @@ unsafe extern "C" {
     ) -> GBoolean;
 }
 
-pub fn length_resolve(v: ValueRef<'_>, basis: f64, fallback: f64) -> f64 {
-    unsafe { ns_layout_length_resolve(v.as_ptr(), basis, fallback) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
-}
-
-pub fn dom_of<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
+    b.dom()
 }
 
 pub fn inline_range_extents(b: BoxRef<'_>, r: &InlineAttr) -> Option<(f64, f64, f64, f64)> {

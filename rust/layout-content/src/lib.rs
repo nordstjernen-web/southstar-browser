@@ -11,4 +11,4 @@ pub mod tags;
 pub mod text_input;
 
 pub use counters::{build as counters_build, clear as counters_clear};
-pub use ffi::{box_dom, box_style, utf8_casefold};
+pub use ffi::utf8_casefold;

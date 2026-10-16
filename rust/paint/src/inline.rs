@@ -8,6 +8,7 @@ use core::ops::Range;
 
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind as k};
+use southstar_layout_geom::inline_text_indent_px;
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 
 use crate::blur::box_blur_a8;
@@ -519,7 +520,7 @@ fn base_layout(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<(Layout, AttrLi
     if b.inline_atomics().is_none_or(<[_]>::is_empty) {
         apply_css_line_spacing(Some(&layout), s);
     }
-    let ti = engine::inline_text_indent_px(b, s, b.content_width());
+    let ti = inline_text_indent_px(b, s, b.content_width());
     if ti > 0.0 {
         layout.set_indent((ti * S) as i32);
     }
@@ -1788,7 +1789,7 @@ fn paint_vertical(
 }
 
 fn inline_text_x(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> f64 {
-    let ti = engine::inline_text_indent_px(b, s, b.content_width());
+    let ti = inline_text_indent_px(b, s, b.content_width());
     b.x() + ti.min(0.0)
 }
 
@@ -1902,7 +1903,7 @@ pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
         let s = inherited_style(root);
         if let Some(layout) = paint_inline_make_layout(root, s, None) {
             let mut text_x = 0.0;
-            let ti = engine::inline_text_indent_px(root, s, root.content_width());
+            let ti = inline_text_indent_px(root, s, root.content_width());
             if ti < 0.0 {
                 text_x = ti;
             }

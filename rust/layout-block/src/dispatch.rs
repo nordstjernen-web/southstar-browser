@@ -5,12 +5,12 @@
 use core::cell::Cell;
 
 use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout_geom::length_or;
 use southstar_style::{PropId, ValueRef};
 
 use crate::block::layout_block;
 use crate::ffi::{
-    layout_image, layout_inline, layout_table, length_or, math_measure, set_container_dims,
-    style_of,
+    layout_image, layout_inline, layout_table, math_measure, set_container_dims, style_of,
 };
 
 thread_local! {

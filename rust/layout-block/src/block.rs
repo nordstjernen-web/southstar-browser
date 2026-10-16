@@ -6,15 +6,17 @@ use core::sync::atomic::{AtomicI32, Ordering};
 
 use southstar_layout::{BoxRef, Style};
 use southstar_layout_float::{box_establishes_bfc, style_is_grid_container};
+use southstar_layout_geom::{
+    edges_into_box, flex_direction_of, height_keyword_stretches, keyword_or, length_resolve,
+    style_is_absolute_or_fixed, style_is_flex_container,
+};
 use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
 
 use crate::align::length_is_auto;
 use crate::ffi::{
-    ContentBox, edges_into_box, flex_direction_of, height_keyword_stretches,
-    inline_runs_join_splits, intrinsic_keyword_width, keyword_or, layout_flex_column,
-    layout_flex_row, layout_grid, length_resolve, measure_natural_width, min_width_of,
-    reorder_children_by_order, style_is_absolute_or_fixed, style_is_flex_container, style_of,
-    text_input_intrinsic_width,
+    ContentBox, inline_runs_join_splits, intrinsic_keyword_width, layout_flex_column,
+    layout_flex_row, layout_grid, measure_natural_width, min_width_of, reorder_children_by_order,
+    style_of, text_input_intrinsic_width,
 };
 use crate::fieldset::{layout_rendered_legend, rendered_legend, set_content_block_size};
 use crate::flex::{grow_of, wraps};
@@ -72,7 +74,7 @@ fn flex_col_item_stretches(b: BoxRef<'_>, parent: BoxRef<'_>) -> bool {
     let style = style_of(b);
     let mut eff = style.and_then(|s| s.keyword_of(PropId::AlignSelf));
     if eff.is_none_or(|e| e.to_bytes() == b"auto") {
-        eff = Some(keyword_or(parent.style(), PropId::AlignItems, c"stretch"));
+        eff = Some(keyword_or(style_of(parent), PropId::AlignItems, c"stretch"));
     }
     let eff = eff.map_or(&b""[..], |e| e.to_bytes());
     if eff != b"stretch" && eff != b"normal" {
@@ -94,8 +96,8 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
     let mut intrinsic_width = false;
     let mut flex_grow_filled = false;
     let parent = b.parent();
-    let parent_flex_dir = parent.map_or(&b"row"[..], |p| flex_direction_of(p.style()));
-    let parent_is_flex = parent.is_some_and(|p| style_is_flex_container(p.style()));
+    let parent_flex_dir = parent.map_or(&b"row"[..], |p| flex_direction_of(style_of(p)).to_bytes());
+    let parent_is_flex = parent.is_some_and(|p| style_is_flex_container(style_of(p)));
     let flex_row_item = parent_is_flex && matches!(parent_flex_dir, b"row" | b"row-reverse");
     let mut flex_col_item_stretch =
         parent_is_flex && matches!(parent_flex_dir, b"column" | b"column-reverse");
@@ -236,8 +238,8 @@ fn resolve_auto_margins(b: BoxRef<'_>, pcw: f64, cw: f64) {
 }
 
 fn layout_flex_or_grid(b: BoxRef<'_>, content: &ContentBox, pcw: f64, cursor_y: &mut f64) -> bool {
-    if style_is_flex_container(b.style()) {
-        let dir = flex_direction_of(b.style());
+    if style_is_flex_container(style_of(b)) {
+        let dir = flex_direction_of(style_of(b)).to_bytes();
         match dir {
             b"row" | b"row-reverse" => {
                 let wrap = wraps(style_of(b));
@@ -271,7 +273,7 @@ pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: *const Style) {
     let width = used_width(b, pcw, inherited);
     let cw = width.cw;
     b.set_content_width(cw);
-    if width.explicit && !style_is_absolute_or_fixed(b.style()) {
+    if width.explicit && !style_is_absolute_or_fixed(style_of(b)) {
         resolve_auto_margins(b, pcw, cw);
     }
 
@@ -304,7 +306,7 @@ pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: *const Style) {
             && block_height_is_auto(b, pcw),
     };
 
-    if style_is_flex_container(b.style()) || style_is_grid_container(style_of(b)) {
+    if style_is_flex_container(style_of(b)) || style_is_grid_container(style_of(b)) {
         reorder_children_by_order(b);
     }
 

@@ -7,9 +7,13 @@ use core::ffi::CStr;
 
 use southstar_css::{GridTracks, TRACK_AUTO, TRACK_FR, TRACK_PERCENT, TRACK_PX};
 use southstar_layout::{BoxKind, BoxRef, Style, children};
+use southstar_layout_geom::{
+    clamp_height_minmax_px, edges_from_style, edges_into_box, keyword_or, length_resolve,
+    resolve_used_height, self_start_is_far_side, specified_height_to_content, value_is_percent,
+};
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
-use crate::abs::{keyword_or, self_alignment, track_edge};
+use crate::abs::{self_alignment, track_edge};
 use crate::ffi::{self, style_of};
 use crate::intrinsic::{gap_px, horizontal_extras, is_absolute_or_fixed, is_length_or_calc};
 use crate::lines::{COLUMN_PROPS, Lines, ROW_PROPS, resolve_pos};
@@ -92,7 +96,7 @@ fn box_inset_definite_height(b: BoxRef<'_>) -> f64 {
 fn row_basis(b: BoxRef<'_>, s: StyleRef<'_>, cw: f64) -> f64 {
     let hv = s.get(PropId::Height);
     if is_length_or_calc(hv) {
-        return ffi::clamp_height(Some(s), ffi::used_height(b, hv, cw, -1.0));
+        return clamp_height_minmax_px(Some(s), resolve_used_height(b, hv, cw, -1.0));
     }
     box_inset_definite_height(b)
 }
@@ -104,7 +108,7 @@ fn auto_repeat_height(b: BoxRef<'_>, s: StyleRef<'_>, basis: f64, cw: f64) -> f6
     for prop in [PropId::MaxHeight, PropId::MinHeight] {
         let v = s.get(prop);
         if is_length_or_calc(v) {
-            let h = ffi::height_to_content(b, ffi::used_height(b, v, cw, -1.0));
+            let h = specified_height_to_content(b, resolve_used_height(b, v, cw, -1.0));
             if h > 0.0 {
                 return h;
             }
@@ -119,7 +123,7 @@ fn min_block_contribution(c: BoxRef<'_>, item_outer: f64, cb_height: f64) -> f64
     };
     let mnh = s.get(PropId::MinHeight);
     let mut min_h = if is_length_or_calc(mnh) {
-        ffi::resolve_length(mnh, if cb_height > 0.0 { cb_height } else { 0.0 }, 0.0)
+        length_resolve(mnh, if cb_height > 0.0 { cb_height } else { 0.0 }, 0.0)
     } else {
         0.0
     };
@@ -133,14 +137,14 @@ fn min_block_contribution(c: BoxRef<'_>, item_outer: f64, cb_height: f64) -> f64
 
 fn stretched_item_max_height(c: BoxRef<'_>) -> f64 {
     let mx = style_of(c).and_then(|s| s.get(PropId::MaxHeight));
-    if !is_length_or_calc(mx) || ffi::is_percent(mx) {
+    if !is_length_or_calc(mx) || value_is_percent(mx) {
         return -1.0;
     }
-    let h = ffi::resolve_length(mx, 0.0, -1.0);
+    let h = length_resolve(mx, 0.0, -1.0);
     if h < 0.0 {
         -1.0
     } else {
-        ffi::height_to_content(c, h)
+        specified_height_to_content(c, h)
     }
 }
 
@@ -359,7 +363,7 @@ fn measure_contribution(c: BoxRef<'_>, inherited: *const Style, avail: f64) -> C
     let mut nw = ffi::natural_width(c, inherited);
     let mut mw = ffi::min_width(c, inherited);
     if let Some(s) = style_of(c) {
-        let (m, p, b) = ffi::edges(s.as_ptr(), mw);
+        let (m, p, b) = edges_from_style(Some(s), mw);
         let extra = horizontal_extras(&m, &p, &b);
         mw += extra;
         nw += extra;
@@ -810,7 +814,7 @@ pub(crate) fn layout_grid(
                     0.0
                 };
         }
-        ffi::edges_into(c, w);
+        edges_into_box(c, w);
         let (m, p, bd) = (c.margin(), c.padding(), c.border());
         let mut cw_for_item = w - m.left - m.right;
         if cw_for_item < 0.0 {
@@ -903,7 +907,7 @@ pub(crate) fn layout_grid(
             } else {
                 j_eff
             };
-            let item_far = ffi::start_is_far_side(cs, true);
+            let item_far = self_start_is_far_side(cs, true);
             let dx = justify_shift(j_kw, free_w, grid_rtl, item_far);
             if dx != 0.0 {
                 ffi::shift(c, dx, 0.0);
@@ -1079,7 +1083,7 @@ pub(crate) fn layout_grid(
     } else if rows_sg.is_none() && n_rows > 0 {
         let mnv = style.get(PropId::MinHeight);
         let min_h = if is_length_or_calc(mnv) {
-            ffi::height_to_content(b, ffi::used_height(b, mnv, cw, -1.0))
+            specified_height_to_content(b, resolve_used_height(b, mnv, cw, -1.0))
         } else {
             -1.0
         };
@@ -1135,7 +1139,7 @@ pub(crate) fn layout_grid(
     let mut total_extra = 0.0;
     let hv = style.get(PropId::Height);
     if is_length_or_calc(hv) && !grid_rows.is_empty() {
-        let mut eh = ffi::clamp_height(Some(style), ffi::used_height(b, hv, cw, -1.0));
+        let mut eh = clamp_height_minmax_px(Some(style), resolve_used_height(b, hv, cw, -1.0));
         if style_has(Some(style), PropId::BoxSizing, c"border-box") {
             let (p, bd) = (b.padding(), b.border());
             eh -= p.top + p.bottom + bd.top + bd.bottom;
@@ -1235,7 +1239,7 @@ pub(crate) fn layout_grid(
                 b"center" => dy_align = free_h / 2.0,
                 b"end" | b"flex-end" | b"last baseline" => dy_align = free_h,
                 b"self-end" | b"self-start" => {
-                    let far = ffi::start_is_far_side(cs, false);
+                    let far = self_start_is_far_side(cs, false);
                     if far == (a_eff == b"self-start") {
                         dy_align = free_h;
                     }

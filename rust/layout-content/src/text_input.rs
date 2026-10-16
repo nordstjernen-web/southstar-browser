@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use southstar_dom::{Node, ancestors_and_self, controls::parse_int, controls::used_value};
 use southstar_layout::{BoxRef, children};
-use southstar_style::{PropId, StyleRef};
+use southstar_style::{PropId, StyleRef, box_style};
 
 use crate::controls::{WIDTH_PROPS, dim_px_clamped, keyword_is, length_or, pad_spaces};
 use crate::ffi;
@@ -186,10 +186,8 @@ fn width_is_definite(s: StyleRef<'_>) -> bool {
 
 fn collect(b: BoxRef<'_>, cols: &mut HashMap<usize, c_int>) -> bool {
     let mut changed = false;
-    if let (Some(s), Some(dom)) = (
-        ffi::box_style(b),
-        ffi::box_dom(b).filter(|_| b.content_width() > 0.0),
-    ) && is_windowed_text_input(Some(dom))
+    if let (Some(s), Some(dom)) = (box_style(b), b.dom().filter(|_| b.content_width() > 0.0))
+        && is_windowed_text_input(Some(dom))
     {
         let have = size_attr(dom);
         let shown = display_cps(dom);

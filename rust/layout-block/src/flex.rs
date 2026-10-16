@@ -3,9 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::BoxRef;
+use southstar_layout_geom::length_resolve;
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
-use crate::ffi::{length_resolve, style_of};
+use crate::ffi::style_of;
 
 fn number_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
     v.and_then(ValueRef::length).map_or(fallback, |(n, _)| n)

@@ -4,6 +4,7 @@
 
 use southstar_css::{AUTO_REPEAT_NONE, TRACK_PX};
 use southstar_layout::{BoxRef, Edges, Style, children};
+use southstar_layout_geom::{edges_from_style, length_resolve};
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
 use crate::ffi::{self, style_of};
@@ -27,7 +28,7 @@ pub(crate) fn gap_px(
     if !is_length_or_calc(v) {
         return 0.0;
     }
-    let resolved = ffi::resolve_length(v, basis, 0.0);
+    let resolved = length_resolve(v, basis, 0.0);
     if resolved < 0.0 { 0.0 } else { resolved }
 }
 
@@ -38,7 +39,7 @@ pub(crate) fn horizontal_extras(m: &Edges, p: &Edges, b: &Edges) -> f64 {
 fn outer_width(c: BoxRef<'_>, w: f64) -> f64 {
     match style_of(c) {
         Some(s) => {
-            let (m, p, b) = ffi::edges(s.as_ptr(), 0.0);
+            let (m, p, b) = edges_from_style(Some(s), 0.0);
             w + horizontal_extras(&m, &p, &b)
         }
         None => w,
@@ -155,7 +156,7 @@ pub(crate) fn natural_width(b: BoxRef<'_>, child_style: *const Style) -> f64 {
             gv = style.get(PropId::Gap);
         }
         if is_length_or_calc(gv) {
-            let gap = ffi::resolve_length(gv, 0.0, 0.0);
+            let gap = length_resolve(gv, 0.0, 0.0);
             if gap > 0.0 {
                 sum += gap * (n - 1) as f64;
             }

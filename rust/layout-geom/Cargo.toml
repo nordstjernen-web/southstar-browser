@@ -1,0 +1,16 @@
+[package]
+name = "southstar-layout-geom"
+description = "The length, height and edge resolution the layout crates share, from src/layout.c: CSS lengths against a basis, used and definite heights, min/max clamping, box edges, aspect ratios, text-indent, display classes and the style predicates and keywords layout reads"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css = { path = "../css" }
+southstar-layout = { path = "../layout" }
+southstar-style = { path = "../style" }
+
+[lints]
+workspace = true

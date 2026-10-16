@@ -6,15 +6,17 @@ use core::ffi::CStr;
 
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout_geom::{
+    edges_from_style, height_keyword_stretches, length_resolve, resolve_height_with_basis,
+    style_creates_fixed_cb, value_is_percent,
+};
 use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::ffi::{
-    self, Area, Entry, box_clips_children, build_abs_box, edges_from_style, estimate_natural_width,
-    flat_parent, flex_box_is_border_box, grid_abs_containing_block, grid_static_align_offset,
-    grid_static_position, height_keyword_stretches, inline_containing_block, layout_box,
-    length_resolve, measure_natural_width, min_width_of, prop, resolve_height_with_basis,
-    shift_box_tree, size_keyword_is_intrinsic, static_run, style_creates_fixed_cb, style_of,
-    value_is_percent, viewport_h, viewport_w,
+    self, Area, Entry, box_clips_children, build_abs_box, estimate_natural_width, flat_parent,
+    flex_box_is_border_box, grid_abs_containing_block, grid_static_align_offset,
+    grid_static_position, inline_containing_block, layout_box, measure_natural_width, min_width_of,
+    prop, shift_box_tree, size_keyword_is_intrinsic, static_run, style_of, viewport_h, viewport_w,
 };
 use crate::relative::{apply_position_offsets, length_is_auto};
 use crate::static_pos::{
@@ -464,7 +466,7 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
     }
     layout_box(abox, layout_w, cs);
     if !stretch_w && !has_explicit_width && abox.kind() == BoxKind::Block {
-        let (fm, fp, fb) = edges_from_style(abox.style(), avail);
+        let (fm, fp, fb) = edges_from_style(style_of(abox), avail);
         let box_extras = fp.left + fp.right + fb.left + fb.right;
         let outer_extras = box_extras + fm.left + fm.right;
         let mut fit = measure_natural_width(abox, cs);

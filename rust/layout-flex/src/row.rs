@@ -3,13 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::{BoxRef, Edges};
+use southstar_layout_geom::{
+    edges_into_box, keyword_or, resolve_used_height, style_is_absolute_or_fixed,
+};
 use southstar_style::PropId;
 
 use crate::Frame;
 use crate::ffi::{
-    box_read_definite_height, edges_from_style, flex_align_is_baseline, flex_gap_of,
-    flex_item_align, flex_item_baseline, keyword_or, layout_box, resolve_used_height,
-    shift_box_tree, style_is_absolute_or_fixed, style_of,
+    flex_align_is_baseline, flex_gap_of, flex_item_align, flex_item_baseline, layout_box,
+    shift_box_tree, style_of,
 };
 use crate::items::{
     self, Item, align_stretches, cross_size_auto, fit_line_keyword_limits, has_auto, is_keyword,
@@ -53,13 +55,13 @@ fn cross_limits(b: BoxRef<'_>, parent_content_width: f64) -> CrossLimits {
     }
     if explicit <= 0.0
         && s.is_some()
-        && style_is_absolute_or_fixed(b.style())
+        && style_is_absolute_or_fixed(style_of(b))
         && b.content_height() > 0.0
         && (hv.is_some() || (get(PropId::Top).is_some() && get(PropId::Bottom).is_some()))
     {
         explicit = b.content_height();
     }
-    if explicit <= 0.0 && box_read_definite_height(b) > 0.0 {
+    if explicit <= 0.0 && b.read_definite_height() > 0.0 {
         explicit = b.definite_height();
     }
     if !definite && explicit > 0.0 && b.definite_height() > 0.0 {
@@ -95,7 +97,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
     let gap = flex_gap_of(b.style(), cw);
     let mut total_extras = 0.0;
     for it in list.iter_mut() {
-        edges_from_style(it.b, cw);
+        edges_into_box(it.b, cw);
         total_extras += outer_main_extras(it.b);
         it.len = row_len(it.b, cw, child_inherited);
     }
@@ -122,7 +124,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
         }
         free_main = 0.0;
     }
-    let justify = keyword_or(b.style(), PropId::JustifyContent, c"flex-start");
+    let justify = keyword_or(style_of(b), PropId::JustifyContent, c"flex-start");
     let (leading, between) = if auto_margins == 0 || free_main < 0.0 {
         justify_offsets(b, justify, free_main, n, reverse)
     } else {
@@ -156,7 +158,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
     } else {
         inner_x + leading
     };
-    let align = keyword_or(b.style(), PropId::AlignItems, c"stretch");
+    let align = keyword_or(style_of(b), PropId::AlignItems, c"stretch");
     let mut cross_size = if limits.definite || max_cross < limits.explicit {
         limits.explicit
     } else {

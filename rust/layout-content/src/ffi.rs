@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, boolean, g_free, strdup};
-use southstar_layout::{BoxRef, Edges, InlineAttr, NsBox, Style};
+use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{Context, Layout};
 use southstar_style::{NsCssValue, StyleRef, ValueRef};
@@ -22,25 +22,7 @@ unsafe extern "C" {
     fn g_unichar_totitle(c: u32) -> u32;
     fn g_unichar_isspace(c: u32) -> GBoolean;
     fn g_unichar_to_utf8(c: u32, outbuf: *mut c_char) -> c_int;
-    fn ns_layout_length_resolve(v: *const NsCssValue, basis: f64, fallback: f64) -> f64;
-    fn ns_layout_edges_from_style(
-        s: *const Style,
-        basis: f64,
-        margin: *mut Edges,
-        padding: *mut Edges,
-        border: *mut Edges,
-    );
     fn ns_layout_peek_image(src: *const c_char) -> *mut c_void;
-}
-
-pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
-    unsafe { ns_layout_length_resolve(v.map_or(ptr::null(), ValueRef::as_ptr), basis, fallback) }
-}
-
-pub fn edges_of(s: StyleRef<'_>, basis: f64) -> (Edges, Edges, Edges) {
-    let (mut m, mut p, mut b) = (Edges::default(), Edges::default(), Edges::default());
-    unsafe { ns_layout_edges_from_style(s.as_ptr(), basis, &mut m, &mut p, &mut b) };
-    (m, p, b)
 }
 
 pub fn peek_image(src: &CStr) -> *mut c_void {
@@ -107,14 +89,6 @@ pub fn char_cell_px(s: *const Style) -> f64 {
     ctx.metrics(fd).map_or(0.0, |fm| {
         f64::from(fm.approximate_char_width()) / f64::from(paint::pango::SCALE)
     })
-}
-
-pub fn box_dom<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
-}
-
-pub fn box_style<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
 }
 
 fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {

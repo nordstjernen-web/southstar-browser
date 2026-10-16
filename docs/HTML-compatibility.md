@@ -557,7 +557,7 @@ CSS support (abridged):
 - ✅ `text-indent` — indents the first formatted line of a block's
   inline content (length or percentage of the content width), including
   large negative sprite-hiding indents used with clipped inline-block
-  logos (`ns_text_indent_px` in `src/layout.c`).
+  logos (`text_indent_px` in `rust/layout-geom`).
 - ✅ `text-decoration` — all three lines (`underline`, `overline`,
   `line-through`, singly or combined, also settable through the
   `text-decoration-line` longhand), all five `text-decoration-style`

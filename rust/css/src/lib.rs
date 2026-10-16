@@ -61,6 +61,7 @@ mod vars;
 
 pub use animation::range_serialize as animation_range_serialize;
 pub use border_image::{Params as BorderImageParams, params as border_image_params};
+pub use calc::{Calc, CalcArg, math_fn_px as calc_math_fn_px};
 pub use cascade::currentcolor_bit;
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
@@ -112,6 +113,7 @@ pub use restyle::{
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
+pub use style_query::{alignment_base, writing_mode_of};
 pub use style_text::{shadow_adopted_text, style_element_text};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
 pub use time::list_serialize as time_list_serialize;

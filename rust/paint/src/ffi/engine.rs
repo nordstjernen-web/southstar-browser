@@ -233,7 +233,6 @@ unsafe extern "C" {
         y0: *mut c_double,
         y1: *mut c_double,
     ) -> GBoolean;
-    fn ns_inline_text_indent_px(b: *const NsBox, s: *const Style, basis: c_double) -> c_double;
     fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
@@ -368,11 +367,6 @@ pub fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64, f64)> {
         ns_box_fieldset_legend_gap(b.as_ptr(), &mut inset, &mut x0, &mut x1, &mut y0, &mut y1)
     };
     (found != 0).then_some((inset, x0, x1, y0, y1))
-}
-
-pub fn inline_text_indent_px(b: BoxRef<'_>, s: Option<StyleRef<'_>>, basis: f64) -> f64 {
-    let s = s.map_or(ptr::null(), StyleRef::as_ptr);
-    unsafe { ns_inline_text_indent_px(b.as_ptr(), s, basis) }
 }
 
 pub fn inline_apply_atomic_shapes(attrs: &AttrList, b: BoxRef<'_>) {

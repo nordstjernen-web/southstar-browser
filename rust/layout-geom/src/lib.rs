@@ -2,13 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 use core::ffi::CStr;
 
 use southstar_layout::{BoxRef, Edges};
-use southstar_layout_content::controls::{keyword_is, length_or};
-use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
-
-use crate::ffi;
+use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, box_style, display_of};
 
 const UNIT_PX: u32 = 0;
 const UNIT_EM: u32 = 1;
@@ -45,12 +44,27 @@ fn c_max(a: f64, b: f64) -> f64 {
     if a > b { a } else { b }
 }
 
+pub fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
+    v.is_some_and(|v| v.is_keyword(kw))
+}
+
+pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
+    v.map_or(fallback, |v| v.length_or(fallback))
+}
+
+pub fn writing_mode(s: Option<StyleRef<'_>>) -> i32 {
+    southstar_css::writing_mode_of(
+        s.and_then(|s| s.get(PropId::WritingMode))
+            .and_then(ValueRef::keyword_text),
+    )
+}
+
 pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
     let Some(v) = v else {
         return fallback;
     };
-    if ffi::calc_is_math_fn(v) {
-        return ffi::calc_math_fn_px(v, basis);
+    if v.is_math_fn() {
+        return v.math_fn_px(basis);
     }
     if let Some((pct, px)) = v.calc() {
         return pct / 100.0 * basis + px;
@@ -71,19 +85,19 @@ pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64
         UNIT_VMIN => len * c_min(vw, vh) / 100.0,
         UNIT_VMAX => len * c_max(vw, vh) / 100.0,
         UNIT_CQW => {
-            let cw = ffi::container_w();
+            let cw = southstar_css::container_unit_dims().0;
             len * (if cw > 0.0 { cw } else { vw }) / 100.0
         }
         UNIT_CQH => {
-            let ch = ffi::container_h();
+            let ch = southstar_css::container_unit_dims().1;
             len * (if ch > 0.0 { ch } else { vh }) / 100.0
         }
         UNIT_CQMIN | UNIT_CQMAX => {
-            let mut cw = ffi::container_w();
+            let mut cw = southstar_css::container_unit_dims().0;
             if cw <= 0.0 {
                 cw = vw;
             }
-            let mut ch = ffi::container_h();
+            let mut ch = southstar_css::container_unit_dims().1;
             if ch <= 0.0 {
                 ch = vh;
             }
@@ -108,6 +122,13 @@ pub fn text_indent_px(s: Option<StyleRef<'_>>, basis: f64) -> f64 {
         Some(v) => length_resolve(Some(v), basis, 0.0),
         None => 0.0,
     }
+}
+
+pub fn inline_text_indent_px(run: BoxRef<'_>, s: Option<StyleRef<'_>>, basis: f64) -> f64 {
+    if run.inline_split_tail() {
+        return 0.0;
+    }
+    text_indent_px(s, basis)
 }
 
 fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
@@ -139,11 +160,11 @@ pub fn value_is_percent(v: Option<ValueRef<'_>>) -> bool {
     if v.calc().is_some_and(|(pct, _)| pct != 0.0) {
         return true;
     }
-    ffi::calc_is_math_fn(v) && v.calc_arg_pcts().iter().any(|&p| p != 0.0)
+    v.is_math_fn() && v.calc_arg_pcts().iter().any(|&p| p != 0.0)
 }
 
-fn box_is_doc_root(b: Option<BoxRef<'_>>) -> bool {
-    b.and_then(ffi::box_dom)
+fn box_is_doc_root(b: BoxRef<'_>) -> bool {
+    b.dom()
         .and_then(|d| d.name())
         .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"))
 }
@@ -156,7 +177,7 @@ fn percent_of(hv: ValueRef<'_>, base: f64) -> f64 {
 }
 
 pub fn resolve_used_height(
-    b: Option<BoxRef<'_>>,
+    b: BoxRef<'_>,
     hv: Option<ValueRef<'_>>,
     width_basis: f64,
     fallback: f64,
@@ -166,10 +187,9 @@ pub fn resolve_used_height(
     };
     if value_is_percent(hv) {
         let vh = if box_is_doc_root(b)
-            || b.and_then(ffi::box_style)
-                .is_some_and(|s| keyword_is(s.get(PropId::Position), c"fixed"))
+            || box_style(b).is_some_and(|s| keyword_is(s.get(PropId::Position), c"fixed"))
         {
-            ffi::viewport_h()
+            southstar_css::viewport().1
         } else {
             let base = containing_block_definite_height(b);
             if base < 0.0 {
@@ -210,7 +230,7 @@ pub fn clamp_height_minmax_px(s: Option<StyleRef<'_>>, mut h: f64) -> f64 {
 
 pub fn specified_height_to_content(b: BoxRef<'_>, h: f64) -> f64 {
     let border_box =
-        ffi::box_style(b).is_some_and(|s| keyword_is(s.get(PropId::BoxSizing), c"border-box"));
+        box_style(b).is_some_and(|s| keyword_is(s.get(PropId::BoxSizing), c"border-box"));
     if h < 0.0 || !border_box {
         return h;
     }
@@ -219,20 +239,18 @@ pub fn specified_height_to_content(b: BoxRef<'_>, h: f64) -> f64 {
     if h < 0.0 { 0.0 } else { h }
 }
 
-pub fn containing_block_definite_height(b: Option<BoxRef<'_>>) -> f64 {
-    if let Some(b) = b
-        && b.cb_height_override() > 0.0
-    {
+pub fn containing_block_definite_height(b: BoxRef<'_>) -> f64 {
+    if b.cb_height_override() > 0.0 {
         return b.cb_height_override();
     }
-    let mut p = b.and_then(BoxRef::parent);
+    let mut p = b.parent();
     while let Some(pb) = p.filter(|pb| pb.style().is_null()) {
         p = pb.parent();
     }
     let Some(p) = p else {
         return -1.0;
     };
-    let Some(ps) = ffi::box_style(p) else {
+    let Some(ps) = box_style(p) else {
         return -1.0;
     };
     if p.read_definite_height() > 0.0 {
@@ -240,7 +258,7 @@ pub fn containing_block_definite_height(b: Option<BoxRef<'_>>) -> f64 {
     }
     let mut h = ps.get(PropId::Height);
     if height_keyword_stretches(h) {
-        let base = containing_block_definite_height(Some(p));
+        let base = containing_block_definite_height(p);
         if base < 0.0 {
             return -1.0;
         }
@@ -270,10 +288,10 @@ pub fn containing_block_definite_height(b: Option<BoxRef<'_>>) -> f64 {
         return -1.0;
     };
     if value_is_percent(h) {
-        let base = if box_is_doc_root(Some(p)) {
-            ffi::viewport_h()
+        let base = if box_is_doc_root(p) {
+            southstar_css::viewport().1
         } else {
-            containing_block_definite_height(Some(p))
+            containing_block_definite_height(p)
         };
         if base < 0.0 {
             return -1.0;
@@ -302,8 +320,8 @@ pub fn resolve_height_with_basis(
         return fallback;
     };
     if let Some((pct, px)) = v.calc() {
-        if ffi::calc_is_math_fn(v) && height_basis >= 0.0 {
-            return ffi::calc_math_fn_px(v, height_basis);
+        if v.is_math_fn() && height_basis >= 0.0 {
+            return v.math_fn_px(height_basis);
         }
         if pct != 0.0 && height_basis >= 0.0 {
             return pct / 100.0 * height_basis + px;
@@ -394,19 +412,16 @@ pub fn style_is_contents(s: Option<StyleRef<'_>>) -> bool {
     display_of(s).box_ == BOX_CONTENTS
 }
 
-pub fn keyword_or<'a>(s: Option<StyleRef<'a>>, p: usize, fallback: &'a CStr) -> &'a CStr {
-    match s
-        .and_then(|s| s.value_at(p))
-        .and_then(ValueRef::keyword_text)
-    {
-        Some(kw) => ffi::alignment_base(kw),
+pub fn keyword_or<'a>(s: Option<StyleRef<'a>>, p: PropId, fallback: &'a CStr) -> &'a CStr {
+    match s.and_then(|s| s.get(p)).and_then(ValueRef::keyword_text) {
+        Some(kw) => southstar_css::alignment_base(kw),
         None => fallback,
     }
 }
 
 pub fn flex_direction_of<'a>(s: Option<StyleRef<'a>>) -> &'a CStr {
-    let dir = keyword_or(s, PropId::FlexDirection as usize, c"row");
-    let writing_mode = ffi::writing_mode(s);
+    let dir = keyword_or(s, PropId::FlexDirection, c"row");
+    let writing_mode = writing_mode(s);
     if writing_mode == 0 {
         return dir;
     }
@@ -429,7 +444,7 @@ pub fn flex_direction_of<'a>(s: Option<StyleRef<'a>>) -> &'a CStr {
 }
 
 pub fn self_start_is_far_side(s: Option<StyleRef<'_>>, horizontal_axis: bool) -> bool {
-    let writing_mode = ffi::writing_mode(s);
+    let writing_mode = writing_mode(s);
     let rtl = keyword_is(s.and_then(|s| s.get(PropId::Direction)), c"rtl");
     if horizontal_axis {
         return match writing_mode {
@@ -482,6 +497,13 @@ pub fn edges_from_style(s: Option<StyleRef<'_>>, basis: f64) -> (Edges, Edges, E
         left: border_side_width(s, PropId::BorderLeftWidth, PropId::BorderLeftStyle),
     };
     (margin, padding, border)
+}
+
+pub fn edges_into_box(b: BoxRef<'_>, basis: f64) {
+    let (margin, padding, border) = edges_from_style(box_style(b), basis);
+    b.set_margin(margin);
+    b.set_padding(padding);
+    b.set_border(border);
 }
 
 pub fn style_creates_fixed_cb(s: Option<StyleRef<'_>>) -> bool {

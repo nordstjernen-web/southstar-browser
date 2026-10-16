@@ -17,7 +17,6 @@ use crate::{attrs, intrinsic, layout, multicol};
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_inline_text_indent_px(run: *const NsBox, s: *const Style, basis: f64) -> f64;
     fn ns_layout_box_first_baseline(b: *const NsBox, out: *mut f64) -> GBoolean;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_layout_inline_attr_control_width(r: *const InlineAttr, b: *const NsBox) -> f64;
@@ -32,10 +31,8 @@ unsafe extern "C" {
     fn ns_layout_measure_inline_atomics_end(saved: *mut c_void);
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
-    fn ns_css_writing_mode(s: *const Style) -> c_int;
     fn ns_css_text_orientation(s: *const Style) -> c_int;
     fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char;
-    fn ns_text_indent_px(s: *const Style, basis: f64) -> f64;
 }
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
@@ -55,7 +52,7 @@ pub(crate) fn new_layout(parent_style: *const Style) -> Layout {
 }
 
 pub(crate) fn style_text_indent(s: *const Style, basis: f64) -> f64 {
-    unsafe { ns_text_indent_px(s, basis) }
+    southstar_layout_geom::text_indent_px(style(s), basis)
 }
 
 pub(crate) fn paint_inline_layout(run: BoxRef<'_>) -> Option<Layout> {
@@ -126,7 +123,7 @@ pub(crate) fn shift(b: BoxRef<'_>, dx: f64, dy: f64) {
 }
 
 pub(crate) fn text_indent(run: BoxRef<'_>, s: *const Style, basis: f64) -> f64 {
-    unsafe { ns_inline_text_indent_px(run.as_ptr(), s, basis) }
+    southstar_layout_geom::inline_text_indent_px(run, style(s), basis)
 }
 
 pub(crate) fn first_baseline(b: BoxRef<'_>) -> Option<f64> {
@@ -185,7 +182,7 @@ pub(crate) fn is_one_line_text_input(dom: *const c_void) -> bool {
 }
 
 pub(crate) fn writing_mode(s: *const Style) -> c_int {
-    unsafe { ns_css_writing_mode(s) }
+    southstar_layout_geom::writing_mode(style(s))
 }
 
 pub(crate) fn text_orientation(s: *const Style) -> c_int {

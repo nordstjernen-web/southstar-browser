@@ -15,8 +15,6 @@ use crate::overflow;
 unsafe extern "C" {
     fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean;
-    fn ns_layout_style_is_flex_container(s: *const Style) -> GBoolean;
 }
 
 #[repr(C)]
@@ -58,12 +56,12 @@ impl FloatRef {
     }
 }
 
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
-pub fn dom_of<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
+    b.dom()
 }
 
 fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
@@ -77,14 +75,6 @@ pub fn overflow_axis_keyword<'a>(s: Option<StyleRef<'a>>, axis: PropId) -> Optio
 
 pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
     unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
-}
-
-pub fn style_is_absolute_or_fixed(s: *const Style) -> bool {
-    unsafe { ns_layout_style_is_absolute_or_fixed(s) != 0 }
-}
-
-pub fn style_is_flex_container(s: *const Style) -> bool {
-    unsafe { ns_layout_style_is_flex_container(s) != 0 }
 }
 
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {

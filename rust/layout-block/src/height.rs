@@ -4,14 +4,15 @@
 
 use southstar_layout::{BoxRef, children};
 use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
+use southstar_layout_geom::{
+    aspect_ratio_number, containing_block_definite_height, height_keyword_stretches,
+    resolve_used_height, style_is_absolute_or_fixed,
+};
 use southstar_style::{Kind, PropId, ValueRef};
 
 use crate::align::block_align_content_shift;
 use crate::dispatch::shift_box_tree;
-use crate::ffi::{
-    aspect_ratio_number, containing_block_definite_height, dom_of, height_keyword_stretches,
-    resolve_used_height, size_keyword_is_intrinsic, style_is_absolute_or_fixed, style_of,
-};
+use crate::ffi::{dom_of, size_keyword_is_intrinsic, style_of};
 use crate::fieldset::{c_max, c_min};
 
 pub struct HeightInput {
@@ -34,7 +35,7 @@ fn keyword_is(v: Option<ValueRef<'_>>, kw: &core::ffi::CStr) -> bool {
 
 fn shift_in_flow_children(b: BoxRef<'_>, dy: f64) {
     for c in children(b) {
-        if !style_is_absolute_or_fixed(c.style()) {
+        if !style_is_absolute_or_fixed(style_of(c)) {
             shift_box_tree(c, 0.0, dy);
         }
     }
@@ -49,7 +50,7 @@ fn horizontal_scroll_extent(b: BoxRef<'_>, inner_x: f64) -> Option<f64> {
     let padding_right = content_right + b.padding().right;
     let mut max_right = padding_right;
     for c in children(b) {
-        if style_is_absolute_or_fixed(c.style()) {
+        if style_is_absolute_or_fixed(style_of(c)) {
             continue;
         }
         let (m, p, bd) = (c.margin(), c.padding(), c.border());
@@ -112,7 +113,7 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
         }
         b.set_content_height(explicit_h);
     } else {
-        let ratio = style.map_or(-1.0, |s| aspect_ratio_number(s.get(PropId::AspectRatio)));
+        let ratio = style.map_or(-1.0, |s| aspect_ratio_number(s.get(PropId::AspectRatio)).0);
         if ratio > 0.0 && b.content_width() > 0.0 {
             let aspect_h = b.content_width() / ratio;
             let content_floor = !is_length_or_calc(mnh)

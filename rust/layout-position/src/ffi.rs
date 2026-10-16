@@ -2,49 +2,27 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_uint};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
-use southstar_layout::{BoxRef, Edges, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::{NsCssValue, PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::sticky::{self, StickyY};
 use crate::{abs, relative};
 
 unsafe extern "C" {
-    fn ns_layout_length_resolve(v: *const NsCssValue, basis: f64, fallback: f64) -> f64;
-    fn ns_layout_value_is_percent(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_edges_from_style(
-        s: *const Style,
-        basis: f64,
-        margin: *mut Edges,
-        padding: *mut Edges,
-        border: *mut Edges,
-    );
-    fn ns_layout_resolve_height_with_basis(
-        hv: *const NsCssValue,
-        width_basis: f64,
-        height_basis: f64,
-        fallback: f64,
-    ) -> f64;
-    fn ns_layout_containing_block_definite_height(b: *const NsBox) -> f64;
     fn ns_layout_size_keyword_is_intrinsic(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_height_keyword_stretches(v: *const NsCssValue) -> GBoolean;
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_style_is_absolute_or_fixed(s: *const Style) -> GBoolean;
-    fn ns_layout_style_is_flex_container(s: *const Style) -> GBoolean;
-    fn ns_layout_keyword_or(s: *const Style, p: c_int, fallback: *const c_char) -> *const c_char;
     fn ns_layout_flex_item_align(c: *const NsBox, container_align: *const c_char) -> *const c_char;
     fn ns_layout_flex_align_is_baseline(align: *const c_char) -> GBoolean;
     fn ns_layout_flex_box_is_border_box(c: *const NsBox) -> GBoolean;
-    fn ns_layout_flex_direction_of(s: *const Style) -> *const c_char;
     fn ns_layout_estimate_natural_width(b: *const NsBox, cap: f64) -> f64;
-    fn ns_layout_style_creates_fixed_cb(s: *const Style) -> GBoolean;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_layout_box_append_child(parent: *mut NsBox, child: *mut NsBox);
     fn ns_layout_flat_parent(n: *const NsNode) -> *const NsNode;
@@ -123,55 +101,20 @@ fn c_str<'a>(p: *const c_char) -> &'a CStr {
     unsafe { CStr::from_ptr(p) }
 }
 
-pub fn style_of<'a>(b: BoxRef<'a>) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
+    southstar_style::box_style(b)
 }
 
-pub fn dom_of<'a>(b: BoxRef<'a>) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
+    b.dom()
 }
 
 pub fn prop(b: BoxRef<'_>, p: PropId) -> Option<ValueRef<'_>> {
     style_of(b).and_then(|s| s.get(p))
 }
 
-pub fn length_resolve(v: Option<ValueRef<'_>>, basis: f64, fallback: f64) -> f64 {
-    unsafe { ns_layout_length_resolve(value_ptr(v), basis, fallback) }
-}
-
-pub fn value_is_percent(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_value_is_percent(value_ptr(v)) != 0 }
-}
-
-pub fn edges_from_style(s: *const Style, basis: f64) -> (Edges, Edges, Edges) {
-    let mut m = Edges::default();
-    let mut p = Edges::default();
-    let mut b = Edges::default();
-    unsafe { ns_layout_edges_from_style(s, basis, &mut m, &mut p, &mut b) };
-    (m, p, b)
-}
-
-pub fn resolve_height_with_basis(
-    hv: Option<ValueRef<'_>>,
-    width_basis: f64,
-    height_basis: f64,
-    fallback: f64,
-) -> f64 {
-    unsafe {
-        ns_layout_resolve_height_with_basis(value_ptr(hv), width_basis, height_basis, fallback)
-    }
-}
-
-pub fn containing_block_definite_height(b: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_containing_block_definite_height(b.as_ptr()) }
-}
-
 pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
     unsafe { ns_layout_size_keyword_is_intrinsic(value_ptr(v)) != 0 }
-}
-
-pub fn height_keyword_stretches(v: Option<ValueRef<'_>>) -> bool {
-    unsafe { ns_layout_height_keyword_stretches(value_ptr(v)) != 0 }
 }
 
 pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
@@ -190,18 +133,6 @@ pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
     unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
 }
 
-pub fn style_is_absolute_or_fixed(s: *const Style) -> bool {
-    unsafe { ns_layout_style_is_absolute_or_fixed(s) != 0 }
-}
-
-pub fn style_is_flex_container(s: StyleRef<'_>) -> bool {
-    unsafe { ns_layout_style_is_flex_container(s.as_ptr()) != 0 }
-}
-
-pub fn keyword_or<'a>(s: StyleRef<'a>, p: PropId, fallback: &'static CStr) -> &'a CStr {
-    c_str(unsafe { ns_layout_keyword_or(s.as_ptr(), p as c_int, fallback.as_ptr()) })
-}
-
 pub fn flex_item_align<'a>(c: BoxRef<'a>, container_align: &'a CStr) -> &'a CStr {
     c_str(unsafe { ns_layout_flex_item_align(c.as_ptr(), container_align.as_ptr()) })
 }
@@ -214,16 +145,8 @@ pub fn flex_box_is_border_box(b: BoxRef<'_>) -> bool {
     unsafe { ns_layout_flex_box_is_border_box(b.as_ptr()) != 0 }
 }
 
-pub fn flex_direction_of(s: StyleRef<'_>) -> &CStr {
-    c_str(unsafe { ns_layout_flex_direction_of(s.as_ptr()) })
-}
-
 pub fn estimate_natural_width(b: BoxRef<'_>, cap: f64) -> f64 {
     unsafe { ns_layout_estimate_natural_width(b.as_ptr(), cap) }
-}
-
-pub fn style_creates_fixed_cb(s: Option<StyleRef<'_>>) -> bool {
-    unsafe { ns_layout_style_creates_fixed_cb(style_ptr(s)) != 0 }
 }
 
 pub fn box_clips_children(b: BoxRef<'_>) -> bool {

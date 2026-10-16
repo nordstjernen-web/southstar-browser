@@ -3,12 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::BoxRef;
+use southstar_layout_geom::{
+    containing_block_definite_height, height_keyword_stretches, value_is_percent,
+};
 use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef};
 
-use crate::ffi::{
-    containing_block_definite_height, dom_of, height_keyword_stretches, prop, shift_box_tree,
-    style_of, value_is_percent, viewport_h,
-};
+use crate::ffi::{dom_of, prop, shift_box_tree, style_of, viewport_h};
 
 const UNIT_EM: u32 = 1;
 

@@ -10,15 +10,18 @@ use southstar_layout_float::{
     FloatRef, box_establishes_bfc, clear_kind_of, float_side_of, multicol_column_host,
     multicol_distributable_children,
 };
+use southstar_layout_geom::{
+    containing_block_definite_height, edges_into_box, height_keyword_stretches, length_resolve,
+    resolve_used_height, style_is_absolute_or_fixed,
+};
 use southstar_style::{Display, Kind, PropId, ValueRef, display_of};
 
 use crate::align::legacy_align_block_child;
 use crate::dispatch::{layout_box, shift_box_tree};
 use crate::ffi::{
-    ContentBox, containing_block_definite_height, dom_of, edges_into_box, height_keyword_stretches,
-    inline_box_can_fragment_multicol, inline_line_height, inline_run_break_before,
-    inline_run_split, length_resolve, measure_natural_width, min_width_of, multicol_single_inline,
-    resolve_used_height, style_is_absolute_or_fixed, style_of, style_ref, used_column_count,
+    ContentBox, dom_of, inline_box_can_fragment_multicol, inline_line_height,
+    inline_run_break_before, inline_run_split, measure_natural_width, min_width_of,
+    multicol_single_inline, style_of, style_ref, used_column_count,
 };
 use crate::fieldset::c_max;
 use crate::flex::box_is_border_box;
@@ -334,7 +337,7 @@ impl<'a> Flow<'a> {
             }
         }
         let rtl = style_value(self.b, PropId::Direction).is_some_and(|v| v.is_keyword(c"rtl"));
-        if rtl && !style_is_absolute_or_fixed(c.style()) {
+        if rtl && !style_is_absolute_or_fixed(style_of(c)) {
             let (m, p, bd) = (c.margin(), c.padding(), c.border());
             let outer =
                 m.left + m.right + c.content_width() + p.left + p.right + bd.left + bd.right;

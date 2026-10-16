@@ -8,6 +8,7 @@ use core::ptr;
 use southstar_dom::{Node, NsNode};
 use southstar_layout::{InlineAttr, NsBox, inline_kind};
 use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword};
+use southstar_layout_geom::style_is_contents;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::collect::{
@@ -15,7 +16,6 @@ use crate::collect::{
     is_atomic_inline_display, style_is_absolute_or_fixed, white_space_mode,
 };
 use crate::ffi::{self, RawLink, RunParts};
-use crate::geom::style_is_contents;
 use southstar_layout_content::text_input::utf8_skip;
 
 struct Collapsed {

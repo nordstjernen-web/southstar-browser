@@ -6,12 +6,11 @@ use southstar_layout::{BoxKind, BoxRef, Style};
 use southstar_layout_float::{
     float_side_of, kw_scrolls, overflow_axis_keyword, style_is_grid_container,
 };
+use southstar_layout_geom::{keyword_or, style_is_absolute_or_fixed, style_is_flex_container};
 use southstar_style::{PropId, ValueRef};
 
 use crate::dispatch::shift_box_tree;
-use crate::ffi::{
-    dom_of, keyword_or, style_is_absolute_or_fixed, style_is_flex_container, style_of, style_ref,
-};
+use crate::ffi::{dom_of, style_of, style_ref};
 
 pub fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
     v.and_then(ValueRef::keyword_text)
@@ -73,7 +72,7 @@ pub fn legacy_align_block_child(
     if !matches!(c.kind(), BoxKind::Block | BoxKind::Table) {
         return;
     }
-    if style_is_absolute_or_fixed(c.style()) || float_side_of(style_of(c)) >= 0 {
+    if style_is_absolute_or_fixed(style_of(c)) || float_side_of(style_of(c)) >= 0 {
         return;
     }
     let style = style_of(c);
@@ -104,10 +103,10 @@ pub fn block_align_content_shift(b: BoxRef<'_>, free_space: f64) -> f64 {
     if free_space == 0.0 {
         return 0.0;
     }
-    if style_is_flex_container(b.style()) || style_is_grid_container(Some(style)) {
+    if style_is_flex_container(style_of(b)) || style_is_grid_container(Some(style)) {
         return 0.0;
     }
-    let mut acont = keyword_or(b.style(), PropId::AlignContent, c"normal").to_bytes();
+    let mut acont = keyword_or(style_of(b), PropId::AlignContent, c"normal").to_bytes();
     let unsafe_align = acont.starts_with(b"unsafe ");
     if unsafe_align {
         acont = &acont[b"unsafe ".len()..];

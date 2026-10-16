@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The length, height and edge helpers the layout crates share live in
+  rust/layout-geom, a new crate that forbids unsafe code. Block, flex,
+  grid, table, sizing, positioned, float, inline, hit-testing, query and
+  tree layout and the painter call its Rust API through a Cargo
+  dependency instead of nineteen C exports from the box-tree builder
+  that took raw style, box and value pointers and wrote their results
+  through out-pointers. It reads calc() math functions, the writing mode
+  and alignment keywords through rust/css's Rust API rather than its C
+  ABI. The unsafe budget drops by 138 unsafe keywords and 73 FFI imports.
 * The GTK shell (rust/shell) no longer calls its own code through C
   symbols: the tab window, the tab view's input, drawing, media and
   chrome modules, the page layers, the icons and the application entry

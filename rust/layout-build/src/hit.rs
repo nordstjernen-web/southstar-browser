@@ -7,13 +7,13 @@ use core::ffi::{CStr, c_int, c_uint};
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::keyword_is;
+use southstar_layout_geom::{style_is_absolute_or_fixed, text_indent_px, writing_mode};
 use southstar_paint::ffi::pango::{
     ALIGN_CENTER, ALIGN_LEFT, ALIGN_RIGHT, AttrList, DIRECTION_RTL, ELLIPSIZE_END, SCALE,
 };
-use southstar_style::{PropId, StyleRef};
+use southstar_style::{PropId, StyleRef, box_style};
 
 use crate::ffi;
-use crate::geom::{style_is_absolute_or_fixed, text_indent_px};
 
 pub fn box_first_baseline(b: BoxRef<'_>) -> Option<f64> {
     if b.kind() == BoxKind::Inline {
@@ -25,7 +25,7 @@ pub fn box_first_baseline(b: BoxRef<'_>) -> Option<f64> {
     let mut c = b.first_child();
     while let Some(child) = c {
         c = child.next_sibling();
-        if style_is_absolute_or_fixed(ffi::box_style(child)) || child.is_rendered_legend() {
+        if style_is_absolute_or_fixed(box_style(child)) || child.is_rendered_legend() {
             continue;
         }
         if let Some(cb) = box_first_baseline(child) {
@@ -39,7 +39,7 @@ pub fn flex_item_align<'a>(
     c: Option<BoxRef<'a>>,
     container_align: *const core::ffi::c_char,
 ) -> *const core::ffi::c_char {
-    if let Some(s) = c.and_then(ffi::box_style)
+    if let Some(s) = c.and_then(box_style)
         && let Some(a) = s.keyword_of(PropId::AlignSelf)
         && a.to_bytes() != b"auto"
     {
@@ -54,8 +54,8 @@ pub fn flex_align_is_baseline(align: Option<&CStr>) -> bool {
 
 pub fn flex_item_baseline(c: BoxRef<'_>, fallback: f64) -> f64 {
     if let Some(p) = c.parent()
-        && ffi::writing_mode(ffi::box_style(p)) != 0
-        && ffi::writing_mode(ffi::box_style(c)) != 0
+        && writing_mode(box_style(p)) != 0
+        && writing_mode(box_style(c)) != 0
     {
         let (pd, bd) = (c.padding(), c.border());
         let border_h = c.content_height() + pd.top + pd.bottom + bd.top + bd.bottom;
@@ -165,7 +165,7 @@ pub fn inline_box_form_hit<'a>(
             if idx < a.byte_off() || idx >= a.byte_off() + 3 {
                 continue;
             }
-            if let Some(dom) = ffi::box_dom(ab).filter(|d| ffi::node_is_form_hit_target(Some(*d))) {
+            if let Some(dom) = ab.dom().filter(|d| ffi::node_is_form_hit_target(Some(*d))) {
                 atomic_hit = Some(dom.as_ptr());
             }
         }

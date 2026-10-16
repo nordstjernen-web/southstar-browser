@@ -8,13 +8,15 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use southstar_css::TRACK_PX;
 use southstar_layout::{BoxKind, BoxRef, Style, children};
 use southstar_layout_float::{float_side_of, overflow_establishes_bfc, style_is_grid_container};
+use southstar_layout_geom::{
+    edges_from_style, flex_direction_of, length_resolve, style_is_flex_container, value_is_percent,
+};
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
 use crate::ffi::{
-    edges_of, flex_box_is_border_box, flex_direction_of, flex_gap_of, flex_grow_of, flex_shrink_of,
-    flex_wraps, grid_column_flow_width, grid_flows_by_column, grid_natural_width, inline_min_width,
-    inline_natural_width, length_resolve, style_is_flex_container, style_of, table_intrinsic_width,
-    value_is_percent,
+    flex_box_is_border_box, flex_gap_of, flex_grow_of, flex_shrink_of, flex_wraps,
+    grid_column_flow_width, grid_flows_by_column, grid_natural_width, inline_min_width,
+    inline_natural_width, style_of, table_intrinsic_width,
 };
 use crate::replaced::{
     inline_atomic_measure_basis, is_border_box, is_length_or_calc, is_replaced,
@@ -53,13 +55,13 @@ fn starts_row(dir: &[u8]) -> bool {
     dir.starts_with(b"row")
 }
 
-fn horizontal_edges(s: *const Style) -> f64 {
-    let (m, pd, bd) = edges_of(s, 0.0);
+fn horizontal_edges(s: Option<StyleRef<'_>>) -> f64 {
+    let (m, pd, bd) = edges_from_style(s, 0.0);
     m.left + m.right + pd.left + pd.right + bd.left + bd.right
 }
 
 fn subtract_inline_padding_border(b: BoxRef<'_>, w: f64) -> f64 {
-    let (_, pd, bd) = edges_of(b.style(), 0.0);
+    let (_, pd, bd) = edges_from_style(style_of(b), 0.0);
     let w = w - (pd.left + pd.right + bd.left + bd.right);
     if w < 0.0 { 0.0 } else { w }
 }
@@ -212,7 +214,8 @@ pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f
             return gw;
         }
     }
-    let flex_row = style_is_flex_container(b.style()) && starts_row(flex_direction_of(b.style()));
+    let flex_row = style_is_flex_container(style_of(b))
+        && starts_row(flex_direction_of(style_of(b)).to_bytes());
     let mut max_child = 0.0;
     let mut float_row = 0.0;
     let mut row_sum = 0.0;
@@ -222,7 +225,7 @@ pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f
         let fside = float_side_of(style_of(c));
         let mut outer = w;
         if !c.style().is_null() {
-            outer += horizontal_edges(c.style());
+            outer += horizontal_edges(style_of(c));
         }
         if flex_row {
             row_sum += outer;
@@ -476,8 +479,8 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     } else {
         b.style()
     };
-    let single_line_row = style_is_flex_container(b.style())
-        && starts_row(flex_direction_of(b.style()))
+    let single_line_row = style_is_flex_container(style_of(b))
+        && starts_row(flex_direction_of(style_of(b)).to_bytes())
         && !flex_wraps(b.style());
     let mut max_child = 0.0;
     let mut row_sum = 0.0;
@@ -490,7 +493,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
         };
         let mut outer = w;
         if !c.style().is_null() {
-            outer += horizontal_edges(c.style());
+            outer += horizontal_edges(style_of(c));
         }
         if outer > max_child {
             max_child = outer;
