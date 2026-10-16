@@ -31,8 +31,7 @@ use super::procview_view::ns_proc_view_unref;
 use super::procview_worker::{
     RES_CLICK, RES_CONSOLE, RES_COPY, RES_DROPFILES, RES_DUMP, RES_EVAL, RES_EXPORT, RES_FAVICON,
     RES_FIND, RES_FRAME, RES_HOVER, RES_KEY, RES_LINK, RES_PAGE, RES_PRINT, RES_RELEASE,
-    RES_SCROLLBAR, RES_SELECT, RES_TICK, RES_VIEWPORT, lock_proc, ns_rproc_http_interrupt,
-    ns_rproc_http_pid, ns_rproc_http_terminate, unlock_proc,
+    RES_SCROLLBAR, RES_SELECT, RES_TICK, RES_VIEWPORT, lock_proc, unlock_proc,
 };
 use crate::procview::nav;
 
@@ -79,7 +78,6 @@ unsafe extern "C" {
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn free(p: *mut c_void);
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -803,20 +801,18 @@ fn on_favicon(v: *mut NsProcView, res: &Res) {
         return;
     }
     clear_object(&mut state.favicon);
-    if !res.favicon_data.is_null() && res.favicon_w > 0 && res.favicon_h > 0 {
-        let len = res.favicon_stride as usize * res.favicon_h as usize;
-        unsafe {
-            let bytes = gtk::g_bytes_new(res.favicon_data.cast(), len);
-            let tex = gtk::gdk_memory_texture_new(
+    if !res.favicon_bytes.is_null() && res.favicon_w > 0 && res.favicon_h > 0 {
+        // SAFETY: favicon_bytes is the reply's own GBytes holding at least stride * height bytes, which the texture takes a reference to.
+        let tex = unsafe {
+            gtk::gdk_memory_texture_new(
                 res.favicon_w,
                 res.favicon_h,
                 gtk::MEMORY_DEFAULT,
-                bytes,
+                res.favicon_bytes,
                 res.favicon_stride as usize,
-            );
-            gtk::g_bytes_unref(bytes);
-            state.favicon = tex.cast();
-        }
+            )
+        };
+        state.favicon = tex.cast();
     }
     post_emit(v, EVT_FAVICON, ptr::null());
 }
@@ -936,12 +932,14 @@ fn free_res(res: *mut Res) {
         ] {
             glib::g_free(s.cast());
         }
-        free(r.clipboard.cast());
+        glib::g_free(r.clipboard.cast());
         glib::g_free(r.window_action.cast());
-        free(r.href.cast());
-        free(r.cursor.cast());
-        free(r.media_url.cast());
-        free(r.favicon_data.cast());
+        glib::g_free(r.href.cast());
+        glib::g_free(r.cursor.cast());
+        glib::g_free(r.media_url.cast());
+        if !r.favicon_bytes.is_null() {
+            gtk::g_bytes_unref(r.favicon_bytes);
+        }
         ns_proc_view_unref(r.view);
         glib::g_free(res.cast());
     }
@@ -1066,12 +1064,7 @@ pub(super) fn ns_proc_view_renderer_pid(v: *mut NsProcView) -> c_int {
         return -1;
     }
     lock_proc(v);
-    let p = view(v).proc;
-    let pid = if p.is_null() {
-        -1
-    } else {
-        unsafe { ns_rproc_http_pid(p) }
-    };
+    let pid = view(v).remote.map_or(-1, |remote| remote.pid());
     unlock_proc(v);
     pid
 }
@@ -1097,12 +1090,9 @@ pub(super) fn ns_proc_view_end_task(v: *mut NsProcView) {
         return;
     }
     lock_proc(v);
-    let p = view(v).proc;
-    if !p.is_null() {
-        unsafe {
-            ns_rproc_http_interrupt(p);
-            ns_rproc_http_terminate(p);
-        }
+    if let Some(remote) = view(v).remote {
+        remote.interrupt();
+        remote.terminate();
     }
     unlock_proc(v);
 }

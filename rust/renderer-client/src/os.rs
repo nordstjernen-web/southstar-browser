@@ -135,7 +135,13 @@ fn spawn_inproc(max_w: c_int, max_h: c_int) -> Option<Renderer> {
     Some(r)
 }
 
-pub fn close(mut r: Renderer) {
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        close(self);
+    }
+}
+
+fn close(r: &mut Renderer) {
     r.quit();
     match core::mem::replace(&mut r.child, Child::InProcess) {
         Child::InProcess => {
@@ -154,21 +160,47 @@ pub fn close(mut r: Renderer) {
     }
 }
 
-pub fn interrupt(sock: c_int) {
-    sys::interrupt(sock);
+#[derive(Clone, Copy)]
+pub struct Remote {
+    sock: c_int,
+    process: Option<sys::Process>,
 }
 
-pub fn pid(child: &Child) -> c_int {
-    match child {
-        Child::Process(process) => sys::pid(process),
-        Child::InProcess => -1,
+impl Remote {
+    pub fn pid(&self) -> c_int {
+        self.process.as_ref().map_or(-1, sys::pid)
+    }
+
+    pub fn interrupt(&self) {
+        sys::interrupt(self.sock);
+    }
+
+    pub fn terminate(&self) {
+        match &self.process {
+            Some(process) => sys::terminate(process),
+            None => self.interrupt(),
+        }
     }
 }
 
-pub fn terminate(child: &Child, sock: c_int) {
-    match child {
-        Child::Process(process) => sys::terminate(process),
-        Child::InProcess => interrupt(sock),
+impl Renderer {
+    pub fn remote(&self) -> Remote {
+        Remote {
+            sock: self.sock,
+            process: match &self.child {
+                Child::Process(process) => Some(*process),
+                Child::InProcess => None,
+            },
+        }
+    }
+
+    pub(crate) fn framebuffer(&self) -> &[u8] {
+        let pixels = self.fb.pixels();
+        if pixels.is_null() {
+            return &[];
+        }
+        // SAFETY: every framebuffer holds max_w * max_h * 4 bytes, the map_size, and stays mapped until the renderer that owns it is dropped.
+        unsafe { core::slice::from_raw_parts(pixels, self.map_size()) }
     }
 }
 
@@ -322,6 +354,7 @@ mod sys {
     use super::{Child, Framebuffer};
     use crate::client::Renderer;
 
+    #[derive(Clone, Copy)]
     pub struct Process(c_int);
 
     pub struct Mapping {
@@ -684,6 +717,7 @@ mod sys {
 
     type Handle = *mut c_void;
 
+    #[derive(Clone, Copy)]
     pub struct Process(Handle);
 
     pub struct Mapping {

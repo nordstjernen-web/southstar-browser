@@ -2,32 +2,20 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uchar, c_void};
+use core::ffi::{c_char, c_double, c_int, c_void};
 
-use southstar_glib::{slice, strdup};
+use southstar_glib::strdup;
 use southstar_gtk_ffi::GtkSnapshot;
 
 use super::gdk::{Snapshot, Under};
 use crate::pagelayers::{LayerUpdate, PageLayers};
 
-/// # Safety
-/// `desc` is null or a NUL-terminated string, and `map` is null or points to `map_size` readable
-/// bytes, both valid for the call.
-pub(super) unsafe fn ns_layer_update_parse(
-    desc: *const c_char,
-    map: *const c_uchar,
-    map_size: usize,
-) -> *mut LayerUpdate {
-    if desc.is_null() {
-        return core::ptr::null_mut();
-    }
-    let desc = unsafe { CStr::from_ptr(desc) }.to_bytes();
-    let map = unsafe { slice(map, map_size) };
+pub(super) fn layer_update_parse(desc: &[u8], map: &[u8]) -> *mut LayerUpdate {
     LayerUpdate::parse(desc, map).map_or(core::ptr::null_mut(), |u| Box::into_raw(Box::new(u)))
 }
 
 /// # Safety
-/// `u` is null or a layer update `ns_layer_update_parse` returned that has not been freed.
+/// `u` is null or a layer update `layer_update_parse` returned that has not been freed.
 pub(super) unsafe fn ns_layer_update_free(u: *mut LayerUpdate) {
     if !u.is_null() {
         drop(unsafe { Box::from_raw(u) });

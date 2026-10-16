@@ -2078,6 +2078,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-layout",
  "southstar-numfmt",
+ "southstar-renderer-client",
  "southstar-url",
 ]
 

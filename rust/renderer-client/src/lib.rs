@@ -6,13 +6,14 @@ mod client;
 mod ffi;
 mod os;
 
-pub use ffi::PrintFn;
-pub use os::{AttachFn, ProcInfo, proc_cpu, proc_info, proc_threads, self_pid};
+pub use client::{Favicon, Frame, Page, Renderer, Text, Tick, TilesRequest, View, Wheel};
+pub use ffi::{PrintFn, PrintSetup, PrintedPages};
+pub use os::{AttachFn, ProcInfo, Remote, proc_cpu, proc_info, proc_threads, self_pid};
 
 pub fn set_inproc(attach: Option<AttachFn>) {
     os::set_attach(attach);
 }
 
 pub fn set_inproc_print(print: Option<PrintFn>) {
-    ffi::ns_rproc_http_set_inproc_print(print);
+    ffi::set_print(print);
 }

@@ -21,8 +21,7 @@ use super::procview_input::{
 use super::procview_media::{ns_pv_media_free, ns_pv_media_new};
 use super::procview_state::{NotifyFn, NsProcView, Req};
 use super::procview_worker::{
-    REQ_QUIT, free_req, lock_proc, ns_proc_renderer_path, ns_rproc_http_interrupt, start_worker,
-    unlock_proc,
+    REQ_QUIT, free_req, lock_proc, ns_proc_renderer_path, start_worker, unlock_proc,
 };
 
 const ACT_HOVER: c_int = 0;
@@ -142,9 +141,8 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
     unsafe { (*req).r#type = REQ_QUIT };
     push_req(v, req);
     lock_proc(v);
-    let p = view(v).proc;
-    if !p.is_null() {
-        unsafe { ns_rproc_http_interrupt(p) };
+    if let Some(remote) = view(v).remote {
+        remote.interrupt();
     }
     unlock_proc(v);
     let state = view(v);
@@ -185,6 +183,7 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
         g_ref_count_init(&raw mut state.rc);
         g_mutex_init((&raw mut state.proc_lock).cast());
     }
+    state.remote = None;
     state.media = ns_pv_media_new().cast();
     state.renderer_path = ns_proc_renderer_path();
     state.queue = unsafe { g_async_queue_new() };

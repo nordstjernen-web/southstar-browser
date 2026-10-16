@@ -20,6 +20,7 @@ southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-renderer-client = { path = "../renderer-client" }
 southstar-url = { path = "../url" }
 
 [lints]

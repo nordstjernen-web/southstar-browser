@@ -378,11 +378,18 @@ pub(super) fn set_named_cursor(widget: *mut GtkWidget, name: &[u8]) {
     }
 }
 
-pub(super) fn stage_fill(px: *const u8, w: c_int, h: c_int, stride: c_int) -> *mut GdkTexture {
+pub(super) fn stage_fill(pixels: &[u8], w: c_int, h: c_int, stride: c_int) -> *mut GdkTexture {
     let row = w as usize * 4;
     if w <= 0 || h <= 0 || (stride as usize) < row {
         return ptr::null_mut();
     }
+    let needed = (h as usize - 1)
+        .checked_mul(stride as usize)
+        .and_then(|n| n.checked_add(row));
+    if needed.is_none_or(|n| pixels.len() < n) {
+        return ptr::null_mut();
+    }
+    let px = pixels.as_ptr();
     unsafe {
         let bytes = if stride as usize == row {
             gtk::g_bytes_new(px.cast(), row * h as usize)
@@ -644,7 +651,7 @@ pub(super) fn start_render(v: *mut NsProcView) {
         state.wheel_pend_y -= f64::from(r.wheel.dy);
         r.wheel.x = state.scroll_x + (state.pointer_x / s) as c_int;
         r.wheel.y = state.scroll_y + (state.pointer_y / s) as c_int;
-        r.wheel.viewport = state.wheel_viewport;
+        r.wheel.viewport = state.wheel_viewport != 0;
     }
     push_req(v, req);
 }

@@ -9,26 +9,27 @@ use southstar_ipc::{
     until_nul, write_message,
 };
 
-use crate::os::{Child, Framebuffer};
+use crate::ffi::{self, PrintSetup, PrintedPages};
+use crate::os::{self, Child, Framebuffer};
 
 pub const RASTER_SCALE: f64 = 3.0;
 
 pub type Text = Option<Vec<u8>>;
 
 pub struct Renderer {
-    pub child: Child,
-    pub sock: c_int,
-    pub wfd: c_int,
-    pub conn: Box<Conn>,
-    pub rx: Option<Vec<u8>>,
-    pub rxcap: usize,
-    pub fb: Framebuffer,
-    pub max_w: c_int,
-    pub max_h: c_int,
-    pub dpr_milli: c_int,
-    pub inproc_conn: *mut core::ffi::c_void,
-    pub linear: (c_int, c_int, c_int),
-    pub head: Box<Head>,
+    pub(crate) child: Child,
+    pub(crate) sock: c_int,
+    pub(crate) wfd: c_int,
+    pub(crate) conn: Box<Conn>,
+    pub(crate) rx: Option<Vec<u8>>,
+    pub(crate) rxcap: usize,
+    pub(crate) fb: Framebuffer,
+    pub(crate) max_w: c_int,
+    pub(crate) max_h: c_int,
+    pub(crate) dpr_milli: c_int,
+    pub(crate) inproc_conn: *mut core::ffi::c_void,
+    pub(crate) linear: (c_int, c_int, c_int),
+    pub(crate) head: Box<Head>,
 }
 
 #[derive(Default)]
@@ -43,8 +44,7 @@ pub struct Page {
     pub remote_ip: Option<Vec<u8>>,
 }
 
-pub struct Frame {
-    pub ok: bool,
+pub struct Frame<'a> {
     pub width: c_int,
     pub height: c_int,
     pub stride: c_int,
@@ -57,7 +57,7 @@ pub struct Frame {
     pub scroll_x: c_int,
     pub unchanged: bool,
     pub render_rc: c_int,
-    pub pixels: *const u8,
+    pub pixels: &'a [u8],
     pub nav: Option<Vec<u8>>,
     pub webgl: Option<Vec<u8>>,
     pub camera: Option<Vec<u8>>,
@@ -66,35 +66,6 @@ pub struct Frame {
     pub window_action: Option<Vec<u8>>,
     pub clipboard: bool,
     pub tiles: Option<Vec<u8>>,
-}
-
-impl Default for Frame {
-    fn default() -> Frame {
-        Frame {
-            ok: false,
-            width: 0,
-            height: 0,
-            stride: 0,
-            animating: false,
-            caret_blinking: false,
-            wheel_snapped: false,
-            page_w: 0,
-            page_h: 0,
-            scroll_y: -1,
-            scroll_x: -1,
-            unchanged: false,
-            render_rc: 0,
-            pixels: core::ptr::null(),
-            nav: None,
-            webgl: None,
-            camera: None,
-            download: None,
-            audio: None,
-            window_action: None,
-            clipboard: false,
-            tiles: None,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -144,7 +115,7 @@ pub struct View {
 }
 
 #[derive(Default)]
-pub struct PrintReply {
+pub(crate) struct PrintReply {
     pub pages: c_long,
     pub scale: f64,
     pub width: Option<f64>,
@@ -159,7 +130,7 @@ pub struct Favicon {
     pub pixels: Vec<u8>,
 }
 
-pub fn long(body: &[u8], key: &str) -> c_long {
+fn long(body: &[u8], key: &str) -> c_long {
     json_value(until_nul(body), key.as_bytes()).map_or(0, atol)
 }
 
@@ -167,8 +138,16 @@ fn double(body: &[u8], key: &str) -> Option<f64> {
     json_value(until_nul(body), key.as_bytes()).map(json_double)
 }
 
-pub fn text(body: &[u8], key: &str) -> Option<Vec<u8>> {
-    json_value(until_nul(body), key.as_bytes()).and_then(json_string)
+fn text(body: &[u8], key: &str) -> Option<Vec<u8>> {
+    json_value(until_nul(body), key.as_bytes())
+        .and_then(json_string)
+        .map(c_text)
+}
+
+fn c_text(mut value: Vec<u8>) -> Vec<u8> {
+    let len = until_nul(&value).len();
+    value.truncate(len);
+    value
 }
 
 fn non_empty(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
@@ -188,9 +167,11 @@ fn head_text(field: &[u8]) -> Option<Vec<u8>> {
     (!value.is_empty()).then(|| value.to_vec())
 }
 
-fn frame_from_head(head: &Head) -> Frame {
+fn frame_from_head<'a>(head: &Head) -> Frame<'a> {
     Frame {
-        ok: true,
+        width: 0,
+        height: 0,
+        stride: 0,
         animating: head.x_anim & 1 != 0,
         caret_blinking: head.x_anim & 2 != 0,
         wheel_snapped: head.x_anim & 4 != 0,
@@ -198,7 +179,9 @@ fn frame_from_head(head: &Head) -> Frame {
         page_h: head.x_page_h as c_int,
         scroll_y: head.x_scroll_y as c_int,
         scroll_x: head.x_scroll_x as c_int,
+        unchanged: false,
         render_rc: head.x_render_rc as c_int,
+        pixels: &[],
         nav: head_text(&head.x_nav),
         webgl: head_text(&head.x_webgl),
         camera: head_text(&head.x_camera),
@@ -206,11 +189,20 @@ fn frame_from_head(head: &Head) -> Frame {
         audio: head_text(&head.x_audio),
         window_action: head_text(&head.x_window_action),
         clipboard: head.x_clipboard > 0,
-        ..Frame::default()
+        tiles: None,
     }
 }
 
 impl Renderer {
+    pub fn spawn(
+        path: Option<&[u8]>,
+        max_w: c_int,
+        max_h: c_int,
+        private: bool,
+    ) -> Option<Renderer> {
+        os::spawn(path, max_w, max_h, true, private)
+    }
+
     fn shm(&self) -> bool {
         !matches!(self.fb, Framebuffer::None)
     }
@@ -229,7 +221,7 @@ impl Renderer {
         }
     }
 
-    pub fn map_size(&self) -> usize {
+    pub(crate) fn map_size(&self) -> usize {
         if self.shm() {
             self.max_w as usize * self.max_h as usize * 4
         } else {
@@ -247,7 +239,7 @@ impl Renderer {
         .is_some_and(|head| write_message(self.wfd, &head, body))
     }
 
-    pub fn request(&mut self, path: &str, json: &str) -> Option<Vec<u8>> {
+    fn request(&mut self, path: &str, json: &str) -> Option<Vec<u8>> {
         if !self.send(path, "application/json", json.as_bytes())
             || !self.conn.read_head(&mut self.head)
         {
@@ -344,13 +336,21 @@ impl Renderer {
         self.shm() || h.content_length as u64 >= (h.x_stride as u64).wrapping_mul(h.x_h as u64)
     }
 
-    fn note_linear(&mut self, out: &Frame) {
+    fn note_linear(&mut self, out: &Frame<'_>) {
         if self.shm() {
             self.linear = (out.width, out.height, out.stride);
         }
     }
 
-    fn attach_unchanged(&self, out: &mut Frame) {
+    fn pixels(&self) -> &[u8] {
+        match (&self.fb, &self.rx) {
+            (Framebuffer::None, Some(rx)) => rx,
+            (Framebuffer::None, None) => &[],
+            _ => self.framebuffer(),
+        }
+    }
+
+    fn attach_unchanged<'a>(&'a self, out: &mut Frame<'a>) {
         let (w, h, stride) = self.linear;
         if !self.shm()
             || w <= 0
@@ -362,7 +362,7 @@ impl Renderer {
         out.width = w;
         out.height = h;
         out.stride = stride;
-        out.pixels = self.fb.pixels();
+        out.pixels = self.pixels();
     }
 
     fn read_frame_reply(&mut self) -> bool {
@@ -385,7 +385,7 @@ impl Renderer {
         }
     }
 
-    fn take_frame(&mut self, width: c_int, height: c_int) -> Option<Frame> {
+    fn take_frame(&mut self, width: c_int, height: c_int) -> Option<Frame<'_>> {
         if self.head.x_unchanged > 0 {
             let mut out = frame_from_head(&self.head);
             out.unchanged = true;
@@ -399,16 +399,24 @@ impl Renderer {
         out.width = self.head.x_w as c_int;
         out.height = self.head.x_h as c_int;
         out.stride = self.head.x_stride as c_int;
-        out.pixels = match (&self.fb, &self.rx) {
-            (Framebuffer::None, Some(rx)) => rx.as_ptr(),
-            (Framebuffer::None, None) => core::ptr::null(),
-            (fb, _) => fb.pixels(),
-        };
         self.note_linear(&out);
+        out.pixels = self.pixels();
         Some(out)
     }
 
-    pub fn render(&mut self, mut view: View, wheel: Option<&Wheel>) -> Option<Frame> {
+    pub fn render(
+        &mut self,
+        view: View,
+        wheel: Option<&Wheel>,
+        tiles: Option<&TilesRequest<'_>>,
+    ) -> Option<Frame<'_>> {
+        match tiles {
+            Some(tiles) if self.shm() => self.render_tiles(view, wheel, tiles),
+            _ => self.render_linear(view, wheel),
+        }
+    }
+
+    fn render_linear(&mut self, mut view: View, wheel: Option<&Wheel>) -> Option<Frame<'_>> {
         self.clamp_view(&mut view);
         let json = self.render_json(&view, wheel);
         if !self.send("/render", "application/json", json.as_bytes()) || !self.read_frame_reply() {
@@ -443,12 +451,12 @@ impl Renderer {
         (json.len() < CAP).then_some(json)
     }
 
-    pub fn render_tiles(
+    fn render_tiles(
         &mut self,
         mut view: View,
         wheel: Option<&Wheel>,
         tiles: &TilesRequest<'_>,
-    ) -> Option<Frame> {
+    ) -> Option<Frame<'_>> {
         self.clamp_view(&mut view);
         let json = self.tiles_json(&view, wheel, tiles)?;
         if !self.send("/render", "application/json", &json) || !self.conn.read_head(&mut self.head)
@@ -464,13 +472,13 @@ impl Renderer {
             if !self.conn.read_body(&mut desc) {
                 return None;
             }
+            self.linear.0 = 0;
             let mut out = frame_from_head(&self.head);
-            out.tiles = Some(desc);
+            out.tiles = Some(c_text(desc));
             out.width = self.head.x_w as c_int;
             out.height = self.head.x_h as c_int;
             out.stride = self.head.x_stride as c_int;
-            out.pixels = self.fb.pixels();
-            self.linear.0 = 0;
+            out.pixels = self.pixels();
             return Some(out);
         }
         if n > 0 {
@@ -489,8 +497,8 @@ impl Renderer {
         out.width = self.head.x_w as c_int;
         out.height = self.head.x_h as c_int;
         out.stride = self.head.x_stride as c_int;
-        out.pixels = self.fb.pixels();
         self.note_linear(&out);
+        out.pixels = self.pixels();
         Some(out)
     }
 
@@ -514,7 +522,7 @@ impl Renderer {
         })
     }
 
-    pub fn xy_text(
+    fn xy_text(
         &mut self,
         path: &str,
         x: c_int,
@@ -528,6 +536,22 @@ impl Renderer {
         };
         let body = self.request(path, &json)?;
         text(&body, key)
+    }
+
+    pub fn link_at(&mut self, x: c_int, y: c_int) -> Text {
+        self.xy_text("/link", x, y, None, "href")
+    }
+
+    pub fn click(&mut self, x: c_int, y: c_int, mods: c_int) -> Text {
+        self.xy_text("/click", x, y, Some(("mods", mods)), "href")
+    }
+
+    pub fn select(&mut self, kind: c_int, x: c_int, y: c_int) -> Text {
+        self.xy_text("/select", x, y, Some(("kind", kind)), "href")
+    }
+
+    pub fn clipboard(&mut self) -> Text {
+        self.request("/clipboard", "{}").map(c_text)
     }
 
     pub fn link_cursor_at(&mut self, x: c_int, y: c_int) -> Option<(Text, Text)> {
@@ -566,9 +590,18 @@ impl Renderer {
         ))
     }
 
-    pub fn flag(&mut self, path: &str, json: &str, key: &str) -> bool {
+    fn flag(&mut self, path: &str, json: &str, key: &str) -> bool {
         self.request(path, json)
             .is_some_and(|body| long(&body, key) != 0)
+    }
+
+    pub fn scrollbar(&mut self, kind: c_int, x: c_int, y: c_int) -> bool {
+        let path = match kind {
+            0 => "/scrollbar-press",
+            1 => "/scrollbar-drag",
+            _ => "/scrollbar-release",
+        };
+        self.flag(path, &format!("{{\"x\":{x},\"y\":{y}}}"), "hit")
     }
 
     pub fn find(
@@ -612,13 +645,26 @@ impl Renderer {
         })
     }
 
-    pub fn origin_decision(&mut self, path: &str, origin: &[u8], allow: bool) -> bool {
+    fn origin_decision(&mut self, path: &str, origin: &[u8], allow: bool) -> bool {
         let json = format!(
             "{{\"origin\":\"{}\",\"allow\":{}}}",
             escaped(origin),
             c_int::from(allow)
         );
         self.request(path, &json).is_some()
+    }
+
+    pub fn resolve_camera(&mut self, origin: &[u8], allow: bool) -> bool {
+        self.origin_decision("/camera", origin, allow)
+    }
+
+    pub fn resolve_webgl(&mut self, origin: &[u8], allow: bool) -> bool {
+        self.origin_decision("/webgl", origin, allow)
+    }
+
+    pub fn set_color_scheme(&mut self, dark: bool) -> bool {
+        let json = format!("{{\"dark\":{}}}", c_int::from(dark));
+        self.request("/colorscheme", &json).is_some()
     }
 
     pub fn video_event(&mut self, token: &[u8], kind: &[u8]) -> bool {
@@ -630,13 +676,25 @@ impl Renderer {
         self.request("/video-event", &json).is_some()
     }
 
-    pub fn text_request(&mut self, path: &str, key: &str, value: Option<&[u8]>) -> Option<Vec<u8>> {
+    fn text_request(&mut self, path: &str, key: &str, value: Option<&[u8]>) -> Option<Vec<u8>> {
         let json = match value {
             Some(value) => format!("{{\"{key}\":\"{}\"}}", escaped(value)),
             None => "{}".to_owned(),
         };
         let body = self.request(path, &json)?;
         text(&body, "text")
+    }
+
+    pub fn eval(&mut self, src: &[u8]) -> Text {
+        self.text_request("/eval", "src", Some(src))
+    }
+
+    pub fn dump(&mut self, kind: &[u8]) -> Text {
+        self.text_request("/dump", "kind", Some(kind))
+    }
+
+    pub fn console_poll(&mut self) -> Text {
+        self.text_request("/console", "", None)
     }
 
     pub fn media_at(&mut self, x: c_int, y: c_int) -> Option<(Option<Vec<u8>>, c_int, c_int)> {
@@ -664,7 +722,7 @@ impl Renderer {
         ok == Some(0)
     }
 
-    pub fn print(&mut self, prefix: &[u8]) -> Option<PrintReply> {
+    pub(crate) fn print_request(&mut self, prefix: &[u8]) -> Option<PrintReply> {
         let json = format!(
             "{{\"prefix\":\"{}\",\"scale\":{RASTER_SCALE:.6}}}",
             escaped(prefix)
@@ -682,6 +740,10 @@ impl Renderer {
                 double(&body, "ml"),
             ],
         })
+    }
+
+    pub fn print(&mut self, setup: &mut PrintSetup) -> Option<PrintedPages> {
+        ffi::print(self, setup)
     }
 
     pub fn favicon(&mut self) -> Option<Favicon> {
@@ -705,6 +767,7 @@ impl Renderer {
         {
             return None;
         }
+        pixels.truncate((h.x_stride as usize) * (h.x_h as usize));
         Some(Favicon {
             width: h.x_w as c_int,
             height: h.x_h as c_int,
@@ -713,7 +776,7 @@ impl Renderer {
         })
     }
 
-    pub fn quit(&mut self) {
+    pub(crate) fn quit(&mut self) {
         self.send("/quit", "text/plain", b"");
     }
 }

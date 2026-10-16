@@ -5,7 +5,10 @@
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 
 use southstar_glib::GBoolean;
-use southstar_gtk_ffi::GtkWidget;
+use southstar_gtk_ffi::{GBytes, GtkWidget};
+use southstar_renderer_client::{Remote, Renderer};
+
+pub use southstar_renderer_client::{PrintSetup, Wheel};
 
 pub type NotifyFn = Option<
     unsafe extern "C" fn(
@@ -24,16 +27,6 @@ pub union GMutex {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct Wheel {
-    pub x: c_int,
-    pub y: c_int,
-    pub dx: c_int,
-    pub dy: c_int,
-    pub viewport: c_int,
-}
-
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TilesReq {
     pub tile_h: c_int,
@@ -42,19 +35,6 @@ pub struct TilesReq {
     pub gen_: c_int,
     pub vp_held: c_int,
     pub fill: c_int,
-    pub have: *const c_char,
-    pub hold: *const c_char,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct PrintSetup {
-    pub width: f64,
-    pub height: f64,
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
 }
 
 #[repr(C)]
@@ -145,7 +125,7 @@ pub struct Res {
     pub media_url: *mut c_char,
     pub media_is_video: c_int,
     pub media_stream: c_int,
-    pub favicon_data: *mut u8,
+    pub favicon_bytes: *mut GBytes,
     pub favicon_w: c_int,
     pub favicon_h: c_int,
     pub favicon_stride: c_int,
@@ -169,7 +149,8 @@ pub struct NsProcView {
     pub closed: GBoolean,
     pub thread: *mut c_void,
     pub queue: *mut c_void,
-    pub proc: *mut c_void,
+    pub proc: *mut Renderer,
+    pub remote: Option<Remote>,
     pub proc_lock: GMutex,
     pub renderer_path: *mut c_char,
     pub private_mode: GBoolean,
