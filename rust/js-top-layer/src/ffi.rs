@@ -18,8 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
-    fn ns_js_set_focus(js: *mut NsJs, el: *const NsNode);
     fn ns_js_set_attr_recorded_len(
         js: *mut NsJs,
         n: *mut NsNode,
@@ -39,8 +37,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
-    fn ns_node_is_focusable(el: *const NsNode) -> GBoolean;
-    fn ns_node_tabindex(el: *const NsNode, out: *mut c_int) -> GBoolean;
     fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
 }
@@ -117,11 +113,13 @@ impl Js {
     }
 
     pub fn focused(self) -> Option<Element> {
-        node(unsafe { ns_js_focused_node(self.ptr()) })
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::focused_node(self.ptr().cast()) }
     }
 
     pub fn set_focus(self, el: Option<Element>) {
-        unsafe { ns_js_set_focus(self.ptr(), Node::ptr_or_null(el)) };
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::set_focus(self.ptr().cast(), el) };
     }
 
     pub fn halted(self) -> bool {
@@ -291,12 +289,11 @@ pub(crate) fn effectively_disabled(el: Element) -> bool {
 }
 
 pub(crate) fn is_focusable(el: Element) -> bool {
-    unsafe { ns_node_is_focusable(el.as_ptr()) != 0 }
+    southstar_js_focus::is_focusable(el)
 }
 
 pub(crate) fn tabindex(el: Element) -> Option<i32> {
-    let mut value: c_int = 0;
-    (unsafe { ns_node_tabindex(el.as_ptr(), &mut value) } != 0).then_some(value)
+    southstar_js_focus::tabindex(el)
 }
 
 pub(crate) fn assigned_slot(n: Element) -> Option<Element> {

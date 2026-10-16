@@ -16,6 +16,12 @@ use southstar_js_engine::Value;
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{
+    activate_element, focus_from_pointer, focused_node, is_focusable, keyboard_activate,
+    keyboard_activates, note_pointer_input, sequential_focus_target, set_focus, set_focused_node,
+    tabindex, window_action_applied,
+};
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

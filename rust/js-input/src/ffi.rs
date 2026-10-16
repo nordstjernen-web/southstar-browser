@@ -42,20 +42,9 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_note_pointer_input(js: *mut NsJs, pointer: GBoolean);
     fn ns_js_popover_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_dialog_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
-    fn ns_js_set_focus(js: *mut NsJs, el: *const NsNode);
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
-    fn ns_js_sequential_focus_target(js: *mut NsJs, backward: GBoolean) -> *const NsNode;
-    fn ns_js_keyboard_activate(
-        js: *mut NsJs,
-        el: *const NsNode,
-        key: *const c_char,
-        keyup: GBoolean,
-    ) -> GBoolean;
     fn ns_js_process_close_request(js: *mut NsJs) -> GBoolean;
-    fn ns_node_is_focusable(el: *const NsNode) -> GBoolean;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_visual_border_box(
         b: *const NsBox,
@@ -164,7 +153,8 @@ impl Js {
     }
 
     pub fn note_pointer_input(self, pointer: bool) {
-        unsafe { ns_js_note_pointer_input(self.ptr(), glib::boolean(pointer)) };
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::note_pointer_input(self.ptr().cast(), pointer) };
     }
 
     pub fn path_has_active_listener(self, target: Element, kind: &str) -> bool {
@@ -216,21 +206,26 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Option<Element>) {
-        unsafe { ns_js_set_focus(self.ptr(), Node::ptr_or_null(el)) };
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::set_focus(self.ptr().cast(), el) };
     }
 
     pub fn focused_node(self) -> Option<Element> {
-        node(unsafe { ns_js_focused_node(self.ptr()) })
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::focused_node(self.ptr().cast()) }
     }
 
     pub fn sequential_focus_target(self, backward: bool) -> Option<Element> {
-        node(unsafe { ns_js_sequential_focus_target(self.ptr(), glib::boolean(backward)) })
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_focus::sequential_focus_target(self.ptr().cast(), backward) }
     }
 
     pub fn keyboard_activate(self, el: Element, key: &str, keyup: bool) {
-        with_c(key, |key| unsafe {
-            ns_js_keyboard_activate(self.ptr(), el.as_ptr(), key, glib::boolean(keyup))
-        });
+        let key = key.replace('\0', " ");
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe {
+            southstar_js_focus::keyboard_activate(self.ptr().cast(), el, key.as_bytes(), keyup)
+        };
     }
 
     pub fn process_close_request(self) {
@@ -260,7 +255,7 @@ pub(crate) fn realm_now_ms(scope: &Scope<'_>) -> f64 {
 }
 
 pub(crate) fn is_focusable(el: Element) -> bool {
-    unsafe { ns_node_is_focusable(el.as_ptr()) != 0 }
+    southstar_js_focus::is_focusable(el)
 }
 
 pub(crate) fn find_box(root: BoxRef<'_>, node: Element) -> Option<BoxRef<'static>> {

@@ -79,9 +79,6 @@ unsafe extern "C" {
         text: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_set_focus(js: *mut c_void, el: *const NsNode);
-    fn ns_js_focus_from_pointer(js: *mut c_void, target: *const NsNode);
-    fn ns_js_note_pointer_input(js: *mut c_void, pointer: GBoolean);
     fn ns_js_note_user_edit(js: *mut c_void, el: *const NsNode, value_before: *const c_char);
     fn ns_js_commit_change(js: *mut c_void, el: *const NsNode);
     fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
@@ -92,18 +89,8 @@ unsafe extern "C" {
     fn ns_js_select_edge(js: *mut c_void, select: *mut NsNode, last: GBoolean) -> GBoolean;
     fn ns_js_select_typeahead(js: *mut c_void, select: *mut NsNode, key: *const c_char)
     -> GBoolean;
-    fn ns_js_keyboard_activates(el: *const NsNode, key: *const c_char) -> GBoolean;
-    fn ns_js_keyboard_activate(
-        js: *mut c_void,
-        el: *const NsNode,
-        key: *const c_char,
-        keyup: GBoolean,
-    ) -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
-    fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
-    fn ns_js_activate_element(js: *mut c_void, el: *const NsNode);
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
-    fn ns_node_is_focusable(n: *const NsNode) -> GBoolean;
     fn ns_option_label_dup(option: *const NsNode) -> *mut c_char;
     fn ns_element_effectively_inert(el: *const NsNode) -> GBoolean;
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
@@ -290,11 +277,13 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Node<'_>) {
-        unsafe { ns_js_set_focus(self.raw(), el.as_ptr()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::set_focus(self.raw(), Some(el)) };
     }
 
     pub fn focus_from_pointer(self, target: Option<Node<'_>>) {
-        unsafe { ns_js_focus_from_pointer(self.raw(), Node::ptr_or_null(target)) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::focus_from_pointer(self.raw(), target) };
     }
 
     pub fn note_user_edit(self, el: Node<'_>, value_before: Option<&CStr>) {
@@ -338,9 +327,10 @@ impl Js {
     }
 
     pub fn keyboard_activate(self, el: Node<'_>, key: Option<&CStr>, keyup: bool) -> bool {
-        unsafe {
-            ns_js_keyboard_activate(self.raw(), el.as_ptr(), opt(key), glib::boolean(keyup)) != 0
-        }
+        key.is_some_and(|key| {
+            // SAFETY: a Js handle names the page's live script engine.
+            unsafe { southstar_js_focus::keyboard_activate(self.raw(), el, key.to_bytes(), keyup) }
+        })
     }
 
     pub fn process_close_request(self) -> bool {
@@ -348,16 +338,13 @@ impl Js {
     }
 
     pub fn sequential_focus_target<'a>(self, backward: bool) -> Option<Node<'a>> {
-        unsafe {
-            Node::from_ptr(ns_js_sequential_focus_target(
-                self.raw(),
-                glib::boolean(backward),
-            ))
-        }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::sequential_focus_target(self.raw(), backward) }
     }
 
     pub fn activate_element(self, el: Node<'_>) {
-        unsafe { ns_js_activate_element(self.raw(), el.as_ptr()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::activate_element(self.raw(), el) };
     }
 
     pub fn node_has_click_handler(self, node: Node<'_>) -> bool {
@@ -370,13 +357,12 @@ impl Js {
 }
 
 pub fn note_pointer_input(js: Option<Js>, pointer: bool) {
-    unsafe {
-        ns_js_note_pointer_input(js.map_or(ptr::null_mut(), Js::raw), glib::boolean(pointer))
-    };
+    // SAFETY: the page passes null or its live script engine.
+    unsafe { southstar_js_focus::note_pointer_input(js.map_or(ptr::null_mut(), Js::raw), pointer) };
 }
 
 pub fn keyboard_activates(el: Node<'_>, key: Option<&CStr>) -> bool {
-    unsafe { ns_js_keyboard_activates(el.as_ptr(), opt(key)) != 0 }
+    key.is_some_and(|key| southstar_js_focus::keyboard_activates(el, key.to_bytes()))
 }
 
 pub fn hit_link(layout: BoxRef<'_>, x: f64, y: f64) -> Option<&CStr> {
@@ -434,9 +420,7 @@ pub fn is_editable(n: Option<Node<'_>>) -> bool {
     n.is_some_and(southstar_dom::controls::is_editable)
 }
 
-pub fn is_focusable(n: Node<'_>) -> bool {
-    unsafe { ns_node_is_focusable(n.as_ptr()) != 0 }
-}
+pub use southstar_js_focus::is_focusable;
 
 pub fn set_editable_value(n: Node<'_>, value: &CStr) {
     southstar_dom::controls::set_editable_value(n, value);

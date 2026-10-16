@@ -14,10 +14,8 @@ use super::engine::{Anim, Images};
 use super::glib::{GString, StrBufOwned};
 
 unsafe extern "C" {
-    fn ns_js_focused_node(js: *const c_void) -> *const NsNode;
     pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
     fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
-    fn ns_js_window_action_applied(js: *mut c_void);
     fn ns_js_dump_stats(js: *mut c_void, out: *mut GString);
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
@@ -69,7 +67,8 @@ impl Js {
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
-        unsafe { Node::from_ptr(ns_js_focused_node(self.raw())) }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::focused_node(self.raw()) }
     }
 
     pub fn fire_media_load_events(self, layout: BoxRef<'_>) {
@@ -135,7 +134,8 @@ impl Js {
     }
 
     pub fn window_action_applied(self) {
-        unsafe { ns_js_window_action_applied(self.raw()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_focus::window_action_applied(self.raw()) };
     }
 
     pub fn dump_stats(self, out: &StrBufOwned) {

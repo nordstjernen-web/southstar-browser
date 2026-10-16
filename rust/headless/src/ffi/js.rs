@@ -90,8 +90,6 @@ unsafe extern "C" {
     fn ns_js_consume_mutated(js: *mut c_void) -> GBoolean;
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
-    fn ns_js_focused_node(js: *const c_void) -> *const NsNode;
-    fn ns_js_set_focused_node(js: *mut c_void, el: *const NsNode);
     fn ns_js_dispatch_event(
         js: *mut c_void,
         target: *const NsNode,
@@ -157,8 +155,6 @@ unsafe extern "C" {
     fn ns_js_drag_session_set_data(session: *mut c_void, kind: *const c_char, data: *const c_char);
     fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
-    fn ns_js_note_pointer_input(js: *mut c_void, pointer: GBoolean);
-    fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
 
@@ -292,7 +288,8 @@ pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<GStr> {
 }
 
 pub fn note_pointer_input(js: Option<Js>, pointer: bool) {
-    unsafe { ns_js_note_pointer_input(js_raw(js), glib::boolean(pointer)) };
+    // SAFETY: js_raw gives null or the run's live script engine.
+    unsafe { southstar_js_focus::note_pointer_input(js_raw(js), pointer) };
 }
 
 pub fn note_viewport_scroll(js: Option<Js>, x: f64, y: f64) {
@@ -359,11 +356,13 @@ impl Js {
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
-        unsafe { Node::from_ptr(ns_js_focused_node(self.raw())) }
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_focus::focused_node(self.raw()) }
     }
 
     pub fn set_focused_node(self, el: Node) {
-        unsafe { ns_js_set_focused_node(self.raw(), el.as_ptr()) };
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_focus::set_focused_node(self.raw(), Some(el)) };
     }
 
     pub fn dispatch(self, target: Node, kind: &CStr) {
@@ -466,7 +465,8 @@ impl Js {
     }
 
     pub fn sequential_focus_target<'a>(self) -> Option<Node<'a>> {
-        unsafe { Node::from_ptr(ns_js_sequential_focus_target(self.raw(), glib::FALSE)) }
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_focus::sequential_focus_target(self.raw(), false) }
     }
 
     pub fn dispatch_anim_events(self, anim: Anim) {

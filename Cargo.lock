@@ -1749,6 +1749,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-html-util",
  "southstar-image",
+ "southstar-js-focus",
  "southstar-js-lifecycle",
  "southstar-js-runtime",
  "southstar-js-window",
@@ -2096,6 +2097,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-html-util",
  "southstar-image",
+ "southstar-js-focus",
  "southstar-js-lifecycle",
  "southstar-js-window",
  "southstar-layout",
@@ -2473,6 +2475,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-focus",
  "southstar-js-runtime",
  "southstar-layout",
 ]
@@ -2733,6 +2736,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-focus",
  "southstar-js-runtime",
 ]
 
