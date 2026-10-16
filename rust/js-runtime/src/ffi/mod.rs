@@ -767,13 +767,6 @@ pub unsafe extern "C" fn ns_worker_js_new(realm: *const WorkerRealm) -> *mut NsJ
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_release_pinned_wrappers(js: *mut NsJs) {
-    if !js.is_null() {
-        teardown::release_pinned_wrappers(Js(js));
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_free(js: *mut NsJs) {
     if !js.is_null() {
         teardown::free(Js(js));

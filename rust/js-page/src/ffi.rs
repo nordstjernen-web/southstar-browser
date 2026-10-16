@@ -4,17 +4,16 @@
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
 use southstar_js_engine::{ContextHandle, MemoryUsage, NativeFn, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, run, stats};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[repr(C)]
 pub(crate) struct GString {
@@ -104,7 +103,7 @@ pub(crate) enum Native {
 impl Native {
     fn function(self) -> NativeFn {
         match self {
-            Native::IllegalConstructor => nsr_illegal_constructor,
+            Native::IllegalConstructor => api::illegal_constructor,
             Native::EventConstructor => nsr_window_event_ctor,
             Native::FontFaceConstructor => nsr_window_fontface_ctor,
             Native::XmlSerializerConstructor => nsr_xml_serializer_ctor,
@@ -157,27 +156,9 @@ pub(crate) enum ValueInstaller {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_set_current_url(js: *mut NsJs, url: *const c_char);
-    fn ns_js_set_document(js: *mut NsJs, doc: *mut NsNode, origin: *mut c_char);
     fn ns_js_brand_node_classes(ctx: ContextHandle);
-    fn ns_js_release_pinned_wrappers(js: *mut NsJs);
-    fn ns_js_free_frame_contexts(js: *mut NsJs);
-    fn ns_js_frame_context_count(js: *const NsJs) -> c_uint;
-    fn ns_js_eval_polyfills(js: *mut NsJs);
     fn ns_js_link_interfaces(ctx: ContextHandle);
-    fn ns_js_snapshot_platform_globals(js: *mut NsJs);
-    fn ns_js_clear_doc_ready_states(js: *mut NsJs);
-    fn ns_js_set_ready_state(js: *mut NsJs, state: c_int);
-    fn ns_js_early_inject_src(js: *const NsJs) -> *const c_char;
     fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const c_char);
-    fn ns_js_drop_message_tasks(js: *mut NsJs);
-    fn ns_storage_load_for(js: *mut NsJs, new_url: *const c_char);
-    fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_js_profile_enabled() -> GBoolean;
     fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
 
@@ -260,13 +241,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_illegal_constructor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    unsafe fn nsr_new_document_object(js: *mut NsJs, scope: &mut Scope<'_>)
-    -> Result<Value, Value>;
     safe fn nsr_window_event_ctor(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -341,53 +315,42 @@ pub(crate) struct Js(*mut NsJs);
 
 impl Js {
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        unsafe { ns_js_main_context(self.0) }.non_null()?.with(f)
+        api::main_context(self.0).non_null()?.with(f)
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.0) != 0 }
+        api::halted(self.0)
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.0) != 0 }
+        api::in_pump(self.0)
     }
 
-    pub fn current_url(self) -> *const c_char {
-        unsafe { ns_js_current_url(self.0) }
-    }
-
-    pub fn current_url_text(self) -> &'static CStr {
-        let url = self.current_url();
-        if url.is_null() {
-            c""
-        } else {
-            unsafe { CStr::from_ptr(url) }
-        }
+    pub fn current_url_text(self) -> CString {
+        api::current_url(self.0)
     }
 
     pub fn current_document(self) -> *const NsNode {
-        unsafe { ns_js_current_document(self.0) }
+        Node::ptr_or_null(api::current_document(self.0))
     }
 
     pub fn set_document(self, doc: Option<Element>, url: &CStr) {
         let origin = if url.is_empty() {
-            ptr::null_mut()
+            None
         } else {
-            southstar_url::bytes::origin_from(url.to_bytes())
-                .map_or(ptr::null_mut(), |origin| glib::strdup(&origin))
+            southstar_url::bytes::origin_from(url.to_bytes()).map(|mut origin| {
+                origin.truncate(origin.iter().position(|&b| b == 0).unwrap_or(origin.len()));
+                CString::new(origin).unwrap_or_default()
+            })
         };
-        unsafe {
-            ns_js_set_document(self.0, Node::ptr_or_null(doc).cast_mut(), origin);
-            ns_dom_set_active_modal(ptr::null());
-            ns_js_set_current_url(self.0, url.as_ptr());
-        }
+        api::set_document(self.0, doc, origin.as_deref());
+        unsafe { ns_dom_set_active_modal(ptr::null()) };
+        api::set_current_url(self.0, Some(url));
     }
 
     pub fn load_storage_and_cookies(self) {
-        unsafe {
-            ns_storage_load_for(self.0, self.current_url());
-            ns_js_seed_cookies_from_jar(self.0);
-        }
+        api::storage_load_for(self.0, Some(&api::current_url(self.0)));
+        unsafe { ns_js_seed_cookies_from_jar(self.0) };
     }
 
     pub fn reset_page_state(self) {
@@ -406,7 +369,7 @@ impl Js {
             ns_js_cancel_async_scripts(self.0);
             ns_attr_detach_all(self.0);
             ns_attribute_maps_release_all(self.0);
-            ns_js_release_pinned_wrappers(self.0);
+            api::release_pinned_wrappers(self.0);
             ns_observers_reset(self.0);
             ns_perf_reset_observers(self.0);
         }
@@ -428,19 +391,19 @@ impl Js {
         unsafe {
             ns_js_frames_reset(self.0);
             ns_window_links_clear(self.0, glib::FALSE);
-            ns_js_drop_message_tasks(self.0);
+            api::drop_message_tasks(self.0);
             ns_js_clear_frame_clocks(self.0, glib::FALSE);
             ns_js_drop_pending_rejections(self.0);
-            ns_js_free_frame_contexts(self.0);
         }
+        api::free_frame_contexts(self.0);
     }
 
     pub fn drain_microtasks(self) {
-        unsafe { ns_drain_microtasks(self.0) };
+        api::drain_microtasks(self.0);
     }
 
     pub fn eval_polyfills(self) {
-        unsafe { ns_js_eval_polyfills(self.0) };
+        api::eval_polyfills(self.0);
     }
 
     pub fn eval_source(self, source: &CStr, origin: &CStr) {
@@ -448,24 +411,23 @@ impl Js {
         unsafe { glib::g_free(result.cast()) };
     }
 
-    pub fn early_inject_src(self) -> Option<&'static CStr> {
-        let src = unsafe { ns_js_early_inject_src(self.0) };
-        (!src.is_null()).then(|| unsafe { CStr::from_ptr(src) })
+    pub fn early_inject_src(self) -> Option<CString> {
+        api::early_inject_src(self.0)
     }
 
     pub fn new_document_object(self, scope: &mut Scope<'_>) -> Value {
-        unsafe { nsr_new_document_object(self.0, scope) }.unwrap_or_else(|_| Value::undefined())
+        api::new_document_object(self.0, scope).unwrap_or_else(|_| Value::undefined())
     }
 
     pub fn snapshot_platform_globals(self) {
-        unsafe { ns_js_snapshot_platform_globals(self.0) };
+        api::snapshot_platform_globals(self.0);
     }
 
     pub fn clear_lifecycle(self) {
+        unsafe { ns_js_lifecycle_clear(self.0) };
+        api::set_ready_state(self.0, 0);
+        api::clear_doc_ready_states(self.0);
         unsafe {
-            ns_js_lifecycle_clear(self.0);
-            ns_js_set_ready_state(self.0, 0);
-            ns_js_clear_doc_ready_states(self.0);
             ns_js_frames_clear_initial_blank(self.0);
             ns_js_mark_navigation(self.0, c"domLoading".as_ptr());
         }
@@ -542,7 +504,7 @@ impl Js {
     }
 
     pub fn frame_context_count(self) -> u32 {
-        unsafe { ns_js_frame_context_count(self.0) }
+        api::frame_context_count(self.0)
     }
 
     pub fn event_loop_counts(self) -> [u32; 6] {

@@ -132,7 +132,7 @@ impl TimerScope {
     }
 }
 
-pub(crate) fn finish_timer(scope: &mut scopes::TimerScope, exception: Option<Value>) {
+fn finish_timer(scope: &mut scopes::TimerScope, exception: Option<Value>) {
     let js = scope.js();
     let ctx = scope.ctx();
     scheduling::add_depth(&js.st().callback_depth, -1);

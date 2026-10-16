@@ -53,7 +53,7 @@ fn run_early_injected(js: Js) {
         }
     }
     if let Some(source) = js.early_inject_src().filter(|src| !src.is_empty()) {
-        js.eval_source(source, c"early-inject");
+        js.eval_source(&source, c"early-inject");
     }
 }
 

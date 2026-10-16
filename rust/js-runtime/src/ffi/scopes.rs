@@ -397,22 +397,6 @@ pub(crate) fn in_dispatch<R>(
     result
 }
 
-pub(crate) unsafe fn dispatch_scope_enter(
-    js: Js,
-    ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
-    buf: *mut c_void,
-) {
-    let scope = buf.cast::<DispatchScope>();
-    unsafe { scope.write(DispatchScope::inactive()) };
-    dispatch_enter(js, ctx, doc, frame, unsafe { &mut *scope });
-}
-
-pub(crate) unsafe fn dispatch_scope_leave(js: Js, buf: *mut c_void) {
-    dispatch_leave(js, unsafe { &mut *buf.cast::<DispatchScope>() });
-}
-
 pub(crate) fn frame_load_begin(
     js: Js,
     frame: *mut NsNode,
@@ -472,10 +456,6 @@ pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameU
     Some(token)
 }
 
-pub(crate) fn timer_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
-    Box::into_raw(timer_scope_begin(js, ctx, frame)).cast()
-}
-
 pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> Box<TimerScope> {
     let previous_ctx = js.ctx();
     let mut ctx = if ctx.is_null() { previous_ctx } else { ctx };
@@ -503,14 +483,6 @@ pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) 
     scope
 }
 
-pub(crate) unsafe fn timer_scope_context(scope: *const c_void) -> ContextHandle {
-    unsafe { (*scope.cast::<TimerScope>()).ctx }
-}
-
-pub(crate) unsafe fn timer_scope_take(scope: *mut c_void) -> Box<TimerScope> {
-    unsafe { Box::from_raw(scope.cast::<TimerScope>()) }
-}
-
 impl TimerScope {
     pub fn js(&self) -> Js {
         self.js
@@ -532,10 +504,6 @@ impl TimerScope {
             js.set_ctx(self.previous_ctx);
         }
     }
-}
-
-pub(crate) fn raf_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {
-    raf_scope_begin(js, ctx, frame).map_or(ptr::null_mut(), |scope| Box::into_raw(scope).cast())
 }
 
 pub(crate) fn raf_scope_begin(
@@ -579,15 +547,6 @@ pub(crate) fn raf_scope_begin(
         .eval_deadline_us
         .set(super::monotonic_us() + budget::eval_budget_us());
     Some(scope)
-}
-
-pub(crate) unsafe fn raf_scope_js(scope: *const c_void) -> Js {
-    unsafe { (*scope.cast::<RafScope>()).js }
-}
-
-pub(crate) unsafe fn raf_scope_finish(scope: *mut c_void) {
-    let mut scope = unsafe { Box::from_raw(scope.cast::<RafScope>()) };
-    raf_scope_end(&mut scope);
 }
 
 impl RafScope {

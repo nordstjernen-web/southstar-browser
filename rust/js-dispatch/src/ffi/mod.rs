@@ -5,7 +5,7 @@
 mod exports;
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 use std::borrow::Cow;
 
@@ -16,10 +16,7 @@ use southstar_js_runtime::api;
 
 use crate::{Element, get, set};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -31,55 +28,14 @@ pub(crate) struct CheckableState {
     checked_radio: *mut NsNode,
 }
 
-#[repr(C, align(16))]
-struct ScopeBuffer([u8; 128]);
-
-impl ScopeBuffer {
-    fn new() -> ScopeBuffer {
-        ScopeBuffer([0; 128])
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut c_void {
-        self.0.as_mut_ptr().cast()
-    }
-}
-
 const DLOG_ERROR: c_uint = 2;
 
 unsafe extern "C" {
-    fn ns_js_note_user_activation(js: *mut NsJs);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_net_page_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean;
-    fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_frame_context(js: *mut NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_iframe_is_cross_origin(js: *mut NsJs, frame: *const NsNode) -> GBoolean;
-    fn ns_js_set_realm(js: *mut NsJs, ctx: ContextHandle, doc: *const NsNode);
-    fn ns_js_dispatch_scope_enter(
-        js: *mut NsJs,
-        ctx: ContextHandle,
-        doc: *const NsNode,
-        frame: *const NsNode,
-        buf: *mut c_void,
-    );
-    fn ns_js_dispatch_scope_leave(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_realm_scope_push(js: *mut NsJs, realm: ContextHandle, buf: *mut c_void);
-    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_dispatch_depth_add(js: *mut NsJs, delta: c_int);
-    fn ns_js_microtask_checkpoint(js: *mut NsJs);
-    fn ns_js_dispatch_finish(js: *mut NsJs);
-    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
-    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
     fn ns_window_named_suspend();
     fn ns_window_named_resume();
-    fn ns_node_arm_js_invalidate(n: *mut NsNode);
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -128,10 +84,7 @@ impl Js {
     }
 
     pub fn ctx(self) -> ContextHandle {
-        if self.is_null() {
-            return ContextHandle::NULL;
-        }
-        unsafe { ns_js_main_context(self.ptr()) }
+        api::main_context(self.ptr())
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -139,42 +92,43 @@ impl Js {
     }
 
     pub fn main_realm(self) -> ContextHandle {
-        unsafe { ns_js_main_realm(self.ptr()) }
+        api::main_realm(self.ptr())
     }
 
     pub fn current_document(self) -> Option<Element> {
-        node(unsafe { ns_js_current_document(self.ptr()) })
+        api::current_document(self.ptr())
     }
 
     pub fn log_enabled(self) -> bool {
-        unsafe { ns_js_log_enabled(self.ptr()) != 0 }
+        api::log_enabled(self.ptr())
     }
 
     pub fn log(self, line: &str) {
         if !self.log_enabled() {
             return;
         }
-        with_c(line, |line| unsafe { ns_js_log_line(self.ptr(), line) });
+        let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();
+        api::log_line(self.ptr(), &line);
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.ptr()) != 0 }
+        api::halted(self.ptr())
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.ptr()) != 0 }
+        api::in_pump(self.ptr())
     }
 
     pub fn current_url(self) -> Option<String> {
-        opt_text(unsafe { ns_js_net_page_url(self.ptr()) }).map(Cow::into_owned)
+        api::page_url(self.ptr()).map(|url| url.to_string_lossy().into_owned())
     }
 
     pub fn inline_handlers_allowed(self) -> bool {
-        unsafe { ns_js_inline_handlers_allowed(self.ptr()) != 0 }
+        api::inline_handlers_allowed(self.ptr())
     }
 
     pub fn is_worker(self) -> bool {
-        unsafe { ns_js_is_worker(self.ptr()) != 0 }
+        api::is_worker(self.ptr())
     }
 
     pub fn realm_for_node(self, node: Element) -> ContextHandle {
@@ -194,7 +148,7 @@ impl Js {
     }
 
     pub fn set_realm(self, ctx: ContextHandle, doc: Option<Element>) {
-        unsafe { ns_js_set_realm(self.ptr(), ctx, Node::ptr_or_null(doc)) };
+        api::set_realm(self.ptr(), ctx, doc);
     }
 
     pub fn in_dispatch_scope<R>(
@@ -203,47 +157,31 @@ impl Js {
         frame: Option<(Element, Element)>,
         f: impl FnOnce() -> R,
     ) -> R {
-        let mut buffer = ScopeBuffer::new();
-        let (doc, frame) = frame.map_or((ptr::null(), ptr::null()), |(doc, frame)| {
-            (doc.as_ptr(), frame.as_ptr())
-        });
-        unsafe { ns_js_dispatch_scope_enter(self.ptr(), ctx, doc, frame, buffer.as_mut_ptr()) };
-        let result = f();
-        unsafe { ns_js_dispatch_scope_leave(self.ptr(), buffer.as_mut_ptr()) };
-        result
+        api::in_dispatch_scope(self.ptr(), ctx, frame, f)
     }
 
     pub fn in_realm_scope<R>(self, realm: ContextHandle, f: impl FnOnce() -> R) -> R {
-        if self.is_null() {
-            return f();
-        }
-        let mut buffer = ScopeBuffer::new();
-        unsafe { ns_js_realm_scope_push(self.ptr(), realm, buffer.as_mut_ptr()) };
-        let result = f();
-        unsafe { ns_js_realm_scope_pop(self.ptr(), buffer.as_mut_ptr()) };
-        result
+        api::in_realm(self.ptr(), realm, f)
     }
 
     pub fn dispatch_depth_add(self, delta: i32) {
-        unsafe { ns_js_dispatch_depth_add(self.ptr(), delta) };
+        api::dispatch_depth_add(self.ptr(), delta);
     }
 
     pub fn microtask_checkpoint(self) {
-        if !self.is_null() {
-            unsafe { ns_js_microtask_checkpoint(self.ptr()) };
-        }
+        api::microtask_checkpoint(self.ptr());
     }
 
     pub fn finish_dispatch(self) {
-        unsafe { ns_js_dispatch_finish(self.ptr()) };
+        api::dispatch_finish(self.ptr());
     }
 
     pub fn budget_enter(self) -> i64 {
-        unsafe { ns_js_budget_enter(self.ptr()) }
+        api::budget_enter(self.ptr())
     }
 
     pub fn budget_leave(self, saved: i64) {
-        unsafe { ns_js_budget_leave(self.ptr(), saved) };
+        api::budget_leave(self.ptr(), saved);
     }
 
     pub fn console_emit(self, scope: &mut Scope<'_>, prefix: &str, value: &Value) {
@@ -283,7 +221,7 @@ impl Js {
     }
 
     pub fn note_user_activation(self) {
-        unsafe { ns_js_note_user_activation(self.ptr()) };
+        api::note_user_activation(self.ptr());
     }
 
     pub fn synthetic_activation(self, act: Element, target: Element) {
@@ -407,7 +345,7 @@ pub(crate) fn suspend_named<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub(crate) fn arm_invalidate(el: Element) {
-    unsafe { ns_node_arm_js_invalidate(el.as_mut_ptr()) };
+    api::arm_js_invalidate(el);
 }
 
 pub(crate) fn first_element(root: Element, tag: &CStr) -> Option<Element> {

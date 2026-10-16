@@ -5,29 +5,23 @@
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::{self, TimerGate};
 
 use crate::screen::{self, Metrics};
 use crate::{
     caches, camera, clipboard_item, commands, console, media, navigator, rtc, timers, window,
 };
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct TimerScope {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Realm(ContextHandle);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Frame(*const c_void);
+pub(crate) struct Frame(Option<Node<'static>>);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Source(c_uint);
@@ -51,25 +45,12 @@ struct TimerTag {
     id: i32,
 }
 
-const TIMER_WAIT: c_int = 1;
-const TIMER_DROP: c_int = 2;
 const G_PRIORITY_DEFAULT: c_int = 0;
 
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_js_due_timers_allowed(js: *const NsJs) -> GBoolean;
-    fn ns_js_timer_gate(js: *const NsJs, frame: *const c_void, idle_expired: GBoolean) -> c_int;
-    fn ns_js_timer_scope_enter(
-        js: *const NsJs,
-        ctx: ContextHandle,
-        frame: *const c_void,
-    ) -> *mut TimerScope;
-    fn ns_js_timer_scope_context(scope: *const TimerScope) -> ContextHandle;
-    fn ns_js_context_frame(js: *const NsJs, ctx: ContextHandle) -> *const c_void;
     fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64;
-    fn ns_js_source_remove(js: *const NsJs, id: c_uint);
-    fn ns_js_glib_context(js: *const NsJs) -> *mut c_void;
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
     fn g_source_set_callback(
@@ -98,11 +79,11 @@ pub(crate) fn realm_of(scope: &Scope<'_>) -> Realm {
 }
 
 pub(crate) fn context_frame(scope: &Scope<'_>, js: Js) -> Frame {
-    Frame(unsafe { ns_js_context_frame(js.0, scope.handle()) })
+    Frame(api::context_frame(js.0, scope.handle()))
 }
 
 pub(crate) fn this_is_detached_window(scope: &mut Scope<'_>, js: Js, this: &Value) -> bool {
-    unsafe { nsr_this_is_detached_window(js.0.cast_mut(), scope, this) }
+    api::this_is_detached_window(js.0, scope, this)
 }
 
 pub(crate) fn idle_frame_end(js: Js, now: i64, end: i64) -> i64 {
@@ -110,14 +91,14 @@ pub(crate) fn idle_frame_end(js: Js, now: i64, end: i64) -> i64 {
 }
 
 pub(crate) fn due_timers_allowed(js: Js) -> bool {
-    unsafe { ns_js_due_timers_allowed(js.0) != 0 }
+    api::due_timers_allowed(js.0)
 }
 
 pub(crate) fn timer_gate(js: Js, frame: Frame, idle_expired: bool) -> Gate {
-    match unsafe { ns_js_timer_gate(js.0, frame.0, glib::boolean(idle_expired)) } {
-        TIMER_WAIT => Gate::Wait,
-        TIMER_DROP => Gate::Drop,
-        _ => Gate::Run,
+    match api::timer_gate(js.0, frame.0, idle_expired) {
+        TimerGate::Wait => Gate::Wait,
+        TimerGate::Drop => Gate::Drop,
+        TimerGate::Run => Gate::Run,
     }
 }
 
@@ -127,10 +108,14 @@ pub(crate) fn in_timer_scope(
     frame: Frame,
     f: impl FnOnce(&mut Scope<'_>) -> Result<Value, Value>,
 ) {
-    let timer_scope = unsafe { ns_js_timer_scope_enter(js.0, realm.0, frame.0) };
-    let ctx = unsafe { ns_js_timer_scope_context(timer_scope) };
-    let result = ctx.with(f).unwrap_or_else(|| Ok(Value::undefined()));
-    unsafe { nsr_timer_scope_leave(timer_scope.cast(), result.err()) };
+    let Some(timer_scope) = api::enter_timer_scope(js.0, realm.0, frame.0) else {
+        return;
+    };
+    let result = timer_scope
+        .context()
+        .with(f)
+        .unwrap_or_else(|| Ok(Value::undefined()));
+    timer_scope.leave(result.err());
 }
 
 unsafe extern "C" fn timer_source_fired(data: *mut c_void) -> GBoolean {
@@ -156,7 +141,7 @@ pub(crate) fn attach_timeout(js: Js, ms: u32, id: i32) -> Source {
             timer_tag(js, id),
             Some(timer_tag_free),
         );
-        let attached = g_source_attach(source, ns_js_glib_context(js.0));
+        let attached = g_source_attach(source, api::glib_context(js.0));
         g_source_unref(source);
         Source(attached)
     }
@@ -176,7 +161,7 @@ pub(crate) fn attach_default_timeout(ms: u32, js: Js, id: i32) -> Source {
 
 pub(crate) fn source_remove(js: Js, source: Source) {
     if !source.is_none() {
-        unsafe { ns_js_source_remove(js.0, source.0) };
+        api::source_remove(js.0, source.0);
     }
 }
 
@@ -295,12 +280,6 @@ pub(crate) enum CMethod {
 }
 
 unsafe extern "C" {
-    fn ns_js_user_activation_state(js: *const NsJs, ever: *mut GBoolean) -> GBoolean;
-    fn ns_js_clipboard_write(js: *const NsJs, text: *const c_char) -> c_int;
-    fn ns_js_selection_copyable(js: *const NsJs) -> GBoolean;
-    fn ns_js_copy_selection(js: *const NsJs) -> GBoolean;
-    fn ns_js_has_selection_commands(js: *const NsJs) -> GBoolean;
-    fn ns_js_selection_command(js: *const NsJs, cmd: *const c_char) -> GBoolean;
     fn ns_net_navigator_languages() -> *mut *mut c_char;
     fn ns_net_navigator_platform() -> *const c_char;
     fn ns_net_ua_hint_platform() -> *const c_char;
@@ -308,19 +287,9 @@ unsafe extern "C" {
     fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
     fn ns_user_agent_has_client_hints(user_agent: *const c_char) -> GBoolean;
     fn g_get_num_processors() -> c_uint;
-    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_log_line(js: *const NsJs, line: *const c_char);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
 }
 
 unsafe extern "Rust" {
-    unsafe fn nsr_timer_scope_leave(token: *mut c_void, exception: Option<Value>);
-    unsafe fn nsr_this_is_detached_window(
-        js: *mut NsJs,
-        scope: &mut Scope<'_>,
-        this: &Value,
-    ) -> bool;
-    safe fn nsr_bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value);
     #[allow(non_snake_case)]
     safe fn nsr_target_dispatchEvent(
         scope: &mut Scope<'_>,
@@ -359,22 +328,15 @@ fn c_string(text: &str) -> CString {
 }
 
 pub(crate) fn log_enabled(js: Js) -> bool {
-    !js.is_null() && unsafe { ns_js_log_enabled(js.0) } != 0
+    api::log_enabled(js.0)
 }
 
 pub(crate) fn log_line(js: Js, line: &str) {
-    if js.is_null() {
-        return;
-    }
-    let line = c_string(line);
-    unsafe { ns_js_log_line(js.0, line.as_ptr()) };
+    api::log_line(js.0, &c_string(line));
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    if js.is_null() {
-        return None;
-    }
-    unsafe { ns_js_main_context(js.0) }.non_null()?.with(f)
+    api::main_context(js.0).non_null()?.with(f)
 }
 
 pub(crate) fn fire_event(scope: &mut Scope<'_>, target: &Value, kind: &str) {
@@ -468,7 +430,7 @@ pub(crate) fn text(p: *const c_char) -> String {
 }
 
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
-    nsr_bind_event_target_listeners(scope, object);
+    api::bind_event_target_listeners(scope, object);
 }
 
 pub(crate) fn c_method(scope: &mut Scope<'_>, name: &str, arity: u32, method: CMethod) -> Value {
@@ -482,39 +444,28 @@ pub(crate) fn c_method(scope: &mut Scope<'_>, name: &str, arity: u32, method: CM
 }
 
 pub(crate) fn user_activation(js: Js) -> (bool, bool) {
-    if js.0.is_null() {
-        return (false, false);
-    }
-    let mut ever = glib::FALSE;
-    let transient = unsafe { ns_js_user_activation_state(js.0, &mut ever) };
-    (transient != 0, ever != 0)
+    api::user_activation_state(js.0)
 }
 
 pub(crate) fn clipboard_write(js: Js, text: &str) -> Option<bool> {
-    if js.0.is_null() {
-        return None;
-    }
     let text = CString::new(text.replace('\0', "")).unwrap_or_default();
-    match unsafe { ns_js_clipboard_write(js.0, text.as_ptr()) } {
-        status if status < 0 => None,
-        status => Some(status != 0),
-    }
+    api::clipboard_write(js.0, &text)
 }
 
 pub(crate) fn selection_copyable(js: Js) -> bool {
-    unsafe { ns_js_selection_copyable(js.0) != 0 }
+    api::selection_copyable(js.0)
 }
 
 pub(crate) fn copy_selection(js: Js) -> bool {
-    unsafe { ns_js_copy_selection(js.0) != 0 }
+    api::copy_selection(js.0)
 }
 
 pub(crate) fn has_selection_commands(js: Js) -> bool {
-    unsafe { ns_js_has_selection_commands(js.0) != 0 }
+    api::has_selection_commands(js.0)
 }
 
 pub(crate) fn selection_command(js: Js, cmd: &core::ffi::CStr) -> bool {
-    unsafe { ns_js_selection_command(js.0, cmd.as_ptr()) != 0 }
+    api::selection_command(js.0, cmd)
 }
 
 pub(crate) fn languages() -> Vec<String> {
@@ -712,8 +663,8 @@ pub unsafe extern "C" fn ns_services_timer_count(js: *const NsJs) -> c_uint {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_services_purge_frame_timers(js: *const NsJs, frame: *const c_void) {
-    if !frame.is_null() {
-        timers::purge_frame(Js(js), Frame(frame));
+    if let Some(frame) = unsafe { Node::from_ptr(frame.cast()) } {
+        timers::purge_frame(Js(js), Frame(Some(frame)));
     }
 }
 

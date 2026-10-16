@@ -48,7 +48,7 @@ pub(crate) fn install_document(js: Js, doc: Option<Element>, base_url: Option<&C
 
 fn install_globals(js: Js, scope: &mut Scope<'_>) {
     let global = scope.global();
-    let url_owned = js.current_url_text().to_owned();
+    let url_owned = js.current_url_text();
     let url_bytes = url_owned.as_c_str();
     let url = String::from_utf8_lossy(url_bytes.to_bytes()).into_owned();
     let document = js.new_document_object(scope);

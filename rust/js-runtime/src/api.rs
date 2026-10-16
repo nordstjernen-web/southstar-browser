@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -149,12 +148,7 @@ pub fn queue_message_task(scope: &mut Scope<'_>, f: TaskFn, args: &[Value]) -> R
     Ok(())
 }
 
-pub unsafe fn timer_scope_leave(token: *mut c_void, exception: Option<Value>) {
-    let mut scope = unsafe { scopes::timer_scope_take(token) };
-    enter::finish_timer(&mut scope, exception);
-}
-
-pub fn this_is_detached_window(js: *mut NsJs, scope: &mut Scope<'_>, this: &Value) -> bool {
+pub fn this_is_detached_window(js: *const NsJs, scope: &mut Scope<'_>, this: &Value) -> bool {
     let Some(js) = Js::of(js) else {
         return false;
     };
@@ -173,7 +167,7 @@ pub fn this_is_detached_window(js: *mut NsJs, scope: &mut Scope<'_>, this: &Valu
 }
 
 pub fn call_observer(
-    js: *mut NsJs,
+    js: *const NsJs,
     ctx: ContextHandle,
     cb: &Value,
     this: &Value,
@@ -199,7 +193,7 @@ pub fn call_observer(
     result
 }
 
-pub fn dispatch_document_window_event(js: *mut NsJs, kind: &str, event: Value) {
+pub fn dispatch_document_window_event(js: *const NsJs, kind: &str, event: Value) {
     let Some(js) = Js::of(js) else {
         return;
     };
@@ -302,7 +296,7 @@ pub fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     wrapper::unwrap(value)
 }
 
-pub fn new_document_object(js: *mut NsJs, scope: &mut Scope<'_>) -> Result<Value, Value> {
+pub fn new_document_object(js: *const NsJs, scope: &mut Scope<'_>) -> Result<Value, Value> {
     match Js::of(js) {
         Some(page) => wrapper::new_document_object(page, scope),
         None => Ok(Value::undefined()),

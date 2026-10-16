@@ -13,6 +13,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-url = { path = "../url" }
 
 [lints]

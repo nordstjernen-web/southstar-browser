@@ -14,15 +14,7 @@ use southstar_layout::{BoxRef, NsBox};
 
 use crate::{events, frames, lifecycle, scrollend};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct RafScope {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);
@@ -41,35 +33,35 @@ impl Js {
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.0) != 0 }
+        api::halted(self.0)
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.0) != 0 }
+        api::in_pump(self.0)
     }
 
     pub fn eval_depth(self) -> c_int {
-        unsafe { ns_js_eval_depth(self.0) }
+        api::eval_depth(self.0)
     }
 
     pub fn callback_depth(self) -> c_int {
-        unsafe { ns_js_callback_depth(self.0) }
+        api::callback_depth(self.0)
     }
 
     pub fn dispatch_depth(self) -> c_int {
-        unsafe { ns_js_dispatch_depth(self.0) }
+        api::dispatch_depth(self.0)
     }
 
     pub fn iframe_load_depth(self) -> c_int {
-        unsafe { ns_js_iframe_load_depth(self.0) }
+        api::iframe_load_depth(self.0)
     }
 
     pub fn is_worker(self) -> bool {
-        unsafe { ns_js_is_worker(self.0) != 0 }
+        api::is_worker(self.0)
     }
 
     pub fn ctx(self) -> ContextHandle {
-        unsafe { ns_js_main_context(self.0) }
+        api::main_context(self.0)
     }
 
     pub fn has_ctx(self) -> bool {
@@ -77,11 +69,11 @@ impl Js {
     }
 
     pub fn mutated(self) -> bool {
-        unsafe { ns_js_mutated(self.0) != 0 }
+        api::mutated(self.0)
     }
 
     pub fn current_document(self) -> *const NsNode {
-        unsafe { ns_js_current_document(self.0) }
+        Node::ptr_or_null(api::current_document(self.0))
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -90,32 +82,32 @@ impl Js {
 
     pub fn log(self, line: &str) {
         if let Ok(line) = CString::new(line.replace('\0', "")) {
-            unsafe { ns_js_log_line(self.0, line.as_ptr()) };
+            api::log_line(self.0, &line);
         }
     }
 
     pub fn context_frame(self, scope: &Scope<'_>) -> *mut NsNode {
-        unsafe { ns_js_context_frame(self.0, scope.handle()) }
+        Node::ptr_or_null(api::context_frame(self.0, scope.handle())).cast_mut()
     }
 
     pub fn budget_enter(self) -> i64 {
-        unsafe { ns_js_budget_enter(self.0) }
+        api::budget_enter(self.0)
     }
 
     pub fn budget_leave(self, saved: i64) {
-        unsafe { ns_js_budget_leave(self.0, saved) };
+        api::budget_leave(self.0, saved);
     }
 
     pub fn callback_depth_add(self, delta: c_int) {
-        unsafe { ns_js_callback_depth_add(self.0, delta) };
+        api::callback_depth_add(self.0, delta);
     }
 
     pub fn drain_microtasks(self) {
-        unsafe { ns_drain_microtasks(self.0) };
+        api::drain_microtasks(self.0);
     }
 
     pub fn drain_mutations(self) {
-        unsafe { ns_drain_mutations(self.0) };
+        api::drain_mutations(self.0);
     }
 
     pub fn flush_ready_images(self) {
@@ -131,15 +123,17 @@ impl Js {
     }
 
     pub fn process_pending_iframes(self) {
-        unsafe { ns_js_process_pending_iframes(self.0) };
+        api::process_pending_iframes(self.0);
     }
 
     pub fn forget_frame_context(self, frame: *const NsNode) {
-        unsafe { ns_js_forget_frame_context(self.0, frame) };
+        if let Some(frame) = node(frame) {
+            api::forget_frame_context(self.0, frame);
+        }
     }
 
-    pub fn node_in_page(self, node: *const NsNode) -> bool {
-        unsafe { ns_js_node_in_page(self.0, node) != 0 }
+    pub fn node_in_page(self, node_ptr: *const NsNode) -> bool {
+        api::node_in_page(self.0, node(node_ptr))
     }
 
     pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
@@ -165,11 +159,11 @@ impl Js {
     }
 
     pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
-        unsafe { ns_js_attach_timeout(self.0, ms, func, self.0.cast()) }
+        api::attach_timeout(self.0, ms, func, self.0.cast())
     }
 
     pub fn source_remove(self, id: c_uint) {
-        unsafe { ns_js_source_remove(self.0, id) };
+        api::source_remove(self.0, id);
     }
 
     pub fn timeout_add(self, ms: c_uint, func: SourceFunc) -> c_uint {
@@ -177,7 +171,7 @@ impl Js {
     }
 
     pub fn set_ready_state(self, state: c_int) {
-        unsafe { ns_js_set_ready_state(self.0, state) };
+        api::set_ready_state(self.0, state);
     }
 
     pub fn mark_navigation(self, key: &CStr) {
@@ -220,7 +214,7 @@ impl Js {
             ns_js_image_loads_pending(self.0) != 0
                 || ns_js_pending_iframe_count(self.0) > 0
                 || ns_js_has_pending_script_roots(self.0) != 0
-                || ns_js_load_delayed(self.0) != 0
+                || api::load_delayed(self.0)
         }
     }
 
@@ -234,7 +228,7 @@ impl Js {
                 || ns_js_filereader_pending(self.0) != 0
                 || ns_js_pending_iframe_count(self.0) > 0
                 || ns_mutation_drain_pending(self.0) != 0
-                || ns_js_observer_tick_pending(self.0) != 0
+                || api::observer_tick_pending(self.0)
                 || ns_js_async_scripts_pending(self.0) != 0
                 || ns_ce_has_pending(self.0) != 0
                 || ns_workers_pending(self.0) != 0
@@ -245,7 +239,7 @@ impl Js {
         self.has_pending_work()
             || unsafe {
                 ns_services_timers_pending(self.0, glib::TRUE) != 0
-                    || ns_js_message_tasks_pending(self.0) != 0
+                    || api::message_tasks_pending(self.0)
                     || ns_js_image_loads_pending(self.0) != 0
             }
     }
@@ -257,36 +251,9 @@ pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
 pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_eval_depth(js: *const NsJs) -> c_int;
-    fn ns_js_callback_depth(js: *const NsJs) -> c_int;
-    fn ns_js_dispatch_depth(js: *const NsJs) -> c_int;
-    fn ns_js_iframe_load_depth(js: *const NsJs) -> c_int;
-    fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_mutated(js: *const NsJs) -> GBoolean;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_context_frame(js: *mut NsJs, ctx: ContextHandle) -> *mut NsNode;
-    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
-    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
-    fn ns_js_callback_depth_add(js: *mut NsJs, delta: c_int);
-    fn ns_drain_microtasks(js: *mut NsJs);
-    fn ns_drain_mutations(js: *mut NsJs);
     fn ns_js_flush_ready_images(js: *mut NsJs);
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_promote_deferred_iframes(js: *mut NsJs);
-    fn ns_js_process_pending_iframes(js: *mut NsJs);
-    fn ns_js_forget_frame_context(js: *mut NsJs, frame: *const NsNode);
-    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
-    fn ns_js_raf_scope_enter(
-        js: *mut NsJs,
-        ctx: ContextHandle,
-        frame: *mut NsNode,
-    ) -> *mut RafScope;
-    fn ns_js_raf_scope_context(scope: *const RafScope) -> ContextHandle;
-    fn ns_js_raf_scope_leave(scope: *mut RafScope);
     fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_void) -> i64;
     fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
     fn ns_js_dispatch_event(
@@ -299,19 +266,11 @@ unsafe extern "C" {
     fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
-    fn ns_js_attach_timeout(
-        js: *mut NsJs,
-        ms: c_uint,
-        func: SourceFunc,
-        data: *mut c_void,
-    ) -> c_uint;
-    fn ns_js_source_remove(js: *mut NsJs, id: c_uint);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn g_get_monotonic_time() -> i64;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_js_set_ready_state(js: *mut NsJs, state: c_int);
     fn ns_js_mark_navigation(js: *mut NsJs, key: *const c_char);
     fn ns_js_run_next_script_schedule(
         js: *mut NsJs,
@@ -328,18 +287,15 @@ unsafe extern "C" {
     fn ns_js_profile_enabled() -> GBoolean;
     fn ns_js_image_loads_pending(js: *const NsJs) -> GBoolean;
     fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
-    fn ns_js_load_delayed(js: *mut NsJs) -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
     fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
-    fn ns_js_observer_tick_pending(js: *const NsJs) -> GBoolean;
     fn ns_js_async_scripts_pending(js: *const NsJs) -> GBoolean;
     fn ns_ce_has_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
-    fn ns_js_message_tasks_pending(js: *const NsJs) -> GBoolean;
 }
 
 unsafe extern "Rust" {
@@ -429,16 +385,15 @@ pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
 
-pub(crate) struct CallbackScope(*mut RafScope);
+pub(crate) struct CallbackScope(api::RafScope);
 
 impl CallbackScope {
     pub fn enter(js: Js, realm: ContextHandle, frame: *mut NsNode) -> Option<CallbackScope> {
-        let scope = unsafe { ns_js_raf_scope_enter(js.0, realm, frame) };
-        (!scope.is_null()).then_some(CallbackScope(scope))
+        api::enter_raf_scope(js.0, realm, node(frame)).map(CallbackScope)
     }
 
     pub fn context(&self) -> ContextHandle {
-        unsafe { ns_js_raf_scope_context(self.0) }
+        self.0.context()
     }
 
     pub fn run<R>(&self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -446,7 +401,7 @@ impl CallbackScope {
     }
 
     pub fn leave(self) {
-        unsafe { ns_js_raf_scope_leave(self.0) };
+        self.0.leave();
     }
 }
 

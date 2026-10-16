@@ -16,8 +16,8 @@ use super::state::{
     DataFn, DelayFn, DownloadFn, FormSubmitFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
     ViewportScrollFn,
 };
-use super::{GMainContext, Js, NsJs, WorkerHost};
-use crate::api::{self, TimerGate};
+use super::{Js, NsJs, WorkerHost};
+use crate::api;
 use crate::scheduling::{self, RunTasks};
 
 const SOURCE_REMOVE: GBoolean = 0;
@@ -46,46 +46,8 @@ pub unsafe extern "C" fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoole
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_user_activation_state(
-    js: *mut NsJs,
-    ever_activated: *mut GBoolean,
-) -> GBoolean {
-    let (transient, ever) = api::user_activation_state(js);
-    unsafe { *ever_activated = flag(ever) };
-    flag(transient)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_consume_user_activation(js: *mut NsJs) {
     api::consume_user_activation(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_clipboard_write(js: *mut NsJs, text_ptr: *const c_char) -> c_int {
-    match text(text_ptr).and_then(|text| api::clipboard_write(js, text)) {
-        Some(written) => c_int::from(written),
-        None => -1,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_selection_copyable(js: *const NsJs) -> GBoolean {
-    flag(api::selection_copyable(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_copy_selection(js: *mut NsJs) -> GBoolean {
-    flag(api::copy_selection(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_selection_commands(js: *const NsJs) -> GBoolean {
-    flag(api::has_selection_commands(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_selection_command(js: *mut NsJs, cmd: *const c_char) -> GBoolean {
-    flag(text(cmd).is_some_and(|cmd| api::selection_command(js, cmd)))
 }
 
 #[unsafe(no_mangle)]
@@ -114,11 +76,6 @@ pub unsafe extern "C" fn ns_js_budget_enter(js: *mut NsJs) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_budget_leave(js: *mut NsJs, saved: i64) {
     api::budget_leave(js, saved);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_context_frame(js: *mut NsJs, ctx: ContextHandle) -> *mut NsNode {
-    Node::ptr_or_null(api::context_frame(js, ctx)).cast_mut()
 }
 
 #[unsafe(no_mangle)]
@@ -159,16 +116,6 @@ pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drop_message_tasks(js: *mut NsJs) {
-    api::drop_message_tasks(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_message_tasks_pending(js: *const NsJs) -> GBoolean {
-    flag(api::message_tasks_pending(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_node_in_page(js: *mut NsJs, n: *const NsNode) -> GBoolean {
     flag(api::node_in_page(js, node(n)))
 }
@@ -179,50 +126,13 @@ pub unsafe extern "C" fn ns_js_realm_url(js: *mut NsJs, realm: ContextHandle) ->
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_microtask_checkpoint(js: *mut NsJs) {
-    api::microtask_checkpoint(js);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_drain_microtasks(js: *mut NsJs) {
     api::drain_microtasks(js);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_due_timers_allowed(js: *const NsJs) -> GBoolean {
-    flag(api::due_timers_allowed(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_drain_mutations(js: *mut NsJs) {
     api::drain_mutations(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_timer_gate(
-    js: *mut NsJs,
-    frame: *mut NsNode,
-    idle_expired: GBoolean,
-) -> c_int {
-    match api::timer_gate(js, node(frame), idle_expired != 0) {
-        TimerGate::Run => scheduling::TIMER_RUN,
-        TimerGate::Wait => scheduling::TIMER_WAIT,
-        TimerGate::Drop => scheduling::TIMER_DROP,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_timer_scope_enter(
-    js: *mut NsJs,
-    ctx: ContextHandle,
-    frame: *mut NsNode,
-) -> *mut c_void {
-    scopes::timer_scope_enter(Js(js), ctx, frame)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_timer_scope_context(scope: *const c_void) -> ContextHandle {
-    unsafe { scopes::timer_scope_context(scope) }
 }
 
 #[unsafe(no_mangle)]
@@ -246,47 +156,6 @@ pub unsafe extern "C" fn ns_observer_schedule_tick(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_observer_tick_pending(js: *const NsJs) -> GBoolean {
-    flag(api::observer_tick_pending(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_finish(js: *mut NsJs) {
-    api::dispatch_finish(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_scope_enter(
-    js: *mut NsJs,
-    ctx: ContextHandle,
-    frame: *mut NsNode,
-) -> *mut c_void {
-    scopes::raf_scope_enter(Js(js), ctx, frame)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_scope_context(scope: *const c_void) -> ContextHandle {
-    unsafe { scopes::raf_scope_js(scope) }.ctx()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_scope_leave(scope: *mut c_void) {
-    let js = unsafe { scopes::raf_scope_js(scope) };
-    scheduling::drain_microtasks(js);
-    unsafe { scopes::raf_scope_finish(scope) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_callback_depth_add(js: *mut NsJs, delta: c_int) {
-    api::callback_depth_add(js, delta);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_mutated(js: *const NsJs) -> GBoolean {
-    flag(api::mutated(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_mark_mutated(js: *mut NsJs) {
     api::mark_mutated(js);
 }
@@ -294,14 +163,6 @@ pub unsafe extern "C" fn ns_js_mark_mutated(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_consume_mutated(js: *mut NsJs) -> GBoolean {
     flag(api::consume_mutated(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_forget_frame_context(js: *mut NsJs, frame: *const NsNode) {
-    let js = Js(js);
-    if js.frame().cast_const() == frame {
-        js.set_frame(ptr::null_mut());
-    }
 }
 
 pub(crate) fn snapshot_globals(js: Js) -> *mut GHashTable {
@@ -385,28 +246,8 @@ pub unsafe extern "C" fn ns_js_scroll_viewport(js: *mut NsJs, x: f64, y: f64) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_process_pending_iframes(js: *mut NsJs) {
-    api::process_pending_iframes(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_iframe_load_depth(js: *const NsJs) -> c_int {
-    api::iframe_load_depth(js)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean {
     flag(api::in_frame_load(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_load_delayed(js: *mut NsJs) -> GBoolean {
-    flag(api::load_delayed(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_ready_state(js: *mut NsJs, state: c_int) {
-    api::set_ready_state(js, state);
 }
 
 #[unsafe(no_mangle)]
@@ -476,11 +317,6 @@ pub unsafe extern "C" fn ns_js_set_early_inject_src(js: *mut NsJs, src: *const c
         let src = text(src).map_or(ptr::null_mut(), |src| glib::strdup(src.to_bytes()));
         super::state::PageState::replace_owned(&js.st().early_inject_src, src);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_early_inject_src(js: *const NsJs) -> *const c_char {
-    Js(js.cast_mut()).st().early_inject_src.get()
 }
 
 #[unsafe(no_mangle)]
@@ -564,12 +400,6 @@ pub unsafe extern "C" fn ns_js_pattern_context() -> ContextHandle {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_document(js: *mut NsJs, doc: *mut NsNode, origin: *mut c_char) {
-    api::set_document(js, node(doc), text(origin));
-    unsafe { glib::g_free(origin.cast()) };
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_events_suspended(js: *const NsJs) -> GBoolean {
     flag(api::events_suspended(js))
 }
@@ -581,11 +411,6 @@ pub unsafe extern "C" fn ns_js_in_main_realm(
     data: *mut c_void,
 ) {
     api::in_main_realm(js, || unsafe { f(data) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_glib_context(js: *const NsJs) -> *mut GMainContext {
-    api::glib_context(js).cast()
 }
 
 #[unsafe(no_mangle)]
@@ -629,11 +454,6 @@ pub unsafe extern "C" fn ns_js_doc_ready_state(js: *const NsJs, doc: *const NsNo
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_clear_doc_ready_states(js: *mut NsJs) {
-    api::clear_doc_ready_states(js);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_current_script(js: *const NsJs) -> *const NsNode {
     Node::ptr_or_null(api::current_script(js))
 }
@@ -641,11 +461,6 @@ pub unsafe extern "C" fn ns_js_current_script(js: *const NsJs) -> *const NsNode 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_current_document(js: *const NsJs) -> *const NsNode {
     Node::ptr_or_null(api::current_document(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_realm(js: *mut NsJs, ctx: ContextHandle, doc: *mut NsNode) {
-    api::set_realm(js, ctx, node(doc));
 }
 
 #[unsafe(no_mangle)]
@@ -658,26 +473,6 @@ pub unsafe extern "C" fn ns_js_log_line(js: *mut NsJs, line: *const c_char) {
     if let Some(line) = text(line) {
         api::log_line(js, line);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval_depth(js: *const NsJs) -> c_int {
-    api::eval_depth(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_callback_depth(js: *const NsJs) -> c_int {
-    api::callback_depth(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_depth(js: *const NsJs) -> c_int {
-    api::dispatch_depth(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_depth_add(js: *mut NsJs, delta: c_int) {
-    api::dispatch_depth_add(js, delta);
 }
 
 #[unsafe(no_mangle)]
@@ -705,29 +500,8 @@ pub unsafe extern "C" fn ns_js_frame_scope_push(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_scope_enter(
-    js: *mut NsJs,
-    ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
-    buf: *mut c_void,
-) {
-    unsafe { scopes::dispatch_scope_enter(Js(js), ctx, doc, frame, buf) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_scope_leave(js: *mut NsJs, buf: *mut c_void) {
-    unsafe { scopes::dispatch_scope_leave(Js(js), buf) };
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean {
     flag(api::pump_iteration(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_load_for(js: *mut NsJs, new_url: *const c_char) {
-    api::storage_load_for(js, text(new_url));
 }
 
 #[unsafe(no_mangle)]
@@ -837,26 +611,6 @@ pub unsafe extern "C" fn ns_ce_attr_changed(
     if let (Some(el), Some(name)) = (node(n), text(attr_name)) {
         api::ce_attr_changed(js, el, name, text(old_value), text(new_value));
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_free_frame_contexts(js: *mut NsJs) {
-    api::free_frame_contexts(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_context_count(js: *const NsJs) -> c_uint {
-    api::frame_context_count(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval_polyfills(js: *mut NsJs) {
-    api::eval_polyfills(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_snapshot_platform_globals(js: *mut NsJs) {
-    api::snapshot_platform_globals(js);
 }
 
 #[unsafe(no_mangle)]
@@ -985,29 +739,4 @@ pub fn nsr_illegal_constructor(
     args: &[southstar_js_engine::Value],
 ) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
     crate::api::illegal_constructor(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_timer_scope_leave(
-    token: *mut c_void,
-    exception: Option<southstar_js_engine::Value>,
-) {
-    unsafe { crate::api::timer_scope_leave(token, exception) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_this_is_detached_window(
-    js: *mut NsJs,
-    scope: &mut southstar_js_engine::Scope<'_>,
-    this: &southstar_js_engine::Value,
-) -> bool {
-    crate::api::this_is_detached_window(js, scope, this)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_new_document_object(
-    js: *mut NsJs,
-    scope: &mut southstar_js_engine::Scope<'_>,
-) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
-    crate::api::new_document_object(js, scope)
 }
