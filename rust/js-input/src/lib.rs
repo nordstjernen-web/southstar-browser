@@ -17,6 +17,10 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{
+    DragData, dispatch_clipboard_event, dispatch_drag_event, dispatch_mouse_event,
+};
+
 pub(crate) type Element = Node<'static>;
 
 pub(crate) const PROPERTY: Attributes = Attributes {
@@ -26,7 +30,7 @@ pub(crate) const PROPERTY: Attributes = Attributes {
 };
 
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Modifiers {
+pub struct Modifiers {
     pub shift: bool,
     pub ctrl: bool,
     pub alt: bool,
@@ -34,7 +38,7 @@ pub(crate) struct Modifiers {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Pointer {
+pub struct Pointer {
     pub client: (f64, f64),
     pub page: (f64, f64),
     pub button: i32,

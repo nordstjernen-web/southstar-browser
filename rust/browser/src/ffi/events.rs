@@ -12,44 +12,6 @@ use southstar_layout::BoxRef;
 use super::{Js, NsBrowser};
 
 unsafe extern "C" {
-    fn ns_js_dispatch_mouse_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        client_x: f64,
-        client_y: f64,
-        page_x: f64,
-        page_y: f64,
-        button: c_int,
-        buttons: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        related: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_drag_event(
-        js: *mut c_void,
-        session: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        client_x: f64,
-        client_y: f64,
-        page_x: f64,
-        page_y: f64,
-        button: c_int,
-        buttons: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        related: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_drag_session_new(js: *mut c_void) -> *mut c_void;
-    fn ns_js_drag_session_add_file(session: *mut c_void, path: *const c_char);
-    fn ns_js_drag_session_free(session: *mut c_void);
     fn ns_js_dispatch_key_event_full(
         js: *mut c_void,
         target: *const NsNode,
@@ -70,13 +32,6 @@ unsafe extern "C" {
         kind: *const c_char,
         input_type: *const c_char,
         data: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_clipboard_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        text: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_note_user_edit(js: *mut c_void, el: *const NsNode, value_before: *const c_char);
@@ -108,6 +63,15 @@ fn flag(mods: c_int, bit: c_int) -> GBoolean {
     glib::boolean(mods & bit != 0)
 }
 
+fn modifiers(mods: c_int) -> southstar_js_input::Modifiers {
+    southstar_js_input::Modifiers {
+        shift: mods & 1 != 0,
+        ctrl: mods & 2 != 0,
+        alt: mods & 4 != 0,
+        meta: mods & 8 != 0,
+    }
+}
+
 pub struct Pointer {
     pub client: (f64, f64),
     pub page: (f64, f64),
@@ -125,31 +89,18 @@ impl Js {
         related: Option<Node<'_>>,
         want_prevented: bool,
     ) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_mouse_event(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                p.client.0,
-                p.client.1,
-                p.page.0,
-                p.page.1,
-                p.button,
-                p.buttons,
-                flag(p.mods, 1),
-                flag(p.mods, 2),
-                flag(p.mods, 4),
-                flag(p.mods, 8),
-                Node::ptr_or_null(related),
-                if want_prevented {
-                    &mut prevented
-                } else {
-                    ptr::null_mut()
-                },
-            )
+        let input = southstar_js_input::Pointer {
+            client: p.client,
+            page: p.page,
+            button: p.button,
+            buttons: p.buttons,
+            modifiers: modifiers(p.mods),
         };
-        prevented != 0
+        // SAFETY: a Js handle names the page's live script engine.
+        let (_, prevented) = unsafe {
+            southstar_js_input::dispatch_mouse_event(self.raw(), target, kind, &input, related)
+        };
+        want_prevented && prevented
     }
 
     pub fn dispatch_key(
@@ -208,17 +159,11 @@ impl Js {
     }
 
     pub fn dispatch_clipboard(self, target: Node<'_>, kind: &CStr, text: &CStr) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_clipboard_event(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                text.as_ptr(),
-                &mut prevented,
-            )
+        // SAFETY: a Js handle names the page's live script engine.
+        let (_, prevented) = unsafe {
+            southstar_js_input::dispatch_clipboard_event(self.raw(), target, kind, Some(text))
         };
-        prevented != 0
+        prevented
     }
 
     pub fn dispatch_scroll(self, target: Node<'_>) {
@@ -226,37 +171,34 @@ impl Js {
     }
 
     pub fn drop_files(self, target: Node<'_>, paths: &[&CStr], x: c_int, y: c_int) -> bool {
-        let session = unsafe { ns_js_drag_session_new(self.raw()) };
-        if session.is_null() {
+        // SAFETY: a Js handle names the page's live script engine.
+        let Some(session) = (unsafe { southstar_js_input::DragData::new(self.raw()) }) else {
             return false;
-        }
+        };
         for path in paths {
-            unsafe { ns_js_drag_session_add_file(session, path.as_ptr()) };
+            session.add_file(path);
         }
+        let (fx, fy) = (f64::from(x), f64::from(y));
+        let input = southstar_js_input::Pointer {
+            client: (fx, fy),
+            page: (fx, fy),
+            button: 0,
+            buttons: 0,
+            modifiers: southstar_js_input::Modifiers::default(),
+        };
         let dispatch = |kind: &CStr| {
-            let mut prevented: GBoolean = 0;
-            let (fx, fy) = (f64::from(x), f64::from(y));
-            unsafe {
-                ns_js_dispatch_drag_event(
+            // SAFETY: a Js handle names the page's live script engine.
+            let (_, prevented) = unsafe {
+                southstar_js_input::dispatch_drag_event(
                     self.raw(),
-                    session,
-                    target.as_ptr(),
-                    kind.as_ptr(),
-                    fx,
-                    fy,
-                    fx,
-                    fy,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    ptr::null(),
-                    &mut prevented,
+                    Some(&session),
+                    target,
+                    kind,
+                    &input,
+                    None,
                 )
             };
-            prevented != 0
+            prevented
         };
         let mut accept = dispatch(c"dragenter");
         accept |= dispatch(c"dragover");
@@ -265,7 +207,7 @@ impl Js {
         } else {
             dispatch(c"dragleave");
         }
-        unsafe { ns_js_drag_session_free(session) };
+        drop(session);
         true
     }
 

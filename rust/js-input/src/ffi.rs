@@ -14,7 +14,7 @@ use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::transfer::DragSession;
-use crate::{Element, Modifiers, Pointer};
+use crate::{Element, Pointer};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
 
@@ -79,8 +79,8 @@ unsafe extern "Rust" {
     ) -> (bool, bool);
 }
 
-pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(ptr) }
+fn live(n: Node<'_>) -> Option<Element> {
+    n.downgrade().get()
 }
 
 fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
@@ -308,186 +308,105 @@ pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
     })
 }
 
-fn pointer(
-    client: (f64, f64),
-    page: (f64, f64),
-    button: c_int,
-    buttons: c_int,
-    modifiers: [GBoolean; 4],
-) -> Pointer {
-    Pointer {
-        client,
-        page,
-        button,
-        buttons,
-        modifiers: Modifiers {
-            shift: modifiers[0] != 0,
-            ctrl: modifiers[1] != 0,
-            alt: modifiers[2] != 0,
-            meta: modifiers[3] != 0,
-        },
-    }
-}
-
-fn report(default_prevented: *mut GBoolean, prevented: bool) {
-    if !default_prevented.is_null() {
-        unsafe { *default_prevented = glib::boolean(prevented) };
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_mouse_event(
-    js: *mut NsJs,
-    target: *const NsNode,
-    kind: *const c_char,
-    client_x: f64,
-    client_y: f64,
-    page_x: f64,
-    page_y: f64,
-    button: c_int,
-    buttons: c_int,
-    shift: GBoolean,
-    ctrl: GBoolean,
-    alt: GBoolean,
-    meta: GBoolean,
-    related: *const NsNode,
-    default_prevented: *mut GBoolean,
-) -> GBoolean {
-    report(default_prevented, false);
-    let (Some(target), Some(kind)) = (node(target), opt_text(kind)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_mouse_event(
+    js: *mut c_void,
+    target: Node<'_>,
+    kind: &CStr,
+    input: &Pointer,
+    related: Option<Node<'_>>,
+) -> (bool, bool) {
+    let js = Js::of(js.cast());
+    let Some(target) = live(target) else {
+        return (false, false);
     };
-    let js = Js::of(js);
     if js.is_null() {
-        return glib::FALSE;
+        return (false, false);
     }
-    let input = pointer(
-        (client_x, client_y),
-        (page_x, page_y),
-        button,
-        buttons,
-        [shift, ctrl, alt, meta],
-    );
-    let (fired, prevented) = crate::mouse::mouse_event(js, target, &kind, &input, node(related));
-    report(default_prevented, prevented);
-    glib::boolean(fired)
+    let kind = kind.to_string_lossy();
+    crate::mouse::mouse_event(js, target, &kind, input, related.and_then(live))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_clipboard_event(
-    js: *mut NsJs,
-    target: *const NsNode,
-    kind: *const c_char,
-    text: *const c_char,
-    default_prevented: *mut GBoolean,
-) -> GBoolean {
-    report(default_prevented, false);
-    let (Some(target), Some(kind)) = (node(target), opt_text(kind)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_clipboard_event(
+    js: *mut c_void,
+    target: Node<'_>,
+    kind: &CStr,
+    text: Option<&CStr>,
+) -> (bool, bool) {
+    let js = Js::of(js.cast());
+    let Some(target) = live(target) else {
+        return (false, false);
     };
-    let js = Js::of(js);
     if js.is_null() {
-        return glib::FALSE;
+        return (false, false);
     }
-    let (fired, prevented) =
-        crate::transfer::clipboard_event(js, target, &kind, opt_text(text).as_deref());
-    report(default_prevented, prevented);
-    glib::boolean(fired)
+    let kind = kind.to_string_lossy();
+    let text = text.map(CStr::to_string_lossy);
+    crate::transfer::clipboard_event(js, target, &kind, text.as_deref())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drag_session_new(js: *mut NsJs) -> *mut DragSession {
-    let js = Js::of(js);
+pub struct DragData(Option<DragSession>);
+
+impl DragData {
+    /// # Safety
+    ///
+    /// `js` is null or a live script engine that outlives the session.
+    pub unsafe fn new(js: *mut c_void) -> Option<DragData> {
+        let js = Js::of(js.cast());
+        if js.is_null() {
+            return None;
+        }
+        DragSession::new(js).map(|session| DragData(Some(session)))
+    }
+
+    pub fn set_data(&self, kind: &CStr, data: Option<&CStr>) {
+        if let Some(session) = &self.0 {
+            let data = data.map(CStr::to_string_lossy);
+            session.set_data(&kind.to_string_lossy(), data.as_deref());
+        }
+    }
+
+    pub fn add_file(&self, path: &CStr) {
+        if let Some(session) = &self.0 {
+            session.add_file(path);
+        }
+    }
+}
+
+impl Drop for DragData {
+    fn drop(&mut self) {
+        if let Some(session) = self.0.take() {
+            session.release();
+        }
+    }
+}
+
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_drag_event(
+    js: *mut c_void,
+    session: Option<&DragData>,
+    target: Node<'_>,
+    kind: &CStr,
+    input: &Pointer,
+    related: Option<Node<'_>>,
+) -> (bool, bool) {
+    let js = Js::of(js.cast());
+    let Some(target) = live(target) else {
+        return (false, false);
+    };
     if js.is_null() {
-        return ptr::null_mut();
+        return (false, false);
     }
-    crate::transfer::DragSession::new(js)
-        .map_or(ptr::null_mut(), |session| Box::into_raw(Box::new(session)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drag_session_free(session: *mut DragSession) {
-    if session.is_null() {
-        return;
-    }
-    let session = unsafe { Box::from_raw(session) };
-    session.release();
-}
-
-fn session_ref<'a>(session: *const DragSession) -> Option<&'a DragSession> {
-    unsafe { session.as_ref() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drag_session_set_data(
-    session: *mut DragSession,
-    kind: *const c_char,
-    data: *const c_char,
-) {
-    let (Some(session), Some(kind)) = (session_ref(session), opt_text(kind)) else {
-        return;
-    };
-    session.set_data(&kind, opt_text(data).as_deref());
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drag_session_add_file(
-    session: *mut DragSession,
-    path: *const c_char,
-) {
-    let Some(session) = session_ref(session) else {
-        return;
-    };
-    if path.is_null() {
-        return;
-    }
-    session.add_file(unsafe { CStr::from_ptr(path) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_drag_event(
-    js: *mut NsJs,
-    session: *mut DragSession,
-    target: *const NsNode,
-    kind: *const c_char,
-    client_x: f64,
-    client_y: f64,
-    page_x: f64,
-    page_y: f64,
-    button: c_int,
-    buttons: c_int,
-    shift: GBoolean,
-    ctrl: GBoolean,
-    alt: GBoolean,
-    meta: GBoolean,
-    related: *const NsNode,
-    default_prevented: *mut GBoolean,
-) -> GBoolean {
-    report(default_prevented, false);
-    let (Some(target), Some(kind)) = (node(target), opt_text(kind)) else {
-        return glib::FALSE;
-    };
-    let js = Js::of(js);
-    if js.is_null() {
-        return glib::FALSE;
-    }
-    let input = pointer(
-        (client_x, client_y),
-        (page_x, page_y),
-        button,
-        buttons,
-        [shift, ctrl, alt, meta],
-    );
-    let (fired, prevented) = crate::transfer::drag_event(
-        js,
-        session_ref(session),
-        target,
-        &kind,
-        &input,
-        node(related),
-    );
-    report(default_prevented, prevented);
-    glib::boolean(fired)
+    let kind = kind.to_string_lossy();
+    let session = session.and_then(|data| data.0.as_ref());
+    crate::transfer::drag_event(js, session, target, &kind, input, related.and_then(live))
 }
 
 #[unsafe(no_mangle)]

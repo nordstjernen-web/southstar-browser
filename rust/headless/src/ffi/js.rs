@@ -109,44 +109,6 @@ unsafe extern "C" {
         meta: GBoolean,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_dispatch_mouse_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        client_x: f64,
-        client_y: f64,
-        page_x: f64,
-        page_y: f64,
-        button: c_int,
-        buttons: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        related: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_drag_event(
-        js: *mut c_void,
-        session: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        client_x: f64,
-        client_y: f64,
-        page_x: f64,
-        page_y: f64,
-        button: c_int,
-        buttons: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        related: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_drag_session_new(js: *mut c_void) -> *mut c_void;
-    fn ns_js_drag_session_free(session: *mut c_void);
-    fn ns_js_drag_session_set_data(session: *mut c_void, kind: *const c_char, data: *const c_char);
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
@@ -251,10 +213,6 @@ pub struct Js(NonNull<c_void>);
 
 pub fn js_raw(js: Option<Js>) -> *mut c_void {
     js.map_or(ptr::null_mut(), |js| js.0.as_ptr())
-}
-
-fn node_ptr(node: Option<Node>) -> *const NsNode {
-    Node::ptr_or_null(node)
 }
 
 pub fn new_js(nav: &NavCapture, timing: &NavigationTiming) -> Option<Js> {
@@ -422,25 +380,12 @@ impl Js {
         (button, buttons): (c_int, c_int),
         prevented: &mut GBoolean,
     ) {
-        unsafe {
-            ns_js_dispatch_mouse_event(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                x,
-                y,
-                x,
-                y,
-                button,
-                buttons,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                ptr::null(),
-                prevented,
-            )
+        let input = pointer((x, y), button, buttons);
+        // SAFETY: a Js handle names the run's live script engine.
+        let (_, was_prevented) = unsafe {
+            southstar_js_input::dispatch_mouse_event(self.raw(), target, kind, &input, None)
         };
+        *prevented = glib::boolean(was_prevented);
     }
 
     pub fn click_activate(self, node: Node) -> bool {
@@ -473,7 +418,8 @@ impl Js {
     }
 
     pub fn drag_session(self) -> Option<DragSession> {
-        NonNull::new(unsafe { ns_js_drag_session_new(self.raw()) }).map(DragSession)
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_input::DragData::new(self.raw()) }.map(DragSession)
     }
 }
 
@@ -489,11 +435,21 @@ pub fn bind_video_events(cache: Option<VideoCache>, js: Option<Js>) {
     }
 }
 
-pub struct DragSession(NonNull<c_void>);
+fn pointer((x, y): (f64, f64), button: c_int, buttons: c_int) -> southstar_js_input::Pointer {
+    southstar_js_input::Pointer {
+        client: (x, y),
+        page: (x, y),
+        button,
+        buttons,
+        modifiers: southstar_js_input::Modifiers::default(),
+    }
+}
+
+pub struct DragSession(southstar_js_input::DragData);
 
 impl DragSession {
     pub fn set_data(&self, kind: &CStr, data: &CStr) {
-        unsafe { ns_js_drag_session_set_data(self.0.as_ptr(), kind.as_ptr(), data.as_ptr()) };
+        self.0.set_data(kind, Some(data));
     }
 
     pub fn dispatch(
@@ -501,37 +457,22 @@ impl DragSession {
         js: Js,
         target: Node,
         kind: &CStr,
-        (x, y): (f64, f64),
+        at: (f64, f64),
         buttons: c_int,
         related: Option<Node>,
     ) -> bool {
-        let mut prevented: GBoolean = glib::FALSE;
-        unsafe {
-            ns_js_dispatch_drag_event(
+        let input = pointer(at, 0, buttons);
+        // SAFETY: a Js handle names the run's live script engine.
+        let (_, prevented) = unsafe {
+            southstar_js_input::dispatch_drag_event(
                 js.raw(),
-                self.0.as_ptr(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                x,
-                y,
-                x,
-                y,
-                0,
-                buttons,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                node_ptr(related),
-                &mut prevented,
+                Some(&self.0),
+                target,
+                kind,
+                &input,
+                related,
             )
         };
-        prevented != 0
-    }
-}
-
-impl Drop for DragSession {
-    fn drop(&mut self) {
-        unsafe { ns_js_drag_session_free(self.0.as_ptr()) };
+        prevented
     }
 }
