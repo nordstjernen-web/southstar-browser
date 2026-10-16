@@ -285,6 +285,13 @@ fn measure_min_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
             {
                 return replaced_intrinsic_contribution(b, false);
             }
+            let wv = style_value(b, PropId::Width);
+            if is_length_or_calc(wv) && !value_is_percent(wv) {
+                let styled = length_resolve(wv, inline_atomic_measure_basis(b), -1.0);
+                if styled >= 0.0 {
+                    return styled;
+                }
+            }
             return if b.content_width() > 0.0 {
                 b.content_width()
             } else {
