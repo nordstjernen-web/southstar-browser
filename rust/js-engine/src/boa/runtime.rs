@@ -738,6 +738,6 @@ impl Scope<'_> {
     }
 
     pub fn is_running_script(&mut self) -> bool {
-        false
+        self.cx().frame_depth() > 1
     }
 }

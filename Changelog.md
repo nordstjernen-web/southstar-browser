@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Promise callbacks queued by an event listener run after the script
+  that dispatched the event, as the HTML event loop requires: el.click()
+  or dispatchEvent() from script no longer drains microtasks between
+  listeners. A real user click still runs them after each listener.
+* ResizeObserver and IntersectionObserver callbacks no longer run in the
+  middle of a script that forces layout (getComputedStyle, offsetWidth);
+  they are delivered once the script has finished. Microsoft's store
+  pages ran a component's resize handler before the component had
+  rendered and threw "cannot convert null to object".
 * Text direction comes from the CSS direction property and the dir
   attribute only. One right-to-left element anywhere on a page (a single
   direction: rtl inside an ad) used to switch every later paragraph's
