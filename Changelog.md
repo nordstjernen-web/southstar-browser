@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The ECMAScript built-in prototypes (Array, Date, Function, Number,
+  String, RegExp, Boolean and the typed arrays) no longer carry an own
+  Symbol.toStringTag. The interface setup gave one to every global
+  constructor, so Object.prototype.toString reported "[object Date]" for
+  plain objects inheriting from Date.prototype, and the common
+  which-typed-array package, which reads the getter on
+  %TypedArray%.prototype, threw "a function is required" and stopped
+  Wired's page script.
 * Playing a WebM or other libav-decoded video whose width is not a
   multiple of 16 no longer corrupts memory. The frames were converted
   into a buffer exactly four bytes per pixel wide, and FFmpeg's
