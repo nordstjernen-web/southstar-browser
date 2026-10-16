@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Changing an element's inline style, or animating it, restyles that
+  element alone; its descendants are recomputed only when a value they
+  inherit changes. Every style="" write (element.style.foo = ...) and
+  every animation frame used to recompute the element's whole subtree,
+  so pages that move or fade large containers from script, and
+  Microsoft's web-component homepage, spent most of each layout in
+  selector matching.
 * The text of a block ::before or ::after collapses its white space like
   any other text, so the widespread clearfix content: " "; display:
   block; clear: both no longer adds an empty line under every container

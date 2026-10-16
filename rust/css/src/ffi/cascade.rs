@@ -7,6 +7,7 @@ use core::ffi::{CStr, c_double, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 use core::slice;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_color::Color;
 use southstar_glib::{GArray, GBoolean};
@@ -168,12 +169,29 @@ fn normalize_overflow(out: &mut Out<'_>) {
     }
 }
 
+static EXPLICIT_INHERIT: [AtomicU64; PROP_COUNT.div_ceil(64)] =
+    [const { AtomicU64::new(0) }; PROP_COUNT.div_ceil(64)];
+
+fn note_explicit_inherit(prop: usize) {
+    if !Prop::from_id(prop).is_some_and(Prop::inherits) {
+        EXPLICIT_INHERIT[prop / 64].fetch_or(1 << (prop % 64), Ordering::Relaxed);
+    }
+}
+
+pub(super) fn passed_to_children(prop: usize) -> bool {
+    Prop::from_id(prop).is_some_and(Prop::inherits)
+        || EXPLICIT_INHERIT[prop / 64].load(Ordering::Relaxed) & (1 << (prop % 64)) != 0
+}
+
 fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     let mut explicit_initial = [false; PROP_COUNT];
     for (prop, initial) in explicit_initial.iter_mut().enumerate() {
         let kw = keyword(out.style.values[prop]);
         match kw {
-            Some(b"inherit") => out.replace(prop, dup(parent_value(parent, prop))),
+            Some(b"inherit") => {
+                note_explicit_inherit(prop);
+                out.replace(prop, dup(parent_value(parent, prop)));
+            }
             Some(b"initial") => {
                 let inherits = Prop::from_id(prop).is_some_and(Prop::inherits);
                 let value = if inherits {

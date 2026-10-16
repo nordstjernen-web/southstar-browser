@@ -142,6 +142,7 @@ struct State {
     keys: Option<Keys>,
     has: Option<HasDeps>,
     dirty: AddrSet<usize>,
+    inline_styled: AddrSet<usize>,
 }
 
 struct HasCtx<'a> {
@@ -836,6 +837,14 @@ impl State {
         }
     }
 
+    fn only_own_style(&self, name: Option<&[u8]>) -> bool {
+        name.is_some_and(|name| name.eq_ignore_ascii_case(b"style"))
+            && self
+                .keys
+                .as_ref()
+                .is_some_and(|keys| !keys.attrs.contains(b"style".as_slice()))
+    }
+
     fn mark_attr(&mut self, target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>) {
         if let (Some(name), Some(old)) = (name, old)
             && CString::new(name).is_ok_and(|name| attr(target, &name) == Some(old))
@@ -843,6 +852,10 @@ impl State {
             return;
         }
         if !self.attr_may_affect_style(name) {
+            return;
+        }
+        if self.only_own_style(name) {
+            self.inline_styled.insert(addr(target));
             return;
         }
         let fallback = target.parent().unwrap_or(target);
@@ -877,8 +890,15 @@ pub(crate) fn is_dirty(node: Node<'_>) -> bool {
     with_state(|s| s.dirty.contains(&addr(node)))
 }
 
+pub(crate) fn inline_style_changed(node: Node<'_>) -> bool {
+    with_state(|s| s.inline_styled.contains(&addr(node)))
+}
+
 pub(crate) fn clear_dirty() {
-    with_state(|s| s.dirty.clear());
+    with_state(|s| {
+        s.dirty.clear();
+        s.inline_styled.clear();
+    });
 }
 
 pub(crate) fn mark_restyle_dirty(node: Node<'_>) {
