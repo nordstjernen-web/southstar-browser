@@ -74,7 +74,8 @@ fn run_external(
         }
         return;
     }
-    let Some(abs_url) = ffi::url_resolve(origin, src) else {
+    let base = js.base_url(n);
+    let Some(abs_url) = ffi::url_resolve(base.as_deref().or(origin), src) else {
         return;
     };
     if origin.is_some_and(|origin| starts_with(origin, b"https://"))
@@ -208,7 +209,8 @@ pub(crate) fn load_stylesheet_element(js: Js, n: Node, origin: Option<&CStr>) {
         js.dispatch_resource_event(n, c"load");
         return;
     }
-    let Some(abs_url) = ffi::url_resolve(origin, &href) else {
+    let base = js.base_url(n);
+    let Some(abs_url) = ffi::url_resolve(base.as_deref().or(origin), &href) else {
         js.dispatch_resource_event(n, c"error");
         return;
     };
