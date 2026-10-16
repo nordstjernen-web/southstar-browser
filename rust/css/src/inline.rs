@@ -530,7 +530,7 @@ fn expanded_value(name: &[u8], value: &[u8], prop: Prop) -> Option<(Vec<u8>, boo
 }
 
 fn all_covered(name: &[u8]) -> bool {
-    !name.starts_with(b"-")
+    (!name.starts_with(b"-") || ffi::prop_named(name).is_some_and(|p| p.name() == name))
         && !eq(name, b"direction")
         && !eq(name, b"unicode-bidi")
         && declarations::named_property_supported(name)
