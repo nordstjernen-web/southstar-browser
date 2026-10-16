@@ -528,7 +528,7 @@ fn auto_columns(
     for w in &cols.widths {
         natural_sum_pre += w;
     }
-    if has_explicit_cols || (natural_sum_pre > *col_avail && *col_avail > 0.0) {
+    if has_explicit_cols || natural_sum_pre > *col_avail {
         for &&GridCell { cell, at } in &ordered {
             let cs = styled_or(cell, measure_inherited);
             let (m, p, bd) = edges_from_style(cell.style(), if *cw > 0.0 { *cw } else { 1000.0 });
@@ -552,7 +552,7 @@ fn auto_columns(
         natural_sum += w;
     }
     let widths = &mut cols.widths;
-    if natural_sum > *col_avail && *col_avail > 0.0 {
+    if natural_sum > *col_avail {
         let mut min_sum = 0.0;
         for mn in &cols.min {
             min_sum += mn;
