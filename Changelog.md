@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A block's negative horizontal margins reduce its parent's max-content
+  width, as in other browsers. The shrink-to-fit measurement took the
+  larger of the child's margin box and its content width, so negative
+  margins never counted: Wikipedia's main-menu button (margin: 0 -12px)
+  made its header slot 44px wide instead of 20px and pushed the logo
+  24px to the right. Inline-blocks, floats, table cells and flex items
+  holding such a block came out too wide in the same way.
 * A module loaded by <script type="module" src> and imported again from
   another module, or by import(), runs once, as the module map requires.
   The script element evaluated its own copy outside the map, so the

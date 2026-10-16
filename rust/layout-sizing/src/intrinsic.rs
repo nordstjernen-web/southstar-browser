@@ -240,9 +240,6 @@ pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f
                 if outer > max_child {
                     max_child = outer;
                 }
-                if w > max_child {
-                    max_child = w;
-                }
                 float_row = 0.0;
             }
         } else {
