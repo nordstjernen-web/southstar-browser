@@ -112,7 +112,8 @@ pub(crate) fn dialog_focusing_steps(js: Js, dialog: Element) {
 }
 
 fn url_targets_element(js: Js, doc: Element) -> bool {
-    let url = js.current_url().to_bytes();
+    let url = js.current_url();
+    let url = url.to_bytes();
     let Some(hash) = url.iter().position(|&b| b == b'#') else {
         return false;
     };

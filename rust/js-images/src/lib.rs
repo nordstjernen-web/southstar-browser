@@ -153,7 +153,8 @@ pub(crate) fn start_image_load(js: Js, el: Element, src: Option<&CStr>) {
     });
     let old = with_page(js, |page| page.loads.insert(key(el), load.clone()));
     drop(old);
-    let top_url = ffi::doc_base(js, el).unwrap_or(&load.requested_url);
+    let doc_base = ffi::doc_base(js, el);
+    let top_url = doc_base.as_deref().unwrap_or(&load.requested_url);
     let img = ffi::cache_get(js, &load.requested_url, top_url, &load);
     load.img.set(img);
     if img.is_some_and(settled) {

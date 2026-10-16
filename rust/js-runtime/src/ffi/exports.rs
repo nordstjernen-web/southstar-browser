@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -11,7 +11,6 @@ use southstar_js_engine::ContextHandle;
 
 use super::glue::{self, SourceFn};
 use super::record;
-use super::scopes;
 use super::state::{
     DataFn, DelayFn, DownloadFn, FormSubmitFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
     ViewportScrollFn,
@@ -33,21 +32,6 @@ fn text<'a>(raw: *const c_char) -> Option<&'a CStr> {
 
 fn node<'a>(raw: *const NsNode) -> Option<Node<'a>> {
     record::node(raw)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_note_user_activation(js: *mut NsJs) {
-    api::note_user_activation(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean {
-    flag(api::has_transient_activation(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_consume_user_activation(js: *mut NsJs) {
-    api::consume_user_activation(js);
 }
 
 #[unsafe(no_mangle)]
@@ -100,11 +84,6 @@ pub unsafe extern "C" fn ns_js_node_in_page(js: *mut NsJs, n: *const NsNode) -> 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_drain_microtasks(js: *mut NsJs) {
     api::drain_microtasks(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_halted(js: *const NsJs) -> GBoolean {
-    flag(api::halted(js))
 }
 
 #[unsafe(no_mangle)]
@@ -169,35 +148,8 @@ pub unsafe extern "C" fn ns_js_set_image_cache(js: *mut NsJs, cache: *mut c_void
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_cache(js: *const NsJs) -> *mut c_void {
-    api::image_cache(js)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_request_repaint(js: *mut NsJs) {
     api::request_repaint(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_notify_scroll_to(js: *mut NsJs, target: *const NsNode) {
-    if let Some(target) = node(target) {
-        api::notify_scroll_to(js, target);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_scroll_viewport(js: *mut NsJs, x: f64, y: f64) {
-    api::scroll_viewport(js, x, y);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean {
-    flag(api::in_frame_load(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_ready_state(js: *const NsJs) -> c_int {
-    api::ready_state(js)
 }
 
 macro_rules! hook_setter {
@@ -265,11 +217,6 @@ pub unsafe extern "C" fn ns_js_set_early_inject_src(js: *mut NsJs, src: *const c
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_wpt_hooks_enabled(js: *const NsJs) -> GBoolean {
-    flag(api::wpt_hooks_enabled(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_flush_layout(js: *mut NsJs) {
     api::flush_layout(js);
 }
@@ -307,42 +254,8 @@ pub unsafe extern "C" fn ns_js_main_context(js: *const NsJs) -> ContextHandle {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_pattern_context() -> ContextHandle {
-    api::pattern_context()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_events_suspended(js: *const NsJs) -> GBoolean {
-    flag(api::events_suspended(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_in_main_realm(
-    js: *mut NsJs,
-    f: unsafe extern "C" fn(data: *mut c_void),
-    data: *mut c_void,
-) {
-    api::in_main_realm(js, || unsafe { f(data) });
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_is_worker(js: *const NsJs) -> GBoolean {
     flag(api::is_worker(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_autofocus_processed(js: *const NsJs) -> GBoolean {
-    flag(api::autofocus_processed(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_autofocus_processed(js: *mut NsJs) {
-    api::set_autofocus_processed(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_active_modal(js: *mut NsJs, modal: *const NsNode) {
-    api::set_active_modal(js, node(modal));
 }
 
 #[unsafe(no_mangle)]
@@ -360,20 +273,6 @@ pub unsafe extern "C" fn ns_js_log_line(js: *mut NsJs, line: *const c_char) {
     if let Some(line) = text(line) {
         api::log_line(js, line);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_scope_push(
-    js: *mut NsJs,
-    realm: ContextHandle,
-    buf: *mut c_void,
-) {
-    unsafe { scopes::realm_scope_push(Js::of(js), realm, buf) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void) {
-    unsafe { scopes::realm_scope_pop(Js::of(js), buf) };
 }
 
 #[unsafe(no_mangle)]
@@ -435,11 +334,6 @@ pub unsafe extern "C" fn ns_js_form_reset(js: *mut NsJs, form: *mut NsNode) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_load_realm(js: *mut NsJs) -> ContextHandle {
-    api::image_load_realm(js)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char {
     if let Some(url) = node(el).and_then(record::node_frame_url) {
         return url.as_ptr();
@@ -486,11 +380,6 @@ pub unsafe extern "C" fn ns_js_csp_form_action_allowed(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_storage_partition(js: *const NsJs) -> *const c_char {
     record::partition_key_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean {
-    flag(api::inline_handlers_allowed(js))
 }
 
 #[unsafe(no_mangle)]

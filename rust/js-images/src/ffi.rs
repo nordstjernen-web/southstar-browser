@@ -9,14 +9,13 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_image::ImageRef;
+use southstar_js_engine::ContextHandle;
+use southstar_js_runtime::api::{self, ResourceInfo as PerfInfo};
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::{Element, Load};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);
@@ -28,40 +27,14 @@ impl Js {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Realm(*mut c_void);
-
-#[repr(C, align(16))]
-struct ScopeBuffer([u8; 128]);
-
-#[repr(C)]
-struct PerfInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: GBoolean,
-    cors_mode: GBoolean,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: core::ffi::c_long,
-    body_size: i64,
-}
+pub(crate) struct Realm(ContextHandle);
 
 type GBoolean = c_int;
 type ImageReadyFn = unsafe extern "C" fn(img: *mut c_void, user_data: *mut c_void);
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
-    fn ns_js_image_cache(js: *const NsJs) -> *mut c_void;
-    fn ns_js_image_load_realm(js: *mut NsJs) -> *mut c_void;
-    fn ns_js_realm_scope_push(js: *mut NsJs, realm: *mut c_void, buf: *mut c_void);
-    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_request_repaint(js: *mut NsJs);
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
     fn ns_perf_has_resource(
         js: *const NsJs,
@@ -78,14 +51,12 @@ unsafe extern "C" {
         end_us: i64,
         resp: *const c_void,
     );
-    fn ns_js_page_time_origin_us(js: *const NsJs) -> i64;
     fn g_get_monotonic_time() -> i64;
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
         target: *const NsNode,
         kind: *const c_char,
     ) -> GBoolean;
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_image_cache_get(
         cache: *mut c_void,
@@ -106,29 +77,29 @@ pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
 }
 
 pub(crate) fn halted(js: Js) -> bool {
-    unsafe { ns_js_halted(js.0) != 0 }
+    api::halted(js.0)
 }
 
 pub(crate) fn in_pump(js: Js) -> bool {
-    unsafe { ns_js_in_pump(js.0) != 0 }
+    api::in_pump(js.0)
 }
 
 pub(crate) fn in_blocking_fetch() -> bool {
     unsafe { ns_engine_in_blocking_fetch() != 0 }
 }
 
-pub(crate) fn doc_base(js: Js, el: Element) -> Option<&'static CStr> {
-    c_str(unsafe { ns_js_node_doc_base(js.0, el.as_ptr()) })
+pub(crate) fn doc_base(js: Js, el: Element) -> Option<CString> {
+    api::node_doc_base(js.0, Some(el))
 }
 
 pub(crate) fn base_url(js: Js, el: Element) -> Option<CString> {
     let document_url = doc_base(js, el);
     southstar_dom::base_url::owning_document(el)
         .and_then(|doc| {
-            southstar_dom::base_url::document_base(doc, document_url.map(CStr::to_bytes))
+            southstar_dom::base_url::document_base(doc, document_url.as_deref().map(CStr::to_bytes))
         })
         .and_then(|base| CString::new(base).ok())
-        .or_else(|| document_url.map(CStr::to_owned))
+        .or(document_url)
 }
 
 pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
@@ -140,10 +111,7 @@ pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
 }
 
 fn image_cache(js: Js) -> *mut c_void {
-    if js.is_null() {
-        return ptr::null_mut();
-    }
-    unsafe { ns_js_image_cache(js.0) }
+    api::image_cache(js.0)
 }
 
 pub(crate) fn has_image_cache(js: Js) -> bool {
@@ -196,33 +164,27 @@ pub(crate) fn timeout_add_ready(ms: c_uint, load: &Rc<Load>) -> c_uint {
 }
 
 pub(crate) fn image_load_realm(js: Js) -> Realm {
-    Realm(unsafe { ns_js_image_load_realm(js.0) })
+    Realm(api::image_load_realm(js.0))
 }
 
 pub(crate) fn in_realm_scope<R>(js: Js, realm: Realm, f: impl FnOnce() -> R) -> R {
-    let mut buffer = ScopeBuffer([0; 128]);
-    let buf: *mut c_void = buffer.0.as_mut_ptr().cast();
-    unsafe { ns_js_realm_scope_push(js.0, realm.0, buf) };
-    let result = f();
-    unsafe { ns_js_realm_scope_pop(js.0, buf) };
-    result
+    api::in_realm(js.0, realm.0, f)
 }
 
 pub(crate) fn log_enabled(js: Js) -> bool {
-    unsafe { ns_js_log_enabled(js.0) != 0 }
+    api::log_enabled(js.0)
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
-    let line = CString::new(line).unwrap_or_default();
-    unsafe { ns_js_log_line(js.0, line.as_ptr()) };
+    api::log_line(js.0, &CString::new(line).unwrap_or_default());
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    unsafe { ns_js_request_repaint(js.0) };
+    api::request_repaint(js.0);
 }
 
 pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
@@ -230,16 +192,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     if js.is_null() || url.is_null() {
         return;
     }
-    let mut info = PerfInfo {
-        timeline: ptr::null(),
-        document_url: ptr::null(),
-        render_blocking: 0,
-        cors_mode: 0,
-        next_hop_protocol: ptr::null(),
-        timing_allow_origin: ptr::null(),
-        status: 0,
-        body_size: 0,
-    };
+    let mut info = PerfInfo::default();
     unsafe { ns_js_element_perf_info(js.0, node.as_ptr(), &mut info) };
     if unsafe { ns_perf_has_resource(js.0, info.timeline, url, c"img".as_ptr()) } != 0 {
         return;
@@ -250,7 +203,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     info.body_size = img.body_size();
     let now = unsafe { g_get_monotonic_time() };
     let (request_us, response_us) = img.fetch_times_us();
-    let origin_us = unsafe { ns_js_page_time_origin_us(js.0) };
+    let origin_us = api::time_origin_us(js.0);
     let start = if request_us >= origin_us {
         request_us
     } else {
@@ -271,7 +224,7 @@ pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
 }
 
 pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
-    let root = unsafe { BoxRef::from_ptr(ns_js_layout_root(js.0)) }?;
+    let root = unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }?;
     let b = unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), el.as_ptr())) }?;
     unsafe { ImageRef::from_ptr(b.media()?.image()) }
 }

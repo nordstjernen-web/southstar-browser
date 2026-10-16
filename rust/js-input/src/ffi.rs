@@ -16,10 +16,7 @@ use southstar_layout::{BoxRef, NsBox};
 use crate::transfer::DragSession;
 use crate::{Element, Modifiers, Pointer};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -44,15 +41,7 @@ unsafe extern "C" {
         meta: GBoolean,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_wpt_hooks_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_note_user_activation(js: *mut NsJs);
     fn ns_js_note_pointer_input(js: *mut NsJs, pointer: GBoolean);
     fn ns_js_popover_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_dialog_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
@@ -128,10 +117,7 @@ impl Js {
     }
 
     pub fn ctx(self) -> ContextHandle {
-        if self.is_null() {
-            return ContextHandle::NULL;
-        }
-        unsafe { ns_js_main_context(self.ptr()) }
+        api::main_context(self.ptr())
     }
 
     pub fn has_context(self) -> bool {
@@ -144,25 +130,25 @@ impl Js {
 
     pub fn realm_scope<R>(self, node: Element, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
         unsafe { ns_js_node_realm_context(self.ptr(), node.as_ptr()) }
-            .or(unsafe { ns_js_main_realm(self.ptr()) })
+            .or(api::main_realm(self.ptr()))
             .or(self.ctx())
             .with(f)
     }
 
     pub fn current_document(self) -> Option<Element> {
-        node(unsafe { ns_js_current_document(self.ptr()) })
+        api::current_document(self.ptr())
     }
 
     pub fn layout_root(self) -> Option<BoxRef<'static>> {
-        unsafe { BoxRef::from_ptr(ns_js_layout_root(self.ptr())) }
+        unsafe { BoxRef::from_ptr(api::layout_root(self.ptr()).cast::<NsBox>()) }
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.ptr()) != 0 }
+        api::halted(self.ptr())
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.ptr()) != 0 }
+        api::in_pump(self.ptr())
     }
 
     pub fn blocked(self) -> bool {
@@ -170,11 +156,11 @@ impl Js {
     }
 
     pub fn wpt_hooks_enabled(self) -> bool {
-        !self.is_null() && unsafe { ns_js_wpt_hooks_enabled(self.ptr()) != 0 }
+        api::wpt_hooks_enabled(self.ptr())
     }
 
     pub fn note_user_activation(self) {
-        unsafe { ns_js_note_user_activation(self.ptr()) };
+        api::note_user_activation(self.ptr());
     }
 
     pub fn note_pointer_input(self, pointer: bool) {

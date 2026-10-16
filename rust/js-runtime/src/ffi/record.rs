@@ -745,11 +745,6 @@ pub(crate) fn active() -> *mut NsJs {
     ACTIVE.with(Cell::get)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_active_js() -> *mut NsJs {
-    active()
-}
-
 pub(crate) fn set_active(js: *mut NsJs) {
     ACTIVE.with(|active| active.set(js));
 }

@@ -10,11 +10,6 @@ use southstar_js_engine::{Scope, Value};
 use super::NsJs;
 
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_make_element(
-        scope: &mut Scope<'_>,
-        node: *const NsNode,
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     #[allow(non_snake_case)]
     pub(crate) safe fn nsr_element_get_shadowRoot(
         scope: &mut Scope<'_>,

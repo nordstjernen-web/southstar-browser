@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
@@ -16,10 +16,7 @@ use southstar_style::{StyleRef, StyleTable};
 
 use crate::{Element, JsResult, Rect};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
@@ -40,13 +37,7 @@ unsafe extern "C" {
         name: *const c_char,
         len: *mut usize,
     ) -> *const c_char;
-    fn ns_js_flush_layout(js: *mut NsJs);
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
-    fn ns_js_style_table(js: *const NsJs) -> *mut GHashTable;
-    fn ns_js_scroll_viewport(js: *mut NsJs, x: f64, y: f64);
     fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64);
-    fn ns_js_request_repaint(js: *mut NsJs);
-    fn ns_js_notify_scroll_to(js: *mut NsJs, node: *const NsNode);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -54,7 +45,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_queue_scrollend(js: *mut NsJs, node: *const NsNode);
-    fn ns_observer_schedule_tick(js: *mut NsJs);
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
@@ -69,7 +59,6 @@ unsafe extern "C" {
         local_y: *mut f64,
     ) -> *const NsBox;
     fn ns_box_image_map_area(b: *const NsBox, local_x: f64, local_y: f64) -> *const NsNode;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
     fn ns_box_inline_rect_for_dom(
         root: *const NsBox,
         target: *const NsNode,
@@ -81,7 +70,6 @@ unsafe extern "C" {
     fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
     fn ns_box_scroll_snap(b: *mut NsBox);
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
-    fn ns_active_js() -> *mut NsJs;
     fn ns_js_computed_text(
         ctx: ContextHandle,
         node: *const NsNode,
@@ -148,23 +136,21 @@ pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
 }
 
 pub(crate) fn flush_layout(js: Js) {
-    if !js.is_null() {
-        unsafe { ns_js_flush_layout(js.0) };
-    }
+    api::flush_layout(js.0);
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(ns_js_layout_root(js.0)) }
+    unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }
 }
 
 pub(crate) fn style_table(js: Js) -> StyleTable {
     if js.is_null() {
         return StyleTable::none();
     }
-    unsafe { StyleTable::from_ptr(ns_js_style_table(js.0)) }
+    unsafe { StyleTable::from_ptr(api::style_table(js.0)) }
 }
 
 pub(crate) fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'static>> {
@@ -180,9 +166,7 @@ pub(crate) fn box_dom(b: BoxRef<'_>) -> Option<Element> {
 }
 
 pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64) {
-    if !js.is_null() {
-        unsafe { ns_js_scroll_viewport(js.0, x, y) };
-    }
+    api::scroll_viewport(js.0, x, y);
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
@@ -190,11 +174,11 @@ pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    unsafe { ns_js_request_repaint(js.0) };
+    api::request_repaint(js.0);
 }
 
 pub(crate) fn notify_scroll_to(js: Js, node: Element) {
-    unsafe { ns_js_notify_scroll_to(js.0, node.as_ptr()) };
+    api::notify_scroll_to(js.0, node);
 }
 
 pub(crate) fn dispatch_scroll(js: Js, node: Element) {
@@ -205,7 +189,7 @@ pub(crate) fn dispatch_scroll(js: Js, node: Element) {
 }
 
 pub(crate) fn observer_schedule_tick(js: Js) {
-    unsafe { ns_observer_schedule_tick(js.0) };
+    api::observer_schedule_tick(js.0);
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &[u8], value: &[u8]) {
@@ -219,7 +203,7 @@ pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<
 }
 
 pub(crate) fn active_js() -> Option<Js> {
-    let js = unsafe { ns_active_js() };
+    let js = api::active();
     (!js.is_null()).then_some(Js(js))
 }
 
@@ -248,7 +232,7 @@ pub(crate) fn image_map_area(b: BoxRef<'_>, local_x: f64, local_y: f64) -> Optio
 }
 
 pub(crate) fn current_doc(js: Js) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.0)) }
+    api::current_document(js.0)
 }
 
 pub(crate) fn inline_rect_for_dom(root: BoxRef<'_>, node: Element) -> Option<Rect> {

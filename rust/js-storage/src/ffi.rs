@@ -9,16 +9,13 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::store::{Area, Items, Snapshot};
 use crate::{Page, binding, class, events};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[repr(C)]
 struct GKeyFile {
@@ -42,22 +39,12 @@ impl Js {
     }
 }
 
-type MainRealmFn = unsafe extern "C" fn(data: *mut c_void);
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 const KEY_FILE_NONE: c_int = 0;
 
 unsafe extern "C" {
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_main_realm(js: *mut NsJs, f: MainRealmFn, data: *mut c_void);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean;
-    fn ns_drain_microtasks(js: *mut NsJs);
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
 
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(tag: c_uint) -> GBoolean;
@@ -146,23 +133,23 @@ pub(crate) fn new_storage(scope: &mut Scope<'_>, area: i32) -> Value {
 }
 
 pub(crate) fn halted(js: Js) -> bool {
-    unsafe { ns_js_halted(js.ptr()) != 0 }
+    api::halted(js.ptr())
 }
 
 pub(crate) fn in_frame_load(js: Js) -> bool {
-    unsafe { ns_js_in_frame_load(js.ptr()) != 0 }
+    api::in_frame_load(js.ptr())
 }
 
 pub(crate) fn current_url(js: Js) -> Option<String> {
-    owned(unsafe { ns_js_current_url(js.ptr()) })
+    Some(api::current_url(js.ptr()).to_string_lossy().into_owned())
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+    api::current_document(js.ptr())
 }
 
 pub(crate) fn in_page_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.ptr()).with(f)
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
@@ -174,7 +161,7 @@ pub(crate) fn frame_realm_window(js: Js, frame: Node<'_>) -> Value {
 }
 
 pub(crate) fn inline_handlers_allowed(js: Js) -> bool {
-    unsafe { ns_js_inline_handlers_allowed(js.ptr()) != 0 }
+    api::inline_handlers_allowed(js.ptr())
 }
 
 pub(crate) fn fire_element_handlers(
@@ -188,36 +175,19 @@ pub(crate) fn fire_element_handlers(
 }
 
 pub(crate) fn dispatch_window_event(_scope: &mut Scope<'_>, js: Js, kind: &str, event: &Value) {
-    api::dispatch_document_window_event(js.ptr().cast(), kind, event.clone());
+    api::dispatch_document_window_event(js.ptr(), kind, event.clone());
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
-    unsafe { ns_drain_microtasks(js.ptr()) };
+    api::drain_microtasks(js.ptr());
 }
 
 pub(crate) fn log_line(js: Js, line: &str) {
-    let line = c_text(line);
-    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+    api::log_line(js.ptr(), &c_text(line));
 }
 
-struct MainRealmJob<'a> {
-    run: &'a mut dyn FnMut(),
-}
-
-unsafe extern "C" fn run_main_realm_job(data: *mut c_void) {
-    let job = unsafe { &mut *data.cast::<MainRealmJob<'_>>() };
-    (job.run)();
-}
-
-pub(crate) fn in_main_realm(js: Js, mut f: impl FnMut()) {
-    let mut job = MainRealmJob { run: &mut f };
-    unsafe {
-        ns_js_in_main_realm(
-            js.ptr(),
-            run_main_realm_job,
-            (&raw mut job).cast::<c_void>(),
-        )
-    };
+pub(crate) fn in_main_realm(js: Js, f: impl FnMut()) {
+    api::in_main_realm(js.ptr(), f);
 }
 
 fn warn(message: &str) {

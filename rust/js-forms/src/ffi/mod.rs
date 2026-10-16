@@ -11,33 +11,21 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
 use southstar_js_bind::host::{self, HostKind};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use self::imports::*;
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Page(*mut NsJs);
 
 unsafe extern "C" {
     fn ns_multipart_boundary() -> *mut c_char;
-    fn ns_js_pattern_context() -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
-    fn ns_js_consume_user_activation(js: *mut NsJs);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_events_suspended(js: *const NsJs) -> GBoolean;
-    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_node_sandbox_blocks_forms(node: *const NsNode) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_submit_form(js: *mut NsJs, form: *const NsNode, submitter: *const NsNode);
     fn ns_js_dialog_close(js: *mut NsJs, dialog: *mut NsNode, return_value: *const c_char);
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
@@ -66,15 +54,7 @@ unsafe extern "C" {
         len: isize,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
 
-    fn ns_element_insert_before_single(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        newc: *mut NsNode,
-        reference: *mut NsNode,
-    );
     fn g_file_get_contents(
         filename: *const c_char,
         contents: *mut *mut c_char,
@@ -111,11 +91,11 @@ fn mut_ptr(node: Element) -> *mut NsNode {
 }
 
 pub(crate) fn element(value: &Value) -> Option<Element> {
-    node(nsr_unwrap_element(value))
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    nsr_make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn shadow_root(scope: &mut Scope<'_>, element: &Value) -> Value {
@@ -160,20 +140,8 @@ pub(crate) fn append_child(parent: Element, child: Element) {
     parent.append(child);
 }
 
-pub(crate) fn insert_before_single(
-    page: Option<Page>,
-    parent: Element,
-    child: Element,
-    reference: Element,
-) {
-    unsafe {
-        ns_element_insert_before_single(
-            Page::raw(page),
-            mut_ptr(parent),
-            mut_ptr(child),
-            mut_ptr(reference),
-        )
-    };
+pub(crate) fn insert_before_single(page: Option<Page>, child: Element, reference: Element) {
+    api::insert_before_single(Page::raw(page), child, reference);
 }
 
 pub(crate) fn array_item_function(scope: &mut Scope<'_>) -> Value {
@@ -278,7 +246,7 @@ pub(crate) fn multipart_boundary() -> Vec<u8> {
 }
 
 pub(crate) fn with_pattern_scope<R>(f: impl FnOnce(&mut Scope<'_>) -> Option<R>) -> Option<R> {
-    unsafe { ns_js_pattern_context() }.with(f).flatten()
+    api::pattern_context().with(f).flatten()
 }
 
 pub(crate) fn regex_matches(pattern: &[u8], value: &[u8]) -> Option<bool> {
@@ -337,19 +305,19 @@ impl Page {
     }
 
     pub(crate) fn current_document(self) -> Option<Element> {
-        node(unsafe { ns_js_current_document(self.0) })
+        api::current_document(self.0)
     }
 
     pub(crate) fn node_in_page(self, node: Element) -> bool {
-        unsafe { ns_js_node_in_page(self.0, node.as_ptr()) != 0 }
+        api::node_in_page(self.0, Some(node))
     }
 
     pub(crate) fn log_line(self, line: &CStr) {
-        unsafe { ns_js_log_line(self.0, line.as_ptr()) };
+        api::log_line(self.0, line);
     }
 
     pub(crate) fn submit_form(self, form: Element, submitter: Option<Element>) {
-        unsafe { ns_js_submit_form(self.0, form.as_ptr(), Node::ptr_or_null(submitter)) };
+        api::submit_form(self.0, form, submitter);
     }
 
     pub(crate) fn close_dialog(page: Option<Page>, dialog: Element, return_value: Option<&CStr>) {
@@ -394,19 +362,19 @@ impl Page {
     }
 
     pub(crate) fn has_transient_activation(self) -> bool {
-        unsafe { ns_js_has_transient_activation(self.0) != 0 }
+        api::has_transient_activation(self.0)
     }
 
     pub(crate) fn consume_user_activation(self) {
-        unsafe { ns_js_consume_user_activation(self.0) };
+        api::consume_user_activation(self.0);
     }
 
     pub(crate) fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.0) != 0 }
+        api::halted(self.0)
     }
 
     pub(crate) fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.0) != 0 }
+        api::in_pump(self.0)
     }
 
     pub(crate) fn dispatch_select(self, scope: &mut Scope<'_>, target: Element) {
@@ -416,7 +384,7 @@ impl Page {
     }
 
     pub(crate) fn mark_mutated(page: Option<Page>) {
-        unsafe { ns_js_mark_mutated(Page::raw(page)) };
+        api::mark_mutated(Page::raw(page));
     }
 
     pub(crate) fn clear_children(page: Option<Page>, node: Element) {
@@ -430,10 +398,10 @@ impl Page {
     }
 
     pub(crate) fn dispatch_submit(self, form: Element, submitter: Option<Element>) -> (bool, bool) {
-        if unsafe { ns_js_events_suspended(self.0) } != 0 {
+        if api::events_suspended(self.0) {
             return (false, false);
         }
-        let main = unsafe { ns_js_main_context(self.0) };
+        let main = api::main_context(self.0);
         let event = main.with(|scope| {
             let event = unsafe { nsr_make_event(scope, "submit", form.as_ptr()) };
             let submitter = wrap(scope, submitter);

@@ -112,11 +112,6 @@ pub(crate) struct FrameLoadScope {
     frame: *mut NsNode,
 }
 
-pub(crate) const SCOPE_BYTES: usize = 128;
-
-const _: () = assert!(core::mem::size_of::<RealmScope>() <= SCOPE_BYTES);
-const _: () = assert!(core::mem::size_of::<DispatchScope>() <= SCOPE_BYTES);
-
 pub(crate) fn top_slot(js: Js) -> *mut *mut c_char {
     let slot = js.st().top_url_slot.get();
     if slot.is_null() {
@@ -315,18 +310,6 @@ pub(crate) fn in_realm<R>(js: Option<Js>, realm: ContextHandle, f: impl FnOnce()
     let result = f();
     realm_scope_leave(js, &mut scope);
     result
-}
-
-pub(crate) unsafe fn realm_scope_push(js: Option<Js>, realm: ContextHandle, buf: *mut c_void) {
-    let scope = buf.cast::<RealmScope>();
-    unsafe {
-        scope.write(RealmScope::inactive());
-        realm_scope_enter(js, realm, &mut *scope);
-    }
-}
-
-pub(crate) unsafe fn realm_scope_pop(js: Option<Js>, buf: *mut c_void) {
-    unsafe { realm_scope_leave(js, &mut *buf.cast::<RealmScope>()) };
 }
 
 pub(crate) fn frame_url_begin(js: Js, url: *const c_char) -> Box<FrameUrl> {

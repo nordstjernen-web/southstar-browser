@@ -280,7 +280,7 @@ pub fn add(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         ffi::node_remove(opt);
     }
     match before.filter(|b| b.parent() == Some(sel)) {
-        Some(before) => ffi::insert_before_single(page, sel, opt, before),
+        Some(before) => ffi::insert_before_single(page, opt, before),
         None => ffi::append_child(sel, opt),
     }
     Page::mark_mutated(page);

@@ -7,32 +7,19 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_set_focus(js: *mut NsJs, el: *const NsNode);
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_request_repaint(js: *mut NsJs);
-    fn ns_js_autofocus_processed(js: *const NsJs) -> GBoolean;
-    fn ns_js_set_autofocus_processed(js: *mut NsJs);
-    fn ns_js_ready_state(js: *const NsJs) -> c_int;
-    fn ns_js_set_active_modal(js: *mut NsJs, modal: *const NsNode);
     fn ns_js_set_attr_recorded_len(
         js: *mut NsJs,
         n: *mut NsNode,
@@ -52,18 +39,13 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
-    fn ns_js_consume_user_activation(js: *mut NsJs);
-    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
     fn ns_node_is_focusable(el: *const NsNode) -> GBoolean;
     fn ns_node_tabindex(el: *const NsNode, out: *mut c_int) -> GBoolean;
     fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_node_arm_js_invalidate(n: *mut NsNode);
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value>;
-    safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
         name: &[u8],
@@ -119,10 +101,7 @@ impl Js {
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        if self.is_null() {
-            return None;
-        }
-        unsafe { ns_js_main_context(self.ptr()) }.with(f)
+        api::main_context(self.ptr()).with(f)
     }
 
     pub fn hold(self, el: Element) -> Option<Value> {
@@ -130,11 +109,11 @@ impl Js {
     }
 
     pub fn current_document(self) -> Option<Element> {
-        node(unsafe { ns_js_current_document(self.ptr()) })
+        api::current_document(self.ptr())
     }
 
-    pub fn current_url(self) -> &'static CStr {
-        text(unsafe { ns_js_current_url(self.ptr()) }).unwrap_or(c"")
+    pub fn current_url(self) -> CString {
+        api::current_url(self.ptr())
     }
 
     pub fn focused(self) -> Option<Element> {
@@ -146,35 +125,35 @@ impl Js {
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.ptr()) != 0 }
+        api::halted(self.ptr())
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.ptr()) != 0 }
+        api::in_pump(self.ptr())
     }
 
     pub fn mark_mutated(self) {
-        unsafe { ns_js_mark_mutated(self.ptr()) };
+        api::mark_mutated(self.ptr());
     }
 
     pub fn request_repaint(self) {
-        unsafe { ns_js_request_repaint(self.ptr()) };
+        api::request_repaint(self.ptr());
     }
 
     pub fn autofocus_processed(self) -> bool {
-        unsafe { ns_js_autofocus_processed(self.ptr()) != 0 }
+        api::autofocus_processed(self.ptr())
     }
 
     pub fn set_autofocus_processed(self) {
-        unsafe { ns_js_set_autofocus_processed(self.ptr()) };
+        api::set_autofocus_processed(self.ptr());
     }
 
     pub fn ready_state(self) -> i32 {
-        unsafe { ns_js_ready_state(self.ptr()) }
+        api::ready_state(self.ptr())
     }
 
     pub fn set_active_modal(self, modal: Option<Element>) {
-        unsafe { ns_js_set_active_modal(self.ptr(), Node::ptr_or_null(modal)) };
+        api::set_active_modal(self.ptr(), modal);
     }
 
     pub fn set_attr_recorded(self, el: Element, name: &CStr, value: &[u8]) {
@@ -231,11 +210,11 @@ impl Js {
     }
 
     pub fn consume_user_activation(self) {
-        unsafe { ns_js_consume_user_activation(self.ptr()) };
+        api::consume_user_activation(self.ptr());
     }
 
     pub fn has_transient_activation(self) -> bool {
-        unsafe { ns_js_has_transient_activation(self.ptr()) != 0 }
+        api::has_transient_activation(self.ptr())
     }
 
     pub fn form_owner(self, el: Element) -> Option<Element> {
@@ -251,11 +230,11 @@ pub(crate) fn unwrap(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;
     }
-    node(nsr_unwrap_element(value))
+    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
-    nsr_make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value {
@@ -295,7 +274,7 @@ pub(crate) fn submit_or_reset(scope: &mut Scope<'_>, form: Element, submitter: O
 }
 
 pub(crate) fn note(el: Element) -> Element {
-    unsafe { ns_node_arm_js_invalidate(el.as_mut_ptr()) };
+    api::arm_js_invalidate(el);
     el
 }
 

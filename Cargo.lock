@@ -2373,6 +2373,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-numfmt",
  "southstar-url",
 ]
@@ -2428,6 +2429,8 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-dom",
  "southstar-image",
+ "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-layout",
  "southstar-url",
 ]
@@ -2694,6 +2697,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]
