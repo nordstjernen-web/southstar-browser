@@ -1207,8 +1207,9 @@ fn baseline_shift(t: &[u8]) -> Option<Value> {
 }
 
 fn vertical_align(t: &[u8]) -> Option<Value> {
-    let (mut source, mut align, mut shift): (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>) =
-        (None, None, None);
+    let mut source: Option<Vec<u8>> = None;
+    let mut align: Option<Vec<u8>> = None;
+    let mut shift: Option<Vec<u8>> = None;
     for word in split_ws_limit(strip(t), 5) {
         if word_is_one_of(word, "first last") && source.is_none() {
             source = Some(lower(word));
