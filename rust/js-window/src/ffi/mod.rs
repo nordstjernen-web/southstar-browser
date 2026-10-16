@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -34,33 +34,27 @@ impl Realm {
 #[derive(Clone, Copy)]
 pub(crate) struct Frame(usize);
 
-pub(crate) struct UrlToken(*mut c_void);
+pub(crate) struct UrlToken(Option<api::UrlScope>);
 
 unsafe extern "C" {
-    fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle;
     fn ns_iframe_origin_is_opaque(frame: *mut NsNode) -> GBoolean;
-    fn ns_js_document_origin(js: *const NsJs) -> *const c_char;
     fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
     fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
-    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
-    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
-    fn ns_js_realm_url_enter(js: *mut NsJs, realm: ContextHandle) -> *mut c_void;
-    fn ns_js_realm_url_leave(js: *mut NsJs, token: *mut c_void);
 }
 
 pub(crate) fn main_realm(js: Js) -> Option<Realm> {
     if js.is_null() {
         return None;
     }
-    Realm::from_handle(unsafe { ns_js_main_realm_context(js.ptr()) })
+    Realm::from_handle(api::main_realm(js.ptr()))
 }
 
 pub(crate) fn current_realm(js: Js) -> Option<Realm> {
     if js.is_null() {
         return None;
     }
-    Realm::from_handle(unsafe { ns_js_main_context(js.ptr()) })
+    Realm::from_handle(api::main_context(js.ptr()))
 }
 
 pub(crate) fn frame_node(js: Js, window: &Value) -> Option<Frame> {
@@ -76,8 +70,7 @@ pub(crate) fn frame_origin_is_opaque(frame: Frame) -> bool {
 }
 
 pub(crate) fn document_origin(js: Js) -> Option<Vec<u8>> {
-    let origin = unsafe { ns_js_document_origin(js.ptr()) };
-    (!origin.is_null()).then(|| unsafe { borrowed(origin) })
+    api::document_origin(js.ptr()).map(CString::into_bytes)
 }
 
 pub(crate) fn frame_url(js: Js, frame: Frame) -> Option<Vec<u8>> {
@@ -116,36 +109,38 @@ pub(crate) fn function_realm(scope: &mut Scope<'_>, function: &Value) -> Realm {
 }
 
 pub(crate) fn budget_enter(js: Js) -> i64 {
-    unsafe { ns_js_budget_enter(js.ptr()) }
+    api::budget_enter(js.ptr())
 }
 
 pub(crate) fn budget_leave(js: Js, saved: i64) {
-    unsafe { ns_js_budget_leave(js.ptr(), saved) };
+    api::budget_leave(js.ptr(), saved);
 }
 
 pub(crate) fn realm_url_enter(js: Js, realm: Realm) -> UrlToken {
-    UrlToken(unsafe { ns_js_realm_url_enter(js.ptr(), realm.0) })
+    UrlToken(api::enter_realm_url(js.ptr(), realm.0))
 }
 
-pub(crate) fn realm_url_leave(js: Js, token: UrlToken) {
-    unsafe { ns_js_realm_url_leave(js.ptr(), token.0) };
+pub(crate) fn realm_url_leave(token: UrlToken) {
+    if let Some(scope) = token.0 {
+        scope.leave();
+    }
 }
 
 pub(crate) fn dispatch_main_window_event(js: Js, kind: &str, event: Value) {
-    let saved_ctx = unsafe { ns_js_main_context(js.ptr()) };
+    let saved_ctx = api::main_context(js.ptr());
     let saved_doc = current_document(js);
     let main_ctx = main_realm(js).map_or(saved_ctx, |realm| realm.0);
     let main_doc = crate::window_events::top_document(saved_doc);
+    api::set_realm(js.ptr(), main_ctx, main_doc);
     unsafe {
-        ns_js_set_realm(js.ptr(), main_ctx, Node::ptr_or_null(main_doc).cast_mut());
         imports::nsr_js_dispatch_window_only_event(
             js.ptr(),
             Node::ptr_or_null(main_doc),
             kind,
             event,
-        );
-        ns_js_set_realm(js.ptr(), saved_ctx, Node::ptr_or_null(saved_doc).cast_mut());
-    }
+        )
+    };
+    api::set_realm(js.ptr(), saved_ctx, saved_doc);
 }
 
 pub(crate) fn port_transfer_prepare(
@@ -195,10 +190,7 @@ pub unsafe fn nsr_window_link_outward(js: *const NsJs, outward: &Value, realm_wi
     message::link_outward(Js::of(js), outward, realm_window);
 }
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -224,28 +216,7 @@ pub(crate) struct UrlOrigin {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_set_current_url(js: *mut NsJs, url: *const c_char);
-    fn ns_js_soft_navigate(js: *mut NsJs, url: *const c_char, replace: GBoolean);
-    fn ns_js_navigate(js: *mut NsJs, url: *const c_char, reload: GBoolean) -> GBoolean;
-    fn ns_js_window_events_blocked(js: *const NsJs) -> GBoolean;
-    fn ns_js_top_url(js: *mut NsJs) -> *const c_char;
-    fn ns_js_set_top_url(js: *mut NsJs, url: *const c_char);
-    fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
-    fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
-    fn ns_js_can_navigate(js: *const NsJs) -> GBoolean;
-    fn ns_js_fragment_navigated(js: *mut NsJs, url: *const c_char);
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
-    fn ns_js_consume_user_activation(js: *mut NsJs);
-    fn ns_js_events_suspended(js: *const NsJs) -> GBoolean;
-    fn ns_js_realm_scope_push(js: *mut NsJs, realm: ContextHandle, buf: *mut c_void);
-    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_set_realm(js: *mut NsJs, ctx: ContextHandle, doc: *mut NsNode);
-    fn ns_js_iframe_document_node(js: *const NsJs) -> *const NsNode;
     fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode;
-    fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode;
     fn g_utf8_casefold(text: *const c_char, len: isize) -> *mut c_char;
 }
 
@@ -282,34 +253,31 @@ pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) 
     if js.is_null() {
         return None;
     }
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.ptr()).with(f)
 }
 
 pub(crate) fn current_url(js: Js) -> Vec<u8> {
-    unsafe { borrowed(ns_js_current_url(js.ptr())) }
+    api::current_url(js.ptr()).into_bytes()
 }
 
 pub(crate) fn set_current_url(js: Js, url: &[u8]) {
-    let url = c_string(url);
-    unsafe { ns_js_set_current_url(js.ptr(), url.as_ptr()) };
+    api::set_current_url(js.ptr(), Some(&c_string(url)));
 }
 
 pub(crate) fn soft_navigate(js: Js, url: &[u8], replace: bool) {
-    let url = c_string(url);
-    unsafe { ns_js_soft_navigate(js.ptr(), url.as_ptr(), southstar_glib::boolean(replace)) };
+    api::soft_navigate(js.ptr(), &c_string(url), replace);
 }
 
 pub(crate) fn navigate(js: Js, url: &[u8], reload: bool) -> bool {
-    let url = c_string(url);
-    unsafe { ns_js_navigate(js.ptr(), url.as_ptr(), southstar_glib::boolean(reload)) != 0 }
+    api::navigate(js.ptr(), &c_string(url), reload)
 }
 
 pub(crate) fn window_events_blocked(js: Js) -> bool {
-    unsafe { ns_js_window_events_blocked(js.ptr()) != 0 }
+    api::window_events_blocked(js.ptr())
 }
 
 pub(crate) fn dispatch_document_window_event(js: Js, kind: &str, event: Value) {
-    api::dispatch_document_window_event(js.ptr().cast(), kind, event);
+    api::dispatch_document_window_event(js.ptr(), kind, event);
 }
 
 pub(crate) fn structured_clone(scope: &mut Scope<'_>, value: &Value) -> Result<Value, Value> {
@@ -380,30 +348,27 @@ pub(crate) fn url_set_component(href: &[u8], component: &str, value: &[u8]) -> O
 }
 
 pub(crate) fn top_url(js: Js) -> Vec<u8> {
-    unsafe { borrowed(ns_js_top_url(js.ptr())) }
+    api::top_url(js.ptr()).into_bytes()
 }
 
 pub(crate) fn set_top_url(js: Js, url: &[u8]) {
-    let url = c_string(url);
-    unsafe { ns_js_set_top_url(js.ptr(), url.as_ptr()) };
+    api::set_top_url(js.ptr(), Some(&c_string(url)));
 }
 
 pub(crate) fn url_parses(js: Js, url: &[u8]) -> bool {
-    let url = c_string(url);
-    unsafe { ns_js_url_parses(js.ptr(), url.as_ptr()) != 0 }
+    api::url_parses(js.ptr(), &c_string(url))
 }
 
 pub(crate) fn in_frame_load(js: Js) -> bool {
-    unsafe { ns_js_in_frame_load(js.ptr()) != 0 }
+    api::in_frame_load(js.ptr())
 }
 
 pub(crate) fn can_navigate(js: Js) -> bool {
-    unsafe { ns_js_can_navigate(js.ptr()) != 0 }
+    api::can_navigate(js.ptr())
 }
 
 pub(crate) fn fragment_navigated(js: Js, url: &[u8]) {
-    let url = c_string(url);
-    unsafe { ns_js_fragment_navigated(js.ptr(), url.as_ptr()) };
+    api::fragment_navigated(js.ptr(), &c_string(url));
 }
 
 pub(crate) fn dispatch_hashchange(js: Js, old_url: &[u8], new_url: &[u8]) {
@@ -412,24 +377,16 @@ pub(crate) fn dispatch_hashchange(js: Js, old_url: &[u8], new_url: &[u8]) {
     crate::window_events::dispatch_hashchange(js, old_url.as_bytes(), new_url.as_bytes());
 }
 
-#[repr(C, align(16))]
-struct ScopeBuffer([u8; 128]);
-
 pub(crate) fn has_main_context(js: Js) -> bool {
-    !unsafe { ns_js_main_context(js.ptr()) }.is_null()
+    !api::main_context(js.ptr()).is_null()
 }
 
 pub(crate) fn events_suspended(js: Js) -> bool {
-    unsafe { ns_js_events_suspended(js.ptr()) != 0 }
+    api::events_suspended(js.ptr())
 }
 
 pub(crate) fn in_main_realm_scope(js: Js, f: impl FnOnce()) {
-    let realm = unsafe { ns_js_main_realm_context(js.ptr()) };
-    let mut buffer = ScopeBuffer([0; 128]);
-    let buffer = buffer.0.as_mut_ptr().cast::<c_void>();
-    unsafe { ns_js_realm_scope_push(js.ptr(), realm, buffer) };
-    f();
-    unsafe { ns_js_realm_scope_pop(js.ptr(), buffer) };
+    api::in_realm(js.ptr(), api::main_realm(js.ptr()), f);
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Node<'static>> {
@@ -437,7 +394,7 @@ pub(crate) fn unwrap(value: &Value) -> Option<Node<'static>> {
 }
 
 pub(crate) fn iframe_document(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_iframe_document_node(js.ptr())) }
+    api::iframe_document_node(js.ptr())
 }
 
 pub(crate) fn frame_document(frame: Option<Node<'static>>) -> Option<Node<'static>> {
@@ -445,7 +402,7 @@ pub(crate) fn frame_document(frame: Option<Node<'static>>) -> Option<Node<'stati
 }
 
 pub(crate) fn ce_main_document(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_ce_main_doc(js.ptr())) }
+    api::ce_main_doc(js.ptr())
 }
 
 pub(crate) fn casefold(text: &[u8]) -> Vec<u8> {
@@ -455,16 +412,15 @@ pub(crate) fn casefold(text: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
-    let line = c_string(line);
-    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+    api::log_line(js.ptr(), &c_string(line));
 }
 
 pub(crate) fn has_transient_activation(js: Js) -> bool {
-    unsafe { ns_js_has_transient_activation(js.ptr()) != 0 }
+    api::has_transient_activation(js.ptr())
 }
 
 pub(crate) fn consume_user_activation(js: Js) {
-    unsafe { ns_js_consume_user_activation(js.ptr()) };
+    api::consume_user_activation(js.ptr());
 }
 
 pub(crate) fn url_parts(url: &[u8]) -> Option<UrlOrigin> {
@@ -504,7 +460,6 @@ pub unsafe extern "C" fn ns_window_history_teardown(js: *const NsJs) {
 }
 
 unsafe extern "C" {
-    fn ns_js_window_action(js: *mut NsJs, action: *const c_char);
     fn ns_services_screen_metrics(
         width: *mut c_int,
         height: *mut c_int,
@@ -553,8 +508,7 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, node: Node<'_>) -> Value {
 }
 
 pub(crate) fn window_action(js: Js, action: &str) {
-    let action = c_string(action.as_bytes());
-    unsafe { ns_js_window_action(js.ptr(), action.as_ptr()) };
+    api::window_action(js.ptr(), &c_string(action.as_bytes()));
 }
 
 pub(crate) fn viewport_width() -> f64 {
@@ -640,9 +594,6 @@ pub unsafe fn nsr_document_expose_legacy_named(
 }
 
 unsafe extern "C" {
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_page_url(js: *const NsJs) -> *const c_char;
     fn ns_window_scroll_prop(ctx: ContextHandle, prop: *const c_char) -> f64;
     fn ns_js_queue_scrollend_document(js: *mut NsJs);
     fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
@@ -652,7 +603,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_observer_schedule_tick(js: *mut NsJs);
     fn ns_services_reeval_media_queries(js: *mut NsJs);
     fn ns_cors_allows(
         doc_url: *const c_char,
@@ -663,11 +613,11 @@ unsafe extern "C" {
 }
 
 pub(crate) fn halted(js: Js) -> bool {
-    unsafe { ns_js_halted(js.ptr()) != 0 }
+    api::halted(js.ptr())
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+    api::current_document(js.ptr())
 }
 
 pub(crate) fn window_scroll_prop(scope: &mut Scope<'_>, prop: &CStr) -> f64 {
@@ -710,7 +660,7 @@ pub(crate) fn make_node_event(
 }
 
 pub(crate) fn schedule_observer_tick(js: Js) {
-    unsafe { ns_observer_schedule_tick(js.ptr()) };
+    api::observer_schedule_tick(js.ptr());
 }
 
 pub(crate) fn reeval_media_queries(js: Js) {
@@ -743,13 +693,9 @@ fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {
     {
         return Some(url.to_bytes().to_vec());
     }
-    let origin = unsafe { ns_js_document_origin(js.ptr()) };
-    let url = if origin.is_null() {
-        unsafe { ns_js_page_url(js.ptr()) }
-    } else {
-        origin
-    };
-    (!url.is_null()).then(|| unsafe { borrowed(url) })
+    api::document_origin(js.ptr())
+        .or_else(|| api::page_url(js.ptr()))
+        .map(CString::into_bytes)
 }
 
 fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {

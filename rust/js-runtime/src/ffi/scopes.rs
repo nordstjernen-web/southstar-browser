@@ -352,18 +352,6 @@ pub(crate) fn frame_url_end(js: Js, fu: &mut FrameUrl) {
     frame_url_leave(js, fu);
 }
 
-pub(crate) fn frame_url_push(js: Js, url: *const c_char) -> *mut c_void {
-    Box::into_raw(frame_url_begin(js, url)).cast()
-}
-
-pub(crate) unsafe fn frame_url_pop(js: Js, token: *mut c_void) {
-    if token.is_null() {
-        return;
-    }
-    let mut fu = unsafe { Box::from_raw(token.cast::<FrameUrl>()) };
-    frame_url_end(js, &mut fu);
-}
-
 fn dispatch_enter(
     js: Js,
     ctx: ContextHandle,
@@ -460,21 +448,6 @@ pub(crate) fn frame_load_begin(
     scope
 }
 
-pub(crate) fn frame_load_enter(
-    js: Js,
-    frame: *mut NsNode,
-    doc: *mut NsNode,
-    url: *const c_char,
-    realm_doc: Option<Value>,
-) -> *mut c_void {
-    Box::into_raw(frame_load_begin(js, frame, doc, url, realm_doc)).cast()
-}
-
-pub(crate) unsafe fn frame_load_leave(js: Js, token: *mut c_void) {
-    let mut scope = unsafe { Box::from_raw(token.cast::<FrameLoadScope>()) };
-    frame_load_end(js, &mut scope);
-}
-
 pub(crate) fn frame_load_end(js: Js, scope: &mut FrameLoadScope) {
     let state = js.st();
     state
@@ -497,10 +470,6 @@ pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameU
     let token = frame_url_begin(js, copy);
     unsafe { glib::g_free(copy.cast()) };
     Some(token)
-}
-
-pub(crate) fn realm_url_enter(js: Js, realm: ContextHandle) -> *mut c_void {
-    realm_url_begin(js, realm).map_or(ptr::null_mut(), |token| Box::into_raw(token).cast())
 }
 
 pub(crate) fn timer_scope_enter(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> *mut c_void {

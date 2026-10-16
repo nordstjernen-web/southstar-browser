@@ -1393,12 +1393,12 @@ pub(crate) fn time_origin_real_ms(js: *const NsJs) -> f64 {
     record(js).map_or(0.0, |js| js.time_origin_real_ms)
 }
 
-pub(crate) unsafe fn navigator_brand_ref<'a>(js: *const NsJs) -> Option<&'a Value> {
-    record(js).map(|js| &js.navigator_brand)
+pub(crate) fn navigator_brand(js: *const NsJs) -> Value {
+    record(js).map_or_else(Value::undefined, |js| js.navigator_brand.clone())
 }
 
-pub(crate) unsafe fn pristine_promise_ref<'a>(js: *const NsJs) -> Option<&'a Value> {
-    record(js).map(|js| &js.pristine_promise)
+pub(crate) fn pristine_promise(js: *const NsJs) -> Value {
+    record(js).map_or_else(Value::undefined, |js| js.pristine_promise.clone())
 }
 
 pub(crate) fn layout_root(js: *const NsJs) -> *const c_void {

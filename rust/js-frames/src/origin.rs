@@ -38,14 +38,10 @@ pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
     else {
         return false;
     };
-    let mut embedder = load::node_doc_base_ptr(js, iframe);
-    if !js.is_null() && embedder == load::page_url_ptr(js) {
-        let origin = load::document_origin(js);
-        if !origin.is_null() {
-            embedder = origin;
-        }
-    }
-    embedder.is_null() || !load::same_origin_ptr(frame_url, embedder)
+    let embedder = load::node_frame_url(iframe)
+        .or_else(|| load::document_origin(js))
+        .or_else(|| load::page_url(js));
+    embedder.is_none_or(|embedder| !load::same_origin(frame_url, &embedder))
 }
 
 fn holder_url(js: Js, iframe: Node<'_>) -> Option<CString> {

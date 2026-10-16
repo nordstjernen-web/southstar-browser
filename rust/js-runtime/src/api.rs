@@ -231,14 +231,14 @@ pub fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
     record::build_attributes(scope, owner)
 }
 
-pub unsafe fn frame_realm_finish(
-    js: *mut NsJs,
+pub fn frame_realm_finish(
+    js: *const NsJs,
     frame: ContextHandle,
     frame_global: &Value,
     parent_global: &Value,
 ) {
     if !js.is_null() {
-        unsafe { record::frame_realm_finish(js, frame, frame_global, parent_global) };
+        unsafe { record::frame_realm_finish(js.cast_mut(), frame, frame_global, parent_global) };
     }
 }
 
@@ -278,16 +278,12 @@ pub fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> Vec<u8> {
     record::exception_message(scope, exception)
 }
 
-pub unsafe fn navigator_brand(js: *const NsJs) -> Value {
-    unsafe { record::navigator_brand_ref(js) }
-        .cloned()
-        .unwrap_or_else(Value::undefined)
+pub fn navigator_brand(js: *const NsJs) -> Value {
+    record::navigator_brand(js)
 }
 
-pub unsafe fn pristine_promise(js: *const NsJs) -> Value {
-    unsafe { record::pristine_promise_ref(js) }
-        .cloned()
-        .unwrap_or_else(Value::undefined)
+pub fn pristine_promise(js: *const NsJs) -> Value {
+    record::pristine_promise(js)
 }
 
 pub fn register_element_class(scope: &mut Scope<'_>, proto: Value) {

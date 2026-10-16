@@ -7,8 +7,9 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
+use southstar_js_runtime::api;
 
-use super::{Js, NsJs};
+use super::Js;
 
 #[repr(C)]
 struct GString {
@@ -29,7 +30,6 @@ unsafe extern "C" {
         first: *mut GBoolean,
         submitter: *const NsNode,
     );
-    fn ns_js_csp_form_action_allowed(js: *mut NsJs, action_url: *const c_char) -> GBoolean;
 }
 
 pub(crate) fn urlencoded(
@@ -70,6 +70,5 @@ pub(crate) fn urlencoded(
 }
 
 pub(crate) fn csp_form_action_allowed(js: Js, url: &CStr) -> bool {
-    // SAFETY: `js` is the live page and `url` is NUL-terminated.
-    unsafe { ns_js_csp_form_action_allowed(js.ptr(), url.as_ptr()) != 0 }
+    api::csp_form_action_allowed(js.ptr(), Some(url))
 }

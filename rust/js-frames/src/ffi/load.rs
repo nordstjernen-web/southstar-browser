@@ -7,11 +7,12 @@ use core::ptr::NonNull;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GArray, GBoolean, GError};
-use southstar_js_engine::{ContextHandle, Value};
+use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_js_engine::Value;
+use southstar_js_runtime::api::{self, ResourceInfo, Upload};
 
 use super::ctx::Ctx;
-use super::imports::{nsr_js_frame_load_enter, nsr_realmdoc_deny_cookie, nsr_window_link_outward};
+use super::imports::{nsr_realmdoc_deny_cookie, nsr_window_link_outward};
 use super::{Js, NsJs, c_string, opt_ptr, owned_text};
 
 #[repr(C)]
@@ -42,12 +43,6 @@ struct NsCsp {
     _private: [u8; 0],
 }
 
-#[repr(C, align(8))]
-pub(crate) struct PerfInfo([u8; 56]);
-
-#[repr(C, align(8))]
-struct ScopeBuffer([u8; 128]);
-
 #[repr(C)]
 struct ScriptTask {
     node: *mut NsNode,
@@ -63,12 +58,6 @@ const SCRIPT_ASYNC: c_int = 2;
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
-    fn ns_js_net_page_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_document_origin(js: *const NsJs) -> *const c_char;
-    fn ns_js_top_url(js: *mut NsJs) -> *const c_char;
-    fn ns_js_node_doc_base(js: *mut NsJs, node: *const NsNode) -> *const c_char;
-    fn ns_js_page_csp(js: *const NsJs) -> *const NsCsp;
     fn ns_csp_allows(
         csp: *const NsCsp,
         kind: c_int,
@@ -77,34 +66,12 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_csp_parse(header: *const c_char) -> *mut NsCsp;
     fn ns_csp_free(csp: *mut NsCsp);
-    fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
     fn ns_js_start_frame_clock(js: *mut NsJs, frame: *const c_void);
-    fn ns_js_fetch_resource(
-        js: *mut NsJs,
-        url: *const c_char,
-        top_url: *const c_char,
-        headers: *const *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
-    fn ns_js_fetch_subresource(
-        js: *mut NsJs,
-        url: *const c_char,
-        top_url: *const c_char,
-        headers: *const *const c_char,
-        error: *mut *mut GError,
-        initiator: *const c_char,
-        info: *const PerfInfo,
-    ) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
+    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut ResourceInfo);
     fn ns_perf_add_resource_timed(
         js: *mut NsJs,
-        info: *const PerfInfo,
+        info: *const ResourceInfo,
         url: *const c_char,
         initiator: *const c_char,
         start_us: i64,
@@ -151,23 +118,9 @@ unsafe extern "C" {
     fn ns_script_type_supported(node: *const NsNode) -> GBoolean;
     fn ns_script_skipped_by_nomodule(node: *const NsNode) -> GBoolean;
     fn ns_script_type_is_module(node: *const NsNode) -> GBoolean;
-    fn ns_js_eval_budget_us() -> i64;
-    fn ns_js_frame_scope_push(
-        js: *mut NsJs,
-        realm: ContextHandle,
-        frame: *mut NsNode,
-        buf: *mut c_void,
-    );
-    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_frame_load_leave(js: *mut NsJs, token: *mut c_void);
-    fn ns_js_frame_eval_begin(js: *mut NsJs, script: *mut NsNode, deadline_us: i64) -> *mut NsNode;
-    fn ns_js_frame_eval_end(js: *mut NsJs, previous_script: *mut NsNode);
-    fn ns_js_current_script(js: *const NsJs) -> *mut NsNode;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
     fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
-    fn ns_js_unpin_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_sweep_orphans(js: *mut NsJs);
 }
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
@@ -238,31 +191,27 @@ pub(crate) fn monotonic_time() -> i64 {
 }
 
 pub(crate) fn node_in_page(js: Js, node: Node<'_>) -> bool {
-    unsafe { ns_js_node_in_page(js.ptr(), node.as_ptr()) != 0 }
-}
-
-pub(crate) fn page_url_ptr(js: Js) -> *const c_char {
-    unsafe { ns_js_net_page_url(js.ptr()) }
+    api::node_in_page(js.ptr(), Some(node))
 }
 
 pub(crate) fn page_url(js: Js) -> Option<CString> {
-    unsafe { c_str(page_url_ptr(js)) }.map(CStr::to_owned)
+    api::page_url(js.ptr())
 }
 
-pub(crate) fn document_origin(js: Js) -> *const c_char {
-    unsafe { ns_js_document_origin(js.ptr()) }
+pub(crate) fn document_origin(js: Js) -> Option<CString> {
+    api::document_origin(js.ptr())
 }
 
 pub(crate) fn top_url(js: Js) -> CString {
-    unsafe { c_str(ns_js_top_url(js.ptr())) }.map_or_else(CString::default, CStr::to_owned)
+    api::top_url(js.ptr())
 }
 
-pub(crate) fn node_doc_base_ptr(js: Js, node: Node<'_>) -> *const c_char {
-    unsafe { ns_js_node_doc_base(js.ptr(), node.as_ptr()) }
+pub(crate) fn node_frame_url(node: Node<'_>) -> Option<CString> {
+    api::node_frame_url(node)
 }
 
-pub(crate) fn same_origin_ptr(a: &CStr, b: *const c_char) -> bool {
-    unsafe { c_str(b) }.is_some_and(|b| same_origin(a, b))
+pub(crate) fn node_doc_base(js: Js, node: Node<'_>) -> Option<CString> {
+    api::node_doc_base(js.ptr(), Some(node))
 }
 
 pub(crate) fn same_origin(a: &CStr, b: &CStr) -> bool {
@@ -293,7 +242,7 @@ pub(crate) enum FrameKind {
 }
 
 pub(crate) fn page_csp_allows(js: Js, kind: FrameKind, url: &CStr, page: &CStr) -> bool {
-    let csp = unsafe { ns_js_page_csp(js.ptr()) };
+    let csp = api::page_csp(js.ptr()).cast::<NsCsp>();
     if csp.is_null() {
         return true;
     }
@@ -318,12 +267,11 @@ fn trimmed_at_nul(line: &[u8]) -> CString {
 }
 
 pub(crate) fn log_enabled(js: Js) -> bool {
-    unsafe { ns_js_log_enabled(js.ptr()) != 0 }
+    api::log_enabled(js.ptr())
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
-    let line = trimmed_at_nul(line);
-    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+    api::log_line(js.ptr(), &trimmed_at_nul(line));
 }
 
 pub(crate) fn start_frame_clock(js: Js, frame: Node<'_>) {
@@ -337,41 +285,13 @@ pub(crate) fn fetch_resource(
     header: &CStr,
     form_body: Option<&[u8]>,
 ) -> (Option<Response>, Option<CString>) {
-    let headers = [header.as_ptr(), core::ptr::null()];
-    let mut error: *mut GError = core::ptr::null_mut();
-    let (method, body, body_len, content_type) = match form_body {
-        Some(body) => (
-            c"POST".as_ptr(),
-            body.as_ptr().cast(),
-            body.len(),
-            c"application/x-www-form-urlencoded".as_ptr(),
-        ),
-        None => (c"GET".as_ptr(), core::ptr::null(), 0, core::ptr::null()),
-    };
-    let resp = unsafe {
-        ns_js_fetch_resource(
-            js.ptr(),
-            url.as_ptr(),
-            top_url.as_ptr(),
-            headers.as_ptr(),
-            method,
-            body,
-            body_len,
-            content_type,
-            &mut error,
-        )
-    };
-    (Response::take(resp), take_error(error))
-}
-
-fn take_error(error: *mut GError) -> Option<CString> {
-    let message = unsafe { error.as_ref() }
-        .and_then(|error| unsafe { c_str(error.message) })
-        .map(CStr::to_owned);
-    if !error.is_null() {
-        unsafe { glib::g_error_free(error) };
-    }
-    message
+    let upload = form_body.map(|body| Upload {
+        method: c"POST",
+        body,
+        content_type: Some(c"application/x-www-form-urlencoded"),
+    });
+    let fetched = api::fetch_resource(js.ptr(), url, Some(top_url), &[header], upload);
+    (Response::take(fetched.response.cast()), fetched.error)
 }
 
 pub(crate) fn fetch_script(
@@ -381,32 +301,19 @@ pub(crate) fn fetch_script(
     top_url: &CStr,
 ) -> Option<Response> {
     let info = element_perf_info(js, script);
-    let mut error: *mut GError = core::ptr::null_mut();
-    let resp = unsafe {
-        ns_js_fetch_subresource(
-            js.ptr(),
-            url.as_ptr(),
-            top_url.as_ptr(),
-            core::ptr::null(),
-            &mut error,
-            c"script".as_ptr(),
-            &info,
-        )
-    };
-    let resp = Response::take(resp);
-    drop(take_error(error));
-    resp
+    let fetched = api::fetch_subresource(js.ptr(), url, Some(top_url), &[], Some(c"script"), &info);
+    Response::take(fetched.response.cast())
 }
 
-pub(crate) fn element_perf_info(js: Js, element: Node<'_>) -> PerfInfo {
-    let mut info = PerfInfo([0; 56]);
+pub(crate) fn element_perf_info(js: Js, element: Node<'_>) -> ResourceInfo {
+    let mut info = ResourceInfo::default();
     unsafe { ns_js_element_perf_info(js.ptr(), element.as_ptr(), &mut info) };
     info
 }
 
 pub(crate) fn add_resource_timing(
     js: Js,
-    info: &PerfInfo,
+    info: &ResourceInfo,
     url: &CStr,
     initiator: &CStr,
     span: (i64, i64),
@@ -563,16 +470,11 @@ pub(crate) fn link_outward(js: Js, outward: &Value, realm_window: &Value) {
 }
 
 pub(crate) fn eval_budget_us() -> i64 {
-    unsafe { ns_js_eval_budget_us() }
+    api::eval_budget_us()
 }
 
 pub(crate) fn in_frame_scope<R>(js: Js, realm: Ctx, frame: Node<'_>, f: impl FnOnce() -> R) -> R {
-    let mut buffer = ScopeBuffer([0; 128]);
-    let buf: *mut c_void = buffer.0.as_mut_ptr().cast();
-    unsafe { ns_js_frame_scope_push(js.ptr(), realm.handle(), frame.as_mut_ptr(), buf) };
-    let result = f();
-    unsafe { ns_js_realm_scope_pop(js.ptr(), buf) };
-    result
+    api::in_frame_scope(js.ptr(), realm.handle(), frame, f)
 }
 
 pub(crate) fn during_frame_load<R>(
@@ -583,18 +485,7 @@ pub(crate) fn during_frame_load<R>(
     realm_doc: &Value,
     f: impl FnOnce() -> R,
 ) -> R {
-    let token = unsafe {
-        nsr_js_frame_load_enter(
-            js.ptr(),
-            frame.as_mut_ptr(),
-            doc.as_mut_ptr(),
-            url.as_ptr(),
-            realm_doc,
-        )
-    };
-    let result = f();
-    unsafe { ns_js_frame_load_leave(js.ptr(), token) };
-    result
+    api::during_frame_load(js.ptr(), frame, doc, url, realm_doc, f)
 }
 
 pub(crate) fn evaluating<R>(
@@ -603,14 +494,7 @@ pub(crate) fn evaluating<R>(
     deadline_us: i64,
     f: impl FnOnce() -> R,
 ) -> R {
-    let script = match script {
-        Some(script) => script.as_mut_ptr(),
-        None => unsafe { ns_js_current_script(js.ptr()) },
-    };
-    let previous = unsafe { ns_js_frame_eval_begin(js.ptr(), script, deadline_us) };
-    let result = f();
-    unsafe { ns_js_frame_eval_end(js.ptr(), previous) };
-    result
+    api::frame_eval(js.ptr(), script, deadline_us, f)
 }
 
 pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
@@ -621,13 +505,11 @@ pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
 }
 
 pub(crate) fn orphan_document(js: Js, doc: Node<'_>) {
-    unsafe {
-        ns_node_remove(doc.as_mut_ptr());
-        ns_js_unpin_subtree(js.ptr(), doc.as_mut_ptr());
-        ns_js_track_orphan(js.ptr(), doc.as_mut_ptr());
-    }
+    unsafe { ns_node_remove(doc.as_mut_ptr()) };
+    api::unpin_subtree(js.ptr(), doc);
+    unsafe { ns_js_track_orphan(js.ptr(), doc.as_mut_ptr()) };
 }
 
 pub(crate) fn sweep_orphans(js: Js) {
-    unsafe { ns_js_sweep_orphans(js.ptr()) };
+    api::sweep_orphans(js.ptr());
 }

@@ -2,10 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
-
 use southstar_dom::NsNode;
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 
 use super::NsJs;
 
@@ -59,23 +57,6 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Native;
     pub(crate) safe fn nsr_storage_area_of(value: &Value) -> Option<i32>;
     pub(crate) safe fn nsr_storage_new(scope: &mut Scope<'_>, area: i32) -> Native;
-    pub(crate) unsafe fn nsr_js_navigator_brand(js: *const NsJs) -> Value;
-    pub(crate) unsafe fn nsr_js_pristine_promise(js: *const NsJs) -> Value;
-    pub(crate) unsafe fn nsr_js_frame_realm_finish(
-        js: *mut NsJs,
-        frame: ContextHandle,
-        frame_global: &Value,
-        parent_global: &Value,
-    );
-    pub(crate) unsafe fn nsr_js_frame_load_enter(
-        js: *mut NsJs,
-        frame: *mut NsNode,
-        doc: *mut NsNode,
-        url: *const c_char,
-        realm_doc: &Value,
-    ) -> *mut c_void;
-    pub(crate) safe fn nsr_make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Native;
-    pub(crate) safe fn nsr_unwrap_element(value: &Value) -> *const NsNode;
     pub(crate) unsafe fn nsr_make_realm_document(
         scope: &mut Scope<'_>,
         doc_node: *mut NsNode,

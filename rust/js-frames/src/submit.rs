@@ -132,12 +132,8 @@ fn navigation_for(
         .is_some_and(|method| method.to_bytes().eq_ignore_ascii_case(b"post"));
     let action = match non_empty(attr(c"formaction", c"action")) {
         Some(action) => {
-            let base = load::node_doc_base_ptr(js, form_node);
-            let base = (!base.is_null()).then(|| {
-                // SAFETY: a non-null document base is a NUL-terminated string owned by the page.
-                unsafe { CStr::from_ptr(base) }
-            })?;
-            ffi::resolve_url(base, action)?
+            let base = load::node_doc_base(js, form_node)?;
+            ffi::resolve_url(&base, action)?
         }
         None => document_url(js, doc)?,
     };

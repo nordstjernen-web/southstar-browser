@@ -227,7 +227,7 @@ pub(crate) fn deliver(scope: &mut Scope<'_>, target: &Value, event: &Value) {
         let url = ffi::realm_url_enter(js, deliver_realm);
         adopt_data(scope, deliver_realm, event);
         let _ = scope.call(&deliver, &actual, core::slice::from_ref(event));
-        ffi::realm_url_leave(js, url);
+        ffi::realm_url_leave(url);
         ffi::budget_leave(js, budget);
     } else if let Some(main) = ffi::current_realm(js).and_then(|_| main_realm(js)) {
         if is_main_window(js, &actual) {

@@ -79,7 +79,7 @@ pub(crate) fn navigator_brand(scope: &Scope<'_>) -> Value {
     if js.is_null() {
         return Value::undefined();
     }
-    unsafe { api::navigator_brand(js) }
+    api::navigator_brand(js)
 }
 
 pub(crate) fn page_clock(scope: &Scope<'_>) -> (f64, f64) {

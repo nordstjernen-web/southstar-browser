@@ -311,7 +311,8 @@ pub(crate) fn module_source(
     }
     count_load(js, true, 0);
     let info = js.module_perf_info(scope.handle());
-    let fetched = js.fetch(name, js.module_top_url(), !json, c"script", &info);
+    let top_url = js.module_top_url();
+    let fetched = js.fetch(name, top_url.as_deref(), !json, c"script", &info);
     let body = fetched
         .response
         .as_ref()

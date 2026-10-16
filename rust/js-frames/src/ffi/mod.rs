@@ -14,6 +14,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
 use self::imports::*;
@@ -21,10 +22,7 @@ use crate::page::{self, Frame};
 use crate::{cloner, globals, origin, owner, queue, realm, sandbox, schedule};
 use ctx::{Ctx, PropertyKey};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -50,24 +48,11 @@ impl Js {
 type JsResult = Result<Value, Value>;
 
 unsafe extern "C" {
-    fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_new_frame_context(js: *mut NsJs) -> ContextHandle;
     fn ns_perf_move_timeline(js: *mut NsJs, from: *const c_void, to: *const c_void);
     fn ns_js_adopt_frame_clock(js: *mut NsJs, frame: *const c_void, ctx: ContextHandle);
-    fn ns_js_node_doc_base(js: *mut NsJs, node: *const NsNode) -> *const c_char;
     fn ns_js_run_script_element(js: *mut NsJs, node: *mut NsNode, origin: *const c_char);
-    fn ns_js_ce_main_doc(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_set_doc_ready_state(js: *mut NsJs, doc: *const NsNode, state: c_int);
-    fn ns_js_platform_globals(js: *mut NsJs) -> *mut glib::GHashTable;
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_frame_load(js: *const NsJs) -> GBoolean;
-    fn ns_js_mark_mutated(js: *mut NsJs);
 }
 
 #[derive(Clone, Copy)]
@@ -137,20 +122,20 @@ pub(crate) fn bind_post_message(ctx: Ctx, global: &Value) {
 }
 
 pub(crate) fn main_realm(js: Js) -> Ctx {
-    let main = unsafe { ns_js_main_realm_context(js.ptr()) };
+    let main = api::main_realm(js.ptr());
     Ctx::from_handle(main).unwrap_or_else(|| current_realm(js))
 }
 
 pub(crate) fn current_realm(js: Js) -> Ctx {
-    Ctx::from_handle(unsafe { ns_js_main_context(js.ptr()) }).unwrap_or(Ctx::NULL)
+    Ctx::from_handle(api::main_context(js.ptr())).unwrap_or(Ctx::NULL)
 }
 
 pub(crate) fn navigator_brand(js: Js, _ctx: Ctx) -> Value {
-    unsafe { nsr_js_navigator_brand(js.ptr()) }
+    api::navigator_brand(js.ptr())
 }
 
 pub(crate) fn pristine_promise(js: Js, _ctx: Ctx) -> Value {
-    unsafe { nsr_js_pristine_promise(js.ptr()) }
+    api::pristine_promise(js.ptr())
 }
 
 pub(crate) fn is_window_named(value: &Value) -> bool {
@@ -176,7 +161,7 @@ pub(crate) fn debug_realm() -> bool {
 }
 
 pub(crate) fn new_frame_context(js: Js) -> Option<Ctx> {
-    Ctx::from_handle(unsafe { ns_js_new_frame_context(js.ptr()) })
+    Ctx::from_handle(api::new_frame_context(js.ptr()))
 }
 
 pub(crate) fn move_timeline(js: Js, frame: Node<'_>, ctx: Ctx) {
@@ -195,7 +180,7 @@ pub(crate) fn adopt_frame_clock(js: Js, frame: Option<Node<'_>>, ctx: Ctx) {
 }
 
 pub(crate) fn make_element(ctx: Ctx, node: Node<'_>) -> Value {
-    ctx.try_enter(|scope| nsr_make_element(scope, node.as_ptr()).ok())
+    ctx.try_enter(|scope| api::make_element(scope, node.as_ptr()).ok())
         .flatten()
         .unwrap_or_else(Value::undefined)
 }
@@ -206,12 +191,11 @@ pub(crate) fn make_post_message(ctx: Ctx, window: &Value) -> Value {
 }
 
 pub(crate) fn finish_frame_realm(js: Js, ctx: Ctx, window: &Value, parent_global: &Value) {
-    unsafe { nsr_js_frame_realm_finish(js.ptr(), ctx.handle(), window, parent_global) };
+    api::frame_realm_finish(js.ptr(), ctx.handle(), window, parent_global);
 }
 
 pub(crate) fn node_doc_base(js: Js, node: Node<'_>) -> Option<Vec<u8>> {
-    let base = unsafe { ns_js_node_doc_base(js.ptr(), node.as_ptr()) };
-    (!base.is_null()).then(|| unsafe { CStr::from_ptr(base) }.to_bytes().to_vec())
+    api::node_doc_base(js.ptr(), Some(node)).map(CString::into_bytes)
 }
 
 pub(crate) fn run_script_element(js: Js, node: Node<'_>, origin: Option<&[u8]>) {
@@ -229,15 +213,15 @@ pub(crate) fn scope_ctx(scope: &Scope<'_>) -> Ctx {
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(nsr_unwrap_element(value)) }
+    api::unwrap_element(value)
 }
 
 pub(crate) fn ce_main_doc(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_ce_main_doc(js.ptr())) }
+    api::ce_main_doc(js.ptr())
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_js_current_document(js.ptr())) }
+    api::current_document(js.ptr())
 }
 
 pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
@@ -245,7 +229,7 @@ pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
 }
 
 pub(crate) fn set_doc_ready_state(js: Js, doc: Node<'_>, state: c_int) {
-    unsafe { ns_js_set_doc_ready_state(js.ptr(), doc.as_ptr(), state) };
+    api::set_doc_ready_state(js.ptr(), doc, state);
 }
 
 fn opt_ptr(text: Option<&CStr>) -> *const c_char {
@@ -274,20 +258,10 @@ pub(crate) fn make_realm_document(
 }
 
 pub(crate) fn platform_global_names(js: Js) -> Vec<String> {
-    let table = unsafe { ns_js_platform_globals(js.ptr()) };
-    let mut names = Vec::new();
-    if table.is_null() {
-        return names;
-    }
-    let mut iter = glib::GHashTableIter::new();
-    let mut key: *mut c_void = core::ptr::null_mut();
-    unsafe { glib::g_hash_table_iter_init(&mut iter, table) };
-    while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, core::ptr::null_mut()) } != 0 {
-        if let Some(name) = unsafe { c_bytes(key.cast()) } {
-            names.push(String::from_utf8_lossy(name).into_owned());
-        }
-    }
-    names
+    api::platform_global_names(js.ptr())
+        .iter()
+        .map(|name| String::from_utf8_lossy(name).into_owned())
+        .collect()
 }
 
 pub(crate) fn window_event_functions(scope: &mut Scope<'_>) -> [(&'static str, Value); 3] {
@@ -359,8 +333,7 @@ pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr, old_value: &CStr) {
 }
 
 pub(crate) fn current_url(js: Js) -> Option<CString> {
-    let url = unsafe { ns_js_current_url(js.ptr()) };
-    (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }.to_owned())
+    Some(api::current_url(js.ptr()))
 }
 
 fn c_string(mut bytes: Vec<u8>) -> CString {
@@ -375,7 +348,7 @@ pub(crate) fn resolve_url(base: &CStr, href: &CStr) -> Option<CString> {
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(ns_js_layout_root(js.ptr())) }
+    unsafe { BoxRef::from_ptr(api::layout_root(js.ptr()).cast()) }
 }
 
 pub(crate) fn find_box(root: BoxRef<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
@@ -387,23 +360,19 @@ pub(crate) fn viewport_height() -> f64 {
 }
 
 pub(crate) fn halted(js: Js) -> bool {
-    unsafe { ns_js_halted(js.ptr()) != 0 }
+    api::halted(js.ptr())
 }
 
 pub(crate) fn in_frame_load(js: Js) -> bool {
-    unsafe { ns_js_in_frame_load(js.ptr()) != 0 }
+    api::in_frame_load(js.ptr())
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.ptr()) };
+    api::mark_mutated(js.ptr());
 }
 
 fn frame_key(node: *const NsNode) -> Frame {
     Frame(node as usize)
-}
-
-unsafe fn c_bytes<'a>(text: *const c_char) -> Option<&'a [u8]> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_bytes())
 }
 
 fn frame_ptr(frame: Option<Frame>) -> *mut NsNode {

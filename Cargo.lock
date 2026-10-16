@@ -2389,6 +2389,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-layout",
  "southstar-url",
  "southstar-xml",
@@ -2512,6 +2513,7 @@ dependencies = [
  "southstar-extensions",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 

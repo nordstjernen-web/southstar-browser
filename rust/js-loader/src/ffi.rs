@@ -7,17 +7,16 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean, GError};
+use southstar_glib::{self as glib, GArray, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::{
     Schedule, Task, blocking, compile, eval, fetch, hold, import_map, page, scan, schedule,
 };
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
+pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
 #[repr(C)]
 struct NsCsp {
@@ -77,20 +76,6 @@ const _: () = assert!(
 );
 
 #[repr(C)]
-pub struct PerfInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: GBoolean,
-    cors_mode: GBoolean,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: c_long,
-    body_size: i64,
-}
-
-const _: () = assert!(core::mem::size_of::<PerfInfo>() == 56);
-
-#[repr(C)]
 struct RawTask {
     node: *mut NsNode,
     schedule: c_int,
@@ -100,45 +85,18 @@ pub(crate) const CSP_SCRIPT: c_uint = 1;
 pub(crate) const CSP_STYLE: c_uint = 2;
 const FETCH_DEST_SCRIPT: c_int = 1;
 
-type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
 unsafe extern "C" {
     fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_node_arm_js_invalidate(node: *mut NsNode);
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_eval_depth(js: *const NsJs) -> c_int;
-    fn ns_js_callback_depth(js: *const NsJs) -> c_int;
-    fn ns_js_dispatch_depth(js: *const NsJs) -> c_int;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_page_csp(js: *const NsJs) -> *const NsCsp;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_worker_host(js: *const NsJs) -> *mut NsWorkerHost;
     fn ns_worker_host_base_url(host: *const NsWorkerHost) -> *const c_char;
-    fn ns_js_realm_document_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_node_in_page(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_node_document_base_url(js: *mut NsJs, node: *const NsNode) -> *mut c_char;
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
         target: *const NsNode,
         ty: *const c_char,
     ) -> GBoolean;
-    fn ns_js_page_url(js: *const NsJs) -> *const c_char;
     fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-    fn ns_js_fetch_subresource(
-        js: *mut NsJs,
-        url: *const c_char,
-        top_url: *const c_char,
-        headers: *const *const c_char,
-        error: *mut *mut GError,
-        initiator: *const c_char,
-        info: *const PerfInfo,
-    ) -> *mut NsResponse;
     fn ns_js_blob_url_lookup(
         js: *mut NsJs,
         url: *const c_char,
@@ -154,19 +112,6 @@ unsafe extern "C" {
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_free(array: *mut GByteArray, free_segment: GBoolean) -> *mut u8;
     fn g_array_remove_index(array: *mut GArray, index: c_uint) -> *mut GArray;
-    fn ns_js_has_log(js: *const NsJs) -> GBoolean;
-    fn ns_js_eval_depth_add(js: *mut NsJs, delta: c_int) -> c_int;
-    fn ns_js_ignore_destructive_writes_add(js: *mut NsJs, delta: c_int);
-    fn ns_js_current_script(js: *const NsJs) -> *const NsNode;
-    fn ns_js_swap_current_script(js: *mut NsJs, script: *mut NsNode) -> *mut NsNode;
-    fn ns_js_swap_current_document(js: *mut NsJs, doc: *mut NsNode) -> *mut NsNode;
-    fn ns_js_module_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_swap_module_context(js: *mut NsJs, ctx: ContextHandle) -> ContextHandle;
-    fn ns_js_frame_url_push(js: *mut NsJs, url: *const c_char) -> *mut c_void;
-    fn ns_js_frame_url_pop(js: *mut NsJs, fu: *mut c_void);
-    fn ns_js_apply_site_quirks(js: *mut NsJs);
-    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
-    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray;
@@ -184,17 +129,10 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_js_attach_timeout(
-        js: *mut NsJs,
-        ms: c_uint,
-        func: GSourceFunc,
-        data: *mut c_void,
-    ) -> c_uint;
     fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrading(js: *const NsJs) -> GBoolean;
-    fn ns_drain_microtasks(js: *mut NsJs);
     fn ns_csp_allows_with_nonce(
         csp: *const NsCsp,
         kind: c_uint,
@@ -222,7 +160,6 @@ unsafe extern "C" {
 
 unsafe extern "Rust" {
     unsafe fn nsr_js_report_uncaught(js: *mut NsJs, exception: &Value, origin: Option<&str>);
-    unsafe fn nsr_js_iframe_document(js: *const NsJs) -> Option<Value>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -277,7 +214,9 @@ pub(crate) fn append_child(parent: Node, child: Node) {
 }
 
 pub(crate) fn arm_invalidate(n: Option<Node>) {
-    unsafe { ns_node_arm_js_invalidate(Node::ptr_or_null(n).cast_mut()) }
+    if let Some(n) = n {
+        api::arm_js_invalidate(n);
+    }
 }
 
 pub(crate) fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
@@ -356,21 +295,6 @@ pub(crate) struct Fetched {
     pub error: Option<CString>,
 }
 
-impl PerfInfo {
-    fn empty() -> PerfInfo {
-        PerfInfo {
-            timeline: ptr::null(),
-            document_url: ptr::null(),
-            render_blocking: 0,
-            cors_mode: 0,
-            next_hop_protocol: ptr::null(),
-            timing_allow_origin: ptr::null(),
-            status: 0,
-            body_size: 0,
-        }
-    }
-}
-
 impl Js {
     pub(crate) fn key(self) -> usize {
         self.0 as usize
@@ -381,40 +305,39 @@ impl Js {
     }
 
     pub(crate) fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.0) != 0 }
+        api::halted(self.0)
     }
 
     pub(crate) fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.0) != 0 }
+        api::in_pump(self.0)
     }
 
     pub(crate) fn eval_depth(self) -> i32 {
-        unsafe { ns_js_eval_depth(self.0) }
+        api::eval_depth(self.0)
     }
 
     pub(crate) fn callback_depth(self) -> i32 {
-        unsafe { ns_js_callback_depth(self.0) }
+        api::callback_depth(self.0)
     }
 
     pub(crate) fn dispatch_depth(self) -> i32 {
-        unsafe { ns_js_dispatch_depth(self.0) }
+        api::dispatch_depth(self.0)
     }
 
     pub(crate) fn current_doc(self) -> Option<Node<'static>> {
-        node(unsafe { ns_js_current_document(self.0) })
+        api::current_document(self.0)
     }
 
     pub(crate) fn log(self, line: &[u8]) {
-        let line = c_string(line);
-        unsafe { ns_js_log_line(self.0, line.as_ptr()) }
+        api::log_line(self.0, &c_string(line));
     }
 
     pub(crate) fn mark_mutated(self) {
-        unsafe { ns_js_mark_mutated(self.0) }
+        api::mark_mutated(self.0);
     }
 
     pub(crate) fn in_page(self, n: Node) -> bool {
-        unsafe { ns_js_node_in_page(self.0, n.as_ptr()) != 0 }
+        api::node_in_page(self.0, Some(n))
     }
 
     pub(crate) fn base_url(self, n: Node) -> Option<CString> {
@@ -435,7 +358,7 @@ impl Js {
     }
 
     pub(crate) fn drain_microtasks(self) {
-        unsafe { ns_drain_microtasks(self.0) }
+        api::drain_microtasks(self.0);
     }
 
     pub(crate) fn schedule_static_iframes(self, root: Node) {
@@ -447,7 +370,7 @@ impl Js {
     }
 
     pub(crate) fn attach_drain_timer(self) -> u32 {
-        unsafe { ns_js_attach_timeout(self.0, 4, async_script_timer, self.0.cast()) }
+        api::attach_timeout(self.0, 4, async_script_timer, self.0.cast())
     }
 
     pub(crate) fn index_child_removed(self, parent: Option<Node>, removed: Node) {
@@ -489,41 +412,40 @@ impl Js {
     }
 
     pub(crate) fn has_log(self) -> bool {
-        unsafe { ns_js_has_log(self.0) != 0 }
+        api::log_enabled(self.0)
     }
 
     pub(crate) fn eval_depth_add(self, delta: i32) -> i32 {
-        unsafe { ns_js_eval_depth_add(self.0, delta) }
+        api::eval_depth_add(self.0, delta)
     }
 
     pub(crate) fn ignore_destructive_writes_add(self, delta: i32) {
-        unsafe { ns_js_ignore_destructive_writes_add(self.0, delta) }
+        api::ignore_destructive_writes_add(self.0, delta);
     }
 
     pub(crate) fn current_script(self) -> Option<Node<'static>> {
-        node(unsafe { ns_js_current_script(self.0) })
+        api::current_script(self.0)
     }
 
     pub(crate) fn swap_current_script(self, script: Option<Node>) -> Option<Node<'static>> {
-        node(unsafe { ns_js_swap_current_script(self.0, Node::ptr_or_null(script).cast_mut()) })
+        api::swap_current_script(self.0, script)
     }
 
     pub(crate) fn swap_current_doc(self, doc: Option<Node>) -> Option<Node<'static>> {
-        node(unsafe { ns_js_swap_current_document(self.0, Node::ptr_or_null(doc).cast_mut()) })
+        api::swap_current_document(self.0, doc)
     }
 
     pub(crate) fn main_realm(self) -> Realm {
-        Realm(unsafe { ns_js_main_context(self.0) })
+        Realm(api::main_context(self.0))
     }
 
     pub(crate) fn module_realm(self) -> Realm {
-        Realm(unsafe { ns_js_module_context(self.0) })
+        Realm(api::module_context(self.0))
     }
 
     pub(crate) fn swap_module_realm(self, realm: Option<Realm>) -> Option<Realm> {
         let ctx = realm.map_or(ContextHandle::default(), |realm| realm.0);
-        let previous = unsafe { ns_js_swap_module_context(self.0, ctx) };
-        previous.non_null().map(Realm)
+        api::swap_module_context(self.0, ctx).non_null().map(Realm)
     }
 
     pub(crate) fn node_realm(self, n: Node) -> Option<Realm> {
@@ -533,27 +455,29 @@ impl Js {
     }
 
     pub(crate) fn iframe_document(self) -> Option<Value> {
-        unsafe { nsr_js_iframe_document(self.0) }
+        api::iframe_document(self.0)
     }
 
     pub(crate) fn frame_url_push(self, url: Option<&CStr>) -> FrameUrl {
-        FrameUrl(unsafe { ns_js_frame_url_push(self.0, opt_ptr(url)) })
+        FrameUrl(api::enter_frame_url(self.0, url))
     }
 
     pub(crate) fn frame_url_pop(self, saved: FrameUrl) {
-        unsafe { ns_js_frame_url_pop(self.0, saved.0) }
+        if let Some(scope) = saved.0 {
+            scope.leave();
+        }
     }
 
     pub(crate) fn apply_site_quirks(self) {
-        unsafe { ns_js_apply_site_quirks(self.0) }
+        api::apply_site_quirks(self.0);
     }
 
     pub(crate) fn budget_enter(self) -> i64 {
-        unsafe { ns_js_budget_enter(self.0) }
+        api::budget_enter(self.0)
     }
 
     pub(crate) fn budget_leave(self, saved: i64) {
-        unsafe { ns_js_budget_leave(self.0, saved) }
+        api::budget_leave(self.0, saved);
     }
 
     pub(crate) fn flush_document_write(self) {
@@ -621,9 +545,10 @@ impl Js {
         nonce: Option<&CStr>,
         parser_inserted: bool,
     ) -> bool {
+        let csp = api::page_csp(self.0).cast::<NsCsp>();
         unsafe {
             ns_csp_allows_with_nonce(
-                ns_js_page_csp(self.0),
+                csp,
                 kind,
                 url.as_ptr(),
                 opt_ptr(origin),
@@ -634,42 +559,36 @@ impl Js {
     }
 
     pub(crate) fn inline_script_allowed(self, text: &[u8], nonce: Option<&CStr>) -> bool {
+        let csp = api::page_csp(self.0).cast::<NsCsp>();
         unsafe {
-            ns_csp_inline_script_allowed(
-                ns_js_page_csp(self.0),
-                text.as_ptr().cast(),
-                text.len(),
-                opt_ptr(nonce),
-            ) != 0
+            ns_csp_inline_script_allowed(csp, text.as_ptr().cast(), text.len(), opt_ptr(nonce)) != 0
         }
     }
 
     pub(crate) fn element_perf_info(self, n: Node) -> PerfInfo {
-        let mut info = PerfInfo::empty();
+        let mut info = PerfInfo::default();
         fill_element_perf_info(self.0, Some(n), &mut info);
         info
     }
 
     pub(crate) fn module_perf_info(self, ctx: ContextHandle) -> PerfInfo {
-        let mut info = PerfInfo::empty();
-        info.timeline = ctx.as_ptr().cast_const();
-        info.document_url = unsafe { ns_js_realm_document_url(self.0, ctx) };
-        info.cors_mode = glib::TRUE;
-        info
+        PerfInfo {
+            timeline: ctx.as_ptr().cast_const(),
+            document_url: api::realm_document_url_ptr(self.0, ctx),
+            cors_mode: glib::TRUE,
+            ..PerfInfo::default()
+        }
     }
 
-    pub(crate) fn module_top_url(self) -> Option<&'static CStr> {
+    pub(crate) fn module_top_url(self) -> Option<CString> {
         if self.is_null() {
             return None;
         }
-        unsafe {
-            let host = ns_js_worker_host(self.0);
-            cstr(if host.is_null() {
-                ns_js_current_url(self.0)
-            } else {
-                ns_worker_host_base_url(host)
-            })
+        let host = api::worker_host(self.0).cast::<NsWorkerHost>();
+        if host.is_null() {
+            return Some(api::current_url(self.0));
         }
+        unsafe { cstr(ns_worker_host_base_url(host)) }.map(CStr::to_owned)
     }
 
     pub(crate) fn fetch(
@@ -680,42 +599,38 @@ impl Js {
         initiator: &CStr,
         info: &PerfInfo,
     ) -> Fetched {
-        let mut err: *mut GError = ptr::null_mut();
         let headers = if script_accept {
-            unsafe { ns_net_accept_headers_for(FETCH_DEST_SCRIPT) }
+            script_accept_headers()
         } else {
-            ptr::null()
+            Vec::new()
         };
-        let resp = unsafe {
-            ns_js_fetch_subresource(
-                self.0,
-                url.as_ptr(),
-                opt_ptr(top_url),
-                headers,
-                &mut err,
-                initiator.as_ptr(),
-                info,
-            )
-        };
-        let error = (!err.is_null()).then(|| {
-            let message = unsafe { cstr((*err).message) }
-                .map(CStr::to_owned)
-                .unwrap_or_default();
-            unsafe { glib::g_error_free(err) };
-            message
-        });
+        let fetched = api::fetch_subresource(self.0, url, top_url, &headers, Some(initiator), info);
+        let resp = fetched.response.cast::<NsResponse>();
         Fetched {
             response: (!resp.is_null()).then(|| Response(resp)),
-            error,
+            error: fetched.error,
         }
     }
 
     pub(crate) fn with_main_scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        unsafe { ns_js_main_context(self.0) }.with(f)
+        api::main_context(self.0).with(f)
     }
 }
 
-pub(crate) struct FrameUrl(*mut c_void);
+fn script_accept_headers() -> Vec<&'static CStr> {
+    let mut headers = Vec::new();
+    let mut at = unsafe { ns_net_accept_headers_for(FETCH_DEST_SCRIPT) };
+    if at.is_null() {
+        return headers;
+    }
+    while let Some(header) = unsafe { cstr(*at) } {
+        headers.push(header);
+        at = unsafe { at.add(1) };
+    }
+    headers
+}
+
+pub(crate) struct FrameUrl(Option<api::UrlScope>);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Realm(ContextHandle);
@@ -1012,7 +927,7 @@ fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) 
     info.document_url = if !frame_url.is_null() {
         frame_url
     } else if has_js {
-        unsafe { ns_js_page_url(js) }
+        api::page_url_ptr(js)
     } else {
         ptr::null()
     };
