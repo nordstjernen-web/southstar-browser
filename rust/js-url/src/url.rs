@@ -6,7 +6,7 @@ use southstar_js_engine::{Scope, Value};
 use southstar_url::bytes::Parts;
 
 use crate::ffi::{self, Js};
-use crate::{JsResult, arg, is_nullish, set, set_str, with_page};
+use crate::{JsResult, arg, is_nullish, set, set_str};
 
 const HELPER_SOURCE: &str = include_str!("url_helper.js");
 
@@ -105,19 +105,21 @@ fn data_object(scope: &mut Scope<'_>, resolved: &[u8]) -> Value {
 }
 
 fn helper(scope: &mut Scope<'_>, js: Js) -> Option<Value> {
-    if let Some(helper) = with_page(js, |page| page.url_helper.clone()) {
-        return Some(helper);
-    }
-    let factory = scope
-        .eval_native_script(HELPER_SOURCE, "<url-helper>")
-        .ok()?;
-    let parts = scope.function("parts", 1, helper_parts);
-    let set = scope.function("set", 3, helper_set);
-    let helper = scope
-        .call(&factory, &Value::undefined(), &[parts, set])
-        .ok()?;
-    with_page(js, |page| page.url_helper = Some(helper.clone()));
-    Some(helper)
+    crate::realm_helper(
+        scope,
+        js,
+        |page| &mut page.url_helpers,
+        |scope| {
+            let factory = scope
+                .eval_native_script(HELPER_SOURCE, "<url-helper>")
+                .ok()?;
+            let parts = scope.function("parts", 1, helper_parts);
+            let set = scope.function("set", 3, helper_set);
+            scope
+                .call(&factory, &Value::undefined(), &[parts, set])
+                .ok()
+        },
+    )
 }
 
 fn wrap_instance(

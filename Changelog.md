@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* URL, URLSearchParams, Response/Request bodies and getComputedStyle
+  keep working in pages with iframes. The script helpers behind them were
+  built once per page, in whichever window used them first, and then
+  shared with every frame: URL objects made in a frame got the parent's
+  URL.prototype, and on naver.com, where an ad frame got there first,
+  every new URL() and new URLSearchParams() in the page threw "Illegal
+  invocation" once that frame went away. Each window now has its own.
 * A module may name its default import `of` or `async`
   (import of from "./react.js"). Both are ordinary identifiers there, but
   the parser rejected them with a SyntaxError, so a minified bundle that

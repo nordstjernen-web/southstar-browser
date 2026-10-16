@@ -5,7 +5,7 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::Js;
-use crate::{JsResult, arg, with_page};
+use crate::{JsResult, arg};
 
 const HELPER_SOURCE: &str = include_str!("search_params_helper.js");
 
@@ -20,14 +20,12 @@ fn helper(scope: &mut Scope<'_>) -> Option<Value> {
     if js.is_null() {
         return None;
     }
-    if let Some(helper) = with_page(js, |page| page.search_params_helper.clone()) {
-        return Some(helper);
-    }
-    let helper = scope
-        .eval_native_script(HELPER_SOURCE, "<usp-helper>")
-        .ok()?;
-    with_page(js, |page| page.search_params_helper = Some(helper.clone()));
-    Some(helper)
+    crate::realm_helper(
+        scope,
+        js,
+        |page| &mut page.search_params_helpers,
+        |scope| scope.eval_native_script(HELPER_SOURCE, "<usp-helper>").ok(),
+    )
 }
 
 fn make(scope: &mut Scope<'_>, init: Value, proto: Value) -> JsResult {

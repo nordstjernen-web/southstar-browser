@@ -156,13 +156,16 @@ fn proxy(scope: &mut Scope<'_>) -> Option<Value> {
         return None;
     }
     let page = page_or_new(js);
-    if let Some(proxy) = page.computed_proxy.borrow().clone() {
+    let cached = page.computed_proxy.borrow().lookup(scope);
+    if let Some(proxy) = cached {
         return Some(proxy);
     }
     let helper = scope
         .eval_native_script(PROXY_SOURCE, "<getComputedStyle>")
         .ok()?;
-    *page.computed_proxy.borrow_mut() = Some(helper.clone());
+    page.computed_proxy
+        .borrow_mut()
+        .store(scope, helper.clone());
     Some(helper)
 }
 
