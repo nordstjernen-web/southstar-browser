@@ -7,6 +7,7 @@ use core::ffi::{CStr, c_void};
 use southstar_glib::GStr;
 
 use crate::ffi::{self, NsBrowser};
+use crate::open::UNSAFE_CONTINUE_SCHEME;
 
 const CONSOLE_MAX: usize = 256 * 1024;
 const CONSOLE_KEEP: usize = 192 * 1024;
@@ -24,13 +25,34 @@ pub fn js_log(b: &NsBrowser, line: &CStr) {
     b.console_buf.append(b"\n");
 }
 
-pub fn allows_navigation_url(b: &NsBrowser, url: Option<&CStr>) -> bool {
-    if !url.is_some_and(|u| u.to_bytes().starts_with(b"file:")) {
-        return true;
+fn continues_interstitial(url: &[u8], from: Option<&[u8]>) -> bool {
+    let mut target = url;
+    while let Some(rest) = target.strip_prefix(UNSAFE_CONTINUE_SCHEME) {
+        target = rest;
     }
-    b.base_url
-        .get()
-        .is_some_and(|base| base.to_bytes().starts_with(b"file:"))
+    let host = |url: &[u8]| southstar_url::bytes::host_from(url).filter(|h| !h.is_empty());
+    match (host(target), from.and_then(host)) {
+        (Some(target), Some(from)) => target.eq_ignore_ascii_case(&from),
+        _ => false,
+    }
+}
+
+pub fn allows_navigation_url(b: &NsBrowser, url: Option<&CStr>) -> bool {
+    let Some(url) = url.map(CStr::to_bytes) else {
+        return true;
+    };
+    let base = b.base_url.get();
+    let from = base.as_deref().map(CStr::to_bytes);
+    if url.starts_with(b"file:") {
+        return from.is_some_and(|f| f.starts_with(b"file:"));
+    }
+    if southstar_net::is_privileged_page(url) {
+        return from.is_some_and(southstar_net::is_chrome_page);
+    }
+    if url.starts_with(UNSAFE_CONTINUE_SCHEME) {
+        return continues_interstitial(url, from);
+    }
+    true
 }
 
 pub fn resolve_navigation(b: &NsBrowser, href: &CStr) -> Option<GStr> {

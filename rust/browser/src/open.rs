@@ -12,7 +12,7 @@ use southstar_glib::GStr;
 use crate::api::Page;
 use crate::ffi::{self, Post, Response};
 
-const UNSAFE_CONTINUE_SCHEME: &[u8] = b"southstar-unsafe-continue:";
+pub(crate) const UNSAFE_CONTINUE_SCHEME: &[u8] = b"southstar-unsafe-continue:";
 const SEC_NONE: c_int = 0;
 const SEC_SECURE: c_int = 1;
 const SEC_INVALID: c_int = 2;

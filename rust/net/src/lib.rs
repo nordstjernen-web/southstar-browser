@@ -22,6 +22,7 @@ mod transport;
 mod url;
 mod view_source;
 
+pub use about::{is_chrome_page, is_privileged_page};
 pub use error_page::build as build_error_page;
 pub use ffi::fetch::{
     Response, Timing as ResponseTiming, accept_header_lines,

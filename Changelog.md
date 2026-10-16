@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Security: a web page can no longer navigate to the browser's privileged
+  pages. A link, a location assignment, a form submission or a Refresh
+  could open about:settings-save, about:settings-clear, about:history,
+  about:config or view-source:, and since a navigation carries no top
+  URL the about: handler took it for the browser's own UI. Any site
+  could rewrite the home page and search engine, turn off JavaScript or
+  HTTPS-First, or wipe history, cookies and site storage. Those targets
+  are now reached only from a browser about: page, settings-save and
+  settings-clear act only on a POST (never a GET query string), and the
+  safe-browsing continue link is followed only from the warning page for
+  the same host, so another page cannot skip the warning. Ported from
+  Nordstjernen.
 * A page whose html element scrolls (overflow: auto) while its body has
   overflow: hidden scrolls again. Overflow propagates to the viewport
   from the root element, and from the body only when the root is

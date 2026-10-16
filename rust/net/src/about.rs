@@ -13,6 +13,7 @@ use southstar_about_style::base_css;
 use southstar_html_util::escape_text;
 
 use crate::ffi::host as sys;
+use crate::request::has_prefix_ci;
 
 pub struct Page {
     pub status: c_long,
@@ -94,11 +95,10 @@ const THIRD_PARTY: Document = Document {
     title: "Third-party software notices",
 };
 
-pub fn request_from_chrome(top_url: Option<&[u8]>) -> bool {
-    let Some(top_url) = top_url.filter(|t| !t.is_empty()) else {
-        return true;
-    };
-    let Some(page) = top_url.strip_prefix(b"about:") else {
+const PRIVILEGED_PAGES: [&[u8]; 4] = [b"settings", b"config", b"history", b"ai"];
+
+pub fn is_chrome_page(url: &[u8]) -> bool {
+    let Some(page) = url.strip_prefix(b"about:") else {
         return false;
     };
     let page = &page[..page
@@ -106,6 +106,20 @@ pub fn request_from_chrome(top_url: Option<&[u8]>) -> bool {
         .position(|&c| c == b'?' || c == b'#')
         .unwrap_or(page.len())];
     !page.eq_ignore_ascii_case(b"blank") && !page.eq_ignore_ascii_case(b"srcdoc")
+}
+
+pub fn is_privileged_page(url: &[u8]) -> bool {
+    if has_prefix_ci(url, b"view-source:") {
+        return true;
+    }
+    has_prefix_ci(url, b"about:")
+        && PRIVILEGED_PAGES
+            .iter()
+            .any(|page| has_prefix_ci(&url[b"about:".len()..], page))
+}
+
+pub fn request_from_chrome(top_url: Option<&[u8]>) -> bool {
+    top_url.filter(|t| !t.is_empty()).is_none_or(is_chrome_page)
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -286,15 +300,21 @@ fn southstar_page() -> Vec<u8> {
     substitute(&page, b"__ND_SPLASH__", &splash_markup())
 }
 
-fn request_form(url: &[u8], method: Option<&[u8]>, body: Option<&[u8]>) -> Vec<u8> {
-    let posted = method.is_some_and(|m| m.eq_ignore_ascii_case(b"POST"));
-    match body.filter(|b| posted && !b.is_empty()) {
-        Some(body) => until_nul(body).to_vec(),
-        None => url
-            .iter()
-            .position(|&c| c == b'?')
-            .map_or_else(Vec::new, |q| url[q + 1..].to_vec()),
-    }
+fn is_post(method: Option<&[u8]>) -> bool {
+    method.is_some_and(|m| m.eq_ignore_ascii_case(b"POST"))
+}
+
+fn request_form<'a>(method: Option<&[u8]>, body: Option<&'a [u8]>) -> Option<&'a [u8]> {
+    body.filter(|b| is_post(method) && !b.is_empty())
+        .map(until_nul)
+}
+
+fn ok_json(ok: bool) -> Page {
+    json(if ok {
+        "{\"ok\":true}"
+    } else {
+        "{\"ok\":false}"
+    })
 }
 
 fn html(body: impl Into<Vec<u8>>) -> Page {
@@ -344,12 +364,18 @@ pub fn respond(
         b"settings" | b"config" => html(templates::settings()),
         _ if what.starts_with(b"settings-data") => json(settings::json()),
         _ if what.starts_with(b"settings-save") => {
-            settings::save(&request_form(url, method, body));
-            json("{\"ok\":true}")
+            let form = request_form(method, body);
+            if let Some(form) = form {
+                settings::save(form);
+            }
+            ok_json(form.is_some())
         }
         _ if what.starts_with(b"settings-clear") => {
-            sys::clear_browsing_data();
-            json("{\"ok\":true}")
+            let post = is_post(method);
+            if post {
+                sys::clear_browsing_data();
+            }
+            ok_json(post)
         }
         _ => html(FALLBACK),
     })
