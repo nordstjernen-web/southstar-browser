@@ -196,8 +196,23 @@ pub(crate) fn parse_from_string(scope: &mut Scope<'_>, this: &Value, args: &[Val
     );
     if wrapper.is_object() {
         let _ = scope.define(&wrapper, "defaultView", Value::null(), PLAIN);
+        if as_xml {
+            use_document_prototype(scope, &wrapper);
+        }
     }
     Ok(wrapper)
+}
+
+fn use_document_prototype(scope: &mut Scope<'_>, wrapper: &Value) {
+    let global = scope.global();
+    let Ok(constructor) = scope.get(&global, "Document") else {
+        return;
+    };
+    if let Ok(proto) = scope.get(&constructor, "prototype")
+        && proto.is_object()
+    {
+        let _ = scope.set_prototype(wrapper, &proto);
+    }
 }
 
 fn close_watcher_fire(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {

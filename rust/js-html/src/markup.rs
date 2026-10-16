@@ -289,7 +289,7 @@ fn serialize_to_string(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> 
     let html = args
         .first()
         .and_then(ffi::unwrap_node)
-        .map_or_else(Vec::new, outer_markup);
+        .map_or_else(Vec::new, |node| serialize::xml_serialize(Some(node)));
     Ok(scope.string_from_bytes(&html))
 }
 

@@ -475,6 +475,7 @@ impl<D: Dom> Parser<'_, D> {
     }
 
     fn content(&mut self, element: D::Node, qualified: &[u8], depth: i32) {
+        let mut closed = false;
         while self.ok && self.p < self.input.len() {
             if self.at(0) != b'<' {
                 let start = self.p;
@@ -498,6 +499,7 @@ impl<D: Dom> Parser<'_, D> {
                 if name.as_deref() != Some(qualified) {
                     self.ok = false;
                 }
+                closed = true;
                 break;
             }
             if self.remaining() >= 4 && self.input[self.p..].starts_with(b"<!--") {
@@ -534,6 +536,9 @@ impl<D: Dom> Parser<'_, D> {
             if !self.element(element, depth + 1) {
                 break;
             }
+        }
+        if !closed {
+            self.ok = false;
         }
     }
 }

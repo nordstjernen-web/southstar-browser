@@ -95,12 +95,6 @@ pub fn collect_all_text(root: Option<Node>) -> Vec<u8> {
     out
 }
 
-fn pre_like(name: &[u8]) -> bool {
-    [&b"pre"[..], b"textarea", b"listing"]
-        .iter()
-        .any(|tag| name.eq_ignore_ascii_case(tag))
-}
-
 fn raw_text_element(node: Node) -> bool {
     let Some(name) = node.element_name() else {
         return false;
@@ -178,7 +172,7 @@ fn serialize_start_tag(node: Node, out: &mut Vec<u8>) -> bool {
             continue;
         }
         out.push(b' ');
-        out.extend_from_slice(bytes(attr.name()));
+        html_attr_name(out, attr);
         out.extend_from_slice(b"=\"");
         escape_append(out, bytes(attr.value()), true);
         out.push(b'"');
@@ -187,15 +181,27 @@ fn serialize_start_tag(node: Node, out: &mut Vec<u8>) -> bool {
     if node.name().is_some() && is_void(name) {
         return false;
     }
-    let leading_newline = node
-        .first_child()
-        .filter(|child| child.is_text())
-        .and_then(|child| child.text())
-        .is_some_and(|text| text.to_bytes().first() == Some(&b'\n'));
-    if pre_like(name) && leading_newline {
-        out.push(b'\n');
-    }
     true
+}
+
+fn html_attr_name(out: &mut Vec<u8>, attr: crate::Attr<'_>) {
+    let ns = attr.namespace_uri().map(CStr::to_bytes);
+    let local = crate::attrs::local_name(attr).to_bytes();
+    let prefix: Option<&[u8]> = match ns {
+        Some(b"http://www.w3.org/XML/1998/namespace") => Some(b"xml"),
+        Some(b"http://www.w3.org/2000/xmlns/") if local == b"xmlns" => None,
+        Some(b"http://www.w3.org/2000/xmlns/") => Some(b"xmlns"),
+        Some(b"http://www.w3.org/1999/xlink") => Some(b"xlink"),
+        _ => {
+            out.extend_from_slice(bytes(attr.name()));
+            return;
+        }
+    };
+    if let Some(prefix) = prefix {
+        out.extend_from_slice(prefix);
+        out.push(b':');
+    }
+    out.extend_from_slice(local);
 }
 
 fn serialize_children(
@@ -274,113 +280,370 @@ pub fn outer_html(node: Option<Node>) -> Vec<u8> {
     out
 }
 
-fn element_namespace(node: Node<'_>) -> &[u8] {
-    if node.flags() & FLAG_SVG_NS != 0 {
-        return SVG_NAMESPACE;
+const XML_NS: &[u8] = b"http://www.w3.org/XML/1998/namespace";
+const XMLNS_NS: &[u8] = b"http://www.w3.org/2000/xmlns/";
+const XML_FLAG_FRAGMENT: u32 = 1 << 2;
+const XML_FLAG_CDATA: u32 = 1 << 10;
+
+type PrefixEntry = (Option<Vec<u8>>, Vec<Vec<u8>>);
+
+#[derive(Clone, Default)]
+struct PrefixMap(Vec<PrefixEntry>);
+
+impl PrefixMap {
+    fn candidates(&self, ns: Option<&[u8]>) -> Option<&Vec<Vec<u8>>> {
+        self.0
+            .iter()
+            .find(|(key, _)| key.as_deref() == ns)
+            .map(|(_, prefixes)| prefixes)
     }
-    if node.flags() & FLAG_FOREIGN_NS != 0 {
-        return bytes(node.attr(c"data-nd-ns-uri"));
+
+    fn contains(&self, ns: Option<&[u8]>, prefix: &[u8]) -> bool {
+        self.candidates(ns)
+            .is_some_and(|prefixes| prefixes.iter().any(|p| p == prefix))
     }
-    HTML_NAMESPACE
+
+    fn add(&mut self, ns: Option<&[u8]>, prefix: &[u8]) {
+        match self.0.iter_mut().find(|(key, _)| key.as_deref() == ns) {
+            Some((_, prefixes)) => prefixes.push(prefix.to_vec()),
+            None => self.0.push((ns.map(<[u8]>::to_vec), vec![prefix.to_vec()])),
+        }
+    }
+
+    fn preferred(&self, ns: Option<&[u8]>, preferred: Option<&[u8]>) -> Option<Vec<u8>> {
+        let candidates = self.candidates(ns)?;
+        if let Some(found) = candidates.iter().find(|p| Some(p.as_slice()) == preferred) {
+            return Some(found.clone());
+        }
+        candidates.last().cloned()
+    }
 }
 
-fn xml_escape(out: &mut Vec<u8>, s: &[u8], attr: bool) {
+fn xml_element_namespace(node: Node<'_>) -> Option<&[u8]> {
+    if let Some(stored) = node.attr(c"data-nd-ns-uri") {
+        return Some(stored.to_bytes()).filter(|ns| !ns.is_empty());
+    }
+    if node.flags() & FLAG_SVG_NS != 0 {
+        return Some(SVG_NAMESPACE);
+    }
+    if node.flags() & FLAG_FOREIGN_NS != 0 {
+        return None;
+    }
+    Some(HTML_NAMESPACE)
+}
+
+fn split_qualified(name: &[u8]) -> (Option<&[u8]>, &[u8]) {
+    match name.iter().position(|&c| c == b':') {
+        Some(colon) => (Some(&name[..colon]), &name[colon + 1..]),
+        None => (None, name),
+    }
+}
+
+fn xml_element_prefix(node: Node<'_>) -> Option<&[u8]> {
+    if let Some(stored) = node.attr(c"data-nd-ns-prefix") {
+        return Some(stored.to_bytes()).filter(|p| !p.is_empty());
+    }
+    split_qualified(bytes(node.name())).0
+}
+
+fn xml_local_name(node: Node<'_>) -> &[u8] {
+    split_qualified(bytes(node.name())).1
+}
+
+struct XmlAttr<'a> {
+    ns: Option<&'a [u8]>,
+    prefix: Option<&'a [u8]>,
+    local: &'a [u8],
+    value: &'a [u8],
+}
+
+fn xml_attrs(node: Node<'_>) -> Vec<XmlAttr<'_>> {
+    node.attrs()
+        .filter(|attr| !is_internal_attr(attr.name()))
+        .map(|attr| {
+            let name = bytes(attr.name());
+            let ns = attr
+                .namespace_uri()
+                .map(CStr::to_bytes)
+                .filter(|ns| !ns.is_empty());
+            let (prefix, local) = match attr.local_name() {
+                Some(local) => (attr.prefix().map(CStr::to_bytes), local.to_bytes()),
+                None if ns.is_some() => split_qualified(name),
+                None => (None, name),
+            };
+            XmlAttr {
+                ns,
+                prefix: prefix.filter(|p| !p.is_empty()),
+                local,
+                value: bytes(attr.value()),
+            }
+        })
+        .collect()
+}
+
+fn xml_text_escape(out: &mut Vec<u8>, s: &[u8]) {
     for &c in s {
         match c {
             b'&' => out.extend_from_slice(b"&amp;"),
             b'<' => out.extend_from_slice(b"&lt;"),
             b'>' => out.extend_from_slice(b"&gt;"),
-            b'"' if attr => out.extend_from_slice(b"&quot;"),
             _ => out.push(c),
         }
     }
 }
 
-fn xml_qualified_name(out: &mut Vec<u8>, prefix: &[u8], name: &[u8]) {
-    if !prefix.is_empty() {
-        out.extend_from_slice(prefix);
-        out.push(b':');
+fn xml_attr_escape(out: &mut Vec<u8>, s: &[u8]) {
+    for &c in s {
+        match c {
+            b'&' => out.extend_from_slice(b"&amp;"),
+            b'"' => out.extend_from_slice(b"&quot;"),
+            b'<' => out.extend_from_slice(b"&lt;"),
+            b'>' => out.extend_from_slice(b"&gt;"),
+            b'\t' => out.extend_from_slice(b"&#x9;"),
+            b'\n' => out.extend_from_slice(b"&#xA;"),
+            b'\r' => out.extend_from_slice(b"&#xD;"),
+            _ => out.push(c),
+        }
     }
-    out.extend_from_slice(name);
 }
 
-fn xml_serialize(node: Node, out: &mut Vec<u8>, parent_ns: Option<&[u8]>, depth: i32) {
-    if depth >= MAX_DEPTH {
-        return;
+struct XmlWriter {
+    out: Vec<u8>,
+    index: u32,
+}
+
+impl XmlWriter {
+    fn generate_prefix(&mut self, map: &mut PrefixMap, ns: Option<&[u8]>) -> Vec<u8> {
+        let prefix = format!("ns{}", self.index).into_bytes();
+        self.index += 1;
+        map.add(ns, &prefix);
+        prefix
     }
-    match node.kind() {
-        Kind::Text => return xml_escape(out, bytes(node.text()), false),
-        Kind::Comment if node.flags() & FLAG_PI != 0 => {
-            out.extend_from_slice(b"<?");
-            out.extend_from_slice(bytes(node.name()));
-            let text = bytes(node.text());
-            if !text.is_empty() {
-                out.push(b' ');
-                out.extend_from_slice(text);
+
+    fn node(&mut self, node: Node<'_>, ns: Option<&[u8]>, map: &PrefixMap, depth: i32) {
+        if depth >= MAX_DEPTH {
+            return;
+        }
+        match node.kind() {
+            Kind::Element => self.element(node, ns, map, depth),
+            Kind::Document => {
+                for child in children(node) {
+                    if !is_embedded_doc(child) {
+                        self.node(child, ns, map, depth + 1);
+                    }
+                }
             }
-            return out.extend_from_slice(b"?>");
+            Kind::Doctype => {
+                self.out.extend_from_slice(b"<!DOCTYPE ");
+                self.out.extend_from_slice(bytes(node.name()));
+                let public = bytes(node.attr(c"publicId"));
+                let system = bytes(node.attr(c"systemId"));
+                if !public.is_empty() {
+                    self.out.extend_from_slice(b" PUBLIC \"");
+                    self.out.extend_from_slice(public);
+                    self.out.push(b'"');
+                } else if !system.is_empty() {
+                    self.out.extend_from_slice(b" SYSTEM");
+                }
+                if !system.is_empty() {
+                    self.out.extend_from_slice(b" \"");
+                    self.out.extend_from_slice(system);
+                    self.out.push(b'"');
+                }
+                self.out.push(b'>');
+            }
+            Kind::Text if node.flags() & XML_FLAG_CDATA != 0 => {
+                self.out.extend_from_slice(b"<![CDATA[");
+                self.out.extend_from_slice(bytes(node.text()));
+                self.out.extend_from_slice(b"]]>");
+            }
+            Kind::Text => xml_text_escape(&mut self.out, bytes(node.text())),
+            Kind::Comment if node.flags() & FLAG_PI != 0 => {
+                self.out.extend_from_slice(b"<?");
+                self.out.extend_from_slice(bytes(node.name()));
+                self.out.push(b' ');
+                self.out.extend_from_slice(bytes(node.text()));
+                self.out.extend_from_slice(b"?>");
+            }
+            Kind::Comment => {
+                self.out.extend_from_slice(b"<!--");
+                self.out.extend_from_slice(bytes(node.text()));
+                self.out.extend_from_slice(b"-->");
+            }
+            Kind::Other => {}
         }
-        Kind::Comment => {
-            out.extend_from_slice(b"<!--");
-            out.extend_from_slice(bytes(node.text()));
-            return out.extend_from_slice(b"-->");
-        }
-        Kind::Element => {}
-        _ => return,
     }
-    let ns = element_namespace(node);
-    let prefix = bytes(node.attr(c"data-nd-ns-prefix"));
-    let name = bytes(node.name());
-    out.push(b'<');
-    xml_qualified_name(out, prefix, name);
-    if parent_ns != Some(ns) {
-        out.extend_from_slice(if prefix.is_empty() {
-            b" xmlns"
+
+    fn element(&mut self, node: Node<'_>, inherited: Option<&[u8]>, outer: &PrefixMap, depth: i32) {
+        let mut map = outer.clone();
+        let attrs = xml_attrs(node);
+        let mut local_prefixes: Vec<(Vec<u8>, Option<Vec<u8>>)> = Vec::new();
+        let mut local_default: Option<&[u8]> = None;
+        for attr in attrs.iter().filter(|a| a.ns == Some(XMLNS_NS)) {
+            match attr.prefix {
+                None => local_default = Some(attr.value),
+                Some(_) => {
+                    let definition = Some(attr.value).filter(|v| !v.is_empty());
+                    if definition == Some(XML_NS) || map.contains(definition, attr.local) {
+                        continue;
+                    }
+                    map.add(definition, attr.local);
+                    local_prefixes.push((attr.local.to_vec(), definition.map(<[u8]>::to_vec)));
+                }
+            }
+        }
+        let local_default_ns =
+            |d: &[u8]| -> Option<Vec<u8>> { Some(d.to_vec()).filter(|d| !d.is_empty()) };
+        let mut inherited: Option<Vec<u8>> = inherited.map(<[u8]>::to_vec);
+        let ns = xml_element_namespace(node);
+        let local = xml_local_name(node);
+        let mut ignore_default_attr = false;
+        let qualified: Vec<u8>;
+        self.out.push(b'<');
+        if inherited.as_deref() == ns {
+            if local_default.is_some() {
+                ignore_default_attr = true;
+            }
+            qualified = if ns == Some(XML_NS) {
+                [b"xml:", local].concat()
+            } else {
+                local.to_vec()
+            };
+            self.out.extend_from_slice(&qualified);
         } else {
-            b" xmlns:"
-        });
-        out.extend_from_slice(prefix);
-        out.extend_from_slice(b"=\"");
-        xml_escape(out, ns, true);
-        out.push(b'"');
-    }
-    for attr in node.attrs() {
-        if is_internal_attr(attr.name()) {
-            continue;
+            let mut prefix = xml_element_prefix(node).map(<[u8]>::to_vec);
+            let mut candidate = map.preferred(ns, prefix.as_deref());
+            if prefix.as_deref() == Some(b"xmlns") {
+                candidate = prefix.clone();
+            }
+            if let Some(candidate) = candidate {
+                qualified = [&candidate[..], b":", local].concat();
+                if let Some(d) = local_default.filter(|d| *d != XML_NS) {
+                    inherited = local_default_ns(d);
+                }
+                self.out.extend_from_slice(&qualified);
+            } else if let Some(p) = prefix.take() {
+                let p = if local_prefixes.iter().any(|(k, _)| *k == p) {
+                    self.generate_prefix(&mut map, ns)
+                } else {
+                    map.add(ns, &p);
+                    p
+                };
+                qualified = [&p[..], b":", local].concat();
+                self.out.extend_from_slice(&qualified);
+                self.out.extend_from_slice(b" xmlns:");
+                self.out.extend_from_slice(&p);
+                self.out.extend_from_slice(b"=\"");
+                xml_attr_escape(&mut self.out, ns.unwrap_or_default());
+                self.out.push(b'"');
+                if let Some(d) = local_default {
+                    inherited = local_default_ns(d);
+                }
+            } else if local_default.is_none_or(|d| Some(d) != ns) {
+                ignore_default_attr = true;
+                qualified = local.to_vec();
+                inherited = ns.map(<[u8]>::to_vec);
+                self.out.extend_from_slice(&qualified);
+                self.out.extend_from_slice(b" xmlns=\"");
+                xml_attr_escape(&mut self.out, ns.unwrap_or_default());
+                self.out.push(b'"');
+            } else {
+                qualified = local.to_vec();
+                inherited = ns.map(<[u8]>::to_vec);
+                self.out.extend_from_slice(&qualified);
+            }
         }
-        out.push(b' ');
-        out.extend_from_slice(bytes(attr.name()));
-        out.extend_from_slice(b"=\"");
-        xml_escape(out, bytes(attr.value()), true);
-        out.push(b'"');
-    }
-    if node.first_child().is_none() {
-        if ns == HTML_NAMESPACE && !(node.name().is_some() && is_void(name)) {
-            out.extend_from_slice(b"></");
-            xml_qualified_name(out, prefix, name);
-            out.push(b'>');
+        for attr in &attrs {
+            if attr.ns.is_none() && attr.prefix.is_none() && attr.local == b"xmlns" {
+                continue;
+            }
+            let mut candidate: Option<Vec<u8>> = None;
+            if let Some(attr_ns) = attr.ns {
+                candidate = map.preferred(Some(attr_ns), attr.prefix);
+                if attr_ns == XMLNS_NS {
+                    let defined = Some(attr.value).filter(|v| !v.is_empty());
+                    let dropped_duplicate = attr.prefix.is_some()
+                        && local_prefixes
+                            .iter()
+                            .any(|(k, v)| k == attr.local && v.as_deref() != defined);
+                    if attr.value == XML_NS
+                        || (attr.prefix.is_none() && ignore_default_attr)
+                        || dropped_duplicate
+                    {
+                        continue;
+                    }
+                    if attr.prefix == Some(b"xmlns") {
+                        candidate = Some(b"xmlns".to_vec());
+                    }
+                } else if candidate.is_none() {
+                    let generated = self.generate_prefix(&mut map, Some(attr_ns));
+                    self.out.extend_from_slice(b" xmlns:");
+                    self.out.extend_from_slice(&generated);
+                    self.out.extend_from_slice(b"=\"");
+                    xml_attr_escape(&mut self.out, attr_ns);
+                    self.out.push(b'"');
+                    candidate = Some(generated);
+                }
+            }
+            self.out.push(b' ');
+            if let Some(candidate) = candidate {
+                self.out.extend_from_slice(&candidate);
+                self.out.push(b':');
+            }
+            self.out.extend_from_slice(attr.local);
+            self.out.extend_from_slice(b"=\"");
+            xml_attr_escape(&mut self.out, attr.value);
+            self.out.push(b'"');
+        }
+        let html = ns == Some(HTML_NAMESPACE);
+        let content = if html && local == b"template" {
+            node.tpl_content().unwrap_or(node)
         } else {
-            out.extend_from_slice(b" />");
+            node
+        };
+        let empty = content.first_child().is_none();
+        if empty && html && is_void(local) {
+            self.out.extend_from_slice(b" />");
+            return;
         }
-        return;
-    }
-    out.push(b'>');
-    for child in children(node) {
-        if !is_embedded_doc(child) {
-            xml_serialize(child, out, Some(ns), depth + 1);
+        if empty && !html {
+            self.out.extend_from_slice(b"/>");
+            return;
         }
+        self.out.push(b'>');
+        for child in children(content) {
+            if !is_embedded_doc(child) {
+                self.node(child, inherited.as_deref(), &map, depth + 1);
+            }
+        }
+        self.out.extend_from_slice(b"</");
+        self.out.extend_from_slice(&qualified);
+        self.out.push(b'>');
     }
-    out.extend_from_slice(b"</");
-    xml_qualified_name(out, prefix, name);
-    out.push(b'>');
+}
+
+pub fn xml_serialize(node: Option<Node>) -> Vec<u8> {
+    let Some(node) = node else {
+        return Vec::new();
+    };
+    let mut map = PrefixMap::default();
+    map.add(Some(XML_NS), b"xml");
+    let mut writer = XmlWriter {
+        out: Vec::new(),
+        index: 1,
+    };
+    if node.kind() == Kind::Document && node.flags() & XML_FLAG_FRAGMENT != 0 {
+        for child in children(node) {
+            writer.node(child, None, &map, 0);
+        }
+    } else {
+        writer.node(node, None, &map, 0);
+    }
+    writer.out
 }
 
 pub fn xml_outer_html(node: Option<Node>) -> Vec<u8> {
-    let mut out = Vec::new();
-    if let Some(node) = node {
-        xml_serialize(node, &mut out, None, 0);
-    }
-    out
+    xml_serialize(node)
 }
 
 fn dump_text(out: &mut Vec<u8>, s: Option<&CStr>, max: usize) {
