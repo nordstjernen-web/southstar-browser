@@ -84,7 +84,6 @@ unsafe extern "C" {
         cursor_y_out: *mut f64,
     );
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
-    fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_css_used_column_count(s: *const Style, avail_w: f64, gap_out: *mut f64) -> c_int;
 }
 
@@ -273,7 +272,7 @@ pub fn math_measure(dom: *const c_void, font_px: f64) -> (f64, f64, f64) {
 }
 
 pub fn set_container_dims(inline_px: f64, block_px: f64) {
-    unsafe { ns_css_set_container_dims(inline_px, block_px) }
+    southstar_css::set_container_unit_dims(inline_px, block_px);
 }
 
 pub fn used_column_count(s: StyleRef<'_>, avail_w: f64, gap: &mut f64) -> i32 {

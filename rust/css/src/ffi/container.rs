@@ -54,11 +54,6 @@ pub extern "C" fn ns_css_set_container_map(map: *mut GHashTable) {
     MAP.with(|current| current.set(map));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_container_dims(inline_px: c_double, block_px: c_double) {
-    container::set_unit_dims(inline_px, block_px);
-}
-
 unsafe extern "C" fn container_free(data: *mut c_void) {
     let container = data.cast::<Container>();
     if let Some(container) = unsafe { container.as_ref() } {

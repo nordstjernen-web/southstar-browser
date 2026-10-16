@@ -19,11 +19,6 @@ unsafe fn view<'a>(style: *const RawStyle) -> Option<StyleView<'a>> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_writing_mode(style: *const RawStyle) -> c_int {
-    style_query::writing_mode(unsafe { view(style) }.as_ref())
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_text_orientation(style: *const RawStyle) -> c_int {
     style_query::text_orientation(unsafe { view(style) }.as_ref())
 }
@@ -65,14 +60,6 @@ pub unsafe extern "C" fn ns_css_keyword_is(v: *const NsCssValue, kw: *const c_ch
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_display_of(style: *const RawStyle) -> Display {
     unsafe { style.as_ref() }.map_or_else(Display::default, |s| s.display)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_alignment_base(kw: *const c_char) -> *const c_char {
-    if kw.is_null() {
-        return ptr::null();
-    }
-    style_query::alignment_base(unsafe { CStr::from_ptr(kw) }).as_ptr()
 }
 
 #[unsafe(no_mangle)]

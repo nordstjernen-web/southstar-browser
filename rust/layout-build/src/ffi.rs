@@ -45,7 +45,6 @@ pub struct SvgSize {
 }
 
 unsafe extern "C" {
-    fn ns_css_set_container_dims(inline_px: f64, block_px: f64);
     fn ns_layout_clear_kind_of(s: *const Style) -> c_int;
     fn ns_layout_float_side_of(s: *const Style) -> c_int;
     fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
@@ -153,7 +152,7 @@ pub fn font_stretch_rank(v: Option<ValueRef<'_>>) -> c_int {
 }
 
 pub fn set_container_dims(inline_px: f64, block_px: f64) {
-    unsafe { ns_css_set_container_dims(inline_px, block_px) };
+    southstar_css::set_container_unit_dims(inline_px, block_px);
 }
 
 pub fn clear_kind_of(s: Option<StyleRef<'_>>) -> c_int {

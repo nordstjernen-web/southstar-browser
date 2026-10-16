@@ -40,9 +40,9 @@ pub(crate) mod viewport;
 
 use core::ffi::{CStr, c_double};
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{self as glib};
 
-use crate::{calc, units};
+use crate::units;
 
 pub use compute::set_render_zoom;
 pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
@@ -106,19 +106,4 @@ pub unsafe extern "C" fn ns_css_length_or(v: *const NsCssValue, fallback: c_doub
         return length.v;
     }
     unsafe { value::calc_of(v) }.map_or(fallback, |calc| calc.px)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_calc_is_math_fn(v: *const NsCssValue) -> GBoolean {
-    let math_fn =
-        unsafe { value::calc_of(v) }.is_some_and(|calc| calc.func != 0 && calc.n_args > 0);
-    glib::boolean(math_fn)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_calc_math_fn_px(v: *const NsCssValue, basis: c_double) -> c_double {
-    let Some(raw) = (unsafe { v.as_ref() }) else {
-        return 0.0;
-    };
-    calc::math_fn_px(&unsafe { raw.u.calc }.to_calc(), basis)
 }

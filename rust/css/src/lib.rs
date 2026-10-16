@@ -65,10 +65,10 @@ pub use calc::{Calc, CalcArg, math_fn_px as calc_math_fn_px};
 pub use cascade::currentcolor_bit;
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
-pub use container::unit_dims as container_unit_dims;
 pub use container::{
     features_begin as container_features_begin, features_used as container_features_used,
 };
+pub use container::{set_unit_dims as set_container_unit_dims, unit_dims as container_unit_dims};
 pub use content::append_unescaped;
 pub use counter::list_style_serialize;
 pub use declarations::{named_declaration_valid, named_property_supported};

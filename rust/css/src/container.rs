@@ -23,7 +23,7 @@ thread_local! {
     static UNIT_DIMS: Cell<(f64, f64)> = const { Cell::new((0.0, 0.0)) };
 }
 
-pub(crate) fn set_unit_dims(inline_px: f64, block_px: f64) {
+pub fn set_unit_dims(inline_px: f64, block_px: f64) {
     UNIT_DIMS.with(|dims| dims.set((inline_px, block_px)));
 }
 

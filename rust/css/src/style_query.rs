@@ -27,10 +27,6 @@ pub fn writing_mode_of(keyword: Option<&CStr>) -> i32 {
     }
 }
 
-pub(crate) fn writing_mode(style: Option<&StyleView<'_>>) -> i32 {
-    writing_mode_of(style.and_then(|s| keyword(s, Prop::WritingMode)))
-}
-
 pub(crate) fn text_orientation(style: Option<&StyleView<'_>>) -> i32 {
     match style
         .and_then(|s| keyword(s, Prop::TextOrientation))

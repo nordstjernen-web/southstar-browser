@@ -2767,6 +2767,7 @@ dependencies = [
 name = "southstar-layout-block"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
