@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* An inline-block narrower than its content no longer shrinks below its
+  min-content width: a long word in a narrow column now widens the
+  inline-block instead of overflowing it.
 * An inline-block or inline-flex with a percentage width and
   box-sizing: border-box keeps its padding when its container shrinks to
   fit it, instead of squeezing its content by the padding.

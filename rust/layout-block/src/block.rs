@@ -149,12 +149,17 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
             explicit_width = true;
             intrinsic_width = true;
         } else {
-            let mut natural = measure_natural_width(b, mi_style(inherited, b));
+            let mi = mi_style(inherited, b);
+            let mut natural = measure_natural_width(b, mi);
             let input_width = text_input_intrinsic_width(b);
             if natural < input_width {
                 natural = input_width;
             }
-            cw = if natural < avail { natural } else { avail };
+            cw = if natural < avail {
+                natural
+            } else {
+                avail.max(min_width_of(b, mi).min(natural))
+            };
         }
         cw = non_negative(cw);
     } else {
