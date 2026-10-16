@@ -15,6 +15,7 @@ southstar-layout = { path = "../layout" }
 southstar-layout-build = { path = "../layout-build" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-layout-geom = { path = "../layout-geom" }
+southstar-layout-grid = { path = "../layout-grid" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-layout-sizing = { path = "../layout-sizing" }
 southstar-layout-tree = { path = "../layout-tree" }

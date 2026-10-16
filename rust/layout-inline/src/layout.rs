@@ -29,7 +29,7 @@ pub(crate) fn white_space_nowrap(s: Option<StyleRef<'_>>) -> bool {
     keyword_is(s, PropId::WhiteSpace, c"nowrap") || keyword_is(s, PropId::WhiteSpace, c"pre")
 }
 
-pub(crate) fn line_height(parent_style: *const Style) -> f64 {
+pub fn line_height(parent_style: *const Style) -> f64 {
     let fs = font_size(ffi::style(parent_style));
     let used = ffi::css_line_height_px(parent_style);
     if used > 0.0 { used } else { fs * 1.2 }
@@ -275,7 +275,7 @@ fn place_atomics(
     }
 }
 
-pub(crate) fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
+pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
     let Some(text) = b.text().filter(|t| !t.is_empty()) else {
         b.set_content_width(0.0);
         b.set_content_height(0.0);

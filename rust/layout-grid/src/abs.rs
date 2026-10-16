@@ -15,7 +15,7 @@ use crate::lines::{Lines, abs_axis_lines, line_name};
 use crate::text::{fmax, fmin};
 use crate::tracks::expand_repeat_names;
 
-pub(crate) struct Area {
+pub struct Area {
     pub x: f64,
     pub y: f64,
     pub w: f64,
@@ -36,7 +36,7 @@ fn is_rtl(s: Option<StyleRef<'_>>) -> bool {
         .is_some_and(|v| v.is_keyword(c"rtl"))
 }
 
-pub(crate) fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area> {
+pub fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area> {
     let ct = ffi::track_edges(cb.grid_tracks(true))?;
     let rt = ffi::track_edges(cb.grid_tracks(false))?;
     let cs = style_of(cb);
@@ -111,7 +111,7 @@ pub(crate) fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area>
     })
 }
 
-pub(crate) fn static_align_offset(align: Option<&CStr>, free_space: f64, flip: bool) -> f64 {
+pub fn static_align_offset(align: Option<&CStr>, free_space: f64, flip: bool) -> f64 {
     let Some(align) = align.map(CStr::to_bytes).filter(|a| *a != b"auto") else {
         return 0.0;
     };
@@ -148,7 +148,7 @@ pub(crate) fn self_alignment<'a>(
     }
 }
 
-pub(crate) fn static_position(
+pub fn static_position(
     abox: BoxRef<'_>,
     cb: BoxRef<'_>,
     area: &Area,

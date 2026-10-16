@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_void};
 
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
@@ -12,62 +12,6 @@ use southstar_style::StyleRef;
 use crate::{align, block, dispatch, fieldset};
 
 unsafe extern "C" {
-    fn ns_layout_inline_box_can_fragment_multicol(
-        b: *const NsBox,
-        style: *const Style,
-        basis: f64,
-    ) -> GBoolean;
-    fn ns_layout_multicol_single_inline(
-        b: *mut NsBox,
-        inner_x: f64,
-        inner_y: f64,
-        col_w: f64,
-        col_gap: f64,
-        n_cols: c_int,
-        child_inherited: *const Style,
-        cursor_y: *mut f64,
-    ) -> GBoolean;
-    fn ns_layout_inline_run_break_before(run: *const NsBox, band_height: f64) -> usize;
-    fn ns_layout_inline_line_height(parent_style: *const Style) -> f64;
-    fn ns_layout_inline(b: *mut NsBox, content_width: f64, parent_style: *const Style);
-    fn ns_layout_table(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_flex_row(
-        b: *mut NsBox,
-        cw: f64,
-        inner_x: f64,
-        inner_y: f64,
-        child_inherited: *const Style,
-        reverse: GBoolean,
-        parent_content_width: f64,
-        cursor_y_out: *mut f64,
-    );
-    fn ns_layout_flex_row_wrap(
-        b: *mut NsBox,
-        cw: f64,
-        inner_x: f64,
-        inner_y: f64,
-        child_inherited: *const Style,
-        reverse: GBoolean,
-        cursor_y_out: *mut f64,
-    );
-    fn ns_layout_flex_column(
-        b: *mut NsBox,
-        cw: f64,
-        inner_x: f64,
-        inner_y: f64,
-        child_inherited: *const Style,
-        reverse: GBoolean,
-        parent_content_height: f64,
-        cursor_y_out: *mut f64,
-    );
-    fn ns_layout_grid(
-        b: *mut NsBox,
-        cw: f64,
-        inner_x: f64,
-        inner_y: f64,
-        child_inherited: *const Style,
-        cursor_y_out: *mut f64,
-    );
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
 }
 
@@ -106,9 +50,11 @@ pub use southstar_layout_tree::{
     join_splits as inline_runs_join_splits, reorder_children as reorder_children_by_order,
 };
 
-pub fn inline_box_can_fragment_multicol(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
-    unsafe { ns_layout_inline_box_can_fragment_multicol(b.as_ptr(), style, basis) != 0 }
-}
+pub use southstar_layout_inline::{
+    can_fragment as inline_box_can_fragment_multicol, layout_inline,
+    line_height as inline_line_height, run_break_before as inline_run_break_before,
+};
+pub use southstar_layout_table::layout_table;
 
 #[allow(clippy::too_many_arguments)]
 pub fn multicol_single_inline(
@@ -121,38 +67,24 @@ pub fn multicol_single_inline(
     child_inherited: *const Style,
     cursor_y: &mut f64,
 ) -> bool {
-    unsafe {
-        ns_layout_multicol_single_inline(
-            b.as_mut_ptr(),
-            inner_x,
-            inner_y,
-            col_w,
-            col_gap,
-            n_cols,
-            child_inherited,
-            cursor_y,
-        ) != 0
+    let cols = southstar_layout_inline::Columns {
+        inner_x,
+        inner_y,
+        col_w,
+        col_gap,
+        n_cols,
+    };
+    match southstar_layout_inline::layout_single_inline(b, &cols, child_inherited) {
+        Some(y) => {
+            *cursor_y = y;
+            true
+        }
+        None => false,
     }
-}
-
-pub fn inline_run_break_before(run: BoxRef<'_>, band_height: f64) -> usize {
-    unsafe { ns_layout_inline_run_break_before(run.as_ptr(), band_height) }
 }
 
 pub fn inline_run_split(run: BoxRef<'_>, split: usize) {
     southstar_layout_tree::run_split(run, split);
-}
-
-pub fn inline_line_height(parent_style: *const Style) -> f64 {
-    unsafe { ns_layout_inline_line_height(parent_style) }
-}
-
-pub fn layout_inline(b: BoxRef<'_>, content_width: f64, parent_style: *const Style) {
-    unsafe { ns_layout_inline(b.as_mut_ptr(), content_width, parent_style) }
-}
-
-pub fn layout_table(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
-    unsafe { ns_layout_table(b.as_mut_ptr(), parent_content_width, inherited) }
 }
 
 pub struct ContentBox {
@@ -160,6 +92,16 @@ pub struct ContentBox {
     pub inner_x: f64,
     pub inner_y: f64,
     pub child_inherited: *const Style,
+}
+
+fn flex_frame(cb: &ContentBox, reverse: bool) -> southstar_layout_flex::Frame {
+    southstar_layout_flex::Frame {
+        cw: cb.cw,
+        inner_x: cb.inner_x,
+        inner_y: cb.inner_y,
+        child_inherited: cb.child_inherited,
+        reverse,
+    }
 }
 
 pub fn layout_flex_row(
@@ -170,30 +112,12 @@ pub fn layout_flex_row(
     parent_content_width: f64,
     cursor_y: &mut f64,
 ) {
-    unsafe {
-        if wrap {
-            ns_layout_flex_row_wrap(
-                b.as_mut_ptr(),
-                cb.cw,
-                cb.inner_x,
-                cb.inner_y,
-                cb.child_inherited,
-                boolean(reverse),
-                cursor_y,
-            );
-        } else {
-            ns_layout_flex_row(
-                b.as_mut_ptr(),
-                cb.cw,
-                cb.inner_x,
-                cb.inner_y,
-                cb.child_inherited,
-                boolean(reverse),
-                parent_content_width,
-                cursor_y,
-            );
-        }
-    }
+    let at = flex_frame(cb, reverse);
+    *cursor_y = if wrap {
+        southstar_layout_flex::layout_row_wrap(b, &at)
+    } else {
+        southstar_layout_flex::layout_row(b, &at, parent_content_width)
+    };
 }
 
 pub fn layout_flex_column(
@@ -203,31 +127,13 @@ pub fn layout_flex_column(
     parent_content_width: f64,
     cursor_y: &mut f64,
 ) {
-    unsafe {
-        ns_layout_flex_column(
-            b.as_mut_ptr(),
-            cb.cw,
-            cb.inner_x,
-            cb.inner_y,
-            cb.child_inherited,
-            boolean(reverse),
-            parent_content_width,
-            cursor_y,
-        );
-    }
+    let at = flex_frame(cb, reverse);
+    *cursor_y = southstar_layout_flex::layout_column(b, &at, parent_content_width);
 }
 
 pub fn layout_grid(b: BoxRef<'_>, cb: &ContentBox, cursor_y: &mut f64) {
-    unsafe {
-        ns_layout_grid(
-            b.as_mut_ptr(),
-            cb.cw,
-            cb.inner_x,
-            cb.inner_y,
-            cb.child_inherited,
-            cursor_y,
-        );
-    }
+    *cursor_y =
+        southstar_layout_grid::layout_grid(b, cb.cw, cb.inner_x, cb.inner_y, cb.child_inherited);
 }
 
 pub fn math_measure(dom: *const c_void, font_px: f64) -> (f64, f64, f64) {

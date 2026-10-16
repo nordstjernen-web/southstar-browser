@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
@@ -15,29 +15,6 @@ use crate::{abs, relative};
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_grid_abs_containing_block(
-        cb: *const NsBox,
-        st: *const Style,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    ) -> GBoolean;
-    fn ns_layout_grid_static_position(
-        abox: *mut NsBox,
-        cb: *const NsBox,
-        area_x: f64,
-        area_y: f64,
-        area_w: f64,
-        area_h: f64,
-        static_x: GBoolean,
-        static_y: GBoolean,
-    );
-    fn ns_layout_grid_static_align_offset(
-        align: *const c_char,
-        free_space: f64,
-        flip: GBoolean,
-    ) -> f64;
 }
 
 #[derive(Clone, Copy)]
@@ -125,17 +102,13 @@ pub fn inline_containing_block(root: BoxRef<'_>, target: Node<'_>) -> Option<Are
     })
 }
 
-pub fn grid_abs_containing_block(cb: BoxRef<'_>, st: *const Style) -> Option<Area> {
-    let mut a = Area {
-        x: 0.0,
-        y: 0.0,
-        w: 0.0,
-        h: 0.0,
-    };
-    let found = unsafe {
-        ns_layout_grid_abs_containing_block(cb.as_ptr(), st, &mut a.x, &mut a.y, &mut a.w, &mut a.h)
-    };
-    (found != 0).then_some(a)
+pub fn grid_abs_containing_block(cb: BoxRef<'_>, st: Option<StyleRef<'_>>) -> Option<Area> {
+    southstar_layout_grid::abs_containing_block(cb, st?).map(|a| Area {
+        x: a.x,
+        y: a.y,
+        w: a.w,
+        h: a.h,
+    })
 }
 
 pub fn grid_static_position(
@@ -145,22 +118,17 @@ pub fn grid_static_position(
     static_x: bool,
     static_y: bool,
 ) {
-    unsafe {
-        ns_layout_grid_static_position(
-            abox.as_mut_ptr(),
-            cb.as_ptr(),
-            area.x,
-            area.y,
-            area.w,
-            area.h,
-            glib::boolean(static_x),
-            glib::boolean(static_y),
-        )
-    }
+    let area = southstar_layout_grid::Area {
+        x: area.x,
+        y: area.y,
+        w: area.w,
+        h: area.h,
+    };
+    southstar_layout_grid::abs_static_position(abox, cb, &area, static_x, static_y);
 }
 
 pub fn grid_static_align_offset(align: &CStr, free_space: f64) -> f64 {
-    unsafe { ns_layout_grid_static_align_offset(align.as_ptr(), free_space, glib::FALSE) }
+    southstar_layout_grid::abs_static_align_offset(Some(align), free_space, false)
 }
 
 pub fn viewport_w() -> f64 {

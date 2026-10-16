@@ -22,15 +22,6 @@ struct CairoMatrix {
 }
 
 unsafe extern "C" {
-    fn ns_box_sticky_offset(
-        b: *const NsBox,
-        vp_x0: f64,
-        vp_y0: f64,
-        vp_x1: f64,
-        vp_y1: f64,
-        out_dx: *mut f64,
-        out_dy: *mut f64,
-    );
     fn ns_paint_3d_registered(b: *const NsBox) -> GBoolean;
     fn ns_paint_3d_pick(root3d: *const NsBox, x: f64, y: f64) -> *const NsBox;
     fn ns_paint_inline_xy_to_byte(
@@ -91,11 +82,7 @@ pub fn viewport_size() -> (f64, f64) {
     southstar_css::viewport()
 }
 
-pub fn sticky_offset(b: BoxRef<'_>, x0: f64, y0: f64, x1: f64, y1: f64) -> (f64, f64) {
-    let (mut dx, mut dy) = (0.0, 0.0);
-    unsafe { ns_box_sticky_offset(b.as_ptr(), x0, y0, x1, y1, &mut dx, &mut dy) };
-    (dx, dy)
-}
+pub use southstar_layout_position::sticky_offset;
 
 pub use southstar_layout::image_map_area;
 

@@ -21,17 +21,6 @@ unsafe extern "C" {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_table(
-    b: *mut NsBox,
-    parent_content_width: f64,
-    inherited: *const Style,
-) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        table::layout(b, parent_content_width, inherited);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_table_intrinsic_width(
     b: *mut NsBox,
     inherited: *const Style,

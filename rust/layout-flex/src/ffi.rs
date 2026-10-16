@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
 use southstar_style::{PropId, StyleRef};
@@ -44,84 +43,3 @@ pub use southstar_layout_geom::flex::{
     gap_of as flex_gap_of, gap_px, grow_of as flex_grow_of, item_align as flex_item_align,
     item_baseline as flex_item_baseline, shrink_of as flex_shrink_of, wraps as flex_wraps,
 };
-
-fn entry<'a>(b: *mut NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
-fn store(out: *mut f64, v: f64) {
-    if let Some(out) = unsafe { out.as_mut() } {
-        *out = v;
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_row(
-    b: *mut NsBox,
-    cw: f64,
-    inner_x: f64,
-    inner_y: f64,
-    child_inherited: *const Style,
-    reverse: GBoolean,
-    parent_content_width: f64,
-    cursor_y_out: *mut f64,
-) {
-    let Some(b) = entry(b) else { return };
-    let at = crate::Frame {
-        cw,
-        inner_x,
-        inner_y,
-        child_inherited,
-        reverse: reverse != 0,
-    };
-    store(
-        cursor_y_out,
-        crate::row::layout(b, &at, parent_content_width),
-    );
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_row_wrap(
-    b: *mut NsBox,
-    cw: f64,
-    inner_x: f64,
-    inner_y: f64,
-    child_inherited: *const Style,
-    reverse: GBoolean,
-    cursor_y_out: *mut f64,
-) {
-    let Some(b) = entry(b) else { return };
-    let at = crate::Frame {
-        cw,
-        inner_x,
-        inner_y,
-        child_inherited,
-        reverse: reverse != 0,
-    };
-    store(cursor_y_out, crate::wrap::layout(b, &at));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_column(
-    b: *mut NsBox,
-    cw: f64,
-    inner_x: f64,
-    inner_y: f64,
-    child_inherited: *const Style,
-    reverse: GBoolean,
-    parent_content_height: f64,
-    cursor_y_out: *mut f64,
-) {
-    let Some(b) = entry(b) else { return };
-    let at = crate::Frame {
-        cw,
-        inner_x,
-        inner_y,
-        child_inherited,
-        reverse: reverse != 0,
-    };
-    store(
-        cursor_y_out,
-        crate::column::layout(b, &at, parent_content_height),
-    );
-}

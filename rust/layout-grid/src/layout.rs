@@ -411,7 +411,7 @@ fn content_distribution(kw: &[u8], free: f64, n: usize) -> (f64, f64) {
     }
 }
 
-pub(crate) fn layout_grid(
+pub fn layout_grid(
     b: BoxRef<'_>,
     cw: f64,
     inner_x: f64,

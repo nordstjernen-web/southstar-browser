@@ -10,8 +10,12 @@ mod wrap;
 
 use southstar_layout::Style;
 
+pub use column::layout as layout_column;
+pub use row::layout as layout_row;
+pub use wrap::layout as layout_row_wrap;
+
 #[derive(Clone, Copy)]
-pub(crate) struct Frame {
+pub struct Frame {
     pub cw: f64,
     pub inner_x: f64,
     pub inner_y: f64,

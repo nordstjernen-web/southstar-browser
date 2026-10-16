@@ -7,3 +7,5 @@ mod ffi;
 mod relative;
 mod static_pos;
 mod sticky;
+
+pub use sticky::offset as sticky_offset;

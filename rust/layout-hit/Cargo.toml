@@ -15,6 +15,7 @@ southstar-layout = { path = "../layout" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-layout-geom = { path = "../layout-geom" }
 southstar-layout-inline = { path = "../layout-inline" }
+southstar-layout-position = { path = "../layout-position" }
 southstar-mat4 = { path = "../mat4" }
 southstar-style = { path = "../style" }
 

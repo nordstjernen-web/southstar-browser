@@ -6,5 +6,7 @@ mod ffi;
 mod grid;
 mod table;
 
+pub use table::layout as layout_table;
+
 #[cfg(test)]
 mod tests;

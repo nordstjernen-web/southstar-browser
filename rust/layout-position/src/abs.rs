@@ -380,7 +380,7 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
     let grid = if inline_cb.is_some() {
         inline_cb
     } else if !cb_is_icb && e.pseudo.is_none() {
-        grid_abs_containing_block(cb, abox.style())
+        grid_abs_containing_block(cb, southstar_style::box_style(abox))
     } else {
         None
     };

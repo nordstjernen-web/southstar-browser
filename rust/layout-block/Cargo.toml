@@ -12,9 +12,13 @@ southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-layout-flex = { path = "../layout-flex" }
 southstar-layout-float = { path = "../layout-float" }
 southstar-layout-geom = { path = "../layout-geom" }
+southstar-layout-grid = { path = "../layout-grid" }
+southstar-layout-inline = { path = "../layout-inline" }
 southstar-layout-sizing = { path = "../layout-sizing" }
+southstar-layout-table = { path = "../layout-table" }
 southstar-layout-tree = { path = "../layout-tree" }
 southstar-style = { path = "../style" }
 
