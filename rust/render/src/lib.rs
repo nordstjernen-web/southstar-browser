@@ -4,6 +4,5 @@
 
 mod ffi;
 mod fonts;
-mod viewport;
 
 pub use ffi::{RenderCtx, RenderProfile, ns_render_relayout, ns_render_relayout_profile};
