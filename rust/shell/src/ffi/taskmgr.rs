@@ -15,7 +15,6 @@ use super::view::{self, View};
 use crate::taskmgr::{self, CpuHistory};
 
 unsafe extern "C" {
-    fn ns_rproc_single_process_enabled() -> c_int;
     fn ns_watchdog_supervisor_pid() -> c_int;
     fn ns_thread_dump_text(pid: c_int, label: *const c_char) -> *mut c_char;
     fn free(p: *mut c_void);
@@ -169,7 +168,7 @@ unsafe fn refresh(tm: &mut TaskManager) {
             };
             if pid > 0 {
                 info = proc_info(pid);
-            } else if ns_rproc_single_process_enabled() != 0 {
+            } else if southstar_renderer_host::single_process_enabled() {
                 pid = renderer_client::self_pid();
                 info = proc_info(pid);
                 info.state = "in-process".into();

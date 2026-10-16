@@ -1,4 +1,4 @@
-//! Southstar — what the headless driver adds to the renderer client: single-process mode and encoding a rendered frame as PNG.
+//! Southstar — encoding a frame the renderer client returned as PNG for the headless driver.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -17,7 +17,6 @@ const CAIRO_FORMAT_ARGB32: c_int = 0;
 const CAIRO_STATUS_SUCCESS: c_int = 0;
 
 unsafe extern "C" {
-    fn ns_rproc_single_process_enable();
     fn cairo_image_surface_create_for_data(
         data: *mut u8,
         format: c_int,
@@ -32,11 +31,6 @@ unsafe extern "C" {
         closure: *mut c_void,
     ) -> c_int;
     fn cairo_surface_destroy(surface: *mut CairoSurface);
-}
-
-pub fn single_process_enable() {
-    // SAFETY: the renderer host's switch takes no arguments and only sets process-wide hooks.
-    unsafe { ns_rproc_single_process_enable() };
 }
 
 pub fn frame_size(frame: &Frame<'_>) -> Option<(c_int, c_int)> {

@@ -41,7 +41,7 @@ pub use js::{
     DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_raw,
     new_js, note_pointer_input, note_viewport_scroll,
 };
-pub use rproc::{encode_png, frame_size, single_process_enable};
+pub use rproc::{encode_png, frame_size};
 pub use stdio::{
     err, flush, out, scan_drag, scan_hold, scan_pair, scan_point, scan_select, scan_size,
 };

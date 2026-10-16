@@ -49,7 +49,6 @@ unsafe extern "C" {
     fn g_simple_action_group_new() -> *mut c_void;
     fn g_get_user_runtime_dir() -> *const c_char;
     fn g_strescape(source: *const c_char, exceptions: *const c_char) -> *mut c_char;
-    fn ns_rproc_single_process_enabled() -> c_int;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -477,7 +476,7 @@ fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
     let menu = unsafe { gtk::g_menu_new() };
     if has_link {
         let mut items = vec![(c"Open Link", c"ctx.open-link")];
-        if unsafe { ns_rproc_single_process_enabled() } == 0 {
+        if !southstar_renderer_host::single_process_enabled() {
             items.push((c"Open Link in New Tab", c"ctx.open-newtab"));
         }
         items.push((c"Copy Link Address", c"ctx.copy-link"));

@@ -291,14 +291,12 @@ unsafe extern "C" fn print(conn: *mut c_void, out_setup: *mut c_void) -> *mut GP
     pages.unwrap_or(0) as *mut GPtrArray
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_single_process_enable() {
+pub fn single_process_enable() {
     ENABLED.store(true, Ordering::SeqCst);
     southstar_renderer_client::set_inproc(Some(attach));
     southstar_renderer_client::set_inproc_print(Some(print));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rproc_single_process_enabled() -> c_int {
-    c_int::from(ENABLED.load(Ordering::SeqCst))
+pub fn single_process_enabled() -> bool {
+    ENABLED.load(Ordering::SeqCst)
 }

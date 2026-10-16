@@ -2079,6 +2079,7 @@ dependencies = [
  "southstar-layout",
  "southstar-numfmt",
  "southstar-renderer-client",
+ "southstar-renderer-host",
  "southstar-url",
 ]
 
@@ -3122,6 +3123,7 @@ dependencies = [
  "southstar-i18n",
  "southstar-media-shm",
  "southstar-renderer-client",
+ "southstar-renderer-host",
  "southstar-url",
 ]
 

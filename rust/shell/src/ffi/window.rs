@@ -55,7 +55,6 @@ unsafe extern "C" {
     fn ns_config_lock();
     fn ns_config_reload();
     fn ns_config_unlock();
-    fn ns_rproc_single_process_enabled() -> c_int;
 }
 
 const WINDOW_KEY: &CStr = c"ns-procwindow";
@@ -627,7 +626,7 @@ impl ProcWindow {
     pub fn add_tab_full(&self, url: &CStr, foreground: bool, private_mode: bool) {
         unsafe {
             if !private_mode
-                && ns_rproc_single_process_enabled() != 0
+                && southstar_renderer_host::single_process_enabled()
                 && gtk::gtk_notebook_get_n_pages(self.notebook()) > 0
                 && let Some(cur) = self.current_view()
             {
@@ -1388,7 +1387,7 @@ unsafe fn install_shortcuts(pw: &ProcWindow) {
                 gtk::gtk_application_set_accels_for_action(pw.app, full.as_ptr(), accels.as_ptr());
             }
         }
-        if ns_rproc_single_process_enabled() != 0 {
+        if southstar_renderer_host::single_process_enabled() {
             for name in [c"new-tab", c"new-private-tab"] {
                 let act = gtk::g_action_map_lookup_action(window, name.as_ptr());
                 if !act.is_null() {
@@ -1782,7 +1781,7 @@ pub unsafe fn proc_window_new(
         connect(newtab, c"clicked", handler!(on_newtab_clicked), data(pw));
         gtk::gtk_widget_set_valign(newtab, gtk::ALIGN_CENTER);
         gtk::gtk_box_append(tabstrip, newtab);
-        if ns_rproc_single_process_enabled() != 0 {
+        if southstar_renderer_host::single_process_enabled() {
             gtk::gtk_widget_set_visible(newtab, 0);
         }
         gtk::gtk_header_bar_set_title_widget(header, ns_title_row_new(tabstrip));

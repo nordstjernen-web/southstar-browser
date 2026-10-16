@@ -21,6 +21,7 @@ southstar-html-parser = { path = "../html-parser" }
 southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-renderer-client = { path = "../renderer-client" }
+southstar-renderer-host = { path = "../renderer-host" }
 southstar-url = { path = "../url" }
 
 [lints]

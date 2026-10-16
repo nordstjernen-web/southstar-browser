@@ -20,6 +20,7 @@ southstar-gtk-ffi = { path = "../gtk-ffi" }
 southstar-i18n = { path = "../i18n" }
 southstar-media-shm = { path = "../media-shm" }
 southstar-renderer-client = { path = "../renderer-client" }
+southstar-renderer-host = { path = "../renderer-host" }
 southstar-url = { path = "../url" }
 
 [features]

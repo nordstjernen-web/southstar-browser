@@ -26,7 +26,7 @@ pub const KEYS: [(&[u8], &CStr, c_int); 12] = [
 ];
 
 pub fn run(opts: &Opts) -> c_int {
-    ffi::single_process_enable();
+    southstar_renderer_host::single_process_enable();
     let main_loop = ffi::MainLoop::new();
     let quit = main_loop.quitter();
     std::thread::scope(|scope| {

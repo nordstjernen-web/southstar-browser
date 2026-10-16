@@ -116,7 +116,6 @@ unsafe extern "C" {
     fn ns_watchdog_child_arm_hang_monitor(js_budget_ms: c_int);
     fn ns_watchdog_child_session_arg(argc: c_int, argv: *mut *mut c_char) -> *const c_char;
     fn ns_watchdog_child_is_recovery() -> GBoolean;
-    fn ns_rproc_single_process_enable();
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_net_init();
@@ -812,7 +811,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         && (appmain::flag_given(&args, b"--single-process")
             || appmain::env_enabled(getenv(c"NS_SINGLE_PROCESS").map(CStr::to_bytes)));
     if single_process {
-        unsafe { ns_rproc_single_process_enable() };
+        southstar_renderer_host::single_process_enable();
     }
 
     if proc_mode {
