@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* white-space: nowrap on an inline element keeps its text on one line.
+  Only a block's own nowrap was honoured, so nowrap spans wrapped at
+  every space and between every CJK character (Rakuten's top menu,
+  Wikipedia's page-numbered citations).
 * A form whose target names an iframe now loads its response into that
   iframe, with a GET query or a POST body, instead of navigating the whole
   tab; a form inside an iframe navigates its own frame. Rakuten's tag
