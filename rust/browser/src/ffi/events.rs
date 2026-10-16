@@ -9,26 +9,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
-use super::{Js, NsBrowser, Videos};
-
-#[repr(C)]
-struct NsVideoHead {
-    _url: *mut c_char,
-    _natural: [c_int; 2],
-    _poster_texture: *mut c_void,
-    _poster_url: *mut c_char,
-    _frame_texture: *mut c_void,
-    _flags: [GBoolean; 3],
-    player: *mut c_void,
-    _dom_node: *const c_void,
-    is_camera: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::offset_of!(NsVideoHead, player) == 56
-        && core::mem::offset_of!(NsVideoHead, is_camera) == 72
-);
+use super::{Js, NsBrowser};
 
 unsafe extern "C" {
     fn ns_js_dispatch_mouse_event(
@@ -179,8 +160,6 @@ unsafe extern "C" {
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
     fn ns_render_page_uses_hover() -> GBoolean;
     fn ns_render_page_uses_active() -> GBoolean;
-    fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
-    fn ns_video_cache_toggle(cache: *mut c_void, v: *mut c_void, now_us: i64) -> GBoolean;
     fn g_utf8_prev_char(p: *const c_char) -> *const c_char;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_utf8_get_char(p: *const c_char) -> u32;
@@ -569,35 +548,10 @@ pub fn set_active_node(node: Option<Node<'_>>) -> bool {
 }
 
 pub fn video_url_is_inline(url: &CStr) -> bool {
-    unsafe { ns_video_url_is_inline(url.as_ptr()) != 0 }
+    southstar_video::url_is_inline_video(url.to_bytes())
 }
 
-pub struct VideoRef(*mut c_void);
-
-impl VideoRef {
-    pub fn of(b: BoxRef<'_>) -> Option<VideoRef> {
-        let v = b.media()?.video();
-        (!v.is_null()).then_some(VideoRef(v))
-    }
-
-    fn head(&self) -> &NsVideoHead {
-        unsafe { &*self.0.cast::<NsVideoHead>() }
-    }
-
-    pub fn is_camera(&self) -> bool {
-        self.head().is_camera != 0
-    }
-
-    pub fn has_player(&self) -> bool {
-        !self.head().player.is_null()
-    }
-
-    pub fn toggle(&self, videos: Option<Videos>, now_us: i64) {
-        unsafe {
-            ns_video_cache_toggle(videos.map_or(ptr::null_mut(), Videos::raw), self.0, now_us)
-        };
-    }
-}
+pub use southstar_video::BoxVideo as VideoRef;
 
 pub fn utf8_prev(s: &CStr, at: usize) -> usize {
     let base = s.as_ptr();

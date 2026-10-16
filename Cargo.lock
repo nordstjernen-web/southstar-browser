@@ -1752,6 +1752,7 @@ dependencies = [
  "southstar-layout",
  "southstar-style",
  "southstar-url",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2088,6 +2089,7 @@ dependencies = [
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-url",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2541,6 +2543,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-url",
+ "southstar-video",
  "southstar-webaudio",
 ]
 

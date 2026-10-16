@@ -4,16 +4,13 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable};
 use southstar_js_runtime::api::{self, NavigationTiming};
 use southstar_layout::NsBox;
 
-use super::engine::{
-    ns_video_cache_mse_append, ns_video_cache_mse_buffered, ns_video_cache_mse_bytes,
-    ns_video_cache_mse_eos, ns_video_cache_mse_remove,
-};
 use super::glib::{
     g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
 };
@@ -47,8 +44,6 @@ type MseRemoveCb = unsafe extern "C" fn(
     ud: *mut c_void,
 ) -> GBoolean;
 type MseBytesCb = unsafe extern "C" fn(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize;
-type VideoJsCb =
-    unsafe extern "C" fn(node: *const c_void, kind: *const c_char, value: f64, ud: *mut c_void);
 
 unsafe extern "C" {
     fn ns_js_set_audio_cb(js: *mut c_void, cb: TextCb, ud: *mut c_void);
@@ -60,8 +55,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
     fn ns_js_set_media_volume_cb(js: *mut c_void, cb: MediaVolumeCb, ud: *mut c_void);
-    fn ns_video_cache_set_js_cb(cache: *mut c_void, cb: VideoJsCb, ud: *mut c_void);
-    fn ns_video_cache_set_audio_cb(cache: *mut c_void, cb: TextCb, ud: *mut c_void);
     fn ns_engine_fetch_images_start(
         root: *mut NsBox,
         base_url: *const c_char,
@@ -165,9 +158,15 @@ unsafe extern "C" fn on_selection_cmd(command: *const c_char, ud: *mut c_void) -
     }
 }
 
-unsafe extern "C" fn on_audio(command: *const c_char, ud: *mut c_void) {
-    if let (Some(b), Some(command)) = (browser_for(ud), c_str(command)) {
+fn audio_command(ud: *mut c_void, command: &CStr) {
+    if let Some(b) = browser_for(ud) {
         callbacks::js_audio(b, command);
+    }
+}
+
+unsafe extern "C" fn on_audio(command: *const c_char, ud: *mut c_void) {
+    if let Some(command) = c_str(command) {
+        audio_command(ud, command);
     }
 }
 
@@ -209,10 +208,15 @@ unsafe extern "C" fn on_mse_data(
         return 0;
     };
     if eos != 0 {
-        unsafe { ns_video_cache_mse_eos(videos.raw(), stream_id) };
+        videos.mse_eos(stream_id);
         return 1;
     }
-    unsafe { ns_video_cache_mse_append(videos.raw(), stream_id, kind, data, len) }
+    if data.is_null() {
+        return 0;
+    }
+    // SAFETY: the script engine passes `len` readable bytes at `data` for the duration of the call.
+    let data = unsafe { southstar_glib::slice(data, len) };
+    southstar_glib::boolean(videos.mse_append(stream_id, kind as u8, data))
 }
 
 unsafe extern "C" fn on_mse_buffered(
@@ -221,13 +225,14 @@ unsafe extern "C" fn on_mse_buffered(
     start: *mut f64,
     ud: *mut c_void,
 ) -> f64 {
-    let Some(videos) = videos_of(ud) else {
-        if let Some(start) = unsafe { start.as_mut() } {
-            *start = 0.0;
-        }
-        return 0.0;
-    };
-    unsafe { ns_video_cache_mse_buffered(videos.raw(), stream_id, kind, start) }
+    let (first, end) = videos_of(ud).map_or((0.0, 0.0), |videos| {
+        videos.mse_buffered(stream_id, kind as u8)
+    });
+    // SAFETY: `start` is null or the script engine's out-parameter, writable for the call.
+    if let Some(start) = unsafe { start.as_mut() } {
+        *start = first;
+    }
+    end
 }
 
 unsafe extern "C" fn on_mse_remove(
@@ -237,19 +242,13 @@ unsafe extern "C" fn on_mse_remove(
     end: f64,
     ud: *mut c_void,
 ) -> GBoolean {
-    match videos_of(ud) {
-        Some(videos) => unsafe {
-            ns_video_cache_mse_remove(videos.raw(), stream_id, kind, start, end)
-        },
-        None => 0,
-    }
+    southstar_glib::boolean(
+        videos_of(ud).is_some_and(|videos| videos.mse_remove(stream_id, kind as u8, start, end)),
+    )
 }
 
 unsafe extern "C" fn on_mse_bytes(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize {
-    match videos_of(ud) {
-        Some(videos) => unsafe { ns_video_cache_mse_bytes(videos.raw(), stream_id, kind) },
-        None => 0,
-    }
+    videos_of(ud).map_or(0, |videos| videos.mse_bytes(stream_id, kind as u8))
 }
 
 unsafe extern "C" fn on_window_action(action: *const c_char, ud: *mut c_void) {
@@ -258,14 +257,10 @@ unsafe extern "C" fn on_window_action(action: *const c_char, ud: *mut c_void) {
     }
 }
 
-unsafe extern "C" fn on_video_event(
-    node: *const c_void,
-    kind: *const c_char,
-    value: f64,
-    ud: *mut c_void,
-) {
+fn video_event(ud: *mut c_void, node: *const c_void, kind: &CStr, value: f64) {
     if let Some(js) = browser_for(ud).and_then(NsBrowser::js) {
-        unsafe { ns_js_video_event(js.raw(), node, kind, value) };
+        // SAFETY: the page's script engine is live while it is in the page's slot, and `kind` is NUL-terminated for the call.
+        unsafe { ns_js_video_event(js.raw(), node, kind.as_ptr(), value) };
     }
 }
 
@@ -329,10 +324,10 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
 
 pub fn wire_videos(b: &NsBrowser, videos: Videos) {
     let ud = b.as_ptr().cast::<c_void>();
-    unsafe {
-        ns_video_cache_set_js_cb(videos.raw(), on_video_event, ud);
-        ns_video_cache_set_audio_cb(videos.raw(), on_audio, ud);
-    }
+    videos.set_js_sink(Some(Rc::new(move |node, kind, value| {
+        video_event(ud, node, kind, value);
+    })));
+    videos.set_audio_sink(Some(Rc::new(move |command| audio_command(ud, command))));
 }
 
 pub fn add_media_events_timeout(b: &NsBrowser) -> c_uint {

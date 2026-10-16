@@ -21,6 +21,8 @@ use media::{
 };
 use mse::{Appended, MseStream};
 
+pub use decode::codec_available;
+pub use ffi::{AudioSink, BoxVideo, JsSink, StillVideo, VideoCache};
 pub use media::helper_composited;
 
 const MAX_BYTES: usize = 256 * 1024 * 1024;

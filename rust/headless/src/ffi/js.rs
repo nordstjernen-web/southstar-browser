@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
+use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
@@ -61,8 +62,6 @@ type MseRemoveCb = unsafe extern "C" fn(
     ud: *mut c_void,
 ) -> GBoolean;
 type MseBytesCb = unsafe extern "C" fn(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize;
-type VideoJsCb =
-    unsafe extern "C" fn(node: *const c_void, kind: *const c_char, value: f64, ud: *mut c_void);
 
 unsafe extern "C" {
     fn ns_js_new(
@@ -165,29 +164,6 @@ unsafe extern "C" {
     fn ns_js_run_animation_frame(js: *mut c_void) -> GBoolean;
     fn ns_js_fire_media_load_events(js: *mut c_void, layout: *const NsBox);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
-    fn ns_video_cache_set_js_cb(cache: *mut c_void, cb: VideoJsCb, ud: *mut c_void);
-    fn ns_video_cache_mse_append(
-        cache: *mut c_void,
-        stream_id: c_uint,
-        kind: c_char,
-        data: *const u8,
-        len: usize,
-    ) -> GBoolean;
-    fn ns_video_cache_mse_eos(cache: *mut c_void, stream_id: c_uint);
-    fn ns_video_cache_mse_buffered(
-        cache: *mut c_void,
-        stream_id: c_uint,
-        kind: c_char,
-        start: *mut f64,
-    ) -> f64;
-    fn ns_video_cache_mse_remove(
-        cache: *mut c_void,
-        stream_id: c_uint,
-        kind: c_char,
-        start: f64,
-        end: f64,
-    ) -> GBoolean;
-    fn ns_video_cache_mse_bytes(cache: *mut c_void, stream_id: c_uint, kind: c_char) -> usize;
 }
 
 unsafe extern "C" fn on_log(line: *const c_char, _ud: *mut c_void) {
@@ -225,15 +201,9 @@ unsafe extern "C" fn on_flush(ud: *mut c_void) {
     }
 }
 
-unsafe extern "C" fn on_video_event(
-    node: *const c_void,
-    kind: *const c_char,
-    value: f64,
-    ud: *mut c_void,
-) {
-    if !ud.is_null() {
-        unsafe { ns_js_video_event(ud, node, kind, value) };
-    }
+fn video_cache(ud: *mut c_void) -> Option<VideoCache> {
+    // SAFETY: bind_media registers null or the run's cache handle, which outlives the script engine's callbacks.
+    unsafe { VideoCache::from_raw(ud) }
 }
 
 unsafe extern "C" fn on_mse_data(
@@ -244,14 +214,19 @@ unsafe extern "C" fn on_mse_data(
     eos: GBoolean,
     ud: *mut c_void,
 ) -> GBoolean {
-    if ud.is_null() {
+    let Some(cache) = video_cache(ud) else {
         return glib::FALSE;
-    }
+    };
     if eos != 0 {
-        unsafe { ns_video_cache_mse_eos(ud, stream_id) };
+        cache.mse_eos(stream_id);
         return glib::TRUE;
     }
-    unsafe { ns_video_cache_mse_append(ud, stream_id, kind, data, len) }
+    if data.is_null() {
+        return glib::FALSE;
+    }
+    // SAFETY: the script engine passes `len` readable bytes at `data` for the duration of the call.
+    let data = unsafe { glib::slice(data, len) };
+    glib::boolean(cache.mse_append(stream_id, kind as u8, data))
 }
 
 unsafe extern "C" fn on_mse_buffered(
@@ -260,13 +235,14 @@ unsafe extern "C" fn on_mse_buffered(
     start: *mut f64,
     ud: *mut c_void,
 ) -> f64 {
-    if ud.is_null() {
-        if !start.is_null() {
-            unsafe { *start = 0.0 };
-        }
-        return 0.0;
+    let (first, end) = video_cache(ud).map_or((0.0, 0.0), |cache| {
+        cache.mse_buffered(stream_id, kind as u8)
+    });
+    // SAFETY: `start` is null or the script engine's out-parameter, writable for the call.
+    if let Some(start) = unsafe { start.as_mut() } {
+        *start = first;
     }
-    unsafe { ns_video_cache_mse_buffered(ud, stream_id, kind, start) }
+    end
 }
 
 unsafe extern "C" fn on_mse_remove(
@@ -277,15 +253,12 @@ unsafe extern "C" fn on_mse_remove(
     ud: *mut c_void,
 ) -> GBoolean {
     glib::boolean(
-        !ud.is_null() && unsafe { ns_video_cache_mse_remove(ud, stream_id, kind, start, end) } != 0,
+        video_cache(ud).is_some_and(|cache| cache.mse_remove(stream_id, kind as u8, start, end)),
     )
 }
 
 unsafe extern "C" fn on_mse_bytes(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize {
-    if ud.is_null() {
-        return 0;
-    }
-    unsafe { ns_video_cache_mse_bytes(ud, stream_id, kind) }
+    video_cache(ud).map_or(0, |cache| cache.mse_bytes(stream_id, kind as u8))
 }
 
 #[derive(Clone, Copy)]
@@ -518,7 +491,13 @@ impl Js {
 
 pub fn bind_video_events(cache: Option<VideoCache>, js: Option<Js>) {
     if let Some(cache) = cache {
-        unsafe { ns_video_cache_set_js_cb(cache.raw(), on_video_event, js_raw(js)) };
+        let js = js_raw(js);
+        cache.set_js_sink(Some(Rc::new(move |node, kind, value| {
+            if !js.is_null() {
+                // SAFETY: the run's script engine outlives the cache's callbacks, and `kind` is NUL-terminated for the call.
+                unsafe { ns_js_video_event(js, node, kind.as_ptr(), value) };
+            }
+        })));
     }
 }
 

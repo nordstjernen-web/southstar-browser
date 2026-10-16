@@ -48,9 +48,9 @@ fn settle_quiet(b: &NsBrowser) -> bool {
     !ffi::main_context_pending()
 }
 
-fn note_videos(b: &NsBrowser, now: i64) {
+fn note_videos(b: &NsBrowser) {
     if let (Some(videos), Some(layout)) = (b.videos(), b.layout()) {
-        videos.discover(layout, b.doc(), now);
+        videos.discover(layout, b.doc());
         if let Some(layout) = b.layout() {
             videos.note_layout(
                 layout,
@@ -75,7 +75,7 @@ pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
         images.tick(now);
     }
     if let (Some(videos), Some(_)) = (b.videos(), b.layout()) {
-        note_videos(b, now);
+        note_videos(b);
         videos.tick(now);
     }
     if let Some(anim) = b.anim()
@@ -114,7 +114,7 @@ pub fn settle(b: &NsBrowser, settle_ms: c_int) {
         return;
     }
     if b.videos().is_some() && b.layout().is_some() {
-        note_videos(b, ffi::monotonic_us());
+        note_videos(b);
     }
     if settle_quiet(b) {
         return;
@@ -181,7 +181,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
             changed = true;
         }
         if let (Some(videos), Some(_)) = (b.videos(), b.layout()) {
-            note_videos(b, now);
+            note_videos(b);
             if videos.tick(now) {
                 changed = true;
             }
@@ -216,7 +216,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
         changed = true;
         b.dirty.set(false);
         if b.videos().is_some() && b.layout().is_some() {
-            note_videos(b, ffi::monotonic_us());
+            note_videos(b);
         }
     }
     scroll::follow_scroll_anchor(b);

@@ -342,7 +342,8 @@ impl Page {
     pub fn video_helper_event(&self, token: Option<&CStr>, kind: &CStr) -> bool {
         self.browser()
             .videos()
-            .is_some_and(|videos| videos.helper_event(token, kind))
+            .zip(token)
+            .is_some_and(|(videos, token)| videos.helper_event(token.to_bytes(), kind.to_bytes()))
     }
 
     pub fn eval(&self, src: &CStr) -> Option<Vec<u8>> {

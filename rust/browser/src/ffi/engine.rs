@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
@@ -14,6 +14,7 @@ use super::{Js, NsBrowser};
 
 pub use southstar_anim::AnimHandle as Anim;
 pub use southstar_image::ImageCache as Images;
+pub use southstar_video::VideoCache as Videos;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -110,67 +111,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_js(js: *mut c_void);
     fn ns_paint_set_anim(anim: *mut c_void);
-    fn ns_video_cache_new() -> *mut c_void;
-    fn ns_video_cache_free(c: *mut c_void);
-    fn ns_video_cache_set_base(c: *mut c_void, base_url: *const c_char);
-    fn ns_video_cache_discover(c: *mut c_void, root: *const NsBox, doc: *const NsNode, now_us: i64);
-    fn ns_video_cache_note_layout(
-        c: *mut c_void,
-        root: *const NsBox,
-        scroll_x: f64,
-        scroll_y: f64,
-        scale: f64,
-    );
-    fn ns_video_cache_tick(c: *mut c_void, now_us: i64) -> GBoolean;
-    fn ns_video_cache_has_pending(c: *const c_void) -> GBoolean;
-    fn ns_video_cache_animating(c: *const c_void) -> GBoolean;
-    fn ns_video_cache_waiting_growth(c: *const c_void) -> GBoolean;
-    fn ns_video_cache_seek_node(
-        c: *mut c_void,
-        node: *const c_void,
-        seconds: f64,
-        now_us: i64,
-    ) -> GBoolean;
-    fn ns_video_cache_set_node_playing(
-        c: *mut c_void,
-        node: *const c_void,
-        play: GBoolean,
-        now_us: i64,
-    ) -> GBoolean;
-    fn ns_video_cache_set_node_muted(
-        c: *mut c_void,
-        node: *const c_void,
-        muted: GBoolean,
-    ) -> GBoolean;
-    fn ns_video_cache_set_node_volume(c: *mut c_void, node: *const c_void, volume: f64)
-    -> GBoolean;
-    pub fn ns_video_cache_mse_append(
-        c: *mut c_void,
-        id: c_uint,
-        kind: c_char,
-        data: *const u8,
-        len: usize,
-    ) -> GBoolean;
-    pub fn ns_video_cache_mse_eos(c: *mut c_void, id: c_uint);
-    pub fn ns_video_cache_mse_buffered(
-        c: *mut c_void,
-        id: c_uint,
-        kind: c_char,
-        start: *mut f64,
-    ) -> f64;
-    pub fn ns_video_cache_mse_remove(
-        c: *mut c_void,
-        id: c_uint,
-        kind: c_char,
-        start: f64,
-        end: f64,
-    ) -> GBoolean;
-    pub fn ns_video_cache_mse_bytes(c: *mut c_void, id: c_uint, kind: c_char) -> usize;
-    fn ns_video_cache_helper_event(
-        c: *mut c_void,
-        token: *const c_char,
-        kind: *const c_char,
-    ) -> GBoolean;
     fn ns_config_init();
     fn ns_config_shutdown();
     fn ns_security_harden_allocator();
@@ -257,82 +197,6 @@ impl NsBrowser {
 
     pub fn set_open_select_for_layout(&self) {
         unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Videos(NonNull<c_void>);
-
-impl Videos {
-    pub fn from_raw(p: *mut c_void) -> Option<Videos> {
-        NonNull::new(p).map(Videos)
-    }
-
-    pub fn create() -> *mut c_void {
-        unsafe { ns_video_cache_new() }
-    }
-
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_video_cache_free(self.raw()) };
-    }
-
-    pub fn set_base(self, base: Option<&CStr>) {
-        unsafe { ns_video_cache_set_base(self.raw(), opt(base)) };
-    }
-
-    pub fn discover(self, layout: BoxRef<'_>, doc: Option<Node<'_>>, now_us: i64) {
-        unsafe {
-            ns_video_cache_discover(self.raw(), layout.as_ptr(), Node::ptr_or_null(doc), now_us)
-        };
-    }
-
-    pub fn note_layout(self, layout: BoxRef<'_>, scroll_x: f64, scroll_y: f64, scale: f64) {
-        unsafe {
-            ns_video_cache_note_layout(self.raw(), layout.as_ptr(), scroll_x, scroll_y, scale)
-        };
-    }
-
-    pub fn tick(self, now_us: i64) -> bool {
-        unsafe { ns_video_cache_tick(self.raw(), now_us) != 0 }
-    }
-
-    pub fn has_pending(self) -> bool {
-        unsafe { ns_video_cache_has_pending(self.raw()) != 0 }
-    }
-
-    pub fn animating(self) -> bool {
-        unsafe { ns_video_cache_animating(self.raw()) != 0 }
-    }
-
-    pub fn waiting_growth(self) -> bool {
-        unsafe { ns_video_cache_waiting_growth(self.raw()) != 0 }
-    }
-
-    pub fn seek_node(self, node: *const c_void, seconds: f64, now_us: i64) -> bool {
-        unsafe { ns_video_cache_seek_node(self.raw(), node, seconds, now_us) != 0 }
-    }
-
-    pub fn set_node_playing(self, node: *const c_void, play: bool, now_us: i64) {
-        unsafe {
-            ns_video_cache_set_node_playing(self.raw(), node, southstar_glib::boolean(play), now_us)
-        };
-    }
-
-    pub fn set_node_muted(self, node: *const c_void, muted: bool) {
-        unsafe { ns_video_cache_set_node_muted(self.raw(), node, southstar_glib::boolean(muted)) };
-    }
-
-    pub fn set_node_volume(self, node: *const c_void, volume: f64) {
-        unsafe { ns_video_cache_set_node_volume(self.raw(), node, volume) };
-    }
-
-    pub fn helper_event(self, token: Option<&CStr>, kind: &CStr) -> bool {
-        // SAFETY: the cache is live and both strings are null or NUL-terminated for the call.
-        unsafe { ns_video_cache_helper_event(self.raw(), opt(token), kind.as_ptr()) != 0 }
     }
 }
 

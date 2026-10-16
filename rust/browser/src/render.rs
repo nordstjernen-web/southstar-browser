@@ -29,8 +29,7 @@ fn target_ok(buf: &PixelBuf<'_>) -> bool {
 
 fn note_videos(b: &NsBrowser) {
     if let (Some(videos), Some(layout)) = (b.videos(), b.layout()) {
-        let now = ffi::monotonic_us();
-        videos.discover(layout, b.doc(), now);
+        videos.discover(layout, b.doc());
         if let Some(layout) = b.layout() {
             videos.note_layout(
                 layout,

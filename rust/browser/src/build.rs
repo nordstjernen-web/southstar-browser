@@ -117,7 +117,7 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
     b.caret_paint_visible.set(true);
     ffi::attach_caches(b);
     if let Some(videos) = b.videos() {
-        videos.set_base(b.base_url.get().as_deref());
+        videos.set_base(b.base_url.get().as_deref().map(CStr::to_bytes));
     }
     b.compute_cascade();
     let anim = ffi::Anim::create();

@@ -240,14 +240,6 @@ impl Player {
         Decoder::new(bytes).map(|d| Player(Box::new(d)))
     }
 
-    pub fn into_raw(self) -> *mut Decoder {
-        Box::into_raw(self.0)
-    }
-
-    pub unsafe fn from_raw(raw: *mut Decoder) -> Option<Player> {
-        (!raw.is_null()).then(|| Player(unsafe { Box::from_raw(raw) }))
-    }
-
     pub fn has_audio(&self) -> bool {
         self.0.has_audio()
     }

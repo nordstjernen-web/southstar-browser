@@ -1,17 +1,17 @@
-//! Southstar — the C ABI of video: the ns_video struct, the video cache and the decoder, over the network, textures, the camera, the DOM and the box tree.
+//! Southstar — the ns_video struct, the video cache, box video and still video handles, and the C ABI paint, canvas and script still read videos through, over the network, textures, the camera, the DOM and the box tree.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
+use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{Kind, PropId, StyleRef};
 
-use crate::decode::Decoder;
 use crate::{Cache, FetchKind, Sink};
 use southstar_webvtt::Cue;
 
@@ -213,29 +213,26 @@ impl VideoPtr {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct AudioOut {
-    cb: AudioCb,
-    user: *mut c_void,
-}
+pub type AudioSink = Rc<dyn Fn(&CStr)>;
+pub type JsSink = Rc<dyn Fn(*const c_void, &CStr, f64)>;
+
+#[derive(Clone)]
+pub struct AudioOut(AudioSink);
 
 impl AudioOut {
     pub fn send(&self, command: &[u8]) {
         if let Ok(command) = CString::new(command) {
-            unsafe { (self.cb)(command.as_ptr(), self.user) };
+            (self.0)(&command);
         }
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct JsOut {
-    cb: JsCb,
-    user: *mut c_void,
-}
+#[derive(Clone)]
+pub struct JsOut(JsSink);
 
 impl JsOut {
     fn deliver(&self, node: *const c_void, kind: &CStr, value: f64) {
-        unsafe { (self.cb)(node, kind.as_ptr(), value, self.user) };
+        (self.0)(node, kind, value);
     }
 }
 
@@ -296,13 +293,6 @@ impl Drop for Response {
     }
 }
 
-type AudioCb = unsafe extern "C" fn(command: *const c_char, user_data: *mut c_void);
-type JsCb = unsafe extern "C" fn(
-    dom_node: *const c_void,
-    kind: *const c_char,
-    value: f64,
-    user: *mut c_void,
-);
 type ReadyCallback =
     unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
 
@@ -383,62 +373,6 @@ pub fn texture_from_bgra(width: i32, height: i32, pixels: &[u8], stride: usize) 
         g_bytes_unref(bytes);
         Texture::adopt(texture)
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_new(bytes: *const u8, len: usize) -> *mut c_void {
-    if bytes.is_null() {
-        return ptr::null_mut();
-    }
-    let bytes = unsafe { glib::slice(bytes, len) };
-    Player::new(bytes).map_or(ptr::null_mut(), |p| p.into_raw().cast())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_free(player: *mut c_void) {
-    drop(unsafe { Player::from_raw(player.cast()) });
-}
-
-unsafe fn decoder<'a>(player: *const c_void) -> Option<&'a mut Decoder> {
-    unsafe { player.cast::<Decoder>().cast_mut().as_mut() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_width(player: *const c_void) -> c_int {
-    unsafe { decoder(player) }.map_or(0, |d| d.width())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_height(player: *const c_void) -> c_int {
-    unsafe { decoder(player) }.map_or(0, |d| d.height())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_duration(player: *const c_void) -> f64 {
-    unsafe { decoder(player) }.map_or(0.0, |d| d.duration())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_player_frame_at(
-    player: *mut c_void,
-    seconds: f64,
-    looping: GBoolean,
-    out_ended: *mut GBoolean,
-) -> *mut c_void {
-    let (frame, ended) = match unsafe { decoder(player) } {
-        Some(d) => d.frame_at(seconds, looping != 0),
-        None => (None, false),
-    };
-    if let Some(out) = unsafe { out_ended.as_mut() } {
-        *out = glib::boolean(ended);
-    }
-    frame.map_or(ptr::null_mut(), |t| t.0.as_ptr())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_codec_available(codec: *const c_char) -> GBoolean {
-    let codec = unsafe { glib::bytes(codec) }.unwrap_or_default();
-    glib::boolean(crate::decode::codec_available(codec))
 }
 
 pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {
@@ -585,21 +519,13 @@ fn flush_js(cache: *mut Cache) {
     let Some(c) = (unsafe { cache.as_mut() }) else {
         return;
     };
-    let out = c.sink.js;
+    let out = c.sink.js.clone();
     let events = core::mem::take(&mut c.sink.queue);
     if let Some(out) = out {
         for e in events {
             out.deliver(e.node, e.kind, e.value);
         }
     }
-}
-
-fn cache_mut<'a>(cache: *mut Cache) -> Option<&'a mut Cache> {
-    unsafe { cache.as_mut() }
-}
-
-fn cache_ref<'a>(cache: *const Cache) -> Option<&'a Cache> {
-    unsafe { cache.as_ref() }
 }
 
 fn video_mut<'a>(v: *mut NsVideo) -> Option<&'a mut NsVideo> {
@@ -610,19 +536,227 @@ fn video_ref<'a>(v: *const NsVideo) -> Option<&'a NsVideo> {
     unsafe { v.as_ref() }
 }
 
-fn c_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct VideoCache(NonNull<Cache>);
+
+impl VideoCache {
+    pub fn create() -> VideoCache {
+        VideoCache(NonNull::from(Box::leak(Box::new(Cache::new()))))
+    }
+
+    /// # Safety
+    ///
+    /// `p` is null or a pointer `raw()` returned for a cache that has not been freed.
+    pub unsafe fn from_raw(p: *mut c_void) -> Option<VideoCache> {
+        NonNull::new(p.cast()).map(VideoCache)
+    }
+
+    pub fn raw(self) -> *mut c_void {
+        self.0.as_ptr().cast()
+    }
+
+    /// # Safety
+    ///
+    /// No copy of this handle, and no pointer `raw()` returned, may be used afterwards.
+    pub unsafe fn free(self) {
+        // SAFETY: the cache was leaked from a Box by create(), and the caller guarantees nothing uses it again.
+        drop(unsafe { Box::from_raw(self.0.as_ptr()) });
+    }
+
+    fn with<R>(self, f: impl FnOnce(&mut Cache) -> R) -> R {
+        // SAFETY: the cache stays allocated until free(), whose contract rules out later use, and the borrow ends before any script callback can call back in.
+        f(unsafe { &mut *self.0.as_ptr() })
+    }
+
+    fn flush_js(self) {
+        flush_js(self.0.as_ptr());
+    }
+
+    pub fn set_base(self, base_url: Option<&[u8]>) {
+        self.with(|c| c.base_url = base_url.map(<[u8]>::to_vec));
+    }
+
+    pub fn set_js_sink(self, sink: Option<JsSink>) {
+        self.with(|c| c.sink.js = sink.map(JsOut));
+    }
+
+    pub fn set_audio_sink(self, sink: Option<AudioSink>) {
+        self.with(|c| c.sink.audio = sink.map(AudioOut));
+    }
+
+    pub fn discover(self, root: BoxRef<'_>, doc: Option<Node<'_>>) {
+        self.with(|c| c.discover(root, doc));
+    }
+
+    pub fn set_page_coords(self, on: bool) {
+        self.with(|c| c.page_coords = on);
+    }
+
+    pub fn note_layout(self, root: BoxRef<'_>, scroll_x: f64, scroll_y: f64, scale: f64) {
+        self.with(|c| c.note_layout(root, scroll_x, scroll_y, scale));
+    }
+
+    pub fn tick(self, now_us: i64) -> bool {
+        let changed = self.with(|c| c.tick(now_us));
+        self.flush_js();
+        changed
+    }
+
+    pub fn flush_composites(self, now_us: i64) {
+        self.with(|c| c.flush_composites(now_us));
+    }
+
+    pub fn animating(self) -> bool {
+        self.with(|c| c.animating())
+    }
+
+    pub fn waiting_growth(self) -> bool {
+        self.with(|c| c.waiting_growth())
+    }
+
+    pub fn has_pending(self) -> bool {
+        self.with(|c| !c.pending.is_empty())
+    }
+
+    pub fn mse_append(self, stream_id: u32, kind: u8, data: &[u8]) -> bool {
+        stream_id != 0 && !data.is_empty() && self.with(|c| c.mse_append(stream_id, kind, data))
+    }
+
+    pub fn mse_eos(self, stream_id: u32) {
+        if stream_id != 0 {
+            self.with(|c| c.mse_eos(stream_id));
+        }
+    }
+
+    pub fn mse_buffered(self, stream_id: u32, kind: u8) -> (f64, f64) {
+        let mut first = 0.0;
+        let end = if stream_id == 0 {
+            0.0
+        } else {
+            self.with(|c| c.mse_buffered(stream_id, kind, &mut first))
+        };
+        (first, end)
+    }
+
+    pub fn mse_remove(self, stream_id: u32, kind: u8, start: f64, end: f64) -> bool {
+        stream_id != 0
+            && start >= 0.0
+            && end > start
+            && self.with(|c| c.mse_remove(stream_id, kind, start, end))
+    }
+
+    pub fn mse_bytes(self, stream_id: u32, kind: u8) -> usize {
+        if stream_id == 0 {
+            return 0;
+        }
+        self.with(|c| c.mse_bytes(stream_id, kind))
+    }
+
+    pub fn helper_event(self, token: &[u8], kind: &[u8]) -> bool {
+        if token.is_empty() || kind.is_empty() {
+            return false;
+        }
+        let handled = self.with(|c| c.helper_event(token, kind));
+        self.flush_js();
+        handled
+    }
+
+    pub fn seek_node(self, dom_node: *const c_void, seconds: f64, now_us: i64) -> bool {
+        if dom_node.is_null() {
+            return false;
+        }
+        let handled = self.with(|c| c.seek_node(dom_node, seconds, now_us));
+        self.flush_js();
+        handled
+    }
+
+    pub fn set_node_playing(self, dom_node: *const c_void, play: bool, now_us: i64) -> bool {
+        !dom_node.is_null() && self.with(|c| c.set_node_playing(dom_node, play, now_us))
+    }
+
+    pub fn set_node_muted(self, dom_node: *const c_void, muted: bool) -> bool {
+        !dom_node.is_null() && self.with(|c| c.set_node_muted(dom_node, muted))
+    }
+
+    pub fn set_node_volume(self, dom_node: *const c_void, volume: f64) -> bool {
+        !dom_node.is_null() && self.with(|c| c.set_node_volume(dom_node, volume))
+    }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_video_cache_new() -> *mut Cache {
-    Box::into_raw(Box::new(Cache::new()))
+#[derive(Clone, Copy)]
+pub struct BoxVideo(NonNull<NsVideo>);
+
+impl BoxVideo {
+    pub fn of(b: BoxRef<'_>) -> Option<BoxVideo> {
+        NonNull::new(b.media()?.video().cast::<NsVideo>()).map(BoxVideo)
+    }
+
+    fn with<R>(self, f: impl FnOnce(&mut NsVideo) -> R) -> R {
+        // SAFETY: a box's video slot holds a video the page's cache or the headless driver keeps alive while the box tree exists, and nothing else borrows it during the call.
+        f(unsafe { &mut *self.0.as_ptr() })
+    }
+
+    pub fn is_camera(self) -> bool {
+        self.with(|v| v.is_camera.get())
+    }
+
+    pub fn has_player(self) -> bool {
+        self.with(|v| v.player.is_some())
+    }
+
+    pub fn toggle(self, cache: Option<VideoCache>, now_us: i64) -> bool {
+        let toggled = match cache {
+            Some(cache) => cache.with(|c| self.with(|v| crate::toggle(&mut c.sink, v, now_us))),
+            None => self.with(|v| crate::toggle(&mut Sink::default(), v, now_us)),
+        };
+        if let Some(cache) = cache {
+            cache.flush_js();
+        }
+        toggled
+    }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_free(cache: *mut Cache) {
-    if !cache.is_null() {
-        drop(unsafe { Box::from_raw(cache) });
+pub struct StillVideo(Box<NsVideo>);
+
+impl StillVideo {
+    fn new(url: &[u8]) -> StillVideo {
+        let mut v = NsVideo::zeroed();
+        v.url = OwnedStr::new(url);
+        StillVideo(v)
+    }
+
+    pub fn from_player(url: &[u8], body: &[u8]) -> Option<StillVideo> {
+        let mut player = Player::new(body)?;
+        let (frame, _) = player.frame_at(0.0, false);
+        let mut still = StillVideo::new(url);
+        let v = &mut still.0;
+        v.natural_width = player.width();
+        v.natural_height = player.height();
+        v.duration = player.duration();
+        v.frame_texture = frame;
+        v.player = Some(player);
+        Some(still)
+    }
+
+    pub fn from_poster(url: &[u8], body: &[u8]) -> Option<StillVideo> {
+        let (texture, w, h) = decode_image(body)?;
+        let mut still = StillVideo::new(url);
+        let v = &mut still.0;
+        v.poster_texture = Some(texture);
+        v.natural_width = w;
+        v.natural_height = h;
+        Some(still)
+    }
+
+    pub fn attach(self, b: BoxRef<'_>) -> Result<(), StillVideo> {
+        match b.media().filter(|m| m.video().is_null()) {
+            Some(m) => {
+                m.set_video(Box::into_raw(self.0).cast());
+                Ok(())
+            }
+            None => Err(self),
+        }
     }
 }
 
@@ -639,281 +773,6 @@ pub unsafe extern "C" fn ns_video_poster_texture(
     }
     v.and_then(|v| v.poster_texture.as_ref())
         .map_or(ptr::null_mut(), |t| t.0.as_ptr())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_base(cache: *mut Cache, base_url: *const c_char) {
-    if let Some(c) = cache_mut(cache) {
-        c.base_url = c_bytes(base_url).map(<[u8]>::to_vec);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_js_cb(
-    cache: *mut Cache,
-    cb: Option<JsCb>,
-    user_data: *mut c_void,
-) {
-    if let Some(c) = cache_mut(cache) {
-        c.sink.js = cb.map(|cb| JsOut {
-            cb,
-            user: user_data,
-        });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_audio_cb(
-    cache: *mut Cache,
-    cb: Option<AudioCb>,
-    user_data: *mut c_void,
-) {
-    if let Some(c) = cache_mut(cache) {
-        c.sink.audio = cb.map(|cb| AudioOut {
-            cb,
-            user: user_data,
-        });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_discover(
-    cache: *mut Cache,
-    root: *const NsBox,
-    doc: *const NsNode,
-    _now_us: i64,
-) {
-    let (Some(c), Some(root)) = (cache_mut(cache), unsafe { BoxRef::from_ptr(root) }) else {
-        return;
-    };
-    c.discover(root, unsafe { Node::from_ptr(doc) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_page_coords(cache: *mut Cache, on: GBoolean) {
-    if let Some(c) = cache_mut(cache) {
-        c.page_coords = on != 0;
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_note_layout(
-    cache: *mut Cache,
-    root: *const NsBox,
-    scroll_x: f64,
-    scroll_y: f64,
-    scale: f64,
-) {
-    let (Some(c), Some(root)) = (cache_mut(cache), unsafe { BoxRef::from_ptr(root) }) else {
-        return;
-    };
-    c.note_layout(root, scroll_x, scroll_y, scale);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_tick(cache: *mut Cache, now_us: i64) -> GBoolean {
-    let Some(c) = cache_mut(cache) else {
-        return glib::FALSE;
-    };
-    let changed = c.tick(now_us);
-    flush_js(cache);
-    glib::boolean(changed)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_flush_composites(cache: *mut Cache, now_us: i64) {
-    if let Some(c) = cache_mut(cache) {
-        c.flush_composites(now_us);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_animating(cache: *const Cache) -> GBoolean {
-    glib::boolean(cache_ref(cache).is_some_and(Cache::animating))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_waiting_growth(cache: *const Cache) -> GBoolean {
-    glib::boolean(cache_ref(cache).is_some_and(Cache::waiting_growth))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_has_pending(cache: *const Cache) -> GBoolean {
-    glib::boolean(cache_ref(cache).is_some_and(|c| !c.pending.is_empty()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_mse_append(
-    cache: *mut Cache,
-    stream_id: c_uint,
-    kind: c_char,
-    data: *const u8,
-    len: usize,
-) -> GBoolean {
-    let Some(c) = cache_mut(cache) else {
-        return glib::FALSE;
-    };
-    if stream_id == 0 || data.is_null() || len == 0 {
-        return glib::FALSE;
-    }
-    let data = unsafe { glib::slice(data, len) };
-    glib::boolean(c.mse_append(stream_id, kind as u8, data))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_mse_eos(cache: *mut Cache, stream_id: c_uint) {
-    if let Some(c) = cache_mut(cache)
-        && stream_id != 0
-    {
-        c.mse_eos(stream_id);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_mse_buffered(
-    cache: *mut Cache,
-    stream_id: c_uint,
-    kind: c_char,
-    start: *mut f64,
-) -> f64 {
-    let start = unsafe { start.as_mut() };
-    let mut first = 0.0;
-    let end = match cache_mut(cache) {
-        Some(c) if stream_id != 0 => c.mse_buffered(stream_id, kind as u8, &mut first),
-        _ => 0.0,
-    };
-    if let Some(start) = start {
-        *start = first;
-    }
-    end
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_mse_remove(
-    cache: *mut Cache,
-    stream_id: c_uint,
-    kind: c_char,
-    start: f64,
-    end: f64,
-) -> GBoolean {
-    let Some(c) = cache_mut(cache) else {
-        return glib::FALSE;
-    };
-    if stream_id == 0 || start < 0.0 || end <= start {
-        return glib::FALSE;
-    }
-    glib::boolean(c.mse_remove(stream_id, kind as u8, start, end))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_mse_bytes(
-    cache: *mut Cache,
-    stream_id: c_uint,
-    kind: c_char,
-) -> usize {
-    match cache_mut(cache) {
-        Some(c) if stream_id != 0 => c.mse_bytes(stream_id, kind as u8),
-        _ => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_helper_event(
-    cache: *mut Cache,
-    token: *const c_char,
-    kind: *const c_char,
-) -> GBoolean {
-    let (Some(c), Some(token), Some(kind)) = (cache_mut(cache), c_bytes(token), c_bytes(kind))
-    else {
-        return glib::FALSE;
-    };
-    if token.is_empty() || kind.is_empty() {
-        return glib::FALSE;
-    }
-    let handled = c.helper_event(token, kind);
-    flush_js(cache);
-    glib::boolean(handled)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_url_is_inline(url: *const c_char) -> GBoolean {
-    glib::boolean(c_bytes(url).is_some_and(crate::url_is_inline_video))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_seek_node(
-    cache: *mut Cache,
-    dom_node: *const c_void,
-    seconds: f64,
-    now_us: i64,
-) -> GBoolean {
-    let Some(c) = cache_mut(cache) else {
-        return glib::FALSE;
-    };
-    if dom_node.is_null() {
-        return glib::FALSE;
-    }
-    let handled = c.seek_node(dom_node, seconds, now_us);
-    flush_js(cache);
-    glib::boolean(handled)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_node_playing(
-    cache: *mut Cache,
-    dom_node: *const c_void,
-    play: GBoolean,
-    now_us: i64,
-) -> GBoolean {
-    match cache_mut(cache) {
-        Some(c) if !dom_node.is_null() => {
-            glib::boolean(c.set_node_playing(dom_node, play != 0, now_us))
-        }
-        _ => glib::FALSE,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_node_muted(
-    cache: *mut Cache,
-    dom_node: *const c_void,
-    muted: GBoolean,
-) -> GBoolean {
-    match cache_mut(cache) {
-        Some(c) if !dom_node.is_null() => glib::boolean(c.set_node_muted(dom_node, muted != 0)),
-        _ => glib::FALSE,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_set_node_volume(
-    cache: *mut Cache,
-    dom_node: *const c_void,
-    volume: f64,
-) -> GBoolean {
-    match cache_mut(cache) {
-        Some(c) if !dom_node.is_null() => glib::boolean(c.set_node_volume(dom_node, volume)),
-        _ => glib::FALSE,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_cache_toggle(
-    cache: *mut Cache,
-    v: *mut NsVideo,
-    now_us: i64,
-) -> GBoolean {
-    let Some(v) = video_mut(v) else {
-        return glib::FALSE;
-    };
-    let mut detached = Sink::default();
-    let sink = match cache_mut(cache) {
-        Some(c) => &mut c.sink,
-        None => &mut detached,
-    };
-    let toggled = crate::toggle(sink, v, now_us);
-    flush_js(cache);
-    glib::boolean(toggled)
 }
 
 #[unsafe(no_mangle)]

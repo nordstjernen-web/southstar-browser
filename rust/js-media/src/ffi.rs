@@ -86,8 +86,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
-    fn ns_video_codec_available(codec: *const c_char) -> GBoolean;
     fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
 }
 
@@ -175,13 +173,11 @@ pub(crate) fn url_resolve(base: &str, href: &str) -> Option<String> {
 }
 
 pub(crate) fn video_url_is_inline(url: &str) -> bool {
-    let url = c_text(url);
-    unsafe { ns_video_url_is_inline(url.as_ptr()) != 0 }
+    southstar_video::url_is_inline_video(until_nul(url.as_bytes()))
 }
 
 pub(crate) fn video_codec_available(codec: &str) -> bool {
-    let codec = c_text(codec);
-    unsafe { ns_video_codec_available(codec.as_ptr()) != 0 }
+    southstar_video::codec_available(until_nul(codec.as_bytes()))
 }
 
 pub(crate) fn perf_now(scope: &Scope<'_>) -> f64 {

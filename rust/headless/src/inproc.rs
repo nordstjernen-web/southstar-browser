@@ -224,8 +224,8 @@ impl<'a> Settle<'a> {
             cache.tick(now);
         }
         if let Some(cache) = fc.video_cache {
-            if !fc.layout.get().is_null() {
-                cache.discover(fc.layout.get(), fc.doc, now);
+            if let Some(layout) = fc.layout() {
+                cache.discover(layout, fc.doc());
             }
             cache.tick(now);
         }
@@ -421,7 +421,7 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
                 && let (None, Some(body)) =
                     (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
             {
-                made = Video::from_player(&src, body);
+                made = Video::from_player(src.as_bytes(), body);
             }
         }
         if made.is_none()
@@ -432,7 +432,7 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
                 && let (None, Some(body)) =
                     (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
             {
-                made = Video::from_poster(&poster, body);
+                made = Video::from_poster(poster.as_bytes(), body);
             }
         }
 
@@ -440,12 +440,8 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
             let target = fc
                 .layout()
                 .and_then(|l| ffi::collect_videos(l).get(idx).copied());
-            let unattached = match target {
-                Some(now) => video.attach(now).err(),
-                None => Some(video),
-            };
-            if let Some(video) = unattached {
-                video.discard();
+            if let Some(now) = target {
+                drop(video.attach(now));
             }
         }
     }
@@ -673,7 +669,7 @@ pub fn run_one(
         js.bind_form_submit(&nav);
     }
     let image_cache = Some(ImageCache::create());
-    let video_cache = VideoCache::new();
+    let video_cache = Some(VideoCache::create());
     let flush_base = page_url.clone();
     let ctx = Ctx {
         doc: doc.as_ptr(),
@@ -700,7 +696,7 @@ pub fn run_one(
         js.bind_media(video_cache);
         ffi::bind_video_events(video_cache, Some(js));
         if let Some(cache) = video_cache {
-            cache.set_base(flush_base.as_deref());
+            cache.set_base(flush_base.as_deref().map(CStr::to_bytes));
         }
         if o.wpt {
             js.set_early_inject_src(CStr::from_bytes_with_nul(WPT_HOOK.as_bytes()).unwrap_or(c""));
@@ -754,7 +750,8 @@ pub fn run_one(
             unsafe { cache.free() };
         }
         if let Some(cache) = video_cache {
-            cache.free();
+            // SAFETY: script, whose media callbacks hold a copy, was released above and the next page creates its own cache.
+            unsafe { cache.free() };
         }
         drop(decoded);
         let next_opts = Opts {
@@ -894,7 +891,8 @@ pub fn run_one(
         unsafe { cache.free() };
     }
     if let Some(cache) = video_cache {
-        cache.free();
+        // SAFETY: the run is over and script, whose media callbacks hold a copy, was released above.
+        unsafe { cache.free() };
     }
     rc
 }

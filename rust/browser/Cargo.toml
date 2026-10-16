@@ -22,6 +22,7 @@ southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
+southstar-video = { path = "../video" }
 
 [lints]
 workspace = true

@@ -3,8 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::mem::size_of;
-use core::ptr::{self, NonNull};
+use core::ptr;
 
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray, GStr};
@@ -53,81 +52,6 @@ struct NsResponse {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184);
-
-#[repr(C)]
-struct NsVideo {
-    url: *mut c_char,
-    natural_width: c_int,
-    natural_height: c_int,
-    poster_texture: *mut c_void,
-    _poster_url: *mut c_char,
-    frame_texture: *mut c_void,
-    _loaded: GBoolean,
-    _load_events_fired: GBoolean,
-    _failed: GBoolean,
-    player: *mut c_void,
-    _dom_node: *const c_void,
-    _is_camera: GBoolean,
-    _autoplay: GBoolean,
-    _loop: GBoolean,
-    _controls: GBoolean,
-    _muted: GBoolean,
-    _has_audio: GBoolean,
-    _audio_opened: GBoolean,
-    _audio_url: *mut c_char,
-    _audio_file: *mut c_char,
-    _audio_file_len: usize,
-    _audio_file_gen: c_uint,
-    _audio_timeline_start: f64,
-    _pending_audio_file: *mut c_char,
-    _pending_audio_file_len: usize,
-    _pending_audio_file_gen: c_uint,
-    _pending_audio_start: f64,
-    _video_file: *mut c_char,
-    _video_file_len: usize,
-    _video_file_gen: c_uint,
-    _pending_video_file: *mut c_char,
-    _pending_video_file_len: usize,
-    _pending_video_file_gen: c_uint,
-    _pending_video_start: f64,
-    _video_opened: GBoolean,
-    _rect: [f64; 4],
-    _clip: [f64; 4],
-    _rect_fit: c_int,
-    _last_paint_us: i64,
-    _rect_dirty: GBoolean,
-    _rect_sent_us: i64,
-    _sent_rect: [f64; 4],
-    _sent_clip: [f64; 4],
-    _sent_rect_fit: c_int,
-    _sent_rect_page: GBoolean,
-    _token: *mut c_char,
-    _playing: GBoolean,
-    _ended: GBoolean,
-    _volume: f64,
-    _meta_sent: GBoolean,
-    _buf_sent: GBoolean,
-    _sent_buffered_end: f64,
-    _seq: c_uint,
-    _base_us: i64,
-    _last_refresh_us: i64,
-    _stalled: GBoolean,
-    _stall_since_us: i64,
-    _mse_id: c_uint,
-    _cur_time: f64,
-    _prev_tick_time: f64,
-    _last_emit_time: f64,
-    duration: f64,
-    _cues: *mut GPtrArray,
-    _track_requested: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    size_of::<NsVideo>() == 544
-        && core::mem::offset_of!(NsVideo, player) == 56
-        && core::mem::offset_of!(NsVideo, duration) == 520
-);
 
 #[repr(C)]
 struct NsLinkRange {
@@ -231,35 +155,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_paint_set_js(js: *mut c_void);
-    fn ns_image_decode_bytes(
-        data: *const u8,
-        len: usize,
-        w: *mut c_int,
-        h: *mut c_int,
-    ) -> *mut c_void;
-    fn ns_texture_ref(texture: *mut c_void) -> *mut c_void;
-    fn ns_texture_unref(texture: *mut c_void);
-    fn ns_video_cache_new() -> *mut c_void;
-    fn ns_video_cache_free(cache: *mut c_void);
-    fn ns_video_cache_tick(cache: *mut c_void, now_us: i64) -> GBoolean;
-    fn ns_video_cache_discover(
-        cache: *mut c_void,
-        root: *const NsBox,
-        doc: *const NsNode,
-        now_us: i64,
-    );
-    fn ns_video_cache_set_base(cache: *mut c_void, base_url: *const c_char);
-    fn ns_video_player_new(bytes: *const u8, len: usize) -> *mut c_void;
-    fn ns_video_player_free(player: *mut c_void);
-    fn ns_video_player_width(player: *const c_void) -> c_int;
-    fn ns_video_player_height(player: *const c_void) -> c_int;
-    fn ns_video_player_duration(player: *const c_void) -> f64;
-    fn ns_video_player_frame_at(
-        player: *mut c_void,
-        seconds: f64,
-        looped: GBoolean,
-        ended: *mut GBoolean,
-    ) -> *mut c_void;
     fn g_hash_table_new_full(
         hash: unsafe extern "C" fn(*const c_void) -> c_uint,
         equal: unsafe extern "C" fn(*const c_void, *const c_void) -> GBoolean,
@@ -570,34 +465,7 @@ pub fn image_cache_raw(cache: Option<ImageCache>) -> *mut c_void {
     cache.map_or(ptr::null_mut(), ImageCache::raw)
 }
 
-#[derive(Clone, Copy)]
-pub struct VideoCache(NonNull<c_void>);
-
-impl VideoCache {
-    pub fn new() -> Option<VideoCache> {
-        NonNull::new(unsafe { ns_video_cache_new() }).map(VideoCache)
-    }
-
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_video_cache_free(self.raw()) };
-    }
-
-    pub fn tick(self, now_us: i64) {
-        unsafe { ns_video_cache_tick(self.raw(), now_us) };
-    }
-
-    pub fn discover(self, root: *const NsBox, doc: *const NsNode, now_us: i64) {
-        unsafe { ns_video_cache_discover(self.raw(), root, doc, now_us) };
-    }
-
-    pub fn set_base(self, base: Option<&CStr>) {
-        unsafe { ns_video_cache_set_base(self.raw(), ptr_or_null(base)) };
-    }
-}
+pub use southstar_video::VideoCache;
 
 pub struct Relayout<'a> {
     pub doc: *mut NsNode,
@@ -695,73 +563,4 @@ pub fn video_sources(b: BoxRef<'_>) -> Option<(Option<&CStr>, Option<&CStr>)> {
         .then(|| (m.video_src(), m.video_poster()))
 }
 
-pub struct Video(NonNull<NsVideo>);
-
-impl Video {
-    fn alloc(url: &CStr) -> Video {
-        let v = unsafe { glib::g_malloc0(size_of::<NsVideo>()) }.cast::<NsVideo>();
-        let v = NonNull::new(v).expect("g_malloc0");
-        unsafe { (*v.as_ptr()).url = glib::g_strdup(url.as_ptr()) };
-        Video(v)
-    }
-
-    pub fn from_player(url: &CStr, body: &[u8]) -> Option<Video> {
-        let player = unsafe { ns_video_player_new(body.as_ptr(), body.len()) };
-        if player.is_null() {
-            return None;
-        }
-        let mut ended: GBoolean = glib::FALSE;
-        let frame = unsafe { ns_video_player_frame_at(player, 0.0, glib::FALSE, &mut ended) };
-        let video = Video::alloc(url);
-        let v = unsafe { &mut *video.0.as_ptr() };
-        v.player = player;
-        v.natural_width = unsafe { ns_video_player_width(player) };
-        v.natural_height = unsafe { ns_video_player_height(player) };
-        v.duration = unsafe { ns_video_player_duration(player) };
-        if !frame.is_null() {
-            v.frame_texture = unsafe { ns_texture_ref(frame) };
-        }
-        Some(video)
-    }
-
-    pub fn from_poster(url: &CStr, body: &[u8]) -> Option<Video> {
-        let (mut w, mut h): (c_int, c_int) = (0, 0);
-        let texture = unsafe { ns_image_decode_bytes(body.as_ptr(), body.len(), &mut w, &mut h) };
-        if texture.is_null() {
-            return None;
-        }
-        let video = Video::alloc(url);
-        let v = unsafe { &mut *video.0.as_ptr() };
-        v.poster_texture = texture;
-        v.natural_width = w;
-        v.natural_height = h;
-        Some(video)
-    }
-
-    pub fn attach(self, b: BoxRef) -> Result<(), Video> {
-        match b.media().filter(|m| m.video().is_null()) {
-            Some(m) => {
-                m.set_video(self.0.as_ptr().cast());
-                Ok(())
-            }
-            None => Err(self),
-        }
-    }
-
-    pub fn discard(self) {
-        let v = unsafe { &mut *self.0.as_ptr() };
-        unsafe {
-            if !v.player.is_null() {
-                ns_video_player_free(v.player);
-            }
-            if !v.frame_texture.is_null() {
-                ns_texture_unref(v.frame_texture);
-            }
-            if !v.poster_texture.is_null() {
-                ns_texture_unref(v.poster_texture);
-            }
-            glib::g_free(v.url.cast());
-            glib::g_free(self.0.as_ptr().cast());
-        }
-    }
-}
+pub use southstar_video::StillVideo as Video;

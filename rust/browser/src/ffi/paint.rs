@@ -114,8 +114,6 @@ unsafe extern "C" {
         sel: *const c_void,
     );
     fn ns_paint_canvas_color(root: *const NsBox, rgba: *mut f64) -> GBoolean;
-    fn ns_video_cache_flush_composites(cache: *mut c_void, now_us: i64);
-    fn ns_video_cache_set_page_coords(cache: *mut c_void, on: GBoolean);
     fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
     fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
     fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
@@ -652,11 +650,15 @@ impl NsBrowser {
     }
 
     pub fn flush_video_composites(&self, now_us: i64) {
-        unsafe { ns_video_cache_flush_composites(self.videos.get(), now_us) };
+        if let Some(videos) = self.videos() {
+            videos.flush_composites(now_us);
+        }
     }
 
     pub fn set_video_page_coords(&self, on: bool) {
-        unsafe { ns_video_cache_set_page_coords(self.videos.get(), glib::boolean(on)) };
+        if let Some(videos) = self.videos() {
+            videos.set_page_coords(on);
+        }
     }
 
     pub fn paint_search(&self) {

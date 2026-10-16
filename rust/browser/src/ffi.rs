@@ -133,7 +133,7 @@ pub struct NsBrowser {
     js: Cell<*mut c_void>,
     anim: Cell<Option<Anim>>,
     images: Cell<Option<Images>>,
-    videos: Cell<*mut c_void>,
+    videos: Cell<Option<Videos>>,
     css_cache: Cell<*mut GHashTable>,
     pub base_url: Text,
     pub doc_charset: Text,
@@ -293,7 +293,7 @@ impl NsBrowser {
     }
 
     pub fn videos(&self) -> Option<Videos> {
-        Videos::from_raw(self.videos.get())
+        self.videos.get()
     }
 
     pub fn take_layout(&self) {
@@ -408,8 +408,9 @@ impl NsBrowser {
             js.free();
         }
         drop(self.doc.borrow_mut().take());
-        if let Some(videos) = self.videos() {
-            videos.free();
+        if let Some(videos) = self.videos.take() {
+            // SAFETY: the handle is out of the page's slot, and script, whose media callbacks reach the cache through that slot, was released above.
+            unsafe { videos.free() };
         }
         if let Some(images) = self.images.take() {
             // SAFETY: the handle is out of the page's slot, and script, layout and every image session that held a copy were released above.
@@ -549,7 +550,7 @@ pub fn attach_js(b: &NsBrowser, navigation_timing: Option<NavigationTiming>) -> 
 pub fn attach_caches(b: &NsBrowser) {
     b.css_cache.set(new_css_cache());
     b.images.set(Some(Images::create()));
-    b.videos.set(Videos::create());
+    b.videos.set(Some(Videos::create()));
 }
 
 pub fn set_anim(b: &NsBrowser, anim: Anim) {
@@ -599,7 +600,9 @@ pub unsafe extern "C" fn ns_browser_video_helper_event(
     let Some(kind) = c_str(kind) else {
         return 0;
     };
-    bool_int(videos.helper_event(c_str(token), kind))
+    bool_int(
+        c_str(token).is_some_and(|token| videos.helper_event(token.to_bytes(), kind.to_bytes())),
+    )
 }
 
 #[unsafe(no_mangle)]
