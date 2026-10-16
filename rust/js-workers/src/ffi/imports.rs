@@ -2,9 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
-
-use southstar_js_engine::{ContextHandle, Scope, TaskFn, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 type Native = Result<Value, Value>;
 
@@ -41,23 +39,6 @@ unsafe extern "Rust" {
         strict_signal: bool,
     ) -> Result<(bool, bool, bool, bool, Option<Value>), Value>;
     pub(crate) safe fn nsr_listeners_compact_dead(scope: &mut Scope<'_>, owner: &Value);
-    pub(crate) safe fn nsr_queue_message_task(
-        scope: &mut Scope<'_>,
-        f: TaskFn,
-        args: &[Value],
-    ) -> Result<(), Value>;
-    pub(crate) unsafe fn nsr_worker_js_eval(
-        js: *mut c_void,
-        source: &CStr,
-        len: usize,
-        url: &CStr,
-        module: bool,
-    ) -> Result<(), (bool, Value)>;
-    pub(crate) safe fn nsr_js_exception_message(
-        scope: &mut Scope<'_>,
-        exception: &Value,
-    ) -> Vec<u8>;
-    pub(crate) safe fn nsr_bind_event_target_listeners(scope: &mut Scope<'_>, object: &Value);
     pub(crate) safe fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_install_namespace_object(
         scope: &mut Scope<'_>,
@@ -105,11 +86,6 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Native;
     pub(crate) safe fn nsr_cache_open(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Native;
-    pub(crate) safe fn nsr_illegal_constructor(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],

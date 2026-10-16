@@ -329,19 +329,6 @@ pub(crate) unsafe fn realm_scope_pop(js: Option<Js>, buf: *mut c_void) {
     unsafe { realm_scope_leave(js, &mut *buf.cast::<RealmScope>()) };
 }
 
-pub(crate) unsafe fn frame_scope_push(
-    js: Js,
-    realm: ContextHandle,
-    frame: *mut NsNode,
-    buf: *mut c_void,
-) {
-    let scope = buf.cast::<RealmScope>();
-    unsafe {
-        scope.write(RealmScope::inactive());
-        frame_scope_enter(js, realm, frame, &mut *scope);
-    }
-}
-
 pub(crate) fn frame_url_begin(js: Js, url: *const c_char) -> Box<FrameUrl> {
     let mut fu = Box::new(FrameUrl::new());
     frame_url_enter(js, &mut fu, url);

@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
+use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
@@ -31,30 +31,18 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_current_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_node_doc_base(js: *mut NsJs, el: *const NsNode) -> *const c_char;
-    fn ns_js_page_csp(js: *const NsJs) -> *const c_void;
     fn ns_csp_allows(
         csp: *const c_void,
         kind: c_int,
         resource_url: *const c_char,
         document_url: *const c_char,
     ) -> GBoolean;
-    fn ns_js_cookie_value(js: *const NsJs) -> *const c_char;
-    fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char);
-    fn ns_js_partition_key(js: *const NsJs) -> *const c_char;
-    fn ns_js_referrer(js: *const NsJs) -> *const c_char;
     fn ns_js_frame_referrer_for(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-    fn ns_js_ready_state(js: *const NsJs) -> c_int;
-    fn ns_js_doc_ready_state(js: *const NsJs, doc: *const NsNode) -> c_int;
-    fn ns_js_current_script(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
     fn ns_js_clear_focused_node(js: *mut NsJs);
     fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_record_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -65,12 +53,6 @@ unsafe extern "C" {
     );
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
     fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
-    fn ns_element_insert_before_single(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        node: *mut NsNode,
-        reference: *mut NsNode,
-    );
     fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
     fn ns_js_set_attr_recorded_len(
         js: *mut NsJs,
@@ -131,24 +113,17 @@ pub(crate) fn is_realm_document(scope: &mut Scope<'_>, doc: &Value) -> bool {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    if js.is_null() {
-        return None;
-    }
-    node_of(unsafe { ns_js_current_document(js.0) })
+    api::current_document(js.0)
 }
 
 const CSP_BASE_URI: c_int = 12;
 
-fn borrowed_c_str(text: *const c_char) -> Option<&'static CStr> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
+pub(crate) fn current_url_c(js: Js) -> Option<CString> {
+    Some(api::current_url(js.0))
 }
 
-pub(crate) fn current_url_c(js: Js) -> Option<&'static CStr> {
-    borrowed_c_str(unsafe { ns_js_current_url(js.0) })
-}
-
-pub(crate) fn node_doc_base(js: Js, node: Option<Element>) -> Option<&'static CStr> {
-    borrowed_c_str(unsafe { ns_js_node_doc_base(js.0, raw(node)) })
+pub(crate) fn node_doc_base(js: Js, node: Option<Element>) -> Option<CString> {
+    api::node_doc_base(js.0, node)
 }
 
 pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
@@ -159,7 +134,7 @@ pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) 
     if js.is_null() {
         return true;
     }
-    let csp = unsafe { ns_js_page_csp(js.0) };
+    let csp = api::page_csp(js.0);
     if csp.is_null() {
         return true;
     }
@@ -190,24 +165,19 @@ pub unsafe extern "C" fn ns_js_node_document_base_url(
 }
 
 pub(crate) fn current_url(js: Js) -> Option<Vec<u8>> {
-    borrowed_text(unsafe { ns_js_current_url(js.0) }).filter(|url| !url.is_empty())
+    Some(api::current_url(js.0).into_bytes()).filter(|url| !url.is_empty())
 }
 
 pub(crate) fn cookie_value(js: Js) -> Option<Vec<u8>> {
-    borrowed_text(unsafe { ns_js_cookie_value(js.0) })
+    api::cookie_value(js.0).map(CString::into_bytes)
 }
 
 pub(crate) fn set_cookie_value(js: Js, value: &[u8]) {
-    let value = c_bytes(value);
-    unsafe { ns_js_set_cookie_value(js.0, value.as_ptr()) };
+    api::set_cookie_value(js.0, Some(&c_bytes(value)));
 }
 
 pub(crate) fn partition_key(js: Js) -> Option<Vec<u8>> {
-    borrowed_text(unsafe { ns_js_partition_key(js.0) })
-}
-
-pub(crate) fn referrer(js: Js) -> Option<Vec<u8>> {
-    borrowed_text(unsafe { ns_js_referrer(js.0) })
+    api::partition_key(js.0).map(CString::into_bytes)
 }
 
 pub(crate) fn frame_referrer(js: Js, frame: Element) -> Option<Vec<u8>> {
@@ -216,16 +186,16 @@ pub(crate) fn frame_referrer(js: Js, frame: Element) -> Option<Vec<u8>> {
 
 pub(crate) fn ready_state(js: Js, doc: Option<Element>) -> i32 {
     if let Some(doc) = doc {
-        let state = unsafe { ns_js_doc_ready_state(js.0, doc.as_ptr()) };
+        let state = api::doc_ready_state(js.0, doc);
         if state >= 0 {
             return state;
         }
     }
-    unsafe { ns_js_ready_state(js.0) }
+    api::ready_state(js.0)
 }
 
 pub(crate) fn current_script(js: Js) -> Option<Element> {
-    node_of(unsafe { ns_js_current_script(js.0) })
+    api::current_script(js.0)
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {
@@ -249,7 +219,7 @@ pub(crate) fn orphan_node(js: Js, node: Element) {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    unsafe { ns_js_mark_mutated(js.0) };
+    api::mark_mutated(js.0);
 }
 
 pub(crate) fn record_child_change(
@@ -280,15 +250,8 @@ pub(crate) fn ce_disconnect_subtree(js: Js, node: Element) {
     unsafe { ns_ce_disconnect_subtree(js.0, node.as_mut_ptr()) };
 }
 
-pub(crate) fn insert_before_single(js: Js, parent: Element, node: Element, reference: Element) {
-    unsafe {
-        ns_element_insert_before_single(
-            js.0,
-            parent.as_mut_ptr(),
-            node.as_mut_ptr(),
-            reference.as_mut_ptr(),
-        )
-    };
+pub(crate) fn insert_before_single(js: Js, node: Element, reference: Element) {
+    api::insert_before_single(js.0, node, reference);
 }
 
 pub(crate) fn replace_all_recorded(js: Js, node: Element, added: Option<Element>) {
@@ -388,10 +351,8 @@ pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
 }
 
 unsafe extern "C" {
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_orphan_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_ignore_destructive_writes(js: *const NsJs) -> c_int;
     fn ns_js_index_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -401,7 +362,6 @@ unsafe extern "C" {
     fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
-    fn ns_node_arm_js_invalidate(node: *mut NsNode);
 }
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
@@ -475,7 +435,7 @@ pub(crate) fn bind_c_function(
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    unsafe { ns_js_main_context(js.0) }.with(f)
+    api::main_context(js.0).with(f)
 }
 
 pub(crate) fn orphan_children(js: Js, node: Element) {
@@ -487,7 +447,7 @@ pub(crate) fn clear_children(js: Js, node: Element) {
 }
 
 pub(crate) fn ignore_destructive_writes(js: Js) -> bool {
-    unsafe { ns_js_ignore_destructive_writes(js.0) > 0 }
+    api::ignore_destructive_writes(js.0) > 0
 }
 
 pub(crate) fn index_child_change(js: Js, parent: Element, added: Element) {
@@ -518,7 +478,7 @@ pub(crate) fn expose_legacy_named(scope: &mut Scope<'_>, root: Element, document
 }
 
 pub(crate) fn arm_js_invalidate(node: Element) {
-    unsafe { ns_node_arm_js_invalidate(node.as_mut_ptr()) };
+    api::arm_js_invalidate(node);
 }
 
 pub(crate) fn new_document() -> Option<Element> {

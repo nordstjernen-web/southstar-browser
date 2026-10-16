@@ -1414,10 +1414,6 @@ pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {
     record(js)?.cookie_value.clone()
 }
 
-pub(crate) fn cookie_value_ptr(js: *const NsJs) -> *const c_char {
-    record(js).map_or(ptr::null(), |js| opt_ptr(&js.cookie_value))
-}
-
 pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
     if js.is_null() {
         return;

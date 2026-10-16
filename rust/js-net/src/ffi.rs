@@ -19,10 +19,7 @@ mod imports;
 
 use imports::*;
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct Js(usize);
@@ -166,7 +163,6 @@ unsafe extern "C" {
     fn ns_es_close(es: *mut c_void);
     fn ns_es_free(es: *mut c_void);
     fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
 }
 
 unsafe extern "C" {
@@ -196,19 +192,7 @@ unsafe extern "C" {
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
 
-    fn ns_js_net_page_url(js: *const NsJs) -> *const c_char;
-    fn ns_js_net_csp_allows_connect(
-        js: *const NsJs,
-        url: *const c_char,
-        page: *const c_char,
-    ) -> GBoolean;
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_is_worker(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_realm_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char;
-    fn ns_js_realm_document_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char;
     fn ns_perf_now_ms(js: *const NsJs) -> f64;
-    fn ns_js_page_time_origin_us(js: *const NsJs) -> i64;
     fn ns_perf_add_resource_timed(
         js: *mut NsJs,
         info: *const NsPerfResourceInfo,
@@ -218,16 +202,6 @@ unsafe extern "C" {
         end_us: i64,
         resp: *const NsResponse,
     );
-    fn ns_js_budget_enter(js: *mut NsJs) -> i64;
-    fn ns_js_budget_leave(js: *mut NsJs, saved: i64);
-    fn ns_drain_mutations(js: *mut NsJs);
-    fn ns_js_attach_idle(js: *mut NsJs, func: GSourceFunc, data: *mut c_void) -> c_uint;
-    fn ns_js_attach_timeout(
-        js: *mut NsJs,
-        ms: c_uint,
-        func: GSourceFunc,
-        data: *mut c_void,
-    ) -> c_uint;
     fn ns_js_blob_url_lookup(
         js: *mut NsJs,
         url: *const c_char,
@@ -243,9 +217,6 @@ unsafe extern "C" {
         body: *const u8,
         body_len: usize,
     );
-    fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean;
-    fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean;
-    fn ns_js_credit_pumped_time(js: *mut NsJs, pump_start_us: i64);
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -685,66 +656,44 @@ pub(crate) fn bind_illegal_ctor(scope: &mut Scope<'_>, global: &Value, name: &CS
 
 impl Js {
     pub fn log_line(self, line: &[u8]) {
-        if self.is_null() {
-            return;
-        }
-        let line = cstring(line);
-        unsafe { ns_js_log_line(self.ptr(), line.as_ptr()) };
+        api::log_line(self.ptr(), &cstring(line));
     }
 
     pub fn page_url(self) -> Option<Vec<u8>> {
-        if self.is_null() {
-            return None;
-        }
-        borrowed(unsafe { ns_js_net_page_url(self.ptr()) })
+        api::page_url(self.ptr()).map(CString::into_bytes)
     }
 
     pub fn url_parses(self, url: &[u8]) -> bool {
-        let url = cstring(url);
-        !self.is_null() && unsafe { ns_js_url_parses(self.ptr(), url.as_ptr()) } != 0
+        !self.is_null() && api::url_parses(self.ptr(), &cstring(url))
     }
 
     pub fn pump_iteration(self) -> bool {
-        !self.is_null() && unsafe { ns_js_net_pump_iteration(self.ptr()) } != 0
+        !self.is_null() && api::pump_iteration(self.ptr())
     }
 
     pub fn credit_pumped_time(self, start_us: i64) {
-        if !self.is_null() {
-            unsafe { ns_js_credit_pumped_time(self.ptr(), start_us) };
-        }
+        api::credit_pumped_time(self.ptr(), start_us);
     }
 
     pub fn csp_allows_connect(self, url: &[u8], page: Option<&[u8]>) -> bool {
-        if self.is_null() {
-            return true;
-        }
-        let url = cstring(url);
         let page = page.map(cstring);
-        unsafe {
-            ns_js_net_csp_allows_connect(self.ptr(), url.as_ptr(), opt_ptr(page.as_ref())) != 0
-        }
+        api::csp_allows_connect(self.ptr(), &cstring(url), page.as_deref())
     }
 
     pub fn main_context(self) -> Realm {
-        if self.is_null() {
-            return Realm(ContextHandle::NULL);
-        }
-        Realm(unsafe { ns_js_main_context(self.ptr()) })
+        Realm(api::main_context(self.ptr()))
     }
 
     pub fn is_worker(self) -> bool {
-        !self.is_null() && unsafe { ns_js_is_worker(self.ptr()) } != 0
+        api::is_worker(self.ptr())
     }
 
     pub fn in_pump(self) -> bool {
-        !self.is_null() && unsafe { ns_js_in_pump(self.ptr()) } != 0
+        api::in_pump(self.ptr())
     }
 
     pub fn realm_url(self, realm: Realm) -> Option<Vec<u8>> {
-        if self.is_null() {
-            return None;
-        }
-        borrowed(unsafe { ns_js_realm_url(self.ptr(), realm.0) })
+        api::realm_url(self.ptr(), realm.0).map(CString::into_bytes)
     }
 
     pub fn perf_now_ms(self) -> f64 {
@@ -755,13 +704,13 @@ impl Js {
     }
 
     pub fn time_origin_us(self) -> i64 {
-        unsafe { ns_js_page_time_origin_us(self.ptr()) }
+        api::time_origin_us(self.ptr())
     }
 
     pub fn add_resource_timing(self, timing: &Timing<'_>, resp: &Response) {
         let info = NsPerfResourceInfo {
             timeline: timing.timeline.0.as_ptr().cast_const(),
-            document_url: unsafe { ns_js_realm_document_url(self.ptr(), timing.timeline.0) },
+            document_url: api::realm_document_url_ptr(self.ptr(), timing.timeline.0),
             render_blocking: 0,
             cors_mode: glib::boolean(timing.cors_mode),
             next_hop_protocol: ptr::null(),
@@ -784,19 +733,14 @@ impl Js {
     }
 
     pub fn with_budget<R>(self, f: impl FnOnce() -> R) -> R {
-        if self.is_null() {
-            return f();
-        }
-        let saved = unsafe { ns_js_budget_enter(self.ptr()) };
+        let saved = api::budget_enter(self.ptr());
         let result = f();
-        unsafe { ns_js_budget_leave(self.ptr(), saved) };
+        api::budget_leave(self.ptr(), saved);
         result
     }
 
     pub fn drain_mutations(self) {
-        if !self.is_null() {
-            unsafe { ns_drain_mutations(self.ptr()) };
-        }
+        api::drain_mutations(self.ptr());
     }
 
     pub fn blob_url(self, url: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
@@ -826,11 +770,11 @@ impl Js {
     }
 
     pub fn attach_idle(self, func: GSourceFunc, data: *mut c_void) {
-        unsafe { ns_js_attach_idle(self.ptr(), func, data) };
+        api::attach_idle(self.ptr(), func, data);
     }
 
     pub fn attach_timeout(self, ms: u32, func: GSourceFunc, data: *mut c_void) {
-        unsafe { ns_js_attach_timeout(self.ptr(), ms, func, data) };
+        api::attach_timeout(self.ptr(), ms, func, data);
     }
 }
 

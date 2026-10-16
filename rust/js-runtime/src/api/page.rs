@@ -9,12 +9,12 @@ use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GHashTable};
-use southstar_js_engine::ContextHandle;
+use southstar_js_engine::{ContextHandle, Value};
 
 use crate::budget;
 use crate::ffi::state::PageState;
 use crate::ffi::{self, Js, NsJs, glue, record, scopes, wrapper};
-use crate::scheduling;
+use crate::{scheduling, worker};
 
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
 
@@ -477,4 +477,48 @@ pub fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
 
 pub fn snapshot_platform_globals(js: *const NsJs) {
     record::snapshot_platform_globals(js);
+}
+
+pub struct WorkerOptions<'a> {
+    pub host: *mut c_void,
+    pub context: *mut c_void,
+    pub url: Option<&'a CStr>,
+    pub base_url: Option<&'a CStr>,
+    pub origin: Option<&'a CStr>,
+    pub name: Option<&'a CStr>,
+    pub service_worker: bool,
+}
+
+pub fn new_worker(options: &WorkerOptions<'_>) -> *mut NsJs {
+    ffi::new_worker(&ffi::WorkerSetup {
+        host: options.host.cast(),
+        context: options.context.cast(),
+        url: options.url,
+        base_url: options.base_url,
+        origin: options.origin,
+        name: options.name,
+        service_worker: options.service_worker,
+    })
+}
+
+pub fn worker_eval(
+    js: *const NsJs,
+    source: &CStr,
+    url: &CStr,
+    module: bool,
+) -> Result<(), (bool, Value)> {
+    let Some(js) = Js::of(js) else {
+        return Err((false, Value::undefined()));
+    };
+    let len = source.to_bytes().len();
+    match js.scope(|scope| worker::eval(scope, source, len, url, module)) {
+        None => Err((false, Value::undefined())),
+        Some(worker::EvalStatus::Done) => Ok(()),
+        Some(worker::EvalStatus::ParseError(thrown)) => Err((true, thrown)),
+        Some(worker::EvalStatus::Thrown(thrown)) => Err((false, thrown)),
+    }
+}
+
+pub fn free(js: *const NsJs) {
+    ffi::free(js);
 }

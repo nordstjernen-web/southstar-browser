@@ -16,7 +16,7 @@ use super::state::{
     DataFn, DelayFn, DownloadFn, FormSubmitFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
     ViewportScrollFn,
 };
-use super::{Js, NsJs, WorkerHost};
+use super::{Js, NsJs};
 use crate::api;
 use crate::scheduling::{self, RunTasks};
 
@@ -53,29 +53,6 @@ pub unsafe extern "C" fn ns_js_consume_user_activation(js: *mut NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_in_pump(js: *const NsJs) -> GBoolean {
     flag(api::in_pump(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_credit_pumped_time(js: *mut NsJs, pump_start_us: i64) {
-    api::credit_pumped_time(js, pump_start_us);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_document_url(
-    js: *mut NsJs,
-    realm: ContextHandle,
-) -> *const c_char {
-    api::realm_document_url_ptr(js, realm)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_budget_enter(js: *mut NsJs) -> i64 {
-    api::budget_enter(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_budget_leave(js: *mut NsJs, saved: i64) {
-    api::budget_leave(js, saved);
 }
 
 #[unsafe(no_mangle)]
@@ -121,28 +98,8 @@ pub unsafe extern "C" fn ns_js_node_in_page(js: *mut NsJs, n: *const NsNode) -> 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_url(js: *mut NsJs, realm: ContextHandle) -> *const c_char {
-    Js::of(js).map_or(ptr::null(), |js| scopes::realm_url(js, realm))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_drain_microtasks(js: *mut NsJs) {
     api::drain_microtasks(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_drain_mutations(js: *mut NsJs) {
-    api::drain_mutations(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_worker_host(js: *const NsJs) -> *mut WorkerHost {
-    api::worker_host(js).cast()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_halt(js: *mut NsJs) {
-    api::halt(js);
 }
 
 #[unsafe(no_mangle)]
@@ -226,18 +183,6 @@ pub unsafe extern "C" fn ns_js_notify_scroll_to(js: *mut NsJs, target: *const Ns
     if let Some(target) = node(target) {
         api::notify_scroll_to(js, target);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_window_action(js: *mut NsJs, action: *const c_char) {
-    if let Some(action) = text(action) {
-        api::window_action(js, action);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_window_action(js: *const NsJs) -> GBoolean {
-    flag(api::has_window_action(js))
 }
 
 #[unsafe(no_mangle)]
@@ -341,34 +286,6 @@ pub unsafe extern "C" fn ns_js_current_url(js: *const NsJs) -> *const c_char {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_page_url(js: *const NsJs) -> *const c_char {
-    api::page_url_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_current_url(js: *mut NsJs, url: *const c_char) {
-    api::set_current_url(js, text(url));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_request_download(
-    js: *mut NsJs,
-    url: *const c_char,
-    filename: *const c_char,
-) -> GBoolean {
-    flag(text(url).is_some_and(|url| api::request_download(js, url, text(filename))))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_navigate(
-    js: *mut NsJs,
-    url: *const c_char,
-    reload: GBoolean,
-) -> GBoolean {
-    flag(text(url).is_some_and(|url| api::navigate(js, url, reload != 0)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_submit_form(
     js: *mut NsJs,
     form: *const NsNode,
@@ -377,11 +294,6 @@ pub unsafe extern "C" fn ns_js_submit_form(
     if let Some(form) = node(form) {
         api::submit_form(js, form, node(submitter));
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle {
-    api::main_realm(js)
 }
 
 #[unsafe(no_mangle)]
@@ -429,33 +341,8 @@ pub unsafe extern "C" fn ns_js_set_autofocus_processed(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_js_referrer(_js: *const NsJs) -> *const c_char {
-    ptr::null()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_ignore_destructive_writes(js: *const NsJs) -> c_int {
-    api::ignore_destructive_writes(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_active_modal(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(api::active_modal(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_set_active_modal(js: *mut NsJs, modal: *const NsNode) {
     api::set_active_modal(js, node(modal));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_doc_ready_state(js: *const NsJs, doc: *const NsNode) -> c_int {
-    node(doc).map_or(-1, |doc| api::doc_ready_state(js, doc))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_current_script(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(api::current_script(js))
 }
 
 #[unsafe(no_mangle)]
@@ -490,21 +377,6 @@ pub unsafe extern "C" fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void) 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_scope_push(
-    js: *mut NsJs,
-    realm: ContextHandle,
-    frame: *mut NsNode,
-    buf: *mut c_void,
-) {
-    unsafe { scopes::frame_scope_push(Js(js), realm, frame, buf) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pump_iteration(js: *mut NsJs) -> GBoolean {
-    flag(api::pump_iteration(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_img_src_layout_neutral(n: *const NsNode) -> GBoolean {
     flag(node(n).is_some_and(api::img_src_layout_neutral))
 }
@@ -532,16 +404,6 @@ pub extern "C" fn ns_media_native_formats() -> c_uint {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_url_parses(js: *mut NsJs, url: *const c_char) -> GBoolean {
-    flag(text(url).is_some_and(|url| api::url_parses(js, url)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_csp_allows_worker(js: *mut NsJs, url: *const c_char) -> GBoolean {
-    flag(text(url).is_none_or(|url| api::csp_allows_worker(js, url)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_purge_subtree_rafs(js: *mut NsJs, root: *mut NsNode) {
     if let Some(root) = node(root) {
         api::purge_subtree_rafs(js, root);
@@ -563,11 +425,6 @@ pub unsafe extern "C" fn ns_element_insert_before_single(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_set_layout_root(js: *mut NsJs, root: *const c_void) {
     api::set_layout_root(js, root);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_disabled_form_control(el: *const NsNode) -> GBoolean {
-    flag(node(el).is_some_and(api::is_disabled_form_control))
 }
 
 #[unsafe(no_mangle)]
@@ -632,21 +489,6 @@ pub unsafe extern "C" fn ns_js_storage_partition(js: *const NsJs) -> *const c_ch
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_partition_key(js: *const NsJs) -> *const c_char {
-    record::partition_key_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_cookie_value(js: *const NsJs) -> *const c_char {
-    record::cookie_value_ptr(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_cookie_value(js: *mut NsJs, value: *const c_char) {
-    api::set_cookie_value(js, text(value));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_inline_handlers_allowed(js: *const NsJs) -> GBoolean {
     flag(api::inline_handlers_allowed(js))
 }
@@ -662,20 +504,6 @@ pub unsafe extern "C" fn ns_js_page_time_origin_real_ms(js: *const NsJs) -> f64 
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_page_csp(js: *const NsJs) -> *const c_void {
-    api::page_csp(js)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_csp_allows_connect(
-    js: *const NsJs,
-    url: *const c_char,
-    page: *const c_char,
-) -> GBoolean {
-    flag(text(url).is_none_or(|url| api::csp_allows_connect(js, url, text(page))))
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_make_element(
     scope: &mut southstar_js_engine::Scope<'_>,
     node: *const NsNode,
@@ -686,57 +514,4 @@ pub fn nsr_make_element(
 #[unsafe(no_mangle)]
 pub fn nsr_unwrap_element(value: &southstar_js_engine::Value) -> *const NsNode {
     Node::ptr_or_null(crate::api::unwrap_element(value))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_worker_js_eval(
-    js: *mut NsJs,
-    source: &core::ffi::CStr,
-    len: usize,
-    url: &core::ffi::CStr,
-    module: bool,
-) -> Result<(), (bool, southstar_js_engine::Value)> {
-    let Some(js) = Js::of(js) else {
-        return Err((false, southstar_js_engine::Value::undefined()));
-    };
-    match js.scope(|scope| crate::worker::eval(scope, source, len, url, module)) {
-        None => Err((false, southstar_js_engine::Value::undefined())),
-        Some(crate::worker::EvalStatus::Done) => Ok(()),
-        Some(crate::worker::EvalStatus::ParseError(thrown)) => Err((true, thrown)),
-        Some(crate::worker::EvalStatus::Thrown(thrown)) => Err((false, thrown)),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_queue_message_task(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    f: southstar_js_engine::TaskFn,
-    args: &[southstar_js_engine::Value],
-) -> Result<(), southstar_js_engine::Value> {
-    crate::api::queue_message_task(scope, f, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_js_exception_message(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    exception: &southstar_js_engine::Value,
-) -> Vec<u8> {
-    crate::api::exception_message(scope, exception)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_bind_event_target_listeners(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    object: &southstar_js_engine::Value,
-) {
-    crate::api::bind_event_target_listeners(scope, object);
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_illegal_constructor(
-    scope: &mut southstar_js_engine::Scope<'_>,
-    this: &southstar_js_engine::Value,
-    args: &[southstar_js_engine::Value],
-) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
-    crate::api::illegal_constructor(scope, this, args)
 }

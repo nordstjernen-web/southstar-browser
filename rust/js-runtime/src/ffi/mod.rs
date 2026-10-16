@@ -54,20 +54,9 @@ impl NavigationTiming {
     }
 }
 
-#[repr(C)]
-pub(crate) struct WorkerRealm {
-    host: *mut WorkerHost,
-    context: *mut GMainContext,
-    url: *const c_char,
-    base_url: *const c_char,
-    origin: *const c_char,
-    name: *const c_char,
-    is_service_worker: GBoolean,
-}
-
 pub(crate) struct WorkerSetup<'a> {
-    host: *mut WorkerHost,
-    context: *mut GMainContext,
+    pub host: *mut WorkerHost,
+    pub context: *mut GMainContext,
     pub url: Option<&'a CStr>,
     pub base_url: Option<&'a CStr>,
     pub origin: Option<&'a CStr>,
@@ -713,10 +702,6 @@ pub(crate) fn thread_stack_size() -> usize {
     0
 }
 
-unsafe fn c_text<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_new(
     log_cb: Option<LogFn>,
@@ -744,31 +729,22 @@ pub unsafe extern "C" fn ns_js_new(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_js_new(realm: *const WorkerRealm) -> *mut NsJs {
-    let Some(realm) = (unsafe { realm.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    let setup = WorkerSetup {
-        host: realm.host,
-        context: realm.context,
-        url: unsafe { c_text(realm.url) },
-        base_url: unsafe { c_text(realm.base_url) },
-        origin: unsafe { c_text(realm.origin) },
-        name: unsafe { c_text(realm.name) },
-        service_worker: realm.is_service_worker != 0,
-    };
+pub(crate) fn new_worker(setup: &WorkerSetup<'_>) -> *mut NsJs {
     let js = Js::alloc();
-    if worker::create(js, &setup) {
+    if worker::create(js, setup) {
         js.0
     } else {
         ptr::null_mut()
     }
 }
 
+pub(crate) fn free(js: *const NsJs) {
+    if let Some(js) = Js::of(js) {
+        teardown::free(js);
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_free(js: *mut NsJs) {
-    if !js.is_null() {
-        teardown::free(Js(js));
-    }
+    free(js);
 }

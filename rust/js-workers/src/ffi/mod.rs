@@ -11,6 +11,7 @@ use std::sync::Arc;
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{make_constructor, natives};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
+use southstar_js_runtime::api::{self, NsJs};
 
 use self::imports::*;
 use crate::scope as worker_scope;
@@ -77,20 +78,14 @@ pub(crate) struct Budget {
 impl Budget {
     pub(crate) fn enter(scope: &Scope<'_>) -> Budget {
         let js = scope.context_opaque();
-        let saved = if js.is_null() {
-            0
-        } else {
-            unsafe { ns_js_budget_enter(js) }
-        };
+        let saved = api::budget_enter(js.cast());
         Budget { js, saved }
     }
 }
 
 impl Drop for Budget {
     fn drop(&mut self) {
-        if !self.js.is_null() {
-            unsafe { ns_js_budget_leave(self.js, self.saved) };
-        }
+        api::budget_leave(self.js.cast(), self.saved);
     }
 }
 
@@ -102,7 +97,7 @@ fn port_deliver_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {
 }
 
 pub(crate) fn queue_delivery(scope: &mut Scope<'_>, args: &[Value]) {
-    let _ = nsr_queue_message_task(scope, port_deliver_job, args);
+    let _ = api::queue_message_task(scope, port_deliver_job, args);
 }
 
 pub(crate) fn parse_listener_options(
@@ -239,17 +234,6 @@ struct NsResponse {
     error: *mut c_char,
 }
 
-#[repr(C)]
-struct WorkerRealm {
-    host: *const c_void,
-    context: *mut GMainContext,
-    url: *const c_char,
-    base_url: *const c_char,
-    origin: *const c_char,
-    name: *const c_char,
-    is_service_worker: c_int,
-}
-
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 type GDestroyNotify = unsafe extern "C" fn(data: *mut c_void);
 unsafe extern "C" {
@@ -274,18 +258,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
-    fn ns_js_budget_enter(js: *mut c_void) -> i64;
-    fn ns_js_budget_leave(js: *mut c_void, saved: i64);
-    fn ns_js_worker_host(js: *mut c_void) -> *const c_void;
-    fn ns_js_main_context(js: *mut c_void) -> ContextHandle;
-    fn ns_js_current_url(js: *mut c_void) -> *const c_char;
-    fn ns_js_set_current_url(js: *mut c_void, url: *const c_char);
-    fn ns_js_log_line(js: *mut c_void, line: *const c_char);
-    fn ns_js_halt(js: *mut c_void);
-    fn ns_drain_microtasks(js: *mut c_void);
-    fn ns_drain_mutations(js: *mut c_void);
-    fn ns_js_free(js: *mut c_void);
-    fn ns_worker_js_new(realm: *const WorkerRealm) -> *mut c_void;
     fn ns_js_report_error_event_in(
         js: *mut c_void,
         ctx: ContextHandle,
@@ -303,7 +275,6 @@ unsafe extern "C" {
     ) -> *mut GBytes;
     fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
     fn ns_js_decode_data_url(url: *const c_char, out_len: *mut usize) -> *mut c_char;
-    fn ns_js_csp_allows_worker(js: *mut c_void, url: *const c_char) -> c_int;
     fn ns_js_net_sw_fetch_result(
         js: *mut c_void,
         id: core::ffi::c_uint,
@@ -316,7 +287,6 @@ unsafe extern "C" {
         error: *const c_char,
     );
     fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
-    fn ns_js_page_time_origin_us(js: *mut c_void) -> i64;
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -343,6 +313,10 @@ impl Js {
     fn ptr(self) -> *mut c_void {
         self.0 as *mut c_void
     }
+
+    fn page(self) -> *const NsJs {
+        self.0 as *const NsJs
+    }
 }
 
 pub(crate) type Ctx = ContextHandle;
@@ -363,7 +337,7 @@ pub(crate) fn with_js<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<
     if js.is_null() {
         return None;
     }
-    unsafe { ns_js_main_context(js.ptr()) }.with(f)
+    api::main_context(js.page()).with(f)
 }
 
 fn c_string(text: &str) -> CString {
@@ -504,58 +478,52 @@ pub(crate) fn worker_host_of(js: Js) -> Option<Arc<Host>> {
     if js.is_null() {
         return None;
     }
-    host_from_ptr(unsafe { ns_js_worker_host(js.ptr()) })
+    host_from_ptr(api::worker_host(js.page()))
 }
 
 pub(crate) fn current_url(js: Js) -> Option<String> {
-    unsafe { borrowed(ns_js_current_url(js.ptr())) }
+    Some(api::current_url(js.page()).to_string_lossy().into_owned())
 }
 
 pub(crate) fn set_current_url(js: Js, url: Option<&str>) {
     let url = url.map(c_string);
-    unsafe {
-        ns_js_set_current_url(
-            js.ptr(),
-            url.as_ref().map_or(core::ptr::null(), |u| u.as_ptr()),
-        )
-    };
+    api::set_current_url(js.page(), url.as_deref());
 }
 
 pub(crate) fn log_line(js: Js, line: &str) {
-    let line = c_string(line);
-    unsafe { ns_js_log_line(js.ptr(), line.as_ptr()) };
+    api::log_line(js.page(), &c_string(line));
 }
 
 pub(crate) fn halt(js: Js) {
-    unsafe { ns_js_halt(js.ptr()) };
+    api::halt(js.page());
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
-    unsafe { ns_drain_microtasks(js.ptr()) };
+    api::drain_microtasks(js.page());
 }
 
 pub(crate) fn drain_mutations(js: Js) {
-    unsafe { ns_drain_mutations(js.ptr()) };
+    api::drain_mutations(js.page());
 }
 
 pub(crate) fn js_free(js: Js) {
-    unsafe { ns_js_free(js.ptr()) };
+    api::free(js.page());
 }
 
 pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
     let url = c_string(&host.url);
     let origin = c_string(&host.origin);
     let name = c_string(&host.name);
-    let realm = WorkerRealm {
-        host: Arc::as_ptr(host).cast(),
-        context: host.context.raw(),
-        url: url.as_ptr(),
-        base_url: host.base_url.as_ptr(),
-        origin: origin.as_ptr(),
-        name: name.as_ptr(),
-        is_service_worker: c_int::from(host.is_service_worker),
+    let options = api::WorkerOptions {
+        host: Arc::as_ptr(host).cast_mut().cast(),
+        context: host.context.raw().cast(),
+        url: Some(&url),
+        base_url: Some(&host.base_url),
+        origin: Some(&origin),
+        name: Some(&name),
+        service_worker: host.is_service_worker,
     };
-    Js(unsafe { ns_worker_js_new(&realm) } as usize)
+    Js(api::new_worker(&options) as usize)
 }
 
 pub(crate) fn worker_eval(
@@ -565,21 +533,11 @@ pub(crate) fn worker_eval(
     url: &str,
     module: bool,
 ) -> Result<(), (bool, Value)> {
-    let source = c_string(source);
-    let url = c_string(url);
-    unsafe {
-        nsr_worker_js_eval(
-            js.ptr().cast(),
-            &source,
-            source.as_bytes().len(),
-            &url,
-            module,
-        )
-    }
+    api::worker_eval(js.page(), &c_string(source), &c_string(url), module)
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> String {
-    let message = nsr_js_exception_message(scope, exception);
+    let message = api::exception_message(scope, exception);
     String::from_utf8_lossy(&message).into_owned()
 }
 
@@ -659,7 +617,7 @@ pub(crate) fn bind_c_if_not_callable(
 }
 
 pub(crate) fn bind_event_target_listeners(scope: &mut Scope<'_>, object: &Value) {
-    nsr_bind_event_target_listeners(scope, object);
+    api::bind_event_target_listeners(scope, object);
 }
 
 #[derive(Clone, Copy)]
@@ -678,7 +636,7 @@ pub(crate) fn bind_ctor(
     ctor: CCtor,
 ) {
     let f: NativeFn = match ctor {
-        CCtor::Illegal => nsr_illegal_constructor,
+        CCtor::Illegal => api::illegal_constructor,
         CCtor::Event => nsr_window_event_ctor,
         CCtor::Response => nsr_window_response_ctor,
         CCtor::Request => nsr_window_request_ctor,
@@ -731,7 +689,7 @@ fn worker_fail_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {
 }
 
 pub(crate) fn queue_fail_job(scope: &mut Scope<'_>, object: &Value) {
-    let _ = nsr_queue_message_task(scope, worker_fail_job, core::slice::from_ref(object));
+    let _ = api::queue_message_task(scope, worker_fail_job, core::slice::from_ref(object));
 }
 
 pub(crate) fn blob_url_lookup(js: Js, url: &str) -> Option<Vec<u8>> {
@@ -766,8 +724,7 @@ pub(crate) fn decode_data_url(url: &str) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn csp_allows_worker(js: Js, url: &str) -> bool {
-    let url = c_string(url);
-    unsafe { ns_js_csp_allows_worker(js.ptr(), url.as_ptr()) != 0 }
+    api::csp_allows_worker(js.page(), &c_string(url))
 }
 
 pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {
@@ -795,7 +752,8 @@ pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {
 }
 
 pub(crate) fn worker_now_ms(js: Js) -> f64 {
-    unsafe { ns_perf_relative_ms(g_get_monotonic_time(), ns_js_page_time_origin_us(js.ptr())) }
+    let origin_us = api::time_origin_us(js.page());
+    unsafe { ns_perf_relative_ms(g_get_monotonic_time(), origin_us) }
 }
 
 pub(crate) fn url_resolve(base: Option<&str>, href: &str) -> Option<String> {

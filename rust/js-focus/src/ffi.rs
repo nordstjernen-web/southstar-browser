@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -13,10 +13,7 @@ use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
+pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -42,27 +39,7 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_main_realm_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_realm_scope_push(js: *mut NsJs, realm: ContextHandle, buf: *mut c_void);
-    fn ns_js_frame_scope_push(
-        js: *mut NsJs,
-        realm: ContextHandle,
-        frame: *mut NsNode,
-        buf: *mut c_void,
-    );
-    fn ns_js_realm_scope_pop(js: *mut NsJs, buf: *mut c_void);
-    fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
-    fn ns_js_current_document(js: *const NsJs) -> *const NsNode;
-    fn ns_js_active_modal(js: *const NsJs) -> *const NsNode;
-    fn ns_js_halted(js: *const NsJs) -> GBoolean;
-    fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_js_mark_mutated(js: *mut NsJs);
     fn ns_js_commit_change(js: *mut NsJs, el: *const NsNode);
-    fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_js_has_transient_activation(js: *mut NsJs) -> GBoolean;
-    fn ns_js_has_window_action(js: *const NsJs) -> GBoolean;
-    fn ns_js_window_action(js: *mut NsJs, action: *const c_char);
-    fn ns_node_arm_js_invalidate(n: *mut NsNode);
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
@@ -72,15 +49,8 @@ unsafe extern "C" {
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
     fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
     fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
-    fn ns_js_request_download(
-        js: *mut NsJs,
-        url: *const c_char,
-        filename: *const c_char,
-    ) -> GBoolean;
     fn ns_js_anchor_fragment_navigate(js: *mut NsJs, abs_url: *const c_char) -> GBoolean;
-    fn ns_js_navigate(js: *mut NsJs, url: *const c_char, reload: GBoolean) -> GBoolean;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    fn ns_node_is_disabled_form_control(el: *const NsNode) -> GBoolean;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
         js: *mut NsJs,
@@ -127,9 +97,6 @@ unsafe extern "Rust" {
     unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
 }
 
-#[repr(C, align(16))]
-struct ScopeBuffer([u8; 128]);
-
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(ptr) }
 }
@@ -148,34 +115,31 @@ impl Js {
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        if self.is_null() {
-            return None;
-        }
-        unsafe { ns_js_main_context(self.ptr()) }.with(f)
+        api::main_context(self.ptr()).with(f)
     }
 
     pub fn has_context(self) -> bool {
-        !self.is_null() && !unsafe { ns_js_main_context(self.ptr()) }.is_null()
+        !api::main_context(self.ptr()).is_null()
     }
 
     pub fn current_document(self) -> Option<Element> {
-        node(unsafe { ns_js_current_document(self.ptr()) })
+        api::current_document(self.ptr())
     }
 
     pub fn active_modal(self) -> Option<Element> {
-        node(unsafe { ns_js_active_modal(self.ptr()) })
+        api::active_modal(self.ptr())
     }
 
     pub fn halted(self) -> bool {
-        unsafe { ns_js_halted(self.ptr()) != 0 }
+        api::halted(self.ptr())
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.ptr()) != 0 }
+        api::in_pump(self.ptr())
     }
 
     pub fn mark_mutated(self) {
-        unsafe { ns_js_mark_mutated(self.ptr()) };
+        api::mark_mutated(self.ptr());
     }
 
     pub fn commit_change(self, el: Element) {
@@ -183,19 +147,19 @@ impl Js {
     }
 
     pub fn log_line(self, line: &CStr) {
-        unsafe { ns_js_log_line(self.ptr(), line.as_ptr()) };
+        api::log_line(self.ptr(), line);
     }
 
     pub fn has_transient_activation(self) -> bool {
-        unsafe { ns_js_has_transient_activation(self.ptr()) != 0 }
+        api::has_transient_activation(self.ptr())
     }
 
     pub fn has_window_action(self) -> bool {
-        unsafe { ns_js_has_window_action(self.ptr()) != 0 }
+        api::has_window_action(self.ptr())
     }
 
     pub fn window_action(self, action: &CStr) {
-        unsafe { ns_js_window_action(self.ptr(), action.as_ptr()) };
+        api::window_action(self.ptr(), action);
     }
 
     pub fn dispatch(self, target: Element, kind: &CStr) {
@@ -215,9 +179,9 @@ impl Js {
         let realm = match doc.parent() {
             Some(_) => unsafe { ns_js_node_realm_context(self.ptr(), doc.as_ptr()) },
             None => {
-                let main = unsafe { ns_js_main_realm_context(self.ptr()) };
+                let main = api::main_realm(self.ptr());
                 if main.is_null() {
-                    unsafe { ns_js_main_context(self.ptr()) }
+                    api::main_context(self.ptr())
                 } else {
                     main
                 }
@@ -226,20 +190,13 @@ impl Js {
         if realm.is_null() {
             return;
         }
-        let mut buffer = ScopeBuffer([0; 128]);
-        let buffer = buffer.0.as_mut_ptr().cast::<c_void>();
         match doc.parent() {
-            Some(frame) if realm != unsafe { ns_js_main_context(self.ptr()) } => unsafe {
-                ns_js_frame_scope_push(self.ptr(), realm, frame.as_mut_ptr(), buffer)
-            },
-            Some(_) => {
-                f();
-                return;
+            Some(frame) if realm != api::main_context(self.ptr()) => {
+                api::in_frame_scope(self.ptr(), realm, frame, f);
             }
-            None => unsafe { ns_js_realm_scope_push(self.ptr(), realm, buffer) },
+            Some(_) => f(),
+            None => api::in_realm(self.ptr(), realm, f),
         }
-        f();
-        unsafe { ns_js_realm_scope_pop(self.ptr(), buffer) };
     }
 
     pub fn dispatch_window_only(self, doc: Element, kind: &CStr, event: Value) {
@@ -293,8 +250,7 @@ impl Js {
     }
 
     pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {
-        let url = c_string(url);
-        unsafe { ns_js_request_download(self.ptr(), url.as_ptr(), filename.as_ptr()) != 0 }
+        api::request_download(self.ptr(), &c_string(url), Some(filename))
     }
 
     pub fn anchor_fragment_navigate(self, url: &[u8]) -> bool {
@@ -303,8 +259,7 @@ impl Js {
     }
 
     pub fn navigate(self, url: &[u8]) {
-        let url = c_string(url);
-        unsafe { ns_js_navigate(self.ptr(), url.as_ptr(), glib::FALSE) };
+        api::navigate(self.ptr(), &c_string(url), false);
     }
 
     pub fn checkable_post_click(
@@ -411,7 +366,7 @@ pub(crate) fn uri_unescape(text: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn note(el: Element) {
-    unsafe { ns_node_arm_js_invalidate(el.as_mut_ptr()) };
+    api::arm_js_invalidate(el);
 }
 
 pub(crate) fn set_focus_visible(el: Option<Element>) {
@@ -427,7 +382,7 @@ pub(crate) fn click_activation_target(el: Element) -> Option<Element> {
 }
 
 pub(crate) fn is_disabled_form_control(el: Element) -> bool {
-    unsafe { ns_node_is_disabled_form_control(el.as_ptr()) != 0 }
+    api::is_disabled_form_control(el)
 }
 
 pub(crate) fn checkable_kind(el: Option<Element>) -> i32 {

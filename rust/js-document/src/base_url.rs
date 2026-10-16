@@ -46,7 +46,7 @@ pub(crate) fn page_base_url(js: Js) -> Option<Vec<u8>> {
         return None;
     }
     let current_url = ffi::current_url_c(js);
-    document_base_url(js, ffi::current_document(js), current_url)
+    document_base_url(js, ffi::current_document(js), current_url.as_deref())
 }
 
 pub(crate) fn node_base_url(js: Js, node: Option<Element>) -> Option<Vec<u8>> {
@@ -54,5 +54,5 @@ pub(crate) fn node_base_url(js: Js, node: Option<Element>) -> Option<Vec<u8>> {
         southstar_dom::ancestors_and_self(node).find(|n| n.kind() == Kind::Document)
     });
     let fallback = ffi::node_doc_base(js, node);
-    document_base_url(js, doc, fallback)
+    document_base_url(js, doc, fallback.as_deref())
 }

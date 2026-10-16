@@ -111,7 +111,7 @@ pub fn get_referrer(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResul
     }
     let referrer = match document_for(scope, this).and_then(|doc| doc.parent()) {
         Some(frame) => ffi::frame_referrer(js, frame),
-        None => ffi::referrer(js),
+        None => None,
     };
     Ok(scope.string_from_bytes(&referrer.unwrap_or_default()))
 }

@@ -2747,6 +2747,7 @@ dependencies = [
  "southstar-js-bind",
  "southstar-js-clone",
  "southstar-js-engine",
+ "southstar-js-runtime",
  "southstar-url",
 ]
 

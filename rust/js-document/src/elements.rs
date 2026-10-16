@@ -123,7 +123,7 @@ pub fn set_body(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult
                 return Err(hierarchy_error(scope, "Document.body cannot be inserted"));
             };
             match detach_old_body(js, root, old_body) {
-                Some(reference) => ffi::insert_before_single(js, root, new_body, reference),
+                Some(reference) => ffi::insert_before_single(js, new_body, reference),
                 None => ffi::append_child(root, new_body),
             }
             new_body
