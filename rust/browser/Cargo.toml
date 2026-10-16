@@ -17,6 +17,7 @@ southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
 southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }
+southstar-history = { path = "../history" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-js-focus = { path = "../js-focus" }

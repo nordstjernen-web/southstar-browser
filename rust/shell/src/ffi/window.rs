@@ -32,7 +32,6 @@ unsafe extern "C" {
     fn ns_address_is_search(s: *const c_char) -> GBoolean;
     fn ns_search_url_for(query: *const c_char) -> *mut c_char;
     fn ns_browser_set_color_scheme(dark: c_int);
-    fn ns_history_record(url: *const c_char, title: *const c_char);
     fn ns_cache_clear();
 }
 
@@ -849,10 +848,7 @@ unsafe extern "C" fn on_view_notify(
             EVT_TITLE => {
                 if !v.is_private() {
                     let url = v.url();
-                    ns_history_record(
-                        url.as_deref().map_or(ptr::null(), CStr::as_ptr),
-                        text.map_or(ptr::null(), CStr::as_ptr),
-                    );
+                    southstar_history::record(url.as_deref(), text);
                 }
                 if idx >= 0 {
                     let p = pw.nth_page(idx);

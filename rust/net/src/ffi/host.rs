@@ -37,8 +37,6 @@ unsafe extern "C" {
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
     fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
-    fn ns_history_html_page() -> *mut c_char;
-    fn ns_history_clear();
     fn ns_cache_clear();
     fn ns_net_cookies_clear();
     fn ns_net_site_storage_clear();
@@ -209,12 +207,12 @@ pub fn user_agent_for_mode(compat_mode: *const c_char) -> Option<Vec<u8>> {
 }
 
 pub fn history_page() -> Vec<u8> {
-    owned(unsafe { ns_history_html_page() }).unwrap_or_default()
+    southstar_history::html_page()
 }
 
 pub fn clear_browsing_data() {
+    southstar_history::clear();
     unsafe {
-        ns_history_clear();
         ns_cache_clear();
         ns_net_cookies_clear();
         ns_net_site_storage_clear();

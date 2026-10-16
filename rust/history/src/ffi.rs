@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of browsing history, and the SQLite and GLib calls behind it.
+//! Southstar — the embedding API's history call, and the GLib calls behind browsing history.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -161,28 +161,8 @@ impl Drop for LocalTime {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_history_init() {
-    crate::init();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_history_shutdown() {
-    crate::shutdown();
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_history_record(url: *const c_char, title: *const c_char) {
     let url = (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) });
     let title = (!title.is_null()).then(|| unsafe { CStr::from_ptr(title) });
     crate::record(url, title);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_history_clear() {
-    crate::clear();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_history_html_page() -> *mut c_char {
-    glib::strdup(&crate::html_page())
 }

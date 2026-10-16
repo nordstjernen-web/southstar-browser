@@ -14,11 +14,6 @@ use super::procview_media::ns_proc_video_helper_available;
 use super::window;
 use crate::window as rules;
 
-unsafe extern "C" {
-    fn ns_history_init();
-    fn ns_history_shutdown();
-}
-
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const LC_NUMERIC: c_int = 1;
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
@@ -182,7 +177,7 @@ pub(super) fn ns_procapp_run(
         }
         clear_http_caches(false);
         if !private_mode {
-            ns_history_init();
+            southstar_history::init();
         }
         let ctx = Context {
             url: Some(startup_url.to_owned()),
@@ -199,7 +194,7 @@ pub(super) fn ns_procapp_run(
         );
         let status = gtk::g_application_run(app, 0, ptr::null_mut());
         gtk::g_object_unref(app);
-        ns_history_shutdown();
+        southstar_history::shutdown();
         clear_http_caches(true);
         status
     }

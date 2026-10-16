@@ -138,7 +138,7 @@ fn prune(db: &Db) {
     }
 }
 
-fn init() {
+pub fn init() {
     let mut history = lock();
     if history.db.is_some() || history.disabled {
         return;
@@ -174,11 +174,11 @@ fn init() {
     history.db = Some(db);
 }
 
-fn shutdown() {
+pub fn shutdown() {
     lock().db = None;
 }
 
-fn record(url: Option<&CStr>, title: Option<&CStr>) {
+pub fn record(url: Option<&CStr>, title: Option<&CStr>) {
     let Some(url) = url.filter(|url| is_recordable(url.to_bytes())) else {
         return;
     };
@@ -195,7 +195,7 @@ fn record(url: Option<&CStr>, title: Option<&CStr>) {
     st.step();
 }
 
-fn clear() {
+pub fn clear() {
     if let Some(db) = lock().db.as_ref() {
         exec(db, CLEAR);
     }
@@ -301,7 +301,7 @@ fn append_visits(page: &mut Vec<u8>) -> bool {
     have
 }
 
-fn html_page() -> Vec<u8> {
+pub fn html_page() -> Vec<u8> {
     let mut page = Vec::new();
     page.extend_from_slice(PAGE_HEAD.as_bytes());
     page.extend_from_slice(b"<style>");

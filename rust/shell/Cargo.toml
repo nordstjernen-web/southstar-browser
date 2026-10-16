@@ -19,6 +19,7 @@ southstar-dom = { path = "../dom" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }
+southstar-history = { path = "../history" }
 southstar-i18n = { path = "../i18n" }
 southstar-media-shm = { path = "../media-shm" }
 southstar-net = { path = "../net" }
