@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The legacy -webkit-linear-gradient(), -webkit-radial-gradient() and
+  their repeating forms are understood, with their old conventions
+  (angles measured from east, counter-clockwise; a bare side naming where
+  the gradient starts; "position, shape" for radials), as Chromium and
+  Firefox still accept them. vuejs.org's tagline gradient and older
+  sites' button and banner gradients were dropped.
 * The ECMAScript built-in prototypes (Array, Date, Function, Number,
   String, RegExp, Boolean and the typed arrays) no longer carry an own
   Symbol.toStringTag. The interface setup gave one to every global
