@@ -190,7 +190,7 @@ fn viewport(spec: &[u8]) -> Option<(i64, i64)> {
 
 fn bounded(text: &[u8], low: i64, high: i64) -> Option<i32> {
     whole_number(text)
-        .filter(|&n| n >= low && n < high)
+        .filter(|&n| (low..=high).contains(&n))
         .map(|n| n as i32)
 }
 
