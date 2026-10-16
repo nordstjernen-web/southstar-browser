@@ -86,10 +86,10 @@ area, base, head, script, style, title, meta, link { display: none; }
 input[type=hidden i] { display: none !important; }
 :is(table, thead, tbody, tfoot, tr) > form { display: none !important; }
 video { display: inline; object-fit: contain; }
-iframe { border: 2px inset; }
+iframe { border: 2px inset; display: inline-block; overflow: hidden; width: 300px; height: 150px; }
 canvas { display: inline; }
-iframe, frame, frameset, embed { display: none; }
-iframe[data-nd-frame-loaded], object[data-nd-frame-loaded] { display: block; overflow: hidden; }
+frame, frameset, embed { display: none; }
+object[data-nd-frame-loaded] { display: block; overflow: hidden; }
 object[data-nd-frame-loaded] > * { display: none; }
 audio, param { display: none; }
 audio[controls] { display: inline-block; }
