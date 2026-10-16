@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
@@ -34,16 +34,7 @@ pub use net::{
 
 use crate::fetch;
 
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct PrintSetup {
-    pub width: f64,
-    pub height: f64,
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
-}
+pub use southstar_print::PrintSetup;
 
 #[repr(C)]
 pub struct GString {
@@ -95,19 +86,8 @@ unsafe extern "C" {
     fn cairo_create(surface: *mut CairoSurface) -> *mut Cairo;
     fn cairo_destroy(cr: *mut Cairo);
     fn cairo_show_page(cr: *mut Cairo);
-    fn ns_print_page_offsets(root: *const NsBox, page_content_height: f64) -> *mut GArray;
-    fn ns_print_page_bottom(offsets: *const GArray, i: c_uint, page_content_height: f64) -> f64;
-    fn ns_print_draw_page(
-        cr: *mut Cairo,
-        root: *const NsBox,
-        setup: *const PrintSetup,
-        scale: f64,
-        page_top: f64,
-        page_bottom: f64,
-    );
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn g_array_free(array: *mut GArray, free_segment: glib::GBoolean) -> *mut c_char;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
@@ -184,7 +164,9 @@ impl Capture {
     }
 
     pub fn draw_sheet(&self, root: BoxRef, setup: &PrintSetup, scale: f64, top: f64, bottom: f64) {
-        unsafe { ns_print_draw_page(self.cr, root.as_ptr(), setup, scale, top, bottom) };
+        // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
+        let cr = unsafe { southstar_paint::Cr::from_raw(self.cr.cast()) };
+        southstar_print::draw_page(cr, root, setup, scale, top, bottom);
     }
 
     pub fn write_png(self, path: &CStr) -> Result<(), Vec<u8>> {
@@ -234,33 +216,24 @@ fn set_pdf_metadata(surface: *mut CairoSurface) {
     }
 }
 
-pub struct Offsets(NonNull<GArray>);
+pub struct Offsets(Vec<f64>);
 
 impl Offsets {
     pub fn len(&self) -> usize {
-        unsafe { self.0.as_ref() }.len as usize
+        self.0.len()
     }
 
     pub fn top(&self, i: usize) -> f64 {
-        unsafe { *self.0.as_ref().data.cast::<f64>().add(i) }
+        self.0[i]
     }
 
     pub fn bottom(&self, i: usize, page_h: f64) -> f64 {
-        unsafe { ns_print_page_bottom(self.0.as_ptr(), i as c_uint, page_h) }
-    }
-}
-
-impl Drop for Offsets {
-    fn drop(&mut self) {
-        unsafe { g_array_free(self.0.as_ptr(), glib::TRUE) };
+        southstar_print::page_bottom(&self.0, i, page_h)
     }
 }
 
 pub fn page_offsets(root: BoxRef, page_h: f64) -> Offsets {
-    Offsets(
-        NonNull::new(unsafe { ns_print_page_offsets(root.as_ptr(), page_h) })
-            .expect("ns_print_page_offsets"),
-    )
+    Offsets(southstar_print::page_offsets(Some(root), page_h))
 }
 
 pub struct Out(NonNull<GString>);

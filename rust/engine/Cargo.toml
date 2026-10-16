@@ -18,6 +18,7 @@ southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-paint = { path = "../paint" }
+southstar-print = { path = "../print" }
 southstar-render = { path = "../render" }
 southstar-url = { path = "../url" }
 

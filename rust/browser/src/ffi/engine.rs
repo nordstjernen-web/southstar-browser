@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -18,9 +18,6 @@ pub use southstar_image::ImageCache as Images;
 pub use southstar_video::VideoCache as Videos;
 
 unsafe extern "C" {
-    fn ns_render_page_rule() -> *const c_void;
-    fn ns_print_setup_default(setup: *mut PrintSetup);
-    fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const c_void);
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
@@ -130,17 +127,14 @@ pub fn dump_layout(layout: BoxRef<'_>, out: &StrBufOwned) {
 }
 
 pub fn print_setup_default() -> PrintSetup {
-    let mut setup = PrintSetup::default();
-    unsafe { ns_print_setup_default(&mut setup) };
-    setup
+    PrintSetup::a4()
 }
 
 pub fn apply_page_rule(setup: &mut PrintSetup) -> bool {
-    let rule = unsafe { ns_render_page_rule() };
-    if rule.is_null() {
+    let Some(rule) = southstar_engine::page_rule() else {
         return false;
-    }
-    unsafe { ns_print_setup_apply_page_rule(setup, rule) };
+    };
+    setup.apply_page_rule(&rule);
     true
 }
 

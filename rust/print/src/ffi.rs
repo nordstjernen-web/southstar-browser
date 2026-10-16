@@ -1,35 +1,27 @@
-//! Southstar — the C ABI of pagination, over the style, paint and Cairo calls it needs.
+//! Southstar — the print setup and its C ABI default, drawing one sheet, and the style and paint calls pagination needs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int};
 use std::sync::OnceLock;
 
-use southstar_glib::{FALSE, GArray, GBoolean, g_array_append_vals, g_array_new};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_css::PageRule;
+use southstar_layout::{BoxRef, Style};
+use southstar_paint::Cr;
 
 const A4_WIDTH: f64 = 210.0 * 96.0 / 25.4;
 const A4_HEIGHT: f64 = 297.0 * 96.0 / 25.4;
 const MARGIN: f64 = 0.5 * 96.0;
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct PrintSetup {
-    width: f64,
-    height: f64,
-    margin_top: f64,
-    margin_right: f64,
-    margin_bottom: f64,
-    margin_left: f64,
-}
-
-#[repr(C)]
-pub struct PageRule {
-    width: f64,
-    height: f64,
-    has_size: GBoolean,
-    landscape: GBoolean,
-    margin: [f64; 4],
-    has_margin: [GBoolean; 4],
+    pub width: f64,
+    pub height: f64,
+    pub margin_top: f64,
+    pub margin_right: f64,
+    pub margin_bottom: f64,
+    pub margin_left: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -67,102 +59,56 @@ pub fn line_height_px(b: BoxRef<'_>) -> f64 {
     unsafe { ns_paint_css_line_height_px(style) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_setup_default(setup: *mut PrintSetup) {
-    unsafe {
-        *setup = PrintSetup {
+impl PrintSetup {
+    pub fn a4() -> PrintSetup {
+        PrintSetup {
             width: A4_WIDTH,
             height: A4_HEIGHT,
             margin_top: MARGIN,
             margin_right: MARGIN,
             margin_bottom: MARGIN,
             margin_left: MARGIN,
-        };
+        }
     }
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_setup_apply_page_rule(
-    setup: *mut PrintSetup,
-    rule: *const PageRule,
-) {
-    let (setup, rule) = match unsafe { (&mut *setup, rule.as_ref()) } {
-        (setup, Some(rule)) => (setup, rule),
-        _ => return,
-    };
-    if rule.has_size != 0 && rule.width > 1.0 && rule.height > 1.0 {
-        setup.width = rule.width;
-        setup.height = rule.height;
-    }
-    let margins = [
-        &mut setup.margin_top,
-        &mut setup.margin_right,
-        &mut setup.margin_bottom,
-        &mut setup.margin_left,
-    ];
-    for (i, side) in margins.into_iter().enumerate() {
-        if rule.has_margin[i] != 0 {
-            *side = rule.margin[i];
+    pub fn apply_page_rule(&mut self, rule: &PageRule) {
+        if rule.has_size != 0 && rule.width > 1.0 && rule.height > 1.0 {
+            self.width = rule.width;
+            self.height = rule.height;
+        }
+        let margins = [
+            &mut self.margin_top,
+            &mut self.margin_right,
+            &mut self.margin_bottom,
+            &mut self.margin_left,
+        ];
+        for (i, side) in margins.into_iter().enumerate() {
+            if rule.has_margin[i] != 0 {
+                *side = rule.margin[i];
+            }
         }
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_page_offsets(
-    root: *const NsBox,
-    page_content_height: f64,
-) -> *mut GArray {
-    let offsets = crate::page_offsets(unsafe { BoxRef::from_ptr(root) }, page_content_height);
-    unsafe {
-        let out = g_array_new(FALSE, FALSE, size_of::<f64>() as c_uint);
-        g_array_append_vals(out, offsets.as_ptr().cast(), offsets.len() as c_uint)
-    }
+pub unsafe extern "C" fn ns_print_setup_default(setup: *mut PrintSetup) {
+    // SAFETY: the caller passes a writable PrintSetup.
+    unsafe { *setup = PrintSetup::a4() };
 }
 
-unsafe fn doubles<'a>(array: *const GArray) -> &'a [f64] {
-    match unsafe { array.as_ref() } {
-        Some(a) if a.len > 0 => unsafe {
-            core::slice::from_raw_parts(a.data.cast::<f64>(), a.len as usize)
-        },
-        _ => &[],
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_page_bottom(
-    offsets: *const GArray,
-    i: c_uint,
-    page_content_height: f64,
-) -> f64 {
-    crate::page_bottom(unsafe { doubles(offsets) }, i as usize, page_content_height)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_draw_page(
-    cr: *mut c_void,
-    root: *const NsBox,
-    setup: *const PrintSetup,
+pub fn draw_page(
+    cr: Cr,
+    root: BoxRef<'_>,
+    setup: &PrintSetup,
     scale: f64,
     page_top: f64,
     page_bottom: f64,
 ) {
-    let Some(setup) = (unsafe { setup.as_ref() }) else {
-        return;
-    };
-    if cr.is_null() || root.is_null() {
-        return;
-    }
     let content_w = setup.width - setup.margin_left - setup.margin_right;
     let content_h = page_bottom - page_top;
     if !crate::exceeds(content_w, 0.0) || !crate::exceeds(content_h, 0.0) {
         return;
     }
-    // SAFETY: the caller passes a live cairo context, checked non-null above.
-    let cr = unsafe { southstar_paint::Cr::from_raw(cr) };
-    // SAFETY: the caller passes the root of a live box tree, checked non-null above.
-    let Some(root) = (unsafe { BoxRef::from_ptr(root) }) else {
-        return;
-    };
     cr.save();
     cr.scale(scale, scale);
     cr.translate(setup.margin_left, setup.margin_top);

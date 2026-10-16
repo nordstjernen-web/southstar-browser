@@ -5,4 +5,6 @@
 mod ffi;
 mod fonts;
 
-pub use ffi::{RenderCtx, RenderProfile, ns_render_relayout, ns_render_relayout_profile};
+pub use ffi::{
+    RenderCtx, RenderProfile, ns_render_relayout, ns_render_relayout_profile, page_rule,
+};

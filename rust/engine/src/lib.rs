@@ -16,6 +16,7 @@ pub use crate::ffi::{
     compute_cascade, dump_layout, dump_text, fetch_images, in_blocking_fetch, load_keyframes,
     print_sheets, relayout, start_image_session,
 };
+pub use southstar_render::page_rule;
 
 const CAIRO_MAX: i32 = 30000;
 const PT_PER_PX: f64 = 72.0 / 96.0;

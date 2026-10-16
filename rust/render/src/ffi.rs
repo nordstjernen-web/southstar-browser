@@ -589,11 +589,8 @@ pub extern "C" fn ns_render_page_uses_active() -> GBoolean {
     glib::boolean(USES_ACTIVE.load(Ordering::Relaxed))
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_render_page_rule() -> *const PageRule {
-    lock(&PAGE_RULE)
-        .as_ref()
-        .map_or(ptr::null(), |rule| rule as *const PageRule)
+pub fn page_rule() -> Option<PageRule> {
+    *lock(&PAGE_RULE)
 }
 
 #[unsafe(no_mangle)]

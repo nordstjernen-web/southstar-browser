@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{PrintSetup, draw_page};
+
 use core::ffi::CStr;
 
 use ffi::BreakProp;

@@ -58,11 +58,6 @@ const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184)
 
 pub use southstar_engine::{CssCache, PrintSetup};
 
-#[repr(C)]
-struct PageRule {
-    _private: [u8; 0],
-}
-
 unsafe extern "C" {
     fn ns_engine_navigate_blocking(
         url: *const c_char,
@@ -90,9 +85,6 @@ unsafe extern "C" {
         status: c_long,
         transport_error: *const c_char,
     ) -> *mut c_char;
-    fn ns_print_setup_default(setup: *mut PrintSetup);
-    fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
-    fn ns_render_page_rule() -> *const PageRule;
     fn ns_box_free(b: *mut NsBox);
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
@@ -308,13 +300,13 @@ pub fn dump_layout(root: Option<BoxRef<'_>>) -> Vec<u8> {
 }
 
 pub fn print_setup_default() -> PrintSetup {
-    let mut setup = PrintSetup::default();
-    unsafe { ns_print_setup_default(&mut setup) };
-    setup
+    PrintSetup::a4()
 }
 
 pub fn apply_render_page_rule(setup: &mut PrintSetup) {
-    unsafe { ns_print_setup_apply_page_rule(setup, ns_render_page_rule()) };
+    if let Some(rule) = southstar_engine::page_rule() {
+        setup.apply_page_rule(&rule);
+    }
 }
 
 pub fn css_set_print_media(printing: bool) {
