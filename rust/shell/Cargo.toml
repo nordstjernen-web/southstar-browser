@@ -22,6 +22,7 @@ southstar-media-shm = { path = "../media-shm" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-url = { path = "../url" }
+southstar-watchdog = { path = "../watchdog" }
 
 [features]
 avif = ["southstar-ffi/avif"]

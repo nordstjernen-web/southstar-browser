@@ -11,7 +11,6 @@ use southstar_config::NsConfig;
 use southstar_glib::{GBoolean, GError, GStr, g_free, g_getenv, g_path_get_dirname, g_strdup};
 
 use super::app::{ns_procapp_run, ns_procapp_set_window_size};
-use super::gtk::borrowed;
 use super::procview_worker::ns_proc_renderer_path;
 use crate::appmain::{self, Action, Gsk, Options};
 
@@ -101,21 +100,6 @@ unsafe extern "C" {
     fn ns_config_get() -> *const NsConfig;
     fn ns_config_dump() -> *mut c_char;
     fn ns_thread_dump_install_signal(label: *const c_char);
-    fn ns_watchdog_should_supervise(
-        argc: c_int,
-        argv: *mut *mut c_char,
-        enabled_by_default: GBoolean,
-    ) -> GBoolean;
-    fn ns_watchdog_run_supervisor(
-        self_exe: *const c_char,
-        argc: c_int,
-        argv: *mut *mut c_char,
-    ) -> c_int;
-    fn ns_watchdog_is_child(argc: c_int, argv: *mut *mut c_char) -> GBoolean;
-    fn ns_watchdog_child_guard_parent_death();
-    fn ns_watchdog_child_arm_hang_monitor(js_budget_ms: c_int);
-    fn ns_watchdog_child_session_arg(argc: c_int, argv: *mut *mut c_char) -> *const c_char;
-    fn ns_watchdog_child_is_recovery() -> GBoolean;
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_net_init();
@@ -673,7 +657,7 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
 fn run_proc_gui(
     url: Option<&CStr>,
     gsk_renderer_override: Option<&CStr>,
-    session_path: *const c_char,
+    session_path: Option<&CStr>,
     recover: bool,
     private_mode: bool,
 ) -> c_int {
@@ -686,7 +670,6 @@ fn run_proc_gui(
     };
     let file_url = file_url_for(start);
     let start = file_url.as_deref().unwrap_or(start);
-    let session_path = unsafe { borrowed(session_path) };
     let status = ns_procapp_run(start, session_path, recover, private_mode);
     drop(file_url);
     clear_self_exe();
@@ -771,7 +754,9 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     init_self_exe(args.first().copied());
     let exe = self_exe();
-    southstar_i18n::init((!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) }));
+    let exe = (!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) });
+    southstar_i18n::init(exe);
+    let watchdog_args: Vec<&[u8]> = args.iter().skip(1).map(|a| a.to_bytes()).collect();
     if appmain::flag_given(&args, b"--private") {
         setenv(c"NS_PRIVATE", c"1");
     }
@@ -796,8 +781,11 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if proc_mode {
         let enabled = config().is_some_and(|c| c.watchdog_enabled != 0);
-        if unsafe { ns_watchdog_should_supervise(argc, argv, GBoolean::from(enabled)) } != 0 {
-            let rc = unsafe { ns_watchdog_run_supervisor(self_exe(), argc, argv) };
+        if southstar_watchdog::should_supervise(watchdog_args.iter().copied(), enabled) {
+            let rc = southstar_watchdog::run_supervisor(
+                exe.map_or(&[][..], CStr::to_bytes),
+                &watchdog_args,
+            );
             clear_self_exe();
             unsafe { ns_config_shutdown() };
             return rc;
@@ -862,17 +850,17 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     if proc_mode {
-        if unsafe { ns_watchdog_is_child(argc, argv) } != 0 {
-            unsafe { ns_watchdog_child_guard_parent_death() };
+        if southstar_watchdog::is_child(watchdog_args.iter().copied()) {
+            southstar_watchdog::child_guard_parent_death();
             let budget = if single_process {
                 config().map_or(0, |c| c.js_eval_budget_ms)
             } else {
                 0
             };
-            unsafe { ns_watchdog_child_arm_hang_monitor(budget) };
+            southstar_watchdog::child_arm_hang_monitor(budget);
         }
-        let session = unsafe { ns_watchdog_child_session_arg(argc, argv) };
-        let recover = unsafe { ns_watchdog_child_is_recovery() } != 0;
+        let session = southstar_watchdog::session_arg(args.iter().skip(1).copied());
+        let recover = southstar_watchdog::child_is_recovery();
         return run_proc_gui(
             options.url,
             options.gsk_renderer_override,

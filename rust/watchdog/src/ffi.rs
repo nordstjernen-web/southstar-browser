@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the watchdog, over GLib's main loop and child watches.
+//! Southstar — the supervisor loop and the child-side hang monitor of the watchdog, over GLib's main loop and child watches.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -413,14 +413,12 @@ fn watch_for_hangs() {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_watchdog_child_guard_parent_death() {
+pub fn child_guard_parent_death() {
     IS_CHILD.store(true, Ordering::SeqCst);
     os::guard_parent_death();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_watchdog_supervisor_pid() -> c_int {
+pub fn supervisor_pid() -> c_int {
     if IS_CHILD.load(Ordering::SeqCst) {
         os::parent_pid()
     } else {
@@ -428,8 +426,7 @@ pub extern "C" fn ns_watchdog_supervisor_pid() -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_watchdog_child_arm_hang_monitor(js_budget_ms: c_int) {
+pub fn child_arm_hang_monitor(js_budget_ms: c_int) {
     let secs = crate::hang_seconds(js_budget_ms);
     HANG_SECS.store(secs, Ordering::SeqCst);
     message(&format!(
@@ -441,48 +438,8 @@ pub extern "C" fn ns_watchdog_child_arm_hang_monitor(js_budget_ms: c_int) {
         .spawn(watch_for_hangs);
 }
 
-unsafe fn args<'a>(argc: c_int, argv: *mut *mut c_char) -> Vec<&'a [u8]> {
-    if argv.is_null() {
-        return Vec::new();
-    }
-    (1..usize::try_from(argc).unwrap_or(0))
-        .filter_map(|i| {
-            let arg = unsafe { *argv.add(i) };
-            (!arg.is_null()).then(|| unsafe { CStr::from_ptr(arg) }.to_bytes())
-        })
-        .collect()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_watchdog_child_session_arg(
-    argc: c_int,
-    argv: *mut *mut c_char,
-) -> *const c_char {
-    crate::session_arg(unsafe { args(argc, argv) })
-        .map_or(ptr::null(), |value| value.as_ptr().cast())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_watchdog_is_child(argc: c_int, argv: *mut *mut c_char) -> GBoolean {
-    glib::boolean(crate::is_child(unsafe { args(argc, argv) }))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_watchdog_child_is_recovery() -> GBoolean {
-    let value = unsafe { glib::bytes(glib::g_getenv(c"NS_WATCHDOG_RECOVER".as_ptr())) };
-    glib::boolean(value == Some(b"1"))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_watchdog_should_supervise(
-    argc: c_int,
-    argv: *mut *mut c_char,
-    enabled_by_default: GBoolean,
-) -> GBoolean {
-    glib::boolean(crate::should_supervise(
-        unsafe { args(argc, argv) },
-        enabled_by_default != 0,
-    ))
+pub fn child_is_recovery() -> bool {
+    std::env::var_os("NS_WATCHDOG_RECOVER").is_some_and(|value| value == "1")
 }
 
 struct Supervisor {
@@ -653,15 +610,9 @@ fn session_path() -> Vec<u8> {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_watchdog_run_supervisor(
-    self_exe: *const c_char,
-    argc: c_int,
-    argv: *mut *mut c_char,
-) -> c_int {
+pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
     let session = session_path();
-    let self_exe = unsafe { glib::bytes(self_exe) }.unwrap_or_default();
-    let child_argv = crate::child_args(self_exe, unsafe { args(argc, argv) }, &session)
+    let child_argv = crate::child_args(self_exe, args.iter().copied(), &session)
         .into_iter()
         .map(|arg| CString::new(arg).unwrap_or_default())
         .collect();

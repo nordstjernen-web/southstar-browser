@@ -3186,6 +3186,7 @@ dependencies = [
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-url",
+ "southstar-watchdog",
 ]
 
 [[package]]

@@ -4,7 +4,12 @@
 
 mod ffi;
 
-use core::ffi::c_int;
+pub use ffi::{
+    child_arm_hang_monitor, child_guard_parent_death, child_is_recovery, run_supervisor,
+    supervisor_pid,
+};
+
+use core::ffi::{CStr, c_int};
 use std::time::{Duration, Instant};
 
 pub const FLAG: &[u8] = b"--watchdog";
@@ -27,9 +32,10 @@ const SIGQUIT: c_int = 3;
 const SIGKILL: c_int = 9;
 const SIGTERM: c_int = 15;
 
-pub fn session_arg<'a>(args: impl IntoIterator<Item = &'a [u8]>) -> Option<&'a [u8]> {
+pub fn session_arg<'a>(args: impl IntoIterator<Item = &'a CStr>) -> Option<&'a CStr> {
     args.into_iter()
-        .find_map(|arg| arg.strip_prefix(SESSION_PREFIX))
+        .find_map(|arg| arg.to_bytes_with_nul().strip_prefix(SESSION_PREFIX))
+        .and_then(|path| CStr::from_bytes_with_nul(path).ok())
 }
 
 pub fn is_child<'a>(args: impl IntoIterator<Item = &'a [u8]>) -> bool {

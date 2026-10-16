@@ -15,7 +15,6 @@ use super::view::{self, View};
 use crate::taskmgr::{self, CpuHistory};
 
 unsafe extern "C" {
-    fn ns_watchdog_supervisor_pid() -> c_int;
     fn ns_thread_dump_text(pid: c_int, label: *const c_char) -> *mut c_char;
     fn free(p: *mut c_void);
 }
@@ -134,7 +133,7 @@ unsafe fn refresh(tm: &mut TaskManager) {
         }
 
         let brand = tr_string(c"Southstar Browser");
-        let wpid = ns_watchdog_supervisor_pid();
+        let wpid = southstar_watchdog::supervisor_pid();
         if wpid > 0 {
             let info = proc_info(wpid);
             let name = format!("{brand} ({})", tr_string(c"watchdog"));
