@@ -14,21 +14,18 @@ use southstar_js_engine::{ContextHandle, RuntimeHandle, Scope, Value};
 use super::scopes::RealmScope;
 use super::{GMainContext, WorkerHost};
 
-pub(crate) type LogFn = unsafe extern "C" fn(line: *const c_char, data: *mut c_void);
-pub(crate) type DataFn = unsafe extern "C" fn(data: *mut c_void);
-pub(crate) type NavigateFn =
-    unsafe extern "C" fn(url: *const c_char, reload: GBoolean, data: *mut c_void);
-pub(crate) type DownloadFn =
+pub type LogFn = unsafe extern "C" fn(line: *const c_char, data: *mut c_void);
+pub type DataFn = unsafe extern "C" fn(data: *mut c_void);
+pub type NavigateFn = unsafe extern "C" fn(url: *const c_char, reload: GBoolean, data: *mut c_void);
+pub type DownloadFn =
     unsafe extern "C" fn(url: *const c_char, filename: *const c_char, data: *mut c_void);
-pub(crate) type NodeFn = unsafe extern "C" fn(target: *const NsNode, data: *mut c_void);
-pub(crate) type UrlFn = unsafe extern "C" fn(url: *const c_char, data: *mut c_void);
-pub(crate) type FormSubmitFn =
+pub type NodeFn = unsafe extern "C" fn(target: *const NsNode, data: *mut c_void);
+pub type UrlFn = unsafe extern "C" fn(url: *const c_char, data: *mut c_void);
+pub type FormSubmitFn =
     unsafe extern "C" fn(form: *const NsNode, submitter: *const NsNode, data: *mut c_void);
-pub(crate) type ViewportScrollFn =
-    unsafe extern "C" fn(x: *mut f64, y: *mut f64, data: *mut c_void);
-pub(crate) type TextQueryFn =
-    unsafe extern "C" fn(text: *const c_char, data: *mut c_void) -> GBoolean;
-pub(crate) type DelayFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+pub type ViewportScrollFn = unsafe extern "C" fn(x: *mut f64, y: *mut f64, data: *mut c_void);
+pub type TextQueryFn = unsafe extern "C" fn(text: *const c_char, data: *mut c_void) -> GBoolean;
+pub type DelayFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 pub(crate) type TaskRun = Box<dyn FnOnce(&mut Scope<'_>) -> Result<Value, Value>>;
 
 #[repr(C)]

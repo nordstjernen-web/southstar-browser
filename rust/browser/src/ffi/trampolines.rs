@@ -7,6 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable};
+use southstar_js_runtime::api::{self, NavigationTiming};
 use southstar_layout::NsBox;
 
 use super::engine::{
@@ -16,21 +17,12 @@ use super::engine::{
 use super::glib::{
     g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
 };
-use super::js::{NavigationTiming, ns_js_video_event};
+use super::js::ns_js_video_event;
 use super::{Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove};
 use crate::{build, callbacks, images, page, scroll, settle};
 
 type TextCb = unsafe extern "C" fn(text: *const c_char, ud: *mut c_void);
-type TextBoolCb = unsafe extern "C" fn(text: *const c_char, ud: *mut c_void) -> GBoolean;
 type UdCb = unsafe extern "C" fn(ud: *mut c_void);
-type UdBoolCb = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
-type NavigateCb = unsafe extern "C" fn(url: *const c_char, flag: GBoolean, ud: *mut c_void);
-type FormSubmitCb =
-    unsafe extern "C" fn(form: *const NsNode, submitter: *const NsNode, ud: *mut c_void);
-type ViewportScrollCb = unsafe extern "C" fn(x: *mut f64, y: *mut f64, ud: *mut c_void);
-type ScrollToCb = unsafe extern "C" fn(target: *const NsNode, ud: *mut c_void);
-type DownloadCb =
-    unsafe extern "C" fn(url: *const c_char, filename: *const c_char, ud: *mut c_void);
 type MediaSeekCb =
     unsafe extern "C" fn(node: *const c_void, seconds: f64, ud: *mut c_void) -> GBoolean;
 type MediaFlagCb = unsafe extern "C" fn(node: *const c_void, on: GBoolean, ud: *mut c_void);
@@ -57,25 +49,6 @@ type VideoJsCb =
     unsafe extern "C" fn(node: *const c_void, kind: *const c_char, value: f64, ud: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_js_new(
-        log_cb: TextCb,
-        log_ud: *mut c_void,
-        mut_cb: UdCb,
-        mut_ud: *mut c_void,
-        nav_cb: NavigateCb,
-        nav_ud: *mut c_void,
-        timing: *const NavigationTiming,
-    ) -> *mut c_void;
-    fn ns_js_set_load_delay_cb(js: *mut c_void, cb: UdBoolCb, ud: *mut c_void);
-    fn ns_js_set_form_submit_cb(js: *mut c_void, cb: FormSubmitCb, ud: *mut c_void);
-    fn ns_js_set_layout_flush_cb(js: *mut c_void, cb: UdCb, ud: *mut c_void);
-    fn ns_js_set_viewport_scroll_cb(js: *mut c_void, cb: ViewportScrollCb, ud: *mut c_void);
-    fn ns_js_set_scroll_to_cb(js: *mut c_void, cb: ScrollToCb, ud: *mut c_void);
-    fn ns_js_set_fragment_nav_cb(js: *mut c_void, cb: TextCb, ud: *mut c_void);
-    fn ns_js_set_soft_nav_cb(js: *mut c_void, cb: NavigateCb, ud: *mut c_void);
-    fn ns_js_set_download_cb(js: *mut c_void, cb: DownloadCb, ud: *mut c_void);
-    fn ns_js_set_clipboard_write_cb(js: *mut c_void, cb: TextBoolCb, ud: *mut c_void);
-    fn ns_js_set_selection_cmd_cb(js: *mut c_void, cb: TextBoolCb, ud: *mut c_void);
     fn ns_js_set_audio_cb(js: *mut c_void, cb: TextCb, ud: *mut c_void);
     fn ns_js_set_media_seek_cb(js: *mut c_void, cb: MediaSeekCb, ud: *mut c_void);
     fn ns_js_set_media_play_cb(js: *mut c_void, cb: MediaFlagCb, ud: *mut c_void);
@@ -85,7 +58,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
     fn ns_js_set_media_volume_cb(js: *mut c_void, cb: MediaVolumeCb, ud: *mut c_void);
-    fn ns_js_set_window_action_cb(js: *mut c_void, cb: TextCb, ud: *mut c_void);
     fn ns_video_cache_set_js_cb(cache: *mut c_void, cb: VideoJsCb, ud: *mut c_void);
     fn ns_video_cache_set_audio_cb(cache: *mut c_void, cb: TextCb, ud: *mut c_void);
     fn ns_engine_fetch_images_start(
@@ -308,38 +280,38 @@ unsafe extern "C" fn on_image_arrived(ud: *mut c_void) {
     }
 }
 
-pub fn new_js(b: &NsBrowser, timing: *const NavigationTiming) -> Option<Js> {
+pub fn new_js(b: &NsBrowser, timing: Option<NavigationTiming>) -> Option<Js> {
     let ud = b.as_ptr().cast::<c_void>();
-    unsafe {
-        Js::from_ptr(ns_js_new(
-            on_log,
-            ud,
-            on_mutated,
-            ud,
-            on_navigate,
-            ud,
-            timing,
-        ))
-    }
+    let callbacks = api::PageCallbacks {
+        log: Some(on_log),
+        log_data: ud,
+        mutated: Some(on_mutated),
+        mutated_data: ud,
+        navigate: Some(on_navigate),
+        navigate_data: ud,
+    };
+    // SAFETY: new_page returns a page it just created, or null.
+    unsafe { Js::from_ptr(api::new_page(callbacks, timing).cast()) }
 }
 
 pub fn wire_js(b: &NsBrowser, js: Js) {
     let ud = b.as_ptr().cast::<c_void>();
     let raw = js.raw();
+    let page = js.page();
+    api::set_load_delay_hook(page, Some(on_load_delay), ud);
+    js.set_style_table(Some(b.styles_raw()));
+    js.set_image_cache(b.images());
+    js.set_anim(b.anim());
+    api::set_form_submit_hook(page, Some(on_form_submit), ud);
+    api::set_layout_flush_hook(page, Some(on_flush), ud);
+    api::set_viewport_scroll_hook(page, Some(on_viewport_scroll), ud);
+    api::set_scroll_to_hook(page, Some(on_scroll_to), ud);
+    api::set_fragment_nav_hook(page, Some(on_fragment_nav), ud);
+    api::set_soft_nav_hook(page, Some(on_soft_nav), ud);
+    api::set_download_hook(page, Some(on_download), ud);
+    api::set_clipboard_write_hook(page, Some(on_clipboard_write), ud);
+    api::set_selection_cmd_hook(page, Some(on_selection_cmd), ud);
     unsafe {
-        ns_js_set_load_delay_cb(raw, on_load_delay, ud);
-        js.set_style_table(Some(b.styles_raw()));
-        js.set_image_cache(b.images());
-        js.set_anim(b.anim());
-        ns_js_set_form_submit_cb(raw, on_form_submit, ud);
-        ns_js_set_layout_flush_cb(raw, on_flush, ud);
-        ns_js_set_viewport_scroll_cb(raw, on_viewport_scroll, ud);
-        ns_js_set_scroll_to_cb(raw, on_scroll_to, ud);
-        ns_js_set_fragment_nav_cb(raw, on_fragment_nav, ud);
-        ns_js_set_soft_nav_cb(raw, on_soft_nav, ud);
-        ns_js_set_download_cb(raw, on_download, ud);
-        ns_js_set_clipboard_write_cb(raw, on_clipboard_write, ud);
-        ns_js_set_selection_cmd_cb(raw, on_selection_cmd, ud);
         ns_js_set_audio_cb(raw, on_audio, ud);
         ns_js_set_media_seek_cb(raw, on_media_seek, ud);
         ns_js_set_media_play_cb(raw, on_media_play, ud);
@@ -349,8 +321,8 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
         ns_js_set_mse_remove_cb(raw, on_mse_remove, ud);
         ns_js_set_mse_bytes_cb(raw, on_mse_bytes, ud);
         ns_js_set_media_volume_cb(raw, on_media_volume, ud);
-        ns_js_set_window_action_cb(raw, on_window_action, ud);
     }
+    api::set_window_action_hook(page, Some(on_window_action), ud);
 }
 
 pub fn wire_videos(b: &NsBrowser, videos: Videos) {

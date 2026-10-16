@@ -79,13 +79,13 @@ pub(crate) struct WorkerSetup<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Callbacks {
-    log: Option<LogFn>,
-    log_data: *mut c_void,
-    mutated: Option<DataFn>,
-    mutated_data: *mut c_void,
-    navigate: Option<NavigateFn>,
-    navigate_data: *mut c_void,
+pub struct Callbacks {
+    pub log: Option<LogFn>,
+    pub log_data: *mut c_void,
+    pub mutated: Option<DataFn>,
+    pub mutated_data: *mut c_void,
+    pub navigate: Option<NavigateFn>,
+    pub navigate_data: *mut c_void,
 }
 
 #[derive(Clone, Copy)]
@@ -735,6 +735,10 @@ pub unsafe extern "C" fn ns_js_new(
         navigate: nav_cb,
         navigate_data: nav_user_data,
     };
+    new_page(callbacks, timing)
+}
+
+pub(crate) fn new_page(callbacks: Callbacks, timing: Option<NavigationTiming>) -> *mut NsJs {
     let js = Js::alloc();
     if page::create(js, timing, callbacks) {
         js.0

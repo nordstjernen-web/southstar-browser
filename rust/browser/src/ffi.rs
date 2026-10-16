@@ -25,7 +25,7 @@ pub use dom::*;
 pub use engine::*;
 pub use events::*;
 pub use glib::*;
-pub use js::{Js, NavigationTiming};
+pub use js::Js;
 pub use net::*;
 pub use paint::*;
 
@@ -514,7 +514,7 @@ pub struct Created<'a> {
     pub csp_header: Option<GStr>,
     pub doc_charset: Option<GStr>,
     pub url: Option<&'a CStr>,
-    pub timing: Option<&'a NavigationTimingData>,
+    pub timing: Option<&'a NavigationTiming>,
 }
 
 pub fn create_browser(c: Created<'_>) -> Page {
@@ -532,13 +532,13 @@ pub fn create_browser(c: Created<'_>) -> Page {
         refresh_header: c.refresh_header,
         csp_header: c.csp_header,
         url: c.url,
-        navigation_timing: c.timing.map_or(ptr::null(), |t| ptr::from_ref(t).cast()),
+        navigation_timing: c.timing.copied(),
     };
     build::build(b, setup);
     page
 }
 
-pub fn attach_js(b: &NsBrowser, navigation_timing: *const NavigationTiming) -> Option<Js> {
+pub fn attach_js(b: &NsBrowser, navigation_timing: Option<NavigationTiming>) -> Option<Js> {
     let js = trampolines::new_js(b, navigation_timing);
     b.js.set(js.map_or(ptr::null_mut(), Js::raw));
     js

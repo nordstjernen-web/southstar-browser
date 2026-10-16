@@ -20,7 +20,7 @@ mod tasks;
 
 pub use crate::ffi::glue::BytesView;
 pub use crate::ffi::record::AdoptedProtos;
-pub use crate::ffi::{NavigationTiming, NsJs};
+pub use crate::ffi::{Callbacks as PageCallbacks, NavigationTiming, NsJs};
 pub use enter::*;
 pub use hooks::*;
 pub use nodes::*;

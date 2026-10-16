@@ -7,39 +7,21 @@ use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_js_runtime::api::{self, NsJs};
 use southstar_layout::{BoxRef, NsBox};
 
 use super::engine::{Anim, Images};
 use super::glib::{GString, StrBufOwned};
 
-#[repr(C)]
-pub struct NavigationTiming {
-    _private: [u8; 0],
-}
-
 unsafe extern "C" {
-    fn ns_js_consume_mutated(js: *mut c_void) -> GBoolean;
     fn ns_js_sync_window_metrics(js: *mut c_void);
-    fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
-    fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
     fn ns_js_focused_node(js: *const c_void) -> *const NsNode;
     fn ns_js_fire_media_load_events(js: *mut c_void, layout: *const NsBox);
     fn ns_js_has_pending_work(js: *const c_void) -> GBoolean;
     fn ns_js_has_pending_animation_frame(js: *const c_void) -> GBoolean;
     fn ns_js_dispatch_anim_events(js: *mut c_void, anim: *mut c_void);
     fn ns_js_run_animation_frame(js: *mut c_void) -> GBoolean;
-    fn ns_js_set_selection(
-        js: *mut c_void,
-        text: *const c_char,
-        has_range: GBoolean,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
-    );
     pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
-    fn ns_js_request_repaint(js: *mut c_void);
-    fn ns_js_add_csp_header(js: *mut c_void, header: *const c_char);
     fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
     fn ns_js_note_viewport_scroll(js: *mut c_void, x: f64, y: f64);
     fn ns_js_needs_tick(js: *const c_void) -> GBoolean;
@@ -50,10 +32,6 @@ unsafe extern "C" {
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
     fn ns_js_fire_page_transition(js: *mut c_void, kind: *const c_char, persisted: GBoolean);
-    fn ns_js_in_pump(js: *const c_void) -> GBoolean;
-    fn ns_js_free(js: *mut c_void);
-    fn ns_js_csp_form_action_allowed(js: *const c_void, action_url: *const c_char) -> GBoolean;
-    fn ns_js_submit_form(js: *mut c_void, form: *const NsNode, submitter: *const NsNode);
     fn ns_js_dispatch_event(
         js: *mut c_void,
         target: *const NsNode,
@@ -66,8 +44,6 @@ unsafe extern "C" {
         submitter: *const NsNode,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_set_image_cache(js: *mut c_void, cache: *mut c_void);
-    fn ns_js_set_anim(js: *mut c_void, anim: *mut c_void);
 }
 
 #[derive(Clone, Copy)]
@@ -82,8 +58,12 @@ impl Js {
         self.0.as_ptr()
     }
 
+    pub fn page(self) -> *const NsJs {
+        self.0.as_ptr().cast_const().cast()
+    }
+
     pub fn consume_mutated(self) -> bool {
-        unsafe { ns_js_consume_mutated(self.raw()) != 0 }
+        api::consume_mutated(self.page())
     }
 
     pub fn sync_window_metrics(self) {
@@ -91,11 +71,11 @@ impl Js {
     }
 
     pub fn set_layout_root(self, root: Option<BoxRef<'_>>) {
-        unsafe { ns_js_set_layout_root(self.raw(), root.map_or(ptr::null(), |r| r.as_ptr())) };
+        api::set_layout_root(self.page(), root.map_or(ptr::null(), |r| r.as_ptr().cast()));
     }
 
     pub fn set_style_table(self, styles: Option<*mut GHashTable>) {
-        unsafe { ns_js_set_style_table(self.raw(), styles.unwrap_or(ptr::null_mut())) };
+        api::set_style_table(self.page(), styles.unwrap_or(ptr::null_mut()));
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
@@ -123,25 +103,15 @@ impl Js {
     }
 
     pub fn set_selection(self, text: Option<&CStr>, has_range: bool, r: [f64; 4]) {
-        unsafe {
-            ns_js_set_selection(
-                self.raw(),
-                text.map_or(ptr::null(), CStr::as_ptr),
-                southstar_glib::boolean(has_range),
-                r[0],
-                r[1],
-                r[2],
-                r[3],
-            )
-        };
+        api::set_selection(self.page(), text, has_range, r);
     }
 
     pub fn request_repaint(self) {
-        unsafe { ns_js_request_repaint(self.raw()) };
+        api::request_repaint(self.page());
     }
 
     pub fn add_csp_header(self, header: Option<&CStr>) {
-        unsafe { ns_js_add_csp_header(self.raw(), header.map_or(ptr::null(), CStr::as_ptr)) };
+        api::add_csp_header(self.page(), header);
     }
 
     pub fn run_scripts_in_doc(self, doc: Option<Node<'_>>, base: Option<&CStr>) {
@@ -188,20 +158,19 @@ impl Js {
     }
 
     pub fn in_pump(self) -> bool {
-        unsafe { ns_js_in_pump(self.raw()) != 0 }
+        api::in_pump(self.page())
     }
 
     pub fn free(self) {
-        unsafe { ns_js_free(self.raw()) };
+        api::free(self.page());
     }
 
     pub fn submit_form(self, form: Node<'_>, submitter: Node<'_>) {
-        // SAFETY: the page is live and both nodes belong to it.
-        unsafe { ns_js_submit_form(self.raw(), form.as_ptr(), submitter.as_ptr()) };
+        api::submit_form(self.page(), form, Some(submitter));
     }
 
     pub fn csp_form_action_allowed(self, url: &CStr) -> bool {
-        unsafe { ns_js_csp_form_action_allowed(self.raw(), url.as_ptr()) != 0 }
+        api::csp_form_action_allowed(self.page(), Some(url))
     }
 
     pub fn dispatch_event(self, target: Node<'_>, kind: &CStr) {
@@ -224,10 +193,10 @@ impl Js {
     }
 
     pub fn set_image_cache(self, images: Option<Images>) {
-        unsafe { ns_js_set_image_cache(self.raw(), images.map_or(ptr::null_mut(), Images::raw)) };
+        api::set_image_cache(self.page(), images.map_or(ptr::null_mut(), Images::raw));
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        unsafe { ns_js_set_anim(self.raw(), anim.map_or(ptr::null_mut(), Anim::raw)) };
+        api::set_anim(self.page(), anim.map_or(ptr::null_mut(), Anim::raw));
     }
 }

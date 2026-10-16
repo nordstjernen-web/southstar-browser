@@ -22,7 +22,7 @@ pub struct Setup<'a> {
     pub refresh_header: Option<GStr>,
     pub csp_header: Option<GStr>,
     pub url: Option<&'a CStr>,
-    pub navigation_timing: *const NavigationTiming,
+    pub navigation_timing: Option<NavigationTiming>,
 }
 
 pub fn init() {

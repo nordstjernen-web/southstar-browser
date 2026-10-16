@@ -50,30 +50,7 @@ const _: () = assert!(
     core::mem::size_of::<NsResponse>() == 200 && core::mem::offset_of!(NsResponse, security) == 192
 );
 
-#[repr(C)]
-#[derive(Default)]
-pub struct NavigationTimingData {
-    pub origin_us: i64,
-    pub origin_real_ms: f64,
-    pub domain_lookup_start_ms: f64,
-    pub domain_lookup_end_ms: f64,
-    pub connect_start_ms: f64,
-    pub connect_end_ms: f64,
-    pub secure_connection_start_ms: f64,
-    pub request_start_ms: f64,
-    pub response_start_ms: f64,
-    pub response_end_ms: f64,
-    pub dom_loading_ms: f64,
-    pub dom_interactive_ms: f64,
-    pub dom_content_loaded_event_start_ms: f64,
-    pub dom_content_loaded_event_end_ms: f64,
-    pub dom_complete_ms: f64,
-    pub load_event_start_ms: f64,
-    pub load_event_end_ms: f64,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<NavigationTimingData>() == 136);
+pub use southstar_js_runtime::api::NavigationTiming;
 
 unsafe extern "C" {
     fn ns_engine_navigate_blocking(
@@ -238,9 +215,9 @@ impl Response {
         self.raw().security
     }
 
-    pub fn timing(&self) -> NavigationTimingData {
+    pub fn timing(&self) -> NavigationTiming {
         let r = self.raw();
-        NavigationTimingData {
+        NavigationTiming {
             origin_us: r.request_start_us,
             origin_real_ms: r.request_start_real_ms,
             domain_lookup_end_ms: r.domain_lookup_ms,
@@ -254,7 +231,7 @@ impl Response {
             request_start_ms: r.pretransfer_ms,
             response_start_ms: r.response_start_ms,
             response_end_ms: r.response_end_ms,
-            ..NavigationTimingData::default()
+            ..NavigationTiming::default()
         }
     }
 

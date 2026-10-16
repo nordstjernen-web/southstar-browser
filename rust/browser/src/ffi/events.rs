@@ -105,7 +105,6 @@ unsafe extern "C" {
     fn ns_js_commit_change(js: *mut c_void, el: *const NsNode);
     fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
-    fn ns_js_form_reset(js: *mut c_void, form: *mut NsNode);
     fn ns_js_select_toggle_option(js: *mut c_void, option: *mut NsNode) -> GBoolean;
     fn ns_js_select_choose_option(js: *mut c_void, option: *mut NsNode) -> GBoolean;
     fn ns_js_select_step(js: *mut c_void, select: *mut NsNode, dir: c_int) -> GBoolean;
@@ -387,7 +386,7 @@ impl Js {
     }
 
     pub fn form_reset(self, form: Node<'_>) {
-        unsafe { ns_js_form_reset(self.raw(), form.as_mut_ptr()) };
+        southstar_js_runtime::api::form_reset(self.page(), form);
     }
 
     pub fn select_toggle_option(self, option: Node<'_>) -> bool {

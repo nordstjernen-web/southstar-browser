@@ -527,6 +527,39 @@ pub fn worker_eval(
     }
 }
 
+pub fn new_page(callbacks: ffi::Callbacks, timing: Option<NavigationTiming>) -> *mut NsJs {
+    ffi::new_page(callbacks, timing)
+}
+
 pub fn free(js: *const NsJs) {
     ffi::free(js);
+}
+
+pub fn set_style_table(js: *const NsJs, styles: *mut GHashTable) {
+    state(js, (), |state| state.style_table.set(styles));
+}
+
+pub fn set_image_cache(js: *const NsJs, cache: *mut c_void) {
+    if let Some(js) = Js::of(js) {
+        js.st().image_cache.set(cache);
+        glue::blob_registry(js, !cache.is_null());
+    }
+}
+
+pub fn anim(js: *const NsJs) -> *mut c_void {
+    state(js, ptr::null_mut(), |state| state.anim.get())
+}
+
+pub fn set_anim(js: *const NsJs, anim: *mut c_void) {
+    if let Some(js) = Js::of(js) {
+        js.st().anim.set(anim);
+        glue::raf_set_host_driven(js);
+    }
+}
+
+pub fn set_early_inject_src(js: *const NsJs, src: Option<&CStr>) {
+    if let Some(js) = Js::of(js) {
+        let src = src.map_or(ptr::null_mut(), |src| glib::strdup(src.to_bytes()));
+        PageState::replace_owned(&js.st().early_inject_src, src);
+    }
 }

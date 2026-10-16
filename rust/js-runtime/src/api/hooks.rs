@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -10,6 +10,11 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::ffi::state::PageState;
 use crate::ffi::{Js, NsJs, glue};
+
+pub use crate::ffi::state::{
+    DataFn, DelayFn, DownloadFn, FormSubmitFn, LogFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
+    ViewportScrollFn,
+};
 
 pub struct Selection {
     pub text: Option<CString>,
@@ -28,6 +33,26 @@ unsafe extern "C" {
 fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
     Js::of(js).map_or(fallback, |js| f(js.st()))
 }
+
+macro_rules! hook_setter {
+    ($name:ident, $field:ident, $ty:ty) => {
+        pub fn $name(js: *const NsJs, hook: Option<$ty>, data: *mut c_void) {
+            state(js, (), |state| state.$field.set(hook, data));
+        }
+    };
+}
+
+hook_setter!(set_form_submit_hook, form_submit, FormSubmitFn);
+hook_setter!(set_download_hook, download, DownloadFn);
+hook_setter!(set_clipboard_write_hook, clipboard_write, TextQueryFn);
+hook_setter!(set_selection_cmd_hook, selection_cmd, TextQueryFn);
+hook_setter!(set_scroll_to_hook, scroll_to, NodeFn);
+hook_setter!(set_fragment_nav_hook, fragment_nav, UrlFn);
+hook_setter!(set_soft_nav_hook, soft_nav, NavigateFn);
+hook_setter!(set_window_action_hook, window_action, UrlFn);
+hook_setter!(set_viewport_scroll_hook, viewport_scroll, ViewportScrollFn);
+hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
+hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
 pub fn navigate(js: *const NsJs, url: &CStr, reload: bool) -> bool {
     state(js, false, |state| match state.navigate.get() {
