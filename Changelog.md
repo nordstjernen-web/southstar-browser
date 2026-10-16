@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* An absolutely positioned ::before or ::after is painted in tree order
+  with the other positioned boxes of its stacking context. Its box has no
+  DOM node of its own, so the paint sort could not place it and it came
+  last, above every later position: relative element: the hero heading,
+  button and illustration on svelte.dev were hidden under the hero's
+  ::before gradient.
 * em, i, cite and dfn follow their computed font-style. The inline
   builder made them italic by tag name even when a stylesheet set
   font-style: normal, so Stripe's hero heading (an em styled upright)

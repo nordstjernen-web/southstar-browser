@@ -92,7 +92,7 @@ js-window	120	57	28	0	68	8	0
 js-workers	101	65	19	0	65	5	0
 jsshell	0	0	0	0	0	0	0
 launcher	18	20	1	0	0	0	0
-layout	149	8	5	0	129	50	1
+layout	150	8	5	0	129	50	1
 layout-block	64	33	12	0	40	1	0
 layout-build	156	41	52	0	57	6	0
 layout-content	30	10	4	0	21	2	0
@@ -115,7 +115,7 @@ net	388	126	67	0	248	25	0
 netstore	0	0	0	0	0	0	0
 netutil	32	4	7	0	17	5	0
 numfmt	0	0	0	0	0	0	0
-paint	454	137	38	0	355	19	44
+paint	455	137	38	0	355	19	44
 pdf	31	21	1	0	6	2	0
 plmpeg	0	0	0	0	0	0	0
 print	25	10	5	0	13	3	0

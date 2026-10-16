@@ -422,11 +422,53 @@ fn capture_cmp(a: &Capture, b: &Capture) -> i32 {
     if za != zb {
         return if za < zb { -1 } else { 1 };
     }
-    let c = dom_tree_order_cmp(node_of(ab), node_of(bb));
+    let c = tree_position_cmp(tree_position(ab), tree_position(bb));
     if c != 0 {
         return c;
     }
     a.seq.cmp(&b.seq) as i32
+}
+
+fn tree_position(b: BoxRef<'_>) -> (Option<Node<'_>>, i32) {
+    if let Some(n) = node_of(b) {
+        return (Some(n), 0);
+    }
+    match b.pseudo_host() {
+        Some((host, after)) => (
+            // SAFETY: pseudo_host holds the originating element recorded when
+            // layout built this box, and the DOM outlives the box tree.
+            unsafe { Node::from_ptr(host.cast()) },
+            if after { 2 } else { 1 },
+        ),
+        None => (None, 0),
+    }
+}
+
+fn is_ancestor_of(a: Node<'_>, n: Node<'_>) -> bool {
+    let mut p = n.parent();
+    while let Some(node) = p {
+        if node == a {
+            return true;
+        }
+        p = node.parent();
+    }
+    false
+}
+
+fn tree_position_cmp(a: (Option<Node<'_>>, i32), b: (Option<Node<'_>>, i32)) -> i32 {
+    let ((Some(na), pa), (Some(nb), pb)) = (a, b) else {
+        return 0;
+    };
+    if na == nb {
+        return pa.cmp(&pb) as i32;
+    }
+    if is_ancestor_of(na, nb) {
+        return if pa == 2 { 1 } else { -1 };
+    }
+    if is_ancestor_of(nb, na) {
+        return if pb == 2 { -1 } else { 1 };
+    }
+    dom_tree_order_cmp(Some(na), Some(nb))
 }
 
 pub fn merge_sort_by<T: Copy>(items: &mut [T], cmp: &impl Fn(&T, &T) -> i32) {
