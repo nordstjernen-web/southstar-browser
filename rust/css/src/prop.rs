@@ -277,10 +277,11 @@ pub enum Prop {
     MaskBorderWidth,
     MaskBorderOutset,
     MaskBorderRepeat,
+    FontPalette,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 269] = [
+    pub(crate) const ALL: [Prop; 270] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -550,6 +551,7 @@ impl Prop {
         Prop::MaskBorderWidth,
         Prop::MaskBorderOutset,
         Prop::MaskBorderRepeat,
+        Prop::FontPalette,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -589,6 +591,7 @@ impl Prop {
                 | Prop::HangingPunctuation
                 | Prop::TextAutospace
                 | Prop::Interactivity
+                | Prop::FontPalette
                 | Prop::FontVariantLigatures
                 | Prop::FontFeatureSettings
                 | Prop::FontVariationSettings
@@ -916,6 +919,7 @@ impl Prop {
             Prop::MaskBorderWidth => c"mask-border-width",
             Prop::MaskBorderOutset => c"mask-border-outset",
             Prop::MaskBorderRepeat => c"mask-border-repeat",
+            Prop::FontPalette => c"font-palette",
         }
     }
 }

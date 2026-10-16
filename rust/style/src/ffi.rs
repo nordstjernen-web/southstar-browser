@@ -103,7 +103,7 @@ const _: () = assert!(
         && core::mem::offset_of!(Rect, is_auto) == 48
 );
 
-pub const PROP_COUNT: usize = 269;
+pub const PROP_COUNT: usize = 270;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -152,11 +152,11 @@ struct NsStyle {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    core::mem::size_of::<NsStyle>() == 2272
-        && core::mem::offset_of!(NsStyle, display) == 2152
-        && core::mem::offset_of!(NsStyle, before) == 2160
-        && core::mem::offset_of!(NsStyle, file_selector_button) == 2224
-        && core::mem::offset_of!(NsStyle, vars) == 2264
+    core::mem::size_of::<NsStyle>() == 2280
+        && core::mem::offset_of!(NsStyle, display) == 2160
+        && core::mem::offset_of!(NsStyle, before) == 2168
+        && core::mem::offset_of!(NsStyle, file_selector_button) == 2232
+        && core::mem::offset_of!(NsStyle, vars) == 2272
 );
 
 #[repr(C)]
@@ -282,6 +282,13 @@ impl<'a> ValueRef<'a> {
 
     pub fn as_ptr(self) -> *const NsCssValue {
         self.0.as_ptr()
+    }
+
+    pub fn font_slanted(self) -> bool {
+        self.keyword_text().is_some_and(|kw| {
+            let kw = kw.to_bytes();
+            kw == b"italic" || kw.starts_with(b"oblique")
+        })
     }
 
     pub fn keyword_text(self) -> Option<&'a CStr> {

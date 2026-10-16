@@ -52,7 +52,7 @@ trait Values {
         Font {
             family: self.keyword(FONT_FAMILY),
             weight: font::weight_number(self.keyword(FONT_WEIGHT).map(CStr::to_bytes), 400),
-            italic: style == Some(b"italic") || style == Some(b"oblique"),
+            italic: style == Some(b"italic") || style.is_some_and(|s| s.starts_with(b"oblique")),
         }
     }
 

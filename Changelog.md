@@ -114,6 +114,13 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* Fonts: font-style accepts an oblique angle ("oblique 14deg", calc()
+  included, rendered slanted), font-palette is a property, font-stretch
+  and font-width take calc() percentages, font-feature-settings
+  serializes canonically (double-quoted tags, "on" and 1 dropped, "off"
+  as 0; computed values sorted and de-duplicated), and the font
+  shorthand keeps its font-stretch keyword when "normal" follows it
+  ("normal expanded normal 16px serif"). WPT css-fonts: +340 subtests.
 * CSS masks gain their missing longhands: mask-mode, mask-repeat,
   mask-position, mask-size, mask-origin, mask-type and the mask-border-*
   properties (with the -webkit- prefixed aliases sites use). The mask

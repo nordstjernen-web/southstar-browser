@@ -1128,10 +1128,48 @@ fn aspect_ratio(t: &[u8]) -> Option<Value> {
     })))
 }
 
+fn font_style(t: &[u8]) -> Option<Value> {
+    if let Some(v) = keyword_choice(t, "normal italic oblique") {
+        return Some(v);
+    }
+    let [kw, angle] = split_ws_limit(t, 3)[..] else {
+        return None;
+    };
+    if !eq(kw, b"oblique") {
+        return None;
+    }
+    let deg = font::oblique_angle(angle)?;
+    Some(Value::keyword(if deg == 0.0 {
+        b"normal".to_vec()
+    } else {
+        format!("oblique {}deg", southstar_numfmt::general(deg, 6)).into_bytes()
+    }))
+}
+
+fn font_palette(t: &[u8]) -> Option<Value> {
+    if t.starts_with(b"--")
+        && t[2..]
+            .iter()
+            .all(|&c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_' || c >= 0x80)
+    {
+        return Some(Value::keyword(t.to_vec()));
+    }
+    keyword_choice(t, "normal light dark")
+}
+
 fn font_stretch(t: &[u8]) -> Option<Value> {
     let kw = lower(t);
     if font::is_stretch_keyword(&kw) {
         return Some(Value::keyword(kw));
+    }
+    if let Some(parsed) = calc_value(t) {
+        return match parsed {
+            Parsed::Length(num, PERCENT) => Some(Value::length(num.max(0.0), PERCENT)),
+            Parsed::Calc(c) if c.px == 0.0 && c.em == 0.0 && c.rem == 0.0 && c.func == 0 => {
+                Some(Value::length(c.pct.max(0.0), PERCENT))
+            }
+            _ => None,
+        };
     }
     match length(t) {
         Some((num, PERCENT)) if num > 0.0 => Some(Value::length(num, PERCENT)),
@@ -1622,7 +1660,8 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             t,
             "normal embed isolate bidi-override isolate-override plaintext",
         ),
-        P::FontStyle => keyword_choice(t, "normal italic oblique"),
+        P::FontStyle => font_style(t),
+        P::FontPalette => font_palette(t),
         P::FontVariant => font_variant(t),
         P::TextAlign => keyword_choice(t, "start end left right center justify match-parent"),
         P::TextTransform => keyword_choice(t, "none capitalize uppercase lowercase"),
@@ -1885,7 +1924,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
                 font_variant_longhand(t, 0..=3)
             }
         }
-        P::FontFeatureSettings => settings_prop(t, font::feature_settings_valid),
+        P::FontFeatureSettings => keyword_text(font::feature_settings_canonical(t, true)),
         P::FontVariationSettings => settings_prop(t, font::variation_settings_valid),
         P::TabSize => tab_size(t),
         P::BorderSpacing => border_spacing(t),

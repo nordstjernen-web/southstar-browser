@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_layout::{InlineAttr, NsBox, inline_kind};
-use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword, keyword_is};
+use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword};
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::collect::{
@@ -167,7 +167,7 @@ fn first_letter_attrs(fl: StyleRef<'_>, text: &[u8], out: &mut Vec<InlineAttr>) 
         out.push(a);
     }
     let fst = fl.get(PropId::FontStyle);
-    if keyword_is(fst, c"italic") || keyword_is(fst, c"oblique") {
+    if fst.is_some_and(ValueRef::font_slanted) {
         out.push(InlineAttr::new(inline_kind::ITALIC, start, len));
     }
     if let Some(fam) = fl

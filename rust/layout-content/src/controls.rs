@@ -546,7 +546,7 @@ pub fn emit_control_text_style(
     }
     if let Some(ph) = phs {
         let fst = ph.get(PropId::FontStyle);
-        if keyword_is(fst, c"italic") || keyword_is(fst, c"oblique") {
+        if fst.is_some_and(ValueRef::font_slanted) {
             emit_attr(attrs, inline_kind::ITALIC, val_start, val_end);
         }
         let phw = ph

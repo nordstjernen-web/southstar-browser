@@ -11,6 +11,7 @@ use southstar_css_color::{Color, HueMethod, Interpolation, Space};
 use crate::color::{self, parse_color};
 use crate::display;
 use crate::ffi;
+use crate::font;
 use crate::gradient;
 use crate::grid::{
     Areas, LineName, TRACK_AUTO, TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT,
@@ -20,6 +21,7 @@ use crate::math::math_canonical;
 use crate::prop::Prop;
 use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
+use crate::scan::split_ws_limit;
 use crate::shadow::{self, ShadowList};
 use crate::shorthand::border_radius_canonical;
 use crate::text::split_top_level_commas;
@@ -664,6 +666,24 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
         && let Some(text) = display::canonical(value)
     {
         return Some(text);
+    }
+    if prop == b"font-feature-settings" {
+        return font::feature_settings_canonical(value, false);
+    }
+    if prop == b"font-style"
+        && let [kw, angle] = split_ws_limit(value, 3)[..]
+        && kw.eq_ignore_ascii_case(b"oblique")
+    {
+        if angle.contains(&b'(') {
+            let canon = math_canonical(&c_text(angle))?;
+            return Some([&b"oblique "[..], &canon].concat());
+        }
+        let zero = font::oblique_angle(angle) == Some(0.0);
+        return Some(if zero {
+            b"normal".to_vec()
+        } else {
+            [&b"oblique "[..], &angle.to_ascii_lowercase()].concat()
+        });
     }
     if prop == b"transform"
         && let Some(text) =

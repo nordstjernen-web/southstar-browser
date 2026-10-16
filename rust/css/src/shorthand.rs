@@ -1490,7 +1490,9 @@ fn font_shorthand(out: &mut Out, text: &[u8]) {
         out.push(prop, Value::keyword(&b"normal"[..]));
     }
     for &t in &tokens[..size_idx.unwrap_or(0)] {
-        let found: Option<(Prop, &[u8])> = if eq(t, b"italic") || eq(t, b"oblique") {
+        let found: Option<(Prop, &[u8])> = if eq(t, b"normal") {
+            None
+        } else if eq(t, b"italic") || eq(t, b"oblique") {
             Some((Prop::FontStyle, b"italic"))
         } else if eq(t, b"bold") || eq(t, b"bolder") || eq(t, b"lighter") {
             Some((Prop::FontWeight, t))

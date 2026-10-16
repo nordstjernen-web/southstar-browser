@@ -6,6 +6,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use southstar_css_syntax::Kind as SyntaxKind;
+
 use crate::calc;
 use crate::ffi;
 use crate::scan::{
@@ -799,34 +801,6 @@ fn feature_read_tag(s: &[u8], pos: &mut usize) -> bool {
     true
 }
 
-fn feature_read_optional_value(s: &[u8], pos: &mut usize) -> bool {
-    let mut p = feature_skip_ws(s, *pos);
-    if p >= s.len() || s[p] == b',' {
-        *pos = p;
-        return true;
-    }
-    if s[p].is_ascii_alphabetic() {
-        let start = p;
-        while p < s.len() && (s[p].is_ascii_alphabetic() || s[p] == b'-') {
-            p += 1;
-        }
-        let kw = s[start..p].to_ascii_lowercase();
-        if kw != b"on" && kw != b"off" {
-            return false;
-        }
-        *pos = feature_skip_ws(s, p);
-        return true;
-    }
-    if !s[p].is_ascii_digit() {
-        return false;
-    }
-    while p < s.len() && s[p].is_ascii_digit() {
-        p += 1;
-    }
-    *pos = feature_skip_ws(s, p);
-    true
-}
-
 fn variation_read_value(s: &[u8], pos: &mut usize) -> bool {
     let p = feature_skip_ws(s, *pos);
     if p >= s.len() || s[p] == b',' {
@@ -865,10 +839,123 @@ fn tag_list_valid(s: &[u8], read_value: fn(&[u8], &mut usize) -> bool) -> bool {
     false
 }
 
-pub(crate) fn feature_settings_valid(s: &[u8]) -> bool {
-    tag_list_valid(s, feature_read_optional_value)
-}
-
 pub(crate) fn variation_settings_valid(s: &[u8]) -> bool {
     tag_list_valid(s, variation_read_value)
+}
+
+fn feature_settings_items(s: &[u8]) -> Option<Vec<(String, i64)>> {
+    let (items, valid) = southstar_css_syntax::parse(s);
+    if !valid {
+        return None;
+    }
+    let mut out = Vec::new();
+    for part in items.split(|c| c.kind == SyntaxKind::Comma) {
+        let mut tokens = part.iter().filter(|c| c.kind != SyntaxKind::Whitespace);
+        let tag = tokens.next().filter(|c| c.kind == SyntaxKind::String)?;
+        let tag = unescape_string(&s[tag.value.clone()?]);
+        if tag.chars().count() != 4 || !tag.chars().all(|c| (' '..='~').contains(&c)) {
+            return None;
+        }
+        let value = match tokens.next() {
+            None => 1,
+            Some(c)
+                if c.kind == SyntaxKind::Number && c.number >= 0.0 && c.number.fract() == 0.0 =>
+            {
+                c.number as i64
+            }
+            Some(c) if c.kind == SyntaxKind::Ident => {
+                match s[c.start..c.end].to_ascii_lowercase().as_slice() {
+                    b"on" => 1,
+                    b"off" => 0,
+                    _ => return None,
+                }
+            }
+            Some(_) => return None,
+        };
+        if tokens.next().is_some() {
+            return None;
+        }
+        out.push((tag, value));
+    }
+    Some(out)
+}
+
+fn unescape_string(raw: &[u8]) -> String {
+    let text = String::from_utf8_lossy(raw);
+    let mut out = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let mut hex = String::new();
+        while hex.len() < 6 && chars.peek().is_some_and(char::is_ascii_hexdigit) {
+            hex.push(chars.next().unwrap_or('0'));
+        }
+        if hex.is_empty() {
+            if let Some(next) = chars.next().filter(|&n| n != '\n') {
+                out.push(next);
+            }
+            continue;
+        }
+        if chars.peek().is_some_and(char::is_ascii_whitespace) {
+            chars.next();
+        }
+        let code = u32::from_str_radix(&hex, 16).unwrap_or(0xfffd);
+        out.push(char::from_u32(code).unwrap_or('\u{fffd}'));
+    }
+    out
+}
+
+fn quote_tag(tag: &str) -> String {
+    let mut out = String::from("\"");
+    for c in tag.chars() {
+        if c == '"' || c == '\\' {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('"');
+    out
+}
+
+pub(crate) fn feature_settings_canonical(s: &[u8], computed: bool) -> Option<Vec<u8>> {
+    if strip(s).eq_ignore_ascii_case(b"normal") {
+        return Some(b"normal".to_vec());
+    }
+    let mut items = feature_settings_items(s)?;
+    if computed {
+        let mut last: Vec<(String, i64)> = Vec::new();
+        for (tag, value) in items {
+            last.retain(|(t, _)| *t != tag);
+            last.push((tag, value));
+        }
+        last.sort_by(|a, b| a.0.cmp(&b.0));
+        items = last;
+    }
+    let parts: Vec<String> = items
+        .iter()
+        .map(|(tag, value)| match value {
+            1 => quote_tag(tag),
+            v => format!("{} {v}", quote_tag(tag)),
+        })
+        .collect();
+    Some(parts.join(", ").into_bytes())
+}
+
+pub(crate) fn oblique_angle(angle: &[u8]) -> Option<f64> {
+    let math = angle.contains(&b'(');
+    let lower = angle.to_ascii_lowercase();
+    let unit = [&b"deg"[..], b"grad", b"rad", b"turn"]
+        .iter()
+        .any(|u| lower.ends_with(u));
+    if !math && !unit {
+        return None;
+    }
+    let deg = crate::transform::parse_angle_any(angle)?;
+    if !deg.is_finite() || (!math && !(-90.0..=90.0).contains(&deg)) {
+        return None;
+    }
+    Some(deg.clamp(-90.0, 90.0))
 }

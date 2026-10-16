@@ -169,7 +169,7 @@ pub fn build_pseudo_inline_for(
         );
     }
     let fst = ps.get(PropId::FontStyle);
-    if keyword_is(fst, c"italic") || keyword_is(fst, c"oblique") {
+    if fst.is_some_and(ValueRef::font_slanted) {
         attrs.push(InlineAttr::new(inline_kind::ITALIC, 0, tlen));
     }
     b.put_attrs(Some(&attrs));

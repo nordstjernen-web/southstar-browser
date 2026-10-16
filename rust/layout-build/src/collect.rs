@@ -428,7 +428,7 @@ impl<'a> Collector<'a> {
             emit_font_weight(attrs, start, end, weight);
         }
         let fst = ps.get(PropId::FontStyle);
-        if keyword_is(fst, c"italic") || keyword_is(fst, c"oblique") {
+        if fst.is_some_and(ValueRef::font_slanted) {
             emit_attr(attrs, inline_kind::ITALIC, start, end);
         }
     }

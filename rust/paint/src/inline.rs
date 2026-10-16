@@ -164,7 +164,7 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
             len,
         );
     }
-    if keyword_is(fl.get(P::FontStyle), c"italic") || keyword_is(fl.get(P::FontStyle), c"oblique") {
+    if fl.get(P::FontStyle).is_some_and(ValueRef::font_slanted) {
         attrs.insert_range(Some(Attribute::style(pango::STYLE_ITALIC)), start_u, len);
     }
     if let Some(ff) = fl
@@ -992,8 +992,7 @@ fn inline_box_vertical_reach(s: Option<StyleRef<'_>>) -> Option<(f64, f64)> {
             .filter(|v| v.kind() == Kind::Keyword)
             .and_then(ValueRef::keyword_text)
             .unwrap_or(c"sans-serif");
-        let italic = keyword_is(st.get(P::FontStyle), c"italic")
-            || keyword_is(st.get(P::FontStyle), c"oblique");
+        let italic = st.get(P::FontStyle).is_some_and(ValueRef::font_slanted);
         let weight = engine::font_weight_number(st.get(P::FontWeight), 400);
         let mut m = FontMetrics::default();
         font_metrics(Some(family), font_size, weight, italic, &mut m);

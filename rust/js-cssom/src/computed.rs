@@ -68,6 +68,7 @@ pub(crate) const COMPUTED_PROPS: &[&str] = &[
     "font-kerning",
     "font-language-override",
     "font-optical-sizing",
+    "font-palette",
     "font-size",
     "font-style",
     "font-variant-alternates",
