@@ -4,7 +4,10 @@ use crate::{
     Context, JsResult, JsValue, js_string,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
-    vm::opcode::{IndexOperand, Operation, RegisterOperand},
+    vm::{
+        LookedUp,
+        opcode::{IndexOperand, Operation, RegisterOperand},
+    },
 };
 
 fn get_by_name<const LENGTH: bool>(
@@ -60,7 +63,7 @@ fn get_by_name<const LENGTH: bool>(
         return Ok(());
     }
 
-    let looked_up = object_borrowed.shape().clone();
+    let looked_up = LookedUp::new(object_borrowed.shape());
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();
