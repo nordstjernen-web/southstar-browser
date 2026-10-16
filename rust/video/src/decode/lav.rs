@@ -12,6 +12,8 @@ use southstar_av::{codec_parameters, format_context, frame, io_context, packet, 
 use super::{Next, copy_bytes, pixel_buffer};
 use crate::ffi::texture_from_bgra;
 
+const SWS_ROW_ALIGN: usize = 64;
+
 const IO_BUFFER_SIZE: c_int = 32768;
 const SEEK_CUR: c_int = 1;
 const SEEK_END: c_int = 2;
@@ -418,7 +420,7 @@ impl Demuxer {
     }
 
     fn frame_to_texture(&mut self, w: i32, h: i32) -> Option<crate::ffi::Texture> {
-        let stride = w as usize * 4;
+        let stride = (w as usize * 4).next_multiple_of(SWS_ROW_ALIGN);
         let mut bgra = pixel_buffer(stride * h as usize, 0)?;
         let f = self.frame.0;
         let (fw, fh, format, data, linesize) = unsafe {
