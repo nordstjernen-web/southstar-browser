@@ -481,7 +481,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     };
     let single_line_row = style_is_flex_container(style_of(b))
         && starts_row(flex_direction_of(style_of(b)).to_bytes())
-        && !flex_wraps(b.style());
+        && !flex_wraps(style_of(b));
     let mut max_child = 0.0;
     let mut row_sum = 0.0;
     let mut items = 0;
@@ -505,7 +505,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
         return max_child;
     }
     if items > 1 {
-        row_sum += flex_gap_of(b.style(), 0.0) * f64::from(items - 1);
+        row_sum += flex_gap_of(style_of(b), 0.0) * f64::from(items - 1);
     }
     row_sum
 }

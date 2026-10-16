@@ -4,6 +4,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod flex;
+
 use core::ffi::CStr;
 
 use southstar_layout::{BoxRef, Edges};

@@ -516,24 +516,6 @@ pub unsafe extern "C" fn ns_layout_translate_subtree(b: *mut NsBox, dx: f64, dy:
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_item_align(
-    c: *const NsBox,
-    container_align: *const c_char,
-) -> *const c_char {
-    hit::flex_item_align(box_ref(c), container_align)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_align_is_baseline(align: *const c_char) -> GBoolean {
-    boolean(hit::flex_align_is_baseline(c_str(align)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_item_baseline(c: *const NsBox, fallback: f64) -> f64 {
-    box_ref(c).map_or(fallback, |c| hit::flex_item_baseline(c, fallback))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_inline_box_form_hit(
     b: *const NsBox,
     local_x: f64,
@@ -642,17 +624,6 @@ pub unsafe extern "C" fn ns_layout_abs_build_box(
         southstar_layout_tree::append_child(abox, g);
     }
     abox.as_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_box_first_baseline(b: *const NsBox, out: *mut f64) -> GBoolean {
-    match box_ref(b).and_then(hit::box_first_baseline) {
-        Some(v) => {
-            unsafe { *out = v };
-            1
-        }
-        None => 0,
-    }
 }
 
 #[unsafe(no_mangle)]

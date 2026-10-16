@@ -19,9 +19,6 @@ unsafe extern "C" {
     fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_flex_item_align(c: *const NsBox, container_align: *const c_char) -> *const c_char;
-    fn ns_layout_flex_align_is_baseline(align: *const c_char) -> GBoolean;
-    fn ns_layout_flex_box_is_border_box(c: *const NsBox) -> GBoolean;
     fn ns_layout_estimate_natural_width(b: *const NsBox, cap: f64) -> f64;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_layout_box_append_child(parent: *mut NsBox, child: *mut NsBox);
@@ -97,10 +94,6 @@ fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
     s.map_or(ptr::null(), StyleRef::as_ptr)
 }
 
-fn c_str<'a>(p: *const c_char) -> &'a CStr {
-    unsafe { CStr::from_ptr(p) }
-}
-
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
 }
@@ -133,17 +126,10 @@ pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
     unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
 }
 
-pub fn flex_item_align<'a>(c: BoxRef<'a>, container_align: &'a CStr) -> &'a CStr {
-    c_str(unsafe { ns_layout_flex_item_align(c.as_ptr(), container_align.as_ptr()) })
-}
-
-pub fn flex_align_is_baseline(align: &CStr) -> bool {
-    unsafe { ns_layout_flex_align_is_baseline(align.as_ptr()) != 0 }
-}
-
-pub fn flex_box_is_border_box(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_flex_box_is_border_box(b.as_ptr()) != 0 }
-}
+pub use southstar_layout_geom::flex::{
+    align_is_baseline as flex_align_is_baseline, box_is_border_box as flex_box_is_border_box,
+    item_align as flex_item_align,
+};
 
 pub fn estimate_natural_width(b: BoxRef<'_>, cap: f64) -> f64 {
     unsafe { ns_layout_estimate_natural_width(b.as_ptr(), cap) }

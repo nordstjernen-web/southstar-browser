@@ -17,7 +17,6 @@ use crate::{attrs, intrinsic, layout, multicol};
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_box_first_baseline(b: *const NsBox, out: *mut f64) -> GBoolean;
     fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_layout_inline_attr_control_width(r: *const InlineAttr, b: *const NsBox) -> f64;
     fn ns_layout_box_is_abs_placeholder(b: *const NsBox) -> GBoolean;
@@ -125,10 +124,7 @@ pub(crate) fn text_indent(run: BoxRef<'_>, s: *const Style, basis: f64) -> f64 {
     southstar_layout_geom::inline_text_indent_px(run, style(s), basis)
 }
 
-pub(crate) fn first_baseline(b: BoxRef<'_>) -> Option<f64> {
-    let mut out = 0.0;
-    (unsafe { ns_layout_box_first_baseline(b.as_ptr(), &mut out) } != 0).then_some(out)
-}
+pub(crate) use southstar_layout_geom::flex::box_first_baseline as first_baseline;
 
 pub(crate) fn clips_children(b: BoxRef<'_>) -> bool {
     unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }

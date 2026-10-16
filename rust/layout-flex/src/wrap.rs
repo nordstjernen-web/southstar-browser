@@ -60,7 +60,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame) -> f64 {
     items::collect(b, &mut list);
     let n = list.len();
     let style = style_of(b);
-    let gap = flex_gap_of(b.style(), cw);
+    let gap = flex_gap_of(style_of(b), cw);
     let row_gap_basis = if b.read_definite_height() > 0.0 {
         b.definite_height()
     } else {

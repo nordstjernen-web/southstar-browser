@@ -94,7 +94,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_width: f64) -> f64 {
     items::collect(b, &mut list);
     let n = list.len();
 
-    let gap = flex_gap_of(b.style(), cw);
+    let gap = flex_gap_of(style_of(b), cw);
     let mut total_extras = 0.0;
     for it in list.iter_mut() {
         edges_into_box(it.b, cw);

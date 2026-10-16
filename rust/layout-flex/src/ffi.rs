@@ -24,27 +24,10 @@ unsafe extern "C" {
     fn ns_layout_box_is_scroll_container(b: *const NsBox) -> GBoolean;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_gap_px(
-        specific: *const NsCssValue,
-        shorthand: *const NsCssValue,
-        basis: f64,
-    ) -> f64;
-    fn ns_layout_flex_box_is_border_box(c: *const NsBox) -> GBoolean;
-    fn ns_layout_flex_grow_of(c: *const NsBox) -> f64;
-    fn ns_layout_flex_shrink_of(c: *const NsBox) -> f64;
-    fn ns_layout_flex_gap_of(s: *const Style, basis: f64) -> f64;
-    fn ns_layout_flex_wraps(s: *const Style) -> GBoolean;
-    fn ns_layout_flex_item_align(c: *const NsBox, container_align: *const c_char) -> *const c_char;
-    fn ns_layout_flex_align_is_baseline(align: *const c_char) -> GBoolean;
-    fn ns_layout_flex_item_baseline(c: *const NsBox, fallback: f64) -> f64;
 }
 
 fn value_ptr(v: Option<ValueRef<'_>>) -> *const NsCssValue {
     v.map_or(ptr::null(), ValueRef::as_ptr)
-}
-
-fn c_str<'a>(p: *const c_char) -> &'a CStr {
-    unsafe { CStr::from_ptr(p) }
 }
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
@@ -87,41 +70,11 @@ pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
     unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
 }
 
-pub fn gap_px(specific: Option<ValueRef<'_>>, shorthand: Option<ValueRef<'_>>, basis: f64) -> f64 {
-    unsafe { ns_layout_gap_px(value_ptr(specific), value_ptr(shorthand), basis) }
-}
-
-pub fn flex_box_is_border_box(c: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_flex_box_is_border_box(c.as_ptr()) != 0 }
-}
-
-pub fn flex_grow_of(c: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_flex_grow_of(c.as_ptr()) }
-}
-
-pub fn flex_shrink_of(c: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_flex_shrink_of(c.as_ptr()) }
-}
-
-pub fn flex_gap_of(s: *const Style, basis: f64) -> f64 {
-    unsafe { ns_layout_flex_gap_of(s, basis) }
-}
-
-pub fn flex_wraps(s: *const Style) -> bool {
-    unsafe { ns_layout_flex_wraps(s) != 0 }
-}
-
-pub fn flex_item_align<'a>(c: BoxRef<'_>, container_align: &'a CStr) -> &'a CStr {
-    c_str(unsafe { ns_layout_flex_item_align(c.as_ptr(), container_align.as_ptr()) })
-}
-
-pub fn flex_align_is_baseline(align: &CStr) -> bool {
-    unsafe { ns_layout_flex_align_is_baseline(align.as_ptr()) != 0 }
-}
-
-pub fn flex_item_baseline(c: BoxRef<'_>, fallback: f64) -> f64 {
-    unsafe { ns_layout_flex_item_baseline(c.as_ptr(), fallback) }
-}
+pub use southstar_layout_geom::flex::{
+    align_is_baseline as flex_align_is_baseline, box_is_border_box as flex_box_is_border_box,
+    gap_of as flex_gap_of, gap_px, grow_of as flex_grow_of, item_align as flex_item_align,
+    item_baseline as flex_item_baseline, shrink_of as flex_shrink_of, wraps as flex_wraps,
+};
 
 fn entry<'a>(b: *mut NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }

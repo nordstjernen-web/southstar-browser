@@ -24,7 +24,7 @@ use crate::ffi::{
     multicol_single_inline, style_of, style_ref,
 };
 use crate::fieldset::c_max;
-use crate::flex::box_is_border_box;
+use southstar_layout_geom::flex::box_is_border_box;
 
 struct Inherited {
     b: *const NsBox,

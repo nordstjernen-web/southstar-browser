@@ -7,6 +7,5 @@ mod block;
 mod dispatch;
 mod ffi;
 mod fieldset;
-mod flex;
 mod flow;
 mod height;

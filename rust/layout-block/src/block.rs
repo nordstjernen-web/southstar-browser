@@ -19,9 +19,9 @@ use crate::ffi::{
     style_of, text_input_intrinsic_width,
 };
 use crate::fieldset::{layout_rendered_legend, rendered_legend, set_content_block_size};
-use crate::flex::{grow_of, wraps};
 use crate::flow::{FlowStart, block_height_is_auto, layout_flow};
 use crate::height::{HeightInput, finish_height};
+use southstar_layout_geom::flex::{grow_of, wraps};
 
 const GRID_NESTING_MAX: i32 = 64;
 static GRID_NESTING: AtomicI32 = AtomicI32::new(0);

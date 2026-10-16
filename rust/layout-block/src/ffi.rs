@@ -10,7 +10,7 @@ use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::{NsCssValue, StyleRef, ValueRef};
 
-use crate::{align, block, dispatch, fieldset, flex};
+use crate::{align, block, dispatch, fieldset};
 
 unsafe extern "C" {
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
@@ -348,42 +348,4 @@ pub unsafe extern "C" fn ns_box_fieldset_legend_gap(
     out(gap_y0, gap.y0);
     out(gap_y1, gap.y1);
     boolean(true)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_box_is_border_box(c: *const NsBox) -> GBoolean {
-    boolean(box_ref(c).is_some_and(flex::box_is_border_box))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_grow_of(c: *const NsBox) -> f64 {
-    box_ref(c).map_or(0.0, flex::grow_of)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_shrink_of(c: *const NsBox) -> f64 {
-    box_ref(c).map_or(1.0, flex::shrink_of)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_gap_px(
-    specific: *const NsCssValue,
-    shorthand: *const NsCssValue,
-    basis: f64,
-) -> f64 {
-    flex::gap_px(
-        unsafe { ValueRef::from_ptr(specific) },
-        unsafe { ValueRef::from_ptr(shorthand) },
-        basis,
-    )
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_gap_of(s: *const Style, basis: f64) -> f64 {
-    flex::gap_of(style_ref(s), basis)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_flex_wraps(s: *const Style) -> GBoolean {
-    boolean(flex::wraps(style_ref(s)))
 }

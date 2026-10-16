@@ -346,13 +346,13 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_height: f64) -> f64 {
     let limits = main_limits(b, cw, parent_content_height);
     let explicit_h = limits.explicit;
     let row_gap = limits.row_gap;
-    let col_gap = flex_gap_of(b.style(), cw);
+    let col_gap = flex_gap_of(style_of(b), cw);
     let line_limit = if explicit_h > 0.0 {
         explicit_h
     } else {
         limits.max
     };
-    let multi_line = flex_wraps(b.style());
+    let multi_line = flex_wraps(style_of(b));
     let wraps = multi_line && line_limit > 0.0;
     let wrap_reverse = is_keyword(value(b, PropId::FlexWrap), c"wrap-reverse");
     let rtl = is_rtl(b);
