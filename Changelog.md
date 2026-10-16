@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Playing a WebM or other libav-decoded video whose width is not a
+  multiple of 16 no longer corrupts memory. The frames were converted
+  into a buffer exactly four bytes per pixel wide, and FFmpeg's
+  vectorized converters write whole blocks of pixels, so the last row
+  ran past the end of the buffer; Discord's homepage video crashed the
+  browser.
 * Array.prototype.sort and TypedArray sort no longer abort the browser
   when the compare function is inconsistent (returns random or
   contradictory results). JavaScript leaves the order unspecified in
