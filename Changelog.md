@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The CSS Font Loading API works. document.fonts returned a new object
+  on every access and was not an EventTarget, so
+  document.fonts.addEventListener("loadingdone", ...) threw and stopped
+  Vercel's homepage script; FontFace objects were not instances of
+  FontFace, ignored their source, and document.fonts.add() did nothing.
+  The set is now one EventTarget per document with add, delete, has,
+  clear, size, iteration and the onloading handlers; an added FontFace's
+  url() or binary source is installed as an @font-face rule, so the font
+  renders; load() fetches it and settles loaded and status.
 * Scripts and stylesheets written in the page's HTML resolve their src and
   href against <base href>. Only the engine's stylesheets, images and
   preloader used the base; the script loader resolved against the page

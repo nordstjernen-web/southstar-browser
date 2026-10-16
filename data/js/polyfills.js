@@ -7015,6 +7015,309 @@
         } catch (e) {}
     }
 
+    (function () {
+        var NativeFontFace = global.FontFace;
+        var FFS = global.FontFaceSet;
+        var ET = global.EventTarget;
+        var D = global.document;
+        while (D && !Object.prototype.hasOwnProperty.call(D, 'fonts')) D = Object.getPrototypeOf(D);
+        var fontsDesc = D && Object.getOwnPropertyDescriptor(D, 'fonts');
+        if (typeof NativeFontFace !== 'function' || typeof FFS !== 'function' ||
+            typeof ET !== 'function' || !fontsDesc || typeof fontsDesc.get !== 'function')
+            return;
+        var nativeFonts = fontsDesc.get;
+        var faceState = new WeakMap();
+        var setState = new WeakMap();
+        var DESCRIPTORS = [
+            ['style', 'normal', 'font-style'], ['weight', 'normal', 'font-weight'],
+            ['stretch', 'normal', 'font-stretch'], ['unicodeRange', 'U+0-10FFFF', 'unicode-range'],
+            ['variant', 'normal', null], ['featureSettings', 'normal', 'font-feature-settings'],
+            ['variationSettings', 'normal', 'font-variation-settings'],
+            ['display', 'auto', 'font-display'], ['ascentOverride', 'normal', 'ascent-override'],
+            ['descentOverride', 'normal', 'descent-override'],
+            ['lineGapOverride', 'normal', 'line-gap-override']
+        ];
+
+        function faceOf(face, member) {
+            var st = faceState.get(face);
+            if (!st) throw new TypeError("Failed to execute '" + member + "' on 'FontFace': Illegal invocation");
+            return st;
+        }
+
+        function cssString(text) {
+            return '"' + String(text).replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\a ') + '"';
+        }
+
+        function isBinary(v) {
+            return v instanceof ArrayBuffer || (ArrayBuffer.isView && ArrayBuffer.isView(v));
+        }
+
+        function srcText(st) {
+            if (isBinary(st.source)) {
+                if (!st.blobUrl) st.blobUrl = URL.createObjectURL(new Blob([st.source]));
+                return 'url(' + cssString(st.blobUrl) + ')';
+            }
+            return String(st.source);
+        }
+
+        function firstUrl(source) {
+            var m = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)/i.exec(String(source));
+            return m ? (m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3]) : null;
+        }
+
+        function ruleText(st) {
+            var text = '@font-face{font-family:' + cssString(st.family) + ';src:' + srcText(st) + ';';
+            DESCRIPTORS.forEach(function (d) {
+                if (d[2] && st[d[0]] !== d[1]) text += d[2] + ':' + st[d[0]] + ';';
+            });
+            return text + '}';
+        }
+
+        function settle(face, st, ok, error) {
+            if (st.status === 'loaded' || st.status === 'error') return;
+            st.status = ok ? 'loaded' : 'error';
+            if (ok) st.resolve(face);
+            else st.reject(error);
+        }
+
+        function startLoad(face, st) {
+            if (st.status !== 'unloaded') return st.loaded;
+            st.status = 'loading';
+            if (isBinary(st.source)) {
+                var bytes = st.source.byteLength;
+                Promise.resolve().then(function () {
+                    settle(face, st, bytes > 0, new DOMException('The font data is empty.', 'SyntaxError'));
+                });
+                return st.loaded;
+            }
+            var url = firstUrl(st.source);
+            if (url === null) {
+                Promise.resolve().then(function () { settle(face, st, true); });
+                return st.loaded;
+            }
+            var request = typeof global.fetch === 'function' ? global.fetch(url) : Promise.reject(new TypeError('fetch'));
+            request.then(function (resp) {
+                settle(face, st, !resp || resp.ok !== false,
+                       new DOMException('A network error occurred.', 'NetworkError'));
+            }, function () {
+                settle(face, st, false, new DOMException('A network error occurred.', 'NetworkError'));
+            });
+            return st.loaded;
+        }
+
+        function FontFace(family, source, descriptors) {
+            if (!new.target)
+                throw new TypeError("Failed to construct 'FontFace': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+            idlNeedCtor(arguments, 2, 'FontFace');
+            if (descriptors !== undefined && descriptors !== null && typeof descriptors !== 'object')
+                throw new TypeError("Failed to construct 'FontFace': The provided value is not of type 'FontFaceDescriptors'.");
+            var st = { family: String(family), source: isBinary(source) ? source : String(source),
+                       status: 'unloaded', sets: [] };
+            st.loaded = new Promise(function (resolve, reject) { st.resolve = resolve; st.reject = reject; });
+            st.loaded.catch(function () {});
+            DESCRIPTORS.forEach(function (d) {
+                var given = descriptors && descriptors[d[0]];
+                st[d[0]] = given === undefined ? d[1] : String(given);
+            });
+            faceState.set(this, st);
+            if (isBinary(source)) startLoad(this, st);
+        }
+        FontFace.prototype = NativeFontFace.prototype;
+        Object.defineProperty(FontFace.prototype, 'constructor', {
+            value: FontFace, writable: true, configurable: true, enumerable: false
+        });
+        ['family'].concat(DESCRIPTORS.map(function (d) { return d[0]; })).forEach(function (key) {
+            Object.defineProperty(FontFace.prototype, key, {
+                get: function () { return faceOf(this, key)[key]; },
+                set: function (v) { faceOf(this, key)[key] = String(v); },
+                enumerable: true, configurable: true
+            });
+        });
+        Object.defineProperty(FontFace.prototype, 'status', {
+            get: function () { return faceOf(this, 'status').status; },
+            enumerable: true, configurable: true
+        });
+        Object.defineProperty(FontFace.prototype, 'loaded', {
+            get: function () { return faceOf(this, 'loaded').loaded; },
+            enumerable: true, configurable: true
+        });
+        Object.defineProperty(FontFace.prototype, 'load', {
+            value: function load() { return startLoad(this, faceOf(this, 'load')); },
+            writable: true, enumerable: true, configurable: true
+        });
+        replaceCtor('FontFace', FontFace);
+
+        if (Object.getPrototypeOf(FFS.prototype) !== ET.prototype) {
+            try { Object.setPrototypeOf(FFS.prototype, ET.prototype); } catch (e) {}
+        }
+
+        function setOf(set, member) {
+            var st = setState.get(set);
+            if (!st) throw new TypeError("Failed to execute '" + member + "' on 'FontFaceSet': Illegal invocation");
+            return st;
+        }
+
+        function install(st, face) {
+            var fst = faceState.get(face);
+            var doc = st.doc;
+            var host = doc.head || doc.documentElement;
+            if (!fst || !host || st.styles.has(face)) return;
+            var el = doc.createElement('style');
+            el.setAttribute('data-nd-font-face', '');
+            el.textContent = ruleText(fst);
+            host.appendChild(el);
+            st.styles.set(face, el);
+        }
+
+        function uninstall(st, face) {
+            var el = st.styles.get(face);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+            st.styles.delete(face);
+        }
+
+        function fire(set, type, faces) {
+            var ev;
+            try {
+                ev = typeof global.FontFaceSetLoadEvent === 'function'
+                    ? new global.FontFaceSetLoadEvent(type, { fontfaces: faces })
+                    : new Event(type);
+            } catch (e) { ev = new Event(type); }
+            set.dispatchEvent(ev);
+        }
+
+        function matching(st, font) {
+            var text = String(font).toLowerCase();
+            return st.faces.filter(function (face) {
+                return text.indexOf(faceState.get(face).family.toLowerCase()) >= 0;
+            });
+        }
+
+        var docSets = new WeakMap();
+
+        function fontsOf(doc) {
+            var st = docSets.get(doc);
+            if (st) return st.set;
+            var set = new ET();
+            Object.setPrototypeOf(set, FFS.prototype);
+            st = { doc: doc, set: set, faces: [], styles: new Map(), ready: null, readyDone: false,
+                   handlers: {} };
+            setState.set(set, st);
+            docSets.set(doc, st);
+            ['loading', 'loadingdone', 'loadingerror'].forEach(function (type) {
+                set.addEventListener(type, function (ev) {
+                    var h = st.handlers[type];
+                    if (typeof h === 'function') h.call(set, ev);
+                });
+            });
+            return set;
+        }
+
+        Object.defineProperty(D, 'fonts', {
+            get: function fonts() { return fontsOf(this); },
+            enumerable: fontsDesc.enumerable, configurable: true
+        });
+
+        var proto = FFS.prototype;
+        function method(name, fn) {
+            Object.defineProperty(proto, name, { value: fn, writable: true, enumerable: true, configurable: true });
+        }
+        function getter(name, fn) {
+            Object.defineProperty(proto, name, { get: fn, enumerable: true, configurable: true });
+        }
+        ['loading', 'loadingdone', 'loadingerror'].forEach(function (type) {
+            Object.defineProperty(proto, 'on' + type, {
+                get: function () { return setOf(this, 'on' + type).handlers[type] || null; },
+                set: function (v) { setOf(this, 'on' + type).handlers[type] = typeof v === 'function' ? v : null; },
+                enumerable: true, configurable: true
+            });
+        });
+        getter('size', function () { return setOf(this, 'size').faces.length; });
+        getter('status', function () {
+            var st = setOf(this, 'status');
+            if (st.faces.some(function (f) { return faceState.get(f).status === 'loading'; })) return 'loading';
+            return nativeFonts.call(st.doc).status;
+        });
+        getter('ready', function () {
+            var st = setOf(this, 'ready');
+            if (st.ready && (!st.readyDone || this.status !== 'loading')) return st.ready;
+            var set = this;
+            var native = nativeFonts.call(st.doc);
+            st.readyDone = false;
+            st.ready = native.ready.then(function () {
+                return Promise.all(st.faces.map(function (f) {
+                    var fst = faceState.get(f);
+                    return fst.status === 'loading' ? fst.loaded.catch(function () {}) : null;
+                }));
+            }).then(function () {
+                st.readyDone = true;
+                fire(set, 'loadingdone', st.faces.slice());
+                return set;
+            });
+            return st.ready;
+        });
+        method('add', function add(face) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'add');
+            var st = setOf(this, 'add');
+            if (!faceState.has(face))
+                throw new TypeError("Failed to execute 'add' on 'FontFaceSet': parameter 1 is not of type 'FontFace'.");
+            if (st.faces.indexOf(face) < 0) {
+                st.faces.push(face);
+                install(st, face);
+            }
+            return this;
+        });
+        method('delete', function (face) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'delete');
+            var st = setOf(this, 'delete');
+            var i = st.faces.indexOf(face);
+            if (i < 0) return false;
+            st.faces.splice(i, 1);
+            uninstall(st, face);
+            return true;
+        });
+        method('clear', function clear() {
+            var st = setOf(this, 'clear');
+            st.faces.slice().forEach(function (face) { uninstall(st, face); });
+            st.faces.length = 0;
+        });
+        method('has', function has(face) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'has');
+            return setOf(this, 'has').faces.indexOf(face) >= 0;
+        });
+        method('forEach', function forEach(callback, thisArg) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'forEach');
+            if (typeof callback !== 'function')
+                throw new TypeError("Failed to execute 'forEach' on 'FontFaceSet': The callback provided as parameter 1 is not a function.");
+            var set = this;
+            setOf(this, 'forEach').faces.slice().forEach(function (face) {
+                callback.call(thisArg, face, face, set);
+            });
+        });
+        method('values', function values() { return setOf(this, 'values').faces.slice().values(); });
+        method('keys', function keys() { return setOf(this, 'keys').faces.slice().values(); });
+        method('entries', function entries() {
+            return setOf(this, 'entries').faces.map(function (f) { return [f, f]; }).values();
+        });
+        Object.defineProperty(proto, Symbol.iterator, {
+            value: proto.values, writable: true, enumerable: false, configurable: true
+        });
+        method('check', function check(font) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'check');
+            return matching(setOf(this, 'check'), font).every(function (f) {
+                return faceState.get(f).status === 'loaded';
+            });
+        });
+        method('load', function load(font, text) {
+            idlNeed(arguments, 1, 'FontFaceSet', 'load');
+            var st = setOf(this, 'load');
+            var faces = matching(st, font);
+            if (!faces.length) {
+                return nativeFonts.call(st.doc).load(font, text).then(function () { return []; });
+            }
+            return Promise.all(faces.map(function (f) { return startLoad(f, faceState.get(f)); }));
+        });
+    })();
+
     if (typeof global.ReportingObserver !== 'function') {
         try {
             var ReportingObserver = function (callback, options) {
