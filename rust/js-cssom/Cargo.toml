@@ -18,6 +18,7 @@ southstar-layout = { path = "../layout" }
 southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-style = { path = "../style" }
+southstar-selector-text = { path = "../selector-text" }
 
 [lints]
 workspace = true

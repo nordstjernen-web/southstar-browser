@@ -7638,6 +7638,8 @@
 
         function canonAnB(raw) {
             var s = String(raw);
+            if (typeof global.__ns_anb_canonical === 'function')
+                return global.__ns_anb_canonical(s);
             if (/^\s*even\s*$/i.test(s)) return '2n';
             if (/^\s*odd\s*$/i.test(s)) return '2n+1';
             var mi = /^\s*([+-]?\d+)\s*$/.exec(s);
@@ -7693,8 +7695,12 @@
         }
         function canonSelector(sel, namespaces) {
             if (!sel) return sel;
+            if (typeof global.__ns_selector_canonical === 'function') {
+                var native = global.__ns_selector_canonical(sel);
+                if (native !== null) sel = native;
+            }
             sel = selectorSpaces(sel.replace(/^\s+|\s+$/g, ''))
-                     .replace(/(^|[\s>+~,])(\*|[-_a-zA-Z][-_a-zA-Z0-9]*)\|/g,
+                     .replace(/(^|[\s>+~,(])(\*|[-_a-zA-Z][-_a-zA-Z0-9]*)\|/g,
                               function (m, lead, prefix) {
                          if (prefix === '*')
                              return namespaces && namespaces.defaultURI

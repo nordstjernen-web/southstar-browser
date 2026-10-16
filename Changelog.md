@@ -90,6 +90,16 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* Selectors serialize the way CSSOM specifies: combinators get spaces,
+  attribute values are double-quoted strings with a lower-case flag,
+  selector lists inside :is(), :where(), :not(), :has(), :host() and
+  ::slotted() are serialized recursively (keeping the text of items a
+  forgiving list drops), and An+B is parsed strictly by the CSS Syntax
+  rules. The new rust/selector-text crate does this for selectorText.
+* Shrinking an array's length twice from the same line of script left
+  its old elements readable, because the engine cached the store to
+  length; a style sheet whose text changed kept answering cssRules[0]
+  with a rule it no longer had.
 * overscroll-behavior (with its -x, -y, -inline and -block longhands),
   interactivity and background-blend-mode are known properties, and
   the logical scroll-margin-block/-inline and scroll-padding-block/-inline

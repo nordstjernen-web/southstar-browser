@@ -79,7 +79,15 @@ pub(crate) fn install_window(scope: &mut Scope<'_>, global: &Value) -> Result<()
         "__ns_container_query_canonical",
         container_query_canonical,
         1,
-    )
+    )?;
+    hidden(
+        scope,
+        global,
+        "__ns_selector_canonical",
+        selector_canonical,
+        1,
+    )?;
+    hidden(scope, global, "__ns_anb_canonical", anb_canonical, 1)
 }
 
 pub(crate) fn install_css(scope: &mut Scope<'_>, global: &Value) -> Result<(), Value> {
@@ -272,6 +280,32 @@ fn container_query_canonical(
         .first()
         .and_then(|t| optional_string(scope, t))
         .and_then(|t| ffi::container_condition_canonical(&t));
+    Ok(match canonical {
+        Some(c) => scope.string(&c),
+        None => Value::null(),
+    })
+}
+
+fn selector_canonical(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let canonical = args
+        .first()
+        .and_then(|t| optional_string(scope, t))
+        .and_then(|t| southstar_selector_text::serialize_selector_list(&t));
+    Ok(match canonical {
+        Some(c) => scope.string(&c),
+        None => Value::null(),
+    })
+}
+
+fn anb_canonical(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value, Value> {
+    let canonical = args
+        .first()
+        .and_then(|t| optional_string(scope, t))
+        .and_then(|t| southstar_selector_text::canonical_anb(&t));
     Ok(match canonical {
         Some(c) => scope.string(&c),
         None => Value::null(),

@@ -447,35 +447,9 @@ pub(crate) fn anb_int_strict(text: &[u8]) -> Option<i32> {
 }
 
 fn parse_anb(arg: &[u8]) -> Option<(i32, i32)> {
-    let s: Vec<u8> = arg.iter().copied().filter(|&c| !is_ws(c)).collect();
-    if eq_ci(&s, b"odd") {
-        return Some((2, 1));
-    }
-    if eq_ci(&s, b"even") {
-        return Some((2, 0));
-    }
-    let n_pos = s
-        .iter()
-        .position(|&c| c == b'n')
-        .or_else(|| s.iter().position(|&c| c == b'N'));
-    let Some(n_pos) = n_pos else {
-        return Some((0, anb_int_strict(&s)?));
-    };
-    let a_str = &s[..n_pos];
-    let a = match a_str {
-        b"" | b"+" => Some(1),
-        b"-" => Some(-1),
-        _ => anb_int_strict(a_str),
-    };
-    let b_str = &s[n_pos + 1..];
-    let b = if b_str.is_empty() {
-        Some(0)
-    } else if b_str[0] != b'+' && b_str[0] != b'-' {
-        None
-    } else {
-        a.and_then(|_| anb_int_strict(b_str))
-    };
-    Some((a?, b?))
+    let (a, b) = southstar_selector_text::parse_anb(core::str::from_utf8(arg).ok()?)?;
+    let clamp = |v: i64| v.clamp(-1_000_000, 1_000_000) as i32;
+    Some((clamp(a), clamp(b)))
 }
 
 fn pseudo_keyword(name: &[u8], arg: Option<&[u8]>, depth: i32) -> Option<PseudoPred> {

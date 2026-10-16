@@ -1803,6 +1803,7 @@ dependencies = [
  "southstar-glib",
  "southstar-mat4",
  "southstar-numfmt",
+ "southstar-selector-text",
  "southstar-url",
 ]
 
@@ -2237,6 +2238,7 @@ dependencies = [
  "southstar-layout",
  "southstar-mat4",
  "southstar-numfmt",
+ "southstar-selector-text",
  "southstar-style",
 ]
 
@@ -3022,6 +3024,13 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
+]
+
+[[package]]
+name = "southstar-selector-text"
+version = "0.9.11-dev"
+dependencies = [
+ "southstar-css-syntax",
 ]
 
 [[package]]

@@ -16,6 +16,7 @@ southstar-glib = { path = "../glib" }
 southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-url = { path = "../url" }
+southstar-selector-text = { path = "../selector-text" }
 
 [lints]
 workspace = true
