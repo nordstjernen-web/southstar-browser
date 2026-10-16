@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The JavaScript bindings reach the page's runtime record through
+  rust/js-runtime's Rust API instead of its C ABI: frames, the loader,
+  window, lifecycle, dispatch, focus, the page, networking, services,
+  documents, workers, the top layer, images, forms, storage, geometry,
+  input, URLs, custom elements, mutation, the browser crate and a dozen
+  smaller crates call typed functions (Node, &CStr, bool, Option, tuples,
+  closures for realm and frame entry) where they redeclared about 380
+  extern "C" functions taking a raw page pointer, C strings and
+  out-pointers. Navigation timing lives in js-runtime with named fields
+  rather than in three copies. js-runtime's C exports drop from 208 to
+  19, and its unsafe count from 792 to 366.
 * rust/css no longer exports any C symbol. The animation crate reads
   computed values, declaration blocks, animation lists and keyframes
   through owned Rust types (OwnedValue with a Cell reference count,
