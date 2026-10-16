@@ -140,7 +140,7 @@ This repo is driven by Codex in long uninterrupted sessions.
 - **Local machine is the build *and* run oracle.** The repo can be
   driven from either a Linux box (GTK 4 / meson / Rust +
   an X session at `DISPLAY=:0`) or a Windows 11 box via MSYS2
-  MINGW64 (same toolchain, same meson/ninja invocation; the binary
+  UCRT64 (same toolchain, same meson/ninja invocation; the binary
   is `./builddir/src/gtk/southstar.exe`). Every commit must pass
   `meson compile -C builddir` locally before pushing. Smoke-launch
   the browser (in the background, then kill it) on material changes
@@ -374,7 +374,7 @@ if uchardet can't classify the bytes at all.
 
 Required dependency (Debian/Ubuntu `libwebp-dev`, Fedora/RHEL
 `libwebp-devel`, openSUSE `libwebp-devel`, Alpine `libwebp-dev`,
-MSYS2 `mingw-w64-x86_64-libwebp`, Homebrew `webp`). WebP —
+MSYS2 `mingw-w64-ucrt-x86_64-libwebp`, Homebrew `webp`). WebP —
 lossy VP8 (the dominant variant served by the BBC, Wikipedia
 thumbnails, and most modern CDNs), lossless VP8L, and **animated
 WebP** (via libwebpdemux's `WebPAnimDecoder`, playing like animated
@@ -410,7 +410,7 @@ AVIF decoding; it drags in a full AV1 decoder for a format that is rare
 on the web, so `-Davif=disabled` drops it.
 
 The FFmpeg libav\* dev packages in the command above (MSYS2
-`mingw-w64-x86_64-ffmpeg`, or the LGPL build from
+`mingw-w64-ucrt-x86_64-ffmpeg`, or the LGPL build from
 `scripts/build-ffmpeg-lgpl.sh`) enable inline WebM playback (VP9/VP8 video
 + Opus/Vorbis audio). **Required on Linux and Windows** (`meson setup` fails
 without them, or with a pre-6.0 FFmpeg); auto-detected on macOS, where without

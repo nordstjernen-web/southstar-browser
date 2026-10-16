@@ -42,7 +42,7 @@ TEMPLATE=$ROOT/data/msix/AppxManifest.xml.in
 SVG=$ROOT/data/icons/hicolor/scalable/apps/southstar.svg
 
 if ! command -v rsvg-convert >/dev/null 2>&1; then
-    echo "pack-msix: rsvg-convert not found (pacman -S mingw-w64-x86_64-librsvg)" >&2
+    echo "pack-msix: rsvg-convert not found (pacman -S mingw-w64-ucrt-x86_64-librsvg)" >&2
     exit 1
 fi
 
