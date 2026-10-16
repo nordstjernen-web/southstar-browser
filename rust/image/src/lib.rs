@@ -4,7 +4,7 @@
 
 mod ffi;
 
-pub use ffi::ImageRef;
+pub use ffi::{ImageCache, ImageRef};
 
 use core::ffi::c_long;
 

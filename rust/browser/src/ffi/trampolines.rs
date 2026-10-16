@@ -18,7 +18,9 @@ use super::glib::{
     g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
 };
 use super::js::ns_js_video_event;
-use super::{Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove};
+use super::{
+    Images, Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove,
+};
 use crate::{build, callbacks, images, page, scroll, settle};
 
 type TextCb = unsafe extern "C" fn(text: *const c_char, ud: *mut c_void);
@@ -344,7 +346,7 @@ pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, 
         ns_engine_fetch_images_start(
             b.layout.get(),
             base.as_deref().map_or(ptr::null(), CStr::as_ptr),
-            b.images.get(),
+            b.images().map_or(ptr::null_mut(), Images::raw),
             b.img_requested.get(),
             b.cur_scroll_y.get(),
             viewport_h,

@@ -672,7 +672,7 @@ pub fn run_one(
     if let Some(js) = js {
         js.bind_form_submit(&nav);
     }
-    let image_cache = ImageCache::new();
+    let image_cache = Some(ImageCache::create());
     let video_cache = VideoCache::new();
     let flush_base = page_url.clone();
     let ctx = Ctx {
@@ -750,7 +750,8 @@ pub fn run_one(
         }
         doc.free();
         if let Some(cache) = image_cache {
-            cache.free();
+            // SAFETY: script, the layout and the document that held copies were released above and the next page creates its own cache.
+            unsafe { cache.free() };
         }
         if let Some(cache) = video_cache {
             cache.free();
@@ -889,7 +890,8 @@ pub fn run_one(
     }
     doc.free();
     if let Some(cache) = image_cache {
-        cache.free();
+        // SAFETY: the run is over and script, the layout and the document that held copies were released above.
+        unsafe { cache.free() };
     }
     if let Some(cache) = video_cache {
         cache.free();

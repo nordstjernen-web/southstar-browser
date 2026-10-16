@@ -13,6 +13,7 @@ use super::glib::{GString, StrBufOwned};
 use super::{Js, NsBrowser};
 
 pub use southstar_anim::AnimHandle as Anim;
+pub use southstar_image::ImageCache as Images;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -109,11 +110,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_js(js: *mut c_void);
     fn ns_paint_set_anim(anim: *mut c_void);
-    fn ns_image_cache_new() -> *mut c_void;
-    fn ns_image_cache_free(c: *mut c_void);
-    fn ns_image_cache_tick(c: *mut c_void, now_us: i64) -> GBoolean;
-    fn ns_image_cache_has_pending(c: *const c_void) -> GBoolean;
-    fn ns_image_cache_animating(c: *const c_void) -> GBoolean;
     fn ns_video_cache_new() -> *mut c_void;
     fn ns_video_cache_free(c: *mut c_void);
     fn ns_video_cache_set_base(c: *mut c_void, base_url: *const c_char);
@@ -210,7 +206,7 @@ impl NsBrowser {
                 opt(base.as_deref()),
                 self.vw.get(),
                 self.vh.get(),
-                self.images.get(),
+                self.images.get().map_or(ptr::null_mut(), Images::raw),
                 self.anim.get().map_or(ptr::null_mut(), Anim::raw),
                 self.js.get(),
                 self.css_cache.get(),
@@ -261,39 +257,6 @@ impl NsBrowser {
 
     pub fn set_open_select_for_layout(&self) {
         unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Images(NonNull<c_void>);
-
-impl Images {
-    pub fn from_raw(p: *mut c_void) -> Option<Images> {
-        NonNull::new(p).map(Images)
-    }
-
-    pub fn create() -> *mut c_void {
-        unsafe { ns_image_cache_new() }
-    }
-
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_image_cache_free(self.raw()) };
-    }
-
-    pub fn tick(self, now_us: i64) -> bool {
-        unsafe { ns_image_cache_tick(self.raw(), now_us) != 0 }
-    }
-
-    pub fn has_pending(self) -> bool {
-        unsafe { ns_image_cache_has_pending(self.raw()) != 0 }
-    }
-
-    pub fn animating(self) -> bool {
-        unsafe { ns_image_cache_animating(self.raw()) != 0 }
     }
 }
 

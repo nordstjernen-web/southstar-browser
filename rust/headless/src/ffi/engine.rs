@@ -231,9 +231,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_paint_set_js(js: *mut c_void);
-    fn ns_image_cache_new() -> *mut c_void;
-    fn ns_image_cache_free(cache: *mut c_void);
-    fn ns_image_cache_tick(cache: *mut c_void, now_us: i64) -> GBoolean;
     fn ns_image_decode_bytes(
         data: *const u8,
         len: usize,
@@ -567,26 +564,7 @@ pub fn paint_set_js(js: *mut c_void) {
     unsafe { ns_paint_set_js(js) };
 }
 
-#[derive(Clone, Copy)]
-pub struct ImageCache(NonNull<c_void>);
-
-impl ImageCache {
-    pub fn new() -> Option<ImageCache> {
-        NonNull::new(unsafe { ns_image_cache_new() }).map(ImageCache)
-    }
-
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_image_cache_free(self.raw()) };
-    }
-
-    pub fn tick(self, now_us: i64) {
-        unsafe { ns_image_cache_tick(self.raw(), now_us) };
-    }
-}
+pub use southstar_image::ImageCache;
 
 pub fn image_cache_raw(cache: Option<ImageCache>) -> *mut c_void {
     cache.map_or(ptr::null_mut(), ImageCache::raw)

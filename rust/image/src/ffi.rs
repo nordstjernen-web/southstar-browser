@@ -516,34 +516,89 @@ fn insert(cache: &Cache, url: *const c_char, img: *mut NsImage) {
     unsafe { glib::g_hash_table_insert(cache.by_url, glib::g_strdup(url).cast(), img.cast()) };
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_image_cache_new() -> *mut Cache {
-    let by_url = unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            Some(image_free),
-        )
-    };
-    Box::into_raw(Box::new(Cache {
-        by_url,
-        pending: Vec::new(),
-        generation: 0,
-        total_bytes: 0,
-    }))
-}
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ImageCache(ptr::NonNull<Cache>);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_free(cache: *mut Cache) {
-    if cache.is_null() {
-        return;
+impl ImageCache {
+    pub fn create() -> ImageCache {
+        // SAFETY: the hash and equality functions match the g_strdup'd keys and the destroy notifiers own the keys and the boxed images.
+        let by_url = unsafe {
+            glib::g_hash_table_new_full(
+                Some(glib::g_str_hash),
+                Some(glib::g_str_equal),
+                Some(glib::g_free),
+                Some(image_free),
+            )
+        };
+        ImageCache(ptr::NonNull::from(Box::leak(Box::new(Cache {
+            by_url,
+            pending: Vec::new(),
+            generation: 0,
+            total_bytes: 0,
+        }))))
     }
-    let cache = unsafe { Box::from_raw(cache) };
-    for &p in &cache.pending {
-        unsafe { (*p).dead = true };
+
+    pub fn raw(self) -> *mut c_void {
+        self.0.as_ptr().cast()
     }
-    unsafe { g_hash_table_destroy(cache.by_url) };
+
+    /// # Safety
+    ///
+    /// No copy of this handle, and no pointer `raw()` returned, may be used afterwards.
+    pub unsafe fn free(self) {
+        // SAFETY: the cache was leaked from a Box by create(), and the caller guarantees nothing uses it again.
+        let cache = unsafe { Box::from_raw(self.0.as_ptr()) };
+        for &p in &cache.pending {
+            // SAFETY: a pending request stays allocated until its callback fires, which marking it dead turns into a no-op.
+            unsafe { (*p).dead = true };
+        }
+        // SAFETY: the table belongs to this cache alone and is destroyed once, here.
+        unsafe { g_hash_table_destroy(cache.by_url) };
+    }
+
+    fn cache<'a>(self) -> &'a Cache {
+        // SAFETY: the cache stays allocated until free(), whose contract rules out later use, and the page only reads its fields here; images are changed through the raw pointers the table holds.
+        unsafe { self.0.as_ref() }
+    }
+
+    pub fn tick(self, now_us: i64) -> bool {
+        let mut any = false;
+        for_each_image(self.cache().by_url, |img| {
+            // SAFETY: the table owns each image until it is removed, which nothing does during the walk.
+            let img = unsafe { &mut *img };
+            // SAFETY: a non-null frame array holds anim_frames' AnimFrame values for as long as the image keeps it.
+            let anim: &mut [AnimFrame] = unsafe { frames(img.anim_frames) };
+            if anim.len() < 2 || img.anim_total_ms <= 0 {
+                return;
+            }
+            let delays: Vec<i32> = anim.iter().map(|f| f.delay_ms).collect();
+            let index =
+                crate::animation_frame(&delays, img.anim_total_ms, img.anim_start_us, now_us);
+            if index as c_int != img.anim_current {
+                img.anim_current = index as c_int;
+                img.texture = anim[index].texture;
+                any = true;
+            }
+        });
+        any
+    }
+
+    pub fn animating(self) -> bool {
+        let mut any = false;
+        for_each_image(self.cache().by_url, |img| {
+            // SAFETY: the table owns each image until it is removed, which nothing does during the walk.
+            let img = unsafe { &*img };
+            // SAFETY: anim_frames is null or the image's live frame array.
+            let frames = unsafe { img.anim_frames.as_ref() };
+            any |= img.loaded != 0 && frames.is_some_and(|a| a.len > 1);
+        });
+        any
+    }
+
+    pub fn has_pending(self) -> bool {
+        !self.cache().pending.is_empty()
+    }
 }
 
 unsafe fn fire_pending(pending: *mut Pending) {
@@ -1193,47 +1248,6 @@ pub unsafe extern "C" fn ns_image_cache_peek(
         img.generation = cache.generation;
     }
     img
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_tick(cache: *mut Cache, now_us: i64) -> GBoolean {
-    let Some(cache) = (unsafe { cache.as_ref() }) else {
-        return FALSE;
-    };
-    let mut any = false;
-    for_each_image(cache.by_url, |img| {
-        let img = unsafe { &mut *img };
-        let anim: &mut [AnimFrame] = unsafe { frames(img.anim_frames) };
-        if anim.len() < 2 || img.anim_total_ms <= 0 {
-            return;
-        }
-        let delays: Vec<i32> = anim.iter().map(|f| f.delay_ms).collect();
-        let index = crate::animation_frame(&delays, img.anim_total_ms, img.anim_start_us, now_us);
-        if index as c_int != img.anim_current {
-            img.anim_current = index as c_int;
-            img.texture = anim[index].texture;
-            any = true;
-        }
-    });
-    glib::boolean(any)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_animating(cache: *const Cache) -> GBoolean {
-    let Some(cache) = (unsafe { cache.as_ref() }) else {
-        return FALSE;
-    };
-    let mut any = false;
-    for_each_image(cache.by_url, |img| {
-        let img = unsafe { &*img };
-        any |= img.loaded != 0 && unsafe { img.anim_frames.as_ref() }.is_some_and(|a| a.len > 1);
-    });
-    glib::boolean(any)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_has_pending(cache: *const Cache) -> GBoolean {
-    glib::boolean(unsafe { cache.as_ref() }.is_some_and(|c| !c.pending.is_empty()))
 }
 
 #[unsafe(no_mangle)]

@@ -132,7 +132,7 @@ pub struct NsBrowser {
     styles: Cell<*mut GHashTable>,
     js: Cell<*mut c_void>,
     anim: Cell<Option<Anim>>,
-    images: Cell<*mut c_void>,
+    images: Cell<Option<Images>>,
     videos: Cell<*mut c_void>,
     css_cache: Cell<*mut GHashTable>,
     pub base_url: Text,
@@ -289,7 +289,7 @@ impl NsBrowser {
     }
 
     pub fn images(&self) -> Option<Images> {
-        Images::from_raw(self.images.get())
+        self.images.get()
     }
 
     pub fn videos(&self) -> Option<Videos> {
@@ -411,8 +411,9 @@ impl NsBrowser {
         if let Some(videos) = self.videos() {
             videos.free();
         }
-        if let Some(images) = self.images() {
-            images.free();
+        if let Some(images) = self.images.take() {
+            // SAFETY: the handle is out of the page's slot, and script, layout and every image session that held a copy were released above.
+            unsafe { images.free() };
         }
         for text in [
             &self.base_url,
@@ -547,7 +548,7 @@ pub fn attach_js(b: &NsBrowser, navigation_timing: Option<NavigationTiming>) -> 
 
 pub fn attach_caches(b: &NsBrowser) {
     b.css_cache.set(new_css_cache());
-    b.images.set(Images::create());
+    b.images.set(Some(Images::create()));
     b.videos.set(Videos::create());
 }
 
