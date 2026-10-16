@@ -991,7 +991,6 @@ impl Parser<'_> {
                 slant = font_face_slant(val);
             }
         }
-        self.sheet.ensure_font_faces();
         if let (Some(family), Some(src_url)) = (family, src_url)
             && !family.is_empty()
             && !src_url.is_empty()
@@ -1105,7 +1104,6 @@ impl Parser<'_> {
                 self.sheet.push_property_rule(
                     name,
                     initial.as_deref(),
-                    syntax_text.as_deref(),
                     syntax,
                     inherits,
                     has_initial,

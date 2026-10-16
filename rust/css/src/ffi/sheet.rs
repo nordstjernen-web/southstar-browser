@@ -4,7 +4,7 @@
 
 use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::{ManuallyDrop, offset_of, size_of};
+use core::mem::{ManuallyDrop, size_of};
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
@@ -15,7 +15,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::container::container_query_free;
 use super::declarations::{RawPending, RawRule, RuleSink};
-use super::keyframes::Keyframes;
+use super::keyframes::{KeyframeStop, Keyframes};
 use super::rule_index::index_free;
 use super::selector::{group_to_c, selector_to_c};
 use super::shorthand::RawDecl;
@@ -24,124 +24,160 @@ use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
-use crate::transform::Transform;
 
-#[repr(C)]
 pub(super) struct RawSheet {
     pub(super) rules: *mut GPtrArray,
-    imports: *mut GArray,
+    imports: Vec<Import>,
     pub(super) layer_names: *mut GPtrArray,
     layers: *mut GHashTable,
-    font_faces: *mut GArray,
-    keyframes: *mut GArray,
-    property_rules: *mut GArray,
-    page_rule: *mut PageRule,
-    has_container_rules: GBoolean,
-    has_container_units: GBoolean,
-    has_hover_rules: GBoolean,
-    has_active_rules: GBoolean,
-    cached: Cell<GBoolean>,
+    font_faces: Vec<FontFaceData>,
+    keyframes: Vec<Keyframes>,
+    property_rules: Vec<PropertyRule>,
+    page_rule: Option<PageRule>,
+    has_container_rules: bool,
+    has_container_units: bool,
+    has_hover_rules: bool,
+    has_active_rules: bool,
+    cached: Cell<bool>,
     pub(super) pseudo_mask: Cell<c_uint>,
     serial: u64,
-    resolved_base: *mut c_char,
+    resolved_base: Option<Vec<u8>>,
     pub(super) index: Cell<*mut c_void>,
 }
 
 impl RawSheet {
+    fn new(serial: u64, has_container_units: bool) -> RawSheet {
+        RawSheet {
+            // SAFETY: rule_free_notify frees the RawRule pointers this array is given.
+            rules: unsafe { glib::g_ptr_array_new_with_free_func(Some(rule_free_notify)) },
+            imports: Vec::new(),
+            layer_names: ptr::null_mut(),
+            layers: ptr::null_mut(),
+            font_faces: Vec::new(),
+            keyframes: Vec::new(),
+            property_rules: Vec::new(),
+            page_rule: None,
+            has_container_rules: false,
+            has_container_units,
+            has_hover_rules: false,
+            has_active_rules: false,
+            cached: Cell::new(false),
+            pseudo_mask: Cell::new(0),
+            serial,
+            resolved_base: None,
+            index: Cell::new(ptr::null_mut()),
+        }
+    }
+
     pub(super) fn serial(&self) -> u64 {
         self.serial
     }
 
-    pub(super) fn property_rules(&self) -> &[RawPropertyRule] {
-        unsafe { elements(self.property_rules) }
+    pub(super) fn property_rules(&self) -> &[PropertyRule] {
+        &self.property_rules
+    }
+
+    fn layer_register(&mut self, name: &[u8]) {
+        if name.is_empty() {
+            return;
+        }
+        unsafe {
+            if self.layer_names.is_null() {
+                self.layer_names = glib::g_ptr_array_new_with_free_func(Some(glib::g_free));
+            }
+            if self.layers.is_null() {
+                self.layers =
+                    glib::g_hash_table_new(Some(glib::g_str_hash), Some(glib::g_str_equal));
+            }
+            let key = c_string(name);
+            if !glib::g_hash_table_lookup(self.layers, key.as_ptr().cast()).is_null() {
+                return;
+            }
+            let rank = (*self.layer_names).len as usize;
+            let owned = glib::strdup(name);
+            glib::g_ptr_array_add(self.layer_names, owned.cast());
+            glib::g_hash_table_insert(self.layers, owned.cast(), (rank + 1) as *mut c_void);
+        }
     }
 }
 
-#[repr(C)]
-struct RawImport {
-    url: *mut c_char,
-    layer_name: *mut c_char,
-    media: *mut c_char,
+impl Drop for RawSheet {
+    fn drop(&mut self) {
+        if !self.rules.is_null() {
+            // SAFETY: rules is the sheet's own array, and its free function frees each rule.
+            unsafe { glib::g_ptr_array_free(self.rules, glib::TRUE) };
+        }
+        if !self.layers.is_null() {
+            // SAFETY: layers is the sheet's own table; its keys belong to layer_names, freed next.
+            unsafe { glib::g_hash_table_destroy(self.layers) };
+        }
+        if !self.layer_names.is_null() {
+            // SAFETY: layer_names is the sheet's own array of GLib strings.
+            unsafe { glib::g_ptr_array_free(self.layer_names, glib::TRUE) };
+        }
+        // SAFETY: index is null or the rule index built for this sheet alone.
+        unsafe { index_free(self.index.get().cast()) };
+    }
 }
 
-#[repr(C)]
-struct RawFontFace {
-    family: *mut c_char,
-    src_url: *mut c_char,
-    unicode_range: *mut c_char,
+struct Import {
+    url: CString,
+    layer_name: Option<CString>,
+    media: Option<CString>,
+}
+
+struct FontFaceData {
+    family: CString,
+    src_url: CString,
+    unicode_range: Option<CString>,
     weight: c_int,
     slant: c_int,
 }
 
-#[repr(C)]
-pub(super) struct RawStop {
-    pub(super) pct: f64,
-    opacity: f64,
-    has_opacity: GBoolean,
-    pub(super) transform: Transform,
-    pub(super) has_transform: GBoolean,
-    color: [u8; 4],
-    has_color: GBoolean,
-    bg_color: [u8; 4],
-    has_bg_color: GBoolean,
-    pub(super) raw_props: *mut c_char,
+pub(super) struct PropertyRule {
+    name: CString,
+    initial_value: Option<CString>,
+    syntax: prop_syntax::SyntaxDef,
+    inherits: bool,
+    has_initial: bool,
 }
 
-#[repr(C)]
-pub(super) struct RawKeyframes {
-    pub(super) name: *mut c_char,
-    pub(super) n_stops: c_int,
-    pub(super) stops: *mut RawStop,
-}
-
-#[repr(C)]
-pub(super) struct RawPropertyRule {
-    name: *mut c_char,
-    pub(super) initial_value: *mut c_char,
-    syntax_text: *mut c_char,
-    syntax: Option<Box<prop_syntax::SyntaxDef>>,
-    inherits: GBoolean,
-    pub(super) has_initial: GBoolean,
-}
-
-impl RawPropertyRule {
+impl PropertyRule {
     pub(super) fn registered(
         name: &[u8],
-        syntax_text: &[u8],
         syntax: prop_syntax::SyntaxDef,
         inherits: bool,
         initial_value: Option<&[u8]>,
         has_initial: bool,
     ) -> Self {
-        RawPropertyRule {
-            name: glib::strdup(name),
-            initial_value: initial_value
-                .filter(|_| has_initial)
-                .map_or(ptr::null_mut(), glib::strdup),
-            syntax_text: glib::strdup(syntax_text),
-            syntax: Some(Box::new(syntax)),
-            inherits: glib::boolean(inherits),
-            has_initial: glib::boolean(has_initial),
+        PropertyRule {
+            name: c_text(name),
+            initial_value: initial_value.filter(|_| has_initial).map(c_text),
+            syntax,
+            inherits,
+            has_initial,
         }
     }
 
-    pub(super) fn name(&self) -> *const c_char {
-        self.name
+    pub(super) fn name(&self) -> &CStr {
+        &self.name
     }
 
     pub(super) fn inherits(&self) -> bool {
-        self.inherits != 0
+        self.inherits
     }
 
     pub(super) fn initial(&self) -> Option<&[u8]> {
-        if self.has_initial == 0 || self.initial_value.is_null() {
-            return None;
-        }
-        Some(unsafe { CStr::from_ptr(self.initial_value) }.to_bytes())
+        self.registered_initial().flatten()
+    }
+
+    pub(super) fn registered_initial(&self) -> Option<Option<&[u8]>> {
+        self.has_initial
+            .then(|| self.initial_value.as_deref().map(CStr::to_bytes))
     }
 
     pub(super) fn typed_syntax(&self) -> Option<&prop_syntax::SyntaxDef> {
-        self.syntax.as_deref().filter(|syntax| !syntax.universal())
+        Some(&self.syntax).filter(|syntax| !syntax.universal())
     }
 
     pub(super) fn rejects(&self, value: &[u8]) -> bool {
@@ -168,29 +204,10 @@ pub(super) struct RawScope {
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    size_of::<RawSheet>() == 112
-        && offset_of!(RawSheet, has_container_rules) == 64
-        && offset_of!(RawSheet, serial) == 88
-        && offset_of!(RawSheet, index) == 104
-        && size_of::<RawImport>() == 24
-        && size_of::<RawFontFace>() == 32
-        && size_of::<RawStop>() == 2176
-        && offset_of!(RawStop, has_transform) == 2144
-        && offset_of!(RawStop, raw_props) == 2168
-        && size_of::<RawKeyframes>() == 24
-        && size_of::<RawPropertyRule>() == 40
-        && size_of::<PageRule>() == 72
-        && size_of::<RawScope>() == 16
-);
+const _: () = assert!(size_of::<PageRule>() == 72);
 
 unsafe extern "C" {
-    fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn g_array_sort(
-        array: *mut GArray,
-        compare: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
-    );
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
 }
 
@@ -198,6 +215,16 @@ static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
 
 fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
+}
+
+fn until_nul(text: &[u8]) -> &[u8] {
+    text.iter()
+        .position(|&c| c == 0)
+        .map_or(text, |nul| &text[..nul])
+}
+
+fn c_text(text: &[u8]) -> CString {
+    CString::new(until_nul(text)).unwrap_or_default()
 }
 
 fn opt_strdup(text: Option<&[u8]>) -> *mut c_char {
@@ -208,18 +235,8 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-unsafe fn new_array(element: usize, clear: glib::GDestroyNotify) -> *mut GArray {
-    unsafe {
-        let array = glib::g_array_new(glib::FALSE, glib::FALSE, element as c_uint);
-        if clear.is_some() {
-            g_array_set_clear_func(array, clear);
-        }
-        array
-    }
-}
-
-unsafe fn append<T>(array: *mut GArray, item: &T) {
-    unsafe { glib::g_array_append_vals(array, ptr::from_ref(item).cast(), 1) };
+unsafe fn new_array(element: usize) -> *mut GArray {
+    unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, element as c_uint) }
 }
 
 unsafe fn elements<'a, T>(array: *mut GArray) -> &'a mut [T] {
@@ -240,45 +257,6 @@ unsafe fn pointers<'a, T>(array: *mut GPtrArray) -> &'a [*mut T] {
     }
 }
 
-unsafe extern "C" fn import_clear(data: *mut c_void) {
-    let import = data.cast::<RawImport>();
-    unsafe {
-        glib::g_free((*import).url.cast());
-        glib::g_free((*import).layer_name.cast());
-        glib::g_free((*import).media.cast());
-    }
-}
-
-unsafe extern "C" fn font_face_clear(data: *mut c_void) {
-    let face = data.cast::<RawFontFace>();
-    unsafe {
-        glib::g_free((*face).family.cast());
-        glib::g_free((*face).src_url.cast());
-        glib::g_free((*face).unicode_range.cast());
-    }
-}
-
-unsafe extern "C" fn keyframes_clear(data: *mut c_void) {
-    let kf = data.cast::<RawKeyframes>();
-    unsafe {
-        glib::g_free((*kf).name.cast());
-        for i in 0..usize::try_from((*kf).n_stops).unwrap_or(0) {
-            glib::g_free((*(*kf).stops.add(i)).raw_props.cast());
-        }
-        glib::g_free((*kf).stops.cast());
-    }
-}
-
-pub(super) unsafe extern "C" fn property_rule_clear(data: *mut c_void) {
-    let rule = data.cast::<RawPropertyRule>();
-    unsafe {
-        glib::g_free((*rule).name.cast());
-        glib::g_free((*rule).initial_value.cast());
-        glib::g_free((*rule).syntax_text.cast());
-        drop((*rule).syntax.take());
-    }
-}
-
 unsafe extern "C" fn scope_free(data: *mut c_void) {
     let scope = data.cast::<RawScope>();
     let Some(raw) = (unsafe { scope.as_ref() }) else {
@@ -295,15 +273,40 @@ unsafe extern "C" fn scope_free(data: *mut c_void) {
     }
 }
 
-unsafe extern "C" fn stop_cmp(a: *const c_void, b: *const c_void) -> c_int {
-    let (da, db) = unsafe { ((*a.cast::<RawStop>()).pct, (*b.cast::<RawStop>()).pct) };
-    if da < db {
-        -1
-    } else if da > db {
-        1
-    } else {
-        0
+fn sort_stops(stops: &mut Vec<KeyframeStop>) {
+    let pcts: Vec<f64> = stops.iter().map(KeyframeStop::pct).collect();
+    let mut order: Vec<usize> = (0..stops.len()).collect();
+    merge_sort(&mut order, &mut Vec::with_capacity(stops.len()), &|a, b| {
+        pcts[a] <= pcts[b] || pcts[a].partial_cmp(&pcts[b]).is_none()
+    });
+    let mut taken: Vec<Option<KeyframeStop>> = stops.drain(..).map(Some).collect();
+    stops.extend(order.iter().filter_map(|&i| taken[i].take()));
+}
+
+fn merge_sort(
+    order: &mut [usize],
+    merged: &mut Vec<usize>,
+    in_order: &dyn Fn(usize, usize) -> bool,
+) {
+    if order.len() <= 1 {
+        return;
     }
+    let (front, back) = order.split_at_mut(order.len() / 2);
+    merge_sort(front, merged, in_order);
+    merge_sort(back, merged, in_order);
+    merged.clear();
+    let (mut i, mut j) = (0, 0);
+    while i < front.len() && j < back.len() {
+        if in_order(front[i], back[j]) {
+            merged.push(front[i]);
+            i += 1;
+        } else {
+            merged.push(back[j]);
+            j += 1;
+        }
+    }
+    merged.extend_from_slice(&front[i..]);
+    order[..merged.len()].copy_from_slice(merged);
 }
 
 pub(super) unsafe fn rule_free(data: *mut c_void) {
@@ -360,7 +363,7 @@ impl SyntaxDef {
 }
 
 pub(crate) struct SheetBuilder {
-    raw: *mut RawSheet,
+    sheet: Box<RawSheet>,
 }
 
 pub(crate) struct RuleBuilder {
@@ -432,169 +435,99 @@ impl RuleBuilder {
 }
 
 impl SheetBuilder {
-    fn sheet(&mut self) -> &mut RawSheet {
-        unsafe { &mut *self.raw }
-    }
-
     pub(crate) fn serial(&self) -> u64 {
-        unsafe { (*self.raw).serial }
+        self.sheet.serial
     }
 
     pub(crate) fn layer_count(&self) -> u32 {
-        unsafe { (*self.raw).layer_names.as_ref() }.map_or(0, |names| names.len)
+        // SAFETY: layer_names is null or the sheet's own array of layer names.
+        unsafe { self.sheet.layer_names.as_ref() }.map_or(0, |names| names.len)
     }
 
     pub(crate) fn layer_register(&mut self, name: &[u8]) {
-        if name.is_empty() {
-            return;
-        }
-        let sheet = self.sheet();
-        unsafe {
-            if sheet.layer_names.is_null() {
-                sheet.layer_names = glib::g_ptr_array_new_with_free_func(Some(glib::g_free));
-            }
-            if sheet.layers.is_null() {
-                sheet.layers =
-                    glib::g_hash_table_new(Some(glib::g_str_hash), Some(glib::g_str_equal));
-            }
-            let key = c_string(name);
-            if !glib::g_hash_table_lookup(sheet.layers, key.as_ptr().cast()).is_null() {
-                return;
-            }
-            let rank = (*sheet.layer_names).len as usize;
-            let owned = glib::strdup(name);
-            glib::g_ptr_array_add(sheet.layer_names, owned.cast());
-            glib::g_hash_table_insert(sheet.layers, owned.cast(), (rank + 1) as *mut c_void);
-        }
+        self.sheet.layer_register(name);
     }
 
     pub(crate) fn add_import(&mut self, url: &[u8], layer: Option<&[u8]>, media: Option<&[u8]>) {
         if url.is_empty() {
             return;
         }
-        let sheet = self.sheet();
-        if sheet.imports.is_null() {
-            sheet.imports = unsafe { new_array(size_of::<RawImport>(), Some(import_clear)) };
-        }
         if let Some(layer) = layer {
             self.layer_register(layer);
         }
-        let import = RawImport {
-            url: glib::strdup(url),
-            layer_name: opt_strdup(layer),
-            media: opt_strdup(media),
-        };
-        unsafe { append(self.sheet().imports, &import) };
-    }
-
-    pub(crate) fn ensure_font_faces(&mut self) {
-        let sheet = self.sheet();
-        if sheet.font_faces.is_null() {
-            sheet.font_faces =
-                unsafe { new_array(size_of::<RawFontFace>(), Some(font_face_clear)) };
-        }
+        self.sheet.imports.push(Import {
+            url: c_text(url),
+            layer_name: layer.map(c_text),
+            media: media.map(c_text),
+        });
     }
 
     pub(crate) fn push_font_face(&mut self, face: FontFace) {
-        let raw = RawFontFace {
-            family: glib::strdup(&face.family),
-            src_url: glib::strdup(&face.src_url),
-            unicode_range: opt_strdup(face.unicode_range.as_deref()),
+        self.sheet.font_faces.push(FontFaceData {
+            family: c_text(&face.family),
+            src_url: c_text(&face.src_url),
+            unicode_range: face.unicode_range.as_deref().map(c_text),
             weight: face.weight,
             slant: face.slant,
-        };
-        unsafe { append(self.sheet().font_faces, &raw) };
+        });
     }
 
     pub(crate) fn push_keyframes(&mut self, name: &[u8], stops: Vec<Stop>) {
-        unsafe {
-            let sheet = self.sheet();
-            if sheet.keyframes.is_null() {
-                sheet.keyframes = new_array(size_of::<RawKeyframes>(), Some(keyframes_clear));
-            }
-            let array = new_array(size_of::<RawStop>(), None);
-            for stop in &stops {
-                let raw = RawStop {
-                    pct: stop.pct,
-                    opacity: stop.opacity,
-                    has_opacity: glib::boolean(stop.has_opacity),
-                    transform: stop.transform,
-                    has_transform: glib::boolean(stop.has_transform),
-                    color: stop.color,
-                    has_color: glib::boolean(stop.has_color),
-                    bg_color: stop.bg_color,
-                    has_bg_color: glib::boolean(stop.has_bg_color),
-                    raw_props: opt_strdup(stop.raw_props.as_deref()),
-                };
-                append(array, &raw);
-            }
-            g_array_sort(array, Some(stop_cmp));
-            let n = (*array).len as usize;
-            let stops_raw = glib::g_malloc0(size_of::<RawStop>() * n.max(1)).cast::<RawStop>();
-            if n > 0 {
-                ptr::copy_nonoverlapping((*array).data.cast::<RawStop>(), stops_raw, n);
-            }
-            g_array_free(array, glib::TRUE);
-            let kf = RawKeyframes {
-                name: glib::strdup(name),
-                n_stops: n as c_int,
-                stops: stops_raw,
-            };
-            append(self.sheet().keyframes, &kf);
-        }
+        let mut stops: Vec<KeyframeStop> = stops
+            .into_iter()
+            .map(|stop| {
+                KeyframeStop::new(
+                    stop.pct,
+                    stop.has_transform.then_some(stop.transform),
+                    stop.raw_props.as_deref().map(|raw| until_nul(raw).to_vec()),
+                )
+            })
+            .collect();
+        sort_stops(&mut stops);
+        self.sheet
+            .keyframes
+            .push(Keyframes::new(until_nul(name).to_vec(), stops));
     }
 
     pub(crate) fn push_property_rule(
         &mut self,
         name: &[u8],
         initial: Option<&[u8]>,
-        syntax_text: Option<&[u8]>,
         syntax: SyntaxDef,
         inherits: bool,
         has_initial: bool,
     ) {
-        let sheet = self.sheet();
-        if sheet.property_rules.is_null() {
-            sheet.property_rules =
-                unsafe { new_array(size_of::<RawPropertyRule>(), Some(property_rule_clear)) };
-        }
-        let rule = ManuallyDrop::new(RawPropertyRule {
-            name: glib::strdup(name),
-            initial_value: opt_strdup(initial),
-            syntax_text: opt_strdup(syntax_text),
-            syntax: Some(Box::new(syntax.0)),
-            inherits: glib::boolean(inherits),
-            has_initial: glib::boolean(has_initial),
+        self.sheet.property_rules.push(PropertyRule {
+            name: c_text(name),
+            initial_value: initial.map(c_text),
+            syntax: syntax.0,
+            inherits,
+            has_initial,
         });
-        unsafe { append(self.sheet().property_rules, &*rule) };
     }
 
     pub(crate) fn page_rule(&mut self) -> &mut PageRule {
-        let sheet = self.sheet();
-        if sheet.page_rule.is_null() {
-            sheet.page_rule = unsafe { glib::g_malloc0(size_of::<PageRule>()) }.cast();
-        }
-        unsafe { &mut *sheet.page_rule }
+        self.sheet.page_rule.get_or_insert_with(PageRule::default)
     }
 
     pub(crate) fn set_has_container_rules(&mut self) {
-        self.sheet().has_container_rules = glib::TRUE;
+        self.sheet.has_container_rules = true;
     }
 
     pub(crate) fn set_has_hover_rules(&mut self) {
-        self.sheet().has_hover_rules = glib::TRUE;
+        self.sheet.has_hover_rules = true;
     }
 
     pub(crate) fn set_has_active_rules(&mut self) {
-        self.sheet().has_active_rules = glib::TRUE;
+        self.sheet.has_active_rules = true;
     }
 
     pub(crate) fn rules_len(&self) -> usize {
-        unsafe { (*(*self.raw).rules).len as usize }
+        unsafe { (*self.sheet.rules).len as usize }
     }
 
     pub(crate) fn join_container_condition(&mut self, from: usize, canon: &[u8]) {
-        let rules = unsafe { pointers::<RawRule>(self.sheet().rules) };
+        let rules = unsafe { pointers::<RawRule>(self.sheet.rules) };
         for &rule in rules.iter().skip(from) {
             let rule = unsafe { &mut *rule };
             let joined = match unsafe { bytes(rule.container_condition) } {
@@ -610,7 +543,7 @@ impl SheetBuilder {
         unsafe {
             let raw = glib::g_malloc0(size_of::<RawRule>()).cast::<RawRule>();
             (*raw).selectors = glib::g_ptr_array_new();
-            (*raw).decls = new_array(size_of::<RawDecl>(), None);
+            (*raw).decls = new_array(size_of::<RawDecl>());
             (*raw).layer_name = opt_strdup(layer);
             (*raw).source_order = source_order;
             RuleBuilder { raw }
@@ -620,7 +553,7 @@ impl SheetBuilder {
     pub(crate) fn push_rule(&mut self, rule: RuleBuilder) {
         let raw = rule.raw;
         core::mem::forget(rule);
-        unsafe { glib::g_ptr_array_add(self.sheet().rules, raw.cast()) };
+        unsafe { glib::g_ptr_array_add(self.sheet.rules, raw.cast()) };
     }
 }
 
@@ -632,21 +565,17 @@ pub struct OwnedSheet(NonNull<RawSheet>);
 
 impl OwnedSheet {
     pub fn parse(css: &[u8]) -> OwnedSheet {
-        // SAFETY: g_malloc0 aborts rather than fail, and all-zero bytes are an empty RawSheet.
-        let raw = unsafe { glib::g_malloc0(size_of::<RawSheet>()) }.cast::<RawSheet>();
-        let mut sheet = OwnedSheet(NonNull::new(raw).expect("g_malloc0"));
-        let fields = sheet.raw_mut();
-        fields.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: rule_free_notify frees the RawRule pointers this array is given.
-        fields.rules = unsafe { glib::g_ptr_array_new_with_free_func(Some(rule_free_notify)) };
-        fields.has_container_units = glib::boolean(nesting::has_container_units(css));
+        let serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
+        let has_container_units = nesting::has_container_units(css);
+        let mut builder = SheetBuilder {
+            sheet: Box::new(RawSheet::new(serial, has_container_units)),
+        };
         let mut flattened = nesting::flatten(css);
         if let Some(nul) = flattened.iter().position(|&c| c == 0) {
             flattened.truncate(nul);
         }
-        let mut builder = SheetBuilder { raw };
         sheet::parse_into(&mut builder, &flattened);
-        sheet
+        OwnedSheet(NonNull::from(Box::leak(builder.sheet)))
     }
 
     fn raw_mut(&mut self) -> &mut RawSheet {
@@ -663,7 +592,7 @@ impl OwnedSheet {
     }
 
     pub(super) fn set_cached(&self, cached: bool) {
-        self.raw().cached.set(glib::boolean(cached));
+        self.raw().cached.set(cached);
     }
 
     pub(super) fn share(&self) -> OwnedSheet {
@@ -672,13 +601,10 @@ impl OwnedSheet {
 
     pub fn resolve_urls(&mut self, base: &CStr) {
         let sheet = self.raw_mut();
-        // SAFETY: resolved_base is null or a string the sheet owns.
-        if unsafe { bytes(sheet.resolved_base) } == Some(base.to_bytes()) {
+        if sheet.resolved_base.as_deref() == Some(base.to_bytes()) {
             return;
         }
-        // SAFETY: resolved_base is null or a GLib string the sheet owns, replaced right after.
-        unsafe { glib::g_free(sheet.resolved_base.cast()) };
-        sheet.resolved_base = glib::strdup(base.to_bytes());
+        sheet.resolved_base = Some(base.to_bytes().to_vec());
         // SAFETY: rules is the sheet's array of RawRule pointers.
         for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
             // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
@@ -686,18 +612,14 @@ impl OwnedSheet {
                 rule_resolve_urls(rule, base);
             }
         }
-        // SAFETY: font_faces is null or the sheet's array of RawFontFace.
-        for face in unsafe { elements::<RawFontFace>(sheet.font_faces) } {
-            // SAFETY: src_url is null or a string the face owns.
-            let Some(resolved) = unsafe { bytes(face.src_url) }
+        for face in &mut sheet.font_faces {
+            let url = face.src_url.to_bytes();
+            if let Some(resolved) = Some(url)
                 .filter(|url| url_should_resolve(url))
                 .and_then(|url| url_resolve(base, url))
-            else {
-                continue;
-            };
-            // SAFETY: src_url is a GLib string the face owns, replaced right after.
-            unsafe { glib::g_free(face.src_url.cast()) };
-            face.src_url = glib::strdup(&resolved);
+            {
+                face.src_url = c_text(&resolved);
+            }
         }
     }
 
@@ -705,25 +627,21 @@ impl OwnedSheet {
         if layer.is_empty() {
             return;
         }
-        let raw = self.as_raw();
         let sheet = self.raw_mut();
         sheet.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
         let old_names = sheet.layer_names;
         let old_layers = sheet.layers;
-        let rules = sheet.rules;
-        let imports = sheet.imports;
         sheet.layer_names = ptr::null_mut();
         sheet.layers = ptr::null_mut();
-        let mut builder = SheetBuilder { raw };
-        builder.layer_register(layer);
+        sheet.layer_register(layer);
         // SAFETY: old_names is null or the array of layer names the sheet owned until now.
         for &old in unsafe { pointers::<c_char>(old_names) } {
             // SAFETY: a layer name is a NUL-terminated string the array owns.
             let full = layer_join(Some(layer), unsafe { bytes(old) }.unwrap_or_default());
-            builder.layer_register(&full);
+            sheet.layer_register(&full);
         }
         // SAFETY: rules is the sheet's array of RawRule pointers.
-        for &rule in unsafe { pointers::<RawRule>(rules) } {
+        for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
             // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
             let Some(rule) = (unsafe { rule.as_mut() }) else {
                 continue;
@@ -737,18 +655,16 @@ impl OwnedSheet {
             unsafe { glib::g_free(rule.layer_name.cast()) };
             rule.layer_name = glib::strdup(&full);
         }
-        // SAFETY: imports is null or the sheet's array of RawImport.
-        for import in unsafe { elements::<RawImport>(imports) } {
-            // SAFETY: layer_name is null or a string the import owns.
-            let full = match unsafe { bytes(import.layer_name) } {
-                Some(existing) => layer_join(Some(layer), existing),
+        let mut imports = core::mem::take(&mut sheet.imports);
+        for import in &mut imports {
+            let full = match &import.layer_name {
+                Some(existing) => layer_join(Some(layer), existing.to_bytes()),
                 None => layer.to_vec(),
             };
-            // SAFETY: layer_name is null or a GLib string the import owns, replaced right after.
-            unsafe { glib::g_free(import.layer_name.cast()) };
-            import.layer_name = glib::strdup(&full);
-            builder.layer_register(&full);
+            import.layer_name = Some(c_text(&full));
+            sheet.layer_register(&full);
         }
+        sheet.imports = imports;
         if !old_layers.is_null() {
             // SAFETY: old_layers is the layer table the sheet owned until now, and nothing refers to it.
             unsafe { glib::g_hash_table_destroy(old_layers) };
@@ -804,8 +720,11 @@ impl Deref for OwnedSheet {
 
 impl Drop for OwnedSheet {
     fn drop(&mut self) {
-        // SAFETY: the handle points to a live sheet, which stylesheet_free leaves alone while a cache holds it.
-        unsafe { stylesheet_free(self.0) };
+        if self.raw().cached.get() {
+            return;
+        }
+        // SAFETY: the handle came from Box::leak, and a sheet no cache holds has no other handle.
+        drop(unsafe { Box::from_raw(self.0.as_ptr()) });
     }
 }
 
@@ -914,11 +833,6 @@ pub struct ImportRule<'a> {
     pub media: Option<&'a CStr>,
 }
 
-pub(super) fn text_at<'a>(text: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: a sheet's strings are null or NUL-terminated and live as long as the sheet.
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
-}
-
 impl Sheet {
     /// # Safety
     ///
@@ -942,33 +856,30 @@ impl Sheet {
     }
 
     pub fn has_container_rules(&self) -> bool {
-        self.0.has_container_rules != 0
+        self.0.has_container_rules
     }
 
     pub fn has_container_units(&self) -> bool {
-        self.0.has_container_units != 0
+        self.0.has_container_units
     }
 
     pub fn has_hover_rules(&self) -> bool {
-        self.0.has_hover_rules != 0
+        self.0.has_hover_rules
     }
 
     pub fn has_active_rules(&self) -> bool {
-        self.0.has_active_rules != 0
+        self.0.has_active_rules
     }
 
     pub fn page_rule(&self) -> Option<&PageRule> {
-        // SAFETY: page_rule is null or the sheet's own PageRule, freed with the sheet.
-        unsafe { self.0.page_rule.as_ref() }
+        self.0.page_rule.as_ref()
     }
 
     pub fn font_faces(&self) -> impl Iterator<Item = FontFaceRule<'_>> {
-        // SAFETY: font_faces is null or the sheet's array of RawFontFace.
-        let faces: &[RawFontFace] = unsafe { shared_elements(self.0.font_faces) };
-        faces.iter().map(|face| FontFaceRule {
-            family: text_at(face.family),
-            src_url: text_at(face.src_url),
-            unicode_range: text_at(face.unicode_range),
+        self.0.font_faces.iter().map(|face| FontFaceRule {
+            family: Some(&face.family),
+            src_url: Some(&face.src_url),
+            unicode_range: face.unicode_range.as_deref(),
             weight: face.weight,
             slant: face.slant,
         })
@@ -993,19 +904,15 @@ impl Sheet {
     }
 
     pub fn imports(&self) -> impl Iterator<Item = ImportRule<'_>> {
-        // SAFETY: imports is null or the sheet's array of RawImport.
-        let imports: &[RawImport] = unsafe { shared_elements(self.0.imports) };
-        imports.iter().map(|import| ImportRule {
-            url: text_at(import.url),
-            layer_name: text_at(import.layer_name),
-            media: text_at(import.media),
+        self.0.imports.iter().map(|import| ImportRule {
+            url: Some(&import.url),
+            layer_name: import.layer_name.as_deref(),
+            media: import.media.as_deref(),
         })
     }
 
     pub fn keyframes(&self) -> impl Iterator<Item = Keyframes> + '_ {
-        // SAFETY: keyframes is null or the sheet's array of RawKeyframes.
-        let rules: &[RawKeyframes] = unsafe { shared_elements(self.0.keyframes) };
-        rules.iter().filter_map(Keyframes::of)
+        self.0.keyframes.iter().cloned()
     }
 }
 
@@ -1016,45 +923,4 @@ unsafe fn shared_elements<'a, T>(array: *const GArray) -> &'a [T] {
         },
         _ => &[],
     }
-}
-
-/// # Safety
-///
-/// `s` points to a live sheet that no reference outlives this call into.
-unsafe fn stylesheet_free(s: NonNull<RawSheet>) {
-    // SAFETY: the caller passes a live sheet.
-    let sheet = unsafe { s.as_ref() };
-    if sheet.cached.get() != 0 {
-        return;
-    }
-    if !sheet.rules.is_null() {
-        // SAFETY: rules is the sheet's own array, and its free function frees each rule.
-        unsafe { glib::g_ptr_array_free(sheet.rules, glib::TRUE) };
-    }
-    if !sheet.imports.is_null() {
-        // SAFETY: imports is the sheet's own array, and its clear function frees each import.
-        unsafe { g_array_free(sheet.imports, glib::TRUE) };
-    }
-    if !sheet.layers.is_null() {
-        // SAFETY: layers is the sheet's own table; its keys belong to layer_names, freed next.
-        unsafe { glib::g_hash_table_destroy(sheet.layers) };
-    }
-    if !sheet.layer_names.is_null() {
-        // SAFETY: layer_names is the sheet's own array of GLib strings.
-        unsafe { glib::g_ptr_array_free(sheet.layer_names, glib::TRUE) };
-    }
-    for array in [sheet.font_faces, sheet.keyframes, sheet.property_rules] {
-        if !array.is_null() {
-            // SAFETY: each array is the sheet's own, and its clear function frees its elements.
-            unsafe { g_array_free(array, glib::TRUE) };
-        }
-    }
-    // SAFETY: page_rule is null or the sheet's own GLib allocation.
-    unsafe { glib::g_free(sheet.page_rule.cast()) };
-    // SAFETY: resolved_base is null or the sheet's own GLib string.
-    unsafe { glib::g_free(sheet.resolved_base.cast()) };
-    // SAFETY: index is null or the rule index built for this sheet alone.
-    unsafe { index_free(sheet.index.get().cast()) };
-    // SAFETY: the sheet was allocated with g_malloc0, and everything it owned is freed above.
-    unsafe { glib::g_free(s.as_ptr().cast()) };
 }

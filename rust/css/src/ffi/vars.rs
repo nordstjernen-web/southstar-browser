@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use southstar_glib::{self as glib, GHashTable, GPtrArray};
 
-use super::sheet::RawPropertyRule;
+use super::sheet::PropertyRule;
 use crate::vars::{self, Lookup};
 
 #[repr(C)]
@@ -112,9 +112,8 @@ impl Lookup for Chain<'_> {
         }
         let key = c_string(name);
         let rule = unsafe { glib::g_hash_table_lookup(self.registered, key.as_ptr().cast()) }
-            .cast::<RawPropertyRule>();
-        let rule = unsafe { rule.as_ref() }?;
-        (rule.has_initial != 0).then(|| unsafe { text(rule.initial_value) })
+            .cast::<PropertyRule>();
+        unsafe { rule.as_ref() }?.registered_initial()
     }
 }
 

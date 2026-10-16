@@ -13,7 +13,7 @@ use southstar_glib::{self as glib, GBoolean, GHashTable};
 
 use super::computed_units::{RawStyle, StyleView};
 use super::font::relative_unit_px;
-use super::sheet::RawPropertyRule;
+use super::sheet::PropertyRule;
 use super::values::text_of;
 use super::vars::{RawVarMap, chain_lookup, map_ref, new_map};
 use crate::computed_units::{self, Font};
@@ -50,7 +50,7 @@ struct Props(*mut GHashTable);
 
 struct Parent<'a>(&'a RawVarMap);
 
-fn registered(rule: &RawPropertyRule) -> Registered<'_> {
+fn registered(rule: &PropertyRule) -> Registered<'_> {
     Registered {
         inherits: rule.inherits(),
         initial: rule.initial(),
@@ -58,10 +58,10 @@ fn registered(rule: &RawPropertyRule) -> Registered<'_> {
 }
 
 impl Props {
-    fn rule(&self, name: &[u8]) -> Option<&RawPropertyRule> {
+    fn rule(&self, name: &[u8]) -> Option<&PropertyRule> {
         let key = CString::new(name).ok()?;
         let rule = unsafe { glib::g_hash_table_lookup(self.0, key.as_ptr().cast()) };
-        unsafe { rule.cast::<RawPropertyRule>().as_ref() }
+        unsafe { rule.cast::<PropertyRule>().as_ref() }
     }
 }
 
@@ -72,7 +72,7 @@ impl Registry for Props {
 
     fn each(&self, f: &mut dyn FnMut(&[u8], Registered<'_>)) {
         for (key, value) in unsafe { glib::hash_table_entries(self.0) } {
-            let rule = unsafe { value.cast::<RawPropertyRule>().as_ref() };
+            let rule = unsafe { value.cast::<PropertyRule>().as_ref() };
             if let (false, Some(rule)) = (key.is_null(), rule) {
                 f(
                     unsafe { CStr::from_ptr(key.cast()) }.to_bytes(),
@@ -237,8 +237,8 @@ pub(super) fn compute_registered_vars(
     let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
     while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
         let rule = unsafe { glib::g_hash_table_lookup(registered_props, key) };
-        let Some(syntax) = unsafe { rule.cast::<RawPropertyRule>().as_ref() }
-            .and_then(RawPropertyRule::typed_syntax)
+        let Some(syntax) =
+            unsafe { rule.cast::<PropertyRule>().as_ref() }.and_then(PropertyRule::typed_syntax)
         else {
             continue;
         };

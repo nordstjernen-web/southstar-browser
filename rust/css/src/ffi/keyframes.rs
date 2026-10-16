@@ -1,9 +1,8 @@
-//! Southstar — a @keyframes rule copied out of a style sheet, with var() in its stops resolved against an element's custom properties.
+//! Southstar — a style sheet's @keyframes rule, with var() in its stops resolved against an element's custom properties.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use super::computed_units::RawStyle;
-use super::sheet::{RawKeyframes, RawStop, text_at};
 use crate::keyframes;
 use crate::transform::Transform;
 
@@ -20,15 +19,6 @@ pub struct Keyframes {
     stops: Vec<KeyframeStop>,
 }
 
-fn raw_stops(raw: &RawKeyframes) -> &[RawStop] {
-    let n = usize::try_from(raw.n_stops).unwrap_or(0);
-    if raw.stops.is_null() || n == 0 {
-        return &[];
-    }
-    // SAFETY: a keyframes rule owns n_stops stops at stops, freed with its sheet.
-    unsafe { core::slice::from_raw_parts(raw.stops, n) }
-}
-
 fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
     if let Some(nul) = text.iter().position(|&c| c == 0) {
         text.truncate(nul);
@@ -37,11 +27,15 @@ fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
 }
 
 impl KeyframeStop {
-    fn of(raw: &RawStop) -> KeyframeStop {
+    pub(super) fn new(
+        pct: f64,
+        transform: Option<Transform>,
+        raw_props: Option<Vec<u8>>,
+    ) -> KeyframeStop {
         KeyframeStop {
-            pct: raw.pct,
-            transform: (raw.has_transform != 0).then_some(raw.transform),
-            raw_props: text_at(raw.raw_props).map(|text| text.to_bytes().to_vec()),
+            pct,
+            transform,
+            raw_props,
         }
     }
 
@@ -75,11 +69,8 @@ impl KeyframeStop {
 }
 
 impl Keyframes {
-    pub(super) fn of(raw: &RawKeyframes) -> Option<Keyframes> {
-        Some(Keyframes {
-            name: text_at(raw.name)?.to_bytes().to_vec(),
-            stops: raw_stops(raw).iter().map(KeyframeStop::of).collect(),
-        })
+    pub(super) fn new(name: Vec<u8>, stops: Vec<KeyframeStop>) -> Keyframes {
+        Keyframes { name, stops }
     }
 
     pub fn name(&self) -> &[u8] {

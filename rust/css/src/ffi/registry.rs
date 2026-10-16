@@ -11,21 +11,11 @@ use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::{self as glib, GHashTable};
 
 use super::selector_view::SheetRef;
-use super::sheet::{RawPropertyRule, RawSheet, property_rule_clear};
-
-struct Registered(Box<RawPropertyRule>);
-
-unsafe impl Send for Registered {}
-
-impl Drop for Registered {
-    fn drop(&mut self) {
-        unsafe { property_rule_clear(ptr::from_mut(&mut *self.0).cast()) };
-    }
-}
+use super::sheet::{PropertyRule, RawSheet};
 
 #[derive(Default)]
 struct Registry {
-    rules: HashMap<Vec<u8>, Registered>,
+    rules: HashMap<Vec<u8>, Box<PropertyRule>>,
     serial: u64,
 }
 
@@ -86,18 +76,15 @@ pub fn register_property(registration: &Registration<'_>) -> Result<(), Register
     if syntax_rejects_initial(&syntax, registration.initial, registration.has_initial) {
         return Err(RegisterError::BadInitial);
     }
-    let rule = RawPropertyRule::registered(
+    let rule = PropertyRule::registered(
         key,
-        registration.syntax,
         syntax,
         registration.inherits,
         registration.initial,
         registration.has_initial,
     );
     let mut registry = registry();
-    let replaced = registry
-        .rules
-        .insert(key.to_vec(), Registered(Box::new(rule)));
+    let replaced = registry.rules.insert(key.to_vec(), Box::new(rule));
     registry.serial += 1;
     drop(registry);
     drop(replaced);
@@ -121,15 +108,13 @@ pub(super) fn registered_property_serial() -> u64 {
 
 fn put_rules(table: *mut GHashTable, sheet: &RawSheet) {
     for rule in sheet.property_rules() {
-        if !rule.name().is_null() {
-            unsafe {
-                glib::g_hash_table_replace(
-                    table,
-                    rule.name().cast_mut().cast(),
-                    ptr::from_ref(rule).cast_mut().cast(),
-                )
-            };
-        }
+        unsafe {
+            glib::g_hash_table_replace(
+                table,
+                rule.name().as_ptr().cast_mut().cast(),
+                ptr::from_ref(rule).cast_mut().cast(),
+            )
+        };
     }
 }
 
@@ -149,12 +134,12 @@ pub(super) fn registered_props_begin(sheets: &[SheetRef<'_>]) -> *mut GHashTable
     for sheet in sheets {
         put_rules(table, sheet.raw());
     }
-    for registered in registry().rules.values() {
-        let rule = &*registered.0;
+    for rule in registry().rules.values() {
+        let rule = &**rule;
         unsafe {
             glib::g_hash_table_replace(
                 table,
-                rule.name().cast_mut().cast(),
+                rule.name().as_ptr().cast_mut().cast(),
                 ptr::from_ref(rule).cast_mut().cast(),
             )
         };
