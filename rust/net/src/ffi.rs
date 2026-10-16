@@ -88,12 +88,6 @@ unsafe extern "C" {
         cancellable: *mut c_void,
         error: *mut *mut GError,
     ) -> *mut NsResponse;
-    fn ns_html_decode_body_full(
-        body: *const c_char,
-        len: usize,
-        content_type: *const c_char,
-        charset_out: *mut *mut c_char,
-    ) -> *mut c_char;
 }
 
 struct ByteArraySink(*mut GByteArray);
@@ -336,12 +330,12 @@ pub unsafe extern "C" fn ns_net_synthesize_view_source_response(
         view_source::error_document(inner, message)
     } else {
         let r = fetched_ref.unwrap_or_else(|| unreachable!());
-        let (data, len) =
-            unsafe { r.body.as_ref() }.map_or((ptr::null(), 0), |b| (b.data, b.len as usize));
-        let decoded =
-            unsafe { ns_html_decode_body_full(data.cast(), len, r.content_type, ptr::null_mut()) };
-        let source = unsafe { glib::GStr::take(decoded) };
-        view_source::document(inner, source.as_deref().map_or(&b""[..], |s| s.to_bytes()))
+        let (decoded, _) = southstar_html_util::decode_body(
+            body_bytes(r.body).unwrap_or_default(),
+            text(r.content_type),
+        );
+        let source = decoded.split(|&b| b == 0).next().unwrap_or_default();
+        view_source::document(inner, source)
     };
     resp.status = 200;
     resp.content_type = glib::strdup(b"text/html; charset=utf-8");

@@ -8,7 +8,6 @@ use std::ffi::CString;
 use southstar_glib as glib;
 
 unsafe extern "C" {
-    fn ns_html_escape_text(s: *const c_char) -> *mut c_char;
     fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
 }
 
@@ -24,8 +23,7 @@ unsafe fn take(p: *mut c_char) -> Vec<u8> {
 }
 
 pub(crate) fn html_escape(text: &[u8]) -> Vec<u8> {
-    let text = cstring(text);
-    unsafe { take(ns_html_escape_text(text.as_ptr())) }
+    southstar_html_util::escape_text(cstring(text).as_bytes())
 }
 
 #[cfg_attr(not(feature = "poppler"), allow(dead_code))]

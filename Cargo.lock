@@ -2078,6 +2078,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
+ "southstar-html-util",
  "southstar-layout",
  "southstar-numfmt",
  "southstar-renderer-client",
@@ -3042,6 +3043,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
+ "southstar-html-util",
 ]
 
 [[package]]

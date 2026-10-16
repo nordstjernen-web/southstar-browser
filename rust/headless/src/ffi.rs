@@ -31,11 +31,11 @@ pub use engine::{
     Anim, Document, ImageCache, PrintSetup, Relayout, Response, Timing, Video, VideoCache,
     anim_raw, apply_render_page_rule, collect_videos, compute_cascade, css_set_active_node,
     css_set_doc_language, css_set_print_media, css_set_target_fragment, css_set_viewport,
-    decode_body, decode_body_text, destroy_table, dump_layout, dump_text, error_page, fetch,
-    fetch_images, free_layout, hit_form_dom, hit_inline_dom, hit_link, image_cache_raw,
-    image_document, json_document, navigate, new_css_cache, node_dump, paint_set_anim,
-    paint_set_js, print_setup_default, relayout, suffix_before_ext, url_resolve, video_sources,
-    write_pdf, write_pdf_paged, write_png, xml_document,
+    decode_body, destroy_table, dump_layout, dump_text, error_page, fetch, fetch_images,
+    free_layout, hit_form_dom, hit_inline_dom, hit_link, image_cache_raw, image_document,
+    json_document, navigate, new_css_cache, node_dump, paint_set_anim, paint_set_js,
+    print_setup_default, relayout, suffix_before_ext, url_resolve, video_sources, write_pdf,
+    write_pdf_paged, write_png, xml_document,
 };
 pub use js::{
     DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_raw,

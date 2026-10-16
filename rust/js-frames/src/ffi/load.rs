@@ -80,12 +80,6 @@ unsafe extern "C" {
     );
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_content_type_is_javascript(content_type: *const c_char) -> GBoolean;
-    fn ns_html_image_document(url: *const c_char) -> *mut c_char;
-    fn ns_html_declared_charset(
-        body: *const c_char,
-        len: usize,
-        content_type: *const c_char,
-    ) -> *mut c_char;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
     fn ns_node_remove(node: *mut NsNode);
     fn ns_net_referer_for(
@@ -341,7 +335,9 @@ pub(crate) fn content_type_is_javascript(content_type: Option<&CStr>) -> bool {
 }
 
 pub(crate) fn image_document(url: &CStr) -> Option<CString> {
-    owned_text(unsafe { ns_html_image_document(url.as_ptr()) })
+    Some(c_string(southstar_html_util::image_document(
+        url.to_bytes(),
+    )))
 }
 
 pub(crate) fn decode_body(body: &[u8], content_type: Option<&CStr>) -> Vec<u8> {
@@ -349,9 +345,8 @@ pub(crate) fn decode_body(body: &[u8], content_type: Option<&CStr>) -> Vec<u8> {
 }
 
 pub(crate) fn declared_charset(body: &[u8], content_type: Option<&CStr>) -> Option<CString> {
-    owned_text(unsafe {
-        ns_html_declared_charset(body.as_ptr().cast(), body.len(), opt_ptr(content_type))
-    })
+    southstar_html_util::declared_charset(Some(body), content_type.map(CStr::to_bytes))
+        .map(|name| c_string(name.as_bytes().to_vec()))
 }
 
 pub(crate) fn html_parse(input: &[u8]) -> Tree {

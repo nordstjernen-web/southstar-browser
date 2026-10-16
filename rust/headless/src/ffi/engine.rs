@@ -181,15 +181,6 @@ unsafe extern "C" {
         status: c_long,
         transport_error: *const c_char,
     ) -> *mut c_char;
-    fn ns_html_image_document(url: *const c_char) -> *mut c_char;
-    fn ns_html_json_document(url: *const c_char, json: *const c_char, len: usize) -> *mut c_char;
-    fn ns_html_xml_document(url: *const c_char, xml: *const c_char, len: usize) -> *mut c_char;
-    fn ns_html_decode_body_full(
-        body: *const c_char,
-        len: usize,
-        content_type: *const c_char,
-        charset_out: *mut *mut c_char,
-    ) -> *mut c_char;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
@@ -416,40 +407,24 @@ pub fn error_page(url: Option<&CStr>, status: c_long, transport_error: Option<&C
 }
 
 pub fn image_document(url: Option<&CStr>) -> Vec<u8> {
-    take_string(unsafe { ns_html_image_document(ptr_or_null(url)) }).unwrap_or_default()
+    southstar_html_util::image_document(url.map_or(&b""[..], CStr::to_bytes))
 }
 
-pub fn json_document(url: Option<&CStr>, json: Option<&CStr>) -> Option<Vec<u8>> {
-    let len = json.map_or(0, |j| j.to_bytes().len());
-    take_string(unsafe { ns_html_json_document(ptr_or_null(url), ptr_or_null(json), len) })
+pub fn json_document(url: Option<&CStr>, json: &[u8]) -> Option<Vec<u8>> {
+    southstar_html_util::json_document(url.map(CStr::to_bytes), json)
 }
 
-pub fn xml_document(url: Option<&CStr>, xml: Option<&CStr>) -> Option<Vec<u8>> {
-    let len = xml.map_or(0, |x| x.to_bytes().len());
-    take_string(unsafe { ns_html_xml_document(ptr_or_null(url), ptr_or_null(xml), len) })
+pub fn xml_document(url: Option<&CStr>, xml: &[u8]) -> Vec<u8> {
+    southstar_html_util::xml_document(url.map(CStr::to_bytes), xml)
 }
 
-pub fn decode_body(
-    body: Option<&[u8]>,
-    content_type: Option<&CStr>,
-) -> (Option<GStr>, Option<GStr>) {
-    let (data, len) = body.map_or((ptr::null(), 0), |b| (b.as_ptr().cast::<c_char>(), b.len()));
-    let mut charset: *mut c_char = ptr::null_mut();
-    let decoded =
-        unsafe { ns_html_decode_body_full(data, len, ptr_or_null(content_type), &mut charset) };
-    unsafe { (GStr::take(decoded), GStr::take(charset)) }
-}
-
-pub fn decode_body_text(body: &[u8], content_type: Option<&CStr>) -> Option<GStr> {
-    let decoded = unsafe {
-        ns_html_decode_body_full(
-            body.as_ptr().cast(),
-            body.len(),
-            ptr_or_null(content_type),
-            ptr::null_mut(),
-        )
-    };
-    unsafe { GStr::take(decoded) }
+pub fn decode_body(body: &[u8], content_type: Option<&CStr>) -> (Vec<u8>, Option<Vec<u8>>) {
+    let (mut decoded, charset) =
+        southstar_html_util::decode_body(body, content_type.map(CStr::to_bytes));
+    if let Some(nul) = decoded.iter().position(|&b| b == 0) {
+        decoded.truncate(nul);
+    }
+    (decoded, charset)
 }
 
 pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
@@ -468,11 +443,8 @@ pub fn suffix_before_ext(path: Option<&CStr>, suffix: &CStr) -> Option<GStr> {
 pub struct Document(Tree);
 
 impl Document {
-    pub fn parse(html: Option<&CStr>, scripting: bool) -> Option<Document> {
-        let html = html.map_or(&b""[..], CStr::to_bytes);
-        Some(Document(southstar_html_parser::parse_document(
-            html, scripting,
-        )))
+    pub fn parse(html: &[u8], scripting: bool) -> Document {
+        Document(southstar_html_parser::parse_document(html, scripting))
     }
 
     pub fn node(&self) -> Node<'static> {

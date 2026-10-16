@@ -73,22 +73,18 @@ fn is_pdf(ct: Option<&CStr>) -> bool {
     starts_ci(ct, b"application/pdf") || starts_ci(ct, b"application/x-pdf")
 }
 
-fn text_document(url: &CStr, text: Option<&CStr>) -> Option<GStr> {
+fn text_document(url: &CStr, text: &[u8]) -> Vec<u8> {
     let title = if url.is_empty() { c"text file" } else { url };
     let mut html = b"<!doctype html><html><head><meta charset=\"utf-8\"><title>".to_vec();
-    if let Some(esc_url) = ffi::html_escape_text(title) {
-        html.extend_from_slice(esc_url.to_bytes());
-        html.extend_from_slice(
-            b"</title><style>body{margin:0;background:#fff;color:#111}pre{margin:0;padding:12px;\
+    html.extend_from_slice(&southstar_html_util::escape_text(title.to_bytes()));
+    html.extend_from_slice(
+        b"</title><style>body{margin:0;background:#fff;color:#111}pre{margin:0;padding:12px;\
 font:13px/1.45 ui-monospace,\"SF Mono\",Menlo,Consolas,monospace;white-space:pre-wrap;\
 overflow-wrap:anywhere}</style></head><body><pre>",
-        );
-        if let Some(esc_text) = ffi::html_escape_text(text.unwrap_or(c"")) {
-            html.extend_from_slice(esc_text.to_bytes());
-            html.extend_from_slice(b"</pre></body></html>");
-        }
-    }
-    ffi::gstr_from(&html)
+    );
+    html.extend_from_slice(&southstar_html_util::escape_text(text));
+    html.extend_from_slice(b"</pre></body></html>");
+    html
 }
 
 fn prepare_document_response(resp: &mut Response) {
@@ -102,28 +98,28 @@ fn prepare_document_response(resp: &mut Response) {
     let final_url = resp
         .final_url()
         .map_or_else(|| c"".to_owned(), CStr::to_owned);
+    let url = Some(final_url.to_bytes());
     let html = if starts_ci(ct, b"image/") {
-        ffi::image_document(&final_url)
+        Some(southstar_html_util::image_document(final_url.to_bytes()))
     } else if is_pdf(ct) {
         resp.pdf_document(&final_url)
+            .map(|html| html.to_bytes().to_vec())
     } else if is_json(ct) {
-        let (decoded, _) = resp.decode_body(false);
-        ffi::json_document(&final_url, decoded.as_deref())
-            .or_else(|| text_document(&final_url, decoded.as_deref()))
+        let decoded = resp.decoded_text();
+        southstar_html_util::json_document(url, &decoded)
+            .or_else(|| Some(text_document(&final_url, &decoded)))
     } else if is_xml(ct) {
-        let (decoded, _) = resp.decode_body(false);
-        ffi::xml_document(&final_url, decoded.as_deref())
-            .or_else(|| text_document(&final_url, decoded.as_deref()))
+        let decoded = resp.decoded_text();
+        Some(southstar_html_util::xml_document(url, &decoded))
     } else if starts_ci(ct, b"text/") && !is_html(ct) {
-        let (decoded, _) = resp.decode_body(false);
-        text_document(&final_url, decoded.as_deref())
+        Some(text_document(&final_url, &resp.decoded_text()))
     } else {
         None
     };
     let Some(html) = html else {
         return;
     };
-    resp.set_body(html.to_bytes());
+    resp.set_body(&html);
     resp.set_content_type(HTML_UTF8);
 }
 

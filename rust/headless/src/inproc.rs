@@ -560,12 +560,12 @@ fn load_page(
             && (ct.starts_with(b"text/xml") || ct.starts_with(b"application/xml") || has(b"+xml"));
         if is_json || is_xml {
             let ct_c = cstring(&ct);
-            let decoded = ffi::decode_body_text(b, Some(&ct_c));
+            let (decoded, _) = ffi::decode_body(b, Some(&ct_c));
             let url = doc_url(&final_url);
             let html = if is_json {
-                ffi::json_document(Some(&url), decoded.as_deref())
+                ffi::json_document(Some(&url), &decoded)
             } else {
-                ffi::xml_document(Some(&url), decoded.as_deref())
+                Some(ffi::xml_document(Some(&url), &decoded))
             };
             if let Some(html) = html {
                 body = Some(html);
@@ -594,14 +594,15 @@ pub fn run_one(
     };
     let content_type = opt_cstring(&page.content_type);
     let final_url = opt_cstring(&page.final_url);
-    let (decoded, charset) = ffi::decode_body(page.body.as_deref(), content_type.as_deref());
+    let (decoded, charset) = ffi::decode_body(
+        page.body.as_deref().unwrap_or_default(),
+        content_type.as_deref(),
+    );
     if let Ok(mut c) = DOC_CHARSET.lock() {
-        *c = charset.map(|c| c.to_bytes().to_vec());
+        *c = charset;
     }
     let scripting = ffi::javascript_enabled();
-    let Some(doc) = Document::parse(decoded.as_deref(), scripting) else {
-        return 1;
-    };
+    let doc = Document::parse(&decoded, scripting);
     let page_url = final_url.clone().or_else(|| o.url.map(CStr::to_owned));
 
     let mut print_setup = ffi::print_setup_default();

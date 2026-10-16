@@ -79,16 +79,6 @@ unsafe extern "C" {
     fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
     fn ns_safebrowsing_allow_host(host: *const c_char);
     fn ns_safebrowsing_interstitial(url: *const c_char, host: *const c_char) -> *mut c_char;
-    fn ns_html_escape_text(s: *const c_char) -> *mut c_char;
-    fn ns_html_decode_body_full(
-        body: *const c_char,
-        len: usize,
-        content_type: *const c_char,
-        out_charset: *mut *mut c_char,
-    ) -> *mut c_char;
-    fn ns_html_image_document(url: *const c_char) -> *mut c_char;
-    fn ns_html_json_document(url: *const c_char, json: *const c_char, len: usize) -> *mut c_char;
-    fn ns_html_xml_document(url: *const c_char, xml: *const c_char, len: usize) -> *mut c_char;
     fn ns_pdf_document_html(data: *const u8, len: usize, url: *const c_char) -> *mut c_char;
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
@@ -242,22 +232,13 @@ impl Response {
         }
     }
 
-    pub fn decode_body(&self, want_charset: bool) -> (Option<GStr>, Option<GStr>) {
-        let (data, len) = self.body_parts();
-        let mut charset: *mut c_char = ptr::null_mut();
-        let out = unsafe {
-            ns_html_decode_body_full(
-                data.cast(),
-                len,
-                opt(self.content_type()),
-                if want_charset {
-                    &mut charset
-                } else {
-                    ptr::null_mut()
-                },
-            )
-        };
-        (take(out), take(charset))
+    pub fn decoded_text(&self) -> Vec<u8> {
+        let content_type = self.content_type().map(CStr::to_bytes);
+        let (mut decoded, _) = southstar_html_util::decode_body(self.body(), content_type);
+        if let Some(nul) = decoded.iter().position(|&b| b == 0) {
+            decoded.truncate(nul);
+        }
+        decoded
     }
 
     pub fn pdf_document(&self, url: &CStr) -> Option<GStr> {
@@ -347,24 +328,6 @@ pub fn html_parse_bytes(input: &[u8], scripting: bool) -> ParsedDoc {
 
 pub fn html_parse(input: Option<&CStr>, scripting: bool) -> ParsedDoc {
     ParsedDoc(input.map(|html| southstar_html_parser::parse_document(html.to_bytes(), scripting)))
-}
-
-pub fn html_escape_text(s: &CStr) -> Option<GStr> {
-    take(unsafe { ns_html_escape_text(s.as_ptr()) })
-}
-
-pub fn image_document(url: &CStr) -> Option<GStr> {
-    take(unsafe { ns_html_image_document(url.as_ptr()) })
-}
-
-pub fn json_document(url: &CStr, json: Option<&CStr>) -> Option<GStr> {
-    let len = json.map_or(0, |j| j.to_bytes().len());
-    take(unsafe { ns_html_json_document(url.as_ptr(), opt(json), len) })
-}
-
-pub fn xml_document(url: &CStr, xml: Option<&CStr>) -> Option<GStr> {
-    let len = xml.map_or(0, |x| x.to_bytes().len());
-    take(unsafe { ns_html_xml_document(url.as_ptr(), opt(xml), len) })
 }
 
 pub fn css_set_color_scheme(dark: bool) {

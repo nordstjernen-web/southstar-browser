@@ -1,8 +1,8 @@
-//! Southstar — the C ABI of the HTML helpers, and the GLib and uchardet calls behind them.
+//! Southstar — the GLib and uchardet calls behind the HTML helpers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
@@ -92,80 +92,4 @@ pub(crate) fn detect_charset(sample: &[u8]) -> Option<Vec<u8>> {
     }
     unsafe { uchardet_delete(detector) };
     charset
-}
-
-unsafe fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_escape_text(s: *const c_char) -> *mut c_char {
-    glib::strdup(&crate::escape_text(unsafe { text(s) }.unwrap_or_default()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_image_document(url: *const c_char) -> *mut c_char {
-    glib::strdup(&crate::image_document(
-        unsafe { text(url) }.unwrap_or_default(),
-    ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_json_document(
-    url: *const c_char,
-    json: *const c_char,
-    len: usize,
-) -> *mut c_char {
-    if json.is_null() {
-        return ptr::null_mut();
-    }
-    let body = unsafe { glib::slice(json.cast(), len) };
-    crate::json_document(unsafe { text(url) }, body)
-        .map_or(ptr::null_mut(), |html| glib::strdup(&html))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_xml_document(
-    url: *const c_char,
-    xml: *const c_char,
-    len: usize,
-) -> *mut c_char {
-    if xml.is_null() {
-        return ptr::null_mut();
-    }
-    let body = unsafe { glib::slice(xml.cast(), len) };
-    glib::strdup(&crate::xml_document(unsafe { text(url) }, body))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_declared_charset(
-    body: *const c_char,
-    len: usize,
-    content_type: *const c_char,
-) -> *mut c_char {
-    let body = (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), len) });
-    crate::declared_charset(body, unsafe { text(content_type) })
-        .map_or(ptr::null_mut(), |name| glib::strdup(name.as_bytes()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_decode_body_full(
-    body: *const c_char,
-    len: usize,
-    content_type: *const c_char,
-    charset_out: *mut *mut c_char,
-) -> *mut c_char {
-    if !charset_out.is_null() {
-        unsafe { *charset_out = ptr::null_mut() };
-    }
-    let body = if body.is_null() {
-        &[][..]
-    } else {
-        unsafe { glib::slice(body.cast(), len) }
-    };
-    let (decoded, charset) = crate::decode_body(body, unsafe { text(content_type) });
-    if let (Some(charset), false) = (charset, charset_out.is_null()) {
-        unsafe { *charset_out = glib::strdup(&charset) };
-    }
-    glib::strdup(&decoded)
 }
