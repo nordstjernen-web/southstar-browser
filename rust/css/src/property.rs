@@ -425,6 +425,10 @@ fn requires_nonnegative(prop: Prop) -> bool {
     matches!(
         prop,
         Prop::FontSize
+            | Prop::ScrollPaddingTop
+            | Prop::ScrollPaddingRight
+            | Prop::ScrollPaddingBottom
+            | Prop::ScrollPaddingLeft
             | Prop::PaddingTop
             | Prop::PaddingRight
             | Prop::PaddingBottom
@@ -464,8 +468,20 @@ fn bare_number_is_length(prop: Prop) -> bool {
     )
 }
 
+fn is_scroll_margin(prop: Prop) -> bool {
+    matches!(
+        prop,
+        Prop::ScrollMarginTop
+            | Prop::ScrollMarginRight
+            | Prop::ScrollMarginBottom
+            | Prop::ScrollMarginLeft
+    )
+}
+
 fn numeric_valid(prop: Prop, body: &Body) -> bool {
     match body {
+        Body::Length(_, PERCENT) if is_scroll_margin(prop) => false,
+        Body::Calc(c) if is_scroll_margin(prop) && c.pct != 0.0 => false,
         Body::Length(num, unit) => {
             let (num, unit) = (*num, *unit);
             if prop == Prop::Opacity {
@@ -696,6 +712,22 @@ fn clip_rect(t: &[u8]) -> Option<Value> {
         idx += 1;
     }
     (idx == 4).then(|| Value::of(Body::Rect(rect)))
+}
+
+const BLEND_MODES: &str = "normal multiply screen overlay darken lighten color-dodge color-burn hard-light soft-light difference exclusion hue saturation color luminosity";
+
+fn blend_mode_list(t: &[u8]) -> Option<Value> {
+    let mut out = Vec::new();
+    for part in t.split(|&c| c == b',') {
+        let Body::Keyword(kw) = keyword_choice(strip(part), BLEND_MODES)?.body else {
+            return None;
+        };
+        if !out.is_empty() {
+            out.extend_from_slice(b", ");
+        }
+        out.extend_from_slice(&kw);
+    }
+    Some(Value::keyword(out))
 }
 
 fn color_value(t: &[u8]) -> Option<Value> {
@@ -1816,6 +1848,11 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::FontLanguageOverride => font_language_override(t),
         P::HangingPunctuation => hanging_punctuation(t),
         P::TextAutospace => text_autospace(t),
+        P::OverscrollBehaviorX | P::OverscrollBehaviorY => {
+            keyword_choice(t, "auto contain none chain")
+        }
+        P::Interactivity => keyword_choice(t, "auto inert"),
+        P::BackgroundBlendMode => blend_mode_list(t),
         P::FontVariantLigatures => {
             if eq(t.trim_ascii(), b"none") {
                 Some(Value::keyword(b"none".to_vec()))

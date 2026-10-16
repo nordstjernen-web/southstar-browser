@@ -248,6 +248,7 @@ pub(crate) const COMPUTED_PROPS: &[&str] = &[
     "inset-block-start",
     "inset-inline-end",
     "inset-inline-start",
+    "interactivity",
     "isolation",
     "justify-content",
     "justify-items",
@@ -299,6 +300,10 @@ pub(crate) const COMPUTED_PROPS: &[&str] = &[
     "overflow-inline",
     "overflow-x",
     "overflow-y",
+    "overscroll-behavior-block",
+    "overscroll-behavior-inline",
+    "overscroll-behavior-x",
+    "overscroll-behavior-y",
     "padding-block-end",
     "padding-block-start",
     "padding-bottom",
@@ -1085,6 +1090,9 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
         "scroll-padding" => four(sides("scroll-padding-", "")),
         "flex" => joined_shorthand(js, n, &["flex-grow", "flex-shrink", "flex-basis"]),
         "flex-flow" => joined_shorthand(js, n, &["flex-direction", "flex-wrap"]),
+        "overscroll-behavior" => {
+            pair_shorthand(js, n, "overscroll-behavior-x", "overscroll-behavior-y")
+        }
         "place-items" => pair_shorthand(js, n, "align-items", "justify-items"),
         "place-content" => pair_shorthand(js, n, "align-content", "justify-content"),
         "place-self" => pair_shorthand(js, n, "align-self", "justify-self"),

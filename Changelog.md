@@ -38,6 +38,13 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* overscroll-behavior (with its -x, -y, -inline and -block longhands),
+  interactivity and background-blend-mode are known properties, and
+  the logical scroll-margin-block/-inline and scroll-padding-block/-inline
+  shorthands and longhands map onto the physical sides. scroll-margin no
+  longer accepts percentages and scroll-padding no longer accepts negative
+  lengths. WPT: +254 subtests across css-overscroll-behavior,
+  css-scroll-snap, compositing and css-ui parsing.
 * CSS colours keep their colour space. lab(), lch(), oklab(), oklch()
   and color() with every predefined space (display-p3, rec2020,
   xyz-d50, ...) are parsed, computed and serialized in their own space

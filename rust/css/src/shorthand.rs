@@ -154,7 +154,17 @@ const BORDER_PAIRS: [(&[u8], Prop, Prop); 6] = [
     ),
 ];
 
-const ALIASES: [(&[u8], Prop); 41] = [
+const ALIASES: [(&[u8], Prop); 51] = [
+    (b"scroll-margin-block-start", Prop::ScrollMarginTop),
+    (b"scroll-margin-block-end", Prop::ScrollMarginBottom),
+    (b"scroll-margin-inline-start", Prop::ScrollMarginLeft),
+    (b"scroll-margin-inline-end", Prop::ScrollMarginRight),
+    (b"scroll-padding-block-start", Prop::ScrollPaddingTop),
+    (b"scroll-padding-block-end", Prop::ScrollPaddingBottom),
+    (b"scroll-padding-inline-start", Prop::ScrollPaddingLeft),
+    (b"scroll-padding-inline-end", Prop::ScrollPaddingRight),
+    (b"overscroll-behavior-inline", Prop::OverscrollBehaviorX),
+    (b"overscroll-behavior-block", Prop::OverscrollBehaviorY),
     (b"grid-row-gap", Prop::RowGap),
     (b"grid-column-gap", Prop::ColumnGap),
     (b"-webkit-user-select", Prop::UserSelect),
@@ -287,6 +297,44 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
             }
         }
         b"mask" | b"-webkit-mask" => mask(&mut out, text),
+        b"overscroll-behavior" => axis_pair(
+            &mut out,
+            text,
+            Prop::OverscrollBehaviorX,
+            Prop::OverscrollBehaviorY,
+        ),
+        b"scroll-margin-block" => {
+            axis_pair(
+                &mut out,
+                text,
+                Prop::ScrollMarginTop,
+                Prop::ScrollMarginBottom,
+            );
+        }
+        b"scroll-margin-inline" => {
+            axis_pair(
+                &mut out,
+                text,
+                Prop::ScrollMarginLeft,
+                Prop::ScrollMarginRight,
+            );
+        }
+        b"scroll-padding-block" => {
+            axis_pair(
+                &mut out,
+                text,
+                Prop::ScrollPaddingTop,
+                Prop::ScrollPaddingBottom,
+            );
+        }
+        b"scroll-padding-inline" => {
+            axis_pair(
+                &mut out,
+                text,
+                Prop::ScrollPaddingLeft,
+                Prop::ScrollPaddingRight,
+            );
+        }
         b"background" => background(&mut out, text),
         b"background-position" => background_position(&mut out, text),
         b"object-position" => object_position(&mut out, text),
@@ -673,6 +721,23 @@ fn border_pair(out: &mut Out, text: &[u8], a: Prop, b: Prop) {
     if let Some(&first) = tokens.first() {
         out.emit(a, first);
         out.emit(b, tokens.get(1).copied().unwrap_or(first));
+    }
+}
+
+fn axis_pair(out: &mut Out, text: &[u8], a: Prop, b: Prop) {
+    if let Some(wide) = wide_keyword(text) {
+        out.shared(&[a, b], wide);
+        return;
+    }
+    let tokens = split_ws_limit(text, 3);
+    if !(1..=2).contains(&tokens.len()) {
+        return;
+    }
+    let first = parse(a, tokens[0]);
+    let second = parse(b, tokens[tokens.len() - 1]);
+    if let (Some(first), Some(second)) = (first, second) {
+        out.push(a, first);
+        out.push(b, second);
     }
 }
 

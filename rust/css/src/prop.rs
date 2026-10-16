@@ -261,10 +261,14 @@ pub enum Prop {
     FontLanguageOverride,
     HangingPunctuation,
     TextAutospace,
+    OverscrollBehaviorX,
+    OverscrollBehaviorY,
+    Interactivity,
+    BackgroundBlendMode,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 253] = [
+    pub(crate) const ALL: [Prop; 257] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -518,6 +522,10 @@ impl Prop {
         Prop::FontLanguageOverride,
         Prop::HangingPunctuation,
         Prop::TextAutospace,
+        Prop::OverscrollBehaviorX,
+        Prop::OverscrollBehaviorY,
+        Prop::Interactivity,
+        Prop::BackgroundBlendMode,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -556,6 +564,7 @@ impl Prop {
                 | Prop::FontLanguageOverride
                 | Prop::HangingPunctuation
                 | Prop::TextAutospace
+                | Prop::Interactivity
                 | Prop::FontVariantLigatures
                 | Prop::FontFeatureSettings
                 | Prop::FontVariationSettings
@@ -867,6 +876,10 @@ impl Prop {
             Prop::FontLanguageOverride => c"font-language-override",
             Prop::HangingPunctuation => c"hanging-punctuation",
             Prop::TextAutospace => c"text-autospace",
+            Prop::OverscrollBehaviorX => c"overscroll-behavior-x",
+            Prop::OverscrollBehaviorY => c"overscroll-behavior-y",
+            Prop::Interactivity => c"interactivity",
+            Prop::BackgroundBlendMode => c"background-blend-mode",
         }
     }
 }
@@ -900,7 +913,17 @@ const ALIASES: [(&[u8], Prop); 17] = [
     (b"-moz-appearance", Prop::Appearance),
 ];
 
-const LOGICAL: [(&[u8], &[u8]); 34] = [
+const LOGICAL: [(&[u8], &[u8]); 44] = [
+    (b"scroll-margin-block-start", b"scroll-margin-top"),
+    (b"scroll-margin-block-end", b"scroll-margin-bottom"),
+    (b"scroll-margin-inline-start", b"scroll-margin-left"),
+    (b"scroll-margin-inline-end", b"scroll-margin-right"),
+    (b"scroll-padding-block-start", b"scroll-padding-top"),
+    (b"scroll-padding-block-end", b"scroll-padding-bottom"),
+    (b"scroll-padding-inline-start", b"scroll-padding-left"),
+    (b"scroll-padding-inline-end", b"scroll-padding-right"),
+    (b"overscroll-behavior-inline", b"overscroll-behavior-x"),
+    (b"overscroll-behavior-block", b"overscroll-behavior-y"),
     (b"margin-block-start", b"margin-top"),
     (b"margin-block-end", b"margin-bottom"),
     (b"margin-inline-start", b"margin-left"),
