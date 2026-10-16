@@ -13,6 +13,7 @@ southstar-cairo = { path = "../cairo" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-css-syntax = { path = "../css-syntax" }
+southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }

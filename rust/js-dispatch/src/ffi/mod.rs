@@ -5,7 +5,7 @@
 mod exports;
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::borrow::Cow;
 
@@ -28,7 +28,7 @@ pub(crate) struct CheckableState {
     checked_radio: *mut NsNode,
 }
 
-const DLOG_ERROR: c_uint = 2;
+const DLOG_ERROR: c_int = 2;
 
 unsafe extern "C" {
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> ContextHandle;
@@ -54,7 +54,6 @@ unsafe extern "C" {
     fn ns_click_activation_target(el: *const NsNode) -> *const NsNode;
     fn ns_node_has_activation_behavior(el: *const NsNode) -> GBoolean;
     fn ns_js_synthetic_activation(js: *mut NsJs, act: *const NsNode, target: *const NsNode);
-    fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
 }
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
@@ -63,11 +62,6 @@ pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
 
 fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy())
-}
-
-fn with_c<R>(text: &str, f: impl FnOnce(*const c_char) -> R) -> R {
-    let owned = std::ffi::CString::new(text.replace('\0', " ")).unwrap_or_default();
-    f(owned.as_ptr())
 }
 
 impl Js {
@@ -386,9 +380,11 @@ pub(crate) fn global_of(ctx: ContextHandle) -> Value {
 }
 
 pub(crate) fn debug_error(category: &CStr, message: &str) {
-    with_c(message, |message| unsafe {
-        ns_debug_log_emit_take(DLOG_ERROR, category.as_ptr(), glib::g_strdup(message))
-    });
+    southstar_debuglog::emit(
+        DLOG_ERROR,
+        category.to_bytes(),
+        message.replace('\0', " ").as_bytes(),
+    );
 }
 
 fn handler_index(scope: &mut Scope<'_>, data: &[Value]) -> usize {

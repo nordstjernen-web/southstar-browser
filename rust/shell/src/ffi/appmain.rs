@@ -52,9 +52,9 @@ const LOG_LEVEL_CRITICAL: c_uint = 1 << 3;
 const LOG_LEVEL_WARNING: c_uint = 1 << 4;
 #[cfg(target_os = "linux")]
 const LOG_LEVEL_MESSAGE: c_uint = 1 << 5;
-const DLOG_INFO: c_uint = 0;
-const DLOG_WARN: c_uint = 1;
-const DLOG_ERROR: c_uint = 2;
+const DLOG_INFO: c_int = 0;
+const DLOG_WARN: c_int = 1;
+const DLOG_ERROR: c_int = 2;
 const FILE_TEST_EXISTS: c_uint = 1 << 4;
 #[cfg(any(windows, target_os = "macos"))]
 const FILE_TEST_IS_DIR: c_uint = 1 << 2;
@@ -87,8 +87,6 @@ unsafe extern "C" {
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
 
-    fn ns_debug_log_init();
-    fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn ns_security_refuse_root() -> GBoolean;
     fn ns_security_sandbox_init(self_exe: *const c_char);
     fn ns_security_add_writable_dir(dir: *const c_char);
@@ -320,9 +318,7 @@ unsafe extern "C" fn log_writer(
             DLOG_INFO
         };
         let category = domain.unwrap_or(c"glib");
-        unsafe {
-            ns_debug_log_emit_take(level, category.as_ptr(), g_strdup(message.as_ptr()));
-        }
+        southstar_debuglog::emit(level, category.to_bytes(), message.to_bytes());
     }
     unsafe { g_log_writer_default(log_level, fields, n_fields, user_data) }
 }
@@ -785,7 +781,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
     unsafe {
-        ns_debug_log_init();
+        southstar_debuglog::init();
         g_log_set_writer_func(log_writer, ptr::null_mut(), None);
     }
     #[cfg(windows)]

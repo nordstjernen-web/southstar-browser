@@ -46,7 +46,7 @@ struct ScriptTask {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<ResourceTiming>() == 56);
 
-const DLOG_JS: c_uint = 5;
+const DLOG_JS: c_int = 5;
 
 #[derive(Clone, Copy)]
 pub(crate) enum ProtoTable {
@@ -164,7 +164,6 @@ unsafe extern "C" {
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
 
-    fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
     fn ns_install_web_api_shapes(ctx: ContextHandle);
@@ -495,7 +494,7 @@ pub(crate) fn build_document_indexes(doc: Element) {
 }
 
 pub(crate) fn debug_js(category: &CStr, message: &[u8]) {
-    unsafe { ns_debug_log_emit_take(DLOG_JS, category.as_ptr(), glib::strdup(message)) };
+    southstar_debuglog::emit(DLOG_JS, category.to_bytes(), message);
 }
 
 pub(crate) fn profile_enabled() -> bool {

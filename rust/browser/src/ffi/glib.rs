@@ -18,7 +18,7 @@ pub struct GString {
 pub type SourceFunc = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
 
 const LOG_LEVEL_MESSAGE: c_int = 1 << 5;
-const DLOG_JS: c_uint = 5;
+const DLOG_JS: c_int = 5;
 
 unsafe extern "C" {
     fn g_string_new(init: *const c_char) -> *mut GString;
@@ -40,7 +40,6 @@ unsafe extern "C" {
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_printerr(format: *const c_char, ...);
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn malloc(size: usize) -> *mut c_void;
     fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut glib::GError)
     -> *mut c_void;
@@ -230,7 +229,7 @@ pub fn gstr_from(bytes: &[u8]) -> Option<GStr> {
 }
 
 pub fn debug_log_console(line: &CStr) {
-    unsafe { ns_debug_log_emit_take(DLOG_JS, c"console".as_ptr(), glib::g_strdup(line.as_ptr())) };
+    southstar_debuglog::emit(DLOG_JS, b"console", line.to_bytes());
 }
 
 pub fn malloc_dup(bytes: &[u8]) -> *mut c_char {

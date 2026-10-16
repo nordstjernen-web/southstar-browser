@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_ulong, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
@@ -25,7 +25,6 @@ unsafe extern "C" {
     fn g_usleep(microseconds: c_ulong);
     fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
     fn g_strcompress(source: *const c_char) -> *mut c_char;
-    fn ns_dlog_level_name(level: c_uint) -> *const c_char;
 }
 
 pub struct MainLoop(NonNull<GMainLoop>);
@@ -105,6 +104,5 @@ pub fn file_contents(path: &[u8]) -> Option<GStr> {
 }
 
 pub fn dlog_level_name(level: u32) -> Option<&'static [u8]> {
-    let name = unsafe { ns_dlog_level_name(level) };
-    (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_bytes())
+    Some(southstar_debuglog::level_name(level as c_int).to_bytes())
 }

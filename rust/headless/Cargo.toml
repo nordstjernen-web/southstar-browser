@@ -15,6 +15,7 @@ southstar-anim = { path = "../anim" }
 southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
+southstar-debuglog = { path = "../debuglog" }
 southstar-digest = { path = "../digest" }
 southstar-dom = { path = "../dom" }
 southstar-engine = { path = "../engine" }

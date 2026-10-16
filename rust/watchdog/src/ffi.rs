@@ -178,7 +178,7 @@ mod os {
 
 #[cfg(windows)]
 mod os {
-    use core::ffi::{CStr, c_char, c_int, c_void};
+    use core::ffi::{c_char, c_int, c_void};
     use core::{mem, ptr};
     use std::ffi::CString;
 
@@ -265,7 +265,6 @@ mod os {
 
     unsafe extern "C" {
         fn g_win32_error_message(error: c_int) -> *mut c_char;
-        fn ns_debug_log_file_path() -> *const c_char;
     }
 
     fn wide(text: &str) -> Vec<u16> {
@@ -338,14 +337,10 @@ mod os {
     }
 
     pub(super) fn report_failure(detail: &str) {
-        let log = unsafe { ns_debug_log_file_path() };
-        let log = if log.is_null() {
-            "(log file unavailable)".to_owned()
-        } else {
-            unsafe { CStr::from_ptr(log) }
-                .to_string_lossy()
-                .into_owned()
-        };
+        let log = southstar_debuglog::file_path().map_or_else(
+            || "(log file unavailable)".to_owned(),
+            |log| log.to_string_lossy().into_owned(),
+        );
         let body = format!(
             "Southstar could not start.\n\n{detail}\n\nA diagnostic log was written to:\n{log}\n\n\
              If this persists, try launching with the cairo renderer by setting the environment \

@@ -14,6 +14,7 @@ southstar-cairo = { path = "../cairo" }
 southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
+southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
 southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }

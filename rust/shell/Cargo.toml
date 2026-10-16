@@ -15,6 +15,7 @@ path = "src/lib.rs"
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
+southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }

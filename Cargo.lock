@@ -1744,6 +1744,7 @@ dependencies = [
  "southstar-config",
  "southstar-css",
  "southstar-css-media",
+ "southstar-debuglog",
  "southstar-dom",
  "southstar-engine",
  "southstar-glib",
@@ -1907,6 +1908,7 @@ dependencies = [
  "southstar-css",
  "southstar-css-media",
  "southstar-css-syntax",
+ "southstar-debuglog",
  "southstar-dom",
  "southstar-glib",
  "southstar-image",
@@ -2105,6 +2107,7 @@ dependencies = [
  "southstar-config",
  "southstar-css",
  "southstar-css-media",
+ "southstar-debuglog",
  "southstar-digest",
  "southstar-dom",
  "southstar-engine",
@@ -2335,6 +2338,7 @@ dependencies = [
 name = "southstar-js-dispatch"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-debuglog",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-bind",
@@ -2669,6 +2673,7 @@ name = "southstar-js-page"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
+ "southstar-debuglog",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-bind",
@@ -3112,6 +3117,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-config",
+ "southstar-debuglog",
  "southstar-digest",
  "southstar-glib",
  "southstar-history",
@@ -3267,6 +3273,7 @@ dependencies = [
  "southstar-bookmarks",
  "southstar-bytecode-cache",
  "southstar-config",
+ "southstar-debuglog",
  "southstar-dom",
  "southstar-ffi",
  "southstar-glib",
@@ -3367,6 +3374,7 @@ dependencies = [
 name = "southstar-watchdog"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-debuglog",
  "southstar-glib",
 ]
 

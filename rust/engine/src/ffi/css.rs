@@ -20,8 +20,6 @@ unsafe extern "C" {
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_box_free(b: *mut NsBox);
-    fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
-    fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn g_printerr(format: *const c_char, ...);
 }
 
@@ -243,13 +241,7 @@ pub fn discard_layout(js: *mut c_void, styles: *mut GHashTable, out_layout: *mut
 }
 
 pub fn log_relayout(styles: *mut GHashTable, viewport_width: c_int) {
-    const DLOG_RENDER: c_uint = 3;
-    unsafe {
-        let message = g_strdup_printf(
-            c"styles=%u vw=%d".as_ptr(),
-            table_size(styles),
-            viewport_width,
-        );
-        ns_debug_log_emit_take(DLOG_RENDER, c"relayout".as_ptr(), message);
-    }
+    const DLOG_RENDER: c_int = 3;
+    let message = format!("styles={} vw={}", table_size(styles), viewport_width);
+    southstar_debuglog::emit(DLOG_RENDER, b"relayout", message.as_bytes());
 }

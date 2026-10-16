@@ -11,10 +11,6 @@ use crate::netlog::{self, Entry};
 
 const DLOG_NET: c_int = 4;
 
-unsafe extern "C" {
-    fn ns_debug_log_emit_take(level: c_int, category: *const c_char, message: *mut c_char);
-}
-
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
 }
@@ -75,7 +71,7 @@ pub unsafe extern "C" fn ns_net_conn_stat_record(
     else {
         return;
     };
-    unsafe { ns_debug_log_emit_take(DLOG_NET, c"conn".as_ptr(), glib::strdup(&message)) };
+    southstar_debuglog::emit(DLOG_NET, b"conn", &message);
 }
 
 #[unsafe(no_mangle)]

@@ -70,7 +70,6 @@ unsafe extern "C" {
         pretty_function: *const c_char,
         expression: *const c_char,
     );
-    fn ns_debug_log_emit_take(level: c_int, category: *const c_char, message: *mut c_char);
 }
 
 struct Task(*mut c_void);
@@ -324,7 +323,7 @@ fn submit(task: Task) {
 }
 
 fn log_fetch(message: Vec<u8>) {
-    unsafe { ns_debug_log_emit_take(DLOG_NET, c"fetch".as_ptr(), glib::strdup(&message)) };
+    southstar_debuglog::emit(DLOG_NET, b"fetch", &message);
 }
 
 fn log_outcome(url: &[u8], outcome: Result<&Response, &Failure>) {

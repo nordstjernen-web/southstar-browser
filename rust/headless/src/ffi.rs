@@ -71,24 +71,13 @@ pub struct NsHeadlessOpts {
 }
 
 #[repr(C)]
-struct DlogEntry {
-    _monotonic_us: i64,
-    level: c_uint,
-    category: *const c_char,
-    message: *const c_char,
-}
-
-#[repr(C)]
 struct GMainLoop {
     _private: [u8; 0],
 }
 
-type DlogListener = unsafe extern "C" fn(entry: *const DlogEntry, ud: *mut c_void);
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_debug_log_subscribe(cb: DlogListener, ud: *mut c_void) -> c_uint;
-    fn ns_debug_log_unsubscribe(id: c_uint);
     fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
     fn g_main_loop_run(main_loop: *mut GMainLoop);
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
@@ -145,34 +134,17 @@ pub fn javascript_enabled() -> bool {
     southstar_config::get().is_none_or(|cfg| cfg.javascript_enabled != 0)
 }
 
-unsafe extern "C" fn on_dlog(entry: *const DlogEntry, ud: *mut c_void) {
-    let Some(e) = (unsafe { entry.as_ref() }) else {
-        return;
-    };
-    let mask = ud as usize as u32;
-    if mask & 1u32.checked_shl(e.level).unwrap_or(0) == 0 {
+fn on_dlog(mask: u32, e: &southstar_debuglog::Entry) {
+    let level = e.level as u32;
+    if mask & 1u32.checked_shl(level).unwrap_or(0) == 0 {
         return;
     }
-    let name = dlog_level_name(e.level).unwrap_or(b"(null)");
-    let category = c_str(e.category).map_or(&b""[..], CStr::to_bytes);
-    let message = c_str(e.message).map_or(&b""[..], CStr::to_bytes);
-    err(&[b"[", name, b" ", category, b"] ", message, b"\n"].concat());
+    let name = dlog_level_name(level).unwrap_or(b"(null)");
+    err(&[b"[", name, b" ", &e.category, b"] ", &e.message, b"\n"].concat());
 }
 
-pub struct DlogSubscription(c_uint);
-
-pub fn subscribe_dlog(mask: u32) -> Option<DlogSubscription> {
-    if mask == 0 {
-        return None;
-    }
-    let id = unsafe { ns_debug_log_subscribe(on_dlog, mask as usize as *mut c_void) };
-    (id != 0).then(|| DlogSubscription(id))
-}
-
-impl Drop for DlogSubscription {
-    fn drop(&mut self) {
-        unsafe { ns_debug_log_unsubscribe(self.0) };
-    }
+pub fn subscribe_dlog(mask: u32) -> Option<southstar_debuglog::Subscription> {
+    (mask != 0).then(|| southstar_debuglog::subscribe(move |e| on_dlog(mask, e)))
 }
 
 unsafe extern "C" fn quit_loop(data: *mut c_void) -> GBoolean {
