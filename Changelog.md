@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A custom property declared with an empty value (--x: ;) substitutes
+  nothing into var(--x) instead of falling back. CSS minifiers such as
+  lightningcss lower light-dark() to a pair of these toggles
+  (var(--light, #264323) var(--dark, #141413)), so every such color came
+  out invalid: crates.io lost its green header and page background.
 * An absolutely positioned ::before/::after of an inline element starts
   where it sits in the line, like an absolutely positioned child element:
   it left no placeholder in the line, so with no insets it was placed at
