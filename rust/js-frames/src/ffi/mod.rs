@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) mod ctx;
+pub(crate) mod form;
 mod imports;
 pub(crate) mod load;
 
@@ -723,6 +724,25 @@ pub unsafe extern "C" fn ns_js_scrub_iframe_globals(js: *mut NsJs, iframe: *cons
     if let Some(iframe) = unsafe { Node::from_ptr(iframe) } {
         globals::scrub(Js::of(js), iframe);
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_frame_submit_form(
+    js: *mut NsJs,
+    form: *const NsNode,
+    submitter: *const NsNode,
+) -> GBoolean {
+    // SAFETY: the caller passes a live form node or null.
+    let Some(form) = (unsafe { Node::from_ptr(form) }) else {
+        return glib::FALSE;
+    };
+    // SAFETY: the caller passes a live submitter node or null.
+    let submitter = unsafe { Node::from_ptr(submitter) };
+    glib::boolean(crate::submit::submit_into_frame(
+        Js::of(js),
+        form,
+        submitter,
+    ))
 }
 
 #[unsafe(no_mangle)]

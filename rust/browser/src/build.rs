@@ -255,5 +255,8 @@ pub fn submit_form(b: &NsBrowser, clicked: Option<Node<'_>>) {
             return;
         }
     }
-    perform_form_navigation(b, form, Some(clicked));
+    match b.js() {
+        Some(js) => js.submit_form(form, clicked),
+        None => perform_form_navigation(b, form, Some(clicked)),
+    }
 }

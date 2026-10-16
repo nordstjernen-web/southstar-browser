@@ -415,11 +415,28 @@ unsafe extern "C" fn pumped_fetch_done(
     }
 }
 
+pub(crate) struct RequestBody {
+    pub method: *const c_char,
+    pub data: *const c_void,
+    pub len: usize,
+    pub content_type: *const c_char,
+}
+
+impl RequestBody {
+    pub(crate) const GET: RequestBody = RequestBody {
+        method: c"GET".as_ptr(),
+        data: ptr::null(),
+        len: 0,
+        content_type: ptr::null(),
+    };
+}
+
 pub(crate) unsafe fn fetch_resource(
     js: Option<Js>,
     url: *const c_char,
     top_url: *const c_char,
     headers: *const *const c_char,
+    body: &RequestBody,
     error: *mut *mut GError,
 ) -> *mut Response {
     let js = match js {
@@ -428,10 +445,10 @@ pub(crate) unsafe fn fetch_resource(
             return ns_net_request_blocking(
                 url,
                 top_url,
-                c"GET".as_ptr(),
-                ptr::null(),
-                0,
-                ptr::null(),
+                body.method,
+                body.data,
+                body.len,
+                body.content_type,
                 headers,
                 ptr::null_mut(),
                 error,
@@ -449,10 +466,10 @@ pub(crate) unsafe fn fetch_resource(
         ns_net_request_async(
             url,
             top_url,
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
+            body.method,
+            body.data,
+            body.len,
+            body.content_type,
             headers,
             ptr::null_mut(),
             pumped_fetch_done,

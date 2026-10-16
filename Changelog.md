@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A form whose target names an iframe now loads its response into that
+  iframe, with a GET query or a POST body, instead of navigating the whole
+  tab; a form inside an iframe navigates its own frame. Rakuten's tag
+  manager posts to a hidden iframe on every page view, which replaced the
+  page with a blank document.
 * SHA digests and base64 come from rust/digest, a new crate that forbids
   unsafe code and hashes through ring, already in the tree for TLS. CSP
   hash-sources, Subresource Integrity, the HTTP cache keys, the bytecode,

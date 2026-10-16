@@ -15,12 +15,18 @@ use crate::ffi::ctx::Ctx;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Frame(pub usize);
 
+pub(crate) struct Navigation {
+    pub url: CString,
+    pub form_body: Option<Vec<u8>>,
+}
+
 #[derive(Default)]
 pub(crate) struct FrameEntry {
     pub realm: Option<Ctx>,
     pub window: Option<Value>,
     pub url: Option<CString>,
     pub referrer: Option<CString>,
+    pub navigation: Option<Navigation>,
 }
 
 impl FrameEntry {
@@ -29,6 +35,7 @@ impl FrameEntry {
             && self.window.is_none()
             && self.url.is_none()
             && self.referrer.is_none()
+            && self.navigation.is_none()
     }
 }
 

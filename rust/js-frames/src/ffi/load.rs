@@ -85,6 +85,10 @@ unsafe extern "C" {
         url: *const c_char,
         top_url: *const c_char,
         headers: *const *const c_char,
+        method: *const c_char,
+        body: *const c_void,
+        body_len: usize,
+        content_type: *const c_char,
         error: *mut *mut GError,
     ) -> *mut NsResponse;
     fn ns_js_fetch_subresource(
@@ -332,15 +336,29 @@ pub(crate) fn fetch_resource(
     url: &CStr,
     top_url: &CStr,
     header: &CStr,
+    form_body: Option<&[u8]>,
 ) -> (Option<Response>, Option<CString>) {
     let headers = [header.as_ptr(), core::ptr::null()];
     let mut error: *mut GError = core::ptr::null_mut();
+    let (method, body, body_len, content_type) = match form_body {
+        Some(body) => (
+            c"POST".as_ptr(),
+            body.as_ptr().cast(),
+            body.len(),
+            c"application/x-www-form-urlencoded".as_ptr(),
+        ),
+        None => (c"GET".as_ptr(), core::ptr::null(), 0, core::ptr::null()),
+    };
     let resp = unsafe {
         ns_js_fetch_resource(
             js.ptr(),
             url.as_ptr(),
             top_url.as_ptr(),
             headers.as_ptr(),
+            method,
+            body,
+            body_len,
+            content_type,
             &mut error,
         )
     };

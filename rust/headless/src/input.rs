@@ -114,14 +114,15 @@ pub fn submit_form_from(fc: &Ctx, nav: &NavCapture, trigger: Node) {
         err(&[b"[headless] form blocked by invalid field ", name, b"\n"].concat());
         return;
     }
-    if let Some(js) = fc.js {
-        let prevented = js.dispatch_submit(form, trigger);
-        ffi::consume_mutated(Some(js));
-        if prevented {
-            return;
-        }
+    let Some(js) = fc.js else {
+        crate::inproc::form_submit(nav, form, Some(trigger));
+        return;
+    };
+    let prevented = js.dispatch_submit(form, trigger);
+    ffi::consume_mutated(Some(js));
+    if !prevented {
+        js.submit_form(form, trigger);
     }
-    crate::inproc::form_submit(nav, form, Some(trigger));
 }
 
 fn is_control(n: Node) -> bool {

@@ -129,9 +129,23 @@ pub unsafe extern "C" fn ns_js_fetch_resource(
     url: *const c_char,
     top_url: *const c_char,
     headers: *const *const c_char,
+    method: *const c_char,
+    body: *const c_void,
+    body_len: usize,
+    content_type: *const c_char,
     error: *mut *mut GError,
 ) -> *mut Response {
-    unsafe { glue::fetch_resource(Js::of(js), url, top_url, headers, error) }
+    let body = if method.is_null() {
+        glue::RequestBody::GET
+    } else {
+        glue::RequestBody {
+            method,
+            data: body,
+            len: body_len,
+            content_type,
+        }
+    };
+    unsafe { glue::fetch_resource(Js::of(js), url, top_url, headers, &body, error) }
 }
 
 #[unsafe(no_mangle)]
@@ -145,7 +159,19 @@ pub unsafe extern "C" fn ns_js_fetch_subresource(
     info: *const c_void,
 ) -> *mut Response {
     let start = super::monotonic_us();
-    let response = unsafe { ns_js_fetch_resource(js, url, top_url, headers, error) };
+    let response = unsafe {
+        ns_js_fetch_resource(
+            js,
+            url,
+            top_url,
+            headers,
+            ptr::null(),
+            ptr::null(),
+            0,
+            ptr::null(),
+            error,
+        )
+    };
     if let Some(js) = Js::of(js)
         && js.st().worker_host.get().is_null()
         && !initiator.is_null()
@@ -730,6 +756,17 @@ pub unsafe extern "C" fn ns_js_submit_form(
     form: *const NsNode,
     submitter: *const NsNode,
 ) {
+    unsafe extern "C" {
+        fn ns_js_frame_submit_form(
+            js: *mut NsJs,
+            form: *const NsNode,
+            submitter: *const NsNode,
+        ) -> GBoolean;
+    }
+    // SAFETY: the page and the nodes are the ones this submission was called with.
+    if unsafe { ns_js_frame_submit_form(js, form, submitter) } != 0 {
+        return;
+    }
     if let Some((submit, data)) = Js(js).st().form_submit.get() {
         unsafe { submit(form, submitter, data) };
     }

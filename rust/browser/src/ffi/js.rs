@@ -53,6 +53,7 @@ unsafe extern "C" {
     fn ns_js_in_pump(js: *const c_void) -> GBoolean;
     fn ns_js_free(js: *mut c_void);
     fn ns_js_csp_form_action_allowed(js: *const c_void, action_url: *const c_char) -> GBoolean;
+    fn ns_js_submit_form(js: *mut c_void, form: *const NsNode, submitter: *const NsNode);
     fn ns_js_dispatch_event(
         js: *mut c_void,
         target: *const NsNode,
@@ -192,6 +193,11 @@ impl Js {
 
     pub fn free(self) {
         unsafe { ns_js_free(self.raw()) };
+    }
+
+    pub fn submit_form(self, form: Node<'_>, submitter: Node<'_>) {
+        // SAFETY: the page is live and both nodes belong to it.
+        unsafe { ns_js_submit_form(self.raw(), form.as_ptr(), submitter.as_ptr()) };
     }
 
     pub fn csp_form_action_allowed(self, url: &CStr) -> bool {

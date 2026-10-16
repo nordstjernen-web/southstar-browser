@@ -12,6 +12,8 @@ use crate::ffi::{self, Js};
 use crate::globals;
 use crate::origin::{self, opaque_by_sandbox};
 use crate::owner;
+use crate::page;
+use crate::realm::frame_of;
 use crate::sandbox;
 use crate::schedule;
 use crate::scripts;
@@ -193,7 +195,13 @@ fn decode_response(iframe: Node<'_>, abs_url: &CStr, resp: &Response) -> Option<
     None
 }
 
-fn fetch_source(js: Js, iframe: Node<'_>, src: &CStr, origin: &CStr) -> Fetched {
+fn fetch_source(
+    js: Js,
+    iframe: Node<'_>,
+    src: &CStr,
+    origin: &CStr,
+    form_body: Option<&[u8]>,
+) -> Fetched {
     let mut fetched = Fetched {
         abs_url: ffi::resolve_url(origin, src),
         decoded: None,
@@ -218,7 +226,8 @@ fn fetch_source(js: Js, iframe: Node<'_>, src: &CStr, origin: &CStr) -> Fetched 
         return fetched;
     };
     let start_us = load::monotonic_time();
-    let (mut resp, error) = load::fetch_resource(js, &abs_url, origin, fetch_dest(iframe, kind));
+    let (mut resp, error) =
+        load::fetch_resource(js, &abs_url, origin, fetch_dest(iframe, kind), form_body);
     let download = resp.as_ref().is_some_and(|resp| {
         schedule::response_is_download(
             resp.error(),
@@ -595,16 +604,28 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
         .and_then(|attr| iframe.attr(attr))
         .map(CStr::to_owned);
     let srcdoc = iframe.attr(c"srcdoc").map(CStr::to_owned);
+    let navigation = page::update_frame(js, frame_of(iframe), |entry| entry.navigation.take());
 
     load::start_frame_clock(js, iframe);
-    let fetched = match (non_empty(srcdoc.as_deref()), non_empty(src.as_deref())) {
-        (Some(srcdoc), _) => Fetched {
+    let fetched = match (
+        &navigation,
+        non_empty(srcdoc.as_deref()),
+        non_empty(src.as_deref()),
+    ) {
+        (Some(navigation), _, _) => fetch_source(
+            js,
+            iframe,
+            &navigation.url,
+            &origin,
+            navigation.form_body.as_deref(),
+        ),
+        (None, Some(srcdoc), _) => Fetched {
             abs_url: Some(origin.clone()),
             decoded: Some(srcdoc.to_bytes().to_vec()),
             resp: None,
         },
-        (None, Some(src)) if !src.to_bytes().starts_with(b"about:") => {
-            fetch_source(js, iframe, src, &origin)
+        (None, None, Some(src)) if !src.to_bytes().starts_with(b"about:") => {
+            fetch_source(js, iframe, src, &origin, None)
         }
         _ => Fetched {
             abs_url: None,
