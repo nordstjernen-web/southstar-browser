@@ -225,7 +225,7 @@ pub(crate) fn context_count() -> usize {
 }
 
 pub(crate) fn forget_context(canvas: usize) {
-    BY_NODE.with(|map| {
+    let _ = BY_NODE.try_with(|map| {
         if let Ok(mut map) = map.try_borrow_mut() {
             map.remove(&canvas);
         }
