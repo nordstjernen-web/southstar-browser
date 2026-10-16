@@ -379,7 +379,9 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             }
         }
     }
-    lines.push(b"X-Requested-With: XMLHttpRequest".to_vec());
+    if ffi::url_same_origin(page.as_deref(), Some(&resolved)) {
+        lines.push(b"X-Requested-With: XMLHttpRequest".to_vec());
+    }
     let id = crate::next_id();
     crate::with_page(js, |page| page.xhrs.insert(id, state));
     let mut user_content_type = false;

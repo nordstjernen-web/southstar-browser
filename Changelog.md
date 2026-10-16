@@ -15,6 +15,11 @@ Southstar Browser 0.9.12-dev:
   safe-browsing continue link is followed only from the warning page for
   the same host, so another page cannot skip the warning. Ported from
   Nordstjernen.
+* Security: XMLHttpRequest adds `X-Requested-With: XMLHttpRequest` only
+  to same-origin requests. It went on every request, cross-site ones
+  too, and sites read the header as proof that a request came from their
+  own script, because another origin could only add it after a CORS
+  preflight. Ported from Northstar.
 * A page whose html element scrolls (overflow: auto) while its body has
   overflow: hidden scrolls again. Overflow propagates to the viewport
   from the root element, and from the body only when the root is
