@@ -1010,6 +1010,7 @@ pub unsafe extern "C" fn ns_js_frame_eval_end(js: *mut NsJs, previous_script: *m
     state.eval_deadline_us.set(0);
     state.current_script.set(previous_script);
     if depth == 0 {
+        scheduling::microtask_checkpoint(js);
         glue::finish_eval_depth(js);
     }
 }
