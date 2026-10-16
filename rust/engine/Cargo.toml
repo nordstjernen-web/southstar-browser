@@ -16,6 +16,7 @@ southstar-css-syntax = { path = "../css-syntax" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
+southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-net = { path = "../net" }

@@ -91,8 +91,6 @@ unsafe extern "C" {
     fn ns_box_free(b: *mut NsBox);
     fn ns_paint_list_ordinals_begin();
     fn ns_paint_list_ordinals_end();
-    fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
-    fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -564,17 +562,11 @@ fn relayout(
     drop(containers);
     drop(predicted);
     remember(c.doc, viewport_width, layout, want_cq);
-    unsafe {
-        if cache_selectors {
-            southstar_css::selector_cache_end();
-        }
-        southstar_css::set_focus_node(None);
-        southstar_css::set_hover_node(None);
-        if !c.js.is_null() {
-            ns_js_set_style_table(c.js, styles);
-            ns_js_set_layout_root(c.js, layout);
-        }
+    if cache_selectors {
+        southstar_css::selector_cache_end();
     }
+    southstar_css::set_focus_node(None);
+    southstar_css::set_hover_node(None);
     *out_layout = layout;
     styles
 }

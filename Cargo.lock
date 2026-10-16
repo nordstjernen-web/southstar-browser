@@ -1906,6 +1906,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-image",
+ "southstar-js-runtime",
  "southstar-layout",
  "southstar-layout-query",
  "southstar-net",
@@ -2111,6 +2112,7 @@ dependencies = [
  "southstar-js-forms",
  "southstar-js-input",
  "southstar-js-lifecycle",
+ "southstar-js-runtime",
  "southstar-js-window",
  "southstar-layout",
  "southstar-layout-hit",
@@ -3080,6 +3082,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-http",
  "southstar-http-cache",
+ "southstar-js-engine",
  "southstar-netstore",
  "southstar-url",
 ]

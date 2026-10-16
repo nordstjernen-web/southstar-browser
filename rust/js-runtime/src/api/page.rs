@@ -446,6 +446,10 @@ pub fn wrapper_pinned(js: *const NsJs, node: Node<'_>) -> bool {
     record::wrapper_pinned(js, node)
 }
 
+pub fn node_unpinned(js: *const NsJs, node: Node<'_>) -> bool {
+    record::node_unpinned(js, node)
+}
+
 pub fn context_frame(js: *const NsJs, ctx: ContextHandle) -> Option<Node<'static>> {
     let js = Js::of(js)?;
     if ctx.is_null() || ctx == js.main_realm() {

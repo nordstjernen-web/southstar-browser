@@ -8,7 +8,7 @@ use std::ffi::CString;
 use southstar_css::{self as css_engine, Prop};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox, Style};
@@ -26,8 +26,8 @@ pub(crate) struct NsJs {
 pub(crate) struct Js(usize);
 
 impl Js {
-    fn ptr(self) -> *const NsJs {
-        self.0 as *const NsJs
+    fn page(self) -> *const api::NsJs {
+        self.0 as *const api::NsJs
     }
 
     fn mut_ptr(self) -> *mut NsJs {
@@ -119,19 +119,12 @@ unsafe extern "Rust" {
 }
 
 unsafe extern "C" {
-    fn ns_js_style_table(js: *const NsJs) -> *mut GHashTable;
-    fn ns_js_anim(js: *const NsJs) -> *mut c_void;
-    fn ns_js_flush_layout(js: *mut NsJs);
-    fn ns_js_flush_style(js: *mut NsJs);
-    fn ns_js_mark_mutated(js: *mut NsJs);
-    fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_js_node_unpinned(js: *const c_void, node: *const NsNode) -> GBoolean;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
     fn ns_paint_normal_line_height_px(style: *const Style) -> f64;
@@ -239,7 +232,7 @@ pub(crate) fn style_table(js: Js) -> StyleTable {
     if js.is_null() {
         return StyleTable::none();
     }
-    unsafe { StyleTable::from_ptr(ns_js_style_table(js.ptr())) }
+    unsafe { StyleTable::from_ptr(api::style_table(js.page())) }
 }
 
 pub(crate) fn has_style_table(js: Js) -> bool {
@@ -256,7 +249,7 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(ns_js_layout_root(js.ptr())) }
+    unsafe { BoxRef::from_ptr(api::layout_root(js.page()).cast()) }
 }
 
 pub(crate) fn find_box(js: Js, node: Node<'_>) -> Option<BoxRef<'static>> {
@@ -266,19 +259,19 @@ pub(crate) fn find_box(js: Js, node: Node<'_>) -> Option<BoxRef<'static>> {
 
 pub(crate) fn flush_layout(js: Js) {
     if !js.is_null() {
-        unsafe { ns_js_flush_layout(js.mut_ptr()) };
+        api::flush_layout(js.page());
     }
 }
 
 pub(crate) fn flush_style(js: Js) {
     if !js.is_null() {
-        unsafe { ns_js_flush_style(js.mut_ptr()) };
+        api::flush_layout(js.page());
     }
 }
 
 pub(crate) fn mark_mutated(js: Js) {
     if !js.is_null() {
-        unsafe { ns_js_mark_mutated(js.mut_ptr()) };
+        api::mark_mutated(js.page());
     }
 }
 
@@ -286,7 +279,7 @@ pub(crate) fn anim(js: Js) -> Option<*mut c_void> {
     if js.is_null() {
         return None;
     }
-    let a = unsafe { ns_js_anim(js.ptr()) };
+    let a = api::anim(js.page());
     (!a.is_null()).then_some(a)
 }
 
@@ -327,8 +320,7 @@ pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
 }
 
 pub(crate) fn write_ignored(scope: &Scope<'_>, node: Node<'_>) -> bool {
-    let js = scope.context_opaque();
-    unsafe { ns_js_node_unpinned(js, node.as_ptr()) != 0 }
+    api::node_unpinned(scope.context_opaque().cast(), node)
 }
 
 pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {

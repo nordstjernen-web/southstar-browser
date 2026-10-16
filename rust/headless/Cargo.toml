@@ -26,6 +26,7 @@ southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-input = { path = "../js-input" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
+southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-window = { path = "../js-window" }
 southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }

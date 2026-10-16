@@ -42,7 +42,6 @@ unsafe extern "C" {
     fn ns_cache_clear();
     fn ns_net_cookies_clear();
     fn ns_net_site_storage_clear();
-    fn ns_js_engine_version() -> *const c_char;
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_version_string")]
     fn pango_version_string() -> *const c_char;
     fn cairo_version_string() -> *const c_char;
@@ -247,7 +246,7 @@ fn libav_version() -> Option<Vec<u8>> {
 pub fn versions() -> Versions {
     unsafe {
         Versions {
-            js_engine: borrowed(ns_js_engine_version()),
+            js_engine: Some(southstar_js_engine::engine_version().into_bytes()),
             glib: [glib_major_version, glib_minor_version, glib_micro_version],
             pango: borrowed(pango_version_string()),
             cairo: borrowed(cairo_version_string()),

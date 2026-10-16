@@ -359,6 +359,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
     } else {
         css::render_relayout(&ctx, out_layout)
     };
+    css::publish_to_page(js, styles, layout.get());
     if crate::styles::frame_viewports_disagree_with_layout() {
         css::discard_layout(js, styles, out_layout);
         drop(sheets);
@@ -366,6 +367,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
         sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
         let ctx = css::render_ctx(&r, &sheets);
         styles = css::render_relayout(&ctx, out_layout);
+        css::publish_to_page(js, styles, layout.get());
     }
     crate::styles::add_relayout(monotonic_us() - t0);
     css::log_relayout(styles, viewport_width);

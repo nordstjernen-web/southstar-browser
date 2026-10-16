@@ -7,7 +7,6 @@ use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::sync::OnceLock;
 
 use southstar_csp::Csp;
 use southstar_dom::{Kind, Node, NsNode};
@@ -826,14 +825,6 @@ pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
         .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page, None, true))
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_engine_version() -> *const c_char {
-    static VERSION: OnceLock<CString> = OnceLock::new();
-    VERSION
-        .get_or_init(|| cstring(southstar_js_engine::engine_version().as_bytes()))
-        .as_ptr()
-}
-
 pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
     if js.is_null() {
         return;
@@ -1059,13 +1050,12 @@ pub(crate) fn node_wrapper(scope: &mut Scope<'_>, n: *const NsNode) -> Option<Va
     Some(scope.object_from_identity(wrapper))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_unpinned(js: *const NsJs, n: *const NsNode) -> GBoolean {
-    let unpinned = record(js).is_some_and(|js| {
+pub(crate) fn node_unpinned(js: *const NsJs, n: Node<'_>) -> bool {
+    record(js).is_some_and(|js| {
         !js.pinned_wrappers_set.is_null()
-            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.cast()) } == 0
-    });
-    glib::boolean(unpinned)
+            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.as_ptr().cast()) }
+                == 0
+    })
 }
 
 pub(crate) fn wrapper_pinned(js: *const NsJs, n: Node<'_>) -> bool {
@@ -1368,11 +1358,6 @@ pub(crate) fn pristine_promise(js: *const NsJs) -> Value {
 
 pub(crate) fn layout_root(js: *const NsJs) -> *const c_void {
     record(js).map_or(ptr::null(), |js| js.layout_root)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_layout_root(js: *const NsJs) -> *const c_void {
-    layout_root(js)
 }
 
 pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {

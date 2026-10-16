@@ -715,28 +715,6 @@ pub(crate) fn thread_stack_size() -> usize {
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_new(
-    log_cb: Option<LogFn>,
-    log_user_data: *mut c_void,
-    mut_cb: Option<DataFn>,
-    mut_user_data: *mut c_void,
-    nav_cb: Option<NavigateFn>,
-    nav_user_data: *mut c_void,
-    navigation_timing: *const NavigationTiming,
-) -> *mut NsJs {
-    let timing = unsafe { navigation_timing.as_ref() }.copied();
-    let callbacks = Callbacks {
-        log: log_cb,
-        log_data: log_user_data,
-        mutated: mut_cb,
-        mutated_data: mut_user_data,
-        navigate: nav_cb,
-        navigate_data: nav_user_data,
-    };
-    new_page(callbacks, timing)
-}
-
 pub(crate) fn new_page(callbacks: Callbacks, timing: Option<NavigationTiming>) -> *mut NsJs {
     let js = Js::alloc();
     if page::create(js, timing, callbacks) {
@@ -759,9 +737,4 @@ pub(crate) fn free(js: *const NsJs) {
     if let Some(js) = Js::of(js) {
         teardown::free(js);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_free(js: *mut NsJs) {
-    free(js);
 }

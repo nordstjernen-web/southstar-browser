@@ -8,42 +8,14 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
+use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
 use super::engine::{Anim, ImageCache, VideoCache};
 use crate::inproc::{Ctx, NavCapture};
 
-#[repr(C)]
-#[derive(Default)]
-pub struct NavigationTiming {
-    pub origin_us: i64,
-    pub origin_real_ms: f64,
-    pub domain_lookup_start_ms: f64,
-    pub domain_lookup_end_ms: f64,
-    pub connect_start_ms: f64,
-    pub connect_end_ms: f64,
-    pub secure_connection_start_ms: f64,
-    pub request_start_ms: f64,
-    pub response_start_ms: f64,
-    pub response_end_ms: f64,
-    pub dom_loading_ms: f64,
-    pub dom_interactive_ms: f64,
-    pub dom_content_loaded_event_start_ms: f64,
-    pub dom_content_loaded_event_end_ms: f64,
-    pub dom_complete_ms: f64,
-    pub load_event_start_ms: f64,
-    pub load_event_end_ms: f64,
-}
+pub use southstar_js_runtime::api::NavigationTiming;
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<NavigationTiming>() == 136);
-
-type LogCb = unsafe extern "C" fn(line: *const c_char, ud: *mut c_void);
-type MutatedCb = unsafe extern "C" fn(ud: *mut c_void);
-type NavigateCb = unsafe extern "C" fn(url: *const c_char, reload: GBoolean, ud: *mut c_void);
-type FormSubmitCb =
-    unsafe extern "C" fn(form: *const NsNode, submitter: *const NsNode, ud: *mut c_void);
-type FlushCb = unsafe extern "C" fn(ud: *mut c_void);
 type MseCb = unsafe extern "C" fn(
     stream_id: c_uint,
     kind: c_char,
@@ -64,30 +36,11 @@ type MseRemoveCb = unsafe extern "C" fn(
 type MseBytesCb = unsafe extern "C" fn(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize;
 
 unsafe extern "C" {
-    fn ns_js_new(
-        log_cb: LogCb,
-        log_ud: *mut c_void,
-        mut_cb: MutatedCb,
-        mut_ud: *mut c_void,
-        nav_cb: NavigateCb,
-        nav_ud: *mut c_void,
-        timing: *const NavigationTiming,
-    ) -> *mut c_void;
-    fn ns_js_free(js: *mut c_void);
-    fn ns_js_set_form_submit_cb(js: *mut c_void, cb: Option<FormSubmitCb>, ud: *mut c_void);
-    fn ns_js_submit_form(js: *mut c_void, form: *const NsNode, submitter: *const NsNode);
-    fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
-    fn ns_js_set_image_cache(js: *mut c_void, cache: *mut c_void);
-    fn ns_js_set_anim(js: *mut c_void, anim: *mut c_void);
-    fn ns_js_set_layout_flush_cb(js: *mut c_void, cb: Option<FlushCb>, ud: *mut c_void);
-    fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
     fn ns_js_set_mse_cb(js: *mut c_void, cb: MseCb, ud: *mut c_void);
     fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-    fn ns_js_set_early_inject_src(js: *mut c_void, src: *const c_char);
     fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
-    fn ns_js_consume_mutated(js: *mut c_void) -> GBoolean;
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
     fn ns_js_dispatch_event(
@@ -216,22 +169,19 @@ pub fn js_raw(js: Option<Js>) -> *mut c_void {
 }
 
 pub fn new_js(nav: &NavCapture, timing: &NavigationTiming) -> Option<Js> {
-    let js = unsafe {
-        ns_js_new(
-            on_log,
-            ptr::null_mut(),
-            on_mutated,
-            ptr::null_mut(),
-            on_navigate,
-            (nav as *const NavCapture).cast_mut().cast(),
-            timing,
-        )
+    let callbacks = api::PageCallbacks {
+        log: Some(on_log),
+        log_data: ptr::null_mut(),
+        mutated: Some(on_mutated),
+        mutated_data: ptr::null_mut(),
+        navigate: Some(on_navigate),
+        navigate_data: (nav as *const NavCapture).cast_mut().cast(),
     };
-    NonNull::new(js).map(Js)
+    NonNull::new(api::new_page(callbacks, Some(*timing)).cast()).map(Js)
 }
 
 pub fn consume_mutated(js: Option<Js>) -> bool {
-    unsafe { ns_js_consume_mutated(js_raw(js)) != 0 }
+    api::consume_mutated(js_raw(js).cast())
 }
 
 pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<GStr> {
@@ -253,22 +203,26 @@ impl Js {
         self.0.as_ptr()
     }
 
+    fn page(self) -> *const api::NsJs {
+        self.0.as_ptr().cast()
+    }
+
     pub fn free(self) {
-        unsafe { ns_js_free(self.raw()) };
+        api::free(self.page());
     }
 
     pub fn bind_form_submit(self, nav: &NavCapture) {
         let ud = (nav as *const NavCapture).cast_mut().cast();
-        unsafe { ns_js_set_form_submit_cb(self.raw(), Some(on_form_submit), ud) };
+        api::set_form_submit_hook(self.page(), Some(on_form_submit), ud);
     }
 
     pub fn bind_layout_flush(self, ctx: &Ctx) {
         let ud = (ctx as *const Ctx).cast_mut().cast();
-        unsafe { ns_js_set_layout_flush_cb(self.raw(), Some(on_flush), ud) };
+        api::set_layout_flush_hook(self.page(), Some(on_flush), ud);
     }
 
     pub fn unbind_layout_flush(self) {
-        unsafe { ns_js_set_layout_flush_cb(self.raw(), None, ptr::null_mut()) };
+        api::set_layout_flush_hook(self.page(), None, ptr::null_mut());
     }
 
     pub fn bind_media(self, video_cache: Option<VideoCache>) {
@@ -282,23 +236,23 @@ impl Js {
     }
 
     pub fn set_style_table(self, styles: *mut GHashTable) {
-        unsafe { ns_js_set_style_table(self.raw(), styles) };
+        api::set_style_table(self.page(), styles);
     }
 
     pub fn set_image_cache(self, cache: Option<ImageCache>) {
-        unsafe { ns_js_set_image_cache(self.raw(), super::engine::image_cache_raw(cache)) };
+        api::set_image_cache(self.page(), super::engine::image_cache_raw(cache));
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        unsafe { ns_js_set_anim(self.raw(), super::engine::anim_raw(anim)) };
+        api::set_anim(self.page(), super::engine::anim_raw(anim));
     }
 
     pub fn set_layout_root(self, root: *const NsBox) {
-        unsafe { ns_js_set_layout_root(self.raw(), root) };
+        api::set_layout_root(self.page(), root.cast());
     }
 
     pub fn set_early_inject_src(self, src: &CStr) {
-        unsafe { ns_js_set_early_inject_src(self.raw(), src.as_ptr()) };
+        api::set_early_inject_src(self.page(), Some(src));
     }
 
     pub fn run_scripts_in_doc(self, doc: *mut NsNode, base_url: Option<&CStr>) {
@@ -329,8 +283,7 @@ impl Js {
     }
 
     pub fn submit_form(self, form: Node, submitter: Node) {
-        // SAFETY: the page is live and both nodes belong to it.
-        unsafe { ns_js_submit_form(self.raw(), form.as_ptr(), submitter.as_ptr()) };
+        api::submit_form(self.page(), form, Some(submitter));
     }
 
     pub fn dispatch_submit(self, form: Node, submitter: Node) -> bool {

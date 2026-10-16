@@ -9,6 +9,7 @@ use std::ffi::CString;
 use southstar_css::OwnedSheet;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_js_runtime::api;
 use southstar_layout::NsBox;
 
 use super::net::Bytes;
@@ -18,8 +19,6 @@ pub use southstar_render::{RenderCtx, RenderProfile};
 unsafe extern "C" {
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
-    fn ns_js_set_layout_root(js: *mut c_void, root: *const NsBox);
-    fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
     fn ns_box_free(b: *mut NsBox);
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
@@ -169,6 +168,13 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
     }
 }
 
+pub fn publish_to_page(js: *mut c_void, styles: *mut GHashTable, layout: *mut NsBox) {
+    if !js.is_null() {
+        api::set_style_table(js.cast(), styles);
+        api::set_layout_root(js.cast(), layout.cast_const().cast());
+    }
+}
+
 pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> *mut GHashTable {
     unsafe { southstar_render::ns_render_relayout(ctx, out_layout) }
 }
@@ -221,11 +227,11 @@ pub fn table_size(table: *mut GHashTable) -> c_uint {
 }
 
 pub fn discard_layout(js: *mut c_void, styles: *mut GHashTable, out_layout: *mut *mut NsBox) {
+    if !js.is_null() {
+        api::set_layout_root(js.cast(), ptr::null());
+        api::set_style_table(js.cast(), ptr::null_mut());
+    }
     unsafe {
-        if !js.is_null() {
-            ns_js_set_layout_root(js, ptr::null());
-            ns_js_set_style_table(js, ptr::null_mut());
-        }
         if !out_layout.is_null() && !(*out_layout).is_null() {
             ns_box_free(*out_layout);
             *out_layout = ptr::null_mut();
