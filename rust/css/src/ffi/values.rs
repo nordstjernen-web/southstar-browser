@@ -12,6 +12,7 @@ use super::value::{
     OwnedValue,
 };
 use crate::grid::{AreaRect, Areas};
+use crate::prop::Prop;
 use crate::property::{Body, Rect, Size, Value};
 use crate::values;
 
@@ -104,11 +105,16 @@ fn rust_value(v: &NsCssValue, layers: bool) -> Option<Value> {
     unsafe { from_c(v, layers) }
 }
 
-pub fn value_interpolate(a: &NsCssValue, b: &NsCssValue, t: f64) -> Option<OwnedValue> {
-    let (Some(a), Some(b)) = (rust_value(a, false), rust_value(b, false)) else {
+pub fn value_interpolate(
+    prop: Option<Prop>,
+    a: &NsCssValue,
+    b: &NsCssValue,
+    t: f64,
+) -> Option<OwnedValue> {
+    let (Some(a), Some(b)) = (rust_value(a, true), rust_value(b, true)) else {
         return None;
     };
-    values::interpolate(&a, &b, t).map(|value| OwnedValue(to_c(value)))
+    values::interpolate_prop(prop, &a, &b, t).map(|value| OwnedValue(to_c(value)))
 }
 
 pub fn values_equal(a: Option<&NsCssValue>, b: Option<&NsCssValue>) -> bool {

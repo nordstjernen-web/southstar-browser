@@ -298,8 +298,11 @@ fn color_lerp(a: &Color, b: &Color, t: f64) -> Color {
     if legacy {
         out.legacy = true;
         out.components = out.components.map(|c| c.map(|v| v.clamp(0.0, 1.0)));
-        out.alpha = out.alpha.map(|v| v.clamp(0.0, 1.0));
     }
+    if out.alpha.is_some_and(|a| a <= 0.0) {
+        out.components = out.components.map(|c| c.map(|_| 0.0));
+    }
+    out.alpha = out.alpha.map(|v| v.clamp(0.0, 1.0));
     out
 }
 
@@ -553,7 +556,57 @@ fn is_none_keyword(v: &Value) -> bool {
     matches!(&v.body, Body::Keyword(k) if k == b"none")
 }
 
+pub(crate) fn interpolate_prop(prop: Option<Prop>, a: &Value, b: &Value, t: f64) -> Option<Value> {
+    let mut value = interpolate(a, b, t)?;
+    let Some(prop) = prop else {
+        return Some(value);
+    };
+    let nonnegative = crate::property::requires_nonnegative(prop)
+        || matches!(
+            prop,
+            Prop::BorderImageSlice | Prop::BorderImageWidth | Prop::BorderImageOutset
+        );
+    match &mut value.body {
+        Body::Length(n, _) if prop == Prop::Opacity => *n = n.clamp(0.0, 1.0),
+        Body::Length(n, _) if nonnegative => *n = n.max(0.0),
+        Body::Keyword(text) if nonnegative => *text = negatives_to_zero(text),
+        _ => {}
+    }
+    Some(value)
+}
+
+fn negatives_to_zero(text: &[u8]) -> Vec<u8> {
+    let parts: Vec<Vec<u8>> = text
+        .split(|&c| c == b' ')
+        .map(|token| {
+            let negative_number = token.first() == Some(&b'-')
+                && token
+                    .get(1)
+                    .is_some_and(|c| c.is_ascii_digit() || *c == b'.');
+            if !negative_number {
+                return token.to_vec();
+            }
+            let unit_start = token
+                .iter()
+                .rposition(|&c| c.is_ascii_digit() || c == b'.')
+                .map_or(token.len(), |i| i + 1);
+            [&b"0"[..], &token[unit_start..]].concat()
+        })
+        .collect();
+    parts.join(&b' ')
+}
+
 pub(crate) fn interpolate(a: &Value, b: &Value, t: f64) -> Option<Value> {
+    let mut first = interpolate_layer(a, b, t)?;
+    match (&a.next_layer, &b.next_layer) {
+        (None, None) => {}
+        (Some(na), Some(nb)) => first.next_layer = Some(Box::new(interpolate(na, nb, t)?)),
+        _ => return None,
+    }
+    Some(first)
+}
+
+fn interpolate_layer(a: &Value, b: &Value, t: f64) -> Option<Value> {
     if let (true, Body::Transform(tb)) = (is_none_keyword(a), &b.body) {
         let identity = Value::of(Body::Transform(Box::new(identity_like(tb)?)));
         return interpolate(&identity, b, t);

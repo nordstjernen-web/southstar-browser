@@ -39,8 +39,8 @@ impl Val {
         Borrowed(self.0.as_ptr())
     }
 
-    pub fn interpolate(a: Borrowed, b: Borrowed, t: f64) -> Option<Val> {
-        southstar_css::value_interpolate(a.get()?, b.get()?, t).map(Val)
+    pub fn interpolate(prop: i32, a: Borrowed, b: Borrowed, t: f64) -> Option<Val> {
+        southstar_css::value_interpolate(prop_at(prop), a.get()?, b.get()?, t).map(Val)
     }
 }
 

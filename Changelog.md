@@ -104,6 +104,18 @@ Southstar Browser 0.9.11-dev:
   tab; a form inside an iframe navigates its own frame. Rakuten's tag
   manager posts to a hidden iframe on every page view, which replaced the
   page with a blank document.
+* Animations and transitions follow the Web Animations interpolation
+  rules more closely. An effect whose easing overshoots (iteration
+  progress below 0 or above 1) extrapolates from the first or last two
+  keyframes, including an implicit neutral keyframe, instead of holding
+  the end value. Results are clamped to the property's range: lengths
+  that cannot be negative (border, padding, sizes, border-image parts)
+  stop at 0, opacity and color alpha stay within 0..1, and a fully
+  transparent result has no color left. initial, unset and inherit in
+  keyframes resolve to the initial or the parent's value and
+  interpolate rather than flipping halfway, a shorthand in
+  transition-property (border-width) transitions its longhands, and the
+  initial border widths are medium (3px).
 * A border side whose style is set but whose width is not now draws at
   the initial medium width (3px) instead of none at all
   (border-bottom-style: solid alone gave no border), and a width set on

@@ -136,6 +136,45 @@ impl Chan {
     }
 }
 
+fn wide_resolved(prop: i32, value: Borrowed) -> Option<Val> {
+    let keyword = value.keyword()?.to_bytes();
+    let initial = keyword.eq_ignore_ascii_case(b"initial")
+        || (keyword.eq_ignore_ascii_case(b"unset") && !css::prop_inherits(prop));
+    if initial {
+        css::initial_value(prop)
+    } else {
+        None
+    }
+}
+
+fn extrapolation_pair(
+    stops: &[KfStop],
+    prop: i32,
+    pct: f64,
+) -> Option<(Option<usize>, Option<usize>)> {
+    if (0.0..=100.0).contains(&pct) {
+        return None;
+    }
+    let keyed: Vec<usize> = (0..stops.len())
+        .filter(|&k| !stops[k].value(prop).is_null())
+        .collect();
+    let (&first, &last) = (keyed.first()?, keyed.last()?);
+    if pct < 0.0 {
+        (stops[first].pct <= 1e-9).then(|| (Some(first), keyed.get(1).copied()))
+    } else {
+        let before_last = keyed.len().checked_sub(2).map(|i| keyed[i]);
+        (stops[last].pct >= 100.0 - 1e-9).then_some((before_last, Some(last)))
+    }
+}
+
+fn inherits_from_parent(prop: i32, value: Borrowed) -> bool {
+    value.keyword().is_some_and(|k| {
+        let k = k.to_bytes();
+        k.eq_ignore_ascii_case(b"inherit")
+            || (k.eq_ignore_ascii_case(b"unset") && css::prop_inherits(prop))
+    })
+}
+
 struct KfStop {
     pct: f64,
     decls: Option<Decls>,
@@ -339,6 +378,9 @@ impl Run {
                         next = Some(k);
                     }
                 }
+                if let Some(pair) = extrapolation_pair(stops, prop, pct) {
+                    (prev, next) = pair;
+                }
                 let prev = prev.map(|k| &stops[k]);
                 let next = next.map(|k| &stops[k]);
                 let mut out = None;
@@ -353,13 +395,25 @@ impl Run {
                         if !self.is_script {
                             t = p.timing().unwrap_or(self.timing).apply(t);
                         }
-                        out = Val::interpolate(p.value(prop), n.value(prop), t).or_else(|| {
-                            Val::retain(if t < 0.5 {
-                                p.value(prop)
-                            } else {
-                                n.value(prop)
-                            })
-                        });
+                        if inherits_from_parent(prop, p.value(prop))
+                            || inherits_from_parent(prop, n.value(prop))
+                        {
+                            self.partials.insert(
+                                prop,
+                                Partial {
+                                    from: Val::retain(p.value(prop)),
+                                    to: Val::retain(n.value(prop)),
+                                    t,
+                                },
+                            );
+                            continue;
+                        }
+                        let from_wide = wide_resolved(prop, p.value(prop));
+                        let to_wide = wide_resolved(prop, n.value(prop));
+                        let from = from_wide.as_ref().map_or(p.value(prop), Val::borrow);
+                        let to = to_wide.as_ref().map_or(n.value(prop), Val::borrow);
+                        out = Val::interpolate(prop, from, to, t)
+                            .or_else(|| Val::retain(if t < 0.5 { from } else { to }));
                     }
                     (Some(p), _) if p.pct >= 100.0 - 1e-9 => out = Val::retain(p.value(prop)),
                     (_, Some(n)) if n.pct <= 1e-9 => out = Val::retain(n.value(prop)),
@@ -619,7 +673,7 @@ impl Shared {
         let next = if ch.discrete {
             Val::retain(nearest)
         } else {
-            Val::interpolate(from, to, eased)
+            Val::interpolate(ch.prop, from, to, eased)
         };
         ch.current = next.or_else(|| Val::retain(nearest));
         true
@@ -1258,7 +1312,7 @@ impl Anim {
                 } else {
                     last_eff
                 };
-                let interpolable = Val::interpolate(from, cur_eff, 0.0).is_some();
+                let interpolable = Val::interpolate(prop, from, cur_eff, 0.0).is_some();
                 if interpolable && ancestor_transitions_to(&self.states, node, prop, cur_eff) {
                     if ch.active {
                         self.shared.chan_cancel(node, ch, now_us);
@@ -1309,6 +1363,15 @@ impl Anim {
             let p = entry_prop(e);
             if props::transitionable(p) {
                 touch(p, e, &mut by_prop, &mut touched, &mut order);
+                continue;
+            }
+            if let Target::Other(Some(name)) = e.target() {
+                for member in southstar_css::shorthand_members(name) {
+                    let p = member.id() as i32;
+                    if props::transitionable(p) {
+                        touch(p, e, &mut by_prop, &mut touched, &mut order);
+                    }
+                }
             }
         }
         for &p in &order {
@@ -1528,11 +1591,30 @@ impl Anim {
                     } else {
                         base
                     };
-                    let from = pa.from.as_ref().map_or(fallback, Val::borrow);
-                    let to = pa.to.as_ref().map_or(fallback, Val::borrow);
+                    let parent = node
+                        .parent()
+                        .and_then(|p| p.style_in(styles))
+                        .map_or(Borrowed::NULL, |ps| css::style_value(ps, prop));
+                    let endpoint = |v: Option<&Val>| -> (Option<Val>, Borrowed) {
+                        let Some(v) = v else {
+                            return (None, fallback);
+                        };
+                        if inherits_from_parent(prop, v.borrow()) && !parent.is_null() {
+                            return (None, parent);
+                        }
+                        match wide_resolved(prop, v.borrow()) {
+                            Some(resolved) => {
+                                let b = resolved.borrow();
+                                (Some(resolved), b)
+                            }
+                            None => (None, v.borrow()),
+                        }
+                    };
+                    let (_from_owned, from) = endpoint(pa.from.as_ref());
+                    let (_to_owned, to) = endpoint(pa.to.as_ref());
                     let both = !from.is_null() && !to.is_null();
                     let mut out = if both {
-                        Val::interpolate(from, to, pa.t)
+                        Val::interpolate(prop, from, to, pa.t)
                     } else {
                         None
                     };

@@ -1298,6 +1298,10 @@ fn shorthand_longhands(name: &[u8], value: &[u8]) -> Option<Vec<Prop>> {
     (props.len() > 1).then_some(props)
 }
 
+pub fn shorthand_members(name: &[u8]) -> Vec<Prop> {
+    shorthand_longhands(&lower(name), b"initial").unwrap_or_default()
+}
+
 pub fn longhand_names(style: &[u8]) -> Vec<Vec<u8>> {
     let mut names: Vec<Vec<u8>> = Vec::new();
     for (key, value) in declarations(style) {

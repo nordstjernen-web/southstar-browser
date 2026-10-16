@@ -428,7 +428,7 @@ fn accepts_normal(prop: Prop) -> bool {
     )
 }
 
-fn requires_nonnegative(prop: Prop) -> bool {
+pub(crate) fn requires_nonnegative(prop: Prop) -> bool {
     matches!(
         prop,
         Prop::FontSize

@@ -113,7 +113,7 @@ pub use initial::initial_value;
 pub use inline::{
     background_position_zip as background_position_join, columns_serialize,
     get as inline_style_get, longhand_names as inline_style_longhands, mask_shorthand_serialize,
-    serialize as inline_style_serialize, set as inline_style_set,
+    serialize as inline_style_serialize, set as inline_style_set, shorthand_members,
 };
 pub use matcher::{clear_defined_elements, register_defined_element};
 pub use nesting::has_container_units as text_has_container_units;
