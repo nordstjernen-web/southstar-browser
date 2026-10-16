@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 use southstar_config::NsConfig;
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkRgba, GtkWidget};
 
+use super::appmain::ns_app_self_exe;
 use super::gtk::{
     borrowed, connect, cstring, handler, set_accessible_label, set_margins, take_gstring,
     toggle_css_class, tr, tr_string,
@@ -55,7 +56,6 @@ unsafe extern "C" {
     fn ns_config_reload();
     fn ns_config_unlock();
     fn ns_rproc_single_process_enabled() -> c_int;
-    fn ns_app_self_exe() -> *const c_char;
 }
 
 const WINDOW_KEY: &CStr = c"ns-procwindow";
@@ -212,7 +212,7 @@ unsafe fn toolbar_button(
     pw: &ProcWindow,
 ) -> *mut GtkWidget {
     unsafe {
-        let b = ns_icon_button_new(icon.as_ptr());
+        let b = ns_icon_button_new(icon);
         gtk::gtk_button_set_has_frame(b, 0);
         gtk::gtk_widget_add_css_class(b, c"ns-nav-button".as_ptr());
         gtk::gtk_widget_set_valign(b, gtk::ALIGN_CENTER);
@@ -251,7 +251,7 @@ impl ProcWindow {
             c"southstar-reload-symbolic"
         };
         unsafe {
-            ns_icon_button_set(self.reload.get().cast(), icon.as_ptr());
+            ns_icon_button_set(self.reload.get().cast(), icon);
             gtk::gtk_widget_set_tooltip_text(self.reload.get(), tip.as_ptr());
             set_accessible_label(self.reload.get(), tip);
         }
@@ -300,7 +300,7 @@ impl ProcWindow {
                 } else {
                     c"southstar-globe-symbolic"
                 };
-                ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, page_icon.as_ptr());
+                ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, page_icon);
                 gtk::gtk_entry_set_icon_activatable(entry, gtk::ENTRY_ICON_PRIMARY, 0);
                 gtk::gtk_entry_set_icon_tooltip_text(
                     entry,
@@ -309,7 +309,7 @@ impl ProcWindow {
                 );
                 return;
             };
-            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, icon_name.as_ptr());
+            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, icon_name);
             gtk::gtk_entry_set_icon_activatable(entry, gtk::ENTRY_ICON_PRIMARY, 0);
             let mut tip = label.to_bytes().to_vec();
             let url = url.unwrap_or_default();
@@ -402,7 +402,7 @@ impl ProcWindow {
             } else {
                 c"southstar-star-symbolic"
             };
-            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_SECONDARY, star.as_ptr());
+            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_SECONDARY, star);
             let tip = if saved {
                 tr(c"Remove this bookmark")
             } else {
@@ -657,14 +657,11 @@ impl ProcWindow {
             gtk::gtk_button_set_has_frame(tabbtn, 0);
             gtk::gtk_widget_add_css_class(tabbtn, c"ns-tab-label".as_ptr());
             let tabcontent = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 5);
-            let icon = ns_icon_image_new(
-                if private_mode {
-                    c"southstar-private-symbolic"
-                } else {
-                    c"southstar-page-symbolic"
-                }
-                .as_ptr(),
-            );
+            let icon = ns_icon_image_new(if private_mode {
+                c"southstar-private-symbolic"
+            } else {
+                c"southstar-page-symbolic"
+            });
             gtk::gtk_image_set_pixel_size(icon, 16);
             let spinner = gtk::gtk_spinner_new();
             gtk::gtk_widget_set_size_request(spinner, 16, 16);
@@ -692,7 +689,7 @@ impl ProcWindow {
             connect(tabbtn, c"clicked", handler!(on_tab_clicked), page.cast());
             gtk::gtk_box_append(wrapper, tabbtn);
 
-            let close = ns_icon_button_new(c"southstar-close-symbolic".as_ptr());
+            let close = ns_icon_button_new(c"southstar-close-symbolic");
             gtk::gtk_button_set_has_frame(close, 0);
             gtk::gtk_widget_add_css_class(close, c"ns-tab-close".as_ptr());
             gtk::gtk_widget_set_valign(close, gtk::ALIGN_CENTER);
@@ -991,7 +988,7 @@ unsafe extern "C" fn on_view_notify(
                 if !icon.is_null() {
                     let fav = v.favicon();
                     if fav.is_null() {
-                        ns_icon_image_set(icon.cast(), c"southstar-page-symbolic".as_ptr());
+                        ns_icon_image_set(icon.cast(), c"southstar-page-symbolic");
                     } else {
                         southstar_gtk_ffi::gtk_image_set_from_paintable(icon.cast(), fav);
                     }
@@ -1644,7 +1641,7 @@ unsafe fn build_address(pw: &ProcWindow) -> *mut GtkWidget {
         ns_icon_entry_set(
             address.cast(),
             gtk::ENTRY_ICON_PRIMARY,
-            c"southstar-globe-symbolic".as_ptr(),
+            c"southstar-globe-symbolic",
         );
         gtk::gtk_entry_set_icon_tooltip_text(
             address,
@@ -1776,7 +1773,7 @@ pub unsafe fn proc_window_new(
         let tabstrip = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 2);
         pw.tabstrip.set(tabstrip);
         gtk::gtk_widget_add_css_class(tabstrip, c"ns-tabstrip".as_ptr());
-        let newtab = ns_icon_button_new(c"southstar-new-tab-symbolic".as_ptr());
+        let newtab = ns_icon_button_new(c"southstar-new-tab-symbolic");
         pw.newtab_btn.set(newtab);
         gtk::gtk_button_set_has_frame(newtab, 0);
         gtk::gtk_widget_add_css_class(newtab, c"ns-newtab".as_ptr());
@@ -1852,7 +1849,7 @@ pub unsafe fn proc_window_new(
         );
         let appmenu = build_menu();
         let menu_button = gtk::gtk_menu_button_new();
-        ns_icon_menu_button_set(menu_button.cast(), c"southstar-menu-symbolic".as_ptr());
+        ns_icon_menu_button_set(menu_button.cast(), c"southstar-menu-symbolic");
         gtk::gtk_widget_add_css_class(menu_button, c"ns-nav-button".as_ptr());
         gtk::gtk_widget_set_valign(menu_button, gtk::ALIGN_CENTER);
         gtk::gtk_menu_button_set_menu_model(menu_button, appmenu);

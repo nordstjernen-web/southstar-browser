@@ -12,7 +12,7 @@ use super::gtk::{connect, handler};
 use super::pagelayers::{ns_page_layers_free, ns_page_layers_new};
 use super::procview_chrome::{build_perm_bar, build_search_bar, ctx_install_actions};
 use super::procview_draw::{
-    ns_pv_area_new, ns_pv_area_set_view, ns_pv_disarm_anim, ns_pv_install_area_signals,
+    disarm_anim, ns_pv_area_new, ns_pv_area_set_view, ns_pv_install_area_signals,
     ns_pv_install_scroll, ns_pv_install_view_signals,
 };
 use super::procview_input::{
@@ -101,7 +101,7 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
     state.closed = 1;
     unref_object(state.im);
     state.im = ptr::null_mut();
-    unsafe { ns_pv_disarm_anim(v) };
+    disarm_anim(v);
     let state = view(v);
     unsafe {
         if state.hover_after_scroll_id != 0 {
@@ -228,12 +228,12 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
         gtk::gtk_widget_set_vexpand(state.root, 1);
     }
     build_search_bar(v);
-    unsafe { ns_pv_input_install_pointer(v) };
+    ns_pv_input_install_pointer(v);
     ctx_install_actions(v);
+    ns_pv_input_install_secondary(v);
+    ns_pv_install_scroll(v);
+    ns_pv_input_install_keys(v);
     unsafe {
-        ns_pv_input_install_secondary(v);
-        ns_pv_install_scroll(v);
-        ns_pv_input_install_keys(v);
         connect(
             view(v).area,
             c"destroy",

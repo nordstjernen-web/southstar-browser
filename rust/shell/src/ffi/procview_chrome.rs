@@ -10,13 +10,14 @@ use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
 use southstar_gtk_ffi::{self as gtk, GtkWidget};
 
 use super::gtk::{connect, cstring, handler, set_accessible_label, tr};
-use super::procview_input::{ns_pv_run_edit_op, ns_pv_start_select, push_req};
+use super::procview_input::{push_req, run_edit_op, start_select};
 use super::procview_result::{
     ns_proc_view_back, ns_proc_view_can_back, ns_proc_view_can_forward, ns_proc_view_forward,
-    ns_proc_view_load, ns_proc_view_reload, ns_pv_perm_resolve, post_emit,
+    ns_proc_view_load, ns_proc_view_reload, perm_resolve, post_emit,
 };
 use super::procview_state::{NsProcView, PrintSetup, Req};
 use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
+use crate::procview::input::EditOp;
 
 const EVT_STATUS: c_int = 2;
 const EVT_NEWTAB: c_int = 3;
@@ -28,10 +29,6 @@ const REQ_EVAL: c_int = 12;
 const REQ_DUMP: c_int = 13;
 const REQ_COLOR_SCHEME: c_int = 18;
 const REQ_PRINT: c_int = 22;
-
-const EDIT_CUT: c_int = 1;
-const EDIT_COPY: c_int = 2;
-const EDIT_PASTE: c_int = 3;
 
 const EDIT_FIELD: c_int = 1;
 const EDIT_WRITABLE: c_int = 2;
@@ -142,7 +139,12 @@ unsafe extern "C" fn on_print_draw(
     }
 }
 
-fn print_run(v: *mut NsProcView, pages: *mut GPtrArray, setup: &PrintSetup, raster_scale: f64) {
+pub(super) fn print_run(
+    v: *mut NsProcView,
+    pages: *mut GPtrArray,
+    setup: &PrintSetup,
+    raster_scale: f64,
+) {
     let job = Box::into_raw(Box::new(PrintJob {
         pages,
         setup: *setup,
@@ -335,21 +337,21 @@ unsafe extern "C" fn on_ctx_copy_link(_a: *mut c_void, _p: *mut c_void, ud: *mut
 }
 
 unsafe extern "C" fn on_ctx_cut(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_pv_run_edit_op(ud.cast(), EDIT_CUT) };
+    run_edit_op(ud.cast(), EditOp::Cut);
 }
 
 unsafe extern "C" fn on_ctx_copy_sel(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_pv_run_edit_op(ud.cast(), EDIT_COPY) };
+    run_edit_op(ud.cast(), EditOp::Copy);
 }
 
 unsafe extern "C" fn on_ctx_paste(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
-    unsafe { ns_pv_run_edit_op(ud.cast(), EDIT_PASTE) };
+    run_edit_op(ud.cast(), EditOp::Paste);
 }
 
 unsafe extern "C" fn on_ctx_select_all(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
     view(v).has_selection = 1;
-    unsafe { ns_pv_start_select(v, 3, 0, 0) };
+    start_select(v, 3, 0, 0);
 }
 
 unsafe extern "C" fn on_ctx_save_pdf(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
@@ -504,12 +506,7 @@ fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
     menu
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_show_context_menu(
-    v: *mut NsProcView,
-    href: *const c_char,
-    edit: c_int,
-) {
+pub(super) fn ns_pv_show_context_menu(v: *mut NsProcView, href: *const c_char, edit: c_int) {
     let state = view(v);
     unsafe { glib::g_free(state.ctx_link.cast()) };
     state.ctx_link = if nonempty(href) {
@@ -719,11 +716,11 @@ pub(super) fn build_search_bar(v: *mut NsProcView) {
 }
 
 unsafe extern "C" fn on_perm_allow(_btn: *mut GtkWidget, data: *mut c_void) {
-    unsafe { ns_pv_perm_resolve(data.cast(), 1) };
+    perm_resolve(data.cast(), true);
 }
 
 unsafe extern "C" fn on_perm_deny(_btn: *mut GtkWidget, data: *mut c_void) {
-    unsafe { ns_pv_perm_resolve(data.cast(), 0) };
+    perm_resolve(data.cast(), false);
 }
 
 pub(super) fn build_perm_bar(v: *mut NsProcView) {
@@ -772,8 +769,7 @@ pub(super) fn build_perm_bar(v: *mut NsProcView) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_console_append(v: *mut NsProcView, text: *const c_char) {
+pub(super) fn ns_pv_console_append(v: *mut NsProcView, text: *const c_char) {
     let state = view(v);
     if state.console_buffer.is_null() || !nonempty(text) {
         return;
@@ -809,7 +805,7 @@ unsafe extern "C" fn on_console_eval(entry: *mut GtkWidget, data: *mut c_void) {
     echo.extend_from_slice(unsafe { CStr::from_ptr(src) }.to_bytes());
     echo.push(b'\n');
     let echo = cstring(echo);
-    unsafe { ns_pv_console_append(v, echo.as_ptr()) };
+    ns_pv_console_append(v, echo.as_ptr());
     let req = new_req(REQ_EVAL);
     unsafe { (*req).query = glib::g_strdup(src) };
     push_req(v, req);
@@ -1068,16 +1064,6 @@ fn build_console_window(v: *mut NsProcView) {
             data,
         );
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_print_run(
-    v: *mut NsProcView,
-    pages: *mut c_void,
-    setup: *const PrintSetup,
-    raster_scale: f64,
-) {
-    print_run(v, pages.cast(), unsafe { &*setup }, raster_scale);
 }
 
 pub(super) fn ns_proc_view_print(v: *mut NsProcView) {

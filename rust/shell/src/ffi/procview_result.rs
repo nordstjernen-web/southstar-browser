@@ -11,20 +11,20 @@ use southstar_gtk_ffi as gtk;
 
 use super::pagelayers::{ns_layer_update_free, ns_page_layers_reset};
 use super::procview_chrome::{
-    ns_pv_console_append, ns_pv_console_set_open, ns_pv_print_run, ns_pv_show_context_menu,
+    ns_pv_console_append, ns_pv_console_set_open, ns_pv_show_context_menu, print_run,
 };
 use super::procview_draw::{
-    clear_busy_cursor, configure_adjustments, ns_pv_arm_anim, ns_pv_disarm_anim,
-    ns_pv_scroll_view_to, ns_pv_set_named_cursor, ns_pv_stop_wheel_animation, ns_pv_tiles_apply,
-    ns_pv_tiles_leave, request_render, request_tick, set_busy_cursor, start_render,
+    arm_anim, clear_busy_cursor, configure_adjustments, disarm_anim, layers,
+    ns_pv_stop_wheel_animation, request_render, request_tick, scroll_view_to, set_busy_cursor,
+    set_named_cursor, start_render, tiles_apply, tiles_leave,
 };
 use super::procview_input::{
-    cur_scale, maybe_update_viewport, ns_pv_css_viewport_h, ns_pv_css_viewport_w,
-    ns_pv_start_hover, ns_pv_start_link, ns_pv_start_select, page_dpr, push_req,
+    cur_scale, maybe_update_viewport, ns_pv_css_viewport_h, ns_pv_css_viewport_w, page_dpr,
+    push_req, start_hover, start_link, start_select,
 };
 use super::procview_media::{
-    Media, ns_pv_media_append_stats, ns_pv_media_audio_pid, ns_pv_media_audio_shutdown,
-    ns_pv_media_pump, ns_pv_media_video_pid, ns_pv_media_video_playing, ns_pv_media_video_shutdown,
+    ns_pv_media_append_stats, ns_pv_media_audio_pid, ns_pv_media_audio_shutdown, ns_pv_media_pump,
+    ns_pv_media_video_pid, ns_pv_media_video_playing, ns_pv_media_video_shutdown,
 };
 use super::procview_state::{NsProcView, Req, Res};
 use super::procview_view::ns_proc_view_unref;
@@ -84,10 +84,6 @@ unsafe extern "C" {
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
     unsafe { &mut *v }
-}
-
-fn media(v: *mut NsProcView) -> *mut Media {
-    view(v).media.cast()
 }
 
 fn tr(text: &CStr) -> *const c_char {
@@ -212,10 +208,8 @@ pub(super) fn do_load(
         return;
     }
     perm_resolve(v, false);
-    unsafe {
-        ns_pv_media_audio_shutdown(media(v));
-        ns_pv_media_video_shutdown(media(v));
-    }
+    ns_pv_media_audio_shutdown(v);
+    ns_pv_media_video_shutdown(v);
     let state = view(v);
     state.pending_record = glib::boolean(record);
     state.load_seq += 1;
@@ -249,12 +243,10 @@ pub(super) fn do_load(
     state.opened = 0;
     state.page_animating = 0;
     state.caret_blinking = 0;
-    unsafe {
-        ns_pv_stop_wheel_animation(v);
-        ns_pv_disarm_anim(v);
-    }
+    ns_pv_stop_wheel_animation(v);
+    disarm_anim(v);
     clear_object(&mut state.frame);
-    unsafe { ns_page_layers_reset(state.layers.cast()) };
+    ns_page_layers_reset(layers(v));
     state.tiles_mode = 0;
     unsafe { gtk::gtk_widget_queue_draw(state.area) };
     if state.loading == 0 {
@@ -274,8 +266,8 @@ pub(super) fn do_load(
         state.deferred_user_activated = glib::boolean(user_activated);
         return;
     }
-    state.last_vp_w = unsafe { ns_pv_css_viewport_w(v) };
-    state.last_vp_h = unsafe { ns_pv_css_viewport_h(v) };
+    state.last_vp_w = ns_pv_css_viewport_w(v);
+    state.last_vp_h = ns_pv_css_viewport_h(v);
     state.last_vp_dpr = page_dpr(v);
 
     let req = new_req(REQ_LOAD);
@@ -329,7 +321,7 @@ fn set_zoom(v: *mut NsProcView, scale: f64) {
     }
 }
 
-fn perm_resolve(v: *mut NsProcView, allow: bool) {
+pub(super) fn perm_resolve(v: *mut NsProcView, allow: bool) {
     let state = view(v);
     if state.perm_pending == 0 {
         return;
@@ -405,12 +397,10 @@ fn adopt_page_size(v: *mut NsProcView, res: &Res) -> bool {
 
 fn set_anim(v: *mut NsProcView) {
     let state = view(v);
-    unsafe {
-        if state.page_animating != 0 || state.caret_blinking != 0 {
-            ns_pv_arm_anim(v);
-        } else {
-            ns_pv_disarm_anim(v);
-        }
+    if state.page_animating != 0 || state.caret_blinking != 0 {
+        arm_anim(v);
+    } else {
+        disarm_anim(v);
     }
 }
 
@@ -430,7 +420,7 @@ fn side_channels(v: *mut NsProcView, res: &Res) {
         post_emit(v, EVT_DOWNLOAD, res.download);
     }
     if nonempty(res.audio) {
-        unsafe { ns_pv_media_pump(v, res.audio) };
+        ns_pv_media_pump(v, res.audio);
     }
     if nonempty(res.window_action) {
         apply_window_action(v, res.window_action);
@@ -528,7 +518,7 @@ fn on_tick(v: *mut NsProcView, res: &Res) {
 fn on_frame(v: *mut NsProcView, res: &mut Res) {
     let current = res.seq == view(v).render_seq;
     if res.ok != 0 && res.wheel_snapped != 0 {
-        unsafe { ns_pv_stop_wheel_animation(v) };
+        ns_pv_stop_wheel_animation(v);
     }
     if current && res.ok != 0 {
         let state = view(v);
@@ -565,9 +555,9 @@ fn on_frame(v: *mut NsProcView, res: &mut Res) {
         }
     }
     if current && res.ok != 0 && !res.layers.is_null() {
-        unsafe { ns_pv_tiles_apply(v, res) };
+        tiles_apply(v, res);
     } else if current && res.ok != 0 && !res.texture.is_null() {
-        unsafe { ns_pv_tiles_leave(v) };
+        tiles_leave(v);
         let state = view(v);
         clear_object(&mut state.frame);
         state.frame = core::mem::replace(&mut res.texture, ptr::null_mut());
@@ -615,25 +605,21 @@ fn pending_link(v: *mut NsProcView) {
         state.link_pending = 0;
         let action = state.link_pending_action;
         state.link_pending_action = ACT_HOVER;
-        unsafe { ns_pv_start_link(v, state.link_pending_x, state.link_pending_y, action) };
+        start_link(v, state.link_pending_x, state.link_pending_y, action);
     }
 }
 
 fn show_link_status(v: *mut NsProcView, href: *const c_char, cursor: *const c_char) {
+    let cursor = unsafe { glib::bytes(cursor) };
     if nonempty(href) {
         post_emit(v, EVT_STATUS, href);
         if view(v).busy_cursor == 0 {
-            let name = if cursor.is_null() {
-                c"pointer".as_ptr()
-            } else {
-                cursor
-            };
-            unsafe { ns_pv_set_named_cursor(view(v).area, name) };
+            set_named_cursor(view(v).area, cursor.unwrap_or(b"pointer"));
         }
     } else {
         post_emit(v, EVT_STATUS, c"".as_ptr());
         if view(v).busy_cursor == 0 {
-            unsafe { ns_pv_set_named_cursor(view(v).area, cursor) };
+            set_named_cursor(view(v).area, cursor.unwrap_or_default());
         }
     }
 }
@@ -648,7 +634,7 @@ fn on_link(v: *mut NsProcView, res: &Res) {
             request_render(v);
         }
         if res.prevented == 0 {
-            unsafe { ns_pv_show_context_menu(v, res.href, res.edit) };
+            ns_pv_show_context_menu(v, res.href, res.edit);
         }
         pending_link(v);
         return;
@@ -680,7 +666,7 @@ fn on_hover(v: *mut NsProcView, res: &Res) {
     let state = view(v);
     if state.hover_pending != 0 {
         state.hover_pending = 0;
-        unsafe { ns_pv_start_hover(v, state.hover_pending_x, state.hover_pending_y) };
+        start_hover(v, state.hover_pending_x, state.hover_pending_y);
     }
 }
 
@@ -707,24 +693,22 @@ fn on_scrollbar(v: *mut NsProcView, res: &Res) {
             }
         } else if still && state.sb_have_last != 0 {
             let s = cur_scale(v);
-            unsafe {
-                if state.multi_click == 0 {
-                    ns_pv_start_select(
-                        v,
-                        0,
-                        state.scroll_x + (state.drag_start_x / s) as c_int,
-                        state.scroll_y + (state.drag_start_y / s) as c_int,
-                    );
-                    view(v).drag_anchored = 1;
-                }
-                let state = view(v);
-                ns_pv_start_select(
+            if state.multi_click == 0 {
+                start_select(
                     v,
-                    1,
-                    state.scroll_x + (state.sb_last_x / s) as c_int,
-                    state.scroll_y + (state.sb_last_y / s) as c_int,
+                    0,
+                    state.scroll_x + (state.drag_start_x / s) as c_int,
+                    state.scroll_y + (state.drag_start_y / s) as c_int,
                 );
+                view(v).drag_anchored = 1;
             }
+            let state = view(v);
+            start_select(
+                v,
+                1,
+                state.scroll_x + (state.sb_last_x / s) as c_int,
+                state.scroll_y + (state.sb_last_y / s) as c_int,
+            );
             view(v).has_selection = 1;
         }
     } else if res.kind == 1 && res.ok != 0 {
@@ -779,12 +763,10 @@ fn on_eval(v: *mut NsProcView, res: &Res) {
             unsafe { gtk::gtk_text_buffer_set_text(state.elements_buffer, text, -1) };
         }
     } else if nonempty(res.href) {
-        unsafe {
-            ns_pv_console_append(v, res.href);
-            ns_pv_console_append(v, c"\n".as_ptr());
-        }
+        ns_pv_console_append(v, res.href);
+        ns_pv_console_append(v, c"\n".as_ptr());
     } else {
-        unsafe { ns_pv_console_append(v, c"undefined\n".as_ptr()) };
+        ns_pv_console_append(v, c"undefined\n".as_ptr());
     }
     request_render(v);
 }
@@ -806,7 +788,7 @@ fn on_dump(v: *mut NsProcView, res: &Res) {
     if buf == state.perf_buffer {
         unsafe {
             let out = g_string_new(text);
-            ns_pv_media_append_stats(media(v), out.cast());
+            ns_pv_media_append_stats(v, out.cast());
             gtk::gtk_text_buffer_set_text(buf, (*out).str, -1);
             g_string_free(out, 1);
         }
@@ -875,7 +857,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
                 load(v, res.href);
             } else {
                 if res.fallback_scroll != 0 && res.prevented == 0 {
-                    unsafe { ns_pv_scroll_view_to(v, res.fallback_x, res.fallback_y) };
+                    scroll_view_to(v, res.fallback_x, res.fallback_y);
                 }
                 request_render(v);
             }
@@ -918,7 +900,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
         RES_PRINT => {
             let pages = res.print_pages.cast::<GPtrArray>();
             if !pages.is_null() && unsafe { (*pages).len } > 0 {
-                unsafe { ns_pv_print_run(v, pages.cast(), &res.print_setup, res.print_scale) };
+                print_run(v, pages, &res.print_setup, res.print_scale);
                 res.print_pages = ptr::null_mut();
             } else {
                 post_emit(v, EVT_STATUS, tr(c"Nothing to print"));
@@ -927,7 +909,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
         }
         RES_CONSOLE => {
             if nonempty(res.href) {
-                unsafe { ns_pv_console_append(v, res.href) };
+                ns_pv_console_append(v, res.href);
             }
         }
         RES_EVAL => on_eval(v, res),
@@ -973,11 +955,6 @@ pub(super) unsafe extern "C" fn on_result(data: *mut c_void) -> GBoolean {
     }
     free_res(res);
     gtk::SOURCE_REMOVE
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_perm_resolve(v: *mut NsProcView, allow: GBoolean) {
-    perm_resolve(v, allow != 0);
 }
 
 pub(super) fn ns_proc_view_stop(v: *mut NsProcView) {
@@ -1103,7 +1080,7 @@ pub(super) fn ns_proc_view_audio_pid(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         -1
     } else {
-        unsafe { ns_pv_media_audio_pid(media(v)) }
+        ns_pv_media_audio_pid(v)
     }
 }
 
@@ -1111,7 +1088,7 @@ pub(super) fn ns_proc_view_video_pid(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         -1
     } else {
-        unsafe { ns_pv_media_video_pid(media(v)) }
+        ns_pv_media_video_pid(v)
     }
 }
 
@@ -1132,13 +1109,13 @@ pub(super) fn ns_proc_view_end_task(v: *mut NsProcView) {
 
 pub(super) fn ns_proc_view_stop_video(v: *mut NsProcView) {
     if !v.is_null() {
-        unsafe { ns_pv_media_video_shutdown(media(v)) };
+        ns_pv_media_video_shutdown(v);
     }
 }
 
 pub(super) fn ns_proc_view_stop_audio(v: *mut NsProcView) {
     if !v.is_null() {
-        unsafe { ns_pv_media_audio_shutdown(media(v)) };
+        ns_pv_media_audio_shutdown(v);
     }
 }
 

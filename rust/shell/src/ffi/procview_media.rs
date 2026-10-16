@@ -18,6 +18,7 @@ use southstar_gtk_ffi::{
     self as gtk, Cairo, CairoSurface, GdkFrameClock, GrapheneRect, GtkSnapshot, GtkWidget,
 };
 
+use super::appmain::ns_app_self_exe;
 use super::procview_result::{ns_proc_view_push_video_event, ns_proc_view_url};
 use super::procview_state::NsProcView;
 use super::procview_view::{
@@ -56,7 +57,6 @@ const FILE_TEST_IS_EXECUTABLE: c_uint = 1 << 3;
 const RESYNC_INTERVAL_US: i64 = 950_000;
 
 unsafe extern "C" {
-    fn ns_app_self_exe() -> *const c_char;
     fn ns_net_proxy_override() -> *const c_char;
     fn ns_net_http_proxy() -> *const c_char;
     fn ns_net_https_proxy() -> *const c_char;
@@ -434,7 +434,7 @@ fn write_line(stream: *mut GOutputStream, line: &[u8]) {
 }
 
 fn helper_path(name: &CStr) -> GStr {
-    let exe = unsafe { ns_app_self_exe() };
+    let exe = ns_app_self_exe();
     if !exe.is_null()
         && let Some(dir) = unsafe { GStr::take(g_path_get_dirname(exe)) }
     {
@@ -1478,13 +1478,13 @@ fn stats(m: &Media) -> Vec<u8> {
     out
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_pv_media_new() -> *mut Media {
+pub(super) fn ns_pv_media_new() -> *mut Media {
     Box::into_raw(Box::new(Media::new()))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_free(m: *mut Media) {
+/// # Safety
+/// `m` is null or media `ns_pv_media_new` returned that has not been freed.
+pub(super) unsafe fn ns_pv_media_free(m: *mut Media) {
     if m.is_null() {
         return;
     }
@@ -1493,8 +1493,7 @@ pub unsafe extern "C" fn ns_pv_media_free(m: *mut Media) {
     m.video_shutdown();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_pump(v: *mut NsProcView, commands: *const c_char) {
+pub(super) fn ns_pv_media_pump(v: *mut NsProcView, commands: *const c_char) {
     let Some(commands) = text(commands).filter(|c| !c.is_empty()) else {
         return;
     };
@@ -1524,28 +1523,24 @@ pub unsafe extern "C" fn ns_pv_media_pump(v: *mut NsProcView, commands: *const c
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_audio_shutdown(m: *mut Media) {
-    if let Some(m) = unsafe { m.as_mut() } {
+pub(super) fn ns_pv_media_audio_shutdown(v: *mut NsProcView) {
+    if let Some(m) = media_of(v) {
         m.audio_shutdown();
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_video_shutdown(m: *mut Media) {
-    if let Some(m) = unsafe { m.as_mut() } {
+pub(super) fn ns_pv_media_video_shutdown(v: *mut NsProcView) {
+    if let Some(m) = media_of(v) {
         m.video_shutdown();
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_audio_pid(m: *const Media) -> c_int {
-    unsafe { m.as_ref() }.map_or(-1, |m| subprocess_pid(m.audio_proc))
+pub(super) fn ns_pv_media_audio_pid(v: *mut NsProcView) -> c_int {
+    media_of(v).map_or(-1, |m| subprocess_pid(m.audio_proc))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_video_pid(m: *const Media) -> c_int {
-    unsafe { m.as_ref() }.map_or(-1, |m| subprocess_pid(m.video_proc))
+pub(super) fn ns_pv_media_video_pid(v: *mut NsProcView) -> c_int {
+    media_of(v).map_or(-1, |m| subprocess_pid(m.video_proc))
 }
 
 pub(super) fn ns_pv_media_video_playing(v: *mut NsProcView) -> bool {
@@ -1568,9 +1563,8 @@ pub(super) fn ns_pv_media_snapshot(v: *mut NsProcView, fs: f64, snapshot: *mut G
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_media_append_stats(m: *const Media, out: *mut c_void) {
-    let Some(m) = (unsafe { m.as_ref() }) else {
+pub(super) fn ns_pv_media_append_stats(v: *mut NsProcView, out: *mut c_void) {
+    let Some(m) = media_of(v) else {
         return;
     };
     let text = stats(m);

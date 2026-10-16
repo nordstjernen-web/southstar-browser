@@ -1,17 +1,19 @@
-//! Southstar — the C entry points of the page layers over the Rust page layer cache.
+//! Southstar — the tab view's side of the page layers: parsing layer updates and driving the Rust page layer cache.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_double, c_int, c_uchar, c_void};
 
-use southstar_glib::{boolean, slice, strdup};
+use southstar_glib::{slice, strdup};
 use southstar_gtk_ffi::GtkSnapshot;
 
 use super::gdk::{Snapshot, Under};
 use crate::pagelayers::{LayerUpdate, PageLayers};
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layer_update_parse(
+/// # Safety
+/// `desc` is null or a NUL-terminated string, and `map` is null or points to `map_size` readable
+/// bytes, both valid for the call.
+pub(super) unsafe fn ns_layer_update_parse(
     desc: *const c_char,
     map: *const c_uchar,
     map_size: usize,
@@ -32,97 +34,87 @@ pub(super) unsafe fn ns_layer_update_free(u: *mut LayerUpdate) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_page_layers_new() -> *mut PageLayers {
+pub(super) fn ns_page_layers_new() -> *mut PageLayers {
     Box::into_raw(Box::default())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_free(pl: *mut PageLayers) {
+/// # Safety
+/// `pl` is null or page layers `ns_page_layers_new` returned that have not been freed.
+pub(super) unsafe fn ns_page_layers_free(pl: *mut PageLayers) {
     if !pl.is_null() {
         drop(unsafe { Box::from_raw(pl) });
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_reset(pl: *mut PageLayers) {
-    if let Some(pl) = unsafe { pl.as_mut() } {
+pub(super) fn ns_page_layers_reset(pl: Option<&mut PageLayers>) {
+    if let Some(pl) = pl {
         pl.reset();
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_apply(pl: *mut PageLayers, u: *mut LayerUpdate) -> c_int {
-    match unsafe { (pl.as_mut(), u.as_mut()) } {
-        (Some(pl), Some(u)) => boolean(pl.apply(u)),
-        _ => 0,
+pub(super) fn ns_page_layers_apply(
+    pl: Option<&mut PageLayers>,
+    u: Option<&mut LayerUpdate>,
+) -> bool {
+    match (pl, u) {
+        (Some(pl), Some(u)) => pl.apply(u),
+        _ => false,
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_active(pl: *const PageLayers) -> c_int {
-    boolean(unsafe { pl.as_ref() }.is_some_and(PageLayers::active))
+pub(super) fn ns_page_layers_active(pl: Option<&PageLayers>) -> bool {
+    pl.is_some_and(PageLayers::active)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_gen(pl: *const PageLayers) -> c_int {
-    unsafe { pl.as_ref() }.map_or(-1, PageLayers::generation)
+pub(super) fn ns_page_layers_gen(pl: Option<&PageLayers>) -> c_int {
+    pl.map_or(-1, PageLayers::generation)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_vp_held(pl: *const PageLayers) -> c_int {
-    unsafe { pl.as_ref() }.map_or(-1, PageLayers::vp_held)
+pub(super) fn ns_page_layers_vp_held(pl: Option<&PageLayers>) -> c_int {
+    pl.map_or(-1, PageLayers::vp_held)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_have(
-    pl: *const PageLayers,
+pub(super) fn ns_page_layers_have(
+    pl: Option<&PageLayers>,
     y0: c_double,
     y1: c_double,
-    any_gen: c_int,
+    any_gen: bool,
 ) -> *mut c_char {
-    let have = unsafe { pl.as_ref() }.map_or_else(String::new, |pl| pl.have(y0, y1, any_gen != 0));
+    let have = pl.map_or_else(String::new, |pl| pl.have(y0, y1, any_gen));
     strdup(have.as_bytes())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_missing(
-    pl: *const PageLayers,
+pub(super) fn ns_page_layers_missing(
+    pl: Option<&PageLayers>,
     y0: c_double,
     y1: c_double,
     view_y0: c_double,
     view_y1: c_double,
     page_h: c_double,
-) -> c_int {
-    boolean(unsafe { pl.as_ref() }.is_some_and(|pl| pl.missing(y0, y1, view_y0, view_y1, page_h)))
+) -> bool {
+    pl.is_some_and(|pl| pl.missing(y0, y1, view_y0, view_y1, page_h))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_evict(pl: *mut PageLayers, y0: c_double, y1: c_double) {
-    if let Some(pl) = unsafe { pl.as_mut() } {
+pub(super) fn ns_page_layers_evict(pl: Option<&mut PageLayers>, y0: c_double, y1: c_double) {
+    if let Some(pl) = pl {
         pl.evict(y0, y1);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_page_layers_scroller_at(
-    pl: *const PageLayers,
+pub(super) fn ns_page_layers_scroller_at(
+    pl: Option<&PageLayers>,
     x: c_double,
     y: c_double,
     scroll_x: c_double,
     scroll_y: c_double,
-    vertical: c_int,
-) -> c_int {
-    boolean(
-        unsafe { pl.as_ref() }
-            .is_some_and(|pl| pl.scroller_at(x, y, scroll_x, scroll_y, vertical != 0)),
-    )
+    vertical: bool,
+) -> bool {
+    pl.is_some_and(|pl| pl.scroller_at(x, y, scroll_x, scroll_y, vertical))
 }
 
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_page_layers_snapshot(
-    pl: *const PageLayers,
+pub(super) fn ns_page_layers_snapshot(
+    pl: Option<&PageLayers>,
     snapshot: *mut GtkSnapshot,
     width: c_double,
     height: c_double,
@@ -132,7 +124,7 @@ pub unsafe extern "C" fn ns_page_layers_snapshot(
     under: Under,
     under_data: *mut c_void,
 ) {
-    let Some(pl) = (unsafe { pl.as_ref() }) else {
+    let Some(pl) = pl else {
         return;
     };
     let mut canvas = Snapshot {

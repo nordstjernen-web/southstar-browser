@@ -70,18 +70,6 @@ pub enum EditOp {
     SelectAll = 4,
 }
 
-impl EditOp {
-    pub fn from_raw(raw: i32) -> EditOp {
-        match raw {
-            1 => EditOp::Cut,
-            2 => EditOp::Copy,
-            3 => EditOp::Paste,
-            4 => EditOp::SelectAll,
-            _ => EditOp::None,
-        }
-    }
-}
-
 pub fn modifier_bits(state: u32) -> i32 {
     i32::from(state & SHIFT != 0)
         | (i32::from(state & CONTROL != 0) << 1)

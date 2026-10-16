@@ -158,7 +158,7 @@ pub(super) fn push_req(v: *mut NsProcView, req: *mut Req) {
     unsafe { g_async_queue_push(view(v).queue, req.cast()) };
 }
 
-fn start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
+pub(super) fn start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
     if !opened(v) {
         return;
     }
@@ -192,7 +192,7 @@ fn request_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
     start_link(v, x, y, action);
 }
 
-fn start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
+pub(super) fn start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
     if !opened(v) {
         return;
     }
@@ -291,7 +291,7 @@ fn start_release(v: *mut NsProcView, x: c_int, y: c_int) {
     push_req(v, req);
 }
 
-fn start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) {
+pub(super) fn start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) {
     if !opened(v) {
         return;
     }
@@ -416,7 +416,7 @@ fn paste_clipboard(v: *mut NsProcView) {
     };
 }
 
-fn run_edit_op(v: *mut NsProcView, op: EditOp) {
+pub(super) fn run_edit_op(v: *mut NsProcView, op: EditOp) {
     match op {
         EditOp::Cut => start_select(v, 7, 0, 0),
         EditOp::Copy => start_select(v, 4, 0, 0),
@@ -736,8 +736,7 @@ fn add_controller(v: *mut NsProcView, controller: *mut c_void) {
     unsafe { gtk::gtk_widget_add_controller(view(v).area, controller.cast()) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_input_install_pointer(v: *mut NsProcView) {
+pub(super) fn ns_pv_input_install_pointer(v: *mut NsProcView) {
     let click = click_gesture(gtk::BUTTON_PRIMARY);
     connect(click.cast(), c"pressed", on_pressed as *const (), v);
     connect(click.cast(), c"released", on_released as *const (), v);
@@ -759,8 +758,7 @@ pub unsafe extern "C" fn ns_pv_input_install_pointer(v: *mut NsProcView) {
     add_controller(v, middle.cast());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_input_install_secondary(v: *mut NsProcView) {
+pub(super) fn ns_pv_input_install_secondary(v: *mut NsProcView) {
     let secondary = click_gesture(gtk::BUTTON_SECONDARY);
     connect(
         secondary.cast(),
@@ -775,8 +773,7 @@ pub unsafe extern "C" fn ns_pv_input_install_secondary(v: *mut NsProcView) {
     add_controller(v, motion.cast());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_input_install_keys(v: *mut NsProcView) {
+pub(super) fn ns_pv_input_install_keys(v: *mut NsProcView) {
     let key = unsafe { gtk::gtk_event_controller_key_new() }.cast::<gtk::GtkEventController>();
     connect(key.cast(), c"key-pressed", on_key as *const (), v);
     connect(key.cast(), c"key-released", on_key_released as *const (), v);
@@ -789,32 +786,10 @@ pub unsafe extern "C" fn ns_pv_input_install_keys(v: *mut NsProcView) {
     add_controller(v, key.cast());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
-    start_link(v, x, y, action);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
-    start_hover(v, x, y);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) {
-    start_select(v, kind, x, y);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_run_edit_op(v: *mut NsProcView, op: c_int) {
-    run_edit_op(v, EditOp::from_raw(op));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_css_viewport_w(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_pv_css_viewport_w(v: *mut NsProcView) -> c_int {
     css_viewport(viewport_w(v), cur_scale(v))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_css_viewport_h(v: *mut NsProcView) -> c_int {
+pub(super) fn ns_pv_css_viewport_h(v: *mut NsProcView) -> c_int {
     css_viewport(viewport_h(v), cur_scale(v))
 }

@@ -189,8 +189,7 @@ unsafe fn name(row: *mut GtkWidget, text: &str) -> *mut GtkWidget {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_title_row_new(tabstrip: *mut GtkWidget) -> *mut GtkWidget {
+pub(super) fn ns_title_row_new(tabstrip: *mut GtkWidget) -> *mut GtkWidget {
     unsafe {
         let row = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 0);
         gtk::gtk_widget_set_layout_manager(

@@ -8,8 +8,9 @@ use core::ptr;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk_ffi as gtk;
 
+use super::appmain::ns_app_self_exe;
 use super::pagelayers::ns_layer_update_parse;
-use super::procview_draw::ns_pv_stage_fill;
+use super::procview_draw::stage_fill;
 use super::procview_result::on_result;
 use super::procview_state::{NsProcView, PrintSetup, Req, Res, TilesReq, Wheel};
 use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
@@ -149,8 +150,6 @@ unsafe extern "C" {
         error: *mut *mut c_void,
     ) -> GBoolean;
     fn free(p: *mut c_void);
-
-    fn ns_app_self_exe() -> *const c_char;
 
     fn ns_rproc_http_spawn_shm_ex(
         renderer_path: *const c_char,
@@ -532,8 +531,7 @@ fn do_render(v: *mut NsProcView, r: &mut Req) {
             unsafe { free(fr.tiles.cast()) };
             out.frame_unchanged = glib::boolean(out.layers.is_null());
         } else if fr.unchanged == 0 {
-            out.texture =
-                unsafe { ns_pv_stage_fill(fr.pixels, fr.width, fr.height, fr.stride) }.cast();
+            out.texture = stage_fill(fr.pixels, fr.width, fr.height, fr.stride).cast();
             out.texture_scale = if r.raster > 0.0 { r.raster } else { 1.0 };
         }
         out.nav = take_malloced(fr.nav);
@@ -977,7 +975,7 @@ pub(super) fn ns_proc_renderer_path() -> *mut c_char {
     } else {
         c"southstar-renderer"
     };
-    let exe = unsafe { ns_app_self_exe() };
+    let exe = ns_app_self_exe();
     if !exe.is_null() {
         unsafe {
             let dir = glib::g_path_get_dirname(exe);

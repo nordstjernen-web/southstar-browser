@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::ptr;
 use std::sync::OnceLock;
 
@@ -20,6 +20,7 @@ use super::procview_input::{
 use super::procview_media::{ns_pv_media_on_page, ns_pv_media_snapshot, ns_pv_media_video_playing};
 use super::procview_result::{do_load, ns_proc_view_zoom_in, ns_proc_view_zoom_out};
 use super::procview_state::{NsProcView, Res};
+use crate::pagelayers::{LayerUpdate, PageLayers};
 use crate::procview::draw::{self, Cursor, Glide, PathOp};
 
 const REQ_RENDER: c_int = 1;
@@ -66,8 +67,8 @@ fn connect(
     }
 }
 
-fn layers(v: *mut NsProcView) -> *mut crate::pagelayers::PageLayers {
-    view(v).layers.cast()
+pub(super) fn layers<'a>(v: *mut NsProcView) -> Option<&'a mut PageLayers> {
+    unsafe { view(v).layers.cast::<PageLayers>().as_mut() }
 }
 
 struct AreaType {
@@ -150,19 +151,17 @@ unsafe extern "C" fn area_snapshot(widget: *mut GtkWidget, snapshot: *mut GtkSna
     let height = unsafe { gtk::gtk_widget_get_height(widget) };
     let state = view(v);
     if state.tiles_mode != 0 {
-        unsafe {
-            pagelayers::ns_page_layers_snapshot(
-                layers(v),
-                snapshot,
-                f64::from(width),
-                f64::from(height),
-                raster_scale(v),
-                f64::from(state.scroll_x),
-                f64::from(state.scroll_y),
-                Some(snapshot_page_video),
-                v.cast(),
-            )
-        };
+        pagelayers::ns_page_layers_snapshot(
+            layers(v).as_deref(),
+            snapshot,
+            f64::from(width),
+            f64::from(height),
+            raster_scale(v),
+            f64::from(state.scroll_x),
+            f64::from(state.scroll_y),
+            Some(snapshot_page_video),
+            v.cast(),
+        );
         return;
     }
     let fs = if state.frame_scale > 0.0 {
@@ -347,7 +346,7 @@ pub(super) fn clear_busy_cursor(v: *mut NsProcView) {
     }
 }
 
-fn set_named_cursor(widget: *mut GtkWidget, name: &[u8]) {
+pub(super) fn set_named_cursor(widget: *mut GtkWidget, name: &[u8]) {
     let Cursor::Named(fallback) = draw::cursor_for(name) else {
         unsafe { gtk::gtk_widget_set_cursor(widget, ptr::null_mut()) };
         return;
@@ -379,7 +378,7 @@ fn set_named_cursor(widget: *mut GtkWidget, name: &[u8]) {
     }
 }
 
-fn stage_fill(px: *const u8, w: c_int, h: c_int, stride: c_int) -> *mut GdkTexture {
+pub(super) fn stage_fill(px: *const u8, w: c_int, h: c_int, stride: c_int) -> *mut GdkTexture {
     let row = w as usize * 4;
     if w <= 0 || h <= 0 || (stride as usize) < row {
         return ptr::null_mut();
@@ -494,20 +493,16 @@ fn tiles_request(v: *mut NsProcView, req: &mut super::procview_state::Req) {
     }
     let (y0, y1) = tiles_range(v);
     let state = view(v);
-    let pl = layers(v);
+    let pl = layers(v).map(|pl| &*pl);
     req.tiles.tile_h = draw::TILE_H;
     req.tiles.want_y0 = y0.floor() as c_int;
     req.tiles.want_y1 = y1.ceil() as c_int;
-    unsafe {
-        req.tiles.gen_ = pagelayers::ns_page_layers_gen(pl);
-        req.tiles.vp_held = pagelayers::ns_page_layers_vp_held(pl);
-    }
+    req.tiles.gen_ = pagelayers::ns_page_layers_gen(pl);
+    req.tiles.vp_held = pagelayers::ns_page_layers_vp_held(pl);
     req.tiles.fill = state.tiles_fill;
     state.tiles_fill = 0;
-    unsafe {
-        req.have = pagelayers::ns_page_layers_have(pl, y0, y1, 0);
-        req.hold = pagelayers::ns_page_layers_have(pl, y0, y1, 1);
-    }
+    req.have = pagelayers::ns_page_layers_have(pl, y0, y1, false);
+    req.hold = pagelayers::ns_page_layers_have(pl, y0, y1, true);
 }
 
 fn adjustments_stale(v: *mut NsProcView) -> bool {
@@ -526,10 +521,10 @@ fn adjustments_stale(v: *mut NsProcView) -> bool {
     }
 }
 
-fn tiles_apply(v: *mut NsProcView, res: &Res) {
-    let pl = layers(v);
-    let changed = unsafe { pagelayers::ns_page_layers_apply(pl, res.layers.cast()) } != 0;
-    if unsafe { pagelayers::ns_page_layers_active(pl) } == 0 {
+pub(super) fn tiles_apply(v: *mut NsProcView, res: &Res) {
+    let update = unsafe { res.layers.cast::<LayerUpdate>().as_mut() };
+    let changed = pagelayers::ns_page_layers_apply(layers(v), update);
+    if !pagelayers::ns_page_layers_active(layers(v).as_deref()) {
         return;
     }
     let state = view(v);
@@ -544,7 +539,7 @@ fn tiles_apply(v: *mut NsProcView, res: &Res) {
     clear_busy_cursor(v);
     let vh = f64::from(viewport_h(v)) / cur_scale(v);
     let scroll_y = f64::from(state.scroll_y);
-    unsafe { pagelayers::ns_page_layers_evict(pl, scroll_y - vh * 1.5, scroll_y + vh * 2.5) };
+    pagelayers::ns_page_layers_evict(layers(v), scroll_y - vh * 1.5, scroll_y + vh * 2.5);
     if res.ph > 0 {
         state.page_h = res.ph;
         if res.pw > 0 {
@@ -560,16 +555,14 @@ fn tiles_apply(v: *mut NsProcView, res: &Res) {
     if changed {
         unsafe { gtk::gtk_widget_queue_draw(state.area) };
         let scroll_y = f64::from(state.scroll_y);
-        let missing = unsafe {
-            pagelayers::ns_page_layers_missing(
-                pl,
-                y0,
-                y1,
-                scroll_y,
-                scroll_y + vh,
-                f64::from(state.page_h),
-            )
-        } != 0;
+        let missing = pagelayers::ns_page_layers_missing(
+            layers(v).as_deref(),
+            y0,
+            y1,
+            scroll_y,
+            scroll_y + vh,
+            f64::from(state.page_h),
+        );
         if missing && state.render_pending == 0 {
             state.render_pending = 1;
             state.tiles_fill = 1;
@@ -577,13 +570,13 @@ fn tiles_apply(v: *mut NsProcView, res: &Res) {
     }
 }
 
-fn tiles_leave(v: *mut NsProcView) {
+pub(super) fn tiles_leave(v: *mut NsProcView) {
     let state = view(v);
     if state.tiles_mode == 0 {
         return;
     }
     state.tiles_mode = 0;
-    unsafe { pagelayers::ns_page_layers_reset(layers(v)) };
+    pagelayers::ns_page_layers_reset(layers(v));
 }
 
 fn new_req(kind: c_int) -> *mut super::procview_state::Req {
@@ -679,16 +672,14 @@ fn route_wheel(v: *mut NsProcView, dx: f64, dy: f64) {
     let state = view(v);
     state.wheel_remote = flag(
         state.wheel_viewport == 0
-            && unsafe {
-                pagelayers::ns_page_layers_scroller_at(
-                    layers(v),
-                    state.pointer_x / s,
-                    state.pointer_y / s,
-                    f64::from(state.scroll_x),
-                    f64::from(state.scroll_y),
-                    flag(dy.abs() >= dx.abs()),
-                )
-            } != 0,
+            && pagelayers::ns_page_layers_scroller_at(
+                layers(v).as_deref(),
+                state.pointer_x / s,
+                state.pointer_y / s,
+                f64::from(state.scroll_x),
+                f64::from(state.scroll_y),
+                dy.abs() >= dx.abs(),
+            ),
     );
 }
 
@@ -803,7 +794,7 @@ pub(super) fn scroll_target_y(v: *const NsProcView) -> f64 {
     f64::from(state.scroll_y) + state.wheel_pend_y + state.wheel_left_y
 }
 
-fn scroll_view_to(v: *mut NsProcView, x: f64, y: f64) {
+pub(super) fn scroll_view_to(v: *mut NsProcView, x: f64, y: f64) {
     let state = view(v);
     let (max_x, max_y) = unsafe {
         (
@@ -926,7 +917,7 @@ unsafe extern "C" fn anim_tick(
     SOURCE_CONTINUE
 }
 
-fn arm_anim(v: *mut NsProcView) {
+pub(super) fn arm_anim(v: *mut NsProcView) {
     let state = view(v);
     if state.anim_tick_id != 0 || state.closed != 0 || state.area.is_null() {
         return;
@@ -936,7 +927,7 @@ fn arm_anim(v: *mut NsProcView) {
         unsafe { gtk::gtk_widget_add_tick_callback(state.area, Some(anim_tick), v.cast(), None) };
 }
 
-fn disarm_anim(v: *mut NsProcView) {
+pub(super) fn disarm_anim(v: *mut NsProcView) {
     let state = view(v);
     if state.anim_tick_id != 0 && !state.area.is_null() {
         unsafe { gtk::gtk_widget_remove_tick_callback(state.area, state.anim_tick_id) };
@@ -1032,20 +1023,19 @@ unsafe extern "C" fn on_scroll_decelerate(
     arm_wheel_animation(v);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_area_new(v: *mut NsProcView) -> *mut GtkWidget {
+pub(super) fn ns_pv_area_new(v: *mut NsProcView) -> *mut GtkWidget {
     let widget = unsafe { gtk::g_object_new(area_type().type_id, ptr::null()) }.cast::<GtkWidget>();
     unsafe { *area_view_slot(widget) = v };
     widget
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_area_set_view(widget: *mut GtkWidget, v: *mut NsProcView) {
+/// # Safety
+/// `widget` is a drawing area `ns_pv_area_new` created.
+pub(super) unsafe fn ns_pv_area_set_view(widget: *mut GtkWidget, v: *mut NsProcView) {
     unsafe { *area_view_slot(widget) = v };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_install_view_signals(v: *mut NsProcView) {
+pub(super) fn ns_pv_install_view_signals(v: *mut NsProcView) {
     let state = view(v);
     connect(
         state.hadj,
@@ -1061,8 +1051,7 @@ pub unsafe extern "C" fn ns_pv_install_view_signals(v: *mut NsProcView) {
     );
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_install_area_signals(v: *mut NsProcView) {
+pub(super) fn ns_pv_install_area_signals(v: *mut NsProcView) {
     let area = view(v).area.cast::<c_void>();
     connect(area, c"resize", on_resize as *const (), v.cast());
     connect(
@@ -1081,8 +1070,7 @@ pub unsafe extern "C" fn ns_pv_install_area_signals(v: *mut NsProcView) {
     connect(area, c"unrealize", on_area_unrealize as *const (), v.cast());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_install_scroll(v: *mut NsProcView) {
+pub(super) fn ns_pv_install_scroll(v: *mut NsProcView) {
     let scroll = unsafe {
         gtk::gtk_event_controller_scroll_new(
             gtk::EVENT_CONTROLLER_SCROLL_BOTH_AXES | gtk::EVENT_CONTROLLER_SCROLL_KINETIC,
@@ -1098,35 +1086,7 @@ pub unsafe extern "C" fn ns_pv_install_scroll(v: *mut NsProcView) {
     unsafe { gtk::gtk_widget_add_controller(view(v).area, scroll.cast()) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_stage_fill(
-    px: *const u8,
-    w: c_int,
-    h: c_int,
-    stride: c_int,
-) -> *mut GdkTexture {
-    stage_fill(px, w, h, stride)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_set_named_cursor(widget: *mut GtkWidget, name: *const c_char) {
-    set_named_cursor(widget, unsafe { glib::bytes(name) }.unwrap_or_default());
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_tiles_apply(v: *mut NsProcView, res: *const Res) {
-    if let Some(res) = unsafe { res.as_ref() } {
-        tiles_apply(v, res);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_tiles_leave(v: *mut NsProcView) {
-    tiles_leave(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
+pub(super) fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
     let state = view(v);
     state.wheel_left_x = 0.0;
     state.wheel_left_y = 0.0;
@@ -1134,19 +1094,4 @@ pub unsafe extern "C" fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {
     state.wheel_pend_y = 0.0;
     state.fling_vx = 0.0;
     state.fling_vy = 0.0;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_scroll_view_to(v: *mut NsProcView, x: c_double, y: c_double) {
-    scroll_view_to(v, x, y);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_arm_anim(v: *mut NsProcView) {
-    arm_anim(v);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pv_disarm_anim(v: *mut NsProcView) {
-    disarm_anim(v);
 }

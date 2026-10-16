@@ -235,12 +235,8 @@ unsafe fn icon_from_resource(name: &[u8]) -> *mut NsIcon {
 
 static ICONS: Mutex<Option<HashMap<Vec<u8>, usize>>> = Mutex::new(None);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_lookup(name: *const c_char) -> *mut GdkPaintable {
-    if name.is_null() {
-        return ptr::null_mut();
-    }
-    let name = unsafe { CStr::from_ptr(name) }.to_bytes();
+fn ns_icon_lookup(name: &CStr) -> *mut GdkPaintable {
+    let name = name.to_bytes();
     if name.is_empty() {
         return ptr::null_mut();
     }
@@ -266,45 +262,39 @@ unsafe fn centered_image(paintable: *mut GdkPaintable) -> *mut GtkWidget {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_image_new(name: *const c_char) -> *mut GtkWidget {
+pub(super) fn ns_icon_image_new(name: &CStr) -> *mut GtkWidget {
+    let paintable = ns_icon_lookup(name);
     unsafe {
-        let paintable = ns_icon_lookup(name);
         if paintable.is_null() {
-            gtk::gtk_image_new_from_icon_name(name)
+            gtk::gtk_image_new_from_icon_name(name.as_ptr())
         } else {
             centered_image(paintable)
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_image_set(image: *mut GtkImage, name: *const c_char) {
+pub(super) fn ns_icon_image_set(image: *mut GtkImage, name: &CStr) {
+    let paintable = ns_icon_lookup(name);
     unsafe {
-        let paintable = ns_icon_lookup(name);
         if paintable.is_null() {
-            gtk::gtk_image_set_from_icon_name(image, name);
+            gtk::gtk_image_set_from_icon_name(image, name.as_ptr());
         } else {
             gtk::gtk_image_set_from_paintable(image, paintable);
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_button_new(name: *const c_char) -> *mut GtkWidget {
-    unsafe {
-        let button = gtk::gtk_button_new();
-        ns_icon_button_set(button.cast(), name);
-        button
-    }
+pub(super) fn ns_icon_button_new(name: &CStr) -> *mut GtkWidget {
+    let button = unsafe { gtk::gtk_button_new() };
+    ns_icon_button_set(button.cast(), name);
+    button
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_button_set(button: *mut GtkButton, name: *const c_char) {
+pub(super) fn ns_icon_button_set(button: *mut GtkButton, name: &CStr) {
+    let paintable = ns_icon_lookup(name);
     unsafe {
-        let paintable = ns_icon_lookup(name);
         if paintable.is_null() {
-            gtk::gtk_button_set_icon_name(button, name);
+            gtk::gtk_button_set_icon_name(button, name.as_ptr());
             return;
         }
         let child = gtk::gtk_button_get_child(button);
@@ -317,28 +307,22 @@ pub unsafe extern "C" fn ns_icon_button_set(button: *mut GtkButton, name: *const
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_menu_button_set(button: *mut GtkMenuButton, name: *const c_char) {
+pub(super) fn ns_icon_menu_button_set(button: *mut GtkMenuButton, name: &CStr) {
+    let paintable = ns_icon_lookup(name);
     unsafe {
-        let paintable = ns_icon_lookup(name);
         if paintable.is_null() {
-            gtk::gtk_menu_button_set_icon_name(button, name);
+            gtk::gtk_menu_button_set_icon_name(button, name.as_ptr());
         } else {
             gtk::gtk_menu_button_set_child(button, centered_image(paintable));
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_entry_set(
-    entry: *mut GtkEntry,
-    pos: gtk::GtkEntryIconPosition,
-    name: *const c_char,
-) {
+pub(super) fn ns_icon_entry_set(entry: *mut GtkEntry, pos: gtk::GtkEntryIconPosition, name: &CStr) {
+    let paintable = ns_icon_lookup(name);
     unsafe {
-        let paintable = ns_icon_lookup(name);
         if paintable.is_null() {
-            gtk::gtk_entry_set_icon_from_icon_name(entry, pos, name);
+            gtk::gtk_entry_set_icon_from_icon_name(entry, pos, name.as_ptr());
         } else {
             gtk::gtk_entry_set_icon_from_paintable(entry, pos, paintable);
         }
@@ -361,11 +345,10 @@ unsafe fn pixbuf_loads_svg() -> bool {
     found
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_icon_install_window_icon(name: *const c_char) {
+pub(super) fn ns_icon_install_window_icon(name: &CStr) {
     unsafe {
         if pixbuf_loads_svg() {
-            gtk::gtk_window_set_default_icon_name(name);
+            gtk::gtk_window_set_default_icon_name(name.as_ptr());
         }
     }
 }
