@@ -53,6 +53,10 @@ fn collapse(c: &Collector<'_>, run_ws_mode: i32) -> Collapsed {
             || (ws_mode != WS_PRESERVE && buf[i..].starts_with(LINE_SEPARATOR));
         if forced_break && ends_in_collapsed_space {
             text.pop();
+            let len = text.len();
+            for m in map[..i].iter_mut().rev().take_while(|m| **m > len) {
+                *m = len;
+            }
         }
         map[i] = text.len();
         if ws_mode == WS_PRESERVE {
