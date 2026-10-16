@@ -289,7 +289,7 @@ impl<'a> Walk<'a> {
             };
             let style = match previous {
                 Some(style) => {
-                    unsafe { (*style).ref_count += 1 };
+                    unsafe { (*style).retain() };
                     self.reused += 1;
                     style
                 }
@@ -508,7 +508,7 @@ fn retained(out: *mut GHashTable) -> Styles {
     unsafe { glib::hash_table_entries(out) }
         .map(|(node, style)| {
             let style = style.cast::<RawStyle>();
-            unsafe { (*style).ref_count += 1 };
+            unsafe { (*style).retain() };
             (node as usize, StyleRef(style))
         })
         .collect()

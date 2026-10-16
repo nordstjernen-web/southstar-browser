@@ -285,7 +285,7 @@ impl RetainedStyle {
     }
 
     pub fn get(&self) -> StyleRef<'_> {
-        StyleRef::new(self.0.get())
+        StyleRef::retained(&self.0)
     }
 
     pub fn ptr(&self) -> *const Style {

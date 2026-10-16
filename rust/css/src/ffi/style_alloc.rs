@@ -51,8 +51,7 @@ pub(super) unsafe fn style_free(s: *mut RawStyle) {
     let Some(style) = (unsafe { s.as_mut() }) else {
         return;
     };
-    if style.ref_count > 0 {
-        style.ref_count -= 1;
+    if !style.release() {
         return;
     }
     for &value in &style.values {

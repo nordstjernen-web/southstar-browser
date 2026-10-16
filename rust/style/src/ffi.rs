@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_uint, c_void};
-use core::ptr;
+use core::marker::PhantomData;
+use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::sync::OnceLock;
 
@@ -303,7 +304,7 @@ pub fn layer(head: Option<ValueRef<'_>>, index: i32) -> Option<ValueRef<'_>> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleRef<'a>(&'a StyleData);
+pub struct StyleRef<'a>(NonNull<StyleData>, PhantomData<&'a StyleData>);
 
 const BEFORE: usize = 0;
 const AFTER: usize = 1;
@@ -322,20 +323,21 @@ impl<'a> StyleRef<'a> {
     ///
     /// `p` is null or a computed style made by rust/css that outlives `'a`.
     pub unsafe fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
-        // SAFETY: the caller passes null or a live computed style.
-        unsafe { StyleData::from_ptr(p) }.map(StyleRef)
+        NonNull::new(p.cast::<StyleData>().cast_mut()).map(|p| StyleRef(p, PhantomData))
     }
 
     pub fn as_ptr(self) -> *const Style {
-        ptr::from_ref(self.0).cast()
+        self.0.as_ptr().cast_const().cast()
     }
 
-    pub fn new(data: &'a StyleData) -> StyleRef<'a> {
-        StyleRef(data)
+    pub fn retained(style: &'a southstar_css::RetainedStyle) -> StyleRef<'a> {
+        let p = style.as_ptr().cast_mut();
+        StyleRef(NonNull::new(p).expect("a retained style"), PhantomData)
     }
 
     pub fn data(self) -> &'a StyleData {
-        self.0
+        // SAFETY: a StyleRef points at a live computed style for 'a.
+        unsafe { self.0.as_ref() }
     }
 
     pub fn value(self, prop: &Prop) -> Option<ValueRef<'a>> {
@@ -343,19 +345,19 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn keyword(self, prop: &Prop) -> Option<&'a CStr> {
-        self.0.keyword(PropId::from_id(prop.id()?)?)
+        self.data().keyword(PropId::from_id(prop.id()?)?)
     }
 
     pub fn value_at(self, index: usize) -> Option<ValueRef<'a>> {
-        self.0.value_at(index).map(ValueRef)
+        self.data().value_at(index).map(ValueRef)
     }
 
     pub fn display(self) -> Display {
-        Display::of(self.0.display_parts())
+        Display::of(self.data().display_parts())
     }
 
     pub fn specified_inline(self) -> bool {
-        self.0.specified_inline()
+        self.data().specified_inline()
     }
 
     pub fn text_fill_color(self) -> Option<ValueRef<'a>> {
@@ -366,11 +368,11 @@ impl<'a> StyleRef<'a> {
 
     pub fn from_currentcolor(self, prop: PropId) -> bool {
         southstar_css::currentcolor_bit(prop)
-            .is_some_and(|bit| (self.0.currentcolor_bits() >> bit) & 1 != 0)
+            .is_some_and(|bit| (self.data().currentcolor_bits() >> bit) & 1 != 0)
     }
 
     pub fn vars_ptr(self) -> *const c_void {
-        self.0.vars_ptr()
+        self.data().vars_ptr()
     }
 
     pub fn get(self, prop: PropId) -> Option<ValueRef<'a>> {
@@ -378,11 +380,12 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn keyword_of(self, prop: PropId) -> Option<&'a CStr> {
-        self.0.keyword(prop)
+        self.data().keyword(prop)
     }
 
     fn pseudo(self, slot: usize) -> Option<StyleRef<'a>> {
-        self.0.pseudo(slot).map(StyleRef)
+        let pseudo = self.data().pseudo_ptr(slot);
+        NonNull::new(pseudo.cast_mut()).map(|p| StyleRef(p, PhantomData))
     }
 
     pub fn first_line(self) -> Option<StyleRef<'a>> {
@@ -430,15 +433,15 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn has_vars(self) -> bool {
-        self.0.has_vars()
+        self.data().has_vars()
     }
 
     pub fn var(self, name: &CStr) -> Option<&'a CStr> {
-        self.0.var(name.to_bytes())
+        self.data().var(name.to_bytes())
     }
 
     pub fn var_names(self) -> Vec<Vec<u8>> {
-        self.0
+        self.data()
             .var_names()
             .into_iter()
             .map(|name| name.to_bytes().to_vec())
@@ -446,11 +449,11 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn var_count(self) -> usize {
-        self.0.var_names().len()
+        self.data().var_names().len()
     }
 
     pub fn resolve_vars(self, text: &CStr) -> Option<Vec<u8>> {
-        self.0.resolve_vars(text.to_bytes())
+        self.data().resolve_vars(text.to_bytes())
     }
 }
 
@@ -515,15 +518,15 @@ pub fn values_equal(a: Option<ValueRef<'_>>, b: Option<ValueRef<'_>>) -> bool {
 }
 
 fn vars_equal(a: StyleRef<'_>, b: StyleRef<'_>) -> bool {
-    if a.0.same_vars(b.0) {
+    if a.data().same_vars(b.data()) {
         return true;
     }
-    let (na, nb) = (a.0.var_names(), b.0.var_names());
+    let (na, nb) = (a.data().var_names(), b.data().var_names());
     na.len() == nb.len()
         && na
             .iter()
             .zip(&nb)
-            .all(|(x, y)| x == y && a.0.var(x.to_bytes()) == b.0.var(y.to_bytes()))
+            .all(|(x, y)| x == y && a.data().var(x.to_bytes()) == b.data().var(y.to_bytes()))
 }
 
 pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
@@ -532,7 +535,7 @@ pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
         (Some(a), Some(b)) => (a, b),
         _ => return false,
     };
-    if ptr::eq(a.0, b.0) {
+    if a.0 == b.0 {
         return true;
     }
     if a.display() != b.display() {

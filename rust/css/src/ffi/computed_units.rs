@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use core::mem::{offset_of, size_of};
 use core::ptr;
@@ -31,7 +32,7 @@ pub struct RawStyle {
     pub(super) specified_inline: u8,
     pub(super) pseudo_styles: [*mut RawStyle; 11],
     pub(super) share_id: u64,
-    pub(super) ref_count: c_int,
+    pub(super) ref_count: Cell<c_int>,
     pub(super) currentcolor_bits: u32,
     pub(super) vars: *mut RawVarMap,
 }
@@ -60,12 +61,24 @@ pub unsafe fn style_value_slot<T>(style: *mut T, index: usize) -> Option<*mut *m
 /// `style` is null or a live computed style made by this crate.
 pub unsafe fn style_retain<T>(style: *mut T) {
     // SAFETY: the caller passes null or a live style.
-    if let Some(style) = unsafe { style.cast::<RawStyle>().as_mut() } {
-        style.ref_count += 1;
+    if let Some(style) = unsafe { style.cast::<RawStyle>().as_ref() } {
+        style.retain();
     }
 }
 
 impl RawStyle {
+    pub fn retain(&self) {
+        self.ref_count.set(self.ref_count.get() + 1);
+    }
+
+    pub(super) fn release(&self) -> bool {
+        let count = self.ref_count.get();
+        if count > 0 {
+            self.ref_count.set(count - 1);
+        }
+        count == 0
+    }
+
     pub(super) fn value(&self, prop: usize) -> *const NsCssValue {
         self.values
             .get(prop)
@@ -93,6 +106,12 @@ impl RawStyle {
 
     pub fn specified_inline(&self) -> bool {
         self.specified_inline != 0
+    }
+
+    pub fn pseudo_ptr(&self, slot: usize) -> *const RawStyle {
+        self.pseudo_styles
+            .get(slot)
+            .map_or(ptr::null(), |&p| p.cast_const())
     }
 
     pub fn pseudo(&self, slot: usize) -> Option<&RawStyle> {
