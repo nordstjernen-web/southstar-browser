@@ -1765,6 +1765,7 @@ dependencies = [
  "southstar-layout-query",
  "southstar-net",
  "southstar-paint",
+ "southstar-sandbox",
  "southstar-selection",
  "southstar-style",
  "southstar-url",
@@ -2300,8 +2301,8 @@ dependencies = [
 name = "southstar-js-crypto"
 version = "0.9.11-dev"
 dependencies = [
- "southstar-glib",
  "southstar-js-engine",
+ "southstar-sandbox",
  "southstar-webcrypto",
 ]
 
@@ -2597,6 +2598,7 @@ dependencies = [
  "southstar-js-custom-elements",
  "southstar-js-engine",
  "southstar-js-runtime",
+ "southstar-sandbox",
  "southstar-url",
 ]
 
@@ -3126,6 +3128,7 @@ dependencies = [
  "southstar-http-cache",
  "southstar-js-engine",
  "southstar-netstore",
+ "southstar-sandbox",
  "southstar-url",
 ]
 
@@ -3285,6 +3288,7 @@ dependencies = [
  "southstar-net",
  "southstar-renderer-client",
  "southstar-renderer-host",
+ "southstar-sandbox",
  "southstar-url",
  "southstar-watchdog",
 ]

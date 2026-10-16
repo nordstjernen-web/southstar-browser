@@ -1,13 +1,13 @@
-//! Southstar — the C ABI of startup security, and the system calls behind it.
+//! Southstar — startup security's entry points, and the system calls behind them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::Mutex;
 
-use southstar_glib::{self as glib, FALSE, GBoolean, TRUE};
+use southstar_glib as glib;
 
 const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -54,22 +54,11 @@ fn getenv(name: &CStr) -> Option<&'static [u8]> {
     unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_sri_check(
-    integrity_attr: *const c_char,
-    body: *const c_void,
-    body_len: usize,
-) -> GBoolean {
-    let integrity = unsafe { glib::bytes(integrity_attr) }.unwrap_or_default();
-    let body = (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), body_len) });
-    glib::boolean(crate::sri_check(integrity, body))
-}
-
 static WRITABLE_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static EXEC_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 
-fn remember(list: &Mutex<Vec<CString>>, dir: *const c_char) {
-    if let Some(dir) = unsafe { glib::bytes(dir) }.filter(|dir| !dir.is_empty())
+fn remember(list: &Mutex<Vec<CString>>, dir: &[u8]) {
+    if !dir.is_empty()
         && let Ok(dir) = CString::new(dir)
     {
         list.lock().unwrap_or_else(|e| e.into_inner()).push(dir);
@@ -81,13 +70,11 @@ fn remembered(list: &Mutex<Vec<CString>>) -> Vec<CString> {
     list.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_add_writable_dir(dir: *const c_char) {
+pub fn add_writable_dir(dir: &[u8]) {
     remember(&WRITABLE_DIRS, dir);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_add_exec_dir(dir: *const c_char) {
+pub fn add_exec_dir(dir: &[u8]) {
     remember(&EXEC_DIRS, dir);
 }
 
@@ -1071,6 +1058,7 @@ fn urandom_fill(buf: &mut [u8]) -> bool {
 
 #[cfg(target_os = "linux")]
 fn os_fill(buf: &mut [u8]) -> bool {
+    use core::ffi::c_void;
     unsafe extern "C" {
         fn getrandom(buf: *mut c_void, len: usize, flags: u32) -> isize;
     }
@@ -1096,6 +1084,7 @@ fn os_fill(buf: &mut [u8]) -> bool {
     target_os = "dragonfly"
 ))]
 fn os_fill(buf: &mut [u8]) -> bool {
+    use core::ffi::c_void;
     unsafe extern "C" {
         fn getentropy(buf: *mut c_void, len: usize) -> c_int;
     }
@@ -1119,21 +1108,21 @@ fn os_fill(_buf: &mut [u8]) -> bool {
     false
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_csprng_fill(buf: *mut c_void, len: usize) -> GBoolean {
-    if buf.is_null() || len == 0 {
-        return TRUE;
-    }
-    let buf = unsafe { core::slice::from_raw_parts_mut(buf.cast::<u8>(), len) };
-    #[cfg(windows)]
-    let filled = windows::csprng_fill(buf);
-    #[cfg(not(windows))]
-    let filled = os_fill(buf) || urandom_fill(buf);
-    glib::boolean(filled)
+#[cfg(windows)]
+fn fill(buf: &mut [u8]) -> bool {
+    windows::csprng_fill(buf)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_security_refuse_root() -> GBoolean {
+#[cfg(not(windows))]
+fn fill(buf: &mut [u8]) -> bool {
+    os_fill(buf) || urandom_fill(buf)
+}
+
+pub fn csprng_fill(buf: &mut [u8]) -> bool {
+    buf.is_empty() || fill(buf)
+}
+
+pub fn refuse_root() -> bool {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         #[cfg(target_os = "linux")]
@@ -1141,47 +1130,46 @@ pub extern "C" fn ns_security_refuse_root() -> GBoolean {
         #[cfg(target_os = "macos")]
         let root = macos::is_root();
         if !root {
-            return TRUE;
+            return true;
         }
         if getenv(c"NS_ALLOW_ROOT").is_some() {
             warning("southstar: running as root because NS_ALLOW_ROOT is set");
-            return TRUE;
+            return true;
         }
         use std::io::Write;
         let _ = std::io::stderr().write_all(crate::ROOT_MESSAGE.as_bytes());
-        FALSE
+        false
     }
     #[cfg(windows)]
     {
         if !windows::is_elevated() {
-            return TRUE;
+            return true;
         }
         if getenv(c"NS_ALLOW_ROOT").is_some() {
             warning("southstar: running as Administrator because NS_ALLOW_ROOT is set");
-            return TRUE;
+            return true;
         }
         if getenv(c"NS_DEELEVATED").is_none() && windows::relaunch_deelevated() {
             warning(
                 "southstar: dropped Administrator rights by relaunching as the current desktop user",
             );
-            return FALSE;
+            return false;
         }
         use std::io::Write;
         let _ = writeln!(std::io::stderr(), "southstar: {}", crate::ELEVATED_MESSAGE);
         if windows::ask_to_run_elevated(crate::ELEVATED_MESSAGE) {
             warning("southstar: running as Administrator at the user's request");
-            return TRUE;
+            return true;
         }
-        FALSE
+        false
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-    TRUE
+    true
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_sandbox_init(self_exe: *const c_char) {
+pub fn sandbox_init(self_exe: Option<&CStr>) {
     #[cfg(target_os = "linux")]
-    linux::sandbox_init(unsafe { glib::bytes(self_exe) });
+    linux::sandbox_init(self_exe.map(CStr::to_bytes));
     #[cfg(target_os = "macos")]
     {
         let _ = self_exe;
@@ -1191,8 +1179,7 @@ pub unsafe extern "C" fn ns_security_sandbox_init(self_exe: *const c_char) {
     let _ = self_exe;
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_security_seccomp_init() {
+pub fn seccomp_init() {
     #[cfg(target_os = "linux")]
     {
         let disabled = getenv(c"NS_NO_SANDBOX").is_some() || getenv(c"NS_NO_SECCOMP").is_some();
@@ -1205,34 +1192,32 @@ pub extern "C" fn ns_security_seccomp_init() {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean) {
+pub fn win32_mitigations_init(allow_child_processes: bool) {
     #[cfg(windows)]
     {
         if getenv(c"NS_NO_WIN32_MITIGATIONS").is_some() {
             return;
         }
-        windows::mitigations_init(allow_child_processes != FALSE);
+        windows::mitigations_init(allow_child_processes);
     }
     #[cfg(not(windows))]
     let _ = allow_child_processes;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_security_mark_download_origin(path: *const c_char, url: *const c_char) {
-    let Some(path_bytes) = unsafe { glib::bytes(path) }.filter(|path| !path.is_empty()) else {
+pub fn mark_download_origin(path: &CStr, url: Option<&[u8]>) {
+    let path_bytes = path.to_bytes();
+    if path_bytes.is_empty() {
         return;
-    };
-    let url = unsafe { glib::bytes(url) };
+    }
     #[cfg(target_os = "macos")]
     {
         let _ = (path_bytes, url);
-        macos::mark_download_origin(unsafe { CStr::from_ptr(path) });
+        macos::mark_download_origin(path);
     }
     #[cfg(target_os = "linux")]
     {
         let _ = path_bytes;
-        linux::mark_download_origin(unsafe { CStr::from_ptr(path) }, url);
+        linux::mark_download_origin(path, url);
     }
     #[cfg(windows)]
     windows::mark_download_origin(path_bytes, url);
@@ -1240,8 +1225,7 @@ pub unsafe extern "C" fn ns_security_mark_download_origin(path: *const c_char, u
     let _ = (path_bytes, url);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_security_harden_allocator() {
+pub fn harden_allocator() {
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     {
         unsafe extern "C" {

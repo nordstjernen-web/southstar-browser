@@ -4,6 +4,11 @@
 
 mod ffi;
 
+pub use ffi::{
+    add_exec_dir, add_writable_dir, csprng_fill, harden_allocator, mark_download_origin,
+    refuse_root, sandbox_init, seccomp_init, win32_mitigations_init,
+};
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SriDigest {
     Sha256,

@@ -19,6 +19,7 @@ southstar-http = { path = "../http" }
 southstar-http-cache = { path = "../http-cache" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-netstore = { path = "../netstore" }
+southstar-sandbox = { path = "../sandbox" }
 southstar-url = { path = "../url" }
 
 [features]

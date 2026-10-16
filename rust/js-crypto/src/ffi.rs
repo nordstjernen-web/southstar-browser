@@ -2,17 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
-
-use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
 
-unsafe extern "C" {
-    fn ns_security_csprng_fill(buf: *mut c_void, len: usize) -> GBoolean;
-}
-
 pub(crate) fn csprng_fill(bytes: &mut [u8]) -> bool {
-    unsafe { ns_security_csprng_fill(bytes.as_mut_ptr().cast(), bytes.len()) != 0 }
+    southstar_sandbox::csprng_fill(bytes)
 }
 
 #[unsafe(no_mangle)]

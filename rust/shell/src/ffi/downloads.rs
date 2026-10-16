@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
@@ -14,10 +14,6 @@ use super::gtk::{
     label, open_path, set_margins, take_gstring, tr,
 };
 use crate::downloads;
-
-unsafe extern "C" {
-    fn ns_security_mark_download_origin(path: *const c_char, url: *const c_char);
-}
 
 const STATE_KEY: &CStr = c"ns-downloads";
 
@@ -111,7 +107,7 @@ unsafe extern "C" fn worker(data: *mut c_void) -> *mut c_void {
             (*d).ok = true;
             (*d).size = body.len() as u64;
             let origin = resp.final_url().unwrap_or(&(*d).url);
-            ns_security_mark_download_origin((*d).path.as_ptr(), origin.as_ptr());
+            southstar_sandbox::mark_download_origin(&(*d).path, Some(origin.to_bytes()));
         }
         drop(resp);
         gtk::g_idle_add(finish_idle, data);

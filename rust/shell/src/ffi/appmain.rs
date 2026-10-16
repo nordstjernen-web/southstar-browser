@@ -87,12 +87,6 @@ unsafe extern "C" {
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
 
-    fn ns_security_refuse_root() -> GBoolean;
-    fn ns_security_sandbox_init(self_exe: *const c_char);
-    fn ns_security_add_writable_dir(dir: *const c_char);
-    fn ns_security_add_exec_dir(dir: *const c_char);
-    fn ns_security_seccomp_init();
-    fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
     fn ns_thread_dump_install_signal(label: *const c_char);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
@@ -127,6 +121,12 @@ static SELF_EXE: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
 
 fn self_exe() -> *const c_char {
     SELF_EXE.load(Ordering::Acquire)
+}
+
+fn self_exe_str() -> Option<&'static CStr> {
+    let exe = self_exe();
+    // SAFETY: SELF_EXE is null or a NUL-terminated string kept until clear_self_exe at exit.
+    (!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) })
 }
 
 fn clear_self_exe() {
@@ -530,10 +530,8 @@ fn add_screenshot_writable_dirs(args: &[&CStr]) {
         if let Some(dir) = dirname(path)
             && !dir.is_empty()
         {
-            unsafe {
-                g_mkdir_with_parents(dir.as_ptr(), 0o700);
-                ns_security_add_writable_dir(dir.as_ptr());
-            }
+            unsafe { g_mkdir_with_parents(dir.as_ptr(), 0o700) };
+            southstar_sandbox::add_writable_dir(dir.to_bytes());
         }
     }
 }
@@ -697,17 +695,20 @@ fn headless_opts(o: &Options<'_>) -> HeadlessOpts {
     }
 }
 
+fn renderer_path() -> Option<GStr> {
+    // SAFETY: ns_proc_renderer_path returns a newly allocated string or null, which GStr takes over.
+    unsafe { GStr::take(ns_proc_renderer_path()) }
+}
+
 fn sandbox_proc_mode(single_process: bool) {
-    unsafe {
-        ns_security_add_writable_dir(c"/dev/shm".as_ptr());
-        if !single_process
-            && let Some(rpath) = GStr::take(ns_proc_renderer_path())
-            && let Some(rdir) = dirname(&rpath)
-        {
-            ns_security_add_exec_dir(rdir.as_ptr());
-        }
-        ns_security_sandbox_init(self_exe());
+    southstar_sandbox::add_writable_dir(b"/dev/shm");
+    if !single_process
+        && let Some(rpath) = renderer_path()
+        && let Some(rdir) = dirname(&rpath)
+    {
+        southstar_sandbox::add_exec_dir(rdir.to_bytes());
     }
+    southstar_sandbox::sandbox_init(self_exe_str());
 }
 
 #[unsafe(no_mangle)]
@@ -721,7 +722,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if appmain::need_console(&args) {
         win32::attach_parent_console();
     }
-    if unsafe { ns_security_refuse_root() } == 0 {
+    if !southstar_sandbox::refuse_root() {
         return 77;
     }
     init_self_exe(args.first().copied());
@@ -762,7 +763,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
 
-    unsafe { ns_security_win32_mitigations_init(GBoolean::from(proc_mode)) };
+    southstar_sandbox::win32_mitigations_init(proc_mode);
     add_screenshot_writable_dirs(&args);
 
     let single_process = proc_mode
@@ -775,10 +776,8 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if proc_mode {
         sandbox_proc_mode(single_process);
     } else {
-        unsafe {
-            ns_security_sandbox_init(self_exe());
-            ns_security_seccomp_init();
-        }
+        southstar_sandbox::sandbox_init(self_exe_str());
+        southstar_sandbox::seccomp_init();
     }
     unsafe {
         southstar_debuglog::init();

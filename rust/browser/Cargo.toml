@@ -35,6 +35,7 @@ southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-net = { path = "../net" }
 southstar-paint = { path = "../paint" }
+southstar-sandbox = { path = "../sandbox" }
 southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean, GError};
@@ -20,7 +20,6 @@ unsafe extern "C" {
         bytes_written: *mut usize,
         error: *mut *mut GError,
     ) -> *mut c_char;
-    fn ns_security_csprng_fill(buf: *mut c_void, len: usize) -> GBoolean;
     fn g_random_int() -> u32;
 }
 
@@ -85,10 +84,12 @@ pub unsafe extern "C" fn ns_form_urlencoded_append_pair(
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_multipart_boundary() -> *mut c_char {
     let mut words = [0u32; 4];
-    let filled = unsafe {
-        ns_security_csprng_fill(words.as_mut_ptr().cast(), core::mem::size_of_val(&words))
-    };
-    if filled == 0 {
+    let mut bytes = [0u8; 16];
+    if southstar_sandbox::csprng_fill(&mut bytes) {
+        for (word, chunk) in words.iter_mut().zip(bytes.as_chunks::<4>().0) {
+            *word = u32::from_ne_bytes(*chunk);
+        }
+    } else {
         for w in &mut words {
             *w = unsafe { g_random_int() };
         }

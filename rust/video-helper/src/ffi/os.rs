@@ -235,12 +235,7 @@ impl Drop for SharedMemory {
 
 #[cfg(target_os = "linux")]
 pub fn sandbox_self() {
-    use southstar_helper_ffi::southstar_sandbox as _;
-    unsafe extern "C" {
-        fn ns_security_add_writable_dir(dir: *const c_char);
-        fn ns_security_sandbox_init(self_exe: *const c_char);
-        fn ns_security_seccomp_init();
-    }
+    use southstar_helper_ffi::southstar_sandbox as sandbox;
     let tmp = std::env::var_os("TMPDIR")
         .filter(|dir| !dir.is_empty())
         .unwrap_or_else(|| "/tmp".into());
@@ -248,12 +243,10 @@ pub fn sandbox_self() {
     let self_exe = std::fs::read_link("/proc/self/exe")
         .ok()
         .and_then(|path| CString::new(path.into_os_string().into_encoded_bytes()).ok());
-    unsafe {
-        ns_security_add_writable_dir(c"/dev/shm".as_ptr());
-        ns_security_add_writable_dir(tmp.as_deref().unwrap_or(c"/tmp").as_ptr());
-        ns_security_sandbox_init(self_exe.as_deref().map_or(ptr::null(), |exe| exe.as_ptr()));
-        ns_security_seccomp_init();
-    }
+    sandbox::add_writable_dir(b"/dev/shm");
+    sandbox::add_writable_dir(tmp.as_deref().unwrap_or(c"/tmp").to_bytes());
+    sandbox::sandbox_init(self_exe.as_deref());
+    sandbox::seccomp_init();
 }
 
 #[cfg(not(target_os = "linux"))]

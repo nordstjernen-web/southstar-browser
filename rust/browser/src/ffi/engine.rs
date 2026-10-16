@@ -21,10 +21,6 @@ unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
-    fn ns_security_harden_allocator();
-    fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
-    fn ns_security_sandbox_init(self_exe: *const c_char);
-    fn ns_security_seccomp_init();
     fn ns_font_init();
     fn ns_font_shutdown();
     fn ns_spell_init();
@@ -32,10 +28,6 @@ unsafe extern "C" {
     fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
     fn ns_camera_take_pending_origin() -> *mut c_char;
     fn ns_camera_set_decision(origin: *const c_char, allow: c_int);
-}
-
-fn opt(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
 }
 
 impl NsBrowser {
@@ -204,8 +196,7 @@ pub fn paint_set_anim(anim: Option<Anim>) {
 pub fn init_subsystems() {
     southstar_config::init();
     if southstar_config::get().is_some_and(|c| c.harden_allocator != 0) {
-        // SAFETY: hardening the allocator has no preconditions and runs before the engine allocates.
-        unsafe { ns_security_harden_allocator() };
+        southstar_sandbox::harden_allocator();
     }
     southstar_net::init();
     southstar_net::set_allow_file_urls(true);
@@ -219,11 +210,9 @@ pub fn init_subsystems() {
 }
 
 pub fn sandbox(self_exe: Option<&CStr>) {
-    unsafe {
-        ns_security_win32_mitigations_init(0);
-        ns_security_sandbox_init(opt(self_exe));
-        ns_security_seccomp_init();
-    }
+    southstar_sandbox::win32_mitigations_init(false);
+    southstar_sandbox::sandbox_init(self_exe);
+    southstar_sandbox::seccomp_init();
 }
 
 pub fn shutdown() {

@@ -128,8 +128,6 @@ unsafe extern "C" {
     fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_security_sri_check(integrity: *const c_char, body: *const c_void, len: usize)
-    -> GBoolean;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_array_append_vals(array: *mut GArray, data: *const c_void, len: c_uint) -> *mut GArray;
@@ -227,7 +225,7 @@ pub(crate) fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn sri_check(integrity: Option<&CStr>, body: &[u8]) -> bool {
-    unsafe { ns_security_sri_check(opt_ptr(integrity), body.as_ptr().cast(), body.len()) != 0 }
+    southstar_sandbox::sri_check(integrity.map_or(&b""[..], CStr::to_bytes), Some(body))
 }
 
 pub(crate) fn source_remove(tag: u32) {
