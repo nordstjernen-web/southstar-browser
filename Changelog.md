@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The text of a block ::before or ::after collapses its white space like
+  any other text, so the widespread clearfix content: " "; display:
+  block; clear: both no longer adds an empty line under every container
+  that uses it. NPR's front page came out 700px taller than in Chromium,
+  EFF's tagline sat 64px low, and apple.com and Smashing Magazine had
+  gaps between sections.
 * Text before a <br> keeps its formatting up to the break. Dropping the
   space before the break left the positions of the text after it one
   byte too far, so an element that ended on that space ended inside the

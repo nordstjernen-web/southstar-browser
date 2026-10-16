@@ -20,13 +20,36 @@ use crate::geom::{OUTER_INLINE, is_atomic_inline, style_is_absolute_or_fixed};
 use crate::media::{KIND_BLOCK, collect_box_bg_image};
 use crate::state::{self, AbsEntry};
 
+fn text_collapses(ps: StyleRef<'_>) -> bool {
+    ps.keyword_of(PropId::WhiteSpace)
+        .is_none_or(|ws| matches!(ws.to_bytes(), b"normal" | b"nowrap"))
+}
+
+fn block_text(ps: StyleRef<'_>, txt: &[u8]) -> Vec<u8> {
+    if !text_collapses(ps) {
+        return txt.to_vec();
+    }
+    let mut out = Vec::with_capacity(txt.len());
+    for word in txt
+        .split(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0c))
+        .filter(|w| !w.is_empty())
+    {
+        if !out.is_empty() {
+            out.push(b' ');
+        }
+        out.extend_from_slice(word);
+    }
+    out
+}
+
 pub fn pseudo_block_with_text(ps: StyleRef<'_>, txt: Option<&[u8]>) -> BoxRef<'static> {
     let block = BoxPool::new_box(KIND_BLOCK);
     block.set_style(ps.as_ptr());
     collect_box_bg_image(block, Some(ps));
-    if let Some(txt) = txt.filter(|t| !t.is_empty()) {
+    let text = txt.map(|t| block_text(ps, t)).unwrap_or_default();
+    if !text.is_empty() {
         let run = BoxPool::new_inline();
-        run.set_text_bytes(txt);
+        run.set_text_bytes(&text);
         append_child(block, run);
     }
     block
