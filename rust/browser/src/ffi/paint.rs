@@ -117,7 +117,6 @@ unsafe extern "C" {
     fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
     fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
     fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
-    fn ns_box_subtree_extent_y(b: *const NsBox, top: *mut f64, bottom: *mut f64) -> GBoolean;
     fn ns_box_sticky_y_model(b: *const NsBox, viewport_h: f64, out: *mut StickyY) -> GBoolean;
     fn ns_box_sticky_offset(
         b: *const NsBox,
@@ -128,18 +127,6 @@ unsafe extern "C" {
         dx: *mut f64,
         dy: *mut f64,
     );
-    fn ns_box_scroll_snap_viewport(
-        root: *mut NsBox,
-        style: *const Style,
-        viewport_w: f64,
-        viewport_h: f64,
-        max_x: f64,
-        max_y: f64,
-        prev_x: f64,
-        prev_y: f64,
-        x: *mut f64,
-        y: *mut f64,
-    ) -> GBoolean;
     fn ns_paint_layer_plan_init(plan: *mut LayerPlan);
     fn ns_paint_layer_plan_clear(plan: *mut LayerPlan);
     fn ns_engine_print_recordings(root: *const NsBox, setup: *const PrintSetup) -> *mut GPtrArray;
@@ -590,7 +577,10 @@ pub fn box_hit_offset(b: BoxRef<'_>) -> (f64, f64) {
 }
 
 pub fn subtree_extent_y(b: BoxRef<'_>, out: &mut VpLayerInfo) -> bool {
-    unsafe { ns_box_subtree_extent_y(b.as_ptr(), &mut out.top, &mut out.bottom) != 0 }
+    let extent = southstar_layout_query::subtree_extent_y(b);
+    out.top = extent.top;
+    out.bottom = extent.bottom;
+    extent.exact
 }
 
 pub fn sticky_y_model(b: BoxRef<'_>, viewport_h: f64, out: &mut VpLayerInfo) -> bool {
@@ -611,19 +601,21 @@ pub fn scroll_snap_viewport(
     prev: (f64, f64),
     pos: &mut (f64, f64),
 ) -> bool {
-    unsafe {
-        ns_box_scroll_snap_viewport(
-            layout.as_ptr().cast_mut(),
-            style,
-            viewport.0,
-            viewport.1,
-            max.0,
-            max.1,
-            prev.0,
-            prev.1,
-            &mut pos.0,
-            &mut pos.1,
-        ) != 0
+    // SAFETY: `style` is null or an entry of the page's style table, which outlives this call.
+    let Some(style) = (unsafe { southstar_style::StyleRef::from_ptr(style) }) else {
+        return false;
+    };
+    let port = southstar_layout_query::SnapViewport {
+        size: viewport,
+        max,
+        prev,
+    };
+    match southstar_layout_query::scroll_snap_viewport(layout, style, &port, *pos) {
+        Some(snapped) => {
+            *pos = snapped;
+            true
+        }
+        None => false,
     }
 }
 

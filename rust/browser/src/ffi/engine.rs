@@ -100,14 +100,6 @@ unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
-    fn ns_box_inline_rect_for_dom(
-        root: *const NsBox,
-        target: *const NsNode,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    ) -> GBoolean;
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_js(js: *mut c_void);
     fn ns_paint_set_anim(anim: *mut c_void);
@@ -308,18 +300,7 @@ pub fn layout_set_datalist_open(open: bool) {
 }
 
 pub fn inline_rect_y(layout: BoxRef<'_>, target: Node<'_>) -> Option<f64> {
-    let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
-    let ok = unsafe {
-        ns_box_inline_rect_for_dom(
-            layout.as_ptr(),
-            target.as_ptr(),
-            &mut x,
-            &mut y,
-            &mut w,
-            &mut h,
-        )
-    };
-    (ok != 0).then_some(y)
+    southstar_layout_query::inline_rect_for_dom(layout, target).map(|(_, y, _, _)| y)
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {

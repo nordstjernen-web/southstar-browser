@@ -115,30 +115,6 @@ unsafe extern "C" {
         lx: *mut f64,
         ly: *mut f64,
     ) -> *mut NsBox;
-    fn ns_box_scroll_snap_from(scroller: *mut NsBox, prev_x: f64, prev_y: f64);
-    fn ns_box_count_matches(
-        root: *const NsBox,
-        needle: *const c_char,
-        case_sensitive: GBoolean,
-    ) -> c_uint;
-    fn ns_box_first_match_below(
-        root: *const NsBox,
-        needle: *const c_char,
-        y: f64,
-        case_sensitive: GBoolean,
-    ) -> *const NsBox;
-    fn ns_box_first_match_above(
-        root: *const NsBox,
-        needle: *const c_char,
-        y: f64,
-        case_sensitive: GBoolean,
-    ) -> *const NsBox;
-    fn ns_box_match_ordinal(
-        root: *const NsBox,
-        needle: *const c_char,
-        target: *const NsBox,
-        case_sensitive: GBoolean,
-    ) -> c_uint;
     fn ns_selection_text_at(root: *const NsBox, x: f64, y: f64) -> GBoolean;
     fn ns_selection_anchor_at(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
     fn ns_selection_extend_to(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
@@ -458,17 +434,11 @@ pub fn hit_scrollbar(layout: BoxRef<'_>, x: f64, y: f64) -> Option<(BoxRef<'_>, 
 }
 
 pub fn scroll_snap_from(scroller: BoxRef<'_>, prev_x: f64, prev_y: f64) {
-    unsafe { ns_box_scroll_snap_from(scroller.as_ptr().cast_mut(), prev_x, prev_y) };
+    southstar_layout_query::scroll_snap_from(scroller, prev_x, prev_y);
 }
 
 pub fn count_matches(layout: BoxRef<'_>, needle: &CStr, case_sensitive: bool) -> c_uint {
-    unsafe {
-        ns_box_count_matches(
-            layout.as_ptr(),
-            needle.as_ptr(),
-            glib::boolean(case_sensitive),
-        )
-    }
+    southstar_layout_query::count_matches(layout, needle.to_bytes(), case_sensitive)
 }
 
 pub fn first_match<'a>(
@@ -478,13 +448,11 @@ pub fn first_match<'a>(
     case_sensitive: bool,
     above: bool,
 ) -> Option<BoxRef<'a>> {
-    let cs = glib::boolean(case_sensitive);
-    let b = if above {
-        unsafe { ns_box_first_match_above(layout.as_ptr(), needle.as_ptr(), y, cs) }
+    if above {
+        southstar_layout_query::first_match_above(layout, needle.to_bytes(), y, case_sensitive)
     } else {
-        unsafe { ns_box_first_match_below(layout.as_ptr(), needle.as_ptr(), y, cs) }
-    };
-    unsafe { BoxRef::from_ptr(b) }
+        southstar_layout_query::first_match_below(layout, needle.to_bytes(), y, case_sensitive)
+    }
 }
 
 pub fn match_ordinal(
@@ -493,14 +461,7 @@ pub fn match_ordinal(
     target: BoxRef<'_>,
     case_sensitive: bool,
 ) -> c_uint {
-    unsafe {
-        ns_box_match_ordinal(
-            layout.as_ptr(),
-            needle.as_ptr(),
-            target.as_ptr(),
-            glib::boolean(case_sensitive),
-        )
-    }
+    southstar_layout_query::match_ordinal(layout, needle.to_bytes(), target, case_sensitive)
 }
 
 pub fn selection_text_at(layout: BoxRef<'_>, x: f64, y: f64) -> bool {

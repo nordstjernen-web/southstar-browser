@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray, GStr};
+use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
 #[repr(C)]
@@ -151,7 +151,6 @@ unsafe extern "C" {
     fn ns_box_hit_link_range(root: *const NsBox, x: f64, y: f64) -> *const NsLinkRange;
     fn ns_box_hit_form_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
     fn ns_box_hit_inline_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
-    fn ns_layout_collect_videos(root: *const NsBox, out: *mut GPtrArray);
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_paint_set_js(js: *mut c_void);
@@ -545,16 +544,7 @@ pub fn hit_inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     unsafe { Node::from_ptr(ns_box_hit_inline_dom(root.as_ptr(), x, y)) }
 }
 
-pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
-    let array = unsafe { glib::g_ptr_array_new() };
-    unsafe { ns_layout_collect_videos(root.as_ptr(), array) };
-    let a = unsafe { &*array };
-    let boxes = (0..a.len as usize)
-        .filter_map(|i| unsafe { BoxRef::from_ptr((*a.pdata.add(i)).cast()) })
-        .collect();
-    unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    boxes
-}
+pub use southstar_layout_query::collect_videos;
 
 pub fn video_sources(b: BoxRef<'_>) -> Option<(Option<&CStr>, Option<&CStr>)> {
     let m = b.media()?;

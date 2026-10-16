@@ -8,8 +8,8 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::{Cache, FetchKind, Sink};
@@ -327,7 +327,6 @@ unsafe extern "C" {
     );
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_layout_collect_videos(root: *const NsBox, out: *mut GPtrArray);
     fn g_get_monotonic_time() -> i64;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_file_set_contents(
@@ -441,14 +440,7 @@ pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
 }
 
 pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
-    let array = unsafe { glib::g_ptr_array_new() };
-    unsafe { ns_layout_collect_videos(root.as_ptr(), array) };
-    let a = unsafe { &*array };
-    let out = (0..a.len as usize)
-        .filter_map(|i| unsafe { BoxRef::from_ptr((*a.pdata.add(i)).cast::<NsBox>()) })
-        .collect();
-    unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    out
+    southstar_layout_query::collect_videos(root)
 }
 
 pub fn video_of_box<'a>(b: BoxRef<'_>) -> Option<&'a mut NsVideo> {
