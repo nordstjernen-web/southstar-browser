@@ -80,7 +80,7 @@ js-page	41	75	2	0	29	7	0
 js-perf	9	2	0	0	6	2	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	24	10	9	0	10	0	0
-js-runtime	305	297	0	0	234	49	1
+js-runtime	304	297	0	0	233	49	1
 js-services	75	34	19	0	33	4	0
 js-shadow	12	4	4	0	3	0	0
 js-storage	51	16	11	0	25	2	0

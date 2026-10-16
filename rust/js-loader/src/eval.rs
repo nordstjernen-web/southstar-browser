@@ -201,7 +201,6 @@ fn eval_classic(
         log_error_with_stack(js, scope, exception, or_default(origin, c"inline"), true);
         js.report_uncaught(exception, origin);
     }
-    js.apply_site_quirks();
     drop(result);
     js.drain_microtasks();
 }

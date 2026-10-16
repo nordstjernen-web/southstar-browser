@@ -446,10 +446,6 @@ impl Js {
         }
     }
 
-    pub(crate) fn apply_site_quirks(self) {
-        api::apply_site_quirks(self.0);
-    }
-
     pub(crate) fn budget_enter(self) -> i64 {
         api::budget_enter(self.0)
     }

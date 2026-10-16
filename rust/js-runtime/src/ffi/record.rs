@@ -43,43 +43,6 @@ const FRAME_WINDOW_CHAIN: &[u8] = b"(function(G){\
   if (gp(G) !== W) try { sp(G, W); } catch (e) {}\
 })(globalThis)";
 
-const SITE_QUIRKS: &[u8] = b"(function(){\
-try{\
-var l=location&&location.hostname||'';\
-if(l!=='freecivweb.com'&&l!=='www.freecivweb.com'&&l!=='fcw.movingborders.es')return;\
-if(typeof tile_types_setup!=='object'||!tile_types_setup)return;\
-if(typeof MATCH_NONE!=='number'||typeof MATCH_SAME!=='number'||\
-typeof MATCH_PAIR!=='number'||typeof MATCH_FULL!=='number'||\
-typeof CELL_WHOLE!=='number'||typeof CELL_CORNER!=='number')return;\
-var r=typeof MATCH_RANDOM==='number'?MATCH_RANDOM:4,t=tile_types_setup;\
-function s(k,m,c){var o=t[k];if(!o)return;if(o.match_style===void 0)o.match_style=m;if(o.sprite_type===void 0)o.sprite_type=c;}\
-s('l0.lake',MATCH_PAIR,CELL_CORNER);\
-s('l0.coast',MATCH_FULL,CELL_CORNER);\
-s('l1.coast',MATCH_PAIR,CELL_CORNER);\
-s('l0.floor',MATCH_FULL,CELL_CORNER);\
-s('l1.floor',MATCH_PAIR,CELL_CORNER);\
-s('l0.arctic',MATCH_NONE,CELL_WHOLE);\
-s('l0.desert',MATCH_NONE,CELL_WHOLE);\
-s('l1.desert',r,CELL_WHOLE);\
-s('l0.forest',MATCH_NONE,CELL_WHOLE);\
-s('l1.forest',MATCH_SAME,CELL_WHOLE);\
-s('l0.grassland',MATCH_NONE,CELL_WHOLE);\
-s('l1.grassland',r,CELL_WHOLE);\
-s('l0.hills',MATCH_NONE,CELL_WHOLE);\
-s('l1.hills',MATCH_SAME,CELL_WHOLE);\
-s('l0.jungle',MATCH_NONE,CELL_WHOLE);\
-s('l1.jungle',MATCH_SAME,CELL_WHOLE);\
-s('l0.mountains',MATCH_NONE,CELL_WHOLE);\
-s('l1.mountains',MATCH_SAME,CELL_WHOLE);\
-s('l0.plains',MATCH_NONE,CELL_WHOLE);\
-s('l1.plains',r,CELL_WHOLE);\
-s('l0.swamp',MATCH_NONE,CELL_WHOLE);\
-s('l1.swamp',r,CELL_WHOLE);\
-s('l0.tundra',MATCH_NONE,CELL_WHOLE);\
-s('l0.inaccessible',MATCH_NONE,CELL_WHOLE);\
-}catch(e){}\
-})()";
-
 const PLAIN_INTERFACE_TAGS: [&[u8]; 51] = [
     b"abbr",
     b"acronym",
@@ -1269,28 +1232,6 @@ pub(crate) fn snapshot_platform_globals(js: *const NsJs) {
         free_platform_globals(js);
         (*rec(js)).platform_globals = super::exports::snapshot_globals(super::Js(js));
     }
-}
-
-pub(crate) fn apply_site_quirks(js: *const NsJs) {
-    let Some(record) = record(js) else {
-        return;
-    };
-    let url = unsafe { glib::bytes(record.current_url) };
-    let relevant = url.is_some_and(|url| {
-        let contains = |needle: &[u8]| url.windows(needle.len()).any(|w| w == needle);
-        contains(b"freecivweb.com") || contains(b"fcw.movingborders.es")
-    });
-    if record.halted != 0 || !relevant || record.ctx.is_null() {
-        return;
-    }
-    let options = ScriptOptions {
-        name: Some(b"site-quirks"),
-        line: 1,
-        ..ScriptOptions::default()
-    };
-    record
-        .ctx
-        .with(|scope| drop(scope.eval_script_bytes(SITE_QUIRKS, &options)));
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* JavaScript: removed the last site-specific hack, a script that ran
+  after every script evaluation on freecivweb.com and filled in missing
+  match_style/sprite_type fields of the page's tileset table. Boa
+  evaluates the site's own tileset configuration correctly, so the shim
+  no longer did anything.
 * Cairo is declared once, in a new rust/cairo crate (southstar-cairo)
   with safe RAII types (Context, Surface, Pattern, Path, Matrix and
   enums for operators, fill rules, line caps and formats) and pixel

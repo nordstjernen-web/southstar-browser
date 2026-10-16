@@ -282,10 +282,6 @@ pub fn eval_polyfills(js: *const NsJs) {
     record::eval_polyfills(js);
 }
 
-pub fn apply_site_quirks(js: *const NsJs) {
-    record::apply_site_quirks(js);
-}
-
 pub fn release_pinned_wrappers(js: *const NsJs) {
     each(js, teardown::release_pinned_wrappers);
 }
