@@ -27,6 +27,13 @@ pub(crate) const CURRENTCOLOR_PROPS: [Prop; 13] = [
     Prop::StopColor,
 ];
 
+pub fn currentcolor_bit(prop: Prop) -> Option<u32> {
+    CURRENTCOLOR_PROPS
+        .iter()
+        .position(|p| *p == prop)
+        .and_then(|i| u32::try_from(i).ok())
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Revert {
     Origin,

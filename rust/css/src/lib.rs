@@ -61,6 +61,7 @@ mod vars;
 
 pub use animation::range_serialize as animation_range_serialize;
 pub use border_image::{Params as BorderImageParams, params as border_image_params};
+pub use cascade::currentcolor_bit;
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::unit_dims as container_unit_dims;
