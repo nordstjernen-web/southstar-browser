@@ -6,11 +6,12 @@ mod ffi;
 
 pub use southstar_raster as raster;
 
+pub use ffi::Buffer;
 use ffi::libwebp::{self, AnimDecoder};
-pub use ffi::{Buffer, Texture};
+use southstar_texture::TextureRef;
 
 pub struct Decoded {
-    pub texture: Texture,
+    pub texture: TextureRef,
     pub width: i32,
     pub height: i32,
 }
@@ -25,7 +26,7 @@ pub struct Pixels {
 impl Pixels {
     pub fn into_texture(self) -> Option<Decoded> {
         let (width, height) = (self.width, self.height);
-        let texture = Texture::new_premultiplied(width, height, self.buffer, self.stride)?;
+        let texture = TextureRef::new(width, height, &self.buffer, self.stride)?;
         Some(Decoded {
             texture,
             width,

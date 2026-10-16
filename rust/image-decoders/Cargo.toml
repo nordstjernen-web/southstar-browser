@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-av = { path = "../av", optional = true }
 southstar-glib = { path = "../glib" }
 southstar-raster = { path = "../raster" }
+southstar-texture = { path = "../texture" }
 
 [features]
 avif = ["dep:southstar-av"]

@@ -12,11 +12,6 @@ pub use southstar_browser::api::{
 };
 
 #[repr(C)]
-struct Texture {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct CairoSurface {
     _private: [u8; 0],
 }
@@ -31,14 +26,6 @@ const CAIRO_STATUS_SUCCESS: c_int = 0;
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn ns_image_decode_bytes(
-        data: *const u8,
-        len: usize,
-        w: *mut c_int,
-        h: *mut c_int,
-    ) -> *mut Texture;
-    fn ns_texture_download(texture: *mut Texture, dst: *mut u8, dst_stride: usize);
-    fn ns_texture_unref(texture: *mut Texture);
 
     fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut CairoSurface;
     fn cairo_create(target: *mut CairoSurface) -> *mut Cairo;
@@ -87,23 +74,15 @@ pub fn fetch_favicon(url: &CStr) -> Option<Favicon> {
     let body = resp
         .body()
         .filter(|body| resp.status() < 400 && !body.is_empty())?;
-    let (mut w, mut h) = (0, 0);
-    // SAFETY: body is body.len() readable bytes and w and h are writable locals.
-    let tex = unsafe { ns_image_decode_bytes(body.as_ptr(), body.len(), &mut w, &mut h) };
+    let decoded = southstar_image::decode_bytes(body);
     drop(resp);
-    if tex.is_null() {
-        return None;
-    }
+    let (tex, w, h) = decoded?;
     if !(1..=512).contains(&w) || !(1..=512).contains(&h) {
-        unsafe { ns_texture_unref(tex) };
         return None;
     }
     let stride = w as usize * 4;
     let mut pixels = vec![0u8; stride * h as usize];
-    unsafe {
-        ns_texture_download(tex, pixels.as_mut_ptr(), stride);
-        ns_texture_unref(tex);
-    }
+    tex.download(&mut pixels, stride);
     Some(Favicon {
         width: w,
         height: h,

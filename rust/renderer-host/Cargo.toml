@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-browser = { path = "../browser" }
 southstar-glib = { path = "../glib" }
+southstar-image = { path = "../image" }
 southstar-ipc = { path = "../ipc" }
 southstar-net = { path = "../net" }
 southstar-renderer-client = { path = "../renderer-client" }

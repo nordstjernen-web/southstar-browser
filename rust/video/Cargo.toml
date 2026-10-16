@@ -15,6 +15,7 @@ southstar-layout = { path = "../layout" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-plmpeg = { path = "../plmpeg" }
 southstar-style = { path = "../style" }
+southstar-texture = { path = "../texture" }
 southstar-url = { path = "../url" }
 southstar-webvtt = { path = "../webvtt" }
 

@@ -21,6 +21,7 @@ southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
+southstar-texture = { path = "../texture" }
 
 [features]
 ns-pango = []

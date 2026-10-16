@@ -456,32 +456,17 @@ mod linux {
     use core::ptr;
 
     use southstar_glib::{self as glib, GPtrArray};
+    use southstar_texture::TextureRef;
 
     use super::v4l2::{self, Camera, PIX_FMT_MJPEG, PIX_FMT_YUYV};
     use super::{CameraInfo, g_ptr_array_new};
 
-    #[repr(C)]
-    struct GBytes {
-        _private: [u8; 0],
-    }
-
-    const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;
-
     unsafe extern "C" {
-        fn g_bytes_new_take(data: *mut c_void, size: usize) -> *mut GBytes;
-        fn g_bytes_unref(bytes: *mut GBytes);
         fn ns_image_decode_bytes(
             data: *const u8,
             len: usize,
             width: *mut c_int,
             height: *mut c_int,
-        ) -> *mut c_void;
-        fn ns_texture_new(
-            width: c_int,
-            height: c_int,
-            format: c_int,
-            bytes: *mut GBytes,
-            stride: usize,
         ) -> *mut c_void;
     }
 
@@ -501,20 +486,8 @@ mod linux {
         let stride = width * 4;
         let mut bgra = vec![0u8; stride * height];
         crate::yuyv_to_bgra(data, width, height, width * 2, &mut bgra, stride);
-        unsafe {
-            let copy = glib::g_malloc(bgra.len()).cast::<u8>();
-            ptr::copy_nonoverlapping(bgra.as_ptr(), copy, bgra.len());
-            let bytes = g_bytes_new_take(copy.cast(), bgra.len());
-            let texture = ns_texture_new(
-                width as c_int,
-                height as c_int,
-                TEXTURE_BGRA_PREMULTIPLIED,
-                bytes,
-                stride,
-            );
-            g_bytes_unref(bytes);
-            texture
-        }
+        TextureRef::new(width as c_int, height as c_int, &bgra, stride)
+            .map_or(ptr::null_mut(), |texture| texture.into_raw().cast())
     }
 
     #[unsafe(no_mangle)]

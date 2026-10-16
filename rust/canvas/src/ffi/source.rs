@@ -9,6 +9,7 @@ use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_layout::{BoxRef, NsBox};
+use southstar_texture::Texture;
 
 use super::cairo::Surface;
 use super::objects::NsNode;
@@ -24,9 +25,6 @@ unsafe extern "C" {
         cors_allow_origin: *const c_char,
     ) -> c_int;
     fn ns_video_poster_texture(video: *const c_void, url: *mut *const c_char) -> *mut c_void;
-    fn ns_texture_get_width(texture: *mut c_void) -> c_int;
-    fn ns_texture_get_height(texture: *mut c_void) -> c_int;
-    fn ns_texture_download(texture: *mut c_void, dst: *mut u8, dst_stride: usize);
 }
 
 struct Found<'a> {
@@ -66,12 +64,9 @@ fn from_box<'a>(js: *mut NsJs, node: *const NsNode, name: &[u8]) -> Option<Found
 }
 
 fn texture_surface(texture: *mut c_void) -> Option<Surface> {
-    let (w, h) = unsafe {
-        (
-            ns_texture_get_width(texture),
-            ns_texture_get_height(texture),
-        )
-    };
+    // SAFETY: texture is null or the image's or video's texture, which its owner keeps alive here.
+    let texture = unsafe { Texture::borrow(texture.cast()) }?;
+    let (w, h) = (texture.width(), texture.height());
     if w <= 0 || h <= 0 {
         return None;
     }
@@ -79,9 +74,7 @@ fn texture_surface(texture: *mut c_void) -> Option<Surface> {
     if !surface.is_ok() {
         return None;
     }
-    surface.write_pixels(|data, stride| unsafe {
-        ns_texture_download(texture, data.as_mut_ptr(), stride);
-    });
+    surface.write_pixels(|data, stride| texture.download(data, stride));
     Some(surface)
 }
 

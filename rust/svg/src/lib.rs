@@ -18,12 +18,13 @@ pub use measure::node_geometry;
 
 use ffi::{
     Canvas, EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, OwnedCanvas,
-    PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout, Texture,
+    PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout,
 };
 use parse::{eq_ci, is_ws};
 use southstar_dom::{Kind, Node, Tree, children};
 use southstar_glib::boolean;
 use southstar_style::{Prop, StyleRef, StyleTable, Value, parse_color};
+use southstar_texture::TextureRef;
 use state::{
     DISPLAY, OPACITY, PaintKind, STOP_COLOR, STOP_OPACITY, State, clamp, cmax, cmin, css_number,
     diag_basis, unit_rgba,
@@ -1350,7 +1351,7 @@ pub fn render_bytes(cr: Canvas, data: &[u8], width: f64, height: f64) -> bool {
     true
 }
 
-pub fn decode_bytes(data: &[u8]) -> Option<(*mut Texture, i32, i32)> {
+pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
     let doc = parse_svg(data)?;
     let root = find_root(doc.root())?;
     let size = intrinsic_size(Some(root));
@@ -1401,6 +1402,6 @@ pub fn decode_bytes(data: &[u8]) -> Option<(*mut Texture, i32, i32)> {
     }
     surf.flush();
     drop(doc);
-    let tex = surf.into_texture(iw, ih);
-    (!tex.is_null()).then_some((tex, iw, ih))
+    let tex = surf.into_texture(iw, ih)?;
+    Some((tex, iw, ih))
 }

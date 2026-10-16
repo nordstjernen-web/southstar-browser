@@ -1792,6 +1792,7 @@ dependencies = [
  "southstar-config",
  "southstar-glib",
  "southstar-js-runtime",
+ "southstar-texture",
  "southstar-url",
 ]
 
@@ -1809,6 +1810,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
+ "southstar-texture",
 ]
 
 [[package]]
@@ -2224,6 +2226,8 @@ dependencies = [
  "southstar-config",
  "southstar-glib",
  "southstar-image-decoders",
+ "southstar-svg",
+ "southstar-texture",
 ]
 
 [[package]]
@@ -2233,6 +2237,7 @@ dependencies = [
  "southstar-av",
  "southstar-glib",
  "southstar-raster",
+ "southstar-texture",
 ]
 
 [[package]]
@@ -3168,6 +3173,7 @@ dependencies = [
  "southstar-numfmt",
  "southstar-selection",
  "southstar-style",
+ "southstar-texture",
 ]
 
 [[package]]
@@ -3231,6 +3237,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-browser",
  "southstar-glib",
+ "southstar-image",
  "southstar-ipc",
  "southstar-net",
  "southstar-renderer-client",
@@ -3333,6 +3340,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-layout",
  "southstar-style",
+ "southstar-texture",
 ]
 
 [[package]]
@@ -3361,6 +3369,7 @@ dependencies = [
  "southstar-layout-query",
  "southstar-plmpeg",
  "southstar-style",
+ "southstar-texture",
  "southstar-url",
  "southstar-webvtt",
 ]

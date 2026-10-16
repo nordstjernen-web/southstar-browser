@@ -58,34 +58,11 @@ pub fn str_of(s: &Option<OwnedStr>) -> Option<&[u8]> {
     s.as_ref().map(OwnedStr::bytes)
 }
 
-#[repr(transparent)]
-pub struct Texture(NonNull<c_void>);
+pub use southstar_texture::TextureRef as Texture;
 
-impl Texture {
-    fn adopt(p: *mut c_void) -> Option<Texture> {
-        NonNull::new(p).map(Texture)
-    }
-
-    pub fn width(&self) -> i32 {
-        unsafe { ns_texture_get_width(self.0.as_ptr()) }
-    }
-
-    pub fn height(&self) -> i32 {
-        unsafe { ns_texture_get_height(self.0.as_ptr()) }
-    }
-}
-
-impl Clone for Texture {
-    fn clone(&self) -> Texture {
-        unsafe { ns_texture_ref(self.0.as_ptr()) };
-        Texture(self.0)
-    }
-}
-
-impl Drop for Texture {
-    fn drop(&mut self) {
-        unsafe { ns_texture_unref(self.0.as_ptr()) };
-    }
+fn adopt(p: *mut c_void) -> Option<Texture> {
+    // SAFETY: p is null or a new texture reference the call that returned it handed over.
+    unsafe { Texture::from_raw(p.cast()) }
 }
 
 pub use crate::decode::{Player, probe_chunk_range};
@@ -297,19 +274,6 @@ type ReadyCallback =
     unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_texture_ref(texture: *mut c_void) -> *mut c_void;
-    fn ns_texture_unref(texture: *mut c_void);
-    fn ns_texture_get_width(texture: *mut c_void) -> c_int;
-    fn ns_texture_get_height(texture: *mut c_void) -> c_int;
-    fn ns_texture_new(
-        width: c_int,
-        height: c_int,
-        format: c_int,
-        bytes: *mut c_void,
-        stride: usize,
-    ) -> *mut c_void;
-    fn g_bytes_new_static(data: *const c_void, size: usize) -> *mut c_void;
-    fn g_bytes_unref(bytes: *mut c_void);
     fn ns_camera_active() -> *mut c_void;
     fn ns_camera_next_frame(camera: *mut c_void) -> *mut c_void;
     fn ns_image_decode_bytes(
@@ -363,22 +327,15 @@ pub fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(base.map(until_nul), until_nul(href))
 }
 
-const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;
-
 pub fn texture_from_bgra(width: i32, height: i32, pixels: &[u8], stride: usize) -> Option<Texture> {
-    unsafe {
-        let bytes = g_bytes_new_static(pixels.as_ptr().cast(), pixels.len());
-        let texture = ns_texture_new(width, height, TEXTURE_BGRA_PREMULTIPLIED, bytes, stride);
-        g_bytes_unref(bytes);
-        Texture::adopt(texture)
-    }
+    Texture::new(width, height, pixels, stride)
 }
 
 pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {
     let mut w = 0;
     let mut h = 0;
     let tex = unsafe { ns_image_decode_bytes(bytes.as_ptr(), bytes.len(), &mut w, &mut h) };
-    Texture::adopt(tex).map(|t| (t, w, h))
+    adopt(tex).map(|t| (t, w, h))
 }
 
 pub fn camera_active() -> bool {
@@ -390,7 +347,7 @@ pub fn camera_next_frame() -> Option<Option<Texture>> {
     if cam.is_null() {
         return None;
     }
-    Some(Texture::adopt(unsafe { ns_camera_next_frame(cam) }))
+    Some(adopt(unsafe { ns_camera_next_frame(cam) }))
 }
 
 pub fn write_stream_file(subdir: &CStr, prefix: u8, token: u32, data: &[u8]) -> Option<Vec<u8>> {
@@ -764,7 +721,7 @@ pub unsafe extern "C" fn ns_video_poster_texture(
             .map_or(ptr::null(), |s| s.0.as_ptr().cast_const());
     }
     v.and_then(|v| v.poster_texture.as_ref())
-        .map_or(ptr::null_mut(), |t| t.0.as_ptr())
+        .map_or(ptr::null_mut(), |t| t.as_ptr().cast())
 }
 
 #[unsafe(no_mangle)]

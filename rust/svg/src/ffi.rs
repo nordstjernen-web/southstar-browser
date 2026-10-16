@@ -9,6 +9,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr, boolean, g_strfreev};
 use southstar_layout::Style;
 use southstar_style::{StyleRef, StyleTable};
+use southstar_texture::TextureRef;
 
 pub const PANGO_SCALE: c_int = 1024;
 const PANGO_STYLE_ITALIC: c_int = 2;
@@ -90,16 +91,6 @@ pub struct SvgGeometry {
     pub height: f64,
     pub to_root: Matrix,
     pub to_viewport: Matrix,
-}
-
-#[repr(C)]
-pub struct Texture {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct GBytes {
-    _private: [u8; 0],
 }
 
 unsafe extern "C" {
@@ -220,20 +211,6 @@ unsafe extern "C" {
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     fn ns_net_navigator_languages() -> *mut *mut c_char;
-    fn ns_texture_new(
-        width: c_int,
-        height: c_int,
-        format: c_int,
-        bytes: *mut GBytes,
-        stride: usize,
-    ) -> *mut Texture;
-    fn g_bytes_new_with_free_func(
-        data: *const c_void,
-        size: usize,
-        free_func: unsafe extern "C" fn(*mut c_void),
-        user_data: *mut c_void,
-    ) -> *mut GBytes;
-    fn g_bytes_unref(bytes: *mut GBytes);
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
 }
@@ -402,25 +379,9 @@ impl Surface {
             .then(|| unsafe { core::slice::from_raw_parts_mut(p, self.stride() * height) })
     }
 
-    pub fn into_texture(self, w: i32, h: i32) -> *mut Texture {
+    pub fn into_texture(mut self, w: i32, h: i32) -> Option<TextureRef> {
         let stride = self.stride();
-        let pixels = unsafe { cairo_image_surface_get_data(self.0) };
-        if pixels.is_null() {
-            return ptr::null_mut();
-        }
-        let raw = self.0;
-        core::mem::forget(self);
-        unsafe {
-            let bytes = g_bytes_new_with_free_func(
-                pixels.cast(),
-                stride * h as usize,
-                cairo_surface_destroy,
-                raw,
-            );
-            let tex = ns_texture_new(w, h, 0, bytes, stride);
-            g_bytes_unref(bytes);
-            tex
-        }
+        TextureRef::new(w, h, self.data(usize::try_from(h).ok()?)?, stride)
     }
 }
 
@@ -781,11 +742,6 @@ unsafe fn input<'a>(data: *const u8, len: usize) -> &'a [u8] {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_bytes_look_like_svg(data: *const u8, len: usize) -> GBoolean {
-    boolean(!data.is_null() && crate::looks_like_svg(unsafe { input(data, len) }))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_svg_render_bytes(
     cr: *mut c_void,
     data: *const u8,
@@ -802,28 +758,4 @@ pub unsafe extern "C" fn ns_svg_render_bytes(
         width,
         height,
     ))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_decode_bytes(
-    data: *const u8,
-    len: usize,
-    out_w: *mut c_int,
-    out_h: *mut c_int,
-) -> *mut Texture {
-    if data.is_null() {
-        return ptr::null_mut();
-    }
-    let Some((tex, w, h)) = crate::decode_bytes(unsafe { input(data, len) }) else {
-        return ptr::null_mut();
-    };
-    unsafe {
-        if let Some(o) = out_w.as_mut() {
-            *o = w;
-        }
-        if let Some(o) = out_h.as_mut() {
-            *o = h;
-        }
-    }
-    tex
 }

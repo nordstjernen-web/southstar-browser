@@ -21,8 +21,6 @@ pub use southstar_css::FontMetrics;
 unsafe extern "C" {
     fn ns_font_family_loaded(family: *const c_char) -> GBoolean;
     fn ns_font_generation() -> c_uint;
-    fn ns_texture_get_width(texture: *mut c_void) -> c_int;
-    fn ns_texture_get_height(texture: *mut c_void) -> c_int;
 }
 
 pub fn font_family_for_pango(family: Option<&CStr>) -> CString {
@@ -95,12 +93,17 @@ impl Texture {
         self.0
     }
 
+    fn get(&self) -> &southstar_texture::Texture {
+        // SAFETY: from_raw's caller vouched for a live texture its owner keeps for this handle's use.
+        unsafe { &*self.0.cast::<southstar_texture::Texture>() }
+    }
+
     pub fn width(self) -> i32 {
-        unsafe { ns_texture_get_width(self.0) }
+        self.get().width()
     }
 
     pub fn height(self) -> i32 {
-        unsafe { ns_texture_get_height(self.0) }
+        self.get().height()
     }
 }
 
@@ -177,13 +180,6 @@ const _: () = assert!(
 pub struct Video<'a>(&'a NsVideo);
 
 unsafe extern "C" {
-    fn ns_texture_download(texture: *mut c_void, dst: *mut u8, stride: usize);
-    fn ns_texture_get_user_data(texture: *mut c_void) -> *mut c_void;
-    fn ns_texture_set_user_data(
-        texture: *mut c_void,
-        data: *mut c_void,
-        destroy: unsafe extern "C" fn(*mut c_void),
-    );
     fn ns_anim_get_color(
         anim: *mut c_void,
         dom: *const c_void,
@@ -247,11 +243,11 @@ unsafe extern "C" {
 
 impl Texture {
     pub fn download(self, dst: &mut [u8], stride: usize) {
-        unsafe { ns_texture_download(self.0, dst.as_mut_ptr(), stride) };
+        self.get().download(dst, stride);
     }
 
     pub fn user_data(self) -> *mut c_void {
-        unsafe { ns_texture_get_user_data(self.0) }
+        self.get().user_data()
     }
 
     pub unsafe fn set_user_data(
@@ -259,7 +255,8 @@ impl Texture {
         data: *mut c_void,
         destroy: unsafe extern "C" fn(*mut c_void),
     ) {
-        unsafe { ns_texture_set_user_data(self.0, data, destroy) };
+        // SAFETY: the caller promises destroy may be called once with data on any thread.
+        unsafe { self.get().set_user_data(data, Some(destroy)) };
     }
 }
 

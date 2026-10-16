@@ -9,6 +9,7 @@ use core::ptr;
 use southstar_glib::{self as glib, FALSE, GBoolean, GError, GHashTable, TRUE};
 
 use southstar_image_decoders::{self as decoders, Pixels};
+use southstar_texture::{Texture, TextureRef};
 
 use crate::RetryState;
 
@@ -16,11 +17,6 @@ const CACHE_BUDGET_BYTES: i64 = 256 * 1024 * 1024;
 const FETCH_DEST_IMAGE: c_int = 3;
 const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;
 const TEXTURE_DEFAULT: c_int = 1;
-
-#[repr(C)]
-pub struct Texture {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 pub struct GArray {
@@ -193,17 +189,6 @@ type HashForeach =
     unsafe extern "C" fn(key: *mut c_void, value: *mut c_void, user_data: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_texture_unref(texture: *mut Texture);
-    fn ns_texture_get_width(texture: *mut Texture) -> c_int;
-    fn ns_texture_get_height(texture: *mut Texture) -> c_int;
-    fn ns_texture_download(texture: *mut Texture, dst: *mut u8, dst_stride: usize);
-    fn ns_svg_bytes_look_like_svg(data: *const u8, len: usize) -> GBoolean;
-    fn ns_svg_decode_bytes(
-        data: *const u8,
-        len: usize,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-    ) -> *mut Texture;
     fn ns_net_request_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -309,7 +294,8 @@ fn dup_or_null(s: *const c_char) -> *mut c_char {
 
 unsafe extern "C" fn anim_frame_clear(data: *mut c_void) {
     if let Some(frame) = unsafe { data.cast::<AnimFrame>().as_ref() } {
-        unsafe { ns_texture_unref(frame.texture) };
+        // SAFETY: each frame owns one reference to its texture, given up as the frame is cleared.
+        unsafe { TextureRef::release(frame.texture) };
     }
 }
 
@@ -332,7 +318,7 @@ unsafe extern "C" fn image_free(p: *mut c_void) {
             cairo_surface_destroy(img.render_surface);
         }
         if img.anim_frames.is_null() {
-            ns_texture_unref(img.texture);
+            TextureRef::release(img.texture);
         } else {
             g_array_free(img.anim_frames, TRUE);
         }
@@ -347,15 +333,11 @@ fn new_image(url: *const c_char) -> *mut NsImage {
 }
 
 fn texture_bytes(texture: *mut Texture) -> i64 {
-    if texture.is_null() {
+    // SAFETY: image and frame textures are null or held by the image that is being measured.
+    let Some(texture) = (unsafe { Texture::borrow(texture) }) else {
         return 0;
-    }
-    let (w, h) = unsafe {
-        (
-            ns_texture_get_width(texture),
-            ns_texture_get_height(texture),
-        )
     };
+    let (w, h) = (texture.width(), texture.height());
     if w > 0 && h > 0 {
         i64::from(w) * i64::from(h) * 4
     } else {
@@ -395,7 +377,7 @@ fn purge(cache: &mut Cache, img: &mut NsImage) {
     img.bytes = 0;
     unsafe {
         if img.anim_frames.is_null() {
-            ns_texture_unref(img.texture);
+            TextureRef::release(img.texture);
         } else {
             g_array_free(img.anim_frames, TRUE);
             img.anim_frames = ptr::null_mut();
@@ -552,29 +534,31 @@ pub unsafe extern "C" fn ns_image_decode_bytes(
     out_w: *mut c_int,
     out_h: *mut c_int,
 ) -> *mut Texture {
-    if data.is_null() || len == 0 {
+    if data.is_null() {
         return ptr::null_mut();
     }
-    let bytes = unsafe { data_slice(data, len) };
+    // SAFETY: data is non-null and the caller guarantees len readable bytes behind it.
+    let Some((texture, width, height)) = decode_bytes(unsafe { data_slice(data, len) }) else {
+        return ptr::null_mut();
+    };
+    // SAFETY: the caller passes out_w as null or a writable c_int.
+    unsafe { store(out_w, width) };
+    // SAFETY: the caller passes out_h as null or a writable c_int.
+    unsafe { store(out_h, height) };
+    texture.into_raw()
+}
+
+pub fn decode_bytes(bytes: &[u8]) -> Option<(TextureRef, i32, i32)> {
+    if bytes.is_empty() {
+        return None;
+    }
     if let Some(decoded) = decode_builtin(bytes) {
-        // SAFETY: the caller passes out_w as null or a writable c_int.
-        unsafe { store(out_w, decoded.width) };
-        // SAFETY: the caller passes out_h as null or a writable c_int.
-        unsafe { store(out_h, decoded.height) };
-        return decoded.texture.into_raw().cast();
+        return Some((decoded.texture, decoded.width, decoded.height));
     }
-    if crate::bytes_blocked_on_platform(bytes) {
-        return ptr::null_mut();
+    if crate::bytes_blocked_on_platform(bytes) || !southstar_svg::looks_like_svg(bytes) {
+        return None;
     }
-    unsafe {
-        if ns_svg_bytes_look_like_svg(data, len) != 0 {
-            let tex = ns_svg_decode_bytes(data, len, out_w, out_h);
-            if !tex.is_null() {
-                return tex;
-            }
-        }
-    }
-    ptr::null_mut()
+    southstar_svg::decode_bytes(bytes)
 }
 
 fn decode_builtin(bytes: &[u8]) -> Option<decoders::Decoded> {
@@ -615,20 +599,16 @@ struct Bgra {
     format: c_int,
 }
 
-/// # Safety
-///
-/// `tex` is null or a texture reference the caller hands over; it is released here.
-unsafe fn texture_to_pixels(tex: *mut Texture, w: c_int, h: c_int, format: c_int) -> Option<Bgra> {
-    let size = if tex.is_null() || w <= 0 || h <= 0 {
+fn texture_to_pixels(texture: TextureRef, w: c_int, h: c_int, format: c_int) -> Option<Bgra> {
+    let size = if w <= 0 || h <= 0 {
         None
     } else {
         let stride = w as usize * 4;
         stride.checked_mul(h as usize).map(|len| (stride, len))
     };
-    let out = size.and_then(|(stride, buf_len)| {
+    size.and_then(|(stride, buf_len)| {
         let mut buffer = decoders::Buffer::try_new(buf_len)?;
-        // SAFETY: tex is a live w×h texture and buffer holds stride × h bytes.
-        unsafe { ns_texture_download(tex, buffer.as_mut_ptr(), stride) };
+        texture.download(&mut buffer, stride);
         Some(Bgra {
             pixels: buffer.into_raw(),
             width: w,
@@ -637,10 +617,7 @@ unsafe fn texture_to_pixels(tex: *mut Texture, w: c_int, h: c_int, format: c_int
             buf_len,
             format,
         })
-    });
-    // SAFETY: the caller handed over this reference, and nothing uses tex after it.
-    unsafe { ns_texture_unref(tex) };
-    out
+    })
 }
 
 unsafe fn store<T>(out: *mut T, value: T) {
@@ -649,7 +626,7 @@ unsafe fn store<T>(out: *mut T, value: T) {
     }
 }
 
-fn decode_to_bgra(data: *const u8, len: usize, bytes: &[u8]) -> Option<Bgra> {
+fn decode_to_bgra(bytes: &[u8]) -> Option<Bgra> {
     let still = if decoders::raster::supports(bytes) {
         decoders::decode_raster(bytes)
     } else {
@@ -676,16 +653,12 @@ fn decode_to_bgra(data: *const u8, len: usize, bytes: &[u8]) -> Option<Bgra> {
     if decoders::avif_supports(bytes)
         && let Some(decoded) = decoders::decode_avif(bytes).and_then(Pixels::into_texture)
     {
-        let tex = decoded.texture.into_raw().cast();
-        // SAFETY: tex is the texture reference into_raw just released to this call.
-        let bgra = unsafe {
-            texture_to_pixels(
-                tex,
-                decoded.width,
-                decoded.height,
-                TEXTURE_BGRA_PREMULTIPLIED,
-            )
-        };
+        let bgra = texture_to_pixels(
+            decoded.texture,
+            decoded.width,
+            decoded.height,
+            TEXTURE_BGRA_PREMULTIPLIED,
+        );
         if bgra.is_some() {
             return bgra;
         }
@@ -693,11 +666,8 @@ fn decode_to_bgra(data: *const u8, len: usize, bytes: &[u8]) -> Option<Bgra> {
     if crate::bytes_blocked_on_platform(bytes) {
         return None;
     }
-    let (mut w, mut h) = (0, 0);
-    // SAFETY: data is non-null with len readable bytes, and w and h are writable locals.
-    let tex = unsafe { ns_image_decode_bytes(data, len, &mut w, &mut h) };
-    // SAFETY: tex is null or the new texture reference ns_image_decode_bytes returned.
-    unsafe { texture_to_pixels(tex, w, h, TEXTURE_DEFAULT) }
+    let (texture, w, h) = decode_bytes(bytes)?;
+    texture_to_pixels(texture, w, h, TEXTURE_DEFAULT)
 }
 
 #[unsafe(no_mangle)]
@@ -715,7 +685,7 @@ pub unsafe extern "C" fn ns_image_decode_bytes_to_pixels(
     }
     // SAFETY: data is non-null and the caller guarantees len readable bytes behind it.
     let bytes = unsafe { data_slice(data, len) };
-    let Some(bgra) = decode_to_bgra(data, len, bytes) else {
+    let Some(bgra) = decode_to_bgra(bytes) else {
         return ptr::null_mut();
     };
     // SAFETY: the caller passes out_w as null or a writable c_int.
@@ -761,7 +731,7 @@ fn anim_frames_from_pixels(source: Vec<decoders::Frame>) -> Option<Anim> {
         };
         let delay = if delay_ms > 0 { delay_ms } else { 100 };
         let frame = AnimFrame {
-            texture: decoded.texture.into_raw().cast(),
+            texture: decoded.texture.into_raw(),
             delay_ms: delay,
         };
         unsafe { g_array_append_vals(out, (&raw const frame).cast(), 1) };
@@ -810,9 +780,9 @@ fn decode_body(data: *const u8, len: usize) -> Decoded {
         // SAFETY: anim.frames is owned here and not used after it is freed.
         unsafe { g_array_free(anim.frames, TRUE) };
     }
-    let (mut w, mut h) = (0, 0);
-    // SAFETY: data is null or len readable bytes, and w and h are writable locals.
-    let tex = unsafe { ns_image_decode_bytes(data, len, &mut w, &mut h) };
+    let (tex, w, h) = decode_bytes(bytes).map_or((ptr::null_mut(), 0, 0), |(texture, w, h)| {
+        (texture.into_raw(), w, h)
+    });
     Decoded {
         tex,
         frames: ptr::null_mut(),
@@ -895,9 +865,7 @@ unsafe extern "C" fn on_image_decoded(
                     g_array_set_clear_func(d.frames, Some(anim_frame_clear));
                     g_array_free(d.frames, TRUE);
                 }
-                if !d.tex.is_null() {
-                    ns_texture_unref(d.tex);
-                }
+                TextureRef::release(d.tex);
             }
         }
         drop(unsafe { Box::from_raw(pending) });

@@ -1,23 +1,16 @@
-//! Southstar — the C ABI of textures.
+//! Southstar — the texture type: shared pixels, the user-data slot whose GLib destroy notify runs on release, and the counted TextureRef handle.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_void};
-use core::ptr;
+use core::ffi::c_void;
+use core::mem::ManuallyDrop;
+use core::ops::Deref;
+use core::ptr::{self, NonNull};
 use std::sync::{Arc, Mutex};
 
 use southstar_glib::GDestroyNotify;
 
 use crate::Pixels;
-
-#[repr(C)]
-pub struct GBytes {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
-}
 
 struct UserData {
     data: *mut c_void,
@@ -29,7 +22,9 @@ pub struct Texture {
     user_data: Mutex<UserData>,
 }
 
+// SAFETY: the pixels are immutable and the user-data slot is only reached through its mutex.
 unsafe impl Send for Texture {}
+// SAFETY: as for Send; every shared access to the slot locks the mutex.
 unsafe impl Sync for Texture {}
 
 impl Drop for Texture {
@@ -38,123 +33,127 @@ impl Drop for Texture {
         if let Some(destroy) = user.destroy
             && !user.data.is_null()
         {
+            // SAFETY: set_user_data's caller promised destroy may be called once with data.
             unsafe { destroy(user.data) };
         }
     }
 }
 
-unsafe fn borrow<'a>(texture: *mut Texture) -> Option<&'a Texture> {
-    unsafe { texture.as_ref() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_new(
-    width: c_int,
-    height: c_int,
-    _format: c_int,
-    bytes: *mut GBytes,
-    stride: usize,
-) -> *mut Texture {
-    if width <= 0 || height <= 0 || bytes.is_null() {
-        return ptr::null_mut();
+impl Texture {
+    pub fn width(&self) -> i32 {
+        self.pixels.width
     }
-    let mut len = 0;
-    let data = unsafe { g_bytes_get_data(bytes, &mut len) };
-    if data.is_null() {
-        return ptr::null_mut();
+
+    pub fn height(&self) -> i32 {
+        self.pixels.height
     }
-    let src = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) };
-    let Some(pixels) = Pixels::copy_from(width, height, src, stride) else {
-        return ptr::null_mut();
-    };
-    let texture = Texture {
-        pixels,
-        user_data: Mutex::new(UserData {
-            data: ptr::null_mut(),
-            destroy: None,
-        }),
-    };
-    Arc::into_raw(Arc::new(texture)).cast_mut()
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_ref(texture: *mut Texture) -> *mut Texture {
-    if !texture.is_null() {
-        unsafe { Arc::increment_strong_count(texture.cast_const()) };
+    pub fn download(&self, dst: &mut [u8], dst_stride: usize) {
+        self.pixels.download(dst, dst_stride);
     }
-    texture
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_unref(texture: *mut Texture) {
-    if !texture.is_null() {
-        unsafe { Arc::decrement_strong_count(texture.cast_const()) };
+    pub fn user_data(&self) -> *mut c_void {
+        self.user_data
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .data
     }
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_get_width(texture: *mut Texture) -> c_int {
-    unsafe { borrow(texture) }.map_or(0, |t| t.pixels.width)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_get_height(texture: *mut Texture) -> c_int {
-    unsafe { borrow(texture) }.map_or(0, |t| t.pixels.height)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_download(
-    texture: *mut Texture,
-    dst: *mut u8,
-    dst_stride: usize,
-) {
-    let Some(texture) = (unsafe { borrow(texture) }) else {
-        return;
-    };
-    if dst.is_null() {
-        return;
-    }
-    let pixels = &texture.pixels;
-    let row = (pixels.width as usize * 4)
-        .min(dst_stride)
-        .min(pixels.stride);
-    let len = (pixels.height as usize - 1) * dst_stride + row;
-    let dst = unsafe { core::slice::from_raw_parts_mut(dst, len) };
-    pixels.download(dst, dst_stride);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_get_user_data(texture: *mut Texture) -> *mut c_void {
-    unsafe { borrow(texture) }.map_or(ptr::null_mut(), |t| {
-        t.user_data.lock().unwrap_or_else(|e| e.into_inner()).data
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_texture_set_user_data(
-    texture: *mut Texture,
-    data: *mut c_void,
-    destroy: GDestroyNotify,
-) {
-    let Some(texture) = (unsafe { borrow(texture) }) else {
-        if let Some(destroy) = destroy
-            && !data.is_null()
+    /// # Safety
+    ///
+    /// `destroy`, when given, must be sound to call exactly once with `data` from any thread,
+    /// when the texture drops or the slot is replaced by different data.
+    pub unsafe fn set_user_data(&self, data: *mut c_void, destroy: GDestroyNotify) {
+        let previous = {
+            let mut user = self.user_data.lock().unwrap_or_else(|e| e.into_inner());
+            let previous = (user.data, user.destroy);
+            user.data = data;
+            user.destroy = destroy;
+            previous
+        };
+        if let (old, Some(old_destroy)) = previous
+            && !old.is_null()
+            && old != data
         {
-            unsafe { destroy(data) };
+            // SAFETY: the caller that stored old promised old_destroy may be called once with it.
+            unsafe { old_destroy(old) };
         }
-        return;
-    };
-    let previous = {
-        let mut user = texture.user_data.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = (user.data, user.destroy);
-        user.data = data;
-        user.destroy = destroy;
-        previous
-    };
-    if let (old, Some(old_destroy)) = previous
-        && !old.is_null()
-        && old != data
-    {
-        unsafe { old_destroy(old) };
+    }
+
+    /// # Safety
+    ///
+    /// `raw` is null or a texture kept alive by some reference for the lifetime `'a`.
+    pub unsafe fn borrow<'a>(raw: *const Texture) -> Option<&'a Texture> {
+        // SAFETY: the caller guarantees raw is null or live for 'a.
+        unsafe { raw.as_ref() }
+    }
+}
+
+#[repr(transparent)]
+pub struct TextureRef(NonNull<Texture>);
+
+// SAFETY: a TextureRef is one counted reference to a Texture, which is Send and Sync.
+unsafe impl Send for TextureRef {}
+// SAFETY: as for Send; shared access only reads the texture.
+unsafe impl Sync for TextureRef {}
+
+impl TextureRef {
+    pub fn new(width: i32, height: i32, bgra: &[u8], stride: usize) -> Option<TextureRef> {
+        let pixels = Pixels::copy_from(width, height, bgra, stride)?;
+        let texture = Arc::new(Texture {
+            pixels,
+            user_data: Mutex::new(UserData {
+                data: ptr::null_mut(),
+                destroy: None,
+            }),
+        });
+        NonNull::new(Arc::into_raw(texture).cast_mut()).map(TextureRef)
+    }
+
+    pub fn as_ptr(&self) -> *mut Texture {
+        self.0.as_ptr()
+    }
+
+    pub fn into_raw(self) -> *mut Texture {
+        ManuallyDrop::new(self).0.as_ptr()
+    }
+
+    /// # Safety
+    ///
+    /// `raw` is null or a reference `into_raw` produced that the caller owns; it is taken over.
+    pub unsafe fn from_raw(raw: *mut Texture) -> Option<TextureRef> {
+        NonNull::new(raw).map(TextureRef)
+    }
+
+    /// # Safety
+    ///
+    /// `raw` is null or a reference `into_raw` produced that the caller owns and gives up.
+    pub unsafe fn release(raw: *mut Texture) {
+        // SAFETY: the caller gives up the reference raw stands for.
+        drop(unsafe { TextureRef::from_raw(raw) });
+    }
+}
+
+impl Deref for TextureRef {
+    type Target = Texture;
+
+    fn deref(&self) -> &Texture {
+        // SAFETY: the reference this handle counts keeps the texture alive.
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl Clone for TextureRef {
+    fn clone(&self) -> TextureRef {
+        // SAFETY: the pointer came from Arc::into_raw and this handle keeps its count above zero.
+        unsafe { Arc::increment_strong_count(self.0.as_ptr().cast_const()) };
+        TextureRef(self.0)
+    }
+}
+
+impl Drop for TextureRef {
+    fn drop(&mut self) {
+        // SAFETY: the pointer came from Arc::into_raw and this handle owns one of its counts.
+        unsafe { Arc::decrement_strong_count(self.0.as_ptr().cast_const()) };
     }
 }
