@@ -41,11 +41,6 @@ unsafe extern "C" {
     );
     fn ns_ce_upgrade_element(js: *mut NsJs, node: *mut NsNode);
     fn ns_ce_upgrade_subtree_detached(js: *mut NsJs, root: *mut NsNode);
-    fn ns_element_get_attr_len(
-        node: *const NsNode,
-        name: *const c_char,
-        len: *mut usize,
-    ) -> *const c_char;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
@@ -151,9 +146,7 @@ pub(crate) fn set_attr(node: Element, name: &CStr, value: &[u8]) {
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {
-    let mut len = 0usize;
-    let v = unsafe { ns_element_get_attr_len(node.as_ptr(), name.as_ptr(), &mut len) };
-    (!v.is_null()).then(|| unsafe { core::slice::from_raw_parts(v.cast::<u8>(), len) })
+    southstar_dom::attrs::find(node, name).and_then(southstar_dom::Attr::value_bytes)
 }
 
 pub(crate) struct AttrName<'a> {

@@ -10,7 +10,6 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::cairo::Context;
 use super::drawimage_source;
-use super::text;
 use crate::bitmap::ImageBitmap;
 use crate::hidden::{self, Hidden};
 use crate::path2d::Path2D;
@@ -41,8 +40,6 @@ unsafe extern "C" {
         node: *const NsNode,
         name: *const c_char,
     ) -> *mut c_char;
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_element_set_attr(el: *mut NsNode, name: *const c_char, value: *const c_char);
 }
 
 pub(crate) fn with_hidden<R>(value: &Value, f: impl FnOnce(&Hidden) -> R) -> Option<R> {
@@ -212,16 +209,26 @@ pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
     Some(text.to_bytes().to_vec())
 }
 
+fn dom_element(el: usize) -> Option<southstar_dom::Node<'static>> {
+    // SAFETY: canvas bindings pass 0 or the address of a node of this thread's DOM store.
+    unsafe { southstar_dom::Node::from_ptr(el as *const southstar_dom::NsNode) }
+        .filter(|el| el.is_element())
+}
+
 pub(crate) fn element_attr(el: usize, name: &str) -> Option<Vec<u8>> {
     let name = CString::new(name).ok()?;
-    unsafe { text(ns_element_get_attr(el as *const NsNode, name.as_ptr())) }.map(<[u8]>::to_vec)
+    dom_element(el)?
+        .attr(&name)
+        .map(|value| value.to_bytes().to_vec())
 }
 
 pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
     let (Ok(name), Ok(value)) = (CString::new(name), CString::new(value)) else {
         return;
     };
-    unsafe { ns_element_set_attr(el as *mut NsNode, name.as_ptr(), value.as_ptr()) };
+    if let Some(el) = dom_element(el) {
+        southstar_dom::attrs::set_attribute(el, &name, Some(value.as_bytes()));
+    }
 }
 
 pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {

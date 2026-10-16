@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
+southstar-dom = { path = "../dom" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }

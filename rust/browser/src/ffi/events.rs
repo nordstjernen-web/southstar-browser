@@ -39,8 +39,6 @@ unsafe extern "C" {
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
-    fn ns_option_label_dup(option: *const NsNode) -> *mut c_char;
-    fn ns_element_effectively_inert(el: *const NsNode) -> GBoolean;
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
     fn ns_render_page_uses_hover() -> GBoolean;
     fn ns_render_page_uses_active() -> GBoolean;
@@ -368,11 +366,11 @@ pub fn set_editable_value(n: Node<'_>, value: &CStr) {
 }
 
 pub fn option_label(option: Node<'_>) -> Option<GStr> {
-    unsafe { GStr::take(ns_option_label_dup(option.as_ptr())) }
+    super::gstr_from(&southstar_dom::select::option_label(option))
 }
 
 pub fn effectively_inert(el: Node<'_>) -> bool {
-    unsafe { ns_element_effectively_inert(el.as_ptr()) != 0 }
+    southstar_dom::tree::effectively_inert(el)
 }
 
 pub fn form_is_reset_trigger(n: Node<'_>) -> bool {

@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
@@ -30,7 +30,6 @@ unsafe extern "C" {
         rel_y: f64,
         out_byte: *mut usize,
     ) -> GBoolean;
-    fn ns_dom_active_modal() -> *const NsNode;
     fn cairo_matrix_invert(m: *mut CairoMatrix) -> c_int;
 }
 
@@ -106,7 +105,7 @@ pub fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
 }
 
 pub fn active_modal<'a>() -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_dom_active_modal()) }
+    southstar_dom::tree::active_modal()
 }
 
 fn entry<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {

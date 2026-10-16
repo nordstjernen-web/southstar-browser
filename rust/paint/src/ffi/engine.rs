@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_cairo::{ContextRef, Surface, SurfaceRef};
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{GBoolean, GHashTable};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
@@ -203,7 +203,6 @@ unsafe extern "C" {
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
     fn ns_spell_available() -> GBoolean;
     fn ns_spell_word_ok(word: *const c_char, len: isize, lang: *const c_char) -> GBoolean;
-    fn ns_node_spellcheck_host(n: *const NsNode) -> *const NsNode;
     fn ns_js_image_for_node(js: *mut c_void, el: *const c_void) -> *const c_void;
     fn ns_svg_render_node(
         cr: *mut c_void,
@@ -358,7 +357,7 @@ pub fn spell_word_ok(word: &[u8]) -> bool {
 }
 
 pub fn node_spellcheck_host(n: Node<'_>) -> bool {
-    unsafe { !ns_node_spellcheck_host(n.as_ptr()).is_null() }
+    southstar_dom::controls::spellcheck_host(n).is_some()
 }
 
 pub fn js_image_for_node(b: BoxRef<'_>) -> Option<ImageRef<'_>> {
@@ -392,7 +391,6 @@ unsafe extern "C" {
         dy: *mut c_double,
     );
     fn ns_box_hit_test(root: *const NsBox, x: c_double, y: c_double) -> *const NsBox;
-    fn ns_dom_active_modal() -> *const NsNode;
     fn ns_selection_ranges(root: *const NsBox, sel: *const c_void) -> *mut GHashTable;
     fn ns_js_canvas_surface(js: *mut c_void, n: *const c_void) -> *mut c_void;
 }
@@ -435,7 +433,7 @@ pub fn box_hit_test(root: BoxRef<'_>, x: f64, y: f64) -> *const NsBox {
 }
 
 pub fn active_modal<'a>() -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_dom_active_modal()) }
+    southstar_dom::tree::active_modal()
 }
 
 pub unsafe fn selection_ranges(root: BoxRef<'_>, sel: *const c_void) -> *mut GHashTable {

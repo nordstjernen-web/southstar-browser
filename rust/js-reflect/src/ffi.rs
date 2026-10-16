@@ -18,11 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_element_get_attr_len(
-        node: *const NsNode,
-        name: *const c_char,
-        len: *mut usize,
-    ) -> *const c_char;
     fn ns_js_set_attr_recorded(
         js: *mut NsJs,
         node: *mut NsNode,
@@ -76,15 +71,11 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {
-    let mut len = 0usize;
-    let v = unsafe { ns_element_get_attr_len(node.as_ptr(), name.as_ptr(), &mut len) };
-    (!v.is_null()).then(|| unsafe { core::slice::from_raw_parts(v.cast::<u8>(), len) })
+    southstar_dom::attrs::find(node, name).and_then(southstar_dom::Attr::value_bytes)
 }
 
 pub(crate) fn attr_c(node: Element, name: &CStr) -> Option<&'static CStr> {
-    let mut len = 0usize;
-    let v = unsafe { ns_element_get_attr_len(node.as_ptr(), name.as_ptr(), &mut len) };
-    (!v.is_null()).then(|| unsafe { CStr::from_ptr(v) })
+    node.attr(name)
 }
 
 pub(crate) fn set_attr_len(js: Js, node: Element, name: &CStr, value: &[u8]) {

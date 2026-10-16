@@ -48,25 +48,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_element_set_attr_len(
-        el: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_element_set_attr_ns(
-        el: *mut NsNode,
-        namespace_uri: *const c_char,
-        prefix: *const c_char,
-        local_name: *const c_char,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_element_remove_attr_ns(
-        el: *mut NsNode,
-        namespace_uri: *const c_char,
-        local_name: *const c_char,
-    );
     fn ns_js_images_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
@@ -286,32 +267,19 @@ pub(crate) fn set_attr(el: Element, name: &CStr, value: &CStr) {
 }
 
 pub(crate) fn set_attr_len(el: Element, name: &CStr, value: &[u8]) {
-    let value_ptr = if value.is_empty() {
-        c"".as_ptr()
-    } else {
-        value.as_ptr().cast()
-    };
-    unsafe {
-        ns_element_set_attr_len(
-            el.as_mut_ptr(),
-            name.as_ptr(),
-            value_ptr,
-            value.len() as isize,
-        )
-    };
+    southstar_dom::attrs::set_attribute(el, name, Some(value));
 }
 
 pub(crate) fn set_attr_ns(el: Element, qname: &QualifiedName, value: &CStr) {
-    unsafe {
-        ns_element_set_attr_ns(
-            el.as_mut_ptr(),
-            c_ptr(qname.namespace_uri),
-            c_ptr(qname.prefix),
-            qname.local_name.as_ptr(),
-            qname.name.as_ptr(),
-            value.as_ptr(),
-        )
-    };
+    if el.is_element() {
+        let qname = southstar_dom::attrs::NsName {
+            namespace_uri: qname.namespace_uri,
+            prefix: qname.prefix,
+            local_name: qname.local_name,
+            name: Some(qname.name),
+        };
+        southstar_dom::attrs::set_ns(el, qname, Some(value));
+    }
 }
 
 pub(crate) fn remove_attr(el: Element, name: &CStr) {
@@ -319,9 +287,9 @@ pub(crate) fn remove_attr(el: Element, name: &CStr) {
 }
 
 pub(crate) fn remove_attr_ns(el: Element, namespace_uri: Option<&CStr>, local_name: &CStr) {
-    unsafe {
-        ns_element_remove_attr_ns(el.as_mut_ptr(), c_ptr(namespace_uri), local_name.as_ptr())
-    };
+    if el.is_element() {
+        southstar_dom::attrs::remove_ns(el, namespace_uri, local_name);
+    }
 }
 
 pub(crate) fn purge_subtree_rafs(js: Js, root: Element) {

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::ffi::{c_char, c_double, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -85,8 +85,6 @@ unsafe extern "C" {
     fn cairo_pattern_destroy(pattern: *mut c_void);
     fn cairo_set_operator(cr: *mut Cairo, op: c_int);
     fn cairo_paint(cr: *mut Cairo);
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_node_free(node: *mut c_void);
     fn ns_webgl_canvas_surface(canvas: *const NsNode) -> *mut c_void;
 }
 
@@ -99,8 +97,9 @@ const OPERATOR_CLEAR: c_int = 0;
 
 pub(crate) fn element_attr(el: Node, name: &str) -> Option<Vec<u8>> {
     let name = CString::new(name).ok()?;
-    let value = unsafe { ns_element_get_attr(el.0, name.as_ptr()) };
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) }.to_bytes().to_vec())
+    // SAFETY: a canvas state's node is null or an element of this thread's DOM store.
+    let el = unsafe { southstar_dom::Node::from_ptr(el.0.cast()) }?;
+    el.attr(&name).map(|value| value.to_bytes().to_vec())
 }
 
 pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
@@ -192,8 +191,9 @@ impl Drop for CanvasState {
             self.jsctx
                 .with(|scope| unsafe { scope.release_identity(ctx2d) });
         }
-        if !self.owned_node.is_null() {
-            unsafe { ns_node_free(self.owned_node) };
+        // SAFETY: owned_node is null or the offscreen canvas element this state created and owns.
+        if let Some(node) = unsafe { southstar_dom::Node::from_ptr(self.owned_node.cast()) } {
+            node.free_tree();
         }
     }
 }

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{Mutex, OnceLock};
 
+use southstar_dom::{Node, NsNode};
 use southstar_gtk_ffi::{
     self as gtk, Cairo, GObject, GObjectClass, GdkPaintable, GdkPaintableFlags,
     GdkPaintableInterface, GdkRgba, GtkButton, GtkEntry, GtkImage, GtkMenuButton, GtkSnapshot,
@@ -15,11 +16,6 @@ use southstar_gtk_ffi::{
 };
 
 use crate::icons;
-
-#[repr(C)]
-struct NsNode {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 #[derive(Default)]
@@ -34,7 +30,6 @@ struct SvgSize {
 
 unsafe extern "C" {
     fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_svg_document_root(doc: *const NsNode) -> *const NsNode;
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize);
     fn ns_svg_render_node(
@@ -100,8 +95,8 @@ unsafe extern "C" fn instance_init(instance: *mut gtk::GTypeInstance, _klass: *m
 unsafe extern "C" fn finalize(object: *mut GObject) {
     unsafe {
         let icon = object.cast::<NsIcon>();
-        if !(*icon).doc.is_null() {
-            ns_node_free((*icon).doc);
+        if let Some(doc) = Node::from_ptr((*icon).doc) {
+            doc.free_tree();
         }
         let parent = gtk::g_type_class_peek(gtk::g_object_get_type()).cast::<GObjectClass>();
         if let Some(parent_finalize) = (*parent).finalize {
@@ -216,8 +211,8 @@ unsafe fn icon_from_resource(name: &[u8]) -> *mut NsIcon {
             ns_svg_document_root(doc)
         };
         if root.is_null() {
-            if !doc.is_null() {
-                ns_node_free(doc);
+            if let Some(doc) = Node::from_ptr(doc) {
+                doc.free_tree();
             }
             return ptr::null_mut();
         }

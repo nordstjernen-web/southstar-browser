@@ -225,12 +225,6 @@ unsafe extern "C" {
         new_partition: *const c_char,
     );
     fn ns_storage_load_local(js: *mut NsJs, url: *const c_char);
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
-    fn ns_element_get_attr_len(
-        node: *const NsNode,
-        name: *const c_char,
-        len: *mut usize,
-    ) -> *const c_char;
     fn ns_ce_name_valid(name: *const c_char) -> GBoolean;
     fn ns_js_set_attr_recorded_paint_only(
         js: *mut NsJs,
@@ -258,23 +252,16 @@ unsafe extern "C" {
     fn ns_csp_merge(dst: *mut NsCsp, src: *mut NsCsp);
     fn ns_csp_free(csp: *mut NsCsp);
     fn ns_csp_inline_event_handler_allowed(csp: *const NsCsp) -> GBoolean;
-    fn ns_node_next_in_subtree(
-        n: *const NsNode,
-        root: *const NsNode,
-        descend: GBoolean,
-    ) -> *mut NsNode;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
     fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
     fn ns_js_scrub_iframe_globals(js: *mut NsJs, iframe: *const NsNode);
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
-    fn ns_node_remove(child: *mut NsNode);
     fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode);
     fn ns_box_lookup_forget(js: *mut NsJs);
     fn ns_js_sync_window_metrics(js: *const NsJs);
     fn ns_js_promote_deferred_iframes(js: *mut NsJs);
     fn ns_intersection_observers_tick(js: *mut NsJs);
     fn ns_resize_observers_tick(js: *mut NsJs);
-    fn ns_attr_name_is_internal(name: *const c_char) -> GBoolean;
     fn ns_js_frame_context(js: *mut NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_install_pdf_plugins(ctx: ContextHandle);
     fn ns_js_link_interface_ctors(ctx: ContextHandle);
@@ -316,8 +303,7 @@ fn is_named(n: Node<'_>, tag: &CStr) -> bool {
 }
 
 fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
-    let value = unsafe { ns_element_get_attr(n.as_ptr(), name.as_ptr()) };
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
+    n.attr(name)
 }
 
 fn rec(js: *const NsJs) -> *mut Record {
@@ -785,9 +771,8 @@ pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
     terminated.extend_from_slice(src);
     terminated.push(0);
     let s = terminated.as_ptr().cast::<c_char>();
-    let mut old_len = 0usize;
-    let old = unsafe { ns_element_get_attr_len(n, c"src".as_ptr(), &mut old_len) };
-    let changed = old.is_null() || unsafe { glib::slice(old.cast(), old_len) } != src;
+    let old = southstar_dom::attrs::find(el, c"src").and_then(southstar_dom::Attr::value_bytes);
+    let changed = old != Some(src);
     unsafe {
         if changed && img_src_layout_neutral(el) {
             ns_js_set_attr_recorded_paint_only(js, n, c"src".as_ptr(), s);
@@ -880,7 +865,9 @@ pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
                 ns_js_scrub_iframe_globals(js, n);
             }
         }
-        n = unsafe { ns_node_next_in_subtree(n, root, glib::TRUE) };
+        n = node(n)
+            .and_then(|current| southstar_dom::index::next_in_subtree(current, node(root), true))
+            .map_or(ptr::null_mut(), Node::as_mut_ptr);
     }
 }
 
@@ -891,12 +878,10 @@ pub(crate) fn insert_before_single(js: *const NsJs, child: Node<'_>, reference_n
         return;
     }
     if child.parent().is_some() {
-        unsafe {
-            if !js.is_null() {
-                ns_node_iters_pre_remove(js, newc);
-            }
-            ns_node_remove(newc);
+        if !js.is_null() {
+            unsafe { ns_node_iters_pre_remove(js, newc) };
         }
+        child.detach();
     }
     if !js.is_null() {
         unsafe { ns_js_unorphan_node(js, newc) };
@@ -950,7 +935,7 @@ pub(crate) fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
         .attrs()
         .filter(|a| {
             a.name()
-                .is_some_and(|name| unsafe { ns_attr_name_is_internal(name.as_ptr()) } == 0)
+                .is_some_and(|name| !southstar_dom::attrs::is_internal(name.to_bytes()))
         })
         .map(|a| {
             imports::nsr_attr_to_js(scope, owner, a.view(), false)

@@ -54,7 +54,6 @@ unsafe extern "C" {
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
     fn ns_mark_scripts_already_started(root: *mut NsNode);
     fn ns_node_is_shadow_root(node: *const NsNode) -> GBoolean;
-    fn ns_node_is_embedded_doc(node: *const NsNode) -> GBoolean;
     fn g_str_hash(v: *const c_void) -> c_uint;
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
@@ -263,9 +262,8 @@ pub(crate) fn is_shadow_root(node: Element) -> bool {
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {
-    unsafe {
-        ns_node_is_embedded_doc(node.as_ptr()) != 0 || ns_node_is_shadow_root(node.as_ptr()) != 0
-    }
+    southstar_dom::serialize::is_embedded_doc(node)
+        || unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
 }
 
 pub(crate) fn parse_fragment_for_tag(tag: &CStr, markup: &[u8], scripting: bool) -> Tree {

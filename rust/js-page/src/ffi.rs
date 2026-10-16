@@ -177,16 +177,11 @@ unsafe extern "C" {
     fn ns_observers_reset(js: *mut NsJs);
     fn ns_perf_reset_observers(js: *mut NsJs);
     fn ns_js_orphans_take_all(js: *mut NsJs) -> *mut GPtrArray;
-    fn ns_node_free(node: *mut NsNode);
     fn ns_js_frames_reset(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_clear_frame_clocks(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
 
-    fn ns_dom_set_active_modal(modal: *const NsNode);
-    fn ns_doc_id_index_build(doc: *mut NsNode);
-    fn ns_doc_class_index_build(doc: *mut NsNode);
-    fn ns_doc_tag_index_build(doc: *mut NsNode);
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
@@ -227,7 +222,6 @@ unsafe extern "C" {
     );
     fn ns_js_image_load_tracked(js: *mut NsJs, el: *const NsNode) -> GBoolean;
     fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
-    fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
 
     fn ns_services_timer_count(js: *const NsJs) -> c_uint;
@@ -344,7 +338,7 @@ impl Js {
             })
         };
         api::set_document(self.0, doc, origin.as_deref());
-        unsafe { ns_dom_set_active_modal(ptr::null()) };
+        southstar_dom::tree::set_active_modal(None);
         api::set_current_url(self.0, Some(url));
     }
 
@@ -382,7 +376,10 @@ impl Js {
         }
         let len = unsafe { (*orphans).len } as usize;
         for i in 0..len {
-            unsafe { ns_node_free((*(*orphans).pdata.add(i)).cast()) };
+            // SAFETY: the taken array holds `len` orphaned nodes of this thread's store.
+            if let Some(node) = unsafe { Node::from_ptr((*(*orphans).pdata.add(i)).cast()) } {
+                node.free_tree();
+            }
         }
         unsafe { glib::g_ptr_array_free(orphans, glib::TRUE) };
     }
@@ -526,11 +523,9 @@ fn c_ptr(text: Option<&CStr>) -> *const c_char {
 }
 
 pub(crate) fn build_document_indexes(doc: Element) {
-    unsafe {
-        ns_doc_id_index_build(doc.as_mut_ptr());
-        ns_doc_class_index_build(doc.as_mut_ptr());
-        ns_doc_tag_index_build(doc.as_mut_ptr());
-    }
+    southstar_dom::index::id_build(doc);
+    southstar_dom::index::class_build(doc);
+    southstar_dom::index::tag_build(doc);
 }
 
 pub(crate) fn debug_js(category: &CStr, message: &[u8]) {
@@ -554,9 +549,8 @@ pub(crate) fn url_origin(url: &CStr) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {
-    unsafe {
-        ns_node_is_embedded_doc(node.as_ptr()) != 0 || ns_node_is_shadow_root(node.as_ptr()) != 0
-    }
+    southstar_dom::serialize::is_embedded_doc(node)
+        || unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
 }
 
 pub(crate) fn native(scope: &mut Scope<'_>, name: &str, arity: u32, native: Native) -> Value {

@@ -105,12 +105,10 @@ unsafe extern "C" {
     fn ns_js_purge_subtree_pending_iframes(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut NsNode);
-    fn ns_node_free(node: *mut NsNode);
     fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
     fn ns_js_pending_iframe_first(js: *const NsJs) -> *mut NsNode;
     fn ns_js_pending_iframe_remove_first(js: *mut NsJs);
     fn ns_js_load_iframe_now(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_dom_set_active_modal(modal: *const NsNode);
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
 }
@@ -264,7 +262,7 @@ pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
 }
 
 pub(crate) fn set_active_modal(modal: *const NsNode) {
-    unsafe { ns_dom_set_active_modal(modal) };
+    southstar_dom::tree::set_active_modal(super::record::node(modal));
 }
 
 pub(crate) fn finish_eval_depth(js: Js) {
@@ -367,7 +365,9 @@ pub(crate) fn free_orphan_subtree(js: Js, root: *mut NsNode) {
         ns_js_purge_subtree_pending_iframes(js.ptr(), root);
         ns_js_purge_subtree_script_refs(js.ptr(), root);
         ns_js_purge_subtree_node_refs(js.ptr(), root);
-        ns_node_free(root);
+    }
+    if let Some(root) = super::record::node(root) {
+        root.free_tree();
     }
 }
 

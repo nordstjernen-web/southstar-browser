@@ -86,7 +86,6 @@ pub(crate) const CSP_STYLE: c_uint = 2;
 const FETCH_DEST_SCRIPT: c_int = 1;
 
 unsafe extern "C" {
-    fn ns_node_is_embedded_doc(n: *const NsNode) -> GBoolean;
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_worker_host_base_url(host: *const NsWorkerHost) -> *const c_char;
     fn ns_js_node_document_base_url(js: *mut NsJs, node: *const NsNode) -> *mut c_char;
@@ -202,7 +201,8 @@ pub(crate) fn is_named(n: Node, tag: &CStr) -> bool {
 }
 
 pub(crate) fn hidden_child(n: Node) -> bool {
-    unsafe { ns_node_is_embedded_doc(n.as_ptr()) != 0 || ns_node_is_shadow_root(n.as_ptr()) != 0 }
+    southstar_dom::serialize::is_embedded_doc(n)
+        || unsafe { ns_node_is_shadow_root(n.as_ptr()) != 0 }
 }
 
 pub(crate) fn node_remove(n: Node) {

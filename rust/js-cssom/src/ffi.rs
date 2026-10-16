@@ -134,7 +134,6 @@ unsafe extern "C" {
     fn ns_js_node_unpinned(js: *const c_void, node: *const NsNode) -> GBoolean;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
-    fn ns_input_is_one_line_text(node: *const NsNode) -> GBoolean;
     fn ns_paint_normal_line_height_px(style: *const Style) -> f64;
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
@@ -341,7 +340,7 @@ pub(crate) fn grid_resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<Strin
 }
 
 pub(crate) fn input_is_one_line_text(node: Node<'_>) -> bool {
-    unsafe { ns_input_is_one_line_text(node.as_ptr()) != 0 }
+    southstar_dom::controls::is_one_line_text(node)
 }
 
 pub(crate) fn line_heights(style: Option<StyleRef<'_>>) -> (f64, f64) {

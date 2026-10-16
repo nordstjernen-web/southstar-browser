@@ -16,7 +16,6 @@ use super::state::NsJs;
 use crate::bitmap::{ImageBitmap, Source};
 
 unsafe extern "C" {
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_js_box_for_node(js: *mut NsJs, node: *const NsNode) -> *const NsBox;
     fn ns_js_image_for_node(js: *mut NsJs, node: *const NsNode) -> *const c_void;
     fn ns_js_resource_origin_clean(
@@ -110,7 +109,8 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     if node.is_null() {
         node = super::context::unwrap_element(src).ptr().cast();
     }
-    let name = unsafe { Node::from_ptr(node.cast()) }?.name()?.to_bytes();
+    let element = unsafe { Node::from_ptr(node.cast()) }?;
+    let name = element.name()?.to_bytes();
     let js: *mut NsJs = scope.context_opaque().cast();
     if js.is_null() {
         return None;
@@ -118,7 +118,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     if name == b"canvas" {
         return canvas_source(scope, node);
     }
-    let cors_requested = !unsafe { ns_element_get_attr(node, c"crossorigin".as_ptr()) }.is_null();
+    let cors_requested = element.attr(c"crossorigin").is_some();
     let found = from_box(js, node, name)
         .filter(|f| !f.texture.is_null())
         .or_else(|| {

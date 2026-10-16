@@ -81,7 +81,6 @@ unsafe extern "C" {
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_content_type_is_javascript(content_type: *const c_char) -> GBoolean;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
-    fn ns_node_remove(node: *mut NsNode);
     fn ns_net_referer_for(
         url: *const c_char,
         referrer_url: *const c_char,
@@ -500,7 +499,7 @@ pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
 }
 
 pub(crate) fn orphan_document(js: Js, doc: Node<'_>) {
-    unsafe { ns_node_remove(doc.as_mut_ptr()) };
+    doc.detach();
     api::unpin_subtree(js.ptr(), doc);
     unsafe { ns_js_track_orphan(js.ptr(), doc.as_mut_ptr()) };
 }

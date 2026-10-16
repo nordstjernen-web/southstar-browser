@@ -6,7 +6,6 @@ pub mod attrs;
 pub mod base_url;
 pub mod controls;
 mod data;
-mod ffi;
 mod handle;
 pub mod image_map;
 pub mod index;

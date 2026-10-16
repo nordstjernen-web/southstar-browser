@@ -6,8 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
+use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_layout_sizing::SavedGeometry;
 use southstar_paint::ffi as paint;
@@ -18,7 +17,6 @@ use crate::attrs;
 
 unsafe extern "C" {
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
-    fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
 }
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
@@ -130,7 +128,7 @@ pub(crate) fn math_ascent(dom: *const c_void, font_px: f64) -> f64 {
 }
 
 pub(crate) fn is_one_line_text_input(dom: *const c_void) -> bool {
-    unsafe { ns_input_is_one_line_text(dom.cast()) != 0 }
+    node(dom).is_some_and(southstar_dom::controls::is_one_line_text)
 }
 
 pub(crate) fn writing_mode(s: *const Style) -> c_int {

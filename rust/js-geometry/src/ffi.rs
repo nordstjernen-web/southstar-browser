@@ -32,11 +32,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_element_get_attr_len(
-        node: *const NsNode,
-        name: *const c_char,
-        len: *mut usize,
-    ) -> *const c_char;
     fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
@@ -127,12 +122,7 @@ pub(crate) fn img_natural_size(scope: &mut Scope<'_>, this: &Value, width: bool)
 }
 
 pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
-    let mut len = 0usize;
-    let v = unsafe { ns_element_get_attr_len(node.as_ptr(), name.as_ptr(), &mut len) };
-    if v.is_null() {
-        return None;
-    }
-    Some(unsafe { core::slice::from_raw_parts(v.cast::<u8>(), len) })
+    southstar_dom::attrs::find(node, name).and_then(southstar_dom::Attr::value_bytes)
 }
 
 pub(crate) fn flush_layout(js: Js) {

@@ -3224,6 +3224,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-bytecode-cache",
  "southstar-config",
+ "southstar-dom",
  "southstar-ffi",
  "southstar-glib",
  "southstar-gtk-ffi",

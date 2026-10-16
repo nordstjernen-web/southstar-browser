@@ -16,11 +16,8 @@ const FRAME_URL_ATTR: &CStr = c"data-nd-frame-url";
 
 unsafe extern "C" {
     fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode;
-    fn ns_element_get_attr(el: *const NsNode, name: *const c_char) -> *const c_char;
     fn ns_js_frame_of_realm(js: *const c_void, realm: ContextHandle) -> *mut NsNode;
     fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> ContextHandle;
-    fn ns_node_root(n: *const NsNode) -> *const NsNode;
-    fn ns_doc_id_index_build(doc: *mut NsNode);
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
 }
 
@@ -140,7 +137,9 @@ fn non_null_text(text: *const c_char) -> *const c_char {
 }
 
 fn frame_url_attr(frame: *const NsNode) -> *const c_char {
-    unsafe { ns_element_get_attr(frame, FRAME_URL_ATTR.as_ptr()) }
+    super::record::node(frame)
+        .and_then(|frame| frame.attr(FRAME_URL_ATTR))
+        .map_or(ptr::null(), CStr::as_ptr)
 }
 
 fn frame_url_enter(js: Js, fu: &mut FrameUrl, url: *const c_char) {
@@ -181,7 +180,7 @@ pub(crate) fn top_document(doc: *mut NsNode) -> *mut NsNode {
 }
 
 pub(crate) fn node_root(node: *const NsNode) -> *const NsNode {
-    unsafe { ns_node_root(node) }
+    Node::ptr_or_null(super::record::node(node).map(southstar_dom::tree::root))
 }
 
 pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> *mut NsNode {
@@ -384,8 +383,8 @@ pub(crate) fn frame_load_begin(
     frame_url_enter(js, &mut scope.url, url);
     scope.doc = js.current_doc();
     js.set_current_doc(doc);
-    if !doc.is_null() {
-        unsafe { ns_doc_id_index_build(doc) };
+    if let Some(doc) = super::record::node(doc) {
+        southstar_dom::index::id_build(doc);
     }
     let state = js.st();
     scope.script = state.current_script.get();

@@ -129,7 +129,6 @@ unsafe extern "C" {
     fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
     fn ns_js_mutation_teardown(js: *mut NsJs);
-    fn ns_node_free(node: *mut NsNode);
 
     fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
     fn ns_top_layer_clear(js: *mut NsJs);
@@ -449,7 +448,7 @@ impl Js {
     }
 
     pub fn free_node(self, node: Element) {
-        unsafe { ns_node_free(node.as_mut_ptr()) };
+        node.free_tree();
     }
 
     pub fn free_doc_ready_states(self) {
