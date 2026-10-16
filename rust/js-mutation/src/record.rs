@@ -179,8 +179,25 @@ pub(crate) fn attribute_changed(
         names.extend(non_empty(target.attr(name)));
         remember_past_names(js, target, &names);
     }
+    if let (Some(js), Some(target), Some(name), None) = (js, target, name, namespace_uri)
+        && is_link_resource_attr(target, name)
+        && target.attr(name) != old
+    {
+        ffi::link_resource_changed(js, target);
+    }
     ffi::mark_attr_dirty(target, name, old);
     ffi::emit_attributes(js, target, name, namespace_uri, old);
+}
+
+fn is_link_resource_attr(target: Element, name: &CStr) -> bool {
+    let name = name.to_bytes();
+    target.is_element()
+        && target
+            .name()
+            .is_some_and(|tag| tag.to_bytes().eq_ignore_ascii_case(b"link"))
+        && [b"rel".as_slice(), b"href", b"as"]
+            .iter()
+            .any(|attr| name.eq_ignore_ascii_case(attr))
 }
 
 pub(crate) fn character_data_changed(js: Option<Js>, target: Option<Element>, old: Option<&CStr>) {

@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* DOM: <link rel="preload" as="style"> fires load (or error) once its
+  fetch ends, and changing a <link>'s rel, href or as loads it again: a
+  link that becomes rel="stylesheet" applies its sheet and fires load.
+  The common async-CSS pattern, <link rel="preload" as="style"
+  onload="this.rel='stylesheet'">, never applied its sheet, so
+  chatgpt.com kept its narrow-screen styles and its cookie dialog
+  covered the whole page in white.
 * DOM: <link rel="stylesheet"> elements from the document's own markup
   fire load (or error) after DOMContentLoaded; only links inserted by
   script did before. The loadCSS pattern, a media=print link whose onload

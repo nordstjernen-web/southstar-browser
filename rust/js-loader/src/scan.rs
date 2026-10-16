@@ -6,8 +6,7 @@ use southstar_dom::{MAX_DEPTH, Node};
 
 use crate::ffi::{hidden_child, is_named};
 use crate::{
-    ALREADY_STARTED, Task, link_is_loadable_stylesheet, schedule_for, skipped_by_nomodule,
-    type_supported,
+    ALREADY_STARTED, Task, link_has_pending_load, schedule_for, skipped_by_nomodule, type_supported,
 };
 
 fn skip(n: Node, depth: i32) -> bool {
@@ -82,7 +81,7 @@ pub(crate) fn pending_stylesheets(root: Node<'_>) -> Vec<Node<'_>> {
         if skip(n, depth) {
             return;
         }
-        if link_is_loadable_stylesheet(n) {
+        if link_has_pending_load(n) {
             out.push(n);
             return;
         }

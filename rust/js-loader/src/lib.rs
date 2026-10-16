@@ -122,7 +122,7 @@ pub(crate) fn schedule_for(n: Node) -> Schedule {
     }
 }
 
-pub(crate) fn link_is_loadable_stylesheet(n: Node) -> bool {
+pub(crate) fn link_has_pending_load(n: Node) -> bool {
     if !ffi::is_named(n, c"link") || n.flags() & FLAG_LINK_LOAD_FIRED != 0 {
         return false;
     }
@@ -134,6 +134,7 @@ pub(crate) fn link_is_loadable_stylesheet(n: Node) -> bool {
     }
     let mut is_sheet = false;
     let mut is_alt = false;
+    let mut is_preload = false;
     for token in rel
         .to_bytes()
         .split(|b| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x0c))
@@ -142,9 +143,24 @@ pub(crate) fn link_is_loadable_stylesheet(n: Node) -> bool {
             is_sheet = true;
         } else if token.eq_ignore_ascii_case(b"alternate") {
             is_alt = true;
+        } else if token.eq_ignore_ascii_case(b"preload") {
+            is_preload = true;
         }
     }
-    is_sheet && !is_alt
+    if is_sheet {
+        return !is_alt;
+    }
+    is_preload
+        && n.attr(c"as")
+            .is_some_and(|as_| as_.to_bytes().eq_ignore_ascii_case(b"style"))
+}
+
+pub fn link_resource_changed(js: *mut NsJs, link: Node) {
+    link.remove_flags(FLAG_LINK_LOAD_FIRED);
+    let js = Js::of(js);
+    if !js.is_null() && link_has_pending_load(link) && js.in_page(link) {
+        schedule::schedule_deferred_root(js, link);
+    }
 }
 
 pub fn fire_parsed_stylesheet_loads(js: *mut NsJs, doc: Node) {

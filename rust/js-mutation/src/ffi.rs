@@ -173,8 +173,12 @@ pub(crate) fn mark_restyle_dirty(node: Option<Element>) {
     }
 }
 
-pub(crate) fn attr_may_affect_style(_target: Element, name: &CStr) -> bool {
-    southstar_css::attr_may_affect_style(Some(name.to_bytes()))
+pub(crate) fn link_resource_changed(js: Js, link: Element) {
+    southstar_js_loader::link_resource_changed(js.0, link);
+}
+
+pub(crate) fn attr_may_affect_style(target: Element, name: &CStr) -> bool {
+    southstar_css::attr_may_affect_style(target, Some(name.to_bytes()))
 }
 
 pub(crate) fn emit_attributes(

@@ -195,8 +195,8 @@ pub(crate) fn body_forward_content_handler(
     };
 }
 
-pub(crate) fn attr_may_affect_style(_node: Element, name: &CStr) -> bool {
-    southstar_css::attr_may_affect_style(Some(name.to_bytes()))
+pub(crate) fn attr_may_affect_style(node: Element, name: &CStr) -> bool {
+    southstar_css::attr_may_affect_style(node, Some(name.to_bytes()))
 }
 
 pub(crate) fn request_repaint(js: Js) {

@@ -62,7 +62,7 @@ pub(crate) fn drain_timer_fired(js: Js) {
     schedule_pending_drain(js);
 }
 
-fn schedule_deferred_root(js: Js, root: Node) {
+pub(crate) fn schedule_deferred_root(js: Js, root: Node) {
     let addr = root.as_ptr() as usize;
     page::with_page(js, |page| {
         if !page.deferred_roots.contains(&addr) {

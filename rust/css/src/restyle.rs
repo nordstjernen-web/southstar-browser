@@ -830,8 +830,9 @@ impl State {
         }
     }
 
-    fn attr_may_affect_style(&self, name: Option<&[u8]>) -> bool {
+    fn attr_may_affect_style(&self, target: Node<'_>, name: Option<&[u8]>) -> bool {
         match (name, &self.keys) {
+            (Some(name), _) if is_link_rel(target, name) => true,
             (Some(name), Some(keys)) if !name.is_empty() => keys.attr_may_affect_style(name),
             _ => true,
         }
@@ -851,7 +852,7 @@ impl State {
         {
             return;
         }
-        if !self.attr_may_affect_style(name) {
+        if !self.attr_may_affect_style(target, name) {
             return;
         }
         if self.only_own_style(name) {
@@ -913,6 +914,14 @@ pub fn mark_attr_dirty(target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>
     with_state(|s| s.mark_attr(target, name, old));
 }
 
-pub fn attr_may_affect_style(name: Option<&[u8]>) -> bool {
-    with_state(|s| s.attr_may_affect_style(name))
+pub fn attr_may_affect_style(target: Node<'_>, name: Option<&[u8]>) -> bool {
+    with_state(|s| s.attr_may_affect_style(target, name))
+}
+
+fn is_link_rel(target: Node<'_>, name: &[u8]) -> bool {
+    name.eq_ignore_ascii_case(b"rel")
+        && target.is_element()
+        && target
+            .name()
+            .is_some_and(|tag| tag.to_bytes().eq_ignore_ascii_case(b"link"))
 }
