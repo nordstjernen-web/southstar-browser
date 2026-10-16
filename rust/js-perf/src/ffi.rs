@@ -272,24 +272,6 @@ pub unsafe fn add_resource_timed(
     crate::add_resource_entry(js, &info, &fetch, response.as_ref());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_add_resource_timed(
-    js: *const NsJs,
-    info: *const ResourceInfo,
-    url: *const c_char,
-    initiator: *const c_char,
-    start_us: i64,
-    end_us: i64,
-    resp: *const api::Response,
-) {
-    let Some(url) = (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }) else {
-        return;
-    };
-    let initiator = (!initiator.is_null()).then(|| unsafe { CStr::from_ptr(initiator) });
-    let info = unsafe { info.as_ref() };
-    unsafe { add_resource_timed(js, info, url, initiator, (start_us, end_us), resp) };
-}
-
 pub fn has_resource_timing(
     js: *const NsJs,
     timeline: *const c_void,

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 use std::ffi::CString;
 
@@ -38,18 +38,6 @@ struct ResourceTiming {
 }
 
 #[repr(C)]
-struct PerfInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: GBoolean,
-    cors_mode: GBoolean,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: c_long,
-    body_size: i64,
-}
-
-#[repr(C)]
 struct ScriptTask {
     node: *mut NsNode,
     schedule: c_int,
@@ -57,8 +45,6 @@ struct ScriptTask {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<ResourceTiming>() == 56);
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<PerfInfo>() == 56);
 
 const DLOG_JS: c_uint = 5;
 
@@ -197,16 +183,7 @@ unsafe extern "C" {
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_js_schedule_static_iframes(js: *mut NsJs, n: *mut NsNode);
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
-    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
-    fn ns_perf_add_resource_timed(
-        js: *mut NsJs,
-        info: *const PerfInfo,
-        url: *const c_char,
-        initiator: *const c_char,
-        start_us: i64,
-        end_us: i64,
-        resp: *mut NsResponse,
-    );
+    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut api::ResourceInfo);
     fn ns_js_register_import_maps(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_collect_script_tasks(n: *mut NsNode, tasks: *mut GArray);
     fn ns_js_run_parser_blocking_scripts(js: *mut NsJs, tasks: *mut GArray, origin: *const c_char);
@@ -441,27 +418,25 @@ impl Js {
             if timing.in_frame != 0 {
                 continue;
             }
-            let mut info = PerfInfo {
-                timeline: ptr::null(),
-                document_url: ptr::null(),
-                render_blocking: glib::FALSE,
-                cors_mode: glib::FALSE,
-                next_hop_protocol: ptr::null(),
-                timing_allow_origin: ptr::null(),
-                status: 0,
-                body_size: 0,
-            };
+            let mut info = api::ResourceInfo::default();
             unsafe { ns_js_element_perf_info(self.0, doc.as_ptr(), &mut info) };
             info.render_blocking = timing.render_blocking;
+            // SAFETY: the engine's timing record keeps its URL alive until the array is freed below.
+            let Some(url) = (unsafe { c_text(timing.url) }) else {
+                continue;
+            };
+            // SAFETY: the initiator is null or a static string the engine recorded.
+            let initiator = unsafe { c_text(timing.initiator) };
+            let span = (timing.start_us, timing.end_us);
+            // SAFETY: the element's perf strings and the timing's response stay live for the call.
             unsafe {
-                ns_perf_add_resource_timed(
+                southstar_js_perf::add_resource_timed(
                     self.0,
-                    &info,
-                    timing.url,
-                    timing.initiator,
-                    timing.start_us,
-                    timing.end_us,
-                    timing.resp,
+                    Some(&info),
+                    url,
+                    initiator,
+                    span,
+                    timing.resp.cast(),
                 )
             };
         }
