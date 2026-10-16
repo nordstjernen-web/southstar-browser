@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Scripts and stylesheets written in the page's HTML resolve their src and
+  href against <base href>. Only the engine's stylesheets, images and
+  preloader used the base; the script loader resolved against the page
+  URL, so a page at /sub/dir/ with <base href="/assets/"> fetched
+  /sub/dir/app.js and ran nothing.
 * Gradient backgrounds honour background-size, background-position and
   background-repeat. A gradient always filled its whole box, so a
   linear-gradient(red, red) 0 100% / 100% 2px no-repeat underline bar
