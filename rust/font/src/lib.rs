@@ -1,4 +1,4 @@
-//! Southstar — the @font-face web font loader: one fetch per URL, WOFF and WOFF2 to SFNT, the on-disk font cache and the loaded families.
+//! Southstar — the @font-face web font loader: one fetch per URL, WOFF and WOFF2 to SFNT, the on-disk font cache, the loaded families and fontconfig's metric-compatible aliases.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -68,6 +68,30 @@ const EXTENSION_BUFFER: usize = 12;
 
 pub fn available() -> bool {
     cfg!(feature = "fontconfig")
+}
+
+type AliasCache = HashMap<Vec<u8>, Option<Vec<u8>>>;
+
+pub fn metric_alias(family: &[u8]) -> Option<Vec<u8>> {
+    const CACHE_MAX: usize = 256;
+    static ALIASES: Mutex<Option<AliasCache>> = Mutex::new(None);
+    let key = family.to_ascii_lowercase();
+    let cached = ALIASES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .and_then(|aliases| aliases.get(&key).cloned());
+    if let Some(alias) = cached {
+        return alias;
+    }
+    let alias = ffi::metric_alias(family);
+    let mut aliases = ALIASES.lock().unwrap_or_else(PoisonError::into_inner);
+    let aliases = aliases.get_or_insert_with(HashMap::new);
+    if aliases.len() >= CACHE_MAX {
+        aliases.clear();
+    }
+    aliases.insert(key, alias.clone());
+    alias
 }
 
 pub fn generation() -> u32 {

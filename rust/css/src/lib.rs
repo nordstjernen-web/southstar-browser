@@ -72,7 +72,7 @@ pub use element_state::node_dir;
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
     MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
-    Selector, SelectorList,
+    Selector, SelectorList, set_font_alias,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, stretch_rank as font_stretch_rank,

@@ -54,7 +54,8 @@ pub(crate) use element_state::{
     url_resolve,
 };
 pub(crate) use font::relative_unit_px as font_relative_px;
-pub(crate) use font::{font_available, font_generation, font_oracle_serial};
+pub use font::set_font_alias;
+pub(crate) use font::{font_alias, font_available, font_generation, font_oracle_serial};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use host_scope::scoped as scoped_css;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};

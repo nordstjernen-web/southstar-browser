@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Arial, Helvetica, Times New Roman and the generic serif and sans-serif
+  families render in the metric-compatible fonts other browsers pick
+  (Liberation Sans and Liberation Serif on most Linux systems). A family
+  that was not installed fell back to fontconfig's default sans-serif,
+  and serif to DejaVu Serif, both much wider, so headings and buttons
+  wrapped where Chromium kept them on one line. The generic families
+  now default to Times New Roman and Arial as in Chromium, and a missing
+  family takes the font fontconfig aliases to it by metrics.
 * SVG icon sprites referenced with <use> render, in the colour of the
   text around them. A <use> pointing at a <symbol> in another <svg> of
   the page found nothing, because ids were looked up only inside the

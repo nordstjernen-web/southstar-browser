@@ -14,6 +14,7 @@ use crate::font;
 
 type AvailableFn = unsafe extern "C" fn(family: *const c_char) -> GBoolean;
 type GenerationFn = unsafe extern "C" fn() -> u64;
+pub type AliasFn = fn(family: &[u8]) -> Option<Vec<u8>>;
 type MetricsFn = unsafe extern "C" fn(
     family: *const c_char,
     size_px: c_double,
@@ -38,6 +39,7 @@ const _: () = assert!(core::mem::size_of::<FontMetrics>() == 56);
 static AVAILABLE: Mutex<Option<AvailableFn>> = Mutex::new(None);
 static GENERATION: Mutex<Option<GenerationFn>> = Mutex::new(None);
 static METRICS: Mutex<Option<MetricsFn>> = Mutex::new(None);
+static ALIAS: Mutex<Option<AliasFn>> = Mutex::new(None);
 static ORACLE_SERIAL: AtomicU32 = AtomicU32::new(0);
 
 fn load<T: Copy>(slot: &Mutex<Option<T>>) -> Option<T> {
@@ -52,6 +54,15 @@ pub(crate) fn font_available(family: &[u8]) -> Option<bool> {
     let cb = load(&AVAILABLE)?;
     let family = CString::new(family).unwrap_or_default();
     Some(unsafe { cb(family.as_ptr()) } != 0)
+}
+
+pub(crate) fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
+    load(&ALIAS)?(family)
+}
+
+pub fn set_font_alias(cb: AliasFn) {
+    store(&ALIAS, Some(cb));
+    ORACLE_SERIAL.fetch_add(1, Ordering::Relaxed);
 }
 
 pub(crate) fn font_generation() -> u64 {

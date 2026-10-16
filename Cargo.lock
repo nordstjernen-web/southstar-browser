@@ -2938,6 +2938,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
+ "southstar-font",
  "southstar-glib",
  "southstar-image",
  "southstar-layout",
