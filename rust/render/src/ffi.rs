@@ -14,7 +14,6 @@ use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
-use crate::viewport;
 
 type ResolveUrl = unsafe extern "C" fn(href: *const c_char, user_data: *mut c_void) -> *mut c_char;
 type FontAllowed = unsafe extern "C" fn(abs_url: *const c_char, user_data: *mut c_void) -> GBoolean;
@@ -509,30 +508,6 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: *mut GHashTable) -> bool {
     })
 }
 
-fn find_viewport_meta(n: Option<Node<'_>>, depth: i32) -> Option<Node<'_>> {
-    let n = n?;
-    if depth >= southstar_dom::MAX_DEPTH {
-        return None;
-    }
-    if n.element_name() == Some(b"meta")
-        && n.attr(c"name")
-            .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(b"viewport"))
-    {
-        return Some(n);
-    }
-    southstar_dom::children(n).find_map(|child| find_viewport_meta(Some(child), depth + 1))
-}
-
-fn effective_viewport_width(c: &RenderCtx) -> f64 {
-    let content = find_viewport_meta(c.doc(), 0).and_then(|meta| meta.attr(c"content"));
-    let hint = viewport::width_hint(content.map(CStr::to_bytes));
-    if hint > c.viewport_width {
-        hint
-    } else {
-        c.viewport_width
-    }
-}
-
 fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
     unsafe {
         ns_paint_list_ordinals_begin();
@@ -577,7 +552,7 @@ fn relayout(
     let timed = profile.is_some();
     let clock = || if timed { now_us() } else { 0 };
 
-    let viewport_width = effective_viewport_width(c);
+    let viewport_width = c.viewport_width;
     unsafe {
         ns_css_set_viewport(viewport_width, c.viewport_height);
         ns_css_set_focus_node(c.focused_input);

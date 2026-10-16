@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The width in <meta name="viewport"> is ignored, as desktop browsers
+  ignore it. A page asking for width=1120 (Wikipedia) was laid out 1120px
+  wide in a narrower window, so its narrow-window media queries and
+  matchMedia() never matched and the page scrolled sideways.
 * text-decoration: inherit, initial, unset and revert take effect. The
   shorthand dropped CSS-wide keywords, so a link styled with Tailwind's
   preflight (a { text-decoration: inherit }) kept the UA underline; the
