@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Images and SVGs sized with calc() contribute that size to grid and
+  table tracks. The min-content contribution of a replaced element read
+  only its laid-out width and fell back to 200px, so Tailwind's
+  size-4 icons (calc(var(--spacing) * 4)) widened an auto grid column to
+  200px and squeezed the text beside them: tailwindcss.com's "Quick
+  search" button wrapped onto two lines.
 * An absolutely positioned ::before or ::after is painted in tree order
   with the other positioned boxes of its stacking context. Its box has no
   DOM node of its own, so the paint sort could not place it and it came
