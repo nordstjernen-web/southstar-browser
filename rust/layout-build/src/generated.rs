@@ -112,6 +112,9 @@ pub fn build_pseudo_inline_for(
     host: Option<Node<'_>>,
 ) -> Option<BoxRef<'static>> {
     let ps = ps?;
+    if !pseudo::generates_box(Some(ps)) {
+        return None;
+    }
     let kw = content_keyword(ps)?;
     let inline_atomic = is_atomic_inline(display_of(Some(ps)));
     let resolved = match pseudo::resolve_content(kw.to_bytes(), host) {
@@ -217,7 +220,7 @@ pub fn build_pseudo_block_for(
     host: Option<Node<'_>>,
 ) -> Option<BoxRef<'static>> {
     let ps = ps?;
-    if style_is_absolute_or_fixed(Some(ps)) {
+    if style_is_absolute_or_fixed(Some(ps)) || !pseudo::generates_box(Some(ps)) {
         return None;
     }
     let kw = content_keyword(ps)?;
@@ -244,7 +247,7 @@ pub fn register_abs_pseudo(host: Option<Node<'_>>, ps: Option<StyleRef<'_>>) {
     if state::with(|st| st.abs_pending.is_none()) || !style_is_absolute_or_fixed(Some(ps)) {
         return;
     }
-    if content_keyword(ps).is_none() {
+    if !pseudo::generates_box(Some(ps)) {
         return;
     }
     let fixed = keyword_is(ps.get(PropId::Position), c"fixed");

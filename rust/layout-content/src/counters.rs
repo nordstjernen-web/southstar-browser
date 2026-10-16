@@ -91,6 +91,12 @@ fn apply_style(current: &mut Counters, s: Option<StyleRef<'_>>) {
     }
 }
 
+fn apply_pseudo(current: &mut Counters, ps: Option<StyleRef<'_>>) {
+    if crate::pseudo::generates_box(ps) {
+        apply_style(current, ps);
+    }
+}
+
 fn content_uses_counter(ps: Option<StyleRef<'_>>) -> bool {
     ps.and_then(|ps| ps.get(PropId::Content))
         .and_then(ValueRef::keyword_text)
@@ -112,7 +118,7 @@ fn walk(
         s = styles.get(n);
         apply_style(current, s);
         if let Some(st) = s {
-            apply_style(current, st.before());
+            apply_pseudo(current, st.before());
         }
         let need = s.is_some_and(|st| {
             content_uses_counter(st.before()) || content_uses_counter(st.after())
@@ -125,7 +131,7 @@ fn walk(
         walk(c, styles, current, snapshots, depth + 1);
     }
     if let Some(st) = s {
-        apply_style(current, st.after());
+        apply_pseudo(current, st.after());
     }
 }
 
